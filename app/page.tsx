@@ -85,14 +85,65 @@ export default function PilgrimagePage() {
           </p>
         </Section>
 
-        {/* VI. Safety & Roads */}
-        <Section number="VI" title="Safety & Roads">
+        {/* VI. Infrastructure & Territory */}
+        <Section number="VI" title="Infrastructure & Territory">
           <p className="text-base md:text-lg leading-relaxed text-ink-light mb-3">
             The paths leading to your site pass through wilderness — forests with bandits, wild animals, and other hazards. Pilgrims who encounter danger turn back and may never come. Your reach is only as good as your roads are safe.
           </p>
-          <p className="text-base md:text-lg leading-relaxed text-ink-light">
+          <p className="text-base md:text-lg leading-relaxed text-ink-light mb-5">
             You deploy <strong className="text-ink">guards on patrol routes</strong> along the paths. Guards are visible on the map, walking assigned routes. Different guard types cover different threats. More coverage means more pilgrims successfully arriving. This is your primary early-game lever for increasing traffic.
           </p>
+
+          <h3 className="font-display text-[13px] font-semibold tracking-[1px] text-ink mb-2 mt-5">Road Tiers</h3>
+          <p className="text-base md:text-lg leading-relaxed text-ink-light mb-4">
+            Road quality determines who can use the path and in what numbers. The path must always remain connected end to end — breaking continuity during construction cuts off traffic. Build alternative routes before demolishing existing ones.
+          </p>
+          <TwoColumnGrid
+            leftItems={[
+              "Dirt track — individuals and small groups only",
+              "Gravel road — small caravans, carts with goods",
+            ]}
+            rightItems={[
+              "Cobblestone — large caravans, noble retinues",
+              "Maintained highway — maximum throughput, all types",
+            ]}
+          />
+
+          <h3 className="font-display text-[13px] font-semibold tracking-[1px] text-ink mb-2 mt-5">Terrain Types</h3>
+          <p className="text-base md:text-lg leading-relaxed text-ink-light mb-4">
+            Three terrain types shape routing decisions on each map. Terrain is a routing puzzle, not an ongoing management system.
+          </p>
+          <TwoColumnGrid
+            leftItems={[
+              "Clear land — build freely, standard cost",
+              "Forest — must clear before building, costs gold and time",
+            ]}
+            rightItems={[
+              "Hills — buildable but adds elevation cost; slows movement permanently regardless of road tier",
+            ]}
+          />
+
+          <h3 className="font-display text-[13px] font-semibold tracking-[1px] text-ink mb-2 mt-5">Rivers</h3>
+          <p className="text-base md:text-lg leading-relaxed text-ink-light mb-4">
+            Rivers are static obstacles solved once with a single infrastructure decision — no ongoing management, no river-specific threats. Each crossing type has different cost and throughput implications.
+          </p>
+          <TwoColumnGrid
+            leftItems={[
+              "Ford — cheap, low throughput, passable by foot traffic only",
+              "Bridge — mid-cost, full road tier, all traffic types",
+            ]}
+            rightItems={[
+              "Dock — opens water route, brings maritime pilgrim types not available overland",
+            ]}
+          />
+
+          <h3 className="font-display text-[13px] font-semibold tracking-[1px] text-ink mb-2 mt-5">Sphere of Influence</h3>
+          <p className="text-base md:text-lg leading-relaxed text-ink-light mb-4">
+            Your road network defines your territory. Everything operates within it — guards patrol within it, bandits are cleared within it, buildings are placed within it. It expands organically as you build outward. No explicit territory declaration needed: you build, and the world responds.
+          </p>
+          <div className="bg-parchment-dark border-l-[3px] border-gold px-5 py-4 my-5 italic text-base text-ink leading-relaxed">
+            Early game: a small bubble around the relic. Late game: the sphere covers the full map. The road is the most visible record of everything you&apos;ve built.
+          </div>
         </Section>
 
         {/* VII. Building Types */}
@@ -117,18 +168,58 @@ export default function PilgrimagePage() {
           />
         </Section>
 
-        {/* VIII. Tone & Aesthetic */}
-        <Section number="VIII" title="Tone & Aesthetic">
+        {/* VIII. Caravan Events */}
+        <Section number="VIII" title="Caravan Events">
           <p className="text-base md:text-lg leading-relaxed text-ink-light mb-3">
-            Isometric perspective. Medieval European settings — Germanic forest, English countryside, French hills, Italian countryside. Seasonal visuals (aesthetic, not necessarily gameplay-affecting). The feel is closer to RollerCoaster Tycoon than Age of Empires — management and observation, not combat and conquest.
+            Beyond the steady trickle of individual pilgrims, the game features periodic <strong className="text-ink">caravan arrivals</strong> — a mass of NPCs traveling together, visually striking and economically significant. Inspired by the merchant caravans of Louis L&apos;Amour&apos;s <em>The Walking Drum</em>, these events capture the feeling of medieval travel as a communal, culturally rich undertaking.
           </p>
-          <p className="text-base md:text-lg leading-relaxed text-ink-light">
-            No RTS combat. Military elements (guards, walls) are defensive and logistical, not tactical.
+          <p className="text-base md:text-lg leading-relaxed text-ink-light mb-4">
+            Caravans are triggered by <strong className="text-ink">Renown milestones</strong> — a reward for growth, not a random event. Watching a column of travelers, wagons, and varied characters crest the hill and move down your road toward the relic is the game&apos;s signature visual moment.
+          </p>
+          <div className="bg-parchment-dark border-l-[3px] border-gold px-5 py-4 my-5 italic text-base text-ink leading-relaxed">
+            &ldquo;There was always the sound of the walking drum... so deeply is it embedded in the fibers of my being.&rdquo; — Louis L&apos;Amour
+          </div>
+          <TwoColumnGrid
+            leftTitle="Caravan Mechanics"
+            leftItems={[
+              "Triggered by renown thresholds, not random timers",
+              "Creates sudden spike in demand — tests infrastructure",
+              "Composition reflects renown level (modest early, noble-led late)",
+              "Must survive the road — guard patrols critical for arrival",
+              "Delivers large patronage payment to the relic",
+            ]}
+            rightTitle="Caravan Composition"
+            rightItems={[
+              "Early: small merchant band, common pilgrims",
+              "Mid: merchants, entertainers, scholars, clergy",
+              "Late: nobles, foreign dignitaries, large retinues",
+              "Acrobats, traders, guards, animals — visible variety",
+              "Each arrival feels like an event, not background noise",
+            ]}
+          />
+          <p className="text-base md:text-lg leading-relaxed text-ink-light mt-4">
+            A possible late-game building: a <strong className="text-ink">Caravanserai</strong> — a waystation outside the city proper that signals to distant travelers you can receive large groups, unlocking larger and more frequent caravan events.
           </p>
         </Section>
 
-        {/* IX. Open Questions */}
-        <Section number="IX" title="Open Questions">
+        {/* IX. Tone & Aesthetic */}
+        <Section number="IX" title="Tone & Aesthetic">
+          <p className="text-base md:text-lg leading-relaxed text-ink-light mb-3">
+            Isometric perspective. Medieval European settings — Germanic forest, English countryside, French hills, Italian countryside. Seasonal visuals (aesthetic, not necessarily gameplay-affecting). The feel is closer to RollerCoaster Tycoon than Age of Empires — management and observation, not combat and conquest.
+          </p>
+          <p className="text-base md:text-lg leading-relaxed text-ink-light mb-3">
+            No RTS combat. Military elements (guards, walls) are defensive and logistical, not tactical.
+          </p>
+          <p className="text-base md:text-lg leading-relaxed text-ink-light mb-4">
+            Art style: hand-drawn isometric assets with painterly warmth. Strong readable silhouettes over fine surface detail — assets must remain legible with many NPCs on screen simultaneously. Visual reference: Thronebreaker&apos;s color palette and atmosphere, RCT2&apos;s asset clarity and caricature-level readability.
+          </p>
+          <div className="bg-parchment-dark border-l-[3px] border-gold px-5 py-4 my-5 italic text-base text-ink leading-relaxed">
+            Tonal reference: <em>The Walking Drum</em> by Louis L&apos;Amour — romanticized 12th century adventure. Warm, cosmopolitan, alive with cultural texture. Not grimdark. Not sanitized. The road itself is a character.
+          </div>
+        </Section>
+
+        {/* X. Open Questions */}
+        <Section number="X" title="Open Questions">
           <ul className="list-none p-0 m-0">
             {[
               "How granular is guard patrol configuration?",
@@ -138,7 +229,12 @@ export default function PilgrimagePage() {
               "Seasonal variation: visual only, or does it affect pilgrim volume?",
               "Multi-path maps — do different paths bring different pilgrim types?",
               "Campaign scenarios vs. sandbox mode structure",
-              "Engine / platform (browser vs. Godot vs. Unity)",
+              "Engine / platform (Godot 4 primary, Phaser for early prototyping)",
+              "Caravanserai as a late-game building — how does it modify caravan frequency and size?",
+              "Does caravan composition change based on map setting (Germanic vs. Italian)?",
+              "How is road connectivity enforced — hard block on demolition, or player warning?",
+              "Does dock open a separate water path or merge into the main route?",
+              "How is sphere of influence visualized — a visible boundary, a fog of war, or implied by building placement?",
             ].map((item, index) => (
               <li
                 key={index}
