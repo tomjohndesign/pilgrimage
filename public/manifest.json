@@ -1,0 +1,16 @@
+{
+  "name": "Pilgrimage — A Medieval Settlement Builder",
+  "short_name": "Pilgrimage",
+  "description": "A medieval settlement builder inspired by RollerCoaster Tycoon & Age of Empires II",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1208",
+  "theme_color": "#1a1208",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

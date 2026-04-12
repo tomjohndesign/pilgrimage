@@ -1,0 +1,107 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Pilgrimage Medieval Theme */
+  --parchment: #f2e8d5;
+  --parchment-dark: #e8d9bc;
+  --ink: #2c1f0e;
+  --ink-light: #4a3520;
+  --red: #8b1a1a;
+  --gold: #a07830;
+  --gold-light: #c49a40;
+  --rule: #c4a96a;
+  
+  --background: #f2e8d5;
+  --foreground: #2c1f0e;
+  --card: #f2e8d5;
+  --card-foreground: #2c1f0e;
+  --popover: #f2e8d5;
+  --popover-foreground: #2c1f0e;
+  --primary: #8b1a1a;
+  --primary-foreground: #f2e8d5;
+  --secondary: #e8d9bc;
+  --secondary-foreground: #2c1f0e;
+  --muted: #e8d9bc;
+  --muted-foreground: #4a3520;
+  --accent: #a07830;
+  --accent-foreground: #f2e8d5;
+  --destructive: #8b1a1a;
+  --destructive-foreground: #f2e8d5;
+  --border: #c4a96a;
+  --input: #c4a96a;
+  --ring: #a07830;
+  --radius: 0;
+}
+
+@theme inline {
+  --font-sans: var(--font-garamond), Georgia, serif;
+  --font-serif: var(--font-garamond), Georgia, serif;
+  --font-display: var(--font-cinzel), serif;
+  --color-parchment: var(--parchment);
+  --color-parchment-dark: var(--parchment-dark);
+  --color-ink: var(--ink);
+  --color-ink-light: var(--ink-light);
+  --color-red: var(--red);
+  --color-gold: var(--gold);
+  --color-gold-light: var(--gold-light);
+  --color-rule: var(--rule);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius));
+  --radius-md: calc(var(--radius));
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius));
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-[#1a1208] text-ink;
+  }
+}
+
+/* Noise texture for parchment effect */
+.parchment-texture::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* Inner border for page */
+.page-border::before {
+  content: '';
+  position: absolute;
+  inset: 12px;
+  border: 1px solid var(--rule);
+  pointer-events: none;
+}
+
+/* Font display class */
+.font-display {
+  font-family: var(--font-cinzel), serif;
+}
