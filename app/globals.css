@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Pilgrimage Medieval Theme */
+  /* Pilgrimage Medieval Theme - Warm parchment palette inspired by historical manuscripts */
   --parchment: #f2e8d5;
   --parchment-dark: #e8d9bc;
   --ink: #2c1f0e;
