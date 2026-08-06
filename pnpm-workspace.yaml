@@ -1,0 +1,4 @@
+# sharp is only needed for Next.js image optimisation, which this project turns
+# off via `images.unoptimized` in next.config.mjs. Skip its native build.
+allowBuilds:
+  sharp: false
