@@ -1,7 +1,8 @@
 interface TwoColumnGridProps {
-  leftTitle: string
+  /** Optional — some grids are plain paired lists with no headings. */
+  leftTitle?: string
   leftItems: string[]
-  rightTitle: string
+  rightTitle?: string
   rightItems: string[]
 }
 
@@ -14,9 +15,11 @@ export function TwoColumnGrid({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 my-4">
       <div>
-        <h3 className="font-display text-[13px] font-semibold tracking-[1px] text-ink mb-2">
-          {leftTitle}
-        </h3>
+        {leftTitle && (
+          <h3 className="font-display text-[13px] font-semibold tracking-[1px] text-ink mb-2">
+            {leftTitle}
+          </h3>
+        )}
         <ul className="list-none p-0 m-0">
           {leftItems.map((item, index) => (
             <li
@@ -29,9 +32,11 @@ export function TwoColumnGrid({
         </ul>
       </div>
       <div>
-        <h3 className="font-display text-[13px] font-semibold tracking-[1px] text-ink mb-2">
-          {rightTitle}
-        </h3>
+        {rightTitle && (
+          <h3 className="font-display text-[13px] font-semibold tracking-[1px] text-ink mb-2">
+            {rightTitle}
+          </h3>
+        )}
         <ul className="list-none p-0 m-0">
           {rightItems.map((item, index) => (
             <li
