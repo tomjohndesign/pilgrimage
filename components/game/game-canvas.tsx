@@ -17,7 +17,7 @@ import { Trees } from "./trees"
 
 const BACKGROUND = "#14100a"
 
-export function GameCanvas({ map, treeDensity }: { map: GameMap; treeDensity?: number }) {
+export function GameCanvas({ map }: { map: GameMap }) {
   return (
     <Canvas
       orthographic
@@ -42,7 +42,7 @@ export function GameCanvas({ map, treeDensity }: { map: GameMap; treeDensity?: n
       <Suspense fallback={null}>
         <TerrainTiles map={map} />
       </Suspense>
-      <Trees map={map} density={treeDensity} />
+      <Trees map={map} />
       <Buildings map={map} />
       <TileCursor map={map} />
 

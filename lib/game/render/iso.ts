@@ -27,9 +27,29 @@ export const CAM_FAR = 400
 
 /** Orthographic frustum height, in world units. Smaller = more zoomed in. */
 export const MIN_VIEW_SIZE = 8
-/** Must be generous enough to frame the largest selectable map (128 tiles). */
+/**
+ * Hard ceiling on zoom-out, deliberately independent of map size. On maps too
+ * large to frame at this height the player pans (or uses the minimap) instead —
+ * that bound on the visible tile count is what keeps huge maps affordable to
+ * render, so it must never scale with the map.
+ */
 export const MAX_VIEW_SIZE = 140
 export const DEFAULT_VIEW_SIZE = 40
+
+/**
+ * The ratio that framed a 128-tile map at MAX_VIEW_SIZE — the tuning the cap
+ * was originally sized against. Smaller maps cap proportionally lower so
+ * zooming out never shows a sliver of world adrift in the void.
+ */
+const FRAME_RATIO = MAX_VIEW_SIZE / 128
+
+/** Zoom-out limit for a given map: frame it fully, but never past the ceiling. */
+export function maxViewSizeForMap(width: number, depth: number): number {
+  return Math.min(
+    MAX_VIEW_SIZE,
+    Math.max(MIN_VIEW_SIZE, FRAME_RATIO * Math.max(width, depth)),
+  )
+}
 
 /** Yaw in radians for a view index. The index is unbounded so tweens can wrap. */
 export function yawForView(viewIndex: number): number {
@@ -93,8 +113,8 @@ export function worldPerPixel(viewSize: number, canvasHeightPx: number): number 
   return viewSize / Math.max(1, canvasHeightPx)
 }
 
-export function clampViewSize(viewSize: number): number {
-  return Math.min(MAX_VIEW_SIZE, Math.max(MIN_VIEW_SIZE, viewSize))
+export function clampViewSize(viewSize: number, maxViewSize: number = MAX_VIEW_SIZE): number {
+  return Math.min(maxViewSize, Math.max(MIN_VIEW_SIZE, viewSize))
 }
 
 /**

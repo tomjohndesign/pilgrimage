@@ -14,29 +14,36 @@ import {
 
 /**
  * Placeholder trees: jittered boxes on every forest tile, drawn in one batch.
- * `density` is trees per tile — 1 reads as open woodland, 4+ as black forest.
+ * Every forest tile holds 1 or 2 trees — a seeded per-tile coin flip, so the
+ * woods vary in thickness without ever thinning to scrub or clotting solid.
  * Jitter derives from the map seed (via its own stream so trees and tiles never
  * share RNG state), keeping the whole look a function of one number.
  */
 const TREE_COLOR = new THREE.Color("#40542e")
 
-export const DEFAULT_TREE_DENSITY = 3
-
-export function Trees({ map, density = DEFAULT_TREE_DENSITY }: { map: GameMap; density?: number }) {
+export function Trees({ map }: { map: GameMap }) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
   const idMeshRef = useRef<THREE.InstancedMesh>(null)
 
   const forestTiles = useMemo(() => {
-    const tiles: Array<{ x: number; z: number }> = []
+    // Counts get their own stream so placement jitter (drawn in the effect
+    // below, from the `trees` stream) stays independent of the coin flips.
+    const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.treeCount))
+    const tiles: Array<{ x: number; z: number; count: number }> = []
     for (let z = 0; z < map.depth; z++) {
       for (let x = 0; x < map.width; x++) {
-        if (map.tiles[z * map.width + x] === "forest") tiles.push({ x, z })
+        if (map.tiles[z * map.width + x] === "forest") {
+          tiles.push({ x, z, count: 1 + (rng() < 0.5 ? 0 : 1) })
+        }
       }
     }
     return tiles
   }, [map])
 
-  const count = forestTiles.length * density
+  const count = useMemo(
+    () => forestTiles.reduce((sum, tile) => sum + tile.count, 0),
+    [forestTiles],
+  )
 
   useLayoutEffect(() => {
     const mesh = meshRef.current
@@ -53,13 +60,12 @@ export function Trees({ map, density = DEFAULT_TREE_DENSITY }: { map: GameMap; d
     const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.trees))
     const baseY = TERRAIN.forest.height
 
-    // Slimmer trunks as the packing increases, so canopies overlap instead of
-    // merging into one solid block.
-    const widthScale = 1 / Math.sqrt(density)
-
     let index = 0
     for (const tile of forestTiles) {
-      for (let t = 0; t < density; t++) {
+      // Slimmer trunks on the fuller tiles, so canopies overlap instead of
+      // merging into one solid block.
+      const widthScale = 1 / Math.sqrt(tile.count)
+      for (let t = 0; t < tile.count; t++) {
         const height = 0.65 + rng() * 0.85
         const width = (0.34 + rng() * 0.16) * widthScale
         // Spread across the tile so a packed tile reads as many trees, not a lattice.
@@ -93,7 +99,7 @@ export function Trees({ map, density = DEFAULT_TREE_DENSITY }: { map: GameMap; d
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
     idMesh.instanceMatrix.needsUpdate = true
     if (idMesh.instanceColor) idMesh.instanceColor.needsUpdate = true
-  }, [map, forestTiles, density])
+  }, [map, forestTiles])
 
   if (count === 0) return null
 

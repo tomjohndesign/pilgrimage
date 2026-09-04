@@ -25,12 +25,10 @@ export default async function PlayPage({
   const coverage = parseIntParam(params.forest)
   const clusters = parseIntParam(params.clusters)
   const groves = parseIntParam(params.groves)
-  const treeDensity = parseIntParam(params.trees)
   if (size !== undefined) initialSettings.size = size
   if (coverage !== undefined) initialSettings.coverage = coverage
   if (clusters !== undefined) initialSettings.clusters = clusters
   if (groves !== undefined) initialSettings.groves = groves
-  if (treeDensity !== undefined) initialSettings.treeDensity = treeDensity
 
   return <GameShell initialSeed={parseIntParam(params.seed)} initialSettings={initialSettings} />
 }

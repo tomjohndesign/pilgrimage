@@ -14,7 +14,6 @@ import {
 } from "@/lib/game/map/generate-map"
 
 import { GameHud } from "./game-hud"
-import { DEFAULT_TREE_DENSITY } from "./trees"
 
 /**
  * WebGL has no meaningful server render, and three.js touches browser globals on
@@ -41,8 +40,6 @@ export interface MapSettings {
   clusters: number
   /** Number of small scattered groves. */
   groves: number
-  /** Trees drawn per forest tile. */
-  treeDensity: number
 }
 
 export const DEFAULT_SETTINGS: MapSettings = {
@@ -50,7 +47,6 @@ export const DEFAULT_SETTINGS: MapSettings = {
   coverage: Math.round(DEFAULT_FOREST_COVERAGE * 100),
   clusters: DEFAULT_CLUSTER_COUNT,
   groves: DEFAULT_GROVE_COUNT,
-  treeDensity: DEFAULT_TREE_DENSITY,
 }
 
 /**
@@ -91,7 +87,6 @@ export function GameShell({
       forest: String(settings.coverage),
       clusters: String(settings.clusters),
       groves: String(settings.groves),
-      trees: String(settings.treeDensity),
     })
     window.history.replaceState(null, "", `?${query}`)
   }, [seed, settings])
@@ -119,7 +114,7 @@ export function GameShell({
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#14100a] select-none">
       {map ? (
-        <GameCanvas map={map} treeDensity={settings.treeDensity} />
+        <GameCanvas map={map} />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
           <span className="font-display text-[10px] uppercase tracking-[3px] text-gold">
