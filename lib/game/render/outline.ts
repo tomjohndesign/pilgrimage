@@ -64,6 +64,14 @@ export function treeObjectId(buildingCount: number, treeIndex: number): number {
 }
 
 /**
+ * Travelers count down from the top of the ID space, so they never collide
+ * with the building/tree block growing up from the bottom.
+ */
+export function travelerObjectId(travelerIndex: number): number {
+  return MAX_OBJECT_ID - travelerIndex
+}
+
+/**
  * Outline thickness in CSS pixels. The edge pass samples neighbours at this
  * screen-space distance, so lines render at a constant display width at every
  * zoom level and DPR.

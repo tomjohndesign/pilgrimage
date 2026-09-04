@@ -4,6 +4,7 @@ import { Suspense } from "react"
 import { Canvas } from "@react-three/fiber"
 
 import type { GameMap } from "@/lib/game/map/types"
+import type { Traveler } from "@/lib/game/travelers"
 import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 
 import { Buildings } from "./buildings"
@@ -13,11 +14,22 @@ import { DebugHandle } from "./debug-handle"
 import { OutlinePass } from "./outline-pass"
 import { TerrainTiles } from "./terrain-tiles"
 import { TileCursor } from "./tile-cursor"
+import { Travelers } from "./travelers"
 import { Trees } from "./trees"
 
 const BACKGROUND = "#14100a"
 
-export function GameCanvas({ map, treeDensity }: { map: GameMap; treeDensity?: number }) {
+export function GameCanvas({
+  map,
+  treeDensity,
+  travelers,
+  walkSpeed,
+}: {
+  map: GameMap
+  treeDensity?: number
+  travelers: Traveler[]
+  walkSpeed: number
+}) {
   return (
     <Canvas
       orthographic
@@ -44,6 +56,7 @@ export function GameCanvas({ map, treeDensity }: { map: GameMap; treeDensity?: n
       </Suspense>
       <Trees map={map} density={treeDensity} />
       <Buildings map={map} />
+      <Travelers map={map} travelers={travelers} speed={walkSpeed} />
       <TileCursor map={map} />
 
       <CameraRig map={map} />

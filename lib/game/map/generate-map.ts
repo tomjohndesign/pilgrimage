@@ -117,13 +117,17 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     .sort((a, b) => a.x - b.x)
 
   const stops = [{ x: 0, z: entryZ }, ...waypoints, { x: width - 1, z: exitZ }]
+  const road: Array<{ x: number; z: number }> = []
   for (let s = 0; s < stops.length - 1; s++) {
-    for (const i of routeSegment(stops[s], stops[s + 1], width, depth, wander)) {
+    const segment = routeSegment(stops[s], stops[s + 1], width, depth, wander)
+    // Each segment starts where the previous one ended; skip the shared tile.
+    for (const i of s === 0 ? segment : segment.slice(1)) {
       tiles[i] = "path"
+      road.push({ x: i % width, z: Math.floor(i / width) })
     }
   }
 
-  return { width, depth, tiles, buildings: [], seed }
+  return { width, depth, tiles, buildings: [], seed, road }
 }
 
 /**

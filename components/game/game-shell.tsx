@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
+import { generateTravelers } from "@/lib/game/travelers"
 import {
   DEFAULT_CLUSTER_COUNT,
   DEFAULT_FOREST_COVERAGE,
@@ -43,6 +44,10 @@ export interface MapSettings {
   groves: number
   /** Trees drawn per forest tile. */
   treeDensity: number
+  /** How many travelers walk the road — the traffic level. */
+  traffic: number
+  /** Base walking speed in tiles per second. */
+  walkSpeed: number
 }
 
 export const DEFAULT_SETTINGS: MapSettings = {
@@ -51,6 +56,8 @@ export const DEFAULT_SETTINGS: MapSettings = {
   clusters: DEFAULT_CLUSTER_COUNT,
   groves: DEFAULT_GROVE_COUNT,
   treeDensity: DEFAULT_TREE_DENSITY,
+  traffic: 12,
+  walkSpeed: 1.5,
 }
 
 /**
@@ -92,6 +99,8 @@ export function GameShell({
       clusters: String(settings.clusters),
       groves: String(settings.groves),
       trees: String(settings.treeDensity),
+      traffic: String(settings.traffic),
+      speed: String(settings.walkSpeed),
     })
     window.history.replaceState(null, "", `?${query}`)
   }, [seed, settings])
@@ -111,15 +120,31 @@ export function GameShell({
     [seed, settings.size, settings.coverage, settings.clusters, settings.groves],
   )
 
+  // Identities live outside the canvas so the HUD can name whoever is selected.
+  const travelers = useMemo(
+    () => (seed === null ? [] : generateTravelers(seed, settings.traffic)),
+    [seed, settings.traffic],
+  )
+
   // The camera's pan clamp follows the loaded map's extent.
   useEffect(() => {
     if (map) useCameraStore.getState().setMapSize(map.width, map.depth)
   }, [map])
 
+  // A new cast of travelers invalidates whoever was selected.
+  useEffect(() => {
+    useCameraStore.getState().selectTraveler(null)
+  }, [travelers])
+
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#14100a] select-none">
       {map ? (
-        <GameCanvas map={map} treeDensity={settings.treeDensity} />
+        <GameCanvas
+          map={map}
+          treeDensity={settings.treeDensity}
+          travelers={travelers}
+          walkSpeed={settings.walkSpeed}
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
           <span className="font-display text-[10px] uppercase tracking-[3px] text-gold">
@@ -130,6 +155,7 @@ export function GameShell({
       <GameHud
         map={map}
         seed={seed}
+        travelers={travelers}
         settings={settings}
         onSettingsChange={setSettings}
         onReroll={() => setSeed(randomSeed())}
