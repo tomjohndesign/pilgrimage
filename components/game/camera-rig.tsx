@@ -5,8 +5,7 @@ import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { useCameraStore } from "@/lib/game/camera-store"
-import { PROTOTYPE_MAP } from "@/lib/game/map/prototype-map"
-import { worldToTileX, worldToTileZ } from "@/lib/game/map/types"
+import { worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
 import {
   CAM_FAR,
   CAM_NEAR,
@@ -30,7 +29,7 @@ const KEY_PAN_SPEED = 18
  */
 const PICK_PLANE_Y = 0.2
 
-export function CameraRig() {
+export function CameraRig({ map }: { map: GameMap }) {
   const { camera, gl, size } = useThree()
 
   const displayYaw = useRef(yawForView(useCameraStore.getState().viewIndex))
@@ -63,9 +62,9 @@ export function CameraRig() {
         setHovered(null)
         return
       }
-      const tx = worldToTileX(PROTOTYPE_MAP, hit.x)
-      const tz = worldToTileZ(PROTOTYPE_MAP, hit.z)
-      if (tx < 0 || tz < 0 || tx >= PROTOTYPE_MAP.width || tz >= PROTOTYPE_MAP.depth) {
+      const tx = worldToTileX(map, hit.x)
+      const tz = worldToTileZ(map, hit.z)
+      if (tx < 0 || tz < 0 || tx >= map.width || tz >= map.depth) {
         setHovered(null)
         return
       }
@@ -129,7 +128,7 @@ export function CameraRig() {
       canvas.removeEventListener("pointerleave", onPointerLeave)
       canvas.removeEventListener("contextmenu", onContextMenu)
     }
-  }, [camera, gl])
+  }, [camera, gl, map])
 
   // --- Wheel: zoom ------------------------------------------------------------
   useEffect(() => {

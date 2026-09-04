@@ -3,7 +3,6 @@
 import { useLayoutEffect, useMemo, useRef } from "react"
 import * as THREE from "three"
 
-import { useCameraStore } from "@/lib/game/camera-store"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -13,12 +12,17 @@ import {
   treeObjectId,
 } from "@/lib/game/render/outline"
 
-/** Placeholder trees: one jittered box per forest tile, drawn in a single batch. */
+/**
+ * Placeholder trees: jittered boxes on every forest tile, drawn in one batch.
+ * `density` is trees per tile — 1 reads as open woodland, 4+ as black forest.
+ * Jitter derives from the map seed (via its own stream so trees and tiles never
+ * share RNG state), keeping the whole look a function of one number.
+ */
 const TREE_COLOR = new THREE.Color("#40542e")
 
-export function Trees({ map }: { map: GameMap }) {
-  // Tree shapes and placement re-roll whenever the world seed changes.
-  const seed = useCameraStore((s) => s.seed)
+export const DEFAULT_TREE_DENSITY = 3
+
+export function Trees({ map, density = DEFAULT_TREE_DENSITY }: { map: GameMap; density?: number }) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
   const idMeshRef = useRef<THREE.InstancedMesh>(null)
 
@@ -32,6 +36,8 @@ export function Trees({ map }: { map: GameMap }) {
     return tiles
   }, [map])
 
+  const count = forestTiles.length * density
+
   useLayoutEffect(() => {
     const mesh = meshRef.current
     const idMesh = idMeshRef.current
@@ -44,53 +50,63 @@ export function Trees({ map }: { map: GameMap }) {
     const scale = new THREE.Vector3()
     const color = new THREE.Color()
     const idColor = new THREE.Color()
-    const rng = makeRng(deriveSeed(seed, SEED_STREAM.trees))
+    const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.trees))
     const baseY = TERRAIN.forest.height
 
-    forestTiles.forEach((tile, index) => {
-      const height = 0.7 + rng() * 0.7
-      const width = 0.34 + rng() * 0.16
-      // Nudge off-centre so the canopy doesn't look like a regular lattice.
-      const offsetX = (rng() - 0.5) * 0.34
-      const offsetZ = (rng() - 0.5) * 0.34
+    // Slimmer trunks as the packing increases, so canopies overlap instead of
+    // merging into one solid block.
+    const widthScale = 1 / Math.sqrt(density)
 
-      position.set(
-        tileToWorldX(map, tile.x) + offsetX,
-        baseY + height / 2,
-        tileToWorldZ(map, tile.z) + offsetZ,
-      )
-      euler.set(0, rng() * Math.PI, 0)
-      quaternion.setFromEuler(euler)
-      scale.set(width, height, width)
-      matrix.compose(position, quaternion, scale)
-      mesh.setMatrixAt(index, matrix)
-      idMesh.setMatrixAt(index, matrix)
+    let index = 0
+    for (const tile of forestTiles) {
+      for (let t = 0; t < density; t++) {
+        const height = 0.65 + rng() * 0.85
+        const width = (0.34 + rng() * 0.16) * widthScale
+        // Spread across the tile so a packed tile reads as many trees, not a lattice.
+        const offsetX = (rng() - 0.5) * 0.8
+        const offsetZ = (rng() - 0.5) * 0.8
 
-      color.copy(TREE_COLOR).multiplyScalar(0.8 + rng() * 0.45)
-      mesh.setColorAt(index, color)
+        position.set(
+          tileToWorldX(map, tile.x) + offsetX,
+          baseY + height / 2,
+          tileToWorldZ(map, tile.z) + offsetZ,
+        )
+        euler.set(0, rng() * Math.PI, 0)
+        quaternion.setFromEuler(euler)
+        scale.set(width, height, width)
+        matrix.compose(position, quaternion, scale)
+        mesh.setMatrixAt(index, matrix)
+        idMesh.setMatrixAt(index, matrix)
 
-      // One ID per tree, so overlapping trees separate from each other too.
-      const [r, g, b] = encodeObjectId(treeObjectId(map.buildings.length, index))
-      idColor.setRGB(r, g, b)
-      idMesh.setColorAt(index, idColor)
-    })
+        color.copy(TREE_COLOR).multiplyScalar(0.75 + rng() * 0.5)
+        mesh.setColorAt(index, color)
+
+        // One ID per tree, so overlapping trees separate from each other too.
+        const [r, g, b] = encodeObjectId(treeObjectId(map.buildings.length, index))
+        idColor.setRGB(r, g, b)
+        idMesh.setColorAt(index, idColor)
+        index++
+      }
+    }
 
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
     idMesh.instanceMatrix.needsUpdate = true
     if (idMesh.instanceColor) idMesh.instanceColor.needsUpdate = true
-  }, [map, forestTiles, seed])
+  }, [map, forestTiles, density])
 
-  if (forestTiles.length === 0) return null
+  if (count === 0) return null
 
   return (
     <group>
       <instancedMesh
+        // The instance count is a constructor argument, so remount when it changes.
+        key={count}
         ref={meshRef}
         args={[
           undefined as unknown as THREE.BufferGeometry,
           undefined as unknown as THREE.Material,
-          forestTiles.length,
+          count,
         ]}
       >
         <boxGeometry args={[1, 1, 1]} />
@@ -99,11 +115,12 @@ export function Trees({ map }: { map: GameMap }) {
 
       {/* ID silhouettes for the outline pass. */}
       <instancedMesh
+        key={`id-${count}`}
         ref={idMeshRef}
         args={[
           undefined as unknown as THREE.BufferGeometry,
           undefined as unknown as THREE.Material,
-          forestTiles.length,
+          count,
         ]}
         layers-mask={OUTLINE_ID_LAYER_MASK}
       >

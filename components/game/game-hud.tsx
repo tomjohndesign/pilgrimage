@@ -3,11 +3,11 @@
 import Link from "next/link"
 import { useEffect, useState } from "react"
 
-import { loadSavedSeed, useCameraStore } from "@/lib/game/camera-store"
-import { PROTOTYPE_MAP } from "@/lib/game/map/prototype-map"
+import { useCameraStore } from "@/lib/game/camera-store"
 import { TERRAIN } from "@/lib/game/map/terrain"
-import { tileAt } from "@/lib/game/map/types"
+import { tileAt, type GameMap } from "@/lib/game/map/types"
 import { parseSeed } from "@/lib/game/rng"
+import { saveSeed } from "@/lib/game/seed-storage"
 import {
   DEFAULT_VIEW_SIZE,
   MAX_VIEW_SIZE,
@@ -16,6 +16,8 @@ import {
 } from "@/lib/game/render/iso"
 import { OUTLINE_MODE_LABELS } from "@/lib/game/render/outline"
 import { SITE_MENU } from "@/lib/site-menu"
+
+import type { MapSettings } from "./game-shell"
 
 const CONTROLS: Array<[string, string]> = [
   ["Drag", "Pan"],
@@ -42,7 +44,7 @@ function Label({ children }: { children: React.ReactNode }) {
   )
 }
 
-function MenuButton({
+function HudButton({
   children,
   onClick,
 }: {
@@ -51,48 +53,55 @@ function MenuButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="border border-rule bg-parchment-dark px-2.5 py-1 font-display text-[10px] uppercase tracking-[2px] text-ink hover:border-gold hover:text-red"
+      className="pointer-events-auto border border-rule bg-parchment-dark px-2 py-1 font-display text-[9px] uppercase tracking-[2px] text-ink transition-colors hover:border-gold hover:text-red"
     >
       {children}
     </button>
   )
 }
 
-function MenuPanel() {
-  const seed = useCameraStore((s) => s.seed)
-  const [seedInput, setSeedInput] = useState(String(seed))
-  const [invalid, setInvalid] = useState(false)
-  const [justSaved, setJustSaved] = useState(false)
-
-  // Follow the store when the seed changes elsewhere (saved-seed load, debug).
-  useEffect(() => setSeedInput(String(seed)), [seed])
-
-  useEffect(() => {
-    if (!justSaved) return
-    const timer = setTimeout(() => setJustSaved(false), 2000)
-    return () => clearTimeout(timer)
-  }, [justSaved])
-
-  const apply = (): boolean => {
-    const parsed = parseSeed(seedInput)
-    if (parsed === null) {
-      setInvalid(true)
-      return false
-    }
-    setInvalid(false)
-    useCameraStore.getState().setSeed(parsed)
-    return true
-  }
-
-  const save = () => {
-    if (!apply()) return
-    useCameraStore.getState().saveSeed()
-    setJustSaved(true)
-  }
-
+function Tuner({
+  label,
+  value,
+  display,
+  min,
+  max,
+  step = 1,
+  onChange,
+}: {
+  label: string
+  value: number
+  display: string
+  min: number
+  max: number
+  step?: number
+  onChange: (value: number) => void
+}) {
   return (
-    <div className={`pointer-events-auto w-52 border border-rule bg-parchment/95 px-4 py-3 ${PANEL_SHADOW}`}>
+    <div className="pt-1.5">
+      <div className="flex items-baseline justify-between gap-4">
+        <span className="text-[13px] italic text-ink-light">{label}</span>
+        <span className="font-display text-[10px] text-ink">{display}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="pointer-events-auto mt-0.5 h-1 w-36 cursor-pointer accent-gold"
+      />
+    </div>
+  )
+}
+
+/** Top-level navigation, folded into the play view. */
+function MenuPanel() {
+  return (
+    <div className={`pointer-events-auto w-40 border border-rule bg-parchment/95 px-4 py-3 ${PANEL_SHADOW}`}>
       <nav className="flex flex-col gap-1.5">
         {SITE_MENU.map((item) => (
           <Link
@@ -104,56 +113,110 @@ function MenuPanel() {
           </Link>
         ))}
       </nav>
+    </div>
+  )
+}
 
-      <div className="mt-3 border-t border-rule pt-2.5">
-        <Label>World seed</Label>
-        <input
-          value={seedInput}
-          onChange={(event) => {
-            setSeedInput(event.target.value)
-            setInvalid(false)
-          }}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") apply()
-          }}
-          inputMode="numeric"
-          spellCheck={false}
-          aria-label="World seed"
-          aria-invalid={invalid}
-          className={`mt-1.5 w-full border bg-parchment px-2 py-1 text-[13px] text-ink outline-none ${
-            invalid ? "border-red" : "border-rule focus:border-gold"
-          }`}
-        />
-        {invalid && <div className="mt-1 text-[11px] italic text-red">Digits only</div>}
-        <div className="mt-2 flex items-center gap-2">
-          <MenuButton onClick={apply}>Apply</MenuButton>
-          <MenuButton onClick={save}>Save</MenuButton>
-          {justSaved && <span className="text-[11px] italic text-ink-light">Saved ✦</span>}
-        </div>
+/**
+ * The seed as an editable field: paste a value and apply it, or save it as the
+ * default for future sessions. The shell owns the seed; this only reports.
+ */
+function SeedField({
+  seed,
+  onSeedChange,
+}: {
+  seed: number | null
+  onSeedChange: (seed: number) => void
+}) {
+  const [input, setInput] = useState(seed === null ? "" : String(seed))
+  const [invalid, setInvalid] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
+
+  // Follow the shell when the seed changes elsewhere (reroll, URL load).
+  useEffect(() => {
+    if (seed !== null) setInput(String(seed))
+  }, [seed])
+
+  useEffect(() => {
+    if (!justSaved) return
+    const timer = setTimeout(() => setJustSaved(false), 2000)
+    return () => clearTimeout(timer)
+  }, [justSaved])
+
+  const apply = (): number | null => {
+    const parsed = parseSeed(input)
+    if (parsed === null) {
+      setInvalid(true)
+      return null
+    }
+    setInvalid(false)
+    onSeedChange(parsed)
+    return parsed
+  }
+
+  const save = () => {
+    const parsed = apply()
+    if (parsed === null) return
+    saveSeed(parsed)
+    setJustSaved(true)
+  }
+
+  return (
+    <div>
+      <input
+        value={input}
+        onChange={(event) => {
+          setInput(event.target.value)
+          setInvalid(false)
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") apply()
+        }}
+        inputMode="numeric"
+        spellCheck={false}
+        aria-label="World seed"
+        aria-invalid={invalid}
+        className={`pointer-events-auto mt-1 w-36 border bg-parchment px-2 py-1 text-[13px] text-ink outline-none ${
+          invalid ? "border-red" : "border-rule focus:border-gold"
+        }`}
+      />
+      {invalid && <div className="mt-1 text-[11px] italic text-red">Digits only</div>}
+      <div className="mt-1.5 flex items-center gap-1.5">
+        <HudButton onClick={apply}>Apply</HudButton>
+        <HudButton onClick={save}>Save</HudButton>
+        {justSaved && <span className="text-[11px] italic text-ink-light">Saved ✦</span>}
       </div>
     </div>
   )
 }
 
-export function GameHud() {
+export function GameHud({
+  map,
+  seed,
+  settings,
+  onSettingsChange,
+  onReroll,
+  onSeedChange,
+}: {
+  map: GameMap | null
+  seed: number | null
+  settings: MapSettings
+  onSettingsChange: (settings: MapSettings) => void
+  onReroll: () => void
+  onSeedChange: (seed: number) => void
+}) {
+  const set = (patch: Partial<MapSettings>) => onSettingsChange({ ...settings, ...patch })
   const viewIndex = useCameraStore((s) => s.viewIndex)
   const viewSize = useCameraStore((s) => s.viewSize)
   const hovered = useCameraStore((s) => s.hovered)
   const outlineMode = useCameraStore((s) => s.outlineMode)
   const [menuOpen, setMenuOpen] = useState(false)
 
-  // A seed the player saved in an earlier session takes over after mount.
-  // (After mount, not during render, so SSR and hydration agree.)
-  useEffect(() => {
-    const saved = loadSavedSeed()
-    if (saved !== null) useCameraStore.getState().setSeed(saved)
-  }, [])
-
   const view = normalizeViewIndex(viewIndex)
   // Relative to the default zoom, so 100% is where the camera starts and
   // bigger reads as closer.
   const zoomPercent = Math.round((DEFAULT_VIEW_SIZE / viewSize) * 100)
-  const hoveredTerrain = hovered ? tileAt(PROTOTYPE_MAP, hovered.x, hovered.z) : null
+  const hoveredTerrain = hovered && map ? tileAt(map, hovered.x, hovered.z) : null
 
   return (
     <>
@@ -166,6 +229,7 @@ export function GameHud() {
         </Panel>
 
         <button
+          type="button"
           onClick={() => setMenuOpen((open) => !open)}
           aria-expanded={menuOpen}
           className={`pointer-events-auto border border-rule bg-parchment/95 px-4 py-2 font-display text-[10px] uppercase tracking-[2px] text-ink hover:text-red ${PANEL_SHADOW}`}
@@ -174,6 +238,59 @@ export function GameHud() {
         </button>
 
         {menuOpen && <MenuPanel />}
+
+        <Panel>
+          <Label>Seed</Label>
+          <SeedField seed={seed} onSeedChange={onSeedChange} />
+          <Tuner
+            label="Size"
+            value={settings.size}
+            display={`${settings.size} × ${settings.size}`}
+            min={32}
+            max={128}
+            step={16}
+            onChange={(size) => set({ size })}
+          />
+          <div className="mt-1.5">
+            <HudButton onClick={onReroll}>New Map</HudButton>
+          </div>
+        </Panel>
+
+        <Panel>
+          <Label>Forest</Label>
+          <Tuner
+            label="Coverage"
+            value={settings.coverage}
+            display={`${settings.coverage}%`}
+            min={0}
+            max={50}
+            onChange={(coverage) => set({ coverage })}
+          />
+          <Tuner
+            label="Forests"
+            value={settings.clusters}
+            display={String(settings.clusters)}
+            min={1}
+            max={8}
+            onChange={(clusters) => set({ clusters })}
+          />
+          <Tuner
+            label="Groves"
+            value={settings.groves}
+            display={String(settings.groves)}
+            min={0}
+            max={30}
+            onChange={(groves) => set({ groves })}
+          />
+          <Tuner
+            label="Trees per tile"
+            value={settings.treeDensity}
+            display={String(settings.treeDensity)}
+            min={1}
+            max={6}
+            onChange={(treeDensity) => set({ treeDensity })}
+          />
+        </Panel>
       </div>
 
       <div className="absolute right-5 top-5 z-10 flex flex-col gap-2">

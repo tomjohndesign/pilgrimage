@@ -4,7 +4,6 @@ import { useLayoutEffect, useMemo, useRef } from "react"
 import { useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 
-import { useCameraStore } from "@/lib/game/camera-store"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -83,8 +82,6 @@ function makeGridMaterial(): THREE.MeshLambertMaterial {
 }
 
 export function TerrainTiles({ map }: { map: GameMap }) {
-  // Per-tile colour jitter re-rolls whenever the world seed changes.
-  const seed = useCameraStore((s) => s.seed)
   const meshRef = useRef<THREE.InstancedMesh>(null)
   const idMeshRef = useRef<THREE.InstancedMesh>(null)
   const count = map.width * map.depth
@@ -101,7 +98,8 @@ export function TerrainTiles({ map }: { map: GameMap }) {
     const quaternion = new THREE.Quaternion()
     const scale = new THREE.Vector3()
     const color = new THREE.Color()
-    const rng = makeRng(deriveSeed(seed, SEED_STREAM.tileJitter))
+    // Colour grain is a function of the map's own seed, one stream per consumer.
+    const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.tileJitter))
 
     for (let z = 0; z < map.depth; z++) {
       for (let x = 0; x < map.width; x++) {
@@ -126,7 +124,7 @@ export function TerrainTiles({ map }: { map: GameMap }) {
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
     idMesh.instanceMatrix.needsUpdate = true
-  }, [map, seed])
+  }, [map])
 
   const dirt = useLoader(THREE.TextureLoader, DIRT_TEXTURE_URL)
   useMemo(() => {

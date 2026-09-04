@@ -3,7 +3,7 @@
 import { Suspense } from "react"
 import { Canvas } from "@react-three/fiber"
 
-import { PROTOTYPE_MAP } from "@/lib/game/map/prototype-map"
+import type { GameMap } from "@/lib/game/map/types"
 import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 
 import { Buildings } from "./buildings"
@@ -17,7 +17,7 @@ import { Trees } from "./trees"
 
 const BACKGROUND = "#14100a"
 
-export function GameCanvas() {
+export function GameCanvas({ map, treeDensity }: { map: GameMap; treeDensity?: number }) {
   return (
     <Canvas
       orthographic
@@ -40,15 +40,15 @@ export function GameCanvas() {
 
       {/* The terrain suspends while the dirt texture loads. */}
       <Suspense fallback={null}>
-        <TerrainTiles map={PROTOTYPE_MAP} />
+        <TerrainTiles map={map} />
       </Suspense>
-      <Trees map={PROTOTYPE_MAP} />
-      <Buildings map={PROTOTYPE_MAP} />
-      <TileCursor map={PROTOTYPE_MAP} />
+      <Trees map={map} density={treeDensity} />
+      <Buildings map={map} />
+      <TileCursor map={map} />
 
-      <CameraRig />
+      <CameraRig map={map} />
       <OutlinePass />
-      <DebugHandle />
+      <DebugHandle map={map} />
     </Canvas>
   )
 }

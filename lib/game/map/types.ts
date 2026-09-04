@@ -21,6 +21,8 @@ export interface GameMap {
   /** Row-major, indexed by `z * width + x`. */
   tiles: TerrainId[]
   buildings: BuildingDef[]
+  /** Present on generated maps; absent on hand-authored ones. Drives cosmetic RNG too. */
+  seed?: number
 }
 
 export function tileAt(map: GameMap, x: number, z: number): TerrainId | null {

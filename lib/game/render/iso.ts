@@ -27,8 +27,9 @@ export const CAM_FAR = 400
 
 /** Orthographic frustum height, in world units. Smaller = more zoomed in. */
 export const MIN_VIEW_SIZE = 8
-export const MAX_VIEW_SIZE = 56
-export const DEFAULT_VIEW_SIZE = 26
+/** Must be generous enough to frame the largest selectable map (128 tiles). */
+export const MAX_VIEW_SIZE = 140
+export const DEFAULT_VIEW_SIZE = 40
 
 /** Yaw in radians for a view index. The index is unbounded so tweens can wrap. */
 export function yawForView(viewIndex: number): number {
