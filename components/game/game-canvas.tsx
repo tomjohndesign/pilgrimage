@@ -2,7 +2,7 @@
 
 import { Canvas } from "@react-three/fiber"
 
-import { PROTOTYPE_MAP } from "@/lib/game/map/prototype-map"
+import type { GameMap } from "@/lib/game/map/types"
 import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 
 import { Buildings } from "./buildings"
@@ -14,10 +14,11 @@ import { Trees } from "./trees"
 
 const BACKGROUND = "#14100a"
 
-/** Half-extent of the shadow camera. Must cover the whole map plus a margin. */
-const SHADOW_EXTENT = 30
+export function GameCanvas({ map, treeDensity }: { map: GameMap; treeDensity?: number }) {
+  // Half-extent of the shadow camera. Must cover the whole map plus a margin,
+  // whatever size the map is.
+  const shadowExtent = Math.max(map.width, map.depth) * 0.75 + 6
 
-export function GameCanvas() {
   return (
     <Canvas
       orthographic
@@ -39,25 +40,25 @@ export function GameCanvas() {
         position={[26, 40, 18]}
         intensity={2.7}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-left={-SHADOW_EXTENT}
-        shadow-camera-right={SHADOW_EXTENT}
-        shadow-camera-top={SHADOW_EXTENT}
-        shadow-camera-bottom={-SHADOW_EXTENT}
+        shadow-mapSize-width={4096}
+        shadow-mapSize-height={4096}
+        shadow-camera-left={-shadowExtent}
+        shadow-camera-right={shadowExtent}
+        shadow-camera-top={shadowExtent}
+        shadow-camera-bottom={-shadowExtent}
         shadow-camera-near={1}
-        shadow-camera-far={120}
+        shadow-camera-far={360}
         shadow-bias={-0.0012}
         shadow-normalBias={0.02}
       />
 
-      <TerrainTiles map={PROTOTYPE_MAP} />
-      <Trees map={PROTOTYPE_MAP} />
-      <Buildings map={PROTOTYPE_MAP} />
-      <TileCursor map={PROTOTYPE_MAP} />
+      <TerrainTiles map={map} />
+      <Trees map={map} density={treeDensity} />
+      <Buildings map={map} />
+      <TileCursor map={map} />
 
-      <CameraRig />
-      <DebugHandle />
+      <CameraRig map={map} />
+      <DebugHandle map={map} />
     </Canvas>
   )
 }

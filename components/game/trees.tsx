@@ -7,11 +7,18 @@ import { makeRng } from "@/lib/game/rng"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 
-/** Placeholder trees: one jittered box per forest tile, drawn in a single batch. */
+/**
+ * Placeholder trees: jittered boxes on every forest tile, drawn in one batch.
+ * `density` is trees per tile — 1 reads as open woodland, 4+ as black forest.
+ * Jitter derives from the map seed (XORed so trees and tiles don't share a
+ * stream), keeping the whole look a function of one number.
+ */
 const TREE_SEED = 774411
 const TREE_COLOR = new THREE.Color("#40542e")
 
-export function Trees({ map }: { map: GameMap }) {
+export const DEFAULT_TREE_DENSITY = 3
+
+export function Trees({ map, density = DEFAULT_TREE_DENSITY }: { map: GameMap; density?: number }) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
 
   const forestTiles = useMemo(() => {
@@ -24,6 +31,8 @@ export function Trees({ map }: { map: GameMap }) {
     return tiles
   }, [map])
 
+  const count = forestTiles.length * density
+
   useLayoutEffect(() => {
     const mesh = meshRef.current
     if (!mesh) return
@@ -34,44 +43,54 @@ export function Trees({ map }: { map: GameMap }) {
     const euler = new THREE.Euler()
     const scale = new THREE.Vector3()
     const color = new THREE.Color()
-    const rng = makeRng(TREE_SEED)
+    const rng = makeRng((map.seed ?? 0) ^ TREE_SEED)
     const baseY = TERRAIN.forest.height
 
-    forestTiles.forEach((tile, index) => {
-      const height = 0.7 + rng() * 0.7
-      const width = 0.34 + rng() * 0.16
-      // Nudge off-centre so the canopy doesn't look like a regular lattice.
-      const offsetX = (rng() - 0.5) * 0.34
-      const offsetZ = (rng() - 0.5) * 0.34
+    // Slimmer trunks as the packing increases, so canopies overlap instead of
+    // merging into one solid block.
+    const widthScale = 1 / Math.sqrt(density)
 
-      position.set(
-        tileToWorldX(map, tile.x) + offsetX,
-        baseY + height / 2,
-        tileToWorldZ(map, tile.z) + offsetZ,
-      )
-      euler.set(0, rng() * Math.PI, 0)
-      quaternion.setFromEuler(euler)
-      scale.set(width, height, width)
-      matrix.compose(position, quaternion, scale)
-      mesh.setMatrixAt(index, matrix)
+    let index = 0
+    for (const tile of forestTiles) {
+      for (let t = 0; t < density; t++) {
+        const height = 0.65 + rng() * 0.85
+        const width = (0.34 + rng() * 0.16) * widthScale
+        // Spread across the tile so a packed tile reads as many trees, not a lattice.
+        const offsetX = (rng() - 0.5) * 0.8
+        const offsetZ = (rng() - 0.5) * 0.8
 
-      color.copy(TREE_COLOR).multiplyScalar(0.8 + rng() * 0.45)
-      mesh.setColorAt(index, color)
-    })
+        position.set(
+          tileToWorldX(map, tile.x) + offsetX,
+          baseY + height / 2,
+          tileToWorldZ(map, tile.z) + offsetZ,
+        )
+        euler.set(0, rng() * Math.PI, 0)
+        quaternion.setFromEuler(euler)
+        scale.set(width, height, width)
+        matrix.compose(position, quaternion, scale)
+        mesh.setMatrixAt(index, matrix)
+
+        color.copy(TREE_COLOR).multiplyScalar(0.75 + rng() * 0.5)
+        mesh.setColorAt(index, color)
+        index++
+      }
+    }
 
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
-  }, [map, forestTiles])
+  }, [map, forestTiles, density])
 
-  if (forestTiles.length === 0) return null
+  if (count === 0) return null
 
   return (
     <instancedMesh
+      // The instance count is a constructor argument, so remount when it changes.
+      key={count}
       ref={meshRef}
       args={[
         undefined as unknown as THREE.BufferGeometry,
         undefined as unknown as THREE.Material,
-        forestTiles.length,
+        count,
       ]}
       castShadow
       receiveShadow

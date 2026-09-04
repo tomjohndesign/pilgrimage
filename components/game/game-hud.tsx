@@ -1,9 +1,10 @@
 "use client"
 
 import { useCameraStore } from "@/lib/game/camera-store"
-import { PROTOTYPE_MAP } from "@/lib/game/map/prototype-map"
 import { TERRAIN } from "@/lib/game/map/terrain"
-import { tileAt } from "@/lib/game/map/types"
+import { tileAt, type GameMap } from "@/lib/game/map/types"
+
+import type { MapSettings } from "./game-shell"
 import {
   DEFAULT_VIEW_SIZE,
   MAX_VIEW_SIZE,
@@ -33,7 +34,56 @@ function Label({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function GameHud() {
+function Tuner({
+  label,
+  value,
+  display,
+  min,
+  max,
+  step = 1,
+  onChange,
+}: {
+  label: string
+  value: number
+  display: string
+  min: number
+  max: number
+  step?: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <div className="pt-1.5">
+      <div className="flex items-baseline justify-between gap-4">
+        <span className="text-[13px] italic text-ink-light">{label}</span>
+        <span className="font-display text-[10px] text-ink">{display}</span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="pointer-events-auto mt-0.5 h-1 w-36 cursor-pointer accent-gold"
+      />
+    </div>
+  )
+}
+
+export function GameHud({
+  map,
+  seed,
+  settings,
+  onSettingsChange,
+  onReroll,
+}: {
+  map: GameMap | null
+  seed: number | null
+  settings: MapSettings
+  onSettingsChange: (settings: MapSettings) => void
+  onReroll: () => void
+}) {
+  const set = (patch: Partial<MapSettings>) => onSettingsChange({ ...settings, ...patch })
   const viewIndex = useCameraStore((s) => s.viewIndex)
   const viewSize = useCameraStore((s) => s.viewSize)
   const hovered = useCameraStore((s) => s.hovered)
@@ -42,16 +92,73 @@ export function GameHud() {
   // Relative to the default zoom, so 100% is where the camera starts and
   // bigger reads as closer.
   const zoomPercent = Math.round((DEFAULT_VIEW_SIZE / viewSize) * 100)
-  const hoveredTerrain = hovered ? tileAt(PROTOTYPE_MAP, hovered.x, hovered.z) : null
+  const hoveredTerrain = hovered && map ? tileAt(map, hovered.x, hovered.z) : null
 
   return (
     <>
-      <div className="absolute left-5 top-5 z-10">
+      <div className="absolute left-5 top-5 z-10 flex flex-col gap-2">
         <Panel>
           <div className="font-display text-sm font-bold tracking-[3px] text-ink">PILGRIMAGE</div>
           <div className="font-display text-[9px] uppercase tracking-[2px] text-gold">
             Prototype — Camera &amp; Map
           </div>
+        </Panel>
+
+        <Panel>
+          <Label>Seed</Label>
+          <div className="pt-1 font-display text-xs text-ink">{seed ?? "—"}</div>
+          <Tuner
+            label="Size"
+            value={settings.size}
+            display={`${settings.size} × ${settings.size}`}
+            min={32}
+            max={128}
+            step={16}
+            onChange={(size) => set({ size })}
+          />
+          <button
+            type="button"
+            onClick={onReroll}
+            className="pointer-events-auto mt-1.5 border border-rule bg-parchment-dark px-2 py-1 font-display text-[9px] uppercase tracking-[2px] text-ink transition-colors hover:border-gold hover:text-gold"
+          >
+            New Map
+          </button>
+        </Panel>
+
+        <Panel>
+          <Label>Forest</Label>
+          <Tuner
+            label="Coverage"
+            value={settings.coverage}
+            display={`${settings.coverage}%`}
+            min={0}
+            max={50}
+            onChange={(coverage) => set({ coverage })}
+          />
+          <Tuner
+            label="Forests"
+            value={settings.clusters}
+            display={String(settings.clusters)}
+            min={1}
+            max={8}
+            onChange={(clusters) => set({ clusters })}
+          />
+          <Tuner
+            label="Groves"
+            value={settings.groves}
+            display={String(settings.groves)}
+            min={0}
+            max={30}
+            onChange={(groves) => set({ groves })}
+          />
+          <Tuner
+            label="Trees per tile"
+            value={settings.treeDensity}
+            display={String(settings.treeDensity)}
+            min={1}
+            max={6}
+            onChange={(treeDensity) => set({ treeDensity })}
+          />
         </Panel>
       </div>
 

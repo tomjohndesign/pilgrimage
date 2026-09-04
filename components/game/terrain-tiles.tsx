@@ -19,7 +19,10 @@ export const SLAB_TOP = 0.08
 const SLAB_THICKNESS = 1.2
 const SLAB_COLOR = "#241a10"
 
-/** Deterministic, so the map looks identical on every load and in screenshots. */
+/**
+ * Deterministic, so the map looks identical on every load and in screenshots.
+ * XORed with the map seed so the colour grain also changes per map.
+ */
 const TILE_JITTER_SEED = 20250805
 
 export function TerrainTiles({ map }: { map: GameMap }) {
@@ -35,7 +38,7 @@ export function TerrainTiles({ map }: { map: GameMap }) {
     const quaternion = new THREE.Quaternion()
     const scale = new THREE.Vector3()
     const color = new THREE.Color()
-    const rng = makeRng(TILE_JITTER_SEED)
+    const rng = makeRng((map.seed ?? 0) ^ TILE_JITTER_SEED)
 
     for (let z = 0; z < map.depth; z++) {
       for (let x = 0; x < map.width; x++) {
