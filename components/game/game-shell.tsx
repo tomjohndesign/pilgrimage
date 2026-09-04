@@ -16,7 +16,6 @@ import {
 
 import { GameHud } from "./game-hud"
 import { MusicPlayer } from "./music-player"
-import { DEFAULT_TREE_DENSITY } from "./trees"
 
 /**
  * WebGL has no meaningful server render, and three.js touches browser globals on
@@ -43,8 +42,6 @@ export interface MapSettings {
   glades: number
   /** Number of small forest-floor clearings scattered through the woods. */
   clearings: number
-  /** Trees drawn per forest tile. */
-  treeDensity: number
   /** How many travelers walk the road — the traffic level. */
   traffic: number
   /** Base walking speed in tiles per second. */
@@ -56,7 +53,6 @@ export const DEFAULT_SETTINGS: MapSettings = {
   coverage: Math.round(DEFAULT_FOREST_COVERAGE * 100),
   glades: DEFAULT_GLADE_COUNT,
   clearings: DEFAULT_CLEARING_COUNT,
-  treeDensity: DEFAULT_TREE_DENSITY,
   traffic: 12,
   walkSpeed: 1.5,
 }
@@ -99,7 +95,6 @@ export function GameShell({
       forest: String(settings.coverage),
       glades: String(settings.glades),
       clearings: String(settings.clearings),
-      trees: String(settings.treeDensity),
       traffic: String(settings.traffic),
       speed: String(settings.walkSpeed),
     })
@@ -140,12 +135,7 @@ export function GameShell({
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#14100a] select-none">
       {map ? (
-        <GameCanvas
-          map={map}
-          treeDensity={settings.treeDensity}
-          travelers={travelers}
-          walkSpeed={settings.walkSpeed}
-        />
+        <GameCanvas map={map} travelers={travelers} walkSpeed={settings.walkSpeed} />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
           <span className="font-display text-[10px] uppercase tracking-[3px] text-gold">

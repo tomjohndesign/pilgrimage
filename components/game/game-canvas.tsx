@@ -21,12 +21,10 @@ const BACKGROUND = "#14100a"
 
 export function GameCanvas({
   map,
-  treeDensity,
   travelers,
   walkSpeed,
 }: {
   map: GameMap
-  treeDensity?: number
   travelers: Traveler[]
   walkSpeed: number
 }) {
@@ -54,7 +52,7 @@ export function GameCanvas({
       <Suspense fallback={null}>
         <TerrainTiles map={map} />
       </Suspense>
-      <Trees map={map} density={treeDensity} />
+      <Trees map={map} />
       <Buildings map={map} />
       <Travelers map={map} travelers={travelers} speed={walkSpeed} />
       <TileCursor map={map} />

@@ -42,4 +42,5 @@ export const SEED_STREAM = {
   tileJitter: 1,
   trees: 2,
   travelers: 3,
+  treeCount: 4,
 } as const

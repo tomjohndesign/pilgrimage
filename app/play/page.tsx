@@ -31,14 +31,12 @@ export default async function PlayPage({
   const coverage = parseIntParam(params.forest)
   const glades = parseIntParam(params.glades)
   const clearings = parseIntParam(params.clearings)
-  const treeDensity = parseIntParam(params.trees)
   const traffic = parseIntParam(params.traffic)
   const walkSpeed = parseFloatParam(params.speed)
   if (size !== undefined) initialSettings.size = size
   if (coverage !== undefined) initialSettings.coverage = coverage
   if (glades !== undefined) initialSettings.glades = glades
   if (clearings !== undefined) initialSettings.clearings = clearings
-  if (treeDensity !== undefined) initialSettings.treeDensity = treeDensity
   if (traffic !== undefined) initialSettings.traffic = traffic
   if (walkSpeed !== undefined) initialSettings.walkSpeed = walkSpeed
 
