@@ -13,10 +13,16 @@ const VIDEO_ID = "5F5dgg1eeGE"
 /** 0–100. Quiet enough to sit under the game rather than in front of it. */
 const VOLUME = 20
 const MUSIC_STORAGE_KEY = "pilgrimage.music"
+/** Used only if the player hasn't reported a duration yet; the real track is ~10h. */
+const FALLBACK_DURATION_SECONDS = 9 * 60 * 60
+/** Never drop in this close to the end, so the random start isn't over in seconds. */
+const TAIL_SECONDS = 10 * 60
 
 interface YouTubePlayer {
   playVideo: () => void
   pauseVideo: () => void
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void
+  getDuration: () => number
   setVolume: (volume: number) => void
   destroy: () => void
 }
@@ -56,6 +62,8 @@ export function MusicPlayer() {
   // Browsers refuse un-gestured audio, so playback waits for any interaction.
   const [interacted, setInteracted] = useState(false)
   const [enabled, setEnabled] = useState(true)
+  // Only the first play jumps; pausing and resuming picks up where it left off.
+  const seekedRef = useRef(false)
 
   useEffect(() => {
     setEnabled(loadMusicEnabled() ?? true)
@@ -118,8 +126,17 @@ export function MusicPlayer() {
   useEffect(() => {
     const player = playerRef.current
     if (!ready || !interacted || !player) return
-    if (enabled) player.playVideo()
-    else player.pauseVideo()
+    if (enabled) {
+      if (!seekedRef.current) {
+        seekedRef.current = true
+        // Ten hours of lute is a lot to always hear the first minute of, so
+        // each session drops in somewhere else in the recording.
+        const duration = player.getDuration() || FALLBACK_DURATION_SECONDS
+        const span = Math.max(0, duration - TAIL_SECONDS)
+        player.seekTo(Math.random() * span, true)
+      }
+      player.playVideo()
+    } else player.pauseVideo()
   }, [ready, interacted, enabled])
 
   // The game falls silent with the tab, like it would if it paused.
