@@ -26,6 +26,8 @@ interface CameraState {
   /** Current map extent; the pan clamp follows whatever map is loaded. */
   mapWidth: number
   mapDepth: number
+  /** Traveler the player clicked, by traveler id. Not part of reset(). */
+  selectedTravelerId: number | null
 
   pan: (dx: number, dz: number) => void
   /** Jump the focus straight to a world point — the minimap's click-to-travel. */
@@ -35,6 +37,7 @@ interface CameraState {
   setHovered: (tile: HoveredTile | null) => void
   cycleOutlineMode: () => void
   setMapSize: (width: number, depth: number) => void
+  selectTraveler: (id: number | null) => void
   reset: () => void
 }
 
@@ -66,6 +69,7 @@ export const useCameraStore = create<CameraState>((set) => ({
   outlineMode: DEFAULT_OUTLINE_MODE,
   mapWidth: DEFAULT_MAP_WIDTH,
   mapDepth: DEFAULT_MAP_DEPTH,
+  selectedTravelerId: null,
 
   pan: (dx, dz) => set((s) => clampTarget(s, s.targetX + dx, s.targetZ + dz)),
 
@@ -97,6 +101,8 @@ export const useCameraStore = create<CameraState>((set) => ({
       viewSize: clampViewSize(s.viewSize, maxViewSizeForMap(width, depth)),
       ...clampTarget({ mapWidth: width, mapDepth: depth }, s.targetX, s.targetZ),
     })),
+
+  selectTraveler: (id) => set({ selectedTravelerId: id }),
 
   // Deliberately leaves mapWidth/mapDepth alone — reset is a camera action.
   reset: () =>

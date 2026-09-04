@@ -5,15 +5,17 @@ import { useEffect, useMemo, useState } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
+import { generateTravelers } from "@/lib/game/travelers"
 import {
-  DEFAULT_CLUSTER_COUNT,
+  DEFAULT_CLEARING_COUNT,
   DEFAULT_FOREST_COVERAGE,
-  DEFAULT_GROVE_COUNT,
+  DEFAULT_GLADE_COUNT,
   DEFAULT_MAP_WIDTH,
   generateMap,
 } from "@/lib/game/map/generate-map"
 
 import { GameHud } from "./game-hud"
+import { MusicPlayer } from "./music-player"
 
 /**
  * WebGL has no meaningful server render, and three.js touches browser globals on
@@ -34,19 +36,25 @@ const GameCanvas = dynamic(() => import("./game-canvas").then((m) => m.GameCanva
 export interface MapSettings {
   /** Map edge length in tiles; maps are square. */
   size: number
-  /** % of the map covered by large forest clusters. */
+  /** % of the map left as forest after the glades are carved. */
   coverage: number
-  /** How many large clusters that coverage is split across. */
-  clusters: number
-  /** Number of small scattered groves. */
-  groves: number
+  /** Number of open grass glades carved out of the forest. */
+  glades: number
+  /** Number of small forest-floor clearings scattered through the woods. */
+  clearings: number
+  /** How many travelers walk the road — the traffic level. */
+  traffic: number
+  /** Base walking speed in tiles per second. */
+  walkSpeed: number
 }
 
 export const DEFAULT_SETTINGS: MapSettings = {
   size: DEFAULT_MAP_WIDTH,
   coverage: Math.round(DEFAULT_FOREST_COVERAGE * 100),
-  clusters: DEFAULT_CLUSTER_COUNT,
-  groves: DEFAULT_GROVE_COUNT,
+  glades: DEFAULT_GLADE_COUNT,
+  clearings: DEFAULT_CLEARING_COUNT,
+  traffic: 12,
+  walkSpeed: 1.5,
 }
 
 /**
@@ -85,8 +93,10 @@ export function GameShell({
       seed: String(seed),
       size: String(settings.size),
       forest: String(settings.coverage),
-      clusters: String(settings.clusters),
-      groves: String(settings.groves),
+      glades: String(settings.glades),
+      clearings: String(settings.clearings),
+      traffic: String(settings.traffic),
+      speed: String(settings.walkSpeed),
     })
     window.history.replaceState(null, "", `?${query}`)
   }, [seed, settings])
@@ -100,10 +110,16 @@ export function GameShell({
             width: settings.size,
             depth: settings.size,
             forestCoverage: settings.coverage / 100,
-            clusterCount: settings.clusters,
-            groveCount: settings.groves,
+            gladeCount: settings.glades,
+            clearingCount: settings.clearings,
           }),
-    [seed, settings.size, settings.coverage, settings.clusters, settings.groves],
+    [seed, settings.size, settings.coverage, settings.glades, settings.clearings],
+  )
+
+  // Identities live outside the canvas so the HUD can name whoever is selected.
+  const travelers = useMemo(
+    () => (seed === null ? [] : generateTravelers(seed, settings.traffic)),
+    [seed, settings.traffic],
   )
 
   // The camera's pan clamp follows the loaded map's extent.
@@ -111,10 +127,15 @@ export function GameShell({
     if (map) useCameraStore.getState().setMapSize(map.width, map.depth)
   }, [map])
 
+  // A new cast of travelers invalidates whoever was selected.
+  useEffect(() => {
+    useCameraStore.getState().selectTraveler(null)
+  }, [travelers])
+
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#14100a] select-none">
       {map ? (
-        <GameCanvas map={map} />
+        <GameCanvas map={map} travelers={travelers} walkSpeed={settings.walkSpeed} />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
           <span className="font-display text-[10px] uppercase tracking-[3px] text-gold">
@@ -125,11 +146,13 @@ export function GameShell({
       <GameHud
         map={map}
         seed={seed}
+        travelers={travelers}
         settings={settings}
         onSettingsChange={setSettings}
         onReroll={() => setSeed(randomSeed())}
         onSeedChange={setSeed}
       />
+      <MusicPlayer />
     </div>
   )
 }
