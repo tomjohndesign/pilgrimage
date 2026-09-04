@@ -21,9 +21,9 @@ jobs:
       VERCEL_ORG_ID: team_x3HIt7dbvbPsM9RKoYwAntcq
       VERCEL_PROJECT_ID: prj_G39IsnKLmJqSmAYFjBQLSAj6qWzc
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
 
