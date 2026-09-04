@@ -2,6 +2,7 @@ import { create } from "zustand"
 
 import { DEFAULT_MAP_DEPTH, DEFAULT_MAP_WIDTH } from "./map/generate-map"
 import { clampViewSize, DEFAULT_VIEW_SIZE } from "./render/iso"
+import { DEFAULT_OUTLINE_MODE, nextOutlineMode, type OutlineMode } from "./render/outline"
 
 /** How far past the map edge the camera target may travel. */
 const PAN_MARGIN = 6
@@ -20,6 +21,8 @@ interface CameraState {
   /** Orthographic frustum height in world units. */
   viewSize: number
   hovered: HoveredTile | null
+  /** How the outline pass separates overlapping objects. Not part of reset(). */
+  outlineMode: OutlineMode
   /** Current map extent; the pan clamp follows whatever map is loaded. */
   mapWidth: number
   mapDepth: number
@@ -28,6 +31,7 @@ interface CameraState {
   rotate: (direction: 1 | -1) => void
   zoomBy: (factor: number) => void
   setHovered: (tile: HoveredTile | null) => void
+  cycleOutlineMode: () => void
   setMapSize: (width: number, depth: number) => void
   reset: () => void
 }
@@ -43,6 +47,7 @@ const INITIAL = {
 
 export const useCameraStore = create<CameraState>((set) => ({
   ...INITIAL,
+  outlineMode: DEFAULT_OUTLINE_MODE,
   mapWidth: DEFAULT_MAP_WIDTH,
   mapDepth: DEFAULT_MAP_DEPTH,
 
@@ -67,6 +72,8 @@ export const useCameraStore = create<CameraState>((set) => ({
       if (tile && s.hovered && tile.x === s.hovered.x && tile.z === s.hovered.z) return s
       return { hovered: tile }
     }),
+
+  cycleOutlineMode: () => set((s) => ({ outlineMode: nextOutlineMode(s.outlineMode) })),
 
   setMapSize: (width, depth) => set({ mapWidth: width, mapDepth: depth }),
 

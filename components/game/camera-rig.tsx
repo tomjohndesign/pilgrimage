@@ -148,7 +148,7 @@ export function CameraRig({ map }: { map: GameMap }) {
 
   // --- Keyboard: pan, rotate, zoom, reset -------------------------------------
   useEffect(() => {
-    const { rotate, zoomBy, reset } = useCameraStore.getState()
+    const { rotate, zoomBy, reset, cycleOutlineMode } = useCameraStore.getState()
 
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
@@ -178,6 +178,9 @@ export function CameraRig({ map }: { map: GameMap }) {
           break
         case "0":
           reset()
+          break
+        case "o":
+          cycleOutlineMode()
           break
       }
     }

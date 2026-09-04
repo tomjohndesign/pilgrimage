@@ -3,23 +3,28 @@
 import { useLayoutEffect, useMemo, useRef } from "react"
 import * as THREE from "three"
 
-import { makeRng } from "@/lib/game/rng"
+import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
+import {
+  encodeObjectId,
+  OUTLINE_ID_LAYER_MASK,
+  treeObjectId,
+} from "@/lib/game/render/outline"
 
 /**
  * Placeholder trees: jittered boxes on every forest tile, drawn in one batch.
  * `density` is trees per tile — 1 reads as open woodland, 4+ as black forest.
- * Jitter derives from the map seed (XORed so trees and tiles don't share a
- * stream), keeping the whole look a function of one number.
+ * Jitter derives from the map seed (via its own stream so trees and tiles never
+ * share RNG state), keeping the whole look a function of one number.
  */
-const TREE_SEED = 774411
 const TREE_COLOR = new THREE.Color("#40542e")
 
 export const DEFAULT_TREE_DENSITY = 3
 
 export function Trees({ map, density = DEFAULT_TREE_DENSITY }: { map: GameMap; density?: number }) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
+  const idMeshRef = useRef<THREE.InstancedMesh>(null)
 
   const forestTiles = useMemo(() => {
     const tiles: Array<{ x: number; z: number }> = []
@@ -35,7 +40,8 @@ export function Trees({ map, density = DEFAULT_TREE_DENSITY }: { map: GameMap; d
 
   useLayoutEffect(() => {
     const mesh = meshRef.current
-    if (!mesh) return
+    const idMesh = idMeshRef.current
+    if (!mesh || !idMesh) return
 
     const matrix = new THREE.Matrix4()
     const position = new THREE.Vector3()
@@ -43,7 +49,8 @@ export function Trees({ map, density = DEFAULT_TREE_DENSITY }: { map: GameMap; d
     const euler = new THREE.Euler()
     const scale = new THREE.Vector3()
     const color = new THREE.Color()
-    const rng = makeRng((map.seed ?? 0) ^ TREE_SEED)
+    const idColor = new THREE.Color()
+    const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.trees))
     const baseY = TERRAIN.forest.height
 
     // Slimmer trunks as the packing increases, so canopies overlap instead of
@@ -69,34 +76,57 @@ export function Trees({ map, density = DEFAULT_TREE_DENSITY }: { map: GameMap; d
         scale.set(width, height, width)
         matrix.compose(position, quaternion, scale)
         mesh.setMatrixAt(index, matrix)
+        idMesh.setMatrixAt(index, matrix)
 
         color.copy(TREE_COLOR).multiplyScalar(0.75 + rng() * 0.5)
         mesh.setColorAt(index, color)
+
+        // One ID per tree, so overlapping trees separate from each other too.
+        const [r, g, b] = encodeObjectId(treeObjectId(map.buildings.length, index))
+        idColor.setRGB(r, g, b)
+        idMesh.setColorAt(index, idColor)
         index++
       }
     }
 
     mesh.instanceMatrix.needsUpdate = true
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    idMesh.instanceMatrix.needsUpdate = true
+    if (idMesh.instanceColor) idMesh.instanceColor.needsUpdate = true
   }, [map, forestTiles, density])
 
   if (count === 0) return null
 
   return (
-    <instancedMesh
-      // The instance count is a constructor argument, so remount when it changes.
-      key={count}
-      ref={meshRef}
-      args={[
-        undefined as unknown as THREE.BufferGeometry,
-        undefined as unknown as THREE.Material,
-        count,
-      ]}
-      castShadow
-      receiveShadow
-    >
-      <boxGeometry args={[1, 1, 1]} />
-      <meshLambertMaterial />
-    </instancedMesh>
+    <group>
+      <instancedMesh
+        // The instance count is a constructor argument, so remount when it changes.
+        key={count}
+        ref={meshRef}
+        args={[
+          undefined as unknown as THREE.BufferGeometry,
+          undefined as unknown as THREE.Material,
+          count,
+        ]}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshLambertMaterial />
+      </instancedMesh>
+
+      {/* ID silhouettes for the outline pass. */}
+      <instancedMesh
+        key={`id-${count}`}
+        ref={idMeshRef}
+        args={[
+          undefined as unknown as THREE.BufferGeometry,
+          undefined as unknown as THREE.Material,
+          count,
+        ]}
+        layers-mask={OUTLINE_ID_LAYER_MASK}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshBasicMaterial toneMapped={false} />
+      </instancedMesh>
+    </group>
   )
 }

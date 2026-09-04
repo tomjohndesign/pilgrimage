@@ -4,6 +4,7 @@ import dynamic from "next/dynamic"
 import { useEffect, useMemo, useState } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import { loadSavedSeed } from "@/lib/game/seed-storage"
 import {
   DEFAULT_CLUSTER_COUNT,
   DEFAULT_FOREST_COVERAGE,
@@ -76,7 +77,9 @@ export function GameShell({
   })
 
   useEffect(() => {
-    if (seed === null) setSeed(randomSeed())
+    // A seed the player saved takes precedence over a random roll, but never
+    // over one named in the URL (that arrives via initialSeed).
+    if (seed === null) setSeed(loadSavedSeed() ?? randomSeed())
   }, [seed])
 
   // Keep seed and tuning in the URL so any map can be bookmarked and revisited.
@@ -130,6 +133,7 @@ export function GameShell({
         settings={settings}
         onSettingsChange={setSettings}
         onReroll={() => setSeed(randomSeed())}
+        onSeedChange={setSeed}
       />
     </div>
   )

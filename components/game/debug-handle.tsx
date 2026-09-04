@@ -5,10 +5,14 @@ import { useThree } from "@react-three/fiber"
 
 import { useCameraStore } from "@/lib/game/camera-store"
 import type { GameMap } from "@/lib/game/map/types"
+import type { OutlineMode } from "@/lib/game/render/outline"
+
+import { outlineFrameRef } from "./outline-pass"
 
 /**
  * Exposes a small handle on `window` so the scene can be driven deterministically
  * from Playwright or the console — set a camera pose, screenshot, compare.
+ * (The world seed itself comes from the URL: /play?seed=….)
  * Development only; it is never mounted in a production build.
  */
 export function DebugHandle({ map }: { map: GameMap }) {
@@ -25,6 +29,7 @@ export function DebugHandle({ map }: { map: GameMap }) {
         useCameraStore.setState({ viewIndex: Math.round(viewIndex) }),
       setTarget: (x: number, z: number) => useCameraStore.setState({ targetX: x, targetZ: z }),
       setZoom: (viewSize: number) => useCameraStore.setState({ viewSize }),
+      setOutline: (mode: OutlineMode) => useCameraStore.setState({ outlineMode: mode }),
       reset: () => useCameraStore.getState().reset(),
       /**
        * Data URL of the current frame. Renders first so the drawing buffer is
@@ -32,7 +37,9 @@ export function DebugHandle({ map }: { map: GameMap }) {
        * the context was created with `preserveDrawingBuffer`.
        */
       screenshot: () => {
-        gl.render(scene, camera)
+        // Prefer the outline pass's frame render so screenshots match the screen.
+        if (outlineFrameRef.current) outlineFrameRef.current()
+        else gl.render(scene, camera)
         return gl.domElement.toDataURL("image/png")
       },
     }
