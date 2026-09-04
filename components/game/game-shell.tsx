@@ -14,6 +14,7 @@ import {
 } from "@/lib/game/map/generate-map"
 
 import { GameHud } from "./game-hud"
+import { MusicPlayer } from "./music-player"
 import { DEFAULT_TREE_DENSITY } from "./trees"
 
 /**
@@ -135,6 +136,7 @@ export function GameShell({
         onReroll={() => setSeed(randomSeed())}
         onSeedChange={setSeed}
       />
+      <MusicPlayer />
     </div>
   )
 }
