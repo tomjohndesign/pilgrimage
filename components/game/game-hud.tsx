@@ -383,25 +383,25 @@ export function GameHud({
             label="Coverage"
             value={settings.coverage}
             display={`${settings.coverage}%`}
-            min={0}
-            max={50}
+            min={30}
+            max={90}
             onChange={(coverage) => set({ coverage })}
           />
           <Tuner
-            label="Forests"
-            value={settings.clusters}
-            display={String(settings.clusters)}
+            label="Glades"
+            value={settings.glades}
+            display={String(settings.glades)}
             min={1}
-            max={8}
-            onChange={(clusters) => set({ clusters })}
+            max={12}
+            onChange={(glades) => set({ glades })}
           />
           <Tuner
-            label="Groves"
-            value={settings.groves}
-            display={String(settings.groves)}
+            label="Clearings"
+            value={settings.clearings}
+            display={String(settings.clearings)}
             min={0}
             max={30}
-            onChange={(groves) => set({ groves })}
+            onChange={(clearings) => set({ clearings })}
           />
           <Tuner
             label="Trees per tile"

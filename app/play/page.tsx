@@ -29,15 +29,15 @@ export default async function PlayPage({
   const initialSettings: Partial<MapSettings> = {}
   const size = parseIntParam(params.size)
   const coverage = parseIntParam(params.forest)
-  const clusters = parseIntParam(params.clusters)
-  const groves = parseIntParam(params.groves)
+  const glades = parseIntParam(params.glades)
+  const clearings = parseIntParam(params.clearings)
   const treeDensity = parseIntParam(params.trees)
   const traffic = parseIntParam(params.traffic)
   const walkSpeed = parseFloatParam(params.speed)
   if (size !== undefined) initialSettings.size = size
   if (coverage !== undefined) initialSettings.coverage = coverage
-  if (clusters !== undefined) initialSettings.clusters = clusters
-  if (groves !== undefined) initialSettings.groves = groves
+  if (glades !== undefined) initialSettings.glades = glades
+  if (clearings !== undefined) initialSettings.clearings = clearings
   if (treeDensity !== undefined) initialSettings.treeDensity = treeDensity
   if (traffic !== undefined) initialSettings.traffic = traffic
   if (walkSpeed !== undefined) initialSettings.walkSpeed = walkSpeed

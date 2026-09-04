@@ -15,8 +15,15 @@ const ebGaramond = EB_Garamond({
   display: 'swap',
 })
 
+// Local dev tabs are named after the git branch (see next.config.mjs) so that
+// several workspaces running side by side stay tellable apart in the tab strip.
+const branch = process.env.NEXT_PUBLIC_GIT_BRANCH
+const title: Metadata['title'] = branch
+  ? { default: branch, template: branch }
+  : 'Pilgrimage — A Medieval Settlement Builder'
+
 export const metadata: Metadata = {
-  title: 'Pilgrimage — A Medieval Settlement Builder',
+  title,
   description: 'A medieval settlement builder inspired by RollerCoaster Tycoon & Age of Empires II. Begin with a holy relic and grow a pilgrimage site into a renowned destination.',
   generator: 'v0.app',
   manifest: '/manifest.json',

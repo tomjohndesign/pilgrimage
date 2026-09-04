@@ -17,8 +17,9 @@ import type { Traveler } from "./travelers"
  *
  * The loop per traveler:
  *  - Walking wears them down: stamina, hunger, and thirst all fall.
- *  - Stamina at 0 → leave the road for the nearest clearing (grass or dirt,
- *    never woods or the road itself) and camp until rested. A roadside stall is
+ *  - Stamina at 0 → leave the road for the nearest open ground (grass, dirt,
+ *    or a forest-floor clearing — never solid woods or the road itself) and
+ *    camp until rested. A roadside stall is
  *    the favourite pitch for anyone; pilgrims will otherwise join an existing
  *    camp rather than camp alone.
  *  - Hunger or thirst at 0 → chase down a vendor and buy: food refills hunger,
@@ -188,7 +189,10 @@ export function createSim(travelers: Traveler[], map: GameMap): SimState {
   return sim
 }
 
-/** Nearest clearing tile to a world point: grass or dirt, never woods or road. */
+/**
+ * Nearest open tile to a world point: grass, dirt, or a forest-floor clearing —
+ * never solid woods or the road itself.
+ */
 function findClearTile(map: GameMap, wx: number, wz: number): { x: number; z: number } | null {
   const cx = worldToTileX(map, wx)
   const cz = worldToTileZ(map, wz)
@@ -197,7 +201,9 @@ function findClearTile(map: GameMap, wx: number, wz: number): { x: number; z: nu
       for (let dx = -r; dx <= r; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue
         const terrain = tileAt(map, cx + dx, cz + dz)
-        if (terrain === "grass" || terrain === "dirt") return { x: cx + dx, z: cz + dz }
+        if (terrain === "grass" || terrain === "dirt" || terrain === "clearing") {
+          return { x: cx + dx, z: cz + dz }
+        }
       }
     }
   }

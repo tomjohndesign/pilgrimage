@@ -120,7 +120,7 @@ describe("stepSim", () => {
 
     expect(runUntil(sim, travelers, map, () => s.activity === "camping", 20)).toBe(true)
     const terrain = tileAt(map, worldToTileX(map, s.spot!.x), worldToTileZ(map, s.spot!.z))
-    expect(["grass", "dirt"]).toContain(terrain)
+    expect(["grass", "dirt", "clearing"]).toContain(terrain)
 
     const staminaAsleep = s.stamina
     stepSim(sim, travelers, map, 1, 0.5)
@@ -224,7 +224,7 @@ describe("stepSim", () => {
     expect(runUntil(sim, travelers, map, () => s.activity === "vending", 60)).toBe(true)
     // The stall stands on a clearing, off the road.
     const terrain = tileAt(map, worldToTileX(map, s.spot!.x), worldToTileZ(map, s.spot!.z))
-    expect(["grass", "dirt"]).toContain(terrain)
+    expect(["grass", "dirt", "clearing"]).toContain(terrain)
 
     const parkedX = s.x
     const parkedZ = s.z
