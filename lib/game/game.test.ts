@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs"
+import { join } from "node:path"
+
 import { describe, expect, it } from "vitest"
 
 import { PROTOTYPE_MAP } from "./map/prototype-map"
@@ -12,12 +15,28 @@ import {
   MAX_VIEW_SIZE,
   MIN_VIEW_SIZE,
   normalizeViewIndex,
+  LIGHT_HEIGHT,
+  LIGHT_HORIZONTAL_DISTANCE,
+  LIGHT_RELATIVE_YAW,
+  lightOffsetForYaw,
   panDelta,
   screenBasis,
+  yawFromForward,
   worldPerPixel,
   yawForView,
 } from "./render/iso"
-import { makeRng } from "./rng"
+import {
+  buildingObjectId,
+  decodeObjectId,
+  encodeObjectId,
+  MAX_OBJECT_ID,
+  nextOutlineMode,
+  OUTLINE_MODES,
+  treeObjectId,
+  type OutlineMode,
+} from "./render/outline"
+import { TEXTURES } from "./render/textures"
+import { DEFAULT_WORLD_SEED, deriveSeed, makeRng, parseSeed, SEED_STREAM } from "./rng"
 
 const DEG = 180 / Math.PI
 const TRUE_ISO_DEGREES = 35.264389682754654
@@ -196,5 +215,115 @@ describe("seeded rng", () => {
       expect(value).toBeGreaterThanOrEqual(0)
       expect(value).toBeLessThan(1)
     }
+  })
+})
+
+describe("outline ids", () => {
+  it("round-trips ids through 8-bit-per-channel quantisation", () => {
+    const readback = (v: number) => Math.round(v * 255) / 255
+    for (const id of [0, 1, 2, 255, 256, 257, 1024, MAX_OBJECT_ID]) {
+      const [r, g] = encodeObjectId(id)
+      expect(decodeObjectId(readback(r), readback(g))).toBe(id)
+    }
+  })
+
+  it("rejects ids the two channels cannot hold", () => {
+    expect(() => encodeObjectId(-1)).toThrow()
+    expect(() => encodeObjectId(MAX_OBJECT_ID + 1)).toThrow()
+    expect(() => encodeObjectId(1.5)).toThrow()
+  })
+
+  it("gives every building and tree a distinct id, none using the reserved 0", () => {
+    const buildingCount = PROTOTYPE_MAP.buildings.length
+    const treeCount = PROTOTYPE_MAP.tiles.filter((t) => t === "forest").length
+    const ids = new Set<number>()
+    for (let i = 0; i < buildingCount; i++) ids.add(buildingObjectId(i))
+    for (let i = 0; i < treeCount; i++) ids.add(treeObjectId(buildingCount, i))
+    expect(ids.has(0)).toBe(false)
+    expect(ids.size).toBe(buildingCount + treeCount)
+    expect(Math.max(...ids)).toBeLessThanOrEqual(MAX_OBJECT_ID)
+  })
+
+  it("cycles through every mode and wraps back to the first", () => {
+    let mode: OutlineMode = OUTLINE_MODES[0]
+    const seen = new Set<OutlineMode>([mode])
+    for (let i = 1; i < OUTLINE_MODES.length; i++) {
+      mode = nextOutlineMode(mode)
+      seen.add(mode)
+    }
+    expect(seen.size).toBe(OUTLINE_MODES.length)
+    expect(nextOutlineMode(mode)).toBe(OUTLINE_MODES[0])
+  })
+})
+
+describe("camera-relative light", () => {
+  it("reproduces the original fixed sun in view 0", () => {
+    const [x, y, z] = lightOffsetForYaw(yawForView(0))
+    expect(x).toBeCloseTo(26, 10)
+    expect(y).toBe(LIGHT_HEIGHT)
+    expect(z).toBeCloseTo(18, 10)
+  })
+
+  it("holds the sun at the same yaw relative to the camera in every view", () => {
+    for (const view of VIEWS) {
+      const yaw = yawForView(view)
+      const [x, y, z] = lightOffsetForYaw(yaw)
+      expect(y).toBe(LIGHT_HEIGHT)
+      let relative = Math.atan2(x, z) - yaw
+      while (relative > Math.PI) relative -= 2 * Math.PI
+      while (relative < -Math.PI) relative += 2 * Math.PI
+      expect(relative).toBeCloseTo(LIGHT_RELATIVE_YAW, 10)
+      expect(Math.hypot(x, z)).toBeCloseTo(LIGHT_HORIZONTAL_DISTANCE, 10)
+    }
+  })
+
+  it("recovers the camera yaw from its forward direction", () => {
+    for (const view of VIEWS) {
+      const yaw = yawForView(view)
+      const [ox, , oz] = cameraOffset(yaw)
+      // The camera sits at target + offset and looks back at the target.
+      const recovered = yawFromForward(-ox, -oz)
+      const diff = Math.atan2(Math.sin(recovered - yaw), Math.cos(recovered - yaw))
+      expect(diff).toBeCloseTo(0, 10)
+    }
+  })
+})
+
+describe("texture manifest", () => {
+  it("has unique ids and urls under /textures/", () => {
+    const ids = new Set(TEXTURES.map((t) => t.id))
+    expect(ids.size).toBe(TEXTURES.length)
+    for (const t of TEXTURES) expect(t.url).toMatch(/^\/textures\//)
+  })
+
+  it("points every entry at a file that exists in public/", () => {
+    for (const t of TEXTURES) {
+      expect(existsSync(join(process.cwd(), "public", t.url)), t.url).toBe(true)
+    }
+  })
+})
+
+describe("world seed", () => {
+  it("derives deterministic, distinct streams from one seed", () => {
+    expect(deriveSeed(123, SEED_STREAM.tileJitter)).toBe(deriveSeed(123, SEED_STREAM.tileJitter))
+    expect(deriveSeed(123, SEED_STREAM.tileJitter)).not.toBe(deriveSeed(123, SEED_STREAM.trees))
+    expect(deriveSeed(123, SEED_STREAM.trees)).not.toBe(deriveSeed(124, SEED_STREAM.trees))
+    for (const stream of Object.values(SEED_STREAM)) {
+      const derived = deriveSeed(DEFAULT_WORLD_SEED, stream)
+      expect(Number.isInteger(derived)).toBe(true)
+      expect(derived).toBeGreaterThanOrEqual(0)
+      expect(derived).toBeLessThanOrEqual(0xffffffff)
+    }
+  })
+
+  it("parses pasted seed input, rejecting anything that is not digits", () => {
+    expect(parseSeed("123")).toBe(123)
+    expect(parseSeed("  42  ")).toBe(42)
+    expect(parseSeed("0")).toBe(0)
+    expect(parseSeed("4294967297")).toBe(1) // wraps into uint32 space
+    expect(parseSeed("")).toBeNull()
+    expect(parseSeed("12.5")).toBeNull()
+    expect(parseSeed("-7")).toBeNull()
+    expect(parseSeed("abc")).toBeNull()
   })
 })

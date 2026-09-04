@@ -13,3 +13,32 @@ export function makeRng(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
+
+/** The world seed everything defaults to before the player supplies one. */
+export const DEFAULT_WORLD_SEED = 20250805
+
+/**
+ * Split one world seed into independent streams (tile jitter, trees, …) so
+ * consumers never share RNG state yet all reproduce from the single seed.
+ */
+export function deriveSeed(seed: number, stream: number): number {
+  return ((seed >>> 0) ^ Math.imul(stream + 1, 0x9e3779b1)) >>> 0
+}
+
+/**
+ * Parse player input into a seed. Accepts any digits (pasted values included),
+ * normalised to uint32 space; returns null when the input isn't a number.
+ */
+export function parseSeed(input: string): number | null {
+  const trimmed = input.trim()
+  if (!/^\d+$/.test(trimmed)) return null
+  const value = Number(trimmed)
+  if (!Number.isFinite(value)) return null
+  return value >>> 0
+}
+
+/** Stream ids for deriveSeed — central so no two consumers collide. */
+export const SEED_STREAM = {
+  tileJitter: 1,
+  trees: 2,
+} as const

@@ -95,3 +95,35 @@ export function worldPerPixel(viewSize: number, canvasHeightPx: number): number 
 export function clampViewSize(viewSize: number): number {
   return Math.min(MAX_VIEW_SIZE, Math.max(MIN_VIEW_SIZE, viewSize))
 }
+
+/**
+ * The sun. Its yaw is fixed relative to the *camera*, not the world, so the
+ * same screen-relative faces of every box stay lit in all four views. The rig
+ * repositions it each frame from the camera's tweened yaw, which makes the
+ * shading swing smoothly — not snap — while a rotation tween plays.
+ *
+ * The relative yaw and distances are chosen so view 0 reproduces the original
+ * fixed sun at (26, 40, 18) exactly.
+ */
+export const LIGHT_RELATIVE_YAW = Math.atan2(26, 18) - ISO_YAW_BASE
+export const LIGHT_HORIZONTAL_DISTANCE = Math.hypot(26, 18)
+export const LIGHT_HEIGHT = 40
+
+/** Sun position (relative to its target at the origin) for a camera yaw. */
+export function lightOffsetForYaw(yaw: number): [number, number, number] {
+  const lightYaw = yaw + LIGHT_RELATIVE_YAW
+  return [
+    LIGHT_HORIZONTAL_DISTANCE * Math.sin(lightYaw),
+    LIGHT_HEIGHT,
+    LIGHT_HORIZONTAL_DISTANCE * Math.cos(lightYaw),
+  ]
+}
+
+/**
+ * Recover the camera's yaw from its ground-plane forward direction — the
+ * inverse of `cameraOffset`, letting the light track the *displayed* camera
+ * mid-tween rather than the snapped view index.
+ */
+export function yawFromForward(fx: number, fz: number): number {
+  return Math.atan2(-fx, -fz)
+}
