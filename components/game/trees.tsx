@@ -20,7 +20,7 @@ import {
  */
 const TREE_COLOR = new THREE.Color("#40542e")
 
-export const DEFAULT_TREE_DENSITY = 3
+export const DEFAULT_TREE_DENSITY = 1
 
 export function Trees({ map, density = DEFAULT_TREE_DENSITY }: { map: GameMap; density?: number }) {
   const meshRef = useRef<THREE.InstancedMesh>(null)

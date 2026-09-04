@@ -6,9 +6,9 @@ import { useEffect, useMemo, useState } from "react"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
 import {
-  DEFAULT_CLUSTER_COUNT,
+  DEFAULT_CLEARING_COUNT,
   DEFAULT_FOREST_COVERAGE,
-  DEFAULT_GROVE_COUNT,
+  DEFAULT_GLADE_COUNT,
   DEFAULT_MAP_WIDTH,
   generateMap,
 } from "@/lib/game/map/generate-map"
@@ -35,12 +35,12 @@ const GameCanvas = dynamic(() => import("./game-canvas").then((m) => m.GameCanva
 export interface MapSettings {
   /** Map edge length in tiles; maps are square. */
   size: number
-  /** % of the map covered by large forest clusters. */
+  /** % of the map left as forest after the glades are carved. */
   coverage: number
-  /** How many large clusters that coverage is split across. */
-  clusters: number
-  /** Number of small scattered groves. */
-  groves: number
+  /** Number of open grass glades carved out of the forest. */
+  glades: number
+  /** Number of small forest-floor clearings scattered through the woods. */
+  clearings: number
   /** Trees drawn per forest tile. */
   treeDensity: number
 }
@@ -48,8 +48,8 @@ export interface MapSettings {
 export const DEFAULT_SETTINGS: MapSettings = {
   size: DEFAULT_MAP_WIDTH,
   coverage: Math.round(DEFAULT_FOREST_COVERAGE * 100),
-  clusters: DEFAULT_CLUSTER_COUNT,
-  groves: DEFAULT_GROVE_COUNT,
+  glades: DEFAULT_GLADE_COUNT,
+  clearings: DEFAULT_CLEARING_COUNT,
   treeDensity: DEFAULT_TREE_DENSITY,
 }
 
@@ -89,8 +89,8 @@ export function GameShell({
       seed: String(seed),
       size: String(settings.size),
       forest: String(settings.coverage),
-      clusters: String(settings.clusters),
-      groves: String(settings.groves),
+      glades: String(settings.glades),
+      clearings: String(settings.clearings),
       trees: String(settings.treeDensity),
     })
     window.history.replaceState(null, "", `?${query}`)
@@ -105,10 +105,10 @@ export function GameShell({
             width: settings.size,
             depth: settings.size,
             forestCoverage: settings.coverage / 100,
-            clusterCount: settings.clusters,
-            groveCount: settings.groves,
+            gladeCount: settings.glades,
+            clearingCount: settings.clearings,
           }),
-    [seed, settings.size, settings.coverage, settings.clusters, settings.groves],
+    [seed, settings.size, settings.coverage, settings.glades, settings.clearings],
   )
 
   // The camera's pan clamp follows the loaded map's extent.
