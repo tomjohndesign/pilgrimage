@@ -26,6 +26,8 @@ interface CameraState {
   /** Current map extent; the pan clamp follows whatever map is loaded. */
   mapWidth: number
   mapDepth: number
+  /** Traveler the player clicked, by traveler id. Not part of reset(). */
+  selectedTravelerId: number | null
 
   pan: (dx: number, dz: number) => void
   rotate: (direction: 1 | -1) => void
@@ -33,6 +35,7 @@ interface CameraState {
   setHovered: (tile: HoveredTile | null) => void
   cycleOutlineMode: () => void
   setMapSize: (width: number, depth: number) => void
+  selectTraveler: (id: number | null) => void
   reset: () => void
 }
 
@@ -50,6 +53,7 @@ export const useCameraStore = create<CameraState>((set) => ({
   outlineMode: DEFAULT_OUTLINE_MODE,
   mapWidth: DEFAULT_MAP_WIDTH,
   mapDepth: DEFAULT_MAP_DEPTH,
+  selectedTravelerId: null,
 
   pan: (dx, dz) =>
     set((s) => {
@@ -76,6 +80,8 @@ export const useCameraStore = create<CameraState>((set) => ({
   cycleOutlineMode: () => set((s) => ({ outlineMode: nextOutlineMode(s.outlineMode) })),
 
   setMapSize: (width, depth) => set({ mapWidth: width, mapDepth: depth }),
+
+  selectTraveler: (id) => set({ selectedTravelerId: id }),
 
   // Deliberately leaves mapWidth/mapDepth alone — reset is a camera action.
   reset: () => set({ ...INITIAL }),

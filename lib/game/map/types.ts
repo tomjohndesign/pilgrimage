@@ -23,6 +23,12 @@ export interface GameMap {
   buildings: BuildingDef[]
   /** Present on generated maps; absent on hand-authored ones. Drives cosmetic RNG too. */
   seed?: number
+  /**
+   * The road as an ordered walk, west edge to east edge, each step to a
+   * 4-neighbour. The tile grid only says *where* road is; this says in what
+   * order a traveller crosses it.
+   */
+  road?: Array<{ x: number; z: number }>
 }
 
 export function tileAt(map: GameMap, x: number, z: number): TerrainId | null {

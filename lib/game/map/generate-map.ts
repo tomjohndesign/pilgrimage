@@ -200,7 +200,10 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   // --- Road: west edge to east edge ------------------------------------------
   // Terrain is ignored while routing — forest in the way gets carved, which is
   // what guarantees the road can never be blocked.
+  // The route comes back as an ordered walk, west edge to east edge; keep
+  // that order on the map (`road`) so travelers know which way along is.
   const roadTiles: number[] = []
+  const road: Array<{ x: number; z: number }> = []
   for (const i of routeSegment(
     { x: 0, z: entryZ },
     { x: width - 1, z: exitZ },
@@ -210,6 +213,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   )) {
     tiles[i] = "path"
     roadTiles.push(i)
+    road.push({ x: i % width, z: Math.floor(i / width) })
   }
 
   // --- Tie the trail network into the road -----------------------------------
@@ -232,7 +236,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     carveTrail(bestCenter, { x: bestRoad % width, z: Math.floor(bestRoad / width) })
   }
 
-  return { width, depth, tiles, buildings: [], seed }
+  return { width, depth, tiles, buildings: [], seed, road }
 }
 
 /**

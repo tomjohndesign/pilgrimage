@@ -2,10 +2,12 @@
 
 import { useEffect } from "react"
 import { useThree } from "@react-three/fiber"
+import * as THREE from "three"
 
 import { useCameraStore } from "@/lib/game/camera-store"
 import type { GameMap } from "@/lib/game/map/types"
 import type { OutlineMode } from "@/lib/game/render/outline"
+import { simRegistry } from "@/lib/game/sim"
 
 import { outlineFrameRef } from "./outline-pass"
 
@@ -31,6 +33,24 @@ export function DebugHandle({ map }: { map: GameMap }) {
       setZoom: (viewSize: number) => useCameraStore.setState({ viewSize }),
       setOutline: (mode: OutlineMode) => useCameraStore.setState({ outlineMode: mode }),
       reset: () => useCameraStore.getState().reset(),
+      /** Live traveler sim state (stats, activities), for e2e assertions. */
+      sim: () => (simRegistry.current ? [...simRegistry.current.travelers.values()] : []),
+      time: () => simRegistry.current?.time ?? null,
+      /** Screen positions (client px) of traveler blocks, for e2e clicks. */
+      travelerScreenPoints: () => {
+        const rect = gl.domElement.getBoundingClientRect()
+        const v = new THREE.Vector3()
+        const points: Array<{ x: number; y: number }> = []
+        scene.traverse((object) => {
+          if (object.name !== "traveler") return
+          object.getWorldPosition(v).project(camera)
+          points.push({
+            x: rect.left + ((v.x + 1) / 2) * rect.width,
+            y: rect.top + ((1 - v.y) / 2) * rect.height,
+          })
+        })
+        return points
+      },
       /**
        * Data URL of the current frame. Renders first so the drawing buffer is
        * populated — without that, reading it back returns a blank image unless

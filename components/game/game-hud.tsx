@@ -16,10 +16,13 @@ import {
 } from "@/lib/game/render/iso"
 import { OUTLINE_MODE_LABELS } from "@/lib/game/render/outline"
 import { SITE_MENU } from "@/lib/site-menu"
+import { ACTIVITY_LABELS, formatGameTime, simRegistry, type SimTraveler } from "@/lib/game/sim"
+import type { Traveler } from "@/lib/game/travelers"
 
 import type { MapSettings } from "./game-shell"
 
 const CONTROLS: Array<[string, string]> = [
+  ["Click", "Inspect traveler"],
   ["Drag", "Pan"],
   ["Scroll", "Zoom"],
   ["Q / E", "Rotate view"],
@@ -190,9 +193,120 @@ function SeedField({
   )
 }
 
+/** One 0–100 attribute as a labelled bar, styled after the zoom meter. */
+function StatBar({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-14 text-[11px] italic text-ink-light">{label}</span>
+      <div className="h-1 w-20 bg-parchment-dark">
+        <div className="h-full bg-gold" style={{ width: `${value}%` }} />
+      </div>
+      <span className="w-5 text-right font-display text-[9px] text-ink">{value}</span>
+    </div>
+  )
+}
+
+/**
+ * The sim mutates stats at frame rate outside React; sample the selected
+ * traveler's slice a few times a second instead of subscribing.
+ */
+function useLiveStats(travelerId: number): SimTraveler | null {
+  const [live, setLive] = useState<SimTraveler | null>(null)
+  useEffect(() => {
+    const read = () => {
+      const s = simRegistry.current?.travelers.get(travelerId)
+      setLive(s ? { ...s } : null)
+    }
+    read()
+    const timer = setInterval(read, 250)
+    return () => clearInterval(timer)
+  }, [travelerId])
+  return live
+}
+
+/** Game clock, sampled from the running sim on the HUD's own schedule. */
+function ClockPanel() {
+  const [time, setTime] = useState<number | null>(null)
+  useEffect(() => {
+    const read = () => setTime(simRegistry.current?.time ?? null)
+    read()
+    const timer = setInterval(read, 500)
+    return () => clearInterval(timer)
+  }, [])
+  if (time === null) return null
+  return (
+    <Panel>
+      <Label>Time</Label>
+      <div className="pt-1 font-display text-xs text-ink">{formatGameTime(time)}</div>
+    </Panel>
+  )
+}
+
+/** Who the player clicked on the road: name, calling, and what drives them. */
+function TravelerPanel({ traveler }: { traveler: Traveler }) {
+  const a = traveler.attributes
+  const live = useLiveStats(traveler.id)
+  return (
+    <Panel>
+      <div className="flex items-baseline justify-between gap-4">
+        <Label>Traveler</Label>
+        <button
+          type="button"
+          onClick={() => useCameraStore.getState().selectTraveler(null)}
+          aria-label="Dismiss traveler"
+          className="pointer-events-auto font-display text-[10px] text-ink-light hover:text-red"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="pt-1">
+        <div className="font-display text-xs text-ink">{traveler.name}</div>
+        <div className="flex items-center gap-1.5">
+          <span
+            className="inline-block h-2 w-2 border border-rule"
+            style={{ backgroundColor: traveler.type.color }}
+          />
+          <span className="text-[13px] italic text-ink-light">
+            {traveler.type.label}, {a.age} years
+          </span>
+        </div>
+        {live && (
+          <div className="text-[11px] italic text-gold">{ACTIVITY_LABELS[live.activity]}</div>
+        )}
+      </div>
+
+      <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
+        <StatBar label="Status" value={a.status} />
+        <StatBar label="Piety" value={a.piety} />
+        <StatBar label="Hunger" value={Math.round(live?.hunger ?? a.hunger)} />
+        <StatBar label="Thirst" value={Math.round(live?.thirst ?? a.thirst)} />
+        <StatBar label="Stamina" value={Math.round(live?.stamina ?? a.stamina)} />
+      </div>
+
+      <div className="mt-2 border-t border-rule pt-2">
+        <div className="flex items-baseline justify-between gap-4">
+          <span className="text-[11px] italic text-ink-light">Gold</span>
+          <span className="font-display text-[10px] text-ink">{live?.gold ?? a.gold} ✦</span>
+        </div>
+        <div className="flex items-baseline justify-between gap-4">
+          <span className="text-[11px] italic text-ink-light">Jobless</span>
+          <span className="font-display text-[10px] text-ink">{a.jobless ? "Yes" : "No"}</span>
+        </div>
+        <div className="flex items-baseline justify-between gap-4">
+          <span className="text-[11px] italic text-ink-light">Skills</span>
+          <span className="max-w-32 text-right text-[11px] italic text-ink">
+            {a.skills.length > 0 ? a.skills.join(", ") : "none"}
+          </span>
+        </div>
+      </div>
+    </Panel>
+  )
+}
+
 export function GameHud({
   map,
   seed,
+  travelers,
   settings,
   onSettingsChange,
   onReroll,
@@ -200,6 +314,7 @@ export function GameHud({
 }: {
   map: GameMap | null
   seed: number | null
+  travelers: Traveler[]
   settings: MapSettings
   onSettingsChange: (settings: MapSettings) => void
   onReroll: () => void
@@ -210,7 +325,13 @@ export function GameHud({
   const viewSize = useCameraStore((s) => s.viewSize)
   const hovered = useCameraStore((s) => s.hovered)
   const outlineMode = useCameraStore((s) => s.outlineMode)
+  const selectedTravelerId = useCameraStore((s) => s.selectedTravelerId)
   const [menuOpen, setMenuOpen] = useState(false)
+
+  const selectedTraveler =
+    selectedTravelerId === null
+      ? null
+      : (travelers.find((t) => t.id === selectedTravelerId) ?? null)
 
   const view = normalizeViewIndex(viewIndex)
   // Relative to the default zoom, so 100% is where the camera starts and
@@ -291,9 +412,31 @@ export function GameHud({
             onChange={(treeDensity) => set({ treeDensity })}
           />
         </Panel>
+
+        <Panel>
+          <Label>Road</Label>
+          <Tuner
+            label="Traffic"
+            value={settings.traffic}
+            display={`${settings.traffic} folk`}
+            min={0}
+            max={60}
+            onChange={(traffic) => set({ traffic })}
+          />
+          <Tuner
+            label="Pace"
+            value={settings.walkSpeed}
+            display={`${settings.walkSpeed.toFixed(1)} tiles/s`}
+            min={0.2}
+            max={5}
+            step={0.1}
+            onChange={(walkSpeed) => set({ walkSpeed })}
+          />
+        </Panel>
       </div>
 
       <div className="absolute right-5 top-5 z-10 flex flex-col gap-2">
+        <ClockPanel />
         <Panel>
           <Label>View</Label>
           <div className="flex items-center gap-1.5 pt-1">
@@ -335,7 +478,8 @@ export function GameHud({
         </Panel>
       </div>
 
-      <div className="absolute bottom-5 left-5 z-10">
+      <div className="absolute bottom-5 left-5 z-10 flex flex-col items-start gap-2">
+        {selectedTraveler && <TravelerPanel traveler={selectedTraveler} />}
         <Panel>
           <Label>Tile</Label>
           {hovered && hoveredTerrain ? (

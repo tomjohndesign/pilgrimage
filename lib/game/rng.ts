@@ -41,4 +41,5 @@ export function parseSeed(input: string): number | null {
 export const SEED_STREAM = {
   tileJitter: 1,
   trees: 2,
+  travelers: 3,
 } as const
