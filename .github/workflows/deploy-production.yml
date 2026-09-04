@@ -1,0 +1,41 @@
+name: Deploy to Vercel Production
+
+# A merged PR lands as a push to main, so this is the "PR merged" trigger.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two production deploys at once; let an in-flight one finish.
+concurrency:
+  group: vercel-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: Production
+      url: ${{ steps.deploy.outputs.url }}
+    env:
+      VERCEL_ORG_ID: team_x3HIt7dbvbPsM9RKoYwAntcq
+      VERCEL_PROJECT_ID: prj_G39IsnKLmJqSmAYFjBQLSAj6qWzc
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm install -g vercel@latest
+
+      # Source is uploaded and built on Vercel, so the project's own build
+      # settings and environment variables apply — same as a Git-triggered deploy.
+      - name: Deploy
+        id: deploy
+        run: |
+          url=$(vercel deploy --prod --yes --token="$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Deployed $GITHUB_SHA to $url" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
