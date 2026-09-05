@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "750dbdfcf9f866b6192386eabfc158ad67a2fedb",
-  "releaseCount": 3,
+  "lastProcessedCommit": "b63b69b3d33eed2213df8e3318323fabd0cd1465",
+  "releaseCount": 5,
   "releases": [
+    {
+      "version": "0.0.19",
+      "title": "Release 0.0.19",
+      "summary": "feat(game): add tunable world-scale pixel rendering (#39)",
+      "commit": "b63b69b3d33eed2213df8e3318323fabd0cd1465"
+    },
+    {
+      "version": "0.0.18",
+      "title": "Release 0.0.18",
+      "summary": "Keep travelers left with individual lane offsets (#37)",
+      "commit": "3721b8384f7822fbb24970c0707029ecb45ac310"
+    },
     {
       "version": "0.0.17",
       "title": "Release 0.0.17",
