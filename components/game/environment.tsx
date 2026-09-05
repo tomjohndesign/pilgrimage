@@ -3,14 +3,23 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import * as THREE from "three"
 
-import { generateElement, type EnvironmentPlacement, type PrimitiveKind } from "@/lib/game/environment/elements"
+import { useBuildStore } from "@/lib/game/build-store"
+import { ELEMENT_RADIUS, generateElement, type EnvironmentPlacement, type PrimitiveKind } from "@/lib/game/environment/elements"
 import { placeEnvironment } from "@/lib/game/environment/placement"
 import type { GameMap } from "@/lib/game/map/types"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 
 export function Environment({ map }: { map: GameMap }) {
   const placements = useMemo(() => placeEnvironment(map), [map])
-  return <EnvironmentField placements={placements} />
+  const buildings = useBuildStore((s) => s.buildings)
+  const visible = useMemo(() => placements.filter((p) => {
+    const radius = ELEMENT_RADIUS * p.scale
+    const x = p.x + map.width / 2
+    const z = p.z + map.depth / 2
+    return !buildings.some((b) => x + radius > b.x && x - radius < b.x + b.w &&
+      z + radius > b.z && z - radius < b.z + b.d)
+  }), [placements, buildings, map.width, map.depth])
+  return <EnvironmentField placements={visible} />
 }
 
 interface Instance {

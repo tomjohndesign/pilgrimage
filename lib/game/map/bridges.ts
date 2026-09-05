@@ -10,9 +10,10 @@ import { tileAt, type GameMap, type TilePos } from "./types"
  *
  * A bridge is a straight run of `bridge` tiles (the generator guarantees
  * straight, short spans over river water). Its deck floats BRIDGE_RISE above
- * the ground so the water shows beneath it, and a ramp on the land tile at
- * each end — the approach — climbs from ground level at its far edge to
- * deck level where it meets the span. Anything walking the road follows the
+ * the ground so the water shows beneath it. Ramps follow the path at each
+ * end, with level landings wherever it turns before descending. Each ramp
+ * climbs from ground level at its far edge to deck level at its upper edge.
+ * Anything walking the road follows the
  * same rise: tile-centre heights interpolate linearly, and the ramp's centre
  * sits at exactly half the rise, so a walker's feet track the wedge.
  */
@@ -57,7 +58,7 @@ export interface BridgeConnector extends TilePos {
 export interface BridgeLayout {
   spans: BridgeSpan[]
   ramps: BridgeRamp[]
-  /** Wooden/stone deck carried over land gaps shorter than three tiles. */
+  /** Level decks over short land gaps and corners before the ramps. */
   connectors: BridgeConnector[]
   /** Height of the walking surface above TILE_HEIGHT at each tile's centre, by tile index. */
   rise: Float32Array
@@ -86,10 +87,13 @@ function spanAxis(map: GameMap, x: number, z: number): readonly [number, number]
     if (isBridge(map, x + dx, z + dz) || isBridge(map, x - dx, z - dz)) return [dx, dz]
   }
   // A single-tile span: it crosses from bank to bank, so it runs along
-  // whichever axis has the most land at its ends. Off the map counts for
-  // half — the bank may well be there, just out of sight.
-  const landScore = (tx: number, tz: number) =>
-    tileAt(map, tx, tz) === null ? 1 : isWet(map, tx, tz) ? 0 : 2
+  // whichever axis has the most path at its ends, then land. Off the map
+  // counts for half a bank — it may be there, just out of sight.
+  const landScore = (tx: number, tz: number) => {
+    const terrain = tileAt(map, tx, tz)
+    if (isRoadTerrain(terrain)) return 5
+    return terrain === null ? 1 : isWet(map, tx, tz) ? 0 : 2
+  }
   let best = AXES[0]
   let bestScore = -1
   for (const axis of AXES) {
@@ -147,9 +151,8 @@ export function bridgeLayout(map: GameMap): BridgeLayout {
       spans.push({ tiles, dx, dz, from, to, kind })
 
       const approach = (tile: TilePos | null, ux: number, uz: number) => {
-        // Only land climbs; a span that meets water end-on (say, at a lake
-        // the generator let it touch) has nothing to ramp from.
-        if (!tile || isWet(map, tile.x, tile.z)) return
+        // Approaches follow the path; bare banks and water have no ramp.
+        if (!tile || !isRoadTerrain(tileAt(map, tile.x, tile.z))) return
         const key = tile.z * map.width + tile.x
         const list = approaches.get(key) ?? []
         list.push({ x: tile.x, z: tile.z, dx: ux, dz: uz, kind })
@@ -192,27 +195,50 @@ export function bridgeLayout(map: GameMap): BridgeLayout {
     if (isRoadTerrain(map.tiles[start])) visit([start])
   }
 
-  const ramps: BridgeRamp[] = []
+  // A ramp needs a level path tile beyond its low edge. Carry the deck
+  // around corners until that is possible, also merging approaches that
+  // would otherwise descend into each other or meet a deck sideways.
+  const pending = new Map([...approaches].map(([index, list]) => [index, [...list]]))
+  const expanded = new Set<number>()
+  while (true) {
+    for (const index of connectorKeys) {
+      if (expanded.has(index)) continue
+      expanded.add(index)
+      pending.delete(index)
+      for (const [dx, dz] of dirs) {
+        const x = index % map.width + dx
+        const z = Math.floor(index / map.width) + dz
+        const terrain = tileAt(map, x, z)
+        const next = z * map.width + x
+        if (!isRoadTerrain(terrain) || connectorKeys.has(next)) continue
+        const list = pending.get(next) ?? []
+        list.push({ x, z, dx: -dx || 0, dz: -dz || 0, kind: terrain === "path" ? "road" : "track" })
+        pending.set(next, list)
+      }
+    }
+    const promote: number[] = []
+    for (const [index, list] of pending) {
+      const ramp = list[0]
+      const x = ramp.x - ramp.dx
+      const z = ramp.z - ramp.dz
+      const terrain = tileAt(map, x, z)
+      const next = z * map.width + x
+      const conflicting = list.some((other) => other.dx !== ramp.dx || other.dz !== ramp.dz)
+      // Off-map paths continue beyond the visible world, as on ground roads.
+      const levelExit = terrain === null || (isRoadTerrain(terrain) && !connectorKeys.has(next) && !pending.has(next))
+      if (conflicting || !levelExit) promote.push(index)
+    }
+    if (promote.length === 0) break
+    for (const index of promote) connectorKeys.add(index)
+  }
+
+  const ramps = [...pending.values()].map((list) => list[0])
   const rise = new Float32Array(map.width * map.depth)
   for (const span of spans) {
     for (const tile of span.tiles) rise[tile.z * map.width + tile.x] = BRIDGE_RISE
   }
-  for (const [index, list] of approaches) {
-    if (connectorKeys.has(index)) continue
-    ramps.push(list[0])
-    rise[index] = BRIDGE_RISE / 2
-  }
-  // A branch may leave an island sideways: give it its own approach too.
-  for (const index of connectorKeys) {
-    for (const [dx, dz] of dirs) {
-      const x = index % map.width + dx
-      const z = Math.floor(index / map.width) + dz
-      const next = z * map.width + x
-      if (!isRoadTerrain(tileAt(map, x, z)) || connectorKeys.has(next) || approaches.has(next)) continue
-      ramps.push({ x, z, dx: -dx || 0, dz: -dz || 0, kind: map.tiles[next] === "path" ? "road" : "track" })
-      approaches.set(next, [ramps[ramps.length - 1]])
-      rise[next] = BRIDGE_RISE / 2
-    }
+  for (const ramp of ramps) {
+    rise[ramp.z * map.width + ramp.x] = BRIDGE_RISE / 2
   }
   const rampAt = new Map(ramps.map((r) => [r.z * map.width + r.x, r]))
   const connectors: BridgeConnector[] = [...connectorKeys].map((index) => {

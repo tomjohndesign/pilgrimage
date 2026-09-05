@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react"
 
+import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { TERRAIN, type TerrainId } from "@/lib/game/map/terrain"
 import type { GameMap } from "@/lib/game/map/types"
@@ -98,6 +99,10 @@ export function Minimap({ map }: { map: GameMap }) {
       ctx.save()
       ctx.setTransform(transform)
       ctx.drawImage(base, -map.width / 2, -map.depth / 2)
+      for (const building of [...map.buildings, ...useBuildStore.getState().buildings]) {
+        ctx.fillStyle = building.id === map.site?.hovelId ? "#e1c777" : "#d4975b"
+        ctx.fillRect(building.x - map.width / 2, building.z - map.depth / 2, building.w, building.d)
+      }
       ctx.restore()
 
       // Keep the viewport outline inside the projected map's diamond.
@@ -148,9 +153,11 @@ export function Minimap({ map }: { map: GameMap }) {
 
     draw()
     const unsubscribe = useCameraStore.subscribe(draw)
+    const unsubscribeBuild = useBuildStore.subscribe(draw)
     window.addEventListener("resize", draw)
     return () => {
       unsubscribe()
+      unsubscribeBuild()
       window.removeEventListener("resize", draw)
     }
   }, [map])

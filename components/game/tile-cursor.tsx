@@ -1,5 +1,7 @@
 "use client"
 
+import { useBuildStore } from "@/lib/game/build-store"
+import { BUILDING_KINDS, placementProblem } from "@/lib/game/buildings"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { surfaceHeight } from "@/lib/game/map/bridges"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -13,10 +15,16 @@ import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map
  */
 export function TileCursor({ map }: { map: GameMap }) {
   const hovered = useCameraStore((s) => s.hovered)
+  const tool = useBuildStore((s) => s.tool)
+  const buildings = useBuildStore((s) => s.buildings)
   if (!hovered) return null
 
   if (!tileAt(map, hovered.x, hovered.z)) return null
 
+  const def = tool ? BUILDING_KINDS[tool] : null
+  const problem = tool ? placementProblem(map, [...map.buildings, ...buildings], tool, hovered.x, hovered.z) : null
+  const w = def?.w ?? 1
+  const d = def?.d ?? 1
   const index = hovered.z * map.width + hovered.x
   // On a bridge the highlight rides the deck, not the water under it.
   const y = surfaceHeight(map, hovered.x, hovered.z)
@@ -24,9 +32,9 @@ export function TileCursor({ map }: { map: GameMap }) {
 
   return (
     <group>
-      <mesh position={[tileToWorldX(map, hovered.x), y + 0.015, tileToWorldZ(map, hovered.z)]}>
-        <boxGeometry args={[1, 0.03, 1]} />
-        <meshBasicMaterial color="#f2e8d5" transparent opacity={0.4} depthWrite={false} />
+      <mesh position={[tileToWorldX(map, hovered.x) + (w - 1) / 2, y + 0.015, tileToWorldZ(map, hovered.z) + (d - 1) / 2]}>
+        <boxGeometry args={[w, 0.03, d]} />
+        <meshBasicMaterial color={tool ? (problem ? "#bd5342" : "#9ebc62") : "#f2e8d5"} transparent opacity={0.4} depthWrite={false} />
       </mesh>
       {flow && (
         // Arrow modelled pointing +X, yawed onto the flow direction. A Y

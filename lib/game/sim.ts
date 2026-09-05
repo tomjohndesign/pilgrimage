@@ -1,3 +1,9 @@
+import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
+import { BUILDING_KINDS, buildingCentre, type PlacedBuilding } from "./buildings"
+import { generateRelic, renownCap, visitChance, type RelicStats } from "./relic"
+import { settlementRoute } from "./settlement-route"
+import type { TreePlacement } from "./trees/placement"
+import type { TilePos } from "./map/types"
 import { computeDangerField, encounterChance, type ThreatSource } from "./map/danger"
 import { surfaceHeight } from "./map/bridges"
 import {
@@ -20,6 +26,11 @@ import type { Traveler } from "./travelers"
  *
  * The loop per traveler:
  *  - Walking wears them down: stamina, hunger, and thirst all fall.
+ *  - At the shrine junction, faith, hospitality and available work draw visitors
+ *    down the branch. The brothers restore their needs and bestow piety before
+ *    they return to the road; each visit spreads the relic's renown.
+ *  - Jobless visitors may settle into a lumber-camp slot, walk to a reserved
+ *    tree, fell it and haul logs home. Camps provide rest between work trips.
  *  - Stamina at 0 → leave the road for the nearest open ground (grass, dirt,
  *    or a forest-floor clearing — never solid woods or the road itself) and
  *    camp until rested. A roadside stall is
@@ -39,6 +50,14 @@ import type { Traveler } from "./travelers"
  */
 
 export type Activity =
+  | "toRelic"
+  | "visiting"
+  | "fromRelic"
+  | "toWork"
+  | "working"
+  | "gathering"
+  | "hauling"
+  | "idle"
   | "walking"
   | "seeking"
   | "fleeing"
@@ -50,6 +69,14 @@ export type Activity =
   | "fromShop"
 
 export const ACTIVITY_LABELS: Record<Activity, string> = {
+  toRelic: "Following the path to the shrine",
+  visiting: "Food, lodging & blessings",
+  fromRelic: "Returning from the shrine",
+  toWork: "Walking to work",
+  working: "Felling a tree",
+  gathering: "Cutting & gathering fallen timber",
+  hauling: "Carrying logs to camp",
+  idle: "At the lumber camp",
   walking: "On the road",
   seeking: "Seeking food & drink",
   fleeing: "Turned back",
@@ -139,6 +166,16 @@ export interface SimTraveler {
   id: number
   activity: Activity
   gold: number
+  piety: number
+  jobless: boolean
+  employer: string | null
+  branchProgress: number
+  visitCooldown: number
+  visits: number
+  workRoute: TilePos[] | null
+  workProgress: number
+  tree: number | null
+  carrying: number
   hunger: number
   thirst: number
   stamina: number
@@ -183,11 +220,21 @@ export interface SimTraveler {
 }
 
 export interface SimState {
+  seed: number
   travelers: Map<number, SimTraveler>
   /** Game time in days since the sim began (fractional). */
   time: number
   /** Danger per tile, indexed like the map's tiles; what encounters roll against. */
   danger: Float64Array
+  relic: RelicStats
+  visits: number
+  wood: number
+  felled: Set<number>
+  treeResources: Map<number, TreeResource>
+  piles: Map<string, WoodPile>
+  resourceRevision: number
+  buildings: readonly PlacedBuilding[]
+  trees: readonly TreePlacement[]
 }
 
 /**
@@ -237,9 +284,14 @@ function routeWorldPoint(
   map: GameMap,
   route: ReadonlyArray<{ x: number; z: number }>,
   p: number,
-  lane: number,
+  lane = 0,
   junctions?: { entry: number; exit: number },
 ): WorldPoint {
+  if (route.length === 1) return {
+    x: tileToWorldX(map, route[0].x),
+    y: surfaceHeight(map, route[0].x, route[0].z),
+    z: tileToWorldZ(map, route[0].z),
+  }
   const i0 = Math.max(0, Math.min(Math.floor(p), route.length - 2))
   const frac = p - i0
   const vertex = (i: number) => {
@@ -284,11 +336,22 @@ export function createSim(
   travelers: Traveler[],
   map: GameMap,
   threats: ThreatSource[] = [],
+  relic: RelicStats = generateRelic(map.seed ?? 0).stats,
 ): SimState {
   const sim: SimState = {
+    seed: map.seed ?? 0,
     travelers: new Map(),
     time: START_TIME,
     danger: computeDangerField(map, threats),
+    relic: { ...relic },
+    visits: 0,
+    wood: 0,
+    felled: new Set(),
+    treeResources: new Map(),
+    piles: new Map(),
+    resourceRevision: 0,
+    buildings: [],
+    trees: [],
   }
   if (!map.road || map.road.length < 2) return sim
   const length = map.road.length - 1
@@ -303,6 +366,16 @@ export function createSim(
       id: t.id,
       activity: "walking",
       gold: t.attributes.gold,
+      piety: t.attributes.piety,
+      jobless: t.attributes.jobless,
+      employer: null,
+      branchProgress: 0,
+      visitCooldown: 0,
+      visits: 0,
+      workRoute: null,
+      workProgress: 0,
+      tree: null,
+      carrying: 0,
       hunger: t.attributes.hunger,
       thirst: t.attributes.thirst,
       stamina: t.attributes.stamina,
@@ -435,7 +508,7 @@ function stepOffRoadWalk(
 }
 
 function routeState(t: Traveler, s: SimTraveler): RouteState {
-  return { type: t.type.id, piety: t.attributes.piety, stamina: s.stamina }
+  return { type: t.type.id, piety: s.piety, stamina: s.stamina }
 }
 
 function nextRoll(s: SimTraveler): number {
@@ -471,6 +544,75 @@ function pay(buyer: SimTraveler, vendor: SimTraveler, price: number): void {
   vendor.gold += paid
 }
 
+/** Unskilled applicants can fill any open lumber-camp slot. */
+function findJob(sim: SimState, s: SimTraveler, map: GameMap): PlacedBuilding | undefined {
+  if (!s.jobless || s.employer) return undefined
+  return sim.buildings.find((b) => {
+    const centre = buildingCentre(map, b)
+    return Array.from(sim.travelers.values()).filter((worker) => worker.employer === b.id).length < BUILDING_KINDS[b.kind].jobs &&
+      sim.trees.some((tree, index) => (sim.treeResources.get(index)?.remainingWood ?? 1) > 0 &&
+        Math.hypot(tree.x - centre.x, tree.z - centre.z) <= BUILDING_KINDS[b.kind].workRadius)
+  })
+}
+
+function startWorkRoute(s: SimTraveler, route: TilePos[], activity: Activity): void {
+  s.workRoute = route
+  s.workProgress = 0
+  s.activity = activity
+}
+
+function stepWorkRoute(s: SimTraveler, map: GameMap, speed: number, dt: number): boolean {
+  const route = s.workRoute!
+  s.workProgress = Math.min(route.length - 1, s.workProgress + speed * dt)
+  const at = routeWorldPoint(map, route, s.workProgress)
+  s.x = at.x
+  s.y = at.y
+  s.z = at.z
+  return s.workProgress >= route.length - 1
+}
+
+function chooseTree(sim: SimState, s: SimTraveler, map: GameMap): boolean {
+  const camp = sim.buildings.find((b) => b.id === s.employer)
+  if (!camp) return false
+  const centre = buildingCentre(map, camp)
+  const reserved = new Set(Array.from(sim.travelers.values()).map((w) => w.tree))
+  const candidates = sim.trees.map((tree, index) => ({ tree, index }))
+    .filter(({ tree, index }) => !tree.walking && (sim.treeResources.get(index)?.remainingWood ?? 1) > 0 && !reserved.has(index) &&
+      Math.hypot(tree.x - centre.x, tree.z - centre.z) <= BUILDING_KINDS[camp.kind].workRadius)
+    .sort((a, b) => Number(sim.felled.has(b.index)) - Number(sim.felled.has(a.index)) ||
+      Math.hypot(a.tree.x - s.x, a.tree.z - s.z) - Math.hypot(b.tree.x - s.x, b.tree.z - s.z))
+  const start = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
+  for (const { tree, index } of candidates) {
+    const route = settlementRoute(map, [...map.buildings, ...sim.buildings], start,
+      { x: worldToTileX(map, tree.x), z: worldToTileZ(map, tree.z) }, true)
+    if (!route) continue
+    s.tree = index
+    if (!sim.treeResources.has(index)) sim.treeResources.set(index, treeResource(tree, index, map.seed))
+    startWorkRoute(s, route, "toWork")
+    return true
+  }
+  return false
+}
+
+function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): void {
+  s.visits++
+  sim.visits++
+  s.piety = Math.min(100, s.piety + 4 + sim.relic.sanctity / 25)
+  sim.relic.renown = Math.min(renownCap(sim.relic), sim.relic.renown + 0.5)
+  const job = findJob(sim, s, map)
+  if (job && nextRoll(s) < (t.attributes.skills.some((skill) => BUILDING_KINDS[job.kind].trades.includes(skill)) ? 0.9 : 0.65)) {
+    const route = settlementRoute(map, [...map.buildings, ...sim.buildings], map.site!.door,
+      { x: job.x, z: job.z + job.d - 1 })
+    if (route) {
+      s.employer = job.id
+      s.jobless = false
+      startWorkRoute(s, route, "hauling")
+      return
+    }
+  }
+  s.activity = "fromRelic"
+}
+
 export function stepSim(
   sim: SimState,
   travelers: Traveler[],
@@ -486,7 +628,9 @@ export function stepSim(
   for (const t of travelers) {
     const s = sim.travelers.get(t.id)
     if (!s) continue
+    s.visitCooldown = Math.max(0, s.visitCooldown - dt)
     const camping = s.activity === "camping"
+    const sheltered = s.activity === "visiting" || s.activity === "idle"
     const isVendor = t.type.id === "vendor"
 
     // --- Needs march on ------------------------------------------------------
@@ -497,6 +641,12 @@ export function stepSim(
     // Minding a parked stall neither drains nor restores the legs.
     else if (s.activity !== "vending") {
       s.stamina = Math.max(0, s.stamina - STAMINA_DECAY * hours)
+    }
+
+    if (sheltered) {
+      s.hunger = Math.min(100, s.hunger + 70 * hours)
+      s.thirst = Math.min(100, s.thirst + 90 * hours)
+      s.stamina = Math.min(100, s.stamina + 65 * hours)
     }
 
     // Vendors eat and drink from their own stock, on the move.
@@ -511,11 +661,91 @@ export function stepSim(
     const worldSpeed = t.pace * baseSpeed
 
     switch (s.activity) {
+      case "toRelic":
+      case "fromRelic": {
+        const branch = map.site!.branch
+        const inbound = s.activity === "toRelic"
+        s.branchProgress = Math.max(0, Math.min(branch.length - 1,
+          s.branchProgress + (inbound ? 1 : -1) * worldSpeed * dt))
+        const at = routeWorldPoint(map, branch, s.branchProgress)
+        s.x = at.x
+        s.y = at.y
+        s.z = at.z
+        if (inbound && s.branchProgress >= branch.length - 1) {
+          s.activity = "visiting"
+          s.timer = 2 * GAME_HOUR_SECONDS
+        } else if (!inbound && s.branchProgress <= 0) {
+          s.activity = "walking"
+          s.visitCooldown = 30
+        }
+        break
+      }
+      case "visiting": {
+        s.timer -= dt
+        if (s.timer <= 0 && Math.min(s.hunger, s.thirst, s.stamina) >= 95) finishVisit(sim, s, t, map)
+        break
+      }
+      case "toWork": {
+        if (stepWorkRoute(s, map, worldSpeed, dt)) {
+          const tree = sim.treeResources.get(s.tree!)!
+          s.activity = tree.health > 0 ? "working" : "gathering"
+          s.timer = GAME_HOUR_SECONDS
+        }
+        break
+      }
+      case "working": {
+        const tree = sim.treeResources.get(s.tree!)!
+        tree.health = Math.max(0, tree.health - AXE_DAMAGE_PER_HOUR * hours)
+        if (tree.health <= 0) {
+          tree.felledAt = sim.time
+          tree.stumpUntil = sim.time + STUMP_LIFETIME_DAYS
+          sim.felled.add(s.tree!)
+          sim.resourceRevision++
+          s.activity = "gathering"
+          s.timer = GAME_HOUR_SECONDS
+        }
+        break
+      }
+      case "gathering": {
+        s.timer -= dt
+        if (s.timer <= 0) {
+          const tree = sim.treeResources.get(s.tree!)!
+          s.carrying = Math.min(TIMBER_LOAD, tree.remainingWood)
+          tree.remainingWood -= s.carrying
+          sim.resourceRevision++
+          s.tree = null
+          startWorkRoute(s, [...s.workRoute!].reverse(), "hauling")
+        }
+        break
+      }
+      case "hauling": {
+        if (stepWorkRoute(s, map, worldSpeed, dt)) {
+          if (s.employer && s.carrying > 0) {
+            stackWood(sim.piles, s.employer, s.carrying)
+            sim.wood += s.carrying
+            sim.resourceRevision++
+            s.gold++
+          }
+          s.carrying = 0
+          s.activity = "idle"
+          s.timer = GAME_HOUR_SECONDS
+        }
+        break
+      }
+      case "idle": {
+        s.timer -= dt
+        if (s.timer <= 0 && Math.min(s.hunger, s.thirst, s.stamina) >= 80) {
+          if (!chooseTree(sim, s, map)) s.timer = GAME_HOUR_SECONDS
+        }
+        break
+      }
       case "walking":
       case "seeking":
       case "fleeing": {
-        // Exhaustion trumps everything: an empty stomach walks, empty legs don't.
-        if (s.stamina <= 0) {
+        // Nearby travelers seek the brothers before collapsing or chasing a cart.
+        const shelter = !!map.site && !s.track && s.activity !== "fleeing" && s.visitCooldown <= 0 &&
+          Math.min(s.hunger, s.thirst, s.stamina) <= 40 && Math.abs(s.progress - map.site.junction) <= 12
+        if (s.stamina <= 0 && !shelter) {
           startCamping(sim, s, t, map)
           break
         }
@@ -524,7 +754,7 @@ export function stepSim(
           if (s.fleeTimer <= 0) s.activity = "walking"
         }
         // A vendor whose walking stint is up pulls off to the side of the path.
-        if (isVendor) {
+        if (isVendor && !shelter) {
           s.timer -= dt
           if (s.timer <= 0) {
             s.spot = pitchSpot(map, s, s)
@@ -534,14 +764,14 @@ export function stepSim(
         }
         // Nobody goes shopping from the middle of the dark forest: on a track
         // they trudge on hungry until they rejoin the road.
-        if (s.activity === "walking" && !isVendor && !s.track && (s.hunger <= 0 || s.thirst <= 0)) {
+        if (s.activity === "walking" && !shelter && !isVendor && !s.track && (s.hunger <= 0 || s.thirst <= 0)) {
           s.activity = "seeking"
           s.targetId = null
         }
 
         let direction = s.direction
         let haste = s.activity === "fleeing" ? FLEE_HASTE : 1
-        if (s.activity === "seeking") {
+        if (s.activity === "seeking" && !shelter) {
           // (Re)acquire the nearest vendor who isn't off camping somewhere.
           const vendor = travelers
             .filter((v) => v.type.id === "vendor")
@@ -601,6 +831,28 @@ export function stepSim(
           break
         }
 
+        if (shelter) direction = map.site!.junction >= s.progress ? 1 : -1
+        const site = map.site
+        if (site && site.branch.length >= 2 && s.activity !== "fleeing" && s.visitCooldown <= 0) {
+          const distance = ((direction * (site.junction - s.progress)) % length + length) % length
+          if (distance <= worldSpeed * haste * dt) {
+            const chance = Math.max(visitChance({ ...t.attributes, piety: s.piety,
+              hunger: s.hunger, thirst: s.thirst, stamina: s.stamina }, sim.relic),
+              findJob(sim, s, map) ? 0.8 : 0)
+            s.visitCooldown = 5
+            if (nextRoll(s) < chance) {
+              s.progress = site.junction
+              s.branchProgress = 0
+              s.activity = "toRelic"
+              s.targetId = null
+              const at = routeWorldPoint(map, site.branch, 0)
+              s.x = at.x
+              s.y = at.y
+              s.z = at.z
+              break
+            }
+          }
+        }
         const next = s.progress + direction * worldSpeed * haste * dt
         // Walkers wrap at the map edges (leave east, arrive west); seekers
         // clamp — their target is on the road, never beyond it.

@@ -1,7 +1,25 @@
 {
-  "lastProcessedCommit": "d57bb5a9c474286011252a34b2145f926bcee2ec",
-  "releaseCount": 6,
+  "lastProcessedCommit": "1bc671422ff1cd59710d9d090d1f9a2196346bff",
+  "releaseCount": 9,
   "releases": [
+    {
+      "version": "0.0.23",
+      "title": "Release 0.0.23",
+      "summary": "Add shrine hospitality, lumber camps, and selectable timber resources (#42)",
+      "commit": "1bc671422ff1cd59710d9d090d1f9a2196346bff"
+    },
+    {
+      "version": "0.0.22",
+      "title": "Release 0.0.22",
+      "summary": "Fix bridge ramps to connect straight onto paths (#41)",
+      "commit": "c6d619a5bb81be5113e056c5573a1e5c5dffa054"
+    },
+    {
+      "version": "0.0.21",
+      "title": "Release 0.0.21",
+      "summary": "Scale traffic density with map area (#40)",
+      "commit": "693934eea0ff74409332efa6d49d0e3a9b2d6626"
+    },
     {
       "version": "0.0.20",
       "title": "Release 0.0.20",

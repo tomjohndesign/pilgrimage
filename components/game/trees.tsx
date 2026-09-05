@@ -4,6 +4,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { useCameraStore } from "@/lib/game/camera-store"
+import { TreeRemains } from "./tree-remains"
+import { useBuildStore } from "@/lib/game/build-store"
+import { simRegistry } from "@/lib/game/sim"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import type { GameMap } from "@/lib/game/map/types"
@@ -66,21 +70,43 @@ function makeCrownGeometry(shape: TreeSpeciesDef["crown"]["shape"]): THREE.Buffe
     : new THREE.IcosahedronGeometry(1, BLOB_DETAIL)
 }
 
-export function Trees({ map, ents = false }: { map: GameMap; ents?: boolean }) {
+export function Trees({ map, placements: supplied, ents = false }: { map: GameMap; placements?: TreePlacement[]; ents?: boolean }) {
+  const selection = useCameraStore((s) => s.selection)
+  const resources = useBuildStore((s) => s.treeResources)
+  const time = useBuildStore((s) => s.time)
+  const felled = useBuildStore((s) => s.felled)
+  const selectionRing = useRef<THREE.Mesh>(null)
   const species = useTreeTuningStore((s) => s.species)
-  const placements = useMemo(() => placeTrees(map, species), [map, species])
+  const placements = useMemo(() => supplied ?? placeTrees(map, species), [map, species, supplied])
 
+  const selected = selection?.kind === "tree" ? placements[selection.id] : null
+  const resource = selection?.kind === "tree" ? resources.get(selection.id) : null
+  const visible = !resource || resource.health > 0 || resource.remainingWood > 0 || time < (resource.stumpUntil ?? 0)
+  useFrame(() => {
+    if (selectionRing.current && selected) selectionRing.current.position.set(selected.x, selected.y + 0.025, selected.z)
+  })
+  useEffect(() => {
+    if (selection?.kind === "tree" && (!selected || !visible)) useCameraStore.getState().select(null)
+  }, [selection, selected, visible])
+  const selectTree = (id: number) => {
+    const camera = useCameraStore.getState()
+    camera.select(camera.selection?.kind === "tree" && camera.selection.id === id ? null : { kind: "tree", id })
+  }
   return (
-    <TreeField
-      placements={placements}
-      seed={deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes)}
-      idBase={map.buildings.length}
-      entMap={ents ? map : undefined}
-    />
+    <group>
+      <TreeField placements={placements} hidden={felled} onSelect={selectTree} entMap={ents ? map : undefined}
+        seed={deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes)} idBase={map.buildings.length} />
+      {Array.from(resources, ([id, resource]) => resource.health <= 0 && placements[id]
+        ? <TreeRemains key={id} id={id} tree={placements[id]} resource={resource} time={time} /> : null)}
+      {selected && visible && <mesh ref={selectionRing} name="tree-selection-ring" position={[selected.x, selected.y + 0.025, selected.z]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.25, 0.32, 24]} /><meshBasicMaterial color="#e4bb58" depthTest={false} />
+      </mesh>}
+    </group>
   )
 }
 
 interface GrownTree {
+  index: number
   placement: TreePlacement
   shape: TreeShape
   objectId: number
@@ -96,17 +122,21 @@ export function TreeField({
   seed,
   idBase = 0,
   entMap,
+  hidden,
+  onSelect,
 }: {
   placements: TreePlacement[]
   seed: number
   idBase?: number
   /** Only the game enables Ents; galleries retain their static tree lineup. */
   entMap?: GameMap
+  hidden?: ReadonlySet<number>
+  onSelect?: (index: number) => void
 }) {
   const species = useTreeTuningStore((s) => s.species)
   const variance = useTreeTuningStore((s) => s.variance)
 
-  const batches = useMemo(() => {
+  const grown = useMemo(() => {
     const rng = makeRng(seed)
     const grouped = new Map<TreeSpeciesId, GrownTree[]>()
     // Trees take the ID block between the buildings and the relic. On huge maps
@@ -114,29 +144,45 @@ export function TreeField({
     // outline between themselves, and they are far apart.
     const idSpan = RELIC_OBJECT_ID - 1 - idBase
     placements.forEach((placement, index) => {
-      const shape = generateTree(species[placement.species], rng, variance)
+      const shape = placement.shape ?? generateTree(species[placement.species], rng, variance)
       const objectId = treeObjectId(idBase, index % idSpan)
       let list = grouped.get(placement.species)
       if (!list) grouped.set(placement.species, (list = []))
-      list.push({ placement, shape, objectId, ent: entMap ? createEnt(placement, entMap.seed ?? 0, index) : undefined })
+      list.push({ index, placement, shape, objectId, ent: entMap ? createEnt(placement, entMap.seed ?? 0, index) : undefined })
     })
     return TREE_SPECIES_ORDER.filter((id) => grouped.has(id)).map((id) => ({
       def: species[id],
       trees: grouped.get(id)!,
     }))
   }, [placements, seed, idBase, species, variance, entMap])
+  const batches = useMemo(() => grown.map((batch) => ({
+    ...batch, trees: hidden ? batch.trees.filter((tree) => !hidden.has(tree.index)) : batch.trees,
+  })), [grown, hidden])
 
   return (
     <group>
       {batches.map(({ def, trees }) => (
-        <SpeciesBatch key={def.id} def={def} trees={trees} entMap={entMap} />
+        <SpeciesBatch key={def.id} def={def} trees={trees} entMap={entMap} onSelect={onSelect} />
       ))}
     </group>
   )
 }
 
 /** Every tree of one species: trunks in one instanced mesh, crowns in another. */
-function SpeciesBatch({ def, trees, entMap }: { def: TreeSpeciesDef; trees: GrownTree[]; entMap?: GameMap }) {
+function SpeciesBatch({ def, trees, entMap, onSelect }: {
+  def: TreeSpeciesDef
+  trees: GrownTree[]
+  entMap?: GameMap
+  onSelect?: (index: number) => void
+}) {
+  const crownOwners = useMemo(() => trees.flatMap((tree) => tree.shape.crown.map(() => tree.index)), [trees])
+  const select = (crown: boolean) => (event: { instanceId?: number; delta: number; stopPropagation: () => void }) => {
+    if (!onSelect || event.instanceId === undefined || event.delta > 6 || useBuildStore.getState().tool) return
+    const index = crown ? crownOwners[event.instanceId] : trees[event.instanceId]?.index
+    if (index === undefined) return
+    event.stopPropagation()
+    onSelect(index)
+  }
   const trunkGeometry = useMemo(() => makeTrunkGeometry(def.trunk.taper), [def.trunk.taper])
   const crownGeometry = useMemo(() => makeCrownGeometry(def.crown.shape), [def.crown.shape])
   useEffect(() => () => trunkGeometry.dispose(), [trunkGeometry])
@@ -156,6 +202,7 @@ function SpeciesBatch({ def, trees, entMap }: { def: TreeSpeciesDef; trees: Grow
       crownStart += tree.shape.crown.length
       return tree.ent ? [{
         tree, ent: tree.ent, trunkIndex, firstCrown,
+        baseX: tree.placement.x, baseZ: tree.placement.z,
         trunkMatrix: new THREE.Matrix4(),
         crownMatrices: tree.shape.crown.map(() => new THREE.Matrix4()),
       }] : []
@@ -240,6 +287,10 @@ function SpeciesBatch({ def, trees, entMap }: { def: TreeSpeciesDef; trees: Grow
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
       // Frustum culling tests the instanced bounds, so refresh them.
       mesh.computeBoundingSphere()
+      // Raycasting also uses these bounds; include everywhere an Ent can walk.
+      if (entMap && movingTrees.length && mesh.boundingSphere) {
+        mesh.boundingSphere.radius += Math.hypot(entMap.width, entMap.depth)
+      }
     }
     // Cache only the one percent that can move. Every other instance stays static.
     const hidden = new THREE.Matrix4().makeScale(0, 0, 0)
@@ -258,7 +309,7 @@ function SpeciesBatch({ def, trees, entMap }: { def: TreeSpeciesDef; trees: Grow
       legIdsRef.current.instanceMatrix.needsUpdate = true
       if (legIdsRef.current.instanceColor) legIdsRef.current.instanceColor.needsUpdate = true
     }
-  }, [def, trees, refs, trunkCount, crownCount, movingTrees])
+  }, [def, trees, refs, trunkCount, crownCount, movingTrees, entMap])
 
   useFrame((_, delta) => {
     if (!entMap || movingTrees.length === 0) return
@@ -266,14 +317,23 @@ function SpeciesBatch({ def, trees, entMap }: { def: TreeSpeciesDef; trees: Grow
     if (!trunk.current || !crown.current || !trunkId.current || !crownId.current) return
     let changed = false
     const { matrix, position, rotation, scale, euler } = scratch
+    const build = useBuildStore.getState()
+    const movementMap = build.buildings.length ? { ...entMap, buildings: [...entMap.buildings, ...build.buildings] } : entMap
+    const reserved = new Set(Array.from(simRegistry.current?.travelers.values() ?? [], (worker) => worker.tree))
     movingTrees.forEach((moving, index) => {
       const { ent, tree } = moving
       const wasMoving = ent.phase !== "rooted"
-      stepEnt(ent, entMap, delta)
+      // A rooted tree already claimed by a woodcutter stays put for the work.
+      if (!wasMoving && reserved.has(tree.index)) return
+      stepEnt(ent, movementMap, delta)
+      tree.placement.walking = ent.phase !== "rooted"
       if (!wasMoving && ent.phase === "rooted") return
       changed = true
-      const dx = ent.x - tree.placement.x
-      const dz = ent.z - tree.placement.z
+      const dx = ent.x - moving.baseX
+      const dz = ent.z - moving.baseZ
+      // Rendering, inspectors, woodcutters, and remains share the same placement.
+      tree.placement.x = ent.x
+      tree.placement.z = ent.z
       const shift = (base: THREE.Matrix4) => {
         matrix.copy(base)
         matrix.elements[12] += dx
@@ -322,11 +382,11 @@ function SpeciesBatch({ def, trees, entMap }: { def: TreeSpeciesDef; trees: Grow
 
   return (
     <group>
-      <instancedMesh key={`trunk-${trunkCount}`} ref={refs.trunk} args={instancedArgs(trunkCount)} frustumCulled={!movingTrees.length}>
+      <instancedMesh key={`trunk-${trunkCount}`} ref={refs.trunk} args={instancedArgs(trunkCount)} onClick={select(false)} frustumCulled={!movingTrees.length}>
         <primitive object={trunkGeometry} attach="geometry" />
         <meshLambertMaterial flatShading />
       </instancedMesh>
-      <instancedMesh key={`crown-${crownCount}`} ref={refs.crown} args={instancedArgs(crownCount)} frustumCulled={!movingTrees.length}>
+      <instancedMesh key={`crown-${crownCount}`} ref={refs.crown} args={instancedArgs(crownCount)} onClick={select(true)} frustumCulled={!movingTrees.length}>
         <primitive object={crownGeometry} attach="geometry" />
         <meshLambertMaterial flatShading />
       </instancedMesh>

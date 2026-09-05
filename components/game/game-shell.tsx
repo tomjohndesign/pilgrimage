@@ -3,13 +3,14 @@
 import dynamic from "next/dynamic"
 import { useEffect, useMemo, useState } from "react"
 
+import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER } from "@/lib/game/map/road"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
-import { generateRelic, relicBound } from "@/lib/game/relic"
-import { DEFAULT_TRAFFIC, generateTravelers } from "@/lib/game/travelers"
+import { generateRelic, visitChance } from "@/lib/game/relic"
+import { DEFAULT_TRAFFIC, generateTravelers, travelerCountForMap } from "@/lib/game/travelers"
 import {
   DEFAULT_CLEARING_COUNT,
   DEFAULT_DARK_FOREST_COUNT,
@@ -54,7 +55,7 @@ export interface MapSettings {
   darkForests: number
   /** How far off the road the relic's hovel is sited, in tiles. */
   relicDistance: number
-  /** How many travelers walk the road — the traffic level. */
+  /** Traffic density, in travelers per 128 × 128 tiles. */
   traffic: number
   /** Base walking speed in tiles per second. */
   walkSpeed: number
@@ -199,9 +200,10 @@ export function GameShell({
   )
 
   // Identities live outside the canvas so the HUD can name whoever is selected.
+  const travelerCount = map ? travelerCountForMap(map, settings.traffic) : 0
   const travelers = useMemo(
-    () => (seed === null ? [] : generateTravelers(seed, settings.traffic)),
-    [seed, settings.traffic],
+    () => (seed === null ? [] : generateTravelers(seed, travelerCount)),
+    [seed, travelerCount],
   )
 
   // The relic and the brothers who keep it, fixed per seed like the travelers.
@@ -217,7 +219,7 @@ export function GameShell({
   )
   // Who among the travelers turns aside for it: the track's own traffic.
   const relicTraffic = useMemo(
-    () => (relic ? relicBound(travelers, relic).length : 0),
+    () => (relic ? Math.round(travelers.reduce((sum, t) => sum + visitChance(t.attributes, relic.stats), 0)) : 0),
     [travelers, relic],
   )
   const monks = useMemo(() => (seed === null ? [] : generateMonks(seed)), [seed])
@@ -226,6 +228,7 @@ export function GameShell({
   // opens on the hovel — the one landmark every map has.
   useEffect(() => {
     if (!map) return
+    useBuildStore.getState().reset()
     const camera = useCameraStore.getState()
     camera.setMapSize(map.width, map.depth)
     camera.select(null)

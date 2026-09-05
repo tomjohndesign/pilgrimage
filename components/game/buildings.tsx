@@ -3,10 +3,14 @@
 import { useMemo } from "react"
 import * as THREE from "three"
 
+import { useBuildStore } from "@/lib/game/build-store"
+import { pileOffset } from "@/lib/game/trees/timber"
+import { WoodPile } from "./wood-pile"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import {
   buildingObjectId,
+  placedObjectId,
   encodeObjectId,
   OUTLINE_ID_LAYER_MASK,
 } from "@/lib/game/render/outline"
@@ -25,16 +29,19 @@ const ROOF_THICKNESS = 0.18
  * between a building and its own roof — only against *other* objects.
  */
 export function Buildings({ map }: { map: GameMap }) {
+  const piles = useBuildStore((s) => s.piles)
+  const placed = useBuildStore((s) => s.buildings)
+  const buildings = useMemo(() => [...map.buildings, ...placed], [map, placed])
   const idColors = useMemo(
     // Component tuples straight into the working colour space — an ID is data,
     // not a colour, so it must dodge sRGB conversion to survive readback.
-    () => map.buildings.map((_, index) => new THREE.Color(...encodeObjectId(buildingObjectId(index)))),
-    [map],
+    () => buildings.map((_, index) => new THREE.Color(...encodeObjectId(index < map.buildings.length ? buildingObjectId(index) : placedObjectId(index - map.buildings.length)))),
+    [map, buildings],
   )
 
   return (
     <group>
-      {map.buildings.map((building, index) => {
+      {buildings.map((building, index) => {
         // The hovel has its own geometry (see shrine.tsx); its ID slot stays reserved.
         if (building.id === map.site?.hovelId) return null
         // Footprint centre: the origin tile's centre, offset by half the extra tiles.
@@ -42,6 +49,26 @@ export function Buildings({ map }: { map: GameMap }) {
         const centreZ = tileToWorldZ(map, building.z) + (building.d - 1) / 2
         const baseY = TILE_HEIGHT
 
+        if (building.id.startsWith("lumberCamp-")) {
+          return (
+            <group key={building.id} name={`lumber-yard-${building.id}`} position={[centreX, baseY, centreZ]}>
+              <mesh position={[0, 0.022, 0]}>
+                <boxGeometry args={[building.w * 0.98, 0.044, building.d * 0.98]} />
+                <meshLambertMaterial color="#a18a60" />
+              </mesh>
+              {/* Low corner pegs mark the open yard without hiding its stacks. */}
+              {[-1, 1].flatMap((x) => [-1, 1].map((z) => (
+                <mesh key={`${x}:${z}`} position={[x * (building.w / 2 - 0.12), 0.13, z * (building.d / 2 - 0.12)]}>
+                  <boxGeometry args={[0.08, 0.26, 0.08]} /><meshLambertMaterial color="#705135" />
+                </mesh>
+              )))}
+              {piles.filter((pile) => pile.campId === building.id).map((pile) => {
+                const [x, z] = pileOffset(pile.slot)
+                return <group key={pile.id} position={[x, 0.03, z]}><WoodPile pile={pile} /></group>
+              })}
+            </group>
+          )
+        }
         const bodyArgs: [number, number, number] = [
           building.w * BODY_INSET,
           building.height,

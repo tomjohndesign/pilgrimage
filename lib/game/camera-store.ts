@@ -17,10 +17,12 @@ export type Selection =
   | { kind: "traveler"; id: number }
   | { kind: "monk"; id: number }
   | { kind: "relic" }
+  | { kind: "tree"; id: number }
+  | { kind: "pile"; id: string }
 
 export function isSelected(selection: Selection | null, candidate: Selection): boolean {
   if (!selection || selection.kind !== candidate.kind) return false
-  return selection.kind === "relic" || selection.id === (candidate as { id: number }).id
+  return selection.kind === "relic" || selection.id === (candidate as { id: number | string }).id
 }
 
 interface CameraState {
