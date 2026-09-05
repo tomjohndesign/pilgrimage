@@ -10,7 +10,20 @@
 /** World-space height of every tile's top surface above the base slab. */
 export const TILE_HEIGHT = 0.2
 
-export type TerrainId = "grass" | "dirt" | "path" | "forest" | "clearing" | "hills"
+export type TerrainId =
+  | "grass"
+  | "dirt"
+  | "path"
+  | "track"
+  | "forest"
+  | "darkwood"
+  | "clearing"
+  | "hills"
+
+/** Woods of either kind — what the forest-shade field and the tree line count. */
+export function isWoods(id: TerrainId): boolean {
+  return id === "forest" || id === "darkwood"
+}
 
 export interface TerrainDef {
   id: TerrainId
@@ -59,12 +72,35 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
     buildable: false,
     passable: true,
   },
+  // A secondary road: the short, dangerous way through the dark forest that
+  // the main road detoured around. Fainter than the road, since few use it.
+  track: {
+    id: "track",
+    label: "Track",
+    color: "#a8926a",
+    jitter: 0.1,
+    shadeBlend: 0.3,
+    buildable: false,
+    passable: true,
+  },
   forest: {
     id: "forest",
     label: "Forest",
     color: "#4b5c33",
     jitter: 0.16,
     shadeBlend: 0.5,
+    buildable: false,
+    passable: false,
+  },
+  // The old growth at the heart of a forest: denser, taller, darker — and
+  // where the dangerous things live. Impassable like forest; the main road
+  // routes around it, and only the tracks cut through.
+  darkwood: {
+    id: "darkwood",
+    label: "Dark forest",
+    color: "#2e3b22",
+    jitter: 0.14,
+    shadeBlend: 0.35,
     buildable: false,
     passable: false,
   },
@@ -93,7 +129,9 @@ export const TERRAIN_CHARS: Record<string, TerrainId> = {
   ".": "grass",
   ",": "dirt",
   "=": "path",
+  "-": "track",
   F: "forest",
+  D: "darkwood",
   o: "clearing",
   "^": "hills",
 }

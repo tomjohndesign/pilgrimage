@@ -8,6 +8,7 @@ import { loadSavedSeed } from "@/lib/game/seed-storage"
 import { generateTravelers } from "@/lib/game/travelers"
 import {
   DEFAULT_CLEARING_COUNT,
+  DEFAULT_DARK_FOREST_COUNT,
   DEFAULT_FOREST_COVERAGE,
   DEFAULT_GLADE_COUNT,
   DEFAULT_MAP_WIDTH,
@@ -42,6 +43,8 @@ export interface MapSettings {
   glades: number
   /** Number of small forest-floor clearings scattered through the woods. */
   clearings: number
+  /** How many dark forests stand in the road's way. */
+  darkForests: number
   /** How many travelers walk the road — the traffic level. */
   traffic: number
   /** Base walking speed in tiles per second. */
@@ -53,6 +56,7 @@ export const DEFAULT_SETTINGS: MapSettings = {
   coverage: Math.round(DEFAULT_FOREST_COVERAGE * 100),
   glades: DEFAULT_GLADE_COUNT,
   clearings: DEFAULT_CLEARING_COUNT,
+  darkForests: DEFAULT_DARK_FOREST_COUNT,
   traffic: 12,
   walkSpeed: 1.5,
 }
@@ -95,6 +99,7 @@ export function GameShell({
       forest: String(settings.coverage),
       glades: String(settings.glades),
       clearings: String(settings.clearings),
+      dark: String(settings.darkForests),
       traffic: String(settings.traffic),
       speed: String(settings.walkSpeed),
     })
@@ -112,8 +117,16 @@ export function GameShell({
             forestCoverage: settings.coverage / 100,
             gladeCount: settings.glades,
             clearingCount: settings.clearings,
+            darkForestCount: settings.darkForests,
           }),
-    [seed, settings.size, settings.coverage, settings.glades, settings.clearings],
+    [
+      seed,
+      settings.size,
+      settings.coverage,
+      settings.glades,
+      settings.clearings,
+      settings.darkForests,
+    ],
   )
 
   // Identities live outside the canvas so the HUD can name whoever is selected.

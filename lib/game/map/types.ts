@@ -29,6 +29,20 @@ export interface GameMap {
    * order a traveller crosses it.
    */
   road?: Array<{ x: number; z: number }>
+  /**
+   * Secondary tracks: each a shorter, more dangerous walk through a dark
+   * forest between two points on the road. Present on generated maps that
+   * grew a dark forest the road had to go around.
+   */
+  shortcuts?: Shortcut[]
+}
+
+export interface Shortcut {
+  /** Indices into `road` where the track leaves it and rejoins it; entry < exit. */
+  entry: number
+  exit: number
+  /** Ordered walk from `road[entry]` to `road[exit]` inclusive, each step to a 4-neighbour. */
+  tiles: Array<{ x: number; z: number }>
 }
 
 export function tileAt(map: GameMap, x: number, z: number): TerrainId | null {

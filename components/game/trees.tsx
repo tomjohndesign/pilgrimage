@@ -4,8 +4,8 @@ import { useLayoutEffect, useMemo, useRef } from "react"
 import * as THREE from "three"
 
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
-import { computeForestShade } from "@/lib/game/map/forest-field"
-import { TILE_HEIGHT } from "@/lib/game/map/terrain"
+import { computeDarkShade, computeForestShade } from "@/lib/game/map/forest-field"
+import { isWoods, TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import {
   encodeObjectId,
@@ -20,7 +20,10 @@ import {
  * The stand fades at its edges: the coin flip only lands on 2 deep in the
  * woods, and height and colour follow the forest-shade field, so the
  * outermost trees are sparser, shorter, and lighter and the woods taper into
- * grassland instead of stopping at a wall. Every forest tile keeps at least
+ * grassland instead of stopping at a wall. Dark forest is the one exception
+ * to the 1–2 rule: old growth holds 2 or 3 trees, taller and darker, and the
+ * dark-shade field feathers that into the woods around it so the heart of a
+ * forest never has a hard rim. Every forest tile keeps at least
  * one tree — forest is impassable, and a treeless tile would lie about that.
  * Jitter derives from the map seed (via its own stream so trees and tiles
  * never share RNG state), keeping the whole look a function of one number.
@@ -32,6 +35,11 @@ const EDGE_SIZE_SCALE = 0.55
 
 /** Chance of a second tree at the very heart of the woods; fades to 0 at the rim. */
 const SECOND_TREE_CHANCE = 0.5
+
+/** Old growth stands this much taller than the woods around it, at full dark shade. */
+const DARK_HEIGHT_SCALE = 1.45
+/** And this much darker. */
+const DARK_BRIGHTNESS = 0.6
 
 interface TreePlacement {
   x: number
@@ -52,6 +60,7 @@ export function Trees({ map }: { map: GameMap }) {
   // instance count must be known before the meshes mount.
   const placements = useMemo<TreePlacement[]>(() => {
     const shade = computeForestShade(map)
+    const darkShade = computeDarkShade(map)
     // Counts get their own stream so placement jitter (from the `trees`
     // stream) stays independent of the coin flips.
     const rngCount = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.treeCount))
@@ -61,14 +70,22 @@ export function Trees({ map }: { map: GameMap }) {
     for (let z = 0; z < map.depth; z++) {
       for (let x = 0; x < map.width; x++) {
         const index = z * map.width + x
-        if (map.tiles[index] !== "forest") continue
+        if (!isWoods(map.tiles[index])) continue
         const depth = shade[index]
+        const dark = darkShade[index]
+        const oldGrowth = map.tiles[index] === "darkwood"
 
-        const count = 1 + (rngCount() < SECOND_TREE_CHANCE * depth ? 1 : 0)
+        // One coin flip per woods tile, dark or not, so ordinary forest draws
+        // exactly what it did before dark forest existed.
+        const flip = rngCount()
+        const count = oldGrowth
+          ? 2 + (flip < SECOND_TREE_CHANCE * dark ? 1 : 0)
+          : 1 + (flip < SECOND_TREE_CHANCE * depth ? 1 : 0)
         // Slimmer trunks on the fuller tiles, so canopies overlap instead of
         // merging into one solid block.
         const widthScale = 1 / Math.sqrt(count)
-        const sizeScale = EDGE_SIZE_SCALE + (1 - EDGE_SIZE_SCALE) * depth
+        const sizeScale =
+          (EDGE_SIZE_SCALE + (1 - EDGE_SIZE_SCALE) * depth) * (1 + (DARK_HEIGHT_SCALE - 1) * dark)
 
         for (let t = 0; t < count; t++) {
           trees.push({
@@ -80,8 +97,10 @@ export function Trees({ map }: { map: GameMap }) {
             offsetX: (rng() - 0.5) * 0.8,
             offsetZ: (rng() - 0.5) * 0.8,
             rotation: rng() * Math.PI,
-            // Edge growth reads younger and sunlit — a touch lighter than the core.
-            brightness: (0.75 + rng() * 0.5) * (1.12 - 0.18 * depth),
+            // Edge growth reads younger and sunlit — a touch lighter than the
+            // core; old growth darker still, feathered by the dark shade.
+            brightness:
+              (0.75 + rng() * 0.5) * (1.12 - 0.18 * depth) * (1 - (1 - DARK_BRIGHTNESS) * dark),
           })
         }
       }

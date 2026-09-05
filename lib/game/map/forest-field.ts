@@ -1,3 +1,4 @@
+import { isWoods, type TerrainId } from "./terrain"
 import type { GameMap } from "./types"
 
 /**
@@ -20,18 +21,34 @@ import type { GameMap } from "./types"
  */
 export const FOREST_SHADE_RADIUS = 4
 
+/**
+ * Dark forest fades into ordinary forest over a tighter band than forest fades
+ * into grass: the old growth reads as a distinct heart, not a second haze.
+ */
+export const DARK_SHADE_RADIUS = 3
+
+/**
+ * How deep in the dark forest each tile sits, 0–1, same shape as the forest
+ * shade. Trees and ground tint read it to feather old growth into the woods
+ * around it, the same way the forest edge feathers into grass.
+ */
+export function computeDarkShade(map: GameMap): Float32Array {
+  return computeForestShade(map, DARK_SHADE_RADIUS, (t) => t === "darkwood")
+}
+
 export function computeForestShade(
   map: GameMap,
   radius: number = FOREST_SHADE_RADIUS,
+  counts: (t: TerrainId) => boolean = isWoods,
 ): Float32Array {
   const { width, depth, tiles } = map
   const stride = width + 1
 
-  // sat[(z+1)*stride + (x+1)] = count of forest tiles in the rect [0..x, 0..z].
+  // sat[(z+1)*stride + (x+1)] = count of counted tiles in the rect [0..x, 0..z].
   const sat = new Float64Array(stride * (depth + 1))
   for (let z = 0; z < depth; z++) {
     for (let x = 0; x < width; x++) {
-      const forest = tiles[z * width + x] === "forest" ? 1 : 0
+      const forest = counts(tiles[z * width + x]) ? 1 : 0
       sat[(z + 1) * stride + (x + 1)] =
         forest + sat[z * stride + (x + 1)] + sat[(z + 1) * stride + x] - sat[z * stride + x]
     }

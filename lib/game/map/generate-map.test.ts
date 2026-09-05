@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { generateMap } from "./generate-map"
-import { TERRAIN } from "./terrain"
+import { isWoods, TERRAIN } from "./terrain"
 import { tileAt, type GameMap } from "./types"
 
 /** Enough seeds to catch structural bugs, few enough to stay fast. */
@@ -92,16 +92,18 @@ describe("generateMap", () => {
   it("is densely forested by default, in one connected mass rather than islands", () => {
     for (const seed of SEEDS) {
       const map = generateMap({ seed })
-      const forest = countTerrain(map, "forest")
+      // Woods of both kinds: dark forest is forest too, just older.
+      const forest = map.tiles.filter(isWoods).length
       expect(forest / map.tiles.length, `seed ${seed} is mostly forest`).toBeGreaterThan(0.5)
 
       // Compactness: in dense woods, most forest tiles touch other forest tiles.
       let neighbourSum = 0
       for (let z = 0; z < map.depth; z++) {
         for (let x = 0; x < map.width; x++) {
-          if (tileAt(map, x, z) !== "forest") continue
+          if (!isWoods(tileAt(map, x, z)!)) continue
           for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-            if (tileAt(map, x + dx, z + dz) === "forest") neighbourSum++
+            const n = tileAt(map, x + dx, z + dz)
+            if (n !== null && isWoods(n)) neighbourSum++
           }
         }
       }
@@ -186,12 +188,104 @@ describe("generateMap", () => {
     }
   })
 
+  it("grows dark forest at the heart of the woods on nearly every seed, clear of the map's ends", () => {
+    expect(TERRAIN.darkwood.passable).toBe(false)
+    let seedsWithDark = 0
+    for (const seed of SEEDS) {
+      const map = generateMap({ seed })
+      const dark = countTerrain(map, "darkwood")
+      // A road that hugs the map's north or south edge leaves no room to
+      // stand a bar across it; such seeds legitimately have no dark forest.
+      if (dark > 150) seedsWithDark++
+      for (let z = 0; z < map.depth; z++) {
+        for (let x = 0; x < map.width; x++) {
+          if (tileAt(map, x, z) !== "darkwood") continue
+          // The road's endpoints sit on the west and east edges; old growth
+          // keeps clear of them so the road never *starts* in the dark.
+          expect(x, `seed ${seed} dark forest keeps off the west edge`).toBeGreaterThanOrEqual(8)
+          expect(x, `seed ${seed} dark forest keeps off the east edge`).toBeLessThan(map.width - 8)
+        }
+      }
+    }
+    expect(seedsWithDark).toBeGreaterThanOrEqual(SEEDS.length * 0.9)
+  })
+
+  it("grows no dark forest when asked not to", () => {
+    const map = generateMap({ seed: 5, darkForestCount: 0 })
+    expect(countTerrain(map, "darkwood")).toBe(0)
+    expect(map.shortcuts).toEqual([])
+  })
+
+  it("routes the road around dark forest instead of through it", () => {
+    for (const seed of SEEDS) {
+      const map = generateMap({ seed })
+      // A road tile with old growth on both flanks is a road *through* the
+      // dark forest. Skirting it never produces one.
+      let through = 0
+      for (const p of map.road!) {
+        const flankedX =
+          tileAt(map, p.x - 1, p.z) === "darkwood" && tileAt(map, p.x + 1, p.z) === "darkwood"
+        const flankedZ =
+          tileAt(map, p.x, p.z - 1) === "darkwood" && tileAt(map, p.x, p.z + 1) === "darkwood"
+        if (flankedX || flankedZ) through++
+      }
+      expect(through, `seed ${seed} road skirts the dark forest`).toBeLessThanOrEqual(2)
+    }
+  })
+
+  it("cuts a shorter track through the dark forest wherever the road detoured", () => {
+    let seedsWithTracks = 0
+    for (const seed of SEEDS) {
+      const map = generateMap({ seed })
+      const road = map.road!
+      if ((map.shortcuts ?? []).length > 0) seedsWithTracks++
+      for (const track of map.shortcuts ?? []) {
+        expect(track.entry).toBeLessThan(track.exit)
+        expect(track.tiles[0]).toEqual(road[track.entry])
+        expect(track.tiles[track.tiles.length - 1]).toEqual(road[track.exit])
+        // Meaningfully shorter than the road between the same two tiles.
+        expect(track.tiles.length, `seed ${seed} track is a shortcut`).toBeLessThan(
+          (track.exit - track.entry + 1) * 0.9,
+        )
+        let touchesDark = false
+        for (let i = 0; i < track.tiles.length; i++) {
+          const t = track.tiles[i]
+          expect(["track", "path"], `seed ${seed} track is carved`).toContain(tileAt(map, t.x, t.z))
+          if (i > 0) {
+            const step = Math.abs(t.x - track.tiles[i - 1].x) + Math.abs(t.z - track.tiles[i - 1].z)
+            expect(step, `seed ${seed} track step ${i} is to a neighbour`).toBe(1)
+          }
+          for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            if (tileAt(map, t.x + dx, t.z + dz) === "darkwood") touchesDark = true
+          }
+        }
+        expect(touchesDark, `seed ${seed} track runs through the dark forest`).toBe(true)
+      }
+    }
+    // Nearly every seed grows a dark forest in the road's way; a handful have
+    // the road's endpoints too close to the crossing for a track to fit.
+    expect(seedsWithTracks).toBeGreaterThanOrEqual(SEEDS.length * 0.8)
+  })
+
   it("keeps the road identical when only forest knobs change", () => {
     for (const seed of SEEDS.slice(0, 10)) {
-      // The road runs on its own RNG stream with no forest waypoints, so no
-      // forest knob may disturb it.
-      const a = generateMap({ seed, forestCoverage: 0.5, gladeCount: 3, clearingCount: 0 })
-      const b = generateMap({ seed, forestCoverage: 0.85, gladeCount: 8, clearingCount: 20 })
+      // The road runs on its own RNG stream and ignores ordinary forest, so
+      // no forest knob may disturb it. Dark forest is the one terrain the
+      // road reacts to, so it is switched off here.
+      const a = generateMap({
+        seed,
+        forestCoverage: 0.5,
+        gladeCount: 3,
+        clearingCount: 0,
+        darkForestCount: 0,
+      })
+      const b = generateMap({
+        seed,
+        forestCoverage: 0.85,
+        gladeCount: 8,
+        clearingCount: 20,
+        darkForestCount: 0,
+      })
       const roadOf = (m: GameMap) =>
         m.tiles.map((t, i) => (t === "path" ? i : -1)).filter((i) => i >= 0)
       expect(roadOf(b), `seed ${seed} road is stable`).toEqual(roadOf(a))

@@ -5,7 +5,7 @@ import { useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
-import { computeForestShade } from "@/lib/game/map/forest-field"
+import { computeDarkShade, computeForestShade } from "@/lib/game/map/forest-field"
 import { TERRAIN, TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
@@ -45,6 +45,9 @@ const GRID_DARKEN = 0.8
  */
 const DEEP_WOOD_TINT = new THREE.Color("#36452a")
 const OPEN_MEADOW_TINT = new THREE.Color("#94a158")
+
+/** The ground darkens by this much more under the heart of a dark forest. */
+const DARK_WOOD_DARKEN = 0.3
 
 
 /**
@@ -136,6 +139,7 @@ export function TerrainTiles({
     // Colour grain is a function of the map's own seed, one stream per consumer.
     const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.tileJitter))
     const shade = computeForestShade(map)
+    const darkShade = computeDarkShade(map)
 
     for (let z = 0; z < map.depth; z++) {
       for (let x = 0; x < map.width; x++) {
@@ -156,6 +160,8 @@ export function TerrainTiles({
         color.set(def.color)
         tint.copy(OPEN_MEADOW_TINT).lerp(DEEP_WOOD_TINT, shade[index])
         color.lerp(tint, def.shadeBlend)
+        // Old growth casts a deeper shadow; feathered so it has no hard rim.
+        color.multiplyScalar(1 - DARK_WOOD_DARKEN * darkShade[index] * def.shadeBlend)
         color.multiplyScalar(1 + (rng() - 0.5) * def.jitter)
         mesh.setColorAt(index, color)
       }

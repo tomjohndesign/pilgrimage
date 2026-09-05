@@ -1,6 +1,7 @@
 import { makeRng } from "../rng"
+import { computeDarkShade, computeForestShade } from "./forest-field"
 import type { TerrainId } from "./terrain"
-import type { GameMap } from "./types"
+import type { GameMap, Shortcut } from "./types"
 
 /**
  * Seeded map generation. The world is dense forest by default: the map starts
@@ -21,9 +22,17 @@ import type { GameMap } from "./types"
  * spanning tree), and that network is tied into the road, so every passable
  * tile on a generated map is reachable from every other.
  *
- * Forest, trail, and road randomness come from separate streams derived from
- * the seed, so tuning forest knobs never moves the road's endpoints or wander
- * (and vice versa) — tuning stays comparable across renders of the same seed.
+ * Dark forests are the old growth at the heart of the woods: a few blobs grown
+ * from the deepest points of the forest-shade field, placed near the road's
+ * line so they sit in its way. The road treats dark forest as very expensive
+ * (never impossible, so it can never be blocked) and detours around it; then,
+ * for each dark forest it went around, a secondary *track* is cut straight
+ * through and kept only if it is meaningfully shorter than the detour. Tracks
+ * are the dangerous short way that most travellers refuse.
+ *
+ * Forest, dark forest, trail, and road randomness come from separate streams
+ * derived from the seed, so tuning one never moves the others' dice — though
+ * the road's *route* does react to where dark forest lands, by design.
  */
 
 export const DEFAULT_MAP_WIDTH = 96
@@ -42,11 +51,58 @@ export interface GenerateMapOptions {
   /** Clearing footprint in tiles. */
   clearingSizeMin?: number
   clearingSizeMax?: number
+  /** How many dark forests to grow at the heart of the woods. */
+  darkForestCount?: number
+  /** Size of each dark forest as a fraction of the map. */
+  darkForestShare?: number
 }
 
 export const DEFAULT_FOREST_COVERAGE = 0.6
 export const DEFAULT_GLADE_COUNT = 12
 export const DEFAULT_CLEARING_COUNT = 22
+export const DEFAULT_DARK_FOREST_COUNT = 2
+export const DEFAULT_DARK_FOREST_SHARE = 0.02
+
+/**
+ * Step cost surcharge for routing the road through dark forest. High enough
+ * that a detour of a few dozen tiles always wins, low enough that a map walled
+ * off by dark forest still gets a road through it.
+ */
+export const DARK_ROAD_COST = 25
+
+/** Only road tiles at least this deep in the shade can seed a dark forest. */
+const DARK_HEART_MIN_SHADE = 0.9
+/** …unless nothing on the road is that deep, in which case settle for this. */
+const DARK_HEART_FALLBACK_SHADE = 0.6
+/** Dark forest hearts keep at least this far apart along the road (in x). */
+const DARK_HEART_SPACING = 20
+/**
+ * Dark forests grow as bars standing across the road rather than round blobs:
+ * a spine this many tiles north and south of the heart is painted first, then
+ * fleshed out. A round blob lets the road slip past along one edge; a bar
+ * forces a real detour, which is what makes a track through it worth having.
+ */
+const DARK_BAR_HALF = 10
+/** A heart wants at least this much woods north *and* south to stand a bar in. */
+const DARK_BAR_MIN_ROOM = 8
+/** …and will settle for this much when the road never runs through deep woods. */
+const DARK_BAR_FALLBACK_ROOM = 4
+/** Dark forest stays this many tiles clear of the west and east edges. */
+const DARK_EDGE_KEEP = 10
+/**
+ * …and of the north and south edges, so a bar never becomes a wall from the
+ * map's edge that the road can only pass on one side, far away.
+ */
+const DARK_EDGE_KEEP_Z = 8
+
+/** A track is only worth cutting if it's at most this fraction of the detour. */
+const TRACK_MAX_RATIO = 0.85
+/** The direct route is "in the dark" where the dark shade is at least this. */
+const TRACK_DARK_SHADE = 0.5
+/** Dark stretches of the direct route closer than this merge into one crossing. */
+const TRACK_MERGE_GAP = 8
+/** A track's ends sit this many tiles beyond the dark shade on the direct route. */
+const TRACK_MARGIN = 4
 
 /** Keep glade centres and road endpoints off the extreme edge tiles. */
 const EDGE_MARGIN = 2
@@ -77,6 +133,8 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     clearingCount = DEFAULT_CLEARING_COUNT,
     clearingSizeMin = 2,
     clearingSizeMax = 6,
+    darkForestCount = DEFAULT_DARK_FOREST_COUNT,
+    darkForestShare = DEFAULT_DARK_FOREST_SHARE,
   } = options
 
   // Independent streams (constants are arbitrary odd numbers) so each part of
@@ -84,6 +142,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   const rngForest = makeRng(seed ^ 0x1b873593)
   const rngRoad = makeRng(seed ^ 0x85ebca6b)
   const rngTrail = makeRng(seed ^ 0xc2b2ae35)
+  const rngDark = makeRng(seed ^ 0x27d4eb2f)
 
   const tiles: TerrainId[] = new Array<TerrainId>(width * depth).fill("forest")
 
@@ -197,23 +256,150 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     connected.push(next)
   }
 
-  // --- Road: west edge to east edge ------------------------------------------
-  // Terrain is ignored while routing — forest in the way gets carved, which is
-  // what guarantees the road can never be blocked.
-  // The route comes back as an ordered walk, west edge to east edge; keep
-  // that order on the map (`road`) so travelers know which way along is.
-  const roadTiles: number[] = []
-  const road: Array<{ x: number; z: number }> = []
-  for (const i of routeSegment(
+  // --- Dark forests: old growth at the heart of the woods --------------------
+  // A dark forest is only interesting if it's in the road's way, so hearts are
+  // picked *on* a provisional road — routed exactly as the real one will be,
+  // minus the dark-forest surcharge — at points deep in the forest-shade
+  // field, spaced apart so they read as separate forests, and kept off the
+  // map's west and east margins so the road's endpoints stay clear. The real
+  // road is routed afterwards and detours around whatever grew. Growth only
+  // spreads through woods (and across the trails that thread them), so a dark
+  // forest never leaks across a glade.
+  const provisional = routeSegment(
     { x: 0, z: entryZ },
     { x: width - 1, z: exitZ },
     width,
     depth,
     roadWander,
-  )) {
+  )
+  if (darkForestCount > 0 && darkForestShare > 0) {
+    const shade = computeForestShade({ width, depth, tiles, buildings: [] })
+    const inHeartland = (i: number) => {
+      const x = i % width
+      const z = Math.floor(i / width)
+      return (
+        x >= DARK_EDGE_KEEP &&
+        x < width - DARK_EDGE_KEEP &&
+        z >= DARK_EDGE_KEEP_Z &&
+        z < depth - DARK_EDGE_KEEP_Z
+      )
+    }
+    const canEnter = (i: number) =>
+      inHeartland(i) &&
+      (tiles[i] === "forest" || tiles[i] === "darkwood" || tiles[i] === "clearing")
+    // How far a bar could extend from this tile before hitting open land.
+    const room = (i: number, dz: number) => {
+      let run = 0
+      let z = Math.floor(i / width) + dz
+      while (z >= 0 && z < depth && run < DARK_BAR_HALF && canEnter(z * width + (i % width))) {
+        run++
+        z += dz
+      }
+      return run
+    }
+    const deepEnough = (minShade: number, minRoom: number) =>
+      provisional.filter(
+        (i) =>
+          canEnter(i) &&
+          tiles[i] === "forest" &&
+          shade[i] >= minShade &&
+          room(i, 1) >= minRoom &&
+          room(i, -1) >= minRoom,
+      )
+    // Roads that mostly run through glades are rare, but settle for thinner
+    // woods rather than a map with no dark forest at all.
+    let candidates = deepEnough(DARK_HEART_MIN_SHADE, DARK_BAR_MIN_ROOM)
+    if (candidates.length === 0) candidates = deepEnough(DARK_HEART_FALLBACK_SHADE, DARK_BAR_MIN_ROOM)
+    if (candidates.length === 0) {
+      candidates = deepEnough(DARK_HEART_FALLBACK_SHADE, DARK_BAR_FALLBACK_ROOM)
+    }
+
+    const hearts: number[] = []
+    const target = Math.round(darkForestShare * width * depth)
+    for (let d = 0; d < darkForestCount && candidates.length > 0; d++) {
+      // Best-of-k among the candidates that keep their distance from earlier
+      // hearts: the one with the most room for a bar, then the deepest.
+      const spaced = candidates.filter((i) =>
+        hearts.every((h) => Math.abs((h % width) - (i % width)) >= DARK_HEART_SPACING),
+      )
+      if (spaced.length === 0) break
+      let best = -1
+      let bestScore = -Infinity
+      for (let k = 0; k < 12; k++) {
+        const i = spaced[Math.floor(rngDark() * spaced.length)]
+        const score = Math.min(room(i, 1), room(i, -1)) + shade[i]
+        if (score > bestScore) {
+          bestScore = score
+          best = i
+        }
+      }
+      if (best < 0) continue
+      hearts.push(best)
+      growDarkForest(tiles, width, depth, best, target, rngDark, canEnter)
+    }
+  }
+
+  // Everything routed from here on pays to enter dark forest — the road
+  // detours, the road-tie trail skirts — but nothing is ever impassable. The
+  // surcharge is feathered by the dark-shade field so it also covers the
+  // clearings and trails threading the old growth: without that, the road
+  // would happily ride a one-tile game trail straight through the middle.
+  const darkShade = computeDarkShade({ width, depth, tiles, buildings: [] })
+  const darkPenalty = (i: number) =>
+    tiles[i] === "darkwood" ? DARK_ROAD_COST : DARK_ROAD_COST * darkShade[i]
+  const roadCost = new Float64Array(width * depth)
+  for (let i = 0; i < roadCost.length; i++) roadCost[i] = roadWander[i] + darkPenalty(i)
+
+  // --- Where the direct route crosses the dark forest ------------------------
+  // The provisional road is the direct route; where it runs through the dark
+  // shade is a crossing. Each crossing gets a pair of waypoints on the direct
+  // route just outside the shade. The real road is routed *through* those
+  // waypoints, so after skirting the old growth it must come back to the
+  // direct line — a genuine detour, not a road that merely drifted past one
+  // end. The direct stretch between the waypoints becomes the track.
+  const crossings: Array<[number, number]> = []
+  for (let p = 0; p < provisional.length; p++) {
+    if (darkShade[provisional[p]] < TRACK_DARK_SHADE) continue
+    const last = crossings[crossings.length - 1]
+    if (last && p - last[1] <= TRACK_MERGE_GAP) last[1] = p
+    else crossings.push([p, p])
+  }
+  const spans: Array<[number, number]> = []
+  for (const [pa, pb] of crossings) {
+    const a = pa - TRACK_MARGIN
+    const b = pb + TRACK_MARGIN
+    const prev = spans[spans.length - 1]
+    if (a <= 0 || b >= provisional.length - 1 || (prev && a <= prev[1])) continue
+    spans.push([a, b])
+  }
+
+  // --- Road: west edge to east edge ------------------------------------------
+  // Ordinary forest is ignored while routing — trees in the way get carved,
+  // which is what guarantees the road can never be blocked. The route comes
+  // back as an ordered walk, west edge to east edge; keep that order on the
+  // map (`road`) so travelers know which way along is.
+  const stops = [provisional[0]]
+  for (const [a, b] of spans) stops.push(provisional[a], provisional[b])
+  stops.push(provisional[provisional.length - 1])
+  const roadTiles: number[] = []
+  for (let st = 0; st < stops.length - 1; st++) {
+    const segment = routeSegment(
+      { x: stops[st] % width, z: Math.floor(stops[st] / width) },
+      { x: stops[st + 1] % width, z: Math.floor(stops[st + 1] / width) },
+      width,
+      depth,
+      roadCost,
+    )
+    // Consecutive segments share their junction tile; keep it once.
+    for (let k = st === 0 ? 0 : 1; k < segment.length; k++) roadTiles.push(segment[k])
+  }
+  const road: Array<{ x: number; z: number }> = []
+  const roadIndex = new Int32Array(width * depth).fill(-1)
+  for (let k = 0; k < roadTiles.length; k++) {
+    const i = roadTiles[k]
     tiles[i] = "path"
-    roadTiles.push(i)
     road.push({ x: i % width, z: Math.floor(i / width) })
+    if (roadIndex[i] < 0) roadIndex[i] = k
   }
 
   // --- Tie the trail network into the road -----------------------------------
@@ -233,10 +419,41 @@ export function generateMap(options: GenerateMapOptions): GameMap {
         }
       }
     }
-    carveTrail(bestCenter, { x: bestRoad % width, z: Math.floor(bestRoad / width) })
+    const tieCost = new Float64Array(width * depth)
+    for (let i = 0; i < tieCost.length; i++) tieCost[i] = trailWander[i] + darkPenalty(i)
+    for (const i of routeSegment(
+      bestCenter,
+      { x: bestRoad % width, z: Math.floor(bestRoad / width) },
+      width,
+      depth,
+      tieCost,
+    )) {
+      if (tiles[i] === "forest" || tiles[i] === "darkwood") tiles[i] = "clearing"
+    }
   }
 
-  return { width, depth, tiles, buildings: [], seed, road }
+  // --- Tracks: the short way through each dark forest ------------------------
+  // Kept only if it really is a shortcut and really crosses old growth — a
+  // road that barely bent around a sliver earns no track.
+  const shortcuts: Shortcut[] = []
+  for (const [a, b] of spans) {
+    const entry = roadIndex[provisional[a]]
+    const exit = roadIndex[provisional[b]]
+    if (entry < 0 || exit <= entry) continue
+    const route = provisional.slice(a, b + 1)
+    if (route.length > (exit - entry + 1) * TRACK_MAX_RATIO) continue
+    if (!route.some((i) => tiles[i] === "darkwood")) continue
+    for (const i of route) {
+      if (tiles[i] !== "path") tiles[i] = "track"
+    }
+    shortcuts.push({
+      entry,
+      exit,
+      tiles: route.map((i) => ({ x: i % width, z: Math.floor(i / width) })),
+    })
+  }
+
+  return { width, depth, tiles, buildings: [], seed, road, shortcuts }
 }
 
 /**
@@ -289,16 +506,71 @@ function growBlob(
 }
 
 /**
- * A* over the full grid, 4-connected, cost 1 + wander per step. Terrain is
- * deliberately ignored — whatever needs carving gets carved by the caller.
+ * Grow one dark forest from `heart`: a straight spine north and south as far
+ * as the woods allow (up to DARK_BAR_HALF each way), then organic growth off
+ * it until `target` forest tiles are old growth. Only forest converts, and the
+ * frontier only spreads where `canEnter` allows, so the bar threads around
+ * clearings and trails but never leaks across a glade. Returns the painted
+ * tile indices.
+ */
+function growDarkForest(
+  tiles: TerrainId[],
+  width: number,
+  depth: number,
+  heart: number,
+  target: number,
+  rng: () => number,
+  canEnter: (i: number) => boolean,
+): number[] {
+  const painted: number[] = []
+  const blob: number[] = []
+  const inBlob = new Set<number>()
+  const add = (i: number) => {
+    inBlob.add(i)
+    blob.push(i)
+    if (tiles[i] === "forest") {
+      tiles[i] = "darkwood"
+      painted.push(i)
+    }
+  }
+
+  add(heart)
+  const hx = heart % width
+  const hz = Math.floor(heart / width)
+  for (const dz of [1, -1]) {
+    for (let k = 1; k <= DARK_BAR_HALF; k++) {
+      const z = hz + dz * k
+      if (z < 0 || z >= depth || !canEnter(z * width + hx)) break
+      add(z * width + hx)
+    }
+  }
+
+  let attempts = target * 40
+  while (painted.length < target && attempts-- > 0) {
+    const from = blob[Math.floor(rng() * blob.length)]
+    const [dx, dz] = DIRS[Math.floor(rng() * 4)]
+    const nx = (from % width) + dx
+    const nz = Math.floor(from / width) + dz
+    if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
+    const n = nz * width + nx
+    if (inBlob.has(n) || !canEnter(n)) continue
+    add(n)
+  }
+  return painted
+}
+
+/**
+ * A* over the full grid, 4-connected, cost 1 + `extra[tile]` per step. Terrain
+ * is only felt through `extra` (wander, dark-forest surcharge) — nothing is
+ * impassable, so whatever needs carving gets carved by the caller.
  * Linear-scan open list; fine at prototype map sizes.
  */
-function routeSegment(
+export function routeSegment(
   start: { x: number; z: number },
   goal: { x: number; z: number },
   width: number,
   depth: number,
-  wander: Float64Array,
+  extra: Float64Array,
 ): number[] {
   const size = width * depth
   const g = new Float64Array(size).fill(Infinity)
@@ -333,7 +605,7 @@ function routeSegment(
       if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
       const n = nz * width + nx
       if (closed[n]) continue
-      const cost = g[current] + 1 + wander[n]
+      const cost = g[current] + 1 + extra[n]
       if (cost < g[n]) {
         g[n] = cost
         cameFrom[n] = current
