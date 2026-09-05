@@ -515,6 +515,7 @@ describe("road edges", () => {
 
 describe("world seed", () => {
   it("derives deterministic, distinct streams from one seed", () => {
+    expect(new Set(Object.values(SEED_STREAM)).size).toBe(Object.values(SEED_STREAM).length)
     expect(deriveSeed(123, SEED_STREAM.tileJitter)).toBe(deriveSeed(123, SEED_STREAM.tileJitter))
     expect(deriveSeed(123, SEED_STREAM.tileJitter)).not.toBe(deriveSeed(123, SEED_STREAM.trees))
     expect(deriveSeed(123, SEED_STREAM.trees)).not.toBe(deriveSeed(124, SEED_STREAM.trees))

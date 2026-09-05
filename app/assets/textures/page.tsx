@@ -3,11 +3,12 @@ import Link from "next/link"
 
 import { TextureGallery } from "@/components/texture-gallery"
 import { TreeLab } from "@/components/tree-lab/tree-lab"
+import { EnvironmentGallery } from "@/components/environment-lab/environment-gallery"
 
 export const metadata: Metadata = {
   title: "Pilgrimage — Textures",
   description:
-    "Every texture in the game, next to the item it dresses — and the parametric tree lab.",
+    "Every texture in the game, next to the item it dresses — with parametric trees and environment details.",
 }
 
 export default function TexturesPage() {
@@ -29,6 +30,14 @@ export default function TexturesPage() {
       </header>
 
       <TextureGallery />
+
+      <section id="environment" className="mt-20 w-full max-w-6xl">
+        <header className="mb-10 text-center">
+          <h2 className="font-display text-3xl font-bold tracking-[6px] text-parchment md:text-4xl">ENVIRONMENT</h2>
+          <p className="mt-3 font-display text-[10px] uppercase tracking-[3px] text-gold">Meadow grass, wildflowers, shrubs, and weathered stone</p>
+        </header>
+        <EnvironmentGallery />
+      </section>
 
       <section id="trees" className="mt-20 w-full max-w-6xl">
         <header className="mb-10 text-center">

@@ -56,4 +56,7 @@ export const SEED_STREAM = {
    * it preserves every seed's cast (names, callings, stats).
    */
   lanes: 10,
+  /** Sparse ground dressing, independent of trees and simulation. */
+  environment: 11,
+  environmentShapes: 12,
 } as const
