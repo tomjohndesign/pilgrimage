@@ -1,0 +1,53 @@
+{
+  "workspace": "https://app.conductor.build/workspace/8ffb9739-5c1f-478d-871c-26deb51f420e",
+  "branch": "character-sprites-and-sounds",
+  "commit": "f6b9d61064df77b99a1b8e61ca2a60926db5a5cd",
+  "note": "Snapshot of working-tree artwork for the rendering lab; source workspace is untouched.",
+  "files": [
+    {
+      "source": "public/textures/characters/peasant-v1.png",
+      "file": "peasant-v1.png",
+      "sha256": "c855b69d5f1790264e55dd20a663146ccf34003b2619a3035b4a86d9b71a04b0"
+    },
+    {
+      "source": "public/textures/characters/pilgrim-v1.png",
+      "file": "pilgrim-v1.png",
+      "sha256": "a15c9e10c305bddbacbb4c539e0bad5c22c79412b2933f44f00e3dbbfb946068"
+    },
+    {
+      "source": "public/textures/characters/merchant-v1.png",
+      "file": "merchant-v1.png",
+      "sha256": "390dd9b540feaff95d68060e476368cf8c1c9b09dc0804a23fbf02adef6474f4"
+    },
+    {
+      "source": "public/textures/characters/friar-v1.png",
+      "file": "friar-v1.png",
+      "sha256": "2dba847989ede6a1cb8a84b6692cab2a2998384cf3e41667848900587f5b178d"
+    },
+    {
+      "source": "public/textures/characters/knight-v1.png",
+      "file": "knight-v1.png",
+      "sha256": "a93f325fe793ac668e4659f98bc75652a6d1dbef39316526820325426c629925"
+    },
+    {
+      "source": "public/textures/characters/minstrel-v1.png",
+      "file": "minstrel-v1.png",
+      "sha256": "7170f03453a370a65b430c682e71dd9a63e162295f96953e745ef0af5fd86228"
+    },
+    {
+      "source": "public/textures/characters/vendor-v1.png",
+      "file": "vendor-v1.png",
+      "sha256": "3c4d299d7cc508d130b841d7ef61fc90f9330592b3edbc3a02059e89c6447cde"
+    },
+    {
+      "source": "public/textures/characters/base/base-person-v8-walk.png",
+      "file": "base-person-v8-walk.png",
+      "sha256": "fdf542200be7037075d6091bf626b3e147bbc5b5b87ce3189af7ceed1f0ff8bc"
+    },
+    {
+      "source": "public/textures/characters/base/base-person-v8-idle.png",
+      "file": "base-person-v8-idle.png",
+      "sha256": "9da84c335a6a0edab29e1da14b4852be46a141c01b1511061ae366fc5b721516"
+    }
+  ]
+}
