@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "c6d619a5bb81be5113e056c5573a1e5c5dffa054",
-  "releaseCount": 8,
+  "lastProcessedCommit": "1bc671422ff1cd59710d9d090d1f9a2196346bff",
+  "releaseCount": 9,
   "releases": [
+    {
+      "version": "0.0.23",
+      "title": "Release 0.0.23",
+      "summary": "Add shrine hospitality, lumber camps, and selectable timber resources (#42)",
+      "commit": "1bc671422ff1cd59710d9d090d1f9a2196346bff"
+    },
     {
       "version": "0.0.22",
       "title": "Release 0.0.22",
