@@ -5,16 +5,15 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import { selectElement } from "@/lib/game/selection"
 import { TreeRemains } from "./tree-remains"
 import { useBuildStore } from "@/lib/game/build-store"
 import { simRegistry } from "@/lib/game/sim"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
-import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import type { GameMap } from "@/lib/game/map/types"
 import {
   encodeObjectId,
   OUTLINE_ID_LAYER_MASK,
-  RELIC_OBJECT_ID,
   treeObjectId,
 } from "@/lib/game/render/outline"
 import { placeTrees, type TreePlacement } from "@/lib/game/trees/placement"
@@ -75,32 +74,22 @@ export function Trees({ map, placements: supplied, ents = false }: { map: GameMa
   const resources = useBuildStore((s) => s.treeResources)
   const time = useBuildStore((s) => s.time)
   const felled = useBuildStore((s) => s.felled)
-  const selectionRing = useRef<THREE.Mesh>(null)
   const species = useTreeTuningStore((s) => s.species)
   const placements = useMemo(() => supplied ?? placeTrees(map, species), [map, species, supplied])
 
   const selected = selection?.kind === "tree" ? placements[selection.id] : null
   const resource = selection?.kind === "tree" ? resources.get(selection.id) : null
   const visible = !resource || resource.health > 0 || resource.remainingWood > 0 || time < (resource.stumpUntil ?? 0)
-  useFrame(() => {
-    if (selectionRing.current && selected) selectionRing.current.position.set(selected.x, selected.y + 0.025, selected.z)
-  })
   useEffect(() => {
     if (selection?.kind === "tree" && (!selected || !visible)) useCameraStore.getState().select(null)
   }, [selection, selected, visible])
-  const selectTree = (id: number) => {
-    const camera = useCameraStore.getState()
-    camera.select(camera.selection?.kind === "tree" && camera.selection.id === id ? null : { kind: "tree", id })
-  }
+  const selectTree = (id: number, event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "tree", id }, event)
   return (
     <group>
       <TreeField placements={placements} hidden={felled} onSelect={selectTree} entMap={ents ? map : undefined}
         seed={deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes)} idBase={map.buildings.length} />
       {Array.from(resources, ([id, resource]) => resource.health <= 0 && placements[id]
-        ? <TreeRemains key={id} id={id} tree={placements[id]} resource={resource} time={time} /> : null)}
-      {selected && visible && <mesh ref={selectionRing} name="tree-selection-ring" position={[selected.x, selected.y + 0.025, selected.z]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.25, 0.32, 24]} /><meshBasicMaterial color="#e4bb58" depthTest={false} />
-      </mesh>}
+        ? <TreeRemains key={id} id={id} objectId={treeObjectId(map.buildings.length, id)} tree={placements[id]} resource={resource} time={time} /> : null)}
     </group>
   )
 }
@@ -131,7 +120,7 @@ export function TreeField({
   /** Only the game enables Ents; galleries retain their static tree lineup. */
   entMap?: GameMap
   hidden?: ReadonlySet<number>
-  onSelect?: (index: number) => void
+  onSelect?: (index: number, event: { delta: number; stopPropagation: () => void }) => void
 }) {
   const species = useTreeTuningStore((s) => s.species)
   const variance = useTreeTuningStore((s) => s.variance)
@@ -142,10 +131,9 @@ export function TreeField({
     // Trees take the ID block between the buildings and the relic. On huge maps
     // IDs wrap rather than overflow: two trees sharing an ID only lose the
     // outline between themselves, and they are far apart.
-    const idSpan = RELIC_OBJECT_ID - 1 - idBase
     placements.forEach((placement, index) => {
       const shape = placement.shape ?? generateTree(species[placement.species], rng, variance)
-      const objectId = treeObjectId(idBase, index % idSpan)
+      const objectId = treeObjectId(idBase, index)
       let list = grouped.get(placement.species)
       if (!list) grouped.set(placement.species, (list = []))
       list.push({ index, placement, shape, objectId, ent: entMap ? createEnt(placement, entMap.seed ?? 0, index) : undefined })
@@ -173,7 +161,7 @@ function SpeciesBatch({ def, trees, entMap, onSelect }: {
   def: TreeSpeciesDef
   trees: GrownTree[]
   entMap?: GameMap
-  onSelect?: (index: number) => void
+  onSelect?: (index: number, event: { delta: number; stopPropagation: () => void }) => void
 }) {
   const crownOwners = useMemo(() => trees.flatMap((tree) => tree.shape.crown.map(() => tree.index)), [trees])
   const select = (crown: boolean) => (event: { instanceId?: number; delta: number; stopPropagation: () => void }) => {
@@ -181,7 +169,7 @@ function SpeciesBatch({ def, trees, entMap, onSelect }: {
     const index = crown ? crownOwners[event.instanceId] : trees[event.instanceId]?.index
     if (index === undefined) return
     event.stopPropagation()
-    onSelect(index)
+    onSelect(index, event)
   }
   const trunkGeometry = useMemo(() => makeTrunkGeometry(def.trunk.taper), [def.trunk.taper])
   const crownGeometry = useMemo(() => makeCrownGeometry(def.crown.shape), [def.crown.shape])

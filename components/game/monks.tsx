@@ -6,6 +6,8 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
+import { selectElement } from "@/lib/game/selection"
+import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
 import { surfaceHeight } from "@/lib/game/map/bridges"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -37,9 +39,6 @@ const PAUSE_MIN_SECONDS = 2
 const PAUSE_MAX_SECONDS = 7
 /** Standing within this many tiles of the hovel's centre counts as keeping vigil. */
 const VIGIL_RADIUS = 1.8
-
-/** A click that dragged further than this many pixels is a pan, not a select. */
-const CLICK_SLOP_PX = 6
 
 interface Spot {
   x: number
@@ -185,11 +184,7 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
       {monks.map((monk, index) => {
         const id = new THREE.Color(...encodeObjectId(residentObjectId(index)))
         const selected = isSelected(selection, { kind: "monk", id: monk.id })
-        const select = (event: { delta: number; stopPropagation: () => void }) => {
-          if (event.delta > CLICK_SLOP_PX) return
-          event.stopPropagation()
-          useCameraStore.getState().select(selected ? null : { kind: "monk", id: monk.id })
-        }
+        const select = (event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "monk", id: monk.id }, event)
         return (
           <group
             key={monk.id}
@@ -209,13 +204,13 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
               <boxGeometry args={BODY} />
               <meshBasicMaterial color={id} toneMapped={false} />
             </mesh>
+            <mesh position={[0, BODY[1] + CROWN[1] / 2, 0]} layers-mask={OUTLINE_ID_LAYER_MASK}>
+              <boxGeometry args={CROWN} />
+              <meshBasicMaterial color={id} toneMapped={false} />
+            </mesh>
             {flying && <MonkRocketGear phase={index} outlineColor={id} onClick={select} />}
-            {selected && (
-              <mesh position={[0, flying ? 1.4 : BODY[1] + 0.35, 0]}>
-                <boxGeometry args={[0.2, 0.05, 0.2]} />
-                <meshBasicMaterial color="#d8a93f" />
-              </mesh>
-            )}
+            <CharacterHitTarget onClick={select} />
+            {selected && <CharacterSelectionShadow map={map} flying={flying} />}
           </group>
         )
       })}

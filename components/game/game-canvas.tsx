@@ -116,7 +116,7 @@ export function GameCanvas({
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
 
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
-      <OutlinePass />
+      <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
       <DebugHandle map={map} travelers={travelers} speed={walkSpeed} />
     </PixelCanvas>
   )
