@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { DEFAULT_MOVEMENT, LINEAR_MOVEMENT } from "./motion"
 import { BRIDGE_RISE } from "./map/bridges"
+import { parseAsciiMap } from "./map/prototype-map"
 import { TILE_HEIGHT, type TerrainId } from "./map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import {
@@ -342,6 +343,24 @@ describe("stepSim", () => {
 })
 
 describe("left-hand walking lanes", () => {
+  it.each([1, -1] as const)("follows a diagonal ribbon continuously in direction %i", (direction) => {
+    const map = parseAsciiMap([".........", "===......", "..==.....", "...==....", "....=====", "........."])
+    map.road = [[0, 1], [1, 1], [2, 1], [2, 2], [3, 2], [3, 3], [4, 3], [4, 4], [5, 4], [6, 4], [7, 4], [8, 4]]
+      .map(([x, z]) => ({ x, z }))
+    const traveler = { ...makeTraveler(0, "knight", {}, (direction === 1 ? 4 : 5) / 11), direction }
+    const sim = createSim([traveler], map)
+    const s = sim.travelers.get(0)!
+    let previous = { x: s.x, z: s.z }
+    for (let tick = 0; tick < 10; tick++) {
+      stepSim(sim, [traveler], map, 1, 0.1)
+      // Both coordinates change together; the lane stays on the path tiles.
+      expect(s.x - previous.x).toBeCloseTo(s.z - previous.z)
+      expect((s.x - previous.x) * direction).toBeGreaterThan(0)
+      expect(tileAt(map, worldToTileX(map, s.x), worldToTileZ(map, s.z))).toBe("path")
+      previous = { x: s.x, z: s.z }
+    }
+  })
+
   it.each(([1, -1] as const).flatMap(direction => [LINEAR_MOVEMENT, DEFAULT_MOVEMENT].map(movement => ({ direction, movement }))))(
     "keeps left across bridge ramps and the raised deck with direction $direction and tuning $movement", ({ direction, movement }) => {
     const map = makeMap()

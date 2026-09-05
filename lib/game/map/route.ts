@@ -1,3 +1,4 @@
+import { elevationStep, type ElevationInfo } from "./elevation"
 export const ROUTE_DIRS: ReadonlyArray<readonly [number, number]> = [
   [1, 0],
   [-1, 0],
@@ -7,7 +8,8 @@ export const ROUTE_DIRS: ReadonlyArray<readonly [number, number]> = [
 
 /**
  * A* over the full grid, 4-connected, cost 1 + wander per step. Terrain is
- * deliberately ignored — whatever is in the way gets carved by the caller.
+ * cover is ignored — whatever is in the way gets carved by the caller.
+ * When elevation is supplied, cliff edges remain impassable even in this fallback.
  * The last-resort fallback for the road and the hovel's track.
  *
  * The open list is a binary heap keyed on f = g + h. A linear scan was fine up
@@ -21,6 +23,7 @@ export function routeBlind(
   width: number,
   depth: number,
   wander: Float64Array,
+  elevation?: ElevationInfo,
 ): number[] {
   const size = width * depth
   const g = new Float64Array(size).fill(Infinity)
@@ -50,7 +53,7 @@ export function routeBlind(
       if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
       const n = nz * width + nx
       if (closed[n]) continue
-      const cost = g[current] + 1 + wander[n]
+      const cost = g[current] + 1 + wander[n] + elevationStep(elevation, current, n)
       if (cost < g[n]) {
         g[n] = cost
         cameFrom[n] = current
@@ -59,6 +62,7 @@ export function routeBlind(
     }
   }
 
+  if (!Number.isFinite(g[goalIndex])) return []
   const route: number[] = []
   for (let i = goalIndex; i !== -1; i = cameFrom[i]) route.push(i)
   return route.reverse()

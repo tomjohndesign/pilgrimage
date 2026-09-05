@@ -4,7 +4,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { ElevationEdges } from "./elevation-edges"
+import { WaterMotion } from "./water-motion"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
+import { shorelineCorners } from "@/lib/game/map/shoreline"
+import { SHORELINE_SHAPE_GLSL } from "@/lib/game/render/shoreline-shape"
 import { bridgeLayout } from "@/lib/game/map/bridges"
 import { computeDarkShade, computeForestShade } from "@/lib/game/map/forest-field"
 import {
@@ -29,6 +33,7 @@ import {
 } from "@/lib/game/map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
+import { diagonalRoadSegments } from "@/lib/game/render/road-segments"
 import { ROAD_SHAPE_GLSL } from "@/lib/game/render/road-shape"
 import { DEFAULT_TRAFFIC } from "@/lib/game/travelers"
 import { useTerrainTexture } from "./use-terrain-texture"
@@ -122,6 +127,7 @@ const EDGE_WAVER = 0.3
 interface RoadSurface {
   texture: THREE.Texture
   edgeWear: number
+  segments: THREE.DataTexture
   /** Live uniforms for the tunable look; the values change without a recompile. */
   look: RoadLookUniforms
 }
@@ -131,6 +137,7 @@ type RoadLookUniforms = Record<keyof RoadLook | "pixelRatio", { value: number }>
 
 interface TileMaterialOptions {
   grassTexture: THREE.Texture
+  cliffTexture: THREE.Texture
   /**
    * Lattice origin for the optional grid overlay. Tile boundaries sit at
    * `k - width/2` in world units, so this shifts the lattice to land on them
@@ -146,8 +153,8 @@ interface TileMaterialOptions {
  * the top face, and fwidth-based smoothing keeps every edge from shimmering at
  * far zooms.
  *
- * Every tile carries a per-instance `aGrass` weight and an `aOverlay` colour.
- * On plain ground `aGrass` flags sward tiles, whose tops wear the grass
+ * Every tile carries a per-instance `aSurface.x` weight and an `aOverlay` colour.
+ * On plain ground `aSurface.x` flags sward tiles, whose tops wear the grass
  * texture (the instance colour is white there, so the texture carries the
  * colour) with `aOverlay` laid over it — the tile's own colour and the
  * forest-shade ramp, folded into one tint and opacity. Both textures go
@@ -163,28 +170,55 @@ interface TileMaterialOptions {
  * tint; nothing green is ever painted, so the grass on and beside a road
  * tile is one continuous surface.
  *
- * `aRoadOpen` identifies the entrances joined by straight tracks and tangent
- * curves. Their ruts merge at junctions, while `aRoadCorners` fills broad road
+ * `aRoadOpen` identifies open sides (1), ordinary entrances (0), and diagonal
+ * entrances (-1). Their ruts merge at junctions, while `aRoadCorners` fills broad road
  * patches. `aRoadShoulders` rounds inside junction corners across adjoining
- * grass tiles; `aGrass` marks those tiles as shoulder-only in the road batch.
+ * grass tiles; `aSurface.zw` selects shared diagonal centrelines, including
+ * their overflow. `aSurface.x` marks land-only instances and packs shoreline flags
+ * above its low bit to stay within the vertex attribute budget.
  * The outer and inner edges in `aLand` (see roadWear), plus a
  * world-space waver, leave grassy verges and a median that wears with traffic.
- * Paved tiers fill the same curved footprint. The `look` uniforms tune the
+ * Paved tiers fill the same constant-width footprint. The `look` uniforms tune the
  * surface and an outline along the combined outer edge.
  *
- * With `gridOrigin` set, the global grid lattice is drawn on top.
+ * Ground tiles carry `aShoreCorners` and `aShorePaint` for triangular banks
+ * and shallows. With `gridOrigin` set, the global grid lattice is drawn on top.
  */
+/** Deform the tile tops identically in the colour and outline depth passes. */
+function elevationShader(shader: { vertexShader: string }): void {
+  shader.vertexShader = shader.vertexShader
+    .replace("#include <common>", "attribute vec4 aCorners;\n#include <common>")
+    .replace("#include <begin_vertex>", `#include <begin_vertex>
+      float terrainTop = mix(mix(aCorners.x, aCorners.y, position.x + 0.5),
+        mix(aCorners.z, aCorners.w, position.x + 0.5), position.z + 0.5) + 0.2;
+      transformed.y = position.y < 0.0 ? -0.5 : (terrainTop - instanceMatrix[3].y) / instanceMatrix[1].y;
+    `)
+    .replace("#include <beginnormal_vertex>", `#include <beginnormal_vertex>
+      if (normal.y > 0.5) {
+        float gx = mix(aCorners.y - aCorners.x, aCorners.w - aCorners.z, position.z + 0.5);
+        float gz = mix(aCorners.z - aCorners.x, aCorners.w - aCorners.y, position.x + 0.5);
+        objectNormal = normalize(vec3(-gx, instanceMatrix[1].y, -gz));
+      }
+    `)
+}
+
 function makeTileMaterial({
   grassTexture,
+  cliffTexture,
   gridOrigin,
   road,
 }: TileMaterialOptions): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial()
   material.onBeforeCompile = (shader) => {
+    elevationShader(shader)
+    shader.uniforms.cliffMap = { value: cliffTexture }
     shader.uniforms.grassMap = { value: grassTexture }
     shader.uniforms.grassFlat = { value: new THREE.Color(TERRAIN.grass.color) }
     if (road) {
       shader.uniforms.roadMap = { value: road.texture }
+      shader.uniforms.waterShallow = { value: new THREE.Color(WATER_DEPTH_COLORS[0]) }
+      shader.uniforms.roadSegments = { value: road.segments }
+      shader.uniforms.roadSegmentTextureSize = { value: new THREE.Vector2(road.segments.image.width, road.segments.image.height) }
       shader.uniforms.roadEdgeWear = { value: road.edgeWear }
       // Shared objects, so the look can be tuned live without a recompile.
       shader.uniforms.roadOpacity = road.look.opacity
@@ -197,23 +231,32 @@ function makeTileMaterial({
       .replace(
         "#include <common>",
         `varying vec2 vWorld;
+        varying vec2 vCliffUv;
+        varying float vWater;
         varying float vGridTop;
-        attribute float aGrass;
+        attribute vec4 aSurface;
         attribute vec4 aOverlay;
         varying float vGrass;
         varying vec4 vOverlay;
+        varying vec2 vTileLocal;
+        #ifndef USE_ROAD_MAP
+          attribute vec4 aShoreCorners;
+          attribute vec4 aShorePaint;
+          varying vec4 vShoreCorners;
+          varying vec4 vShorePaint;
+        #endif
         #ifdef USE_ROAD_MAP
           attribute vec4 aRoadOpen;
           attribute vec4 aRoadCorners;
           attribute vec4 aRoadShoulders;
           attribute vec4 aLandOverlay;
           attribute vec3 aLand;
+          varying vec2 vRoadSegments;
           varying vec4 vRoadOpen;
           varying vec4 vRoadCorners;
           varying vec4 vRoadShoulders;
           varying vec4 vLandOverlay;
           varying vec3 vLand;
-          varying vec2 vTileLocal;
         #endif
         #include <common>`,
       )
@@ -227,10 +270,19 @@ function makeTileMaterial({
           #endif
           worldPos = modelMatrix * worldPos;
           vWorld = worldPos.xz;
+          vWater = aSurface.y;
+          vCliffUv = vec2((abs(normal.x) > 0.5 ? worldPos.z : worldPos.x) / 4.0,
+            1.0 - (terrainTop - worldPos.y) / ${SLAB_THICKNESS});
           vGridTop = step(0.5, normal.y);
-          vGrass = aGrass;
+          vGrass = aSurface.x;
           vOverlay = aOverlay;
+          vTileLocal = position.xz + 0.5;
+          #ifndef USE_ROAD_MAP
+            vShoreCorners = aShoreCorners;
+            vShorePaint = aShorePaint;
+          #endif
           #ifdef USE_ROAD_MAP
+            vRoadSegments = aSurface.zw;
             vRoadOpen = aRoadOpen;
             vRoadCorners = aRoadCorners;
             vRoadShoulders = aRoadShoulders;
@@ -249,25 +301,35 @@ function makeTileMaterial({
       .replace(
         "#include <common>",
         `varying vec2 vWorld;
+        varying vec2 vCliffUv;
+        varying float vWater;
         varying float vGridTop;
         varying float vGrass;
         varying vec4 vOverlay;
+        varying vec2 vTileLocal;
+        #ifndef USE_ROAD_MAP
+          varying vec4 vShoreCorners;
+          varying vec4 vShorePaint;
+        #endif
+        ${SHORELINE_SHAPE_GLSL}
+        uniform sampler2D cliffMap;
         uniform sampler2D grassMap;
         uniform vec3 grassFlat;
         #ifdef USE_ROAD_MAP
           uniform sampler2D roadMap;
+          uniform vec3 waterShallow;
           uniform float roadEdgeWear;
           uniform float roadOpacity;
           uniform float roadShade;
           uniform float roadEdgeLine;
           uniform float roadEdgeWidth;
           uniform float roadPixelRatio;
+          varying vec2 vRoadSegments;
           varying vec4 vRoadOpen;
           varying vec4 vRoadCorners;
           varying vec4 vRoadShoulders;
           varying vec4 vLandOverlay;
           varying vec3 vLand;
-          varying vec2 vTileLocal;
           ${ROAD_SHAPE_GLSL}
         #endif
         float tileHash(vec2 p) {
@@ -312,7 +374,13 @@ function makeTileMaterial({
             float vEdge = vLand.y;
             float vInner = vLand.z;
             vec3 sward = mix(grassColor, vLandOverlay.rgb, vLandOverlay.a) * landJitter;
-            vec3 landTop = sward;
+            float shoreCode = floor(vGrass / 2.0);
+            vec4 shoreCorners = mod(floor(shoreCode / vec4(1.0, 2.0, 4.0, 8.0)), 2.0);
+            float shoreInset = shorelineInset(vTileLocal, shoreCorners);
+            float shoreAA = max(fwidth(shoreInset), 0.0001);
+            float shore = smoothstep(-shoreAA, shoreAA, shoreInset);
+            vec3 shallows = mix(waterShallow, vOverlay.rgb, ${TERRAIN.water.shadeBlend});
+            vec3 landTop = mix(sward, shallows, shore);
 
             // The road proper: the tier texture, shaded, the shade ramp at
             // the road's own blend, then the weathering tint and grain.
@@ -335,22 +403,24 @@ function makeTileMaterial({
             // through the median at a fork instead of leaving a square seam.
             // Noise over world position frays the verges continuously.
             float tuft = tileNoise(world * 7.0) * 0.6 + tileNoise(world * 15.0) * 0.4;
-            vec2 shape = roadShape(vTileLocal, 1.0 - vRoadOpen, vRoadCorners,
+            vec2 shape = roadShape(vTileLocal, clamp(1.0 - vRoadOpen, 0.0, 1.0), max(-vRoadOpen, 0.0), vRoadCorners,
               edge, vInner, (tuft - 0.5) * 0.2 * roadEdgeWear);
-            // Grass tiles at a junction carry only the adjoining shoulder.
+            // Land instances carry only the adjoining shoulders and diagonals.
             if (vGrass > 0.5) shape = vec2(0.0, -1.0);
             shape = max(shape, roadShoulders(vTileLocal, vRoadShoulders,
               edge, (tuft - 0.5) * 0.2 * roadEdgeWear));
+            shape = max(shape, diagonalRoadShape(vTileLocal, vRoadSegments,
+              edge - vEdge, edge, (tuft - 0.5) * 0.2 * roadEdgeWear));
             float bare = shape.x;
             float d = shape.y;
-            float cover = bare * roadTex.a * roadOpacity;
+            float cover = bare * roadTex.a * roadOpacity * (1.0 - shore);
 
             // A line along the edge, sized on screen like the outlines the
             // trees wear: fwidth(d) is one device pixel in tile units, so the
             // width holds at every zoom instead of scaling with the tiles.
             float px = max(fwidth(d), 0.00001);
             float halfLine = 0.5 * roadEdgeWidth * roadPixelRatio * px;
-            float line = (1.0 - smoothstep(halfLine - 0.5 * px, halfLine + 0.5 * px, abs(d - edge))) * roadEdgeLine;
+            float line = (1.0 - smoothstep(halfLine - 0.5 * px, halfLine + 0.5 * px, abs(d - edge))) * roadEdgeLine * (1.0 - shore);
 
             vec3 top = mix(landTop, road, cover) * (1.0 - 0.75 * line * roadOpacity);
             vec3 surface = mix(${ROAD_SIDE_COLOR} * roadColor, top, vGridTop);
@@ -359,17 +429,26 @@ function makeTileMaterial({
             // Sward tiles: the texture on top, the flat grass colour on the
             // sides, the tile's own tint laid over both.
             vec3 top = mix(grassColor, vOverlay.rgb, vOverlay.a);
-            vec3 side = mix(grassFlat, vOverlay.rgb, vOverlay.a);
+            vec3 side = vec3(0.38, 0.29, 0.20) * (0.9 + 0.15 * tileNoise(world * 3.0));
             diffuseColor.rgb *= mix(vec3(1.0), mix(side, top, vGridTop), vGrass);
+            float inset = shorelineInset(vTileLocal, vShoreCorners);
+            float shoreAA = max(fwidth(inset), 0.0001);
+            float shore = smoothstep(-shoreAA, shoreAA, inset) * vGridTop;
+            // On clipped water corners, the bank can carry the grass texture.
+            vec3 bank = mix(vShorePaint.rgb, mix(grassColor, vShorePaint.rgb, 0.55), vShorePaint.a);
+            diffuseColor.rgb = mix(diffuseColor.rgb, bank, shore);
           #endif
+          // Exposed earth uses the slab texture with the same horizontal scale
+          // and a topsoil-to-subsoil ramp measured down from the local rim.
+          if (vGridTop < 0.5 && vWater < 0.5) diffuseColor.rgb = texture2D(cliffMap, vCliffUv).rgb;
           #ifdef USE_GRID
             // Distance to the nearest lattice line along each axis.
             vec2 cell = fract(world + vec2(${(gridOrigin?.x ?? 0).toFixed(3)}, ${(gridOrigin?.z ?? 0).toFixed(3)}));
             vec2 axisDist = 0.5 - abs(cell - 0.5);
             float gridDist = min(axisDist.x, axisDist.y);
             float aa = fwidth(gridDist);
-            float line = (1.0 - smoothstep(${GRID_HALF_WIDTH} - aa, ${GRID_HALF_WIDTH} + aa, gridDist)) * vGridTop;
-            diffuseColor.rgb *= mix(1.0, ${GRID_DARKEN}, line);
+            float gridLine = (1.0 - smoothstep(${GRID_HALF_WIDTH} - aa, ${GRID_HALF_WIDTH} + aa, gridDist)) * vGridTop;
+            diffuseColor.rgb *= mix(1.0, ${GRID_DARKEN}, gridLine);
           #endif
         }`,
       )
@@ -386,15 +465,21 @@ function makeTileMaterial({
 }
 
 /**
- * Attach the per-instance data makeTileMaterial reads: `aGrass` and
+ * Attach the per-instance data makeTileMaterial reads: `aSurface.x` and
  * `aOverlay` on every tile. A road geometry also carries which sides face
  * open land, its filled corners and junction shoulders, where traffic puts
  * the rut edges, and what the land here looks like (grass overlay and grain).
  */
 function addTileAttributes(geometry: THREE.BufferGeometry, slots: number, road: boolean): void {
   const n = Math.max(1, slots)
-  geometry.setAttribute("aGrass", new THREE.InstancedBufferAttribute(new Float32Array(n), 1))
+  geometry.setAttribute("aCorners", new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4))
+  // Pack land flags, water and segment range into one attribute alongside elevation data.
+  geometry.setAttribute("aSurface", new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4))
   geometry.setAttribute("aOverlay", new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4))
+  if (!road) {
+    geometry.setAttribute("aShoreCorners", new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4))
+    geometry.setAttribute("aShorePaint", new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4))
+  }
   if (road) {
     geometry.setAttribute("aRoadOpen", new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4))
     geometry.setAttribute("aRoadCorners", new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4))
@@ -560,9 +645,31 @@ export function TerrainTiles({
   ].map((tile) => tile.z * map.width + tile.x)), [bridges, map.width])
   const tier = ROAD_TIERS[clampRoadTier(roadTier)]
   const shoulders = useMemo(() => junctionShoulders(map, coveredLand), [map, coveredLand])
+  const diagonalSegments = useMemo(() => diagonalRoadSegments(map, coveredLand), [map, coveredLand])
+  const segmentData = useMemo(() => {
+    const count = [...diagonalSegments.values()].reduce((sum, segments) => sum + segments.length * 2, 0)
+    const width = Math.min(1024, Math.max(1, count))
+    const height = Math.max(1, Math.ceil(count / width))
+    const data = new Float32Array(width * height * 4)
+    const ranges = new Map<number, [number, number]>()
+    let offset = 0
+    for (const [index, segments] of diagonalSegments) {
+      ranges.set(index, [offset, segments.length])
+      for (const segment of segments) {
+        const wear = roadWear(segment[4] ? relicTraffic : traffic, tier.tier)
+        data.set(segment.slice(0, 4), offset * 4)
+        data.set([wear.edge, wear.inner, segment[4], 0], (offset + 1) * 4)
+        offset += 2
+      }
+    }
+    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat, THREE.FloatType)
+    texture.needsUpdate = true
+    return { texture, ranges }
+  }, [diagonalSegments, traffic, relicTraffic, tier.tier])
+  useEffect(() => () => segmentData.texture.dispose(), [segmentData])
   const roadCount = useMemo(
-    () => map.tiles.reduce((n, t, i) => ((isRoadTerrain(t) || shoulders.has(i)) && !coveredLand.has(i) ? n + 1 : n), 0),
-    [map, coveredLand, shoulders],
+    () => map.tiles.reduce((n, t, i) => ((isRoadTerrain(t) || shoulders.has(i) || diagonalSegments.has(i)) && !coveredLand.has(i) ? n + 1 : n), 0),
+    [map, coveredLand, shoulders, diagonalSegments],
   )
 
   // The look is uniforms shared with the material: tuned in place, no recompile.
@@ -598,6 +705,17 @@ export function TerrainTiles({
     }
   }, [roadTexture, grass])
 
+  const dirt = useTerrainTexture(DIRT_TEXTURE_URL, TERRAIN.dirt.color)
+  useMemo(() => {
+    dirt.colorSpace = THREE.SRGBColorSpace
+    // Repeat around the cliff, but run the topsoil-to-subsoil ramp just once
+    // top to bottom, so wrap horizontally and clamp vertically.
+    dirt.wrapS = THREE.RepeatWrapping
+    dirt.wrapT = THREE.ClampToEdgeWrapping
+    dirt.repeat.set(map.width / 4, 1)
+    dirt.anisotropy = 4
+  }, [dirt, map])
+
   // Tile boundaries sit at integer offsets from -width/2, so the lattice
   // origin is that half-extent modulo one tile.
   const gridOrigin = useMemo(
@@ -605,20 +723,30 @@ export function TerrainTiles({
     [showGrid, map.width, map.depth],
   )
   const groundMaterial = useMemo(
-    () => makeTileMaterial({ grassTexture: grass, gridOrigin }),
-    [grass, gridOrigin],
+    () => makeTileMaterial({ grassTexture: grass, cliffTexture: dirt, gridOrigin }),
+    [grass, dirt, gridOrigin],
   )
   useEffect(() => () => groundMaterial.dispose(), [groundMaterial])
   const roadMaterial = useMemo(
     () =>
       makeTileMaterial({
         grassTexture: grass,
+        cliffTexture: dirt,
         gridOrigin,
-        road: { texture: roadTexture, edgeWear: tier.edgeWear, look: lookUniforms },
+        road: { texture: roadTexture, edgeWear: tier.edgeWear, look: lookUniforms, segments: segmentData.texture },
       }),
-    [grass, gridOrigin, roadTexture, tier, lookUniforms],
+    [grass, dirt, gridOrigin, roadTexture, tier, lookUniforms, segmentData],
   )
   useEffect(() => () => roadMaterial.dispose(), [roadMaterial])
+
+  const floor = useMemo(() => (map.elevation?.height.reduce((a, b) => Math.min(a, b), SLAB_TOP) ?? SLAB_TOP) - 0.02, [map.elevation])
+  const idGeometry = useMemo(() => makeTileGeometry(count), [count])
+  const idMaterial = useMemo(() => {
+    const material = new THREE.MeshBasicMaterial({ color: "black", toneMapped: false })
+    material.onBeforeCompile = elevationShader
+    return material
+  }, [])
+  useEffect(() => () => { idGeometry.dispose(); idMaterial.dispose() }, [idGeometry, idMaterial])
 
   const groundGeometry = useMemo(() => makeTileGeometry(count - roadCount), [count, roadCount])
   useEffect(() => () => groundGeometry.dispose(), [groundGeometry])
@@ -653,11 +781,12 @@ export function TerrainTiles({
         mesh,
         next: 0,
         open: attr(geometry, "aRoadOpen"),
-        corners: attr(geometry, "aRoadCorners"),
+        roadCorners: attr(geometry, "aRoadCorners"),
         shoulders: attr(geometry, "aRoadShoulders"),
-        grass: attr(geometry, "aGrass"),
+        surface: attr(geometry, "aSurface"),
         landOverlay: attr(geometry, "aLandOverlay"),
         land: attr(geometry, "aLand"),
+        corners: attr(geometry, "aCorners"),
         overlay: attr(geometry, "aOverlay"),
       }
     })
@@ -666,8 +795,11 @@ export function TerrainTiles({
       return {
         mesh,
         next: 0,
-        grass: attr(geometry, "aGrass"),
+        surface: attr(geometry, "aSurface"),
+        corners: attr(geometry, "aCorners"),
         overlay: attr(geometry, "aOverlay"),
+        shoreCorners: attr(geometry, "aShoreCorners"),
+        shorePaint: attr(geometry, "aShorePaint"),
       }
     })
 
@@ -694,22 +826,19 @@ export function TerrainTiles({
         // road, and the track cut through it alike; feathered so it has no
         // hard rim.
         const canopy = 1 - DARK_WOOD_DARKEN * darkShade[index]
-        const height = TILE_HEIGHT
-
-        // Box base sits at y=0 and the top at the shared tile height, so tiles
-        // sink into the slab and never show a gap from a low camera angle.
-        // Full-size footprints: every top face is coplanar with its
-        // neighbours, so the ground reads as one continuous surface with no
-        // seams or steps; the only visible edge is the optional grid overlay.
-        position.set(tileToWorldX(map, x), height / 2, tileToWorldZ(map, z))
+        const corners = map.elevation?.corners.slice(index * 4, index * 4 + 4) ?? [0, 0, 0, 0]
+        const top = TILE_HEIGHT + Math.max(...corners)
+        const height = top - floor
+        position.set(tileToWorldX(map, x), floor + height / 2, tileToWorldZ(map, z))
         scale.set(1, height, 1)
         matrix.compose(position, quaternion, scale)
         idMesh.setMatrixAt(index, matrix)
+        attr(idGeometry, "aCorners").setXYZW(index, corners[0], corners[1], corners[2], corners[3])
 
         // Where this tile sits on the forest-shade ramp.
         shadeTint(index, tint)
 
-        if (isRoadTerrain(terrain) || shoulders.has(index)) {
+        if (isRoadTerrain(terrain) || shoulders.has(index) || diagonalSegments.has(index)) {
           const shoulderOnly = !isRoadTerrain(terrain)
           // The texture carries the road's colour; the instance carries the
           // weathering from whatever surrounds this stretch, plus the grain.
@@ -736,7 +865,11 @@ export function TerrainTiles({
           }
           if (swardAround > 0) landOverlay.divideScalar(swardAround)
           else landOverlay.copy(paintLand(map, "grass", x, z, tint, land).overlay)
-          if (shoulderOnly) landOverlay.copy(paintLand(map, terrain, x, z, tint, land).overlay)
+          if (shoulderOnly) {
+            paintLand(map, terrain, x, z, tint, land)
+            if (land.sward) landOverlay.copy(land.overlay)
+            else landOverlay.set(land.color.r, land.color.g, land.color.b, 1)
+          }
           // The grain a land tile here would have had, from the same draw
           // (under the same canopy), and the rut edges for this road's own
           // traffic.
@@ -746,13 +879,21 @@ export function TerrainTiles({
           {
             const target = roadTargets[0]
             const i = target.next++
+            target.surface.setY(i, 0)
+            target.corners.setXYZW(i, corners[0], corners[1], corners[2], corners[3])
             target.mesh.setMatrixAt(i, matrix)
             target.mesh.setColorAt(i, color)
             target.overlay.setXYZW(i, tint.r, tint.g, tint.b, shoulderOnly ? TERRAIN.path.shadeBlend : def.shadeBlend)
-            target.open.setXYZW(i, edge.open[0], edge.open[1], edge.open[2], edge.open[3])
-            target.corners.setXYZW(i, ...edge.filledCorners)
+            // -1 is a diagonal entrance, 0 an ordinary entrance, 1 open land.
+            target.open.setXYZW(i, edge.open[0] - edge.diagonal[0], edge.open[1] - edge.diagonal[1],
+              edge.open[2] - edge.diagonal[2], edge.open[3] - edge.diagonal[3])
+            const [segmentStart, segmentCount] = segmentData.ranges.get(index) ?? [0, 0]
+            target.surface.setZ(i, segmentStart)
+            target.surface.setW(i, segmentCount)
+            target.roadCorners.setXYZW(i, ...edge.filledCorners)
             target.shoulders.setXYZW(i, ...(shoulders.get(index) ?? [0, 0, 0, 0]))
-            target.grass.setX(i, shoulderOnly ? 1 : 0)
+            const shoreCode = shoulderOnly ? shorelineCorners(map, x, z).reduce((code, flag, corner) => code + flag * 2 ** corner, 0) : 0
+            target.surface.setX(i, shoulderOnly ? 1 + 2 * shoreCode : 0)
             target.landOverlay.setXYZW(i, landOverlay.x, landOverlay.y, landOverlay.z, landOverlay.w)
             target.land.setXYZ(i, landJitter, wear.edge, wear.inner)
           }
@@ -764,10 +905,22 @@ export function TerrainTiles({
         {
           const target = groundTargets[0]
           const i = target.next++
+          target.surface.setY(i, map.water?.depth[index] || terrain === "water" || terrain === "bridge" ? 1 : 0)
+          target.corners.setXYZW(i, corners[0], corners[1], corners[2], corners[3])
           target.mesh.setMatrixAt(i, matrix)
           target.mesh.setColorAt(i, color)
-          target.grass.setX(i, land.sward ? 1 : 0)
+          target.surface.setX(i, land.sward ? 1 : 0)
           target.overlay.setXYZW(i, land.overlay.x, land.overlay.y, land.overlay.z, land.overlay.w)
+          const shoreCorners = coveredLand.has(index) ? [0, 0, 0, 0] as const : shorelineCorners(map, x, z)
+          target.shoreCorners.setXYZW(i, shoreCorners[0], shoreCorners[1], shoreCorners[2], shoreCorners[3])
+          let bank: TerrainId = "water"
+          if (terrain === "water") {
+            bank = AROUND.some(([dx, dz]) => tileAt(map, x + dx, z + dz) === "sand") ? "sand" : "grass"
+          }
+          paintLand(map, bank, x, z, tint, land)
+          if (land.sward) color.copy(tint)
+          else color.copy(land.color)
+          target.shorePaint.setXYZW(i, color.r, color.g, color.b, land.sward ? 1 : 0)
         }
       }
     }
@@ -776,19 +929,24 @@ export function TerrainTiles({
       target.mesh.instanceMatrix.needsUpdate = true
       if (target.mesh.instanceColor) target.mesh.instanceColor.needsUpdate = true
       target.open.needsUpdate = true
-      target.corners.needsUpdate = true
+      target.roadCorners.needsUpdate = true
       target.shoulders.needsUpdate = true
-      target.grass.needsUpdate = true
+      target.surface.needsUpdate = true
       target.landOverlay.needsUpdate = true
       target.land.needsUpdate = true
+      target.corners.needsUpdate = true
       target.overlay.needsUpdate = true
     }
     for (const target of groundTargets) {
       target.mesh.instanceMatrix.needsUpdate = true
       if (target.mesh.instanceColor) target.mesh.instanceColor.needsUpdate = true
-      target.grass.needsUpdate = true
+      target.surface.needsUpdate = true
+      target.corners.needsUpdate = true
       target.overlay.needsUpdate = true
+      target.shoreCorners.needsUpdate = true
+      target.shorePaint.needsUpdate = true
     }
+    attr(idGeometry, "aCorners").needsUpdate = true
     idMesh.instanceMatrix.needsUpdate = true
     // Recompute bounds after map edits for correct culling and picking.
     for (const target of [...roadTargets, ...groundTargets]) target.mesh.computeBoundingSphere()
@@ -801,23 +959,16 @@ export function TerrainTiles({
     roadGeometry,
     groundGeometry,
     coveredLand,
+    floor,
+    idGeometry,
     shoulders,
+    diagonalSegments,
+    segmentData,
   ])
 
-  const dirt = useTerrainTexture(DIRT_TEXTURE_URL, TERRAIN.dirt.color)
-  useMemo(() => {
-    dirt.colorSpace = THREE.SRGBColorSpace
-    // Repeat around the cliff, but run the topsoil-to-subsoil ramp just once
-    // top to bottom, so wrap horizontally and clamp vertically.
-    dirt.wrapS = THREE.RepeatWrapping
-    dirt.wrapT = THREE.ClampToEdgeWrapping
-    dirt.repeat.set(map.width / 4, 1)
-    dirt.anisotropy = 4
-  }, [dirt, map])
-
   const slabPosition = useMemo<[number, number, number]>(
-    () => [0, SLAB_TOP - SLAB_THICKNESS / 2, 0],
-    [],
+    () => [0, floor - SLAB_THICKNESS / 2, 0],
+    [floor],
   )
   const slabArgs = useMemo<[number, number, number]>(
     () => [map.width + SLAB_EXPAND, SLAB_THICKNESS, map.depth + SLAB_EXPAND],
@@ -826,12 +977,15 @@ export function TerrainTiles({
 
   return (
     <group name="terrain">
+      <WaterMotion map={map} />
+      <ElevationEdges map={map} />
       <mesh position={slabPosition}>
         <boxGeometry args={slabArgs} />
         <meshLambertMaterial map={dirt} />
       </mesh>
 
       <instancedMesh
+        frustumCulled={false}
         ref={groundMeshRef}
         args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, count - roadCount]}
       >
@@ -863,12 +1017,13 @@ export function TerrainTiles({
         <meshBasicMaterial color="black" toneMapped={false} />
       </mesh>
       <instancedMesh
+        frustumCulled={false}
         ref={idMeshRef}
         args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, count]}
         layers-mask={OUTLINE_ID_LAYER_MASK}
       >
-        <boxGeometry args={[1, 1, 1]} />
-        <meshBasicMaterial color="black" toneMapped={false} />
+        <primitive object={idGeometry} attach="geometry" />
+        <primitive object={idMaterial} attach="material" />
       </instancedMesh>
     </group>
   )

@@ -61,5 +61,7 @@ export const SEED_STREAM = {
   environmentShapes: 12,
   monkFlight: 13,
   ents: 14,
-  characterAppearance: 15,
+  /** Local road style, independent of route generation and traveler identity. */
+  roadShape: 15,
+  characterAppearance: 16,
 } as const

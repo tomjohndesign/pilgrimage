@@ -1,13 +1,11 @@
 /**
  * Terrain vocabulary for the map. Pure data — no three.js, no React.
  *
- * Every tile shares one height: the ground is a flat plane and terrain reads
- * through colour alone. Per-terrain relief was tried and dropped — a step
- * between neighbouring tiles exposes a dark side face that outlines every
- * terrain boundary, which is exactly the tiled look the map is meant to avoid.
+ * Elevation is an independent field: terrain describes land cover, while
+ * elevation.ts supplies continuous slopes, cliff edges, and submerged beds.
  */
 
-/** World-space height of every tile's top surface above the base slab. */
+/** World-space height of the zero-elevation base surface. */
 export const TILE_HEIGHT = 0.2
 
 export type TerrainId =
@@ -157,8 +155,7 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
 
 /**
  * Water renders by depth, not by its single TERRAIN entry: index 0 is shallow
- * shoreline water (depth 1), index 2 is deep water (depth 3). Colour only —
- * the ground is a flat plane, so depth never shows as relief.
+ * shoreline water (depth 1), index 2 is deep water (depth 3). The elevation field stores the bed below the water surface separately.
  */
 export const WATER_DEPTH_COLORS = ["#6ba6c8", "#5893b9", "#4581aa"] as const
 export const MAX_WATER_DEPTH = 3

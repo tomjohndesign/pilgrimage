@@ -1,4 +1,5 @@
 import { OUTLINE_THICKNESS_PX } from "../render/outline"
+import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
 import type { TerrainId } from "./terrain"
 import { tileAt, type GameMap } from "./types"
 
@@ -215,6 +216,8 @@ export interface RoadEdge {
   open: SideFlags
   /** Solid 2x2 road patches at corners, in ++, +-, -+, -- order. */
   filledCorners: SideFlags
+  /** Entrances shared by alternating bends, which form a diagonal ribbon. */
+  diagonal: SideFlags
 }
 
 
@@ -259,7 +262,91 @@ export function roadEdge(map: GameMap, x: number, z: number): RoadEdge {
       filledCorners[corner] = 1
     }
   }
-  return { open, filledCorners }
+  return { open, filledCorners, diagonal: roadDiagonals(map, x, z) }
+}
+
+/** Most suitable stretches straighten, with some ordinary bends for variety. */
+export const DIAGONAL_ROAD_SHARE = 0.75
+/** Choose a style over a stretch of land, rather than independently at every bend. */
+const ROAD_STYLE_REGION = 8
+
+function prefersDiagonalRoad(map: GameMap, x: number, z: number, nx: number, nz: number): boolean {
+  // Hand-authored fixtures express their shape directly. Generated worlds
+  // choose a repeatable mix, shared by the renderer and traveler movement.
+  if (map.seed === undefined) return true
+  // Use the shared entrance's midpoint, so both tiles make the same choice
+  // even when that entrance crosses a style-region boundary.
+  const rx = Math.floor((x + nx + 1) / (2 * ROAD_STYLE_REGION))
+  const rz = Math.floor((z + nz + 1) / (2 * ROAD_STYLE_REGION))
+  const region = Math.imul(rx, 73856093) ^ Math.imul(rz, 19349663)
+  const seed = deriveSeed(deriveSeed(map.seed, SEED_STREAM.roadShape), region)
+  return makeRng(seed)() < DIAGONAL_ROAD_SHARE
+}
+
+/** Only selected simple alternating bends straighten; junctions, plazas and bridges keep their entrances. */
+export function roadDiagonals(map: GameMap, x: number, z: number): SideFlags {
+  const bend = (bx: number, bz: number): number[] => {
+    if (!isRoadTerrain(tileAt(map, bx, bz))) return []
+    const sides = EDGE_DIRS.flatMap(([dx, dz], side) =>
+      roadContinues(tileAt(map, bx + dx, bz + dz)) ? [side] : [])
+    return sides.length === 2 && (sides[0] < 2) !== (sides[1] < 2) ? sides : []
+  }
+  const sides = bend(x, z)
+  const diagonal: SideFlags = [0, 0, 0, 0]
+  for (const side of sides) {
+    const [dx, dz] = EDGE_DIRS[side]
+    const neighbour = bend(x + dx, z + dz)
+    const other = sides.find((s) => s !== side)!
+    if (neighbour.includes(side ^ 1) && neighbour.includes(other ^ 1) && prefersDiagonalRoad(map, x, z, x + dx, z + dz)) {
+      diagonal[side] = 1
+    }
+  }
+  return diagonal
+}
+
+export interface RoadBend {
+  a: { x: number; z: number }
+  b: { x: number; z: number }
+  controlA: { x: number; z: number }
+  controlB: { x: number; z: number }
+  straight: boolean
+}
+
+/** A centreline with matching tangents at diagonal and ordinary entrances. Coordinates use tile edges. */
+export function diagonalRoadBend(map: GameMap, x: number, z: number): RoadBend | null {
+  const diagonal = roadDiagonals(map, x, z)
+  if (!diagonal.some(Boolean)) return null
+  const sx = roadContinues(tileAt(map, x + 1, z)) ? 1 : -1
+  const sz = roadContinues(tileAt(map, x, z + 1)) ? 1 : -1
+  const diagonalX = diagonal[sx > 0 ? 0 : 1] > 0
+  const diagonalZ = diagonal[sz > 0 ? 2 : 3] > 0
+  const a = { x: x + 0.5 + sx * 0.5, z: z + 0.5 }
+  const b = { x: x + 0.5, z: z + 0.5 + sz * 0.5 }
+  const handle = 0.28
+  return {
+    a, b,
+    controlA: { x: a.x - sx * handle * (diagonalX ? Math.SQRT1_2 : 1), z: a.z + (diagonalX ? sz * handle * Math.SQRT1_2 : 0) },
+    controlB: { x: b.x + (diagonalZ ? sx * handle * Math.SQRT1_2 : 0), z: b.z - sz * handle * (diagonalZ ? Math.SQRT1_2 : 1) },
+    straight: diagonalX && diagonalZ,
+  }
+}
+
+export function sampleRoadBend(bend: RoadBend, t: number): { x: number; z: number } {
+  const { a, b, controlA, controlB } = bend
+  if (bend.straight) return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t }
+  const u = 1 - t
+  return {
+    x: u ** 3 * a.x + 3 * u * u * t * controlA.x + 3 * u * t * t * controlB.x + t ** 3 * b.x,
+    z: u ** 3 * a.z + 3 * u * u * t * controlA.z + 3 * u * t * t * controlB.z + t ** 3 * b.z,
+  }
+}
+
+/** Keep travelers on the rendered centreline, with the same physical lane spacing at every angle. */
+export function diagonalRoadPoint(map: GameMap, x: number, z: number): { x: number; z: number; laneScale: number } {
+  const bend = diagonalRoadBend(map, x, z)
+  if (!bend) return { x, z, laneScale: 1 }
+  const centre = sampleRoadBend(bend, 0.5)
+  return { x: centre.x - 0.5, z: centre.z - 0.5, laneScale: Math.SQRT1_2 }
 }
 
 /**

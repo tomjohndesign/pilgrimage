@@ -8,7 +8,8 @@ import { settlementRoute } from "./settlement-route"
 import type { TreePlacement } from "./trees/placement"
 import type { TilePos } from "./map/types"
 import { computeDangerField, encounterChance, type ThreatSource } from "./map/danger"
-import { surfaceHeight } from "./map/bridges"
+import { surfaceHeight, ropeHeightAt } from "./map/bridges"
+import { diagonalRoadPoint } from "./map/road"
 import {
   tileAt,
   tileToWorldX,
@@ -261,6 +262,7 @@ export const simRegistry: { current: SimState | null } = { current: null }
  * continuous. On our 4-connected routes the offset stays inside the tile.
  */
 function laneVertex(
+  map: GameMap,
   route: ReadonlyArray<{ x: number; z: number }>,
   i: number,
   lane: number,
@@ -276,7 +278,8 @@ function laneVertex(
   // A doubled-back vertex has no intersection; keep its outgoing normal.
   const nx = divisor > 0 ? (inZ + outZ) / divisor : outZ
   const nz = divisor > 0 ? -(inX + outX) / divisor : -outX
-  return { x: p.x + nx * lane, z: p.z + nz * lane }
+  const centre = diagonalRoadPoint(map, p.x, p.z)
+  return { x: centre.x + nx * lane * centre.laneScale, z: centre.z + nz * lane * centre.laneScale }
 }
 
 interface WorldPoint {
@@ -308,9 +311,9 @@ function routeWorldPoint(
   const vertex = (i: number) => {
     // Tracks meet the same lane point as the road at both junctions.
     if (junctions && (i === 0 || i === route.length - 1)) {
-      return laneVertex(map.road!, i === 0 ? junctions.entry : junctions.exit, lane)
+      return laneVertex(map, map.road!, i === 0 ? junctions.entry : junctions.exit, lane)
     }
-    return laneVertex(route, i, lane)
+    return laneVertex(map, route, i, lane)
   }
   const a = vertex(i0)
   const b = vertex(i0 + 1)
@@ -320,7 +323,7 @@ function routeWorldPoint(
   const bz = tileToWorldZ(map, b.z)
   const ay = surfaceHeight(map, route[i0].x, route[i0].z)
   const by = surfaceHeight(map, route[i0 + 1].x, route[i0 + 1].z)
-  const point = { x: ax + (bx - ax) * frac, y: ay + (by - ay) * frac, z: az + (bz - az) * frac }
+  const point = { x: ax + (bx - ax) * frac, y: ropeHeightAt(map, a.x + (b.x - a.x) * frac, a.z + (b.z - a.z) * frac) ?? ay + (by - ay) * frac, z: az + (bz - az) * frac }
   const cornerIndex = Math.round(p)
   if (pathEase > 0 && cornerIndex > 0 && cornerIndex < route.length - 1) {
     const previous = route[cornerIndex - 1], corner = route[cornerIndex], next = route[cornerIndex + 1]

@@ -1,9 +1,11 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { groundHeight } from "@/lib/game/map/elevation"
+import { surfaceHeight, ropeHeightAt } from "@/lib/game/map/bridges"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { worldToTileX, worldToTileZ, type GameMap, type TilePos } from "@/lib/game/map/types"
@@ -23,13 +25,6 @@ const TWEEN_LAMBDA = 9
 /** Keyboard pan speed, in world units per second at the default zoom. */
 const KEY_PAN_SPEED = 18
 
-/**
- * Height of the plane used for cursor picking. Most tiles top out around 0.2,
- * so picking against that plane keeps the tile cursor aligned with what the
- * player sees. Hills read slightly off until real height-aware picking lands.
- */
-const PICK_PLANE_Y = 0.2
-
 export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TilePos) => void }) {
   const placeRef = useRef(onPlace)
   placeRef.current = onPlace
@@ -39,7 +34,8 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
   const displayViewSize = useRef(useCameraStore.getState().viewSize)
   const heldKeys = useRef(new Set<string>())
 
-  const pickPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), -PICK_PLANE_Y))
+  const minPickY = useMemo(() => (map.water?.surface?.reduce((a, b) => Math.min(a, b), 0) ?? 0) - 0.5, [map.water])
+  const pickPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), -4.3))
   const raycaster = useRef(new THREE.Raycaster())
   const hitPoint = useRef(new THREE.Vector3())
   const ndc = useRef(new THREE.Vector2())
@@ -63,18 +59,33 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
         -((event.clientY - rect.top) / rect.height) * 2 + 1,
       )
       raycaster.current.setFromCamera(ndc.current, camera)
-      const hit = raycaster.current.ray.intersectPlane(pickPlane.current, hitPoint.current)
-      if (!hit) {
-        setHovered(null)
+      const ray = raycaster.current.ray
+      const hit = ray.intersectPlane(pickPlane.current, hitPoint.current)
+      if (!hit) { setHovered(null); return }
+      const start = hit.clone()
+      const minY = minPickY
+      const clearance = (p: THREE.Vector3) => {
+        const x = p.x + map.width / 2 - 0.5, z = p.z + map.depth / 2 - 0.5
+        const tx = Math.floor(x + 0.5), tz = Math.floor(z + 0.5)
+        if (tx < 0 || tz < 0 || tx >= map.width || tz >= map.depth) return Infinity
+        const y = ropeHeightAt(map, x, z) ?? surfaceHeight(map, tx, tz)
+        const ground = groundHeight(map, tx, tz)
+        return p.y - (Math.abs(y - ground) > 0.001 ? y : groundHeight(map, x, z))
+      }
+      for (let distance = 0; start.y + ray.direction.y * distance >= minY; distance += 0.15) {
+        hit.copy(start).addScaledVector(ray.direction, distance)
+        if (clearance(hit) > 0) continue
+        let lo = Math.max(0, distance - 0.15), hi = distance
+        for (let k = 0; k < 10; k++) {
+          const mid = (lo + hi) / 2
+          hit.copy(start).addScaledVector(ray.direction, mid)
+          if (clearance(hit) > 0) lo = mid; else hi = mid
+        }
+        hit.copy(start).addScaledVector(ray.direction, hi)
+        setHovered({ x: worldToTileX(map, hit.x), z: worldToTileZ(map, hit.z) })
         return
       }
-      const tx = worldToTileX(map, hit.x)
-      const tz = worldToTileZ(map, hit.z)
-      if (tx < 0 || tz < 0 || tx >= map.width || tz >= map.depth) {
-        setHovered(null)
-        return
-      }
-      setHovered({ x: tx, z: tz })
+      setHovered(null)
     }
 
     const onPointerDown = (event: PointerEvent) => {
@@ -141,7 +152,7 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
       canvas.removeEventListener("pointerleave", onPointerLeave)
       canvas.removeEventListener("contextmenu", onContextMenu)
     }
-  }, [camera, gl, map])
+  }, [camera, gl, map, minPickY])
 
   // --- Wheel: zoom ------------------------------------------------------------
   useEffect(() => {

@@ -1,5 +1,6 @@
+import { groundHeight } from "../map/elevation"
 import { computeDarkShade, computeForestShade } from "../map/forest-field"
-import { isWoods, TILE_HEIGHT } from "../map/terrain"
+import { isWoods } from "../map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "../map/types"
 import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
 import { pickSpecies, type TreeSpeciesDef, type TreeSpeciesId, type TreeShape } from "./species"
@@ -173,7 +174,7 @@ export function placeTrees(
           if (!hasRoom(px, pz, def, scale, x, z)) continue
           if (!here) byTile[index] = here = []
           here.push(out.length)
-          out.push({ x: px, y: TILE_HEIGHT, z: pz, species: id, scale, brightness })
+          out.push({ x: px, y: groundHeight(map, px + map.width / 2 - 0.5, pz + map.depth / 2 - 0.5), z: pz, species: id, scale, brightness })
           break
         }
       }

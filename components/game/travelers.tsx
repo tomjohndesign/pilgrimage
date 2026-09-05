@@ -1,5 +1,8 @@
 "use client"
 
+import { groundHeight } from "@/lib/game/map/elevation"
+import { bridgeLayout } from "@/lib/game/map/bridges"
+
 import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
@@ -160,7 +163,11 @@ export function Travelers({
 
       const logs = group.getObjectByName("carried-logs")
       if (logs) logs.visible = s.carrying > 0
-      group.position.set(s.x, s.y, s.z)
+      const tx = Math.floor(s.x + map.width / 2), tz = Math.floor(s.z + map.depth / 2)
+      const bridge = bridgeLayout(map).rise[tz * map.width + tx]
+      const y = map.elevation && !bridge
+        ? groundHeight(map, s.x + map.width / 2 - 0.5, s.z + map.depth / 2 - 0.5) : s.y
+      group.position.set(s.x, y, s.z)
       // Keep baked bodies and ground shadows at their authored proportions.
       // Camping/visiting already select the idle clip.
       group.scale.y = 1
