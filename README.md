@@ -1,4 +1,12 @@
+<img src="public/icon.svg" alt="Pilgrimage" width="60" height="60">
+
 # pilgrimage
+
+A medieval settlement builder inspired by RollerCoaster Tycoon & Age of Empires II.
+
+## Iconography
+
+The mark (a parchment Cinzel Black "P" on forest green) is designed in Paper: https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/G3-0. It lives in the repo as `public/icon.svg` (vector, the source for every raster size), `public/favicon.ico`, `public/apple-icon.png`, the `public/icon-*.png` PWA sizes in `public/manifest.json`, and `app/opengraph-image.png`, which also serves as the GitHub social preview (Settings → General → Social preview).
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
 

@@ -4,13 +4,12 @@
   "description": "A medieval settlement builder inspired by RollerCoaster Tycoon & Age of Empires II",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1a1208",
+  "background_color": "#274617",
   "theme_color": "#1a1208",
   "icons": [
-    {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
-    }
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
