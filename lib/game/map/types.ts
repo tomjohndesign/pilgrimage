@@ -15,6 +15,19 @@ export interface BuildingDef {
   roofColor: string
 }
 
+export interface WaterInfo {
+  /**
+   * Row-major water depth: 0 on land, 1 (shallow shoreline) to 3 (deep) on
+   * water. Bridge tiles keep the depth of the water running beneath them.
+   */
+  depth: number[]
+  /**
+   * Flow direction `[dx, dz]` per tile index. Only river water flows — a water
+   * tile with no entry here is lake or pond. Bridge tiles keep their entry.
+   */
+  flow: Record<number, readonly [number, number]>
+}
+
 export interface GameMap {
   width: number
   depth: number
@@ -23,6 +36,8 @@ export interface GameMap {
   buildings: BuildingDef[]
   /** Present on generated maps; absent on hand-authored ones. Drives cosmetic RNG too. */
   seed?: number
+  /** Present on generated maps; hand-authored water renders at depth 1. */
+  water?: WaterInfo
 }
 
 export function tileAt(map: GameMap, x: number, z: number): TerrainId | null {

@@ -5,7 +5,12 @@ import { useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
-import { TERRAIN } from "@/lib/game/map/terrain"
+import {
+  MAX_WATER_DEPTH,
+  TERRAIN,
+  WATER_DEPTH_COLORS,
+  WATER_DEPTH_HEIGHTS,
+} from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 
@@ -81,6 +86,28 @@ function makeGridMaterial(): THREE.MeshLambertMaterial {
   return material
 }
 
+/**
+ * Chebyshev distance (1 or 2) from a tile to the nearest water-bearing tile,
+ * or 3 when none is that close. Bridges count — the water still runs under
+ * them. Drives the sand-to-grass fade on beach tiles.
+ */
+function waterDistance(map: GameMap, x: number, z: number): number {
+  const wet = (wx: number, wz: number) => {
+    if (wx < 0 || wz < 0 || wx >= map.width || wz >= map.depth) return false
+    const i = wz * map.width + wx
+    return map.water ? map.water.depth[i] > 0 : map.tiles[i] === "water"
+  }
+  for (let r = 1; r <= 2; r++) {
+    for (let dz = -r; dz <= r; dz++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue
+        if (wet(x + dx, z + dz)) return r
+      }
+    }
+  }
+  return 3
+}
+
 export function TerrainTiles({ map }: { map: GameMap }) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
   const idMeshRef = useRef<THREE.InstancedMesh>(null)
@@ -98,6 +125,8 @@ export function TerrainTiles({ map }: { map: GameMap }) {
     const quaternion = new THREE.Quaternion()
     const scale = new THREE.Vector3()
     const color = new THREE.Color()
+    const grassColor = new THREE.Color(TERRAIN.grass.color)
+    const sandColor = new THREE.Color(TERRAIN.sand.color)
     // Colour grain is a function of the map's own seed, one stream per consumer.
     const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.tileJitter))
 
@@ -106,16 +135,38 @@ export function TerrainTiles({ map }: { map: GameMap }) {
         const index = z * map.width + x
         const def = TERRAIN[map.tiles[index]]
 
+        // Water renders by depth — shallow shoreline water is light and sits
+        // higher, deep water is dark and lower. Hand-authored maps carry no
+        // depth data and render as uniformly shallow.
+        let height = def.height
+        let baseColor = def.color
+        if (def.id === "water") {
+          const waterDepth = Math.min(
+            MAX_WATER_DEPTH,
+            Math.max(1, map.water?.depth[index] ?? 1),
+          )
+          height = WATER_DEPTH_HEIGHTS[waterDepth - 1]
+          baseColor = WATER_DEPTH_COLORS[waterDepth - 1]
+        }
+
         // Box base sits at y=0 and the top at the terrain height, so tiles sink
         // into the slab and never show a gap from a low camera angle. Full-size
         // footprints — the grid comes from the shader overlay, not from gaps.
-        position.set(tileToWorldX(map, x), def.height / 2, tileToWorldZ(map, z))
-        scale.set(TILE_EPS, def.height, TILE_EPS)
+        position.set(tileToWorldX(map, x), height / 2, tileToWorldZ(map, z))
+        scale.set(TILE_EPS, height, TILE_EPS)
         matrix.compose(position, quaternion, scale)
         mesh.setMatrixAt(index, matrix)
         idMesh.setMatrixAt(index, matrix)
 
-        color.set(def.color)
+        if (def.id === "sand") {
+          // Beaches fade toward grass as they leave the waterline: full sand
+          // against the water, blended a tile out, mostly grass beyond.
+          const d = waterDistance(map, x, z)
+          const sandiness = d <= 1 ? 1 : d === 2 ? 0.55 : 0.3
+          color.copy(grassColor).lerp(sandColor, sandiness)
+        } else {
+          color.set(baseColor)
+        }
         color.multiplyScalar(1 + (rng() - 0.5) * def.jitter)
         mesh.setColorAt(index, color)
       }

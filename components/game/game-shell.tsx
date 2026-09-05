@@ -10,6 +10,7 @@ import {
   DEFAULT_FOREST_COVERAGE,
   DEFAULT_GROVE_COUNT,
   DEFAULT_MAP_WIDTH,
+  DEFAULT_WATER_COVERAGE,
   generateMap,
 } from "@/lib/game/map/generate-map"
 
@@ -43,7 +44,16 @@ export interface MapSettings {
   groves: number
   /** Trees drawn per forest tile. */
   treeDensity: number
+  /** Max % of the map under water (rivers, lakes, ponds). */
+  water: number
+  /** Forced counts for water bodies; −1 lets the seed roll them. */
+  rivers: number
+  lakes: number
+  ponds: number
 }
+
+/** Slider value that means "let the seed decide" for water body counts. */
+export const WATER_COUNT_AUTO = -1
 
 export const DEFAULT_SETTINGS: MapSettings = {
   size: DEFAULT_MAP_WIDTH,
@@ -51,6 +61,10 @@ export const DEFAULT_SETTINGS: MapSettings = {
   clusters: DEFAULT_CLUSTER_COUNT,
   groves: DEFAULT_GROVE_COUNT,
   treeDensity: DEFAULT_TREE_DENSITY,
+  water: Math.round(DEFAULT_WATER_COVERAGE * 100),
+  rivers: WATER_COUNT_AUTO,
+  lakes: WATER_COUNT_AUTO,
+  ponds: WATER_COUNT_AUTO,
 }
 
 /**
@@ -92,6 +106,10 @@ export function GameShell({
       clusters: String(settings.clusters),
       groves: String(settings.groves),
       trees: String(settings.treeDensity),
+      water: String(settings.water),
+      rivers: String(settings.rivers),
+      lakes: String(settings.lakes),
+      ponds: String(settings.ponds),
     })
     window.history.replaceState(null, "", `?${query}`)
   }, [seed, settings])
@@ -107,8 +125,22 @@ export function GameShell({
             forestCoverage: settings.coverage / 100,
             clusterCount: settings.clusters,
             groveCount: settings.groves,
+            waterCoverage: settings.water / 100,
+            riverCount: settings.rivers >= 0 ? settings.rivers : undefined,
+            lakeCount: settings.lakes >= 0 ? settings.lakes : undefined,
+            pondCount: settings.ponds >= 0 ? settings.ponds : undefined,
           }),
-    [seed, settings.size, settings.coverage, settings.clusters, settings.groves],
+    [
+      seed,
+      settings.size,
+      settings.coverage,
+      settings.clusters,
+      settings.groves,
+      settings.water,
+      settings.rivers,
+      settings.lakes,
+      settings.ponds,
+    ],
   )
 
   // The camera's pan clamp follows the loaded map's extent.

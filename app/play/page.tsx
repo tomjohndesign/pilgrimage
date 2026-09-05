@@ -26,11 +26,19 @@ export default async function PlayPage({
   const clusters = parseIntParam(params.clusters)
   const groves = parseIntParam(params.groves)
   const treeDensity = parseIntParam(params.trees)
+  const water = parseIntParam(params.water)
+  const rivers = parseIntParam(params.rivers)
+  const lakes = parseIntParam(params.lakes)
+  const ponds = parseIntParam(params.ponds)
   if (size !== undefined) initialSettings.size = size
   if (coverage !== undefined) initialSettings.coverage = coverage
   if (clusters !== undefined) initialSettings.clusters = clusters
   if (groves !== undefined) initialSettings.groves = groves
   if (treeDensity !== undefined) initialSettings.treeDensity = treeDensity
+  if (water !== undefined) initialSettings.water = water
+  if (rivers !== undefined) initialSettings.rivers = rivers
+  if (lakes !== undefined) initialSettings.lakes = lakes
+  if (ponds !== undefined) initialSettings.ponds = ponds
 
   return <GameShell initialSeed={parseIntParam(params.seed)} initialSettings={initialSettings} />
 }

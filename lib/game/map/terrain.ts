@@ -6,7 +6,7 @@
  * isometric camera without needing a real heightmap yet.
  */
 
-export type TerrainId = "grass" | "dirt" | "path" | "forest" | "hills"
+export type TerrainId = "grass" | "dirt" | "path" | "forest" | "hills" | "water" | "sand" | "bridge"
 
 export interface TerrainDef {
   id: TerrainId
@@ -62,7 +62,40 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
     jitter: 0.12,
     buildable: true,
   },
+  water: {
+    id: "water",
+    label: "Water",
+    color: "#4f8ab2",
+    height: 0.11,
+    jitter: 0.05,
+    buildable: false,
+  },
+  sand: {
+    id: "sand",
+    label: "Beach",
+    color: "#d3bd85",
+    height: 0.16,
+    jitter: 0.1,
+    buildable: true,
+  },
+  bridge: {
+    id: "bridge",
+    label: "Bridge",
+    color: "#9b7a4e",
+    height: 0.14,
+    jitter: 0.04,
+    buildable: false,
+  },
 }
+
+/**
+ * Water renders by depth, not by its single TERRAIN entry: index 0 is shallow
+ * shoreline water (depth 1), index 2 is deep water (depth 3). Deeper water also
+ * sits a little lower, so banks read as banks under the isometric camera.
+ */
+export const WATER_DEPTH_COLORS = ["#6ba6c8", "#5893b9", "#4581aa"] as const
+export const WATER_DEPTH_HEIGHTS = [0.115, 0.1, 0.088] as const
+export const MAX_WATER_DEPTH = 3
 
 /** Characters used in the ASCII map source. */
 export const TERRAIN_CHARS: Record<string, TerrainId> = {
@@ -71,4 +104,7 @@ export const TERRAIN_CHARS: Record<string, TerrainId> = {
   "=": "path",
   F: "forest",
   "^": "hills",
+  "~": "water",
+  "%": "sand",
+  "#": "bridge",
 }

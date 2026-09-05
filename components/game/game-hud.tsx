@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import { MIN_MAP_SIZE } from "@/lib/game/map/generate-map"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileAt, type GameMap } from "@/lib/game/map/types"
 import { parseSeed } from "@/lib/game/rng"
@@ -218,6 +219,15 @@ export function GameHud({
   const zoomPercent = Math.round((DEFAULT_VIEW_SIZE / viewSize) * 100)
   const hoveredTerrain = hovered && map ? tileAt(map, hovered.x, hovered.z) : null
 
+  // Water tiles say what they are: river or lake (flow data only exists on
+  // rivers), plus how deep the water is.
+  let hoveredLabel = hoveredTerrain ? TERRAIN[hoveredTerrain].label : ""
+  if (hovered && map?.water && hoveredTerrain === "water") {
+    const index = hovered.z * map.width + hovered.x
+    const kind = map.water.flow[index] ? "River" : "Lake"
+    hoveredLabel = `${kind} · depth ${map.water.depth[index]}`
+  }
+
   return (
     <>
       <div className="absolute left-5 top-5 z-10 flex flex-col items-start gap-2">
@@ -246,9 +256,9 @@ export function GameHud({
             label="Size"
             value={settings.size}
             display={`${settings.size} × ${settings.size}`}
-            min={32}
-            max={128}
-            step={16}
+            min={MIN_MAP_SIZE}
+            max={256}
+            step={32}
             onChange={(size) => set({ size })}
           />
           <div className="mt-1.5">
@@ -289,6 +299,42 @@ export function GameHud({
             min={1}
             max={6}
             onChange={(treeDensity) => set({ treeDensity })}
+          />
+        </Panel>
+
+        <Panel>
+          <Label>Water</Label>
+          <Tuner
+            label="Coverage"
+            value={settings.water}
+            display={`${settings.water}%`}
+            min={0}
+            max={20}
+            onChange={(water) => set({ water })}
+          />
+          <Tuner
+            label="Rivers"
+            value={settings.rivers}
+            display={settings.rivers < 0 ? "Seeded" : String(settings.rivers)}
+            min={-1}
+            max={3}
+            onChange={(rivers) => set({ rivers })}
+          />
+          <Tuner
+            label="Lakes"
+            value={settings.lakes}
+            display={settings.lakes < 0 ? "Seeded" : String(settings.lakes)}
+            min={-1}
+            max={2}
+            onChange={(lakes) => set({ lakes })}
+          />
+          <Tuner
+            label="Ponds"
+            value={settings.ponds}
+            display={settings.ponds < 0 ? "Seeded" : String(settings.ponds)}
+            min={-1}
+            max={3}
+            onChange={(ponds) => set({ ponds })}
           />
         </Panel>
       </div>
@@ -343,9 +389,7 @@ export function GameHud({
               <div className="font-display text-xs text-ink">
                 {hovered.x}, {hovered.z}
               </div>
-              <div className="text-[13px] italic text-ink-light">
-                {TERRAIN[hoveredTerrain].label}
-              </div>
+              <div className="text-[13px] italic text-ink-light">{hoveredLabel}</div>
             </div>
           ) : (
             <div className="pt-1 text-[13px] italic text-ink-light">—</div>
