@@ -733,15 +733,9 @@ export function GameHud({
           />
         </Section>
 
-        <Section {...section("Road")}>
-          <Tuner
-            label="Traffic"
-            value={settings.traffic}
-            display={String(settings.traffic)}
-            min={0}
-            max={60}
-            onChange={(traffic) => set({ traffic })}
-          />
+        <Section {...section("Walking")}>
+          <Chooser label="Timing" value={settings.walkSync ? 0 : 1}
+            options={["Match travel", "Fixed FPS"]} onChange={(index) => set({ walkSync: index === 0 })} />
           <Tuner
             label="Pace"
             value={settings.walkSpeed}
@@ -750,6 +744,61 @@ export function GameHud({
             max={5}
             step={0.1}
             onChange={(walkSpeed) => set({ walkSpeed })}
+          />
+          <Tuner
+            label="Anim FPS"
+            value={settings.characterFps}
+            display={`${settings.characterFps} fps`}
+            min={1}
+            max={24}
+            onChange={(characterFps) => set({ characterFps })}
+          />
+          <Tuner label="Stride" value={settings.stride} display={`${settings.stride.toFixed(2)} tiles`}
+            min={0.15} max={1.2} step={0.01} onChange={(stride) => set({ stride })} />
+          <p className="py-1 text-[11px] leading-relaxed text-ink-light">{settings.walkSync ?
+            "Stride sets travel per full walk cycle. Longer strides mean fewer steps. FPS caps frame changes." :
+            "FPS sets the walk cadence directly. Switch to Match travel to use Stride."}</p>
+          <Tuner label="Variation" value={settings.paceVariation} display={`${Math.round(settings.paceVariation * 100)}%`}
+            min={0} max={0.4} step={0.01} onChange={(paceVariation) => set({ paceVariation })} />
+          <Tuner label="Path ease" value={settings.pathEase} display={`${Math.round(settings.pathEase * 100)}%`}
+            min={0} max={1} step={0.05} onChange={(pathEase) => set({ pathEase })} />
+          <Tuner label="Accel" value={settings.acceleration} display={`${settings.acceleration.toFixed(2)} s`}
+            min={0} max={1.5} step={0.05} onChange={(acceleration) => set({ acceleration })} />
+          <p className="py-1 text-[11px] leading-relaxed text-ink-light">Variation adds a personal rhythm. Path ease softens corners and camp arrivals. Accel smooths starts and pace changes.</p>
+        </Section>
+
+        <Section {...section("Road")}>
+          <Chooser
+            label="Models"
+            value={settings.characterModel === "base" ? 0 : 1}
+            options={["Base person", "Character drafts"]}
+            onChange={(index) => set({ characterModel: index === 0 ? "base" : "callings" })}
+          />
+          <Tuner
+            label="Base size"
+            value={settings.baseSize}
+            display={`${Math.round(settings.baseSize * 100)}%`}
+            min={0.5}
+            max={4}
+            step={0.05}
+            onChange={(baseSize) => set({ baseSize })}
+          />
+          <Tuner
+            label="Draft size"
+            value={settings.draftSize}
+            display={`${Math.round(settings.draftSize * 100)}%`}
+            min={0.5}
+            max={4}
+            step={0.05}
+            onChange={(draftSize) => set({ draftSize })}
+          />
+          <Tuner
+            label="Traffic"
+            value={settings.traffic}
+            display={String(settings.traffic)}
+            min={0}
+            max={60}
+            onChange={(traffic) => set({ traffic })}
           />
           {map && <DangerForecast map={map} />}
           {/* Stand-in for progression: the road builds up as the pilgrimage grows. */}

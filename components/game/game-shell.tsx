@@ -4,6 +4,8 @@ import dynamic from "next/dynamic"
 import { useEffect, useMemo, useState } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import { DEFAULT_MOVEMENT } from "@/lib/game/motion"
+import type { CharacterModel } from "@/lib/game/character-assets"
 import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER } from "@/lib/game/map/road"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
 import { generateMonks } from "@/lib/game/monks"
@@ -56,6 +58,16 @@ export interface MapSettings {
   traffic: number
   /** Base walking speed in tiles per second. */
   walkSpeed: number
+  characterFps: number
+  walkSync: boolean
+  stride: number
+  paceVariation: number
+  pathEase: number
+  acceleration: number
+  characterModel: CharacterModel
+  /** Uniform sprite-size multipliers, independently tuned for each model. */
+  baseSize: number
+  draftSize: number
   /** Road development tier — index into ROAD_TIERS. */
   road: number
   /** Road surface look, 0–1 opacity over the grass. */
@@ -85,7 +97,16 @@ export const DEFAULT_SETTINGS: MapSettings = {
   darkForests: DEFAULT_DARK_FOREST_COUNT,
   relicDistance: DEFAULT_RELIC_DISTANCE,
   traffic: DEFAULT_TRAFFIC,
-  walkSpeed: 1.5,
+  walkSpeed: 0.5,
+  characterFps: 8,
+  walkSync: true,
+  stride: 0.44,
+  paceVariation: DEFAULT_MOVEMENT.variation,
+  pathEase: DEFAULT_MOVEMENT.pathEase,
+  acceleration: DEFAULT_MOVEMENT.acceleration,
+  characterModel: "base",
+  baseSize: 1.5,
+  draftSize: 1,
   road: DEFAULT_ROAD_TIER,
   roadOpacity: DEFAULT_ROAD_LOOK.opacity,
   roadShade: DEFAULT_ROAD_LOOK.shade,
@@ -139,6 +160,15 @@ export function GameShell({
       relic: String(settings.relicDistance),
       traffic: String(settings.traffic),
       speed: String(settings.walkSpeed),
+      fps: String(settings.characterFps),
+      timing: settings.walkSync ? "distance" : "fps",
+      stride: String(settings.stride),
+      variation: String(settings.paceVariation),
+      easing: String(settings.pathEase),
+      acceleration: String(settings.acceleration),
+      characters: settings.characterModel,
+      baseSize: String(settings.baseSize),
+      draftSize: String(settings.draftSize),
       road: String(settings.road),
       opacity: String(settings.roadOpacity),
       shade: String(settings.roadShade),
@@ -184,6 +214,10 @@ export function GameShell({
       settings.ponds,
     ],
   )
+
+  const movement = useMemo(() => ({ variation: settings.paceVariation, pathEase: settings.pathEase, acceleration: settings.acceleration }),
+    [settings.paceVariation, settings.pathEase, settings.acceleration])
+  const walkTuning = useMemo(() => ({ sync: settings.walkSync, stride: settings.stride }), [settings.walkSync, settings.stride])
 
   // Identities live outside the canvas so the HUD can name whoever is selected.
   const travelers = useMemo(
@@ -239,6 +273,11 @@ export function GameShell({
           monks={monks}
           travelers={travelers}
           walkSpeed={settings.walkSpeed}
+          characterFps={settings.characterFps}
+          movement={movement}
+          walkTuning={walkTuning}
+          characterModel={settings.characterModel}
+          characterScale={settings.characterModel === "base" ? settings.baseSize : settings.draftSize}
           roadTier={settings.road}
           relicTraffic={relicTraffic}
           roadLook={roadLook}

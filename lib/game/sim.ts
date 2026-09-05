@@ -1,3 +1,4 @@
+import { LINEAR_MOVEMENT, easeProgress, easeSpeed, paceVariation, roundedCorner, type MovementTuning } from "./motion"
 import { computeDangerField, encounterChance, type ThreatSource } from "./map/danger"
 import { surfaceHeight } from "./map/bridges"
 import {
@@ -147,6 +148,8 @@ export interface SimTraveler {
   z: number
   /** Distance along the road in tiles; authoritative whenever on the road. */
   progress: number
+  /** Smoothed travel speed, before activity-specific haste. */
+  moveSpeed: number
   /**
    * +1 walks west to east, -1 east to west. Starts as the traveler's own and
    * flips whenever they turn back from trouble.
@@ -209,6 +212,7 @@ function routeWorldPoint(
   map: GameMap,
   route: ReadonlyArray<{ x: number; z: number }>,
   p: number,
+  pathEase = 0,
 ): WorldPoint {
   const i0 = Math.max(0, Math.min(Math.floor(p), route.length - 2))
   const frac = p - i0
@@ -220,17 +224,31 @@ function routeWorldPoint(
   const bx = tileToWorldX(map, b.x)
   const bz = tileToWorldZ(map, b.z)
   const by = surfaceHeight(map, b.x, b.z)
-  return { x: ax + (bx - ax) * frac, y: ay + (by - ay) * frac, z: az + (bz - az) * frac }
+  const point = { x: ax + (bx - ax) * frac, y: ay + (by - ay) * frac, z: az + (bz - az) * frac }
+  const vertex = Math.round(p)
+  if (pathEase > 0 && vertex > 0 && vertex < route.length - 1) {
+    const previous = route[vertex - 1], corner = route[vertex], next = route[vertex + 1]
+    // Keep bridge approaches on their authored slopes and deck centreline.
+    const height = surfaceHeight(map, corner.x, corner.z)
+    if (surfaceHeight(map, previous.x, previous.z) === height && surfaceHeight(map, next.x, next.z) === height) {
+      const rounded = roundedCorner(previous, corner, next, p - vertex, pathEase)
+      if (rounded) {
+        point.x = tileToWorldX(map, rounded.x)
+        point.z = tileToWorldZ(map, rounded.z)
+      }
+    }
+  }
+  return point
 }
 
-function roadWorldPoint(map: GameMap, p: number): WorldPoint {
-  return routeWorldPoint(map, map.road!, p)
+function roadWorldPoint(map: GameMap, p: number, pathEase = 0): WorldPoint {
+  return routeWorldPoint(map, map.road!, p, pathEase)
 }
 
 /** Where on their route — road or track — the traveler currently belongs. */
-function currentRoutePoint(map: GameMap, s: SimTraveler): WorldPoint {
-  if (s.track) return routeWorldPoint(map, map.shortcuts![s.track.index].tiles, s.track.progress)
-  return roadWorldPoint(map, s.progress)
+function currentRoutePoint(map: GameMap, s: SimTraveler, pathEase = 0): WorldPoint {
+  if (s.track) return routeWorldPoint(map, map.shortcuts![s.track.index].tiles, s.track.progress, pathEase)
+  return roadWorldPoint(map, s.progress, pathEase)
 }
 
 export function createSim(
@@ -259,6 +277,7 @@ export function createSim(
       y: at.y,
       z: at.z,
       progress,
+      moveSpeed: 0,
       direction: t.direction,
       track: null,
       fled: 0,
@@ -371,13 +390,15 @@ function stepOffRoadWalk(
   to: { x: number; y: number; z: number },
   worldSpeed: number,
   dt: number,
+  pathEase = 0,
 ): boolean {
   const from = s.walkFrom!
   const dist = Math.max(0.001, Math.hypot(to.x - from.x, to.z - from.z))
   s.walkT = Math.min(1, s.walkT + (worldSpeed * dt) / dist)
-  s.x = from.x + (to.x - from.x) * s.walkT
-  s.y = from.y + (to.y - from.y) * s.walkT
-  s.z = from.z + (to.z - from.z) * s.walkT
+  const eased = easeProgress(s.walkT, pathEase)
+  s.x = from.x + (to.x - from.x) * eased
+  s.y = from.y + (to.y - from.y) * eased
+  s.z = from.z + (to.z - from.z) * eased
   return s.walkT >= 1
 }
 
@@ -424,6 +445,7 @@ export function stepSim(
   map: GameMap,
   baseSpeed: number,
   dt: number,
+  movement: MovementTuning = LINEAR_MOVEMENT,
 ): void {
   if (!map.road || map.road.length < 2) return
   const length = map.road.length - 1
@@ -455,7 +477,10 @@ export function stepSim(
       }
     }
 
-    const worldSpeed = t.pace * baseSpeed
+    const targetSpeed = t.pace * baseSpeed * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+    s.moveSpeed = camping || s.activity === "vending" ? 0 :
+      easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
+    const worldSpeed = s.moveSpeed
 
     switch (s.activity) {
       case "walking":
@@ -540,7 +565,7 @@ export function stepSim(
               meetTrouble(sim, s, t, map, track.tiles[tile])
             }
           }
-          const at = currentRoutePoint(map, s)
+          const at = currentRoutePoint(map, s, movement.pathEase)
           s.x = at.x
           s.y = at.y
           s.z = at.z
@@ -570,7 +595,7 @@ export function stepSim(
             meetTrouble(sim, s, t, map, map.road[after])
           }
         }
-        const at = currentRoutePoint(map, s)
+        const at = currentRoutePoint(map, s, movement.pathEase)
         s.x = at.x
         s.y = at.y
         s.z = at.z
@@ -578,7 +603,7 @@ export function stepSim(
       }
 
       case "toShop": {
-        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt)) {
+        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, movement.pathEase)) {
           s.activity = "vending"
           s.timer = vendShopSeconds(s.id, s.cycle)
         }
@@ -601,8 +626,8 @@ export function stepSim(
       }
 
       case "fromShop": {
-        const back = currentRoutePoint(map, s)
-        if (stepOffRoadWalk(s, back, worldSpeed, dt)) {
+        const back = currentRoutePoint(map, s, movement.pathEase)
+        if (stepOffRoadWalk(s, back, worldSpeed, dt, movement.pathEase)) {
           s.activity = "walking"
           s.spot = null
           s.walkFrom = null
@@ -612,7 +637,7 @@ export function stepSim(
       }
 
       case "toCamp": {
-        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt)) s.activity = "camping"
+        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, movement.pathEase)) s.activity = "camping"
         break
       }
 
@@ -622,8 +647,8 @@ export function stepSim(
       }
 
       case "fromCamp": {
-        const back = currentRoutePoint(map, s)
-        if (stepOffRoadWalk(s, back, worldSpeed, dt)) {
+        const back = currentRoutePoint(map, s, movement.pathEase)
+        if (stepOffRoadWalk(s, back, worldSpeed, dt, movement.pathEase)) {
           s.activity = "walking"
           s.spot = null
           s.walkFrom = null

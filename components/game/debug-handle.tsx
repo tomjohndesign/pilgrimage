@@ -36,14 +36,42 @@ export function DebugHandle({ map }: { map: GameMap }) {
       /** Live traveler sim state (stats, activities), for e2e assertions. */
       sim: () => (simRegistry.current ? [...simRegistry.current.travelers.values()] : []),
       time: () => simRegistry.current?.time ?? null,
-      /** Screen positions (client px) of traveler blocks, for e2e clicks. */
+      setTerrainVisible: (visible: boolean) => { const terrain = scene.getObjectByName("terrain"); if (terrain) terrain.visible = visible },
+      renderInfo: () => ({
+        programs: gl.info.programs?.length ?? 0,
+        spritePrograms: gl.info.programs?.filter((p) => p.cacheKey.includes("traveler-id")).length ?? 0,
+        textures: gl.info.memory.textures,
+      }),
+      /** Sprite layout and active clip for comparing road character models. */
+      travelerSprites: () => {
+        const sprites: Array<{ model: string; phase: number; sync: boolean; fps: number; sheet: string; repeat: number[]; offset: number[]; center: number[]; scale: number[] }> = []
+        scene.traverse((object) => {
+          if (object.name !== "traveler" || !(object instanceof THREE.Sprite)) return
+          const map = object.material.map
+          const image = map?.image as HTMLImageElement | undefined
+          sprites.push({ model: object.userData.characterModel, phase: object.userData.walkPhase, sync: object.userData.sync, fps: object.userData.fps, sheet: image?.src ?? "",
+            repeat: map?.repeat.toArray() ?? [], offset: map?.offset.toArray() ?? [], center: object.center.toArray(), scale: object.scale.toArray() })
+        })
+        return sprites
+      },
+      travelerShadows: () => {
+        const shadows: Array<{ visible: boolean; offset: number[]; depthWrite: boolean }> = []
+        scene.traverse(object => {
+          if (object.name === "traveler-shadow" && object instanceof THREE.Sprite) shadows.push({ visible: object.visible, offset: object.material.map?.offset.toArray() ?? [], depthWrite: object.material.depthWrite })
+        })
+        return shadows
+      },
+      setShadowsVisible: (visible: boolean) => scene.traverse(object => { if (object.name === "traveler-shadow") object.visible = visible }),
+      /** Screen positions (client px) of traveler sprites, for e2e clicks. */
       travelerScreenPoints: () => {
         const rect = gl.domElement.getBoundingClientRect()
         const v = new THREE.Vector3()
         const points: Array<{ x: number; y: number }> = []
         scene.traverse((object) => {
           if (object.name !== "traveler") return
-          object.getWorldPosition(v).project(camera)
+          object.getWorldPosition(v)
+          v.y += 0.25
+          v.project(camera)
           points.push({
             x: rect.left + ((v.x + 1) / 2) * rect.width,
             y: rect.top + ((1 - v.y) / 2) * rect.height,

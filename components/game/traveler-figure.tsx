@@ -1,9 +1,13 @@
 "use client"
 
 import type { TravelerTypeDef } from "@/lib/game/travelers"
+import { Suspense } from "react"
+import { CharacterSprite } from "./character-sprite"
+import type { WalkTuning } from "@/lib/game/motion"
+import type { CharacterModel } from "@/lib/game/character-assets"
 
 /**
- * The visible body of one traveler: a coloured block in the calling's colour,
+ * The visible body of one traveler: a tiny eight-direction sprite,
  * plus the cart for vendors. Shared between the road (components/game/
  * travelers.tsx) and the /assets/characters gallery, so the gallery shows the
  * exact figure the player meets in game.
@@ -60,17 +64,28 @@ export function TravelerFigure({
   onClick,
   /** Initial awning state for vendors; the sim flips it live on the road. */
   awning = false,
+  outlineColor,
+  characterModel = "callings",
+  characterScale = 1,
+  characterFps,
+  walkTuning,
 }: {
   type: TravelerTypeDef
   onClick?: FigureClickHandler
   awning?: boolean
+  outlineColor?: [number, number, number]
+  characterModel?: CharacterModel
+  /** Uniform size multiplier; leaves the sprite's foot anchor fixed. */
+  characterScale?: number
+  /** Animation frames per second, independent of movement pace. */
+  characterFps?: number
+  walkTuning?: WalkTuning
 }) {
   return (
     <>
-      <mesh name="traveler" position={[0, BLOCK_HEIGHT / 2, 0]} onClick={onClick}>
-        <boxGeometry args={[BLOCK_WIDTH, BLOCK_HEIGHT, BLOCK_WIDTH]} />
-        <meshLambertMaterial color={type.color} />
-      </mesh>
+      <Suspense fallback={null}>
+        <CharacterSprite type={type.id} onClick={onClick} outlineColor={outlineColor} characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
+      </Suspense>
       {type.id === "vendor" && <VendorCart onClick={onClick} awning={awning} />}
     </>
   )

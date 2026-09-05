@@ -1,0 +1,77 @@
+{
+  "version": 8,
+  "id": "base-person",
+  "status": "base template for review",
+  "cellSize": 64,
+  "nominalHeightPixels": 35,
+  "columns": 8,
+  "rows": 8,
+  "anchor": [
+    32,
+    48.5
+  ],
+  "camera": {
+    "pitch": 35.264389682754654,
+    "viewSize": 3.466666666666667
+  },
+  "directions": [
+    "S",
+    "SW",
+    "W",
+    "NW",
+    "N",
+    "NE",
+    "E",
+    "SE"
+  ],
+  "framesPerCycle": 8,
+  "defaultFps": 8,
+  "palette": {
+    "tunic": "#507186",
+    "belt": "#38291f",
+    "skin": "#c99a72"
+  },
+  "body": {
+    "hipHeight": 0.76,
+    "thighLength": 0.375,
+    "shinLength": 0.365,
+    "ankleHeight": 0.11,
+    "legOffset": 0.125,
+    "shoulderHeight": 1.3,
+    "shoulderOffset": 0.295,
+    "upperArmLength": 0.29,
+    "forearmLength": 0.25,
+    "stride": 0.31,
+    "footLift": 0.12,
+    "headCenter": 1.66,
+    "headWidth": 0.17,
+    "headHeight": 0.2,
+    "headDepth": 0.155,
+    "torsoTop": 0.285,
+    "torsoBottom": 0.225,
+    "torsoHeight": 0.4,
+    "torsoCenter": 1.105,
+    "thighWidth": 0.105,
+    "shinWidth": 0.09,
+    "footWidth": 0.22,
+    "footHeight": 0.1,
+    "footLength": 0.34
+  },
+  "styleReference": "https://github.com/OpenRCT2/OpenRCT2/issues/7125",
+  "styleNotes": "User book-photo references: about five heads high, shaped jaw and nose, a visible neck above lowered shoulders, pinched waist and flared hem. Screenshot-tuned defaults keep the male base bald and barefoot, with an optional cropped/bob/long hairstyle and short beard. Tunic-covered legs are clipped at the hem; far-arm shading and edge priority follow the viewing direction. Selective ink edges separate overlapping parts. Male profiles have broad shoulders and a tapered waist; female profiles have wider hips, a subtle tunic bust contour and long hair without facial hair. Torso height and shoulder offset are independent. Foot length, width and height are independent parameters.",
+  "renderPalette": [
+    "#30251e",
+    "#503b2b",
+    "#785637",
+    "#9c724e",
+    "#c39368",
+    "#e3b78a",
+    "#354e60",
+    "#507186",
+    "#7899a7",
+    "#a4b4b5",
+    "#44452e",
+    "#606142"
+  ],
+  "generation": "Parametric storybook template. 64px padded cells retain the former pixel density. Locally rendered and cached with custom color ramps and separate translucent cast-shadow sheets; no image model required for adjustments."
+}

@@ -1,0 +1,329 @@
+{
+  "version": 1,
+  "sampleRate": 22050,
+  "sounds": {
+    "peasant": {
+      "label": "Soft steps & cloth",
+      "seed": 11,
+      "events": [
+        {
+          "at": 0,
+          "frequency": 110,
+          "duration": 0.14,
+          "gain": 0.6,
+          "kind": "noise",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        },
+        {
+          "at": 0.17,
+          "frequency": 90,
+          "duration": 0.18,
+          "gain": 0.48,
+          "kind": "noise",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        },
+        {
+          "at": 0.03,
+          "frequency": 320,
+          "duration": 0.24,
+          "gain": 0.12,
+          "kind": "noise",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        }
+      ]
+    },
+    "pilgrim": {
+      "label": "Staff tap & pilgrim bell",
+      "seed": 21,
+      "events": [
+        {
+          "at": 0,
+          "frequency": 230,
+          "duration": 0.1,
+          "gain": 0.5,
+          "kind": "wood",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        },
+        {
+          "at": 0.13,
+          "frequency": 980,
+          "duration": 0.48,
+          "gain": 0.33,
+          "kind": "tone",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        },
+        {
+          "at": 0.15,
+          "frequency": 1490,
+          "duration": 0.35,
+          "gain": 0.12,
+          "kind": "tone",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        }
+      ]
+    },
+    "merchant": {
+      "label": "A purse of coins",
+      "seed": 31,
+      "events": [
+        {
+          "at": 0,
+          "frequency": 1450,
+          "duration": 0.26,
+          "gain": 0.4,
+          "kind": "tone",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        },
+        {
+          "at": 0.08,
+          "frequency": 1920,
+          "duration": 0.33,
+          "gain": 0.34,
+          "kind": "tone",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        },
+        {
+          "at": 0.16,
+          "frequency": 2300,
+          "duration": 0.3,
+          "gain": 0.26,
+          "kind": "tone",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        },
+        {
+          "at": 0.01,
+          "frequency": 200,
+          "duration": 0.2,
+          "gain": 0.2,
+          "kind": "noise",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        }
+      ]
+    },
+    "friar": {
+      "label": "Low chapel bells",
+      "seed": 41,
+      "events": [
+        {
+          "at": 0,
+          "frequency": 294,
+          "duration": 0.7,
+          "gain": 0.48,
+          "kind": "tone",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        },
+        {
+          "at": 0.18,
+          "frequency": 440,
+          "duration": 0.66,
+          "gain": 0.25,
+          "kind": "tone",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        },
+        {
+          "at": 0.01,
+          "frequency": 147,
+          "duration": 0.5,
+          "gain": 0.16,
+          "kind": "tone",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        }
+      ]
+    },
+    "knight": {
+      "label": "Armour & steel",
+      "seed": 51,
+      "events": [
+        {
+          "at": 0,
+          "frequency": 320,
+          "duration": 0.24,
+          "gain": 0.45,
+          "kind": "noise",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        },
+        {
+          "at": 0.03,
+          "frequency": 710,
+          "duration": 0.35,
+          "gain": 0.4,
+          "kind": "tone",
+          "overtones": [
+            1,
+            1.43,
+            2.71,
+            4.1
+          ]
+        },
+        {
+          "at": 0.12,
+          "frequency": 1180,
+          "duration": 0.35,
+          "gain": 0.28,
+          "kind": "tone",
+          "overtones": [
+            1,
+            1.37,
+            2.9
+          ]
+        }
+      ]
+    },
+    "minstrel": {
+      "label": "Three lute notes",
+      "seed": 61,
+      "events": [
+        {
+          "at": 0,
+          "frequency": 330,
+          "duration": 0.5,
+          "gain": 0.4,
+          "kind": "pluck",
+          "overtones": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "at": 0.11,
+          "frequency": 415,
+          "duration": 0.45,
+          "gain": 0.35,
+          "kind": "pluck",
+          "overtones": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "at": 0.22,
+          "frequency": 494,
+          "duration": 0.48,
+          "gain": 0.32,
+          "kind": "pluck",
+          "overtones": [
+            1,
+            2,
+            3,
+            4
+          ]
+        }
+      ]
+    },
+    "vendor": {
+      "label": "Wooden cart & shop bell",
+      "seed": 71,
+      "events": [
+        {
+          "at": 0,
+          "frequency": 180,
+          "duration": 0.12,
+          "gain": 0.6,
+          "kind": "wood",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        },
+        {
+          "at": 0.1,
+          "frequency": 260,
+          "duration": 0.12,
+          "gain": 0.4,
+          "kind": "wood",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        },
+        {
+          "at": 0.22,
+          "frequency": 1320,
+          "duration": 0.52,
+          "gain": 0.32,
+          "kind": "tone",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        },
+        {
+          "at": 0.04,
+          "frequency": 160,
+          "duration": 0.22,
+          "gain": 0.15,
+          "kind": "noise",
+          "overtones": [
+            1,
+            2.01,
+            3.9
+          ]
+        }
+      ]
+    }
+  }
+}

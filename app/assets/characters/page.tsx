@@ -1,11 +1,11 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 
-import { CharacterGallery } from "@/components/character-gallery"
+import { BasePersonLab } from "@/components/base-person-lab"
 
 export const metadata: Metadata = {
   title: "Pilgrimage — Characters",
-  description: "Every calling that walks the road, as it appears in game.",
+  description: "A tiny, consistent base person for every calling on the road.",
 }
 
 export default function CharactersPage() {
@@ -22,11 +22,11 @@ export default function CharactersPage() {
           CHARACTERS
         </h1>
         <p className="mt-3 font-display text-[10px] uppercase tracking-[3px] text-gold">
-          Every calling on the road, and what it rolls
+          Base person · The shared sprite template
         </p>
       </header>
 
-      <CharacterGallery />
+      <BasePersonLab />
     </main>
   )
 }

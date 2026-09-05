@@ -30,6 +30,13 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+The [character playground](http://localhost:3000/assets/characters) previews the
+shared, RCT2-scale [base person](assets/BASE_PERSON.md). The earlier road sprites
+and selection sounds are under [character drafts](http://localhost:3000/assets/characters/callings). Sprite sheets and source art live
+in [Textures](http://localhost:3000/assets/textures#characters). See the
+[asset pipeline](assets/PIPELINE.md) for generation prompts, versioned imports,
+sound recipes, and validation commands.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 ## Learn More

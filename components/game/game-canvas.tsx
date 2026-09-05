@@ -1,12 +1,15 @@
 "use client"
 
-import { Suspense } from "react"
+import { useEffect } from "react"
+import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { Canvas } from "@react-three/fiber"
 
 import type { GameMap } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
 import type { Traveler } from "@/lib/game/travelers"
+import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/game/motion"
+import type { CharacterModel } from "@/lib/game/character-assets"
 import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 
 import { Bridges } from "./bridges"
@@ -31,6 +34,11 @@ export function GameCanvas({
   monks,
   travelers,
   walkSpeed,
+  characterModel = "callings",
+  characterScale = 1,
+  characterFps,
+  walkTuning,
+  movement = LINEAR_MOVEMENT,
   roadTier,
   relicTraffic,
   roadLook,
@@ -41,6 +49,14 @@ export function GameCanvas({
   monks: Monk[]
   travelers: Traveler[]
   walkSpeed: number
+  /** Use the shared base person or the earlier calling-specific sprite sheets. */
+  characterModel?: CharacterModel
+  /** Uniform size multiplier; leaves the sprite's foot anchor fixed. */
+  characterScale?: number
+  /** Animation frames per second, independent of movement pace. */
+  characterFps?: number
+  walkTuning?: WalkTuning
+  movement?: MovementTuning
   /** Road development tier — index into ROAD_TIERS. */
   roadTier?: number
   /** How many of the travelers turn aside for the relic; wears its track. */
@@ -50,6 +66,7 @@ export function GameCanvas({
   /** Draw the global tile lattice over the ground. Off by default. */
   showGrid?: boolean
 }) {
+  useEffect(() => { void usePersonDesignStore.getState().hydrate() }, [])
   return (
     <Canvas
       orthographic
@@ -70,23 +87,20 @@ export function GameCanvas({
       <hemisphereLight args={["#bcd0f0", "#3a2a16", 0.45]} />
       <CameraLight />
 
-      {/* The terrain suspends while the dirt texture loads. */}
-      <Suspense fallback={null}>
-        <TerrainTiles
-          map={map}
-          roadTier={roadTier}
-          traffic={travelers.length}
-          relicTraffic={relicTraffic}
-          look={roadLook}
-          showGrid={showGrid}
-        />
-      </Suspense>
+      <TerrainTiles
+        map={map}
+        roadTier={roadTier}
+        traffic={travelers.length}
+        relicTraffic={relicTraffic}
+        look={roadLook}
+        showGrid={showGrid}
+      />
       <Bridges map={map} roadTier={roadTier} />
       <Trees map={map} />
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />
       <Monks map={map} monks={monks} />
-      <Travelers map={map} travelers={travelers} speed={walkSpeed} />
+      <Travelers map={map} travelers={travelers} speed={walkSpeed} characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
       <TileCursor map={map} />
 
       <CameraRig map={map} />

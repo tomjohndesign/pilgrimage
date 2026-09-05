@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
-import { useLoader, useThree } from "@react-three/fiber"
+import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
@@ -29,6 +29,7 @@ import {
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 import { DEFAULT_TRAFFIC } from "@/lib/game/travelers"
+import { useTerrainTexture } from "./use-terrain-texture"
 
 /** Top of the base slab. Must sit below the shortest terrain height. */
 export const SLAB_TOP = 0.08
@@ -312,7 +313,13 @@ function makeTileMaterial({
             // The road proper: the tier texture, shaded, the shade ramp at
             // the road's own blend, then the weathering tint and grain.
             vec4 roadTex = sampleTiled(roadMap, world * ${ROAD_UV_SCALE}, world);
-            vec3 road = mix(roadTex.rgb * roadShade, vOverlay.rgb, vOverlay.a) * vColor.rgb;
+            // Empty ramp batches have no instanceColor buffer, so three does
+            // not declare vColor for their shader variant.
+            vec3 roadTintColor = vec3(1.0);
+            #if defined(USE_COLOR) || defined(USE_COLOR_ALPHA)
+              roadTintColor = vColor.rgb;
+            #endif
+            vec3 road = mix(roadTex.rgb * roadShade, vOverlay.rgb, vOverlay.a) * roadTintColor;
 
             // Distance in from the nearest open side of this road tile (1.0
             // with none open: a junction, road on every side).
@@ -351,7 +358,7 @@ function makeTileMaterial({
             float line = (1.0 - smoothstep(halfLine - 0.5 * px, halfLine + 0.5 * px, abs(d - edge))) * roadEdgeLine;
 
             vec3 top = mix(landTop, road, cover) * (1.0 - 0.75 * line * roadOpacity);
-            vec3 surface = mix(${ROAD_SIDE_COLOR} * vColor.rgb, top, vGridTop);
+            vec3 surface = mix(${ROAD_SIDE_COLOR} * roadTintColor, top, vGridTop);
             diffuseColor.rgb *= surface;
           #else
             // Sward tiles: the texture on top, the flat grass colour on the
@@ -600,23 +607,18 @@ export function TerrainTiles({
     lookUniforms.pixelRatio.value = dpr
   }, [lookUniforms, look, dpr])
 
-  // All tiers load up front so switching tier swaps textures without a
-  // suspend (which would blank the whole terrain for a frame).
-  const roadTextures = useLoader(
-    THREE.TextureLoader,
-    ROAD_TIERS.map((t) => t.textureUrl),
-  )
-  const grass = useLoader(THREE.TextureLoader, GRASS_TEXTURE_URL)
+  // Texture requests never suspend the terrain: colored surfaces are already
+  // in place while each image loads, including when switching road tiers.
+  const roadTexture = useTerrainTexture(tier.textureUrl, TERRAIN.path.color)
+  const grass = useTerrainTexture(GRASS_TEXTURE_URL, TERRAIN.grass.color)
   useMemo(() => {
-    for (const texture of [...roadTextures, grass]) {
+    for (const texture of [roadTexture, grass]) {
       texture.colorSpace = THREE.SRGBColorSpace
-      // World-position UVs walk off in every direction, so wrap both axes.
       texture.wrapS = THREE.RepeatWrapping
       texture.wrapT = THREE.RepeatWrapping
       texture.anisotropy = 4
     }
-  }, [roadTextures, grass])
-  const roadTexture = roadTextures[tier.tier]
+  }, [roadTexture, grass])
 
   // Tile boundaries sit at integer offsets from -width/2, so the lattice
   // origin is that half-extent modulo one tile.
@@ -871,6 +873,9 @@ export function TerrainTiles({
     }
     idMesh.instanceMatrix.needsUpdate = true
     idRampMesh.instanceMatrix.needsUpdate = true
+    // Map edits move instances; cached bounds must follow for culling/picking.
+    groundMesh.computeBoundingSphere()
+    idMesh.computeBoundingSphere()
   }, [
     map,
     tier,
@@ -884,7 +889,7 @@ export function TerrainTiles({
     plateaus,
   ])
 
-  const dirt = useLoader(THREE.TextureLoader, DIRT_TEXTURE_URL)
+  const dirt = useTerrainTexture(DIRT_TEXTURE_URL, TERRAIN.dirt.color)
   useMemo(() => {
     dirt.colorSpace = THREE.SRGBColorSpace
     // Repeat around the cliff, but run the topsoil-to-subsoil ramp just once
@@ -905,7 +910,7 @@ export function TerrainTiles({
   )
 
   return (
-    <group>
+    <group name="terrain">
       <mesh position={slabPosition}>
         <boxGeometry args={slabArgs} />
         <meshLambertMaterial map={dirt} />
