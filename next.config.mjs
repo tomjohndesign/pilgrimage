@@ -30,6 +30,10 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  async redirects() {
+    // The texture gallery moved under /assets when characters joined it.
+    return [{ source: '/textures', destination: '/assets/textures', permanent: true }]
+  },
 }
 
 export default nextConfig

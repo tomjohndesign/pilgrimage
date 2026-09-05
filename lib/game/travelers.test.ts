@@ -67,6 +67,19 @@ describe("generateTravelers", () => {
     expect(jobless).toBeLessThan(pilgrims.length * 0.7)
   })
 
+  it("weights callings as percent shares of the road, peasants at 60", () => {
+    const total = Object.values(TRAVELER_TYPES).reduce((sum, t) => sum + t.weight, 0)
+    expect(total).toBeCloseTo(100, 10)
+    expect(TRAVELER_TYPES.peasant.weight).toBe(60)
+  })
+
+  it("fills roughly six in ten places on the road with peasants", () => {
+    const travelers = generateTravelers(31337, 2000)
+    const peasants = travelers.filter((t) => t.type.id === "peasant").length / travelers.length
+    expect(peasants).toBeGreaterThan(0.55)
+    expect(peasants).toBeLessThan(0.65)
+  })
+
   it("sends traffic both ways and mixes the callings", () => {
     const travelers = generateTravelers(4242, 200)
     const eastbound = travelers.filter((t) => t.direction === 1).length

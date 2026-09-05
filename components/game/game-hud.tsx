@@ -102,13 +102,23 @@ function MenuPanel() {
     <div className={`pointer-events-auto w-40 border border-rule bg-parchment/95 px-4 py-3 ${PANEL_SHADOW}`}>
       <nav className="flex flex-col gap-1.5">
         {SITE_MENU.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className="font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red"
-          >
-            {item.label}
-          </Link>
+          <div key={item.href} className="flex flex-col gap-1">
+            <Link
+              href={item.href}
+              className="font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red"
+            >
+              {item.label}
+            </Link>
+            {item.children?.map((child) => (
+              <Link
+                key={child.href}
+                href={child.href}
+                className="pl-3 font-display text-[10px] uppercase tracking-[2px] text-ink-light hover:text-red"
+              >
+                {child.label}
+              </Link>
+            ))}
+          </div>
         ))}
         <button
           type="button"

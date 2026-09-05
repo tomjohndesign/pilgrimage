@@ -12,6 +12,7 @@ import { deriveSeed, makeRng, SEED_STREAM } from "./rng"
  */
 
 export type TravelerTypeId =
+  | "peasant"
   | "pilgrim"
   | "merchant"
   | "friar"
@@ -30,7 +31,10 @@ export interface TravelerTypeDef {
   label: string
   /** Block colour in the scene. */
   color: string
-  /** Relative frequency on the road. */
+  /**
+   * Share of the road, in percent. The weights sum to 100 so each one reads
+   * directly as how much of the traffic that calling makes up.
+   */
   weight: number
   /** Walking pace relative to the shared base speed. */
   paceMin: number
@@ -50,11 +54,27 @@ export interface TravelerTypeDef {
 }
 
 export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
+  // The bulk of the road: local folk going about their business, poor and
+  // half of them looking for work — the settlement's future labour.
+  peasant: {
+    id: "peasant",
+    label: "Peasant",
+    color: "#9c8b66",
+    weight: 60,
+    paceMin: 0.8,
+    paceMax: 1.1,
+    gold: { min: 0, max: 15 },
+    status: { min: 5, max: 25 },
+    piety: { min: 30, max: 80 },
+    joblessChance: 0.6,
+    skillCount: { min: 1, max: 2 },
+    skills: ["farming", "herding", "woodcutting", "thatching", "milling", "labour"],
+  },
   pilgrim: {
     id: "pilgrim",
     label: "Pilgrim",
     color: "#8a7f9e",
-    weight: 6,
+    weight: 16.5,
     paceMin: 0.8,
     paceMax: 1.1,
     gold: { min: 5, max: 40 },
@@ -68,7 +88,7 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     id: "merchant",
     label: "Merchant",
     color: "#b3762f",
-    weight: 3,
+    weight: 8.5,
     paceMin: 0.7,
     paceMax: 0.95,
     gold: { min: 60, max: 220 },
@@ -82,7 +102,7 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     id: "friar",
     label: "Friar",
     color: "#6d5638",
-    weight: 2,
+    weight: 5.5,
     paceMin: 0.75,
     paceMax: 1.0,
     gold: { min: 0, max: 10 },
@@ -96,7 +116,7 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     id: "knight",
     label: "Knight",
     color: "#96393a",
-    weight: 1,
+    weight: 3,
     paceMin: 1.1,
     paceMax: 1.4,
     gold: { min: 40, max: 120 },
@@ -110,7 +130,7 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     id: "minstrel",
     label: "Minstrel",
     color: "#3f7d6c",
-    weight: 2,
+    weight: 5.5,
     paceMin: 0.9,
     paceMax: 1.2,
     gold: { min: 5, max: 30 },
@@ -126,7 +146,7 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     id: "vendor",
     label: "Vendor",
     color: "#d1a33c",
-    weight: 0.5,
+    weight: 1,
     paceMin: 0.7,
     paceMax: 0.95,
     gold: { min: 30, max: 120 },

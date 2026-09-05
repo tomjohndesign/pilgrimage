@@ -37,6 +37,7 @@ import {
   type OutlineMode,
 } from "./render/outline"
 import { TEXTURES } from "./render/textures"
+import { SITE_MENU } from "../site-menu"
 import { DEFAULT_WORLD_SEED, deriveSeed, makeRng, parseSeed, SEED_STREAM } from "./rng"
 
 const DEG = 180 / Math.PI
@@ -317,6 +318,23 @@ describe("texture manifest", () => {
     for (const t of TEXTURES) {
       expect(existsSync(join(process.cwd(), "public", t.url)), t.url).toBe(true)
     }
+  })
+})
+
+describe("site menu", () => {
+  it("has unique hrefs and nests sub-pages under their parent route", () => {
+    const hrefs = SITE_MENU.flatMap((item) => [item.href, ...(item.children ?? []).map((c) => c.href)])
+    expect(new Set(hrefs).size).toBe(hrefs.length)
+    for (const item of SITE_MENU) {
+      for (const child of item.children ?? []) {
+        expect(child.href.startsWith(`${item.href}/`), child.href).toBe(true)
+      }
+    }
+  })
+
+  it("lists textures and characters under assets", () => {
+    const assets = SITE_MENU.find((item) => item.label === "Assets")
+    expect(assets?.children?.map((c) => c.label)).toEqual(["Textures", "Characters"])
   })
 })
 
