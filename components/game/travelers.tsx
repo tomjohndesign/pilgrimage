@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
-import { useCameraStore } from "@/lib/game/camera-store"
+import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import type { GameMap } from "@/lib/game/map/types"
 import { createSim, simRegistry, stepSim } from "@/lib/game/sim"
 import type { Traveler } from "@/lib/game/travelers"
@@ -14,63 +14,29 @@ import {
   travelerObjectId,
 } from "@/lib/game/render/outline"
 
+import {
+  AWNING_NAME,
+  BLOCK_HEIGHT,
+  BLOCK_WIDTH,
+  CART_BED,
+  CART_OFFSET_Z,
+  TravelerFigure,
+} from "./traveler-figure"
+
 /**
  * People on the road: placeholder blocks driven by the simulation in
  * lib/game/sim.ts — walking, camping in clearings, chasing vendors. Identity
  * comes from the travelers prop; all per-frame state lives in the sim, and this
  * component just copies positions out of it. Click a block to select it — the
- * HUD names it and shows its live stats.
+ * HUD names it and shows its live stats. The figure itself lives in
+ * traveler-figure.tsx so the character gallery can draw the same one.
  */
-
-const BLOCK_WIDTH = 0.3
-const BLOCK_HEIGHT = 0.55
 
 /** Campers fold down to this fraction of standing height. */
 const CAMP_SCALE = 0.35
 
 /** A click that dragged further than this many pixels is a pan, not a select. */
 const CLICK_SLOP_PX = 6
-
-/**
- * The vendor's cart trails behind on the group's local -z; the group is rotated
- * to face the direction of travel so the cart follows properly around bends.
- */
-const CART_BED: [number, number, number] = [0.42, 0.16, 0.5]
-const CART_OFFSET_Z = -0.5
-
-/**
- * Cart pieces plus the shop awning. The awning is always mounted and toggled
- * via `visible` from useFrame (by its name), because the vending state changes
- * in the sim at frame rate, outside React.
- */
-export const AWNING_NAME = "vendor-awning"
-
-function VendorCart({ onClick }: { onClick: (event: { delta: number; stopPropagation: () => void }) => void }) {
-  return (
-    <group position={[0, 0, CART_OFFSET_Z]}>
-      {/* Unnamed on purpose: travelerScreenPoints counts "traveler" meshes 1:1. */}
-      <mesh position={[0, 0.18, 0]} onClick={onClick}>
-        <boxGeometry args={CART_BED} />
-        <meshLambertMaterial color="#6f4f2a" />
-      </mesh>
-      {/* Wine and victuals riding on the bed. */}
-      <mesh position={[0, 0.33, 0]}>
-        <boxGeometry args={[0.28, 0.14, 0.34]} />
-        <meshLambertMaterial color="#8a2f2f" />
-      </mesh>
-      {[-0.26, 0.26].map((x) => (
-        <mesh key={x} position={[x, 0.12, 0]}>
-          <boxGeometry args={[0.06, 0.24, 0.24]} />
-          <meshLambertMaterial color="#3a2c1a" />
-        </mesh>
-      ))}
-      <mesh name={AWNING_NAME} position={[0, 0.75, 0.05]} visible={false}>
-        <boxGeometry args={[0.62, 0.04, 0.72]} />
-        <meshLambertMaterial color="#d8d0b8" />
-      </mesh>
-    </group>
-  )
-}
 
 export function Travelers({
   map,
@@ -82,7 +48,7 @@ export function Travelers({
   /** Base walking speed in tiles per second; each traveler's pace scales it. */
   speed: number
 }) {
-  const selectedId = useCameraStore((s) => s.selectedTravelerId)
+  const selection = useCameraStore((s) => s.selection)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
 
   const sim = useMemo(() => createSim(travelers, map), [travelers, map])
@@ -124,12 +90,12 @@ export function Travelers({
   return (
     <group>
       {travelers.map((traveler, index) => {
-        const selected = traveler.id === selectedId
+        const selected = isSelected(selection, { kind: "traveler", id: traveler.id })
         const [r, g, b] = encodeObjectId(travelerObjectId(index))
         const select = (event: { delta: number; stopPropagation: () => void }) => {
           if (event.delta > CLICK_SLOP_PX) return
           event.stopPropagation()
-          useCameraStore.getState().selectTraveler(selected ? null : traveler.id)
+          useCameraStore.getState().select(selected ? null : { kind: "traveler", id: traveler.id })
         }
         return (
           <group
@@ -138,12 +104,7 @@ export function Travelers({
               groupRefs.current[index] = node
             }}
           >
-            <mesh name="traveler" position={[0, BLOCK_HEIGHT / 2, 0]} onClick={select}>
-              <boxGeometry args={[BLOCK_WIDTH, BLOCK_HEIGHT, BLOCK_WIDTH]} />
-              <meshLambertMaterial color={traveler.type.color} />
-            </mesh>
-
-            {traveler.type.id === "vendor" && <VendorCart onClick={select} />}
+            <TravelerFigure type={traveler.type} onClick={select} />
 
             {/* ID silhouettes for the outline pass; inherit the group's motion. */}
             <mesh position={[0, BLOCK_HEIGHT / 2, 0]} layers-mask={OUTLINE_ID_LAYER_MASK}>

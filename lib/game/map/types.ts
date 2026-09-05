@@ -28,6 +28,30 @@ export interface WaterInfo {
   flow: Record<number, readonly [number, number]>
 }
 
+export interface TilePos {
+  x: number
+  z: number
+}
+
+/**
+ * Where the relic is, and how to get there. The hovel sits a real detour off
+ * the road in its own glade; the branch is the only way in. Travelers who turn
+ * at the junction walk the branch to the door, venerate, and walk back out.
+ */
+export interface FoundingSite {
+  /** Index into `road` of the tile where the branch forks off the main road. */
+  junction: number
+  /**
+   * Ordered walk from the junction tile to the hovel's door tile, each step to
+   * a 4-neighbour. The first entry is the junction itself (on the road).
+   */
+  branch: TilePos[]
+  /** The tile the branch ends on, adjacent to the hovel's footprint. */
+  door: TilePos
+  /** Which entry in `buildings` is the hovel. */
+  hovelId: string
+}
+
 export interface GameMap {
   width: number
   depth: number
@@ -43,7 +67,9 @@ export interface GameMap {
    * 4-neighbour. The tile grid only says *where* road is; this says in what
    * order a traveller crosses it. Steps over rivers are bridge tiles.
    */
-  road?: Array<{ x: number; z: number }>
+  road?: TilePos[]
+  /** Present on generated maps: the relic's hovel and the branch that reaches it. */
+  site?: FoundingSite
 }
 
 export function tileAt(map: GameMap, x: number, z: number): TerrainId | null {

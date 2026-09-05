@@ -43,4 +43,8 @@ export const SEED_STREAM = {
   trees: 2,
   travelers: 3,
   treeCount: 4,
+  relic: 5,
+  monks: 6,
+  /** Runtime stream for the monks' ambient wandering around the hovel. */
+  monkWander: 7,
 } as const

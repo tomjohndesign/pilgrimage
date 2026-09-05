@@ -14,6 +14,7 @@ export type TerrainId =
   | "grass"
   | "dirt"
   | "path"
+  | "track"
   | "forest"
   | "clearing"
   | "hills"
@@ -65,6 +66,17 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
     color: "#c9ab7a",
     jitter: 0.08,
     shadeBlend: 0.15,
+    buildable: false,
+    passable: true,
+  },
+  // The branch off the road to the relic: a beaten track, not engineered road.
+  // Its own terrain so the main road stays identifiable (and stable) on its own.
+  track: {
+    id: "track",
+    label: "Track",
+    color: "#ad9468",
+    jitter: 0.1,
+    shadeBlend: 0.2,
     buildable: false,
     passable: true,
   },
@@ -137,6 +149,7 @@ export const TERRAIN_CHARS: Record<string, TerrainId> = {
   ".": "grass",
   ",": "dirt",
   "=": "path",
+  "-": "track",
   F: "forest",
   o: "clearing",
   "^": "hills",
