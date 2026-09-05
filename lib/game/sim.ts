@@ -1,4 +1,4 @@
-import { TERRAIN } from "./map/terrain"
+import { TILE_HEIGHT } from "./map/terrain"
 import {
   tileAt,
   tileToWorldX,
@@ -158,7 +158,7 @@ function roadWorldPoint(map: GameMap, p: number): { x: number; z: number } {
   return { x: ax + (bx - ax) * frac, z: az + (bz - az) * frac }
 }
 
-const ROAD_Y = TERRAIN.path.height
+const ROAD_Y = TILE_HEIGHT
 
 export function createSim(travelers: Traveler[], map: GameMap): SimState {
   const sim: SimState = { travelers: new Map(), time: START_TIME }
@@ -254,7 +254,7 @@ function pitchSpot(
   return tile
     ? {
         x: tileToWorldX(map, tile.x) + jitter.x,
-        y: TERRAIN[tileAt(map, tile.x, tile.z)!].height,
+        y: TILE_HEIGHT,
         z: tileToWorldZ(map, tile.z) + jitter.z,
       }
     : { x: s.x, y: s.y, z: s.z }

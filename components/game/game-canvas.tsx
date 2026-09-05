@@ -23,10 +23,13 @@ export function GameCanvas({
   map,
   travelers,
   walkSpeed,
+  showGrid = false,
 }: {
   map: GameMap
   travelers: Traveler[]
   walkSpeed: number
+  /** Draw the global tile lattice over the ground. Off by default. */
+  showGrid?: boolean
 }) {
   return (
     <Canvas
@@ -50,7 +53,7 @@ export function GameCanvas({
 
       {/* The terrain suspends while the dirt texture loads. */}
       <Suspense fallback={null}>
-        <TerrainTiles map={map} />
+        <TerrainTiles map={map} showGrid={showGrid} />
       </Suspense>
       <Trees map={map} />
       <Buildings map={map} />
