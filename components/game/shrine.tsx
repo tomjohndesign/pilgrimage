@@ -5,8 +5,8 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
-import { TERRAIN } from "@/lib/game/map/terrain"
-import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
+import { TILE_HEIGHT } from "@/lib/game/map/terrain"
+import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import type { Relic } from "@/lib/game/relic"
 import {
   buildingObjectId,
@@ -121,12 +121,11 @@ export function Shrine({ map, relic }: { map: GameMap; relic: Relic }) {
       ...roofPieces(hovel.roofColor),
       { args: PLINTH, position: [0, FLOOR_THICKNESS + PLINTH[1] / 2, 0], color: PLINTH_COLOR },
     ]
-    const groundTerrain = tileAt(map, hovel.x, hovel.z)
     return {
       pieces,
       centreX: tileToWorldX(map, hovel.x) + (hovel.w - 1) / 2,
       centreZ: tileToWorldZ(map, hovel.z) + (hovel.d - 1) / 2,
-      baseY: groundTerrain ? TERRAIN[groundTerrain].height : 0,
+      baseY: TILE_HEIGHT,
       relicY: FLOOR_THICKNESS + PLINTH[1] + RELIC_SIZE / 2 + 0.02,
     }
   }, [map, hovel])

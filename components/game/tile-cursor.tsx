@@ -1,7 +1,7 @@
 "use client"
 
 import { useCameraStore } from "@/lib/game/camera-store"
-import { TERRAIN } from "@/lib/game/map/terrain"
+import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 
 /**
@@ -12,10 +12,9 @@ export function TileCursor({ map }: { map: GameMap }) {
   const hovered = useCameraStore((s) => s.hovered)
   if (!hovered) return null
 
-  const terrain = tileAt(map, hovered.x, hovered.z)
-  if (!terrain) return null
+  if (!tileAt(map, hovered.x, hovered.z)) return null
 
-  const y = TERRAIN[terrain].height
+  const y = TILE_HEIGHT
 
   return (
     <mesh position={[tileToWorldX(map, hovered.x), y + 0.015, tileToWorldZ(map, hovered.z)]}>

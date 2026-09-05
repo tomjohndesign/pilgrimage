@@ -5,7 +5,7 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
-import { TERRAIN } from "@/lib/game/map/terrain"
+import { TERRAIN, TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
@@ -64,7 +64,7 @@ function wanderSpots(map: GameMap): { spots: Spot[]; centre: { x: number; z: num
       if (inFootprint) continue
       const terrain = tileAt(map, x, z)
       if (!terrain || !TERRAIN[terrain].passable || terrain === "forest") continue
-      spots.push({ x: tileToWorldX(map, x), y: TERRAIN[terrain].height, z: tileToWorldZ(map, z) })
+      spots.push({ x: tileToWorldX(map, x), y: TILE_HEIGHT, z: tileToWorldZ(map, z) })
     }
   }
   return { spots, centre }
