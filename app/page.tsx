@@ -1,5 +1,6 @@
 import Link from "next/link"
 
+import { CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 
 export default function LandingPage() {
@@ -33,7 +34,7 @@ export default function LandingPage() {
       </nav>
 
       <footer className="mt-14 text-center font-display text-[10px] uppercase tracking-[3px] text-gold/60">
-        Prototype — v0.3
+        {CURRENT_VERSION}
       </footer>
     </main>
   )
