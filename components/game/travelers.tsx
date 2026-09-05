@@ -5,6 +5,7 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
+import { useSimulationStore } from "@/lib/game/simulation-store"
 import { selectElement } from "@/lib/game/selection"
 import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
 import { useBalanceStore } from "@/lib/game/balance-store"
@@ -112,7 +113,13 @@ export function Travelers({
     sim.shrineRenown = shrineRenown
     sim.balance = useBalanceStore.getState().balance
     sim.trees = trees
-    stepSim(sim, travelers, map, speed, Math.min(delta, 0.1), movement)
+    const playback = useSimulationStore.getState()
+    // Keep each tick bounded at faster speeds, including work and routing.
+    if (!playback.paused) {
+      for (let tick = 0; tick < playback.speed; tick++) {
+        stepSim(sim, travelers, map, speed, Math.min(delta, 0.1), movement)
+      }
+    }
     resourceElapsed.current += delta
     if (build.resourceRevision !== sim.resourceRevision || resourceElapsed.current >= 0.25) {
       build.syncResources(sim, travelers)
@@ -135,6 +142,7 @@ export function Travelers({
         const blend = movement.pathEase === 0 ? 1 : 1 - Math.exp(-Math.min(delta, 0.1) / (movement.pathEase * 0.18))
         group.rotation.y += turn * blend
       }
+      group.userData.playbackRate = playback.paused ? 0 : playback.speed
       group.userData.distance = moved
       group.userData.moving = moving
       group.userData.initialized = true

@@ -97,7 +97,7 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
       clock.current = (parent.userData.phase ?? 0) % 1
       seeded.current = true
     }
-    const dt = Math.min(delta, 0.1)
+    const dt = Math.min(delta, 0.1) * (parent.userData.playbackRate ?? 1)
     frameElapsed.current += dt
     if (moving) {
       const stride = (walkTuning?.stride ?? 0.44) * characterScale / (characterModel === "base" ? 1.5 : 1)

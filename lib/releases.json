@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "24f3921769828ec5da3975874edeb5c60385950f",
-  "releaseCount": 16,
+  "lastProcessedCommit": "0c90cb6e68fc1a75005751891672fdbd01b8c24e",
+  "releaseCount": 17,
   "releases": [
+    {
+      "version": "0.0.31",
+      "title": "Release 0.0.31",
+      "summary": "Build contextual game HUD with illustrated commands and playback controls (#50)",
+      "commit": "0c90cb6e68fc1a75005751891672fdbd01b8c24e"
+    },
     {
       "version": "0.0.30",
       "title": "Release 0.0.30",

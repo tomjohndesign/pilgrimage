@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
+import { useSimulationStore } from "@/lib/game/simulation-store"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
@@ -300,7 +301,8 @@ function SpeciesBatch({ def, trees, entMap, onSelect }: {
   }, [def, trees, refs, trunkCount, crownCount, movingTrees, entMap])
 
   useFrame((_, delta) => {
-    if (!entMap || movingTrees.length === 0) return
+    const playback = useSimulationStore.getState()
+    if (playback.paused || !entMap || movingTrees.length === 0) return
     const { trunk, crown, trunkId, crownId } = refs
     if (!trunk.current || !crown.current || !trunkId.current || !crownId.current) return
     let changed = false
@@ -312,7 +314,7 @@ function SpeciesBatch({ def, trees, entMap, onSelect }: {
       const wasMoving = ent.phase !== "rooted"
       // A rooted tree already claimed by a woodcutter stays put for the work.
       if (!wasMoving && reserved.has(tree.index)) return
-      stepEnt(ent, movementMap, delta)
+      for (let tick = 0; tick < playback.speed; tick++) stepEnt(ent, movementMap, delta)
       tree.placement.walking = ent.phase !== "rooted"
       if (!wasMoving && ent.phase === "rooted") return
       changed = true
