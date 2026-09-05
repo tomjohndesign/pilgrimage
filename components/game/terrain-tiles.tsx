@@ -311,8 +311,14 @@ function makeTileMaterial({
 
             // The road proper: the tier texture, shaded, the shade ramp at
             // the road's own blend, then the weathering tint and grain.
+            // Empty batches (including maps with no bridge ramps) may compile
+            // before any instance colours exist, so vColor is optional.
+            vec3 roadTint = vec3(1.0);
+            #if defined(USE_COLOR) || defined(USE_COLOR_ALPHA)
+              roadTint = vColor.rgb;
+            #endif
             vec4 roadTex = sampleTiled(roadMap, world * ${ROAD_UV_SCALE}, world);
-            vec3 road = mix(roadTex.rgb * roadShade, vOverlay.rgb, vOverlay.a) * vColor.rgb;
+            vec3 road = mix(roadTex.rgb * roadShade, vOverlay.rgb, vOverlay.a) * roadTint;
 
             // Distance in from the nearest open side of this road tile (1.0
             // with none open: a junction, road on every side).
@@ -351,7 +357,7 @@ function makeTileMaterial({
             float line = (1.0 - smoothstep(halfLine - 0.5 * px, halfLine + 0.5 * px, abs(d - edge))) * roadEdgeLine;
 
             vec3 top = mix(landTop, road, cover) * (1.0 - 0.75 * line * roadOpacity);
-            vec3 surface = mix(${ROAD_SIDE_COLOR} * vColor.rgb, top, vGridTop);
+            vec3 surface = mix(${ROAD_SIDE_COLOR} * roadTint, top, vGridTop);
             diffuseColor.rgb *= surface;
           #else
             // Sward tiles: the texture on top, the flat grass colour on the

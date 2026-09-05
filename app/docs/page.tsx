@@ -1,3 +1,4 @@
+import Link from "next/link"
 import type { Metadata } from "next"
 
 import { DocumentHeader } from "@/components/document-header"
@@ -19,6 +20,11 @@ export default function DesignDocumentPage() {
       <article className="relative mx-auto max-w-[780px] bg-parchment p-7 md:p-[60px_70px] shadow-[0_0_0_1px_var(--rule),0_0_0_4px_var(--parchment-dark),0_0_0_5px_var(--rule),8px_8px_40px_rgba(0,0,0,0.7)] page-border parchment-texture">
         
         <DocumentHeader />
+        <p className="my-6 border-l-2 border-gold bg-parchment-dark p-4 text-base text-ink-light">
+          This document describes the wider game design. For the current prototype’s economy,
+          construction and renown rules, read the <Link href="/docs/game-specs" className="text-red underline">game specifications</Link>.
+          {" "}<Link href="/tuning" className="text-red underline">Game tuning</Link> lets you adjust those values while playing.
+        </p>
 
         {/* I. Concept */}
         <Section number="I" title="Concept">

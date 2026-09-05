@@ -1,5 +1,8 @@
 "use client"
 
+import { canAfford, placementError, type Resources } from "@/lib/game/settlement"
+import { useBalanceStore } from "@/lib/game/balance-store"
+import { buildCatalog } from "@/lib/game/balance"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { surfaceHeight } from "@/lib/game/map/bridges"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -11,11 +14,50 @@ import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map
  * In development builds, hovering river water (or a bridge over it) also shows
  * the flow direction as an arrow floating over the tile.
  */
-export function TileCursor({ map }: { map: GameMap }) {
+export function TileCursor({
+  map,
+  buildType,
+  resources,
+  shrineRenown = 0,
+}: {
+  map: GameMap
+  buildType?: string | null
+  resources?: Resources
+  shrineRenown?: number
+}) {
+  const balance = useBalanceStore((s) => s.balance)
   const hovered = useCameraStore((s) => s.hovered)
   if (!hovered) return null
 
   if (!tileAt(map, hovered.x, hovered.z)) return null
+
+  const build = buildCatalog(balance).find((item) => item.id === buildType)
+  if (build) {
+    const valid =
+      shrineRenown >= build.requiredRenown &&
+      !placementError(map, build, hovered, balance) &&
+      !!resources &&
+      canAfford(resources, build.cost)
+    const color = valid ? "#93bc6c" : "#db6656"
+    return (
+      <group
+        position={[
+          tileToWorldX(map, hovered.x) + (build.w - 1) / 2,
+          0.24,
+          tileToWorldZ(map, hovered.z) + (build.d - 1) / 2,
+        ]}
+      >
+        <mesh>
+          <boxGeometry args={[build.w, 0.04, build.d]} />
+          <meshBasicMaterial color={color} transparent opacity={0.65} depthWrite={false} />
+        </mesh>
+        <mesh position={[0, build.height / 2, 0]}>
+          <boxGeometry args={[build.w * 0.86, build.height, build.d * 0.86]} />
+          <meshBasicMaterial color={color} wireframe transparent opacity={0.8} depthWrite={false} />
+        </mesh>
+      </group>
+    )
+  }
 
   const index = hovered.z * map.width + hovered.x
   // On a bridge the highlight rides the deck, not the water under it.

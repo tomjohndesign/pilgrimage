@@ -3,6 +3,8 @@
 import { Suspense } from "react"
 import { Canvas } from "@react-three/fiber"
 
+import type { Resources } from "@/lib/game/settlement"
+import type { TilePos } from "@/lib/game/map/types"
 import type { GameMap } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
@@ -35,8 +37,16 @@ export function GameCanvas({
   relicTraffic,
   roadLook,
   showGrid = false,
+  buildType,
+  shrineRenown,
+  resources,
+  onPlace,
 }: {
   map: GameMap
+  buildType: string | null
+  shrineRenown: number
+  resources: Resources
+  onPlace: (at: TilePos) => void
   relic: Relic
   monks: Monk[]
   travelers: Traveler[]
@@ -87,9 +97,9 @@ export function GameCanvas({
       <Shrine map={map} relic={relic} />
       <Monks map={map} monks={monks} />
       <Travelers map={map} travelers={travelers} speed={walkSpeed} />
-      <TileCursor map={map} />
+      <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
 
-      <CameraRig map={map} />
+      <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <OutlinePass />
       <DebugHandle map={map} />
     </Canvas>

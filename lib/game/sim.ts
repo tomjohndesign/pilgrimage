@@ -1,3 +1,4 @@
+import { buildingAt } from "./settlement"
 import { computeDangerField, encounterChance, type ThreatSource } from "./map/danger"
 import { surfaceHeight } from "./map/bridges"
 import {
@@ -287,7 +288,7 @@ function findClearTile(map: GameMap, wx: number, wz: number): { x: number; z: nu
       for (let dx = -r; dx <= r; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue
         const terrain = tileAt(map, cx + dx, cz + dz)
-        if (terrain === "grass" || terrain === "dirt" || terrain === "clearing") {
+        if ((terrain === "grass" || terrain === "dirt" || terrain === "clearing") && !buildingAt(map, cx + dx, cz + dz)) {
           return { x: cx + dx, z: cz + dz }
         }
       }

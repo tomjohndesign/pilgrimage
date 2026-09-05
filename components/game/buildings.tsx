@@ -3,6 +3,7 @@
 import { useMemo } from "react"
 import * as THREE from "three"
 
+import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import {
@@ -25,6 +26,7 @@ const ROOF_THICKNESS = 0.18
  * between a building and its own roof — only against *other* objects.
  */
 export function Buildings({ map }: { map: GameMap }) {
+  const selection = useCameraStore((s) => s.selection)
   const idColors = useMemo(
     // Component tuples straight into the working colour space — an ID is data,
     // not a colour, so it must dodge sRGB conversion to survive readback.
@@ -42,24 +44,32 @@ export function Buildings({ map }: { map: GameMap }) {
         const centreZ = tileToWorldZ(map, building.z) + (building.d - 1) / 2
         const baseY = TILE_HEIGHT
 
+        const cross = building.buildType === "cross"
+        const selected = isSelected(selection, { kind: "building", id: building.id })
+        const capY = cross ? building.height * 0.72 : building.height + ROOF_THICKNESS / 2
         const bodyArgs: [number, number, number] = [
-          building.w * BODY_INSET,
+          cross ? 0.14 : building.w * BODY_INSET,
           building.height,
-          building.d * BODY_INSET,
+          cross ? 0.14 : building.d * BODY_INSET,
         ]
         const roofArgs: [number, number, number] = [
-          building.w * ROOF_INSET,
+          cross ? 0.7 : building.w * ROOF_INSET,
           ROOF_THICKNESS,
-          building.d * ROOF_INSET,
+          cross ? 0.14 : building.d * ROOF_INSET,
         ]
 
         return (
-          <group key={building.id} position={[centreX, baseY, centreZ]}>
+          <group key={building.id} position={[centreX, baseY, centreZ]} onClick={(event) => {
+            if (event.delta > 6) return
+            event.stopPropagation()
+            useCameraStore.getState().select(selected ? null : { kind: "building", id: building.id })
+          }}>
+            {selected && <mesh position={[0, building.height + 0.4, 0]}><boxGeometry args={[0.2, 0.05, 0.2]} /><meshBasicMaterial color="#d8a93f" /></mesh>}
             <mesh position={[0, building.height / 2, 0]}>
               <boxGeometry args={bodyArgs} />
               <meshLambertMaterial color={building.color} />
             </mesh>
-            <mesh position={[0, building.height + ROOF_THICKNESS / 2, 0]}>
+            <mesh position={[0, capY, 0]}>
               <boxGeometry args={roofArgs} />
               <meshLambertMaterial color={building.roofColor} />
             </mesh>
@@ -70,7 +80,7 @@ export function Buildings({ map }: { map: GameMap }) {
               <meshBasicMaterial color={idColors[index]} toneMapped={false} />
             </mesh>
             <mesh
-              position={[0, building.height + ROOF_THICKNESS / 2, 0]}
+              position={[0, capY, 0]}
               layers-mask={OUTLINE_ID_LAYER_MASK}
             >
               <boxGeometry args={roofArgs} />

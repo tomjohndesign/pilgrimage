@@ -1,3 +1,4 @@
+import { DEFAULT_BALANCE, type GameBalance } from "./balance"
 import { deriveSeed, makeRng, SEED_STREAM } from "./rng"
 import type { StatRange, Traveler, TravelerAttributes } from "./travelers"
 
@@ -13,8 +14,7 @@ import type { StatRange, Traveler, TravelerAttributes } from "./travelers"
  *  - spectacle: how outlandish the claim — draws the curious and the idle
  *    even when their piety is thin.
  *  - doubt: how shaky the provenance — the learned and the high-born sniff
- *    at it, and it caps how far renown can honestly climb.
- *  - renown: how widely it is known. Starts small; visitors spread the word.
+ *    at it. These qualities also contribute to the whole shrine’s renown.
  */
 
 export type RelicKind = "bone" | "wood" | "cloth" | "hair" | "stone" | "metal" | "vial"
@@ -83,14 +83,10 @@ export const RELICS: readonly RelicDef[] = [
   { name: "a drop of the blood of St. Januarius", kind: "vial", sanctity: r(70, 90), spectacle: r(65, 85), doubt: r(30, 55) },
 ]
 
-/** A relic that is known to a few and no more, until pilgrims spread the word. */
-const STARTING_RENOWN: StatRange = { min: 4, max: 14 }
-
 export interface RelicStats {
   sanctity: number
   spectacle: number
   doubt: number
-  renown: number
 }
 
 export interface Relic {
@@ -111,26 +107,27 @@ export function relicTitle(relic: Relic): string {
  * How strongly this relic pulls one traveler off the road, 0–100ish. The
  * devout are drawn by sanctity — sharply, so the truly pious feel it far more
  * than the merely observant — the idle and curious by spectacle, and the
- * high-born are put off in proportion to the doubt over it. Renown scales the
- * whole, since few turn aside for a relic they've barely heard of; as word
- * spreads, the same relic draws a wider crowd. See the module note for what
- * each stat means.
+ * high-born are put off in proportion to the doubt over it. The establishment’s
+ * renown scales the whole: its buildings, residents, scenery and all relics
+ * help attract a wider crowd. Renown is supplied by the settlement, never stored
+ * on an individual relic.
  */
-export function relicDraw(who: TravelerAttributes, stats: RelicStats): number {
+export function relicDraw(who: TravelerAttributes, stats: RelicStats, shrineRenown: number, balance: GameBalance = DEFAULT_BALANCE): number {
   const piety = who.piety / 100
   const devotion = stats.sanctity * piety * piety
   const curiosity = stats.spectacle * (1 - piety) * 0.8
   const scepticism = who.status * (stats.doubt / 100) * 0.4
-  const renown = 0.75 + (stats.renown / 100) * 0.5
+  const r = balance.rules
+  const renown = r.drawBase + (Math.min(r.drawCap, Math.max(0, shrineRenown)) / r.drawCap) * r.drawBonus
   return (devotion + curiosity - scepticism) * renown
 }
 
 /** Draw at or above this, and a traveler turns aside at the junction. */
-export const TURN_ASIDE_DRAW = 40
+export const TURN_ASIDE_DRAW = DEFAULT_BALANCE.rules.turnAsideDraw
 
 /** Would this traveler leave the road for the relic? */
-export function turnsAside(traveler: Traveler, relic: Relic): boolean {
-  return relicDraw(traveler.attributes, relic.stats) >= TURN_ASIDE_DRAW
+export function turnsAside(traveler: Traveler, relic: Relic, shrineRenown: number, balance: GameBalance = DEFAULT_BALANCE): boolean {
+  return relicDraw(traveler.attributes, relic.stats, shrineRenown, balance) >= balance.rules.turnAsideDraw
 }
 
 /**
@@ -138,8 +135,8 @@ export function turnsAside(traveler: Traveler, relic: Relic): boolean {
  * road's, and a smaller one — this is the traffic the track to the hovel
  * wears under, as opposed to the road.
  */
-export function relicBound(travelers: readonly Traveler[], relic: Relic): Traveler[] {
-  return travelers.filter((t) => turnsAside(t, relic))
+export function relicBound(travelers: readonly Traveler[], relic: Relic, shrineRenown: number, balance: GameBalance = DEFAULT_BALANCE): Traveler[] {
+  return travelers.filter((t) => turnsAside(t, relic, shrineRenown, balance))
 }
 
 export function generateRelic(seed: number): Relic {
@@ -155,7 +152,6 @@ export function generateRelic(seed: number): Relic {
       sanctity: roll(rng, def.sanctity),
       spectacle: roll(rng, def.spectacle),
       doubt: roll(rng, def.doubt),
-      renown: roll(rng, STARTING_RENOWN),
     },
   }
 }

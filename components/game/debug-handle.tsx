@@ -5,7 +5,8 @@ import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { useCameraStore } from "@/lib/game/camera-store"
-import type { GameMap } from "@/lib/game/map/types"
+import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
+import { surfaceHeight } from "@/lib/game/map/bridges"
 import type { OutlineMode } from "@/lib/game/render/outline"
 import { simRegistry } from "@/lib/game/sim"
 
@@ -36,6 +37,12 @@ export function DebugHandle({ map }: { map: GameMap }) {
       /** Live traveler sim state (stats, activities), for e2e assertions. */
       sim: () => (simRegistry.current ? [...simRegistry.current.travelers.values()] : []),
       time: () => simRegistry.current?.time ?? null,
+      /** Ground-tile screen position for exercising build placement across camera views. */
+      tileScreenPoint: (x: number, z: number) => {
+        const rect = gl.domElement.getBoundingClientRect()
+        const point = new THREE.Vector3(tileToWorldX(map, x), surfaceHeight(map, x, z), tileToWorldZ(map, z)).project(camera)
+        return { x: rect.left + ((point.x + 1) / 2) * rect.width, y: rect.top + ((1 - point.y) / 2) * rect.height }
+      },
       /** Screen positions (client px) of traveler blocks, for e2e clicks. */
       travelerScreenPoints: () => {
         const rect = gl.domElement.getBoundingClientRect()

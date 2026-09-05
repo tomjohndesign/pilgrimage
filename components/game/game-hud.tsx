@@ -25,6 +25,12 @@ import type { Traveler } from "@/lib/game/travelers"
 
 import type { MapSettings } from "./game-shell"
 import { Minimap } from "./minimap"
+import { SettlementPanel } from "./settlement-panel"
+import type { useSettlement } from "@/hooks/use-settlement"
+import { individualRenown, relicRenown } from "@/lib/game/settlement"
+
+import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
+import { useBalanceStore } from "@/lib/game/balance-store"
 import { MusicPlayer } from "./music-player"
 
 const CONTROLS: Array<[string, string]> = [
@@ -213,6 +219,8 @@ function MenuPanel() {
           <div key={item.href} className="flex flex-col gap-1">
             <Link
               href={item.href}
+              target={item.href === "/tuning" ? "_blank" : undefined}
+              rel={item.href === "/tuning" ? "noopener noreferrer" : undefined}
               className="font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red"
             >
               {item.label}
@@ -483,6 +491,7 @@ function DangerForecast({ map }: { map: GameMap }) {
 
 /** What the monks keep in the hovel: the relic's name, nature, and pull. */
 function RelicPanel({ relic }: { relic: Relic }) {
+  const balance = useBalanceStore((s) => s.balance)
   const s = relic.stats
   return (
     <Panel>
@@ -512,7 +521,7 @@ function RelicPanel({ relic }: { relic: Relic }) {
         <StatBar label="Sanctity" value={s.sanctity} />
         <StatBar label="Spectacle" value={s.spectacle} />
         <StatBar label="Doubt" value={s.doubt} />
-        <StatBar label="Renown" value={s.renown} />
+        <div className="mt-1 text-[11px] text-ink-light">Contributes +{relicRenown(relic, balance)} shrine renown</div>
       </div>
     </Panel>
   )
@@ -532,6 +541,7 @@ function useMonkActivity(monkId: number): MonkActivity | null {
 
 /** One of the brothers: name, office, and what he brought with him. */
 function MonkPanel({ monk }: { monk: Monk }) {
+  const balance = useBalanceStore((s) => s.balance)
   const a = monk.attributes
   const activity = useMonkActivity(monk.id)
   return (
@@ -559,6 +569,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
 
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
         <StatBar label="Piety" value={a.piety} />
+        <div className="mt-1 text-[11px] text-ink-light">Contributes +{individualRenown(monk, balance)} shrine renown</div>
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
@@ -588,9 +599,11 @@ export function GameHud({
   relicTraffic,
   settings,
   onSettingsChange,
+  economy,
   onReroll,
   onSeedChange,
 }: {
+  economy: ReturnType<typeof useSettlement>
   map: GameMap | null
   seed: number | null
   relic: Relic | null
@@ -625,6 +638,8 @@ export function GameHud({
     selection?.kind === "traveler" ? (travelers.find((t) => t.id === selection.id) ?? null) : null
   const selectedMonk =
     selection?.kind === "monk" ? (monks.find((m) => m.id === selection.id) ?? null) : null
+  const selectedBuilding = selection?.kind === "building" ? map?.buildings.find((b) => b.id === selection.id) : null
+  const selectedDefinition = buildCatalog(economy.balance).find((item) => item.id === selectedBuilding?.buildType)
   const selectedRelic = selection?.kind === "relic"
 
   return (
@@ -665,6 +680,7 @@ export function GameHud({
       <aside
         className={`pointer-events-auto absolute inset-y-0 left-0 z-10 flex w-[228px] flex-col overflow-y-auto border border-rule bg-parchment/95 px-2 py-3 ${PANEL_SHADOW}`}
       >
+        <SettlementPanel economy={economy} monks={monks} relic={relic} />
         <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />
           <Tuner
@@ -835,6 +851,17 @@ export function GameHud({
       </aside>
 
       {/* Inspector: whoever or whatever the player clicked, tucked against the sidebar. */}
+      {selectedBuilding && selectedDefinition && (
+        <div className="absolute bottom-0 left-[228px] z-10">
+          <Panel>
+            <div className="flex items-center justify-between gap-4"><Label>{selectedDefinition.category === "scenery" ? "Scenery" : "Building"}</Label><button type="button" aria-label="Dismiss building" onClick={() => useCameraStore.getState().select(null)} className="pointer-events-auto text-xs text-ink-light">✕</button></div>
+            <p className="mt-1 font-display text-xs text-ink">{selectedBuilding.label}</p>
+            <p className="mt-2 text-[11px] text-ink-light">Contributes +{selectedDefinition.renown} shrine renown</p>
+            <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">{selectedDefinition.description}</p>
+            <p className="mt-1 text-[11px] text-ink-light">{buildingIncomeLabel(selectedDefinition, economy.balance)}</p>
+          </Panel>
+        </div>
+      )}
       {selectedTraveler && (
         <div className="absolute bottom-0 left-[228px] z-10">
           <TravelerPanel traveler={selectedTraveler} />

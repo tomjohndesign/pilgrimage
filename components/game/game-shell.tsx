@@ -21,6 +21,9 @@ import {
   generateMap,
 } from "@/lib/game/map/generate-map"
 
+import { useSettlement } from "@/hooks/use-settlement"
+import { settlementRenown } from "@/lib/game/settlement"
+
 import { GameHud } from "./game-hud"
 
 /**
@@ -152,7 +155,7 @@ export function GameShell({
     window.history.replaceState(null, "", `?${query}`)
   }, [seed, settings])
 
-  const map = useMemo(
+  const baseMap = useMemo(
     () =>
       seed === null
         ? null
@@ -202,17 +205,20 @@ export function GameShell({
     }),
     [settings.roadOpacity, settings.roadShade, settings.roadEdgeLine, settings.roadEdgeWidth],
   )
-  // Who among the travelers turns aside for it: the track's own traffic.
-  const relicTraffic = useMemo(
-    () => (relic ? relicBound(travelers, relic).length : 0),
-    [travelers, relic],
-  )
   const monks = useMemo(() => (seed === null ? [] : generateMonks(seed)), [seed])
+  const economy = useSettlement(baseMap, monks, relic)
+  const map = economy.map
+  const renown = useMemo(() => map && relic ? settlementRenown(map, monks, [relic], economy.balance) : null, [map, monks, relic, economy.balance])
+  const relicTraffic = useMemo(
+    () => (relic ? relicBound(travelers, relic, renown?.total ?? 0, economy.balance).length : 0),
+    [travelers, relic, renown, economy.balance],
+  )
 
   // The camera's pan clamp follows the loaded map's extent, and a new world
   // opens on the hovel — the one landmark every map has.
   useEffect(() => {
-    if (!map) return
+    if (!baseMap) return
+    const map = baseMap
     const camera = useCameraStore.getState()
     camera.setMapSize(map.width, map.depth)
     camera.select(null)
@@ -223,7 +229,7 @@ export function GameShell({
         tileToWorldZ(map, hovel.z) + (hovel.d - 1) / 2,
       )
     }
-  }, [map])
+  }, [baseMap])
 
   // A new cast of travelers invalidates whoever was selected.
   useEffect(() => {
@@ -242,6 +248,10 @@ export function GameShell({
           roadTier={settings.road}
           relicTraffic={relicTraffic}
           roadLook={roadLook}
+          shrineRenown={renown?.total ?? 0}
+          buildType={economy.buildType}
+          resources={economy.settlement.resources}
+          onPlace={economy.place}
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
@@ -258,6 +268,7 @@ export function GameShell({
         travelers={travelers}
         relicTraffic={relicTraffic}
         settings={settings}
+        economy={economy}
         onSettingsChange={setSettings}
         onReroll={() => setSeed(randomSeed())}
         onSeedChange={setSeed}

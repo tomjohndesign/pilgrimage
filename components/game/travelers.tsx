@@ -51,7 +51,8 @@ export function Travelers({
   const selection = useCameraStore((s) => s.selection)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
 
-  const sim = useMemo(() => createSim(travelers, map), [travelers, map])
+  // Building additions share the road; only a new world or cast resets the sim.
+  const sim = useMemo(() => createSim(travelers, map), [travelers, map.road])
 
   // Publish the running sim so the HUD's traveler panel can poll live stats.
   useEffect(() => {

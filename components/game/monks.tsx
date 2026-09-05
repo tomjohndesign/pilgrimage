@@ -1,5 +1,6 @@
 "use client"
 
+import { buildingAt } from "@/lib/game/settlement"
 import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
@@ -62,7 +63,7 @@ function wanderSpots(map: GameMap): { spots: Spot[]; centre: { x: number; z: num
   for (let z = hovel.z - WANDER_RADIUS; z < hovel.z + hovel.d + WANDER_RADIUS; z++) {
     for (let x = hovel.x - WANDER_RADIUS; x < hovel.x + hovel.w + WANDER_RADIUS; x++) {
       const inFootprint = x >= hovel.x && x < hovel.x + hovel.w && z >= hovel.z && z < hovel.z + hovel.d
-      if (inFootprint) continue
+      if (inFootprint || buildingAt(map, x, z)) continue
       const terrain = tileAt(map, x, z)
       if (!terrain || !TERRAIN[terrain].passable || terrain === "forest") continue
       spots.push({ x: tileToWorldX(map, x), y: surfaceHeight(map, x, z), z: tileToWorldZ(map, z) })
