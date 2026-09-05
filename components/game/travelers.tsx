@@ -5,6 +5,8 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
+import { selectElement } from "@/lib/game/selection"
+import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { lumberCamps } from "@/lib/game/settlement"
 import { useBuildStore } from "@/lib/game/build-store"
@@ -21,10 +23,6 @@ import {
 
 import {
   AWNING_NAME,
-  BLOCK_HEIGHT,
-  BLOCK_WIDTH,
-  CART_BED,
-  CART_OFFSET_Z,
   TravelerFigure,
 } from "./traveler-figure"
 
@@ -39,9 +37,6 @@ import {
 
 /** Campers fold down to this fraction of standing height. */
 const CAMP_SCALE = 0.35
-
-/** A click that dragged further than this many pixels is a pan, not a select. */
-const CLICK_SLOP_PX = 6
 
 export function Travelers({
   map,
@@ -128,12 +123,8 @@ export function Travelers({
     <group>
       {travelers.map((traveler, index) => {
         const selected = isSelected(selection, { kind: "traveler", id: traveler.id })
-        const [r, g, b] = encodeObjectId(travelerObjectId(index))
-        const select = (event: { delta: number; stopPropagation: () => void }) => {
-          if (event.delta > CLICK_SLOP_PX || useBuildStore.getState().tool) return
-          event.stopPropagation()
-          useCameraStore.getState().select(selected ? null : { kind: "traveler", id: traveler.id })
-        }
+        const idColor = new THREE.Color(...encodeObjectId(travelerObjectId(index)))
+        const select = (event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "traveler", id: traveler.id }, event)
         return (
           <group
             key={traveler.id}
@@ -141,33 +132,16 @@ export function Travelers({
               groupRefs.current[index] = node
             }}
           >
-            <TravelerFigure type={traveler.type} onClick={select} />
-            <mesh name="carried-logs" visible={false} position={[0, 0.35, 0.2]} rotation={[0, 0, Math.PI / 2]}>
-              <cylinderGeometry args={[0.12, 0.12, 0.6, 6]} />
-              <meshLambertMaterial color="#89613c" />
-            </mesh>
-
-            {/* ID silhouettes for the outline pass; inherit the group's motion. */}
-            <mesh position={[0, BLOCK_HEIGHT / 2, 0]} layers-mask={OUTLINE_ID_LAYER_MASK}>
-              <boxGeometry args={[BLOCK_WIDTH, BLOCK_HEIGHT, BLOCK_WIDTH]} />
-              <meshBasicMaterial color={new THREE.Color(r, g, b)} toneMapped={false} />
-            </mesh>
-            {traveler.type.id === "vendor" && (
-              <mesh
-                position={[0, 0.18, CART_OFFSET_Z]}
-                layers-mask={OUTLINE_ID_LAYER_MASK}
-              >
-                <boxGeometry args={CART_BED} />
-                <meshBasicMaterial color={new THREE.Color(r, g, b)} toneMapped={false} />
+            <TravelerFigure type={traveler.type} onClick={select} idColor={idColor} />
+            <group name="carried-logs" visible={false} position={[0, 0.35, 0.2]} rotation={[0, 0, Math.PI / 2]} onClick={select}>
+              <mesh><cylinderGeometry args={[0.12, 0.12, 0.6, 6]} /><meshLambertMaterial color="#89613c" /></mesh>
+              <mesh layers-mask={OUTLINE_ID_LAYER_MASK}>
+                <cylinderGeometry args={[0.12, 0.12, 0.6, 6]} /><meshBasicMaterial color={idColor} toneMapped={false} />
               </mesh>
-            )}
+            </group>
 
-            {selected && (
-              <mesh position={[0, BLOCK_HEIGHT + 0.35, 0]}>
-                <boxGeometry args={[0.2, 0.05, 0.2]} />
-                <meshBasicMaterial color="#d8a93f" />
-              </mesh>
-            )}
+            <CharacterHitTarget onClick={select} />
+            {selected && <CharacterSelectionShadow map={map} />}
           </group>
         )
       })}

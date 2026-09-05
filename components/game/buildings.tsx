@@ -3,7 +3,7 @@
 import { useMemo } from "react"
 import * as THREE from "three"
 
-import { isSelected, useCameraStore } from "@/lib/game/camera-store"
+import { selectElement } from "@/lib/game/selection"
 import { useBuildStore } from "@/lib/game/build-store"
 import { pileOffset } from "@/lib/game/trees/timber"
 import { WoodPile } from "./wood-pile"
@@ -11,7 +11,7 @@ import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import {
   buildingObjectId,
-  placedObjectId,
+  pileObjectId,
   encodeObjectId,
   OUTLINE_ID_LAYER_MASK,
 } from "@/lib/game/render/outline"
@@ -30,13 +30,12 @@ const ROOF_THICKNESS = 0.18
  * between a building and its own roof — only against *other* objects.
  */
 export function Buildings({ map }: { map: GameMap }) {
-  const selection = useCameraStore((s) => s.selection)
   const piles = useBuildStore((s) => s.piles)
   const buildings = map.buildings
   const idColors = useMemo(
     // Component tuples straight into the working colour space — an ID is data,
     // not a colour, so it must dodge sRGB conversion to survive readback.
-    () => buildings.map((_, index) => new THREE.Color(...encodeObjectId(index < map.buildings.length ? buildingObjectId(index) : placedObjectId(index - map.buildings.length)))),
+    () => buildings.map((_, index) => new THREE.Color(...encodeObjectId(buildingObjectId(index)))),
     [map, buildings],
   )
 
@@ -51,28 +50,30 @@ export function Buildings({ map }: { map: GameMap }) {
         const baseY = TILE_HEIGHT
 
         const cross = building.buildType === "cross"
-        const selected = isSelected(selection, { kind: "building", id: building.id })
         const capY = cross ? building.height * 0.72 : building.height + ROOF_THICKNESS / 2
         if (building.id.startsWith("lumberCamp-")) {
           return (
-            <group key={building.id} name={`lumber-yard-${building.id}`} position={[centreX, baseY, centreZ]} onClick={(event) => {
-              if (event.delta > 6 || useBuildStore.getState().tool) return
-              event.stopPropagation()
-              useCameraStore.getState().select(selected ? null : { kind: "building", id: building.id })
-            }}>
+            <group key={building.id} name={`lumber-yard-${building.id}`} position={[centreX, baseY, centreZ]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
               <mesh position={[0, 0.022, 0]}>
                 <boxGeometry args={[building.w * 0.98, 0.044, building.d * 0.98]} />
                 <meshLambertMaterial color="#a18a60" />
               </mesh>
+              <mesh position={[0, 0.022, 0]} layers-mask={OUTLINE_ID_LAYER_MASK}>
+                <boxGeometry args={[building.w * 0.98, 0.044, building.d * 0.98]} />
+                <meshBasicMaterial color={idColors[index]} toneMapped={false} />
+              </mesh>
               {/* Low corner pegs mark the open yard without hiding its stacks. */}
               {[-1, 1].flatMap((x) => [-1, 1].map((z) => (
-                <mesh key={`${x}:${z}`} position={[x * (building.w / 2 - 0.12), 0.13, z * (building.d / 2 - 0.12)]}>
-                  <boxGeometry args={[0.08, 0.26, 0.08]} /><meshLambertMaterial color="#705135" />
-                </mesh>
+                <group key={`${x}:${z}`} position={[x * (building.w / 2 - 0.12), 0.13, z * (building.d / 2 - 0.12)]}>
+                  <mesh><boxGeometry args={[0.08, 0.26, 0.08]} /><meshLambertMaterial color="#705135" /></mesh>
+                  <mesh layers-mask={OUTLINE_ID_LAYER_MASK}>
+                    <boxGeometry args={[0.08, 0.26, 0.08]} /><meshBasicMaterial color={idColors[index]} toneMapped={false} />
+                  </mesh>
+                </group>
               )))}
               {piles.filter((pile) => pile.campId === building.id).map((pile) => {
                 const [x, z] = pileOffset(pile.slot)
-                return <group key={pile.id} position={[x, 0.03, z]}><WoodPile pile={pile} /></group>
+                return <group key={pile.id} position={[x, 0.03, z]}><WoodPile pile={pile} objectId={pileObjectId(piles.indexOf(pile))} /></group>
               })}
             </group>
           )
@@ -89,12 +90,7 @@ export function Buildings({ map }: { map: GameMap }) {
         ]
 
         return (
-          <group key={building.id} position={[centreX, baseY, centreZ]} onClick={(event) => {
-            if (event.delta > 6 || useBuildStore.getState().tool) return
-            event.stopPropagation()
-            useCameraStore.getState().select(selected ? null : { kind: "building", id: building.id })
-          }}>
-            {selected && <mesh position={[0, building.height + 0.4, 0]}><boxGeometry args={[0.2, 0.05, 0.2]} /><meshBasicMaterial color="#d8a93f" /></mesh>}
+          <group key={building.id} position={[centreX, baseY, centreZ]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
             <mesh position={[0, building.height / 2, 0]}>
               <boxGeometry args={bodyArgs} />
               <meshLambertMaterial color={building.color} />
