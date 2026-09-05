@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { DEFAULT_RELIC_DISTANCE, generateMap, HOVEL_ID, relicDistanceBand } from "./generate-map"
-import { TERRAIN } from "./terrain"
+import { isWoods, TERRAIN } from "./terrain"
 import { tileAt, type GameMap } from "./types"
 
 /** Enough seeds to catch structural bugs, few enough to stay fast. */
@@ -177,7 +177,7 @@ describe("generateMap", () => {
       expect(near).toBeLessThanOrEqual(relicDistanceBand(8).max)
       expect(far).toBeGreaterThanOrEqual(relicDistanceBand(32).min)
     }
-  })
+  }, SWEEP_TIMEOUT)
 
   it("cuts one unbroken track from a mid-road junction to the hovel's door", () => {
     for (const seed of SEEDS) {
@@ -254,6 +254,15 @@ describe("generateMap", () => {
     expect(small.tiles).toHaveLength(128 * 128)
   }, SWEEP_TIMEOUT)
 
+  it("builds a 512 × 512 map, the largest the HUD offers, with its road and hovel intact", () => {
+    const map = generateMap({ seed: 99, width: 512, depth: 512 })
+    expect(map.tiles).toHaveLength(512 * 512)
+    expect(map.tiles.every((t) => t in TERRAIN)).toBe(true)
+    expect(map.buildings.map((b) => b.id)).toEqual([HOVEL_ID])
+    const road = reachablePath(map)
+    expect([...road].some((key) => key.startsWith(`${map.width - 1},`))).toBe(true)
+  }, SWEEP_TIMEOUT)
+
   it("connects the west edge to the east edge with an unbroken road, every seed", () => {
     for (const seed of SEEDS) {
       expect(roadReachesEast(mapFor(seed)), `seed ${seed} road reaches the east edge`).toBe(true)
@@ -286,18 +295,20 @@ describe("generateMap", () => {
   it("is densely forested by default, in one connected mass rather than islands", () => {
     for (const seed of SEEDS) {
       const map = mapFor(seed)
-      const forest = countTerrain(map, "forest")
-      // Forest dominance is measured against dry land — water legitimately
-      // takes its own share of the map.
+      // Woods of both kinds: dark forest is forest too, just older. Forest
+      // dominance is measured against dry land — water legitimately takes its
+      // own share of the map.
+      const forest = map.tiles.filter(isWoods).length
       expect(forest / landTiles(map), `seed ${seed} is mostly forest`).toBeGreaterThan(0.5)
 
       // Compactness: in dense woods, most forest tiles touch other forest tiles.
       let neighbourSum = 0
       for (let z = 0; z < map.depth; z++) {
         for (let x = 0; x < map.width; x++) {
-          if (tileAt(map, x, z) !== "forest") continue
+          if (!isWoods(tileAt(map, x, z)!)) continue
           for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-            if (tileAt(map, x + dx, z + dz) === "forest") neighbourSum++
+            const n = tileAt(map, x + dx, z + dz)
+            if (n !== null && isWoods(n)) neighbourSum++
           }
         }
       }
@@ -383,6 +394,100 @@ describe("generateMap", () => {
     }
   }, SWEEP_TIMEOUT)
 
+  it(
+    "grows dark forest at the heart of the woods on nearly every seed, clear of the map's ends",
+    () => {
+      expect(TERRAIN.darkwood.passable).toBe(false)
+      let seedsWithDark = 0
+      for (const seed of SEEDS) {
+        const map = mapFor(seed)
+        const dark = countTerrain(map, "darkwood")
+        // A road that hugs the map's north or south edge leaves no room to
+        // stand a bar across it; such seeds legitimately have no dark forest.
+        if (dark > 150) seedsWithDark++
+        for (let z = 0; z < map.depth; z++) {
+          for (let x = 0; x < map.width; x++) {
+            if (tileAt(map, x, z) !== "darkwood") continue
+            // The road's endpoints sit on the west and east edges; old growth
+            // keeps clear of them so the road never *starts* in the dark.
+            expect(x, `seed ${seed} dark forest keeps off the west edge`).toBeGreaterThanOrEqual(8)
+            expect(x, `seed ${seed} dark forest keeps off the east edge`).toBeLessThan(map.width - 8)
+          }
+        }
+      }
+      expect(seedsWithDark).toBeGreaterThanOrEqual(SEEDS.length * 0.9)
+    },
+    SWEEP_TIMEOUT,
+  )
+
+  it("grows no dark forest when asked not to", () => {
+    const map = generateMap({ seed: 5, darkForestCount: 0 })
+    expect(countTerrain(map, "darkwood")).toBe(0)
+    expect(map.shortcuts).toEqual([])
+  })
+
+  it(
+    "routes the road around dark forest instead of through it",
+    () => {
+      for (const seed of SEEDS) {
+        const map = mapFor(seed)
+        // A road tile with old growth on both flanks is a road *through* the
+        // dark forest. Skirting it never produces one.
+        let through = 0
+        for (const p of map.road!) {
+          const flankedX =
+            tileAt(map, p.x - 1, p.z) === "darkwood" && tileAt(map, p.x + 1, p.z) === "darkwood"
+          const flankedZ =
+            tileAt(map, p.x, p.z - 1) === "darkwood" && tileAt(map, p.x, p.z + 1) === "darkwood"
+          if (flankedX || flankedZ) through++
+        }
+        expect(through, `seed ${seed} road skirts the dark forest`).toBeLessThanOrEqual(2)
+      }
+    },
+    SWEEP_TIMEOUT,
+  )
+
+  it(
+    "cuts a shorter track through the dark forest wherever the road detoured",
+    () => {
+      let seedsWithTracks = 0
+      for (const seed of SEEDS) {
+        const map = mapFor(seed)
+        const road = map.road!
+        if ((map.shortcuts ?? []).length > 0) seedsWithTracks++
+        for (const track of map.shortcuts ?? []) {
+          expect(track.entry).toBeLessThan(track.exit)
+          expect(track.tiles[0]).toEqual(road[track.entry])
+          expect(track.tiles[track.tiles.length - 1]).toEqual(road[track.exit])
+          // Meaningfully shorter than the road between the same two tiles.
+          expect(track.tiles.length, `seed ${seed} track is a shortcut`).toBeLessThan(
+            (track.exit - track.entry + 1) * 0.9,
+          )
+          let touchesDark = false
+          for (let i = 0; i < track.tiles.length; i++) {
+            const t = track.tiles[i]
+            expect(["track", "path", "bridge"], `seed ${seed} track is carved`).toContain(
+              tileAt(map, t.x, t.z),
+            )
+            if (i > 0) {
+              const step =
+                Math.abs(t.x - track.tiles[i - 1].x) + Math.abs(t.z - track.tiles[i - 1].z)
+              expect(step, `seed ${seed} track step ${i} is to a neighbour`).toBe(1)
+            }
+            for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+              if (tileAt(map, t.x + dx, t.z + dz) === "darkwood") touchesDark = true
+            }
+          }
+          expect(touchesDark, `seed ${seed} track runs through the dark forest`).toBe(true)
+        }
+      }
+      // Nearly every seed grows a dark forest in the road's way; a handful have
+      // the road's endpoints too close to the crossing for a track to fit.
+      expect(seedsWithTracks).toBeGreaterThanOrEqual(SEEDS.length * 0.8)
+    },
+    SWEEP_TIMEOUT,
+  )
+
   /**
    * Share of the land beside the road that is still forest, over the 4-neighbours
    * of every road tile (other road, track, and water don't count either way).
@@ -428,9 +533,11 @@ describe("generateMap", () => {
   }, SWEEP_TIMEOUT)
 
   it("keeps the road at a sane length — it seeks open ground, it doesn't wander the map for it", () => {
+    // Glade-seeking plus a detour around each dark forest can add up, but the
+    // road still reads as a way across the map, not a maze.
     for (const seed of SEEDS) {
       const map = mapFor(seed)
-      expect(map.road!.length, `seed ${seed} road is not a maze`).toBeLessThan(map.width * 2)
+      expect(map.road!.length, `seed ${seed} road is not a maze`).toBeLessThan(map.width * 3)
     }
   }, SWEEP_TIMEOUT)
 

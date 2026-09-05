@@ -1,12 +1,20 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import {
+  arrivalOdds,
+  computeDangerField,
+  DANGER_THRESHOLDS,
+  dangerLabel,
+} from "@/lib/game/map/danger"
 import { clampRoadTier, MAX_ROAD_TIER, ROAD_TIERS } from "@/lib/game/map/road"
 import { MIN_MAP_SIZE } from "@/lib/game/map/generate-map"
-import type { GameMap } from "@/lib/game/map/types"
+import { TERRAIN } from "@/lib/game/map/terrain"
+import { tileAt, type GameMap } from "@/lib/game/map/types"
+import { nerve } from "@/lib/game/route-choice"
 import { parseSeed } from "@/lib/game/rng"
 import { saveSeed } from "@/lib/game/seed-storage"
 import { SITE_MENU } from "@/lib/site-menu"
@@ -298,7 +306,15 @@ function TravelerPanel({ traveler }: { traveler: Traveler }) {
           </span>
         </div>
         {live && (
-          <div className="text-[11px] italic text-gold">{ACTIVITY_LABELS[live.activity]}</div>
+          <div className="text-[11px] italic text-gold">
+            {ACTIVITY_LABELS[live.activity]}
+            {live.track && " · on the dark track"}
+          </div>
+        )}
+        {live && live.fled > 0 && (
+          <div className="text-[11px] italic text-red">
+            Turned back {live.fled === 1 ? "once" : `${live.fled} times`}
+          </div>
         )}
       </div>
 
@@ -327,6 +343,61 @@ function TravelerPanel({ traveler }: { traveler: Traveler }) {
         </div>
       </div>
     </Panel>
+  )
+}
+
+/** The everyman pilgrim and a knight, as the HUD forecasts them. */
+const PILGRIM_NERVE = nerve({ type: "pilgrim", piety: 50, stamina: 100 })
+const KNIGHT_NERVE = nerve({ type: "knight", piety: 50, stamina: 100 })
+
+/**
+ * What the danger field says about the road and its tracks: the share of
+ * pilgrims and knights forecast to walk each end to end, plus the danger of
+ * whatever tile is under the cursor — the tuning readout for dark forests.
+ */
+function DangerForecast({ map }: { map: GameMap }) {
+  const hovered = useCameraStore((s) => s.hovered)
+  const danger = useMemo(() => computeDangerField(map), [map])
+  const road = map.road ?? []
+  const tracks = map.shortcuts ?? []
+  const hoveredTerrain = hovered ? tileAt(map, hovered.x, hovered.z) : null
+  const hoveredDanger = hovered && hoveredTerrain ? danger[hovered.z * map.width + hovered.x] : null
+
+  const pct = (route: Array<{ x: number; z: number }>, nerveValue: number) =>
+    `${Math.round(arrivalOdds(danger, map, route, nerveValue) * 100)}%`
+
+  return (
+    <div className="mt-2 border-t border-rule pt-2">
+      <div className="flex items-baseline justify-between gap-4">
+        <span className="text-[11px] italic text-ink-light">Road, {road.length} tiles</span>
+        <span className="font-display text-[10px] text-ink">
+          {pct(road, PILGRIM_NERVE)} · {pct(road, KNIGHT_NERVE)}
+        </span>
+      </div>
+      {tracks.map((track, index) => (
+        <div key={index} className="flex items-baseline justify-between gap-4">
+          <span className="text-[11px] italic text-ink-light">
+            Track {index + 1}, {track.tiles.length} for {track.exit - track.entry + 1}
+          </span>
+          <span className="font-display text-[10px] text-red">
+            {pct(track.tiles, PILGRIM_NERVE)} · {pct(track.tiles, KNIGHT_NERVE)}
+          </span>
+        </div>
+      ))}
+      <div className="text-[10px] italic text-ink-light">pilgrims · knights arriving</div>
+      {hoveredTerrain && hoveredDanger !== null && (
+        <div className="mt-1 flex items-baseline justify-between gap-4">
+          <span className="text-[11px] italic text-ink-light">{TERRAIN[hoveredTerrain].label}</span>
+          <span
+            className={`font-display text-[10px] ${
+              hoveredDanger >= DANGER_THRESHOLDS.dangerous ? "text-red" : "text-ink"
+            }`}
+          >
+            {dangerLabel(hoveredDanger)}
+          </span>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -482,7 +553,7 @@ export function GameHud({
             value={settings.size}
             display={`${settings.size} × ${settings.size}`}
             min={MIN_MAP_SIZE}
-            max={256}
+            max={512}
             step={32}
             onChange={(size) => set({ size })}
           />
@@ -516,6 +587,14 @@ export function GameHud({
             min={0}
             max={30}
             onChange={(clearings) => set({ clearings })}
+          />
+          <Tuner
+            label="Dark forests"
+            value={settings.darkForests}
+            display={String(settings.darkForests)}
+            min={0}
+            max={4}
+            onChange={(darkForests) => set({ darkForests })}
           />
         </Panel>
 
@@ -553,6 +632,7 @@ export function GameHud({
             step={0.1}
             onChange={(walkSpeed) => set({ walkSpeed })}
           />
+          {map && <DangerForecast map={map} />}
           {/* Stand-in for progression: the road builds up as the pilgrimage grows. */}
           <Tuner
             label="Development"
