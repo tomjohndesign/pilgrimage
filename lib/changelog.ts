@@ -11,6 +11,12 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "0.0.13",
+    title: "Room for Every Tree",
+    summary:
+      "Large maps no longer crash on load. Every tree carries its own outline ID, and the biggest worlds grew more trees than the old 16-bit ID space could name; IDs are now 24-bit, with room for every tree a 512 × 512 map can hold.",
+  },
+  {
     version: "0.0.12",
     title: "Wider Horizons",
     summary:

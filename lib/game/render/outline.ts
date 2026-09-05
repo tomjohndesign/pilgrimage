@@ -34,8 +34,13 @@ export function nextOutlineMode(mode: OutlineMode): OutlineMode {
   return OUTLINE_MODES[(OUTLINE_MODES.indexOf(mode) + 1) % OUTLINE_MODES.length]
 }
 
-/** IDs use 8 bits in each of the R and G channels. ID 0 means "not an object". */
-export const MAX_OBJECT_ID = 0xffff
+/**
+ * IDs use 8 bits in each of the R, G, and B channels — 24 bits, so a 512 × 512
+ * map packed two trees to a tile (about half a million objects) still fits with
+ * room to spare. Two channels ran out around 65k trees, which a large map
+ * reached at ordinary forest coverage. ID 0 means "not an object".
+ */
+export const MAX_OBJECT_ID = 0xffffff
 
 /**
  * Encode an ID as linear RGB in 0–1, exact under 8-bit-per-channel quantisation.
@@ -45,12 +50,12 @@ export function encodeObjectId(id: number): [number, number, number] {
   if (!Number.isInteger(id) || id < 0 || id > MAX_OBJECT_ID) {
     throw new Error(`Object id out of range: ${id}`)
   }
-  return [(id & 0xff) / 255, ((id >> 8) & 0xff) / 255, 0]
+  return [(id & 0xff) / 255, ((id >> 8) & 0xff) / 255, ((id >> 16) & 0xff) / 255]
 }
 
 /** Inverse of `encodeObjectId`, for tests and readback debugging. */
-export function decodeObjectId(r: number, g: number): number {
-  return Math.round(r * 255) + 256 * Math.round(g * 255)
+export function decodeObjectId(r: number, g: number, b: number): number {
+  return Math.round(r * 255) + 256 * Math.round(g * 255) + 65536 * Math.round(b * 255)
 }
 
 /** Buildings take the first block of IDs, starting above the reserved 0. */
@@ -83,7 +88,7 @@ export function residentObjectId(residentIndex: number): number {
  * The relic sits alone in the middle of the ID space, so it outlines against
  * the shrine that houses it rather than merging into the walls.
  */
-export const RELIC_OBJECT_ID = 0x8000
+export const RELIC_OBJECT_ID = 0x800000
 
 /**
  * Outline thickness in CSS pixels. The edge pass samples neighbours at this
