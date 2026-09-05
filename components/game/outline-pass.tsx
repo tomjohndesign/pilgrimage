@@ -1,13 +1,13 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
-import { useFrame, useThree } from "@react-three/fiber"
+import { useEffect, useMemo } from "react"
+import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
+import { usePixelScene } from "@/components/pixel-canvas"
 
 import { useCameraStore } from "@/lib/game/camera-store"
 import {
   OUTLINE_ID_LAYER,
-  OUTLINE_THICKNESS_PX,
   type OutlineMode,
 } from "@/lib/game/render/outline"
 
@@ -76,21 +76,18 @@ const FRAGMENT_SHADER = /* glsl */ `
 `
 
 export function OutlinePass() {
-  const { gl, scene, camera, size } = useThree()
-  const dpr = useThree((s) => s.viewport.dpr)
+  const { gl, scene } = useThree()
 
   // ID + depth buffer at drawing-buffer resolution. Nearest filtering is load-
   // bearing: interpolated ID colours would decode as phantom objects.
   const target = useMemo(() => {
-    const width = Math.max(1, Math.round(size.width * dpr))
-    const height = Math.max(1, Math.round(size.height * dpr))
-    return new THREE.WebGLRenderTarget(width, height, {
+    return new THREE.WebGLRenderTarget(1, 1, {
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
       generateMipmaps: false,
-      depthTexture: new THREE.DepthTexture(width, height),
+      depthTexture: new THREE.DepthTexture(1, 1),
     })
-  }, [size.width, size.height, dpr])
+  }, [])
 
   useEffect(
     () => () => {
@@ -138,11 +135,17 @@ export function OutlinePass() {
   )
 
   const prevClearColor = useMemo(() => new THREE.Color(), [])
+  const bufferSize = useMemo(() => new THREE.Vector2(), [])
 
-  const renderFrame = () => {
+  const frameRef = usePixelScene((camera, destination) => {
     const mode = useCameraStore.getState().outlineMode
 
     if (mode !== "off") {
+      // Resolution can change during the camera tween in this same frame.
+      // Reuse the target object and only resize its storage when needed.
+      if (destination) bufferSize.set(destination.width, destination.height)
+      else gl.getDrawingBufferSize(bufferSize)
+      target.setSize(Math.max(1, bufferSize.x), Math.max(1, bufferSize.y))
       // ID pass: only the layer holding flat ID silhouettes, cleared to ID 0.
       const background = scene.background
       scene.background = null
@@ -152,21 +155,22 @@ export function OutlinePass() {
       camera.layers.set(OUTLINE_ID_LAYER)
       gl.setRenderTarget(target)
       gl.render(scene, camera)
-      gl.setRenderTarget(null)
+      gl.setRenderTarget(destination)
       camera.layers.set(0)
       gl.setClearColor(prevClearColor, prevClearAlpha)
       scene.background = background
     }
 
+    gl.setRenderTarget(destination)
     gl.render(scene, camera)
 
     if (mode !== "off") {
       pass.uniforms.tId.value = target.texture
       pass.uniforms.tDepth.value = target.depthTexture
-      // Offsets in CSS pixels, so line weight is steady across zoom and DPR.
+      // One world texel of ink: outlines enlarge with the scene's pixels.
       pass.uniforms.uTexel.value.set(
-        (OUTLINE_THICKNESS_PX * dpr) / target.width,
-        (OUTLINE_THICKNESS_PX * dpr) / target.height,
+        1 / target.width,
+        1 / target.height,
       )
       pass.uniforms.uMode.value = MODE_INT[mode]
       const prevAutoClear = gl.autoClear
@@ -174,20 +178,14 @@ export function OutlinePass() {
       gl.render(pass.quadScene, pass.quadCamera)
       gl.autoClear = prevAutoClear
     }
-  }
-
-  const frameRef = useRef(renderFrame)
-  frameRef.current = renderFrame
+  })
 
   useEffect(() => {
-    outlineFrameRef.current = () => frameRef.current()
+    outlineFrameRef.current = () => frameRef.current?.()
     return () => {
       outlineFrameRef.current = null
     }
-  }, [])
-
-  // Priority > 0 takes over rendering from react-three-fiber.
-  useFrame(() => frameRef.current(), 1)
+  }, [frameRef])
 
   return null
 }

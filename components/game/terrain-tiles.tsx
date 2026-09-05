@@ -922,6 +922,8 @@ export function TerrainTiles({
       <instancedMesh
         ref={roadMeshRef}
         key={tier.id}
+        // Empty batches have no instance colours for the road shader to read.
+        visible={roadCount > 0}
         // The road runs the width of the map; the instance bounds it would
         // be culled by are computed once and never worth it.
         frustumCulled={false}
@@ -943,6 +945,7 @@ export function TerrainTiles({
       <instancedMesh
         ref={roadRampMeshRef}
         key={`ramp-${tier.id}`}
+        visible={roadRampCount > 0}
         frustumCulled={false}
         args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, roadRampCount]}
       >

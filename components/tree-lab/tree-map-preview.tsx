@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo } from "react"
-import { Canvas } from "@react-three/fiber"
+import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
 
 import { CameraLight } from "@/components/game/camera-light"
 import { CameraRig } from "@/components/game/camera-rig"
@@ -19,7 +19,7 @@ import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
  * without the lab depending on world state. Same controls as /play: drag to
  * pan, scroll to zoom, Q/E to rotate, O to cycle outlines.
  */
-export function TreeMapPreview({ seed, size }: { seed: number; size: number }) {
+export function TreeMapPreview({ seed, size, ...pixelation }: { seed: number; size: number } & PixelationProps) {
   const map = useMemo(() => generateMap({ seed, width: size, depth: size }), [seed, size])
 
   useEffect(() => {
@@ -29,11 +29,10 @@ export function TreeMapPreview({ seed, size }: { seed: number; size: number }) {
   }, [map])
 
   return (
-    <Canvas
+    <PixelCanvas
+      {...pixelation}
       orthographic
-      dpr={[1, 2]}
-      gl={{ antialias: true }}
-      camera={{ position: [20, 20, 20], near: CAM_NEAR, far: CAM_FAR }}
+      camera={{ manual: true, position: [20, 20, 20], near: CAM_NEAR, far: CAM_FAR }}
     >
       <color attach="background" args={["#14100a"]} />
       <ambientLight intensity={0.5} />
@@ -47,6 +46,6 @@ export function TreeMapPreview({ seed, size }: { seed: number; size: number }) {
 
       <CameraRig map={map} />
       <OutlinePass />
-    </Canvas>
+    </PixelCanvas>
   )
 }
