@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
-import { useCameraStore } from "@/lib/game/camera-store"
+import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import type { GameMap } from "@/lib/game/map/types"
 import { createSim, simRegistry, stepSim } from "@/lib/game/sim"
 import type { Traveler } from "@/lib/game/travelers"
@@ -48,7 +48,7 @@ export function Travelers({
   /** Base walking speed in tiles per second; each traveler's pace scales it. */
   speed: number
 }) {
-  const selectedId = useCameraStore((s) => s.selectedTravelerId)
+  const selection = useCameraStore((s) => s.selection)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
 
   const sim = useMemo(() => createSim(travelers, map), [travelers, map])
@@ -90,12 +90,12 @@ export function Travelers({
   return (
     <group>
       {travelers.map((traveler, index) => {
-        const selected = traveler.id === selectedId
+        const selected = isSelected(selection, { kind: "traveler", id: traveler.id })
         const [r, g, b] = encodeObjectId(travelerObjectId(index))
         const select = (event: { delta: number; stopPropagation: () => void }) => {
           if (event.delta > CLICK_SLOP_PX) return
           event.stopPropagation()
-          useCameraStore.getState().selectTraveler(selected ? null : traveler.id)
+          useCameraStore.getState().select(selected ? null : { kind: "traveler", id: traveler.id })
         }
         return (
           <group

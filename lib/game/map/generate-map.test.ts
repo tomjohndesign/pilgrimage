@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { generateMap } from "./generate-map"
+import { DEFAULT_RELIC_DISTANCE, generateMap, HOVEL_ID, relicDistanceBand } from "./generate-map"
 import { TERRAIN } from "./terrain"
 import { tileAt, type GameMap } from "./types"
 
@@ -42,9 +42,114 @@ describe("generateMap", () => {
     expect(a.tiles).not.toEqual(b.tiles)
   })
 
-  it("generates no buildings — building is the player's job", () => {
+  it("generates exactly one building, the founded hovel, standing on grass off the road", () => {
     for (const seed of SEEDS) {
-      expect(generateMap({ seed }).buildings).toEqual([])
+      const map = generateMap({ seed })
+      expect(map.buildings.map((b) => b.id), `seed ${seed} has only the hovel`).toEqual([HOVEL_ID])
+      const hovel = map.buildings[0]
+      expect(map.site?.hovelId).toBe(HOVEL_ID)
+      for (let dz = -1; dz <= hovel.d; dz++) {
+        for (let dx = -1; dx <= hovel.w; dx++) {
+          const terrain = tileAt(map, hovel.x + dx, hovel.z + dz)
+          const inFootprint = dx >= 0 && dx < hovel.w && dz >= 0 && dz < hovel.d
+          if (inFootprint) {
+            expect(terrain, `seed ${seed} hovel stands on grass`).toBe("grass")
+          } else {
+            // The ring is grass except where the track arrives at the door.
+            expect(["grass", "track"], `seed ${seed} hovel has breathing room`).toContain(terrain)
+          }
+        }
+      }
+    }
+  })
+
+  /** Grid distance from the hovel's footprint to the nearest road tile. */
+  function hovelRoadDistance(map: GameMap): number {
+    const hovel = map.buildings[0]
+    let nearest = Infinity
+    for (const p of map.road!) {
+      for (let dz = 0; dz < hovel.d; dz++) {
+        for (let dx = 0; dx < hovel.w; dx++) {
+          nearest = Math.min(nearest, Math.abs(p.x - hovel.x - dx) + Math.abs(p.z - hovel.z - dz))
+        }
+      }
+    }
+    return nearest
+  }
+
+  it("sites the hovel a real detour off the road — inside the distance band", () => {
+    const band = relicDistanceBand(DEFAULT_RELIC_DISTANCE)
+    for (const seed of SEEDS) {
+      const nearest = hovelRoadDistance(generateMap({ seed }))
+      expect(nearest, `seed ${seed} not too close`).toBeGreaterThanOrEqual(band.min)
+      expect(nearest, `seed ${seed} not too far`).toBeLessThanOrEqual(band.max)
+    }
+  })
+
+  it("moves the hovel further out when asked", () => {
+    for (const seed of SEEDS.slice(0, 10)) {
+      const near = hovelRoadDistance(generateMap({ seed, relicDistance: 8 }))
+      const far = hovelRoadDistance(generateMap({ seed, relicDistance: 32 }))
+      expect(far, `seed ${seed} far > near`).toBeGreaterThan(near)
+      expect(near).toBeLessThanOrEqual(relicDistanceBand(8).max)
+      expect(far).toBeGreaterThanOrEqual(relicDistanceBand(32).min)
+    }
+  })
+
+  it("cuts one unbroken track from a mid-road junction to the hovel's door", () => {
+    for (const seed of SEEDS) {
+      const map = generateMap({ seed })
+      const { junction, branch, door } = map.site!
+      const road = map.road!
+      const hovel = map.buildings[0]
+
+      // The fork is never on the road's outermost stretches.
+      expect(junction, `seed ${seed} junction not at west end`).toBeGreaterThanOrEqual(road.length * 0.1 - 1)
+      expect(junction, `seed ${seed} junction not at east end`).toBeLessThanOrEqual(road.length * 0.9)
+      expect(branch[0], `seed ${seed} branch starts at the junction`).toEqual(road[junction])
+      expect(branch[branch.length - 1], `seed ${seed} branch ends at the door`).toEqual(door)
+
+      // The door touches the footprint but is not inside it.
+      const touching =
+        door.x >= hovel.x - 1 &&
+        door.x <= hovel.x + hovel.w &&
+        door.z >= hovel.z - 1 &&
+        door.z <= hovel.z + hovel.d
+      const inside =
+        door.x >= hovel.x && door.x < hovel.x + hovel.w && door.z >= hovel.z && door.z < hovel.z + hovel.d
+      expect(touching && !inside, `seed ${seed} door is adjacent to the hovel`).toBe(true)
+
+      for (let i = 0; i < branch.length; i++) {
+        const terrain = tileAt(map, branch[i].x, branch[i].z)
+        expect(terrain !== null && TERRAIN[terrain].passable, `seed ${seed} branch is walkable`).toBe(true)
+        const onHovel =
+          branch[i].x >= hovel.x &&
+          branch[i].x < hovel.x + hovel.w &&
+          branch[i].z >= hovel.z &&
+          branch[i].z < hovel.z + hovel.d
+        expect(onHovel, `seed ${seed} branch does not cross the hovel`).toBe(false)
+        if (i > 0) {
+          const step = Math.abs(branch[i].x - branch[i - 1].x) + Math.abs(branch[i].z - branch[i - 1].z)
+          expect(step, `seed ${seed} branch step ${i} is to a neighbour`).toBe(1)
+          expect(terrain, `seed ${seed} branch is track past the junction`).toBe("track")
+        }
+      }
+    }
+  })
+
+  it("founds a hovel even on a map with no glades to speak of", () => {
+    const map = generateMap({ seed: 7, forestCoverage: 0.98, gladeCount: 1, clearingCount: 0 })
+    const hovel = map.buildings[0]
+    expect(hovel).toBeDefined()
+    expect(tileAt(map, hovel.x, hovel.z)).toBe("grass")
+    expect(map.site!.branch.length).toBeGreaterThan(1)
+  })
+
+  it("sites the hovel on small maps too, scaling the band down", () => {
+    for (const seed of SEEDS.slice(0, 10)) {
+      const map = generateMap({ seed, width: 32, depth: 32 })
+      expect(map.buildings).toHaveLength(1)
+      expect(map.site!.branch.length).toBeGreaterThan(1)
     }
   })
 

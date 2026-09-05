@@ -12,6 +12,17 @@ export interface HoveredTile {
   z: number
 }
 
+/** One thing selected at a time, whatever kind it is. */
+export type Selection =
+  | { kind: "traveler"; id: number }
+  | { kind: "monk"; id: number }
+  | { kind: "relic" }
+
+export function isSelected(selection: Selection | null, candidate: Selection): boolean {
+  if (!selection || selection.kind !== candidate.kind) return false
+  return selection.kind === "relic" || selection.id === (candidate as { id: number }).id
+}
+
 interface CameraState {
   /** Camera focus point on the ground plane. */
   targetX: number
@@ -26,8 +37,8 @@ interface CameraState {
   /** Current map extent; the pan clamp follows whatever map is loaded. */
   mapWidth: number
   mapDepth: number
-  /** Traveler the player clicked, by traveler id. Not part of reset(). */
-  selectedTravelerId: number | null
+  /** What the player clicked — a traveler, a monk, or the relic. Not part of reset(). */
+  selection: Selection | null
 
   pan: (dx: number, dz: number) => void
   /** Jump the focus straight to a world point — the minimap's click-to-travel. */
@@ -37,12 +48,12 @@ interface CameraState {
   setHovered: (tile: HoveredTile | null) => void
   cycleOutlineMode: () => void
   setMapSize: (width: number, depth: number) => void
-  selectTraveler: (id: number | null) => void
+  select: (selection: Selection | null) => void
   reset: () => void
 }
 
 const INITIAL = {
-  // Generated maps have no landmark to favour, so start at the map centre.
+  // Map centre by default; the shell pans to the hovel once a map loads.
   targetX: 0,
   targetZ: 0,
   viewIndex: 0,
@@ -69,7 +80,7 @@ export const useCameraStore = create<CameraState>((set) => ({
   outlineMode: DEFAULT_OUTLINE_MODE,
   mapWidth: DEFAULT_MAP_WIDTH,
   mapDepth: DEFAULT_MAP_DEPTH,
-  selectedTravelerId: null,
+  selection: null,
 
   pan: (dx, dz) => set((s) => clampTarget(s, s.targetX + dx, s.targetZ + dz)),
 
@@ -102,7 +113,7 @@ export const useCameraStore = create<CameraState>((set) => ({
       ...clampTarget({ mapWidth: width, mapDepth: depth }, s.targetX, s.targetZ),
     })),
 
-  selectTraveler: (id) => set({ selectedTravelerId: id }),
+  select: (selection) => set({ selection }),
 
   // Deliberately leaves mapWidth/mapDepth alone — reset is a camera action.
   reset: () =>

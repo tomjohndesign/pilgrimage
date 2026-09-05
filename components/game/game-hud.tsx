@@ -9,6 +9,8 @@ import { parseSeed } from "@/lib/game/rng"
 import { saveSeed } from "@/lib/game/seed-storage"
 import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, formatGameTime, simRegistry, type SimTraveler } from "@/lib/game/sim"
+import { MONK_ACTIVITY_LABELS, monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
+import { relicTitle, type Relic } from "@/lib/game/relic"
 import type { Traveler } from "@/lib/game/travelers"
 
 import type { MapSettings } from "./game-shell"
@@ -275,7 +277,7 @@ function TravelerPanel({ traveler }: { traveler: Traveler }) {
         <Label>Traveler</Label>
         <button
           type="button"
-          onClick={() => useCameraStore.getState().selectTraveler(null)}
+          onClick={() => useCameraStore.getState().select(null)}
           aria-label="Dismiss traveler"
           className="pointer-events-auto font-display text-[10px] text-ink-light hover:text-red"
         >
@@ -326,9 +328,103 @@ function TravelerPanel({ traveler }: { traveler: Traveler }) {
   )
 }
 
+/** What the monks keep in the hovel: the relic's name, nature, and pull. */
+function RelicPanel({ relic }: { relic: Relic }) {
+  const s = relic.stats
+  return (
+    <Panel>
+      <div className="flex items-baseline justify-between gap-4">
+        <Label>Relic</Label>
+        <button
+          type="button"
+          onClick={() => useCameraStore.getState().select(null)}
+          aria-label="Dismiss relic"
+          className="pointer-events-auto font-display text-[10px] text-ink-light hover:text-red"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="pt-1">
+        <div className="font-display text-xs text-ink">{relicTitle(relic)}</div>
+        <div className="flex items-center gap-1.5">
+          <span
+            className="inline-block h-2 w-2 border border-rule"
+            style={{ backgroundColor: relic.color }}
+          />
+          <span className="text-[13px] italic capitalize text-ink-light">{relic.kind}</span>
+        </div>
+      </div>
+
+      <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
+        <StatBar label="Sanctity" value={s.sanctity} />
+        <StatBar label="Spectacle" value={s.spectacle} />
+        <StatBar label="Doubt" value={s.doubt} />
+        <StatBar label="Renown" value={s.renown} />
+      </div>
+    </Panel>
+  )
+}
+
+/** The scene writes monk activities at frame rate; sample on the HUD's own schedule. */
+function useMonkActivity(monkId: number): MonkActivity | null {
+  const [activity, setActivity] = useState<MonkActivity | null>(null)
+  useEffect(() => {
+    const read = () => setActivity(monkRegistry.current?.get(monkId) ?? null)
+    read()
+    const timer = setInterval(read, 250)
+    return () => clearInterval(timer)
+  }, [monkId])
+  return activity
+}
+
+/** One of the brothers: name, office, and what he brought with him. */
+function MonkPanel({ monk }: { monk: Monk }) {
+  const a = monk.attributes
+  const activity = useMonkActivity(monk.id)
+  return (
+    <Panel>
+      <div className="flex items-baseline justify-between gap-4">
+        <Label>Brother</Label>
+        <button
+          type="button"
+          onClick={() => useCameraStore.getState().select(null)}
+          aria-label="Dismiss monk"
+          className="pointer-events-auto font-display text-[10px] text-ink-light hover:text-red"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="pt-1">
+        <div className="font-display text-xs text-ink">{monk.name}</div>
+        <div className="text-[13px] italic text-ink-light">
+          {monk.duty}, {a.age} years
+        </div>
+        {activity && (
+          <div className="text-[11px] italic text-gold">{MONK_ACTIVITY_LABELS[activity]}</div>
+        )}
+      </div>
+
+      <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
+        <StatBar label="Piety" value={a.piety} />
+      </div>
+
+      <div className="mt-2 border-t border-rule pt-2">
+        <div className="flex items-baseline justify-between gap-4">
+          <span className="text-[11px] italic text-ink-light">Skills</span>
+          <span className="max-w-32 text-right text-[11px] italic text-ink">
+            {a.skills.join(", ")}
+          </span>
+        </div>
+      </div>
+    </Panel>
+  )
+}
+
 export function GameHud({
   map,
   seed,
+  relic,
+  monks,
   travelers,
   settings,
   onSettingsChange,
@@ -337,6 +433,8 @@ export function GameHud({
 }: {
   map: GameMap | null
   seed: number | null
+  relic: Relic | null
+  monks: Monk[]
   travelers: Traveler[]
   settings: MapSettings
   onSettingsChange: (settings: MapSettings) => void
@@ -344,13 +442,14 @@ export function GameHud({
   onSeedChange: (seed: number) => void
 }) {
   const set = (patch: Partial<MapSettings>) => onSettingsChange({ ...settings, ...patch })
-  const selectedTravelerId = useCameraStore((s) => s.selectedTravelerId)
+  const selection = useCameraStore((s) => s.selection)
   const [menuOpen, setMenuOpen] = useState(false)
 
   const selectedTraveler =
-    selectedTravelerId === null
-      ? null
-      : (travelers.find((t) => t.id === selectedTravelerId) ?? null)
+    selection?.kind === "traveler" ? (travelers.find((t) => t.id === selection.id) ?? null) : null
+  const selectedMonk =
+    selection?.kind === "monk" ? (monks.find((m) => m.id === selection.id) ?? null) : null
+  const selectedRelic = selection?.kind === "relic"
 
   return (
     <>
@@ -419,6 +518,21 @@ export function GameHud({
         </Panel>
 
         <Panel>
+          <Label>Relic</Label>
+          {relic && (
+            <div className="pb-1 text-[11px] italic text-ink-light">{relicTitle(relic)}</div>
+          )}
+          <Tuner
+            label="Distance"
+            value={settings.relicDistance}
+            display={`${settings.relicDistance} tiles off road`}
+            min={6}
+            max={48}
+            onChange={(relicDistance) => set({ relicDistance })}
+          />
+        </Panel>
+
+        <Panel>
           <Label>Road</Label>
           <Tuner
             label="Traffic"
@@ -447,6 +561,16 @@ export function GameHud({
       {selectedTraveler && (
         <div className="absolute bottom-5 left-5 z-10">
           <TravelerPanel traveler={selectedTraveler} />
+        </div>
+      )}
+      {selectedMonk && (
+        <div className="absolute bottom-5 left-5 z-10">
+          <MonkPanel monk={selectedMonk} />
+        </div>
+      )}
+      {selectedRelic && relic && (
+        <div className="absolute bottom-5 left-5 z-10">
+          <RelicPanel relic={relic} />
         </div>
       )}
 

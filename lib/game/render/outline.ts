@@ -72,6 +72,20 @@ export function travelerObjectId(travelerIndex: number): number {
 }
 
 /**
+ * Residents (the monks) take a block below the travelers — 4096 IDs down,
+ * far more travelers than any road will carry.
+ */
+export function residentObjectId(residentIndex: number): number {
+  return MAX_OBJECT_ID - 0x1000 - residentIndex
+}
+
+/**
+ * The relic sits alone in the middle of the ID space, so it outlines against
+ * the shrine that houses it rather than merging into the walls.
+ */
+export const RELIC_OBJECT_ID = 0x8000
+
+/**
  * Outline thickness in CSS pixels. The edge pass samples neighbours at this
  * screen-space distance, so lines render at a constant display width at every
  * zoom level and DPR.

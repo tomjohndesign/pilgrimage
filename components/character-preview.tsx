@@ -4,7 +4,7 @@ import { Suspense } from "react"
 import { Canvas } from "@react-three/fiber"
 
 import { parseAsciiMap } from "@/lib/game/map/prototype-map"
-import { TERRAIN } from "@/lib/game/map/terrain"
+import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import {
   CAM_FAR,
   CAM_NEAR,
@@ -35,7 +35,7 @@ const PREVIEW_YAW = yawForView(0)
  * shown mid-sale, awning up, since that is when the cart is most recognisable.
  */
 export function CharacterPreview({ type }: { type: TravelerTypeDef }) {
-  const roadTop = TERRAIN.path.height
+  const roadTop = TILE_HEIGHT
   return (
     <Canvas
       orthographic
