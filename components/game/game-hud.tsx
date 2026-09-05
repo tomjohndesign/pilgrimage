@@ -480,7 +480,7 @@ export function GameHud({
             value={settings.size}
             display={`${settings.size} × ${settings.size}`}
             min={32}
-            max={128}
+            max={512}
             step={16}
             onChange={(size) => set({ size })}
           />
