@@ -12,6 +12,7 @@ import { generateRelic } from "@/lib/game/relic"
 import { generateTravelers } from "@/lib/game/travelers"
 import {
   DEFAULT_CLEARING_COUNT,
+  DEFAULT_DARK_FOREST_COUNT,
   DEFAULT_FOREST_COVERAGE,
   DEFAULT_GLADE_COUNT,
   DEFAULT_MAP_WIDTH,
@@ -47,6 +48,8 @@ export interface MapSettings {
   glades: number
   /** Number of small forest-floor clearings scattered through the woods. */
   clearings: number
+  /** How many dark forests stand in the road's way. */
+  darkForests: number
   /** How far off the road the relic's hovel is sited, in tiles. */
   relicDistance: number
   /** How many travelers walk the road — the traffic level. */
@@ -71,6 +74,7 @@ export const DEFAULT_SETTINGS: MapSettings = {
   coverage: Math.round(DEFAULT_FOREST_COVERAGE * 100),
   glades: DEFAULT_GLADE_COUNT,
   clearings: DEFAULT_CLEARING_COUNT,
+  darkForests: DEFAULT_DARK_FOREST_COUNT,
   relicDistance: DEFAULT_RELIC_DISTANCE,
   traffic: 12,
   walkSpeed: 1.5,
@@ -119,6 +123,7 @@ export function GameShell({
       forest: String(settings.coverage),
       glades: String(settings.glades),
       clearings: String(settings.clearings),
+      dark: String(settings.darkForests),
       relic: String(settings.relicDistance),
       traffic: String(settings.traffic),
       speed: String(settings.walkSpeed),
@@ -142,6 +147,7 @@ export function GameShell({
             forestCoverage: settings.coverage / 100,
             gladeCount: settings.glades,
             clearingCount: settings.clearings,
+            darkForestCount: settings.darkForests,
             relicDistance: settings.relicDistance,
             waterCoverage: settings.water / 100,
             riverCount: settings.rivers >= 0 ? settings.rivers : undefined,
@@ -154,6 +160,7 @@ export function GameShell({
       settings.coverage,
       settings.glades,
       settings.clearings,
+      settings.darkForests,
       settings.relicDistance,
       settings.water,
       settings.rivers,

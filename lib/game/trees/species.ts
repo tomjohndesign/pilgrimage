@@ -17,6 +17,11 @@
  * out, so the forest reads as birch groves, beech stands and pine patches with
  * mixing along their seams rather than as a uniform salt-and-pepper mix.
  *
+ * Each species also claims ground. A footprint is the radius around a trunk
+ * where no other trunk may stand, and a per-tile cap says how many of the
+ * species fit on one tile: an oak or beech has a tile to itself, while birch
+ * and hawthorn crowd two or three to a tile. See placement.ts for the rules.
+ *
  * Rendering cost is deliberately fixed and low. Every tree is a trunk plus a
  * handful of canopy shapes, each an instance of one tiny shared geometry, so
  * the whole forest is a few instanced draw calls regardless of tree count.
@@ -79,6 +84,14 @@ export interface TreeSpeciesDef {
     grouping: number
     /** Typical grove diameter, in tiles. */
     groveSize: number
+    /**
+     * The ground a tree claims: no other trunk may stand closer than this, in
+     * tiles. Between two neighbours the larger footprint wins, and it scales
+     * with the individual, so old growth holds more ground and rim trees less.
+     */
+    footprint: number
+    /** Most trees of this species one tile can hold: 1 for the big crowns, up to 3 for scrub. */
+    perTile: number
   }
 }
 
@@ -116,7 +129,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
       colorJitter: 0.17,
     },
     // The generalist: everywhere, and the one that fills the seams between groves.
-    habitat: { weight: 0.5, edgeBias: 0.1, grouping: 0.35, groveSize: 9 },
+    habitat: { weight: 0.5, edgeBias: 0.1, grouping: 0.35, groveSize: 9, footprint: 0.7, perTile: 1 },
   },
   beech: {
     id: "beech",
@@ -142,7 +155,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
       colorJitter: 0.14,
     },
     // Beech shades everything else out, so it forms big pure stands.
-    habitat: { weight: 0.8, edgeBias: -0.5, grouping: 0.75, groveSize: 12 },
+    habitat: { weight: 0.8, edgeBias: -0.5, grouping: 0.75, groveSize: 12, footprint: 0.7, perTile: 1 },
   },
   birch: {
     id: "birch",
@@ -168,7 +181,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
       colorJitter: 0.21,
     },
     // Birch seeds in drifts: small tight groves, rarely a lone tree.
-    habitat: { weight: 0.6, edgeBias: 0.8, grouping: 0.9, groveSize: 5 },
+    habitat: { weight: 0.6, edgeBias: 0.8, grouping: 0.9, groveSize: 5, footprint: 0.28, perTile: 3 },
   },
   scotsPine: {
     id: "scotsPine",
@@ -193,7 +206,8 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
       color: "#2f5030",
       colorJitter: 0.14,
     },
-    habitat: { weight: 0.25, edgeBias: -0.2, grouping: 0.8, groveSize: 8 },
+    // Tall and narrow: pines stand close, but not on top of each other.
+    habitat: { weight: 0.25, edgeBias: -0.2, grouping: 0.8, groveSize: 8, footprint: 0.4, perTile: 2 },
   },
   hawthorn: {
     id: "hawthorn",
@@ -219,7 +233,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
       colorJitter: 0.14,
     },
     // Scrub: strings along edges rather than forming stands.
-    habitat: { weight: 0.45, edgeBias: 0.9, grouping: 0.4, groveSize: 4 },
+    habitat: { weight: 0.45, edgeBias: 0.9, grouping: 0.4, groveSize: 4, footprint: 0.3, perTile: 3 },
   },
   holly: {
     id: "holly",
@@ -244,7 +258,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
       color: "#294a26",
       colorJitter: 0.1,
     },
-    habitat: { weight: 0.35, edgeBias: 0, grouping: 0.5, groveSize: 5 },
+    habitat: { weight: 0.35, edgeBias: 0, grouping: 0.5, groveSize: 5, footprint: 0.3, perTile: 2 },
   },
 }
 
