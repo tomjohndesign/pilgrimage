@@ -22,18 +22,61 @@ const MAP_EDGE_MAP = parseAsciiMap([
 ])
 
 /**
+ * For the road previews: the road runs past forest on one side and bare earth
+ * on the other, so every kind of surroundings-weathering shows — mossy under
+ * the trees, grass-fringed in the open, dusty by the dirt.
+ */
+const ROAD_MAP = parseAsciiMap([
+  ".FF...",
+  "FFF...",
+  "======",
+  "...,,.",
+  "..,,,.",
+  "......",
+])
+
+/**
+ * For the grass preview: open meadow with the trail crossing it, so the sward
+ * shows both on its own tiles and creeping back over the road.
+ */
+const GRASS_MAP = parseAsciiMap([
+  "......",
+  "......",
+  "===...",
+  "..====",
+  "......",
+  "......",
+])
+
+/**
  * How each `TexturePreviewKind` looks in game. Rendered with the same
  * components, lights, and camera maths as /play — this is the item itself,
  * not an approximation. Scenes are lifted so their visual centre sits at the
  * origin the iso camera studies.
  */
-function PreviewScene({ kind }: { kind: TextureEntry["preview"] }) {
-  switch (kind) {
+function PreviewScene({ entry }: { entry: TextureEntry }) {
+  switch (entry.preview) {
     case "map-edge":
       return (
         <group position={[0, 1.4, 0]}>
           <Suspense fallback={null}>
             <TerrainTiles map={MAP_EDGE_MAP} />
+          </Suspense>
+        </group>
+      )
+    case "road":
+      return (
+        <group position={[0, 1.4, 0]}>
+          <Suspense fallback={null}>
+            <TerrainTiles map={ROAD_MAP} roadTier={entry.roadTier} />
+          </Suspense>
+        </group>
+      )
+    case "grass":
+      return (
+        <group position={[0, 1.4, 0]}>
+          <Suspense fallback={null}>
+            <TerrainTiles map={GRASS_MAP} roadTier={0} />
           </Suspense>
         </group>
       )
@@ -43,7 +86,7 @@ function PreviewScene({ kind }: { kind: TextureEntry["preview"] }) {
 export function TexturePreview({ entry }: { entry: TextureEntry }) {
   return (
     <PreviewCanvas zoom={34}>
-      <PreviewScene kind={entry.preview} />
+      <PreviewScene entry={entry} />
     </PreviewCanvas>
   )
 }

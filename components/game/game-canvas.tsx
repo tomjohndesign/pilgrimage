@@ -29,6 +29,7 @@ export function GameCanvas({
   monks,
   travelers,
   walkSpeed,
+  roadTier,
   showGrid = false,
 }: {
   map: GameMap
@@ -36,6 +37,8 @@ export function GameCanvas({
   monks: Monk[]
   travelers: Traveler[]
   walkSpeed: number
+  /** Road development tier — index into ROAD_TIERS. */
+  roadTier?: number
   /** Draw the global tile lattice over the ground. Off by default. */
   showGrid?: boolean
 }) {
@@ -61,7 +64,7 @@ export function GameCanvas({
 
       {/* The terrain suspends while the dirt texture loads. */}
       <Suspense fallback={null}>
-        <TerrainTiles map={map} showGrid={showGrid} />
+        <TerrainTiles map={map} roadTier={roadTier} showGrid={showGrid} />
       </Suspense>
       <Trees map={map} />
       <Buildings map={map} />
