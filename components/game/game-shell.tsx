@@ -4,6 +4,7 @@ import dynamic from "next/dynamic"
 import { useEffect, useMemo, useState } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import { DEFAULT_ROAD_TIER } from "@/lib/game/map/road"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
@@ -56,6 +57,8 @@ export interface MapSettings {
   traffic: number
   /** Base walking speed in tiles per second. */
   walkSpeed: number
+  /** Road development tier — index into ROAD_TIERS. */
+  road: number
   /** Max % of the map under water (rivers, lakes, ponds). */
   water: number
   /** Forced counts for water bodies; −1 lets the seed roll them. */
@@ -76,6 +79,7 @@ export const DEFAULT_SETTINGS: MapSettings = {
   relicDistance: DEFAULT_RELIC_DISTANCE,
   traffic: 12,
   walkSpeed: 1.5,
+  road: DEFAULT_ROAD_TIER,
   water: Math.round(DEFAULT_WATER_COVERAGE * 100),
   rivers: WATER_COUNT_AUTO,
   lakes: WATER_COUNT_AUTO,
@@ -124,6 +128,7 @@ export function GameShell({
       relic: String(settings.relicDistance),
       traffic: String(settings.traffic),
       speed: String(settings.walkSpeed),
+      road: String(settings.road),
       water: String(settings.water),
       rivers: String(settings.rivers),
       lakes: String(settings.lakes),
@@ -205,6 +210,7 @@ export function GameShell({
           monks={monks}
           travelers={travelers}
           walkSpeed={settings.walkSpeed}
+          roadTier={settings.road}
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center">

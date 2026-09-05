@@ -35,6 +35,7 @@ export default async function PlayPage({
   const relicDistance = parseIntParam(params.relic)
   const traffic = parseIntParam(params.traffic)
   const walkSpeed = parseFloatParam(params.speed)
+  const road = parseIntParam(params.road)
   const water = parseIntParam(params.water)
   const rivers = parseIntParam(params.rivers)
   const lakes = parseIntParam(params.lakes)
@@ -47,6 +48,7 @@ export default async function PlayPage({
   if (relicDistance !== undefined) initialSettings.relicDistance = relicDistance
   if (traffic !== undefined) initialSettings.traffic = traffic
   if (walkSpeed !== undefined) initialSettings.walkSpeed = walkSpeed
+  if (road !== undefined) initialSettings.road = road
   if (water !== undefined) initialSettings.water = water
   if (rivers !== undefined) initialSettings.rivers = rivers
   if (lakes !== undefined) initialSettings.lakes = lakes

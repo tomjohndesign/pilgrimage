@@ -10,6 +10,7 @@ import {
   DANGER_THRESHOLDS,
   dangerLabel,
 } from "@/lib/game/map/danger"
+import { clampRoadTier, MAX_ROAD_TIER, ROAD_TIERS } from "@/lib/game/map/road"
 import { MIN_MAP_SIZE } from "@/lib/game/map/generate-map"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileAt, type GameMap } from "@/lib/game/map/types"
@@ -552,7 +553,7 @@ export function GameHud({
             value={settings.size}
             display={`${settings.size} × ${settings.size}`}
             min={MIN_MAP_SIZE}
-            max={256}
+            max={512}
             step={32}
             onChange={(size) => set({ size })}
           />
@@ -632,6 +633,15 @@ export function GameHud({
             onChange={(walkSpeed) => set({ walkSpeed })}
           />
           {map && <DangerForecast map={map} />}
+          {/* Stand-in for progression: the road builds up as the pilgrimage grows. */}
+          <Tuner
+            label="Development"
+            value={clampRoadTier(settings.road)}
+            display={ROAD_TIERS[clampRoadTier(settings.road)].label}
+            min={0}
+            max={MAX_ROAD_TIER}
+            onChange={(road) => set({ road })}
+          />
         </Panel>
 
         <Panel>
