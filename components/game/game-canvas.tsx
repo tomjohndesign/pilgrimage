@@ -34,6 +34,8 @@ export function GameCanvas({
   map,
   relic,
   monks,
+  blasterPastor = false,
+  lastMarch = false,
   travelers,
   walkSpeed,
   roadTier,
@@ -45,6 +47,8 @@ export function GameCanvas({
   map: GameMap
   relic: Relic
   monks: Monk[]
+  blasterPastor?: boolean
+  lastMarch?: boolean
   travelers: Traveler[]
   walkSpeed: number
   /** Road development tier — index into ROAD_TIERS. */
@@ -91,11 +95,11 @@ export function GameCanvas({
         />
       </Suspense>
       <Bridges map={map} roadTier={roadTier} />
-      <Trees map={map} placements={trees} />
+      <Trees map={map} placements={trees} ents={lastMarch} />
       <Environment map={map} />
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />
-      <Monks map={map} monks={monks} />
+      <Monks map={map} monks={monks} flying={blasterPastor} />
       <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} />
       <TileCursor map={map} />
 

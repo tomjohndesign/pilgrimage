@@ -10,8 +10,10 @@ import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import type { OutlineMode } from "@/lib/game/render/outline"
 import type { Traveler } from "@/lib/game/travelers"
 import { simRegistry, stepSim } from "@/lib/game/sim"
+import type { EntState } from "@/lib/game/trees/ents"
 
 import { outlineFrameRef } from "./outline-pass"
+import { ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
 
 /**
  * Exposes a small handle on `window` so the scene can be driven deterministically
@@ -38,6 +40,29 @@ export function DebugHandle({ map, travelers, speed }: { map: GameMap; travelers
       /** Live traveler sim state (stats, activities), for e2e assertions. */
       sim: () => (simRegistry.current ? [...simRegistry.current.travelers.values()] : []),
       time: () => simRegistry.current?.time ?? null,
+      /** Live Ent state for checking staggered walks and replanting. */
+      ents: () => {
+        const ents: EntState[] = []
+        scene.traverse((object) => {
+          if (object.name === "ent-legs") ents.push(...object.userData.ents)
+        })
+        return ents
+      },
+      /** Monk positions and equipped boosters, for cheat-code smoke tests. */
+      monks: () => {
+        const points: Array<{ x: number; y: number; z: number; flying: boolean; equipped: boolean }> = []
+        const position = new THREE.Vector3()
+        scene.traverse((object) => {
+          if (object.name !== "monk") return
+          object.getWorldPosition(position)
+          points.push({
+            x: position.x, y: position.y, z: position.z,
+            flying: !!object.parent?.getObjectByName(ROCKET_EXHAUST_NAME)?.visible,
+            equipped: !!object.parent?.getObjectByName("monk-rocket-gear"),
+          })
+        })
+        return points
+      },
       /** Advance bounded simulation ticks without waiting for the WebGL frame rate. */
       advance: (seconds: number) => {
         const sim = simRegistry.current
