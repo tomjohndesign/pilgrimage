@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "9d901ea2b61181fa4a82e09b1753a4686029db8c",
-  "releaseCount": 19,
+  "lastProcessedCommit": "498777ed82febcb43abed6f0a5f9df43d8b176d9",
+  "releaseCount": 20,
   "releases": [
+    {
+      "version": "0.0.34",
+      "title": "Release 0.0.34",
+      "summary": "Add constant-width diagonal paths and angled shorelines (#53)",
+      "commit": "498777ed82febcb43abed6f0a5f9df43d8b176d9"
+    },
     {
       "version": "0.0.33",
       "title": "Release 0.0.33",
