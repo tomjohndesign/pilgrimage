@@ -20,8 +20,31 @@ import { ISO_PITCH, screenBasis, yawForView } from "@/lib/game/render/iso"
  */
 
 /** CSS size of the widget; the backing store is 2× for crisp 1px-per-tile texels. */
-const DISPLAY_PX = 144
-const CANVAS_PX = DISPLAY_PX * 2
+const DISPLAY_WIDTH = 144
+const DISPLAY_HEIGHT = Math.ceil(DISPLAY_WIDTH * Math.sin(ISO_PITCH))
+const CANVAS_WIDTH = DISPLAY_WIDTH * 2
+const CANVAS_HEIGHT = DISPLAY_HEIGHT * 2
+const PADDING = 4
+
+/** Project world X/Z with the same orientation and pitch as the main camera. */
+function mapTransform(map: GameMap, viewIndex: number): DOMMatrix {
+  const b = screenBasis(yawForView(viewIndex))
+  const sinPitch = Math.sin(ISO_PITCH)
+  const width = Math.abs(b.rightX) * map.width + Math.abs(b.rightZ) * map.depth
+  const height = (Math.abs(b.fwdX) * map.width + Math.abs(b.fwdZ) * map.depth) * sinPitch
+  const scale = Math.min(
+    (CANVAS_WIDTH - PADDING * 2) / width,
+    (CANVAS_HEIGHT - PADDING * 2) / height,
+  )
+  return new DOMMatrix([
+    b.rightX * scale,
+    -b.fwdX * sinPitch * scale,
+    b.rightZ * scale,
+    -b.fwdZ * sinPitch * scale,
+    CANVAS_WIDTH / 2,
+    CANVAS_HEIGHT / 2,
+  ])
+}
 
 const VIEWPORT_STROKE = "#f2e8d5"
 
@@ -66,21 +89,38 @@ export function Minimap({ map }: { map: GameMap }) {
     // Built here, not in render: the HUD server-renders, and canvas needs DOM.
     const base = renderBase(map)
 
-    // World units per canvas pixel; maps are square but derive both anyway.
-    const scaleX = CANVAS_PX / map.width
-    const scaleZ = CANVAS_PX / map.depth
-    const toPxX = (wx: number) => (wx + map.width / 2) * scaleX
-    const toPxZ = (wz: number) => (wz + map.depth / 2) * scaleZ
-
     const draw = () => {
       const { targetX, targetZ, viewIndex, viewSize } = useCameraStore.getState()
+      const transform = mapTransform(map, viewIndex)
+      const project = (wx: number, wz: number) => transform.transformPoint({ x: wx, y: wz })
 
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
       ctx.imageSmoothingEnabled = false
-      ctx.drawImage(base, 0, 0, CANVAS_PX, CANVAS_PX)
+      ctx.save()
+      ctx.setTransform(transform)
+      ctx.drawImage(base, -map.width / 2, -map.depth / 2)
       for (const building of [...map.buildings, ...useBuildStore.getState().buildings]) {
         ctx.fillStyle = building.id === map.site?.hovelId ? "#e1c777" : "#d4975b"
-        ctx.fillRect(building.x * scaleX, building.z * scaleZ, building.w * scaleX, building.d * scaleZ)
+        ctx.fillRect(building.x - map.width / 2, building.z - map.depth / 2, building.w, building.d)
       }
+      ctx.restore()
+
+      // Keep the viewport outline inside the projected map's diamond.
+      ctx.save()
+      ctx.beginPath()
+      const edges = [
+        [-map.width / 2, -map.depth / 2],
+        [map.width / 2, -map.depth / 2],
+        [map.width / 2, map.depth / 2],
+        [-map.width / 2, map.depth / 2],
+      ]
+      edges.forEach(([wx, wz], i) => {
+        const point = project(wx, wz)
+        if (i === 0) ctx.moveTo(point.x, point.y)
+        else ctx.lineTo(point.x, point.y)
+      })
+      ctx.closePath()
+      ctx.clip()
 
       // The camera's ground footprint: a rectangle spanning the frustum, laid
       // on the ground along the screen axes — so it rotates with the view.
@@ -102,11 +142,13 @@ export function Minimap({ map }: { map: GameMap }) {
       corners.forEach(([sr, sf], i) => {
         const wx = targetX + b.rightX * halfR * sr + b.fwdX * halfF * sf
         const wz = targetZ + b.rightZ * halfR * sr + b.fwdZ * halfF * sf
-        if (i === 0) ctx.moveTo(toPxX(wx), toPxZ(wz))
-        else ctx.lineTo(toPxX(wx), toPxZ(wz))
+        const point = project(wx, wz)
+        if (i === 0) ctx.moveTo(point.x, point.y)
+        else ctx.lineTo(point.x, point.y)
       })
       ctx.closePath()
       ctx.stroke()
+      ctx.restore()
     }
 
     draw()
@@ -128,20 +170,33 @@ export function Minimap({ map }: { map: GameMap }) {
 
     let dragging = false
 
-    const travel = (event: PointerEvent) => {
+    const travel = (event: PointerEvent, clampToMap = false) => {
       const rect = canvas.getBoundingClientRect()
       const u = (event.clientX - rect.left) / rect.width
       const v = (event.clientY - rect.top) / rect.height
-      panTo(u * map.width - map.width / 2, v * map.depth - map.depth / 2)
+      const point = mapTransform(map, useCameraStore.getState().viewIndex)
+        .inverse()
+        .transformPoint({ x: u * CANVAS_WIDTH, y: v * CANVAS_HEIGHT })
+      const halfWidth = map.width / 2
+      const halfDepth = map.depth / 2
+      // Empty corners aren't map locations; dragging past an edge stays on it.
+      if (!clampToMap && (Math.abs(point.x) > halfWidth || Math.abs(point.y) > halfDepth)) {
+        return false
+      }
+      panTo(
+        Math.max(-halfWidth, Math.min(halfWidth, point.x)),
+        Math.max(-halfDepth, Math.min(halfDepth, point.y)),
+      )
+      return true
     }
 
     const onPointerDown = (event: PointerEvent) => {
+      if (!travel(event)) return
       dragging = true
       canvas.setPointerCapture(event.pointerId)
-      travel(event)
     }
     const onPointerMove = (event: PointerEvent) => {
-      if (dragging) travel(event)
+      if (dragging) travel(event, true)
     }
     const onPointerEnd = (event: PointerEvent) => {
       if (!dragging) return
@@ -164,10 +219,10 @@ export function Minimap({ map }: { map: GameMap }) {
   return (
     <canvas
       ref={canvasRef}
-      width={CANVAS_PX}
-      height={CANVAS_PX}
-      style={{ width: DISPLAY_PX, height: DISPLAY_PX, imageRendering: "pixelated" }}
-      className="pointer-events-auto cursor-crosshair border border-rule"
+      width={CANVAS_WIDTH}
+      height={CANVAS_HEIGHT}
+      style={{ width: DISPLAY_WIDTH, height: DISPLAY_HEIGHT, imageRendering: "pixelated" }}
+      className="pointer-events-auto touch-none cursor-crosshair"
       aria-label="Minimap"
     />
   )

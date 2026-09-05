@@ -100,8 +100,7 @@ export function placedObjectId(placedIndex: number): number {
 export const RELIC_OBJECT_ID = 0x800000
 
 /**
- * Outline thickness in CSS pixels. The edge pass samples neighbours at this
- * screen-space distance, so lines render at a constant display width at every
- * zoom level and DPR.
+ * Default road-edge thickness in CSS pixels. Object outlines use one rendered
+ * world texel in OutlinePass so they scale with the pixelated scene's zoom.
  */
 export const OUTLINE_THICKNESS_PX = 2

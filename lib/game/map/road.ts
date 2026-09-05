@@ -84,7 +84,10 @@ export const MAX_ROAD_TIER = ROAD_TIERS.length - 1
  * its own, but they are one continuous way to look at: the track wears the
  * same tier surface, and where the two meet no verge is eroded between them.
  */
-export function isRoadTerrain(terrain: TerrainId | null): boolean {
+type RoadTerrainId = Extract<TerrainId, "path" | "track">
+type RoadContinuationId = RoadTerrainId | "bridge" | null
+
+export function isRoadTerrain(terrain: TerrainId | null): terrain is RoadTerrainId {
   return terrain === "path" || terrain === "track"
 }
 
@@ -221,6 +224,14 @@ const EDGE_DIRS: ReadonlyArray<readonly [number, number]> = [
 ]
 
 /**
+ * True where the road carries on past this tile: more road, a bridge deck
+ * (the way runs straight over it), or the edge of the world.
+ */
+export function roadContinues(terrain: TerrainId | null): terrain is RoadContinuationId {
+  return terrain === null || isRoadTerrain(terrain) || terrain === "bridge"
+}
+
+/**
  * Edge data for the road tile at (x, z). See RoadEdge. What colour the land
  * behind each open side is belongs to the renderer, which knows how it would
  * have painted that land tile itself.
@@ -229,9 +240,7 @@ export function roadEdge(map: GameMap, x: number, z: number): RoadEdge {
   const open: SideFlags = [0, 0, 0, 0]
   for (let side = 0; side < 4; side++) {
     const [dx, dz] = EDGE_DIRS[side]
-    const neighbour = tileAt(map, x + dx, z + dz)
-    if (neighbour === null || isRoadTerrain(neighbour)) continue
-    open[side] = 1
+    if (!roadContinues(tileAt(map, x + dx, z + dz))) open[side] = 1
   }
   return { open }
 }

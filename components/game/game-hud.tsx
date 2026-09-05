@@ -23,7 +23,8 @@ import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, formatGameTime, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { MONK_ACTIVITY_LABELS, monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { relicTitle, type Relic } from "@/lib/game/relic"
-import type { Traveler } from "@/lib/game/travelers"
+import { DEFAULT_TRAFFIC, type Traveler } from "@/lib/game/travelers"
+import type { PixelationProps } from "@/components/pixel-canvas"
 
 import type { MapSettings } from "./game-shell"
 import { ResourceInspector } from "./resource-inspector"
@@ -122,6 +123,7 @@ function Tuner({
   min,
   max,
   step = 1,
+  showHandle = false,
   onChange,
 }: {
   label: string
@@ -130,6 +132,7 @@ function Tuner({
   min: number
   max: number
   step?: number
+  showHandle?: boolean
   onChange: (value: number) => void
 }) {
   const fraction = max > min ? (value - min) / (max - min) : 0
@@ -142,11 +145,11 @@ function Tuner({
           className="absolute inset-y-0 left-0 rounded-[6px] bg-gold"
           style={{ width: `${fraction * 100}%` }}
         />
-        {/* The handle is a notch in the panel's own parchment, shown only while the
-            row is hovered. It rides 6px inside the fill's leading edge, never touching
+        {/* The handle is a notch in the panel's own parchment, optionally always
+            visible. It rides inside the fill's leading edge, never touching
             the rim, and stops short of the value at the far end so the two never collide. */}
         <div
-          className="absolute top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-parchment opacity-0 group-hover:opacity-100"
+          className={`absolute top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-parchment ${showHandle ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
           style={{ left: `clamp(4px, calc(${fraction * 100}% - 8px), calc(100% - 32px))` }}
         />
         <span className="absolute right-1 top-1/2 -translate-y-1/2 font-display text-[11px] font-black text-ink-light">
@@ -160,7 +163,7 @@ function Tuner({
           value={value}
           aria-label={label}
           onChange={(event) => onChange(Number(event.target.value))}
-          className="pointer-events-auto absolute inset-0 h-full w-full cursor-ew-resize opacity-0"
+          className="pointer-events-auto absolute inset-0 h-full w-full touch-none cursor-ew-resize opacity-0"
         />
       </div>
     </div>
@@ -636,6 +639,8 @@ export function GameHud({
   relicTraffic,
   settings,
   onSettingsChange,
+  pixelation,
+  onPixelationChange,
   onReroll,
   onSeedChange,
 }: {
@@ -648,6 +653,8 @@ export function GameHud({
   relicTraffic: number
   settings: MapSettings
   onSettingsChange: (settings: MapSettings) => void
+  pixelation: Required<PixelationProps>
+  onPixelationChange: (patch: PixelationProps) => void
   onReroll: () => void
   onSeedChange: (seed: number) => void
 }) {
@@ -656,6 +663,7 @@ export function GameHud({
   const [menuOpen, setMenuOpen] = useState(false)
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     Seed: true,
+    Pixelation: true,
     Forest: true,
     Relic: true,
     Road: true,
@@ -728,6 +736,40 @@ export function GameHud({
 
         {map && <Section {...section("Settlement")}><SettlementPanel map={map} /></Section>}
 
+        <Section {...section("Pixelation")}>
+          <Chooser
+            label="Look"
+            value={pixelation.pixelated ? 1 : 0}
+            options={["Original", "Pixelated"]}
+            onChange={(value) => onPixelationChange({ pixelated: value === 1 })}
+          />
+          {pixelation.pixelated && (
+            <>
+              <Tuner
+                label="Detail"
+                value={pixelation.pixelsPerUnit}
+                display={String(pixelation.pixelsPerUnit)}
+                min={1}
+                max={64}
+                showHandle
+                onChange={(pixelsPerUnit) => onPixelationChange({ pixelsPerUnit })}
+              />
+              <p className="text-[11px] italic text-ink-light">Less detail makes larger pixels.</p>
+              <Tuner
+                label="Edges"
+                value={pixelation.outputDpr}
+                display={`${pixelation.outputDpr.toFixed(1)}×`}
+                min={0.5}
+                max={2}
+                step={0.5}
+                showHandle
+                onChange={(outputDpr) => onPixelationChange({ outputDpr })}
+              />
+              <p className="text-[11px] italic text-ink-light">Higher gives finer edges while zooming.</p>
+            </>
+          )}
+        </Section>
+
         <Section {...section("Forest")}>
           <Tuner
             label="Coverage"
@@ -786,13 +828,16 @@ export function GameHud({
 
         <Section {...section("Road")}>
           <Tuner
-            label="Traffic"
+            label="Traffic density"
             value={settings.traffic}
-            display={String(settings.traffic)}
+            display={`${Math.round((settings.traffic / DEFAULT_TRAFFIC) * 100)}%`}
             min={0}
             max={60}
             onChange={(traffic) => set({ traffic })}
           />
+          <p className="text-[11px] italic text-ink-light">
+            {travelers.length} folk across the map.
+          </p>
           <Tuner
             label="Pace"
             value={settings.walkSpeed}

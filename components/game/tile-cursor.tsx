@@ -3,7 +3,7 @@
 import { useBuildStore } from "@/lib/game/build-store"
 import { BUILDING_KINDS, placementProblem } from "@/lib/game/buildings"
 import { useCameraStore } from "@/lib/game/camera-store"
-import { TILE_HEIGHT } from "@/lib/game/map/terrain"
+import { surfaceHeight } from "@/lib/game/map/bridges"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 
 /**
@@ -26,7 +26,8 @@ export function TileCursor({ map }: { map: GameMap }) {
   const w = def?.w ?? 1
   const d = def?.d ?? 1
   const index = hovered.z * map.width + hovered.x
-  const y = TILE_HEIGHT
+  // On a bridge the highlight rides the deck, not the water under it.
+  const y = surfaceHeight(map, hovered.x, hovered.z)
   const flow = process.env.NODE_ENV !== "production" ? map.water?.flow[index] : undefined
 
   return (

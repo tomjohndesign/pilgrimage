@@ -10,7 +10,7 @@ import { loadSavedSeed } from "@/lib/game/seed-storage"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import { generateRelic, visitChance } from "@/lib/game/relic"
-import { DEFAULT_TRAFFIC, generateTravelers } from "@/lib/game/travelers"
+import { DEFAULT_TRAFFIC, generateTravelers, travelerCountForMap } from "@/lib/game/travelers"
 import {
   DEFAULT_CLEARING_COUNT,
   DEFAULT_DARK_FOREST_COUNT,
@@ -23,6 +23,7 @@ import {
 } from "@/lib/game/map/generate-map"
 
 import { GameHud } from "./game-hud"
+import type { PixelationProps } from "@/components/pixel-canvas"
 
 /**
  * WebGL has no meaningful server render, and three.js touches browser globals on
@@ -53,7 +54,7 @@ export interface MapSettings {
   darkForests: number
   /** How far off the road the relic's hovel is sited, in tiles. */
   relicDistance: number
-  /** How many travelers walk the road — the traffic level. */
+  /** Traffic density, in travelers per 128 × 128 tiles. */
   traffic: number
   /** Base walking speed in tiles per second. */
   walkSpeed: number
@@ -109,9 +110,12 @@ function randomSeed(): number {
 export function GameShell({
   initialSeed,
   initialSettings,
+  pixelation,
 }: {
   initialSeed?: number
   initialSettings?: Partial<MapSettings>
+  /** Tune the world pixel renderer without changing map or simulation settings. */
+  pixelation?: PixelationProps
 }) {
   // With no ?seed= in the URL the seed is chosen client-side in an effect, so
   // the server and client never render from different seeds.
@@ -120,6 +124,12 @@ export function GameShell({
     ...DEFAULT_SETTINGS,
     ...initialSettings,
   })
+  const [pixelationOverrides, setPixelationOverrides] = useState<PixelationProps>({})
+  const pixelationSettings = {
+    pixelsPerUnit: pixelationOverrides.pixelsPerUnit ?? pixelation?.pixelsPerUnit ?? 25,
+    outputDpr: pixelationOverrides.outputDpr ?? pixelation?.outputDpr ?? 0.5,
+    pixelated: pixelationOverrides.pixelated ?? pixelation?.pixelated ?? true,
+  }
 
   useEffect(() => {
     // A seed the player saved takes precedence over a random roll, but never
@@ -187,9 +197,10 @@ export function GameShell({
   )
 
   // Identities live outside the canvas so the HUD can name whoever is selected.
+  const travelerCount = map ? travelerCountForMap(map, settings.traffic) : 0
   const travelers = useMemo(
-    () => (seed === null ? [] : generateTravelers(seed, settings.traffic)),
-    [seed, settings.traffic],
+    () => (seed === null ? [] : generateTravelers(seed, travelerCount)),
+    [seed, travelerCount],
   )
 
   // The relic and the brothers who keep it, fixed per seed like the travelers.
@@ -236,6 +247,7 @@ export function GameShell({
     <div className="fixed inset-0 overflow-hidden bg-[#14100a] select-none">
       {map && relic ? (
         <GameCanvas
+          {...pixelationSettings}
           map={map}
           relic={relic}
           monks={monks}
@@ -261,6 +273,8 @@ export function GameShell({
         relicTraffic={relicTraffic}
         settings={settings}
         onSettingsChange={setSettings}
+        pixelation={pixelationSettings}
+        onPixelationChange={(patch) => setPixelationOverrides((current) => ({ ...current, ...patch }))}
         onReroll={() => setSeed(randomSeed())}
         onSeedChange={setSeed}
       />

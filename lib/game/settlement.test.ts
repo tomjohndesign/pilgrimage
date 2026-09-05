@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { BUILDING_KINDS, placementProblem, planBuilding } from "./buildings"
 import { useBuildStore } from "./build-store"
+import { BRIDGE_RISE } from "./map/bridges"
 import { generateMap } from "./map/generate-map"
 import { TILE_HEIGHT, type TerrainId } from "./map/terrain"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
@@ -266,5 +267,42 @@ describe("tree resources and timber storage", () => {
     expect(Array.from(piles.values()).filter((pile) => pile.campId === "camp-a")).toHaveLength(4)
     expect(Array.from(piles.values()).reduce((sum, pile) => sum + pile.wood, 0)).toBe(1007)
     expect(new Set(piles.keys()).size).toBe(piles.size)
+  })
+})
+
+describe("settlement route heights", () => {
+  it.each(["toRelic", "fromRelic", "toWork", "hauling"] as const)(
+    "follows bridge ramps while %s", (activity) => {
+      const { map, traveler } = fixture()
+      map.tiles[6 * map.width + 10] = "bridge"
+      const t = traveler(0)
+      const sim = createSim([t], map)
+      const s = sim.travelers.get(0)!
+      s.activity = activity
+      s.branchProgress = activity === "fromRelic" ? 2 : 1
+      s.workRoute = map.site!.branch
+      s.workProgress = 1
+      s.y = TILE_HEIGHT
+      stepSim(sim, [t], map, 1, 0.5)
+      expect(s.y).toBeCloseTo(TILE_HEIGHT + BRIDGE_RISE * 0.75)
+      expect(s.x).toBeCloseTo(tileToWorldX(map, 10))
+      expect(s.z).toBeCloseTo(tileToWorldZ(map, 5.5))
+    },
+  )
+
+  it.each(["grass", "bridge"] as const)("finishes a one-tile hauling route on %s", (terrain) => {
+    const { map, traveler } = fixture()
+    map.tiles[6 * map.width + 10] = terrain
+    const t = traveler(0)
+    const sim = createSim([t], map)
+    const s = sim.travelers.get(0)!
+    s.activity = "hauling"
+    s.workRoute = [{ x: 10, z: 6 }]
+    s.workProgress = 0
+    stepSim(sim, [t], map, 1, 0.5)
+    expect(s.activity).toBe("idle")
+    expect(s.x).toBe(tileToWorldX(map, 10))
+    expect(s.z).toBe(tileToWorldZ(map, 6))
+    expect(s.y).toBeCloseTo(TILE_HEIGHT + (terrain === "bridge" ? BRIDGE_RISE : 0))
   })
 })
