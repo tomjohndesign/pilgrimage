@@ -21,7 +21,6 @@ import {
 } from "@/lib/game/map/generate-map"
 
 import { GameHud } from "./game-hud"
-import { MusicPlayer } from "./music-player"
 
 /**
  * WebGL has no meaningful server render, and three.js touches browser globals on
@@ -223,7 +222,6 @@ export function GameShell({
         onReroll={() => setSeed(randomSeed())}
         onSeedChange={setSeed}
       />
-      <MusicPlayer />
     </div>
   )
 }

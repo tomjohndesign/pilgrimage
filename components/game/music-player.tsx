@@ -55,7 +55,11 @@ function saveMusicEnabled(enabled: boolean): void {
   window.localStorage.setItem(MUSIC_STORAGE_KEY, enabled ? "on" : "off")
 }
 
-export function MusicPlayer() {
+/**
+ * The toggle button takes its look from wherever it is mounted (the HUD header
+ * passes its ghost-button style); the hidden player host is fixed off-screen.
+ */
+export function MusicPlayer({ className = "" }: { className?: string }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<YouTubePlayer | null>(null)
   const [ready, setReady] = useState(false)
@@ -167,7 +171,7 @@ export function MusicPlayer() {
         type="button"
         onClick={toggle}
         aria-pressed={enabled}
-        className="pointer-events-auto absolute bottom-5 left-1/2 z-10 -translate-x-1/2 border border-rule bg-parchment/95 px-4 py-2 font-display text-[10px] uppercase tracking-[2px] text-ink shadow-[0_2px_16px_rgba(0,0,0,0.6)] transition-colors hover:border-gold hover:text-red"
+        className={className}
       >
         ♪ Music {enabled ? "On" : "Off"}
       </button>

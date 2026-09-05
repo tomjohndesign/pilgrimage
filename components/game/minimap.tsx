@@ -160,7 +160,7 @@ export function Minimap({ map }: { map: GameMap }) {
       width={CANVAS_PX}
       height={CANVAS_PX}
       style={{ width: DISPLAY_PX, height: DISPLAY_PX, imageRendering: "pixelated" }}
-      className="pointer-events-auto mt-1.5 cursor-crosshair border border-rule"
+      className="pointer-events-auto cursor-crosshair border border-rule"
       aria-label="Minimap"
     />
   )
