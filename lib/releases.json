@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "cfc695bf9cf32133ffaf6bc97a064ebab874accb",
-  "releaseCount": 15,
+  "lastProcessedCommit": "24f3921769828ec5da3975874edeb5c60385950f",
+  "releaseCount": 16,
   "releases": [
+    {
+      "version": "0.0.30",
+      "title": "Release 0.0.30",
+      "summary": "Round road bends and blend junction surfaces (#49)",
+      "commit": "24f3921769828ec5da3975874edeb5c60385950f"
+    },
     {
       "version": "0.0.29",
       "title": "Release 0.0.29",
