@@ -16,11 +16,17 @@ export type TerrainId =
   | "path"
   | "track"
   | "forest"
+  | "darkwood"
   | "clearing"
   | "hills"
   | "water"
   | "sand"
   | "bridge"
+
+/** Woods of either kind — what the forest-shade field and the tree line count. */
+export function isWoods(id: TerrainId): boolean {
+  return id === "forest" || id === "darkwood"
+}
 
 export interface TerrainDef {
   id: TerrainId
@@ -90,6 +96,18 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
     buildable: false,
     passable: false,
   },
+  // The old growth at the heart of a forest: denser, taller, darker — and
+  // where the dangerous things live. Impassable like forest; the main road
+  // routes around it, and only the tracks cut through.
+  darkwood: {
+    id: "darkwood",
+    label: "Dark forest",
+    color: "#2e3b22",
+    jitter: 0.14,
+    shadeBlend: 0.35,
+    buildable: false,
+    passable: false,
+  },
   clearing: {
     id: "clearing",
     label: "Forest clearing",
@@ -152,6 +170,7 @@ export const TERRAIN_CHARS: Record<string, TerrainId> = {
   "=": "path",
   "-": "track",
   F: "forest",
+  D: "darkwood",
   o: "clearing",
   "^": "hills",
   "~": "water",
