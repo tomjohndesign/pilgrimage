@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "b63b69b3d33eed2213df8e3318323fabd0cd1465",
-  "releaseCount": 5,
+  "lastProcessedCommit": "d57bb5a9c474286011252a34b2145f926bcee2ec",
+  "releaseCount": 6,
   "releases": [
+    {
+      "version": "0.0.20",
+      "title": "Release 0.0.20",
+      "summary": "Add clustered meadow vegetation and stone outcrops (#38)",
+      "commit": "d57bb5a9c474286011252a34b2145f926bcee2ec"
+    },
     {
       "version": "0.0.19",
       "title": "Release 0.0.19",
