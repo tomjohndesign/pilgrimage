@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "e6c93db8fc744b8de41dfdeb7f2a85e0fe9d6fa3",
-  "releaseCount": 11,
+  "lastProcessedCommit": "70a8990e5b59e75984ac52ebe1cf989f64414aa9",
+  "releaseCount": 12,
   "releases": [
+    {
+      "version": "0.0.26",
+      "title": "Release 0.0.26",
+      "summary": "fix(game): disable picture-in-picture for background music (#45)",
+      "commit": "70a8990e5b59e75984ac52ebe1cf989f64414aa9"
+    },
     {
       "version": "0.0.25",
       "title": "Release 0.0.25",
