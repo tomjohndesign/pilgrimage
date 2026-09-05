@@ -1,5 +1,5 @@
 import { makeRng } from "../rng"
-import { routeBlind, ROUTE_DIRS } from "./route"
+import { MinHeap, routeBlind, ROUTE_DIRS } from "./route"
 import { TERRAIN, type TerrainId } from "./terrain"
 import type { BuildingDef, FoundingSite, GameMap, TilePos } from "./types"
 import { generateWater, WATER_KIND_LAKE, WATER_KIND_RIVER } from "./water"
@@ -923,26 +923,22 @@ function routeOverLand(
   // Manhattan distance; admissible because every step costs at least 1.
   const h = (i: number) => Math.abs((i % width) - goal.x) + Math.abs(Math.floor(i / width) - goal.z)
 
-  const relax = (n: number, cost: number, from: number, open: number[]) => {
+  // Heap keyed on f = g + h; stale entries are skipped via the closed set.
+  const open = new MinHeap()
+  const relax = (n: number, cost: number, from: number) => {
     if (cost < g[n]) {
       g[n] = cost
       cameFrom[n] = from
-      open.push(n)
+      open.push(n, cost + h(n))
     }
   }
 
   g[startIndex] = 0
-  const open: number[] = [startIndex]
+  open.push(startIndex, h(startIndex))
   let reachedGoal = false
 
-  while (open.length > 0) {
-    let best = 0
-    for (let k = 1; k < open.length; k++) {
-      if (g[open[k]] + h(open[k]) < g[open[best]] + h(open[best])) best = k
-    }
-    const current = open[best]
-    open[best] = open[open.length - 1]
-    open.pop()
+  while (open.size > 0) {
+    const current = open.pop()
     if (closed[current]) continue
     closed[current] = 1
     if (current === goalIndex) {
@@ -959,7 +955,7 @@ function routeOverLand(
       const n = nz * width + nx
 
       if (pass[n] === 0) {
-        if (!closed[n]) relax(n, g[current] + 1 + wander[n], current, open)
+        if (!closed[n]) relax(n, g[current] + 1 + wander[n], current)
         continue
       }
       if (pass[n] === WATER_KIND_LAKE) continue
@@ -986,7 +982,7 @@ function routeOverLand(
         pz += dz
       }
       if (landing !== -1 && !closed[landing]) {
-        relax(landing, g[current] + span * BRIDGE_TILE_COST + 1 + wander[landing], current, open)
+        relax(landing, g[current] + span * BRIDGE_TILE_COST + 1 + wander[landing], current)
       }
     }
   }

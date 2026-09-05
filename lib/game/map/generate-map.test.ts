@@ -254,6 +254,15 @@ describe("generateMap", () => {
     expect(small.tiles).toHaveLength(128 * 128)
   }, SWEEP_TIMEOUT)
 
+  it("builds a 512 × 512 map, the largest the HUD offers, with its road and hovel intact", () => {
+    const map = generateMap({ seed: 99, width: 512, depth: 512 })
+    expect(map.tiles).toHaveLength(512 * 512)
+    expect(map.tiles.every((t) => t in TERRAIN)).toBe(true)
+    expect(map.buildings.map((b) => b.id)).toEqual([HOVEL_ID])
+    const road = reachablePath(map)
+    expect([...road].some((key) => key.startsWith(`${map.width - 1},`))).toBe(true)
+  }, SWEEP_TIMEOUT)
+
   it("connects the west edge to the east edge with an unbroken road, every seed", () => {
     for (const seed of SEEDS) {
       expect(roadReachesEast(mapFor(seed)), `seed ${seed} road reaches the east edge`).toBe(true)

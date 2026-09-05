@@ -482,7 +482,7 @@ export function GameHud({
             value={settings.size}
             display={`${settings.size} × ${settings.size}`}
             min={MIN_MAP_SIZE}
-            max={256}
+            max={512}
             step={32}
             onChange={(size) => set({ size })}
           />
