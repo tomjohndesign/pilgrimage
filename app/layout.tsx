@@ -15,6 +15,10 @@ const ebGaramond = EB_Garamond({
   display: 'swap',
 })
 
+// Site iconography (favicon, Apple/PWA icons, Open Graph card) is the "logo"
+// mark from Paper: a parchment Cinzel Black "P" on the forest green.
+// @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/G3-0
+//
 // Local dev tabs are named after the git branch (see next.config.mjs) so that
 // several workspaces running side by side stay tellable apart in the tab strip.
 const branch = process.env.NEXT_PUBLIC_GIT_BRANCH
@@ -29,18 +33,8 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
   icons: {
     icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
+      { url: '/favicon.ico', sizes: '48x48' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
     ],
     apple: '/apple-icon.png',
   },

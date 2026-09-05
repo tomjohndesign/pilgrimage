@@ -260,6 +260,9 @@ function PieceBatch({
   return (
     <instancedMesh
       ref={ref}
+      // The instances are scattered across the map; the mesh's own bounds
+      // (a unit box at the origin) would cull them all wrongly.
+      frustumCulled={false}
       args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, pieces.length]}
       {...(silhouette ? { "layers-mask": OUTLINE_ID_LAYER_MASK } : {})}
     >

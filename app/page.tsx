@@ -50,8 +50,27 @@ export default function LandingPage() {
         ))}
       </nav>
 
-      <footer className="mt-14 text-center font-display text-[10px] uppercase tracking-[3px] text-gold/60">
-        {CURRENT_VERSION}
+      <footer className="mt-14 flex flex-col items-center gap-3 text-center font-display text-[10px] uppercase tracking-[3px] text-gold/60">
+        <span>{CURRENT_VERSION}</span>
+        <a
+          href="https://github.com/tomjohndesign/pilgrimage"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="transition-colors hover:text-gold"
+        >
+          View the source on GitHub
+        </a>
+        <span>
+          Created by{" "}
+          <a
+            href="https://www.tomjohn.design"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-gold"
+          >
+            tomjohn
+          </a>
+        </span>
       </footer>
     </main>
   )

@@ -17,6 +17,7 @@ import { DebugHandle } from "./debug-handle"
 import { Monks } from "./monks"
 import { OutlinePass } from "./outline-pass"
 import { Shrine } from "./shrine"
+import type { RoadLook } from "@/lib/game/map/road"
 import { TerrainTiles } from "./terrain-tiles"
 import { TileCursor } from "./tile-cursor"
 import { Travelers } from "./travelers"
@@ -31,6 +32,8 @@ export function GameCanvas({
   travelers,
   walkSpeed,
   roadTier,
+  relicTraffic,
+  roadLook,
   showGrid = false,
 }: {
   map: GameMap
@@ -40,6 +43,10 @@ export function GameCanvas({
   walkSpeed: number
   /** Road development tier — index into ROAD_TIERS. */
   roadTier?: number
+  /** How many of the travelers turn aside for the relic; wears its track. */
+  relicTraffic?: number
+  /** Tunable look of the road surface. */
+  roadLook?: RoadLook
   /** Draw the global tile lattice over the ground. Off by default. */
   showGrid?: boolean
 }) {
@@ -65,7 +72,14 @@ export function GameCanvas({
 
       {/* The terrain suspends while the dirt texture loads. */}
       <Suspense fallback={null}>
-        <TerrainTiles map={map} roadTier={roadTier} showGrid={showGrid} />
+        <TerrainTiles
+          map={map}
+          roadTier={roadTier}
+          traffic={travelers.length}
+          relicTraffic={relicTraffic}
+          look={roadLook}
+          showGrid={showGrid}
+        />
       </Suspense>
       <Bridges map={map} roadTier={roadTier} />
       <Trees map={map} />

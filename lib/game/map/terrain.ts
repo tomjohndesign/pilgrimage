@@ -75,8 +75,9 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
     buildable: false,
     passable: true,
   },
-  // The branch off the road to the relic: a beaten track, not engineered road.
-  // Its own terrain so the main road stays identifiable (and stable) on its own.
+  // The branch off the road to the relic. Its own terrain so the main road
+  // stays identifiable (and stable) on its own, but it is drawn as road: the
+  // same tier surface, continuous with the road where they meet.
   track: {
     id: "track",
     label: "Track",
