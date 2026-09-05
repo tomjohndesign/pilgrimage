@@ -1,7 +1,25 @@
 {
-  "lastProcessedCommit": "64b0397b4049906f46f140bd47fd9c7a9127e111",
-  "releaseCount": 0,
+  "lastProcessedCommit": "750dbdfcf9f866b6192386eabfc158ad67a2fedb",
+  "releaseCount": 3,
   "releases": [
+    {
+      "version": "0.0.17",
+      "title": "Release 0.0.17",
+      "summary": "ci: automate post-merge releases and batch documentation reviews (#36)",
+      "commit": "750dbdfcf9f866b6192386eabfc158ad67a2fedb"
+    },
+    {
+      "version": "0.0.16",
+      "title": "Release 0.0.16",
+      "summary": "Fix grassy paths and bridge continuity across small islands (#35)",
+      "commit": "82513fe2ec29446955745f0f2b7a23ce42709b70"
+    },
+    {
+      "version": "0.0.15",
+      "title": "Release 0.0.15",
+      "summary": "Match minimap to the isometric map orientation (#34)",
+      "commit": "bde418c23dfcfe4f70b779c9367bf05c63229e5d"
+    },
     {
       "version": "0.0.14",
       "title": "Winding Waters",
@@ -10,12 +28,12 @@
     {
       "version": "0.0.13",
       "title": "Room for Every Tree",
-      "summary": "Large maps no longer crash on load. Every tree carries its own outline ID, and the biggest worlds grew more trees than the old 16-bit ID space could name; IDs are now 24-bit, with room for every tree a 512 \u00d7 512 map can hold."
+      "summary": "Large maps no longer crash on load. Every tree carries its own outline ID, and the biggest worlds grew more trees than the old 16-bit ID space could name; IDs are now 24-bit, with room for every tree a 512 × 512 map can hold."
     },
     {
       "version": "0.0.12",
       "title": "Wider Horizons",
-      "summary": "The map size slider now climbs to 512 \u00d7 512 tiles, twice the old limit on a side, so a world can hold room for rivers, roads, and settlements far beyond the first glade. Road and river routing got a proper priority queue, so even the largest worlds generate in a couple of seconds."
+      "summary": "The map size slider now climbs to 512 × 512 tiles, twice the old limit on a side, so a world can hold room for rivers, roads, and settlements far beyond the first glade. Road and river routing got a proper priority queue, so even the largest worlds generate in a couple of seconds."
     },
     {
       "version": "0.0.11",
@@ -65,7 +83,7 @@
     {
       "version": "0.0.2",
       "title": "First Steps on the Map",
-      "summary": "An isometric camera and map prototype opened at /play \u2014 pan, zoom, and rotate across the first tiles of the world."
+      "summary": "An isometric camera and map prototype opened at /play — pan, zoom, and rotate across the first tiles of the world."
     },
     {
       "version": "0.0.1",
