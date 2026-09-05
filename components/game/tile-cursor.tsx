@@ -1,11 +1,7 @@
 "use client"
 
 import { useCameraStore } from "@/lib/game/camera-store"
-import {
-  MAX_WATER_DEPTH,
-  TERRAIN,
-  WATER_DEPTH_HEIGHTS,
-} from "@/lib/game/map/terrain"
+import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 
 /**
@@ -19,16 +15,10 @@ export function TileCursor({ map }: { map: GameMap }) {
   const hovered = useCameraStore((s) => s.hovered)
   if (!hovered) return null
 
-  const terrain = tileAt(map, hovered.x, hovered.z)
-  if (!terrain) return null
+  if (!tileAt(map, hovered.x, hovered.z)) return null
 
   const index = hovered.z * map.width + hovered.x
-  let y = TERRAIN[terrain].height
-  if (terrain === "water") {
-    const waterDepth = Math.min(MAX_WATER_DEPTH, Math.max(1, map.water?.depth[index] ?? 1))
-    y = WATER_DEPTH_HEIGHTS[waterDepth - 1]
-  }
-
+  const y = TILE_HEIGHT
   const flow = process.env.NODE_ENV !== "production" ? map.water?.flow[index] : undefined
 
   return (

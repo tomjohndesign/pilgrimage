@@ -7,7 +7,7 @@ import { tileAt, type GameMap } from "./types"
 /** Enough seeds to catch structural bugs, few enough to stay fast. */
 const SEEDS = Array.from({ length: 40 }, (_, i) => i * 7919 + 1)
 
-/** Maps are ~50ms each at the 128×128 floor, so suite-wide loops share them. */
+/** Maps take real time at the 128×128 floor, so suite-wide loops share them. */
 const SWEEP_TIMEOUT = 30_000
 
 /** Default-options maps, shared across tests — nothing mutates them. */
@@ -34,6 +34,23 @@ function lakeMapFor(seed: number): GameMap {
 
 function countTerrain(map: GameMap, id: string): number {
   return map.tiles.filter((t) => t === id).length
+}
+
+/** True for tiles that carry water — bridges keep the water beneath them. */
+function carriesWater(map: GameMap, x: number, z: number): boolean {
+  const t = tileAt(map, x, z)
+  return t === "water" || t === "bridge"
+}
+
+/** Tiles that aren't open water — the denominator for land-share thresholds. */
+function landTiles(map: GameMap): number {
+  let land = 0
+  for (let z = 0; z < map.depth; z++) {
+    for (let x = 0; x < map.width; x++) {
+      if (!carriesWater(map, x, z)) land++
+    }
+  }
+  return land
 }
 
 /** All road tiles (path or bridge) reachable from the west edge, 4-connected. */
@@ -63,12 +80,6 @@ function roadReachesEast(map: GameMap): boolean {
     if (reached.has(`${map.width - 1},${z}`)) return true
   }
   return false
-}
-
-/** True for tiles that carry water — bridges keep the water beneath them. */
-function carriesWater(map: GameMap, x: number, z: number): boolean {
-  const t = tileAt(map, x, z)
-  return t === "water" || t === "bridge"
 }
 
 /** 4-connected components of water-carrying tiles, as index lists. */
@@ -106,6 +117,7 @@ describe("generateMap", () => {
     const b = generateMap({ seed: 12345 })
     expect(a.tiles).toEqual(b.tiles)
     expect(a.water).toEqual(b.water)
+    expect(a.road).toEqual(b.road)
     expect(a.seed).toBe(12345)
   })
 
@@ -139,13 +151,38 @@ describe("generateMap", () => {
     }
   }, SWEEP_TIMEOUT)
 
-  it("grows forests in clusters rather than scattering lone trees", () => {
+  it("returns the road as an unbroken ordered walk, west edge to east edge", () => {
+    for (const seed of SEEDS) {
+      const map = mapFor(seed)
+      const road = map.road!
+      expect(road.length, `seed ${seed} has a route`).toBeGreaterThan(0)
+      expect(road[0].x, `seed ${seed} starts on the west edge`).toBe(0)
+      expect(road[road.length - 1].x, `seed ${seed} ends on the east edge`).toBe(map.width - 1)
+
+      for (let i = 0; i < road.length; i++) {
+        // River crossings ride on bridge tiles; everything else is path.
+        expect(
+          ["path", "bridge"],
+          `seed ${seed} route is on road`,
+        ).toContain(tileAt(map, road[i].x, road[i].z))
+        if (i > 0) {
+          const step =
+            Math.abs(road[i].x - road[i - 1].x) + Math.abs(road[i].z - road[i - 1].z)
+          expect(step, `seed ${seed} step ${i} is to a neighbour`).toBe(1)
+        }
+      }
+    }
+  }, SWEEP_TIMEOUT)
+
+  it("is densely forested by default, in one connected mass rather than islands", () => {
     for (const seed of SEEDS) {
       const map = mapFor(seed)
       const forest = countTerrain(map, "forest")
-      expect(forest, `seed ${seed} grew forests`).toBeGreaterThanOrEqual(30)
+      // Forest dominance is measured against dry land — water legitimately
+      // takes its own share of the map.
+      expect(forest / landTiles(map), `seed ${seed} is mostly forest`).toBeGreaterThan(0.5)
 
-      // Compactness: in a blob, most forest tiles touch other forest tiles.
+      // Compactness: in dense woods, most forest tiles touch other forest tiles.
       let neighbourSum = 0
       for (let z = 0; z < map.depth; z++) {
         for (let x = 0; x < map.width; x++) {
@@ -155,54 +192,95 @@ describe("generateMap", () => {
           }
         }
       }
-      expect(neighbourSum / forest, `seed ${seed} forests are clustered`).toBeGreaterThan(1.5)
+      expect(neighbourSum / forest, `seed ${seed} forest is compact`).toBeGreaterThan(2.5)
     }
   }, SWEEP_TIMEOUT)
 
-  it("threads the road through the woods, never blocked by them", () => {
+  it("carves open grass glades out of the woods", () => {
     for (const seed of SEEDS) {
       const map = mapFor(seed)
-      let pathBesideForest = 0
-      for (let z = 0; z < map.depth; z++) {
-        for (let x = 0; x < map.width; x++) {
-          if (tileAt(map, x, z) !== "path") continue
-          for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-            if (tileAt(map, x + dx, z + dz) === "forest") pathBesideForest++
+      const grass = countTerrain(map, "grass")
+      const land = landTiles(map)
+      expect(grass / land, `seed ${seed} has glades`).toBeGreaterThan(0.15)
+      expect(grass / land, `seed ${seed} stays forest-dominant`).toBeLessThan(0.5)
+    }
+  }, SWEEP_TIMEOUT)
+
+  it("threads the woods with clearings and trails", () => {
+    for (const seed of SEEDS) {
+      const map = mapFor(seed)
+      const clearing = countTerrain(map, "clearing")
+      expect(clearing, `seed ${seed} has forest-floor passage`).toBeGreaterThan(20)
+    }
+  }, SWEEP_TIMEOUT)
+
+  it("keeps every passable tile reachable from every other, every seed", () => {
+    for (const seed of SEEDS) {
+      const map = mapFor(seed)
+      const passable = map.tiles.filter((t) => TERRAIN[t].passable).length
+
+      // Flood-fill from any passable tile; it must reach all passable land.
+      const seen = new Uint8Array(map.tiles.length)
+      const start = map.tiles.findIndex((t) => TERRAIN[t].passable)
+      const queue = [start]
+      seen[start] = 1
+      let reached = 0
+      while (queue.length) {
+        const i = queue.pop()!
+        reached++
+        const x = i % map.width
+        const z = Math.floor(i / map.width)
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const terrain = tileAt(map, x + dx, z + dz)
+          if (terrain === null || !TERRAIN[terrain].passable) continue
+          const n = (z + dz) * map.width + (x + dx)
+          if (!seen[n]) {
+            seen[n] = 1
+            queue.push(n)
           }
         }
       }
-      // The waypoint routing sends the road through cluster interiors, so
-      // carved road with trees alongside must exist on every seed.
-      expect(pathBesideForest, `seed ${seed} road passes through forest`).toBeGreaterThan(0)
+      expect(reached, `seed ${seed} passable land is one region`).toBe(passable)
     }
   }, SWEEP_TIMEOUT)
 
-  it("leaves a generous share of buildable land at default coverage", () => {
+  it("leaves buildable land for settling at default coverage", () => {
     for (const seed of SEEDS) {
       const map = mapFor(seed)
       const buildable = map.tiles.filter((t) => TERRAIN[t].buildable).length
-      expect(buildable / map.tiles.length, `seed ${seed} is buildable`).toBeGreaterThan(0.5)
+      expect(buildable / map.tiles.length, `seed ${seed} is settleable`).toBeGreaterThan(0.15)
     }
   }, SWEEP_TIMEOUT)
 
   it("scales forest area with the coverage knob", () => {
     for (const seed of SEEDS.slice(0, 10)) {
-      const sparse = generateMap({ seed, forestCoverage: 0.12 })
-      const dense = generateMap({ seed, forestCoverage: 0.45 })
-      const fraction = (m: GameMap) => countTerrain(m, "forest") / m.tiles.length
+      const sparse = generateMap({ seed, forestCoverage: 0.45 })
+      const dense = generateMap({ seed, forestCoverage: 0.85 })
+      const fraction = (m: GameMap) => countTerrain(m, "forest") / landTiles(m)
       expect(fraction(dense), `seed ${seed} dense > sparse`).toBeGreaterThan(fraction(sparse))
-      expect(fraction(dense), `seed ${seed} dense is dense`).toBeGreaterThan(0.3)
-      expect(fraction(sparse), `seed ${seed} sparse is sparse`).toBeLessThan(0.25)
+      expect(fraction(dense), `seed ${seed} dense is dense`).toBeGreaterThan(0.6)
+      expect(fraction(sparse), `seed ${seed} sparse is sparse`).toBeLessThan(0.5)
     }
   }, SWEEP_TIMEOUT)
 
-  it("scatters small groves when asked, even with zero cluster coverage", () => {
+  it("scatters more clearings when asked", () => {
     for (const seed of SEEDS.slice(0, 10)) {
-      const map = generateMap({ seed, forestCoverage: 0, groveCount: 10 })
-      const forest = countTerrain(map, "forest")
-      // 10 groves of 2–5 tiles, minus path carving and blob overlap.
-      expect(forest, `seed ${seed} has grove trees`).toBeGreaterThanOrEqual(8)
-      expect(forest, `seed ${seed} groves stay small`).toBeLessThanOrEqual(50)
+      const few = generateMap({ seed, clearingCount: 0 })
+      const many = generateMap({ seed, clearingCount: 25 })
+      expect(
+        countTerrain(many, "clearing"),
+        `seed ${seed} clearings scale`,
+      ).toBeGreaterThan(countTerrain(few, "clearing"))
+    }
+  }, SWEEP_TIMEOUT)
+
+  it("keeps the road identical when only forest knobs change", () => {
+    for (const seed of SEEDS.slice(0, 10)) {
+      // The road runs on its own RNG stream with no forest waypoints, so no
+      // forest knob may disturb it.
+      const a = generateMap({ seed, forestCoverage: 0.5, gladeCount: 3, clearingCount: 0 })
+      const b = generateMap({ seed, forestCoverage: 0.85, gladeCount: 8, clearingCount: 20 })
+      expect(b.road, `seed ${seed} road is stable`).toEqual(a.road)
     }
   }, SWEEP_TIMEOUT)
 
@@ -354,7 +432,7 @@ describe("generateMap", () => {
       lakeSeeds++
       expect(countTerrain(map, "sand"), `seed ${seed} lake has a beach`).toBeGreaterThan(0)
       // Every remaining sand tile sits within the two-ring beach band of some
-      // water (the road may pave parts of the band over).
+      // water (the road may pave parts over, the repair pass may reforest).
       let strandedSand = 0
       for (let z = 0; z < map.depth; z++) {
         for (let x = 0; x < map.width; x++) {
@@ -412,18 +490,6 @@ describe("generateMap", () => {
     for (const seed of SEEDS.slice(0, 15)) {
       const map = generateMap({ seed, riverCount: 2 })
       expect(roadReachesEast(map), `seed ${seed} road crosses the rivers`).toBe(true)
-    }
-  }, SWEEP_TIMEOUT)
-
-  it("keeps the road identical when only forest knobs change", () => {
-    for (const seed of SEEDS.slice(0, 10)) {
-      // With no clusters there are no waypoints, so the road depends only on
-      // its own RNG stream — forest knobs must not disturb it.
-      const bare = generateMap({ seed, forestCoverage: 0, groveCount: 0 })
-      const grovey = generateMap({ seed, forestCoverage: 0, groveCount: 15 })
-      const roadOf = (m: GameMap) =>
-        m.tiles.map((t, i) => (t === "path" ? i : -1)).filter((i) => i >= 0)
-      expect(roadOf(grovey), `seed ${seed} road is stable`).toEqual(roadOf(bare))
     }
   }, SWEEP_TIMEOUT)
 })

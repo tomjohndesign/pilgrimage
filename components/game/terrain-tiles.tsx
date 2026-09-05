@@ -1,15 +1,16 @@
 "use client"
 
-import { useLayoutEffect, useMemo, useRef } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
+import { computeForestShade } from "@/lib/game/map/forest-field"
 import {
   MAX_WATER_DEPTH,
   TERRAIN,
+  TILE_HEIGHT,
   WATER_DEPTH_COLORS,
-  WATER_DEPTH_HEIGHTS,
 } from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
@@ -30,53 +31,69 @@ const SLAB_EXPAND = 0.1
 const DIRT_TEXTURE_URL = "/textures/dirt-side.png"
 
 /**
- * Tiles are a hair under 1 unit so neighbouring boxes of different heights
- * never share a face plane (coplanar faces shimmer). The 0.002 seam is well
- * under a pixel at every zoom, and the grid line sits on top of it anyway.
- */
-const TILE_EPS = 0.998
-
-/**
- * Grid lines are drawn in the tile shader, not as gaps between tiles. Each tile
- * darkens a band this wide (in world units) along the edges of its top face;
- * two adjacent tiles together produce one line centred on the shared boundary.
+ * The optional grid is one global lattice projected onto the terrain, not a
+ * border on each tile. The shader darkens a band this wide (in world units) on
+ * either side of every integer world-space line on the tiles' top faces, so
+ * the lines run continuously across the map and never depend on the
+ * individual boxes under them.
  */
 const GRID_HALF_WIDTH = 0.025
 /** How much a grid line darkens the tile colour underneath it. */
 const GRID_DARKEN = 0.8
 
+/**
+ * Anchor tints for the forest-shade gradient. Every tile's colour is pulled
+ * (by its terrain's `shadeBlend`) toward a point on the ramp between these two,
+ * chosen by how deep in the woods it sits — so the ground darkens under the
+ * forest cluster and brightens continuously toward open meadow, instead of
+ * snapping between two flat greens at the tree line.
+ */
+const DEEP_WOOD_TINT = new THREE.Color("#36452a")
+const OPEN_MEADOW_TINT = new THREE.Color("#94a158")
+
 
 /**
- * A Lambert material with the grid overlay injected. The unit box's UVs span
- * 0–1 per face and instances never rotate, so `uv` measures across the tile and
- * `normal.y` picks out the top face. fwidth-based smoothing keeps the lines
- * from shimmering at far zooms.
+ * A Lambert material with the global grid overlay injected. The line position
+ * comes from world-space XZ, not from each box's UVs, so the overlay is one
+ * continuous lattice over the whole map rather than a border drawn per tile.
+ * Tile boundaries sit at `k - width/2` in world units, so `origin` shifts the
+ * lattice to land on them for any map size. `normal.y` picks out the top
+ * face. fwidth-based smoothing keeps the lines from shimmering at far zooms.
  */
-function makeGridMaterial(): THREE.MeshLambertMaterial {
+function makeGridMaterial(origin: { x: number; z: number }): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial()
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
-        "varying vec2 vGridUv;\nvarying float vGridTop;\n#include <common>",
+        "varying vec2 vGridWorld;\nvarying float vGridTop;\n#include <common>",
       )
       .replace(
-        "#include <uv_vertex>",
-        "#include <uv_vertex>\nvGridUv = uv;\nvGridTop = step(0.5, normal.y);",
+        "#include <project_vertex>",
+        `#include <project_vertex>
+        {
+          vec4 gridPos = vec4(transformed, 1.0);
+          #ifdef USE_INSTANCING
+            gridPos = instanceMatrix * gridPos;
+          #endif
+          gridPos = modelMatrix * gridPos;
+          vGridWorld = gridPos.xz;
+          vGridTop = step(0.5, normal.y);
+        }`,
       )
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "varying vec2 vGridUv;\nvarying float vGridTop;\n#include <common>",
+        "varying vec2 vGridWorld;\nvarying float vGridTop;\n#include <common>",
       )
       .replace(
         "#include <color_fragment>",
         `#include <color_fragment>
         {
-          float gridDist = min(
-            min(vGridUv.x, 1.0 - vGridUv.x),
-            min(vGridUv.y, 1.0 - vGridUv.y)
-          );
+          // Distance to the nearest lattice line along each axis.
+          vec2 cell = fract(vGridWorld + vec2(${origin.x.toFixed(3)}, ${origin.z.toFixed(3)}));
+          vec2 axisDist = 0.5 - abs(cell - 0.5);
+          float gridDist = min(axisDist.x, axisDist.y);
           float aa = fwidth(gridDist);
           float line = (1.0 - smoothstep(${GRID_HALF_WIDTH} - aa, ${GRID_HALF_WIDTH} + aa, gridDist)) * vGridTop;
           diffuseColor.rgb *= mix(1.0, ${GRID_DARKEN}, line);
@@ -108,12 +125,29 @@ function waterDistance(map: GameMap, x: number, z: number): number {
   return 3
 }
 
-export function TerrainTiles({ map }: { map: GameMap }) {
+export function TerrainTiles({
+  map,
+  showGrid = false,
+}: {
+  map: GameMap
+  /** Draw the global tile lattice over the ground. Off by default. */
+  showGrid?: boolean
+}) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
   const idMeshRef = useRef<THREE.InstancedMesh>(null)
   const count = map.width * map.depth
 
-  const gridMaterial = useMemo(makeGridMaterial, [])
+  // Tile boundaries sit at integer offsets from -width/2, so the lattice
+  // origin is that half-extent modulo one tile. Without the grid the ground
+  // is a plain Lambert surface — no overlay, no per-tile edge of any kind.
+  const groundMaterial = useMemo(
+    () =>
+      showGrid
+        ? makeGridMaterial({ x: (map.width / 2) % 1, z: (map.depth / 2) % 1 })
+        : new THREE.MeshLambertMaterial(),
+    [showGrid, map.width, map.depth],
+  )
+  useEffect(() => () => groundMaterial.dispose(), [groundMaterial])
 
   useLayoutEffect(() => {
     const mesh = meshRef.current
@@ -125,48 +159,49 @@ export function TerrainTiles({ map }: { map: GameMap }) {
     const quaternion = new THREE.Quaternion()
     const scale = new THREE.Vector3()
     const color = new THREE.Color()
+    const tint = new THREE.Color()
     const grassColor = new THREE.Color(TERRAIN.grass.color)
     const sandColor = new THREE.Color(TERRAIN.sand.color)
+    const waterColors = WATER_DEPTH_COLORS.map((c) => new THREE.Color(c))
     // Colour grain is a function of the map's own seed, one stream per consumer.
     const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.tileJitter))
+    const shade = computeForestShade(map)
 
     for (let z = 0; z < map.depth; z++) {
       for (let x = 0; x < map.width; x++) {
         const index = z * map.width + x
         const def = TERRAIN[map.tiles[index]]
 
-        // Water renders by depth — shallow shoreline water is light and sits
-        // higher, deep water is dark and lower. Hand-authored maps carry no
-        // depth data and render as uniformly shallow.
-        let height = def.height
-        let baseColor = def.color
-        if (def.id === "water") {
-          const waterDepth = Math.min(
-            MAX_WATER_DEPTH,
-            Math.max(1, map.water?.depth[index] ?? 1),
-          )
-          height = WATER_DEPTH_HEIGHTS[waterDepth - 1]
-          baseColor = WATER_DEPTH_COLORS[waterDepth - 1]
-        }
-
-        // Box base sits at y=0 and the top at the terrain height, so tiles sink
-        // into the slab and never show a gap from a low camera angle. Full-size
-        // footprints — the grid comes from the shader overlay, not from gaps.
-        position.set(tileToWorldX(map, x), height / 2, tileToWorldZ(map, z))
-        scale.set(TILE_EPS, height, TILE_EPS)
+        // Box base sits at y=0 and the top at the shared tile height, so tiles
+        // sink into the slab and never show a gap from a low camera angle.
+        // Full-size footprints: every top face is coplanar with its
+        // neighbours, so the ground reads as one continuous surface with no
+        // seams or steps; the only visible edge is the optional grid overlay.
+        position.set(tileToWorldX(map, x), TILE_HEIGHT / 2, tileToWorldZ(map, z))
+        scale.set(1, TILE_HEIGHT, 1)
         matrix.compose(position, quaternion, scale)
         mesh.setMatrixAt(index, matrix)
         idMesh.setMatrixAt(index, matrix)
 
-        if (def.id === "sand") {
+        if (def.id === "water") {
+          // Water colours by depth — shallow shoreline light, deep water dark.
+          // Hand-authored maps carry no depth data and render as shallow.
+          const waterDepth = Math.min(
+            MAX_WATER_DEPTH,
+            Math.max(1, map.water?.depth[index] ?? 1),
+          )
+          color.copy(waterColors[waterDepth - 1])
+        } else if (def.id === "sand") {
           // Beaches fade toward grass as they leave the waterline: full sand
           // against the water, blended a tile out, mostly grass beyond.
           const d = waterDistance(map, x, z)
           const sandiness = d <= 1 ? 1 : d === 2 ? 0.55 : 0.3
           color.copy(grassColor).lerp(sandColor, sandiness)
         } else {
-          color.set(baseColor)
+          color.set(def.color)
         }
+        tint.copy(OPEN_MEADOW_TINT).lerp(DEEP_WOOD_TINT, shade[index])
+        color.lerp(tint, def.shadeBlend)
         color.multiplyScalar(1 + (rng() - 0.5) * def.jitter)
         mesh.setColorAt(index, color)
       }
@@ -209,7 +244,7 @@ export function TerrainTiles({ map }: { map: GameMap }) {
         args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, count]}
       >
         <boxGeometry args={[1, 1, 1]} />
-        <primitive object={gridMaterial} attach="material" />
+        <primitive object={groundMaterial} attach="material" />
       </instancedMesh>
 
       {/*

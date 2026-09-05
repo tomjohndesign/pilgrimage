@@ -13,6 +13,7 @@ import {
   DEFAULT_VIEW_SIZE,
   ISO_PITCH,
   MAX_VIEW_SIZE,
+  maxViewSizeForMap,
   MIN_VIEW_SIZE,
   normalizeViewIndex,
   LIGHT_HEIGHT,
@@ -143,6 +144,22 @@ describe("isometric camera", () => {
     expect(clampViewSize(1)).toBe(MIN_VIEW_SIZE)
     expect(clampViewSize(9999)).toBe(MAX_VIEW_SIZE)
     expect(clampViewSize(DEFAULT_VIEW_SIZE)).toBe(DEFAULT_VIEW_SIZE)
+  })
+
+  it("caps zoom-out per map, but never past the fixed ceiling", () => {
+    // The ceiling is what bounds visible tiles — and render cost — on big maps,
+    // so it must not grow with the map.
+    expect(maxViewSizeForMap(512, 512)).toBe(MAX_VIEW_SIZE)
+    expect(maxViewSizeForMap(128, 128)).toBe(MAX_VIEW_SIZE)
+    // Smaller maps cap proportionally lower (140 framed a 128 map).
+    expect(maxViewSizeForMap(64, 64)).toBeCloseTo(70, 6)
+    expect(maxViewSizeForMap(32, 32)).toBeCloseTo(35, 6)
+    // Rectangular maps frame their longer edge.
+    expect(maxViewSizeForMap(32, 128)).toBe(MAX_VIEW_SIZE)
+    // Degenerate maps still leave room to zoom.
+    expect(maxViewSizeForMap(1, 1)).toBe(MIN_VIEW_SIZE)
+    // clampViewSize honours a per-map cap.
+    expect(clampViewSize(9999, maxViewSizeForMap(64, 64))).toBeCloseTo(70, 6)
   })
 })
 

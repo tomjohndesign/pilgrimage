@@ -38,6 +38,12 @@ export interface GameMap {
   seed?: number
   /** Present on generated maps; hand-authored water renders at depth 1. */
   water?: WaterInfo
+  /**
+   * The road as an ordered walk, west edge to east edge, each step to a
+   * 4-neighbour. The tile grid only says *where* road is; this says in what
+   * order a traveller crosses it. Steps over rivers are bridge tiles.
+   */
+  road?: Array<{ x: number; z: number }>
 }
 
 export function tileAt(map: GameMap, x: number, z: number): TerrainId | null {
