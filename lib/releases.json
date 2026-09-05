@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "693934eea0ff74409332efa6d49d0e3a9b2d6626",
-  "releaseCount": 7,
+  "lastProcessedCommit": "c6d619a5bb81be5113e056c5573a1e5c5dffa054",
+  "releaseCount": 8,
   "releases": [
+    {
+      "version": "0.0.22",
+      "title": "Release 0.0.22",
+      "summary": "Fix bridge ramps to connect straight onto paths (#41)",
+      "commit": "c6d619a5bb81be5113e056c5573a1e5c5dffa054"
+    },
     {
       "version": "0.0.21",
       "title": "Release 0.0.21",
