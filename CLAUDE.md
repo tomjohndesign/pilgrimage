@@ -2,6 +2,12 @@
 
 ## Rules
 
+- **Releases and documentation have shared ownership rules.** Follow
+  [docs/releases.md](docs/releases.md). The post-merge GitHub Action owns version
+  increments and changelog entries; feature workspaces must leave those fields
+  alone. Batch game-doc and GitHub documentation reviews about every ten releases
+  in one dedicated workspace, using the generated review checklist.
+
 - **Local dev tabs are named after the git branch.** Every locally running dev
   version of this app must set its browser tab title to the current branch name,
   so several Conductor workspaces running side by side stay tellable apart. The
