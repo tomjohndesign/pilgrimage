@@ -17,7 +17,9 @@
     "assets:check": "node scripts/check-character-assets.mjs",
     "assets:terrain": "node scripts/generate-grass-texture.mjs && node scripts/generate-dirt-texture.mjs && node scripts/generate-road-textures.mjs",
     "assets:base": "node scripts/export-base-person.mjs",
-    "assets:check-base": "node scripts/check-base-person.mjs"
+    "assets:check-base": "node scripts/check-base-person.mjs",
+    "assets:population": "node scripts/export-population.mjs",
+    "assets:check-population": "node scripts/check-population.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

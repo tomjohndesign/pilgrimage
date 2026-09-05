@@ -50,12 +50,12 @@ export function DebugHandle({ map, travelers, speed, movement }: { map: GameMap;
       }),
       /** Sprite layout and active clip for comparing road character models. */
       travelerSprites: () => {
-        const sprites: Array<{ model: string; phase: number; sync: boolean; fps: number; sheet: string; repeat: number[]; offset: number[]; center: number[]; scale: number[] }> = []
+        const sprites: Array<{ model: string; calling: string; variant: number | null; bodyType: string; appearanceScale: number; phase: number; sync: boolean; fps: number; sheet: string; repeat: number[]; offset: number[]; center: number[]; scale: number[] }> = []
         scene.traverse((object) => {
           if (object.name !== "traveler" || !(object instanceof THREE.Sprite)) return
           const map = object.material.map
           const image = map?.image as HTMLImageElement | undefined
-          sprites.push({ model: object.userData.characterModel, phase: object.userData.walkPhase, sync: object.userData.sync, fps: object.userData.fps, sheet: image?.src ?? "",
+          sprites.push({ model: object.userData.characterModel, calling: object.userData.calling, variant: object.userData.variant, bodyType: object.userData.bodyType, appearanceScale: object.userData.appearanceScale, phase: object.userData.walkPhase, sync: object.userData.sync, fps: object.userData.fps, sheet: image?.src ?? "",
             repeat: map?.repeat.toArray() ?? [], offset: map?.offset.toArray() ?? [], center: object.center.toArray(), scale: object.scale.toArray() })
         })
         return sprites

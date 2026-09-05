@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 import { characterVisual, spriteRow, type CharacterModel } from "@/lib/game/character-assets"
+import { usePopulationStore } from "@/lib/game/base-person/population-store"
+import { populationVisual } from "@/lib/game/base-person/population-assets"
+import type { TravelerAppearance } from "@/lib/game/base-person/population"
 import { advanceWalkPhase, type WalkTuning } from "@/lib/game/motion"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { useCharacterAssetStore } from "@/lib/game/character-asset-store"
@@ -12,8 +15,9 @@ import { applySpriteDepth } from "@/lib/game/render/sprite-depth"
 import { OUTLINE_ID_LAYER_MASK, SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import type { FigureClickHandler } from "./traveler-figure"
 
-export function CharacterSprite({ type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning }: {
+export function CharacterSprite({ type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance }: {
   type: TravelerTypeId
+  appearance?: TravelerAppearance
   selected?: boolean
   onClick?: FigureClickHandler
   outlineColor?: [number, number, number]
@@ -24,8 +28,13 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
 }) {
   const asset = useCharacterAssetStore((s) => s.assets[type])
   const custom = usePersonDesignStore((s) => s.atlas)
-  const visual = useMemo(() => characterVisual(asset, characterModel, custom), [asset, characterModel, custom])
-  const size = visual.scale * characterScale
+  const population = usePopulationStore(s => s.pack)
+  const varied = characterModel === "base" && !!appearance
+  const visual = useMemo(() => varied ? populationVisual(type, appearance.variant, population) :
+    { ...characterVisual(asset, characterModel, custom), rowOffset: 0, strideRatio: 1, design: undefined },
+    [asset, characterModel, custom, varied, appearance?.variant, population, type])
+  const individualScale = characterScale * (varied ? appearance.scale : 1)
+  const size = visual.scale * individualScale
   const fps = characterFps ?? visual.fps
   const sources = useLoader(THREE.TextureLoader, [visual.walk.url, visual.idle.url, ...(visual.shadow ? [visual.shadow.walk, visual.shadow.idle] : [])])
   // Each traveler owns UV state; the loader still shares the decoded image.
@@ -37,7 +46,7 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     map.generateMipmaps = false
     const clip = index % 2 === 0 ? visual.walk : visual.idle
     map.repeat.set(1 / clip.columns, 1 / clip.rows)
-    map.offset.set(clip.stillFrame / clip.columns, (clip.rows - 1) / clip.rows)
+    map.offset.set(clip.stillFrame / clip.columns, (clip.rows - 1 - visual.rowOffset) / clip.rows)
     map.needsUpdate = true
     return map
   }), [sources, visual])
@@ -100,7 +109,7 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     const dt = Math.min(delta, 0.1) * (parent.userData.playbackRate ?? 1)
     frameElapsed.current += dt
     if (moving) {
-      const stride = (walkTuning?.stride ?? 0.44) * characterScale / (characterModel === "base" ? 1.5 : 1)
+      const stride = (walkTuning?.stride ?? 0.44) * individualScale * visual.strideRatio / (characterModel === "base" ? 1.5 : 1)
       clock.current = advanceWalkPhase(clock.current, parent.userData.distance ?? 0, dt,
         visual.walk.columns, fps, stride, walkTuning?.sync === true)
     }
@@ -108,7 +117,7 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     const clip = moving ? visual.walk : visual.idle
     const texture = textures[moving ? 0 : 1]
     const frame = moving ? Math.floor(clock.current * clip.columns) : clip.stillFrame
-    const row = spriteRow(heading, yaw)
+    const row = visual.rowOffset + spriteRow(heading, yaw)
     const previous = lastFrame.current
     if (previous.texture === texture && previous.row === row) {
       if (previous.frame === frame) return
@@ -129,7 +138,7 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
   return (
     <>
       {shadowMaterial && <sprite name="traveler-shadow" material={shadowMaterial} scale={[size, size, 1]} center={center} raycast={() => {}} />}
-      <sprite ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name="traveler" material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, fps, sync: walkTuning?.sync === true }} />
+      <sprite ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name="traveler" material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync === true }} />
       {outlineMaterial && <sprite layers-mask={OUTLINE_ID_LAYER_MASK} material={outlineMaterial}
         scale={[size, size, 1]} center={center} />}
     </>

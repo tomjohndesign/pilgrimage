@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import * as THREE from "three"
 import { BASE_PERSON, armAngle, legPose, type Point3 } from "./pose"
-import { personRecipe } from "./design"
+import { DEFAULT_DESIGN, PERSON_PRESETS, personRecipe } from "./design"
 import { createBasePersonRig } from "./rig"
 
 const length = (a: Point3, b: Point3) => Math.hypot(...a.map((v, i) => v - b[i]))
@@ -67,6 +67,59 @@ describe("shared person template", () => {
         if (mask) rig.inkMask(false)
       }
     } finally { rig.dispose() }
+  })
+
+  it("dresses both arms to the wrist and preserves outfit layers through every pose", () => {
+    for (const design of [DEFAULT_DESIGN, PERSON_PRESETS.Female]) {
+      const recipe = personRecipe(design), rig = createBasePersonRig(recipe)
+      const female = design.bodyType === "Female"
+      try {
+        for (const side of ["left", "right"]) {
+          const sleeve = rig.root.getObjectByName(`${side}-lower-sleeve`) as THREE.Mesh
+          sleeve.geometry.computeBoundingBox()
+          expect(sleeve.geometry.boundingBox!.min.y).toBeCloseTo(-recipe.body.forearmLength)
+          expect((sleeve.material as THREE.MeshLambertMaterial).color.getHexString()).toBe((female ? design.shirtColor : design.tunicColor).slice(1))
+        }
+        expect(!!rig.root.getObjectByName("head-covering")).toBe(female)
+        const body = rig.root.getObjectByName(female ? "sleeveless-dress" : "shirt") as THREE.Mesh
+        if (female) expect(new Set(body.geometry.groups.map(group => group.materialIndex))).toEqual(new Set([0, 1]))
+        const legs: THREE.Mesh[] = []
+        rig.root.traverse(object => { if (object instanceof THREE.Mesh && object.userData.clipAboveHem) legs.push(object) })
+        expect(legs).toHaveLength(female ? 6 : 4)
+        for (let row = 0; row < 8; row++) for (let frame = 0; frame < 8; frame++) {
+          rig.view(row); rig.pose(frame / 8)
+          for (const debug of [false, true]) {
+            rig.trackSides(debug); rig.inkMask(true)
+            for (const leg of legs) expect((leg.material as THREE.Material).clippingPlanes?.[0]).toBeDefined()
+            rig.inkMask(false)
+          }
+        }
+        rig.pose(0)
+        const first = Array.from(body.geometry.getAttribute("position").array)
+        rig.pose(1)
+        Array.from(body.geometry.getAttribute("position").array).forEach((value, i) => expect(value).toBeCloseTo(first[i], 12))
+      } finally { rig.dispose() }
+    }
+  })
+
+  it("closes the shirt around the neck even with raised or lowered arm roots", () => {
+    for (const preset of [DEFAULT_DESIGN, PERSON_PRESETS.Stout, PERSON_PRESETS.Female]) {
+      for (const shoulderHeight of [0.8, 1.15]) {
+        const recipe = personRecipe({ ...preset, shoulderHeight }), rig = createBasePersonRig(recipe)
+        try {
+          rig.pose(0)
+          const torso = rig.root.getObjectByName(preset.bodyType === "Female" ? "sleeveless-dress" : "shirt")!
+          // Rays through the previously open annulus must land on shoulder cloth,
+          // rather than pass into the body and out through its back or bottom.
+          for (const x of [-0.12, 0.12]) for (const z of [-0.06, 0.06]) {
+            const ray = new THREE.Raycaster(new THREE.Vector3(x, recipe.body.torsoShoulderHeight + 0.3, z), new THREE.Vector3(0, -1, 0))
+            const hits = ray.intersectObject(torso)
+            expect(hits.length).toBeGreaterThan(0)
+            expect(hits[0].point.y).toBeGreaterThan(recipe.body.torsoShoulderHeight)
+          }
+        } finally { rig.dispose() }
+      }
+    }
   })
 
 })

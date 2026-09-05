@@ -61,4 +61,5 @@ export const SEED_STREAM = {
   environmentShapes: 12,
   monkFlight: 13,
   ents: 14,
+  characterAppearance: 15,
 } as const

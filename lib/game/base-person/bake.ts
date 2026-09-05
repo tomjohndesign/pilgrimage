@@ -137,7 +137,7 @@ export function renderPersonPreview(design: PersonDesign, clip: BaseClip, frame:
 }
 
 /** Bake directly at final pixel resolution, without crops or per-pose resizing. */
-export function bakeBasePerson(design: PersonDesign = DEFAULT_DESIGN): BasePersonBake {
+export function bakeBasePerson(design: PersonDesign = DEFAULT_DESIGN, diagnostics = true): BasePersonBake {
   const session = personFrameRenderer(design)
   const recipe = session.recipe, size = recipe.cellSize
   const clips = { walk: [] as FrameRegistration[], idle: [] as FrameRegistration[] }
@@ -168,7 +168,7 @@ export function bakeBasePerson(design: PersonDesign = DEFAULT_DESIGN): BasePerso
   try {
     return {
       walk: render("walk", false), idle: render("idle", false),
-      debugWalk: render("walk", true), debugIdle: render("idle", true),
+      debugWalk: diagnostics ? render("walk", true) : "", debugIdle: diagnostics ? render("idle", true) : "",
       shadowWalk: shadows.walk, shadowIdle: shadows.idle,
       metadata: {
         template: recipe.id, version: recipe.version, cellSize: size,

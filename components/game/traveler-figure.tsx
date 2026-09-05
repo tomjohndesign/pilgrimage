@@ -6,6 +6,7 @@ import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 import type { TravelerTypeDef } from "@/lib/game/travelers"
 import { Suspense } from "react"
 import { CharacterSprite } from "./character-sprite"
+import type { TravelerAppearance } from "@/lib/game/base-person/population"
 import type { WalkTuning } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
 
@@ -78,8 +79,10 @@ export function TravelerFigure({
   characterScale = 1,
   characterFps,
   walkTuning,
+  appearance,
 }: {
   type: TravelerTypeDef
+  appearance?: TravelerAppearance
   selected?: boolean
   idColor?: THREE.Color
   onClick?: FigureClickHandler
@@ -95,7 +98,7 @@ export function TravelerFigure({
   return (
     <>
       <Suspense fallback={null}>
-        <CharacterSprite selected={selected} type={type.id} onClick={onClick} outlineColor={outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] : undefined)} characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
+        <CharacterSprite appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] : undefined)} characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
       </Suspense>
       {type.id === "vendor" && <VendorCart onClick={onClick} awning={awning} idColor={idColor} />}
     </>

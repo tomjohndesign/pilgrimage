@@ -1,6 +1,6 @@
 import type { BasePersonBake } from "./base-person/bake"
 import type { TravelerTypeId } from "./travelers"
-import baseMetadata from "../../public/textures/characters/base/base-person-v8.json"
+import baseMetadata from "../../public/textures/characters/base/base-person-v10.json"
 
 export type CharacterModel = "base" | "callings"
 

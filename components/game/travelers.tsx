@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { travelerAppearance } from "@/lib/game/base-person/population"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { selectElement } from "@/lib/game/selection"
@@ -69,6 +70,7 @@ export function Travelers({
   walkTuning?: WalkTuning
   movement?: MovementTuning
 }) {
+  const appearances = useMemo(() => travelers.map(t => travelerAppearance(map.seed ?? 0, t.id)), [travelers, map.seed])
   const selection = useCameraStore((s) => s.selection)
   const resourceElapsed = useRef(0)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
@@ -182,7 +184,7 @@ export function Travelers({
               groupRefs.current[index] = node
             }}
           >
-            <TravelerFigure selected={selected} type={traveler.type} onClick={select} idColor={idColor}
+            <TravelerFigure appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
               characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
             <group name="carried-logs" visible={false} position={[0, 0.35, 0.2]} rotation={[0, 0, Math.PI / 2]} onClick={select}>
               <mesh><cylinderGeometry args={[0.12, 0.12, 0.6, 6]} /><meshLambertMaterial color="#89613c" /></mesh>

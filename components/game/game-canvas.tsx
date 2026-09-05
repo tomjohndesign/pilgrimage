@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo } from "react"
+import { usePopulationStore } from "@/lib/game/base-person/population-store"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { PixelCanvas, PixelCharacters, type PixelationProps } from "@/components/pixel-canvas"
 
@@ -90,7 +91,9 @@ export function GameCanvas({
   /** Draw the global tile lattice over the ground. Off by default. */
   showGrid?: boolean
 } & PixelationProps) {
+  const foundation = usePersonDesignStore(s => s.design)
   useEffect(() => { void usePersonDesignStore.getState().hydrate() }, [])
+  useEffect(() => { void usePopulationStore.getState().prepare(foundation) }, [foundation])
   const species = useTreeTuningStore((s) => s.species)
   const variance = useTreeTuningStore((s) => s.variance)
   const trees = useMemo(() => growTreePlacements(placeTrees(map, species),

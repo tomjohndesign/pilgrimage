@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { DEFAULT_DESIGN, DESIGN_CONTROLS, PERSON_PRESETS, personRecipe, validatePersonDesign, withBodyType, type DesignKey } from "./design"
+import previousDesign from "../../../public/textures/characters/base/base-person-v9.json"
 import { legPose } from "./pose"
 import { inkPersonFrame } from "./ink"
 
@@ -21,7 +22,7 @@ describe("parametric people", () => {
     for (const design of Object.values(PERSON_PRESETS)) expect(validatePersonDesign(JSON.parse(JSON.stringify(design)))).toEqual(design)
     for (const key of Object.keys(DESIGN_CONTROLS) as DesignKey[]) {
       expect(() => validatePersonDesign({ ...DEFAULT_DESIGN, [key]: NaN })).toThrow()
-      expect(() => validatePersonDesign({ ...DEFAULT_DESIGN, [key]: 9 })).toThrow()
+      expect(() => validatePersonDesign({ ...DEFAULT_DESIGN, [key]: DESIGN_CONTROLS[key].max + DESIGN_CONTROLS[key].step })).toThrow()
     }
     personRecipe(PERSON_PRESETS.Stout)
     expect(personRecipe()).toEqual(original)
@@ -104,6 +105,42 @@ describe("parametric people", () => {
     expect(design.tunicColor).toBe("#aa3344")
     expect(personRecipe(design).renderPalette).toContain("#aa3344")
     expect(personRecipe(design).palette.skin).toBe(design.skinColor)
+  })
+  it("migrates old clothing palettes and keeps shirts short and dresses long", () => {
+    const { sleeves: _sleeves, shirtColor: _shirt, trouserColor: _pants, coveringColor: _cover, ...legacy } = DEFAULT_DESIGN
+    expect(validatePersonDesign(legacy)).toEqual(DEFAULT_DESIGN)
+    for (const key of ["shirtColor", "trouserColor", "coveringColor"] as const) {
+      expect(() => validatePersonDesign({ ...DEFAULT_DESIGN, [key]: "red" })).toThrow()
+    }
+    for (const legs of [0.85, 1.15]) for (const tunicLength of [0.75, 1.4]) {
+      const male = personRecipe({ ...DEFAULT_DESIGN, legs, tunicLength }).body
+      const female = personRecipe({ ...PERSON_PRESETS.Female, legs, tunicLength }).body
+      expect(male.tunicHem).toBeGreaterThan(male.hipHeight - 0.2)
+      expect(male.tunicHem).toBeLessThan(male.hipHeight)
+      expect(female.tunicHem).toBeGreaterThan(female.ankleHeight)
+      expect(female.tunicHem).toBeLessThan(female.ankleHeight + 0.1)
+    }
+    const female = personRecipe(PERSON_PRESETS.Female)
+    expect(female.renderPalette).toContain(PERSON_PRESETS.Female.shirtColor)
+    expect(female.renderPalette).toContain(PERSON_PRESETS.Female.coveringColor)
+    expect(personRecipe().renderPalette).toContain(DEFAULT_DESIGN.trouserColor)
+  })
+  it("adds independent arm tuning without changing the torso, head or legs", () => {
+    const migrated = validatePersonDesign(previousDesign.design)
+    expect(migrated.armSpacing).toBe(DEFAULT_DESIGN.armSpacing)
+    expect(migrated.elbowBend).toBe(DEFAULT_DESIGN.elbowBend)
+    expect(migrated.shoulderHeight).toBe(previousDesign.design.shoulderHeight)
+    const base = personRecipe().body
+    for (const [key, dimension] of [["upperArm", "upperArmLength"], ["forearm", "forearmLength"], ["armSpacing", "shoulderOffset"]] as const) {
+      const setting = DESIGN_CONTROLS[key].max
+      const changed = personRecipe({ ...DEFAULT_DESIGN, [key]: setting }).body
+      for (const field of Object.keys(base) as (keyof typeof base)[]) {
+        expect(changed[field]).toBeCloseTo(base[field] * (field === dimension ? setting : 1), 10)
+      }
+    }
+    for (const armSwing of [0, 1.5]) for (const elbowBend of [0, 40]) {
+      expect(personRecipe({ ...DEFAULT_DESIGN, armSwing, elbowBend }).body).toEqual(base)
+    }
   })
   it("adds native contours without touching neighboring cells or growing beyond one pixel", () => {
     const size = 16, pixels = new Uint8ClampedArray(size * size * 4), parts = new Uint8ClampedArray(pixels.length)
