@@ -22,6 +22,7 @@ import {
 } from "@/lib/game/map/generate-map"
 
 import { GameHud } from "./game-hud"
+import type { PixelationProps } from "@/components/pixel-canvas"
 
 /**
  * WebGL has no meaningful server render, and three.js touches browser globals on
@@ -108,9 +109,12 @@ function randomSeed(): number {
 export function GameShell({
   initialSeed,
   initialSettings,
+  pixelation,
 }: {
   initialSeed?: number
   initialSettings?: Partial<MapSettings>
+  /** Tune the world pixel renderer without changing map or simulation settings. */
+  pixelation?: PixelationProps
 }) {
   // With no ?seed= in the URL the seed is chosen client-side in an effect, so
   // the server and client never render from different seeds.
@@ -119,6 +123,12 @@ export function GameShell({
     ...DEFAULT_SETTINGS,
     ...initialSettings,
   })
+  const [pixelationOverrides, setPixelationOverrides] = useState<PixelationProps>({})
+  const pixelationSettings = {
+    pixelsPerUnit: pixelationOverrides.pixelsPerUnit ?? pixelation?.pixelsPerUnit ?? 25,
+    outputDpr: pixelationOverrides.outputDpr ?? pixelation?.outputDpr ?? 0.5,
+    pixelated: pixelationOverrides.pixelated ?? pixelation?.pixelated ?? true,
+  }
 
   useEffect(() => {
     // A seed the player saved takes precedence over a random roll, but never
@@ -234,6 +244,7 @@ export function GameShell({
     <div className="fixed inset-0 overflow-hidden bg-[#14100a] select-none">
       {map && relic ? (
         <GameCanvas
+          {...pixelationSettings}
           map={map}
           relic={relic}
           monks={monks}
@@ -259,6 +270,8 @@ export function GameShell({
         relicTraffic={relicTraffic}
         settings={settings}
         onSettingsChange={setSettings}
+        pixelation={pixelationSettings}
+        onPixelationChange={(patch) => setPixelationOverrides((current) => ({ ...current, ...patch }))}
         onReroll={() => setSeed(randomSeed())}
         onSeedChange={setSeed}
       />

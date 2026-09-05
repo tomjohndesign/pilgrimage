@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense } from "react"
-import { Canvas } from "@react-three/fiber"
+import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
 
 import type { GameMap } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
@@ -36,6 +36,7 @@ export function GameCanvas({
   relicTraffic,
   roadLook,
   showGrid = false,
+  ...pixelation
 }: {
   map: GameMap
   relic: Relic
@@ -50,13 +51,12 @@ export function GameCanvas({
   roadLook?: RoadLook
   /** Draw the global tile lattice over the ground. Off by default. */
   showGrid?: boolean
-}) {
+} & PixelationProps) {
   return (
-    <Canvas
+    <PixelCanvas
+      {...pixelation}
       orthographic
-      dpr={[1, 2]}
-      gl={{ antialias: true }}
-      camera={{ position: [20, 20, 20], near: CAM_NEAR, far: CAM_FAR }}
+      camera={{ manual: true, position: [20, 20, 20], near: CAM_NEAR, far: CAM_FAR }}
     >
       <color attach="background" args={[BACKGROUND]} />
 
@@ -94,6 +94,6 @@ export function GameCanvas({
       <CameraRig map={map} />
       <OutlinePass />
       <DebugHandle map={map} />
-    </Canvas>
+    </PixelCanvas>
   )
 }
