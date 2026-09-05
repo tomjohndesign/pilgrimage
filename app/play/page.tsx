@@ -34,6 +34,7 @@ export default async function PlayPage({
   const relicDistance = parseIntParam(params.relic)
   const traffic = parseIntParam(params.traffic)
   const walkSpeed = parseFloatParam(params.speed)
+  const road = parseIntParam(params.road)
   if (size !== undefined) initialSettings.size = size
   if (coverage !== undefined) initialSettings.coverage = coverage
   if (glades !== undefined) initialSettings.glades = glades
@@ -41,6 +42,7 @@ export default async function PlayPage({
   if (relicDistance !== undefined) initialSettings.relicDistance = relicDistance
   if (traffic !== undefined) initialSettings.traffic = traffic
   if (walkSpeed !== undefined) initialSettings.walkSpeed = walkSpeed
+  if (road !== undefined) initialSettings.road = road
 
   return <GameShell initialSeed={parseIntParam(params.seed)} initialSettings={initialSettings} />
 }

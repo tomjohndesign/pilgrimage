@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import { clampRoadTier, MAX_ROAD_TIER, ROAD_TIERS } from "@/lib/game/map/road"
 import type { GameMap } from "@/lib/game/map/types"
 import { parseSeed } from "@/lib/game/rng"
 import { saveSeed } from "@/lib/game/seed-storage"
@@ -550,6 +551,15 @@ export function GameHud({
             max={5}
             step={0.1}
             onChange={(walkSpeed) => set({ walkSpeed })}
+          />
+          {/* Stand-in for progression: the road builds up as the pilgrimage grows. */}
+          <Tuner
+            label="Development"
+            value={clampRoadTier(settings.road)}
+            display={ROAD_TIERS[clampRoadTier(settings.road)].label}
+            min={0}
+            max={MAX_ROAD_TIER}
+            onChange={(road) => set({ road })}
           />
         </Panel>
       </div>

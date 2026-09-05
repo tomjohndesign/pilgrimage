@@ -4,6 +4,7 @@ import dynamic from "next/dynamic"
 import { useEffect, useMemo, useState } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import { DEFAULT_ROAD_TIER } from "@/lib/game/map/road"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
@@ -52,6 +53,8 @@ export interface MapSettings {
   traffic: number
   /** Base walking speed in tiles per second. */
   walkSpeed: number
+  /** Road development tier — index into ROAD_TIERS. */
+  road: number
 }
 
 export const DEFAULT_SETTINGS: MapSettings = {
@@ -62,6 +65,7 @@ export const DEFAULT_SETTINGS: MapSettings = {
   relicDistance: DEFAULT_RELIC_DISTANCE,
   traffic: 12,
   walkSpeed: 1.5,
+  road: DEFAULT_ROAD_TIER,
 }
 
 /**
@@ -105,6 +109,7 @@ export function GameShell({
       relic: String(settings.relicDistance),
       traffic: String(settings.traffic),
       speed: String(settings.walkSpeed),
+      road: String(settings.road),
     })
     window.history.replaceState(null, "", `?${query}`)
   }, [seed, settings])
@@ -165,6 +170,7 @@ export function GameShell({
           monks={monks}
           travelers={travelers}
           walkSpeed={settings.walkSpeed}
+          roadTier={settings.road}
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
