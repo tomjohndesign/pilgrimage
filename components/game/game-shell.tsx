@@ -9,7 +9,7 @@ import { loadSavedSeed } from "@/lib/game/seed-storage"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import { generateRelic, relicBound } from "@/lib/game/relic"
-import { DEFAULT_TRAFFIC, generateTravelers } from "@/lib/game/travelers"
+import { DEFAULT_TRAFFIC, generateTravelers, travelerCountForMap } from "@/lib/game/travelers"
 import {
   DEFAULT_CLEARING_COUNT,
   DEFAULT_DARK_FOREST_COUNT,
@@ -53,7 +53,7 @@ export interface MapSettings {
   darkForests: number
   /** How far off the road the relic's hovel is sited, in tiles. */
   relicDistance: number
-  /** How many travelers walk the road — the traffic level. */
+  /** Traffic density, in travelers per 128 × 128 tiles. */
   traffic: number
   /** Base walking speed in tiles per second. */
   walkSpeed: number
@@ -196,9 +196,10 @@ export function GameShell({
   )
 
   // Identities live outside the canvas so the HUD can name whoever is selected.
+  const travelerCount = map ? travelerCountForMap(map, settings.traffic) : 0
   const travelers = useMemo(
-    () => (seed === null ? [] : generateTravelers(seed, settings.traffic)),
-    [seed, settings.traffic],
+    () => (seed === null ? [] : generateTravelers(seed, travelerCount)),
+    [seed, travelerCount],
   )
 
   // The relic and the brothers who keep it, fixed per seed like the travelers.
