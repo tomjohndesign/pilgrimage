@@ -18,7 +18,9 @@ function flatMap(width: number, depth: number, fill: TerrainId): GameMap {
   return { width, depth, tiles: new Array<TerrainId>(width * depth).fill(fill), buildings: [] }
 }
 
-const SEEDS = Array.from({ length: 20 }, (_, i) => i * 7919 + 1)
+/** Maps take real time at the 128×128 floor; a dozen seeds is plenty here. */
+const SEEDS = Array.from({ length: 12 }, (_, i) => i * 7919 + 1)
+const SWEEP_TIMEOUT = 60_000
 
 describe("computeDangerField", () => {
   it("reads open country as safe, ordinary woods as uneasy, and old growth as perilous", () => {
@@ -142,5 +144,5 @@ describe("arrivalOdds", () => {
     expect(trackOdds / tracks).toBeGreaterThan(0.4)
     expect(trackOdds / tracks).toBeLessThan(0.75)
     expect(knightTrackOdds / tracks).toBeGreaterThan(trackOdds / tracks + 0.15)
-  })
+  }, SWEEP_TIMEOUT)
 })

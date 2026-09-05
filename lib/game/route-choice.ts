@@ -7,8 +7,9 @@ import type { TravelerTypeId } from "./travelers"
  * fresh this morning may take it exhausted tonight.
  *
  * The rules, as designed:
- *  - Merchants, vendors, and minstrels never take the track. Carts and stock
- *    go the safe way; minstrels have nowhere they need to be.
+ *  - Merchants, vendors, minstrels, and peasants never take the track. Carts
+ *    and stock go the safe way; minstrels have nowhere they need to be, and
+ *    peasants know better than anyone what lives in the old growth.
  *  - Knights sometimes do — a flat roll.
  *  - Pilgrims and friars only when very pious (the relics outweigh the fear)
  *    or worn out (too tired to judge well). Friars' faith stays their fear
@@ -35,6 +36,7 @@ const BASE_NERVE: Record<TravelerTypeId, number> = {
   merchant: 0.3,
   vendor: 0.3,
   minstrel: 0.25,
+  peasant: 0.3,
   knight: 0.85,
 }
 /** Very pious travellers hold their nerve this much better. */
@@ -62,6 +64,7 @@ export function trackChance({ type, piety, stamina }: RouteState): number {
     case "merchant":
     case "vendor":
     case "minstrel":
+    case "peasant":
       return 0
     case "knight":
       return KNIGHT_TRACK_CHANCE

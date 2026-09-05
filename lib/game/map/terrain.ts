@@ -19,6 +19,9 @@ export type TerrainId =
   | "darkwood"
   | "clearing"
   | "hills"
+  | "water"
+  | "sand"
+  | "bridge"
 
 /** Woods of either kind — what the forest-shade field and the tree line count. */
 export function isWoods(id: TerrainId): boolean {
@@ -72,14 +75,14 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
     buildable: false,
     passable: true,
   },
-  // A secondary road: the short, dangerous way through the dark forest that
-  // the main road detoured around. Fainter than the road, since few use it.
+  // The branch off the road to the relic: a beaten track, not engineered road.
+  // Its own terrain so the main road stays identifiable (and stable) on its own.
   track: {
     id: "track",
     label: "Track",
-    color: "#a8926a",
+    color: "#ad9468",
     jitter: 0.1,
-    shadeBlend: 0.3,
+    shadeBlend: 0.2,
     buildable: false,
     passable: true,
   },
@@ -122,7 +125,42 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
     buildable: true,
     passable: true,
   },
+  water: {
+    id: "water",
+    label: "Water",
+    color: "#4f8ab2",
+    jitter: 0.05,
+    shadeBlend: 0.15,
+    buildable: false,
+    passable: false,
+  },
+  sand: {
+    id: "sand",
+    label: "Beach",
+    color: "#d3bd85",
+    jitter: 0.1,
+    shadeBlend: 0.25,
+    buildable: true,
+    passable: true,
+  },
+  bridge: {
+    id: "bridge",
+    label: "Bridge",
+    color: "#9b7a4e",
+    jitter: 0.04,
+    shadeBlend: 0.15,
+    buildable: false,
+    passable: true,
+  },
 }
+
+/**
+ * Water renders by depth, not by its single TERRAIN entry: index 0 is shallow
+ * shoreline water (depth 1), index 2 is deep water (depth 3). Colour only —
+ * the ground is a flat plane, so depth never shows as relief.
+ */
+export const WATER_DEPTH_COLORS = ["#6ba6c8", "#5893b9", "#4581aa"] as const
+export const MAX_WATER_DEPTH = 3
 
 /** Characters used in the ASCII map source. */
 export const TERRAIN_CHARS: Record<string, TerrainId> = {
@@ -134,4 +172,7 @@ export const TERRAIN_CHARS: Record<string, TerrainId> = {
   D: "darkwood",
   o: "clearing",
   "^": "hills",
+  "~": "water",
+  "%": "sand",
+  "#": "bridge",
 }

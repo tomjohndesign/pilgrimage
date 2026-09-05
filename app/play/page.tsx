@@ -32,15 +32,25 @@ export default async function PlayPage({
   const glades = parseIntParam(params.glades)
   const clearings = parseIntParam(params.clearings)
   const darkForests = parseIntParam(params.dark)
+  const relicDistance = parseIntParam(params.relic)
   const traffic = parseIntParam(params.traffic)
   const walkSpeed = parseFloatParam(params.speed)
+  const water = parseIntParam(params.water)
+  const rivers = parseIntParam(params.rivers)
+  const lakes = parseIntParam(params.lakes)
+  const ponds = parseIntParam(params.ponds)
   if (size !== undefined) initialSettings.size = size
   if (coverage !== undefined) initialSettings.coverage = coverage
   if (glades !== undefined) initialSettings.glades = glades
   if (clearings !== undefined) initialSettings.clearings = clearings
   if (darkForests !== undefined) initialSettings.darkForests = darkForests
+  if (relicDistance !== undefined) initialSettings.relicDistance = relicDistance
   if (traffic !== undefined) initialSettings.traffic = traffic
   if (walkSpeed !== undefined) initialSettings.walkSpeed = walkSpeed
+  if (water !== undefined) initialSettings.water = water
+  if (rivers !== undefined) initialSettings.rivers = rivers
+  if (lakes !== undefined) initialSettings.lakes = lakes
+  if (ponds !== undefined) initialSettings.ponds = ponds
 
   return <GameShell initialSeed={parseIntParam(params.seed)} initialSettings={initialSettings} />
 }

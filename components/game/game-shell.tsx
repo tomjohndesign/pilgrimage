@@ -5,6 +5,9 @@ import { useEffect, useMemo, useState } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
+import { generateMonks } from "@/lib/game/monks"
+import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
+import { generateRelic } from "@/lib/game/relic"
 import { generateTravelers } from "@/lib/game/travelers"
 import {
   DEFAULT_CLEARING_COUNT,
@@ -12,6 +15,8 @@ import {
   DEFAULT_FOREST_COVERAGE,
   DEFAULT_GLADE_COUNT,
   DEFAULT_MAP_WIDTH,
+  DEFAULT_RELIC_DISTANCE,
+  DEFAULT_WATER_COVERAGE,
   generateMap,
 } from "@/lib/game/map/generate-map"
 
@@ -45,11 +50,22 @@ export interface MapSettings {
   clearings: number
   /** How many dark forests stand in the road's way. */
   darkForests: number
+  /** How far off the road the relic's hovel is sited, in tiles. */
+  relicDistance: number
   /** How many travelers walk the road — the traffic level. */
   traffic: number
   /** Base walking speed in tiles per second. */
   walkSpeed: number
+  /** Max % of the map under water (rivers, lakes, ponds). */
+  water: number
+  /** Forced counts for water bodies; −1 lets the seed roll them. */
+  rivers: number
+  lakes: number
+  ponds: number
 }
+
+/** Slider value that means "let the seed decide" for water body counts. */
+export const WATER_COUNT_AUTO = -1
 
 export const DEFAULT_SETTINGS: MapSettings = {
   size: DEFAULT_MAP_WIDTH,
@@ -57,8 +73,13 @@ export const DEFAULT_SETTINGS: MapSettings = {
   glades: DEFAULT_GLADE_COUNT,
   clearings: DEFAULT_CLEARING_COUNT,
   darkForests: DEFAULT_DARK_FOREST_COUNT,
+  relicDistance: DEFAULT_RELIC_DISTANCE,
   traffic: 12,
   walkSpeed: 1.5,
+  water: Math.round(DEFAULT_WATER_COVERAGE * 100),
+  rivers: WATER_COUNT_AUTO,
+  lakes: WATER_COUNT_AUTO,
+  ponds: WATER_COUNT_AUTO,
 }
 
 /**
@@ -100,8 +121,13 @@ export function GameShell({
       glades: String(settings.glades),
       clearings: String(settings.clearings),
       dark: String(settings.darkForests),
+      relic: String(settings.relicDistance),
       traffic: String(settings.traffic),
       speed: String(settings.walkSpeed),
+      water: String(settings.water),
+      rivers: String(settings.rivers),
+      lakes: String(settings.lakes),
+      ponds: String(settings.ponds),
     })
     window.history.replaceState(null, "", `?${query}`)
   }, [seed, settings])
@@ -118,6 +144,11 @@ export function GameShell({
             gladeCount: settings.glades,
             clearingCount: settings.clearings,
             darkForestCount: settings.darkForests,
+            relicDistance: settings.relicDistance,
+            waterCoverage: settings.water / 100,
+            riverCount: settings.rivers >= 0 ? settings.rivers : undefined,
+            lakeCount: settings.lakes >= 0 ? settings.lakes : undefined,
+            pondCount: settings.ponds >= 0 ? settings.ponds : undefined,
           }),
     [
       seed,
@@ -126,6 +157,11 @@ export function GameShell({
       settings.glades,
       settings.clearings,
       settings.darkForests,
+      settings.relicDistance,
+      settings.water,
+      settings.rivers,
+      settings.lakes,
+      settings.ponds,
     ],
   )
 
@@ -135,20 +171,41 @@ export function GameShell({
     [seed, settings.traffic],
   )
 
-  // The camera's pan clamp follows the loaded map's extent.
+  // The relic and the brothers who keep it, fixed per seed like the travelers.
+  const relic = useMemo(() => (seed === null ? null : generateRelic(seed)), [seed])
+  const monks = useMemo(() => (seed === null ? [] : generateMonks(seed)), [seed])
+
+  // The camera's pan clamp follows the loaded map's extent, and a new world
+  // opens on the hovel — the one landmark every map has.
   useEffect(() => {
-    if (map) useCameraStore.getState().setMapSize(map.width, map.depth)
+    if (!map) return
+    const camera = useCameraStore.getState()
+    camera.setMapSize(map.width, map.depth)
+    camera.select(null)
+    const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
+    if (hovel) {
+      camera.panTo(
+        tileToWorldX(map, hovel.x) + (hovel.w - 1) / 2,
+        tileToWorldZ(map, hovel.z) + (hovel.d - 1) / 2,
+      )
+    }
   }, [map])
 
   // A new cast of travelers invalidates whoever was selected.
   useEffect(() => {
-    useCameraStore.getState().selectTraveler(null)
+    useCameraStore.getState().select(null)
   }, [travelers])
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#14100a] select-none">
-      {map ? (
-        <GameCanvas map={map} travelers={travelers} walkSpeed={settings.walkSpeed} />
+      {map && relic ? (
+        <GameCanvas
+          map={map}
+          relic={relic}
+          monks={monks}
+          travelers={travelers}
+          walkSpeed={settings.walkSpeed}
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
           <span className="font-display text-[10px] uppercase tracking-[3px] text-gold">
@@ -159,6 +216,8 @@ export function GameShell({
       <GameHud
         map={map}
         seed={seed}
+        relic={relic}
+        monks={monks}
         travelers={travelers}
         settings={settings}
         onSettingsChange={setSettings}

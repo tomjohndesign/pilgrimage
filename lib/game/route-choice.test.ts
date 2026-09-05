@@ -13,8 +13,8 @@ import type { TravelerTypeId } from "./travelers"
 const fresh = (type: TravelerTypeId, piety = 50) => ({ type, piety, stamina: 100 })
 
 describe("trackChance", () => {
-  it("never sends merchants, vendors, or minstrels down the track, whatever their state", () => {
-    for (const type of ["merchant", "vendor", "minstrel"] as const) {
+  it("never sends merchants, vendors, minstrels, or peasants down the track, whatever their state", () => {
+    for (const type of ["merchant", "vendor", "minstrel", "peasant"] as const) {
       expect(trackChance(fresh(type))).toBe(0)
       expect(trackChance({ type, piety: 100, stamina: 0 })).toBe(0)
     }
@@ -56,7 +56,7 @@ describe("trackChance", () => {
 
 describe("nerve", () => {
   it("has knights press on far more often than anyone else", () => {
-    for (const type of ["pilgrim", "friar", "merchant", "vendor", "minstrel"] as const) {
+    for (const type of ["pilgrim", "friar", "merchant", "vendor", "minstrel", "peasant"] as const) {
       expect(nerve(fresh("knight"))).toBeGreaterThan(nerve(fresh(type)) + 0.3)
     }
   })

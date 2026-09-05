@@ -1,5 +1,6 @@
 import Link from "next/link"
 
+import { CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 
 export default function LandingPage() {
@@ -17,23 +18,40 @@ export default function LandingPage() {
 
       <nav className="flex w-full max-w-xs flex-col gap-6">
         {SITE_MENU.map((item) => (
-          <Link
+          <div
             key={item.href}
-            href={item.href}
-            className="group border border-rule bg-parchment px-6 py-4 text-center shadow-[0_0_0_3px_var(--parchment-dark),0_0_0_4px_var(--rule),4px_4px_24px_rgba(0,0,0,0.6)] transition-colors hover:bg-parchment-dark"
+            className="border border-rule bg-parchment text-center shadow-[0_0_0_3px_var(--parchment-dark),0_0_0_4px_var(--rule),4px_4px_24px_rgba(0,0,0,0.6)]"
           >
-            <span className="font-display text-lg font-semibold uppercase tracking-[4px] text-ink group-hover:text-red">
-              {item.label}
-            </span>
-            <span className="mt-0.5 block text-[13px] italic text-ink-light">
-              {item.description}
-            </span>
-          </Link>
+            <Link
+              href={item.href}
+              className="group block px-6 py-4 transition-colors hover:bg-parchment-dark"
+            >
+              <span className="font-display text-lg font-semibold uppercase tracking-[4px] text-ink group-hover:text-red">
+                {item.label}
+              </span>
+              <span className="mt-0.5 block text-[13px] italic text-ink-light">
+                {item.description}
+              </span>
+            </Link>
+            {item.children && (
+              <div className="flex justify-center gap-6 border-t border-rule px-6 py-2.5">
+                {item.children.map((child) => (
+                  <Link
+                    key={child.href}
+                    href={child.href}
+                    className="font-display text-[10px] uppercase tracking-[3px] text-ink-light hover:text-red"
+                  >
+                    {child.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         ))}
       </nav>
 
       <footer className="mt-14 text-center font-display text-[10px] uppercase tracking-[3px] text-gold/60">
-        Prototype — v0.3
+        {CURRENT_VERSION}
       </footer>
     </main>
   )
