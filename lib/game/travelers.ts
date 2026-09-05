@@ -30,7 +30,7 @@ export interface StatRange {
 export interface TravelerTypeDef {
   id: TravelerTypeId
   label: string
-  /** Block colour in the scene. */
+  /** Calling's identifying colour, shared with its sprite palette and UI. */
   color: string
   /**
    * Share of the road, in percent. The weights sum to 100 so each one reads

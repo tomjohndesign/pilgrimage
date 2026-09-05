@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { travelerAppearance } from "@/lib/game/base-person/population"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { selectElement } from "@/lib/game/selection"
@@ -19,6 +20,9 @@ import type { TreePlacement } from "@/lib/game/trees/placement"
 import type { GameMap } from "@/lib/game/map/types"
 import { createSim, simRegistry, stepSim } from "@/lib/game/sim"
 import type { Traveler } from "@/lib/game/travelers"
+import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/game/motion"
+import type { CharacterModel } from "@/lib/game/character-assets"
+import { playCharacterSound, stopCharacterSound } from "@/lib/game/character-audio"
 import {
   encodeObjectId,
   OUTLINE_ID_LAYER_MASK,
@@ -31,21 +35,24 @@ import {
 } from "./traveler-figure"
 
 /**
- * People on the road: placeholder blocks driven by the simulation in
+ * People on the road: directional walking sprites driven by the simulation in
  * lib/game/sim.ts — walking, camping in clearings, chasing vendors. Identity
  * comes from the travelers prop; all per-frame state lives in the sim, and this
- * component just copies positions out of it. Click a block to select it — the
+ * component copies position, heading and motion out of it. Select a person — the
  * HUD names it and shows its live stats. The figure itself lives in
  * traveler-figure.tsx so the character gallery can draw the same one.
  */
 
-/** Campers fold down to this fraction of standing height. */
-const CAMP_SCALE = 0.35
 
 export function Travelers({
   map,
   travelers,
   speed,
+  characterModel = "callings",
+  characterScale = 1,
+  characterFps,
+  walkTuning,
+  movement = LINEAR_MOVEMENT,
   relic,
   trees,
   shrineRenown,
@@ -57,7 +64,16 @@ export function Travelers({
   shrineRenown: number
   /** Base walking speed in tiles per second; each traveler's pace scales it. */
   speed: number
+  /** Swaps only the figure; identities, simulation and selection sounds stay shared. */
+  characterModel?: CharacterModel
+  /** Uniform size multiplier; leaves the sprite's foot anchor fixed. */
+  characterScale?: number
+  /** Animation frames per second, independent of movement pace. */
+  characterFps?: number
+  walkTuning?: WalkTuning
+  movement?: MovementTuning
 }) {
+  const appearances = useMemo(() => travelers.map(t => travelerAppearance(map.seed ?? 0, t.id)), [travelers, map.seed])
   const selection = useCameraStore((s) => s.selection)
   const resourceElapsed = useRef(0)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
@@ -83,6 +99,18 @@ export function Travelers({
     }
   }, [sim])
 
+  useEffect(() => {
+    // Synchronous subscription keeps playback in the user gesture and also
+    // covers selections originating in other controls, not only the canvas.
+    const unsubscribe = useCameraStore.subscribe((state, previous) => {
+      const next = state.selection
+      if (!next || next.kind !== "traveler" || isSelected(previous.selection, next)) return
+      const traveler = travelers.find((t) => t.id === next.id)
+      if (traveler) void playCharacterSound(traveler.type.id, traveler.id)
+    })
+    return () => { unsubscribe(); stopCharacterSound() }
+  }, [travelers])
+
   useFrame((_, delta) => {
     // A background tab hands us a huge delta; clamp so nobody teleports.
     const build = useBuildStore.getState()
@@ -94,7 +122,7 @@ export function Travelers({
     // Keep each tick bounded at faster speeds, including work and routing.
     if (!playback.paused) {
       for (let tick = 0; tick < playback.speed; tick++) {
-        stepSim(sim, travelers, map, speed, Math.min(delta, 0.1))
+        stepSim(sim, travelers, map, speed, Math.min(delta, 0.1), movement)
       }
     }
     resourceElapsed.current += delta
@@ -108,12 +136,27 @@ export function Travelers({
       const s = sim.travelers.get(travelers[i].id)
       if (!group || !s) continue
 
+      const dx = s.x - group.position.x
+      const dz = s.z - group.position.z
+      const distance = Math.hypot(dx, dz)
+      const moved = group.userData.initialized === true && distance < 2 ? distance : 0
+      const moving = moved > 1e-6
+      if (moving) {
+        const target = Math.atan2(dx, dz)
+        const turn = Math.atan2(Math.sin(target - group.rotation.y), Math.cos(target - group.rotation.y))
+        const blend = movement.pathEase === 0 ? 1 : 1 - Math.exp(-Math.min(delta, 0.1) / (movement.pathEase * 0.18))
+        group.rotation.y += turn * blend
+      }
+      group.userData.playbackRate = playback.paused ? 0 : playback.speed
+      group.userData.distance = moved
+      group.userData.moving = moving
+      group.userData.initialized = true
+      group.userData.phase = travelers[i].id * 0.137
+      group.userData.heading = group.rotation.y
+
       if (travelers[i].type.id === "vendor") {
         // Face the direction of travel so the cart trails behind; hold the
         // last heading while parked or camped.
-        const dx = s.x - group.position.x
-        const dz = s.z - group.position.z
-        if (dx * dx + dz * dz > 1e-8) group.rotation.y = Math.atan2(dx, dz)
         const awning = group.getObjectByName(AWNING_NAME)
         if (awning) awning.visible = s.activity === "vending"
       }
@@ -125,7 +168,9 @@ export function Travelers({
       const y = map.elevation && !bridge
         ? groundHeight(map, s.x + map.width / 2 - 0.5, s.z + map.depth / 2 - 0.5) : s.y
       group.position.set(s.x, y, s.z)
-      group.scale.y = s.activity === "camping" || s.activity === "visiting" ? CAMP_SCALE : 1
+      // Keep baked bodies and ground shadows at their authored proportions.
+      // Camping/visiting already select the idle clip.
+      group.scale.y = 1
       if (s.activity === "working") group.rotation.z = Math.sin(sim.time * 1800) * 0.12
       else group.rotation.z = 0
     }
@@ -146,7 +191,8 @@ export function Travelers({
               groupRefs.current[index] = node
             }}
           >
-            <TravelerFigure type={traveler.type} onClick={select} idColor={idColor} />
+            <TravelerFigure appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
+              characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
             <group name="carried-logs" visible={false} position={[0, 0.35, 0.2]} rotation={[0, 0, Math.PI / 2]} onClick={select}>
               <mesh><cylinderGeometry args={[0.12, 0.12, 0.6, 6]} /><meshLambertMaterial color="#89613c" /></mesh>
               <mesh layers-mask={OUTLINE_ID_LAYER_MASK}>

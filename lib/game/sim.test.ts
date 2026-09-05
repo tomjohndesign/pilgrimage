@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 
+import { DEFAULT_MOVEMENT, LINEAR_MOVEMENT } from "./motion"
 import { BRIDGE_RISE } from "./map/bridges"
 import { parseAsciiMap } from "./map/prototype-map"
 import { TILE_HEIGHT, type TerrainId } from "./map/terrain"
@@ -360,7 +361,8 @@ describe("left-hand walking lanes", () => {
     }
   })
 
-  it.each([1, -1] as const)("keeps left while climbing bridge ramps and crossing the raised deck (direction %i)", (direction) => {
+  it.each(([1, -1] as const).flatMap(direction => [LINEAR_MOVEMENT, DEFAULT_MOVEMENT].map(movement => ({ direction, movement }))))(
+    "keeps left across bridge ramps and the raised deck with direction $direction and tuning $movement", ({ direction, movement }) => {
     const map = makeMap()
     for (let x = 9; x <= 11; x++) map.tiles[4 * map.width + x] = "bridge"
     const t = makeTraveler(0, "knight", {}, (direction === 1 ? 6 : 13) / 23)
@@ -372,7 +374,7 @@ describe("left-hand walking lanes", () => {
       const rise = Math.max(0, Math.min(s.progress - 7, 13 - s.progress, 2)) * BRIDGE_RISE / 2
       expect(s.y).toBeCloseTo(TILE_HEIGHT + rise)
       expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) - direction * s.laneOffset)
-      if (i < 28) stepSim(sim, [t], map, 1, 0.25)
+      if (i < 28) stepSim(sim, [t], map, 1, 0.25, movement)
     }
   })
 

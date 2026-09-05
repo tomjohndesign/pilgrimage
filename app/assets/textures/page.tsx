@@ -3,6 +3,7 @@ import Link from "next/link"
 
 import { TextureGallery } from "@/components/texture-gallery"
 import { TreeLab } from "@/components/tree-lab/tree-lab"
+import { CharacterTextures } from "@/components/character-textures"
 import { EnvironmentGallery } from "@/components/environment-lab/environment-gallery"
 
 export const metadata: Metadata = {
@@ -30,6 +31,7 @@ export default function TexturesPage() {
       </header>
 
       <TextureGallery />
+      <CharacterTextures />
 
       <section id="environment" className="mt-20 w-full max-w-6xl">
         <header className="mb-10 text-center">

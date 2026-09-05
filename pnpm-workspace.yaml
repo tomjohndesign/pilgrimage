@@ -1,4 +1,3 @@
-# sharp is only needed for Next.js image optimisation, which this project turns
-# off via `images.unoptimized` in next.config.mjs. Skip its native build.
+# sharp packs generated sprite sheets and terrain textures in the asset pipeline.
 allowBuilds:
-  sharp: false
+  sharp: true

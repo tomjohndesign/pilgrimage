@@ -1,0 +1,5 @@
+{
+  "mud-path": {
+    "prompt": "Use case: stylized-concept. Asset type: seamless terrain texture for a small-scale isometric medieval game reminiscent of RCT2 and classic Age of Empires. Create a square, top-down, tileable muddy footpath surface. Tiny compact earth clumps, occasional tiny pale stones, restrained warm brown palette, simple readable texture at 128x128 pixels. Uniform diffuse lighting; no perspective, horizons, large objects, cast shadows, borders, labels or text. All opposite edges must tile seamlessly. Opaque PNG background."
+  }
+}

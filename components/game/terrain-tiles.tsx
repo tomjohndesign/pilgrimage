@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
-import { useLoader, useThree } from "@react-three/fiber"
+import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { ElevationEdges } from "./elevation-edges"
@@ -36,6 +36,7 @@ import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 import { diagonalRoadSegments } from "@/lib/game/render/road-segments"
 import { ROAD_SHAPE_GLSL } from "@/lib/game/render/road-shape"
 import { DEFAULT_TRAFFIC } from "@/lib/game/travelers"
+import { useTerrainTexture } from "./use-terrain-texture"
 
 /** Top of the base slab. Must sit below the shortest terrain height. */
 export const SLAB_TOP = 0.08
@@ -691,23 +692,20 @@ export function TerrainTiles({
     lookUniforms.pixelRatio.value = dpr
   }, [lookUniforms, look, dpr])
 
-  // All tiers load up front so switching tier swaps textures without a
-  // suspend (which would blank the whole terrain for a frame).
-  const roadTextures = useLoader(
-    THREE.TextureLoader,
-    ROAD_TIERS.map((t) => t.textureUrl),
-  )
-  const grass = useLoader(THREE.TextureLoader, GRASS_TEXTURE_URL)
+  // Texture requests never suspend the terrain: colored surfaces are already
+  // in place while each image loads, including when switching road tiers.
+  const roadTexture = useTerrainTexture(tier.textureUrl, TERRAIN.path.color)
+  const grass = useTerrainTexture(GRASS_TEXTURE_URL, TERRAIN.grass.color)
   useMemo(() => {
-    for (const texture of [...roadTextures, grass]) {
+    for (const texture of [roadTexture, grass]) {
       texture.colorSpace = THREE.SRGBColorSpace
-      // World-position UVs walk off in every direction, so wrap both axes.
       texture.wrapS = THREE.RepeatWrapping
       texture.wrapT = THREE.RepeatWrapping
       texture.anisotropy = 4
     }
-  }, [roadTextures, grass])
-  const dirt = useLoader(THREE.TextureLoader, DIRT_TEXTURE_URL)
+  }, [roadTexture, grass])
+
+  const dirt = useTerrainTexture(DIRT_TEXTURE_URL, TERRAIN.dirt.color)
   useMemo(() => {
     dirt.colorSpace = THREE.SRGBColorSpace
     // Repeat around the cliff, but run the topsoil-to-subsoil ramp just once
@@ -717,8 +715,6 @@ export function TerrainTiles({
     dirt.repeat.set(map.width / 4, 1)
     dirt.anisotropy = 4
   }, [dirt, map])
-
-  const roadTexture = roadTextures[tier.tier]
 
   // Tile boundaries sit at integer offsets from -width/2, so the lattice
   // origin is that half-extent modulo one tile.
@@ -952,6 +948,9 @@ export function TerrainTiles({
     }
     attr(idGeometry, "aCorners").needsUpdate = true
     idMesh.instanceMatrix.needsUpdate = true
+    // Recompute bounds after map edits for correct culling and picking.
+    for (const target of [...roadTargets, ...groundTargets]) target.mesh.computeBoundingSphere()
+    idMesh.computeBoundingSphere()
   }, [
     map,
     tier,
@@ -977,7 +976,7 @@ export function TerrainTiles({
   )
 
   return (
-    <group>
+    <group name="terrain">
       <WaterMotion map={map} />
       <ElevationEdges map={map} />
       <mesh position={slabPosition}>

@@ -9,7 +9,17 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "assets:prompt": "node scripts/asset-prompt.mjs",
+    "assets:import": "node scripts/import-sprite.mjs",
+    "assets:import-texture": "node scripts/import-texture.mjs",
+    "assets:sounds": "node scripts/generate-character-sounds.mjs",
+    "assets:check": "node scripts/check-character-assets.mjs",
+    "assets:terrain": "node scripts/generate-grass-texture.mjs && node scripts/generate-dirt-texture.mjs && node scripts/generate-road-textures.mjs",
+    "assets:base": "node scripts/export-base-person.mjs",
+    "assets:check-base": "node scripts/check-base-person.mjs",
+    "assets:population": "node scripts/export-population.mjs",
+    "assets:check-population": "node scripts/check-population.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -71,7 +81,9 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.185.4",
+    "playwright": "^1.63.0",
     "postcss": "^8.5",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4.2.0",
     "tw-animate-css": "1.3.3",
     "typescript": "5.7.3",

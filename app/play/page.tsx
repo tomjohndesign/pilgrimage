@@ -28,6 +28,21 @@ export default async function PlayPage({
   const params = await searchParams
 
   const initialSettings: Partial<MapSettings> = {}
+  if (params.characters === "base" || params.characters === "callings") {
+    initialSettings.characterModel = params.characters
+  }
+  for (const key of ["baseSize", "draftSize"] as const) {
+    const scale = parseFloatParam(params[key])
+    if (scale !== undefined) initialSettings[key] = Math.min(4, Math.max(0.5, scale))
+  }
+  if (params.timing === "distance" || params.timing === "fps") initialSettings.walkSync = params.timing === "distance"
+  for (const [query, key, min, max] of [
+    ["stride", "stride", 0.15, 1.2], ["variation", "paceVariation", 0, 0.4],
+    ["easing", "pathEase", 0, 1], ["acceleration", "acceleration", 0, 1.5],
+  ] as const) {
+    const value = parseFloatParam(params[query])
+    if (value !== undefined) initialSettings[key] = Math.max(min, Math.min(max, value))
+  }
   const elevation = { ...DEFAULT_ELEVATION }
   for (const key of Object.keys(ELEVATION_CONTROLS) as (keyof ElevationSettings)[]) {
     const value = parseFloatParam(params[`e_${key}`])
@@ -42,6 +57,8 @@ export default async function PlayPage({
   const relicDistance = parseIntParam(params.relic)
   const traffic = parseIntParam(params.traffic)
   const walkSpeed = parseFloatParam(params.speed)
+  const characterFps = parseIntParam(params.fps)
+  if (characterFps !== undefined) initialSettings.characterFps = Math.min(24, Math.max(1, characterFps))
   const road = parseIntParam(params.road)
   const roadOpacity = parseFloatParam(params.opacity)
   const roadShade = parseFloatParam(params.shade)

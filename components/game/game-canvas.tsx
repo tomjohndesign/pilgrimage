@@ -1,6 +1,8 @@
 "use client"
 
-import { Suspense, useMemo } from "react"
+import { useEffect, useMemo } from "react"
+import { usePopulationStore } from "@/lib/game/base-person/population-store"
+import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { PixelCanvas, PixelCharacters, type PixelationProps } from "@/components/pixel-canvas"
 
 import { useCameraStore } from "@/lib/game/camera-store"
@@ -14,6 +16,8 @@ import type { GameMap } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
 import type { Traveler } from "@/lib/game/travelers"
+import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/game/motion"
+import type { CharacterModel } from "@/lib/game/character-assets"
 import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 
 import { Bridges } from "./bridges"
@@ -42,6 +46,11 @@ export function GameCanvas({
   lastMarch = false,
   travelers,
   walkSpeed,
+  characterModel = "callings",
+  characterScale = 1,
+  characterFps,
+  walkTuning,
+  movement = LINEAR_MOVEMENT,
   roadTier,
   relicTraffic,
   roadLook,
@@ -65,6 +74,14 @@ export function GameCanvas({
   lastMarch?: boolean
   travelers: Traveler[]
   walkSpeed: number
+  /** Use the shared base person or the earlier calling-specific sprite sheets. */
+  characterModel?: CharacterModel
+  /** Uniform size multiplier; leaves the sprite's foot anchor fixed. */
+  characterScale?: number
+  /** Animation frames per second, independent of movement pace. */
+  characterFps?: number
+  walkTuning?: WalkTuning
+  movement?: MovementTuning
   /** Road development tier — index into ROAD_TIERS. */
   roadTier?: number
   /** How many of the travelers turn aside for the relic; wears its track. */
@@ -74,6 +91,9 @@ export function GameCanvas({
   /** Draw the global tile lattice over the ground. Off by default. */
   showGrid?: boolean
 } & PixelationProps) {
+  const foundation = usePersonDesignStore(s => s.design)
+  useEffect(() => { void usePersonDesignStore.getState().hydrate() }, [])
+  useEffect(() => { void usePopulationStore.getState().prepare(foundation) }, [foundation])
   const species = useTreeTuningStore((s) => s.species)
   const variance = useTreeTuningStore((s) => s.variance)
   const trees = useMemo(() => growTreePlacements(placeTrees(map, species),
@@ -100,17 +120,14 @@ export function GameCanvas({
       <hemisphereLight args={["#bcd0f0", "#3a2a16", 0.45]} />
       <CameraLight />
 
-      {/* The terrain suspends while the dirt texture loads. */}
-      <Suspense fallback={null}>
-        <TerrainTiles
-          map={map}
-          roadTier={roadTier}
-          traffic={travelers.length}
-          relicTraffic={relicTraffic}
-          look={roadLook}
-          showGrid={showGrid}
-        />
-      </Suspense>
+      <TerrainTiles
+        map={map}
+        roadTier={roadTier}
+        traffic={travelers.length}
+        relicTraffic={relicTraffic}
+        look={roadLook}
+        showGrid={showGrid}
+      />
       <Bridges map={map} roadTier={roadTier} />
       <Trees map={map} placements={trees} ents={lastMarch} />
       <Environment map={map} />
@@ -118,14 +135,15 @@ export function GameCanvas({
       <Shrine map={map} relic={relic} />
       <PixelCharacters>
         <Monks map={map} monks={monks} flying={blasterPastor} />
-        <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown} />
+        <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown}
+          characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
       </PixelCharacters>
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
       {buildType && <BuildInfluenceOverlay map={map} />}
 
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
-      <DebugHandle map={map} travelers={travelers} speed={walkSpeed} />
+      <DebugHandle map={map} travelers={travelers} speed={walkSpeed} movement={movement} />
     </PixelCanvas>
   )
 }

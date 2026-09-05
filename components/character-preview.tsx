@@ -1,6 +1,5 @@
 "use client"
 
-import { Suspense } from "react"
 import { PixelCanvas, PixelCharacters, type PixelationProps } from "@/components/pixel-canvas"
 
 import { parseAsciiMap } from "@/lib/game/map/prototype-map"
@@ -13,6 +12,7 @@ import {
   yawForView,
 } from "@/lib/game/render/iso"
 import type { TravelerTypeDef } from "@/lib/game/travelers"
+import type { CharacterModel } from "@/lib/game/character-assets"
 
 import { TerrainTiles } from "./game/terrain-tiles"
 import { TravelerFigure } from "./game/traveler-figure"
@@ -34,7 +34,7 @@ const PREVIEW_YAW = yawForView(0)
  * the figure's middle sits at the origin the iso camera studies. Vendors are
  * shown mid-sale, awning up, since that is when the cart is most recognisable.
  */
-export function CharacterPreview({ type, ...pixelation }: { type: TravelerTypeDef } & PixelationProps) {
+export function CharacterPreview({ type, characterModel = "callings", ...pixelation }: { type: TravelerTypeDef; characterModel?: CharacterModel } & PixelationProps) {
   const roadTop = TILE_HEIGHT
   return (
     <PixelCanvas
@@ -56,12 +56,10 @@ export function CharacterPreview({ type, ...pixelation }: { type: TravelerTypeDe
       <directionalLight position={lightOffsetForYaw(PREVIEW_YAW)} intensity={2.7} />
 
       <group position={[0, -roadTop - 0.3, 0]}>
-        <Suspense fallback={null}>
-          <TerrainTiles map={ROAD_MAP} />
-        </Suspense>
+        <TerrainTiles map={ROAD_MAP} />
         {/* Face east along the road so the vendor's cart trails visibly. */}
         <group position={[0, roadTop, 0]} rotation={[0, Math.PI / 2, 0]}>
-          <PixelCharacters><TravelerFigure type={type} awning={type.id === "vendor"} /></PixelCharacters>
+          <PixelCharacters><TravelerFigure type={type} awning={type.id === "vendor"} characterModel={characterModel} /></PixelCharacters>
         </group>
       </group>
     </PixelCanvas>

@@ -4,9 +4,14 @@ import type * as THREE from "three"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 
 import type { TravelerTypeDef } from "@/lib/game/travelers"
+import { Suspense } from "react"
+import { CharacterSprite } from "./character-sprite"
+import type { TravelerAppearance } from "@/lib/game/base-person/population"
+import type { WalkTuning } from "@/lib/game/motion"
+import type { CharacterModel } from "@/lib/game/character-assets"
 
 /**
- * The visible body of one traveler: a coloured block in the calling's colour,
+ * The visible body of one traveler: a tiny eight-direction sprite,
  * plus the cart for vendors. Shared between the road (components/game/
  * travelers.tsx) and the /assets/characters gallery, so the gallery shows the
  * exact figure the player meets in game.
@@ -66,17 +71,35 @@ export function TravelerFigure({
   type,
   onClick,
   idColor,
+  selected = false,
   /** Initial awning state for vendors; the sim flips it live on the road. */
   awning = false,
+  outlineColor,
+  characterModel = "callings",
+  characterScale = 1,
+  characterFps,
+  walkTuning,
+  appearance,
 }: {
   type: TravelerTypeDef
+  appearance?: TravelerAppearance
+  selected?: boolean
   idColor?: THREE.Color
   onClick?: FigureClickHandler
   awning?: boolean
+  outlineColor?: [number, number, number]
+  characterModel?: CharacterModel
+  /** Uniform size multiplier; leaves the sprite's foot anchor fixed. */
+  characterScale?: number
+  /** Animation frames per second, independent of movement pace. */
+  characterFps?: number
+  walkTuning?: WalkTuning
 }) {
   return (
     <>
-      <FigureBox name="traveler" position={[0, BLOCK_HEIGHT / 2, 0]} args={[BLOCK_WIDTH, BLOCK_HEIGHT, BLOCK_WIDTH]} color={type.color} idColor={idColor} onClick={onClick} />
+      <Suspense fallback={null}>
+        <CharacterSprite appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] : undefined)} characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
+      </Suspense>
       {type.id === "vendor" && <VendorCart onClick={onClick} awning={awning} idColor={idColor} />}
     </>
   )

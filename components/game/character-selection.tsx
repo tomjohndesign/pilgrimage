@@ -32,6 +32,7 @@ export function CharacterSelectionShadow({ map, flying = false }: { map: GameMap
       object.layers.enable(SELECTED_CHARACTER_LAYER)
     }
     // Use the actual animated figure, including its cart and carried items.
+    // Sprites manage their own layer so selection also works after async loading.
     // The click volume and flat ID copies must never enlarge its silhouette.
     anchor.current?.parent?.traverse((object) => {
       if ((object instanceof THREE.Mesh || object instanceof THREE.Sprite) && object.layers.isEnabled(0) && object.name !== "character-hit-target") include(object)
