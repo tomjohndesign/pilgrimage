@@ -30,6 +30,14 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  async headers() {
+    return [{
+      source: '/:path*',
+      // Background music uses a hidden YouTube video. Prevent the embed from
+      // opening a floating video player when the user switches tabs.
+      headers: [{ key: 'Permissions-Policy', value: 'picture-in-picture=()' }],
+    }]
+  },
   async redirects() {
     // The texture gallery moved under /assets when characters joined it.
     return [{ source: '/textures', destination: '/assets/textures', permanent: true }]
