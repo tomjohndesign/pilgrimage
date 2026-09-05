@@ -26,13 +26,17 @@ import { generateWater, WATER_KIND_LAKE, WATER_KIND_RIVER } from "./water"
  *    through woods that would otherwise be a solid wall of trees.
  *
  * Water routes around everything else's guarantees rather than breaking them:
- * lakes get sand beaches, rivers get point bars, and the road, trails, and
- * the relic's track cross rivers only on straight bridges of at most
- * MAX_BRIDGE_SPAN tiles — never lakes. Every glade and clearing is joined
- * into one trail network (nearest-neighbour spanning tree), that network is
- * tied into the road, and a final repair pass reconnects (or reforests) any
- * pocket the water cut off, so every passable tile on a generated map is
- * reachable from every other.
+ * lakes get sand beaches, rivers get point bars, and the road crosses rivers
+ * only on straight bridges of at most MAX_BRIDGE_SPAN tiles — never lakes.
+ * Bridges belong to the road alone. Trails are desire lines, not engineering:
+ * they never bridge, so a trail bound for the far bank runs down to the water
+ * and stops there, and some simply peter out in the woods or branch off to
+ * nowhere. The relic's track forks from the road on the hovel's own bank, so
+ * it too stays dry (a bridge is its last resort, never its habit). Glades and
+ * clearings are joined by a nearest-neighbour spanning tree, that network is
+ * tied into the road, and a final pass gives every pocket of passable land a
+ * trail to reachable ground when only forest lies between them — pockets with
+ * water in the way stay cut off, as rivers should.
  *
  * Forest, trail, road, site, and water randomness come from separate streams
  * derived from the seed, so tuning one part's knobs never moves the others —
@@ -59,6 +63,8 @@ export interface GenerateMapOptions {
   /** Clearing footprint in tiles. */
   clearingSizeMin?: number
   clearingSizeMax?: number
+  /** Number of dead-end spurs branching off the trail network to nowhere. */
+  spurCount?: number
   /** How far off the road the relic's hovel is sited, in tiles (see DEFAULT_RELIC_DISTANCE). */
   relicDistance?: number
   /** Max fraction of the map under water (0 disables water entirely). */
@@ -72,7 +78,16 @@ export interface GenerateMapOptions {
 export const DEFAULT_FOREST_COVERAGE = 0.6
 export const DEFAULT_GLADE_COUNT = 12
 export const DEFAULT_CLEARING_COUNT = 22
+export const DEFAULT_SPUR_COUNT = 8
 export const DEFAULT_WATER_COVERAGE = 0.1
+
+/** Chance a trail between two stops peters out in the woods before arriving. */
+const TRAIL_FADE_CHANCE = 0.2
+/** How far a spur aims from the trail it leaves, in tiles, before it fades. */
+const SPUR_REACH_MIN = 8
+const SPUR_REACH_MAX = 24
+/** How many cut-off pockets the joining pass will look at before giving up. */
+const MAX_POCKET_REPAIRS = 64
 
 /** Keep glade centres and road endpoints off the extreme edge tiles. */
 const EDGE_MARGIN = 2
@@ -147,6 +162,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     clearingCount = DEFAULT_CLEARING_COUNT,
     clearingSizeMin = 2,
     clearingSizeMax = 6,
+    spurCount = DEFAULT_SPUR_COUNT,
     relicDistance = DEFAULT_RELIC_DISTANCE,
     waterCoverage = DEFAULT_WATER_COVERAGE,
   } = options
@@ -315,28 +331,38 @@ export function generateMap(options: GenerateMapOptions): GameMap {
 
   // --- Trails: join every glade and clearing into one network ----------------
   // Nearest-neighbour spanning tree over the centres, each edge routed with
-  // the wandering A* and carved as forest-floor clearing. Trails are
-  // water-aware: they route around lakes and cross rivers on short straight
-  // bridges; an edge that can't be routed (a centre walled in by lake water)
-  // is skipped and left to the repair pass below.
+  // the wandering A* and carved as forest-floor clearing. Trails route around
+  // water but never over it — bridges are the road's alone. A trail whose far
+  // stop lies across a river is routed as if it could cross, then cut at the
+  // bank, so it runs down to the water and stops. Some trails also peter out
+  // in the woods short of where they were going.
   //
-  // Every carved bridge is knocked out of `passKind`, the water mask routing
-  // sees, so later routes walk across existing bridges for free instead of
-  // building a duplicate crossing one tile over.
+  // `passKind` is the water mask the road and the relic's track route on:
+  // every bridge they build is knocked out of it so a later route walks an
+  // existing bridge for free instead of building a duplicate one tile over.
+  // Trails route on `kind` itself, so to them a bridge is still water.
   const passKind = kind.slice()
+  const trailTiles: number[] = []
   const carveRoute = (route: number[]): void => {
     for (const i of route) {
-      if (tiles[i] === "water") {
-        tiles[i] = "bridge"
-        passKind[i] = 0
-      } else if (tiles[i] === "forest") {
-        tiles[i] = "clearing"
-      }
+      if (kind[i] !== 0) continue
+      if (tiles[i] === "forest") tiles[i] = "clearing"
+      trailTiles.push(i)
     }
   }
-  const carveTrail = (a: { x: number; z: number }, b: { x: number; z: number }): void => {
-    const route = routeOverLand(a, b, width, depth, trailWander, kind, passKind, MAX_BRIDGE_SPAN)
-    if (route) carveRoute(route)
+  /** Cut a trail from `a` toward `b` without bridging, keeping the first `keep` of it. */
+  const carveTrail = (a: TilePos, b: TilePos, keep = 1): void => {
+    let route = routeOverLand(a, b, width, depth, trailWander, kind, kind, 0)
+    if (!route) {
+      // The far stop is across the water: head for it and stop on this bank.
+      const crossing = routeOverLand(a, b, width, depth, trailWander, kind, passKind, MAX_BRIDGE_SPAN)
+      if (!crossing) return
+      const bank = crossing.findIndex((i) => kind[i] !== 0)
+      route = bank === -1 ? crossing : crossing.slice(0, bank)
+    }
+    if (keep < 1) route = route.slice(0, Math.max(2, Math.round(route.length * keep)))
+    if (route.length < 2) return
+    carveRoute(route)
   }
 
   // Trail endpoints must be reachable land; snap centres onto the main
@@ -366,8 +392,32 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     }
     const next = pending[bestPending]
     pending.splice(bestPending, 1)
-    carveTrail(trailStops[next], trailStops[bestConnected])
+    // Both rolls are always drawn so the fade chance never shifts the stream.
+    const fadeRoll = rngTrail()
+    const lengthRoll = rngTrail()
+    const keep = fadeRoll < TRAIL_FADE_CHANCE ? 0.4 + lengthRoll * 0.4 : 1
+    carveTrail(trailStops[next], trailStops[bestConnected], keep)
     connected.push(next)
+  }
+
+  // --- Spurs: trails that branch off to nowhere -------------------------------
+  // Each leaves an existing trail tile, heads a random distance in a random
+  // direction, and fades out short of wherever it was going — the ways of
+  // woodcutters and hunters, not of anyone with a destination. Spurs may
+  // leave earlier spurs, so the network frays at its edges.
+  for (let s = 0; s < spurCount && trailTiles.length > 0; s++) {
+    const from = trailTiles[Math.floor(rngTrail() * trailTiles.length)]
+    const reach = SPUR_REACH_MIN + rngTrail() * (SPUR_REACH_MAX - SPUR_REACH_MIN)
+    const angle = rngTrail() * Math.PI * 2
+    const keep = 0.5 + rngTrail() * 0.4
+    const fx = from % width
+    const fz = Math.floor(from / width)
+    const aim = {
+      x: Math.max(0, Math.min(width - 1, Math.round(fx + Math.cos(angle) * reach))),
+      z: Math.max(0, Math.min(depth - 1, Math.round(fz + Math.sin(angle) * reach))),
+    }
+    const to = snapToLand(aim, roadLand, width, depth)
+    if (to) carveTrail({ x: fx, z: fz }, to, keep)
   }
 
   // --- Road: west edge to east edge ------------------------------------------
@@ -401,7 +451,8 @@ export function generateMap(options: GenerateMapOptions): GameMap {
 
   // --- Tie the trail network into the road -----------------------------------
   // One trail from the road's nearest centre keeps the network joined to the
-  // road, even when the road misses all the glades.
+  // road, even when the road misses all the glades. Like every trail it stops
+  // at the water if a river runs between them.
   if (trailStops.length > 0) {
     let bestCenter = trailStops[0]
     let bestRoad = roadTiles[0]
@@ -433,46 +484,35 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     roadLand,
   )
 
-  // --- Keep the passable graph whole -----------------------------------------
-  // Rivers and lakes can sever glades, trails, and beaches. Flood the
-  // passable tiles from the road; each pocket left over gets its own trail to
-  // the road when one can be routed, and reverts to forest when it can't (a
-  // pocket walled in by lake water). The final sweep makes the invariant
-  // unconditional: every passable tile is reachable from every other.
-  for (let repair = 0; repair < 16; repair++) {
-    const orphan = findOrphanTile(tiles, roadTiles, width, depth)
+  // --- Join same-bank pockets to the network ---------------------------------
+  // Rivers and lakes divide the world, and trails never bridge, so land the
+  // road cannot reach without a crossing stays cut off — that is the point.
+  // But a glade or clearing that shares a bank with reachable ground should
+  // not sit walled off by forest alone: each such pocket gets a bridge-free
+  // trail to the nearest reachable tile. Pockets with water between them and
+  // everything reachable are left exactly as they are.
+  let reached = reachableFrom(tiles, roadTiles, width, depth)
+  const settled = new Uint8Array(tiles.length)
+  for (let repair = 0; repair < MAX_POCKET_REPAIRS; repair++) {
+    const orphan = tiles.findIndex((t, i) => TERRAIN[t].passable && !reached[i] && !settled[i])
     if (orphan === -1) break
-    const from = { x: orphan % width, z: Math.floor(orphan / width) }
-    let bestRoad = -1
-    let bestDist = Infinity
-    for (const i of roadTiles) {
-      if (kind[i] !== 0) continue
-      const dist = Math.abs((i % width) - from.x) + Math.abs(Math.floor(i / width) - from.z)
-      if (dist < bestDist) {
-        bestDist = dist
-        bestRoad = i
-      }
-    }
-    const route =
-      bestRoad === -1
-        ? null
-        : routeOverLand(
-            from,
-            { x: bestRoad % width, z: Math.floor(bestRoad / width) },
-            width,
-            depth,
-            trailWander,
-            kind,
-            passKind,
-            MAX_BRIDGE_SPAN,
-          )
-    if (route) carveRoute(route)
-    else reforestComponent(tiles, orphan, width, depth)
-  }
-  // Whatever is still cut off after the repair budget goes back to the woods.
-  for (let orphan = findOrphanTile(tiles, roadTiles, width, depth); orphan !== -1; ) {
-    reforestComponent(tiles, orphan, width, depth)
-    orphan = findOrphanTile(tiles, roadTiles, width, depth)
+    const pocket = passableComponent(tiles, orphan, width, depth)
+    for (const i of pocket) settled[i] = 1
+    const link = nearestReachedByLand(pocket, reached, tiles, kind, width, depth)
+    if (!link) continue
+    const route = routeOverLand(
+      { x: link.from % width, z: Math.floor(link.from / width) },
+      { x: link.to % width, z: Math.floor(link.to / width) },
+      width,
+      depth,
+      trailWander,
+      kind,
+      kind,
+      0,
+    )
+    if (!route) continue
+    carveRoute(route)
+    reached = reachableFrom(tiles, roadTiles, width, depth)
   }
 
   return {
@@ -491,16 +531,25 @@ export function generateMap(options: GenerateMapOptions): GameMap {
 }
 
 /**
- * Grid-step distance from every tile to the nearest road tile, ignoring
- * terrain — this is the length of track it would take to reach each spot on a
- * dry map, and a fine siting yardstick on a wet one.
+ * Grid-step distance over dry land from every tile to the nearest of the
+ * `sources`, ignoring forest but walking around water — the length of track
+ * it would take to reach each spot without a bridge. Tiles no dry walk
+ * reaches (the far bank, a lake-locked pocket) stay -1. `origin` records
+ * which source each tile's walk began from.
  */
-function roadDistanceField(width: number, depth: number, road: TilePos[]): Int32Array {
+function landDistanceField(
+  sources: number[],
+  kind: Uint8Array,
+  width: number,
+  depth: number,
+): { dist: Int32Array; origin: Int32Array } {
   const dist = new Int32Array(width * depth).fill(-1)
+  const origin = new Int32Array(width * depth).fill(-1)
   const queue: number[] = []
-  for (const p of road) {
-    const i = p.z * width + p.x
+  for (const i of sources) {
+    if (kind[i] !== 0 || dist[i] !== -1) continue
     dist[i] = 0
+    origin[i] = i
     queue.push(i)
   }
   for (let head = 0; head < queue.length; head++) {
@@ -512,12 +561,13 @@ function roadDistanceField(width: number, depth: number, road: TilePos[]): Int32
       const nz = z + dz
       if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
       const n = nz * width + nx
-      if (dist[n] !== -1) continue
+      if (dist[n] !== -1 || kind[n] !== 0) continue
       dist[n] = dist[i] + 1
+      origin[n] = origin[i]
       queue.push(n)
     }
   }
-  return dist
+  return { dist, origin }
 }
 
 /**
@@ -533,11 +583,12 @@ function roadDistanceField(width: number, depth: number, road: TilePos[]): Int32
  * the hovel always stands on buildable ground with breathing space, even on a
  * map whose knobs left no glade to be had.
  *
- * The branch forks from the road tile nearest the door (outside the road's
- * outer stretches) and is routed with the trail wander, steered away from the
- * road and the hovel itself so it reads as one clean track in, not a tangle.
- * It routes water-aware like every other way on the map — around lakes, over
- * rivers on short straight bridges.
+ * The branch forks from the road tile nearest the door by dry land (outside
+ * the road's outer stretches) and is routed with the trail wander, steered
+ * away from the road and the hovel itself so it reads as one clean track in,
+ * not a tangle. Siting and forking both measure distance around water rather
+ * than across it, so the hovel lands on the same bank as its junction and the
+ * track stays dry; it will bridge only when no dry way exists at all.
  */
 function foundSite(
   tiles: TerrainId[],
@@ -551,8 +602,39 @@ function foundSite(
   passKind: Uint8Array,
   roadLand: Uint8Array,
 ): { hovel: BuildingDef; site: FoundingSite } {
-  const dist = roadDistanceField(width, depth, road)
   const { min: bandMin, max: bandMax } = relicDistanceBand(relicDistance)
+
+  // Distance from the road is measured as it will be walked: dry, around
+  // water rather than across it, from any road tile at all — the gap between
+  // road and relic is the ground the settlement will grow on.
+  const fromRoad = landDistanceField(
+    road.map((p) => p.z * width + p.x),
+    kind,
+    width,
+    depth,
+  )
+  const walkFromRoad = (i: number): number =>
+    fromRoad.dist[i] === -1 ? width + depth : fromRoad.dist[i]
+
+  // The track itself is walked dry and off the road (the road and its bridges
+  // are walls to this walk), starting from the "gates" — land tiles beside
+  // the stretch of road the branch may fork from. A site no such walk reaches
+  // (the far bank of a river the road crosses only near its ends) would need
+  // a bridge, so it is penalised out of contention.
+  const lo = Math.floor(road.length * JUNCTION_MARGIN)
+  const hi = Math.max(lo, Math.ceil(road.length * (1 - JUNCTION_MARGIN)) - 1)
+  const offRoad = kind.slice()
+  for (const p of road) offRoad[p.z * width + p.x] = WATER_KIND_LAKE
+  const gates: number[] = []
+  for (let r = lo; r <= hi; r++) {
+    for (const [dx, dz] of ROUTE_DIRS) {
+      const nx = road[r].x + dx
+      const nz = road[r].z + dz
+      if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
+      if (offRoad[nz * width + nx] === 0) gates.push(nz * width + nx)
+    }
+  }
+  const { dist, origin } = landDistanceField(gates, offRoad, width, depth)
 
   // --- Score every origin the footprint fits at ------------------------------
   let best: TilePos = { x: EDGE_MARGIN, z: EDGE_MARGIN }
@@ -562,6 +644,7 @@ function foundSite(
     for (let x = outerMin; x <= width - HOVEL_SIZE - outerMin; x++) {
       let onRoad = false
       let grounded = true
+      let dryTrack = false
       let nearest = Infinity
       for (let dz = -1; dz <= HOVEL_SIZE; dz++) {
         for (let dx = -1; dx <= HOVEL_SIZE; dx++) {
@@ -572,7 +655,10 @@ function foundSite(
           if (roadLand[i] !== 1) grounded = false
           if (inFootprint) {
             if (tiles[i] === "path") onRoad = true
-            nearest = Math.min(nearest, dist[i])
+            nearest = Math.min(nearest, walkFromRoad(i))
+          } else if (dist[i] !== -1) {
+            // A ring tile the gate walk reaches means the track can arrive dry.
+            dryTrack = true
           }
         }
       }
@@ -582,6 +668,8 @@ function foundSite(
       // amount of open ground can buy back — in-band sites always win if any exist.
       const bandPenalty =
         nearest < bandMin ? (bandMin - nearest) * 50 : nearest > bandMax ? (nearest - bandMax) * 50 : 0
+      // Needing a bridge outweighs any band shortfall a dry site could have.
+      const bridgePenalty = dryTrack ? 0 : (width + depth) * 50
 
       let room = 0
       for (let dz = -SITE_ROOM_RADIUS; dz < HOVEL_SIZE + SITE_ROOM_RADIUS; dz++) {
@@ -599,7 +687,7 @@ function foundSite(
       const edgeDist = Math.min(x, z, width - HOVEL_SIZE - x, depth - HOVEL_SIZE - z)
       const edgePenalty = Math.max(0, SITE_EDGE_MARGIN - edgeDist) * SITE_EDGE_PENALTY
 
-      const score = room - bandPenalty - edgePenalty + rng() * SITE_SCORE_JITTER
+      const score = room - bandPenalty - bridgePenalty - edgePenalty + rng() * SITE_SCORE_JITTER
       if (score > bestScore) {
         bestScore = score
         best = { x, z }
@@ -618,6 +706,9 @@ function foundSite(
   }
 
   // --- Door and junction: the closest pair between the ring and the road ------
+  // Closest by the same dry, off-road walk, so the fork is on the hovel's own
+  // bank and the track can reach the door without touching road or water.
+  // Straight-line distance is only the fallback for a hovel no such walk reaches.
   const ring: TilePos[] = []
   for (let k = 0; k < HOVEL_SIZE; k++) {
     ring.push({ x: best.x + k, z: best.z - 1 })
@@ -625,18 +716,36 @@ function foundSite(
     ring.push({ x: best.x - 1, z: best.z + k })
     ring.push({ x: best.x + HOVEL_SIZE, z: best.z + k })
   }
-  const lo = Math.floor(road.length * JUNCTION_MARGIN)
-  const hi = Math.max(lo, Math.ceil(road.length * (1 - JUNCTION_MARGIN)) - 1)
   let door = ring[0]
   let junction = lo
   let bestDist = Infinity
+  let gate = -1
   for (const d of ring) {
+    const i = d.z * width + d.x
+    if (dist[i] === -1 || dist[i] + 1 >= bestDist) continue
+    bestDist = dist[i] + 1
+    door = d
+    gate = origin[i]
+  }
+  if (gate !== -1) {
+    // The junction is the in-range road tile the gate stands beside.
+    const gx = gate % width
+    const gz = Math.floor(gate / width)
     for (let r = lo; r <= hi; r++) {
-      const manhattan = Math.abs(road[r].x - d.x) + Math.abs(road[r].z - d.z)
-      if (manhattan < bestDist) {
-        bestDist = manhattan
-        door = d
+      if (Math.abs(road[r].x - gx) + Math.abs(road[r].z - gz) === 1) {
         junction = r
+        break
+      }
+    }
+  } else {
+    for (const d of ring) {
+      for (let r = lo; r <= hi; r++) {
+        const manhattan = Math.abs(road[r].x - d.x) + Math.abs(road[r].z - d.z)
+        if (manhattan < bestDist) {
+          bestDist = manhattan
+          door = d
+          junction = r
+        }
       }
     }
   }
@@ -644,14 +753,20 @@ function foundSite(
   // --- The branch: one track from junction to door -----------------------------
   const branchWander = new Float64Array(trailWander)
   for (let i = 0; i < branchWander.length; i++) {
-    if (tiles[i] === "path") branchWander[i] += BRANCH_AVOID_COST
+    if (tiles[i] === "path" || tiles[i] === "bridge") branchWander[i] += BRANCH_AVOID_COST
   }
   for (let dz = 0; dz < HOVEL_SIZE; dz++) {
     for (let dx = 0; dx < HOVEL_SIZE; dx++) {
       branchWander[(best.z + dz) * width + (best.x + dx)] += BRANCH_AVOID_COST
     }
   }
+  // Dry and clear of the road first (the road is a wall, bar the junction
+  // itself); then the road merely avoided; a bridge only when no dry way
+  // exists at all; and blind as a last resort.
+  offRoad[road[junction].z * width + road[junction].x] = 0
   const branchRoute =
+    routeOverLand(road[junction], door, width, depth, branchWander, offRoad, offRoad, 0) ??
+    routeOverLand(road[junction], door, width, depth, branchWander, kind, passKind, 0) ??
     routeOverLand(road[junction], door, width, depth, branchWander, kind, passKind, MAX_BRIDGE_SPAN) ??
     routeOverLand(road[junction], door, width, depth, branchWander, kind, passKind, Infinity) ??
     routeBlind(road[junction], door, width, depth, branchWander)
@@ -743,16 +858,13 @@ function growBlob(
   return { center: { x: cx, z: cz }, added }
 }
 
-/**
- * One passable tile that cannot reach the road by walking passable tiles, or
- * -1 when the passable graph is whole.
- */
-function findOrphanTile(
+/** Mask of every passable tile reachable from the road over passable tiles. */
+function reachableFrom(
   tiles: TerrainId[],
   roadTiles: number[],
   width: number,
   depth: number,
-): number {
+): Uint8Array {
   const seen = new Uint8Array(tiles.length)
   const queue: number[] = []
   for (const i of roadTiles) {
@@ -775,19 +887,16 @@ function findOrphanTile(
       }
     }
   }
-  for (let i = 0; i < tiles.length; i++) {
-    if (TERRAIN[tiles[i]].passable && !seen[i]) return i
-  }
-  return -1
+  return seen
 }
 
-/** Turn one cut-off passable component back into forest, starting at `start`. */
-function reforestComponent(
+/** The 4-connected passable component containing `start`, as tile indices. */
+function passableComponent(
   tiles: TerrainId[],
   start: number,
   width: number,
   depth: number,
-): void {
+): number[] {
   const component = [start]
   const seen = new Set(component)
   for (let q = 0; q < component.length; q++) {
@@ -804,7 +913,30 @@ function reforestComponent(
       }
     }
   }
-  for (const i of component) tiles[i] = "forest"
+  return component
+}
+
+/**
+ * The shortest dry walk from a cut-off pocket to reachable ground: which
+ * pocket tile to leave from and which reached passable tile to arrive at.
+ * Forest is walkable (a trail can be cut through it); water and bridges are
+ * not. Null when water lies between the pocket and everything reachable.
+ */
+function nearestReachedByLand(
+  pocket: number[],
+  reached: Uint8Array,
+  tiles: TerrainId[],
+  kind: Uint8Array,
+  width: number,
+  depth: number,
+): { from: number; to: number } | null {
+  const { dist, origin } = landDistanceField(pocket, kind, width, depth)
+  let best = -1
+  for (let i = 0; i < dist.length; i++) {
+    if (dist[i] === -1 || !reached[i] || !TERRAIN[tiles[i]].passable) continue
+    if (best === -1 || dist[i] < dist[best]) best = i
+  }
+  return best === -1 ? null : { from: origin[best], to: best }
 }
 
 /**

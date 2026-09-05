@@ -144,17 +144,40 @@ describe("generateMap", () => {
         }
       }
     }
-  })
+  }, SWEEP_TIMEOUT)
 
-  /** Grid distance from the hovel's footprint to the nearest road tile. */
+  /**
+   * Dry-walk distance from the hovel's footprint to the nearest road tile:
+   * grid steps around water (bridges included), through forest or not.
+   */
   function hovelRoadDistance(map: GameMap): number {
     const hovel = map.buildings[0]
-    let nearest = Infinity
+    const dist = new Int32Array(map.tiles.length).fill(-1)
+    const queue: number[] = []
     for (const p of map.road!) {
-      for (let dz = 0; dz < hovel.d; dz++) {
-        for (let dx = 0; dx < hovel.w; dx++) {
-          nearest = Math.min(nearest, Math.abs(p.x - hovel.x - dx) + Math.abs(p.z - hovel.z - dz))
-        }
+      const i = p.z * map.width + p.x
+      if (carriesWater(map, p.x, p.z)) continue
+      dist[i] = 0
+      queue.push(i)
+    }
+    for (let q = 0; q < queue.length; q++) {
+      const x = queue[q] % map.width
+      const z = Math.floor(queue[q] / map.width)
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx
+        const nz = z + dz
+        if (nx < 0 || nz < 0 || nx >= map.width || nz >= map.depth) continue
+        const n = nz * map.width + nx
+        if (dist[n] !== -1 || carriesWater(map, nx, nz)) continue
+        dist[n] = dist[queue[q]] + 1
+        queue.push(n)
+      }
+    }
+    let nearest = Infinity
+    for (let dz = 0; dz < hovel.d; dz++) {
+      for (let dx = 0; dx < hovel.w; dx++) {
+        const d = dist[(hovel.z + dz) * map.width + (hovel.x + dx)]
+        if (d !== -1) nearest = Math.min(nearest, d)
       }
     }
     return nearest
@@ -177,7 +200,7 @@ describe("generateMap", () => {
       expect(near).toBeLessThanOrEqual(relicDistanceBand(8).max)
       expect(far).toBeGreaterThanOrEqual(relicDistanceBand(32).min)
     }
-  })
+  }, SWEEP_TIMEOUT)
 
   it("cuts one unbroken track from a mid-road junction to the hovel's door", () => {
     for (const seed of SEEDS) {
@@ -222,7 +245,16 @@ describe("generateMap", () => {
         }
       }
     }
-  })
+  }, SWEEP_TIMEOUT)
+
+  it("keeps the relic's track dry — the hovel sits on the junction's own bank", () => {
+    for (const seed of SEEDS) {
+      const map = mapFor(seed)
+      for (const p of map.site!.branch) {
+        expect(tileAt(map, p.x, p.z), `seed ${seed} track never bridges`).not.toBe("bridge")
+      }
+    }
+  }, SWEEP_TIMEOUT)
 
   it("founds a hovel even on a map with no glades to speak of", () => {
     const map = generateMap({ seed: 7, forestCoverage: 0.98, gladeCount: 1, clearingCount: 0 })
@@ -323,34 +355,84 @@ describe("generateMap", () => {
     }
   }, SWEEP_TIMEOUT)
 
-  it("keeps every passable tile reachable from every other, every seed", () => {
-    for (const seed of SEEDS) {
-      const map = mapFor(seed)
-      const passable = map.tiles.filter((t) => TERRAIN[t].passable).length
-
-      // Flood-fill from any passable tile; it must reach all passable land.
-      const seen = new Uint8Array(map.tiles.length)
-      const start = map.tiles.findIndex((t) => TERRAIN[t].passable)
-      const queue = [start]
-      seen[start] = 1
-      let reached = 0
-      while (queue.length) {
-        const i = queue.pop()!
-        reached++
-        const x = i % map.width
-        const z = Math.floor(i / map.width)
-        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const terrain = tileAt(map, x + dx, z + dz)
-          if (terrain === null || !TERRAIN[terrain].passable) continue
-          const n = (z + dz) * map.width + (x + dx)
-          if (!seen[n]) {
-            seen[n] = 1
-            queue.push(n)
-          }
+  /** Flood over 4-neighbours from `starts`, entering tiles that pass `open`. */
+  function flood(map: GameMap, starts: number[], open: (i: number) => boolean): Uint8Array {
+    const seen = new Uint8Array(map.tiles.length)
+    const queue: number[] = []
+    for (const i of starts) {
+      if (!seen[i] && open(i)) {
+        seen[i] = 1
+        queue.push(i)
+      }
+    }
+    for (let q = 0; q < queue.length; q++) {
+      const x = queue[q] % map.width
+      const z = Math.floor(queue[q] / map.width)
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx
+        const nz = z + dz
+        if (nx < 0 || nz < 0 || nx >= map.width || nz >= map.depth) continue
+        const n = nz * map.width + nx
+        if (!seen[n] && open(n)) {
+          seen[n] = 1
+          queue.push(n)
         }
       }
-      expect(reached, `seed ${seed} passable land is one region`).toBe(passable)
     }
+    return seen
+  }
+
+  it("cuts off passable land only where water lies between it and the road", () => {
+    for (const seed of SEEDS) {
+      const map = mapFor(seed)
+      const passable = (i: number) => TERRAIN[map.tiles[i]].passable
+      const dry = (i: number) => !carriesWater(map, i % map.width, Math.floor(i / map.width))
+      const roadTiles = map.road!.map((p) => p.z * map.width + p.x)
+      const reached = flood(map, roadTiles, passable)
+
+      // Every passable tile the road can't reach must be walled off by water:
+      // a dry walk from it, through forest if need be, meets no reached tile.
+      const pockets = map.tiles.map((_, i) => i).filter((i) => passable(i) && !reached[i])
+      const dryFromPockets = flood(map, pockets, dry)
+      let leaks = 0
+      for (let i = 0; i < map.tiles.length; i++) {
+        if (dryFromPockets[i] && reached[i]) leaks++
+      }
+      expect(leaks, `seed ${seed} pockets reach the road dry`).toBe(0)
+    }
+  }, SWEEP_TIMEOUT)
+
+  it("builds bridges for the road alone — trails stop at the water", () => {
+    for (const seed of SEEDS) {
+      const map = mapFor(seed)
+      const onRoad = new Set(map.road!.map((p) => p.z * map.width + p.x))
+      let strays = 0
+      map.tiles.forEach((t, i) => {
+        if (t === "bridge" && !onRoad.has(i)) strays++
+      })
+      expect(strays, `seed ${seed} every bridge is the road's`).toBe(0)
+    }
+  }, SWEEP_TIMEOUT)
+
+  it("lets trails dead-end in the woods", () => {
+    let seedsWithDeadEnds = 0
+    for (const seed of SEEDS) {
+      const map = mapFor(seed)
+      let deadEnds = 0
+      for (let z = 0; z < map.depth; z++) {
+        for (let x = 0; x < map.width; x++) {
+          if (tileAt(map, x, z) !== "clearing") continue
+          let open = 0
+          for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const t = tileAt(map, x + dx, z + dz)
+            if (t !== null && TERRAIN[t].passable) open++
+          }
+          if (open === 1) deadEnds++
+        }
+      }
+      if (deadEnds > 0) seedsWithDeadEnds++
+    }
+    expect(seedsWithDeadEnds).toBe(SEEDS.length)
   }, SWEEP_TIMEOUT)
 
   it("leaves buildable land for settling at default coverage", () => {
