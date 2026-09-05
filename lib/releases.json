@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "0c90cb6e68fc1a75005751891672fdbd01b8c24e",
-  "releaseCount": 17,
+  "lastProcessedCommit": "0499b1a01d27ff82f177e62f141d18fd8cf90137",
+  "releaseCount": 18,
   "releases": [
+    {
+      "version": "0.0.32",
+      "title": "Release 0.0.32",
+      "summary": "Add map elevation, eroded shores, waterfalls, and rope bridges (#51)",
+      "commit": "0499b1a01d27ff82f177e62f141d18fd8cf90137"
+    },
     {
       "version": "0.0.31",
       "title": "Release 0.0.31",
