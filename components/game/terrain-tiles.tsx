@@ -13,7 +13,13 @@ import {
   roadEdge,
   roadTint,
 } from "@/lib/game/map/road"
-import { TERRAIN, TILE_HEIGHT, type TerrainId } from "@/lib/game/map/terrain"
+import {
+  MAX_WATER_DEPTH,
+  TERRAIN,
+  TILE_HEIGHT,
+  WATER_DEPTH_COLORS,
+  type TerrainId,
+} from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 
@@ -306,6 +312,28 @@ function makeTileGeometry(slots: number): THREE.BoxGeometry {
   return geometry
 }
 
+/**
+ * Chebyshev distance (1 or 2) from a tile to the nearest water-bearing tile,
+ * or 3 when none is that close. Bridges count — the water still runs under
+ * them. Drives the sand-to-grass fade on beach tiles.
+ */
+function waterDistance(map: GameMap, x: number, z: number): number {
+  const wet = (wx: number, wz: number) => {
+    if (wx < 0 || wz < 0 || wx >= map.width || wz >= map.depth) return false
+    const i = wz * map.width + wx
+    return map.water ? map.water.depth[i] > 0 : map.tiles[i] === "water"
+  }
+  for (let r = 1; r <= 2; r++) {
+    for (let dz = -r; dz <= r; dz++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue
+        if (wet(x + dx, z + dz)) return r
+      }
+    }
+  }
+  return 3
+}
+
 export function TerrainTiles({
   map,
   roadTier = DEFAULT_ROAD_TIER,
@@ -409,6 +437,9 @@ export function TerrainTiles({
     const roadOverlayAttr = roadGeometry.getAttribute("aOverlay") as THREE.InstancedBufferAttribute
     const groundGrassAttr = groundGeometry.getAttribute("aGrass") as THREE.InstancedBufferAttribute
     const groundOverlayAttr = groundGeometry.getAttribute("aOverlay") as THREE.InstancedBufferAttribute
+    const grassColor = new THREE.Color(TERRAIN.grass.color)
+    const sandColor = new THREE.Color(TERRAIN.sand.color)
+    const waterColors = WATER_DEPTH_COLORS.map((c) => new THREE.Color(c))
     // Colour grain is a function of the map's own seed, one stream per consumer.
     // One draw per tile in scan order, whichever mesh the tile lands in, so the
     // grain never reshuffles when the road tier changes.
@@ -460,8 +491,25 @@ export function TerrainTiles({
         groundMesh.setMatrixAt(groundIndex, matrix)
         const overlay = SWARD_OVERLAY[terrain]
         if (overlay === undefined) {
-          // Flat-coloured ground: main's tile colour pulled along the ramp.
-          color.set(def.color)
+          // Flat-coloured ground, pulled along the shade ramp.
+          if (def.id === "water") {
+            // Water colours by depth — shallow shoreline light, deep water
+            // dark. Hand-authored maps carry no depth data and render as
+            // shallow.
+            const waterDepth = Math.min(
+              MAX_WATER_DEPTH,
+              Math.max(1, map.water?.depth[index] ?? 1),
+            )
+            color.copy(waterColors[waterDepth - 1])
+          } else if (def.id === "sand") {
+            // Beaches fade toward grass as they leave the waterline: full sand
+            // against the water, blended a tile out, mostly grass beyond.
+            const d = waterDistance(map, x, z)
+            const sandiness = d <= 1 ? 1 : d === 2 ? 0.55 : 0.3
+            color.copy(grassColor).lerp(sandColor, sandiness)
+          } else {
+            color.set(def.color)
+          }
           color.lerp(tint, def.shadeBlend)
           color.multiplyScalar(jitter)
           groundGrassAttr.setX(groundIndex, 0)

@@ -16,6 +16,7 @@ import {
   DEFAULT_GLADE_COUNT,
   DEFAULT_MAP_WIDTH,
   DEFAULT_RELIC_DISTANCE,
+  DEFAULT_WATER_COVERAGE,
   generateMap,
 } from "@/lib/game/map/generate-map"
 
@@ -55,7 +56,16 @@ export interface MapSettings {
   walkSpeed: number
   /** Road development tier — index into ROAD_TIERS. */
   road: number
+  /** Max % of the map under water (rivers, lakes, ponds). */
+  water: number
+  /** Forced counts for water bodies; −1 lets the seed roll them. */
+  rivers: number
+  lakes: number
+  ponds: number
 }
+
+/** Slider value that means "let the seed decide" for water body counts. */
+export const WATER_COUNT_AUTO = -1
 
 export const DEFAULT_SETTINGS: MapSettings = {
   size: DEFAULT_MAP_WIDTH,
@@ -66,6 +76,10 @@ export const DEFAULT_SETTINGS: MapSettings = {
   traffic: 12,
   walkSpeed: 1.5,
   road: DEFAULT_ROAD_TIER,
+  water: Math.round(DEFAULT_WATER_COVERAGE * 100),
+  rivers: WATER_COUNT_AUTO,
+  lakes: WATER_COUNT_AUTO,
+  ponds: WATER_COUNT_AUTO,
 }
 
 /**
@@ -110,6 +124,10 @@ export function GameShell({
       traffic: String(settings.traffic),
       speed: String(settings.walkSpeed),
       road: String(settings.road),
+      water: String(settings.water),
+      rivers: String(settings.rivers),
+      lakes: String(settings.lakes),
+      ponds: String(settings.ponds),
     })
     window.history.replaceState(null, "", `?${query}`)
   }, [seed, settings])
@@ -126,8 +144,23 @@ export function GameShell({
             gladeCount: settings.glades,
             clearingCount: settings.clearings,
             relicDistance: settings.relicDistance,
+            waterCoverage: settings.water / 100,
+            riverCount: settings.rivers >= 0 ? settings.rivers : undefined,
+            lakeCount: settings.lakes >= 0 ? settings.lakes : undefined,
+            pondCount: settings.ponds >= 0 ? settings.ponds : undefined,
           }),
-    [seed, settings.size, settings.coverage, settings.glades, settings.clearings, settings.relicDistance],
+    [
+      seed,
+      settings.size,
+      settings.coverage,
+      settings.glades,
+      settings.clearings,
+      settings.relicDistance,
+      settings.water,
+      settings.rivers,
+      settings.lakes,
+      settings.ponds,
+    ],
   )
 
   // Identities live outside the canvas so the HUD can name whoever is selected.

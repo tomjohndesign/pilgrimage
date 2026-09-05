@@ -35,6 +35,10 @@ export default async function PlayPage({
   const traffic = parseIntParam(params.traffic)
   const walkSpeed = parseFloatParam(params.speed)
   const road = parseIntParam(params.road)
+  const water = parseIntParam(params.water)
+  const rivers = parseIntParam(params.rivers)
+  const lakes = parseIntParam(params.lakes)
+  const ponds = parseIntParam(params.ponds)
   if (size !== undefined) initialSettings.size = size
   if (coverage !== undefined) initialSettings.coverage = coverage
   if (glades !== undefined) initialSettings.glades = glades
@@ -43,6 +47,10 @@ export default async function PlayPage({
   if (traffic !== undefined) initialSettings.traffic = traffic
   if (walkSpeed !== undefined) initialSettings.walkSpeed = walkSpeed
   if (road !== undefined) initialSettings.road = road
+  if (water !== undefined) initialSettings.water = water
+  if (rivers !== undefined) initialSettings.rivers = rivers
+  if (lakes !== undefined) initialSettings.lakes = lakes
+  if (ponds !== undefined) initialSettings.ponds = ponds
 
   return <GameShell initialSeed={parseIntParam(params.seed)} initialSettings={initialSettings} />
 }

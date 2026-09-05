@@ -10,7 +10,17 @@
 /** World-space height of every tile's top surface above the base slab. */
 export const TILE_HEIGHT = 0.2
 
-export type TerrainId = "grass" | "dirt" | "path" | "track" | "forest" | "clearing" | "hills"
+export type TerrainId =
+  | "grass"
+  | "dirt"
+  | "path"
+  | "track"
+  | "forest"
+  | "clearing"
+  | "hills"
+  | "water"
+  | "sand"
+  | "bridge"
 
 export interface TerrainDef {
   id: TerrainId
@@ -97,7 +107,42 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
     buildable: true,
     passable: true,
   },
+  water: {
+    id: "water",
+    label: "Water",
+    color: "#4f8ab2",
+    jitter: 0.05,
+    shadeBlend: 0.15,
+    buildable: false,
+    passable: false,
+  },
+  sand: {
+    id: "sand",
+    label: "Beach",
+    color: "#d3bd85",
+    jitter: 0.1,
+    shadeBlend: 0.25,
+    buildable: true,
+    passable: true,
+  },
+  bridge: {
+    id: "bridge",
+    label: "Bridge",
+    color: "#9b7a4e",
+    jitter: 0.04,
+    shadeBlend: 0.15,
+    buildable: false,
+    passable: true,
+  },
 }
+
+/**
+ * Water renders by depth, not by its single TERRAIN entry: index 0 is shallow
+ * shoreline water (depth 1), index 2 is deep water (depth 3). Colour only —
+ * the ground is a flat plane, so depth never shows as relief.
+ */
+export const WATER_DEPTH_COLORS = ["#6ba6c8", "#5893b9", "#4581aa"] as const
+export const MAX_WATER_DEPTH = 3
 
 /** Characters used in the ASCII map source. */
 export const TERRAIN_CHARS: Record<string, TerrainId> = {
@@ -108,4 +153,7 @@ export const TERRAIN_CHARS: Record<string, TerrainId> = {
   F: "forest",
   o: "clearing",
   "^": "hills",
+  "~": "water",
+  "%": "sand",
+  "#": "bridge",
 }
