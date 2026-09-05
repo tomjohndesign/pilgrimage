@@ -1,3 +1,5 @@
+import { getBuildInfluence } from "./build-influence"
+import { DEFAULT_ELEVATION } from "./map/elevation"
 import { describe, expect, it } from "vitest"
 import { generateMap } from "./map/generate-map"
 import type { GameMap } from "./map/types"
@@ -6,6 +8,7 @@ import { generateRelic, relicDraw } from "./relic"
 import { generateTravelers } from "./travelers"
 import {
   BUILD_CATALOG,
+  buildTileError,
   collectIncome,
   createSettlement,
   individualRenown,
@@ -53,6 +56,19 @@ const shelter = BUILD_CATALOG.find((item) => item.id === "shelter")!
 const garden = BUILD_CATALOG.find((item) => item.id === "garden")!
 
 describe("build and buy", () => {
+  it("keeps influence feedback and footprint checks aware of cliffs and uneven ground", () => {
+    const map = testMap(), i = 14 * map.width + 11
+    map.elevation = { settings: DEFAULT_ELEVATION, height: Array(900).fill(0), corners: Array(3600).fill(0), cliffs: Array(900).fill(0), slope: Array(900).fill(0) }
+    const influence = getBuildInfluence(map)
+    expect(buildTileError(map, 11, 14, influence)).toBeNull()
+    map.elevation.cliffs[i] = 1
+    expect(buildTileError(map, 11, 14, influence)).toMatch(/cliffs/)
+    expect(placementError(map, shelter, { x: 11, z: 14 })).toMatch(/cliffs/)
+    map.elevation.cliffs[i] = 0
+    map.elevation.corners.fill(0.4, (i + 1) * 4, (i + 2) * 4)
+    expect(placementError(map, shelter, { x: 11, z: 14 })).toMatch(/level ground/)
+  })
+
   it("pays once on successful placement, retaining the base map and founding supplies", () => {
     const before = createSettlement()
     const map = testMap()

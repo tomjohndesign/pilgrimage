@@ -1,5 +1,7 @@
 "use client"
 
+import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/elevation"
+
 import Link from "next/link"
 import * as Tooltip from "@radix-ui/react-tooltip"
 import { Menu, Settings, X } from "lucide-react"
@@ -502,6 +504,28 @@ function DangerForecast({ map }: { map: GameMap }) {
   )
 }
 
+/** Live terrain measurements alongside the generation controls. */
+function ElevationReadout({ map }: { map: GameMap }) {
+  const hovered = useCameraStore((s) => s.hovered)
+  if (!hovered || !map.elevation) return <p className="text-[10px] italic text-ink-light">Hover terrain to inspect height, slope, and water flow.</p>
+  const i = hovered.z * map.width + hovered.x, e = map.elevation, water = map.water
+  const wet = (water?.depth[i] ?? 0) > 0
+  const values = wet ? [
+    ["Water surface", water!.surface?.[i].toFixed(2)],
+    ["River bed", e.height[i].toFixed(2)],
+    ["Downstream drop", water!.drop?.[i].toFixed(3)],
+    ["Water motion", water!.motion?.[i]],
+  ] : [
+    ["Elevation", `${e.height[i] >= 0 ? "+" : ""}${e.height[i].toFixed(2)}`],
+    ["Steepest grade", `${Math.round(e.slope[i] * 100)}%`],
+    ["Cliff edges", String(e.cliffs[i].toString(2).split("1").length - 1)],
+  ]
+  return <div className="mb-3 border-b border-rule pb-2 text-[10px] text-ink-light">
+    <div className="mb-1">Tile {hovered.x}, {hovered.z}</div>
+    {values.map(([label, value]) => <div key={label} className="flex justify-between gap-2"><span>{label}</span><span>{value}</span></div>)}
+  </div>
+}
+
 /** What the monks keep in the hovel: the relic's name, nature, and pull. */
 function RelicPanel({ relic }: { relic: Relic }) {
   const balance = useBalanceStore((s) => s.balance)
@@ -923,6 +947,18 @@ export function GameHud({
             step={0.5}
             onChange={(roadEdgeWidth) => set({ roadEdgeWidth })}
           />
+        </Section>
+
+        <Section {...section("Elevation")}>
+          {map && <ElevationReadout map={map} />}
+          {(Object.keys(ELEVATION_CONTROLS) as (keyof ElevationSettings)[]).map((key) => {
+            const control = ELEVATION_CONTROLS[key]
+            const value = settings.elevation[key] ?? control.value
+            return <Tuner key={key} label={control.label} value={value}
+              display={String(Number(value.toFixed(3)))}
+              min={control.min} max={control.max} step={control.step}
+              onChange={(value) => set({ elevation: { ...settings.elevation, [key]: value } })} />
+          })}
         </Section>
 
         <Section {...section("Water")}>

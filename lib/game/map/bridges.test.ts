@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { BRIDGE_RISE, bridgeLayout, surfaceHeight } from "./bridges"
+import { BRIDGE_RISE, bridgeLayout, surfaceHeight, ropeDeckHeight, ropeHeightAt } from "./bridges"
 import { generateMap } from "./generate-map"
 import { parseAsciiMap } from "./prototype-map"
 import { isRoadTerrain } from "./road"
@@ -244,7 +244,8 @@ describe("bridgeLayout", () => {
         expect(span.from, `seed ${seed}`).not.toBeNull()
         expect(span.to, `seed ${seed}`).not.toBeNull()
         for (const tile of span.tiles) {
-          expect(surfaceHeight(map, tile.x, tile.z)).toBeCloseTo(TILE_HEIGHT + BRIDGE_RISE)
+          const along = (tile.x - (span.tiles[0].x + span.tiles.at(-1)!.x) / 2) * span.dx + (tile.z - (span.tiles[0].z + span.tiles.at(-1)!.z) / 2) * span.dz
+          expect(surfaceHeight(map, tile.x, tile.z)).toBeCloseTo(ropeDeckHeight(span, along))
         }
       }
       // Island decks never also become ramps.
@@ -256,7 +257,7 @@ describe("bridgeLayout", () => {
         const terrain = tileAt(map, x, z)
         expect(terrain === null || isRoadTerrain(terrain), `seed ${seed} ramp at ${ramp.x},${ramp.z}`).toBe(true)
         expect(surfaceHeight(map, x, z)).toBe(TILE_HEIGHT)
-        expect(surfaceHeight(map, ramp.x + ramp.dx, ramp.z + ramp.dz)).toBeCloseTo(TILE_HEIGHT + BRIDGE_RISE)
+        expect(surfaceHeight(map, ramp.x + ramp.dx, ramp.z + ramp.dz)).toBeCloseTo(ropeHeightAt(map, ramp.x + ramp.dx, ramp.z + ramp.dz) ?? TILE_HEIGHT + BRIDGE_RISE)
       }
     }
   }, 30_000)
