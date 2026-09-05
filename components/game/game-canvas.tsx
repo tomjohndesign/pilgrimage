@@ -3,6 +3,8 @@
 import { Suspense, useMemo } from "react"
 import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
 
+import type { Resources } from "@/lib/game/settlement"
+import type { TilePos } from "@/lib/game/map/types"
 import { deriveSeed, SEED_STREAM } from "@/lib/game/rng"
 import { growTreePlacements } from "@/lib/game/trees/dimensions"
 import { placeTrees } from "@/lib/game/trees/placement"
@@ -42,9 +44,19 @@ export function GameCanvas({
   relicTraffic,
   roadLook,
   showGrid = false,
+  buildType,
+  shrineRenown,
+  baseRenown,
+  resources,
+  onPlace,
   ...pixelation
 }: {
   map: GameMap
+  buildType: string | null
+  shrineRenown: number
+  baseRenown: number
+  resources: Resources
+  onPlace: (at: TilePos) => void
   relic: Relic
   monks: Monk[]
   blasterPastor?: boolean
@@ -63,7 +75,7 @@ export function GameCanvas({
   const species = useTreeTuningStore((s) => s.species)
   const variance = useTreeTuningStore((s) => s.variance)
   const trees = useMemo(() => growTreePlacements(placeTrees(map, species),
-    deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes), species, variance), [map, species, variance])
+    deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes), species, variance), [map.tiles, species, variance])
   return (
     <PixelCanvas
       {...pixelation}
@@ -100,10 +112,10 @@ export function GameCanvas({
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />
       <Monks map={map} monks={monks} flying={blasterPastor} />
-      <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} />
-      <TileCursor map={map} />
+      <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown} />
+      <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
 
-      <CameraRig map={map} />
+      <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <OutlinePass />
       <DebugHandle map={map} travelers={travelers} speed={walkSpeed} />
     </PixelCanvas>

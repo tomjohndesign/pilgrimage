@@ -1,6 +1,8 @@
+import { DEFAULT_BALANCE, type GameBalance } from "./balance"
+import { buildingAt } from "./settlement"
 import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
 import { BUILDING_KINDS, buildingCentre, type PlacedBuilding } from "./buildings"
-import { generateRelic, renownCap, visitChance, type RelicStats } from "./relic"
+import { generateRelic, visitChance, type RelicStats } from "./relic"
 import { settlementRoute } from "./settlement-route"
 import type { TreePlacement } from "./trees/placement"
 import type { TilePos } from "./map/types"
@@ -28,7 +30,7 @@ import type { Traveler } from "./travelers"
  *  - Walking wears them down: stamina, hunger, and thirst all fall.
  *  - At the shrine junction, faith, hospitality and available work draw visitors
  *    down the branch. The brothers restore their needs and bestow piety before
- *    they return to the road; each visit spreads the relic's renown.
+ *    they return to the road; each visit spreads the shrine's renown.
  *  - Jobless visitors may settle into a lumber-camp slot, walk to a reserved
  *    tree, fell it and haul logs home. Camps provide rest between work trips.
  *  - Stamina at 0 → leave the road for the nearest open ground (grass, dirt,
@@ -227,8 +229,13 @@ export interface SimState {
   /** Danger per tile, indexed like the map's tiles; what encounters roll against. */
   danger: Float64Array
   relic: RelicStats
+  world: GameMap
+  /** Contributions from structures, residents, scenery and relics, before visits. */
+  shrineRenown: number
+  balance: GameBalance
   visits: number
   wood: number
+  constructionWood: number
   felled: Set<number>
   treeResources: Map<number, TreeResource>
   piles: Map<string, WoodPile>
@@ -344,8 +351,12 @@ export function createSim(
     time: START_TIME,
     danger: computeDangerField(map, threats),
     relic: { ...relic },
+    world: map,
+    shrineRenown: 0,
+    balance: DEFAULT_BALANCE,
     visits: 0,
     wood: 0,
+    constructionWood: 0,
     felled: new Set(),
     treeResources: new Map(),
     piles: new Map(),
@@ -413,7 +424,7 @@ function findClearTile(map: GameMap, wx: number, wz: number): { x: number; z: nu
       for (let dx = -r; dx <= r; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue
         const terrain = tileAt(map, cx + dx, cz + dz)
-        if (terrain === "grass" || terrain === "dirt" || terrain === "clearing") {
+        if ((terrain === "grass" || terrain === "dirt" || terrain === "clearing") && !buildingAt(map, cx + dx, cz + dz)) {
           return { x: cx + dx, z: cz + dz }
         }
       }
@@ -598,7 +609,6 @@ function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): 
   s.visits++
   sim.visits++
   s.piety = Math.min(100, s.piety + 4 + sim.relic.sanctity / 25)
-  sim.relic.renown = Math.min(renownCap(sim.relic), sim.relic.renown + 0.5)
   const job = findJob(sim, s, map)
   if (job && nextRoll(s) < (t.attributes.skills.some((skill) => BUILDING_KINDS[job.kind].trades.includes(skill)) ? 0.9 : 0.65)) {
     const route = settlementRoute(map, [...map.buildings, ...sim.buildings], map.site!.door,
@@ -837,7 +847,7 @@ export function stepSim(
           const distance = ((direction * (site.junction - s.progress)) % length + length) % length
           if (distance <= worldSpeed * haste * dt) {
             const chance = Math.max(visitChance({ ...t.attributes, piety: s.piety,
-              hunger: s.hunger, thirst: s.thirst, stamina: s.stamina }, sim.relic),
+              hunger: s.hunger, thirst: s.thirst, stamina: s.stamina }, sim.relic, sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown, sim.balance),
               findJob(sim, s, map) ? 0.8 : 0)
             s.visitCooldown = 5
             if (nextRoll(s) < chance) {

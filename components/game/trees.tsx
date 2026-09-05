@@ -317,8 +317,7 @@ function SpeciesBatch({ def, trees, entMap, onSelect }: {
     if (!trunk.current || !crown.current || !trunkId.current || !crownId.current) return
     let changed = false
     const { matrix, position, rotation, scale, euler } = scratch
-    const build = useBuildStore.getState()
-    const movementMap = build.buildings.length ? { ...entMap, buildings: [...entMap.buildings, ...build.buildings] } : entMap
+    const movementMap = entMap
     const reserved = new Set(Array.from(simRegistry.current?.travelers.values() ?? [], (worker) => worker.tree))
     movingTrees.forEach((moving, index) => {
       const { ent, tree } = moving

@@ -5,9 +5,8 @@ import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { useBuildStore } from "@/lib/game/build-store"
-import { planBuilding } from "@/lib/game/buildings"
 import { useCameraStore } from "@/lib/game/camera-store"
-import { worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
+import { worldToTileX, worldToTileZ, type GameMap, type TilePos } from "@/lib/game/map/types"
 import {
   CAM_FAR,
   CAM_NEAR,
@@ -31,7 +30,9 @@ const KEY_PAN_SPEED = 18
  */
 const PICK_PLANE_Y = 0.2
 
-export function CameraRig({ map }: { map: GameMap }) {
+export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TilePos) => void }) {
+  const placeRef = useRef(onPlace)
+  placeRef.current = onPlace
   const { camera, gl, size } = useThree()
 
   const displayYaw = useRef(yawForView(useCameraStore.getState().viewIndex))
@@ -49,12 +50,11 @@ export function CameraRig({ map }: { map: GameMap }) {
     const { pan, setHovered } = useCameraStore.getState()
 
     let dragPointerId: number | null = null
-    let downX = 0
-    let downY = 0
-    let dragDistance = 0
-    let downButton = 0
     let lastX = 0
     let lastY = 0
+    let startX = 0
+    let startY = 0
+    let dragged = false
 
     const updateHover = (event: PointerEvent) => {
       const rect = canvas.getBoundingClientRect()
@@ -80,17 +80,15 @@ export function CameraRig({ map }: { map: GameMap }) {
     const onPointerDown = (event: PointerEvent) => {
       if (dragPointerId !== null) return
       dragPointerId = event.pointerId
-      lastX = downX = event.clientX
-      lastY = downY = event.clientY
-      dragDistance = 0
-      downButton = event.button
-      updateHover(event)
+      lastX = startX = event.clientX
+      lastY = startY = event.clientY
+      dragged = false
       canvas.setPointerCapture(event.pointerId)
     }
 
     const onPointerMove = (event: PointerEvent) => {
       if (event.pointerId === dragPointerId) {
-        dragDistance = Math.max(dragDistance, Math.hypot(event.clientX - downX, event.clientY - downY))
+        if (Math.hypot(event.clientX - startX, event.clientY - startY) > 6) dragged = true
         const dx = event.clientX - lastX
         const dy = event.clientY - lastY
         lastX = event.clientX
@@ -110,19 +108,14 @@ export function CameraRig({ map }: { map: GameMap }) {
 
     const endDrag = (event: PointerEvent) => {
       if (event.pointerId !== dragPointerId) return
-      if (event.type === "pointerup" && downButton === 0 && dragDistance <= 6 &&
-          Math.hypot(event.clientX - downX, event.clientY - downY) <= 6) {
-        updateHover(event)
-        const build = useBuildStore.getState()
-        const hovered = useCameraStore.getState().hovered
-        if (build.tool && hovered) {
-          const building = planBuilding(map, [...map.buildings, ...build.buildings], build.tool, hovered.x, hovered.z, build.serial)
-          if (building) build.place(building)
-        }
-      }
-      canvas.releasePointerCapture(event.pointerId)
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
       dragPointerId = null
       canvas.style.cursor = "grab"
+      if (event.type === "pointerup" && event.button === 0 && !dragged && Math.hypot(event.clientX - startX, event.clientY - startY) <= 6) {
+        updateHover(event)
+        const tile = useCameraStore.getState().hovered
+        if (tile) placeRef.current?.(tile)
+      }
     }
 
     const onPointerLeave = () => {

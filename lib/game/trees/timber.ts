@@ -93,7 +93,7 @@ export function stackWood(piles: Map<string, WoodPile>, campId: string, wood: nu
   const stacks = Array.from(piles.values()).filter((pile) => pile.campId === campId)
   let pile = stacks.find((p) => p.wood < 24 * WOOD_PER_LOG)
   if (!pile && stacks.length < 4) {
-    const slot = stacks.length
+    const slot = [0, 1, 2, 3].find((candidate) => !stacks.some((p) => p.slot === candidate))!
     pile = { id: `${campId}:pile:${slot}`, campId, slot, wood: 0 }
     piles.set(pile.id, pile)
   }

@@ -163,6 +163,20 @@ describe("stepSim", () => {
     expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) - s.laneOffset)
   })
 
+  it("keeps new camps out of purchased building footprints", () => {
+    const map = makeMap()
+    map.buildings.push({
+      id: "settlement-0", buildType: "shelter", label: "Shelter",
+      x: 0, z: 5, w: map.width, d: 1, height: 1, color: "#888", roofColor: "#444",
+    })
+    const travelers = [makeTraveler(0, "knight", { stamina: 1, hunger: 100, thirst: 100 })]
+    const sim = createSim(travelers, map)
+    const traveler = sim.travelers.get(0)!
+
+    expect(runUntil(sim, travelers, map, () => traveler.activity === "camping", 20)).toBe(true)
+    expect(worldToTileZ(map, traveler.spot!.z)).not.toBe(5)
+  })
+
   it("has pilgrims join a nearby camp instead of camping alone", () => {
     const map = makeMap()
     const travelers = [

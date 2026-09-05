@@ -22,6 +22,8 @@ import {
   generateMap,
 } from "@/lib/game/map/generate-map"
 
+import { useSettlement } from "@/hooks/use-settlement"
+
 import { GameHud } from "./game-hud"
 import { CheatBar } from "./cheat-bar"
 import type { PixelationProps } from "@/components/pixel-canvas"
@@ -166,7 +168,7 @@ export function GameShell({
     window.history.replaceState(null, "", `?${query}`)
   }, [seed, settings])
 
-  const map = useMemo(
+  const baseMap = useMemo(
     () =>
       seed === null
         ? null
@@ -200,7 +202,7 @@ export function GameShell({
   )
 
   // Identities live outside the canvas so the HUD can name whoever is selected.
-  const travelerCount = map ? travelerCountForMap(map, settings.traffic) : 0
+  const travelerCount = baseMap ? travelerCountForMap(baseMap, settings.traffic) : 0
   const travelers = useMemo(
     () => (seed === null ? [] : generateTravelers(seed, travelerCount)),
     [seed, travelerCount],
@@ -217,17 +219,20 @@ export function GameShell({
     }),
     [settings.roadOpacity, settings.roadShade, settings.roadEdgeLine, settings.roadEdgeWidth],
   )
-  // Who among the travelers turns aside for it: the track's own traffic.
-  const relicTraffic = useMemo(
-    () => (relic ? Math.round(travelers.reduce((sum, t) => sum + visitChance(t.attributes, relic.stats), 0)) : 0),
-    [travelers, relic],
-  )
   const monks = useMemo(() => (seed === null ? [] : generateMonks(seed)), [seed])
+  const economy = useSettlement(baseMap, monks, relic)
+  const map = economy.map
+  const renown = economy.renown
+  const relicTraffic = useMemo(
+    () => (relic ? Math.round(travelers.reduce((sum, t) => sum + visitChance(t.attributes, relic.stats, renown?.total ?? 0, economy.balance), 0)) : 0),
+    [travelers, relic, renown, economy.balance],
+  )
 
   // The camera's pan clamp follows the loaded map's extent, and a new world
   // opens on the hovel — the one landmark every map has.
   useEffect(() => {
-    if (!map) return
+    if (!baseMap) return
+    const map = baseMap
     useBuildStore.getState().reset()
     const camera = useCameraStore.getState()
     camera.setMapSize(map.width, map.depth)
@@ -239,7 +244,7 @@ export function GameShell({
         tileToWorldZ(map, hovel.z) + (hovel.d - 1) / 2,
       )
     }
-  }, [map])
+  }, [baseMap])
 
   // A new cast of travelers invalidates whoever was selected.
   useEffect(() => {
@@ -261,6 +266,11 @@ export function GameShell({
           roadTier={settings.road}
           relicTraffic={relicTraffic}
           roadLook={roadLook}
+          shrineRenown={renown?.total ?? 0}
+          baseRenown={(renown?.total ?? 0) - (renown?.visits ?? 0)}
+          buildType={economy.buildType}
+          resources={economy.settlement.resources}
+          onPlace={economy.place}
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
@@ -277,6 +287,7 @@ export function GameShell({
         travelers={travelers}
         relicTraffic={relicTraffic}
         settings={settings}
+        economy={economy}
         onSettingsChange={setSettings}
         pixelation={pixelationSettings}
         onPixelationChange={(patch) => setPixelationOverrides((current) => ({ ...current, ...patch }))}

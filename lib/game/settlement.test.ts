@@ -1,328 +1,231 @@
 import { describe, expect, it } from "vitest"
-import { BUILDING_KINDS, placementProblem, planBuilding } from "./buildings"
-import { useBuildStore } from "./build-store"
-import { BRIDGE_RISE } from "./map/bridges"
 import { generateMap } from "./map/generate-map"
-import { TILE_HEIGHT, type TerrainId } from "./map/terrain"
-import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
-import { generateRelic, renownCap, visitChance } from "./relic"
-import { createSim, stepSim, type SimState } from "./sim"
-import { generateTravelers, TRAVELER_TYPES, type Traveler } from "./travelers"
-import { treeResource, treeStage, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, type WoodPile } from "./trees/timber"
-import type { TreePlacement } from "./trees/placement"
+import type { GameMap } from "./map/types"
+import { generateMonks } from "./monks"
+import { generateRelic, relicDraw } from "./relic"
+import { generateTravelers } from "./travelers"
+import {
+  BUILD_CATALOG,
+  collectIncome,
+  createSettlement,
+  individualRenown,
+  placementError,
+  purchaseStructure,
+  relicRenown,
+  settlementIncome,
+  settlementRenown,
+  STARTING_RESOURCES,
+} from "./settlement"
 
-function fixture() {
-  const width = 30, depth = 18
-  const map: GameMap = { width, depth, tiles: new Array<TerrainId>(width * depth).fill("grass"), buildings: [],
-    road: Array.from({ length: width }, (_, x) => ({ x, z: 4 })),
-    site: { junction: 10, branch: Array.from({ length: 5 }, (_, i) => ({ x: 10, z: 4 + i })),
-      door: { x: 10, z: 8 }, hovelId: "hovel" } }
-  for (const p of map.road!) map.tiles[p.z * width + p.x] = "path"
-  for (const p of map.site!.branch.slice(1)) map.tiles[p.z * width + p.x] = "track"
-  map.buildings.push({ id: "hovel", label: "Shrine", x: 9, z: 9, w: 2, d: 2, height: 1, color: "tan", roofColor: "brown" })
-  const trees: TreePlacement[] = Array.from({ length: 6 }, (_, i) => {
-    const x = 16 + i % 3, z = 10 + Math.floor(i / 3)
-    map.tiles[z * width + x] = "forest"
-    return { x: tileToWorldX(map, x), y: TILE_HEIGHT, z: tileToWorldZ(map, z), species: "oak" }
-  })
-  const camp = planBuilding(map, map.buildings, "lumberCamp", 13, 8, 0)!
-  const traveler = (id: number, direction: 1 | -1 = 1): Traveler => ({
-    id, name: `Traveler ${id}`, type: TRAVELER_TYPES.peasant, direction, pace: 1,
-    offset: (10 - direction * 0.2) / (width - 1),
-    attributes: { age: 30, gold: 0, piety: 0, status: 100, hunger: 100, thirst: 100,
-      stamina: 100, jobless: false, skills: [] },
-  })
-  return { map, camp, trees, traveler }
-}
-
-function run(sim: SimState, travelers: Traveler[], map: GameMap, seconds: number, stop = () => false) {
-  for (let i = 0; i < seconds * 10 && !stop(); i++) stepSim(sim, travelers, map, 1.5, 0.1)
-}
-
-const obscure = { sanctity: 0, spectacle: 0, doubt: 100, renown: 0 }
-
-describe("shrine hospitality", () => {
-  for (const need of ["hunger", "thirst", "stamina"] as const) {
-    for (const direction of [1, -1] as const) {
-      it(`draws a traveler with empty ${need} from direction ${direction}, restores needs and returns them`, () => {
-        const { map, traveler } = fixture()
-        const t = traveler(0, direction)
-        t.attributes[need] = 0
-        const sim = createSim([t], map, [], obscure)
-        const s = sim.travelers.get(t.id)!
-        const identity = structuredClone(t)
-        run(sim, [t], map, 1)
-        expect(s.activity).toBe("toRelic")
-        run(sim, [t], map, 60, () => s.activity === "fromRelic")
-        expect(s.visits).toBe(1)
-        expect(Math.min(s.hunger, s.thirst, s.stamina)).toBeGreaterThanOrEqual(95)
-        expect(s.piety).toBeGreaterThan(t.attributes.piety)
-        expect(s.gold).toBe(0)
-        expect(sim.relic.renown).toBeGreaterThan(0)
-        expect(sim.relic.renown).toBeLessThanOrEqual(renownCap(sim.relic))
-        run(sim, [t], map, 20, () => s.activity === "walking")
-        expect(s.activity).toBe("walking")
-        expect(s.progress).toBe(map.site!.junction)
-        expect(s.direction).toBe(direction)
-        run(sim, [t], map, 0.5)
-        expect(s.activity).toBe("walking")
-        expect(t).toEqual(identity)
-      })
-    }
+function testMap(): GameMap {
+  const map: GameMap = {
+    width: 30,
+    depth: 30,
+    tiles: Array(900).fill("grass"),
+    buildings: [
+      {
+        id: "hovel",
+        label: "Founding hovel",
+        x: 14,
+        z: 14,
+        w: 2,
+        d: 2,
+        height: 0.6,
+        color: "#888",
+        roofColor: "#444",
+      },
+    ],
+    site: {
+      hovelId: "hovel",
+      junction: 0,
+      door: { x: 14, z: 16 },
+      branch: [
+        { x: 14, z: 16 },
+        { x: 14, z: 17 },
+      ],
+    },
   }
+  return map
+}
+const monks = generateMonks(12345)
+const relic = generateRelic(12345)
+const shelter = BUILD_CATALOG.find((item) => item.id === "shelter")!
+const garden = BUILD_CATALOG.find((item) => item.id === "garden")!
 
-  it("notices a junction even when a fast step skips its tile", () => {
-    const { map, traveler } = fixture()
-    const t = traveler(0)
-    t.offset = 8.5 / 29
-    t.attributes.hunger = 0
-    const sim = createSim([t], map)
-    stepSim(sim, [t], map, 5, 1)
-    expect(sim.travelers.get(0)!.activity).toBe("toRelic")
-  })
-
-  it("keeps faith relevant for rested travelers and makes dire need certain", () => {
-    const { traveler } = fixture()
-    const a = traveler(0).attributes
-    const holy = { sanctity: 95, spectacle: 40, doubt: 15, renown: 10 }
-    expect(visitChance({ ...a, piety: 100 }, holy)).toBeGreaterThan(visitChance(a, holy))
-    expect(visitChance({ ...a, hunger: 0 }, obscure)).toBe(1)
-    expect(visitChance({ ...a, thirst: 35 }, obscure)).toBeGreaterThan(visitChance(a, obscure))
-  })
-
-  it("produces actual visits on generated worlds", () => {
-    for (const seed of [1, 42, 12345]) {
-      const map = generateMap({ seed })
-      const travelers = generateTravelers(seed, 30)
-      const sim = createSim(travelers, map, [], generateRelic(seed).stats)
-      run(sim, travelers, map, 240)
-      expect(sim.visits, `seed ${seed}`).toBeGreaterThan(0)
-    }
-  })
-})
-
-describe("lumber camps", () => {
-  it("waits for a walking Ent to replant before claiming it for timber", () => {
-    const { map, trees, camp, traveler } = fixture()
-    const t = traveler(0)
-    const sim = createSim([t], map)
-    sim.buildings = [camp]
-    sim.trees = [{ ...trees[0], walking: true }]
-    const worker = sim.travelers.get(0)!
-    worker.employer = camp.id
-    worker.activity = "idle"
-    worker.timer = 0
-    run(sim, [t], map, 5)
-    expect(worker.tree).toBeNull()
-    expect(sim.treeResources.size).toBe(0)
-    sim.trees[0].walking = false
-    worker.timer = 0
-    run(sim, [t], map, 5, () => worker.tree !== null)
-    expect(worker.tree).toBe(0)
-    expect(sim.treeResources.has(0)).toBe(true)
-  })
-
-  it("hires unskilled visitors up to capacity, cuts each tree once and delivers wood", () => {
-    const { map, trees, camp, traveler } = fixture()
-    expect(camp).not.toBeNull()
-    map.tiles[10 * map.width + 15] = "water"
-    const travelers = Array.from({ length: 12 }, (_, id) => {
-      const t = traveler(id)
-      t.attributes.hunger = 0
-      t.attributes.jobless = true
-      return t
+describe("build and buy", () => {
+  it("pays once on successful placement, retaining the base map and founding supplies", () => {
+    const before = createSettlement()
+    const map = testMap()
+    const result = purchaseStructure(before, map, monks, [relic], "shelter", { x: 11, z: 14 })
+    expect(result.error).toBeNull()
+    expect(result.settlement.resources).toEqual({
+      gold: STARTING_RESOURCES.gold - 45,
+      wood: STARTING_RESOURCES.wood - 35,
     })
-    const sim = createSim(travelers, map, [], obscure)
-    sim.buildings = [camp]
-    sim.trees = trees
-    let maxWorkers = 0
-    let sawWorking = false
-    let sawHauling = false
-    for (let i = 0; i < 6000; i++) {
-      stepSim(sim, travelers, map, 1.5, 0.1)
-      const workers = Array.from(sim.travelers.values()).filter((s) => s.employer)
-      maxWorkers = Math.max(maxWorkers, workers.length)
-      expect(workers.length).toBeLessThanOrEqual(BUILDING_KINDS.lumberCamp.jobs)
-      const reserved = workers.flatMap((s) => s.tree === null ? [] : [s.tree])
-      expect(new Set(reserved).size).toBe(reserved.length)
-      for (const worker of workers) {
-        expect(worker.jobless).toBe(false)
-        sawWorking ||= worker.activity === "working"
-        sawHauling ||= worker.activity === "hauling" && worker.carrying > 0
-        const x = worldToTileX(map, worker.x), z = worldToTileZ(map, worker.z)
-        expect(map.tiles[z * map.width + x]).not.toBe("water")
-      }
-    }
-    expect(maxWorkers).toBe(3)
-    expect(sawWorking && sawHauling).toBe(true)
-    expect(sim.felled.size).toBe(trees.length)
-    expect(sim.wood).toBe(trees.reduce((sum, tree, index) => sum + treeResource(tree, index, map.seed).wood, 0))
-    expect(Array.from(sim.piles.values()).reduce((sum, pile) => sum + pile.wood, 0)).toBe(sim.wood)
-    expect(Array.from(sim.travelers.values()).filter((s) => s.employer)).toHaveLength(3)
+    expect(result.settlement.structures[0]).toMatchObject({
+      buildType: "shelter",
+      x: 11,
+      z: 14,
+      w: 2,
+      d: 2,
+    })
+    expect(before.resources).toEqual(STARTING_RESOURCES)
+    expect(before.structures).toHaveLength(0)
+    expect(map.buildings).toHaveLength(1)
   })
 
-  it("does not recruit employed travelers", () => {
-    const { map, trees, camp, traveler } = fixture()
-    const t = traveler(0)
-    t.attributes.hunger = 0
-    const sim = createSim([t], map)
-    sim.buildings = [camp]
-    sim.trees = trees
-    run(sim, [t], map, 120)
-    expect(sim.visits).toBeGreaterThan(0)
-    expect(sim.travelers.get(0)!.employer).toBeNull()
-    expect(sim.wood).toBe(0)
+  it.each([
+    { gold: 44, wood: 100 },
+    { gold: 100, wood: 34 },
+  ])("requires enough of each currency: %j", (resources) => {
+    const before = { ...createSettlement(), resources }
+    const result = purchaseStructure(before, testMap(), monks, [relic], "shelter", { x: 11, z: 14 })
+    expect(result.error).toMatch(/Not enough/)
+    expect(result.settlement).toBe(before)
   })
 
-  it("rejects water, roads, occupied footprints, remote woods and disconnected entrances", () => {
-    const { map, camp } = fixture()
-    expect(placementProblem(map, map.buildings, "lumberCamp", 13, 8)).toBeNull()
-    expect(placementProblem(map, [...map.buildings, camp], "lumberCamp", 14, 8)).toBe("occupied")
-    expect(placementProblem(map, map.buildings, "lumberCamp", 10, 4)).toBe("terrain")
-    expect(placementProblem(map, map.buildings, "lumberCamp", 29, 17)).toBe("terrain")
-    expect(placementProblem(map, map.buildings, "lumberCamp", 0, 0)).toBe("noWoods")
-    map.tiles[8 * map.width + 13] = "water"
-    expect(placementProblem(map, map.buildings, "lumberCamp", 13, 8)).toBe("terrain")
-    map.tiles[8 * map.width + 13] = "grass"
-    for (let z = 0; z < map.depth; z++) map.tiles[z * map.width + 12] = "water"
-    expect(placementProblem(map, map.buildings, "lumberCamp", 13, 8)).toBe("access")
+  it("allows exact funds, then refuses a second purchase without going negative", () => {
+    const before = { ...createSettlement(), resources: { ...shelter.cost } }
+    const result = purchaseStructure(before, testMap(), monks, [relic], "shelter", { x: 11, z: 14 })
+    expect(result.settlement.resources).toEqual({ gold: 0, wood: 0 })
+    const second = purchaseStructure(result.settlement, testMap(), monks, [relic], "shelter", {
+      x: 18,
+      z: 14,
+    })
+    expect(second.settlement).toBe(result.settlement)
+    expect(second.error).toBeTruthy()
   })
 
-  it("rejects woods stranded across water even within the work radius", () => {
-    const { map } = fixture()
-    for (let z = 9; z <= 12; z++) {
-      for (let x = 15; x <= 19; x++) {
-        if (x === 15 || x === 19 || z === 9 || z === 12) map.tiles[z * map.width + x] = "water"
-      }
-    }
-    expect(placementProblem(map, map.buildings, "lumberCamp", 13, 8)).toBe("noWoods")
+  it("rejects overlap with both the founding hovel and player additions without charging", () => {
+    const before = createSettlement()
+    expect(
+      purchaseStructure(before, testMap(), monks, [relic], "shelter", { x: 13, z: 13 }).settlement,
+    ).toBe(before)
+    const first = purchaseStructure(before, testMap(), monks, [relic], "shelter", {
+      x: 11,
+      z: 14,
+    }).settlement
+    const second = purchaseStructure(first, testMap(), monks, [relic], "garden", { x: 12, z: 15 })
+    expect(second.error).toMatch(/occupies/)
+    expect(second.settlement).toBe(first)
   })
 
-  it("clears buildings, cut trees and the tool for a new world", () => {
-    const { camp } = fixture()
-    const store = useBuildStore.getState()
-    store.place(camp)
-    store.setTool("lumberCamp")
-    store.setFelled(new Set([1]))
-    store.reset()
-    expect(useBuildStore.getState()).toMatchObject({ buildings: [], serial: 0, tool: null })
-    expect(useBuildStore.getState().felled.size).toBe(0)
-  })
-})
-
-
-describe("tree resources and timber storage", () => {
-  it("gives larger and harder species more durability and wood", () => {
-    const { trees } = fixture()
-    const oak = treeResource(trees[0], 0, 42)
-    const small = treeResource({ ...trees[0], scale: 0.7 }, 0, 42)
-    const birch = treeResource({ ...trees[0], species: "birch" }, 0, 42)
-    expect(oak.maxHealth).toBeGreaterThan(small.maxHealth)
-    expect(oak.wood).toBeGreaterThan(small.wood)
-    expect(oak.maxHealth).toBeGreaterThan(birch.maxHealth)
-    expect(small.fellingHours).toBeGreaterThanOrEqual(2)
-    expect(treeResource(trees[0], 0, 42)).toEqual(oak)
-  })
-
-  it("keeps a tree standing through the old cut time, then hauls several loads into the yard", () => {
-    const { map, trees, camp, traveler } = fixture()
-    const t = traveler(0)
-    const sim = createSim([t], map)
-    sim.buildings = [camp]
-    sim.trees = [trees[0]]
-    const s = sim.travelers.get(0)!
-    s.employer = camp.id
-    s.activity = "idle"
-    s.timer = 0
-    s.x = tileToWorldX(map, camp.x)
-    s.z = tileToWorldZ(map, camp.z + camp.d - 1)
-    run(sim, [t], map, 30, () => s.activity === "working")
-    expect(s.activity).toBe("working")
-    run(sim, [t], map, 10)
-    const resource = sim.treeResources.get(0)!
-    expect(resource.health).toBeGreaterThan(0)
-    expect(resource.health).toBeLessThan(resource.maxHealth)
-    expect(treeStage(resource, sim.time)).toBe("Being felled")
-    expect(sim.felled.size).toBe(0)
-    run(sim, [t], map, 120, () => s.activity === "gathering")
-    expect(resource.health).toBe(0)
-    expect(treeStage(resource, sim.time)).toBe("Fallen")
-    expect(resource.stumpUntil! - resource.felledAt!).toBeCloseTo(STUMP_LIFETIME_DAYS)
-    expect(resource.remainingWood).toBe(resource.wood)
-    expect(sim.piles.size).toBe(0)
-    run(sim, [t], map, 10, () => s.carrying > 0)
-    expect(s.carrying).toBe(TIMBER_LOAD)
-    expect(resource.remainingWood).toBe(resource.wood - TIMBER_LOAD)
-    expect(sim.wood).toBe(0)
-    expect(sim.piles.size).toBe(0)
-    run(sim, [t], map, 30, () => sim.wood > 0)
-    expect(sim.wood).toBe(TIMBER_LOAD)
-    expect(s.x).toBeGreaterThanOrEqual(tileToWorldX(map, camp.x))
-    expect(s.x).toBeLessThan(tileToWorldX(map, camp.x + camp.w))
-    expect(s.z).toBeGreaterThanOrEqual(tileToWorldZ(map, camp.z))
-    expect(s.z).toBeLessThan(tileToWorldZ(map, camp.z + camp.d))
-    for (let i = 0; i < 2000; i++) {
-      stepSim(sim, [t], map, 1.5, 0.1)
-      expect(resource.remainingWood + s.carrying + sim.wood).toBe(resource.wood)
-    }
-    expect(sim.wood).toBe(resource.wood)
-    expect(treeStage(resource, resource.stumpUntil! - 0.01)).toBe("Stump")
-    expect(treeStage(resource, resource.stumpUntil!)).toBe("Cleared")
-    expect(Array.from(sim.piles.values()).reduce((sum, pile) => sum + pile.wood, 0)).toBe(resource.wood)
-  })
-
-  it("keeps uncollected timber after the stump decays", () => {
-    const { trees } = fixture()
-    const resource = treeResource(trees[0], 0)
-    resource.health = 0
-    resource.felledAt = 1
-    resource.stumpUntil = 4
-    expect(treeStage(resource, 5)).toBe("Fallen")
-  })
-
-  it("keeps stacks separate by camp and preserves every delivered unit", () => {
-    const piles = new Map<string, WoodPile>()
-    for (let i = 0; i < 100; i++) stackWood(piles, "camp-a", 10)
-    stackWood(piles, "camp-b", 7)
-    expect(Array.from(piles.values()).filter((pile) => pile.campId === "camp-a")).toHaveLength(4)
-    expect(Array.from(piles.values()).reduce((sum, pile) => sum + pile.wood, 0)).toBe(1007)
-    expect(new Set(piles.keys()).size).toBe(piles.size)
-  })
-})
-
-describe("settlement route heights", () => {
-  it.each(["toRelic", "fromRelic", "toWork", "hauling"] as const)(
-    "follows bridge ramps while %s", (activity) => {
-      const { map, traveler } = fixture()
-      map.tiles[6 * map.width + 10] = "bridge"
-      const t = traveler(0)
-      const sim = createSim([t], map)
-      const s = sim.travelers.get(0)!
-      s.activity = activity
-      s.branchProgress = activity === "fromRelic" ? 2 : 1
-      s.workRoute = map.site!.branch
-      s.workProgress = 1
-      s.y = TILE_HEIGHT
-      stepSim(sim, [t], map, 1, 0.5)
-      expect(s.y).toBeCloseTo(TILE_HEIGHT + BRIDGE_RISE * 0.75)
-      expect(s.x).toBeCloseTo(tileToWorldX(map, 10))
-      expect(s.z).toBeCloseTo(tileToWorldZ(map, 5.5))
+  it.each(["forest", "darkwood", "water", "path", "track", "bridge", "clearing", "hills"] as const)(
+    "checks the far corner of the footprint for %s",
+    (terrain) => {
+      const map = testMap()
+      map.tiles[15 * map.width + 12] = terrain
+      const before = createSettlement()
+      const result = purchaseStructure(before, map, monks, [relic], "shelter", { x: 11, z: 14 })
+      expect(result.error).toBeTruthy()
+      expect(result.settlement).toBe(before)
     },
   )
 
-  it.each(["grass", "bridge"] as const)("finishes a one-tile hauling route on %s", (terrain) => {
-    const { map, traveler } = fixture()
-    map.tiles[6 * map.width + 10] = terrain
-    const t = traveler(0)
-    const sim = createSim([t], map)
-    const s = sim.travelers.get(0)!
-    s.activity = "hauling"
-    s.workRoute = [{ x: 10, z: 6 }]
-    s.workProgress = 0
-    stepSim(sim, [t], map, 1, 0.5)
-    expect(s.activity).toBe("idle")
-    expect(s.x).toBe(tileToWorldX(map, 10))
-    expect(s.z).toBe(tileToWorldZ(map, 6))
-    expect(s.y).toBeCloseTo(TILE_HEIGHT + (terrain === "bridge" ? BRIDGE_RISE : 0))
+  it("keeps the approach clear even if its terrain is open", () => {
+    expect(placementError(testMap(), shelter, { x: 13, z: 16 })).toMatch(/approach/)
+  })
+
+  it("rejects distant sites, partial off-map footprints and fractional coordinates", () => {
+    expect(placementError(testMap(), shelter, { x: 0, z: 0 })).toBeTruthy()
+    expect(placementError(testMap(), shelter, { x: 29, z: 14 })).toBeTruthy()
+    expect(placementError(testMap(), shelter, { x: 11.5, z: 14 })).toBeTruthy()
+  })
+
+  it("unlocks the hall through the establishment's combined renown", () => {
+    const map = testMap()
+    let settlement = { ...createSettlement(), resources: { gold: 1000, wood: 1000 } }
+    const locked = purchaseStructure(settlement, map, [], [], "hall", { x: 18, z: 14 })
+    expect(locked.error).toMatch(/40 shrine renown/)
+    expect(locked.settlement).toBe(settlement)
+    for (const at of [
+      { x: 9, z: 10 },
+      { x: 11, z: 10 },
+      { x: 13, z: 10 },
+      { x: 15, z: 10 },
+      { x: 17, z: 10 },
+    ]) {
+      const purchase = purchaseStructure(settlement, map, [], [], "shelter", at)
+      expect(purchase.error).toBeNull()
+      settlement = purchase.settlement
+    }
+    const hall = purchaseStructure(settlement, map, [], [], "hall", { x: 18, z: 14 })
+    expect(hall.error).toBeNull()
+    expect(hall.settlement.structures.at(-1)?.buildType).toBe("hall")
+  })
+
+  it("offers buildable land on generated shrine maps", () => {
+    for (const seed of [1, 42, 12345, 7919]) {
+      const map = generateMap({ seed, width: 64, depth: 64 })
+      const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)!
+      let available = false
+      for (let z = hovel.z - 12; z <= hovel.z + 12 && !available; z++) {
+        for (let x = hovel.x - 12; x <= hovel.x + 12; x++) {
+          if (!placementError(map, shelter, { x, z })) {
+            available = true
+            break
+          }
+        }
+      }
+      expect(available, `seed ${seed}`).toBe(true)
+    }
+  })
+})
+
+describe("shrine renown and income", () => {
+  it("adds all four sources and counts each resident and relic separately", () => {
+    const map = testMap()
+    const first = purchaseStructure(createSettlement(), map, monks, [relic], "shelter", {
+      x: 11,
+      z: 14,
+    }).settlement
+    const second = purchaseStructure(first, map, monks, [relic], "garden", {
+      x: 18,
+      z: 14,
+    }).settlement
+    const relics = [relic, generateRelic(42)]
+    const total = settlementRenown(
+      { ...map, buildings: [...map.buildings, ...second.structures] },
+      monks,
+      relics,
+    )
+    expect(total.buildings).toBe(5 + shelter.renown)
+    expect(total.scenery).toBe(garden.renown)
+    expect(total.individuals).toBe(monks.reduce((sum, monk) => sum + individualRenown(monk), 0))
+    expect(total.relics).toBe(relics.reduce((sum, item) => sum + relicRenown(item), 0))
+    expect(total.total).toBe(total.buildings + total.scenery + total.individuals + total.relics)
+  })
+
+  it("increases attraction when scenery is added, without changing the relic", () => {
+    const map = testMap()
+    const before = settlementRenown(map, monks, [relic]).total
+    const purchase = purchaseStructure(createSettlement(), map, monks, [relic], "garden", {
+      x: 18,
+      z: 14,
+    }).settlement
+    const after = settlementRenown(
+      { ...map, buildings: [...map.buildings, ...purchase.structures] },
+      monks,
+      [relic],
+    ).total
+    const pilgrim = generateTravelers(42, 60).find((t) => t.type.id === "pilgrim")!
+    expect(relicDraw(pilgrim.attributes, relic.stats, after)).toBeGreaterThan(
+      relicDraw(pilgrim.attributes, relic.stats, before),
+    )
+    expect(relic).toEqual(generateRelic(12345))
+  })
+
+  it("replenishes both supplies and applies income from purchased buildings", () => {
+    const before = createSettlement()
+    const built = purchaseStructure(before, testMap(), monks, [relic], "workshop", {
+      x: 11,
+      z: 14,
+    }).settlement
+    expect(settlementIncome(built, 4)).toEqual({ gold: 4, wood: 16 })
+    const after = collectIncome(built, 4)
+    expect(after.resources.gold).toBe(built.resources.gold + 4)
+    expect(after.resources.wood).toBe(built.resources.wood + 16)
+    expect(after.structures).toBe(built.structures)
+    expect(createSettlement()).toEqual(before)
   })
 })

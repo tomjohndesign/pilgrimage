@@ -17,6 +17,7 @@ export type Selection =
   | { kind: "traveler"; id: number }
   | { kind: "monk"; id: number }
   | { kind: "relic" }
+  | { kind: "building"; id: string }
   | { kind: "tree"; id: number }
   | { kind: "pile"; id: string }
 

@@ -1,7 +1,8 @@
 "use client"
 
-import { useBuildStore } from "@/lib/game/build-store"
-import { BUILDING_KINDS, placementProblem } from "@/lib/game/buildings"
+import { canAfford, placementError, type Resources } from "@/lib/game/settlement"
+import { useBalanceStore } from "@/lib/game/balance-store"
+import { buildCatalog } from "@/lib/game/balance"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { surfaceHeight } from "@/lib/game/map/bridges"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -13,18 +14,51 @@ import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map
  * In development builds, hovering river water (or a bridge over it) also shows
  * the flow direction as an arrow floating over the tile.
  */
-export function TileCursor({ map }: { map: GameMap }) {
+export function TileCursor({
+  map,
+  buildType,
+  resources,
+  shrineRenown = 0,
+}: {
+  map: GameMap
+  buildType?: string | null
+  resources?: Resources
+  shrineRenown?: number
+}) {
+  const balance = useBalanceStore((s) => s.balance)
   const hovered = useCameraStore((s) => s.hovered)
-  const tool = useBuildStore((s) => s.tool)
-  const buildings = useBuildStore((s) => s.buildings)
   if (!hovered) return null
 
   if (!tileAt(map, hovered.x, hovered.z)) return null
 
-  const def = tool ? BUILDING_KINDS[tool] : null
-  const problem = tool ? placementProblem(map, [...map.buildings, ...buildings], tool, hovered.x, hovered.z) : null
-  const w = def?.w ?? 1
-  const d = def?.d ?? 1
+  const build = buildCatalog(balance).find((item) => item.id === buildType)
+  if (build) {
+    const valid =
+      shrineRenown >= build.requiredRenown &&
+      !placementError(map, build, hovered, balance) &&
+      !!resources &&
+      canAfford(resources, build.cost)
+    const color = valid ? "#93bc6c" : "#db6656"
+    return (
+      <group
+        position={[
+          tileToWorldX(map, hovered.x) + (build.w - 1) / 2,
+          0.24,
+          tileToWorldZ(map, hovered.z) + (build.d - 1) / 2,
+        ]}
+      >
+        <mesh>
+          <boxGeometry args={[build.w, 0.04, build.d]} />
+          <meshBasicMaterial color={color} transparent opacity={0.65} depthWrite={false} />
+        </mesh>
+        <mesh position={[0, build.height / 2, 0]}>
+          <boxGeometry args={[build.w * 0.86, build.height, build.d * 0.86]} />
+          <meshBasicMaterial color={color} wireframe transparent opacity={0.8} depthWrite={false} />
+        </mesh>
+      </group>
+    )
+  }
+
   const index = hovered.z * map.width + hovered.x
   // On a bridge the highlight rides the deck, not the water under it.
   const y = surfaceHeight(map, hovered.x, hovered.z)
@@ -32,9 +66,9 @@ export function TileCursor({ map }: { map: GameMap }) {
 
   return (
     <group>
-      <mesh position={[tileToWorldX(map, hovered.x) + (w - 1) / 2, y + 0.015, tileToWorldZ(map, hovered.z) + (d - 1) / 2]}>
-        <boxGeometry args={[w, 0.03, d]} />
-        <meshBasicMaterial color={tool ? (problem ? "#bd5342" : "#9ebc62") : "#f2e8d5"} transparent opacity={0.4} depthWrite={false} />
+      <mesh position={[tileToWorldX(map, hovered.x), y + 0.015, tileToWorldZ(map, hovered.z)]}>
+        <boxGeometry args={[1, 0.03, 1]} />
+        <meshBasicMaterial color="#f2e8d5" transparent opacity={0.4} depthWrite={false} />
       </mesh>
       {flow && (
         // Arrow modelled pointing +X, yawed onto the flow direction. A Y

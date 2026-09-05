@@ -5,6 +5,8 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
+import { useBalanceStore } from "@/lib/game/balance-store"
+import { lumberCamps } from "@/lib/game/settlement"
 import { useBuildStore } from "@/lib/game/build-store"
 import type { Relic } from "@/lib/game/relic"
 import type { TreePlacement } from "@/lib/game/trees/placement"
@@ -47,11 +49,13 @@ export function Travelers({
   speed,
   relic,
   trees,
+  shrineRenown,
 }: {
   map: GameMap
   travelers: Traveler[]
   relic: Relic
   trees: TreePlacement[]
+  shrineRenown: number
   /** Base walking speed in tiles per second; each traveler's pace scales it. */
   speed: number
 }) {
@@ -59,7 +63,7 @@ export function Travelers({
   const resourceElapsed = useRef(0)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
 
-  const sim = useMemo(() => createSim([], map, [], relic.stats), [map, relic])
+  const sim = useMemo(() => createSim([], map, [], relic.stats), [map.road, relic])
   useEffect(() => {
     const fresh = createSim(travelers, map, [], relic.stats)
     for (const [id, traveler] of fresh.travelers) {
@@ -69,6 +73,8 @@ export function Travelers({
       if (!fresh.travelers.has(id)) sim.travelers.delete(id)
     }
   }, [sim, travelers, map, relic])
+
+  const camps = useMemo(() => lumberCamps(map), [map])
 
   // Publish the running sim so the HUD's traveler panel can poll live stats.
   useEffect(() => {
@@ -81,12 +87,14 @@ export function Travelers({
   useFrame((_, delta) => {
     // A background tab hands us a huge delta; clamp so nobody teleports.
     const build = useBuildStore.getState()
-    sim.buildings = build.buildings
+    sim.buildings = camps
+    sim.shrineRenown = shrineRenown
+    sim.balance = useBalanceStore.getState().balance
     sim.trees = trees
     stepSim(sim, travelers, map, speed, Math.min(delta, 0.1))
     resourceElapsed.current += delta
     if (build.resourceRevision !== sim.resourceRevision || resourceElapsed.current >= 0.25) {
-      build.syncResources(sim)
+      build.syncResources(sim, travelers)
       resourceElapsed.current = 0
     }
 
