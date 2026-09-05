@@ -47,7 +47,10 @@ const FRAGMENT_SHADER = /* glsl */ `
 
   float idAt(vec2 uv) {
     vec4 t = texture2D(tId, uv);
-    return floor(t.r * 255.0 + 0.5) + 256.0 * floor(t.g * 255.0 + 0.5);
+    // 24-bit ID, exact in highp float (24-bit mantissa) — see MAX_OBJECT_ID.
+    return floor(t.r * 255.0 + 0.5)
+      + 256.0 * floor(t.g * 255.0 + 0.5)
+      + 65536.0 * floor(t.b * 255.0 + 0.5);
   }
 
   bool occludedBy(vec2 uv, float idC, float dC) {
