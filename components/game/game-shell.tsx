@@ -22,6 +22,7 @@ import {
 } from "@/lib/game/map/generate-map"
 
 import { GameHud } from "./game-hud"
+import { CheatBar } from "./cheat-bar"
 import type { PixelationProps } from "@/components/pixel-canvas"
 
 /**
@@ -119,6 +120,8 @@ export function GameShell({
   // With no ?seed= in the URL the seed is chosen client-side in an effect, so
   // the server and client never render from different seeds.
   const [seed, setSeed] = useState<number | null>(initialSeed ?? null)
+  const [blasterPastor, setBlasterPastor] = useState(false)
+  const [lastMarch, setLastMarch] = useState(false)
   const [settings, setSettings] = useState<MapSettings>({
     ...DEFAULT_SETTINGS,
     ...initialSettings,
@@ -248,6 +251,8 @@ export function GameShell({
           map={map}
           relic={relic}
           monks={monks}
+          blasterPastor={blasterPastor}
+          lastMarch={lastMarch}
           travelers={travelers}
           walkSpeed={settings.walkSpeed}
           roadTier={settings.road}
@@ -275,6 +280,7 @@ export function GameShell({
         onReroll={() => setSeed(randomSeed())}
         onSeedChange={setSeed}
       />
+      <CheatBar onBlasterPastor={() => setBlasterPastor(true)} onLastMarch={() => setLastMarch(true)} />
     </div>
   )
 }

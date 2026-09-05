@@ -152,7 +152,7 @@ export function CameraRig({ map }: { map: GameMap }) {
 
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return
+      if (event.defaultPrevented || target?.closest("input, textarea, select, [contenteditable='true']")) return
 
       const key = event.key.toLowerCase()
       heldKeys.current.add(key)
@@ -191,10 +191,13 @@ export function CameraRig({ map }: { map: GameMap }) {
     window.addEventListener("keydown", onKeyDown)
     window.addEventListener("keyup", onKeyUp)
     window.addEventListener("blur", onBlur)
+    // Opening the cheat bar while holding WASD must stop the existing pan.
+    window.addEventListener("focusin", onBlur)
     return () => {
       window.removeEventListener("keydown", onKeyDown)
       window.removeEventListener("keyup", onKeyUp)
       window.removeEventListener("blur", onBlur)
+      window.removeEventListener("focusin", onBlur)
     }
   }, [])
 

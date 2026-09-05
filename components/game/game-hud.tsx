@@ -36,6 +36,7 @@ const CONTROLS: Array<[string, string]> = [
   ["W A S D", "Pan"],
   ["O", "Cycle outlines"],
   ["0", "Reset camera"],
+  ["Return", "Cheat code"],
 ]
 
 const PANEL_SHADOW = "shadow-[0_2px_16px_rgba(0,0,0,0.6)]"

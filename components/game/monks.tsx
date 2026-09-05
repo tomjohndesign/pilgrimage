@@ -9,14 +9,18 @@ import { surfaceHeight } from "@/lib/game/map/bridges"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
+import { createMonkFlight, monkGroundTime, stepMonkFlight, type MonkFlight } from "@/lib/game/monk-flight"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { encodeObjectId, OUTLINE_ID_LAYER_MASK, residentObjectId } from "@/lib/game/render/outline"
+import { MonkRocketGear, ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
 
 /**
- * The brothers, always about the hovel: they drift between the open tiles
- * around it, stand a while, and drift on — enough that the place is plainly
+ * The brothers drift between the open tiles around the hovel,
+ * stand a while, and drift on — enough that the place is plainly
  * lived in. Ambient motion only; they aren't in the traveler sim. Click one
- * to select him — the HUD names him and his office.
+ * to select him — the HUD names him and his office. Blaster Pastor sends them
+ * on occasional cruises across the map; they return to their life at the shrine
+ * between trips, keeping their rocket-powered gear equipped.
  */
 
 const BODY: [number, number, number] = [0.3, 0.55, 0.3]
@@ -48,6 +52,8 @@ interface MonkState {
   z: number
   target: Spot
   pause: number
+  flight?: MonkFlight
+  flightWait: number
 }
 
 /** Open ground around the hovel a monk may stand on: never the walls, never the woods. */
@@ -71,24 +77,26 @@ function wanderSpots(map: GameMap): { spots: Spot[]; centre: { x: number; z: num
   return { spots, centre }
 }
 
-export function Monks({ map, monks }: { map: GameMap; monks: Monk[] }) {
+export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Monk[]; flying?: boolean }) {
   const selection = useCameraStore((s) => s.selection)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
 
   const world = useMemo(() => {
     const { spots, centre } = wanderSpots(map)
     const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.monkWander))
+    const flightRng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.monkFlight))
     const pick = (): Spot => {
       const spot = spots[Math.floor(rng() * spots.length)]
       // Jitter within the tile so two brothers never stand on the same spot.
       return { x: spot.x + (rng() - 0.5) * 0.5, y: spot.y, z: spot.z + (rng() - 0.5) * 0.5 }
     }
-    const states: MonkState[] = monks.map(() => {
+    const states: MonkState[] = (spots.length ? monks : []).map((_, index) => {
       const start = pick()
-      return { ...start, target: pick(), pause: rng() * PAUSE_MAX_SECONDS }
+      // One immediate demonstration; the other brothers take off in their own time.
+      return { ...start, target: pick(), pause: rng() * PAUSE_MAX_SECONDS, flightWait: index * 8 }
     })
     const activities = new Map<number, MonkActivity>()
-    return { spots, centre, rng, pick, states, activities }
+    return { spots, centre, rng, flightRng, pick, states, activities }
   }, [map, monks])
 
   // Publish activities so the HUD's monk panel can poll them.
@@ -105,6 +113,41 @@ export function Monks({ map, monks }: { map: GameMap; monks: Monk[] }) {
       const s = world.states[i]
       const group = groupRefs.current[i]
       if (!group) continue
+
+      const exhaust = group.getObjectByName(ROCKET_EXHAUST_NAME)
+      if (flying) {
+        s.flightWait -= dt
+        if (!s.flight && s.flightWait <= 0) {
+          s.flight = createMonkFlight(s, world.pick(), map, world.flightRng)
+        }
+      }
+      if (s.flight) {
+        const flight = s.flight
+        stepMonkFlight(flight, map, world.flightRng, dt)
+        s.x = flight.x
+        s.y = flight.y
+        s.z = flight.z
+        const dx = flight.target.x - flight.x
+        const dz = flight.target.z - flight.z
+        if (Math.hypot(dx, dz) > 0.001) {
+          const heading = Math.atan2(dx, dz)
+          const turn = Math.atan2(Math.sin(heading - group.rotation.y), Math.cos(heading - group.rotation.y))
+          group.rotation.y += turn * Math.min(1, dt * 5)
+        }
+        group.rotation.x = flight.phase === "cruising" || flight.phase === "returning" ? 0.15 : 0
+        group.position.set(flight.x, flight.y, flight.z)
+        if (flight.phase !== "landed") {
+          if (exhaust) exhaust.visible = true
+          world.activities.set(monks[i].id, "flying")
+          continue
+        }
+        s.flight = undefined
+        s.flightWait = monkGroundTime(world.flightRng)
+        s.target = world.pick()
+        s.pause = PAUSE_MIN_SECONDS + world.rng() * (PAUSE_MAX_SECONDS - PAUSE_MIN_SECONDS)
+      }
+      if (exhaust) exhaust.visible = false
+      group.rotation.x = 0
 
       if (s.pause > 0) {
         s.pause -= dt
@@ -165,8 +208,9 @@ export function Monks({ map, monks }: { map: GameMap; monks: Monk[] }) {
               <boxGeometry args={BODY} />
               <meshBasicMaterial color={id} toneMapped={false} />
             </mesh>
+            {flying && <MonkRocketGear phase={index} outlineColor={id} onClick={select} />}
             {selected && (
-              <mesh position={[0, BODY[1] + 0.35, 0]}>
+              <mesh position={[0, flying ? 1.4 : BODY[1] + 0.35, 0]}>
                 <boxGeometry args={[0.2, 0.05, 0.2]} />
                 <meshBasicMaterial color="#d8a93f" />
               </mesh>

@@ -59,4 +59,6 @@ export const SEED_STREAM = {
   /** Sparse ground dressing, independent of trees and simulation. */
   environment: 11,
   environmentShapes: 12,
+  monkFlight: 13,
+  ents: 14,
 } as const
