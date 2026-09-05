@@ -11,10 +11,34 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
-    version: "0.0.7",
+    version: "0.0.11",
     title: "Changelog & Versioning",
     summary:
       "The game now keeps a public record of its own history. Every release gets a version number, a title, and a summary, all reachable from the main menu.",
+  },
+  {
+    version: "0.0.10",
+    title: "The Assets Gallery",
+    summary:
+      "Textures and characters moved under a single Assets menu, each with its own gallery, and peasants joined the cast of figures on the road.",
+  },
+  {
+    version: "0.0.9",
+    title: "Softer Ground",
+    summary:
+      "Forests now fade into grassland at their edges instead of stopping at a hard line, and the ground was flattened for a calmer, more readable landscape.",
+  },
+  {
+    version: "0.0.8",
+    title: "A Clearer View",
+    summary:
+      "Trees settled at one or two per tile for a consistent canopy, zoom gained a per-map limit, and a minimap arrived to keep your bearings.",
+  },
+  {
+    version: "0.0.7",
+    title: "Travelers on the Road",
+    summary:
+      "The road came alive: travelers walk it with needs of their own, stopping at camps and vendors, all keeping time against a proper game clock.",
   },
   {
     version: "0.0.6",

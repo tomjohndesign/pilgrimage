@@ -70,6 +70,25 @@ describe("generateMap", () => {
     }
   })
 
+  it("returns the road as an unbroken ordered walk, west edge to east edge", () => {
+    for (const seed of SEEDS) {
+      const map = generateMap({ seed })
+      const road = map.road!
+      expect(road.length, `seed ${seed} has a route`).toBeGreaterThan(0)
+      expect(road[0].x, `seed ${seed} starts on the west edge`).toBe(0)
+      expect(road[road.length - 1].x, `seed ${seed} ends on the east edge`).toBe(map.width - 1)
+
+      for (let i = 0; i < road.length; i++) {
+        expect(tileAt(map, road[i].x, road[i].z), `seed ${seed} route is on path`).toBe("path")
+        if (i > 0) {
+          const step =
+            Math.abs(road[i].x - road[i - 1].x) + Math.abs(road[i].z - road[i - 1].z)
+          expect(step, `seed ${seed} step ${i} is to a neighbour`).toBe(1)
+        }
+      }
+    }
+  })
+
   it("is densely forested by default, in one connected mass rather than islands", () => {
     for (const seed of SEEDS) {
       const map = generateMap({ seed })

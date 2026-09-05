@@ -13,6 +13,7 @@ import {
   DEFAULT_VIEW_SIZE,
   ISO_PITCH,
   MAX_VIEW_SIZE,
+  maxViewSizeForMap,
   MIN_VIEW_SIZE,
   normalizeViewIndex,
   LIGHT_HEIGHT,
@@ -36,6 +37,7 @@ import {
   type OutlineMode,
 } from "./render/outline"
 import { TEXTURES } from "./render/textures"
+import { SITE_MENU } from "../site-menu"
 import { DEFAULT_WORLD_SEED, deriveSeed, makeRng, parseSeed, SEED_STREAM } from "./rng"
 
 const DEG = 180 / Math.PI
@@ -143,6 +145,22 @@ describe("isometric camera", () => {
     expect(clampViewSize(1)).toBe(MIN_VIEW_SIZE)
     expect(clampViewSize(9999)).toBe(MAX_VIEW_SIZE)
     expect(clampViewSize(DEFAULT_VIEW_SIZE)).toBe(DEFAULT_VIEW_SIZE)
+  })
+
+  it("caps zoom-out per map, but never past the fixed ceiling", () => {
+    // The ceiling is what bounds visible tiles — and render cost — on big maps,
+    // so it must not grow with the map.
+    expect(maxViewSizeForMap(512, 512)).toBe(MAX_VIEW_SIZE)
+    expect(maxViewSizeForMap(128, 128)).toBe(MAX_VIEW_SIZE)
+    // Smaller maps cap proportionally lower (140 framed a 128 map).
+    expect(maxViewSizeForMap(64, 64)).toBeCloseTo(70, 6)
+    expect(maxViewSizeForMap(32, 32)).toBeCloseTo(35, 6)
+    // Rectangular maps frame their longer edge.
+    expect(maxViewSizeForMap(32, 128)).toBe(MAX_VIEW_SIZE)
+    // Degenerate maps still leave room to zoom.
+    expect(maxViewSizeForMap(1, 1)).toBe(MIN_VIEW_SIZE)
+    // clampViewSize honours a per-map cap.
+    expect(clampViewSize(9999, maxViewSizeForMap(64, 64))).toBeCloseTo(70, 6)
   })
 })
 
@@ -300,6 +318,23 @@ describe("texture manifest", () => {
     for (const t of TEXTURES) {
       expect(existsSync(join(process.cwd(), "public", t.url)), t.url).toBe(true)
     }
+  })
+})
+
+describe("site menu", () => {
+  it("has unique hrefs and nests sub-pages under their parent route", () => {
+    const hrefs = SITE_MENU.flatMap((item) => [item.href, ...(item.children ?? []).map((c) => c.href)])
+    expect(new Set(hrefs).size).toBe(hrefs.length)
+    for (const item of SITE_MENU) {
+      for (const child of item.children ?? []) {
+        expect(child.href.startsWith(`${item.href}/`), child.href).toBe(true)
+      }
+    }
+  })
+
+  it("lists textures and characters under assets", () => {
+    const assets = SITE_MENU.find((item) => item.label === "Assets")
+    expect(assets?.children?.map((c) => c.label)).toEqual(["Textures", "Characters"])
   })
 })
 
