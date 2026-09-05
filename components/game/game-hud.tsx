@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useEffect, useState } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import { MIN_MAP_SIZE } from "@/lib/game/map/generate-map"
 import type { GameMap } from "@/lib/game/map/types"
 import { parseSeed } from "@/lib/game/rng"
 import { saveSeed } from "@/lib/game/seed-storage"
@@ -479,9 +480,9 @@ export function GameHud({
             label="Size"
             value={settings.size}
             display={`${settings.size} × ${settings.size}`}
-            min={32}
+            min={MIN_MAP_SIZE}
             max={512}
-            step={16}
+            step={32}
             onChange={(size) => set({ size })}
           />
           <div className="mt-1.5">
@@ -550,6 +551,42 @@ export function GameHud({
             max={5}
             step={0.1}
             onChange={(walkSpeed) => set({ walkSpeed })}
+          />
+        </Panel>
+
+        <Panel>
+          <Label>Water</Label>
+          <Tuner
+            label="Coverage"
+            value={settings.water}
+            display={`${settings.water}%`}
+            min={0}
+            max={20}
+            onChange={(water) => set({ water })}
+          />
+          <Tuner
+            label="Rivers"
+            value={settings.rivers}
+            display={settings.rivers < 0 ? "Seeded" : String(settings.rivers)}
+            min={-1}
+            max={3}
+            onChange={(rivers) => set({ rivers })}
+          />
+          <Tuner
+            label="Lakes"
+            value={settings.lakes}
+            display={settings.lakes < 0 ? "Seeded" : String(settings.lakes)}
+            min={-1}
+            max={2}
+            onChange={(lakes) => set({ lakes })}
+          />
+          <Tuner
+            label="Ponds"
+            value={settings.ponds}
+            display={settings.ponds < 0 ? "Seeded" : String(settings.ponds)}
+            min={-1}
+            max={3}
+            onChange={(ponds) => set({ ponds })}
           />
         </Panel>
       </div>

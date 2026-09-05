@@ -15,6 +15,19 @@ export interface BuildingDef {
   roofColor: string
 }
 
+export interface WaterInfo {
+  /**
+   * Row-major water depth: 0 on land, 1 (shallow shoreline) to 3 (deep) on
+   * water. Bridge tiles keep the depth of the water running beneath them.
+   */
+  depth: number[]
+  /**
+   * Flow direction `[dx, dz]` per tile index. Only river water flows — a water
+   * tile with no entry here is lake or pond. Bridge tiles keep their entry.
+   */
+  flow: Record<number, readonly [number, number]>
+}
+
 export interface TilePos {
   x: number
   z: number
@@ -47,10 +60,12 @@ export interface GameMap {
   buildings: BuildingDef[]
   /** Present on generated maps; absent on hand-authored ones. Drives cosmetic RNG too. */
   seed?: number
+  /** Present on generated maps; hand-authored water renders at depth 1. */
+  water?: WaterInfo
   /**
    * The road as an ordered walk, west edge to east edge, each step to a
    * 4-neighbour. The tile grid only says *where* road is; this says in what
-   * order a traveller crosses it.
+   * order a traveller crosses it. Steps over rivers are bridge tiles.
    */
   road?: TilePos[]
   /** Present on generated maps: the relic's hovel and the branch that reaches it. */

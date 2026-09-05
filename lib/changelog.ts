@@ -14,7 +14,7 @@ export const CHANGELOG: Release[] = [
     version: "0.0.12",
     title: "Wider Horizons",
     summary:
-      "The map size slider now climbs to 512 × 512 tiles, four times the old limit on a side, so a world can hold room for roads and settlements far beyond the first glade.",
+      "The map size slider now climbs to 512 × 512 tiles, twice the old limit on a side, so a world can hold room for rivers, roads, and settlements far beyond the first glade.",
   },
   {
     version: "0.0.11",
