@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "1bc671422ff1cd59710d9d090d1f9a2196346bff",
-  "releaseCount": 9,
+  "lastProcessedCommit": "4d1c11d51be56dc8bd05bdb1c8809200e71b14cd",
+  "releaseCount": 10,
   "releases": [
+    {
+      "version": "0.0.24",
+      "title": "Release 0.0.24",
+      "summary": "Add cheat console, rocket-powered monks, and walking Ents (#44)",
+      "commit": "4d1c11d51be56dc8bd05bdb1c8809200e71b14cd"
+    },
     {
       "version": "0.0.23",
       "title": "Release 0.0.23",
