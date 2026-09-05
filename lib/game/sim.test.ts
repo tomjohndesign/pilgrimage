@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import type { TerrainId } from "./map/terrain"
-import { tileAt, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
+import { tileAt, tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import {
   createSim,
   FOOD_PRICE,
@@ -159,6 +159,7 @@ describe("stepSim", () => {
     expect(runUntil(sim, travelers, map, () => s.activity === "walking", 30)).toBe(true)
     expect(s.stamina).toBeGreaterThan(90)
     expect(s.spot).toBeNull()
+    expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) - s.laneOffset)
   })
 
   it("has pilgrims join a nearby camp instead of camping alone", () => {
@@ -324,6 +325,85 @@ describe("stepSim", () => {
   })
 })
 
+describe("left-hand walking lanes", () => {
+  it.each([[1, 0], [-1, 0], [0, 1], [0, -1]])(
+    "keeps both directions to their own left on a route heading (%i, %i)",
+    (dx, dz) => {
+      const map = makeMap()
+      map.road = Array.from({ length: 5 }, (_, i) => ({ x: 10 + dx * i, z: 4 + dz * i }))
+      const travelers = [makeTraveler(0, "knight"), makeTraveler(1, "knight")]
+      travelers[1].direction = -1
+      const sim = createSim(travelers, map)
+      const centre = map.road[2]
+      for (const t of travelers) {
+        const s = sim.travelers.get(t.id)!
+        const x = s.x - tileToWorldX(map, centre.x)
+        const z = s.z - tileToWorldZ(map, centre.z)
+        expect((x * dz - z * dx) * t.direction).toBeCloseTo(s.laneOffset)
+        expect(s.laneOffset).toBeGreaterThanOrEqual(0.18)
+        expect(s.laneOffset).toBeLessThan(0.28)
+      }
+    },
+  )
+
+  it("varies each person's line reproducibly without depending on crowd order", () => {
+    const map = makeMap()
+    const travelers = Array.from({ length: 10 }, (_, id) => makeTraveler(id, "knight"))
+    const sim = createSim(travelers, map)
+    const reordered = createSim([...travelers].reverse(), map)
+    const offsets = [...sim.travelers.values()].map((s) => s.laneOffset)
+    expect(new Set(offsets).size).toBe(travelers.length)
+    for (const s of sim.travelers.values()) expect(reordered.travelers.get(s.id)).toEqual(s)
+    expect(createSim(travelers, { ...map, seed: 2 }).travelers.get(0)!.laneOffset).not.toBe(offsets[0])
+  })
+
+  it.each([1, -1] as const)("stays on the path through bends without position jumps (direction %i)", (direction) => {
+    const map = makeMap()
+    map.tiles.fill("grass")
+    map.road = [
+      { x: 8, z: 4 }, { x: 9, z: 4 }, { x: 10, z: 4 },
+      { x: 10, z: 5 }, { x: 10, z: 6 }, { x: 11, z: 6 }, { x: 12, z: 6 },
+    ]
+    for (const tile of map.road) map.tiles[tile.z * map.width + tile.x] = "path"
+    const t = makeTraveler(0, "knight", {}, direction === 1 ? 0 : 1)
+    t.direction = direction
+    const sim = createSim([t], map)
+    const s = sim.travelers.get(0)!
+    for (let i = 0; i < 550; i++) {
+      const before = { x: s.x, z: s.z }
+      stepSim(sim, [t], map, 1, 0.01)
+      expect(Math.hypot(s.x - before.x, s.z - before.z)).toBeLessThan(0.02)
+      expect(tileAt(map, worldToTileX(map, s.x), worldToTileZ(map, s.z))).toBe("path")
+    }
+  })
+
+  it("crosses gradually to the new left lane when turning back", () => {
+    const map = makeMap()
+    const t = makeTraveler(0, "knight")
+    const sim = createSim([t], map)
+    const s = sim.travelers.get(0)!
+    const startZ = s.z
+    s.direction = -1
+    stepSim(sim, [t], map, 1, 0.1)
+    expect(s.z - startZ).toBeGreaterThan(0)
+    expect(s.z - startZ).toBeLessThan(0.1)
+    for (let i = 0; i < 10; i++) stepSim(sim, [t], map, 1, 0.1)
+    expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) + s.laneOffset)
+  })
+
+  it("uses the actual walking direction while seeking a vendor behind them", () => {
+    const map = makeMap()
+    const travelers = [makeTraveler(0, "pilgrim", { hunger: 0 }, 0.8), makeTraveler(1, "vendor", {}, 0.2)]
+    const sim = createSim(travelers, map)
+    const s = sim.travelers.get(0)!
+    for (let i = 0; i < 10; i++) stepSim(sim, travelers, map, 1, 0.1)
+    expect(s.activity).toBe("seeking")
+    expect(s.direction).toBe(1)
+    expect(s.progress).toBeLessThan(0.8 * (map.road!.length - 1))
+    expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) + s.laneOffset)
+  })
+})
+
 describe("danger on the road", () => {
   it("never troubles anyone on open country", () => {
     const map = makeMap()
@@ -393,6 +473,28 @@ describe("danger on the road", () => {
 describe("tracks through the dark forest", () => {
   /** Start just west of the track's mouth and walk east through it. */
   const beforeMouth = 6 / 39
+
+  it.each([1, -1] as const)("keeps left on tracks and rejoins the road's lane continuously (direction %i)", (direction) => {
+    const map = makeTrackMap()
+    const t = makeTraveler(0, "knight")
+    t.direction = direction
+    const sim = createSim([t], map)
+    sim.danger.fill(0)
+    const s = sim.travelers.get(0)!
+    s.track = { index: 0, progress: 9 }
+    stepSim(sim, [t], map, 1, 0)
+    expect(s.z).toBeCloseTo(tileToWorldZ(map, 1) - direction * s.laneOffset)
+
+    const track = map.shortcuts![0]
+    s.track!.progress = direction === 1 ? track.tiles.length - 1 - 0.00001 : 0.00001
+    stepSim(sim, [t], map, 1, 0)
+    const before = { x: s.x, z: s.z }
+    stepSim(sim, [t], map, 1, 0.00002)
+    expect(s.track).toBeNull()
+    expect(s.progress).toBe(direction === 1 ? track.exit : track.entry)
+    expect(Math.hypot(s.x - before.x, s.z - before.z)).toBeLessThan(0.00003)
+    expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) - direction * s.laneOffset)
+  })
 
   it("tempts some knights but never merchants, vendors, or minstrels", () => {
     const map = makeTrackMap()

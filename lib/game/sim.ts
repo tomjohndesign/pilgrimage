@@ -9,6 +9,7 @@ import {
   type GameMap,
 } from "./map/types"
 import { holdsNerve, takesTrack, type RouteState } from "./route-choice"
+import { deriveSeed, makeRng, SEED_STREAM } from "./rng"
 import type { Traveler } from "./travelers"
 
 /**
@@ -152,6 +153,10 @@ export interface SimTraveler {
    * flips whenever they turn back from trouble.
    */
   direction: 1 | -1
+  /** Personal distance left of the route centre, in tiles. */
+  laneOffset: number
+  /** Signed offset along the ordered route; eases across when turning back. */
+  lane: number
   /**
    * On a track through the dark forest: which shortcut and how far along it,
    * in tiles from its entry end. Null while on the road. `progress` holds the
@@ -193,29 +198,74 @@ export interface SimState {
  */
 export const simRegistry: { current: SimState | null } = { current: null }
 
-/** World point `p` tiles along an ordered walk of tiles, interpolated. */
+/**
+ * Offset a route vertex to the left (+z is south, so eastbound left is -z).
+ * Joining the adjacent parallel segments at their intersection keeps bends
+ * continuous. On our 4-connected routes the offset stays inside the tile.
+ */
+function laneVertex(
+  route: ReadonlyArray<{ x: number; z: number }>,
+  i: number,
+  lane: number,
+): { x: number; z: number } {
+  const p = route[i]
+  const a = route[Math.max(0, i - 1)]
+  const b = route[Math.min(route.length - 1, i + 1)]
+  const inX = i === 0 ? b.x - p.x : p.x - a.x
+  const inZ = i === 0 ? b.z - p.z : p.z - a.z
+  const outX = i === route.length - 1 ? inX : b.x - p.x
+  const outZ = i === route.length - 1 ? inZ : b.z - p.z
+  const divisor = 1 + inX * outX + inZ * outZ
+  // A doubled-back vertex has no intersection; keep its outgoing normal.
+  const nx = divisor > 0 ? (inZ + outZ) / divisor : outZ
+  const nz = divisor > 0 ? -(inX + outX) / divisor : -outX
+  return { x: p.x + nx * lane, z: p.z + nz * lane }
+}
+
+/** World point along parallel lanes, interpolated continuously around bends. */
 function routeWorldPoint(
   map: GameMap,
   route: ReadonlyArray<{ x: number; z: number }>,
   p: number,
+  lane: number,
+  junctions?: { entry: number; exit: number },
 ): { x: number; z: number } {
   const i0 = Math.max(0, Math.min(Math.floor(p), route.length - 2))
   const frac = p - i0
-  const ax = tileToWorldX(map, route[i0].x)
-  const az = tileToWorldZ(map, route[i0].z)
-  const bx = tileToWorldX(map, route[i0 + 1].x)
-  const bz = tileToWorldZ(map, route[i0 + 1].z)
+  const vertex = (i: number) => {
+    // Tracks meet the same lane point as the road at both junctions.
+    if (junctions && (i === 0 || i === route.length - 1)) {
+      return laneVertex(map.road!, i === 0 ? junctions.entry : junctions.exit, lane)
+    }
+    return laneVertex(route, i, lane)
+  }
+  const a = vertex(i0)
+  const b = vertex(i0 + 1)
+  const ax = tileToWorldX(map, a.x)
+  const az = tileToWorldZ(map, a.z)
+  const bx = tileToWorldX(map, b.x)
+  const bz = tileToWorldZ(map, b.z)
   return { x: ax + (bx - ax) * frac, z: az + (bz - az) * frac }
 }
 
-function roadWorldPoint(map: GameMap, p: number): { x: number; z: number } {
-  return routeWorldPoint(map, map.road!, p)
+function roadWorldPoint(map: GameMap, p: number, lane: number): { x: number; z: number } {
+  return routeWorldPoint(map, map.road!, p, lane)
 }
 
 /** Where on their route — road or track — the traveler currently belongs. */
 function currentRoutePoint(map: GameMap, s: SimTraveler): { x: number; z: number } {
-  if (s.track) return routeWorldPoint(map, map.shortcuts![s.track.index].tiles, s.track.progress)
-  return roadWorldPoint(map, s.progress)
+  if (s.track) {
+    const track = map.shortcuts![s.track.index]
+    return routeWorldPoint(map, track.tiles, s.track.progress, s.lane, track)
+  }
+  return roadWorldPoint(map, s.progress, s.lane)
+}
+
+/** Cross to the new left lane over a short walk, including when seeking food. */
+function stepLane(s: SimTraveler, direction: 1 | -1, distance: number): void {
+  const target = direction * s.laneOffset
+  const step = Math.max(0, distance) * 0.8
+  s.lane += Math.max(-step, Math.min(step, target - s.lane))
 }
 
 const ROAD_Y = TILE_HEIGHT
@@ -234,7 +284,11 @@ export function createSim(
   const length = map.road.length - 1
   for (const t of travelers) {
     const progress = t.offset * length
-    const at = roadWorldPoint(map, progress)
+    // A separate, per-id stream preserves the cast and survives reordering.
+    const laneRng = makeRng(deriveSeed(deriveSeed(map.seed ?? 0, SEED_STREAM.lanes), t.id))
+    const laneOffset = 0.18 + laneRng() * 0.1
+    const lane = t.direction * laneOffset
+    const at = roadWorldPoint(map, progress, lane)
     sim.travelers.set(t.id, {
       id: t.id,
       activity: "walking",
@@ -247,6 +301,8 @@ export function createSim(
       z: at.z,
       progress,
       direction: t.direction,
+      laneOffset,
+      lane,
       track: null,
       fled: 0,
       rolls: 0,
@@ -527,6 +583,7 @@ export function stepSim(
               meetTrouble(sim, s, t, map, track.tiles[tile])
             }
           }
+          stepLane(s, s.activity === "fleeing" ? s.direction : direction, worldSpeed * haste * dt)
           const at = currentRoutePoint(map, s)
           s.x = at.x
           s.y = ROAD_Y
@@ -557,6 +614,7 @@ export function stepSim(
             meetTrouble(sim, s, t, map, map.road[after])
           }
         }
+        stepLane(s, s.activity === "fleeing" ? s.direction : direction, worldSpeed * haste * dt)
         const at = currentRoutePoint(map, s)
         s.x = at.x
         s.y = ROAD_Y

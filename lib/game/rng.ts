@@ -49,4 +49,9 @@ export const SEED_STREAM = {
   monkWander: 7,
   /** Individual tree shapes (trunk, crown, lean); placement uses `trees`. */
   treeShapes: 8,
+  /**
+   * Which line each traveler keeps along the road. Its own stream so adding
+   * it preserves every seed's cast (names, callings, stats).
+   */
+  lanes: 9,
 } as const
