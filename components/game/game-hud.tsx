@@ -710,8 +710,8 @@ export function GameHud({
                 Settlement
               </button>
               {settlementOpen && (
-                <div id="settlement-controls" className={`pointer-events-auto absolute right-0 top-full mt-2 w-[228px] border border-rule bg-parchment/95 px-3 py-3 ${PANEL_SHADOW}`}>
-                  <SettlementPanel map={map} />
+                <div id="settlement-controls" className={`pointer-events-auto absolute right-0 top-full mt-2 max-h-[calc(100dvh-5rem)] w-[228px] overflow-y-auto border border-rule bg-parchment/95 px-3 py-3 ${PANEL_SHADOW}`}>
+                  <SettlementPanel economy={economy} monks={monks} relic={relic} />
                 </div>
               )}
             </div>

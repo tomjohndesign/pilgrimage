@@ -132,7 +132,7 @@ describe("build and buy", () => {
     expect(placementError(testMap(), shelter, { x: 11.5, z: 14 })).toBeTruthy()
   })
 
-  it("unlocks the hall through the establishment's combined renown", () => {
+  it("housing does not unlock the hall; completed visits can earn the required renown", () => {
     const map = testMap()
     let settlement = { ...createSettlement(), resources: { gold: 1000, wood: 1000 } }
     const locked = purchaseStructure(settlement, map, [], [], "hall", { x: 18, z: 14 })
@@ -149,7 +149,8 @@ describe("build and buy", () => {
       expect(purchase.error).toBeNull()
       settlement = purchase.settlement
     }
-    const hall = purchaseStructure(settlement, map, [], [], "hall", { x: 18, z: 14 })
+    expect(purchaseStructure(settlement, map, [], [], "hall", { x: 18, z: 14 }).error).toMatch(/40 shrine renown/)
+    const hall = purchaseStructure(settlement, map, [], [], "hall", { x: 18, z: 14 }, undefined, 70)
     expect(hall.error).toBeNull()
     expect(hall.settlement.structures.at(-1)?.buildType).toBe("hall")
   })

@@ -1,5 +1,6 @@
 import { placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
 import { settlementRoute } from "./settlement-route"
+import { getBuildInfluence, type BuildInfluence } from "./build-influence"
 import type { SimState } from "./sim"
 import { TERRAIN } from "./map/terrain"
 import { tileAt, type BuildingDef, type GameMap, type TilePos } from "./map/types"
@@ -139,6 +140,21 @@ export function buildingAt(map: GameMap, x: number, z: number): BuildingDef | un
   return map.buildings.find((b) => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d)
 }
 
+/** Shared terrain feedback for the influence overlay and the full footprint check. */
+export function buildTileError(map: GameMap, x: number, z: number, influence: BuildInfluence): string | null {
+  const terrain = tileAt(map, x, z)
+  if (!terrain) return "The whole structure must fit on the map."
+  if (buildingAt(map, x, z)) return "Another structure occupies this space."
+  if (!TERRAIN[terrain].buildable || terrain === "hills")
+    return "Choose flat, open ground; keep woods, water and paths clear."
+  if (map.water?.depth[z * map.width + x]) return "Structures need dry ground."
+  if (map.site?.branch.some((tile) => tile.x === x && tile.z === z) ||
+    (map.site?.door.x === x && map.site.door.z === z)) return "Keep the shrine approach clear."
+  if (!influence.connected[z * map.width + x])
+    return "Build beside the shrine approach or within connected influence from a renown source."
+  return null
+}
+
 /** Validate the entire footprint; roads, the shrine approach and water stay clear. */
 export function placementError(
   map: GameMap,
@@ -149,24 +165,11 @@ export function placementError(
   const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
   if (!hovel) return "A founding shrine is needed before building."
   if (!Number.isInteger(at.x) || !Number.isInteger(at.z)) return "Choose a tile on the map."
+  const influence = getBuildInfluence(map, balance)
   for (let z = at.z; z < at.z + def.d; z++) {
     for (let x = at.x; x < at.x + def.w; x++) {
-      const terrain = tileAt(map, x, z)
-      if (!terrain) return "The whole structure must fit on the map."
-      if (
-        Math.hypot(x - (hovel.x + (hovel.w - 1) / 2), z - (hovel.z + (hovel.d - 1) / 2)) >
-        balance.rules.buildRadius
-      )
-        return `Build within ${balance.rules.buildRadius} tiles of the founding shrine.`
-      if (buildingAt(map, x, z)) return "Another structure occupies this space."
-      if (!TERRAIN[terrain].buildable || terrain === "hills")
-        return "Choose flat, open ground; keep woods, water and paths clear."
-      if (map.water?.depth[z * map.width + x]) return "Structures need dry ground."
-      if (
-        map.site?.branch.some((tile) => tile.x === x && tile.z === z) ||
-        (map.site?.door.x === x && map.site.door.z === z)
-      )
-        return "Keep the shrine approach clear."
+      const error = buildTileError(map, x, z, influence)
+      if (error) return error
     }
   }
   if (def.id === "lumberCamp") {
