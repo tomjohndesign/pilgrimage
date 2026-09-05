@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "d57bb5a9c474286011252a34b2145f926bcee2ec",
-  "releaseCount": 6,
+  "lastProcessedCommit": "693934eea0ff74409332efa6d49d0e3a9b2d6626",
+  "releaseCount": 7,
   "releases": [
+    {
+      "version": "0.0.21",
+      "title": "Release 0.0.21",
+      "summary": "Scale traffic density with map area (#40)",
+      "commit": "693934eea0ff74409332efa6d49d0e3a9b2d6626"
+    },
     {
       "version": "0.0.20",
       "title": "Release 0.0.20",
