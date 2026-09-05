@@ -10,7 +10,9 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   return <div className="flex justify-between gap-4 py-0.5"><span className="italic text-ink-light">{label}</span><span>{children}</span></div>
 }
 
-/** The same tree identity can be inspected standing, fallen, or as a stump. */
+/** The same tree identity can be inspected standing, fallen, or as a stump.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1GB-0 — contextual panel placement
+ */
 export function ResourceInspector({ selection }: { selection: Extract<Selection, { kind: "tree" | "pile" }> }) {
   const [, refresh] = useState(0)
   useEffect(() => {
@@ -52,7 +54,7 @@ export function ResourceInspector({ selection }: { selection: Extract<Selection,
       <p className="mt-2 italic text-ink-light">Delivered here by the camp’s woodcutters.</p>
     </>
   }
-  return <div className="pointer-events-auto absolute bottom-0 left-[228px] z-10 w-[250px] border border-rule bg-parchment/95 px-4 py-3 text-[11px] text-ink">
+  return <div className="hud-inspector-content w-[250px] border border-rule bg-parchment/95 px-4 py-3 text-[11px] text-ink">
     <div className="mb-2 flex items-center justify-between gap-3">
       <span className="font-display text-xs">{title}</span>
       <button type="button" aria-label="Dismiss resource" onClick={() => useCameraStore.getState().select(null)}>✕</button>

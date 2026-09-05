@@ -5,6 +5,7 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
+import { useSimulationStore } from "@/lib/game/simulation-store"
 import { useBuildStore } from "@/lib/game/build-store"
 import type { Relic } from "@/lib/game/relic"
 import type { TreePlacement } from "@/lib/game/trees/placement"
@@ -83,7 +84,13 @@ export function Travelers({
     const build = useBuildStore.getState()
     sim.buildings = build.buildings
     sim.trees = trees
-    stepSim(sim, travelers, map, speed, Math.min(delta, 0.1))
+    const playback = useSimulationStore.getState()
+    // Keep each tick bounded at faster speeds, including work and routing.
+    if (!playback.paused) {
+      for (let tick = 0; tick < playback.speed; tick++) {
+        stepSim(sim, travelers, map, speed, Math.min(delta, 0.1))
+      }
+    }
     resourceElapsed.current += delta
     if (build.resourceRevision !== sim.resourceRevision || resourceElapsed.current >= 0.25) {
       build.syncResources(sim)

@@ -57,9 +57,10 @@ function saveMusicEnabled(enabled: boolean): void {
 
 /**
  * The toggle button takes its look from wherever it is mounted (the HUD header
- * passes its ghost-button style); the hidden player host is fixed off-screen.
+ * passes its button style); the hidden player host is fixed off-screen.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1SK-0
  */
-export function MusicPlayer({ className = "" }: { className?: string }) {
+export function MusicPlayer({ className = "", compact = false }: { className?: string; compact?: boolean }) {
   const hostRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<YouTubePlayer | null>(null)
   const [ready, setReady] = useState(false)
@@ -171,9 +172,11 @@ export function MusicPlayer({ className = "" }: { className?: string }) {
         type="button"
         onClick={toggle}
         aria-pressed={enabled}
+        aria-label={`Music ${enabled ? "on" : "off"}`}
+        title={`Music ${enabled ? "on" : "off"}`}
         className={className}
       >
-        ♪ Music {enabled ? "On" : "Off"}
+        {compact ? "♪" : `♪ Music ${enabled ? "On" : "Off"}`}
       </button>
     </>
   )

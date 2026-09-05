@@ -78,6 +78,9 @@ function renderBase(map: GameMap): HTMLCanvasElement {
   return base
 }
 
+/** Live map in the persistent bottom-right details dock.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1SK-0
+ */
 export function Minimap({ map }: { map: GameMap }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -221,7 +224,7 @@ export function Minimap({ map }: { map: GameMap }) {
       ref={canvasRef}
       width={CANVAS_WIDTH}
       height={CANVAS_HEIGHT}
-      style={{ width: DISPLAY_WIDTH, height: DISPLAY_HEIGHT, imageRendering: "pixelated" }}
+      style={{ width: "100%", height: "auto", imageRendering: "pixelated" }}
       className="pointer-events-auto touch-none cursor-crosshair"
       aria-label="Minimap"
     />

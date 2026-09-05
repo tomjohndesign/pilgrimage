@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { useSimulationStore } from "@/lib/game/simulation-store"
+import { useBuildStore } from "@/lib/game/build-store"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { surfaceHeight } from "@/lib/game/map/bridges"
 import { TERRAIN } from "@/lib/game/map/terrain"
@@ -100,11 +102,16 @@ export function Monks({ map, monks }: { map: GameMap; monks: Monk[] }) {
   }, [world])
 
   useFrame((_, delta) => {
-    const dt = Math.min(delta, 0.1)
+    const playback = useSimulationStore.getState()
+    const dt = playback.paused ? 0 : Math.min(delta, 0.1) * playback.speed
     for (let i = 0; i < world.states.length; i++) {
       const s = world.states[i]
       const group = groupRefs.current[i]
       if (!group) continue
+      if (playback.paused) {
+        group.position.set(s.x, s.y, s.z)
+        continue
+      }
 
       if (s.pause > 0) {
         s.pause -= dt
@@ -142,7 +149,7 @@ export function Monks({ map, monks }: { map: GameMap; monks: Monk[] }) {
         const id = new THREE.Color(...encodeObjectId(residentObjectId(index)))
         const selected = isSelected(selection, { kind: "monk", id: monk.id })
         const select = (event: { delta: number; stopPropagation: () => void }) => {
-          if (event.delta > CLICK_SLOP_PX) return
+          if (event.delta > CLICK_SLOP_PX || useBuildStore.getState().tool) return
           event.stopPropagation()
           useCameraStore.getState().select(selected ? null : { kind: "monk", id: monk.id })
         }
