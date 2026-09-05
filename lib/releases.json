@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "70a8990e5b59e75984ac52ebe1cf989f64414aa9",
-  "releaseCount": 12,
+  "lastProcessedCommit": "05ac1f2a2dbe2b5785552cde27279257b724784c",
+  "releaseCount": 13,
   "releases": [
+    {
+      "version": "0.0.27",
+      "title": "Release 0.0.27",
+      "summary": "Make property panels opt-in while keeping traffic density visible (#46)",
+      "commit": "05ac1f2a2dbe2b5785552cde27279257b724784c"
+    },
     {
       "version": "0.0.26",
       "title": "Release 0.0.26",
