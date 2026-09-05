@@ -1,5 +1,5 @@
 import { computeDangerField, encounterChance, type ThreatSource } from "./map/danger"
-import { TILE_HEIGHT } from "./map/terrain"
+import { surfaceHeight } from "./map/bridges"
 import {
   tileAt,
   tileToWorldX,
@@ -193,32 +193,45 @@ export interface SimState {
  */
 export const simRegistry: { current: SimState | null } = { current: null }
 
-/** World point `p` tiles along an ordered walk of tiles, interpolated. */
+interface WorldPoint {
+  x: number
+  y: number
+  z: number
+}
+
+/**
+ * World point `p` tiles along an ordered walk of tiles, interpolated. Height
+ * interpolates between tile-centre surface heights too, which is exactly the
+ * slope of a bridge ramp: level road, half-way up at the ramp's centre, deck
+ * height on the span.
+ */
 function routeWorldPoint(
   map: GameMap,
   route: ReadonlyArray<{ x: number; z: number }>,
   p: number,
-): { x: number; z: number } {
+): WorldPoint {
   const i0 = Math.max(0, Math.min(Math.floor(p), route.length - 2))
   const frac = p - i0
-  const ax = tileToWorldX(map, route[i0].x)
-  const az = tileToWorldZ(map, route[i0].z)
-  const bx = tileToWorldX(map, route[i0 + 1].x)
-  const bz = tileToWorldZ(map, route[i0 + 1].z)
-  return { x: ax + (bx - ax) * frac, z: az + (bz - az) * frac }
+  const a = route[i0]
+  const b = route[i0 + 1]
+  const ax = tileToWorldX(map, a.x)
+  const az = tileToWorldZ(map, a.z)
+  const ay = surfaceHeight(map, a.x, a.z)
+  const bx = tileToWorldX(map, b.x)
+  const bz = tileToWorldZ(map, b.z)
+  const by = surfaceHeight(map, b.x, b.z)
+  return { x: ax + (bx - ax) * frac, y: ay + (by - ay) * frac, z: az + (bz - az) * frac }
 }
 
-function roadWorldPoint(map: GameMap, p: number): { x: number; z: number } {
+function roadWorldPoint(map: GameMap, p: number): WorldPoint {
   return routeWorldPoint(map, map.road!, p)
 }
 
 /** Where on their route — road or track — the traveler currently belongs. */
-function currentRoutePoint(map: GameMap, s: SimTraveler): { x: number; z: number } {
+function currentRoutePoint(map: GameMap, s: SimTraveler): WorldPoint {
   if (s.track) return routeWorldPoint(map, map.shortcuts![s.track.index].tiles, s.track.progress)
   return roadWorldPoint(map, s.progress)
 }
-
-const ROAD_Y = TILE_HEIGHT
 
 export function createSim(
   travelers: Traveler[],
@@ -243,7 +256,7 @@ export function createSim(
       thirst: t.attributes.thirst,
       stamina: t.attributes.stamina,
       x: at.x,
-      y: ROAD_Y,
+      y: at.y,
       z: at.z,
       progress,
       direction: t.direction,
@@ -327,7 +340,7 @@ function pitchSpot(
   return tile
     ? {
         x: tileToWorldX(map, tile.x) + jitter.x,
-        y: TILE_HEIGHT,
+        y: surfaceHeight(map, tile.x, tile.z),
         z: tileToWorldZ(map, tile.z) + jitter.z,
       }
     : { x: s.x, y: s.y, z: s.z }
@@ -529,7 +542,7 @@ export function stepSim(
           }
           const at = currentRoutePoint(map, s)
           s.x = at.x
-          s.y = ROAD_Y
+          s.y = at.y
           s.z = at.z
           break
         }
@@ -559,7 +572,7 @@ export function stepSim(
         }
         const at = currentRoutePoint(map, s)
         s.x = at.x
-        s.y = ROAD_Y
+        s.y = at.y
         s.z = at.z
         break
       }
@@ -589,7 +602,7 @@ export function stepSim(
 
       case "fromShop": {
         const back = currentRoutePoint(map, s)
-        if (stepOffRoadWalk(s, { x: back.x, y: ROAD_Y, z: back.z }, worldSpeed, dt)) {
+        if (stepOffRoadWalk(s, back, worldSpeed, dt)) {
           s.activity = "walking"
           s.spot = null
           s.walkFrom = null
@@ -610,7 +623,7 @@ export function stepSim(
 
       case "fromCamp": {
         const back = currentRoutePoint(map, s)
-        if (stepOffRoadWalk(s, { x: back.x, y: ROAD_Y, z: back.z }, worldSpeed, dt)) {
+        if (stepOffRoadWalk(s, back, worldSpeed, dt)) {
           s.activity = "walking"
           s.spot = null
           s.walkFrom = null

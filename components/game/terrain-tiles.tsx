@@ -5,6 +5,7 @@ import { useLoader, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
+import { BRIDGE_RISE, bridgeLayout, type BridgeRamp } from "@/lib/game/map/bridges"
 import { computeDarkShade, computeForestShade } from "@/lib/game/map/forest-field"
 import {
   clampRoadTier,
@@ -12,6 +13,7 @@ import {
   DEFAULT_ROAD_TIER,
   isRoadTerrain,
   ROAD_TIERS,
+  roadContinues,
   roadEdge,
   roadTint,
   roadWear,
@@ -228,7 +230,13 @@ function makeTileMaterial({
             vVergeColor = aVergeColor;
             vLandOverlay = aLandOverlay;
             vLand = aLand;
-            vTileLocal = position.xz + 0.5;
+            // Tile-local XZ in *world* axes, so an instance yawed to face
+            // its bridge (a ramp) still lines its edge data up with the map.
+            #ifdef USE_INSTANCING
+              vTileLocal = (instanceMatrix * vec4(position.x, 0.0, position.z, 0.0)).xz + 0.5;
+            #else
+              vTileLocal = position.xz + 0.5;
+            #endif
           #endif
         }`,
       )
@@ -375,12 +383,51 @@ function makeTileMaterial({
   return material
 }
 
-/** Unit box with the per-instance `aGrass` and `aOverlay` data (see makeTileMaterial). */
-function makeTileGeometry(slots: number): THREE.BoxGeometry {
-  const geometry = new THREE.BoxGeometry(1, 1, 1)
+/**
+ * Attach the per-instance data makeTileMaterial reads: `aGrass` and
+ * `aOverlay` on every tile. A road geometry also carries which sides face
+ * open land, where traffic puts the rut edges, and what the land here looks
+ * like (flat colour, sward overlay, grain, share of sward).
+ */
+function addTileAttributes(geometry: THREE.BufferGeometry, slots: number, road: boolean): void {
   const n = Math.max(1, slots)
   geometry.setAttribute("aGrass", new THREE.InstancedBufferAttribute(new Float32Array(n), 1))
   geometry.setAttribute("aOverlay", new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4))
+  if (road) {
+    geometry.setAttribute("aRoadOpen", new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4))
+    geometry.setAttribute("aVergeColor", new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4))
+    geometry.setAttribute("aLandOverlay", new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4))
+    // Grain and the two rut edges packed together: vertex attributes are a
+    // scarce resource (16 is a common limit) and the instance matrix alone
+    // takes four.
+    geometry.setAttribute("aLand", new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3))
+  }
+}
+
+/** Unit box for flat tiles, with the per-instance tile data. */
+function makeTileGeometry(slots: number, road = false): THREE.BoxGeometry {
+  const geometry = new THREE.BoxGeometry(1, 1, 1)
+  addTileAttributes(geometry, slots, road)
+  return geometry
+}
+
+/**
+ * The ramp up onto a bridge: a tile-sized wedge with its base on y=0, rising
+ * from ground level at its -x edge to deck level at its +x edge; instances
+ * are yawed to face their bridge. Every face stays planar, so the box's
+ * per-face normals recompute cleanly, and the sloped top still counts as a
+ * top face in the shader (its normal is well above the 0.5 cut-off).
+ */
+function makeRampGeometry(slots = 0, road = false): THREE.BoxGeometry {
+  const geometry = new THREE.BoxGeometry(1, 1, 1)
+  const position = geometry.getAttribute("position") as THREE.BufferAttribute
+  for (let i = 0; i < position.count; i++) {
+    const top = position.getY(i) > 0
+    position.setY(i, top ? TILE_HEIGHT + BRIDGE_RISE * (position.getX(i) + 0.5) : 0)
+  }
+  position.needsUpdate = true
+  geometry.computeVertexNormals()
+  addTileAttributes(geometry, slots, road)
   return geometry
 }
 
@@ -436,7 +483,9 @@ function paintLand(
   tint: THREE.Color,
   out: LandPaint,
 ): LandPaint {
-  const def = TERRAIN[terrain]
+  // A bridge tile is the water still running beneath it; the deck above is
+  // its own mesh (see bridges.tsx).
+  const def = TERRAIN[terrain === "bridge" ? "water" : terrain]
   const index = z * map.width + x
   const overlay = SWARD_OVERLAY[terrain]
   if (overlay === undefined) {
@@ -519,7 +568,10 @@ export function TerrainTiles({
 }) {
   const groundMeshRef = useRef<THREE.InstancedMesh>(null)
   const roadMeshRef = useRef<THREE.InstancedMesh>(null)
+  const groundRampMeshRef = useRef<THREE.InstancedMesh>(null)
+  const roadRampMeshRef = useRef<THREE.InstancedMesh>(null)
   const idMeshRef = useRef<THREE.InstancedMesh>(null)
+  const idRampMeshRef = useRef<THREE.InstancedMesh>(null)
   const count = map.width * map.depth
 
   const tier = ROAD_TIERS[clampRoadTier(roadTier)]
@@ -591,58 +643,94 @@ export function TerrainTiles({
   const groundGeometry = useMemo(() => makeTileGeometry(count - roadCount), [count, roadCount])
   useEffect(() => () => groundGeometry.dispose(), [groundGeometry])
 
-  // The road's box geometry also carries the per-instance data the shader
-  // reads: which sides face open land, where traffic puts the rut edges, and
-  // what the land here looks like (flat colour, sward overlay, grain, share
-  // of sward).
-  const roadGeometry = useMemo(() => {
-    const geometry = makeTileGeometry(roadCount)
-    const slots = Math.max(1, roadCount)
-    geometry.setAttribute(
-      "aRoadOpen",
-      new THREE.InstancedBufferAttribute(new Float32Array(slots * 4), 4),
-    )
-    geometry.setAttribute(
-      "aVergeColor",
-      new THREE.InstancedBufferAttribute(new Float32Array(slots * 4), 4),
-    )
-    geometry.setAttribute(
-      "aLandOverlay",
-      new THREE.InstancedBufferAttribute(new Float32Array(slots * 4), 4),
-    )
-    // Grain and the two rut edges packed together: vertex attributes are a
-    // scarce resource (16 is a common limit) and the instance matrix alone
-    // takes four.
-    geometry.setAttribute("aLand", new THREE.InstancedBufferAttribute(new Float32Array(slots * 3), 3))
-    return geometry
-  }, [roadCount])
+  const roadGeometry = useMemo(() => makeTileGeometry(roadCount, true), [roadCount])
   useEffect(() => () => roadGeometry.dispose(), [roadGeometry])
+
+  // Bridge approaches wear the same materials on wedge geometry: one
+  // instanced mesh per material, drawn over the flat tile beneath, which the
+  // wedge hides entirely (they meet only along the far edge). The ground
+  // rises there; the decks themselves are their own component (bridges.tsx).
+  const bridges = useMemo(() => bridgeLayout(map), [map])
+  const rampAt = useMemo(() => {
+    const at = new Map<number, BridgeRamp>()
+    for (const ramp of bridges.ramps) at.set(ramp.z * map.width + ramp.x, ramp)
+    return at
+  }, [bridges, map.width])
+  const plateaus = useMemo(
+    () => new Set(bridges.plateaus.map((p) => p.z * map.width + p.x)),
+    [bridges, map.width],
+  )
+  const roadRampCount = useMemo(
+    () =>
+      bridges.ramps.reduce(
+        (n, r) => (isRoadTerrain(map.tiles[r.z * map.width + r.x]) ? n + 1 : n),
+        0,
+      ),
+    [bridges, map],
+  )
+  const groundRampCount = bridges.ramps.length - roadRampCount
+  const roadRampGeometry = useMemo(() => makeRampGeometry(roadRampCount, true), [roadRampCount])
+  useEffect(() => () => roadRampGeometry.dispose(), [roadRampGeometry])
+  const groundRampGeometry = useMemo(() => makeRampGeometry(groundRampCount), [groundRampCount])
+  useEffect(() => () => groundRampGeometry.dispose(), [groundRampGeometry])
+  const idRampGeometry = useMemo(() => makeRampGeometry(), [])
+  useEffect(() => () => idRampGeometry.dispose(), [idRampGeometry])
 
   useLayoutEffect(() => {
     const groundMesh = groundMeshRef.current
     const roadMesh = roadMeshRef.current
+    const groundRampMesh = groundRampMeshRef.current
+    const roadRampMesh = roadRampMeshRef.current
     const idMesh = idMeshRef.current
-    if (!groundMesh || !roadMesh || !idMesh) return
+    const idRampMesh = idRampMeshRef.current
+    if (!groundMesh || !roadMesh || !groundRampMesh || !roadRampMesh || !idMesh || !idRampMesh) {
+      return
+    }
 
     const matrix = new THREE.Matrix4()
+    const rampMatrix = new THREE.Matrix4()
     const position = new THREE.Vector3()
     const quaternion = new THREE.Quaternion()
+    const rampQuaternion = new THREE.Quaternion()
     const scale = new THREE.Vector3()
+    const unit = new THREE.Vector3(1, 1, 1)
+    const up = new THREE.Vector3(0, 1, 0)
     const color = new THREE.Color()
     const tint = new THREE.Color()
     const neighbourTint = new THREE.Color()
     const land: LandPaint = { sward: false, color: new THREE.Color(), overlay: new THREE.Vector4() }
     const landOverlay = new THREE.Vector4()
     const vergeFlat = new THREE.Color()
-    const openAttr = roadGeometry.getAttribute("aRoadOpen") as THREE.InstancedBufferAttribute
-    const vergeAttr = roadGeometry.getAttribute("aVergeColor") as THREE.InstancedBufferAttribute
-    const landOverlayAttr = roadGeometry.getAttribute("aLandOverlay") as THREE.InstancedBufferAttribute
-    const landAttr = roadGeometry.getAttribute("aLand") as THREE.InstancedBufferAttribute
+
+    // Every tile writes to the flat mesh for its material; a bridge approach
+    // writes the same data to that material's ramp mesh as well.
+    const attr = (geometry: THREE.BufferGeometry, name: string) =>
+      geometry.getAttribute(name) as THREE.InstancedBufferAttribute
+    const roadTargets = [roadMesh, roadRampMesh].map((mesh, i) => {
+      const geometry = i === 0 ? roadGeometry : roadRampGeometry
+      return {
+        mesh,
+        next: 0,
+        open: attr(geometry, "aRoadOpen"),
+        verge: attr(geometry, "aVergeColor"),
+        landOverlay: attr(geometry, "aLandOverlay"),
+        land: attr(geometry, "aLand"),
+        overlay: attr(geometry, "aOverlay"),
+      }
+    })
+    const groundTargets = [groundMesh, groundRampMesh].map((mesh, i) => {
+      const geometry = i === 0 ? groundGeometry : groundRampGeometry
+      return {
+        mesh,
+        next: 0,
+        grass: attr(geometry, "aGrass"),
+        overlay: attr(geometry, "aOverlay"),
+      }
+    })
+    const RAMP = 1
+
     const roadWearBy = roadWear(traffic, tier.tier)
     const trackWearBy = roadWear(relicTraffic, tier.tier)
-    const roadOverlayAttr = roadGeometry.getAttribute("aOverlay") as THREE.InstancedBufferAttribute
-    const groundGrassAttr = groundGeometry.getAttribute("aGrass") as THREE.InstancedBufferAttribute
-    const groundOverlayAttr = groundGeometry.getAttribute("aOverlay") as THREE.InstancedBufferAttribute
     // Colour grain is a function of the map's own seed, one stream per consumer.
     // One draw per tile in scan order, whichever mesh the tile lands in, so the
     // grain never reshuffles when the road tier changes.
@@ -652,48 +740,59 @@ export function TerrainTiles({
     const shadeTint = (index: number, out: THREE.Color) =>
       out.copy(OPEN_MEADOW_TINT).lerp(DEEP_WOOD_TINT, shade[index])
 
-    let groundIndex = 0
-    let roadIndex = 0
+    let rampIndex = 0
     for (let z = 0; z < map.depth; z++) {
       for (let x = 0; x < map.width; x++) {
         const index = z * map.width + x
         const terrain = map.tiles[index]
-        const def = TERRAIN[terrain]
+        // A bridge tile draws the water still running beneath it (see paintLand).
+        const def = TERRAIN[terrain === "bridge" ? "water" : terrain]
         const grain = rng() - 0.5
         const jitter = 1 + grain * def.jitter
         // Old growth casts a deeper shadow on everything beneath it — sward,
         // road, and the track cut through it alike; feathered so it has no
         // hard rim.
         const canopy = 1 - DARK_WOOD_DARKEN * darkShade[index]
+        const ramp = rampAt.get(index)
+        // A causeway between two spans stands level at deck height.
+        const height = plateaus.has(index) ? TILE_HEIGHT + BRIDGE_RISE : TILE_HEIGHT
 
         // Box base sits at y=0 and the top at the shared tile height, so tiles
         // sink into the slab and never show a gap from a low camera angle.
         // Full-size footprints: every top face is coplanar with its
         // neighbours, so the ground reads as one continuous surface with no
         // seams or steps; the only visible edge is the optional grid overlay.
-        position.set(tileToWorldX(map, x), TILE_HEIGHT / 2, tileToWorldZ(map, z))
-        scale.set(1, TILE_HEIGHT, 1)
+        position.set(tileToWorldX(map, x), height / 2, tileToWorldZ(map, z))
+        scale.set(1, height, 1)
         matrix.compose(position, quaternion, scale)
         idMesh.setMatrixAt(index, matrix)
+
+        if (ramp) {
+          // The wedge climbs along its local +x; yaw that onto the uphill
+          // direction. A yaw of θ maps +x to (cos θ, 0, −sin θ), hence −dz.
+          rampQuaternion.setFromAxisAngle(up, Math.atan2(-ramp.dz, ramp.dx))
+          position.y = 0
+          rampMatrix.compose(position, rampQuaternion, unit)
+          idRampMesh.setMatrixAt(rampIndex++, rampMatrix)
+        }
+        const targets = ramp ? 2 : 1
 
         // Where this tile sits on the forest-shade ramp.
         shadeTint(index, tint)
 
         if (isRoadTerrain(terrain)) {
-          roadMesh.setMatrixAt(roadIndex, matrix)
           // The texture carries the road's colour; the instance carries the
           // weathering from whatever surrounds this stretch, plus the grain.
           const [r, g, b] = roadTint(map, x, z, tier.tier)
           color.setRGB(r, g, b, THREE.SRGBColorSpace)
           color.multiplyScalar(jitter * canopy)
-          roadMesh.setColorAt(roadIndex, color)
-          roadOverlayAttr.setXYZW(roadIndex, tint.r, tint.g, tint.b, def.shadeBlend)
 
           // The land this tile would be, painted as the ground mesh would
           // paint it: the sward overlay averaged over every surrounding sward
           // tile, the flat colour averaged over the open sides that face flat
           // ground. Sward is the default with no sward around, so a road
-          // through bare earth still greens as meadow.
+          // through bare earth still greens as meadow. The road runs on over
+          // a bridge, so a deck beside this tile is not land.
           const edge = roadEdge(map, x, z)
           landOverlay.set(0, 0, 0, 0)
           vergeFlat.setRGB(0, 0, 0)
@@ -703,7 +802,7 @@ export function TerrainTiles({
           for (let side = 0; side < AROUND.length; side++) {
             const [dx, dz] = AROUND[side]
             const neighbour = tileAt(map, x + dx, z + dz)
-            if (neighbour === null || isRoadTerrain(neighbour)) continue
+            if (roadContinues(neighbour)) continue
             const nx = x + dx
             const nz = z + dz
             paintLand(map, neighbour, nx, nz, shadeTint(nz * map.width + nx, neighbourTint), land)
@@ -721,53 +820,69 @@ export function TerrainTiles({
           else landOverlay.copy(paintLand(map, "grass", x, z, tint, land).overlay)
           const openFlat = openCount - openSward
           if (openFlat > 0) vergeFlat.multiplyScalar(1 / openFlat)
-          openAttr.setXYZW(roadIndex, edge.open[0], edge.open[1], edge.open[2], edge.open[3])
-          vergeAttr.setXYZW(
-            roadIndex,
-            vergeFlat.r,
-            vergeFlat.g,
-            vergeFlat.b,
-            openCount > 0 ? openSward / openCount : 1,
-          )
-          landOverlayAttr.setXYZW(roadIndex, landOverlay.x, landOverlay.y, landOverlay.z, landOverlay.w)
+          const vergeSward = openCount > 0 ? openSward / openCount : 1
           // The grain a land tile here would have had, from the same draw
           // (under the same canopy), and the rut edges for this road's own
           // traffic.
           const wear = terrain === "track" ? trackWearBy : roadWearBy
-          landAttr.setXYZ(roadIndex, (1 + grain * TERRAIN.grass.jitter) * canopy, wear.edge, wear.inner)
-          roadIndex++
+          const landJitter = (1 + grain * TERRAIN.grass.jitter) * canopy
+
+          for (let t = 0; t < targets; t++) {
+            const target = roadTargets[t]
+            const i = target.next++
+            target.mesh.setMatrixAt(i, t === RAMP ? rampMatrix : matrix)
+            target.mesh.setColorAt(i, color)
+            target.overlay.setXYZW(i, tint.r, tint.g, tint.b, def.shadeBlend)
+            target.open.setXYZW(i, edge.open[0], edge.open[1], edge.open[2], edge.open[3])
+            target.verge.setXYZW(i, vergeFlat.r, vergeFlat.g, vergeFlat.b, vergeSward)
+            target.landOverlay.setXYZW(i, landOverlay.x, landOverlay.y, landOverlay.z, landOverlay.w)
+            target.land.setXYZ(i, landJitter, wear.edge, wear.inner)
+          }
           continue
         }
 
-        groundMesh.setMatrixAt(groundIndex, matrix)
         paintLand(map, terrain, x, z, tint, land)
         color.copy(land.color).multiplyScalar(jitter * canopy)
-        groundMesh.setColorAt(groundIndex, color)
-        groundGrassAttr.setX(groundIndex, land.sward ? 1 : 0)
-        groundOverlayAttr.setXYZW(
-          groundIndex,
-          land.overlay.x,
-          land.overlay.y,
-          land.overlay.z,
-          land.overlay.w,
-        )
-        groundIndex++
+        for (let t = 0; t < targets; t++) {
+          const target = groundTargets[t]
+          const i = target.next++
+          target.mesh.setMatrixAt(i, t === RAMP ? rampMatrix : matrix)
+          target.mesh.setColorAt(i, color)
+          target.grass.setX(i, land.sward ? 1 : 0)
+          target.overlay.setXYZW(i, land.overlay.x, land.overlay.y, land.overlay.z, land.overlay.w)
+        }
       }
     }
 
-    groundMesh.instanceMatrix.needsUpdate = true
-    if (groundMesh.instanceColor) groundMesh.instanceColor.needsUpdate = true
-    roadMesh.instanceMatrix.needsUpdate = true
-    if (roadMesh.instanceColor) roadMesh.instanceColor.needsUpdate = true
-    openAttr.needsUpdate = true
-    vergeAttr.needsUpdate = true
-    landOverlayAttr.needsUpdate = true
-    landAttr.needsUpdate = true
-    roadOverlayAttr.needsUpdate = true
-    groundGrassAttr.needsUpdate = true
-    groundOverlayAttr.needsUpdate = true
+    for (const target of roadTargets) {
+      target.mesh.instanceMatrix.needsUpdate = true
+      if (target.mesh.instanceColor) target.mesh.instanceColor.needsUpdate = true
+      target.open.needsUpdate = true
+      target.verge.needsUpdate = true
+      target.landOverlay.needsUpdate = true
+      target.land.needsUpdate = true
+      target.overlay.needsUpdate = true
+    }
+    for (const target of groundTargets) {
+      target.mesh.instanceMatrix.needsUpdate = true
+      if (target.mesh.instanceColor) target.mesh.instanceColor.needsUpdate = true
+      target.grass.needsUpdate = true
+      target.overlay.needsUpdate = true
+    }
     idMesh.instanceMatrix.needsUpdate = true
-  }, [map, tier, traffic, relicTraffic, roadGeometry, groundGeometry])
+    idRampMesh.instanceMatrix.needsUpdate = true
+  }, [
+    map,
+    tier,
+    traffic,
+    relicTraffic,
+    roadGeometry,
+    groundGeometry,
+    roadRampGeometry,
+    groundRampGeometry,
+    rampAt,
+    plateaus,
+  ])
 
   const dirt = useLoader(THREE.TextureLoader, DIRT_TEXTURE_URL)
   useMemo(() => {
@@ -816,6 +931,25 @@ export function TerrainTiles({
         <primitive object={roadMaterial} attach="material" />
       </instancedMesh>
 
+      {/* Ramps up onto the bridges, in whichever material their tile wears. */}
+      <instancedMesh
+        ref={groundRampMeshRef}
+        frustumCulled={false}
+        args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, groundRampCount]}
+      >
+        <primitive object={groundRampGeometry} attach="geometry" />
+        <primitive object={groundMaterial} attach="material" />
+      </instancedMesh>
+      <instancedMesh
+        ref={roadRampMeshRef}
+        key={`ramp-${tier.id}`}
+        frustumCulled={false}
+        args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, roadRampCount]}
+      >
+        <primitive object={roadRampGeometry} attach="geometry" />
+        <primitive object={roadMaterial} attach="material" />
+      </instancedMesh>
+
       {/*
         Terrain in the outline pass: ID 0 (black), depth only. It takes no
         outline itself, but its depth stops hidden object seams — say two
@@ -831,6 +965,15 @@ export function TerrainTiles({
         layers-mask={OUTLINE_ID_LAYER_MASK}
       >
         <boxGeometry args={[1, 1, 1]} />
+        <meshBasicMaterial color="black" toneMapped={false} />
+      </instancedMesh>
+      <instancedMesh
+        ref={idRampMeshRef}
+        frustumCulled={false}
+        args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, bridges.ramps.length]}
+        layers-mask={OUTLINE_ID_LAYER_MASK}
+      >
+        <primitive object={idRampGeometry} attach="geometry" />
         <meshBasicMaterial color="black" toneMapped={false} />
       </instancedMesh>
     </group>

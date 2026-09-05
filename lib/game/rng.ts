@@ -49,4 +49,6 @@ export const SEED_STREAM = {
   monkWander: 7,
   /** Individual tree shapes (trunk, crown, lean); placement uses `trees`. */
   treeShapes: 8,
+  /** Per-plank and per-stone colour grain on the bridges. */
+  bridgeGrain: 9,
 } as const
