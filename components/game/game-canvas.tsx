@@ -17,6 +17,7 @@ import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 
 import { Bridges } from "./bridges"
 import { Buildings } from "./buildings"
+import { BuildInfluenceOverlay } from "./build-influence-overlay"
 import { CameraLight } from "./camera-light"
 import { CameraRig } from "./camera-rig"
 import { DebugHandle } from "./debug-handle"
@@ -114,6 +115,7 @@ export function GameCanvas({
       <Monks map={map} monks={monks} flying={blasterPastor} />
       <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown} />
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
+      {buildType && <BuildInfluenceOverlay map={map} />}
 
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />

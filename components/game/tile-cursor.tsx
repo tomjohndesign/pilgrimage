@@ -47,11 +47,11 @@ export function TileCursor({
           tileToWorldZ(map, hovered.z) + (build.d - 1) / 2,
         ]}
       >
-        <mesh>
+        <mesh renderOrder={4}>
           <boxGeometry args={[build.w, 0.04, build.d]} />
           <meshBasicMaterial color={color} transparent opacity={0.65} depthWrite={false} />
         </mesh>
-        <mesh position={[0, build.height / 2, 0]}>
+        <mesh position={[0, build.height / 2, 0]} renderOrder={4}>
           <boxGeometry args={[build.w * 0.86, build.height, build.d * 0.86]} />
           <meshBasicMaterial color={color} wireframe transparent opacity={0.8} depthWrite={false} />
         </mesh>

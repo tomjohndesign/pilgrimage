@@ -65,14 +65,19 @@ export default function GameSpecsPage() {
         </p>
         <ul className="my-3 list-disc space-y-1 pl-6">
           <li>
-            Every footprint tile must fit on the map and within {r.buildRadius} tiles of the
-            founding hovel’s centre.
+            Every footprint tile must fit on the map and inside influence connected to the shrine
+            approach. The approach provides three tiles of frontage; the founding shrine and other
+            renown sources radiate influence with radius {r.buildRadius} × √(renown / 5) tiles.
+            Zero-renown structures do not extend it. Woods and water block connections between areas.
           </li>
           <li>
             Flat buildable terrain is allowed: grass, dirt and dry sand. Hills, forest-floor
             clearings, woods, water, roads, tracks and bridges are blocked.
           </li>
           <li>Existing structures, the hovel door and the shrine approach must stay clear.</li>
+          <li>While placing, green marks available ground, red marks blocked ground and a gold
+            edge marks the influence boundary. The cursor checks the complete footprint, access,
+            supplies and unlocks. Unmarked land is outside influence.</li>
           <li>Lumber camps need reachable woods within eight tiles and a clear route from the shrine.
             Later construction must preserve access to their entrances.</li>
           <li>

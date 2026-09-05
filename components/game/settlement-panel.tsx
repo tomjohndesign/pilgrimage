@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
+import { influenceRadius } from "@/lib/game/build-influence"
 import { useState } from "react"
 import type { useSettlement } from "@/hooks/use-settlement"
 import { useCameraStore } from "@/lib/game/camera-store"
@@ -15,7 +16,10 @@ import {
   settlementIncome,
 } from "@/lib/game/settlement"
 
-/** Treasury, establishment-wide progression and the first build catalogue. */
+/**
+ * Treasury, establishment-wide progression and the first build catalogue.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0
+ */
 export function SettlementPanel({
   economy,
   monks,
@@ -140,11 +144,32 @@ export function SettlementPanel({
       >
         {buildOpen ? "Close catalogue" : "Build & buy"}
       </button>
+      {selected && (
+        <div className="mt-2 border border-gold p-2 text-[11px]">
+          <p>Placing {selected.label.toLowerCase()}</p>
+          <ul className="mt-2 space-y-1 text-ink-light">
+            <li><span className="mr-1 inline-block h-2 w-2 border border-[#47632e] bg-[#93bc6c]" />Green: available ground</li>
+            <li><span className="mr-1 inline-block h-2 w-2 border border-red bg-[#db6656]" />Red: blocked ground</li>
+            <li><span className="mr-1 inline-block h-2 w-2 border border-gold" />Gold edge: influence boundary</li>
+          </ul>
+          <p className="mt-2 text-ink-light">The whole footprint must fit. Unmarked land is outside influence. The cursor checks access and supplies.</p>
+          <p className="mt-1 text-ink-light">
+            {previewError ?? "Click available ground inside the influence boundary."}
+          </p>
+          <button
+            type="button"
+            onClick={() => chooseBuild(null)}
+            className="mt-1 text-red underline"
+          >
+            Cancel placement
+          </button>
+        </div>
+      )}
       {buildOpen && (
         <div className="mt-3 space-y-2">
           <p className="text-[11px] italic text-ink-light">
-            Choose a structure, then click open ground near the shrine. Pay on placement. Esc
-            cancels.
+            Choose a structure to see building influence. Build beside the approach or extend
+            your reach with renown sources. Pay on placement. Esc cancels.
           </p>
           {catalog.map((item) => {
             const locked = renown.total < item.requiredRenown
@@ -163,7 +188,7 @@ export function SettlementPanel({
               >
                 <div className="flex items-baseline justify-between gap-1">
                   <span className="font-display text-[11px]">{item.label}</span>
-                  <span className="whitespace-nowrap text-[10px]">+{item.renown} renown</span>
+                  <span className="whitespace-nowrap text-[10px]">{item.renown ? `+${item.renown} renown` : "No renown"}</span>
                 </div>
                 <div className="mt-1 text-[11px]">
                   <span className={settlement.resources.gold < item.cost.gold ? "text-red" : ""}>
@@ -181,6 +206,11 @@ export function SettlementPanel({
                 <div className="mt-1 text-[10px] text-ink-light">
                   {buildingIncomeLabel(item, balance)}
                 </div>
+                <div className="mt-1 text-[10px] text-ink-light">
+                  {item.renown > 0
+                    ? `Spreads influence ${influenceRadius(item.renown, balance).toFixed(1)} tiles`
+                    : "Does not extend building influence"}
+                </div>
                 {locked && (
                   <div className="mt-1 text-[10px] text-red">
                     Requires {item.requiredRenown} shrine renown
@@ -192,21 +222,6 @@ export function SettlementPanel({
               </button>
             )
           })}
-        </div>
-      )}
-      {selected && (
-        <div className="mt-2 border border-gold p-2 text-[11px]">
-          <p>Placing {selected.label.toLowerCase()}</p>
-          <p className="mt-1 text-ink-light">
-            {previewError ?? "Click an open tile near the shrine."}
-          </p>
-          <button
-            type="button"
-            onClick={() => chooseBuild(null)}
-            className="mt-1 text-red underline"
-          >
-            Cancel placement
-          </button>
         </div>
       )}
       <p role="status" aria-live="polite" className="mt-2 text-[11px] text-ink-light">
