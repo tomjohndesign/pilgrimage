@@ -68,8 +68,22 @@ export interface GameMap {
    * order a traveller crosses it. Steps over rivers are bridge tiles.
    */
   road?: TilePos[]
+  /**
+   * Secondary tracks: each a shorter, more dangerous walk through a dark
+   * forest between two points on the road. Present on generated maps that
+   * grew a dark forest the road had to go around.
+   */
+  shortcuts?: Shortcut[]
   /** Present on generated maps: the relic's hovel and the branch that reaches it. */
   site?: FoundingSite
+}
+
+export interface Shortcut {
+  /** Indices into `road` where the track leaves it and rejoins it; entry < exit. */
+  entry: number
+  exit: number
+  /** Ordered walk from `road[entry]` to `road[exit]` inclusive, each step to a 4-neighbour. */
+  tiles: TilePos[]
 }
 
 export function tileAt(map: GameMap, x: number, z: number): TerrainId | null {

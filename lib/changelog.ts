@@ -11,6 +11,18 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: "0.0.13",
+    title: "Room for Every Tree",
+    summary:
+      "Large maps no longer crash on load. Every tree carries its own outline ID, and the biggest worlds grew more trees than the old 16-bit ID space could name; IDs are now 24-bit, with room for every tree a 512 × 512 map can hold.",
+  },
+  {
+    version: "0.0.12",
+    title: "Wider Horizons",
+    summary:
+      "The map size slider now climbs to 512 × 512 tiles, twice the old limit on a side, so a world can hold room for rivers, roads, and settlements far beyond the first glade. Road and river routing got a proper priority queue, so even the largest worlds generate in a couple of seconds.",
+  },
+  {
     version: "0.0.11",
     title: "Changelog & Versioning",
     summary:

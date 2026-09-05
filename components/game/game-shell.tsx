@@ -4,13 +4,15 @@ import dynamic from "next/dynamic"
 import { useEffect, useMemo, useState } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER } from "@/lib/game/map/road"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
-import { generateRelic } from "@/lib/game/relic"
-import { generateTravelers } from "@/lib/game/travelers"
+import { generateRelic, relicBound } from "@/lib/game/relic"
+import { DEFAULT_TRAFFIC, generateTravelers } from "@/lib/game/travelers"
 import {
   DEFAULT_CLEARING_COUNT,
+  DEFAULT_DARK_FOREST_COUNT,
   DEFAULT_FOREST_COVERAGE,
   DEFAULT_GLADE_COUNT,
   DEFAULT_MAP_WIDTH,
@@ -20,7 +22,6 @@ import {
 } from "@/lib/game/map/generate-map"
 
 import { GameHud } from "./game-hud"
-import { MusicPlayer } from "./music-player"
 
 /**
  * WebGL has no meaningful server render, and three.js touches browser globals on
@@ -47,12 +48,24 @@ export interface MapSettings {
   glades: number
   /** Number of small forest-floor clearings scattered through the woods. */
   clearings: number
+  /** How many dark forests stand in the road's way. */
+  darkForests: number
   /** How far off the road the relic's hovel is sited, in tiles. */
   relicDistance: number
   /** How many travelers walk the road — the traffic level. */
   traffic: number
   /** Base walking speed in tiles per second. */
   walkSpeed: number
+  /** Road development tier — index into ROAD_TIERS. */
+  road: number
+  /** Road surface look, 0–1 opacity over the grass. */
+  roadOpacity: number
+  /** Road surface brightness multiplier. */
+  roadShade: number
+  /** 0–1 darkness of the line along the road's edge. */
+  roadEdgeLine: number
+  /** Width of that line in CSS pixels, like the tree and building outlines. */
+  roadEdgeWidth: number
   /** Max % of the map under water (rivers, lakes, ponds). */
   water: number
   /** Forced counts for water bodies; −1 lets the seed roll them. */
@@ -69,9 +82,15 @@ export const DEFAULT_SETTINGS: MapSettings = {
   coverage: Math.round(DEFAULT_FOREST_COVERAGE * 100),
   glades: DEFAULT_GLADE_COUNT,
   clearings: DEFAULT_CLEARING_COUNT,
+  darkForests: DEFAULT_DARK_FOREST_COUNT,
   relicDistance: DEFAULT_RELIC_DISTANCE,
-  traffic: 12,
+  traffic: DEFAULT_TRAFFIC,
   walkSpeed: 1.5,
+  road: DEFAULT_ROAD_TIER,
+  roadOpacity: DEFAULT_ROAD_LOOK.opacity,
+  roadShade: DEFAULT_ROAD_LOOK.shade,
+  roadEdgeLine: DEFAULT_ROAD_LOOK.edgeLine,
+  roadEdgeWidth: DEFAULT_ROAD_LOOK.edgeWidth,
   water: Math.round(DEFAULT_WATER_COVERAGE * 100),
   rivers: WATER_COUNT_AUTO,
   lakes: WATER_COUNT_AUTO,
@@ -116,9 +135,15 @@ export function GameShell({
       forest: String(settings.coverage),
       glades: String(settings.glades),
       clearings: String(settings.clearings),
+      dark: String(settings.darkForests),
       relic: String(settings.relicDistance),
       traffic: String(settings.traffic),
       speed: String(settings.walkSpeed),
+      road: String(settings.road),
+      opacity: String(settings.roadOpacity),
+      shade: String(settings.roadShade),
+      edgeline: String(settings.roadEdgeLine),
+      edgewidth: String(settings.roadEdgeWidth),
       water: String(settings.water),
       rivers: String(settings.rivers),
       lakes: String(settings.lakes),
@@ -138,6 +163,7 @@ export function GameShell({
             forestCoverage: settings.coverage / 100,
             gladeCount: settings.glades,
             clearingCount: settings.clearings,
+            darkForestCount: settings.darkForests,
             relicDistance: settings.relicDistance,
             waterCoverage: settings.water / 100,
             riverCount: settings.rivers >= 0 ? settings.rivers : undefined,
@@ -150,6 +176,7 @@ export function GameShell({
       settings.coverage,
       settings.glades,
       settings.clearings,
+      settings.darkForests,
       settings.relicDistance,
       settings.water,
       settings.rivers,
@@ -166,6 +193,20 @@ export function GameShell({
 
   // The relic and the brothers who keep it, fixed per seed like the travelers.
   const relic = useMemo(() => (seed === null ? null : generateRelic(seed)), [seed])
+  const roadLook = useMemo(
+    () => ({
+      opacity: settings.roadOpacity,
+      shade: settings.roadShade,
+      edgeLine: settings.roadEdgeLine,
+      edgeWidth: settings.roadEdgeWidth,
+    }),
+    [settings.roadOpacity, settings.roadShade, settings.roadEdgeLine, settings.roadEdgeWidth],
+  )
+  // Who among the travelers turns aside for it: the track's own traffic.
+  const relicTraffic = useMemo(
+    () => (relic ? relicBound(travelers, relic).length : 0),
+    [travelers, relic],
+  )
   const monks = useMemo(() => (seed === null ? [] : generateMonks(seed)), [seed])
 
   // The camera's pan clamp follows the loaded map's extent, and a new world
@@ -198,6 +239,9 @@ export function GameShell({
           monks={monks}
           travelers={travelers}
           walkSpeed={settings.walkSpeed}
+          roadTier={settings.road}
+          relicTraffic={relicTraffic}
+          roadLook={roadLook}
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
@@ -212,12 +256,12 @@ export function GameShell({
         relic={relic}
         monks={monks}
         travelers={travelers}
+        relicTraffic={relicTraffic}
         settings={settings}
         onSettingsChange={setSettings}
         onReroll={() => setSeed(randomSeed())}
         onSeedChange={setSeed}
       />
-      <MusicPlayer />
     </div>
   )
 }

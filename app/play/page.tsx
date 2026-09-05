@@ -31,9 +31,15 @@ export default async function PlayPage({
   const coverage = parseIntParam(params.forest)
   const glades = parseIntParam(params.glades)
   const clearings = parseIntParam(params.clearings)
+  const darkForests = parseIntParam(params.dark)
   const relicDistance = parseIntParam(params.relic)
   const traffic = parseIntParam(params.traffic)
   const walkSpeed = parseFloatParam(params.speed)
+  const road = parseIntParam(params.road)
+  const roadOpacity = parseFloatParam(params.opacity)
+  const roadShade = parseFloatParam(params.shade)
+  const roadEdgeLine = parseFloatParam(params.edgeline)
+  const roadEdgeWidth = parseFloatParam(params.edgewidth)
   const water = parseIntParam(params.water)
   const rivers = parseIntParam(params.rivers)
   const lakes = parseIntParam(params.lakes)
@@ -42,9 +48,15 @@ export default async function PlayPage({
   if (coverage !== undefined) initialSettings.coverage = coverage
   if (glades !== undefined) initialSettings.glades = glades
   if (clearings !== undefined) initialSettings.clearings = clearings
+  if (darkForests !== undefined) initialSettings.darkForests = darkForests
   if (relicDistance !== undefined) initialSettings.relicDistance = relicDistance
   if (traffic !== undefined) initialSettings.traffic = traffic
   if (walkSpeed !== undefined) initialSettings.walkSpeed = walkSpeed
+  if (road !== undefined) initialSettings.road = road
+  if (roadOpacity !== undefined) initialSettings.roadOpacity = roadOpacity
+  if (roadShade !== undefined) initialSettings.roadShade = roadShade
+  if (roadEdgeLine !== undefined) initialSettings.roadEdgeLine = roadEdgeLine
+  if (roadEdgeWidth !== undefined) initialSettings.roadEdgeWidth = roadEdgeWidth
   if (water !== undefined) initialSettings.water = water
   if (rivers !== undefined) initialSettings.rivers = rivers
   if (lakes !== undefined) initialSettings.lakes = lakes

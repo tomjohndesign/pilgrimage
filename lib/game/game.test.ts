@@ -3,7 +3,18 @@ import { join } from "node:path"
 
 import { describe, expect, it } from "vitest"
 
-import { PROTOTYPE_MAP } from "./map/prototype-map"
+import { PROTOTYPE_MAP, parseAsciiMap } from "./map/prototype-map"
+import {
+  clampRoadTier,
+  DEFAULT_ROAD_TIER,
+  MAX_ROAD_TIER,
+  ROAD_TIERS,
+  isRoadTerrain,
+  roadEdge,
+  roadTint,
+  roadWear,
+  TRAFFIC_FOR_BARE_ROAD,
+} from "./map/road"
 import { TERRAIN } from "./map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ } from "./map/types"
 import {
@@ -33,6 +44,9 @@ import {
   MAX_OBJECT_ID,
   nextOutlineMode,
   OUTLINE_MODES,
+  RELIC_OBJECT_ID,
+  residentObjectId,
+  travelerObjectId,
   treeObjectId,
   type OutlineMode,
 } from "./render/outline"
@@ -239,13 +253,13 @@ describe("seeded rng", () => {
 describe("outline ids", () => {
   it("round-trips ids through 8-bit-per-channel quantisation", () => {
     const readback = (v: number) => Math.round(v * 255) / 255
-    for (const id of [0, 1, 2, 255, 256, 257, 1024, MAX_OBJECT_ID]) {
-      const [r, g] = encodeObjectId(id)
-      expect(decodeObjectId(readback(r), readback(g))).toBe(id)
+    for (const id of [0, 1, 2, 255, 256, 257, 1024, 65535, 65536, 65537, 0x8000ff, MAX_OBJECT_ID]) {
+      const [r, g, b] = encodeObjectId(id)
+      expect(decodeObjectId(readback(r), readback(g), readback(b))).toBe(id)
     }
   })
 
-  it("rejects ids the two channels cannot hold", () => {
+  it("rejects ids the three channels cannot hold", () => {
     expect(() => encodeObjectId(-1)).toThrow()
     expect(() => encodeObjectId(MAX_OBJECT_ID + 1)).toThrow()
     expect(() => encodeObjectId(1.5)).toThrow()
@@ -260,6 +274,18 @@ describe("outline ids", () => {
     expect(ids.has(0)).toBe(false)
     expect(ids.size).toBe(buildingCount + treeCount)
     expect(Math.max(...ids)).toBeLessThanOrEqual(MAX_OBJECT_ID)
+  })
+
+  it("holds the trees of the largest map without reaching the reserved blocks", () => {
+    // 512 × 512 tiles, every one forest, two trees each: the worst case the
+    // size and coverage sliders can produce. The tree block must stay below
+    // the relic, the residents, and the travelers counting down from the top.
+    const worstTrees = 512 * 512 * 2
+    const top = treeObjectId(64, worstTrees - 1)
+    expect(top).toBeLessThan(RELIC_OBJECT_ID)
+    expect(top).toBeLessThan(residentObjectId(0x1000 - 1))
+    expect(top).toBeLessThan(travelerObjectId(0xfff))
+    expect(() => encodeObjectId(top)).not.toThrow()
   })
 
   it("cycles through every mode and wraps back to the first", () => {
@@ -335,6 +361,155 @@ describe("site menu", () => {
   it("lists textures and characters under assets", () => {
     const assets = SITE_MENU.find((item) => item.label === "Assets")
     expect(assets?.children?.map((c) => c.label)).toEqual(["Textures", "Characters"])
+  })
+})
+
+describe("road tiers", () => {
+  it("runs from least to most developed, each weathering less than the last", () => {
+    ROAD_TIERS.forEach((tier, i) => expect(tier.tier).toBe(i))
+    for (let i = 1; i < ROAD_TIERS.length; i++) {
+      expect(ROAD_TIERS[i].weathering).toBeLessThan(ROAD_TIERS[i - 1].weathering)
+    }
+    expect(clampRoadTier(DEFAULT_ROAD_TIER)).toBe(DEFAULT_ROAD_TIER)
+  })
+
+  it("registers every tier's texture in the manifest", () => {
+    const urls = new Set(TEXTURES.map((t) => t.url))
+    for (const tier of ROAD_TIERS) expect(urls.has(tier.textureUrl), tier.id).toBe(true)
+  })
+
+  it("clamps junk settings to a real tier", () => {
+    expect(clampRoadTier(-5)).toBe(0)
+    expect(clampRoadTier(99)).toBe(MAX_ROAD_TIER)
+    expect(clampRoadTier(1.4)).toBe(1)
+    expect(clampRoadTier(Number.NaN)).toBe(DEFAULT_ROAD_TIER)
+  })
+})
+
+describe("road weathering", () => {
+  // One road, three stretches of surroundings: forest, open grass, bare earth.
+  const map = parseAsciiMap([
+    "FFF...,,,",
+    "=========",
+    "FFF...,,,",
+  ])
+  const luminance = ([r, g, b]: [number, number, number]) => (r + g + b) / 3
+
+  it("leaves a road surrounded by road untouched", () => {
+    const paved = parseAsciiMap(["===", "===", "==="])
+    expect(roadTint(paved, 1, 1, 0)).toEqual([1, 1, 1])
+  })
+
+  it("mosses the road under forest, darker and greener than in the open", () => {
+    const inForest = roadTint(map, 1, 1, 0)
+    const inOpen = roadTint(map, 4, 1, 0)
+    expect(luminance(inForest)).toBeLessThan(luminance(inOpen))
+    // Green holds up while red and blue drop — the mossy cast.
+    expect(inForest[1]).toBeGreaterThan(inForest[0])
+    expect(inForest[0]).toBeGreaterThan(inForest[2])
+  })
+
+  it("dusts the road lighter beside bare earth", () => {
+    const byDirt = roadTint(map, 7, 1, 0)
+    expect(byDirt[0]).toBeGreaterThan(1)
+    expect(luminance(byDirt)).toBeGreaterThan(luminance(roadTint(map, 1, 1, 0)))
+  })
+
+  it("frays the trail more than gravel, and cuts paved tiers straight", () => {
+    expect(ROAD_TIERS[0].edgeWear).toBeGreaterThan(ROAD_TIERS[1].edgeWear)
+    expect(ROAD_TIERS[1].edgeWear).toBeGreaterThan(0)
+    for (const tier of ROAD_TIERS) {
+      expect(tier.paved).toBe(tier.edgeWear === 0)
+    }
+    expect(ROAD_TIERS.filter((t) => t.paved).map((t) => t.id)).toEqual(["cobble", "flagstone"])
+  })
+
+  it("weathers developed roads less than the trail", () => {
+    const drift = (tier: number) => {
+      const [r, g, b] = roadTint(map, 1, 1, tier)
+      return Math.abs(1 - r) + Math.abs(1 - g) + Math.abs(1 - b)
+    }
+    for (let tier = 1; tier < ROAD_TIERS.length; tier++) {
+      expect(drift(tier)).toBeLessThan(drift(tier - 1))
+    }
+  })
+})
+
+describe("road wear", () => {
+  it("widens the ruts both ways the more feet pass", () => {
+    let last = roadWear(0)
+    for (const traffic of [3, 6, 12, 24, TRAFFIC_FOR_BARE_ROAD]) {
+      const wear = roadWear(traffic)
+      expect(wear.edge).toBeLessThan(last.edge)
+      expect(wear.inner).toBeGreaterThan(last.inner)
+      last = wear
+    }
+  })
+
+  it("leaves an empty road as two ruts with grass between and beside, and a busy one bare to its sides", () => {
+    const empty = roadWear(0)
+    expect(empty.edge).toBeGreaterThan(0)
+    expect(empty.inner).toBeGreaterThan(empty.edge)
+    expect(empty.inner).toBeLessThan(0.5)
+    const busy = roadWear(TRAFFIC_FOR_BARE_ROAD)
+    expect(busy.edge).toBe(0)
+    expect(busy.inner).toBeGreaterThan(0.5)
+    // The surface never leaves the road's own tiles.
+    for (const traffic of [0, 5, 12, 30, 60, 1000]) expect(roadWear(traffic).edge).toBeGreaterThanOrEqual(0)
+  })
+
+  it("lays a paved road edge to edge with no ruts, whatever the traffic", () => {
+    for (const tier of ROAD_TIERS.filter((t) => t.paved)) {
+      for (const traffic of [0, 12, 60]) {
+        const wear = roadWear(traffic, tier.tier)
+        expect(wear.edge).toBe(0)
+        expect(wear.inner).toBeGreaterThanOrEqual(1)
+      }
+    }
+  })
+
+  it("wears no further past the point the road is bare, and shrugs off junk", () => {
+    expect(roadWear(TRAFFIC_FOR_BARE_ROAD * 3)).toEqual(roadWear(TRAFFIC_FOR_BARE_ROAD))
+    expect(roadWear(Number.NaN)).toEqual(roadWear(0))
+    expect(roadWear(-5)).toEqual(roadWear(0))
+  })
+})
+
+describe("road edges", () => {
+  it("opens only the sides that face land on a straight run", () => {
+    // Grass above the road, bare earth below.
+    const map = parseAsciiMap(["...", "===", ",,,"])
+    const edge = roadEdge(map, 1, 1)
+    expect(edge.open).toEqual([0, 0, 1, 1]) // +x, -x, +z, -z
+  })
+
+  it("runs seamlessly into the track to the relic, and the track into it", () => {
+    // The branch forks south off the road: no verge is eroded between the
+    // fork tile and the track, or between the track and the road, so the
+    // two read as one way.
+    const map = parseAsciiMap(["...", "===", ".-.", ".-."])
+    expect(isRoadTerrain("track")).toBe(true)
+    expect(roadEdge(map, 1, 1).open).toEqual([0, 0, 0, 1])
+    expect(roadEdge(map, 1, 2).open).toEqual([1, 1, 0, 0])
+    // Off-map counts as road, so the last track tile is open only sideways.
+    expect(roadEdge(map, 1, 3).open).toEqual([1, 1, 0, 0])
+  })
+
+  it("treats off-map as road, so the road exits the world squarely", () => {
+    const map = parseAsciiMap(["...", "===", "..."])
+    expect(roadEdge(map, 0, 1).open).toEqual([0, 0, 1, 1])
+    expect(roadEdge(map, 2, 1).open).toEqual([0, 0, 1, 1])
+  })
+
+  it("keeps every side closed inside a paved plaza", () => {
+    const map = parseAsciiMap(["===", "===", "==="])
+    expect(roadEdge(map, 1, 1).open).toEqual([0, 0, 0, 0])
+  })
+
+  it("opens the outside of a bend", () => {
+    const map = parseAsciiMap(["=..", "==.", ".=."])
+    // The bend tile: road continues west and south; grass east and north-east.
+    expect(roadEdge(map, 1, 1).open).toEqual([1, 0, 0, 1])
   })
 })
 
