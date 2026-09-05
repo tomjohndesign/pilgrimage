@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "50e6637cdbbac59cada14bd0bb60702ddd77e812",
-  "releaseCount": 14,
+  "lastProcessedCommit": "cfc695bf9cf32133ffaf6bc97a064ebab874accb",
+  "releaseCount": 15,
   "releases": [
+    {
+      "version": "0.0.29",
+      "title": "Release 0.0.29",
+      "summary": "Add renown-based building influence and placement overlay (#48)",
+      "commit": "cfc695bf9cf32133ffaf6bc97a064ebab874accb"
+    },
     {
       "version": "0.0.28",
       "title": "Release 0.0.28",
