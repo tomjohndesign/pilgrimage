@@ -585,6 +585,7 @@ export function GameHud({
   relic,
   monks,
   travelers,
+  relicTraffic,
   settings,
   onSettingsChange,
   onReroll,
@@ -595,6 +596,8 @@ export function GameHud({
   relic: Relic | null
   monks: Monk[]
   travelers: Traveler[]
+  /** How many of the travelers turn aside for the relic. */
+  relicTraffic: number
   settings: MapSettings
   onSettingsChange: (settings: MapSettings) => void
   onReroll: () => void
@@ -714,6 +717,12 @@ export function GameHud({
           {relic && (
             <div className="text-[11px] italic text-ink-light">{relicTitle(relic)}</div>
           )}
+          <div className="flex items-baseline justify-between pb-1 text-[11px] text-ink-light">
+            <span className="italic">Turn aside</span>
+            <span className="font-display text-[10px] uppercase tracking-[1px]">
+              {relicTraffic} of {travelers.length} folk
+            </span>
+          </div>
           <Tuner
             label="Distance"
             value={settings.relicDistance}
@@ -749,6 +758,43 @@ export function GameHud({
             value={clampRoadTier(settings.road)}
             options={ROAD_TIERS.map((tier) => tier.label)}
             onChange={(road) => set({ road })}
+          />
+          {/* The surface's look, to explore: how solid, how dark, and the edge line. */}
+          <Tuner
+            label="Opacity"
+            value={settings.roadOpacity}
+            display={`${Math.round(settings.roadOpacity * 100)}%`}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(roadOpacity) => set({ roadOpacity })}
+          />
+          <Tuner
+            label="Shade"
+            value={settings.roadShade}
+            display={`${Math.round(settings.roadShade * 100)}%`}
+            min={0.3}
+            max={1.5}
+            step={0.05}
+            onChange={(roadShade) => set({ roadShade })}
+          />
+          <Tuner
+            label="Edge line"
+            value={settings.roadEdgeLine}
+            display={settings.roadEdgeLine === 0 ? "None" : `${Math.round(settings.roadEdgeLine * 100)}%`}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(roadEdgeLine) => set({ roadEdgeLine })}
+          />
+          <Tuner
+            label="Edge width"
+            value={settings.roadEdgeWidth}
+            display={`${settings.roadEdgeWidth.toFixed(1)} px`}
+            min={0.5}
+            max={6}
+            step={0.5}
+            onChange={(roadEdgeWidth) => set({ roadEdgeWidth })}
           />
         </Section>
 
