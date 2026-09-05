@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { useSimulationStore } from "@/lib/game/simulation-store"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { selectElement } from "@/lib/game/selection"
 import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
@@ -108,11 +109,16 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
   }, [world])
 
   useFrame((_, delta) => {
-    const dt = Math.min(delta, 0.1)
+    const playback = useSimulationStore.getState()
+    const dt = playback.paused ? 0 : Math.min(delta, 0.1) * playback.speed
     for (let i = 0; i < world.states.length; i++) {
       const s = world.states[i]
       const group = groupRefs.current[i]
       if (!group) continue
+      if (playback.paused) {
+        group.position.set(s.x, s.y, s.z)
+        continue
+      }
 
       const exhaust = group.getObjectByName(ROCKET_EXHAUST_NAME)
       if (flying) {
@@ -123,7 +129,9 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
       }
       if (s.flight) {
         const flight = s.flight
-        stepMonkFlight(flight, map, world.flightRng, dt)
+        for (let tick = 0; tick < playback.speed; tick++) {
+          stepMonkFlight(flight, map, world.flightRng, Math.min(delta, 0.1))
+        }
         s.x = flight.x
         s.y = flight.y
         s.z = flight.z

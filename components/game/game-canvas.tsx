@@ -3,6 +3,7 @@
 import { Suspense, useMemo } from "react"
 import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
 
+import { useCameraStore } from "@/lib/game/camera-store"
 import type { Resources } from "@/lib/game/settlement"
 import type { TilePos } from "@/lib/game/map/types"
 import { deriveSeed, SEED_STREAM } from "@/lib/game/rng"
@@ -81,6 +82,9 @@ export function GameCanvas({
     <PixelCanvas
       {...pixelation}
       orthographic
+      onPointerMissed={(event) => {
+        if (event.button === 0) useCameraStore.getState().select(null)
+      }}
       camera={{ manual: true, position: [20, 20, 20], near: CAM_NEAR, far: CAM_FAR }}
     >
       <color attach="background" args={[BACKGROUND]} />
