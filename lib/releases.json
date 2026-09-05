@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "4d1c11d51be56dc8bd05bdb1c8809200e71b14cd",
-  "releaseCount": 10,
+  "lastProcessedCommit": "e6c93db8fc744b8de41dfdeb7f2a85e0fe9d6fa3",
+  "releaseCount": 11,
   "releases": [
+    {
+      "version": "0.0.25",
+      "title": "Release 0.0.25",
+      "summary": "Add gold and wood building economy, shrine renown, and live tuning (#43)",
+      "commit": "e6c93db8fc744b8de41dfdeb7f2a85e0fe9d6fa3"
+    },
     {
       "version": "0.0.24",
       "title": "Release 0.0.24",
