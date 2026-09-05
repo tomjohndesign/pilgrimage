@@ -51,8 +51,14 @@ const GRID_DARKEN = 0.8
 const DEEP_WOOD_TINT = new THREE.Color("#36452a")
 const OPEN_MEADOW_TINT = new THREE.Color("#94a158")
 
-/** The ground darkens by this much more under the heart of a dark forest. */
-const DARK_WOOD_DARKEN = 0.3
+/**
+ * The ground darkens by this much more under the heart of a dark forest.
+ * Unlike the forest-shade tint this ignores `shadeBlend`: it is the canopy's
+ * shadow, and it falls on the track cut through the old growth just as it
+ * falls on the forest floor — a bright ribbon through the dark would lie
+ * about how dark it is in there.
+ */
+const DARK_WOOD_DARKEN = 0.4
 
 
 /**
@@ -206,8 +212,9 @@ export function TerrainTiles({
         }
         tint.copy(OPEN_MEADOW_TINT).lerp(DEEP_WOOD_TINT, shade[index])
         color.lerp(tint, def.shadeBlend)
-        // Old growth casts a deeper shadow; feathered so it has no hard rim.
-        color.multiplyScalar(1 - DARK_WOOD_DARKEN * darkShade[index] * def.shadeBlend)
+        // Old growth casts a deeper shadow on everything beneath it, the
+        // track included; feathered so it has no hard rim.
+        color.multiplyScalar(1 - DARK_WOOD_DARKEN * darkShade[index])
         color.multiplyScalar(1 + (rng() - 0.5) * def.jitter)
         mesh.setColorAt(index, color)
       }
