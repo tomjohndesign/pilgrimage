@@ -31,12 +31,12 @@ describe("bridgeLayout", () => {
     // Each ramp climbs toward the water.
     expect(layout.ramps).toEqual(
       expect.arrayContaining([
-        { x: 1, z: 2, dx: 1, dz: 0 },
-        { x: 5, z: 2, dx: -1, dz: 0 },
+        { x: 1, z: 2, dx: 1, dz: 0, kind: "road" },
+        { x: 5, z: 2, dx: -1, dz: 0, kind: "road" },
       ]),
     )
     expect(layout.ramps).toHaveLength(2)
-    expect(layout.plateaus).toHaveLength(0)
+    expect(layout.connectors).toHaveLength(0)
   })
 
   it("rises linearly from the road, up the ramp, onto the deck", () => {
@@ -78,23 +78,74 @@ describe("bridgeLayout", () => {
     const [span] = bridgeLayout(map).spans
     expect(span.from).toBeNull()
     expect(span.to).toEqual({ x: 2, z: 0 })
-    expect(bridgeLayout(map).ramps).toEqual([{ x: 2, z: 0, dx: -1, dz: 0 }])
+    expect(bridgeLayout(map).ramps).toEqual([{ x: 2, z: 0, dx: -1, dz: 0, kind: "road" }])
   })
 
-  it("makes a tile between two spans a level causeway, not a ramp", () => {
+  it("continues the deck over a one-tile island without a dirt causeway", () => {
     const map = parseAsciiMap(["=#=#="])
     const layout = bridgeLayout(map)
     expect(layout.spans).toHaveLength(2)
-    expect(layout.plateaus).toEqual([{ x: 2, z: 0 }])
+    expect(layout.connectors).toEqual([{ x: 2, z: 0, kind: "road", open: [true, true, false, false] }])
     expect(layout.ramps.map((r) => r.x).sort()).toEqual([0, 4])
     expect(surfaceHeight(map, 2, 0)).toBeCloseTo(TILE_HEIGHT + BRIDGE_RISE)
+  })
+
+  it.each([1, 2, 3, 4])("requires three dry tiles between ramps (gap %i)", (gap) => {
+    const map = parseAsciiMap(["=##" + "=".repeat(gap) + "##="])
+    const original = [...map.tiles]
+    const layout = bridgeLayout(map)
+    expect(layout.connectors).toHaveLength(gap < 3 ? gap : 0)
+    expect(layout.ramps).toHaveLength(gap < 3 ? 2 : 4)
+    if (gap === 3) expect(surfaceHeight(map, 4, 0)).toBe(TILE_HEIGHT)
+    expect(map.tiles).toEqual(original)
+  })
+
+  it("continues over a two-tile island when the crossing turns", () => {
+    const map = parseAsciiMap([
+      "..=..",
+      "~~#~~",
+      "~~#~~",
+      "~~==~",
+      "~~~#~",
+      "~~~#~",
+      "...=.",
+    ])
+    const layout = bridgeLayout(map)
+    expect(layout.connectors.map(({ x, z }) => ({ x, z }))).toEqual([
+      { x: 2, z: 3 }, { x: 3, z: 3 },
+    ])
+    expect(layout.connectors[0].open).toEqual([true, false, false, true])
+    expect(layout.connectors[1].open).toEqual([false, true, true, false])
+    expect(layout.ramps).toHaveLength(2)
+    for (const tile of layout.connectors) {
+      expect(surfaceHeight(map, tile.x, tile.z)).toBeCloseTo(TILE_HEIGHT + BRIDGE_RISE)
+    }
+  })
+
+  it("keeps a track island and its approaches timber", () => {
+    const layout = bridgeLayout(parseAsciiMap(["-##--##-"]))
+    expect(layout.connectors).toHaveLength(2)
+    expect([...layout.connectors, ...layout.ramps].every((tile) => tile.kind === "track")).toBe(true)
   })
 
   it("does not ramp off water: a span meeting a lake end-on has no approach there", () => {
     const map = parseAsciiMap(["~#="])
     const layout = bridgeLayout(map)
     expect(layout.spans[0].from).toEqual({ x: 0, z: 0 })
-    expect(layout.ramps).toEqual([{ x: 2, z: 0, dx: -1, dz: 0 }])
+    expect(layout.ramps).toEqual([{ x: 2, z: 0, dx: -1, dz: 0, kind: "road" }])
+  })
+
+  it("preserves water and dry island terrain while adding bridge surfaces", () => {
+    const map = parseAsciiMap(["=##==##="])
+    map.water = {
+      depth: [0, 2, 1, 0, 0, 1, 2, 0],
+      flow: { 1: [0, 1], 2: [0, 1], 5: [0, 1], 6: [0, 1] },
+    }
+    const before = structuredClone(map)
+    const layout = bridgeLayout(map)
+    expect(layout.connectors).toHaveLength(2)
+    expect(map).toEqual(before)
+    expect(layout.connectors.every((tile) => map.water!.depth[tile.z * map.width + tile.x] === 0)).toBe(true)
   })
 
   it("is memoised per map", () => {
@@ -115,9 +166,9 @@ describe("bridgeLayout", () => {
           expect(surfaceHeight(map, tile.x, tile.z)).toBeCloseTo(TILE_HEIGHT + BRIDGE_RISE)
         }
       }
-      // Every approach is either a ramp or a causeway, never both.
+      // Island decks never also become ramps.
       const rampKeys = new Set(layout.ramps.map((r) => `${r.x},${r.z}`))
-      for (const p of layout.plateaus) expect(rampKeys.has(`${p.x},${p.z}`)).toBe(false)
+      for (const p of layout.connectors) expect(rampKeys.has(`${p.x},${p.z}`)).toBe(false)
     }
   }, 30_000)
 })
