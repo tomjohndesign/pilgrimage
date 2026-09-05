@@ -85,6 +85,15 @@ export function residentObjectId(residentIndex: number): number {
 }
 
 /**
+ * Buildings the player puts down take a block below the residents. The
+ * generated buildings' block grows upward with the trees, so a placed
+ * building can't share it without colliding with a tree.
+ */
+export function placedObjectId(placedIndex: number): number {
+  return MAX_OBJECT_ID - 0x2000 - placedIndex
+}
+
+/**
  * The relic sits alone in the middle of the ID space, so it outlines against
  * the shrine that houses it rather than merging into the walls.
  */

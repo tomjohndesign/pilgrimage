@@ -4,10 +4,12 @@ import { useEffect } from "react"
 import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
-import type { GameMap } from "@/lib/game/map/types"
+import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import type { OutlineMode } from "@/lib/game/render/outline"
-import { simRegistry } from "@/lib/game/sim"
+import type { Traveler } from "@/lib/game/travelers"
+import { simRegistry, stepSim } from "@/lib/game/sim"
 
 import { outlineFrameRef } from "./outline-pass"
 
@@ -17,7 +19,7 @@ import { outlineFrameRef } from "./outline-pass"
  * (The world seed itself comes from the URL: /play?seed=….)
  * Development only; it is never mounted in a production build.
  */
-export function DebugHandle({ map }: { map: GameMap }) {
+export function DebugHandle({ map, travelers, speed }: { map: GameMap; travelers: Traveler[]; speed: number }) {
   const { gl, camera, scene } = useThree()
 
   useEffect(() => {
@@ -36,6 +38,33 @@ export function DebugHandle({ map }: { map: GameMap }) {
       /** Live traveler sim state (stats, activities), for e2e assertions. */
       sim: () => (simRegistry.current ? [...simRegistry.current.travelers.values()] : []),
       time: () => simRegistry.current?.time ?? null,
+      /** Advance bounded simulation ticks without waiting for the WebGL frame rate. */
+      advance: (seconds: number) => {
+        const sim = simRegistry.current
+        if (!sim) return
+        const ticks = Math.ceil(Math.max(0, Math.min(120, seconds)) * 10)
+        for (let i = 0; i < ticks; i++) stepSim(sim, travelers, map, speed, 0.1)
+        useBuildStore.getState().syncResources(sim)
+      },
+      settlement: () => ({
+        buildings: useBuildStore.getState().buildings,
+        felled: [...useBuildStore.getState().felled],
+        trees: simRegistry.current ? [...simRegistry.current.treeResources.entries()] : [],
+        piles: useBuildStore.getState().piles,
+        wood: simRegistry.current?.wood ?? 0,
+        visits: simRegistry.current?.visits ?? 0,
+      }),
+      treePlacements: () => simRegistry.current?.trees ?? [],
+      worldScreenPoint: (x: number, y: number, z: number) => {
+        const rect = gl.domElement.getBoundingClientRect()
+        const point = new THREE.Vector3(x, y, z).project(camera)
+        return { x: rect.left + (point.x + 1) / 2 * rect.width, y: rect.top + (1 - point.y) / 2 * rect.height }
+      },
+      tileScreenPoint: (x: number, z: number) => {
+        const rect = gl.domElement.getBoundingClientRect()
+        const point = new THREE.Vector3(tileToWorldX(map, x), 0.2, tileToWorldZ(map, z)).project(camera)
+        return { x: rect.left + (point.x + 1) / 2 * rect.width, y: rect.top + (1 - point.y) / 2 * rect.height }
+      },
       /** Screen positions (client px) of traveler blocks, for e2e clicks. */
       travelerScreenPoints: () => {
         const rect = gl.domElement.getBoundingClientRect()
@@ -68,7 +97,7 @@ export function DebugHandle({ map }: { map: GameMap }) {
     return () => {
       delete (window as unknown as Record<string, unknown>).__pilgrimage
     }
-  }, [gl, camera, scene, map])
+  }, [gl, camera, scene, map, travelers, speed])
 
   return null
 }

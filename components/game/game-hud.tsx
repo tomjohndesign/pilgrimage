@@ -3,6 +3,8 @@
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
 
+import { useBuildStore } from "@/lib/game/build-store"
+import { BUILDING_KINDS, placementProblem, PLACEMENT_PROBLEM_LABELS } from "@/lib/game/buildings"
 import { useCameraStore } from "@/lib/game/camera-store"
 import {
   arrivalOdds,
@@ -25,11 +27,12 @@ import { DEFAULT_TRAFFIC, type Traveler } from "@/lib/game/travelers"
 import type { PixelationProps } from "@/components/pixel-canvas"
 
 import type { MapSettings } from "./game-shell"
+import { ResourceInspector } from "./resource-inspector"
 import { Minimap } from "./minimap"
 import { MusicPlayer } from "./music-player"
 
 const CONTROLS: Array<[string, string]> = [
-  ["Click", "Inspect traveler"],
+  ["Click", "Inspect people, trees & piles"],
   ["Drag", "Pan"],
   ["Scroll", "Zoom"],
   ["Q / E", "Rotate view"],
@@ -360,6 +363,49 @@ function ClockPanel() {
   )
 }
 
+function useSettlementStats() {
+  const [stats, setStats] = useState({ visits: 0, settlers: 0, wood: 0, renown: null as number | null })
+  useEffect(() => {
+    const read = () => {
+      const sim = simRegistry.current
+      setStats({ visits: sim?.visits ?? 0, wood: sim?.wood ?? 0,
+        settlers: sim ? Array.from(sim.travelers.values()).filter((s) => s.employer).length : 0,
+        renown: sim?.relic.renown ?? null })
+    }
+    read()
+    const timer = setInterval(read, 500)
+    return () => clearInterval(timer)
+  }, [])
+  return stats
+}
+
+/** Building tool and the settlement's live population and timber stores. */
+function SettlementPanel({ map }: { map: GameMap }) {
+  const tool = useBuildStore((s) => s.tool)
+  const buildings = useBuildStore((s) => s.buildings)
+  const hovered = useCameraStore((s) => s.hovered)
+  const stats = useSettlementStats()
+  const problem = useMemo(() => tool && hovered
+    ? placementProblem(map, [...map.buildings, ...buildings], tool, hovered.x, hovered.z)
+    : null, [map, buildings, tool, hovered])
+  const jobs = buildings.reduce((sum, b) => sum + BUILDING_KINDS[b.kind].jobs, 0)
+  return (
+    <div className="space-y-2 text-[11px] text-ink-light">
+      <div>{stats.visits} visits · {stats.settlers} settlers · {stats.wood} wood</div>
+      <div>{Math.max(0, jobs - stats.settlers)} open jobs · {buildings.length} lumber camps</div>
+      <button type="button" aria-pressed={tool === "lumberCamp"}
+        onClick={() => useBuildStore.getState().setTool(tool ? null : "lumberCamp")}
+        className="w-full border border-rule px-2 py-1.5 font-display text-[10px] text-ink hover:bg-gold/20">
+        {tool ? "Cancel building (Esc)" : "Build lumber camp"}
+      </button>
+      <p className="italic">Free to build · 3 jobs · no skills required. An open storage yard. Workers fell trees and carry timber into selectable stacks.</p>
+      {tool && <p role="status" className={problem ? "text-red" : "text-ink"}>
+        {problem ? PLACEMENT_PROBLEM_LABELS[problem] : "Click open ground near woods to place a 2 × 2 camp. Drag to pan."}
+      </p>}
+    </div>
+  )
+}
+
 /** Who the player clicked on the road: name, calling, and what drives them. */
 function TravelerPanel({ traveler }: { traveler: Traveler }) {
   const a = traveler.attributes
@@ -391,6 +437,7 @@ function TravelerPanel({ traveler }: { traveler: Traveler }) {
         {live && (
           <div className="text-[11px] italic text-gold">
             {ACTIVITY_LABELS[live.activity]}
+            {live.employer && " · Settler"}
             {live.track && " · on the dark track"}
           </div>
         )}
@@ -403,7 +450,7 @@ function TravelerPanel({ traveler }: { traveler: Traveler }) {
 
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
         <StatBar label="Status" value={a.status} />
-        <StatBar label="Piety" value={a.piety} />
+        <StatBar label="Piety" value={Math.round(live?.piety ?? a.piety)} />
         <StatBar label="Hunger" value={Math.round(live?.hunger ?? a.hunger)} />
         <StatBar label="Thirst" value={Math.round(live?.thirst ?? a.thirst)} />
         <StatBar label="Stamina" value={Math.round(live?.stamina ?? a.stamina)} />
@@ -416,7 +463,7 @@ function TravelerPanel({ traveler }: { traveler: Traveler }) {
         </div>
         <div className="flex items-baseline justify-between gap-4">
           <span className="text-[11px] italic text-ink-light">Jobless</span>
-          <span className="font-display text-[10px] text-ink">{a.jobless ? "Yes" : "No"}</span>
+          <span className="font-display text-[10px] text-ink">{(live?.jobless ?? a.jobless) ? "Yes" : "No"}</span>
         </div>
         <div className="flex items-baseline justify-between gap-4">
           <span className="text-[11px] italic text-ink-light">Skills</span>
@@ -486,7 +533,8 @@ function DangerForecast({ map }: { map: GameMap }) {
 
 /** What the monks keep in the hovel: the relic's name, nature, and pull. */
 function RelicPanel({ relic }: { relic: Relic }) {
-  const s = relic.stats
+  const summary = useSettlementStats()
+  const s = { ...relic.stats, renown: summary.renown ?? relic.stats.renown }
   return (
     <Panel>
       <div className="flex items-baseline justify-between gap-4">
@@ -515,7 +563,7 @@ function RelicPanel({ relic }: { relic: Relic }) {
         <StatBar label="Sanctity" value={s.sanctity} />
         <StatBar label="Spectacle" value={s.spectacle} />
         <StatBar label="Doubt" value={s.doubt} />
-        <StatBar label="Renown" value={s.renown} />
+        <StatBar label="Renown" value={Math.round(s.renown)} />
       </div>
     </Panel>
   )
@@ -686,6 +734,8 @@ export function GameHud({
           />
         </Section>
 
+        {map && <Section {...section("Settlement")}><SettlementPanel map={map} /></Section>}
+
         <Section {...section("Pixelation")}>
           <Chooser
             label="Look"
@@ -760,11 +810,12 @@ export function GameHud({
             <div className="text-[11px] italic text-ink-light">{relicTitle(relic)}</div>
           )}
           <div className="flex items-baseline justify-between pb-1 text-[11px] text-ink-light">
-            <span className="italic">Turn aside</span>
+            <span className="italic">Initial visit forecast</span>
             <span className="font-display text-[10px] uppercase tracking-[1px]">
               {relicTraffic} of {travelers.length} folk
             </span>
           </div>
+          <p className="mb-2 text-[11px] italic text-ink-light">The brothers offer free food, drink, lodging and blessings. Hungry, thirsty and tired folk seek their care.</p>
           <Tuner
             label="Distance"
             value={settings.relicDistance}
@@ -878,6 +929,8 @@ export function GameHud({
           />
         </Section>
       </aside>
+
+      {(selection?.kind === "tree" || selection?.kind === "pile") && <ResourceInspector selection={selection} />}
 
       {/* Inspector: whoever or whatever the player clicked, tucked against the sidebar. */}
       {selectedTraveler && (

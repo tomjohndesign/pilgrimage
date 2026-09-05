@@ -1,8 +1,12 @@
 "use client"
 
-import { Suspense } from "react"
+import { Suspense, useMemo } from "react"
 import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
 
+import { deriveSeed, SEED_STREAM } from "@/lib/game/rng"
+import { growTreePlacements } from "@/lib/game/trees/dimensions"
+import { placeTrees } from "@/lib/game/trees/placement"
+import { useTreeTuningStore } from "@/lib/game/trees/tree-tuning-store"
 import type { GameMap } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
@@ -52,6 +56,10 @@ export function GameCanvas({
   /** Draw the global tile lattice over the ground. Off by default. */
   showGrid?: boolean
 } & PixelationProps) {
+  const species = useTreeTuningStore((s) => s.species)
+  const variance = useTreeTuningStore((s) => s.variance)
+  const trees = useMemo(() => growTreePlacements(placeTrees(map, species),
+    deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes), species, variance), [map, species, variance])
   return (
     <PixelCanvas
       {...pixelation}
@@ -83,17 +91,17 @@ export function GameCanvas({
         />
       </Suspense>
       <Bridges map={map} roadTier={roadTier} />
-      <Trees map={map} />
+      <Trees map={map} placements={trees} />
       <Environment map={map} />
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />
       <Monks map={map} monks={monks} />
-      <Travelers map={map} travelers={travelers} speed={walkSpeed} />
+      <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} />
       <TileCursor map={map} />
 
       <CameraRig map={map} />
       <OutlinePass />
-      <DebugHandle map={map} />
+      <DebugHandle map={map} travelers={travelers} speed={walkSpeed} />
     </PixelCanvas>
   )
 }

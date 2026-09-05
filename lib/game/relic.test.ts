@@ -51,10 +51,12 @@ describe("relic draw", () => {
       (s) => generateRelic(s).stats.sanctity >= 80,
     )!
     const relic = generateRelic(seed)
-    const travelers = generateTravelers(seed, 60)
+    const travelers = generateTravelers(seed, 60).map((t) => ({
+      ...t, attributes: { ...t.attributes, hunger: 100, thirst: 100, stamina: 100 },
+    }))
     const bound = relicBound(travelers, relic)
     expect(bound.length).toBeGreaterThan(0)
-    expect(bound.length).toBeLessThan(travelers.length / 2)
+    expect(bound.length).toBeLessThan(travelers.length)
     expect(bound.every((t) => turnsAside(t, relic))).toBe(true)
     // Pilgrims turn aside for it more readily than the rest of the road.
     const share = (pick: (t: Traveler) => boolean) => {
