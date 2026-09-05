@@ -96,8 +96,8 @@ export function isRoadTerrain(terrain: TerrainId | null): terrain is RoadTerrain
  * a little way in from either side, grass between them down the middle and
  * grass along the verges outside. Feet and wheels widen the ruts — outward
  * into the verge, inward into the middle strip — until at this many
- * travelers and up the surface is bare from side to side of its tiles. It
- * never leaves them.
+ * travelers and up the surface is bare from side to side of its tiles.
+ * The renderer adds small curved shoulders where junctions meet grassy land.
  */
 export const TRAFFIC_FOR_BARE_ROAD = 30
 
@@ -213,6 +213,8 @@ export interface RoadEdge {
    * edge of the world.
    */
   open: SideFlags
+  /** Solid 2x2 road patches at corners, in ++, +-, -+, -- order. */
+  filledCorners: SideFlags
 }
 
 
@@ -242,5 +244,57 @@ export function roadEdge(map: GameMap, x: number, z: number): RoadEdge {
     const [dx, dz] = EDGE_DIRS[side]
     if (!roadContinues(tileAt(map, x + dx, z + dz))) open[side] = 1
   }
-  return { open }
+  const filledCorners: SideFlags = [0, 0, 0, 0]
+  for (let corner = 0; corner < 4; corner++) {
+    const xSide = corner < 2 ? 0 : 1
+    const zSide = corner % 2 === 0 ? 2 : 3
+    const dx = xSide === 0 ? 1 : -1
+    const dz = zSide === 2 ? 1 : -1
+    // Off-map and bridges continue a lane but do not create a paved plaza.
+    if (
+      isRoadTerrain(tileAt(map, x + dx, z)) &&
+      isRoadTerrain(tileAt(map, x, z + dz)) &&
+      isRoadTerrain(tileAt(map, x + dx, z + dz))
+    ) {
+      filledCorners[corner] = 1
+    }
+  }
+  return { open, filledCorners }
+}
+
+/**
+ * Rounded inside shoulders at T/cross junctions. Each shared corner records
+ * which quadrant faces grass (1: ++, 2: +-, 3: -+, 4: --). All four tiles
+ * receive the same shape so its surface and outline cross their seams.
+ */
+export function junctionShoulders(map: GameMap, excluded: ReadonlySet<number> = new Set()): Map<number, SideFlags> {
+  const shoulders = new Map<number, SideFlags>()
+  const road = (x: number, z: number) => isRoadTerrain(tileAt(map, x, z)) && !excluded.has(z * map.width + x)
+  for (let z = 0; z < map.depth; z++) {
+    for (let x = 0; x < map.width; x++) {
+      if (!road(x, z)) continue
+      if (EDGE_DIRS.filter(([dx, dz]) => road(x + dx, z + dz)).length < 3) continue
+      for (const dx of [-1, 1]) {
+        for (const dz of [-1, 1]) {
+          if (!road(x + dx, z) || !road(x, z + dz)) continue
+          // Shoulders may use a grassy verge, never water or occupied land.
+          if (tileAt(map, x + dx, z + dz) !== "grass" || excluded.has((z + dz) * map.width + x + dx)) continue
+          if (map.buildings.some(b => x + dx >= b.x && x + dx < b.x + b.w && z + dz >= b.z && z + dz < b.z + b.d)) continue
+          const code = (dx > 0 ? 1 : 3) + (dz > 0 ? 0 : 1)
+          const cornerX = x + (dx > 0 ? 1 : 0)
+          const cornerZ = z + (dz > 0 ? 1 : 0)
+          for (const tx of [x, x + dx]) {
+            for (const tz of [z, z + dz]) {
+              const index = tz * map.width + tx
+              const flags = shoulders.get(index) ?? [0, 0, 0, 0]
+              const corner = (cornerX - tx === 1 ? 0 : 2) + (cornerZ - tz === 1 ? 0 : 1)
+              flags[corner] = code
+              shoulders.set(index, flags)
+            }
+          }
+        }
+      }
+    }
+  }
+  return shoulders
 }
