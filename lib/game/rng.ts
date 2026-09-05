@@ -51,4 +51,12 @@ export const SEED_STREAM = {
   treeShapes: 8,
   /** Per-plank and per-stone colour grain on the bridges. */
   bridgeGrain: 9,
+  /**
+   * Which line each traveler keeps along the road. Its own stream so adding
+   * it preserves every seed's cast (names, callings, stats).
+   */
+  lanes: 10,
+  /** Sparse ground dressing, independent of trees and simulation. */
+  environment: 11,
+  environmentShapes: 12,
 } as const

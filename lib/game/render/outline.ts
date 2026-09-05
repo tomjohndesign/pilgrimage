@@ -85,14 +85,22 @@ export function residentObjectId(residentIndex: number): number {
 }
 
 /**
+ * Buildings the player puts down take a block below the residents. The
+ * generated buildings' block grows upward with the trees, so a placed
+ * building can't share it without colliding with a tree.
+ */
+export function placedObjectId(placedIndex: number): number {
+  return MAX_OBJECT_ID - 0x2000 - placedIndex
+}
+
+/**
  * The relic sits alone in the middle of the ID space, so it outlines against
  * the shrine that houses it rather than merging into the walls.
  */
 export const RELIC_OBJECT_ID = 0x800000
 
 /**
- * Outline thickness in CSS pixels. The edge pass samples neighbours at this
- * screen-space distance, so lines render at a constant display width at every
- * zoom level and DPR.
+ * Default road-edge thickness in CSS pixels. Object outlines use one rendered
+ * world texel in OutlinePass so they scale with the pixelated scene's zoom.
  */
 export const OUTLINE_THICKNESS_PX = 2

@@ -3,6 +3,9 @@
 import { useEffect, useLayoutEffect, useMemo } from "react"
 import * as THREE from "three"
 
+import { useCameraStore } from "@/lib/game/camera-store"
+import { TreeRemains } from "./tree-remains"
+import { useBuildStore } from "@/lib/game/build-store"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import type { GameMap } from "@/lib/game/map/types"
@@ -64,20 +67,39 @@ function makeCrownGeometry(shape: TreeSpeciesDef["crown"]["shape"]): THREE.Buffe
     : new THREE.IcosahedronGeometry(1, BLOB_DETAIL)
 }
 
-export function Trees({ map }: { map: GameMap }) {
+export function Trees({ map, placements: supplied }: { map: GameMap; placements?: TreePlacement[] }) {
+  const selection = useCameraStore((s) => s.selection)
+  const resources = useBuildStore((s) => s.treeResources)
+  const time = useBuildStore((s) => s.time)
+  const felled = useBuildStore((s) => s.felled)
   const species = useTreeTuningStore((s) => s.species)
-  const placements = useMemo(() => placeTrees(map, species), [map, species])
+  const placements = useMemo(() => supplied ?? placeTrees(map, species), [map, species, supplied])
 
+  const selected = selection?.kind === "tree" ? placements[selection.id] : null
+  const resource = selection?.kind === "tree" ? resources.get(selection.id) : null
+  const visible = !resource || resource.health > 0 || resource.remainingWood > 0 || time < (resource.stumpUntil ?? 0)
+  useEffect(() => {
+    if (selection?.kind === "tree" && (!selected || !visible)) useCameraStore.getState().select(null)
+  }, [selection, selected, visible])
+  const selectTree = (id: number) => {
+    const camera = useCameraStore.getState()
+    camera.select(camera.selection?.kind === "tree" && camera.selection.id === id ? null : { kind: "tree", id })
+  }
   return (
-    <TreeField
-      placements={placements}
-      seed={deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes)}
-      idBase={map.buildings.length}
-    />
+    <group>
+      <TreeField placements={placements} hidden={felled} onSelect={selectTree}
+        seed={deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes)} idBase={map.buildings.length} />
+      {Array.from(resources, ([id, resource]) => resource.health <= 0 && placements[id]
+        ? <TreeRemains key={id} id={id} tree={placements[id]} resource={resource} time={time} /> : null)}
+      {selected && visible && <mesh position={[selected.x, selected.y + 0.025, selected.z]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.25, 0.32, 24]} /><meshBasicMaterial color="#e4bb58" depthTest={false} />
+      </mesh>}
+    </group>
   )
 }
 
 interface GrownTree {
+  index: number
   placement: TreePlacement
   shape: TreeShape
   objectId: number
@@ -91,15 +113,19 @@ export function TreeField({
   placements,
   seed,
   idBase = 0,
+  hidden,
+  onSelect,
 }: {
   placements: TreePlacement[]
   seed: number
   idBase?: number
+  hidden?: ReadonlySet<number>
+  onSelect?: (index: number) => void
 }) {
   const species = useTreeTuningStore((s) => s.species)
   const variance = useTreeTuningStore((s) => s.variance)
 
-  const batches = useMemo(() => {
+  const grown = useMemo(() => {
     const rng = makeRng(seed)
     const grouped = new Map<TreeSpeciesId, GrownTree[]>()
     // Trees take the ID block between the buildings and the relic. On huge maps
@@ -107,29 +133,40 @@ export function TreeField({
     // outline between themselves, and they are far apart.
     const idSpan = RELIC_OBJECT_ID - 1 - idBase
     placements.forEach((placement, index) => {
-      const shape = generateTree(species[placement.species], rng, variance)
+      const shape = placement.shape ?? generateTree(species[placement.species], rng, variance)
       const objectId = treeObjectId(idBase, index % idSpan)
       let list = grouped.get(placement.species)
       if (!list) grouped.set(placement.species, (list = []))
-      list.push({ placement, shape, objectId })
+      list.push({ index, placement, shape, objectId })
     })
     return TREE_SPECIES_ORDER.filter((id) => grouped.has(id)).map((id) => ({
       def: species[id],
       trees: grouped.get(id)!,
     }))
   }, [placements, seed, idBase, species, variance])
+  const batches = useMemo(() => grown.map((batch) => ({
+    ...batch, trees: hidden ? batch.trees.filter((tree) => !hidden.has(tree.index)) : batch.trees,
+  })), [grown, hidden])
 
   return (
     <group>
       {batches.map(({ def, trees }) => (
-        <SpeciesBatch key={def.id} def={def} trees={trees} />
+        <SpeciesBatch key={def.id} def={def} trees={trees} onSelect={onSelect} />
       ))}
     </group>
   )
 }
 
 /** Every tree of one species: trunks in one instanced mesh, crowns in another. */
-function SpeciesBatch({ def, trees }: { def: TreeSpeciesDef; trees: GrownTree[] }) {
+function SpeciesBatch({ def, trees, onSelect }: { def: TreeSpeciesDef; trees: GrownTree[]; onSelect?: (index: number) => void }) {
+  const crownOwners = useMemo(() => trees.flatMap((tree) => tree.shape.crown.map(() => tree.index)), [trees])
+  const select = (crown: boolean) => (event: { instanceId?: number; delta: number; stopPropagation: () => void }) => {
+    if (!onSelect || event.instanceId === undefined || event.delta > 6 || useBuildStore.getState().tool) return
+    const index = crown ? crownOwners[event.instanceId] : trees[event.instanceId]?.index
+    if (index === undefined) return
+    event.stopPropagation()
+    onSelect(index)
+  }
   const trunkGeometry = useMemo(() => makeTrunkGeometry(def.trunk.taper), [def.trunk.taper])
   const crownGeometry = useMemo(() => makeCrownGeometry(def.crown.shape), [def.crown.shape])
   useEffect(() => () => trunkGeometry.dispose(), [trunkGeometry])
@@ -226,11 +263,11 @@ function SpeciesBatch({ def, trees }: { def: TreeSpeciesDef; trees: GrownTree[] 
 
   return (
     <group>
-      <instancedMesh key={`trunk-${trunkCount}`} ref={refs.trunk} args={instancedArgs(trunkCount)}>
+      <instancedMesh key={`trunk-${trunkCount}`} ref={refs.trunk} args={instancedArgs(trunkCount)} onClick={select(false)}>
         <primitive object={trunkGeometry} attach="geometry" />
         <meshLambertMaterial flatShading />
       </instancedMesh>
-      <instancedMesh key={`crown-${crownCount}`} ref={refs.crown} args={instancedArgs(crownCount)}>
+      <instancedMesh key={`crown-${crownCount}`} ref={refs.crown} args={instancedArgs(crownCount)} onClick={select(true)}>
         <primitive object={crownGeometry} attach="geometry" />
         <meshLambertMaterial flatShading />
       </instancedMesh>

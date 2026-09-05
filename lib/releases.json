@@ -1,0 +1,130 @@
+{
+  "lastProcessedCommit": "1bc671422ff1cd59710d9d090d1f9a2196346bff",
+  "releaseCount": 9,
+  "releases": [
+    {
+      "version": "0.0.23",
+      "title": "Release 0.0.23",
+      "summary": "Add shrine hospitality, lumber camps, and selectable timber resources (#42)",
+      "commit": "1bc671422ff1cd59710d9d090d1f9a2196346bff"
+    },
+    {
+      "version": "0.0.22",
+      "title": "Release 0.0.22",
+      "summary": "Fix bridge ramps to connect straight onto paths (#41)",
+      "commit": "c6d619a5bb81be5113e056c5573a1e5c5dffa054"
+    },
+    {
+      "version": "0.0.21",
+      "title": "Release 0.0.21",
+      "summary": "Scale traffic density with map area (#40)",
+      "commit": "693934eea0ff74409332efa6d49d0e3a9b2d6626"
+    },
+    {
+      "version": "0.0.20",
+      "title": "Release 0.0.20",
+      "summary": "Add clustered meadow vegetation and stone outcrops (#38)",
+      "commit": "d57bb5a9c474286011252a34b2145f926bcee2ec"
+    },
+    {
+      "version": "0.0.19",
+      "title": "Release 0.0.19",
+      "summary": "feat(game): add tunable world-scale pixel rendering (#39)",
+      "commit": "b63b69b3d33eed2213df8e3318323fabd0cd1465"
+    },
+    {
+      "version": "0.0.18",
+      "title": "Release 0.0.18",
+      "summary": "Keep travelers left with individual lane offsets (#37)",
+      "commit": "3721b8384f7822fbb24970c0707029ecb45ac310"
+    },
+    {
+      "version": "0.0.17",
+      "title": "Release 0.0.17",
+      "summary": "ci: automate post-merge releases and batch documentation reviews (#36)",
+      "commit": "750dbdfcf9f866b6192386eabfc158ad67a2fedb"
+    },
+    {
+      "version": "0.0.16",
+      "title": "Release 0.0.16",
+      "summary": "Fix grassy paths and bridge continuity across small islands (#35)",
+      "commit": "82513fe2ec29446955745f0f2b7a23ce42709b70"
+    },
+    {
+      "version": "0.0.15",
+      "title": "Release 0.0.15",
+      "summary": "Match minimap to the isometric map orientation (#34)",
+      "commit": "bde418c23dfcfe4f70b779c9367bf05c63229e5d"
+    },
+    {
+      "version": "0.0.14",
+      "title": "Winding Waters",
+      "summary": "Rivers meander and meet. Every world now has an imaginary lie of the land, a random swell that steers each river left and right of its course, so rivers wind back and forth without ever repeating a pattern. Rivers no longer cross: one that meets another bends downstream into it, and the river it joins runs wider from the junction on. Channels keep their width around bends, and sand collects on the inside bank of every real curve."
+    },
+    {
+      "version": "0.0.13",
+      "title": "Room for Every Tree",
+      "summary": "Large maps no longer crash on load. Every tree carries its own outline ID, and the biggest worlds grew more trees than the old 16-bit ID space could name; IDs are now 24-bit, with room for every tree a 512 × 512 map can hold."
+    },
+    {
+      "version": "0.0.12",
+      "title": "Wider Horizons",
+      "summary": "The map size slider now climbs to 512 × 512 tiles, twice the old limit on a side, so a world can hold room for rivers, roads, and settlements far beyond the first glade. Road and river routing got a proper priority queue, so even the largest worlds generate in a couple of seconds."
+    },
+    {
+      "version": "0.0.11",
+      "title": "Changelog & Versioning",
+      "summary": "The game now keeps a public record of its own history. Every release gets a version number, a title, and a summary, all reachable from the main menu."
+    },
+    {
+      "version": "0.0.10",
+      "title": "The Assets Gallery",
+      "summary": "Textures and characters moved under a single Assets menu, each with its own gallery, and peasants joined the cast of figures on the road."
+    },
+    {
+      "version": "0.0.9",
+      "title": "Softer Ground",
+      "summary": "Forests now fade into grassland at their edges instead of stopping at a hard line, and the ground was flattened for a calmer, more readable landscape."
+    },
+    {
+      "version": "0.0.8",
+      "title": "A Clearer View",
+      "summary": "Trees settled at one or two per tile for a consistent canopy, zoom gained a per-map limit, and a minimap arrived to keep your bearings."
+    },
+    {
+      "version": "0.0.7",
+      "title": "Travelers on the Road",
+      "summary": "The road came alive: travelers walk it with needs of their own, stopping at camps and vendors, all keeping time against a proper game clock."
+    },
+    {
+      "version": "0.0.6",
+      "title": "Music of the Road",
+      "summary": "Looping background music accompanies the prototype, starting from a random point in the track so every visit sounds a little different. A HUD toggle silences it."
+    },
+    {
+      "version": "0.0.5",
+      "title": "The Dense Forest",
+      "summary": "Forests grew thick and believable: dense tree cover broken by glades, winding trails, and passable clearings, tuned for exploration on foot."
+    },
+    {
+      "version": "0.0.4",
+      "title": "A Seeded World",
+      "summary": "A full rendering pass over the map, worlds generated from shareable seeds, and site-wide navigation linking the game, docs, and textures together."
+    },
+    {
+      "version": "0.0.3",
+      "title": "Terrain Takes Shape",
+      "summary": "Seeded map generation arrived with tunable forests, a road crossing the land, and adjustable map sizes."
+    },
+    {
+      "version": "0.0.2",
+      "title": "First Steps on the Map",
+      "summary": "An isometric camera and map prototype opened at /play — pan, zoom, and rotate across the first tiles of the world."
+    },
+    {
+      "version": "0.0.1",
+      "title": "The Pilgrimage Begins",
+      "summary": "The founding release: a landing page, the game design document, and the vision for a medieval pilgrimage-site builder."
+    }
+  ]
+}

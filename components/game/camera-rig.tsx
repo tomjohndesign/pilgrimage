@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { worldToTileX, worldToTileZ, type GameMap, type TilePos } from "@/lib/game/map/types"
 import {
@@ -172,6 +173,9 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
       // Rotation and zoom fire once per press, not on auto-repeat.
       if (event.repeat) return
       switch (key) {
+        case "escape":
+          useBuildStore.getState().setTool(null)
+          break
         case "q":
         case ",":
           rotate(-1)
@@ -210,6 +214,8 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     }
   }, [])
 
+  // Update the display pose before lighting, animation, and the pixel render pass.
+  // These canvases use a manual camera because this rig owns the frustum.
   // --- Per-frame: tween and drive the camera ----------------------------------
   useFrame((_, delta) => {
     const { targetX, targetZ, viewIndex, viewSize, pan } = useCameraStore.getState()
@@ -261,7 +267,7 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     cam.position.set(targetX + ox, oy, targetZ + oz)
     cam.lookAt(targetX, 0, targetZ)
     cam.updateProjectionMatrix()
-  })
+  }, -2)
 
   return null
 }

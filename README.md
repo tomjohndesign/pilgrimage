@@ -4,6 +4,13 @@
 
 A medieval settlement builder inspired by RollerCoaster Tycoon & Age of Empires II.
 
+## Releases and documentation
+
+Every merge to `main` gets a patch version and a changelog entry from the
+post-merge Release action. Read the [changelog](CHANGELOG.md) and
+[release rules](docs/releases.md). Game-doc and GitHub documentation reviews are
+batched every ten releases; feature PRs do not manually increment versions.
+
 ## Iconography
 
 The mark (a parchment Cinzel Black "P" on forest green) is designed in Paper: https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/G3-0. It lives in the repo as `public/icon.svg` (vector, the source for every raster size), `public/favicon.ico`, `public/apple-icon.png`, the `public/icon-*.png` PWA sizes in `public/manifest.json`, and `app/opengraph-image.png`, which also serves as the GitHub social preview (Settings → General → Social preview).

@@ -1,3 +1,6 @@
+import { placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
+import { settlementRoute } from "./settlement-route"
+import type { SimState } from "./sim"
 import { TERRAIN } from "./map/terrain"
 import { tileAt, type BuildingDef, type GameMap, type TilePos } from "./map/types"
 import type { Monk } from "./monks"
@@ -17,6 +20,9 @@ export const SETTLEMENT_RADIUS = DEFAULT_BALANCE.rules.buildRadius
 
 export interface Settlement {
   resources: Resources
+  /** Cumulative harvest already credited; spending never credits it again. */
+  deliveredWood: number
+  spentWood: number
   /** Only player-built additions. The founding hovel stays on the base map. */
   structures: BuildingDef[]
 }
@@ -25,6 +31,8 @@ export function createSettlement(balance: GameBalance = DEFAULT_BALANCE): Settle
   return {
     resources: { gold: balance.rules.startingGold, wood: balance.rules.startingWood },
     structures: [],
+    deliveredWood: 0,
+    spentWood: 0,
   }
 }
 
@@ -55,6 +63,7 @@ export function settlementRenown(
   residents: readonly Monk[],
   relics: readonly Relic[],
   balance: GameBalance = DEFAULT_BALANCE,
+  completedVisits = 0,
 ) {
   let buildings = 0
   let scenery = 0
@@ -66,12 +75,14 @@ export function settlementRenown(
   }
   const individuals = residents.reduce((sum, monk) => sum + individualRenown(monk, balance), 0)
   const relicContribution = relics.reduce((sum, relic) => sum + relicRenown(relic, balance), 0)
+  const visits = completedVisits * balance.rules.visitRenown
   return {
+    visits,
     buildings,
     individuals,
     scenery,
     relics: relicContribution,
-    total: buildings + individuals + scenery + relicContribution,
+    total: buildings + individuals + scenery + relicContribution + visits,
   }
 }
 
@@ -158,7 +169,45 @@ export function placementError(
         return "Keep the shrine approach clear."
     }
   }
+  if (def.id === "lumberCamp") {
+    const problem = placementProblem(map, map.buildings, "lumberCamp", at.x, at.z)
+    if (problem) return PLACEMENT_PROBLEM_LABELS[problem]
+  }
+  // Every addition must preserve access to existing lumber yards.
+  if (map.site) {
+    const candidate = { ...def, ...at, id: def.id === "lumberCamp" ? "lumberCamp-preview" : "preview" }
+    const occupied = [...map.buildings, candidate]
+    for (const camp of lumberCamps(map)) {
+      if (!settlementRoute(map, occupied, map.site.door, { x: camp.x, z: camp.z + camp.d }))
+        return "Keep access to lumber camps clear."
+    }
+  }
   return null
+}
+
+export function lumberCamps(map: GameMap): PlacedBuilding[] {
+  return map.buildings.filter((b) => b.buildType === "lumberCamp")
+    .map((b) => ({ ...b, kind: "lumberCamp" }))
+}
+
+export function creditTimber(settlement: Settlement, deliveredWood: number): Settlement {
+  const added = Math.max(0, deliveredWood - settlement.deliveredWood)
+  return added ? { ...settlement, deliveredWood,
+    resources: { ...settlement.resources, wood: settlement.resources.wood + added } } : settlement
+}
+
+/** Remove spent harvest from visible stacks; deliveries remain cumulative for crediting. */
+export function syncTimberSpending(sim: SimState, spentWood: number): void {
+  let remaining = Math.max(0, spentWood - sim.constructionWood)
+  sim.constructionWood = Math.max(sim.constructionWood, spentWood)
+  for (const [id, pile] of sim.piles) {
+    if (!remaining) break
+    const used = Math.min(remaining, pile.wood)
+    remaining -= used
+    if (used === pile.wood) sim.piles.delete(id)
+    else sim.piles.set(id, { ...pile, wood: pile.wood - used })
+    sim.resourceRevision++
+  }
 }
 
 /** The purchase and placement are one transaction; failed builds spend nothing. */
@@ -170,18 +219,19 @@ export function purchaseStructure(
   type: string,
   at: TilePos,
   balance: GameBalance = DEFAULT_BALANCE,
+  completedVisits = 0,
 ): { settlement: Settlement; error: string | null } {
   const def = buildCatalog(balance).find((item) => item.id === type)
   if (!def) return { settlement, error: "Unknown structure." }
   const map = { ...baseMap, buildings: [...baseMap.buildings, ...settlement.structures] }
-  if (settlementRenown(map, residents, relics, balance).total < def.requiredRenown)
+  if (settlementRenown(map, residents, relics, balance, completedVisits).total < def.requiredRenown)
     return { settlement, error: `Requires ${def.requiredRenown} shrine renown.` }
   if (!canAfford(settlement.resources, def.cost))
     return { settlement, error: "Not enough gold or wood." }
   const error = placementError(map, def, at, balance)
   if (error) return { settlement, error }
   const building: BuildingDef = {
-    id: `settlement-${settlement.structures.length}`,
+    id: `${def.id === "lumberCamp" ? "lumberCamp" : "settlement"}-${settlement.structures.length}`,
     buildType: def.id,
     label: def.label,
     x: at.x,
@@ -194,6 +244,8 @@ export function purchaseStructure(
   }
   return {
     settlement: {
+      ...settlement,
+      spentWood: settlement.spentWood + def.cost.wood,
       resources: {
         gold: settlement.resources.gold - def.cost.gold,
         wood: settlement.resources.wood - def.cost.wood,

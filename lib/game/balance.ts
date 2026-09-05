@@ -1,5 +1,5 @@
 /** Pure balance data, shared by gameplay, the tuning page and the specification. */
-export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall"
+export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "lumberCamp"
 
 export interface Resources {
   gold: number
@@ -98,6 +98,13 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     color: "#c6b998",
     roofColor: "#78504b",
   },
+  {
+    id: "lumberCamp", label: "Lumber camp", category: "buildings",
+    description: "Three jobs for settlers. Workers fell nearby trees and deliver spendable wood.",
+    cost: { gold: 60, wood: 45 }, renown: 6, requiredRenown: 0,
+    income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.04,
+    color: "#7a5a3a", roofColor: "#54402c",
+  },
 ]
 
 export const RULE_GROUPS = [
@@ -109,6 +116,11 @@ export const RULE_GROUPS = [
   "Traveler attraction",
 ] as const
 export const RULE_FIELDS = [
+  {
+    key: "visitRenown", group: "Progression", label: "Renown per completed visit",
+    description: "Word of mouth earned by the whole shrine. Applies to all visits in this settlement.",
+    default: 0.5, min: 0, max: 100, step: 0.1,
+  },
   {
     key: "startingGold",
     group: "Treasury & construction",
@@ -325,7 +337,7 @@ export const RULE_FIELDS = [
     key: "turnAsideDraw",
     group: "Traveler attraction",
     label: "Turn-aside draw threshold",
-    description: "Minimum attraction score counted in the shrine’s traffic forecast.",
+    description: "Attraction score giving a rested traveler a 50% visit chance. Need for hospitality can increase it.",
     default: 40,
     min: 0,
     max: 1000,
@@ -428,7 +440,7 @@ export function buildingIncomeLabel(def: BuildDefinition, balance: GameBalance):
   ].filter(Boolean)
   return parts.length
     ? `${parts.join(" · ")} / ${balance.rules.incomeSeconds}s`
-    : "No resource income"
+    : def.id === "lumberCamp" ? "Workers deliver harvested wood" : "No resource income"
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -499,7 +511,15 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
     const preset = record(JSON.parse(json))
     if (preset?.version !== BALANCE_VERSION)
       return { balance: null, error: "Unsupported preset version. Expected version 1." }
-    return validateBalance(preset.balance)
+    // Version 1 presets made before lumber camps keep every existing setting.
+    const saved = record(preset.balance)
+    const rules = record(saved?.rules)
+    const buildings = record(saved?.buildings)
+    return validateBalance(saved && rules && buildings ? {
+      ...saved,
+      rules: { visitRenown: DEFAULT_BALANCE.rules.visitRenown, ...rules },
+      buildings: { lumberCamp: DEFAULT_BALANCE.buildings.lumberCamp, ...buildings },
+    } : preset.balance)
   } catch {
     return { balance: null, error: "This file is not valid JSON." }
   }

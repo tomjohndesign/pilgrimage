@@ -1,10 +1,14 @@
 "use client"
 
-import { Suspense } from "react"
-import { Canvas } from "@react-three/fiber"
+import { Suspense, useMemo } from "react"
+import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
 
 import type { Resources } from "@/lib/game/settlement"
 import type { TilePos } from "@/lib/game/map/types"
+import { deriveSeed, SEED_STREAM } from "@/lib/game/rng"
+import { growTreePlacements } from "@/lib/game/trees/dimensions"
+import { placeTrees } from "@/lib/game/trees/placement"
+import { useTreeTuningStore } from "@/lib/game/trees/tree-tuning-store"
 import type { GameMap } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
@@ -16,6 +20,7 @@ import { Buildings } from "./buildings"
 import { CameraLight } from "./camera-light"
 import { CameraRig } from "./camera-rig"
 import { DebugHandle } from "./debug-handle"
+import { Environment } from "./environment"
 import { Monks } from "./monks"
 import { OutlinePass } from "./outline-pass"
 import { Shrine } from "./shrine"
@@ -39,12 +44,15 @@ export function GameCanvas({
   showGrid = false,
   buildType,
   shrineRenown,
+  baseRenown,
   resources,
   onPlace,
+  ...pixelation
 }: {
   map: GameMap
   buildType: string | null
   shrineRenown: number
+  baseRenown: number
   resources: Resources
   onPlace: (at: TilePos) => void
   relic: Relic
@@ -59,13 +67,16 @@ export function GameCanvas({
   roadLook?: RoadLook
   /** Draw the global tile lattice over the ground. Off by default. */
   showGrid?: boolean
-}) {
+} & PixelationProps) {
+  const species = useTreeTuningStore((s) => s.species)
+  const variance = useTreeTuningStore((s) => s.variance)
+  const trees = useMemo(() => growTreePlacements(placeTrees(map, species),
+    deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes), species, variance), [map, species, variance])
   return (
-    <Canvas
+    <PixelCanvas
+      {...pixelation}
       orthographic
-      dpr={[1, 2]}
-      gl={{ antialias: true }}
-      camera={{ position: [20, 20, 20], near: CAM_NEAR, far: CAM_FAR }}
+      camera={{ manual: true, position: [20, 20, 20], near: CAM_NEAR, far: CAM_FAR }}
     >
       <color attach="background" args={[BACKGROUND]} />
 
@@ -92,16 +103,17 @@ export function GameCanvas({
         />
       </Suspense>
       <Bridges map={map} roadTier={roadTier} />
-      <Trees map={map} />
+      <Trees map={map} placements={trees} />
+      <Environment map={map} />
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />
       <Monks map={map} monks={monks} />
-      <Travelers map={map} travelers={travelers} speed={walkSpeed} />
+      <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown} />
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
 
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <OutlinePass />
-      <DebugHandle map={map} />
-    </Canvas>
+      <DebugHandle map={map} travelers={travelers} speed={walkSpeed} />
+    </PixelCanvas>
   )
 }

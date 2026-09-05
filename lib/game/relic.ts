@@ -122,18 +122,39 @@ export function relicDraw(who: TravelerAttributes, stats: RelicStats, shrineReno
   return (devotion + curiosity - scepticism) * renown
 }
 
-/** Draw at or above this, and a traveler turns aside at the junction. */
-export const TURN_ASIDE_DRAW = DEFAULT_BALANCE.rules.turnAsideDraw
+/**
+ * The draw at which a traveler is as likely as not to turn aside; the chance
+ * runs from nothing at VISIT_DRAW_FLOOR to certain at VISIT_DRAW_CEILING.
+ */
+export const VISIT_DRAW_FLOOR = DEFAULT_BALANCE.rules.turnAsideDraw - 25
+export const VISIT_DRAW_CEILING = DEFAULT_BALANCE.rules.turnAsideDraw + 25
+export const TURN_ASIDE_DRAW = (VISIT_DRAW_FLOOR + VISIT_DRAW_CEILING) / 2
 
-/** Would this traveler leave the road for the relic? */
-export function turnsAside(traveler: Traveler, relic: Relic, shrineRenown: number, balance: GameBalance = DEFAULT_BALANCE): boolean {
-  return relicDraw(traveler.attributes, relic.stats, shrineRenown, balance) >= balance.rules.turnAsideDraw
+/**
+ * The chance, 0–1, that this traveler turns down the branch when they reach
+ * the junction. A chance rather than a threshold so the road's ordinary folk
+ * still wander in now and then, while the devout all but always do. The sim
+ * rolls it (see sim.ts); the HUD's forecast rounds it.
+ */
+export function visitChance(who: TravelerAttributes, stats: RelicStats, shrineRenown = 0, balance: GameBalance = DEFAULT_BALANCE): number {
+  const draw = relicDraw(who, stats, shrineRenown, balance)
+  const devotion = Math.max(0, Math.min(1, (draw - (balance.rules.turnAsideDraw - 25)) / 50))
+  // These are fullness/energy meters: low values mean greater need. Hospitality
+  // is known at the junction even when the relic itself is obscure.
+  const need = Math.min(who.hunger, who.thirst, who.stamina)
+  const hospitality = Math.max(0, Math.min(1, (60 - need) / 40))
+  return Math.max(devotion, hospitality)
+}
+
+/** Would this traveler, more likely than not, leave the road for the relic? */
+export function turnsAside(traveler: Traveler, relic: Relic, shrineRenown = 0, balance: GameBalance = DEFAULT_BALANCE): boolean {
+  return visitChance(traveler.attributes, relic.stats, shrineRenown, balance) >= 0.5
 }
 
 /**
- * The travelers who walk the branch to the relic. A different crowd from the
- * road's, and a smaller one — this is the traffic the track to the hovel
- * wears under, as opposed to the road.
+ * The travelers likely to walk the branch to the relic. A different crowd
+ * from the road's, and a smaller one — this is the traffic the track to the
+ * hovel wears under, as opposed to the road.
  */
 export function relicBound(travelers: readonly Traveler[], relic: Relic, shrineRenown: number, balance: GameBalance = DEFAULT_BALANCE): Traveler[] {
   return travelers.filter((t) => turnsAside(t, relic, shrineRenown, balance))

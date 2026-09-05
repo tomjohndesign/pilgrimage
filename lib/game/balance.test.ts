@@ -53,6 +53,21 @@ describe("balance presets", () => {
     expect(result.balance).not.toBe(DEFAULT_BALANCE)
     expect(result.balance?.buildings.hall).not.toBe(DEFAULT_BALANCE.buildings.hall)
   })
+  it("migrates earlier version 1 presets without losing edits", () => {
+    const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
+    delete old.balance.rules.visitRenown
+    delete old.balance.buildings.lumberCamp
+    old.balance.rules.startingGold = 321
+    old.balance.buildings.shelter.goldCost = 17
+    const result = importBalance(JSON.stringify(old))
+    expect(result.error).toBeNull()
+    expect(result.balance?.rules.startingGold).toBe(321)
+    expect(result.balance?.buildings.shelter.goldCost).toBe(17)
+    expect(result.balance?.rules.visitRenown).toBe(0.5)
+    expect(result.balance?.buildings.lumberCamp).toEqual(DEFAULT_BALANCE.buildings.lumberCamp)
+    old.balance.buildings.lumberCamp = { goldCost: -1 }
+    expect(importBalance(JSON.stringify(old)).balance).toBeNull()
+  })
   it.each([NaN, Infinity, -1, 1.5, 100001, "200", null])(
     "rejects invalid starting supplies: %s",
     (value) => {
@@ -165,6 +180,6 @@ describe("tuned gameplay", () => {
     expect(relicDraw(pilgrim.attributes, relic.stats, 200, balance)).toBeCloseTo(base * 2)
     expect(relicDraw(pilgrim.attributes, relic.stats, 500, balance)).toBeCloseTo(base * 2)
     balance.rules.turnAsideDraw = 1000
-    expect(turnsAside(pilgrim, relic, 200, balance)).toBe(false)
+    expect(turnsAside({ ...pilgrim, attributes: { ...pilgrim.attributes, hunger: 100, thirst: 100, stamina: 100 } }, relic, 200, balance)).toBe(false)
   })
 })

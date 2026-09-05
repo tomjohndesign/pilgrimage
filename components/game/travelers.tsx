@@ -5,6 +5,11 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
+import { useBalanceStore } from "@/lib/game/balance-store"
+import { lumberCamps } from "@/lib/game/settlement"
+import { useBuildStore } from "@/lib/game/build-store"
+import type { Relic } from "@/lib/game/relic"
+import type { TreePlacement } from "@/lib/game/trees/placement"
 import type { GameMap } from "@/lib/game/map/types"
 import { createSim, simRegistry, stepSim } from "@/lib/game/sim"
 import type { Traveler } from "@/lib/game/travelers"
@@ -42,17 +47,34 @@ export function Travelers({
   map,
   travelers,
   speed,
+  relic,
+  trees,
+  shrineRenown,
 }: {
   map: GameMap
   travelers: Traveler[]
+  relic: Relic
+  trees: TreePlacement[]
+  shrineRenown: number
   /** Base walking speed in tiles per second; each traveler's pace scales it. */
   speed: number
 }) {
   const selection = useCameraStore((s) => s.selection)
+  const resourceElapsed = useRef(0)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
 
-  // Building additions share the road; only a new world or cast resets the sim.
-  const sim = useMemo(() => createSim(travelers, map), [travelers, map.road])
+  const sim = useMemo(() => createSim([], map, [], relic.stats), [map.road, relic])
+  useEffect(() => {
+    const fresh = createSim(travelers, map, [], relic.stats)
+    for (const [id, traveler] of fresh.travelers) {
+      if (!sim.travelers.has(id)) sim.travelers.set(id, traveler)
+    }
+    for (const id of sim.travelers.keys()) {
+      if (!fresh.travelers.has(id)) sim.travelers.delete(id)
+    }
+  }, [sim, travelers, map, relic])
+
+  const camps = useMemo(() => lumberCamps(map), [map])
 
   // Publish the running sim so the HUD's traveler panel can poll live stats.
   useEffect(() => {
@@ -64,7 +86,17 @@ export function Travelers({
 
   useFrame((_, delta) => {
     // A background tab hands us a huge delta; clamp so nobody teleports.
+    const build = useBuildStore.getState()
+    sim.buildings = camps
+    sim.shrineRenown = shrineRenown
+    sim.balance = useBalanceStore.getState().balance
+    sim.trees = trees
     stepSim(sim, travelers, map, speed, Math.min(delta, 0.1))
+    resourceElapsed.current += delta
+    if (build.resourceRevision !== sim.resourceRevision || resourceElapsed.current >= 0.25) {
+      build.syncResources(sim, travelers)
+      resourceElapsed.current = 0
+    }
 
     for (let i = 0; i < travelers.length; i++) {
       const group = groupRefs.current[i]
@@ -81,8 +113,12 @@ export function Travelers({
         if (awning) awning.visible = s.activity === "vending"
       }
 
+      const logs = group.getObjectByName("carried-logs")
+      if (logs) logs.visible = s.carrying > 0
       group.position.set(s.x, s.y, s.z)
-      group.scale.y = s.activity === "camping" ? CAMP_SCALE : 1
+      group.scale.y = s.activity === "camping" || s.activity === "visiting" ? CAMP_SCALE : 1
+      if (s.activity === "working") group.rotation.z = Math.sin(sim.time * 1800) * 0.12
+      else group.rotation.z = 0
     }
   })
 
@@ -94,7 +130,7 @@ export function Travelers({
         const selected = isSelected(selection, { kind: "traveler", id: traveler.id })
         const [r, g, b] = encodeObjectId(travelerObjectId(index))
         const select = (event: { delta: number; stopPropagation: () => void }) => {
-          if (event.delta > CLICK_SLOP_PX) return
+          if (event.delta > CLICK_SLOP_PX || useBuildStore.getState().tool) return
           event.stopPropagation()
           useCameraStore.getState().select(selected ? null : { kind: "traveler", id: traveler.id })
         }
@@ -106,6 +142,10 @@ export function Travelers({
             }}
           >
             <TravelerFigure type={traveler.type} onClick={select} />
+            <mesh name="carried-logs" visible={false} position={[0, 0.35, 0.2]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.12, 0.12, 0.6, 6]} />
+              <meshLambertMaterial color="#89613c" />
+            </mesh>
 
             {/* ID silhouettes for the outline pass; inherit the group's motion. */}
             <mesh position={[0, BLOCK_HEIGHT / 2, 0]} layers-mask={OUTLINE_ID_LAYER_MASK}>

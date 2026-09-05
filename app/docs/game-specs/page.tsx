@@ -50,9 +50,10 @@ export default function GameSpecsPage() {
           there is no offline catch-up.
         </p>
         <p className="mt-3">
-          Income currently models offerings and timber as automatic production. It does not debit
-          travelers, require staffed jobs, or fell map trees. There are no wages, upkeep, refunds or
-          demolition yet.
+          Scheduled income models offerings and gathered timber without debiting travelers or requiring
+          jobs. Lumber camps also hire up to three jobless visitors each; their workers fell nearby
+          trees and carry logs home. Each delivered unit enters the shared treasury once, in addition
+          to scheduled income. Construction uses available stacked timber first, then other treasury wood. There are no wages, upkeep, refunds or demolition yet.
         </p>
 
         <h2 className={heading}>Construction</h2>
@@ -72,6 +73,8 @@ export default function GameSpecsPage() {
             clearings, woods, water, roads, tracks and bridges are blocked.
           </li>
           <li>Existing structures, the hovel door and the shrine approach must stay clear.</li>
+          <li>Lumber camps need reachable woods within eight tiles and a clear route from the shrine.
+            Later construction must preserve access to their entrances.</li>
           <li>
             Each successful click places one copy and ends placement mode. Escape or Cancel spends
             nothing. Dragging pans the camera without building.
@@ -80,7 +83,7 @@ export default function GameSpecsPage() {
         <div className="overflow-x-auto">
           <table className={table}>
             <caption className="mb-2 text-left italic">
-              Default catalogue; income is per {r.incomeSeconds}-second payment.
+              Default catalogue; income is per {r.incomeSeconds}-second payment. Lumber-camp harvests are additional.
             </caption>
             <thead>
               <tr>
@@ -122,7 +125,8 @@ export default function GameSpecsPage() {
         <p>
           Renown is a derived total for the entire establishment. It is not spendable and is not
           stored on the relic. Every placed copy contributes, with no diversity bonus or diminishing
-          return. Passing travelers are not residents and do not contribute.
+          return. Passing travelers contribute as residents once recruited by a lumber camp;
+          completed shrine visits also spread word of mouth.
         </p>
         <dl className="my-4 space-y-3">
           <div>
@@ -137,8 +141,7 @@ export default function GameSpecsPage() {
             <dd>
               Sum over the residents: max(minimum, round(piety ÷ piety divisor) + skill count ×
               renown per skill). With defaults: max({r.individualMinimum}, round(piety ÷{" "}
-              {r.pietyDivisor}) + skill count × {r.skillRenown}). Currently these residents are the
-              founding monks.
+              {r.pietyDivisor}) + skill count × {r.skillRenown}). Residents include the founding monks and recruited lumber workers.
             </dd>
           </div>
           <div>
@@ -158,6 +161,11 @@ export default function GameSpecsPage() {
               starts with one relic; the model accepts several.
             </dd>
           </div>
+          <div>
+            <dt className="font-semibold text-ink">Visits</dt>
+            <dd>Each completed visit adds {r.visitRenown} renown through word of mouth.
+              This belongs to the whole shrine and has no relic-based cap.</dd>
+          </div>
         </dl>
         <p>
           Titles progress from Humble shrine at 0, to Sanctuary at {r.sanctuaryRenown}, Pilgrimage
@@ -175,10 +183,13 @@ export default function GameSpecsPage() {
         </p>
         <p className="mt-3">
           Defaults range from ×{r.drawBase} at zero renown to ×{r.drawBase + r.drawBonus} at{" "}
-          {r.drawCap} renown. Scores at or above {r.turnAsideDraw} count in the “Turn aside”
-          forecast and shrine-track wear. This forecast currently does not route simulated travelers
-          down the shrine branch. Higher renown does not yet increase the road’s traveler count or
-          spawn new archetypes.
+          {r.drawCap} renown. A rested traveler has a 50% visit chance at a draw of {r.turnAsideDraw};
+          the chance rises linearly from 0 to 100% across scores {r.turnAsideDraw - 25}–{r.turnAsideDraw + 25}.
+          Hunger, thirst or exhaustion can increase that chance, and available work gives eligible
+          jobless travelers at least an 80% chance. The simulation rolls at the junction and routes
+          visitors to the shrine for food, rest and blessings. The HUD rounds the sum of faith and
+          hospitality chances as its forecast; actual visits also depend on changing needs and jobs.
+          Higher renown does not increase the road’s traveler count or spawn new archetypes.
         </p>
 
         <h2 className={heading}>Tuning while playing</h2>

@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense } from "react"
-import { Canvas } from "@react-three/fiber"
+import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
 
 import { parseAsciiMap } from "@/lib/game/map/prototype-map"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
@@ -34,13 +34,12 @@ const PREVIEW_YAW = yawForView(0)
  * the figure's middle sits at the origin the iso camera studies. Vendors are
  * shown mid-sale, awning up, since that is when the cart is most recognisable.
  */
-export function CharacterPreview({ type }: { type: TravelerTypeDef }) {
+export function CharacterPreview({ type, ...pixelation }: { type: TravelerTypeDef } & PixelationProps) {
   const roadTop = TILE_HEIGHT
   return (
-    <Canvas
+    <PixelCanvas
+      {...pixelation}
       orthographic
-      dpr={[1, 2]}
-      gl={{ antialias: true }}
       camera={{
         position: cameraOffset(PREVIEW_YAW),
         zoom: 110,
@@ -65,6 +64,6 @@ export function CharacterPreview({ type }: { type: TravelerTypeDef }) {
           <TravelerFigure type={type} awning={type.id === "vendor"} />
         </group>
       </group>
-    </Canvas>
+    </PixelCanvas>
   )
 }

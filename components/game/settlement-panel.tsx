@@ -13,7 +13,6 @@ import {
   placementError,
   renownTiers,
   settlementIncome,
-  settlementRenown,
 } from "@/lib/game/settlement"
 
 /** Treasury, establishment-wide progression and the first build catalogue. */
@@ -32,8 +31,8 @@ export function SettlementPanel({
   if (!map || !relic) return null
   const catalog = buildCatalog(balance)
   const tiers = renownTiers(balance)
-  const renown = settlementRenown(map, monks, [relic], balance)
-  const income = settlementIncome(settlement, monks.length, balance)
+  const renown = economy.renown!
+  const income = settlementIncome(settlement, economy.residents.length, balance)
   const tier = [...tiers].reverse().find((t) => renown.total >= t.renown)!
   const next = tiers.find((t) => renown.total < t.renown)
   const selected = catalog.find((item) => item.id === buildType)
@@ -89,12 +88,15 @@ export function SettlementPanel({
           </div>
         ))}
       </div>
+      <p className="mb-2 text-[11px] text-ink-light">
+        {economy.visits} visits · {economy.residents.length - monks.length} settlers · {Math.max(0, map.buildings.filter((b) => b.buildType === "lumberCamp").length * 3 - (economy.residents.length - monks.length))} open jobs
+      </p>
       <details>
         <summary className="cursor-pointer text-xs">
           <span className="font-display">{renown.total} renown</span> · {tier.label}
         </summary>
         <dl className="mt-2 space-y-1 text-[11px]">
-          {(["buildings", "individuals", "scenery", "relics"] as const).map((source) => (
+          {(["buildings", "individuals", "scenery", "relics", "visits"] as const).map((source) => (
             <div key={source} className="flex justify-between">
               <dt className="capitalize">{source}</dt>
               <dd>+{renown[source]}</dd>

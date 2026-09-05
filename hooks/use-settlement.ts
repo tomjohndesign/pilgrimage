@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import type { GameMap, TilePos } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
-import { collectIncome, createSettlement, purchaseStructure } from "@/lib/game/settlement"
+import { useBuildStore } from "@/lib/game/build-store"
+import { collectIncome, createSettlement, purchaseStructure, creditTimber, syncTimberSpending, settlementRenown } from "@/lib/game/settlement"
 
 import { useBalanceStore } from "@/lib/game/balance-store"
 
@@ -13,6 +14,13 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   const balance = useBalanceStore((s) => s.balance)
   const ready = useBalanceStore((s) => s.ready)
   const world = ready ? baseMap : null
+  const simulation = useBuildStore((s) => s.simulation)
+  const wood = useBuildStore((s) => s.wood)
+  const visitCount = useBuildStore((s) => s.visits)
+  const settlers = useBuildStore((s) => s.settlers)
+  const sameWorld = !!world && simulation?.world.road === world.road
+  const visits = sameWorld ? visitCount : 0
+  const residents = useMemo(() => [...monks, ...(sameWorld ? settlers : [])], [monks, sameWorld, settlers])
   const balanceRef = useRef(balance)
   balanceRef.current = balance
   const [session, setSession] = useState(() => ({
@@ -34,6 +42,27 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   )
 
   useEffect(() => {
+    useBuildStore.getState().setTool(session.buildType)
+  }, [session.buildType, world])
+
+  useEffect(() => {
+    if (!sameWorld) return
+    setSession((current) => {
+      if (current.world !== world) return current
+      const settlement = creditTimber(current.settlement, wood)
+      return settlement === current.settlement ? current : { ...current, settlement }
+    })
+  }, [sameWorld, wood, world])
+
+  useEffect(() => {
+    if (sameWorld && simulation) syncTimberSpending(simulation, session.settlement.spentWood)
+  }, [sameWorld, simulation, session.settlement.spentWood])
+
+  const renown = useMemo(() => map && relic
+    ? settlementRenown(map, residents, [relic], balance, visits) : null,
+    [map, residents, relic, balance, visits])
+
+  useEffect(() => {
     if (!world) return
     const timer = setInterval(() => {
       if (document.hidden) return
@@ -41,13 +70,13 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
         current.world === world
           ? {
               ...current,
-              settlement: collectIncome(current.settlement, monks.length, balanceRef.current),
+              settlement: collectIncome(current.settlement, residents.length, balanceRef.current),
             }
           : current,
       )
     }, balance.rules.incomeSeconds * 1000)
     return () => clearInterval(timer)
-  }, [world, monks.length, balance.rules.incomeSeconds])
+  }, [world, residents.length, balance.rules.incomeSeconds])
 
   useEffect(() => {
     const cancel = (event: KeyboardEvent) => {
@@ -66,11 +95,12 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
       const result = purchaseStructure(
         current.settlement,
         baseMap,
-        monks,
+        residents,
         [relic],
         current.buildType,
         at,
         balanceRef.current,
+        visits,
       )
       return {
         ...current,
@@ -83,6 +113,9 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
 
   return {
     map,
+    renown,
+    residents,
+    visits,
     balance,
     settlement: session.settlement,
     buildType: session.buildType,
