@@ -4,6 +4,12 @@
 // the renderer maps it by world position so the surface runs continuously
 // along the road, and any tile boundary can land anywhere in the image.
 //
+// The textures are laid *over* the ground: the renderer draws the grass under
+// every road tile exactly as it does beside it, and composites the surface on
+// top by the texture's alpha. So nothing green is ever painted here — where
+// the ground should show through, the texture is simply transparent, and the
+// real grass (whatever shade the map gives it there) fills the gap seamlessly.
+//
 //   node scripts/generate-road-textures.mjs
 
 import { join, dirname } from "node:path"
@@ -42,33 +48,36 @@ function makeGrain(seed) {
   }
 }
 
+/** `shadePixel` returns [r, g, b] (opaque) or [r, g, b, alpha 0–1]. */
 function render(name, shadePixel) {
   const pixels = new Uint8Array(SIZE * SIZE * 4)
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
-      const [r, g, b] = shadePixel(x, y)
+      const [r, g, b, a = 1] = shadePixel(x, y)
       const i = (y * SIZE + x) * 4
       pixels[i] = clamp01(r / 255) * 255
       pixels[i + 1] = clamp01(g / 255) * 255
       pixels[i + 2] = clamp01(b / 255) * 255
-      pixels[i + 3] = 255
+      pixels[i + 3] = clamp01(a) * 255
     }
   }
   writePng(join(OUT_DIR, `${name}.png`), SIZE, pixels)
 }
 
 // --- Tier 0: trodden trail ---------------------------------------------------
-// Bare packed dirt: warm grain, darker damp hollows, the odd pebble, and a few
-// tufts of grass the traffic hasn't worn away. Only the *bare* surface lives
-// here — the broad patches where grass has reclaimed the trail are world-space
-// noise in the tile shader, blending in grass.png, so they never repeat with
-// the texture.
+// Bare packed dirt: warm grain, darker damp hollows, the odd pebble. Grass is
+// never painted — where a tuft has survived the traffic the texture is a
+// transparent hole, and the dirt thins to nothing along fine worn fringes, so
+// the ground beneath shows through as itself. The broad patches where grass
+// has reclaimed the trail are world-space noise in the tile shader, so they
+// never repeat with the texture.
 {
   const rng = makeRng(SEED)
   const grain = makeGrain(SEED ^ 0x51ed)
   const hollows = { period: 6, lattice: makeLattice(6, makeRng(SEED ^ 0xd1a7)) }
+  const wear = { period: 24, lattice: makeLattice(24, makeRng(SEED ^ 0x3e4d)) }
 
-  const BASE = [186, 156, 110]
+  const BASE = [112, 88, 58]
   const flecks = [] // [x, y, size, kind] — kind 0 pebble, 1 grass tuft
   for (let i = 0; i < 120; i++) {
     flecks.push([
@@ -88,6 +97,11 @@ function render(name, shadePixel) {
 
     let [r, g, b] = [BASE[0] * shade, BASE[1] * shade, BASE[2] * shade]
 
+    // Fine wear: the dirt frays into the ground along small noisy fringes,
+    // so even the bare surface is ragged at the scale of a footstep.
+    const worn = noise2(wear.lattice, wear.period, (x / SIZE) * 24, (y / SIZE) * 24)
+    let alpha = aa(0.3, 0.1, worn)
+
     for (const [fx, fy, size, kind] of flecks) {
       // Wrapped distance so flecks straddling the border stay seamless.
       const dx = Math.min(Math.abs(x - fx), SIZE - Math.abs(x - fx))
@@ -99,14 +113,11 @@ function render(name, shadePixel) {
         g += 40
         b += 34
       } else {
-        // A tuft: a small dark clump, soft at its rim.
-        const t = 0.7 * (1 - d2 / (size * size + 1))
-        r = lerp(r, 96, t)
-        g = lerp(g, 118, t)
-        b = lerp(b, 56, t)
+        // A tuft: a hole in the dirt, soft at its rim, for the grass to fill.
+        alpha *= 1 - 0.9 * (1 - d2 / (size * size + 1))
       }
     }
-    return [r, g, b]
+    return [r, g, b, alpha]
   })
 }
 

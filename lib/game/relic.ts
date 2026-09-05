@@ -1,5 +1,5 @@
 import { deriveSeed, makeRng, SEED_STREAM } from "./rng"
-import type { StatRange } from "./travelers"
+import type { StatRange, Traveler, TravelerAttributes } from "./travelers"
 
 /**
  * The relic: what the monks carried here and what every traveler on the road
@@ -105,6 +105,41 @@ export interface Relic {
 /** Capitalise the first letter for use at the start of a sentence or title. */
 export function relicTitle(relic: Relic): string {
   return relic.name.charAt(0).toUpperCase() + relic.name.slice(1)
+}
+
+/**
+ * How strongly this relic pulls one traveler off the road, 0–100ish. The
+ * devout are drawn by sanctity — sharply, so the truly pious feel it far more
+ * than the merely observant — the idle and curious by spectacle, and the
+ * high-born are put off in proportion to the doubt over it. Renown scales the
+ * whole, since few turn aside for a relic they've barely heard of; as word
+ * spreads, the same relic draws a wider crowd. See the module note for what
+ * each stat means.
+ */
+export function relicDraw(who: TravelerAttributes, stats: RelicStats): number {
+  const piety = who.piety / 100
+  const devotion = stats.sanctity * piety * piety
+  const curiosity = stats.spectacle * (1 - piety) * 0.8
+  const scepticism = who.status * (stats.doubt / 100) * 0.4
+  const renown = 0.75 + (stats.renown / 100) * 0.5
+  return (devotion + curiosity - scepticism) * renown
+}
+
+/** Draw at or above this, and a traveler turns aside at the junction. */
+export const TURN_ASIDE_DRAW = 40
+
+/** Would this traveler leave the road for the relic? */
+export function turnsAside(traveler: Traveler, relic: Relic): boolean {
+  return relicDraw(traveler.attributes, relic.stats) >= TURN_ASIDE_DRAW
+}
+
+/**
+ * The travelers who walk the branch to the relic. A different crowd from the
+ * road's, and a smaller one — this is the traffic the track to the hovel
+ * wears under, as opposed to the road.
+ */
+export function relicBound(travelers: readonly Traveler[], relic: Relic): Traveler[] {
+  return travelers.filter((t) => turnsAside(t, relic))
 }
 
 export function generateRelic(seed: number): Relic {
