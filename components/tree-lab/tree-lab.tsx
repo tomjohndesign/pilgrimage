@@ -360,10 +360,30 @@ function SpeciesEditor({ def }: { def: TreeSpeciesDef }) {
             format={(v) => `${v} tiles`}
             onChange={(groveSize) => habitat({ groveSize })}
           />
+          <Slider
+            label="Footprint"
+            value={def.habitat.footprint}
+            min={0.1}
+            max={0.8}
+            step={0.05}
+            format={(v) => `${v.toFixed(2)} tiles`}
+            onChange={(footprint) => habitat({ footprint })}
+          />
+          <Slider
+            label="Per tile"
+            value={def.habitat.perTile}
+            min={1}
+            max={3}
+            step={1}
+            format={(v) => (v === 1 ? "1 tree" : `${v} trees`)}
+            onChange={(perTile) => habitat({ perTile })}
+          />
           <p className="mt-3 text-[12px] text-ink-light">
             Abundance is the species&apos; share of the forest; edge bias pulls it toward tiles
             that border open ground (positive) or away from them (negative). Grouping keeps the
-            species to groves of about the given size, with mixing along their seams.
+            species to groves of about the given size, with mixing along their seams. Footprint
+            is the ground a trunk claims — no other trunk stands closer — and per tile caps how
+            many of the species one tile can hold.
           </p>
         </div>
       </div>

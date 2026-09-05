@@ -40,7 +40,19 @@ describe("tree species table", () => {
       expect(def.habitat.grouping).toBeGreaterThanOrEqual(0)
       expect(def.habitat.grouping).toBeLessThanOrEqual(1)
       expect(def.habitat.groveSize).toBeGreaterThanOrEqual(1)
+      expect(def.habitat.footprint).toBeGreaterThan(0)
+      expect(Number.isInteger(def.habitat.perTile)).toBe(true)
+      expect(def.habitat.perTile).toBeGreaterThanOrEqual(1)
     }
+  })
+
+  it("gives the big crowns a tile to themselves and lets scrub crowd in", () => {
+    expect(TREE_SPECIES.oak.habitat.perTile).toBe(1)
+    expect(TREE_SPECIES.beech.habitat.perTile).toBe(1)
+    expect(TREE_SPECIES.birch.habitat.perTile).toBeGreaterThan(1)
+    expect(TREE_SPECIES.hawthorn.habitat.perTile).toBeGreaterThan(1)
+    expect(TREE_SPECIES.oak.habitat.footprint).toBeGreaterThan(TREE_SPECIES.birch.habitat.footprint)
+    expect(TREE_SPECIES.beech.habitat.footprint).toBeGreaterThan(TREE_SPECIES.hawthorn.habitat.footprint)
   })
 
   it("clones deeply so tuning never touches the defaults", () => {
