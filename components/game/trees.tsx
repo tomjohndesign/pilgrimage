@@ -4,8 +4,8 @@ import { useEffect, useLayoutEffect, useMemo } from "react"
 import * as THREE from "three"
 
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
-import { computeForestShade } from "@/lib/game/map/forest-field"
-import { TILE_HEIGHT } from "@/lib/game/map/terrain"
+import { computeDarkShade, computeForestShade } from "@/lib/game/map/forest-field"
+import { isWoods, TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import {
   encodeObjectId,
@@ -34,7 +34,10 @@ import { useTreeTuningStore } from "@/lib/game/trees/tree-tuning-store"
  *    seeded coin flip that only lands on 2 deep in the woods — and the stand
  *    fades at its rim: the outermost trees are a little shorter and lighter,
  *    following the forest-shade field the ground colour also reads, so the
- *    woods taper into grassland instead of stopping at a wall.
+ *    woods taper into grassland instead of stopping at a wall. Dark forest is
+ *    the one exception to the 1–2 rule: old growth holds 2 or 3 trees, taller
+ *    and darker, and the dark-shade field feathers that into the woods around
+ *    it so the heart of a forest never has a hard rim.
  *  - `TreeField` grows each placement into a `TreeShape` and renders them. The
  *    lab on /assets/textures uses it directly to line up trees of one species.
  *
@@ -64,6 +67,11 @@ const EDGE_SIZE_SCALE = 0.7
 /** Chance of a second tree at the very heart of the woods; fades to 0 at the rim. */
 const SECOND_TREE_CHANCE = 0.5
 
+/** Old growth stands this much taller than the woods around it, at full dark shade. */
+const DARK_HEIGHT_SCALE = 1.45
+/** And this much darker. */
+const DARK_BRIGHTNESS = 0.6
+
 /** Trunks sink slightly into the ground so a lean never exposes a gap. */
 const TRUNK_SINK = 0.04
 
@@ -86,7 +94,7 @@ function makeCrownGeometry(shape: TreeSpeciesDef["crown"]["shape"]): THREE.Buffe
     : new THREE.IcosahedronGeometry(1, BLOB_DETAIL)
 }
 
-/** Forest tiles that touch open ground; the map edge does not count. */
+/** Woods tiles that touch open ground; the map edge does not count. */
 function isForestEdge(map: GameMap, x: number, z: number): boolean {
   for (const [dx, dz] of [
     [1, 0],
@@ -95,7 +103,7 @@ function isForestEdge(map: GameMap, x: number, z: number): boolean {
     [0, -1],
   ]) {
     const neighbour = tileAt(map, x + dx, z + dz)
-    if (neighbour !== null && neighbour !== "forest") return true
+    if (neighbour !== null && !isWoods(neighbour)) return true
   }
   return false
 }
@@ -106,6 +114,7 @@ export function Trees({ map }: { map: GameMap }) {
   const placements = useMemo<TreePlacement[]>(() => {
     const seed = map.seed ?? 0
     const shade = computeForestShade(map)
+    const darkShade = computeDarkShade(map)
     // Counts get their own stream so species and jitter (from the `trees`
     // stream) stay independent of the coin flips.
     const rngCount = makeRng(deriveSeed(seed, SEED_STREAM.treeCount))
@@ -116,9 +125,16 @@ export function Trees({ map }: { map: GameMap }) {
     for (let z = 0; z < map.depth; z++) {
       for (let x = 0; x < map.width; x++) {
         const index = z * map.width + x
-        if (map.tiles[index] !== "forest") continue
+        if (!isWoods(map.tiles[index])) continue
         const depth = shade[index]
-        const count = 1 + (rngCount() < SECOND_TREE_CHANCE * depth ? 1 : 0)
+        const dark = darkShade[index]
+        const oldGrowth = map.tiles[index] === "darkwood"
+        // One coin flip per woods tile, dark or not, so ordinary forest draws
+        // exactly what it did before dark forest existed.
+        const flip = rngCount()
+        const count = oldGrowth
+          ? 2 + (flip < SECOND_TREE_CHANCE * dark ? 1 : 0)
+          : 1 + (flip < SECOND_TREE_CHANCE * depth ? 1 : 0)
         const site = { x, z, onEdge: isForestEdge(map, x, z), seed }
         for (let t = 0; t < count; t++) {
           const id = pickSpecies(species, site, rng)
@@ -127,9 +143,12 @@ export function Trees({ map }: { map: GameMap }) {
             y: TILE_HEIGHT,
             z: tileToWorldZ(map, z) + (rng() - 0.5) * scatter,
             species: id,
-            scale: EDGE_SIZE_SCALE + (1 - EDGE_SIZE_SCALE) * depth,
-            // Edge growth reads younger and sunlit — a touch lighter than the core.
-            brightness: 1.1 - 0.15 * depth,
+            scale:
+              (EDGE_SIZE_SCALE + (1 - EDGE_SIZE_SCALE) * depth) *
+              (1 + (DARK_HEIGHT_SCALE - 1) * dark),
+            // Edge growth reads younger and sunlit — a touch lighter than the
+            // core; old growth darker still, feathered by the dark shade.
+            brightness: (1.1 - 0.15 * depth) * (1 - (1 - DARK_BRIGHTNESS) * dark),
           })
         }
       }

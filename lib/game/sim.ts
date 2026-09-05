@@ -1,3 +1,4 @@
+import { computeDangerField, encounterChance, type ThreatSource } from "./map/danger"
 import { TILE_HEIGHT } from "./map/terrain"
 import {
   tileAt,
@@ -7,6 +8,7 @@ import {
   worldToTileZ,
   type GameMap,
 } from "./map/types"
+import { holdsNerve, takesTrack, type RouteState } from "./route-choice"
 import type { Traveler } from "./travelers"
 
 /**
@@ -26,11 +28,19 @@ import type { Traveler } from "./travelers"
  *    wine refills thirst and some stamina. Gold changes hands.
  *  - Vendors walk a stretch, then pull the cart off to the side of the path and
  *    keep shop for a few hours before moving on. They eat their own stock free.
+ *  - Danger (see map/danger.ts) is met tile by tile: each new tile rolls for
+ *    trouble against its danger, and trouble rolls against the traveler's
+ *    nerve. Lose it and they turn back — direction flips and they hurry the
+ *    way they came for a while. At the mouth of a track through the dark
+ *    forest, who they are decides whether they take it (see route-choice.ts).
+ *    Dice are hashed from (id, roll count), so no RNG plumbing is needed and
+ *    every journey replays identically.
  */
 
 export type Activity =
   | "walking"
   | "seeking"
+  | "fleeing"
   | "toCamp"
   | "camping"
   | "fromCamp"
@@ -41,6 +51,7 @@ export type Activity =
 export const ACTIVITY_LABELS: Record<Activity, string> = {
   walking: "On the road",
   seeking: "Seeking food & drink",
+  fleeing: "Turned back",
   toCamp: "Making camp",
   camping: "Camping",
   fromCamp: "Breaking camp",
@@ -92,6 +103,9 @@ const CAMP_JOIN_RADIUS = 10
 const CAMP_SEARCH_RADIUS = 6
 /** The hungry hurry: pace multiplier while chasing a vendor. */
 const SEEK_HASTE = 1.25
+/** The spooked hurry too, and for this many game hours before settling. */
+const FLEE_HASTE = 1.35
+const FLEE_HOURS = 2
 
 /**
  * A vendor's rhythm in game hours: walk a stretch, then park off the path and
@@ -107,6 +121,19 @@ function vendShopSeconds(id: number, cycle: number): number {
   return (2.5 + ((id * 13 + cycle * 7) % 4)) * GAME_HOUR_SECONDS
 }
 
+/**
+ * Deterministic dice: the n-th roll for traveler `id`, in [0, 1). Hashed for
+ * the same reason as the vendor timers — no RNG plumbing, and any roll can be
+ * replayed from (id, n) alone.
+ */
+function roll(id: number, n: number): number {
+  let h = Math.imul(id + 1, 0x9e3779b1) ^ Math.imul(n + 1, 0x85ebca6b)
+  h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d)
+  h = Math.imul(h ^ (h >>> 12), 0x297a2d39)
+  h ^= h >>> 15
+  return (h >>> 0) / 4294967296
+}
+
 export interface SimTraveler {
   id: number
   activity: Activity
@@ -120,6 +147,23 @@ export interface SimTraveler {
   z: number
   /** Distance along the road in tiles; authoritative whenever on the road. */
   progress: number
+  /**
+   * +1 walks west to east, -1 east to west. Starts as the traveler's own and
+   * flips whenever they turn back from trouble.
+   */
+  direction: 1 | -1
+  /**
+   * On a track through the dark forest: which shortcut and how far along it,
+   * in tiles from its entry end. Null while on the road. `progress` holds the
+   * road position they left from until they rejoin.
+   */
+  track: { index: number; progress: number } | null
+  /** Times they have turned back from trouble. */
+  fled: number
+  /** How many dice they have rolled; feeds the deterministic hash. */
+  rolls: number
+  /** Seconds left of hurrying after turning back. */
+  fleeTimer: number
   /** Off-road walk endpoints and 0–1 progress between them. */
   walkFrom: { x: number; y: number; z: number } | null
   /** The off-road pitch — a camp or a stall, depending on activity. */
@@ -137,6 +181,8 @@ export interface SimState {
   travelers: Map<number, SimTraveler>
   /** Game time in days since the sim began (fractional). */
   time: number
+  /** Danger per tile, indexed like the map's tiles; what encounters roll against. */
+  danger: Float64Array
 }
 
 /**
@@ -147,21 +193,43 @@ export interface SimState {
  */
 export const simRegistry: { current: SimState | null } = { current: null }
 
-function roadWorldPoint(map: GameMap, p: number): { x: number; z: number } {
-  const road = map.road!
-  const i0 = Math.max(0, Math.min(Math.floor(p), road.length - 2))
+/** World point `p` tiles along an ordered walk of tiles, interpolated. */
+function routeWorldPoint(
+  map: GameMap,
+  route: ReadonlyArray<{ x: number; z: number }>,
+  p: number,
+): { x: number; z: number } {
+  const i0 = Math.max(0, Math.min(Math.floor(p), route.length - 2))
   const frac = p - i0
-  const ax = tileToWorldX(map, road[i0].x)
-  const az = tileToWorldZ(map, road[i0].z)
-  const bx = tileToWorldX(map, road[i0 + 1].x)
-  const bz = tileToWorldZ(map, road[i0 + 1].z)
+  const ax = tileToWorldX(map, route[i0].x)
+  const az = tileToWorldZ(map, route[i0].z)
+  const bx = tileToWorldX(map, route[i0 + 1].x)
+  const bz = tileToWorldZ(map, route[i0 + 1].z)
   return { x: ax + (bx - ax) * frac, z: az + (bz - az) * frac }
+}
+
+function roadWorldPoint(map: GameMap, p: number): { x: number; z: number } {
+  return routeWorldPoint(map, map.road!, p)
+}
+
+/** Where on their route — road or track — the traveler currently belongs. */
+function currentRoutePoint(map: GameMap, s: SimTraveler): { x: number; z: number } {
+  if (s.track) return routeWorldPoint(map, map.shortcuts![s.track.index].tiles, s.track.progress)
+  return roadWorldPoint(map, s.progress)
 }
 
 const ROAD_Y = TILE_HEIGHT
 
-export function createSim(travelers: Traveler[], map: GameMap): SimState {
-  const sim: SimState = { travelers: new Map(), time: START_TIME }
+export function createSim(
+  travelers: Traveler[],
+  map: GameMap,
+  threats: ThreatSource[] = [],
+): SimState {
+  const sim: SimState = {
+    travelers: new Map(),
+    time: START_TIME,
+    danger: computeDangerField(map, threats),
+  }
   if (!map.road || map.road.length < 2) return sim
   const length = map.road.length - 1
   for (const t of travelers) {
@@ -178,6 +246,11 @@ export function createSim(travelers: Traveler[], map: GameMap): SimState {
       y: ROAD_Y,
       z: at.z,
       progress,
+      direction: t.direction,
+      track: null,
+      fled: 0,
+      rolls: 0,
+      fleeTimer: 0,
       walkFrom: null,
       spot: null,
       walkT: 0,
@@ -295,6 +368,36 @@ function stepOffRoadWalk(
   return s.walkT >= 1
 }
 
+function routeState(t: Traveler, s: SimTraveler): RouteState {
+  return { type: t.type.id, piety: t.attributes.piety, stamina: s.stamina }
+}
+
+function nextRoll(s: SimTraveler): number {
+  return roll(s.id, s.rolls++)
+}
+
+/**
+ * Arriving on a new tile: roll for trouble against its danger, and on trouble
+ * roll against nerve. Lose it and they turn back the way they came.
+ */
+function meetTrouble(
+  sim: SimState,
+  s: SimTraveler,
+  t: Traveler,
+  map: GameMap,
+  tile: { x: number; z: number },
+): void {
+  const danger = sim.danger[tile.z * map.width + tile.x]
+  if (danger <= 0) return
+  if (nextRoll(s) >= encounterChance(danger)) return
+  if (holdsNerve(routeState(t, s), nextRoll(s))) return
+  s.direction = s.direction === 1 ? -1 : 1
+  s.fled++
+  s.activity = "fleeing"
+  s.fleeTimer = FLEE_HOURS * GAME_HOUR_SECONDS
+  s.targetId = null
+}
+
 function pay(buyer: SimTraveler, vendor: SimTraveler, price: number): void {
   // The penniless still get served — nobody starves on the road for now.
   const paid = Math.min(price, buyer.gold)
@@ -343,11 +446,16 @@ export function stepSim(
 
     switch (s.activity) {
       case "walking":
-      case "seeking": {
+      case "seeking":
+      case "fleeing": {
         // Exhaustion trumps everything: an empty stomach walks, empty legs don't.
         if (s.stamina <= 0) {
           startCamping(sim, s, t, map)
           break
+        }
+        if (s.activity === "fleeing") {
+          s.fleeTimer -= dt
+          if (s.fleeTimer <= 0) s.activity = "walking"
         }
         // A vendor whose walking stint is up pulls off to the side of the path.
         if (isVendor) {
@@ -358,13 +466,15 @@ export function stepSim(
             break
           }
         }
-        if (s.activity === "walking" && !isVendor && (s.hunger <= 0 || s.thirst <= 0)) {
+        // Nobody goes shopping from the middle of the dark forest: on a track
+        // they trudge on hungry until they rejoin the road.
+        if (s.activity === "walking" && !isVendor && !s.track && (s.hunger <= 0 || s.thirst <= 0)) {
           s.activity = "seeking"
           s.targetId = null
         }
 
-        let direction = t.direction
-        let haste = 1
+        let direction = s.direction
+        let haste = s.activity === "fleeing" ? FLEE_HASTE : 1
         if (s.activity === "seeking") {
           // (Re)acquire the nearest vendor who isn't off camping somewhere.
           const vendor = travelers
@@ -401,14 +511,53 @@ export function stepSim(
           }
         }
 
+        if (s.track) {
+          // On a track: walk it to the far end, then rejoin the road there.
+          const track = map.shortcuts![s.track.index]
+          const last = track.tiles.length - 1
+          const before = Math.floor(s.track.progress)
+          const next = s.track.progress + direction * worldSpeed * haste * dt
+          if (next >= last || next <= 0) {
+            s.progress = direction === 1 ? track.exit : track.entry
+            s.track = null
+          } else {
+            s.track.progress = next
+            const tile = Math.floor(next)
+            if (tile !== before && s.activity === "walking") {
+              meetTrouble(sim, s, t, map, track.tiles[tile])
+            }
+          }
+          const at = currentRoutePoint(map, s)
+          s.x = at.x
+          s.y = ROAD_Y
+          s.z = at.z
+          break
+        }
+
         const next = s.progress + direction * worldSpeed * haste * dt
         // Walkers wrap at the map edges (leave east, arrive west); seekers
         // clamp — their target is on the road, never beyond it.
+        const before = Math.floor(s.progress)
         s.progress =
           s.activity === "seeking"
             ? Math.max(0, Math.min(length, next))
             : ((next % length) + length) % length
-        const at = roadWorldPoint(map, s.progress)
+        const after = Math.floor(s.progress)
+        if (after !== before && s.activity === "walking") {
+          // A new road tile: a track mouth to consider, or trouble to meet.
+          const mouth = (map.shortcuts ?? []).findIndex(
+            (sc) => (direction === 1 ? sc.entry : sc.exit) === after,
+          )
+          if (mouth >= 0 && takesTrack(routeState(t, s), nextRoll(s))) {
+            s.track = {
+              index: mouth,
+              progress: direction === 1 ? 0 : map.shortcuts![mouth].tiles.length - 1,
+            }
+          } else {
+            meetTrouble(sim, s, t, map, map.road[after])
+          }
+        }
+        const at = currentRoutePoint(map, s)
         s.x = at.x
         s.y = ROAD_Y
         s.z = at.z
@@ -439,7 +588,7 @@ export function stepSim(
       }
 
       case "fromShop": {
-        const back = roadWorldPoint(map, s.progress)
+        const back = currentRoutePoint(map, s)
         if (stepOffRoadWalk(s, { x: back.x, y: ROAD_Y, z: back.z }, worldSpeed, dt)) {
           s.activity = "walking"
           s.spot = null
@@ -460,7 +609,7 @@ export function stepSim(
       }
 
       case "fromCamp": {
-        const back = roadWorldPoint(map, s.progress)
+        const back = currentRoutePoint(map, s)
         if (stepOffRoadWalk(s, { x: back.x, y: ROAD_Y, z: back.z }, worldSpeed, dt)) {
           s.activity = "walking"
           s.spot = null
