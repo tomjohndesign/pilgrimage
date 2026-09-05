@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
+import { shorelineCorners } from "@/lib/game/map/shoreline"
+import { SHORELINE_SHAPE_GLSL } from "@/lib/game/render/shoreline-shape"
 import { waterfallTurbulence } from "@/lib/game/map/waterfall-turbulence"
 import { DEFAULT_ELEVATION } from "@/lib/game/map/elevation"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -12,10 +14,10 @@ import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 export function WaterMotion({ map }: { map: GameMap }) {
   const material = useRef<THREE.ShaderMaterial>(null)
   const geometry = useMemo(() => {
-    const positions: number[] = [], uv: number[] = [], falling: number[] = [], turbulence: number[] = []
+    const positions: number[] = [], uv: number[] = [], falling: number[] = [], turbulence: number[] = [], shores: number[] = []
     const field = waterfallTurbulence(map.water, map.tiles.length, map.elevation?.settings.turbulenceReach ?? DEFAULT_ELEVATION.turbulenceReach)
-    const quad = (a: number[], b: number[], c: number[], d: number[], fall = 0, current = [0, 0, 0]) => {
-      for (const p of [a, b, c, c, b, d]) { positions.push(...p); falling.push(fall); turbulence.push(...current) }
+    const quad = (a: number[], b: number[], c: number[], d: number[], fall = 0, current = [0, 0, 0], shore = [0, 0, 0, 0]) => {
+      for (const p of [a, b, c, c, b, d]) { positions.push(...p); falling.push(fall); turbulence.push(...current); shores.push(...shore) }
       uv.push(0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1)
     }
     const water = map.water
@@ -24,7 +26,7 @@ export function WaterMotion({ map }: { map: GameMap }) {
       const x = tileToWorldX(map, i % map.width), z = tileToWorldZ(map, Math.floor(i / map.width))
       const y = TILE_HEIGHT + (water?.surface?.[i] ?? 0) + 0.012
       // Full tile coverage lets the shader's noise cross boundaries without a repeated border.
-      quad([x - 0.5, y, z - 0.5], [x + 0.5, y, z - 0.5], [x - 0.5, y, z + 0.5], [x + 0.5, y, z + 0.5], 0, Array.from(field.subarray(i * 3, i * 3 + 3)))
+      quad([x - 0.5, y, z - 0.5], [x + 0.5, y, z - 0.5], [x - 0.5, y, z + 0.5], [x + 0.5, y, z + 0.5], 0, Array.from(field.subarray(i * 3, i * 3 + 3)), shorelineCorners(map, i % map.width, Math.floor(i / map.width)))
       const n = water?.downstream?.[i] ?? -1
       if (water?.motion?.[i] !== "waterfall" || n < 0 || !water.surface || !water.flow[i]) continue
       const [dx, dz] = water.flow[i], low = TILE_HEIGHT + water.surface[n] + 0.015
@@ -35,6 +37,7 @@ export function WaterMotion({ map }: { map: GameMap }) {
     g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
     g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2))
     g.setAttribute("aTurbulence", new THREE.Float32BufferAttribute(turbulence, 3))
+    g.setAttribute("aShoreCorners", new THREE.Float32BufferAttribute(shores, 4))
     g.setAttribute("aFall", new THREE.Float32BufferAttribute(falling, 1))
     return g
   }, [map])
@@ -51,10 +54,11 @@ export function WaterMotion({ map }: { map: GameMap }) {
   useFrame((_, dt) => { if (material.current) material.current.uniforms.time.value += Math.min(dt, 0.1) })
   return <mesh name="water-shimmer" geometry={geometry} frustumCulled={false}>
     <shaderMaterial ref={material} uniforms={uniforms} transparent depthWrite={false} side={THREE.DoubleSide}
-      vertexShader={`attribute float aFall; attribute vec3 aTurbulence; varying vec3 vTurbulence; varying float vFall; varying vec2 vUv; varying vec2 vWorld;
-        void main() { vFall = aFall; vTurbulence = aTurbulence; vUv = uv; vWorld = position.xz;
+      vertexShader={`attribute vec4 aShoreCorners; varying vec4 vShoreCorners; attribute float aFall; attribute vec3 aTurbulence; varying vec3 vTurbulence; varying float vFall; varying vec2 vUv; varying vec2 vWorld;
+        void main() { vShoreCorners = aShoreCorners; vFall = aFall; vTurbulence = aTurbulence; vUv = uv; vWorld = position.xz;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`}
-      fragmentShader={`uniform float time, seed, strength, coverage, groupSize, speed, foam, turbulenceStrength, currentSpeed;
+      fragmentShader={`varying vec4 vShoreCorners; ${SHORELINE_SHAPE_GLSL}
+        uniform float time, seed, strength, coverage, groupSize, speed, foam, turbulenceStrength, currentSpeed;
         varying vec3 vTurbulence; varying float vFall; varying vec2 vUv; varying vec2 vWorld;
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7)) + seed) * 43758.5453); }
         float noise(vec2 p) {
@@ -63,6 +67,7 @@ export function WaterMotion({ map }: { map: GameMap }) {
             mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
         }
         void main() {
+          if (vFall < 0.5 && shorelineInset(vUv, vShoreCorners) > 0.0) discard;
           float t = time * speed;
           vec2 patchPos = vWorld / groupSize + vec2(seed, seed * 0.31);
           float patches = noise(patchPos + vec2(sin(t * 0.07), cos(t * 0.09)) * 0.2);

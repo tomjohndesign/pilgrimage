@@ -1,6 +1,8 @@
 /**
  * Road coverage in tile-local XZ. Opposite entrances share a straight track;
  * adjacent entrances share a radius-0.5 arc tangent to both tile boundaries.
+ * Alternating bends straighten into diagonals, transitioning back to arcs
+ * at their ends so the shared entrances remain continuous.
  * Taking the union of each track's ruts lets wheels wear through the grass
  * median when paths cross, without drawing an edge through the junction.
  * Junctions have a worn apron and rounded shoulders extending onto grass.
@@ -43,20 +45,57 @@ export const ROAD_SHAPE_GLSL = /* glsl */ `
     return max(shape, roadShoulder(p, vec2(0.0, 0.0), corners.w, edge, roughness));
   }
 
-  vec2 roadShape(vec2 p, vec4 connected, vec4 filledCorners, float edge, float inner, float roughness) {
+  uniform sampler2D roadSegments;
+  uniform vec2 roadSegmentTextureSize;
+
+  vec4 roadSegmentTexel(float index) {
+    vec2 uv = (vec2(mod(index, roadSegmentTextureSize.x), floor(index / roadSegmentTextureSize.x)) + 0.5) / roadSegmentTextureSize;
+    return texture2D(roadSegments, uv);
+  }
+
+  vec2 diagonalRoadShape(vec2 p, vec2 range, float edgeNoise, float targetEdge, float roughness) {
+    vec2 distanceToTrack = vec2(100.0);
+    vec2 mainWear = vec2(0.0);
+    vec2 trackWear = vec2(0.0);
+    for (int segment = 0; segment < int(range.y); segment++) {
+      float index = range.x + float(segment) * 2.0;
+      vec4 endpoints = roadSegmentTexel(index);
+      vec4 wear = roadSegmentTexel(index + 1.0);
+      vec2 along = endpoints.zw - endpoints.xy;
+      float t = clamp(dot(p - endpoints.xy, along) / max(dot(along, along), 0.000001), 0.0, 1.0);
+      float distance = length(p - endpoints.xy - along * t);
+      if (wear.z < 0.5) {
+        distanceToTrack.x = min(distanceToTrack.x, distance);
+        mainWear = wear.xy;
+      } else {
+        distanceToTrack.y = min(distanceToTrack.y, distance);
+        trackWear = wear.xy;
+      }
+    }
+    // Union centreline distances before drawing ruts; overlapping caps must
+    // not draw rings through the median. Overflow keeps its source traffic.
+    vec2 main = roadStrip(distanceToTrack.x, mainWear.x + edgeNoise, mainWear.y, roughness);
+    vec2 track = roadStrip(distanceToTrack.y, trackWear.x + edgeNoise, trackWear.y, roughness);
+    // Express both boundaries relative to the receiving tile's edge value,
+    // so its outline follows the source wear too, including on grass tiles.
+    return vec2(max(main.x, track.x),
+      max(main.y - mainWear.x - edgeNoise, track.y - trackWear.x - edgeNoise) + targetEdge);
+  }
+
+  vec2 roadShape(vec2 p, vec4 connected, vec4 diagonal, vec4 filledCorners, float edge, float inner, float roughness) {
     vec3 shape = vec3(0.0, -1.0, -1.0);
     if (connected.x * connected.y > 0.5)
       shape = addRoadStrip(shape, roadStrip(abs(p.y - 0.5), edge, inner, roughness));
     if (connected.z * connected.w > 0.5)
       shape = addRoadStrip(shape, roadStrip(abs(p.x - 0.5), edge, inner, roughness));
-    if (connected.x * connected.z > 0.5)
+    if (connected.x * connected.z > 0.5 && diagonal.x + diagonal.z < 0.5)
       shape = addRoadStrip(shape, roadStrip(abs(length(p - vec2(1.0, 1.0)) - 0.5), edge, inner, roughness));
-    if (connected.x * connected.w > 0.5)
+    if (connected.x * connected.w > 0.5 && diagonal.x + diagonal.w < 0.5)
       shape = addRoadStrip(shape, roadStrip(abs(length(p - vec2(1.0, 0.0)) - 0.5), edge, inner, roughness));
-    if (connected.y * connected.z > 0.5)
+    if (connected.y * connected.z > 0.5 && diagonal.y + diagonal.z < 0.5)
       shape = addRoadStrip(shape, roadStrip(abs(length(p - vec2(0.0, 1.0)) - 0.5), edge, inner, roughness));
-    if (connected.y * connected.w > 0.5)
-      shape = addRoadStrip(shape, roadStrip(abs(length(p) - 0.5), edge, inner, roughness));
+    if (connected.y * connected.w > 0.5 && diagonal.y + diagonal.w < 0.5)
+      shape = addRoadStrip(shape, roadStrip(abs(length(p - vec2(0.0)) - 0.5), edge, inner, roughness));
 
     float entrances = dot(connected, vec4(1.0));
     if (entrances > 2.5) {

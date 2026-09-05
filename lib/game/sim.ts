@@ -8,6 +8,7 @@ import type { TreePlacement } from "./trees/placement"
 import type { TilePos } from "./map/types"
 import { computeDangerField, encounterChance, type ThreatSource } from "./map/danger"
 import { surfaceHeight, ropeHeightAt } from "./map/bridges"
+import { diagonalRoadPoint } from "./map/road"
 import {
   tileAt,
   tileToWorldX,
@@ -258,6 +259,7 @@ export const simRegistry: { current: SimState | null } = { current: null }
  * continuous. On our 4-connected routes the offset stays inside the tile.
  */
 function laneVertex(
+  map: GameMap,
   route: ReadonlyArray<{ x: number; z: number }>,
   i: number,
   lane: number,
@@ -273,7 +275,8 @@ function laneVertex(
   // A doubled-back vertex has no intersection; keep its outgoing normal.
   const nx = divisor > 0 ? (inZ + outZ) / divisor : outZ
   const nz = divisor > 0 ? -(inX + outX) / divisor : -outX
-  return { x: p.x + nx * lane, z: p.z + nz * lane }
+  const centre = diagonalRoadPoint(map, p.x, p.z)
+  return { x: centre.x + nx * lane * centre.laneScale, z: centre.z + nz * lane * centre.laneScale }
 }
 
 interface WorldPoint {
@@ -304,9 +307,9 @@ function routeWorldPoint(
   const vertex = (i: number) => {
     // Tracks meet the same lane point as the road at both junctions.
     if (junctions && (i === 0 || i === route.length - 1)) {
-      return laneVertex(map.road!, i === 0 ? junctions.entry : junctions.exit, lane)
+      return laneVertex(map, map.road!, i === 0 ? junctions.entry : junctions.exit, lane)
     }
-    return laneVertex(route, i, lane)
+    return laneVertex(map, route, i, lane)
   }
   const a = vertex(i0)
   const b = vertex(i0 + 1)
