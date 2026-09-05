@@ -1,24 +1,30 @@
 "use client"
 
+import { buildingAt } from "@/lib/game/settlement"
 import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { useSimulationStore } from "@/lib/game/simulation-store"
-import { useBuildStore } from "@/lib/game/build-store"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
+import { selectElement } from "@/lib/game/selection"
+import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
 import { surfaceHeight } from "@/lib/game/map/bridges"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
+import { createMonkFlight, monkGroundTime, stepMonkFlight, type MonkFlight } from "@/lib/game/monk-flight"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { encodeObjectId, OUTLINE_ID_LAYER_MASK, residentObjectId } from "@/lib/game/render/outline"
+import { MonkRocketGear, ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
 
 /**
- * The brothers, always about the hovel: they drift between the open tiles
- * around it, stand a while, and drift on — enough that the place is plainly
+ * The brothers drift between the open tiles around the hovel,
+ * stand a while, and drift on — enough that the place is plainly
  * lived in. Ambient motion only; they aren't in the traveler sim. Click one
- * to select him — the HUD names him and his office.
+ * to select him — the HUD names him and his office. Blaster Pastor sends them
+ * on occasional cruises across the map; they return to their life at the shrine
+ * between trips, keeping their rocket-powered gear equipped.
  */
 
 const BODY: [number, number, number] = [0.3, 0.55, 0.3]
@@ -35,9 +41,6 @@ const PAUSE_MAX_SECONDS = 7
 /** Standing within this many tiles of the hovel's centre counts as keeping vigil. */
 const VIGIL_RADIUS = 1.8
 
-/** A click that dragged further than this many pixels is a pan, not a select. */
-const CLICK_SLOP_PX = 6
-
 interface Spot {
   x: number
   y: number
@@ -50,6 +53,8 @@ interface MonkState {
   z: number
   target: Spot
   pause: number
+  flight?: MonkFlight
+  flightWait: number
 }
 
 /** Open ground around the hovel a monk may stand on: never the walls, never the woods. */
@@ -64,7 +69,7 @@ function wanderSpots(map: GameMap): { spots: Spot[]; centre: { x: number; z: num
   for (let z = hovel.z - WANDER_RADIUS; z < hovel.z + hovel.d + WANDER_RADIUS; z++) {
     for (let x = hovel.x - WANDER_RADIUS; x < hovel.x + hovel.w + WANDER_RADIUS; x++) {
       const inFootprint = x >= hovel.x && x < hovel.x + hovel.w && z >= hovel.z && z < hovel.z + hovel.d
-      if (inFootprint) continue
+      if (inFootprint || buildingAt(map, x, z)) continue
       const terrain = tileAt(map, x, z)
       if (!terrain || !TERRAIN[terrain].passable || terrain === "forest") continue
       spots.push({ x: tileToWorldX(map, x), y: surfaceHeight(map, x, z), z: tileToWorldZ(map, z) })
@@ -73,24 +78,26 @@ function wanderSpots(map: GameMap): { spots: Spot[]; centre: { x: number; z: num
   return { spots, centre }
 }
 
-export function Monks({ map, monks }: { map: GameMap; monks: Monk[] }) {
+export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Monk[]; flying?: boolean }) {
   const selection = useCameraStore((s) => s.selection)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
 
   const world = useMemo(() => {
     const { spots, centre } = wanderSpots(map)
     const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.monkWander))
+    const flightRng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.monkFlight))
     const pick = (): Spot => {
       const spot = spots[Math.floor(rng() * spots.length)]
       // Jitter within the tile so two brothers never stand on the same spot.
       return { x: spot.x + (rng() - 0.5) * 0.5, y: spot.y, z: spot.z + (rng() - 0.5) * 0.5 }
     }
-    const states: MonkState[] = monks.map(() => {
+    const states: MonkState[] = (spots.length ? monks : []).map((_, index) => {
       const start = pick()
-      return { ...start, target: pick(), pause: rng() * PAUSE_MAX_SECONDS }
+      // One immediate demonstration; the other brothers take off in their own time.
+      return { ...start, target: pick(), pause: rng() * PAUSE_MAX_SECONDS, flightWait: index * 8 }
     })
     const activities = new Map<number, MonkActivity>()
-    return { spots, centre, rng, pick, states, activities }
+    return { spots, centre, rng, flightRng, pick, states, activities }
   }, [map, monks])
 
   // Publish activities so the HUD's monk panel can poll them.
@@ -112,6 +119,43 @@ export function Monks({ map, monks }: { map: GameMap; monks: Monk[] }) {
         group.position.set(s.x, s.y, s.z)
         continue
       }
+
+      const exhaust = group.getObjectByName(ROCKET_EXHAUST_NAME)
+      if (flying) {
+        s.flightWait -= dt
+        if (!s.flight && s.flightWait <= 0) {
+          s.flight = createMonkFlight(s, world.pick(), map, world.flightRng)
+        }
+      }
+      if (s.flight) {
+        const flight = s.flight
+        for (let tick = 0; tick < playback.speed; tick++) {
+          stepMonkFlight(flight, map, world.flightRng, Math.min(delta, 0.1))
+        }
+        s.x = flight.x
+        s.y = flight.y
+        s.z = flight.z
+        const dx = flight.target.x - flight.x
+        const dz = flight.target.z - flight.z
+        if (Math.hypot(dx, dz) > 0.001) {
+          const heading = Math.atan2(dx, dz)
+          const turn = Math.atan2(Math.sin(heading - group.rotation.y), Math.cos(heading - group.rotation.y))
+          group.rotation.y += turn * Math.min(1, dt * 5)
+        }
+        group.rotation.x = flight.phase === "cruising" || flight.phase === "returning" ? 0.15 : 0
+        group.position.set(flight.x, flight.y, flight.z)
+        if (flight.phase !== "landed") {
+          if (exhaust) exhaust.visible = true
+          world.activities.set(monks[i].id, "flying")
+          continue
+        }
+        s.flight = undefined
+        s.flightWait = monkGroundTime(world.flightRng)
+        s.target = world.pick()
+        s.pause = PAUSE_MIN_SECONDS + world.rng() * (PAUSE_MAX_SECONDS - PAUSE_MIN_SECONDS)
+      }
+      if (exhaust) exhaust.visible = false
+      group.rotation.x = 0
 
       if (s.pause > 0) {
         s.pause -= dt
@@ -148,11 +192,7 @@ export function Monks({ map, monks }: { map: GameMap; monks: Monk[] }) {
       {monks.map((monk, index) => {
         const id = new THREE.Color(...encodeObjectId(residentObjectId(index)))
         const selected = isSelected(selection, { kind: "monk", id: monk.id })
-        const select = (event: { delta: number; stopPropagation: () => void }) => {
-          if (event.delta > CLICK_SLOP_PX || useBuildStore.getState().tool) return
-          event.stopPropagation()
-          useCameraStore.getState().select(selected ? null : { kind: "monk", id: monk.id })
-        }
+        const select = (event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "monk", id: monk.id }, event)
         return (
           <group
             key={monk.id}
@@ -172,12 +212,13 @@ export function Monks({ map, monks }: { map: GameMap; monks: Monk[] }) {
               <boxGeometry args={BODY} />
               <meshBasicMaterial color={id} toneMapped={false} />
             </mesh>
-            {selected && (
-              <mesh position={[0, BODY[1] + 0.35, 0]}>
-                <boxGeometry args={[0.2, 0.05, 0.2]} />
-                <meshBasicMaterial color="#d8a93f" />
-              </mesh>
-            )}
+            <mesh position={[0, BODY[1] + CROWN[1] / 2, 0]} layers-mask={OUTLINE_ID_LAYER_MASK}>
+              <boxGeometry args={CROWN} />
+              <meshBasicMaterial color={id} toneMapped={false} />
+            </mesh>
+            {flying && <MonkRocketGear phase={index} outlineColor={id} onClick={select} />}
+            <CharacterHitTarget onClick={select} />
+            {selected && <CharacterSelectionShadow map={map} flying={flying} />}
           </group>
         )
       })}

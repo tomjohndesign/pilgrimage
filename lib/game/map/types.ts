@@ -2,6 +2,8 @@ import type { TerrainId } from "./terrain"
 
 export interface BuildingDef {
   id: string
+  /** Player-built catalogue entry; absent on the founding hovel. */
+  buildType?: string
   label: string
   /** Origin tile — the minimum corner of the footprint. */
   x: number

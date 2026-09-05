@@ -7,11 +7,14 @@ import * as THREE from "three"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
+import { surfaceHeight } from "@/lib/game/map/bridges"
 import type { OutlineMode } from "@/lib/game/render/outline"
 import type { Traveler } from "@/lib/game/travelers"
 import { simRegistry, stepSim } from "@/lib/game/sim"
+import type { EntState } from "@/lib/game/trees/ents"
 
 import { outlineFrameRef } from "./outline-pass"
+import { ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
 
 /**
  * Exposes a small handle on `window` so the scene can be driven deterministically
@@ -38,16 +41,39 @@ export function DebugHandle({ map, travelers, speed }: { map: GameMap; travelers
       /** Live traveler sim state (stats, activities), for e2e assertions. */
       sim: () => (simRegistry.current ? [...simRegistry.current.travelers.values()] : []),
       time: () => simRegistry.current?.time ?? null,
+      /** Live Ent state for checking staggered walks and replanting. */
+      ents: () => {
+        const ents: EntState[] = []
+        scene.traverse((object) => {
+          if (object.name === "ent-legs") ents.push(...object.userData.ents)
+        })
+        return ents
+      },
+      /** Monk positions and equipped boosters, for cheat-code smoke tests. */
+      monks: () => {
+        const points: Array<{ x: number; y: number; z: number; flying: boolean; equipped: boolean }> = []
+        const position = new THREE.Vector3()
+        scene.traverse((object) => {
+          if (object.name !== "monk") return
+          object.getWorldPosition(position)
+          points.push({
+            x: position.x, y: position.y, z: position.z,
+            flying: !!object.parent?.getObjectByName(ROCKET_EXHAUST_NAME)?.visible,
+            equipped: !!object.parent?.getObjectByName("monk-rocket-gear"),
+          })
+        })
+        return points
+      },
       /** Advance bounded simulation ticks without waiting for the WebGL frame rate. */
       advance: (seconds: number) => {
         const sim = simRegistry.current
         if (!sim) return
         const ticks = Math.ceil(Math.max(0, Math.min(120, seconds)) * 10)
         for (let i = 0; i < ticks; i++) stepSim(sim, travelers, map, speed, 0.1)
-        useBuildStore.getState().syncResources(sim)
+        useBuildStore.getState().syncResources(sim, travelers)
       },
       settlement: () => ({
-        buildings: useBuildStore.getState().buildings,
+        buildings: map.buildings,
         felled: [...useBuildStore.getState().felled],
         trees: simRegistry.current ? [...simRegistry.current.treeResources.entries()] : [],
         piles: useBuildStore.getState().piles,
@@ -62,7 +88,7 @@ export function DebugHandle({ map, travelers, speed }: { map: GameMap; travelers
       },
       tileScreenPoint: (x: number, z: number) => {
         const rect = gl.domElement.getBoundingClientRect()
-        const point = new THREE.Vector3(tileToWorldX(map, x), 0.2, tileToWorldZ(map, z)).project(camera)
+        const point = new THREE.Vector3(tileToWorldX(map, x), surfaceHeight(map, x, z), tileToWorldZ(map, z)).project(camera)
         return { x: rect.left + (point.x + 1) / 2 * rect.width, y: rect.top + (1 - point.y) / 2 * rect.height }
       },
       /** Screen positions (client px) of traveler blocks, for e2e clicks. */

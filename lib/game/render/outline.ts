@@ -13,6 +13,9 @@
 export const OUTLINE_ID_LAYER = 1
 export const OUTLINE_ID_LAYER_MASK = 1 << OUTLINE_ID_LAYER
 
+/** Only the selected character's visible meshes enter this isolated colour pass. */
+export const SELECTED_CHARACTER_LAYER = 2
+
 /**
  * Rendering modes, in the order the O key cycles through them:
  *  - overlap:    outline only where an object overlaps a different object.
@@ -63,9 +66,10 @@ export function buildingObjectId(buildingIndex: number): number {
   return 1 + buildingIndex
 }
 
-/** Trees follow the buildings, one ID per tree so each reads as its own object. */
+/** Trees follow buildings, wrapping below the relic if the ID block fills up. */
 export function treeObjectId(buildingCount: number, treeIndex: number): number {
-  return 1 + buildingCount + treeIndex
+  const span = RELIC_OBJECT_ID - 1 - buildingCount
+  return 1 + buildingCount + treeIndex % span
 }
 
 /**
@@ -98,6 +102,11 @@ export function placedObjectId(placedIndex: number): number {
  * the shrine that houses it rather than merging into the walls.
  */
 export const RELIC_OBJECT_ID = 0x800000
+
+/** Wood stacks use the block immediately above the relic, clear of tree IDs. */
+export function pileObjectId(pileIndex: number): number {
+  return RELIC_OBJECT_ID + 1 + pileIndex
+}
 
 /**
  * Default road-edge thickness in CSS pixels. Object outlines use one rendered

@@ -3,7 +3,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import * as THREE from "three"
 
-import { useBuildStore } from "@/lib/game/build-store"
 import { ELEMENT_RADIUS, generateElement, type EnvironmentPlacement, type PrimitiveKind } from "@/lib/game/environment/elements"
 import { placeEnvironment } from "@/lib/game/environment/placement"
 import type { GameMap } from "@/lib/game/map/types"
@@ -11,7 +10,7 @@ import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 
 export function Environment({ map }: { map: GameMap }) {
   const placements = useMemo(() => placeEnvironment(map), [map])
-  const buildings = useBuildStore((s) => s.buildings)
+  const buildings = map.buildings
   const visible = useMemo(() => placements.filter((p) => {
     const radius = ELEMENT_RADIUS * p.scale
     const x = p.x + map.width / 2

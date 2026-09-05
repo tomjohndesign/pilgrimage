@@ -4,6 +4,8 @@ import { Suspense, useMemo } from "react"
 import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import type { Resources } from "@/lib/game/settlement"
+import type { TilePos } from "@/lib/game/map/types"
 import { deriveSeed, SEED_STREAM } from "@/lib/game/rng"
 import { growTreePlacements } from "@/lib/game/trees/dimensions"
 import { placeTrees } from "@/lib/game/trees/placement"
@@ -16,6 +18,7 @@ import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 
 import { Bridges } from "./bridges"
 import { Buildings } from "./buildings"
+import { BuildInfluenceOverlay } from "./build-influence-overlay"
 import { CameraLight } from "./camera-light"
 import { CameraRig } from "./camera-rig"
 import { DebugHandle } from "./debug-handle"
@@ -35,17 +38,31 @@ export function GameCanvas({
   map,
   relic,
   monks,
+  blasterPastor = false,
+  lastMarch = false,
   travelers,
   walkSpeed,
   roadTier,
   relicTraffic,
   roadLook,
   showGrid = false,
+  buildType,
+  shrineRenown,
+  baseRenown,
+  resources,
+  onPlace,
   ...pixelation
 }: {
   map: GameMap
+  buildType: string | null
+  shrineRenown: number
+  baseRenown: number
+  resources: Resources
+  onPlace: (at: TilePos) => void
   relic: Relic
   monks: Monk[]
+  blasterPastor?: boolean
+  lastMarch?: boolean
   travelers: Traveler[]
   walkSpeed: number
   /** Road development tier — index into ROAD_TIERS. */
@@ -60,7 +77,7 @@ export function GameCanvas({
   const species = useTreeTuningStore((s) => s.species)
   const variance = useTreeTuningStore((s) => s.variance)
   const trees = useMemo(() => growTreePlacements(placeTrees(map, species),
-    deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes), species, variance), [map, species, variance])
+    deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes), species, variance), [map.tiles, species, variance])
   return (
     <PixelCanvas
       {...pixelation}
@@ -95,16 +112,17 @@ export function GameCanvas({
         />
       </Suspense>
       <Bridges map={map} roadTier={roadTier} />
-      <Trees map={map} placements={trees} />
+      <Trees map={map} placements={trees} ents={lastMarch} />
       <Environment map={map} />
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />
-      <Monks map={map} monks={monks} />
-      <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} />
-      <TileCursor map={map} />
+      <Monks map={map} monks={monks} flying={blasterPastor} />
+      <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown} />
+      <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
+      {buildType && <BuildInfluenceOverlay map={map} />}
 
-      <CameraRig map={map} />
-      <OutlinePass />
+      <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
+      <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
       <DebugHandle map={map} travelers={travelers} speed={walkSpeed} />
     </PixelCanvas>
   )

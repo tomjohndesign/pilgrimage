@@ -47,6 +47,8 @@ export interface TreePlacement {
   scale?: number
   /** Brightness multiplier on bark and foliage; edge trees are lighter. Defaults to 1. */
   brightness?: number
+  /** Runtime Ent motion; moving trees cannot be claimed for felling. */
+  walking?: boolean
 }
 
 /** Edge trees scale down to this fraction of a core tree's size. */

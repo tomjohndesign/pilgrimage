@@ -3,12 +3,13 @@
 import Image from "next/image"
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react"
 import * as Tooltip from "@radix-ui/react-tooltip"
-import { Footprints, Hammer, House, Pause, Play, Users, X } from "lucide-react"
+import { Coins, Footprints, Hammer, House, Pause, Play, Sparkles, Users, X } from "lucide-react"
 
-import { useBuildStore } from "@/lib/game/build-store"
-import { BUILDING_KINDS, placementProblem, PLACEMENT_PROBLEM_LABELS } from "@/lib/game/buildings"
+import type { useSettlement } from "@/hooks/use-settlement"
+import { buildCatalog, buildingIncomeLabel, type BuildId } from "@/lib/game/balance"
+import { influenceRadius } from "@/lib/game/build-influence"
+import { canAfford, placementError } from "@/lib/game/settlement"
 import { useCameraStore } from "@/lib/game/camera-store"
-import type { GameMap } from "@/lib/game/map/types"
 import { formatGameTime, simRegistry } from "@/lib/game/sim"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 
@@ -29,67 +30,85 @@ export function HudHelp({ children, content }: { children: ReactElement; content
 /** Live settlement resources in the compact upper frame.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1SK-0
  */
-export function HudResources({ wood, settlers, visits }: { wood: number; settlers: number; visits: number }) {
+export function HudResources({ economy, settlers, open, onToggle }: {
+  economy: ReturnType<typeof useSettlement>
+  settlers: number
+  open: boolean
+  onToggle: () => void
+}) {
+  const { gold, wood } = economy.settlement.resources
+  const renown = Math.round((economy.renown?.total ?? 0) * 10) / 10
   return <div className="hud-resources" aria-label="Settlement resources">
+    <span title="Gold" aria-label={`${gold} gold`}><Coins aria-hidden size={21} />{gold}</span>
     <span title="Stored timber" aria-label={`${wood} timber`}><Image src="/game-icons/timber.svg" width={30} height={28} alt="" />{wood}</span>
     <span title="Settlers" aria-label={`${settlers} settlers`}><Users aria-hidden size={21} />{settlers}</span>
-    <span title="Pilgrim visits" aria-label={`${visits} pilgrim visits`}><Footprints aria-hidden size={21} />{visits}</span>
+    <span title="Pilgrim visits" aria-label={`${economy.visits} pilgrim visits`}><Footprints aria-hidden size={21} />{economy.visits}</span>
+    <HudHelp content={<><div className="hud-help-title">Shrine renown</div><p>Open the treasury, income, and renown breakdown.</p></>}>
+      <button type="button" className="hud-resource-button" aria-label="Settlement details" aria-expanded={open} aria-controls="settlement-details" onClick={onToggle}>
+        <Sparkles aria-hidden size={18} />{renown}
+      </button>
+    </HudHelp>
   </div>
 }
 
-const PLANNED = [
-  { id: "inn", label: "Inn / Hostel", description: "Lodging for passing pilgrims." },
-  { id: "tavern", label: "Tavern", description: "Food and drink for travelers." },
-  { id: "road", label: "Road", description: "Extend paths between buildings." },
-] as const
+const BUILD_ICONS: Record<BuildId, string> = {
+  lumberCamp: "camp", shelter: "inn", workshop: "tavern", hall: "inn", garden: "garden", cross: "cross",
+}
 
-/** Small illustrated commands above the persistent bottom actions. Planned
- * buildings have no simulation behavior yet, so their help explains availability.
+/** Small illustrated commands use the live economy's catalogue and placement rules.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1GB-0
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1SK-0
  */
-export function BuildControls({ map, open, onToggle, onClose }: {
-  map: GameMap | null
+export function BuildControls({ economy, open, onToggle, onClose }: {
+  economy: ReturnType<typeof useSettlement>
   open: boolean
   onToggle: () => void
   onClose: () => void
 }) {
-  const tool = useBuildStore((s) => s.tool)
-  const buildings = useBuildStore((s) => s.buildings)
+  const { map, balance, settlement, buildType, chooseBuild } = economy
   const hovered = useCameraStore((s) => s.hovered)
-  const problem = useMemo(() => map && tool && hovered
-    ? placementProblem(map, [...map.buildings, ...buildings], tool, hovered.x, hovered.z)
-    : null, [map, tool, buildings, hovered])
-  const camp = BUILDING_KINDS.lumberCamp
+  const catalog = useMemo(() => [...buildCatalog(balance)].sort((a, b) =>
+    a.id === "lumberCamp" ? -1 : b.id === "lumberCamp" ? 1 : 0), [balance])
+  const renown = economy.renown?.total ?? 0
+  const selected = catalog.find((item) => item.id === buildType)
+  const problem = useMemo(() => {
+    if (!selected) return null
+    if (renown < selected.requiredRenown) return `Requires ${selected.requiredRenown} shrine renown.`
+    if (!canAfford(settlement.resources, selected.cost)) return "Not enough gold or wood."
+    return map && hovered ? placementError(map, selected, hovered, balance) : null
+  }, [selected, renown, settlement.resources, map, hovered, balance])
 
   return <div className="hud-bottom-center">
     {open && <section id="build-tray" className="hud-well hud-build-tray" aria-label="Build options">
       <div className="hud-building-tiles">
-        <HudHelp content={<>
-          <div className="hud-help-title">Build {camp.label}<kbd>L</kbd></div>
-          <p>Fell nearby trees and stack the timber.</p>
-          <div className="hud-help-meta">Free · {camp.jobs} jobs · {camp.w} × {camp.d} tiles</div>
-          <p className="hud-help-secondary">Needs reachable woods and a clear route from the shrine.</p>
-        </>}>
-          <button type="button" className="hud-building-tile" aria-label="Build lumber camp" aria-pressed={tool === "lumberCamp"}
-            disabled={!map} onClick={() => useBuildStore.getState().setTool(tool ? null : "lumberCamp")}>
-            <Image src="/game-icons/camp.svg" alt="" width={54} height={49} /><kbd>L</kbd>
-          </button>
-        </HudHelp>
-        {PLANNED.map((building) => <HudHelp key={building.id} content={<>
-          <div className="hud-help-title">{building.label}</div>
-          <p>{building.description}</p>
-          <div className="hud-help-meta">Not available yet</div>
-        </>}>
-          <button type="button" className="hud-building-tile" aria-disabled="true" aria-label={`${building.label} — not available yet`}>
-            <Image src={`/game-icons/${building.id}.svg`} alt="" width={54} height={49} />
-          </button>
-        </HudHelp>)}
+        {catalog.map((item) => {
+          const locked = renown < item.requiredRenown
+          const unavailable = !map || locked || !canAfford(settlement.resources, item.cost)
+          return <HudHelp key={item.id} content={<>
+            <div className="hud-help-title">Build {item.label}{item.id === "lumberCamp" && <kbd>L</kbd>}</div>
+            <p>{item.description}</p>
+            <div className="hud-help-meta">{item.cost.gold} gold · {item.cost.wood} wood · {item.w} × {item.d} tiles</div>
+            <p className="hud-help-secondary">{buildingIncomeLabel(item, balance)}</p>
+            <p className="hud-help-secondary">+{item.renown} shrine renown · {item.renown > 0
+              ? `${influenceRadius(item.renown, balance).toFixed(1)} tiles of influence`
+              : "Does not extend influence"}</p>
+            <p className="hud-help-secondary">{locked ? `Requires ${item.requiredRenown} shrine renown.`
+              : unavailable ? "Not enough supplies or the world is still loading."
+              : "Place inside shrine influence or beside the approach; the whole footprint must fit."}</p>
+          </>}>
+            <button type="button" className="hud-building-tile" aria-label={`Build ${item.label.toLowerCase()}`}
+              aria-pressed={buildType === item.id} aria-disabled={unavailable}
+              onClick={() => { if (!unavailable) chooseBuild(buildType === item.id ? null : item.id) }}>
+              <Image src={`/game-icons/${BUILD_ICONS[item.id]}.svg`} alt="" width={54} height={49} />
+              {item.id === "lumberCamp" && <kbd>L</kbd>}
+            </button>
+          </HudHelp>
+        })}
       </div>
       <button type="button" className="hud-close" aria-label="Close build options" onClick={onClose}><X size={14} /></button>
     </section>}
-    {open && tool && <div className={`hud-placement-status ${problem ? "hud-placement-error" : ""}`} role="status">
-      {problem ? PLACEMENT_PROBLEM_LABELS[problem] : "Place lumber camp near woods · Click to build · Esc to cancel"}
+    {open && (selected || economy.message) && <div className={`hud-placement-status ${problem ? "hud-placement-error" : ""}`} role="status">
+      {problem ?? (selected ? `Place ${selected.label.toLowerCase()} inside influence · Click to build · Esc to cancel` : economy.message)}
     </div>}
     <nav className="hud-bottom-actions" aria-label="Building tools">
       <button id="build-menu-button" type="button" className="hud-action" aria-expanded={open} aria-controls="build-tray" onClick={onToggle}>

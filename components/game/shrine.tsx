@@ -4,7 +4,7 @@ import { useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
-import { isSelected, useCameraStore } from "@/lib/game/camera-store"
+import { selectElement } from "@/lib/game/selection"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import type { Relic } from "@/lib/game/relic"
@@ -19,7 +19,7 @@ import {
  * The monks' hovel: four low walls with a doorway toward the track, a ring of
  * thatch around an open centre, and the relic on a plinth in the middle where
  * the sky can see it. It pulses — faintly — so the eye finds it from any zoom.
- * Click any part of it to select the relic; the HUD tells you what it is.
+ * The building and the relic have separate selections and inspectors.
  */
 
 const WALL_HEIGHT = 0.6
@@ -45,9 +45,6 @@ const HALO_BASE = 0.07
 const HALO_SWING = 0.05
 const LIGHT_BASE = 0.55
 const LIGHT_SWING = 0.2
-
-/** A click that dragged further than this many pixels is a pan, not a select. */
-const CLICK_SLOP_PX = 6
 
 const WALL_COLOR = "#8c7658"
 const FLOOR_COLOR = "#5a4a38"
@@ -97,7 +94,6 @@ function roofPieces(roofColor: string): Piece[] {
 }
 
 export function Shrine({ map, relic }: { map: GameMap; relic: Relic }) {
-  const selected = useCameraStore((s) => isSelected(s.selection, { kind: "relic" }))
   const relicMaterial = useRef<THREE.MeshStandardMaterial>(null)
   const haloMaterial = useRef<THREE.MeshBasicMaterial>(null)
   const light = useRef<THREE.PointLight>(null)
@@ -143,19 +139,15 @@ export function Shrine({ map, relic }: { map: GameMap; relic: Relic }) {
     if (light.current) light.current.intensity = LIGHT_BASE + LIGHT_SWING * phase
   })
 
-  if (!layout) return null
+  if (!layout || !hovel) return null
 
-  const select = (event: { delta: number; stopPropagation: () => void }) => {
-    if (event.delta > CLICK_SLOP_PX) return
-    event.stopPropagation()
-    useCameraStore.getState().select(selected ? null : { kind: "relic" })
-  }
+  const select = (event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "relic" }, event)
 
   return (
     <group position={[layout.centreX, layout.baseY, layout.centreZ]}>
       {layout.pieces.map((piece, i) => (
         <group key={i} position={piece.position}>
-          <mesh onClick={select}>
+          <mesh onClick={(event) => selectElement({ kind: "building", id: hovel.id }, event)}>
             <boxGeometry args={piece.args} />
             <meshLambertMaterial color={piece.color} />
           </mesh>
@@ -201,13 +193,6 @@ export function Shrine({ map, relic }: { map: GameMap; relic: Relic }) {
         distance={3.5}
         decay={2}
       />
-
-      {selected && (
-        <mesh position={[0, WALL_HEIGHT + 0.6, 0]}>
-          <boxGeometry args={[0.2, 0.05, 0.2]} />
-          <meshBasicMaterial color="#d8a93f" />
-        </mesh>
-      )}
     </group>
   )
 }

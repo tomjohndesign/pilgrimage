@@ -6,6 +6,7 @@
 }
 .game-hud {
   --hud-bar-height: 36px;
+  --hud-header-height: var(--hud-bar-height);
   --hud-dock-width: 280px;
   --hud-map-height: 182px;
   --hud-left: var(--hud-space);
@@ -44,7 +45,7 @@
   z-index: 25;
 }
 .hud-header-right { display: flex; align-items: flex-start; gap: var(--hud-space); }
-.hud-resource-bar, .hud-header-actions, .hud-clock {
+.hud-resource-bar, .hud-header-actions, .hud-clock, .hud-traffic {
   display: flex;
   align-items: center;
   height: var(--hud-bar-height);
@@ -54,7 +55,7 @@
   pointer-events: auto;
 }
 .hud-resources { display: flex; align-items: center; gap: var(--hud-space); padding: 0 var(--hud-space); }
-.hud-resources > span { display: flex; align-items: center; gap: 6px; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hud-resources > :is(span, button) { display: flex; align-items: center; gap: 6px; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .hud-resources img { width: 30px; height: auto; }
 .hud-resources svg { color: #cbb783; }
 .hud-brand { border-left: 1px solid #73633f; padding: 0 var(--hud-space); font-family: var(--font-cinzel), serif; font-size: 12px; letter-spacing: .15em; color: #cbb783; }
@@ -76,7 +77,7 @@
 .hud-bottom-actions { width: fit-content; max-width: 100%; background: #241f16ed; pointer-events: auto; display: flex; align-items: center; gap: var(--hud-control-gap); height: var(--hud-bar-height); border: 1px solid #8c784c; box-shadow: inset 0 0 0 2px #17140e; padding: 3px; }
 .hud-action { display: flex; gap: 7px; align-items: center; justify-content: center; padding: 4px var(--hud-space); height: 28px; font-family: var(--font-cinzel), serif; font-size: 11px; letter-spacing: .04em; white-space: nowrap; pointer-events: auto; cursor: pointer; text-shadow: 0 1px 2px #000; }
 .hud-build-tray { position: relative; display: flex; align-items: flex-start; gap: var(--hud-space); padding: var(--hud-space); pointer-events: auto; }
-.hud-building-tiles { display: flex; min-width: 0; align-items: center; gap: var(--hud-space); }
+.hud-building-tiles { overflow-x: auto; display: flex; min-width: 0; align-items: center; gap: var(--hud-space); }
 .hud-building-tile { position: relative; width: 60px; height: 56px; flex-shrink: 0; padding: 2px; cursor: pointer; }
 .hud-building-tile img { width: 54px; height: 49px; object-fit: contain; }
 .hud-building-tile kbd { position: absolute; right: 4px; bottom: 3px; font: 10px Georgia, serif; color: #eed8a3; text-shadow: 1px 1px #000; }
@@ -133,16 +134,33 @@
   .hud-brand { display: none; }
 }
 @media (max-width: 700px) {
-  .game-hud { --hud-right: var(--hud-space); --hud-map-height: 118px; }
-  .hud-header { display: grid; grid-template-columns: 1fr auto; }
-  .hud-resource-bar { justify-self: start; }
+  .game-hud { --hud-right: var(--hud-space); --hud-map-height: 118px; --hud-header-height: calc(var(--hud-bar-height) * 2 + var(--hud-space)); }
+  .hud-header { display: grid; grid-template-columns: auto 1fr; }
+  .hud-resource-bar { grid-column: 1 / -1; justify-self: start; max-width: 100%; }
+  .hud-resources { gap: 8px; }
+  .hud-resources > :is(span, button) { font-size: 15px; }
+  .hud-header-actions { grid-column: 1; grid-row: 2; }
   .hud-header-right { display: contents; }
-  .hud-clock { grid-column: 1 / -1; justify-self: end; }
-  .hud-details-dock { bottom: calc(var(--hud-space) * 2 + var(--hud-bar-height)); width: 160px; max-width: calc(100% - var(--hud-space) * 2); max-height: calc(100% - 170px); }
+  .hud-clock { grid-column: 2; grid-row: 2; justify-self: end; }
+  .hud-details-dock { bottom: calc(var(--hud-space) * 2 + var(--hud-bar-height)); width: 160px; max-width: calc(100% - var(--hud-space) * 2); max-height: calc(100% - var(--hud-header-height) - var(--hud-bar-height) * 2 - var(--hud-space) * 5); }
   .hud-details-dock[data-selected="true"] { width: 280px; }
   .hud-minimap canvas { max-width: 140px; }
   .hud-build-tray { margin-bottom: calc(var(--hud-map-height) + var(--hud-space)); }
   .hud-building-tiles { overflow-x: auto; }
   .hud-placement-status { font-size: 12px; }
-  .hud-world { top: calc(var(--hud-space) * 3 + var(--hud-bar-height) * 2); width: min(var(--hud-dock-width), calc(100% - var(--hud-space) * 2)); max-height: calc(100% - var(--hud-map-height) - var(--hud-bar-height) * 3 - var(--hud-space) * 6); }
+  .hud-world { top: calc(var(--hud-header-height) + var(--hud-bar-height) + var(--hud-space) * 3); width: min(var(--hud-dock-width), calc(100% - var(--hud-space) * 2)); max-height: calc(100% - var(--hud-map-height) - var(--hud-header-height) - var(--hud-bar-height) * 2 - var(--hud-space) * 6); }
 }
+
+.hud-resource-button { cursor: pointer; }
+.hud-resource-button:hover, .hud-resource-button[aria-expanded="true"] { color: #f9e5af; }
+.hud-resource-bar { min-width: 0; }
+.hud-resources { overflow-x: auto; }
+.hud-resources > :is(span, button) { flex-shrink: 0; }
+@media (max-width: 380px) {
+  .hud-clock { grid-column: 1 / -1; grid-row: 3; }
+  .game-hud { --hud-header-height: calc(var(--hud-bar-height) * 3 + var(--hud-space) * 2); }
+}
+
+.hud-traffic { position: absolute; top: calc(var(--hud-header-height) + var(--hud-space) * 2); left: var(--hud-space); width: 216px; gap: 8px; padding: 3px var(--hud-space); z-index: 24; font-size: 12px; }
+.hud-traffic input { min-width: 0; width: 100%; accent-color: #bea067; }
+.hud-traffic output { min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
