@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic"
 import { useEffect, useMemo, useState } from "react"
 
+import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { DEFAULT_MOVEMENT } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
@@ -10,8 +11,8 @@ import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER } from "@/lib/game/map/road"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
-import { generateRelic, relicBound } from "@/lib/game/relic"
-import { DEFAULT_TRAFFIC, generateTravelers } from "@/lib/game/travelers"
+import { generateRelic, visitChance } from "@/lib/game/relic"
+import { DEFAULT_TRAFFIC, generateTravelers, travelerCountForMap } from "@/lib/game/travelers"
 import {
   DEFAULT_CLEARING_COUNT,
   DEFAULT_DARK_FOREST_COUNT,
@@ -23,7 +24,11 @@ import {
   generateMap,
 } from "@/lib/game/map/generate-map"
 
+import { useSettlement } from "@/hooks/use-settlement"
+
 import { GameHud } from "./game-hud"
+import { CheatBar } from "./cheat-bar"
+import type { PixelationProps } from "@/components/pixel-canvas"
 
 /**
  * WebGL has no meaningful server render, and three.js touches browser globals on
@@ -54,7 +59,7 @@ export interface MapSettings {
   darkForests: number
   /** How far off the road the relic's hovel is sited, in tiles. */
   relicDistance: number
-  /** How many travelers walk the road — the traffic level. */
+  /** Traffic density, in travelers per 128 × 128 tiles. */
   traffic: number
   /** Base walking speed in tiles per second. */
   walkSpeed: number
@@ -129,17 +134,28 @@ function randomSeed(): number {
 export function GameShell({
   initialSeed,
   initialSettings,
+  pixelation,
 }: {
   initialSeed?: number
   initialSettings?: Partial<MapSettings>
+  /** Tune the world pixel renderer without changing map or simulation settings. */
+  pixelation?: PixelationProps
 }) {
   // With no ?seed= in the URL the seed is chosen client-side in an effect, so
   // the server and client never render from different seeds.
   const [seed, setSeed] = useState<number | null>(initialSeed ?? null)
+  const [blasterPastor, setBlasterPastor] = useState(false)
+  const [lastMarch, setLastMarch] = useState(false)
   const [settings, setSettings] = useState<MapSettings>({
     ...DEFAULT_SETTINGS,
     ...initialSettings,
   })
+  const [pixelationOverrides, setPixelationOverrides] = useState<PixelationProps>({})
+  const pixelationSettings = {
+    pixelsPerUnit: pixelationOverrides.pixelsPerUnit ?? pixelation?.pixelsPerUnit ?? 25,
+    outputDpr: pixelationOverrides.outputDpr ?? pixelation?.outputDpr ?? 0.5,
+    pixelated: pixelationOverrides.pixelated ?? pixelation?.pixelated ?? true,
+  }
 
   useEffect(() => {
     // A seed the player saved takes precedence over a random roll, but never
@@ -182,7 +198,7 @@ export function GameShell({
     window.history.replaceState(null, "", `?${query}`)
   }, [seed, settings])
 
-  const map = useMemo(
+  const baseMap = useMemo(
     () =>
       seed === null
         ? null
@@ -220,9 +236,10 @@ export function GameShell({
   const walkTuning = useMemo(() => ({ sync: settings.walkSync, stride: settings.stride }), [settings.walkSync, settings.stride])
 
   // Identities live outside the canvas so the HUD can name whoever is selected.
+  const travelerCount = baseMap ? travelerCountForMap(baseMap, settings.traffic) : 0
   const travelers = useMemo(
-    () => (seed === null ? [] : generateTravelers(seed, settings.traffic)),
-    [seed, settings.traffic],
+    () => (seed === null ? [] : generateTravelers(seed, travelerCount)),
+    [seed, travelerCount],
   )
 
   // The relic and the brothers who keep it, fixed per seed like the travelers.
@@ -236,17 +253,21 @@ export function GameShell({
     }),
     [settings.roadOpacity, settings.roadShade, settings.roadEdgeLine, settings.roadEdgeWidth],
   )
-  // Who among the travelers turns aside for it: the track's own traffic.
-  const relicTraffic = useMemo(
-    () => (relic ? relicBound(travelers, relic).length : 0),
-    [travelers, relic],
-  )
   const monks = useMemo(() => (seed === null ? [] : generateMonks(seed)), [seed])
+  const economy = useSettlement(baseMap, monks, relic)
+  const map = economy.map
+  const renown = economy.renown
+  const relicTraffic = useMemo(
+    () => (relic ? Math.round(travelers.reduce((sum, t) => sum + visitChance(t.attributes, relic.stats, renown?.total ?? 0, economy.balance), 0)) : 0),
+    [travelers, relic, renown, economy.balance],
+  )
 
   // The camera's pan clamp follows the loaded map's extent, and a new world
   // opens on the hovel — the one landmark every map has.
   useEffect(() => {
-    if (!map) return
+    if (!baseMap) return
+    const map = baseMap
+    useBuildStore.getState().reset()
     const camera = useCameraStore.getState()
     camera.setMapSize(map.width, map.depth)
     camera.select(null)
@@ -257,7 +278,7 @@ export function GameShell({
         tileToWorldZ(map, hovel.z) + (hovel.d - 1) / 2,
       )
     }
-  }, [map])
+  }, [baseMap])
 
   // A new cast of travelers invalidates whoever was selected.
   useEffect(() => {
@@ -268,9 +289,12 @@ export function GameShell({
     <div className="fixed inset-0 overflow-hidden bg-[#14100a] select-none">
       {map && relic ? (
         <GameCanvas
+          {...pixelationSettings}
           map={map}
           relic={relic}
           monks={monks}
+          blasterPastor={blasterPastor}
+          lastMarch={lastMarch}
           travelers={travelers}
           walkSpeed={settings.walkSpeed}
           characterFps={settings.characterFps}
@@ -281,6 +305,11 @@ export function GameShell({
           roadTier={settings.road}
           relicTraffic={relicTraffic}
           roadLook={roadLook}
+          shrineRenown={renown?.total ?? 0}
+          baseRenown={(renown?.total ?? 0) - (renown?.visits ?? 0)}
+          buildType={economy.buildType}
+          resources={economy.settlement.resources}
+          onPlace={economy.place}
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
@@ -297,10 +326,14 @@ export function GameShell({
         travelers={travelers}
         relicTraffic={relicTraffic}
         settings={settings}
+        economy={economy}
         onSettingsChange={setSettings}
+        pixelation={pixelationSettings}
+        onPixelationChange={(patch) => setPixelationOverrides((current) => ({ ...current, ...patch }))}
         onReroll={() => setSeed(randomSeed())}
         onSeedChange={setSeed}
       />
+      <CheatBar onBlasterPastor={() => setBlasterPastor(true)} onLastMarch={() => setLastMarch(true)} />
     </div>
   )
 }

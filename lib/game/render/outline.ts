@@ -13,6 +13,9 @@
 export const OUTLINE_ID_LAYER = 1
 export const OUTLINE_ID_LAYER_MASK = 1 << OUTLINE_ID_LAYER
 
+/** Only the selected character's visible meshes enter this isolated colour pass. */
+export const SELECTED_CHARACTER_LAYER = 2
+
 /**
  * Rendering modes, in the order the O key cycles through them:
  *  - overlap:    outline only where an object overlaps a different object.
@@ -63,9 +66,10 @@ export function buildingObjectId(buildingIndex: number): number {
   return 1 + buildingIndex
 }
 
-/** Trees follow the buildings, one ID per tree so each reads as its own object. */
+/** Trees follow buildings, wrapping below the relic if the ID block fills up. */
 export function treeObjectId(buildingCount: number, treeIndex: number): number {
-  return 1 + buildingCount + treeIndex
+  const span = RELIC_OBJECT_ID - 1 - buildingCount
+  return 1 + buildingCount + treeIndex % span
 }
 
 /**
@@ -85,14 +89,27 @@ export function residentObjectId(residentIndex: number): number {
 }
 
 /**
+ * Buildings the player puts down take a block below the residents. The
+ * generated buildings' block grows upward with the trees, so a placed
+ * building can't share it without colliding with a tree.
+ */
+export function placedObjectId(placedIndex: number): number {
+  return MAX_OBJECT_ID - 0x2000 - placedIndex
+}
+
+/**
  * The relic sits alone in the middle of the ID space, so it outlines against
  * the shrine that houses it rather than merging into the walls.
  */
 export const RELIC_OBJECT_ID = 0x800000
 
+/** Wood stacks use the block immediately above the relic, clear of tree IDs. */
+export function pileObjectId(pileIndex: number): number {
+  return RELIC_OBJECT_ID + 1 + pileIndex
+}
+
 /**
- * Outline thickness in CSS pixels. The edge pass samples neighbours at this
- * screen-space distance, so lines render at a constant display width at every
- * zoom level and DPR.
+ * Default road-edge thickness in CSS pixels. Object outlines use one rendered
+ * world texel in OutlinePass so they scale with the pixelated scene's zoom.
  */
 export const OUTLINE_THICKNESS_PX = 2

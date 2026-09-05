@@ -84,7 +84,16 @@ export function MusicPlayer({ className = "" }: { className?: string }) {
       playerRef.current = new window.YT.Player(host, {
         videoId: VIDEO_ID,
         // Looping a single video requires naming it as its own playlist.
-        playerVars: { controls: 0, disablekb: 1, loop: 1, playlist: VIDEO_ID },
+        playerVars: {
+          controls: 0,
+          disablekb: 1,
+          loop: 1,
+          playlist: VIDEO_ID,
+          // Keep background music inline on mobile; next.config.mjs also
+          // disables picture-in-picture through the page's permissions policy.
+          playsinline: 1,
+          fs: 0,
+        },
         events: {
           onReady: (event) => {
             event.target.setVolume(VOLUME)

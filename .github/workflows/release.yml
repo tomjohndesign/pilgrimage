@@ -1,0 +1,32 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# Catch-up reads all unreleased main commits, so replacing a pending run is safe.
+concurrency:
+  group: pilgrimage-release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test release automation
+        run: node --test scripts/test-release.mjs
+      - name: Update versions, changelogs, and documentation checkpoints
+        run: node scripts/release.mjs --publish

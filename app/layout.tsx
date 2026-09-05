@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Cinzel, EB_Garamond } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { BalanceProvider } from '@/components/game/balance-provider'
 import './globals.css'
 
 const cinzel = Cinzel({ 
@@ -55,7 +56,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${cinzel.variable} ${ebGaramond.variable} bg-[#1a1208]`}>
       <body className="font-serif antialiased">
-        {children}
+        <BalanceProvider>{children}</BalanceProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

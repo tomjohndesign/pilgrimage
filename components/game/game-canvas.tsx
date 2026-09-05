@@ -1,9 +1,15 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useMemo } from "react"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
-import { Canvas } from "@react-three/fiber"
+import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
 
+import type { Resources } from "@/lib/game/settlement"
+import type { TilePos } from "@/lib/game/map/types"
+import { deriveSeed, SEED_STREAM } from "@/lib/game/rng"
+import { growTreePlacements } from "@/lib/game/trees/dimensions"
+import { placeTrees } from "@/lib/game/trees/placement"
+import { useTreeTuningStore } from "@/lib/game/trees/tree-tuning-store"
 import type { GameMap } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
@@ -14,9 +20,11 @@ import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 
 import { Bridges } from "./bridges"
 import { Buildings } from "./buildings"
+import { BuildInfluenceOverlay } from "./build-influence-overlay"
 import { CameraLight } from "./camera-light"
 import { CameraRig } from "./camera-rig"
 import { DebugHandle } from "./debug-handle"
+import { Environment } from "./environment"
 import { Monks } from "./monks"
 import { OutlinePass } from "./outline-pass"
 import { Shrine } from "./shrine"
@@ -32,6 +40,8 @@ export function GameCanvas({
   map,
   relic,
   monks,
+  blasterPastor = false,
+  lastMarch = false,
   travelers,
   walkSpeed,
   characterModel = "callings",
@@ -43,10 +53,23 @@ export function GameCanvas({
   relicTraffic,
   roadLook,
   showGrid = false,
+  buildType,
+  shrineRenown,
+  baseRenown,
+  resources,
+  onPlace,
+  ...pixelation
 }: {
   map: GameMap
+  buildType: string | null
+  shrineRenown: number
+  baseRenown: number
+  resources: Resources
+  onPlace: (at: TilePos) => void
   relic: Relic
   monks: Monk[]
+  blasterPastor?: boolean
+  lastMarch?: boolean
   travelers: Traveler[]
   walkSpeed: number
   /** Use the shared base person or the earlier calling-specific sprite sheets. */
@@ -65,14 +88,17 @@ export function GameCanvas({
   roadLook?: RoadLook
   /** Draw the global tile lattice over the ground. Off by default. */
   showGrid?: boolean
-}) {
+} & PixelationProps) {
   useEffect(() => { void usePersonDesignStore.getState().hydrate() }, [])
+  const species = useTreeTuningStore((s) => s.species)
+  const variance = useTreeTuningStore((s) => s.variance)
+  const trees = useMemo(() => growTreePlacements(placeTrees(map, species),
+    deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes), species, variance), [map.tiles, species, variance])
   return (
-    <Canvas
+    <PixelCanvas
+      {...pixelation}
       orthographic
-      dpr={[1, 2]}
-      gl={{ antialias: true }}
-      camera={{ position: [20, 20, 20], near: CAM_NEAR, far: CAM_FAR }}
+      camera={{ manual: true, position: [20, 20, 20], near: CAM_NEAR, far: CAM_FAR }}
     >
       <color attach="background" args={[BACKGROUND]} />
 
@@ -96,16 +122,19 @@ export function GameCanvas({
         showGrid={showGrid}
       />
       <Bridges map={map} roadTier={roadTier} />
-      <Trees map={map} />
+      <Trees map={map} placements={trees} ents={lastMarch} />
+      <Environment map={map} />
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />
-      <Monks map={map} monks={monks} />
-      <Travelers map={map} travelers={travelers} speed={walkSpeed} characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
-      <TileCursor map={map} />
+      <Monks map={map} monks={monks} flying={blasterPastor} />
+      <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown}
+        characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
+      <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
+      {buildType && <BuildInfluenceOverlay map={map} />}
 
-      <CameraRig map={map} />
-      <OutlinePass />
-      <DebugHandle map={map} />
-    </Canvas>
+      <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
+      <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
+      <DebugHandle map={map} travelers={travelers} speed={walkSpeed} movement={movement} />
+    </PixelCanvas>
   )
 }

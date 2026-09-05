@@ -1,4 +1,5 @@
 import { deriveSeed, makeRng, SEED_STREAM } from "./rng"
+import type { GameMap } from "./map/types"
 
 /**
  * Travelers on the road. Pure data — no three.js, no React — so identities can
@@ -257,8 +258,17 @@ function rollAttributes(rng: () => number, type: TravelerTypeDef): TravelerAttri
   }
 }
 
-/** How many travelers walk the road unless the tuner says otherwise. */
+/** Travelers per 128 × 128 tiles; also the count on the reference map. */
 export const DEFAULT_TRAFFIC = 12
+
+/** Convert the traffic density into a whole crowd using the generated map's area. */
+export function travelerCountForMap(
+  map: Pick<GameMap, "width" | "depth">,
+  density: number = DEFAULT_TRAFFIC,
+): number {
+  if (!Number.isFinite(density) || density <= 0) return 0
+  return Math.max(0, Math.round((map.width * map.depth * density) / (128 * 128)))
+}
 
 export function generateTravelers(seed: number, count: number): Traveler[] {
   const rng = makeRng(deriveSeed(seed, SEED_STREAM.travelers))

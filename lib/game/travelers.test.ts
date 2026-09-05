@@ -1,6 +1,31 @@
 import { describe, expect, it } from "vitest"
 
-import { generateTravelers, TRAVELER_TYPES } from "./travelers"
+import { generateTravelers, travelerCountForMap, TRAVELER_TYPES } from "./travelers"
+
+describe("travelerCountForMap", () => {
+  it("preserves the default crowd and scales with map area", () => {
+    expect(travelerCountForMap({ width: 128, depth: 128 })).toBe(12)
+    expect(travelerCountForMap({ width: 64, depth: 64 })).toBe(3)
+    expect(travelerCountForMap({ width: 256, depth: 256 })).toBe(48)
+    expect(travelerCountForMap({ width: 128, depth: 256 })).toBe(24)
+  })
+
+  it("applies the chosen density and allows empty roads at every size", () => {
+    for (const size of [64, 128, 256, 512]) {
+      const map = { width: size, depth: size }
+      expect(travelerCountForMap(map, 24)).toBe(travelerCountForMap(map) * 2)
+      expect(travelerCountForMap(map, 0)).toBe(0)
+    }
+  })
+
+  it("rounds to a whole crowd and ignores invalid densities", () => {
+    const map = { width: 96, depth: 96 }
+    expect(generateTravelers(7, travelerCountForMap(map))).toHaveLength(7)
+    for (const density of [-1, NaN, Infinity]) {
+      expect(travelerCountForMap(map, density)).toBe(0)
+    }
+  })
+})
 
 describe("generateTravelers", () => {
   it("is fully determined by its seed", () => {

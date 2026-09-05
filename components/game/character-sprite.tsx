@@ -9,11 +9,12 @@ import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { useCharacterAssetStore } from "@/lib/game/character-asset-store"
 import type { TravelerTypeId } from "@/lib/game/travelers"
 import { applySpriteDepth } from "@/lib/game/render/sprite-depth"
-import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
+import { OUTLINE_ID_LAYER_MASK, SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import type { FigureClickHandler } from "./traveler-figure"
 
-export function CharacterSprite({ type, onClick, outlineColor, characterModel = "callings", characterScale = 1, characterFps, walkTuning }: {
+export function CharacterSprite({ type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning }: {
   type: TravelerTypeId
+  selected?: boolean
   onClick?: FigureClickHandler
   outlineColor?: [number, number, number]
   characterModel?: CharacterModel
@@ -128,7 +129,7 @@ export function CharacterSprite({ type, onClick, outlineColor, characterModel = 
   return (
     <>
       {shadowMaterial && <sprite name="traveler-shadow" material={shadowMaterial} scale={[size, size, 1]} center={center} raycast={() => {}} />}
-      <sprite ref={sprite} name="traveler" material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, fps, sync: walkTuning?.sync === true }} />
+      <sprite ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name="traveler" material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, fps, sync: walkTuning?.sync === true }} />
       {outlineMaterial && <sprite layers-mask={OUTLINE_ID_LAYER_MASK} material={outlineMaterial}
         scale={[size, size, 1]} center={center} />}
     </>

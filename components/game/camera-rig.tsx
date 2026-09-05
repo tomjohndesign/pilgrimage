@@ -4,8 +4,9 @@ import { useEffect, useRef } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
-import { worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
+import { worldToTileX, worldToTileZ, type GameMap, type TilePos } from "@/lib/game/map/types"
 import {
   CAM_FAR,
   CAM_NEAR,
@@ -29,7 +30,9 @@ const KEY_PAN_SPEED = 18
  */
 const PICK_PLANE_Y = 0.2
 
-export function CameraRig({ map }: { map: GameMap }) {
+export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TilePos) => void }) {
+  const placeRef = useRef(onPlace)
+  placeRef.current = onPlace
   const { camera, gl, size } = useThree()
 
   const displayYaw = useRef(yawForView(useCameraStore.getState().viewIndex))
@@ -49,6 +52,9 @@ export function CameraRig({ map }: { map: GameMap }) {
     let dragPointerId: number | null = null
     let lastX = 0
     let lastY = 0
+    let startX = 0
+    let startY = 0
+    let dragged = false
 
     const updateHover = (event: PointerEvent) => {
       const rect = canvas.getBoundingClientRect()
@@ -74,13 +80,15 @@ export function CameraRig({ map }: { map: GameMap }) {
     const onPointerDown = (event: PointerEvent) => {
       if (dragPointerId !== null) return
       dragPointerId = event.pointerId
-      lastX = event.clientX
-      lastY = event.clientY
+      lastX = startX = event.clientX
+      lastY = startY = event.clientY
+      dragged = false
       canvas.setPointerCapture(event.pointerId)
     }
 
     const onPointerMove = (event: PointerEvent) => {
       if (event.pointerId === dragPointerId) {
+        if (Math.hypot(event.clientX - startX, event.clientY - startY) > 6) dragged = true
         const dx = event.clientX - lastX
         const dy = event.clientY - lastY
         lastX = event.clientX
@@ -100,9 +108,14 @@ export function CameraRig({ map }: { map: GameMap }) {
 
     const endDrag = (event: PointerEvent) => {
       if (event.pointerId !== dragPointerId) return
-      canvas.releasePointerCapture(event.pointerId)
+      if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
       dragPointerId = null
       canvas.style.cursor = "grab"
+      if (event.type === "pointerup" && event.button === 0 && !dragged && Math.hypot(event.clientX - startX, event.clientY - startY) <= 6) {
+        updateHover(event)
+        const tile = useCameraStore.getState().hovered
+        if (tile) placeRef.current?.(tile)
+      }
     }
 
     const onPointerLeave = () => {
@@ -152,7 +165,7 @@ export function CameraRig({ map }: { map: GameMap }) {
 
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return
+      if (event.defaultPrevented || target?.closest("input, textarea, select, [contenteditable='true']")) return
 
       const key = event.key.toLowerCase()
       heldKeys.current.add(key)
@@ -160,6 +173,9 @@ export function CameraRig({ map }: { map: GameMap }) {
       // Rotation and zoom fire once per press, not on auto-repeat.
       if (event.repeat) return
       switch (key) {
+        case "escape":
+          useBuildStore.getState().setTool(null)
+          break
         case "q":
         case ",":
           rotate(-1)
@@ -191,13 +207,18 @@ export function CameraRig({ map }: { map: GameMap }) {
     window.addEventListener("keydown", onKeyDown)
     window.addEventListener("keyup", onKeyUp)
     window.addEventListener("blur", onBlur)
+    // Opening the cheat bar while holding WASD must stop the existing pan.
+    window.addEventListener("focusin", onBlur)
     return () => {
       window.removeEventListener("keydown", onKeyDown)
       window.removeEventListener("keyup", onKeyUp)
       window.removeEventListener("blur", onBlur)
+      window.removeEventListener("focusin", onBlur)
     }
   }, [])
 
+  // Update the display pose before lighting, animation, and the pixel render pass.
+  // These canvases use a manual camera because this rig owns the frustum.
   // --- Per-frame: tween and drive the camera ----------------------------------
   useFrame((_, delta) => {
     const { targetX, targetZ, viewIndex, viewSize, pan } = useCameraStore.getState()
@@ -249,7 +270,7 @@ export function CameraRig({ map }: { map: GameMap }) {
     cam.position.set(targetX + ox, oy, targetZ + oz)
     cam.lookAt(targetX, 0, targetZ)
     cam.updateProjectionMatrix()
-  })
+  }, -2)
 
   return null
 }

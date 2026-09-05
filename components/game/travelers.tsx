@@ -5,6 +5,13 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
+import { selectElement } from "@/lib/game/selection"
+import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
+import { useBalanceStore } from "@/lib/game/balance-store"
+import { lumberCamps } from "@/lib/game/settlement"
+import { useBuildStore } from "@/lib/game/build-store"
+import type { Relic } from "@/lib/game/relic"
+import type { TreePlacement } from "@/lib/game/trees/placement"
 import type { GameMap } from "@/lib/game/map/types"
 import { createSim, simRegistry, stepSim } from "@/lib/game/sim"
 import type { Traveler } from "@/lib/game/travelers"
@@ -19,9 +26,6 @@ import {
 
 import {
   AWNING_NAME,
-  BLOCK_HEIGHT,
-  CART_BED,
-  CART_OFFSET_Z,
   TravelerFigure,
 } from "./traveler-figure"
 
@@ -34,8 +38,6 @@ import {
  * traveler-figure.tsx so the character gallery can draw the same one.
  */
 
-/** A click that dragged further than this many pixels is a pan, not a select. */
-const CLICK_SLOP_PX = 6
 
 export function Travelers({
   map,
@@ -46,9 +48,15 @@ export function Travelers({
   characterFps,
   walkTuning,
   movement = LINEAR_MOVEMENT,
+  relic,
+  trees,
+  shrineRenown,
 }: {
   map: GameMap
   travelers: Traveler[]
+  relic: Relic
+  trees: TreePlacement[]
+  shrineRenown: number
   /** Base walking speed in tiles per second; each traveler's pace scales it. */
   speed: number
   /** Swaps only the figure; identities, simulation and selection sounds stay shared. */
@@ -61,9 +69,21 @@ export function Travelers({
   movement?: MovementTuning
 }) {
   const selection = useCameraStore((s) => s.selection)
+  const resourceElapsed = useRef(0)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
 
-  const sim = useMemo(() => createSim(travelers, map), [travelers, map])
+  const sim = useMemo(() => createSim([], map, [], relic.stats), [map.road, relic])
+  useEffect(() => {
+    const fresh = createSim(travelers, map, [], relic.stats)
+    for (const [id, traveler] of fresh.travelers) {
+      if (!sim.travelers.has(id)) sim.travelers.set(id, traveler)
+    }
+    for (const id of sim.travelers.keys()) {
+      if (!fresh.travelers.has(id)) sim.travelers.delete(id)
+    }
+  }, [sim, travelers, map, relic])
+
+  const camps = useMemo(() => lumberCamps(map), [map])
 
   // Publish the running sim so the HUD's traveler panel can poll live stats.
   useEffect(() => {
@@ -87,7 +107,17 @@ export function Travelers({
 
   useFrame((_, delta) => {
     // A background tab hands us a huge delta; clamp so nobody teleports.
+    const build = useBuildStore.getState()
+    sim.buildings = camps
+    sim.shrineRenown = shrineRenown
+    sim.balance = useBalanceStore.getState().balance
+    sim.trees = trees
     stepSim(sim, travelers, map, speed, Math.min(delta, 0.1), movement)
+    resourceElapsed.current += delta
+    if (build.resourceRevision !== sim.resourceRevision || resourceElapsed.current >= 0.25) {
+      build.syncResources(sim, travelers)
+      resourceElapsed.current = 0
+    }
 
     for (let i = 0; i < travelers.length; i++) {
       const group = groupRefs.current[i]
@@ -118,7 +148,14 @@ export function Travelers({
         if (awning) awning.visible = s.activity === "vending"
       }
 
+      const logs = group.getObjectByName("carried-logs")
+      if (logs) logs.visible = s.carrying > 0
       group.position.set(s.x, s.y, s.z)
+      // Keep baked bodies and ground shadows at their authored proportions.
+      // Camping/visiting already select the idle clip.
+      group.scale.y = 1
+      if (s.activity === "working") group.rotation.z = Math.sin(sim.time * 1800) * 0.12
+      else group.rotation.z = 0
     }
   })
 
@@ -128,12 +165,8 @@ export function Travelers({
     <group>
       {travelers.map((traveler, index) => {
         const selected = isSelected(selection, { kind: "traveler", id: traveler.id })
-        const [r, g, b] = encodeObjectId(travelerObjectId(index))
-        const select = (event: { delta: number; stopPropagation: () => void }) => {
-          if (event.delta > CLICK_SLOP_PX) return
-          event.stopPropagation()
-          useCameraStore.getState().select(selected ? null : { kind: "traveler", id: traveler.id })
-        }
+        const idColor = new THREE.Color(...encodeObjectId(travelerObjectId(index)))
+        const select = (event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "traveler", id: traveler.id }, event)
         return (
           <group
             key={traveler.id}
@@ -141,25 +174,17 @@ export function Travelers({
               groupRefs.current[index] = node
             }}
           >
-            <TravelerFigure type={traveler.type} onClick={select} outlineColor={[r, g, b]} characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
-
-            {/* ID silhouettes for the outline pass; inherit the group's motion. */}
-            {traveler.type.id === "vendor" && (
-              <mesh
-                position={[0, 0.18, CART_OFFSET_Z]}
-                layers-mask={OUTLINE_ID_LAYER_MASK}
-              >
-                <boxGeometry args={CART_BED} />
-                <meshBasicMaterial color={new THREE.Color(r, g, b)} toneMapped={false} />
+            <TravelerFigure selected={selected} type={traveler.type} onClick={select} idColor={idColor}
+              characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
+            <group name="carried-logs" visible={false} position={[0, 0.35, 0.2]} rotation={[0, 0, Math.PI / 2]} onClick={select}>
+              <mesh><cylinderGeometry args={[0.12, 0.12, 0.6, 6]} /><meshLambertMaterial color="#89613c" /></mesh>
+              <mesh layers-mask={OUTLINE_ID_LAYER_MASK}>
+                <cylinderGeometry args={[0.12, 0.12, 0.6, 6]} /><meshBasicMaterial color={idColor} toneMapped={false} />
               </mesh>
-            )}
+            </group>
 
-            {selected && (
-              <mesh position={[0, BLOCK_HEIGHT * characterScale + 0.35, 0]}>
-                <boxGeometry args={[0.2, 0.05, 0.2]} />
-                <meshBasicMaterial color="#d8a93f" />
-              </mesh>
-            )}
+            <CharacterHitTarget onClick={select} />
+            {selected && <CharacterSelectionShadow map={map} />}
           </group>
         )
       })}
