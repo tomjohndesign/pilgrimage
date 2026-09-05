@@ -21,7 +21,7 @@ import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, formatGameTime, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { MONK_ACTIVITY_LABELS, monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { relicTitle, type Relic } from "@/lib/game/relic"
-import type { Traveler } from "@/lib/game/travelers"
+import { DEFAULT_TRAFFIC, type Traveler } from "@/lib/game/travelers"
 import type { PixelationProps } from "@/components/pixel-canvas"
 
 import type { MapSettings } from "./game-shell"
@@ -777,13 +777,16 @@ export function GameHud({
 
         <Section {...section("Road")}>
           <Tuner
-            label="Traffic"
+            label="Traffic density"
             value={settings.traffic}
-            display={String(settings.traffic)}
+            display={`${Math.round((settings.traffic / DEFAULT_TRAFFIC) * 100)}%`}
             min={0}
             max={60}
             onChange={(traffic) => set({ traffic })}
           />
+          <p className="text-[11px] italic text-ink-light">
+            {travelers.length} folk across the map.
+          </p>
           <Tuner
             label="Pace"
             value={settings.walkSpeed}
