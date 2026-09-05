@@ -41,6 +41,9 @@ import {
   MAX_OBJECT_ID,
   nextOutlineMode,
   OUTLINE_MODES,
+  RELIC_OBJECT_ID,
+  residentObjectId,
+  travelerObjectId,
   treeObjectId,
   type OutlineMode,
 } from "./render/outline"
@@ -247,13 +250,13 @@ describe("seeded rng", () => {
 describe("outline ids", () => {
   it("round-trips ids through 8-bit-per-channel quantisation", () => {
     const readback = (v: number) => Math.round(v * 255) / 255
-    for (const id of [0, 1, 2, 255, 256, 257, 1024, MAX_OBJECT_ID]) {
-      const [r, g] = encodeObjectId(id)
-      expect(decodeObjectId(readback(r), readback(g))).toBe(id)
+    for (const id of [0, 1, 2, 255, 256, 257, 1024, 65535, 65536, 65537, 0x8000ff, MAX_OBJECT_ID]) {
+      const [r, g, b] = encodeObjectId(id)
+      expect(decodeObjectId(readback(r), readback(g), readback(b))).toBe(id)
     }
   })
 
-  it("rejects ids the two channels cannot hold", () => {
+  it("rejects ids the three channels cannot hold", () => {
     expect(() => encodeObjectId(-1)).toThrow()
     expect(() => encodeObjectId(MAX_OBJECT_ID + 1)).toThrow()
     expect(() => encodeObjectId(1.5)).toThrow()
@@ -268,6 +271,18 @@ describe("outline ids", () => {
     expect(ids.has(0)).toBe(false)
     expect(ids.size).toBe(buildingCount + treeCount)
     expect(Math.max(...ids)).toBeLessThanOrEqual(MAX_OBJECT_ID)
+  })
+
+  it("holds the trees of the largest map without reaching the reserved blocks", () => {
+    // 512 × 512 tiles, every one forest, two trees each: the worst case the
+    // size and coverage sliders can produce. The tree block must stay below
+    // the relic, the residents, and the travelers counting down from the top.
+    const worstTrees = 512 * 512 * 2
+    const top = treeObjectId(64, worstTrees - 1)
+    expect(top).toBeLessThan(RELIC_OBJECT_ID)
+    expect(top).toBeLessThan(residentObjectId(0x1000 - 1))
+    expect(top).toBeLessThan(travelerObjectId(0xfff))
+    expect(() => encodeObjectId(top)).not.toThrow()
   })
 
   it("cycles through every mode and wraps back to the first", () => {
