@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from "react"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
-import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
+import { PixelCanvas, PixelCharacters, type PixelationProps } from "@/components/pixel-canvas"
 
 import { useCameraStore } from "@/lib/game/camera-store"
 import type { Resources } from "@/lib/game/settlement"
@@ -130,9 +130,11 @@ export function GameCanvas({
       <Environment map={map} />
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />
-      <Monks map={map} monks={monks} flying={blasterPastor} />
-      <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown}
-        characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
+      <PixelCharacters>
+        <Monks map={map} monks={monks} flying={blasterPastor} />
+        <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown}
+          characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
+      </PixelCharacters>
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
       {buildType && <BuildInfluenceOverlay map={map} />}
 

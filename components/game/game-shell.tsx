@@ -153,7 +153,7 @@ export function GameShell({
   const [pixelationOverrides, setPixelationOverrides] = useState<PixelationProps>({})
   const pixelationSettings = {
     pixelsPerUnit: pixelationOverrides.pixelsPerUnit ?? pixelation?.pixelsPerUnit ?? 25,
-    outputDpr: pixelationOverrides.outputDpr ?? pixelation?.outputDpr ?? 0.5,
+    outputDpr: pixelationOverrides.outputDpr ?? pixelation?.outputDpr ?? 1,
     pixelated: pixelationOverrides.pixelated ?? pixelation?.pixelated ?? true,
   }
 
