@@ -1,7 +1,7 @@
 import { create } from "zustand"
 
 import { DEFAULT_MAP_DEPTH, DEFAULT_MAP_WIDTH } from "./map/generate-map"
-import { clampViewSize, DEFAULT_VIEW_SIZE } from "./render/iso"
+import { clampViewSize, DEFAULT_VIEW_SIZE, maxViewSizeForMap } from "./render/iso"
 import { DEFAULT_OUTLINE_MODE, nextOutlineMode, type OutlineMode } from "./render/outline"
 
 /** How far past the map edge the camera target may travel. */
@@ -26,13 +26,18 @@ interface CameraState {
   /** Current map extent; the pan clamp follows whatever map is loaded. */
   mapWidth: number
   mapDepth: number
+  /** Traveler the player clicked, by traveler id. Not part of reset(). */
+  selectedTravelerId: number | null
 
   pan: (dx: number, dz: number) => void
+  /** Jump the focus straight to a world point — the minimap's click-to-travel. */
+  panTo: (x: number, z: number) => void
   rotate: (direction: 1 | -1) => void
   zoomBy: (factor: number) => void
   setHovered: (tile: HoveredTile | null) => void
   cycleOutlineMode: () => void
   setMapSize: (width: number, depth: number) => void
+  selectTraveler: (id: number | null) => void
   reset: () => void
 }
 
@@ -45,25 +50,37 @@ const INITIAL = {
   hovered: null,
 }
 
+/** Clamp a target point to the map extent plus the pan margin. */
+function clampTarget(
+  s: { mapWidth: number; mapDepth: number },
+  x: number,
+  z: number,
+): { targetX: number; targetZ: number } {
+  const maxX = s.mapWidth / 2 + PAN_MARGIN
+  const maxZ = s.mapDepth / 2 + PAN_MARGIN
+  return {
+    targetX: Math.min(maxX, Math.max(-maxX, x)),
+    targetZ: Math.min(maxZ, Math.max(-maxZ, z)),
+  }
+}
+
 export const useCameraStore = create<CameraState>((set) => ({
   ...INITIAL,
   outlineMode: DEFAULT_OUTLINE_MODE,
   mapWidth: DEFAULT_MAP_WIDTH,
   mapDepth: DEFAULT_MAP_DEPTH,
+  selectedTravelerId: null,
 
-  pan: (dx, dz) =>
-    set((s) => {
-      const maxX = s.mapWidth / 2 + PAN_MARGIN
-      const maxZ = s.mapDepth / 2 + PAN_MARGIN
-      return {
-        targetX: Math.min(maxX, Math.max(-maxX, s.targetX + dx)),
-        targetZ: Math.min(maxZ, Math.max(-maxZ, s.targetZ + dz)),
-      }
-    }),
+  pan: (dx, dz) => set((s) => clampTarget(s, s.targetX + dx, s.targetZ + dz)),
+
+  panTo: (x, z) => set((s) => clampTarget(s, x, z)),
 
   rotate: (direction) => set((s) => ({ viewIndex: s.viewIndex + direction })),
 
-  zoomBy: (factor) => set((s) => ({ viewSize: clampViewSize(s.viewSize * factor) })),
+  zoomBy: (factor) =>
+    set((s) => ({
+      viewSize: clampViewSize(s.viewSize * factor, maxViewSizeForMap(s.mapWidth, s.mapDepth)),
+    })),
 
   setHovered: (tile) =>
     set((s) => {
@@ -75,8 +92,22 @@ export const useCameraStore = create<CameraState>((set) => ({
 
   cycleOutlineMode: () => set((s) => ({ outlineMode: nextOutlineMode(s.outlineMode) })),
 
-  setMapSize: (width, depth) => set({ mapWidth: width, mapDepth: depth }),
+  // Loading a smaller map may leave the camera zoomed out past the new cap,
+  // so the view size re-clamps along with the pan bounds.
+  setMapSize: (width, depth) =>
+    set((s) => ({
+      mapWidth: width,
+      mapDepth: depth,
+      viewSize: clampViewSize(s.viewSize, maxViewSizeForMap(width, depth)),
+      ...clampTarget({ mapWidth: width, mapDepth: depth }, s.targetX, s.targetZ),
+    })),
+
+  selectTraveler: (id) => set({ selectedTravelerId: id }),
 
   // Deliberately leaves mapWidth/mapDepth alone — reset is a camera action.
-  reset: () => set({ ...INITIAL }),
+  reset: () =>
+    set((s) => ({
+      ...INITIAL,
+      viewSize: clampViewSize(DEFAULT_VIEW_SIZE, maxViewSizeForMap(s.mapWidth, s.mapDepth)),
+    })),
 }))

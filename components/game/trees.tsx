@@ -14,25 +14,24 @@ import {
 } from "@/lib/game/render/outline"
 
 /**
- * Placeholder trees: jittered boxes on forest tiles, drawn in one batch.
- * `density` is trees per tile at the forest core. The stand fades at its
- * edges: tree count, height, and colour all follow the forest-shade field, so
- * the outermost trees are sparser, shorter, and lighter and the woods taper
- * into grassland instead of stopping at a wall. Every forest tile keeps at
- * least one tree — forest is impassable, and a treeless tile would lie about
- * that. Jitter derives from the map seed (via its own stream so trees and
- * tiles never share RNG state), keeping the whole look a function of one
- * number.
+ * Placeholder trees: jittered boxes on every forest tile, drawn in one batch.
+ * Every forest tile holds 1 or 2 trees — a seeded per-tile coin flip, so the
+ * woods vary in thickness without ever thinning to scrub or clotting solid.
+ * The stand fades at its edges: the coin flip only lands on 2 deep in the
+ * woods, and height and colour follow the forest-shade field, so the
+ * outermost trees are sparser, shorter, and lighter and the woods taper into
+ * grassland instead of stopping at a wall. Every forest tile keeps at least
+ * one tree — forest is impassable, and a treeless tile would lie about that.
+ * Jitter derives from the map seed (via its own stream so trees and tiles
+ * never share RNG state), keeping the whole look a function of one number.
  */
 const TREE_COLOR = new THREE.Color("#40542e")
-
-export const DEFAULT_TREE_DENSITY = 1
 
 /** Edge trees scale down to this fraction of a core tree's size. */
 const EDGE_SIZE_SCALE = 0.55
 
-/** How deep in the woods a tile must be before extra core trees can appear. */
-const CORE_SHADE = 0.75
+/** Chance of a second tree at the very heart of the woods; fades to 0 at the rim. */
+const SECOND_TREE_CHANCE = 0.5
 
 interface TreePlacement {
   x: number
@@ -45,7 +44,7 @@ interface TreePlacement {
   brightness: number
 }
 
-export function Trees({ map, density = DEFAULT_TREE_DENSITY }: { map: GameMap; density?: number }) {
+export function Trees({ map }: { map: GameMap }) {
   const meshRef = useRef<THREE.InstancedMesh>(null)
   const idMeshRef = useRef<THREE.InstancedMesh>(null)
 
@@ -53,12 +52,11 @@ export function Trees({ map, density = DEFAULT_TREE_DENSITY }: { map: GameMap; d
   // instance count must be known before the meshes mount.
   const placements = useMemo<TreePlacement[]>(() => {
     const shade = computeForestShade(map)
+    // Counts get their own stream so placement jitter (from the `trees`
+    // stream) stays independent of the coin flips.
+    const rngCount = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.treeCount))
     const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.trees))
     const trees: TreePlacement[] = []
-
-    // Slimmer trunks as the packing increases, so canopies overlap instead of
-    // merging into one solid block.
-    const widthScale = 1 / Math.sqrt(Math.max(1, density))
 
     for (let z = 0; z < map.depth; z++) {
       for (let x = 0; x < map.width; x++) {
@@ -66,12 +64,12 @@ export function Trees({ map, density = DEFAULT_TREE_DENSITY }: { map: GameMap; d
         if (map.tiles[index] !== "forest") continue
         const depth = shade[index]
 
-        // Edge tiles thin out to a single tree; the deep core occasionally
-        // packs one extra so the middle of the stand reads denser than its rim.
-        let count = Math.max(1, Math.round(density * (0.5 + 0.5 * depth)))
-        if (depth > CORE_SHADE && rng() < (depth - CORE_SHADE) * 2) count += 1
-
+        const count = 1 + (rngCount() < SECOND_TREE_CHANCE * depth ? 1 : 0)
+        // Slimmer trunks on the fuller tiles, so canopies overlap instead of
+        // merging into one solid block.
+        const widthScale = 1 / Math.sqrt(count)
         const sizeScale = EDGE_SIZE_SCALE + (1 - EDGE_SIZE_SCALE) * depth
+
         for (let t = 0; t < count; t++) {
           trees.push({
             x,
@@ -89,7 +87,7 @@ export function Trees({ map, density = DEFAULT_TREE_DENSITY }: { map: GameMap; d
       }
     }
     return trees
-  }, [map, density])
+  }, [map])
 
   const count = placements.length
 
