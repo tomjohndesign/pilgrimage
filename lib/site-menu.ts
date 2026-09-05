@@ -19,4 +19,5 @@ export const SITE_MENU: SiteMenuItem[] = [
       { label: "Characters", description: "Every calling on the road", href: "/assets/characters" },
     ],
   },
+  { label: "Changelog", description: "What changed, release by release", href: "/changelog" },
 ]
