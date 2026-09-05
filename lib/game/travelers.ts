@@ -257,6 +257,9 @@ function rollAttributes(rng: () => number, type: TravelerTypeDef): TravelerAttri
   }
 }
 
+/** How many travelers walk the road unless the tuner says otherwise. */
+export const DEFAULT_TRAFFIC = 12
+
 export function generateTravelers(seed: number, count: number): Traveler[] {
   const rng = makeRng(deriveSeed(seed, SEED_STREAM.travelers))
   const travelers: Traveler[] = []

@@ -1,6 +1,71 @@
 import { describe, expect, it } from "vitest"
 
-import { generateRelic, RELICS, relicTitle } from "./relic"
+import {
+  generateRelic,
+  relicBound,
+  relicDraw,
+  RELICS,
+  relicTitle,
+  TURN_ASIDE_DRAW,
+  turnsAside,
+} from "./relic"
+import { generateTravelers, TRAVELER_TYPES, type Traveler, type TravelerAttributes } from "./travelers"
+
+const who = (piety: number, status: number): TravelerAttributes => ({
+  gold: 10,
+  status,
+  hunger: 50,
+  thirst: 50,
+  piety,
+  stamina: 50,
+  jobless: false,
+  skills: [],
+  age: 30,
+})
+
+describe("relic draw", () => {
+  const holy = { sanctity: 95, spectacle: 40, doubt: 15, renown: 10 }
+  const dubious = { sanctity: 30, spectacle: 95, doubt: 90, renown: 10 }
+
+  it("pulls the devout harder toward a holy relic than the worldly", () => {
+    expect(relicDraw(who(100, 20), holy)).toBeGreaterThan(relicDraw(who(20, 20), holy))
+    expect(relicDraw(who(100, 20), holy)).toBeGreaterThanOrEqual(TURN_ASIDE_DRAW)
+  })
+
+  it("draws the idle and curious to a marvel, but the high-born sniff at doubt", () => {
+    // Same thin piety: a peasant is more taken by the spectacle than a lord.
+    expect(relicDraw(who(20, 10), dubious)).toBeGreaterThan(relicDraw(who(20, 95), dubious))
+    expect(relicDraw(who(20, 95), dubious)).toBeLessThan(TURN_ASIDE_DRAW)
+  })
+
+  it("grows with renown, since nobody turns aside for a relic they've never heard of", () => {
+    expect(relicDraw(who(70, 30), { ...holy, renown: 90 })).toBeGreaterThan(
+      relicDraw(who(70, 30), { ...holy, renown: 5 }),
+    )
+  })
+
+  it("sends a different, smaller crowd down the track than walks the road", () => {
+    // A holy relic: enough draw that someone turns aside even while it is
+    // barely known, never so much that the whole road does.
+    const seed = Array.from({ length: 50 }, (_, i) => i + 1).find(
+      (s) => generateRelic(s).stats.sanctity >= 80,
+    )!
+    const relic = generateRelic(seed)
+    const travelers = generateTravelers(seed, 60)
+    const bound = relicBound(travelers, relic)
+    expect(bound.length).toBeGreaterThan(0)
+    expect(bound.length).toBeLessThan(travelers.length / 2)
+    expect(bound.every((t) => turnsAside(t, relic))).toBe(true)
+    // Pilgrims turn aside for it more readily than the rest of the road.
+    const share = (pick: (t: Traveler) => boolean) => {
+      const of = travelers.filter(pick)
+      return of.length ? of.filter((t) => turnsAside(t, relic)).length / of.length : 0
+    }
+    expect(share((t) => t.type === TRAVELER_TYPES.pilgrim)).toBeGreaterThan(
+      share((t) => t.type !== TRAVELER_TYPES.pilgrim),
+    )
+  })
+})
 
 describe("generateRelic", () => {
   it("is fully determined by its seed", () => {
