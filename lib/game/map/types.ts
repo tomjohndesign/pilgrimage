@@ -18,6 +18,12 @@ export interface BuildingDef {
 }
 
 export interface WaterInfo {
+  /** Surface relative to the base layer; always negative on water. */
+  surface?: number[]
+  /** Downstream neighbour index, or -1 at a still pool/outlet. */
+  downstream?: number[]
+  drop?: number[]
+  motion?: Array<"still" | "flow" | "waterfall">
   /**
    * Row-major water depth: 0 on land, 1 (shallow shoreline) to 3 (deep) on
    * water. Bridge tiles keep the depth of the water running beneath them.
@@ -55,6 +61,7 @@ export interface FoundingSite {
 }
 
 export interface GameMap {
+  elevation?: import("./elevation").ElevationInfo
   width: number
   depth: number
   /** Row-major, indexed by `z * width + x`. */

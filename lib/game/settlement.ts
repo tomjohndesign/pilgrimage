@@ -1,3 +1,4 @@
+import { groundHeight } from "./map/elevation"
 import { placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
 import { settlementRoute } from "./settlement-route"
 import type { SimState } from "./sim"
@@ -161,6 +162,7 @@ export function placementError(
       if (buildingAt(map, x, z)) return "Another structure occupies this space."
       if (!TERRAIN[terrain].buildable || terrain === "hills")
         return "Choose flat, open ground; keep woods, water and paths clear."
+      if (map.elevation && (map.elevation.cliffs[z * map.width + x] || Math.abs(groundHeight(map, x, z) - groundHeight(map, at.x, at.z)) > 0.2)) return "Choose level ground away from cliffs."
       if (map.water?.depth[z * map.width + x]) return "Structures need dry ground."
       if (
         map.site?.branch.some((tile) => tile.x === x && tile.z === z) ||

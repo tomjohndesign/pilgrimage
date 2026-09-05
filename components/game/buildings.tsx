@@ -1,5 +1,7 @@
 "use client"
 
+import { groundHeight } from "@/lib/game/map/elevation"
+
 import { useMemo } from "react"
 import * as THREE from "three"
 
@@ -7,7 +9,6 @@ import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { useBuildStore } from "@/lib/game/build-store"
 import { pileOffset } from "@/lib/game/trees/timber"
 import { WoodPile } from "./wood-pile"
-import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import {
   buildingObjectId,
@@ -48,7 +49,7 @@ export function Buildings({ map }: { map: GameMap }) {
         // Footprint centre: the origin tile's centre, offset by half the extra tiles.
         const centreX = tileToWorldX(map, building.x) + (building.w - 1) / 2
         const centreZ = tileToWorldZ(map, building.z) + (building.d - 1) / 2
-        const baseY = TILE_HEIGHT
+        const baseY = groundHeight(map, building.x + (building.w - 1) / 2, building.z + (building.d - 1) / 2)
 
         const cross = building.buildType === "cross"
         const selected = isSelected(selection, { kind: "building", id: building.id })

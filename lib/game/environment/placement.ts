@@ -1,6 +1,7 @@
+import { groundHeight } from "../map/elevation"
 import { bridgeLayout } from "../map/bridges"
 import { computeForestShade } from "../map/forest-field"
-import { TILE_HEIGHT, type TerrainId } from "../map/terrain"
+import { type TerrainId } from "../map/terrain"
 import { worldToTileX, worldToTileZ, type GameMap } from "../map/types"
 import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
 import { ELEMENT_RADIUS, ENVIRONMENT_KINDS, type EnvironmentKind, type EnvironmentPlacement } from "./elements"
@@ -119,7 +120,7 @@ export function placeEnvironment(map: GameMap): EnvironmentPlacement[] {
           const x = worldToTileX(map, px)
           const z = worldToTileZ(map, pz)
           const placement: EnvironmentPlacement = {
-            x: px, y: TILE_HEIGHT, z: pz, kind, scale, cluster,
+            x: px, y: groundHeight(map, px + map.width / 2 - 0.5, pz + map.depth / 2 - 0.5), z: pz, kind, scale, cluster,
             yaw: rng() * Math.PI * 2,
             brightness: 1 - shade[z * map.width + x] * 0.25,
             seed: deriveSeed(deriveSeed(shapeSeed, cluster), member),
