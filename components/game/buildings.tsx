@@ -3,8 +3,8 @@
 import { useMemo } from "react"
 import * as THREE from "three"
 
-import { TERRAIN } from "@/lib/game/map/terrain"
-import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
+import { TILE_HEIGHT } from "@/lib/game/map/terrain"
+import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import {
   buildingObjectId,
   encodeObjectId,
@@ -38,8 +38,7 @@ export function Buildings({ map }: { map: GameMap }) {
         // Footprint centre: the origin tile's centre, offset by half the extra tiles.
         const centreX = tileToWorldX(map, building.x) + (building.w - 1) / 2
         const centreZ = tileToWorldZ(map, building.z) + (building.d - 1) / 2
-        const groundTerrain = tileAt(map, building.x, building.z)
-        const baseY = groundTerrain ? TERRAIN[groundTerrain].height : 0
+        const baseY = TILE_HEIGHT
 
         const bodyArgs: [number, number, number] = [
           building.w * BODY_INSET,

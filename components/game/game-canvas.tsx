@@ -17,7 +17,16 @@ import { Trees } from "./trees"
 
 const BACKGROUND = "#14100a"
 
-export function GameCanvas({ map, treeDensity }: { map: GameMap; treeDensity?: number }) {
+export function GameCanvas({
+  map,
+  treeDensity,
+  showGrid = false,
+}: {
+  map: GameMap
+  treeDensity?: number
+  /** Draw the global tile lattice over the ground. Off by default. */
+  showGrid?: boolean
+}) {
   return (
     <Canvas
       orthographic
@@ -40,7 +49,7 @@ export function GameCanvas({ map, treeDensity }: { map: GameMap; treeDensity?: n
 
       {/* The terrain suspends while the dirt texture loads. */}
       <Suspense fallback={null}>
-        <TerrainTiles map={map} />
+        <TerrainTiles map={map} showGrid={showGrid} />
       </Suspense>
       <Trees map={map} density={treeDensity} />
       <Buildings map={map} />
