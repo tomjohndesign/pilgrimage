@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "498777ed82febcb43abed6f0a5f9df43d8b176d9",
-  "releaseCount": 20,
+  "lastProcessedCommit": "2290db26c014bfa34e4d415cac4b880cafb34c4e",
+  "releaseCount": 21,
   "releases": [
+    {
+      "version": "0.0.35",
+      "title": "Release 0.0.35",
+      "summary": "Add parametric character sprites, a live editor, and a varied road population (#54)",
+      "commit": "2290db26c014bfa34e4d415cac4b880cafb34c4e"
+    },
     {
       "version": "0.0.34",
       "title": "Release 0.0.34",
