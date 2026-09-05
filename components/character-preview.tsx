@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense } from "react"
-import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
+import { PixelCanvas, PixelCharacters, type PixelationProps } from "@/components/pixel-canvas"
 
 import { parseAsciiMap } from "@/lib/game/map/prototype-map"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
@@ -61,7 +61,7 @@ export function CharacterPreview({ type, ...pixelation }: { type: TravelerTypeDe
         </Suspense>
         {/* Face east along the road so the vendor's cart trails visibly. */}
         <group position={[0, roadTop, 0]} rotation={[0, Math.PI / 2, 0]}>
-          <TravelerFigure type={type} awning={type.id === "vendor"} />
+          <PixelCharacters><TravelerFigure type={type} awning={type.id === "vendor"} /></PixelCharacters>
         </group>
       </group>
     </PixelCanvas>

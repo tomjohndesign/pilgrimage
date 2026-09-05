@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react"
 import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 import { usePixelScene } from "@/components/pixel-canvas"
+import { CHARACTER_ID_LAYER } from "@/lib/game/render/pixel-characters"
 
 import { useCameraStore } from "@/lib/game/camera-store"
 import { useBuildStore } from "@/lib/game/build-store"
@@ -11,6 +12,7 @@ import { SELECTION_OUTLINE_COLOR, SELECTION_OUTLINE_OPACITY, SELECTION_FILL, SEL
 import {
   OUTLINE_ID_LAYER,
   SELECTED_CHARACTER_LAYER,
+  MAX_OBJECT_ID,
   type OutlineMode,
 } from "@/lib/game/render/outline"
 
@@ -46,6 +48,8 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform sampler2D tCharacter;
   uniform sampler2D tCharacterDepth;
   uniform bool uCharacterSelected;
+  uniform bool uCharacterPass;
+  uniform float uCharacterIdMin;
   uniform vec2 uTexel;
   uniform int uMode; // 1 = overlap only, 2 = full silhouette
   uniform vec3 uColor;
@@ -55,6 +59,11 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform vec3 uSelectionFill;
   uniform float uSelectionOpacity;
   varying vec2 vUv;
+
+  void finishColor() {
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
 
   float idAt(vec2 uv) {
     vec4 t = texture2D(tId, uv);
@@ -68,6 +77,8 @@ const FRAGMENT_SHADER = /* glsl */ `
     float idN = idAt(uv);
     if (idN < 0.5) return false;            // only objects cast a halo
     if (abs(idN - idC) < 0.5) return false; // same object, no boundary
+    // Scenery-only edges already exist in the enlarged world image.
+    if (uCharacterPass && idC < uCharacterIdMin && idN < uCharacterIdMin) return false;
     float dN = texture2D(tDepth, uv).x;
     return dN < dC - 1.0e-5;                // neighbour must be in front
   }
@@ -92,7 +103,7 @@ const FRAGMENT_SHADER = /* glsl */ `
         } else {
           gl_FragColor = vec4(uSelectionFill, uSelectionOpacity);
         }
-        return;
+        finishColor(); return;
       }
       bool characterEdge =
         texture2D(tCharacter, vUv + vec2(uTexel.x, 0.0)).a > 0.5 ||
@@ -101,12 +112,12 @@ const FRAGMENT_SHADER = /* glsl */ `
         texture2D(tCharacter, vUv - vec2(0.0, uTexel.y)).a > 0.5;
       if (characterEdge) {
         gl_FragColor = vec4(uSelectionColor, uSelectionOutlineOpacity);
-        return;
+        finishColor(); return;
       }
     }
     if (!uCharacterSelected && uSelectedId > 0.5 && abs(idC - uSelectedId) < 0.5) {
       gl_FragColor = vec4(uSelectionFill, uSelectionOpacity);
-      return;
+      finishColor(); return;
     }
     // A thin halo belongs outside the shape, on its background side only.
     // Nearer objects still hide the selected object and its highlight.
@@ -118,7 +129,7 @@ const FRAGMENT_SHADER = /* glsl */ `
         selectedNeighbour(vUv - vec2(0.0, uTexel.y), dC);
       if (selectedEdge) {
         gl_FragColor = vec4(uSelectionColor, uSelectionOutlineOpacity);
-        return;
+        finishColor(); return;
       }
     }
     if (uMode == 0) discard;
@@ -130,6 +141,7 @@ const FRAGMENT_SHADER = /* glsl */ `
       occludedBy(vUv - vec2(0.0, uTexel.y), idC, dC);
     if (!edge) discard;
     gl_FragColor = vec4(uColor, 1.0);
+    finishColor();
   }
 `
 
@@ -155,14 +167,51 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
     depthTexture: new THREE.DepthTexture(1, 1),
   }), [])
 
+  const displayTarget = useMemo(() => new THREE.WebGLRenderTarget(1, 1, {
+    minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+    generateMipmaps: false, depthTexture: new THREE.DepthTexture(1, 1),
+  }), [])
+
+  // Copy encoded world IDs without colour conversion, using exactly the same
+  // crop/depth samples as the visible scenery. Then depth-test character IDs.
+  const worldIds = useMemo(() => {
+    const uniforms = {
+      tId: { value: target.texture }, tDepth: { value: target.depthTexture },
+      uScale: { value: new THREE.Vector2() }, uOffset: { value: new THREE.Vector2() },
+    }
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3))
+    const material = new THREE.ShaderMaterial({
+      uniforms, depthTest: true, depthWrite: true, depthFunc: THREE.AlwaysDepth, toneMapped: false,
+      vertexShader: VERTEX_SHADER,
+      fragmentShader: `varying vec2 vUv;
+        uniform sampler2D tId; uniform sampler2D tDepth;
+        uniform vec2 uScale; uniform vec2 uOffset;
+        void main() {
+          vec2 uv = (vUv - 0.5) * uScale + 0.5 + uOffset;
+          gl_FragColor = texture2D(tId, uv);
+          gl_FragDepth = texture2D(tDepth, uv).x;
+        }`,
+    })
+    const scene = new THREE.Scene()
+    const mesh = new THREE.Mesh(geometry, material)
+    mesh.frustumCulled = false
+    scene.add(mesh)
+    return { uniforms, geometry, material, scene, camera: new THREE.Camera() }
+  }, [target])
+
   useEffect(
     () => () => {
       target.depthTexture?.dispose()
       target.dispose()
       characterTarget.depthTexture?.dispose()
       characterTarget.dispose()
+      displayTarget.depthTexture?.dispose()
+      displayTarget.dispose()
+      worldIds.geometry.dispose()
+      worldIds.material.dispose()
     },
-    [target, characterTarget],
+    [target, characterTarget, displayTarget, worldIds],
   )
 
   const pass = useMemo(() => {
@@ -172,6 +221,8 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
       tCharacter: { value: characterTarget.texture },
       tCharacterDepth: { value: characterTarget.depthTexture },
       uCharacterSelected: { value: false },
+      uCharacterPass: { value: false },
+      uCharacterIdMin: { value: MAX_OBJECT_ID - 0x2000 + 1 },
       uTexel: { value: new THREE.Vector2() },
       uMode: { value: 0 },
       uColor: { value: new THREE.Color(OUTLINE_COLOR) },
@@ -214,59 +265,73 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
   const prevClearColor = useMemo(() => new THREE.Color(), [])
   const bufferSize = useMemo(() => new THREE.Vector2(), [])
 
-  const frameRef = usePixelScene((camera, destination) => {
+  const frameRef = usePixelScene((camera, destination, stage) => {
     const { outlineMode: mode, selection } = useCameraStore.getState()
-    const selectedId = objects
+    const requestedId = objects
       ? selectionObjectId(selection, { ...objects, piles: useBuildStore.getState().piles }) : 0
-    const needsOutline = mode !== "off" || selectedId !== 0
-    const characterSelected = selectedId !== 0 && (selection?.kind === "monk" || selection?.kind === "traveler")
-
-    if (needsOutline) {
-      // Resolution can change during the camera tween in this same frame.
-      // Reuse the target object and only resize its storage when needed.
-      if (destination) bufferSize.set(destination.width, destination.height)
-      else gl.getDrawingBufferSize(bufferSize)
-      target.setSize(Math.max(1, bufferSize.x), Math.max(1, bufferSize.y))
-      // ID pass: only the layer holding flat ID silhouettes, cleared to ID 0.
-      const background = scene.background
-      scene.background = null
-      gl.getClearColor(prevClearColor)
-      const prevClearAlpha = gl.getClearAlpha()
-      gl.setClearColor(0x000000, 1)
-      camera.layers.set(OUTLINE_ID_LAYER)
-      gl.setRenderTarget(target)
-      gl.render(scene, camera)
-      if (characterSelected) {
-        characterTarget.setSize(target.width, target.height)
-        gl.setClearColor(0x000000, 0)
-        camera.layers.set(SELECTED_CHARACTER_LAYER)
-        gl.setRenderTarget(characterTarget)
-        gl.render(scene, camera)
-      }
-      gl.setRenderTarget(destination)
-      camera.layers.set(0)
-      gl.setClearColor(prevClearColor, prevClearAlpha)
-      scene.background = background
-    }
-
-    gl.setRenderTarget(destination)
-    gl.render(scene, camera)
-
-    if (needsOutline) {
-      pass.uniforms.tId.value = target.texture
-      pass.uniforms.tDepth.value = target.depthTexture
-      // One world texel of ink: outlines enlarge with the scene's pixels.
-      pass.uniforms.uTexel.value.set(
-        1 / target.width,
-        1 / target.height,
-      )
-      pass.uniforms.uMode.value = MODE_INT[mode]
-      pass.uniforms.uSelectedId.value = selectedId
-      pass.uniforms.uCharacterSelected.value = characterSelected
-      const prevAutoClear = gl.autoClear
+    const selectingCharacter = requestedId !== 0 && (selection?.kind === "monk" || selection?.kind === "traveler")
+    const characterPass = stage.phase === "characters"
+    const selectionInOtherPass = (stage.phase === "world" && selectingCharacter) || (characterPass && !selectingCharacter)
+    const selectedId = selectionInOtherPass ? 0 : requestedId
+    // The world ID/depth is also needed when only a character is selected.
+    const needsOutline = mode !== "off" || requestedId !== 0
+    const characterSelected = selectedId !== 0 && selectingCharacter
+    const ids = characterPass ? displayTarget : target
+    const background = scene.background
+    const mask = camera.layers.mask
+    const autoClear = gl.autoClear
+    const previousTarget = gl.getRenderTarget()
+    gl.getClearColor(prevClearColor)
+    const clearAlpha = gl.getClearAlpha()
+    try {
       gl.autoClear = false
-      gl.render(pass.quadScene, pass.quadCamera)
-      gl.autoClear = prevAutoClear
+      if (needsOutline) {
+        if (destination) bufferSize.set(destination.width, destination.height)
+        else gl.getDrawingBufferSize(bufferSize)
+        ids.setSize(Math.max(1, bufferSize.x), Math.max(1, bufferSize.y))
+        scene.background = null
+        gl.setClearColor(0x000000, 1)
+        gl.setRenderTarget(ids)
+        gl.clear()
+        if (characterPass) {
+          worldIds.uniforms.uScale.value.copy(stage.scale)
+          worldIds.uniforms.uOffset.value.copy(stage.offset)
+          gl.render(worldIds.scene, worldIds.camera)
+        }
+        camera.layers.set(characterPass ? CHARACTER_ID_LAYER : OUTLINE_ID_LAYER)
+        gl.render(scene, camera)
+        if (characterSelected) {
+          characterTarget.setSize(ids.width, ids.height)
+          gl.setClearColor(0x000000, 0)
+          camera.layers.set(SELECTED_CHARACTER_LAYER)
+          gl.setRenderTarget(characterTarget)
+          gl.clear()
+          gl.render(scene, camera)
+        }
+      }
+      camera.layers.mask = mask
+      gl.setClearColor(prevClearColor, clearAlpha)
+      scene.background = background
+      gl.setRenderTarget(destination)
+      if (!characterPass) gl.clear()
+      gl.render(scene, camera)
+      if (needsOutline) {
+        pass.uniforms.tId.value = ids.texture
+        pass.uniforms.tDepth.value = ids.depthTexture
+        // One texel at each subject's own resolution: coarse scenery, fine figures.
+        pass.uniforms.uTexel.value.set(1 / ids.width, 1 / ids.height)
+        pass.uniforms.uMode.value = MODE_INT[mode]
+        pass.uniforms.uSelectedId.value = selectedId
+        pass.uniforms.uCharacterSelected.value = characterSelected
+        pass.uniforms.uCharacterPass.value = characterPass
+        gl.render(pass.quadScene, pass.quadCamera)
+      }
+    } finally {
+      camera.layers.mask = mask
+      scene.background = background
+      gl.setClearColor(prevClearColor, clearAlpha)
+      gl.autoClear = autoClear
+      gl.setRenderTarget(previousTarget)
     }
   })
 

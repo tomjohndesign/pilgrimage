@@ -1,8 +1,9 @@
 "use client"
 
-import { createContext, useContext, useEffect, useMemo, useRef } from "react"
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react"
 import { Canvas, useFrame, type CanvasProps } from "@react-three/fiber"
 import * as THREE from "three"
+import { CHARACTER_COLOR_LAYER, tagPixelCharacters, withoutPixelCharacters } from "@/lib/game/render/pixel-characters"
 
 export interface PixelationProps {
   /** Rendered pixels per world unit. Lower is chunkier and cheaper. Default: 25.
@@ -10,26 +11,46 @@ export interface PixelationProps {
   pixelsPerUnit?: number
   /** Turn off the low-resolution world render for comparison. Default: true. */
   pixelated?: boolean
-  /** Display pixel ratio for the final upscale. Default: 0.5; use 2 for Retina.
+  /** Display pixel ratio for characters and the final upscale. Default: 1; use 2 for Retina.
    * Clamped to 0.5–2. */
   outputDpr?: number
 }
 
-type RenderScene = (camera: THREE.Camera, target: THREE.WebGLRenderTarget | null) => void
+export interface PixelSceneStage {
+  phase: "world" | "characters" | "all"
+  /** World-buffer crop, shared by colour, depth, and outline IDs. */
+  scale: THREE.Vector2
+  offset: THREE.Vector2
+}
+type RenderScene = (camera: THREE.Camera, target: THREE.WebGLRenderTarget | null, stage: PixelSceneStage) => void
 interface PixelRenderer {
   scene: { current: RenderScene | null }
   frame: { current: (() => void) | null }
+  characters: Set<THREE.Object3D>
 }
 const PixelRenderContext = createContext<PixelRenderer | null>(null)
 
-/** Register scene effects inside the pixel renderer, before the final upscale. */
+/** Character roots keep their original layers for picking and the unpixelated view. */
+export function PixelCharacters({ children }: { children: ReactNode }) {
+  const renderer = useContext(PixelRenderContext)
+  const root = useRef<THREE.Group>(null)
+  useLayoutEffect(() => {
+    const group = root.current
+    if (!group || !renderer) return
+    renderer.characters.add(group)
+    return () => { renderer.characters.delete(group) }
+  }, [renderer])
+  return <group ref={root}>{children}</group>
+}
+
+/** Register scene effects for both the world pass and the display-resolution characters. */
 export function usePixelScene(render: RenderScene) {
   const renderer = useContext(PixelRenderContext)
   if (!renderer) throw new Error("usePixelScene requires PixelCanvas")
   const callback = useRef(render)
   callback.current = render
   useEffect(() => {
-    renderer.scene.current = (camera, target) => callback.current(camera, target)
+    renderer.scene.current = (camera, target, stage) => callback.current(camera, target, stage)
     return () => {
       renderer.scene.current = null
     }
@@ -48,9 +69,11 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
       magFilter: THREE.NearestFilter,
       type: THREE.HalfFloatType,
       generateMipmaps: false,
+      depthTexture: new THREE.DepthTexture(1, 1),
     })
     const uniforms = {
       tScene: { value: target.texture },
+      tDepth: { value: target.depthTexture },
       uScale: { value: new THREE.Vector2() },
       uOffset: { value: new THREE.Vector2() },
     }
@@ -58,8 +81,9 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
     geometry.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3))
     const material = new THREE.ShaderMaterial({
       uniforms,
-      depthTest: false,
-      depthWrite: false,
+      depthTest: true,
+      depthWrite: true,
+      depthFunc: THREE.AlwaysDepth,
       vertexShader: /* glsl */ `
         varying vec2 vUv;
         void main() {
@@ -69,11 +93,14 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
       `,
       fragmentShader: /* glsl */ `
         uniform sampler2D tScene;
+        uniform sampler2D tDepth;
         uniform vec2 uScale;
         uniform vec2 uOffset;
         varying vec2 vUv;
         void main() {
-          gl_FragColor = texture2D(tScene, (vUv - 0.5) * uScale + 0.5 + uOffset);
+          vec2 sampleUv = (vUv - 0.5) * uScale + 0.5 + uOffset;
+          gl_FragColor = texture2D(tScene, sampleUv);
+          gl_FragDepth = texture2D(tDepth, sampleUv).x;
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }
@@ -90,10 +117,12 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
       right: new THREE.Vector3(),
       up: new THREE.Vector3(),
       center: new THREE.Vector3(),
+      stage: { phase: "all", scale: uniforms.uScale.value, offset: uniforms.uOffset.value } as PixelSceneStage,
     }
   }, [])
 
   useEffect(() => () => {
+    resources.target.depthTexture?.dispose()
     resources.target.dispose()
     resources.geometry.dispose()
     resources.material.dispose()
@@ -106,12 +135,13 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
         gl.render(scene, cam)
       })
       const cam = camera as THREE.OrthographicCamera
+      const r = resources
       if (!pixelated || !cam.isOrthographicCamera) {
-        renderScene(camera, null)
+        r.stage.phase = "all"
+        renderScene(camera, null, r.stage)
         return
       }
 
-      const r = resources
       const width = (cam.right - cam.left) / cam.zoom
       const height = (cam.top - cam.bottom) / cam.zoom
       const maxSize = Math.floor(gl.capabilities.maxTextureSize / BUFFER_STEP) * BUFFER_STEP
@@ -143,11 +173,29 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
       r.camera.updateProjectionMatrix()
       r.camera.updateMatrixWorld()
 
-      renderScene(r.camera, r.target)
       r.uniforms.uScale.value.set(width * density / bufferWidth, height * density / bufferHeight)
       r.uniforms.uOffset.value.set(-dx * density / bufferWidth, -dy * density / bufferHeight)
+      tagPixelCharacters(renderer.characters, scene)
+      r.stage.phase = "world"
+      withoutPixelCharacters(renderer.characters, () => renderScene(r.camera, r.target, r.stage))
       gl.setRenderTarget(null)
       gl.render(r.screen, r.screenCamera)
+      if (renderer.characters.size) {
+        const background = scene.background
+        const mask = camera.layers.mask
+        const autoClear = gl.autoClear
+        try {
+          scene.background = null
+          gl.autoClear = false
+          camera.layers.set(CHARACTER_COLOR_LAYER)
+          r.stage.phase = "characters"
+          renderScene(camera, null, r.stage)
+        } finally {
+          scene.background = background
+          camera.layers.mask = mask
+          gl.autoClear = autoClear
+        }
+      }
     }
     renderer.frame.current = renderFrame
     renderFrame()
@@ -161,8 +209,9 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
 
 /**
  * A fixed world pixel grid, cropped and scaled smoothly into the display canvas.
- * The scene and outlines render at low resolution; one cheap display pass does
- * the upscale. Camera picking stays in display coordinates. Neither zoom nor
+ * Scenery and its outlines render at low resolution; the display pass transfers
+ * colour and depth before characters and their outlines render at full resolution.
+ * Camera picking stays in display coordinates. Neither zoom nor
  * panning writes React state or resizes the display canvas.
  */
 export function PixelCanvas({
@@ -170,12 +219,12 @@ export function PixelCanvas({
   style,
   pixelsPerUnit = 25,
   pixelated = true,
-  outputDpr = 0.5,
+  outputDpr = 1,
   ...props
 }: Omit<CanvasProps, "dpr" | "gl"> & PixelationProps) {
-  const renderer = useMemo<PixelRenderer>(() => ({ scene: { current: null }, frame: { current: null } }), [])
+  const renderer = useMemo<PixelRenderer>(() => ({ scene: { current: null }, frame: { current: null }, characters: new Set() }), [])
   const density = Number.isFinite(pixelsPerUnit) ? THREE.MathUtils.clamp(pixelsPerUnit, 1, 64) : 25
-  const dpr = Number.isFinite(outputDpr) ? THREE.MathUtils.clamp(outputDpr, 0.5, 2) : 0.5
+  const dpr = Number.isFinite(outputDpr) ? THREE.MathUtils.clamp(outputDpr, 0.5, 2) : 1
   return (
     <Canvas
       {...props}
