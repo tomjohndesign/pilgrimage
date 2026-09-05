@@ -35,6 +35,8 @@ export function Buildings({ map }: { map: GameMap }) {
   return (
     <group>
       {map.buildings.map((building, index) => {
+        // The hovel has its own geometry (see shrine.tsx); its ID slot stays reserved.
+        if (building.id === map.site?.hovelId) return null
         // Footprint centre: the origin tile's centre, offset by half the extra tiles.
         const centreX = tileToWorldX(map, building.x) + (building.w - 1) / 2
         const centreZ = tileToWorldZ(map, building.z) + (building.d - 1) / 2

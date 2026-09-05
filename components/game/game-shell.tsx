@@ -5,12 +5,16 @@ import { useEffect, useMemo, useState } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
+import { generateMonks } from "@/lib/game/monks"
+import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
+import { generateRelic } from "@/lib/game/relic"
 import { generateTravelers } from "@/lib/game/travelers"
 import {
   DEFAULT_CLEARING_COUNT,
   DEFAULT_FOREST_COVERAGE,
   DEFAULT_GLADE_COUNT,
   DEFAULT_MAP_WIDTH,
+  DEFAULT_RELIC_DISTANCE,
   generateMap,
 } from "@/lib/game/map/generate-map"
 
@@ -42,6 +46,8 @@ export interface MapSettings {
   glades: number
   /** Number of small forest-floor clearings scattered through the woods. */
   clearings: number
+  /** How far off the road the relic's hovel is sited, in tiles. */
+  relicDistance: number
   /** How many travelers walk the road — the traffic level. */
   traffic: number
   /** Base walking speed in tiles per second. */
@@ -53,6 +59,7 @@ export const DEFAULT_SETTINGS: MapSettings = {
   coverage: Math.round(DEFAULT_FOREST_COVERAGE * 100),
   glades: DEFAULT_GLADE_COUNT,
   clearings: DEFAULT_CLEARING_COUNT,
+  relicDistance: DEFAULT_RELIC_DISTANCE,
   traffic: 12,
   walkSpeed: 1.5,
 }
@@ -95,6 +102,7 @@ export function GameShell({
       forest: String(settings.coverage),
       glades: String(settings.glades),
       clearings: String(settings.clearings),
+      relic: String(settings.relicDistance),
       traffic: String(settings.traffic),
       speed: String(settings.walkSpeed),
     })
@@ -112,8 +120,9 @@ export function GameShell({
             forestCoverage: settings.coverage / 100,
             gladeCount: settings.glades,
             clearingCount: settings.clearings,
+            relicDistance: settings.relicDistance,
           }),
-    [seed, settings.size, settings.coverage, settings.glades, settings.clearings],
+    [seed, settings.size, settings.coverage, settings.glades, settings.clearings, settings.relicDistance],
   )
 
   // Identities live outside the canvas so the HUD can name whoever is selected.
@@ -122,20 +131,41 @@ export function GameShell({
     [seed, settings.traffic],
   )
 
-  // The camera's pan clamp follows the loaded map's extent.
+  // The relic and the brothers who keep it, fixed per seed like the travelers.
+  const relic = useMemo(() => (seed === null ? null : generateRelic(seed)), [seed])
+  const monks = useMemo(() => (seed === null ? [] : generateMonks(seed)), [seed])
+
+  // The camera's pan clamp follows the loaded map's extent, and a new world
+  // opens on the hovel — the one landmark every map has.
   useEffect(() => {
-    if (map) useCameraStore.getState().setMapSize(map.width, map.depth)
+    if (!map) return
+    const camera = useCameraStore.getState()
+    camera.setMapSize(map.width, map.depth)
+    camera.select(null)
+    const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
+    if (hovel) {
+      camera.panTo(
+        tileToWorldX(map, hovel.x) + (hovel.w - 1) / 2,
+        tileToWorldZ(map, hovel.z) + (hovel.d - 1) / 2,
+      )
+    }
   }, [map])
 
   // A new cast of travelers invalidates whoever was selected.
   useEffect(() => {
-    useCameraStore.getState().selectTraveler(null)
+    useCameraStore.getState().select(null)
   }, [travelers])
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-[#14100a] select-none">
-      {map ? (
-        <GameCanvas map={map} travelers={travelers} walkSpeed={settings.walkSpeed} />
+      {map && relic ? (
+        <GameCanvas
+          map={map}
+          relic={relic}
+          monks={monks}
+          travelers={travelers}
+          walkSpeed={settings.walkSpeed}
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center">
           <span className="font-display text-[10px] uppercase tracking-[3px] text-gold">
@@ -146,6 +176,8 @@ export function GameShell({
       <GameHud
         map={map}
         seed={seed}
+        relic={relic}
+        monks={monks}
         travelers={travelers}
         settings={settings}
         onSettingsChange={setSettings}
