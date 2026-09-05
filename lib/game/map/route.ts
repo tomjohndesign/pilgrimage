@@ -8,7 +8,7 @@ export const ROUTE_DIRS: ReadonlyArray<readonly [number, number]> = [
 /**
  * A* over the full grid, 4-connected, cost 1 + wander per step. Terrain is
  * deliberately ignored — whatever is in the way gets carved by the caller.
- * Used for river centerlines and as the road's last-resort fallback.
+ * The last-resort fallback for the road and the hovel's track.
  *
  * The open list is a binary heap keyed on f = g + h. A linear scan was fine up
  * to 128 tiles a side but cost seconds per route at 512, and a map routes

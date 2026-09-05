@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { DEFAULT_RELIC_DISTANCE, generateMap, HOVEL_ID, relicDistanceBand } from "./generate-map"
 import { isWoods, TERRAIN } from "./terrain"
+import { MAX_RIVER_WIDTH } from "./water"
 import { tileAt, type GameMap } from "./types"
 
 /** Enough seeds to catch structural bugs, few enough to stay fast. */
@@ -209,8 +210,11 @@ describe("generateMap", () => {
       const road = map.road!
       const hovel = map.buildings[0]
 
-      // The fork is never on the road's outermost stretches.
-      expect(junction, `seed ${seed} junction not at west end`).toBeGreaterThanOrEqual(road.length * 0.1 - 1)
+      // The fork is never on the road's outermost stretches. The generator
+      // picks from the floored margin and may slide one tile along the road.
+      expect(junction, `seed ${seed} junction not at west end`).toBeGreaterThanOrEqual(
+        Math.floor(road.length * 0.1) - 1,
+      )
       expect(junction, `seed ${seed} junction not at east end`).toBeLessThanOrEqual(road.length * 0.9)
       expect(branch[0], `seed ${seed} branch starts at the junction`).toEqual(road[junction])
       expect(branch[branch.length - 1], `seed ${seed} branch ends at the door`).toEqual(door)
@@ -838,6 +842,30 @@ describe("generateMap", () => {
     }
     // Wandering rivers bend constantly; nearly every seed should deposit bars.
     expect(seedsWithBars).toBeGreaterThanOrEqual(Math.ceil(sample.length * 0.8))
+  }, SWEEP_TIMEOUT)
+
+  it("keeps rivers from running along the map border", () => {
+    // A river may enter or leave across an edge, but never lie along one:
+    // the longest run of river water on any border line stays a few widths.
+    const limit = MAX_RIVER_WIDTH * 4
+    for (const seed of SEEDS) {
+      const map = generateMap({ seed, riverCount: 2, lakeCount: 0, pondCount: 0 })
+      const lines: Array<Array<[number, number]>> = [
+        Array.from({ length: map.width }, (_, x) => [x, 0] as [number, number]),
+        Array.from({ length: map.width }, (_, x) => [x, map.depth - 1] as [number, number]),
+        Array.from({ length: map.depth }, (_, z) => [0, z] as [number, number]),
+        Array.from({ length: map.depth }, (_, z) => [map.width - 1, z] as [number, number]),
+      ]
+      for (const line of lines) {
+        let run = 0
+        let longest = 0
+        for (const [x, z] of line) {
+          run = carriesWater(map, x, z) ? run + 1 : 0
+          longest = Math.max(longest, run)
+        }
+        expect(longest, `seed ${seed} river along the border`).toBeLessThanOrEqual(limit)
+      }
+    }
   }, SWEEP_TIMEOUT)
 
   it("keeps the road connected across forced rivers", () => {
