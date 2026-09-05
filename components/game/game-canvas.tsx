@@ -1,7 +1,7 @@
 "use client"
 
 import { Suspense, useMemo } from "react"
-import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
+import { PixelCanvas, PixelCharacters, type PixelationProps } from "@/components/pixel-canvas"
 
 import { useCameraStore } from "@/lib/game/camera-store"
 import type { Resources } from "@/lib/game/settlement"
@@ -116,8 +116,10 @@ export function GameCanvas({
       <Environment map={map} />
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />
-      <Monks map={map} monks={monks} flying={blasterPastor} />
-      <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown} />
+      <PixelCharacters>
+        <Monks map={map} monks={monks} flying={blasterPastor} />
+        <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown} />
+      </PixelCharacters>
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
       {buildType && <BuildInfluenceOverlay map={map} />}
 

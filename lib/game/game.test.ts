@@ -359,9 +359,9 @@ describe("site menu", () => {
     }
   })
 
-  it("lists textures and characters under assets", () => {
+  it("lists textures, characters, and the pixel workshop under assets", () => {
     const assets = SITE_MENU.find((item) => item.label === "Assets")
-    expect(assets?.children?.map((c) => c.label)).toEqual(["Textures", "Characters"])
+    expect(assets?.children?.map((c) => c.label)).toEqual(["Textures", "Characters", "Pixel workshop"])
   })
 })
 

@@ -7,7 +7,7 @@ import { settlementRoute } from "./settlement-route"
 import type { TreePlacement } from "./trees/placement"
 import type { TilePos } from "./map/types"
 import { computeDangerField, encounterChance, type ThreatSource } from "./map/danger"
-import { surfaceHeight } from "./map/bridges"
+import { surfaceHeight, ropeHeightAt } from "./map/bridges"
 import { diagonalRoadPoint } from "./map/road"
 import {
   tileAt,
@@ -319,7 +319,7 @@ function routeWorldPoint(
   const bz = tileToWorldZ(map, b.z)
   const ay = surfaceHeight(map, route[i0].x, route[i0].z)
   const by = surfaceHeight(map, route[i0 + 1].x, route[i0 + 1].z)
-  return { x: ax + (bx - ax) * frac, y: ay + (by - ay) * frac, z: az + (bz - az) * frac }
+  return { x: ax + (bx - ax) * frac, y: ropeHeightAt(map, a.x + (b.x - a.x) * frac, a.z + (b.z - a.z) * frac) ?? ay + (by - ay) * frac, z: az + (bz - az) * frac }
 }
 
 function roadWorldPoint(map: GameMap, p: number, lane: number): WorldPoint {

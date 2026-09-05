@@ -3,7 +3,7 @@
 import { useLayoutEffect, useMemo, useRef } from "react"
 import * as THREE from "three"
 
-import { BRIDGE_RISE, bridgeLayout, type BridgeSpan, type BridgeRamp, type BridgeConnector } from "@/lib/game/map/bridges"
+import { BRIDGE_RISE, bridgeLayout, ropeDeckHeight, type BridgeSpan, type BridgeRamp, type BridgeConnector } from "@/lib/game/map/bridges"
 import { clampRoadTier } from "@/lib/game/map/road"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -179,6 +179,41 @@ function timberBridge(map: GameMap, span: BridgeSpan, rng: () => number, out: Pi
   }
 }
 
+/** Slatted suspension deck: bank anchors, continuous ropes, and hanging ties; no riverbed piles. */
+function ropeBridge(map: GameMap, span: BridgeSpan, rng: () => number, out: Pieces): void {
+  const place = spanFrame(map, span), n = span.tiles.length
+  const length = n + 2 * DECK_OVERHANG, count = Math.ceil(length / PLANK_PITCH), pitch = length / count
+  const color = new THREE.Color(), rope = new THREE.Color("#b59a69")
+  const surface = (a: number) => ropeDeckHeight(span, a)
+  const segment = (a: number, b: number, across: number, ya: number, yb: number, thick: number, tint: THREE.Color) => {
+    const piece = place((a + b) / 2, across, (ya + yb) / 2, Math.hypot(b - a, yb - ya), thick, thick, tint)
+    piece.rotZ = Math.atan2(yb - ya, b - a)
+    out.boxes.push(piece)
+  }
+  for (let k = 0; k < count; k++) {
+    const a = -length / 2 + k * pitch, b = a + pitch, mid = (a + b) / 2
+    const slope = Math.atan2(surface(b) - surface(a), pitch)
+    color.set(PLANK_COLOR).multiplyScalar(1 + (rng() - 0.5) * WOOD_GRAIN)
+    const slat = place(mid, 0, surface(mid) - PLANK_THICKNESS / 2, pitch * 0.82, PLANK_THICKNESS, DECK_WIDTH, color)
+    slat.rotZ = slope
+    out.boxes.push(slat); out.silhouettes.push({ ...slat, sx: pitch / Math.cos(slope) })
+    for (const side of [-1, 1]) {
+      const across = side * (DECK_WIDTH / 2 - 0.035)
+      segment(a, b, across, surface(a) - 0.045, surface(b) - 0.045, 0.028, rope)
+      segment(a, b, across, surface(a) + 0.5, surface(b) + 0.5, 0.035, rope)
+      if (k % 2 === 0) out.posts.push(place(mid, across, surface(mid) + 0.24, 0.017, 0.52, 0.017, rope))
+    }
+  }
+  for (const end of [-1, 1]) for (const side of [-1, 1]) {
+    const along = end * length / 2, across = side * (DECK_WIDTH / 2 - 0.035)
+    const top = DECK_TOP + 0.62
+    out.posts.push(place(along, across, (TILE_HEIGHT + top) / 2, 0.075, top - TILE_HEIGHT, 0.075, color.set(POST_COLOR)))
+    const anchor = along + end * 0.55
+    if (end < 0) segment(anchor, along, across, TILE_HEIGHT + 0.04, DECK_TOP + 0.5, 0.035, rope)
+    else segment(along, anchor, across, DECK_TOP + 0.5, TILE_HEIGHT + 0.04, 0.035, rope)
+  }
+}
+
 function stoneBridge(map: GameMap, span: BridgeSpan, tier: number, rng: () => number, out: Pieces): void {
   const place = spanFrame(map, span)
   const n = span.tiles.length
@@ -302,11 +337,15 @@ function buildPieces(map: GameMap, tier: number): Pieces {
   const layout = bridgeLayout(map)
   for (const span of layout.spans) {
     const timber = span.kind === "track" || tier <= LAST_TIMBER_TIER
-    if (timber) timberBridge(map, span, rng, out)
+    if (span.ropeSag !== undefined) ropeBridge(map, span, rng, out)
+    else if (timber) timberBridge(map, span, rng, out)
     else stoneBridge(map, span, tier, rng, out)
   }
   for (const tile of layout.connectors) islandDeck(map, tile, tier, rng, out)
-  for (const ramp of layout.ramps) bridgeApproach(map, ramp, tier, rng, out)
+  for (const ramp of layout.ramps) {
+    const rope = layout.ropeAt.has((ramp.z + ramp.dz) * map.width + ramp.x + ramp.dx)
+    bridgeApproach(map, rope ? { ...ramp, kind: "track" } : ramp, tier, rng, out)
+  }
   return out
 }
 

@@ -1,3 +1,4 @@
+import { elevationStep } from "./elevation"
 import { describe, expect, it } from "vitest"
 
 import { DEFAULT_RELIC_DISTANCE, generateMap, HOVEL_ID, relicDistanceBand } from "./generate-map"
@@ -169,7 +170,7 @@ describe("generateMap", () => {
         const nz = z + dz
         if (nx < 0 || nz < 0 || nx >= map.width || nz >= map.depth) continue
         const n = nz * map.width + nx
-        if (dist[n] !== -1 || carriesWater(map, nx, nz)) continue
+        if (dist[n] !== -1 || carriesWater(map, nx, nz) || !Number.isFinite(elevationStep(map.elevation, queue[q], n))) continue
         dist[n] = dist[queue[q]] + 1
         queue.push(n)
       }
@@ -388,6 +389,7 @@ describe("generateMap", () => {
         const nz = z + dz
         if (nx < 0 || nz < 0 || nx >= map.width || nz >= map.depth) continue
         const n = nz * map.width + nx
+        if (map.tiles[queue[q]] !== "bridge" && map.tiles[n] !== "bridge" && !Number.isFinite(elevationStep(map.elevation, queue[q], n))) continue
         if (!seen[n] && open(n)) {
           seen[n] = 1
           queue.push(n)
@@ -397,7 +399,7 @@ describe("generateMap", () => {
     return seen
   }
 
-  it("cuts off passable land only where water or dark forest lies between it and the road", () => {
+  it("cuts off passable land only behind water, dark forest, or cliffs", () => {
     for (const seed of SEEDS) {
       const map = mapFor(seed)
       const passable = (i: number) => TERRAIN[map.tiles[i]].passable
@@ -514,10 +516,10 @@ describe("generateMap", () => {
   })
 
   it(
-    "routes the road around dark forest instead of through it",
+    "routes the road around dark forest when flat land permits a detour",
     () => {
       for (const seed of SEEDS) {
-        const map = mapFor(seed)
+        const map = generateMap({ seed, elevation: { maxHeight: 0 } })
         // A road tile with old growth on both flanks is a road *through* the
         // dark forest. Skirting it never produces one.
         let through = 0
@@ -594,7 +596,7 @@ describe("generateMap", () => {
     return forest / beside
   }
 
-  it("routes the road through open ground rather than straight through the woods", () => {
+  it("prefers open ground when elevation does not constrain the road", () => {
     // The road pays to fell forest, so it bends through glades and picks the
     // narrowest belt of trees where it has to cross one: the land beside it
     // is markedly more open than the map as a whole. Per seed this is only a
@@ -604,7 +606,7 @@ describe("generateMap", () => {
     let roadside = 0
     let mapWide = 0
     for (const seed of SEEDS) {
-      const map = mapFor(seed)
+      const map = generateMap({ seed, elevation: { maxHeight: 0, slopeCost: 0, riverDrop: 0, waterfallDrop: 0 } })
       const beside = roadsideForestShare(map)
       const overall = countTerrain(map, "forest") / landTiles(map)
       roadside += beside
@@ -759,7 +761,7 @@ describe("generateMap", () => {
         const zs = new Set(span.map((i) => Math.floor(i / map.width)))
         expect(Math.min(xs.size, zs.size), `seed ${seed} bridge is straight`).toBe(1)
         for (const i of span) {
-          expect(map.water!.flow[i], `seed ${seed} bridge sits over a river`).toBeDefined()
+          expect(map.water!.flow[i] || map.water!.motion?.[i] === "still", `seed ${seed} bridge sits over a river or its terminal pool`).toBeTruthy()
         }
       }
     }

@@ -1,3 +1,4 @@
+import { groundHeight } from "./elevation"
 import { isRoadTerrain } from "./road"
 import { TILE_HEIGHT } from "./terrain"
 import { tileAt, type GameMap, type TilePos } from "./types"
@@ -25,6 +26,8 @@ export const BRIDGE_RISE = 0.36
 export const MIN_BRIDGE_LAND_GAP = 3
 
 export interface BridgeSpan {
+  /** Canyon crossings hang from bank anchors; absent on ordinary supported bridges. */
+  ropeSag?: number
   /** The bridge tiles in order from `from` to `to`. */
   tiles: TilePos[]
   /** Unit step along the span, from `from` toward `to`: (±1, 0) or (0, ±1). */
@@ -56,6 +59,7 @@ export interface BridgeConnector extends TilePos {
 }
 
 export interface BridgeLayout {
+  ropeAt: Map<number, BridgeSpan>
   spans: BridgeSpan[]
   ramps: BridgeRamp[]
   /** Level decks over short land gaps and corners before the ramps. */
@@ -148,7 +152,11 @@ export function bridgeLayout(map: GameMap): BridgeLayout {
       const from = fromTerrain === null ? null : { x: first.x - dx, z: first.z - dz }
       const to = toTerrain === null ? null : { x: last.x + dx, z: last.z + dz }
       const kind = fromTerrain === "path" || toTerrain === "path" ? "road" : "track"
-      spans.push({ tiles, dx, dz, from, to, kind })
+      const levels = tiles.map((p) => map.water?.surface?.[p.z * map.width + p.x] ?? 0)
+      const canyon = levels.some((h) => h < -0.5)
+      const clearance = BRIDGE_RISE - Math.max(...levels) - 0.16
+      const ropeSag = canyon ? Math.max(0.05, Math.min(map.elevation?.settings.bridgeSag ?? 0.55, tiles.length * 0.14, clearance)) : undefined
+      spans.push({ tiles, dx, dz, from, to, kind, ...(ropeSag === undefined ? {} : { ropeSag }) })
 
       const approach = (tile: TilePos | null, ux: number, uz: number) => {
         // Approaches follow the path; bare banks and water have no ramp.
@@ -258,7 +266,9 @@ export function bridgeLayout(map: GameMap): BridgeLayout {
     }
   })
 
-  const layout = { spans, ramps, connectors, rise }
+  const ropeAt = new Map<number, BridgeSpan>()
+  for (const span of spans) if (span.ropeSag !== undefined) for (const p of span.tiles) ropeAt.set(p.z * map.width + p.x, span)
+  const layout = { spans, ramps, connectors, rise, ropeAt }
   layoutCache.set(map, layout)
   return layout
 }
@@ -270,5 +280,25 @@ export function bridgeLayout(map: GameMap): BridgeLayout {
  */
 export function surfaceHeight(map: GameMap, x: number, z: number): number {
   if (x < 0 || z < 0 || x >= map.width || z >= map.depth) return TILE_HEIGHT
-  return TILE_HEIGHT + bridgeLayout(map).rise[z * map.width + x]
+  const hanging = ropeHeightAt(map, x, z)
+  if (hanging !== undefined) return hanging
+  const rise = bridgeLayout(map).rise[z * map.width + x]
+  return (rise > 0 ? TILE_HEIGHT : groundHeight(map, x, z)) + rise
+}
+
+/** Parabolic hanging deck, anchored level at both banks. `along` is measured from its centre. */
+export function ropeDeckHeight(span: BridgeSpan, along: number): number {
+  const u = Math.max(0, Math.min(1, along / span.tiles.length + 0.5))
+  return TILE_HEIGHT + BRIDGE_RISE - (span.ropeSag ?? 0) * 4 * u * (1 - u)
+}
+
+/** Continuous deck sample shared by the renderer, simulation, and cursor picking. */
+export function ropeHeightAt(map: GameMap, x: number, z: number): number | undefined {
+  const tx = Math.floor(x + 0.5), tz = Math.floor(z + 0.5)
+  if (tx < 0 || tz < 0 || tx >= map.width || tz >= map.depth) return undefined
+  const span = bridgeLayout(map).ropeAt.get(tz * map.width + tx)
+  if (!span) return undefined
+  const first = span.tiles[0], last = span.tiles[span.tiles.length - 1]
+  const along = (x - (first.x + last.x) / 2) * span.dx + (z - (first.z + last.z) / 2) * span.dz
+  return ropeDeckHeight(span, along)
 }

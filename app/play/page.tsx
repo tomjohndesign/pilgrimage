@@ -1,3 +1,4 @@
+import { DEFAULT_ELEVATION, ELEVATION_CONTROLS, elevationSettings, type ElevationSettings } from "@/lib/game/map/elevation"
 import type { Metadata } from "next"
 
 import { GameShell, type MapSettings } from "@/components/game/game-shell"
@@ -27,6 +28,12 @@ export default async function PlayPage({
   const params = await searchParams
 
   const initialSettings: Partial<MapSettings> = {}
+  const elevation = { ...DEFAULT_ELEVATION }
+  for (const key of Object.keys(ELEVATION_CONTROLS) as (keyof ElevationSettings)[]) {
+    const value = parseFloatParam(params[`e_${key}`])
+    if (value !== undefined) elevation[key] = value
+  }
+  initialSettings.elevation = elevationSettings(elevation)
   const size = parseIntParam(params.size)
   const coverage = parseIntParam(params.forest)
   const glades = parseIntParam(params.glades)

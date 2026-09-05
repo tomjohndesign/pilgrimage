@@ -1,3 +1,4 @@
+import { elevationStep } from "./map/elevation"
 import { ROUTE_DIRS } from "./map/route"
 import { isWoods, TERRAIN } from "./map/terrain"
 import { tileAt, type BuildingDef, type GameMap, type TilePos } from "./map/types"
@@ -31,6 +32,7 @@ export function settlementRoute(
       if (!terrain || !(TERRAIN[terrain].passable || (logging && isWoods(terrain)))) continue
       if (buildings.some((b) => !b.id.startsWith("lumberCamp-") && next.x >= b.x && next.x < b.x + b.w && next.z >= b.z && next.z < b.z + b.d)) continue
       const index = key(next)
+      if (map.tiles[current] !== "bridge" && terrain !== "bridge" && !Number.isFinite(elevationStep(map.elevation, current, index))) continue
       if (parents.has(index)) continue
       parents.set(index, current)
       queue.push(next)

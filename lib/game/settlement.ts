@@ -1,3 +1,4 @@
+import { groundHeight } from "./map/elevation"
 import { placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
 import { settlementRoute } from "./settlement-route"
 import { getBuildInfluence, type BuildInfluence } from "./build-influence"
@@ -147,6 +148,7 @@ export function buildTileError(map: GameMap, x: number, z: number, influence: Bu
   if (buildingAt(map, x, z)) return "Another structure occupies this space."
   if (!TERRAIN[terrain].buildable || terrain === "hills")
     return "Choose flat, open ground; keep woods, water and paths clear."
+  if (map.elevation?.cliffs[z * map.width + x]) return "Choose level ground away from cliffs."
   if (map.water?.depth[z * map.width + x]) return "Structures need dry ground."
   if (map.site?.branch.some((tile) => tile.x === x && tile.z === z) ||
     (map.site?.door.x === x && map.site.door.z === z)) return "Keep the shrine approach clear."
@@ -170,6 +172,7 @@ export function placementError(
     for (let x = at.x; x < at.x + def.w; x++) {
       const error = buildTileError(map, x, z, influence)
       if (error) return error
+      if (map.elevation && Math.abs(groundHeight(map, x, z) - groundHeight(map, at.x, at.z)) > 0.2) return "Choose level ground away from cliffs."
     }
   }
   if (def.id === "lumberCamp") {
