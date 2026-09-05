@@ -176,7 +176,8 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
 
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.defaultPrevented || target?.closest("input, textarea, select, [contenteditable='true']")) return
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey ||
+          target?.closest("input, textarea, select, [contenteditable=true]")) return
 
       const key = event.key.toLowerCase()
       heldKeys.current.add(key)

@@ -149,11 +149,11 @@ describe("tuned gameplay", () => {
     expect(existing).toEqual(before)
     expect(buildingIncomeLabel(buildCatalog(balance)[0], balance)).toBe("+9 gold / 6s")
   })
-  it("applies the tuned build radius across the full footprint", () => {
+  it("applies the tuned influence radius across the full footprint", () => {
     const balance = fresh()
     balance.rules.buildRadius = 20
     const at = { x: 34, z: 18 }
-    expect(placementError(map(), BUILD_CATALOG[0], at)).toMatch(/12 tiles/)
+    expect(placementError(map(), BUILD_CATALOG[0], at)).toMatch(/influence/)
     expect(placementError(map(), BUILD_CATALOG[0], at, balance)).toBeNull()
   })
   it("uses tunable individual, relic and milestone rules", () => {

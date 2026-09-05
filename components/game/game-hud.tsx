@@ -3,8 +3,11 @@
 import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/elevation"
 
 import Link from "next/link"
+import * as Tooltip from "@radix-ui/react-tooltip"
+import { Menu, Settings, X } from "lucide-react"
+import "./game-hud.css"
 import { useEffect, useMemo, useState } from "react"
-
+import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import {
   arrivalOdds,
@@ -20,7 +23,7 @@ import { nerve } from "@/lib/game/route-choice"
 import { parseSeed } from "@/lib/game/rng"
 import { CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
-import { ACTIVITY_LABELS, formatGameTime, simRegistry, type SimTraveler } from "@/lib/game/sim"
+import { ACTIVITY_LABELS, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { MONK_ACTIVITY_LABELS, monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { relicTitle, type Relic } from "@/lib/game/relic"
 import { DEFAULT_TRAFFIC, type Traveler } from "@/lib/game/travelers"
@@ -36,6 +39,7 @@ import { individualRenown, relicRenown } from "@/lib/game/settlement"
 import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { MusicPlayer } from "./music-player"
+import { BuildControls, HudClock, HudHelp, HudResources } from "./hud-controls"
 
 const CONTROLS: Array<[string, string]> = [
   ["Click", "Inspect people, trees & piles"],
@@ -45,6 +49,8 @@ const CONTROLS: Array<[string, string]> = [
   ["W A S D", "Pan"],
   ["O", "Cycle outlines"],
   ["0", "Reset camera"],
+  ["B / L", "Build menu / lumber camp"],
+  ["Esc", "Close panel & cancel building"],
   ["Return", "Cheat code"],
 ]
 
@@ -57,7 +63,7 @@ const SHOW_PROPERTY_PANELS =
 
 function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`pointer-events-none border border-rule bg-parchment/95 px-4 py-3 ${className}`}>
+    <div className={`hud-inspector-content border border-rule bg-parchment/95 px-4 py-3 ${className}`}>
       {children}
     </div>
   )
@@ -87,7 +93,7 @@ function Section({
         aria-expanded={open}
         className="pointer-events-auto flex w-full items-baseline justify-between gap-3 text-left"
       >
-        <span className="font-display text-[9px] font-black uppercase tracking-[2px] text-black">
+        <span className="font-display text-[9px] font-black uppercase tracking-[2px] text-ink">
           {title}
         </span>
         <span className="font-display text-[9px] text-gold/70">{open ? "▾" : "▸"}</span>
@@ -96,13 +102,6 @@ function Section({
     </section>
   )
 }
-
-/** Ghost control for the transparent header: parchment text straight on the scene. */
-const HEADER_BUTTON =
-  "pointer-events-auto border border-parchment/30 bg-[#14100a]/40 px-3 py-1.5 font-display text-[10px] uppercase tracking-[2px] text-parchment backdrop-blur-[2px] transition-colors hover:border-gold-light hover:text-gold-light"
-
-const HEADER_TEXT_SHADOW =
-  "[text-shadow:0_1px_2px_rgba(0,0,0,0.95),0_0_12px_rgba(0,0,0,0.85)]"
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
@@ -151,7 +150,7 @@ function Tuner({
   return (
     <div className="group flex items-center">
       <span className="w-16 shrink-0 text-[13px] font-medium text-ink-light">{label}</span>
-      <div className="relative h-8 flex-1 overflow-hidden rounded-[6px] bg-parchment-dark">
+      <div className="relative h-8 flex-1 overflow-hidden rounded-[6px] bg-[#c3b193]">
         {/* Fill and knob are drawn; the real range input sits on top, invisible. */}
         <div
           className="absolute inset-y-0 left-0 rounded-[6px] bg-gold"
@@ -164,7 +163,7 @@ function Tuner({
           className={`absolute top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-parchment ${showHandle ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
           style={{ left: `clamp(4px, calc(${fraction * 100}% - 8px), calc(100% - 32px))` }}
         />
-        <span className="absolute right-1 top-1/2 -translate-y-1/2 font-display text-[11px] font-black text-ink-light">
+        <span className="absolute right-1 top-1/2 -translate-y-1/2 font-display text-[11px] font-black text-[#2c1f0e]">
           {display}
         </span>
         <input
@@ -246,7 +245,7 @@ function MenuPanel() {
 
   return (
     <div
-      className={`pointer-events-auto absolute right-0 top-full mt-2 w-44 border border-rule bg-parchment/95 px-4 py-3 ${PANEL_SHADOW}`}
+      className={`hud-menu pointer-events-auto absolute right-0 top-full mt-2 w-56 border border-rule bg-parchment/95 px-4 py-3 ${PANEL_SHADOW}`}
     >
       <nav className="flex flex-col gap-1.5">
         {SITE_MENU.map((item) => (
@@ -378,25 +377,6 @@ function useLiveStats(travelerId: number): SimTraveler | null {
     return () => clearInterval(timer)
   }, [travelerId])
   return live
-}
-
-/** Game clock, sampled from the running sim on the HUD's own schedule. */
-function ClockPanel() {
-  const [time, setTime] = useState<number | null>(null)
-  useEffect(() => {
-    const read = () => setTime(simRegistry.current?.time ?? null)
-    read()
-    const timer = setInterval(read, 500)
-    return () => clearInterval(timer)
-  }, [])
-  if (time === null) return null
-  const [day, clock] = formatGameTime(time).split(" — ")
-  return (
-    <div className="flex py-0.5 font-display text-lg leading-5 text-ink">
-      <span className="w-1/2">{day}</span>
-      <span className="w-1/2">{clock}</span>
-    </div>
-  )
 }
 
 /** Who the player clicked on the road: name, calling, and what drives them. */
@@ -642,10 +622,12 @@ function MonkPanel({ monk }: { monk: Monk }) {
 }
 
 /**
- * The play-screen chrome: transparent header, settlement controls, the inspector,
- * and the minimap dock. Local workspaces can opt into the World tuning sidebar.
+ * Contextual game chrome: bottom-left actions and a shared minimap/selection dock on the right.
+ * Build, world tuning, and object inspection open only when requested.
  *
- * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — HUD layout frame
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1SK-0 — nothing selected
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1GB-0 — Build open
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1N5-0 — hover details
  */
 export function GameHud({
   map,
@@ -680,7 +662,59 @@ export function GameHud({
   const set = (patch: Partial<MapSettings>) => onSettingsChange({ ...settings, ...patch })
   const selection = useCameraStore((s) => s.selection)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [settlementOpen, setSettlementOpen] = useState(false)
+  const [panel, setPanel] = useState<"build" | "world" | "settlement" | null>(null)
+
+  const closeBuild = () => {
+    setPanel(null)
+    economy.chooseBuild(null)
+    document.getElementById("build-menu-button")?.focus()
+  }
+  const toggleBuild = () => {
+    setPanel((current) => current === "build" ? null : "build")
+    setMenuOpen(false)
+    economy.chooseBuild(null)
+    useCameraStore.getState().select(null)
+  }
+
+  useEffect(() => {
+    if (!selection) return
+    setPanel(null)
+    economy.chooseBuild(null)
+  }, [selection, economy.chooseBuild])
+
+  useEffect(() => {
+    // Dismiss stale placement UI; keep World open while its sliders rebuild the map.
+    setPanel((current) => current === "build" ? null : current)
+  }, [map?.road])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return
+      if (event.key === "Escape") {
+        setPanel(null)
+        setMenuOpen(false)
+        economy.chooseBuild(null)
+        useCameraStore.getState().select(null)
+        return
+      }
+      const target = event.target as HTMLElement | null
+      if (target?.closest("input, textarea, select, [contenteditable=true]")) return
+      if (event.key.toLowerCase() === "b" || event.key.toLowerCase() === "l") {
+        event.preventDefault()
+        useCameraStore.getState().select(null)
+        setMenuOpen(false)
+        if (event.key.toLowerCase() === "l") {
+          setPanel("build")
+          if (map) economy.chooseBuild("lumberCamp")
+        } else {
+          setPanel((current) => current === "build" ? null : "build")
+          economy.chooseBuild(null)
+        }
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [map, economy.chooseBuild])
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     Seed: true,
     Pixelation: true,
@@ -701,73 +735,59 @@ export function GameHud({
     selection?.kind === "traveler" ? (travelers.find((t) => t.id === selection.id) ?? null) : null
   const selectedMonk =
     selection?.kind === "monk" ? (monks.find((m) => m.id === selection.id) ?? null) : null
+  const piles = useBuildStore((s) => s.piles)
   const selectedBuilding = selection?.kind === "building" ? map?.buildings.find((b) => b.id === selection.id) : null
   const selectedDefinition = buildCatalog(economy.balance).find((item) => item.id === selectedBuilding?.buildType)
+  const storedWood = piles.reduce((sum, pile) => sum + (pile.campId === selectedBuilding?.id ? pile.wood : 0), 0)
   const selectedRelic = selection?.kind === "relic"
 
   return (
-    <>
-      {/* Header follows the available scene width, including the optional sidebar. */}
-      <header className={`pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between py-4 pr-4 ${SHOW_PROPERTY_PANELS ? "pl-[244px]" : "pl-4"}`}>
-        <div className={`flex items-baseline gap-3 ${HEADER_TEXT_SHADOW}`}>
-          <Link
-            href="/"
-            className="pointer-events-auto font-display text-sm font-bold tracking-[4px] text-parchment hover:text-gold-light"
-          >
-            PILGRIMAGE
-          </Link>
-          <span className="font-display text-[9px] uppercase tracking-[2px] text-parchment/80">
-            {CURRENT_VERSION}
-          </span>
+    <Tooltip.Provider delayDuration={180} skipDelayDuration={100}>
+    <div className="game-hud">
+      <div className="hud-frame" aria-hidden="true" />
+      <header className="hud-header">
+        <div className="hud-resource-bar">
+          <HudResources economy={economy} settlers={economy.residents.length - monks.length} open={panel === "settlement"} onToggle={() => {
+            setPanel((current) => current === "settlement" ? null : "settlement")
+            setMenuOpen(false)
+            economy.chooseBuild(null)
+            useCameraStore.getState().select(null)
+          }} />
+          <Link href="/" className="hud-brand" title={`Pilgrimage ${CURRENT_VERSION}`}>Pilgrimage</Link>
         </div>
-
-        <div className="relative flex items-center gap-2">
-          {!SHOW_PROPERTY_PANELS && map && (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => { setSettlementOpen((open) => !open); setMenuOpen(false) }}
-                aria-expanded={settlementOpen}
-                aria-controls="settlement-controls"
-                className={HEADER_BUTTON}
-              >
-                Settlement
-              </button>
-              {settlementOpen && (
-                <div id="settlement-controls" className={`pointer-events-auto absolute right-0 top-full mt-2 w-[228px] border border-rule bg-parchment/95 px-3 py-3 ${PANEL_SHADOW}`}>
-                  <SettlementPanel economy={economy} monks={monks} relic={relic} />
-                </div>
-              )}
-            </div>
-          )}
-          <button type="button" onClick={onReroll} className={HEADER_BUTTON}>
-            ✦ New Map
-          </button>
-          <MusicPlayer className={HEADER_BUTTON} />
-          <button
-            type="button"
-            onClick={() => { setMenuOpen((open) => !open); setSettlementOpen(false) }}
-            aria-expanded={menuOpen}
-            className={HEADER_BUTTON}
-          >
-            ☰ Menu
-          </button>
+        <div className="hud-header-right">
+        <div className="hud-header-actions">
+          <MusicPlayer className="hud-header-button" compact />
+          <button type="button" className="hud-header-button" aria-label="World settings" title="World settings"
+            aria-expanded={panel === "world"} aria-controls="world-settings" onClick={() => {
+              setPanel((current) => current === "world" ? null : "world")
+              setMenuOpen(false)
+              economy.chooseBuild(null)
+              useCameraStore.getState().select(null)
+            }}><Settings size={16} /></button>
+          <button type="button" className="hud-header-button" aria-label="Menu" title="Menu"
+            aria-expanded={menuOpen} onClick={() => {
+              setMenuOpen((open) => !open)
+              setPanel(null)
+              economy.chooseBuild(null)
+            }}><Menu size={16} /></button>
           {menuOpen && <MenuPanel />}
         </div>
+        <HudClock />
+        </div>
       </header>
+      <HudHelp content={<><div className="hud-help-title">Traffic density</div><p>{travelers.length} folk across the map.</p></>}>
+        <section className="hud-traffic" aria-label="Traffic">
+          <label htmlFor="traffic-density">Traffic</label>
+          <input id="traffic-density" type="range" aria-label="Traffic density" min={0} max={60} step={1} value={settings.traffic} onChange={(event) => set({ traffic: Number(event.target.value) })} />
+          <output htmlFor="traffic-density">{Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}%</output>
+        </section>
+      </HudHelp>
 
-      {!SHOW_PROPERTY_PANELS && (
-        <aside aria-label="Traffic" className={`pointer-events-auto absolute left-4 top-20 z-10 w-[228px] border border-rule bg-parchment/95 px-3 py-2 ${PANEL_SHADOW}`}>
-          <TrafficDensity value={settings.traffic} travelerCount={travelers.length} onChange={(traffic) => set({ traffic })} />
-        </aside>
-      )}
-
-      {/* World: a full-height sidebar of tuning knobs, grouped under fold-away headers. */}
-      {SHOW_PROPERTY_PANELS && <aside
-        aria-label="World properties"
-        className={`pointer-events-auto absolute inset-y-0 left-0 z-10 flex w-[228px] flex-col overflow-y-auto border border-rule bg-parchment/95 px-2 py-3 ${PANEL_SHADOW}`}
-      >
-        <SettlementPanel economy={economy} monks={monks} relic={relic} />
+      {panel === "world" && <aside id="world-settings" className="hud-world hud-well" aria-label="World settings">
+        <div className="hud-world-heading"><span>World</span><button type="button" aria-label="Close world settings" onClick={() => setPanel(null)}><X size={16} /></button></div>
+        <div className="mb-4"><HudButton onClick={onReroll}>✦ New Map</HudButton></div>
+        {SHOW_PROPERTY_PANELS && <>
         <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />
           <Tuner
@@ -780,7 +800,6 @@ export function GameHud({
             onChange={(size) => set({ size })}
           />
         </Section>
-
 
         <Section {...section("Pixelation")}>
           <Chooser
@@ -976,49 +995,40 @@ export function GameHud({
             onChange={(ponds) => set({ ponds })}
           />
         </Section>
+        </>}
       </aside>}
 
-      {(selection?.kind === "tree" || selection?.kind === "pile") && (
-        <ResourceInspector selection={selection} className={SHOW_PROPERTY_PANELS ? "left-[228px]" : "left-0"} />
-      )}
-
-      {/* Inspector: whoever or whatever the player clicked, tucked against the sidebar. */}
-      {selectedBuilding && selectedDefinition && (
-        <div className="absolute bottom-0 left-[228px] z-10">
-          <Panel>
-            <div className="flex items-center justify-between gap-4"><Label>{selectedDefinition.category === "scenery" ? "Scenery" : "Building"}</Label><button type="button" aria-label="Dismiss building" onClick={() => useCameraStore.getState().select(null)} className="pointer-events-auto text-xs text-ink-light">✕</button></div>
+      <BuildControls economy={economy} open={panel === "build"} onToggle={toggleBuild} onClose={closeBuild} />
+      {map && <aside className="hud-details-dock hud-well" aria-label="Minimap and selection" data-selected={!!selection || panel === "settlement"}>
+        {panel === "settlement" && <div className="hud-inspector" id="settlement-details">
+          <SettlementPanel economy={economy} monks={monks} relic={relic} onClose={() => setPanel(null)} />
+        </div>}
+        {selection && <div className="hud-inspector" aria-label="Selection details">
+          {(selection.kind === "tree" || selection.kind === "pile") && <ResourceInspector selection={selection} />}
+          {selectedBuilding && (
+            <Panel>
+            <div className="flex items-center justify-between gap-4"><Label>{selectedDefinition?.category === "scenery" ? "Scenery" : "Building"}</Label><button type="button" aria-label="Dismiss building" onClick={() => useCameraStore.getState().select(null)} className="pointer-events-auto text-xs text-ink-light">✕</button></div>
             <p className="mt-1 font-display text-xs text-ink">{selectedBuilding.label}</p>
-            <p className="mt-2 text-[11px] text-ink-light">Contributes +{selectedDefinition.renown} shrine renown</p>
-            <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">{selectedDefinition.description}</p>
-            <p className="mt-1 text-[11px] text-ink-light">{buildingIncomeLabel(selectedDefinition, economy.balance)}</p>
+            {selectedBuilding.buildType === "lumberCamp" && (
+              <p className="mt-2 text-[11px] text-ink"><span className="text-ink-light">Stored wood</span> · {storedWood} wood</p>
+            )}
+            {selectedDefinition && <>
+              <p className="mt-2 text-[11px] text-ink-light">Contributes +{selectedDefinition.renown} shrine renown</p>
+              <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">{selectedDefinition.description}</p>
+              <p className="mt-1 text-[11px] text-ink-light">{buildingIncomeLabel(selectedDefinition, economy.balance)}</p>
+            </>}
           </Panel>
-        </div>
-      )}
-      {selectedTraveler && (
-        <div className={`absolute bottom-0 z-10 ${SHOW_PROPERTY_PANELS ? "left-[228px]" : "left-0"}`}>
-          <TravelerPanel traveler={selectedTraveler} />
-        </div>
-      )}
-      {selectedMonk && (
-        <div className={`absolute bottom-0 z-10 ${SHOW_PROPERTY_PANELS ? "left-[228px]" : "left-0"}`}>
-          <MonkPanel monk={selectedMonk} />
-        </div>
-      )}
-      {selectedRelic && relic && (
-        <div className={`absolute bottom-0 z-10 ${SHOW_PROPERTY_PANELS ? "left-[228px]" : "left-0"}`}>
-          <RelicPanel relic={relic} />
-        </div>
-      )}
-
-      {/* Dock: the minimap in the bottom-right corner with the calendar above it. */}
-      {map && (
-        <div
-          className={`pointer-events-none absolute bottom-0 right-0 z-10 flex flex-col gap-2 bg-parchment/95 px-4 pb-4 pt-3 ${PANEL_SHADOW}`}
-        >
-          <ClockPanel />
+          )}
+          {selectedTraveler && <TravelerPanel traveler={selectedTraveler} />}
+          {selectedMonk && <MonkPanel monk={selectedMonk} />}
+          {selectedRelic && relic && <RelicPanel relic={relic} />}
+        </div>}
+        <div className="hud-minimap">
           <Minimap map={map} />
+          <span className="hud-minimap-north" aria-hidden="true">N ↑</span>
         </div>
-      )}
-    </>
+      </aside>}
+    </div>
+    </Tooltip.Provider>
   )
 }

@@ -8,7 +8,10 @@ import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { useSimulationStore } from "@/lib/game/simulation-store"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
+import { selectElement } from "@/lib/game/selection"
+import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
 import { surfaceHeight } from "@/lib/game/map/bridges"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -40,9 +43,6 @@ const PAUSE_MIN_SECONDS = 2
 const PAUSE_MAX_SECONDS = 7
 /** Standing within this many tiles of the hovel's centre counts as keeping vigil. */
 const VIGIL_RADIUS = 1.8
-
-/** A click that dragged further than this many pixels is a pan, not a select. */
-const CLICK_SLOP_PX = 6
 
 interface Spot {
   x: number
@@ -112,11 +112,16 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
   }, [world])
 
   useFrame((_, delta) => {
-    const dt = Math.min(delta, 0.1)
+    const playback = useSimulationStore.getState()
+    const dt = playback.paused ? 0 : Math.min(delta, 0.1) * playback.speed
     for (let i = 0; i < world.states.length; i++) {
       const s = world.states[i]
       const group = groupRefs.current[i]
       if (!group) continue
+      if (playback.paused) {
+        group.position.set(s.x, s.y, s.z)
+        continue
+      }
 
       const exhaust = group.getObjectByName(ROCKET_EXHAUST_NAME)
       if (flying) {
@@ -127,7 +132,9 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
       }
       if (s.flight) {
         const flight = s.flight
-        stepMonkFlight(flight, map, world.flightRng, dt)
+        for (let tick = 0; tick < playback.speed; tick++) {
+          stepMonkFlight(flight, map, world.flightRng, Math.min(delta, 0.1))
+        }
         s.x = flight.x
         s.y = flight.y
         s.z = flight.z
@@ -192,11 +199,7 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
       {monks.map((monk, index) => {
         const id = new THREE.Color(...encodeObjectId(residentObjectId(index)))
         const selected = isSelected(selection, { kind: "monk", id: monk.id })
-        const select = (event: { delta: number; stopPropagation: () => void }) => {
-          if (event.delta > CLICK_SLOP_PX) return
-          event.stopPropagation()
-          useCameraStore.getState().select(selected ? null : { kind: "monk", id: monk.id })
-        }
+        const select = (event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "monk", id: monk.id }, event)
         return (
           <group
             key={monk.id}
@@ -216,13 +219,13 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
               <boxGeometry args={BODY} />
               <meshBasicMaterial color={id} toneMapped={false} />
             </mesh>
+            <mesh position={[0, BODY[1] + CROWN[1] / 2, 0]} layers-mask={OUTLINE_ID_LAYER_MASK}>
+              <boxGeometry args={CROWN} />
+              <meshBasicMaterial color={id} toneMapped={false} />
+            </mesh>
             {flying && <MonkRocketGear phase={index} outlineColor={id} onClick={select} />}
-            {selected && (
-              <mesh position={[0, flying ? 1.4 : BODY[1] + 0.35, 0]}>
-                <boxGeometry args={[0.2, 0.05, 0.2]} />
-                <meshBasicMaterial color="#d8a93f" />
-              </mesh>
-            )}
+            <CharacterHitTarget onClick={select} />
+            {selected && <CharacterSelectionShadow map={map} flying={flying} />}
           </group>
         )
       })}

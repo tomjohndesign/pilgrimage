@@ -3,6 +3,7 @@
 import { Suspense, useMemo } from "react"
 import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
 
+import { useCameraStore } from "@/lib/game/camera-store"
 import type { Resources } from "@/lib/game/settlement"
 import type { TilePos } from "@/lib/game/map/types"
 import { deriveSeed, SEED_STREAM } from "@/lib/game/rng"
@@ -17,6 +18,7 @@ import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 
 import { Bridges } from "./bridges"
 import { Buildings } from "./buildings"
+import { BuildInfluenceOverlay } from "./build-influence-overlay"
 import { CameraLight } from "./camera-light"
 import { CameraRig } from "./camera-rig"
 import { DebugHandle } from "./debug-handle"
@@ -80,6 +82,9 @@ export function GameCanvas({
     <PixelCanvas
       {...pixelation}
       orthographic
+      onPointerMissed={(event) => {
+        if (event.button === 0) useCameraStore.getState().select(null)
+      }}
       camera={{ manual: true, position: [20, 20, 20], near: CAM_NEAR, far: CAM_FAR }}
     >
       <color attach="background" args={[BACKGROUND]} />
@@ -114,9 +119,10 @@ export function GameCanvas({
       <Monks map={map} monks={monks} flying={blasterPastor} />
       <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown} />
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
+      {buildType && <BuildInfluenceOverlay map={map} />}
 
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
-      <OutlinePass />
+      <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
       <DebugHandle map={map} travelers={travelers} speed={walkSpeed} />
     </PixelCanvas>
   )

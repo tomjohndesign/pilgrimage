@@ -1,16 +1,19 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { GameMap, TilePos } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
 import { useBuildStore } from "@/lib/game/build-store"
 import { collectIncome, createSettlement, purchaseStructure, creditTimber, syncTimberSpending, settlementRenown } from "@/lib/game/settlement"
 
+import { useSimulationStore } from "@/lib/game/simulation-store"
 import { useBalanceStore } from "@/lib/game/balance-store"
 
 /** A generated world owns one economy. Cosmetic settings keep it; regeneration resets it. */
 export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Relic | null) {
+  const paused = useSimulationStore((s) => s.paused)
+  const simulationSpeed = useSimulationStore((s) => s.speed)
   const balance = useBalanceStore((s) => s.balance)
   const ready = useBalanceStore((s) => s.ready)
   const world = ready ? baseMap : null
@@ -63,7 +66,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     [map, residents, relic, balance, visits])
 
   useEffect(() => {
-    if (!world) return
+    if (!world || paused) return
     const timer = setInterval(() => {
       if (document.hidden) return
       setSession((current) =>
@@ -74,9 +77,9 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
             }
           : current,
       )
-    }, balance.rules.incomeSeconds * 1000)
+    }, balance.rules.incomeSeconds * 1000 / simulationSpeed)
     return () => clearInterval(timer)
-  }, [world, residents.length, balance.rules.incomeSeconds])
+  }, [world, residents.length, balance.rules.incomeSeconds, paused, simulationSpeed])
 
   useEffect(() => {
     const cancel = (event: KeyboardEvent) => {
@@ -87,8 +90,8 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     return () => window.removeEventListener("keydown", cancel)
   }, [])
 
-  const chooseBuild = (buildType: string | null) =>
-    setSession((current) => ({ ...current, buildType, message: "" }))
+  const chooseBuild = useCallback((buildType: string | null) =>
+    setSession((current) => ({ ...current, buildType, message: "" })), [])
   const place = (at: TilePos) => {
     setSession((current) => {
       if (!baseMap || !relic || current.world !== baseMap || !current.buildType) return current

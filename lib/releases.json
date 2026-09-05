@@ -1,7 +1,31 @@
 {
-  "lastProcessedCommit": "05ac1f2a2dbe2b5785552cde27279257b724784c",
-  "releaseCount": 13,
+  "lastProcessedCommit": "0c90cb6e68fc1a75005751891672fdbd01b8c24e",
+  "releaseCount": 17,
   "releases": [
+    {
+      "version": "0.0.31",
+      "title": "Release 0.0.31",
+      "summary": "Build contextual game HUD with illustrated commands and playback controls (#50)",
+      "commit": "0c90cb6e68fc1a75005751891672fdbd01b8c24e"
+    },
+    {
+      "version": "0.0.30",
+      "title": "Release 0.0.30",
+      "summary": "Round road bends and blend junction surfaces (#49)",
+      "commit": "24f3921769828ec5da3975874edeb5c60385950f"
+    },
+    {
+      "version": "0.0.29",
+      "title": "Release 0.0.29",
+      "summary": "Add renown-based building influence and placement overlay (#48)",
+      "commit": "cfc695bf9cf32133ffaf6bc97a064ebab874accb"
+    },
+    {
+      "version": "0.0.28",
+      "title": "Release 0.0.28",
+      "summary": "Unify selection highlights and reveal obscured characters (#47)",
+      "commit": "50e6637cdbbac59cada14bd0bb60702ddd77e812"
+    },
     {
       "version": "0.0.27",
       "title": "Release 0.0.27",
