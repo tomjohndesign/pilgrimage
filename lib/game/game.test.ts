@@ -10,6 +10,7 @@ import {
   MAX_ROAD_TIER,
   ROAD_TIERS,
   isRoadTerrain,
+  junctionShoulders,
   roadEdge,
   roadTint,
   roadWear,
@@ -510,6 +511,54 @@ describe("road edges", () => {
     const map = parseAsciiMap(["=..", "==.", ".=."])
     // The bend tile: road continues west and south; grass east and north-east.
     expect(roadEdge(map, 1, 1).open).toEqual([1, 0, 0, 1])
+  })
+
+  it("keeps forks and crossroads curved when their diagonal corners are grass", () => {
+    for (const rows of [["...", "===", ".-."], [".=.", "===", ".-."]]) {
+      expect(roadEdge(parseAsciiMap(rows), 1, 1).filledCorners).toEqual([0, 0, 0, 0])
+    }
+  })
+
+  it("fills the same shared corner on all four tiles of a broad road patch", () => {
+    const map = parseAsciiMap(["....", ".==.", ".--.", "...."])
+    expect(roadEdge(map, 1, 1).filledCorners).toEqual([1, 0, 0, 0])
+    expect(roadEdge(map, 2, 1).filledCorners).toEqual([0, 0, 1, 0])
+    expect(roadEdge(map, 1, 2).filledCorners).toEqual([0, 1, 0, 0])
+    expect(roadEdge(map, 2, 2).filledCorners).toEqual([0, 0, 0, 1])
+    const plaza = parseAsciiMap(["===", "===", "==="])
+    expect(roadEdge(plaza, 1, 1).filledCorners).toEqual([1, 1, 1, 1])
+  })
+
+  it("continues into a bridge without widening onto its neighbouring water", () => {
+    const map = parseAsciiMap(["....", ".=#.", ".-=.", "...."])
+    expect(roadEdge(map, 1, 1).open).toEqual([0, 1, 0, 1])
+    expect(roadEdge(map, 1, 1).filledCorners).toEqual([0, 0, 0, 0])
+  })
+})
+
+describe("junction shoulders", () => {
+  it("shares both inside curves of a T across their four adjoining tiles", () => {
+    const map = parseAsciiMap([".....", ".....", "=====", "..=..", "..=.."])
+    const shoulders = junctionShoulders(map)
+    expect(shoulders.get(2 * 5 + 2)).toEqual([1, 0, 3, 0])
+    // The same southeast shoulder at the junction, main road, branch, grass.
+    expect(shoulders.get(2 * 5 + 3)?.[2]).toBe(1)
+    expect(shoulders.get(3 * 5 + 2)?.[1]).toBe(1)
+    expect(shoulders.get(3 * 5 + 3)?.[3]).toBe(1)
+    expect(shoulders.size).toBe(6)
+  })
+
+  it("keeps shoulders off water, bridge approaches, and building footprints", () => {
+    const map = parseAsciiMap([".....", ".....", "=====", ".~=..", "..=.."])
+    expect(junctionShoulders(map).has(3 * 5 + 1)).toBe(false)
+    expect(junctionShoulders(map, new Set([2 * 5 + 2])).size).toBe(0)
+    map.buildings.push({ id: "test", label: "House", x: 3, z: 3, w: 1, d: 1, height: 1, color: "brown", roofColor: "brown" })
+    expect(junctionShoulders(map).size).toBe(0)
+  })
+
+  it("leaves ordinary bends and straight roads alone", () => {
+    expect(junctionShoulders(parseAsciiMap([".....", ".....", "===..", "..=..", "..=.."])).size).toBe(0)
+    expect(junctionShoulders(parseAsciiMap([".....", "=====", "....."])).size).toBe(0)
   })
 })
 
