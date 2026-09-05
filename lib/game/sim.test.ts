@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import type { TerrainId } from "./map/terrain"
+import { BRIDGE_RISE } from "./map/bridges"
+import { TILE_HEIGHT, type TerrainId } from "./map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import {
   createSim,
@@ -326,6 +327,22 @@ describe("stepSim", () => {
 })
 
 describe("left-hand walking lanes", () => {
+  it.each([1, -1] as const)("keeps left while climbing bridge ramps and crossing the raised deck (direction %i)", (direction) => {
+    const map = makeMap()
+    for (let x = 9; x <= 11; x++) map.tiles[4 * map.width + x] = "bridge"
+    const t = makeTraveler(0, "knight", {}, (direction === 1 ? 6 : 13) / 23)
+    t.direction = direction
+    const sim = createSim([t], map)
+    const s = sim.travelers.get(0)!
+    for (let i = 0; i <= 28; i++) {
+      // Ground at 7 and 13, half-rise ramps at 8 and 12, full deck at 9–11.
+      const rise = Math.max(0, Math.min(s.progress - 7, 13 - s.progress, 2)) * BRIDGE_RISE / 2
+      expect(s.y).toBeCloseTo(TILE_HEIGHT + rise)
+      expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) - direction * s.laneOffset)
+      if (i < 28) stepSim(sim, [t], map, 1, 0.25)
+    }
+  })
+
   it.each([[1, 0], [-1, 0], [0, 1], [0, -1]])(
     "keeps both directions to their own left on a route heading (%i, %i)",
     (dx, dz) => {

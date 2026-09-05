@@ -9,6 +9,7 @@ import type { Relic } from "@/lib/game/relic"
 import type { Traveler } from "@/lib/game/travelers"
 import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 
+import { Bridges } from "./bridges"
 import { Buildings } from "./buildings"
 import { CameraLight } from "./camera-light"
 import { CameraRig } from "./camera-rig"
@@ -80,6 +81,7 @@ export function GameCanvas({
           showGrid={showGrid}
         />
       </Suspense>
+      <Bridges map={map} roadTier={roadTier} />
       <Trees map={map} />
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />

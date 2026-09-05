@@ -1,5 +1,5 @@
 import { computeDangerField, encounterChance, type ThreatSource } from "./map/danger"
-import { TILE_HEIGHT } from "./map/terrain"
+import { surfaceHeight } from "./map/bridges"
 import {
   tileAt,
   tileToWorldX,
@@ -222,14 +222,24 @@ function laneVertex(
   return { x: p.x + nx * lane, z: p.z + nz * lane }
 }
 
-/** World point along parallel lanes, interpolated continuously around bends. */
+interface WorldPoint {
+  x: number
+  y: number
+  z: number
+}
+
+/**
+ * World point along parallel lanes, interpolated continuously around bends.
+ * Height follows the route's tile-centre surfaces, including bridge ramps and
+ * raised decks; lane offsets must not be used as fractional tile indices.
+ */
 function routeWorldPoint(
   map: GameMap,
   route: ReadonlyArray<{ x: number; z: number }>,
   p: number,
   lane: number,
   junctions?: { entry: number; exit: number },
-): { x: number; z: number } {
+): WorldPoint {
   const i0 = Math.max(0, Math.min(Math.floor(p), route.length - 2))
   const frac = p - i0
   const vertex = (i: number) => {
@@ -245,15 +255,17 @@ function routeWorldPoint(
   const az = tileToWorldZ(map, a.z)
   const bx = tileToWorldX(map, b.x)
   const bz = tileToWorldZ(map, b.z)
-  return { x: ax + (bx - ax) * frac, z: az + (bz - az) * frac }
+  const ay = surfaceHeight(map, route[i0].x, route[i0].z)
+  const by = surfaceHeight(map, route[i0 + 1].x, route[i0 + 1].z)
+  return { x: ax + (bx - ax) * frac, y: ay + (by - ay) * frac, z: az + (bz - az) * frac }
 }
 
-function roadWorldPoint(map: GameMap, p: number, lane: number): { x: number; z: number } {
+function roadWorldPoint(map: GameMap, p: number, lane: number): WorldPoint {
   return routeWorldPoint(map, map.road!, p, lane)
 }
 
 /** Where on their route — road or track — the traveler currently belongs. */
-function currentRoutePoint(map: GameMap, s: SimTraveler): { x: number; z: number } {
+function currentRoutePoint(map: GameMap, s: SimTraveler): WorldPoint {
   if (s.track) {
     const track = map.shortcuts![s.track.index]
     return routeWorldPoint(map, track.tiles, s.track.progress, s.lane, track)
@@ -267,8 +279,6 @@ function stepLane(s: SimTraveler, direction: 1 | -1, distance: number): void {
   const step = Math.max(0, distance) * 0.8
   s.lane += Math.max(-step, Math.min(step, target - s.lane))
 }
-
-const ROAD_Y = TILE_HEIGHT
 
 export function createSim(
   travelers: Traveler[],
@@ -297,7 +307,7 @@ export function createSim(
       thirst: t.attributes.thirst,
       stamina: t.attributes.stamina,
       x: at.x,
-      y: ROAD_Y,
+      y: at.y,
       z: at.z,
       progress,
       direction: t.direction,
@@ -383,7 +393,7 @@ function pitchSpot(
   return tile
     ? {
         x: tileToWorldX(map, tile.x) + jitter.x,
-        y: TILE_HEIGHT,
+        y: surfaceHeight(map, tile.x, tile.z),
         z: tileToWorldZ(map, tile.z) + jitter.z,
       }
     : { x: s.x, y: s.y, z: s.z }
@@ -586,7 +596,7 @@ export function stepSim(
           stepLane(s, s.activity === "fleeing" ? s.direction : direction, worldSpeed * haste * dt)
           const at = currentRoutePoint(map, s)
           s.x = at.x
-          s.y = ROAD_Y
+          s.y = at.y
           s.z = at.z
           break
         }
@@ -617,7 +627,7 @@ export function stepSim(
         stepLane(s, s.activity === "fleeing" ? s.direction : direction, worldSpeed * haste * dt)
         const at = currentRoutePoint(map, s)
         s.x = at.x
-        s.y = ROAD_Y
+        s.y = at.y
         s.z = at.z
         break
       }
@@ -647,7 +657,7 @@ export function stepSim(
 
       case "fromShop": {
         const back = currentRoutePoint(map, s)
-        if (stepOffRoadWalk(s, { x: back.x, y: ROAD_Y, z: back.z }, worldSpeed, dt)) {
+        if (stepOffRoadWalk(s, back, worldSpeed, dt)) {
           s.activity = "walking"
           s.spot = null
           s.walkFrom = null
@@ -668,7 +678,7 @@ export function stepSim(
 
       case "fromCamp": {
         const back = currentRoutePoint(map, s)
-        if (stepOffRoadWalk(s, { x: back.x, y: ROAD_Y, z: back.z }, worldSpeed, dt)) {
+        if (stepOffRoadWalk(s, back, worldSpeed, dt)) {
           s.activity = "walking"
           s.spot = null
           s.walkFrom = null
