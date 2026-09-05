@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react"
 
+import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { TERRAIN, type TerrainId } from "@/lib/game/map/terrain"
 import type { GameMap } from "@/lib/game/map/types"
@@ -76,6 +77,10 @@ export function Minimap({ map }: { map: GameMap }) {
 
       ctx.imageSmoothingEnabled = false
       ctx.drawImage(base, 0, 0, CANVAS_PX, CANVAS_PX)
+      for (const building of [...map.buildings, ...useBuildStore.getState().buildings]) {
+        ctx.fillStyle = building.id === map.site?.hovelId ? "#e1c777" : "#d4975b"
+        ctx.fillRect(building.x * scaleX, building.z * scaleZ, building.w * scaleX, building.d * scaleZ)
+      }
 
       // The camera's ground footprint: a rectangle spanning the frustum, laid
       // on the ground along the screen axes — so it rotates with the view.
@@ -106,9 +111,11 @@ export function Minimap({ map }: { map: GameMap }) {
 
     draw()
     const unsubscribe = useCameraStore.subscribe(draw)
+    const unsubscribeBuild = useBuildStore.subscribe(draw)
     window.addEventListener("resize", draw)
     return () => {
       unsubscribe()
+      unsubscribeBuild()
       window.removeEventListener("resize", draw)
     }
   }, [map])

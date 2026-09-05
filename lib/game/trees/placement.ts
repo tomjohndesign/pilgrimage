@@ -2,7 +2,7 @@ import { computeDarkShade, computeForestShade } from "../map/forest-field"
 import { isWoods, TILE_HEIGHT } from "../map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "../map/types"
 import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
-import { pickSpecies, type TreeSpeciesDef, type TreeSpeciesId } from "./species"
+import { pickSpecies, type TreeSpeciesDef, type TreeSpeciesId, type TreeShape } from "./species"
 
 /**
  * Where the trees stand. Pure data — no three.js, no React — so the stand can
@@ -39,6 +39,10 @@ export interface TreePlacement {
   y: number
   z: number
   species: TreeSpeciesId
+  /** Shared sampled geometry, attached after placement for the game scene. */
+  shape?: TreeShape
+  trunkTaper?: number
+  footprint?: number
   /** Whole-tree size multiplier; edge trees are smaller. Defaults to 1. */
   scale?: number
   /** Brightness multiplier on bark and foliage; edge trees are lighter. Defaults to 1. */

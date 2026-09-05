@@ -3,12 +3,13 @@
 import dynamic from "next/dynamic"
 import { useEffect, useMemo, useState } from "react"
 
+import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER } from "@/lib/game/map/road"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
-import { generateRelic, relicBound } from "@/lib/game/relic"
+import { generateRelic, visitChance } from "@/lib/game/relic"
 import { DEFAULT_TRAFFIC, generateTravelers } from "@/lib/game/travelers"
 import {
   DEFAULT_CLEARING_COUNT,
@@ -204,7 +205,7 @@ export function GameShell({
   )
   // Who among the travelers turns aside for it: the track's own traffic.
   const relicTraffic = useMemo(
-    () => (relic ? relicBound(travelers, relic).length : 0),
+    () => (relic ? Math.round(travelers.reduce((sum, t) => sum + visitChance(t.attributes, relic.stats), 0)) : 0),
     [travelers, relic],
   )
   const monks = useMemo(() => (seed === null ? [] : generateMonks(seed)), [seed])
@@ -213,6 +214,7 @@ export function GameShell({
   // opens on the hovel — the one landmark every map has.
   useEffect(() => {
     if (!map) return
+    useBuildStore.getState().reset()
     const camera = useCameraStore.getState()
     camera.setMapSize(map.width, map.depth)
     camera.select(null)
