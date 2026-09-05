@@ -144,7 +144,7 @@ describe("generateMap", () => {
         }
       }
     }
-  })
+  }, SWEEP_TIMEOUT)
 
   /** Grid distance from the hovel's footprint to the nearest road tile. */
   function hovelRoadDistance(map: GameMap): number {
@@ -383,14 +383,69 @@ describe("generateMap", () => {
     }
   }, SWEEP_TIMEOUT)
 
-  it("keeps the road identical when only forest knobs change", () => {
+  /**
+   * Share of the land beside the road that is still forest, over the 4-neighbours
+   * of every road tile (other road, track, and water don't count either way).
+   * A terrain-blind road would see roughly the map's own forest share here.
+   */
+  function roadsideForestShare(map: GameMap): number {
+    let beside = 0
+    let forest = 0
+    for (const p of map.road!) {
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const t = tileAt(map, p.x + dx, p.z + dz)
+        if (t === null || t === "path" || t === "bridge" || t === "track" || t === "water") continue
+        beside++
+        if (t === "forest") forest++
+      }
+    }
+    return forest / beside
+  }
+
+  it("routes the road through open ground rather than straight through the woods", () => {
+    // The road pays to fell forest, so it bends through glades and picks the
+    // narrowest belt of trees where it has to cross one: the land beside it
+    // is markedly more open than the map as a whole. Per seed this is only a
+    // tendency (a glade-poor stretch may leave no cheap way across), so the
+    // sweep asserts on the aggregate and allows a few exceptions.
+    let openerSeeds = 0
+    let roadside = 0
+    let mapWide = 0
+    for (const seed of SEEDS) {
+      const map = mapFor(seed)
+      const beside = roadsideForestShare(map)
+      const overall = countTerrain(map, "forest") / landTiles(map)
+      roadside += beside
+      mapWide += overall
+      if (beside < overall) openerSeeds++
+    }
+    expect(openerSeeds, "nearly every road finds opener ground than the map average").toBeGreaterThanOrEqual(
+      Math.floor(SEEDS.length * 0.9),
+    )
+    expect(roadside / SEEDS.length, "roadside is far less wooded than the map").toBeLessThan(
+      mapWide / SEEDS.length - 0.15,
+    )
+  }, SWEEP_TIMEOUT)
+
+  it("keeps the road at a sane length — it seeks open ground, it doesn't wander the map for it", () => {
+    for (const seed of SEEDS) {
+      const map = mapFor(seed)
+      expect(map.road!.length, `seed ${seed} road is not a maze`).toBeLessThan(map.width * 2)
+    }
+  }, SWEEP_TIMEOUT)
+
+  it("bends the road to meet the glades when the forest changes", () => {
+    // The road's dice are its own stream, but its route reacts to the land:
+    // with the same seed and a different glade layout it should take a
+    // different line. (The same seed with the same forest is byte-identical —
+    // see "is fully determined by its seed".)
+    let moved = 0
     for (const seed of SEEDS.slice(0, 10)) {
-      // The road runs on its own RNG stream with no forest waypoints, so no
-      // forest knob may disturb it.
       const a = generateMap({ seed, forestCoverage: 0.5, gladeCount: 3, clearingCount: 0 })
       const b = generateMap({ seed, forestCoverage: 0.85, gladeCount: 8, clearingCount: 20 })
-      expect(b.road, `seed ${seed} road is stable`).toEqual(a.road)
+      if (JSON.stringify(a.road) !== JSON.stringify(b.road)) moved++
     }
+    expect(moved, "the road follows the land").toBeGreaterThanOrEqual(8)
   }, SWEEP_TIMEOUT)
 
   it("generates no water when the coverage knob is zero", () => {

@@ -529,7 +529,7 @@ export function GameHud({
             value={settings.relicDistance}
             display={`${settings.relicDistance} tiles off road`}
             min={6}
-            max={48}
+            max={72}
             onChange={(relicDistance) => set({ relicDistance })}
           />
         </Panel>

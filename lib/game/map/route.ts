@@ -6,10 +6,70 @@ export const ROUTE_DIRS: ReadonlyArray<readonly [number, number]> = [
 ]
 
 /**
+ * Binary min-heap open list for the A* routers, keyed by f = g + h. Entries
+ * are (tile index, key) pairs; a tile may sit in the heap more than once
+ * after being relaxed, and callers skip the stale copies via their closed
+ * set. Replaces a linear-scan open list — the routers cost the ground they
+ * cross, which loosens the Manhattan heuristic and makes them expand many
+ * more tiles than a straight-line route would.
+ */
+export class OpenHeap {
+  private items: number[] = []
+  private keys: number[] = []
+
+  get size(): number {
+    return this.items.length
+  }
+
+  push(item: number, key: number): void {
+    const items = this.items
+    const keys = this.keys
+    let i = items.length
+    items.push(item)
+    keys.push(key)
+    while (i > 0) {
+      const parent = (i - 1) >> 1
+      if (keys[parent] <= key) break
+      items[i] = items[parent]
+      keys[i] = keys[parent]
+      i = parent
+    }
+    items[i] = item
+    keys[i] = key
+  }
+
+  /** Removes and returns the item with the smallest key. Undefined when empty. */
+  pop(): number | undefined {
+    const items = this.items
+    const keys = this.keys
+    if (items.length === 0) return undefined
+    const top = items[0]
+    const lastItem = items.pop() as number
+    const lastKey = keys.pop() as number
+    const n = items.length
+    if (n > 0) {
+      let i = 0
+      for (;;) {
+        const left = i * 2 + 1
+        if (left >= n) break
+        const right = left + 1
+        const child = right < n && keys[right] < keys[left] ? right : left
+        if (keys[child] >= lastKey) break
+        items[i] = items[child]
+        keys[i] = keys[child]
+        i = child
+      }
+      items[i] = lastItem
+      keys[i] = lastKey
+    }
+    return top
+  }
+}
+
+/**
  * A* over the full grid, 4-connected, cost 1 + wander per step. Terrain is
  * deliberately ignored — whatever is in the way gets carved by the caller.
  * Used for river centerlines and as the road's last-resort fallback.
- * Linear-scan open list; fine at prototype map sizes.
  */
 export function routeBlind(
   start: { x: number; z: number },
@@ -29,16 +89,11 @@ export function routeBlind(
   const h = (i: number) => Math.abs((i % width) - goal.x) + Math.abs(Math.floor(i / width) - goal.z)
 
   g[startIndex] = 0
-  const open: number[] = [startIndex]
+  const open = new OpenHeap()
+  open.push(startIndex, h(startIndex))
 
-  while (open.length > 0) {
-    let best = 0
-    for (let k = 1; k < open.length; k++) {
-      if (g[open[k]] + h(open[k]) < g[open[best]] + h(open[best])) best = k
-    }
-    const current = open[best]
-    open[best] = open[open.length - 1]
-    open.pop()
+  while (open.size > 0) {
+    const current = open.pop() as number
     if (closed[current]) continue
     closed[current] = 1
     if (current === goalIndex) break
@@ -55,7 +110,7 @@ export function routeBlind(
       if (cost < g[n]) {
         g[n] = cost
         cameFrom[n] = current
-        open.push(n)
+        open.push(n, cost + h(n))
       }
     }
   }
