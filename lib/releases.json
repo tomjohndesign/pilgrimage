@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "0499b1a01d27ff82f177e62f141d18fd8cf90137",
-  "releaseCount": 18,
+  "lastProcessedCommit": "9d901ea2b61181fa4a82e09b1753a4686029db8c",
+  "releaseCount": 19,
   "releases": [
+    {
+      "version": "0.0.33",
+      "title": "Release 0.0.33",
+      "summary": "Keep characters sharp over pixelated scenery and add a rendering lab (#52)",
+      "commit": "9d901ea2b61181fa4a82e09b1753a4686029db8c"
+    },
     {
       "version": "0.0.32",
       "title": "Release 0.0.32",
