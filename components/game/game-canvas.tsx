@@ -36,6 +36,8 @@ export function GameCanvas({
   map,
   relic,
   monks,
+  blasterPastor = false,
+  lastMarch = false,
   travelers,
   walkSpeed,
   roadTier,
@@ -57,6 +59,8 @@ export function GameCanvas({
   onPlace: (at: TilePos) => void
   relic: Relic
   monks: Monk[]
+  blasterPastor?: boolean
+  lastMarch?: boolean
   travelers: Traveler[]
   walkSpeed: number
   /** Road development tier — index into ROAD_TIERS. */
@@ -71,7 +75,7 @@ export function GameCanvas({
   const species = useTreeTuningStore((s) => s.species)
   const variance = useTreeTuningStore((s) => s.variance)
   const trees = useMemo(() => growTreePlacements(placeTrees(map, species),
-    deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes), species, variance), [map, species, variance])
+    deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes), species, variance), [map.tiles, species, variance])
   return (
     <PixelCanvas
       {...pixelation}
@@ -103,11 +107,11 @@ export function GameCanvas({
         />
       </Suspense>
       <Bridges map={map} roadTier={roadTier} />
-      <Trees map={map} placements={trees} />
+      <Trees map={map} placements={trees} ents={lastMarch} />
       <Environment map={map} />
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />
-      <Monks map={map} monks={monks} />
+      <Monks map={map} monks={monks} flying={blasterPastor} />
       <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown} />
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
 

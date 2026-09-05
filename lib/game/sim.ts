@@ -588,7 +588,7 @@ function chooseTree(sim: SimState, s: SimTraveler, map: GameMap): boolean {
   const centre = buildingCentre(map, camp)
   const reserved = new Set(Array.from(sim.travelers.values()).map((w) => w.tree))
   const candidates = sim.trees.map((tree, index) => ({ tree, index }))
-    .filter(({ tree, index }) => (sim.treeResources.get(index)?.remainingWood ?? 1) > 0 && !reserved.has(index) &&
+    .filter(({ tree, index }) => !tree.walking && (sim.treeResources.get(index)?.remainingWood ?? 1) > 0 && !reserved.has(index) &&
       Math.hypot(tree.x - centre.x, tree.z - centre.z) <= BUILDING_KINDS[camp.kind].workRadius)
     .sort((a, b) => Number(sim.felled.has(b.index)) - Number(sim.felled.has(a.index)) ||
       Math.hypot(a.tree.x - s.x, a.tree.z - s.z) - Math.hypot(b.tree.x - s.x, b.tree.z - s.z))

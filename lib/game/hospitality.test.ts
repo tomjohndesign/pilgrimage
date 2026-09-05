@@ -104,6 +104,27 @@ describe("shrine hospitality", () => {
 })
 
 describe("lumber camps", () => {
+  it("waits for a walking Ent to replant before claiming it for timber", () => {
+    const { map, trees, camp, traveler } = fixture()
+    const t = traveler(0)
+    const sim = createSim([t], map)
+    sim.buildings = [camp]
+    sim.trees = [{ ...trees[0], walking: true }]
+    const worker = sim.travelers.get(0)!
+    worker.employer = camp.id
+    worker.activity = "idle"
+    worker.timer = 0
+    run(sim, [t], map, 5)
+    expect(worker.tree).toBeNull()
+    expect(sim.treeResources.size).toBe(0)
+    sim.trees[0].walking = false
+    worker.timer = 0
+    run(sim, [t], map, 5, () => worker.tree !== null)
+    expect(worker.tree).toBe(0)
+    expect(sim.treeResources.has(0)).toBe(true)
+  })
+
+
   it("purchases a working camp and credits deliveries once, even after spending wood", () => {
     const { map, trees, traveler } = fixture()
     const before = createSettlement()
