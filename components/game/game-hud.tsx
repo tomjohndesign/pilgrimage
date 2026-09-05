@@ -48,6 +48,11 @@ const CONTROLS: Array<[string, string]> = [
 
 const PANEL_SHADOW = "shadow-[0_2px_16px_rgba(0,0,0,0.6)]"
 
+// Opt in per workspace; a production build must never expose the tuning UI.
+const SHOW_PROPERTY_PANELS =
+  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_PROPERTY_PANELS === "1"
+
 function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
     <div className={`pointer-events-none border border-rule bg-parchment/95 px-4 py-3 ${className}`}>
@@ -172,6 +177,28 @@ function Tuner({
         />
       </div>
     </div>
+  )
+}
+
+function TrafficDensity({ value, travelerCount, onChange }: {
+  value: number
+  travelerCount: number
+  onChange: (traffic: number) => void
+}) {
+  return (
+    <>
+      <Tuner
+        label="Traffic density"
+        value={value}
+        display={`${Math.round((value / DEFAULT_TRAFFIC) * 100)}%`}
+        min={0}
+        max={60}
+        onChange={onChange}
+      />
+      <p className="text-[11px] italic text-ink-light">
+        {travelerCount} folk across the map.
+      </p>
+    </>
   )
 }
 
@@ -591,8 +618,8 @@ function MonkPanel({ monk }: { monk: Monk }) {
 }
 
 /**
- * The play-screen chrome: transparent header, one World panel of tuning knobs,
- * the inspector, and the minimap dock.
+ * The play-screen chrome: transparent header, settlement controls, the inspector,
+ * and the minimap dock. Local workspaces can opt into the World tuning sidebar.
  *
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — HUD layout frame
  */
@@ -629,6 +656,7 @@ export function GameHud({
   const set = (patch: Partial<MapSettings>) => onSettingsChange({ ...settings, ...patch })
   const selection = useCameraStore((s) => s.selection)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [settlementOpen, setSettlementOpen] = useState(false)
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     Seed: true,
     Pixelation: true,
@@ -655,9 +683,8 @@ export function GameHud({
 
   return (
     <>
-      {/* Header: title and version just right of the sidebar, menu on the right,
-          no backing — it sits straight on the scene like a title card. */}
-      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between py-4 pl-[244px] pr-4">
+      {/* Header follows the available scene width, including the optional sidebar. */}
+      <header className={`pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between py-4 pr-4 ${SHOW_PROPERTY_PANELS ? "pl-[244px]" : "pl-4"}`}>
         <div className={`flex items-baseline gap-3 ${HEADER_TEXT_SHADOW}`}>
           <Link
             href="/"
@@ -671,13 +698,31 @@ export function GameHud({
         </div>
 
         <div className="relative flex items-center gap-2">
+          {!SHOW_PROPERTY_PANELS && map && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => { setSettlementOpen((open) => !open); setMenuOpen(false) }}
+                aria-expanded={settlementOpen}
+                aria-controls="settlement-controls"
+                className={HEADER_BUTTON}
+              >
+                Settlement
+              </button>
+              {settlementOpen && (
+                <div id="settlement-controls" className={`pointer-events-auto absolute right-0 top-full mt-2 w-[228px] border border-rule bg-parchment/95 px-3 py-3 ${PANEL_SHADOW}`}>
+                  <SettlementPanel map={map} />
+                </div>
+              )}
+            </div>
+          )}
           <button type="button" onClick={onReroll} className={HEADER_BUTTON}>
             ✦ New Map
           </button>
           <MusicPlayer className={HEADER_BUTTON} />
           <button
             type="button"
-            onClick={() => setMenuOpen((open) => !open)}
+            onClick={() => { setMenuOpen((open) => !open); setSettlementOpen(false) }}
             aria-expanded={menuOpen}
             className={HEADER_BUTTON}
           >
@@ -687,8 +732,15 @@ export function GameHud({
         </div>
       </header>
 
+      {!SHOW_PROPERTY_PANELS && (
+        <aside aria-label="Traffic" className={`pointer-events-auto absolute left-4 top-20 z-10 w-[228px] border border-rule bg-parchment/95 px-3 py-2 ${PANEL_SHADOW}`}>
+          <TrafficDensity value={settings.traffic} travelerCount={travelers.length} onChange={(traffic) => set({ traffic })} />
+        </aside>
+      )}
+
       {/* World: a full-height sidebar of tuning knobs, grouped under fold-away headers. */}
-      <aside
+      {SHOW_PROPERTY_PANELS && <aside
+        aria-label="World properties"
         className={`pointer-events-auto absolute inset-y-0 left-0 z-10 flex w-[228px] flex-col overflow-y-auto border border-rule bg-parchment/95 px-2 py-3 ${PANEL_SHADOW}`}
       >
         <SettlementPanel economy={economy} monks={monks} relic={relic} />
@@ -797,17 +849,7 @@ export function GameHud({
         </Section>
 
         <Section {...section("Road")}>
-          <Tuner
-            label="Traffic density"
-            value={settings.traffic}
-            display={`${Math.round((settings.traffic / DEFAULT_TRAFFIC) * 100)}%`}
-            min={0}
-            max={60}
-            onChange={(traffic) => set({ traffic })}
-          />
-          <p className="text-[11px] italic text-ink-light">
-            {travelers.length} folk across the map.
-          </p>
+          <TrafficDensity value={settings.traffic} travelerCount={travelers.length} onChange={(traffic) => set({ traffic })} />
           <Tuner
             label="Pace"
             value={settings.walkSpeed}
@@ -898,9 +940,11 @@ export function GameHud({
             onChange={(ponds) => set({ ponds })}
           />
         </Section>
-      </aside>
+      </aside>}
 
-      {(selection?.kind === "tree" || selection?.kind === "pile") && <ResourceInspector selection={selection} />}
+      {(selection?.kind === "tree" || selection?.kind === "pile") && (
+        <ResourceInspector selection={selection} className={SHOW_PROPERTY_PANELS ? "left-[228px]" : "left-0"} />
+      )}
 
       {/* Inspector: whoever or whatever the player clicked, tucked against the sidebar. */}
       {selectedBuilding && selectedDefinition && (
@@ -915,17 +959,17 @@ export function GameHud({
         </div>
       )}
       {selectedTraveler && (
-        <div className="absolute bottom-0 left-[228px] z-10">
+        <div className={`absolute bottom-0 z-10 ${SHOW_PROPERTY_PANELS ? "left-[228px]" : "left-0"}`}>
           <TravelerPanel traveler={selectedTraveler} />
         </div>
       )}
       {selectedMonk && (
-        <div className="absolute bottom-0 left-[228px] z-10">
+        <div className={`absolute bottom-0 z-10 ${SHOW_PROPERTY_PANELS ? "left-[228px]" : "left-0"}`}>
           <MonkPanel monk={selectedMonk} />
         </div>
       )}
       {selectedRelic && relic && (
-        <div className="absolute bottom-0 left-[228px] z-10">
+        <div className={`absolute bottom-0 z-10 ${SHOW_PROPERTY_PANELS ? "left-[228px]" : "left-0"}`}>
           <RelicPanel relic={relic} />
         </div>
       )}

@@ -11,7 +11,10 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** The same tree identity can be inspected standing, fallen, or as a stump. */
-export function ResourceInspector({ selection }: { selection: Extract<Selection, { kind: "tree" | "pile" }> }) {
+export function ResourceInspector({ selection, className = "left-0" }: {
+  selection: Extract<Selection, { kind: "tree" | "pile" }>
+  className?: string
+}) {
   const [, refresh] = useState(0)
   useEffect(() => {
     const timer = setInterval(() => refresh((n) => n + 1), 250)
@@ -52,7 +55,7 @@ export function ResourceInspector({ selection }: { selection: Extract<Selection,
       <p className="mt-2 italic text-ink-light">Delivered here by the camp’s woodcutters.</p>
     </>
   }
-  return <div className="pointer-events-auto absolute bottom-0 left-[228px] z-10 w-[250px] border border-rule bg-parchment/95 px-4 py-3 text-[11px] text-ink">
+  return <div className={`pointer-events-auto absolute bottom-0 z-10 w-[250px] border border-rule bg-parchment/95 px-4 py-3 text-[11px] text-ink ${className}`}>
     <div className="mb-2 flex items-center justify-between gap-3">
       <span className="font-display text-xs">{title}</span>
       <button type="button" aria-label="Dismiss resource" onClick={() => useCameraStore.getState().select(null)}>✕</button>
