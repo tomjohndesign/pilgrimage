@@ -10,13 +10,13 @@ import {
   DANGER_THRESHOLDS,
   dangerLabel,
 } from "@/lib/game/map/danger"
-import { clampRoadTier, MAX_ROAD_TIER, ROAD_TIERS } from "@/lib/game/map/road"
+import { clampRoadTier, ROAD_TIERS } from "@/lib/game/map/road"
 import { MIN_MAP_SIZE } from "@/lib/game/map/generate-map"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileAt, type GameMap } from "@/lib/game/map/types"
 import { nerve } from "@/lib/game/route-choice"
 import { parseSeed } from "@/lib/game/rng"
-import { saveSeed } from "@/lib/game/seed-storage"
+import { CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, formatGameTime, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { MONK_ACTIVITY_LABELS, monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
@@ -25,6 +25,7 @@ import type { Traveler } from "@/lib/game/travelers"
 
 import type { MapSettings } from "./game-shell"
 import { Minimap } from "./minimap"
+import { MusicPlayer } from "./music-player"
 
 const CONTROLS: Array<[string, string]> = [
   ["Click", "Inspect traveler"],
@@ -38,13 +39,54 @@ const CONTROLS: Array<[string, string]> = [
 
 const PANEL_SHADOW = "shadow-[0_2px_16px_rgba(0,0,0,0.6)]"
 
-function Panel({ children }: { children: React.ReactNode }) {
+function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`pointer-events-none border border-rule bg-parchment/95 px-4 py-3 ${PANEL_SHADOW}`}>
+    <div className={`pointer-events-none border border-rule bg-parchment/95 px-4 py-3 ${className}`}>
       {children}
     </div>
   )
 }
+
+/**
+ * One category inside the merged World panel: a gold header that folds the
+ * body away, with a rule between neighbours. Everything stays in one column so
+ * the tuning knobs read as a single instrument rather than a stack of cards.
+ */
+function Section({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string
+  open: boolean
+  onToggle: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <section className="flex flex-col gap-1 border-t border-rule/70 py-2 first:border-t-0 first:pt-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="pointer-events-auto flex w-full items-baseline justify-between gap-3 text-left"
+      >
+        <span className="font-display text-[9px] font-black uppercase tracking-[2px] text-black">
+          {title}
+        </span>
+        <span className="font-display text-[9px] text-gold/70">{open ? "▾" : "▸"}</span>
+      </button>
+      {open && <div className="flex flex-col gap-1">{children}</div>}
+    </section>
+  )
+}
+
+/** Ghost control for the transparent header: parchment text straight on the scene. */
+const HEADER_BUTTON =
+  "pointer-events-auto border border-parchment/30 bg-[#14100a]/40 px-3 py-1.5 font-display text-[10px] uppercase tracking-[2px] text-parchment backdrop-blur-[2px] transition-colors hover:border-gold-light hover:text-gold-light"
+
+const HEADER_TEXT_SHADOW =
+  "[text-shadow:0_1px_2px_rgba(0,0,0,0.95),0_0_12px_rgba(0,0,0,0.85)]"
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
@@ -87,21 +129,73 @@ function Tuner({
   step?: number
   onChange: (value: number) => void
 }) {
+  const fraction = max > min ? (value - min) / (max - min) : 0
   return (
-    <div className="pt-1.5">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-[13px] italic text-ink-light">{label}</span>
-        <span className="font-display text-[10px] text-ink">{display}</span>
+    <div className="group flex items-center">
+      <span className="w-16 shrink-0 text-[13px] font-medium text-ink-light">{label}</span>
+      <div className="relative h-8 flex-1 overflow-hidden rounded-[6px] bg-parchment-dark">
+        {/* Fill and knob are drawn; the real range input sits on top, invisible. */}
+        <div
+          className="absolute inset-y-0 left-0 rounded-[6px] bg-gold"
+          style={{ width: `${fraction * 100}%` }}
+        />
+        {/* The handle is a notch in the panel's own parchment, shown only while the
+            row is hovered. It rides 6px inside the fill's leading edge, never touching
+            the rim, and stops short of the value at the far end so the two never collide. */}
+        <div
+          className="absolute top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-parchment opacity-0 group-hover:opacity-100"
+          style={{ left: `clamp(4px, calc(${fraction * 100}% - 8px), calc(100% - 32px))` }}
+        />
+        <span className="absolute right-1 top-1/2 -translate-y-1/2 font-display text-[11px] font-black text-ink-light">
+          {display}
+        </span>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          aria-label={label}
+          onChange={(event) => onChange(Number(event.target.value))}
+          className="pointer-events-auto absolute inset-0 h-full w-full cursor-ew-resize opacity-0"
+        />
       </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="pointer-events-auto mt-0.5 h-1 w-36 cursor-pointer accent-gold"
-      />
+    </div>
+  )
+}
+
+/** A stepped choice drawn as the same box as a tuner track, with the option's name inside. */
+function Chooser({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: number
+  options: string[]
+  onChange: (index: number) => void
+}) {
+  return (
+    <div className="flex items-center">
+      <span className="w-16 shrink-0 text-[13px] font-medium text-ink-light">{label}</span>
+      <div className="relative h-8 flex-1 rounded-[6px] bg-parchment-dark">
+        <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 truncate font-display text-[11px] font-black text-ink-light">
+          {options[value]}
+        </span>
+        <select
+          value={value}
+          aria-label={label}
+          onChange={(event) => onChange(Number(event.target.value))}
+          className="pointer-events-auto absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        >
+          {options.map((option, index) => (
+            <option key={option} value={index}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   )
 }
@@ -111,7 +205,9 @@ function MenuPanel() {
   const [showControls, setShowControls] = useState(false)
 
   return (
-    <div className={`pointer-events-auto w-40 border border-rule bg-parchment/95 px-4 py-3 ${PANEL_SHADOW}`}>
+    <div
+      className={`pointer-events-auto absolute right-0 top-full mt-2 w-44 border border-rule bg-parchment/95 px-4 py-3 ${PANEL_SHADOW}`}
+    >
       <nav className="flex flex-col gap-1.5">
         {SITE_MENU.map((item) => (
           <div key={item.href} className="flex flex-col gap-1">
@@ -168,40 +264,26 @@ function SeedField({
 }) {
   const [input, setInput] = useState(seed === null ? "" : String(seed))
   const [invalid, setInvalid] = useState(false)
-  const [justSaved, setJustSaved] = useState(false)
 
   // Follow the shell when the seed changes elsewhere (reroll, URL load).
   useEffect(() => {
     if (seed !== null) setInput(String(seed))
   }, [seed])
 
-  useEffect(() => {
-    if (!justSaved) return
-    const timer = setTimeout(() => setJustSaved(false), 2000)
-    return () => clearTimeout(timer)
-  }, [justSaved])
-
-  const apply = (): number | null => {
+  const apply = () => {
     const parsed = parseSeed(input)
     if (parsed === null) {
       setInvalid(true)
-      return null
+      return
     }
     setInvalid(false)
     onSeedChange(parsed)
-    return parsed
-  }
-
-  const save = () => {
-    const parsed = apply()
-    if (parsed === null) return
-    saveSeed(parsed)
-    setJustSaved(true)
   }
 
   return (
-    <div>
-      <input
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-stretch gap-1.5">
+        <input
         value={input}
         onChange={(event) => {
           setInput(event.target.value)
@@ -214,16 +296,13 @@ function SeedField({
         spellCheck={false}
         aria-label="World seed"
         aria-invalid={invalid}
-        className={`pointer-events-auto mt-1 w-36 border bg-parchment px-2 py-1 text-[13px] text-ink outline-none ${
+        className={`pointer-events-auto min-w-0 flex-1 border bg-parchment px-2 py-1 text-[13px] text-ink outline-none ${
           invalid ? "border-red" : "border-rule focus:border-gold"
         }`}
-      />
-      {invalid && <div className="mt-1 text-[11px] italic text-red">Digits only</div>}
-      <div className="mt-1.5 flex items-center gap-1.5">
+        />
         <HudButton onClick={apply}>Apply</HudButton>
-        <HudButton onClick={save}>Save</HudButton>
-        {justSaved && <span className="text-[11px] italic text-ink-light">Saved ✦</span>}
       </div>
+      {invalid && <div className="text-[11px] italic text-red">Digits only</div>}
     </div>
   )
 }
@@ -269,11 +348,12 @@ function ClockPanel() {
     return () => clearInterval(timer)
   }, [])
   if (time === null) return null
+  const [day, clock] = formatGameTime(time).split(" — ")
   return (
-    <Panel>
-      <Label>Time</Label>
-      <div className="pt-1 font-display text-xs text-ink">{formatGameTime(time)}</div>
-    </Panel>
+    <div className="flex py-0.5 font-display text-lg leading-5 text-ink">
+      <span className="w-1/2">{day}</span>
+      <span className="w-1/2">{clock}</span>
+    </div>
   )
 }
 
@@ -493,6 +573,12 @@ function MonkPanel({ monk }: { monk: Monk }) {
   )
 }
 
+/**
+ * The play-screen chrome: transparent header, one World panel of tuning knobs,
+ * the inspector, and the minimap dock.
+ *
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — HUD layout frame
+ */
 export function GameHud({
   map,
   seed,
@@ -520,6 +606,20 @@ export function GameHud({
   const set = (patch: Partial<MapSettings>) => onSettingsChange({ ...settings, ...patch })
   const selection = useCameraStore((s) => s.selection)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    Seed: true,
+    Forest: true,
+    Relic: true,
+    Road: true,
+    Water: true,
+  })
+  const toggleSection = (title: string) =>
+    setOpenSections((open) => ({ ...open, [title]: !open[title] }))
+  const section = (title: string) => ({
+    title,
+    open: openSections[title] ?? true,
+    onToggle: () => toggleSection(title),
+  })
 
   const selectedTraveler =
     selection?.kind === "traveler" ? (travelers.find((t) => t.id === selection.id) ?? null) : null
@@ -529,45 +629,56 @@ export function GameHud({
 
   return (
     <>
-      {/* Scrolls within the window: the tuning panels outgrow a short screen. */}
-      <div className="absolute left-5 top-5 z-10 flex max-h-[calc(100vh-2.5rem)] flex-col items-start gap-2 overflow-y-auto pr-2 [scrollbar-width:none]">
-        <Panel>
-          <div className="font-display text-sm font-bold tracking-[3px] text-ink">PILGRIMAGE</div>
-          <div className="font-display text-[9px] uppercase tracking-[2px] text-gold">
-            Prototype — Camera &amp; Map
-          </div>
-        </Panel>
+      {/* Header: title and version just right of the sidebar, menu on the right,
+          no backing — it sits straight on the scene like a title card. */}
+      <header className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-between py-4 pl-[244px] pr-4">
+        <div className={`flex items-baseline gap-3 ${HEADER_TEXT_SHADOW}`}>
+          <Link
+            href="/"
+            className="pointer-events-auto font-display text-sm font-bold tracking-[4px] text-parchment hover:text-gold-light"
+          >
+            PILGRIMAGE
+          </Link>
+          <span className="font-display text-[9px] uppercase tracking-[2px] text-parchment/80">
+            {CURRENT_VERSION}
+          </span>
+        </div>
 
-        <button
-          type="button"
-          onClick={() => setMenuOpen((open) => !open)}
-          aria-expanded={menuOpen}
-          className={`pointer-events-auto border border-rule bg-parchment/95 px-4 py-2 font-display text-[10px] uppercase tracking-[2px] text-ink hover:text-red ${PANEL_SHADOW}`}
-        >
-          ☰ Menu
-        </button>
+        <div className="relative flex items-center gap-2">
+          <button type="button" onClick={onReroll} className={HEADER_BUTTON}>
+            ✦ New Map
+          </button>
+          <MusicPlayer className={HEADER_BUTTON} />
+          <button
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-expanded={menuOpen}
+            className={HEADER_BUTTON}
+          >
+            ☰ Menu
+          </button>
+          {menuOpen && <MenuPanel />}
+        </div>
+      </header>
 
-        {menuOpen && <MenuPanel />}
-
-        <Panel>
-          <Label>Seed</Label>
+      {/* World: a full-height sidebar of tuning knobs, grouped under fold-away headers. */}
+      <aside
+        className={`pointer-events-auto absolute inset-y-0 left-0 z-10 flex w-[228px] flex-col overflow-y-auto border border-rule bg-parchment/95 px-2 py-3 ${PANEL_SHADOW}`}
+      >
+        <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />
           <Tuner
             label="Size"
             value={settings.size}
-            display={`${settings.size} × ${settings.size}`}
+            display={String(settings.size)}
             min={MIN_MAP_SIZE}
             max={512}
             step={32}
             onChange={(size) => set({ size })}
           />
-          <div className="mt-1.5">
-            <HudButton onClick={onReroll}>New Map</HudButton>
-          </div>
-        </Panel>
+        </Section>
 
-        <Panel>
-          <Label>Forest</Label>
+        <Section {...section("Forest")}>
           <Tuner
             label="Coverage"
             value={settings.coverage}
@@ -600,12 +711,11 @@ export function GameHud({
             max={4}
             onChange={(darkForests) => set({ darkForests })}
           />
-        </Panel>
+        </Section>
 
-        <Panel>
-          <Label>Relic</Label>
+        <Section {...section("Relic")}>
           {relic && (
-            <div className="pb-1 text-[11px] italic text-ink-light">{relicTitle(relic)}</div>
+            <div className="text-[11px] italic text-ink-light">{relicTitle(relic)}</div>
           )}
           <div className="flex items-baseline justify-between pb-1 text-[11px] text-ink-light">
             <span className="italic">Turn aside</span>
@@ -616,19 +726,18 @@ export function GameHud({
           <Tuner
             label="Distance"
             value={settings.relicDistance}
-            display={`${settings.relicDistance} tiles off road`}
+            display={String(settings.relicDistance)}
             min={6}
             max={72}
             onChange={(relicDistance) => set({ relicDistance })}
           />
-        </Panel>
+        </Section>
 
-        <Panel>
-          <Label>Road</Label>
+        <Section {...section("Road")}>
           <Tuner
             label="Traffic"
             value={settings.traffic}
-            display={`${settings.traffic} folk`}
+            display={String(settings.traffic)}
             min={0}
             max={60}
             onChange={(traffic) => set({ traffic })}
@@ -636,7 +745,7 @@ export function GameHud({
           <Tuner
             label="Pace"
             value={settings.walkSpeed}
-            display={`${settings.walkSpeed.toFixed(1)} tiles/s`}
+            display={settings.walkSpeed.toFixed(1)}
             min={0.2}
             max={5}
             step={0.1}
@@ -644,12 +753,10 @@ export function GameHud({
           />
           {map && <DangerForecast map={map} />}
           {/* Stand-in for progression: the road builds up as the pilgrimage grows. */}
-          <Tuner
-            label="Development"
+          <Chooser
+            label="Path"
             value={clampRoadTier(settings.road)}
-            display={ROAD_TIERS[clampRoadTier(settings.road)].label}
-            min={0}
-            max={MAX_ROAD_TIER}
+            options={ROAD_TIERS.map((tier) => tier.label)}
             onChange={(road) => set({ road })}
           />
           {/* The surface's look, to explore: how solid, how dark, and the edge line. */}
@@ -674,7 +781,7 @@ export function GameHud({
           <Tuner
             label="Edge line"
             value={settings.roadEdgeLine}
-            display={settings.roadEdgeLine === 0 ? "none" : `${Math.round(settings.roadEdgeLine * 100)}%`}
+            display={settings.roadEdgeLine === 0 ? "None" : `${Math.round(settings.roadEdgeLine * 100)}%`}
             min={0}
             max={1}
             step={0.05}
@@ -689,10 +796,9 @@ export function GameHud({
             step={0.5}
             onChange={(roadEdgeWidth) => set({ roadEdgeWidth })}
           />
-        </Panel>
+        </Section>
 
-        <Panel>
-          <Label>Water</Label>
+        <Section {...section("Water")}>
           <Tuner
             label="Coverage"
             value={settings.water}
@@ -725,35 +831,33 @@ export function GameHud({
             max={3}
             onChange={(ponds) => set({ ponds })}
           />
-        </Panel>
-      </div>
+        </Section>
+      </aside>
 
-      <div className="absolute right-5 top-5 z-10">
-        <ClockPanel />
-      </div>
-
+      {/* Inspector: whoever or whatever the player clicked, tucked against the sidebar. */}
       {selectedTraveler && (
-        <div className="absolute bottom-5 left-5 z-10">
+        <div className="absolute bottom-0 left-[228px] z-10">
           <TravelerPanel traveler={selectedTraveler} />
         </div>
       )}
       {selectedMonk && (
-        <div className="absolute bottom-5 left-5 z-10">
+        <div className="absolute bottom-0 left-[228px] z-10">
           <MonkPanel monk={selectedMonk} />
         </div>
       )}
       {selectedRelic && relic && (
-        <div className="absolute bottom-5 left-5 z-10">
+        <div className="absolute bottom-0 left-[228px] z-10">
           <RelicPanel relic={relic} />
         </div>
       )}
 
+      {/* Dock: the minimap in the bottom-right corner with the calendar above it. */}
       {map && (
-        <div className="absolute bottom-5 right-5 z-10">
-          <Panel>
-            <Label>Map</Label>
-            <Minimap map={map} />
-          </Panel>
+        <div
+          className={`pointer-events-none absolute bottom-0 right-0 z-10 flex flex-col gap-2 bg-parchment/95 px-4 pb-4 pt-3 ${PANEL_SHADOW}`}
+        >
+          <ClockPanel />
+          <Minimap map={map} />
         </div>
       )}
     </>
