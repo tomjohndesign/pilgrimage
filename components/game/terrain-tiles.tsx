@@ -825,6 +825,8 @@ export function TerrainTiles({
       <instancedMesh
         ref={roadMeshRef}
         key={tier.id}
+        // Skip empty road batches, such as paths entirely covered by bridges.
+        visible={roadCount > 0}
         // The road runs the width of the map; the instance bounds it would
         // be culled by are computed once and never worth it.
         frustumCulled={false}

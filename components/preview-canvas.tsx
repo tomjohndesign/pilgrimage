@@ -1,8 +1,10 @@
 "use client"
 
 import { useEffect } from "react"
-import { Canvas, useThree } from "@react-three/fiber"
+import { useThree } from "@react-three/fiber"
 import type * as THREE from "three"
+
+import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
 
 import {
   CAM_FAR,
@@ -21,19 +23,19 @@ export function PreviewCanvas({
   zoom,
   view = 0,
   children,
+  ...pixelation
 }: {
   /** Pixels per world unit. */
   zoom: number
   /** Which of the four game views to freeze at. */
   view?: number
   children: React.ReactNode
-}) {
+} & PixelationProps) {
   const yaw = yawForView(view)
   return (
-    <Canvas
+    <PixelCanvas
+      {...pixelation}
       orthographic
-      dpr={[1, 2]}
-      gl={{ antialias: true }}
       camera={{ position: cameraOffset(yaw), zoom, near: CAM_NEAR, far: CAM_FAR }}
       onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
     >
@@ -47,7 +49,7 @@ export function PreviewCanvas({
       <CameraAim view={view} zoom={zoom} />
 
       {children}
-    </Canvas>
+    </PixelCanvas>
   )
 }
 

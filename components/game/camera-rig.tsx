@@ -198,6 +198,8 @@ export function CameraRig({ map }: { map: GameMap }) {
     }
   }, [])
 
+  // Update the display pose before lighting, animation, and the pixel render pass.
+  // These canvases use a manual camera because this rig owns the frustum.
   // --- Per-frame: tween and drive the camera ----------------------------------
   useFrame((_, delta) => {
     const { targetX, targetZ, viewIndex, viewSize, pan } = useCameraStore.getState()
@@ -249,7 +251,7 @@ export function CameraRig({ map }: { map: GameMap }) {
     cam.position.set(targetX + ox, oy, targetZ + oz)
     cam.lookAt(targetX, 0, targetZ)
     cam.updateProjectionMatrix()
-  })
+  }, -2)
 
   return null
 }
