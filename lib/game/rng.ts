@@ -51,4 +51,7 @@ export const SEED_STREAM = {
   treeShapes: 8,
   /** Per-plank and per-stone colour grain on the bridges. */
   bridgeGrain: 9,
+  /** Sparse ground dressing, independent of trees and simulation. */
+  environment: 10,
+  environmentShapes: 11,
 } as const

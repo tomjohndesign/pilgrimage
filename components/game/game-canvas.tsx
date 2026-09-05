@@ -14,6 +14,7 @@ import { Buildings } from "./buildings"
 import { CameraLight } from "./camera-light"
 import { CameraRig } from "./camera-rig"
 import { DebugHandle } from "./debug-handle"
+import { Environment } from "./environment"
 import { Monks } from "./monks"
 import { OutlinePass } from "./outline-pass"
 import { Shrine } from "./shrine"
@@ -83,6 +84,7 @@ export function GameCanvas({
       </Suspense>
       <Bridges map={map} roadTier={roadTier} />
       <Trees map={map} />
+      <Environment map={map} />
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />
       <Monks map={map} monks={monks} />

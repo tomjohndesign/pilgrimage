@@ -5,6 +5,7 @@ import { Canvas } from "@react-three/fiber"
 
 import { CameraLight } from "@/components/game/camera-light"
 import { CameraRig } from "@/components/game/camera-rig"
+import { Environment } from "@/components/game/environment"
 import { OutlinePass } from "@/components/game/outline-pass"
 import { TerrainTiles } from "@/components/game/terrain-tiles"
 import { Trees } from "@/components/game/trees"
@@ -44,6 +45,7 @@ export function TreeMapPreview({ seed, size }: { seed: number; size: number }) {
         <TerrainTiles map={map} />
       </Suspense>
       <Trees map={map} />
+      <Environment map={map} />
 
       <CameraRig map={map} />
       <OutlinePass />
