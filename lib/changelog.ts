@@ -14,7 +14,7 @@ export const CHANGELOG: Release[] = [
     version: "0.0.14",
     title: "Winding Waters",
     summary:
-      "Rivers meander and meet. Every world now has an imaginary lie of the land, a random swell that steers each river left and right of its course, so rivers wind back and forth without ever repeating a pattern. Rivers no longer cross: one that meets another bends downstream into it, and the river it joins runs wider from the junction on. Channels keep their width around bends, sand collects on the inside bank of every real curve, the hovel's track forks from the road by walking distance rather than as the crow flies, and bridges stay short and separate.",
+      "Rivers meander and meet. Every world now has an imaginary lie of the land, a random swell that steers each river left and right of its course, so rivers wind back and forth without ever repeating a pattern. Rivers no longer cross: one that meets another bends downstream into it, and the river it joins runs wider from the junction on. Channels keep their width around bends, and sand collects on the inside bank of every real curve.",
   },
   {
     version: "0.0.13",

@@ -4,18 +4,17 @@ import { useEffect, useLayoutEffect, useMemo } from "react"
 import * as THREE from "three"
 
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
-import { computeForestShade } from "@/lib/game/map/forest-field"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
-import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
+import type { GameMap } from "@/lib/game/map/types"
 import {
   encodeObjectId,
   OUTLINE_ID_LAYER_MASK,
   RELIC_OBJECT_ID,
   treeObjectId,
 } from "@/lib/game/render/outline"
+import { placeTrees, type TreePlacement } from "@/lib/game/trees/placement"
 import {
   generateTree,
-  pickSpecies,
   TREE_SPECIES_ORDER,
   type TreeShape,
   type TreeSpeciesDef,
@@ -27,14 +26,9 @@ import { useTreeTuningStore } from "@/lib/game/trees/tree-tuning-store"
  * Parametric species trees, drawn as instanced low-poly primitives.
  *
  * Two layers:
- *  - `Trees` reads a map, decides where trees stand and which species each is
- *    (weighted by habitat — birch and hawthorn favour the forest edge, beech
- *    the interior — and by each species' grove field, so kinds clump together),
- *    and hands the placements on. Every forest tile holds 1 or 2 trees — a
- *    seeded coin flip that only lands on 2 deep in the woods — and the stand
- *    fades at its rim: the outermost trees are a little shorter and lighter,
- *    following the forest-shade field the ground colour also reads, so the
- *    woods taper into grassland instead of stopping at a wall.
+ *  - `Trees` reads a map and asks `placeTrees` (lib/game/trees/placement) where
+ *    the trees stand and which species each is: habitat and groves pick the
+ *    kind, and each species' footprint and per-tile cap decide how many fit.
  *  - `TreeField` grows each placement into a `TreeShape` and renders them. The
  *    lab on /assets/textures uses it directly to line up trees of one species.
  *
@@ -46,23 +40,7 @@ import { useTreeTuningStore } from "@/lib/game/trees/tree-tuning-store"
  * per-tree geometry, no textures, no transparency.
  */
 
-export interface TreePlacement {
-  /** World position of the tree's base. */
-  x: number
-  y: number
-  z: number
-  species: TreeSpeciesId
-  /** Whole-tree size multiplier; edge trees are smaller. Defaults to 1. */
-  scale?: number
-  /** Brightness multiplier on bark and foliage; edge trees are lighter. Defaults to 1. */
-  brightness?: number
-}
-
-/** Edge trees scale down to this fraction of a core tree's size. */
-const EDGE_SIZE_SCALE = 0.7
-
-/** Chance of a second tree at the very heart of the woods; fades to 0 at the rim. */
-const SECOND_TREE_CHANCE = 0.5
+export type { TreePlacement }
 
 /** Trunks sink slightly into the ground so a lean never exposes a gap. */
 const TRUNK_SINK = 0.04
@@ -86,56 +64,9 @@ function makeCrownGeometry(shape: TreeSpeciesDef["crown"]["shape"]): THREE.Buffe
     : new THREE.IcosahedronGeometry(1, BLOB_DETAIL)
 }
 
-/** Forest tiles that touch open ground; the map edge does not count. */
-function isForestEdge(map: GameMap, x: number, z: number): boolean {
-  for (const [dx, dz] of [
-    [1, 0],
-    [-1, 0],
-    [0, 1],
-    [0, -1],
-  ]) {
-    const neighbour = tileAt(map, x + dx, z + dz)
-    if (neighbour !== null && neighbour !== "forest") return true
-  }
-  return false
-}
-
 export function Trees({ map }: { map: GameMap }) {
   const species = useTreeTuningStore((s) => s.species)
-
-  const placements = useMemo<TreePlacement[]>(() => {
-    const seed = map.seed ?? 0
-    const shade = computeForestShade(map)
-    // Counts get their own stream so species and jitter (from the `trees`
-    // stream) stay independent of the coin flips.
-    const rngCount = makeRng(deriveSeed(seed, SEED_STREAM.treeCount))
-    const rng = makeRng(deriveSeed(seed, SEED_STREAM.trees))
-    // Spread across the tile so a packed tile reads as many trees, not a lattice.
-    const scatter = 0.8
-    const out: TreePlacement[] = []
-    for (let z = 0; z < map.depth; z++) {
-      for (let x = 0; x < map.width; x++) {
-        const index = z * map.width + x
-        if (map.tiles[index] !== "forest") continue
-        const depth = shade[index]
-        const count = 1 + (rngCount() < SECOND_TREE_CHANCE * depth ? 1 : 0)
-        const site = { x, z, onEdge: isForestEdge(map, x, z), seed }
-        for (let t = 0; t < count; t++) {
-          const id = pickSpecies(species, site, rng)
-          out.push({
-            x: tileToWorldX(map, x) + (rng() - 0.5) * scatter,
-            y: TILE_HEIGHT,
-            z: tileToWorldZ(map, z) + (rng() - 0.5) * scatter,
-            species: id,
-            scale: EDGE_SIZE_SCALE + (1 - EDGE_SIZE_SCALE) * depth,
-            // Edge growth reads younger and sunlit — a touch lighter than the core.
-            brightness: 1.1 - 0.15 * depth,
-          })
-        }
-      }
-    }
-    return out
-  }, [map, species])
+  const placements = useMemo(() => placeTrees(map, species), [map, species])
 
   return (
     <TreeField

@@ -9,8 +9,11 @@ import {
   DEFAULT_ROAD_TIER,
   MAX_ROAD_TIER,
   ROAD_TIERS,
+  isRoadTerrain,
   roadEdge,
   roadTint,
+  roadWear,
+  TRAFFIC_FOR_BARE_ROAD,
 } from "./map/road"
 import { TERRAIN } from "./map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ } from "./map/types"
@@ -412,19 +415,13 @@ describe("road weathering", () => {
     expect(luminance(byDirt)).toBeGreaterThan(luminance(roadTint(map, 1, 1, 0)))
   })
 
-  it("lets grass reclaim each tier less than the last, but never nothing", () => {
-    for (let i = 1; i < ROAD_TIERS.length; i++) {
-      expect(ROAD_TIERS[i].sward).toBeLessThan(ROAD_TIERS[i - 1].sward)
+  it("frays the trail more than gravel, and cuts paved tiers straight", () => {
+    expect(ROAD_TIERS[0].edgeWear).toBeGreaterThan(ROAD_TIERS[1].edgeWear)
+    expect(ROAD_TIERS[1].edgeWear).toBeGreaterThan(0)
+    for (const tier of ROAD_TIERS) {
+      expect(tier.paved).toBe(tier.edgeWear === 0)
     }
-    expect(ROAD_TIERS[MAX_ROAD_TIER].sward).toBeGreaterThan(0)
-    expect(ROAD_TIERS[0].sward).toBeLessThan(1)
-  })
-
-  it("erodes each tier's edges less than the last, but never to square", () => {
-    for (let i = 1; i < ROAD_TIERS.length; i++) {
-      expect(ROAD_TIERS[i].edgeWear).toBeLessThan(ROAD_TIERS[i - 1].edgeWear)
-    }
-    expect(ROAD_TIERS[MAX_ROAD_TIER].edgeWear).toBeGreaterThan(0)
+    expect(ROAD_TIERS.filter((t) => t.paved).map((t) => t.id)).toEqual(["cobble", "flagstone"])
   })
 
   it("weathers developed roads less than the trail", () => {
@@ -438,33 +435,64 @@ describe("road weathering", () => {
   })
 })
 
-describe("road edges", () => {
-  const GRASS_RGB = [0x77 / 255, 0x86 / 255, 0x4b / 255]
-  const DIRT_RGB = [0xa5 / 255, 0x86 / 255, 0x58 / 255]
+describe("road wear", () => {
+  it("widens the ruts both ways the more feet pass", () => {
+    let last = roadWear(0)
+    for (const traffic of [3, 6, 12, 24, TRAFFIC_FOR_BARE_ROAD]) {
+      const wear = roadWear(traffic)
+      expect(wear.edge).toBeLessThan(last.edge)
+      expect(wear.inner).toBeGreaterThan(last.inner)
+      last = wear
+    }
+  })
 
+  it("leaves an empty road as two ruts with grass between and beside, and a busy one bare to its sides", () => {
+    const empty = roadWear(0)
+    expect(empty.edge).toBeGreaterThan(0)
+    expect(empty.inner).toBeGreaterThan(empty.edge)
+    expect(empty.inner).toBeLessThan(0.5)
+    const busy = roadWear(TRAFFIC_FOR_BARE_ROAD)
+    expect(busy.edge).toBe(0)
+    expect(busy.inner).toBeGreaterThan(0.5)
+    // The surface never leaves the road's own tiles.
+    for (const traffic of [0, 5, 12, 30, 60, 1000]) expect(roadWear(traffic).edge).toBeGreaterThanOrEqual(0)
+  })
+
+  it("lays a paved road edge to edge with no ruts, whatever the traffic", () => {
+    for (const tier of ROAD_TIERS.filter((t) => t.paved)) {
+      for (const traffic of [0, 12, 60]) {
+        const wear = roadWear(traffic, tier.tier)
+        expect(wear.edge).toBe(0)
+        expect(wear.inner).toBeGreaterThanOrEqual(1)
+      }
+    }
+  })
+
+  it("wears no further past the point the road is bare, and shrugs off junk", () => {
+    expect(roadWear(TRAFFIC_FOR_BARE_ROAD * 3)).toEqual(roadWear(TRAFFIC_FOR_BARE_ROAD))
+    expect(roadWear(Number.NaN)).toEqual(roadWear(0))
+    expect(roadWear(-5)).toEqual(roadWear(0))
+  })
+})
+
+describe("road edges", () => {
   it("opens only the sides that face land on a straight run", () => {
     // Grass above the road, bare earth below.
     const map = parseAsciiMap(["...", "===", ",,,"])
     const edge = roadEdge(map, 1, 1)
     expect(edge.open).toEqual([0, 0, 1, 1]) // +x, -x, +z, -z
-    // Verge is the average of the two open neighbours' base colours.
-    edge.verge.forEach((v, i) => expect(v).toBeCloseTo((GRASS_RGB[i] + DIRT_RGB[i]) / 2, 10))
   })
 
-  it("knows how much grass hems a road tile in, and what the open sides face", () => {
-    // Grass above the road, bare earth below: half the open sides are grass,
-    // and three of the eight neighbours.
-    const mixed = roadEdge(parseAsciiMap(["...", "===", ",,,"]), 1, 1)
-    expect(mixed.vergeGrass).toBeCloseTo(0.5, 10)
-    expect(mixed.grass).toBeCloseTo(3 / 8, 10)
-    // A trail through open meadow is hemmed in on every side but the road.
-    const meadow = roadEdge(parseAsciiMap(["...", "===", "..."]), 1, 1)
-    expect(meadow.vergeGrass).toBe(1)
-    expect(meadow.grass).toBeCloseTo(6 / 8, 10)
-    // Road surrounded by road: nothing open, no grass.
-    const paved = roadEdge(parseAsciiMap(["===", "===", "==="]), 1, 1)
-    expect(paved.vergeGrass).toBe(0)
-    expect(paved.grass).toBe(0)
+  it("runs seamlessly into the track to the relic, and the track into it", () => {
+    // The branch forks south off the road: no verge is eroded between the
+    // fork tile and the track, or between the track and the road, so the
+    // two read as one way.
+    const map = parseAsciiMap(["...", "===", ".-.", ".-."])
+    expect(isRoadTerrain("track")).toBe(true)
+    expect(roadEdge(map, 1, 1).open).toEqual([0, 0, 0, 1])
+    expect(roadEdge(map, 1, 2).open).toEqual([1, 1, 0, 0])
+    // Off-map counts as road, so the last track tile is open only sideways.
+    expect(roadEdge(map, 1, 3).open).toEqual([1, 1, 0, 0])
   })
 
   it("treats off-map as road, so the road exits the world squarely", () => {
@@ -475,17 +503,13 @@ describe("road edges", () => {
 
   it("keeps every side closed inside a paved plaza", () => {
     const map = parseAsciiMap(["===", "===", "==="])
-    const edge = roadEdge(map, 1, 1)
-    expect(edge.open).toEqual([0, 0, 0, 0])
-    expect(edge.verge).toEqual([1, 1, 1])
+    expect(roadEdge(map, 1, 1).open).toEqual([0, 0, 0, 0])
   })
 
   it("opens the outside of a bend", () => {
     const map = parseAsciiMap(["=..", "==.", ".=."])
     // The bend tile: road continues west and south; grass east and north-east.
-    const edge = roadEdge(map, 1, 1)
-    expect(edge.open).toEqual([1, 0, 0, 1])
-    edge.verge.forEach((v, i) => expect(v).toBeCloseTo(GRASS_RGB[i], 10))
+    expect(roadEdge(map, 1, 1).open).toEqual([1, 0, 0, 1])
   })
 })
 

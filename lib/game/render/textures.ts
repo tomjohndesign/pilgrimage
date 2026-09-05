@@ -25,7 +25,8 @@ export interface TextureEntry {
 }
 
 const ROAD_TIER_NOTES: Record<string, string> = {
-  trail: "Road surface at tier 0 — the bare track pilgrims tread at the start.",
+  trail:
+    "Road surface at tier 0 — the bare track pilgrims tread at the start. Transparent where tufts survive, so the grass beneath shows through.",
   gravel: "Road surface at tier 1 — crushed stone packed into the trail.",
   cobble: "Road surface at tier 2 — rounded setts with earth joints.",
   flagstone: "Road surface at tier 3 — cut slabs laid in offset courses.",
@@ -45,7 +46,7 @@ export const TEXTURES: TextureEntry[] = [
     label: "Sward",
     url: "/textures/grass.png",
     appliedTo:
-      "Tops of clear-land tiles, and the patches where grass has reclaimed the road.",
+      "Tops of clear-land tiles, under the forest floor, and under every road tile — showing through wherever the surface is thin, worn away, or reclaimed.",
     source: "Generated — node scripts/generate-grass-texture.mjs",
     preview: "grass",
   },
