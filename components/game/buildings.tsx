@@ -1,5 +1,6 @@
 "use client"
 
+import { buildingYaw, rotatedFootprint } from "@/lib/game/building-rotation"
 import { StructureModel } from "@/components/building-lab/building-model"
 import { structureParts } from "@/lib/game/building-art/structure"
 
@@ -23,7 +24,7 @@ import {
 export function Buildings({ map }: { map: GameMap }) {
   const piles = useBuildStore((s) => s.piles)
   const buildings = map.buildings
-  const models = useMemo(() => buildings.map((building) => structureParts({ ...building, buildType: building.buildType ?? (building.id.startsWith("lumberCamp-") ? "lumberCamp" : undefined) })), [buildings])
+  const models = useMemo(() => buildings.map((building) => structureParts({ ...building, ...rotatedFootprint(building, building.rotation), buildType: building.buildType ?? (building.id.startsWith("lumberCamp-") ? "lumberCamp" : undefined) })), [buildings])
   const idColors = useMemo(
     // Component tuples straight into the working colour space — an ID is data,
     // not a colour, so it must dodge sRGB conversion to survive readback.
@@ -43,7 +44,7 @@ export function Buildings({ map }: { map: GameMap }) {
 
         if (building.buildType === "lumberCamp" || building.id.startsWith("lumberCamp-")) {
           return (
-            <group key={building.id} name={`lumber-yard-${building.id}`} position={[centreX, baseY, centreZ]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
+            <group key={building.id} name={`lumber-yard-${building.id}`} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
               <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} />
               {piles.filter((pile) => pile.campId === building.id).map((pile) => {
                 const [x, z] = pileOffset(pile.slot)
@@ -54,7 +55,7 @@ export function Buildings({ map }: { map: GameMap }) {
         }
 
         return (
-          <group key={building.id} position={[centreX, baseY, centreZ]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
+          <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
             <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} />
           </group>
         )

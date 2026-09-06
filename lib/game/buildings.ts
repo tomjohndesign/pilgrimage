@@ -1,3 +1,4 @@
+import { rotatedFootprint, lumberCampEntry, type BuildingRotation } from "./building-rotation"
 import { settlementRoute } from "./settlement-route"
 import { isWoods, TERRAIN } from "./map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } from "./map/types"
@@ -75,16 +76,18 @@ function footprintsOverlap(
 export function hasWoodsInReach(
   map: GameMap, def: BuildingKindDef, x: number, z: number,
   existing: readonly BuildingDef[] = [],
+  rotation: BuildingRotation = 0,
 ): boolean {
-  const cx = x + (def.w - 1) / 2
-  const cz = z + (def.d - 1) / 2
+  const footprint = rotatedFootprint(def, rotation)
+  const cx = x + (footprint.w - 1) / 2
+  const cz = z + (footprint.d - 1) / 2
   const r = def.workRadius
   for (let tz = Math.floor(cz - r); tz <= Math.ceil(cz + r); tz++) {
     for (let tx = Math.floor(cx - r); tx <= Math.ceil(cx + r); tx++) {
       if (Math.hypot(tx - cx, tz - cz) > r) continue
       const terrain = tileAt(map, tx, tz)
-      if (terrain && isWoods(terrain) && settlementRoute(map, [...existing, { ...def, x, z }],
-        { x, z: z + def.d }, { x: tx, z: tz }, true)) return true
+      if (terrain && isWoods(terrain) && settlementRoute(map, [...existing, { ...def, ...footprint, rotation, x, z, id: "lumberCamp-preview" }],
+        lumberCampEntry({ ...footprint, rotation, x, z }), { x: tx, z: tz }, true)) return true
     }
   }
   return false
@@ -111,25 +114,26 @@ export function placementProblem(
   kind: BuildingKind,
   x: number,
   z: number,
+  rotation: BuildingRotation = 0,
 ): PlacementProblem | null {
   const def = BUILDING_KINDS[kind]
-  for (let dz = 0; dz < def.d; dz++) {
-    for (let dx = 0; dx < def.w; dx++) {
+  const footprint = { x, z, ...rotatedFootprint(def, rotation) }
+  for (let dz = 0; dz < footprint.d; dz++) {
+    for (let dx = 0; dx < footprint.w; dx++) {
       const terrain = tileAt(map, x + dx, z + dz)
       if (!terrain || !TERRAIN[terrain].buildable) return "terrain"
     }
   }
-  const footprint = { x, z, w: def.w, d: def.d }
   if (existing.some((b) => footprintsOverlap(b, footprint))) return "occupied"
   if (map.site) {
-    const planned = { ...def, x, z }
-    const entrance = { x, z: z + def.d }
+    const planned = { ...def, ...footprint, rotation, id: "lumberCamp-preview" }
+    const entrance = lumberCampEntry(planned)
     if (!settlementRoute(map, [...existing, planned], map.site.door, entrance)) return "access"
     // A new footprint must not cut off a camp already connected to the shrine.
     if (existing.some((b) => b.id.startsWith("lumberCamp-") &&
-      !settlementRoute(map, [...existing, planned], map.site!.door, { x: b.x, z: b.z + b.d }))) return "access"
+      !settlementRoute(map, [...existing, planned], map.site!.door, lumberCampEntry(b)))) return "access"
   }
-  if (def.workRadius > 0 && !hasWoodsInReach(map, def, x, z, existing)) return "noWoods"
+  if (def.workRadius > 0 && !hasWoodsInReach(map, def, x, z, existing, rotation)) return "noWoods"
   return null
 }
 
@@ -141,8 +145,9 @@ export function planBuilding(
   x: number,
   z: number,
   serial: number,
+  rotation: BuildingRotation = 0,
 ): PlacedBuilding | null {
-  if (placementProblem(map, existing, kind, x, z) !== null) return null
+  if (placementProblem(map, existing, kind, x, z, rotation) !== null) return null
   const def = BUILDING_KINDS[kind]
   return {
     id: `${kind}-${serial}`,
@@ -150,8 +155,8 @@ export function planBuilding(
     label: def.label,
     x,
     z,
-    w: def.w,
-    d: def.d,
+    ...rotatedFootprint(def, rotation),
+    rotation,
     height: def.height,
     color: def.color,
     roofColor: def.roofColor,

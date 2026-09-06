@@ -1,3 +1,4 @@
+import { rotatedFootprint, lumberCampEntry, type BuildingRotation } from "./building-rotation"
 import { groundHeight } from "./map/elevation"
 import { placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
 import { settlementRoute } from "./settlement-route"
@@ -178,28 +179,30 @@ export function placementError(
   def: BuildDefinition,
   at: TilePos,
   balance: GameBalance = DEFAULT_BALANCE,
+  rotation: BuildingRotation = 0,
 ): string | null {
+  const footprint = rotatedFootprint(def, rotation)
   const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
   if (!hovel) return "A founding shrine is needed before building."
   if (!Number.isInteger(at.x) || !Number.isInteger(at.z)) return "Choose a tile on the map."
   const influence = getBuildInfluence(map, balance)
-  for (let z = at.z; z < at.z + def.d; z++) {
-    for (let x = at.x; x < at.x + def.w; x++) {
+  for (let z = at.z; z < at.z + footprint.d; z++) {
+    for (let x = at.x; x < at.x + footprint.w; x++) {
       const error = buildTileError(map, x, z, influence)
       if (error) return error
       if (map.elevation && Math.abs(groundHeight(map, x, z) - groundHeight(map, at.x, at.z)) > 0.2) return "Choose level ground away from cliffs."
     }
   }
   if (def.id === "lumberCamp") {
-    const problem = placementProblem(map, map.buildings, "lumberCamp", at.x, at.z)
+    const problem = placementProblem(map, map.buildings, "lumberCamp", at.x, at.z, rotation)
     if (problem) return PLACEMENT_PROBLEM_LABELS[problem]
   }
   // Every addition must preserve access to existing lumber yards.
   if (map.site) {
-    const candidate = { ...def, ...at, id: def.id === "lumberCamp" ? "lumberCamp-preview" : "preview" }
+    const candidate = { ...def, ...footprint, rotation, ...at, id: def.id === "lumberCamp" ? "lumberCamp-preview" : "preview" }
     const occupied = [...map.buildings, candidate]
     for (const camp of lumberCamps(map)) {
-      if (!settlementRoute(map, occupied, map.site.door, { x: camp.x, z: camp.z + camp.d }))
+      if (!settlementRoute(map, occupied, map.site.door, lumberCampEntry(camp)))
         return "Keep access to lumber camps clear."
     }
   }
@@ -241,6 +244,7 @@ export function purchaseStructure(
   at: TilePos,
   balance: GameBalance = DEFAULT_BALANCE,
   completedVisits = 0,
+  rotation: BuildingRotation = 0,
 ): { settlement: Settlement; error: string | null } {
   const def = buildCatalog(balance).find((item) => item.id === type)
   if (!def) return { settlement, error: "Unknown structure." }
@@ -249,7 +253,7 @@ export function purchaseStructure(
     return { settlement, error: `Requires ${def.requiredRenown} shrine renown.` }
   if (!canAfford(settlement.resources, def.cost))
     return { settlement, error: "Not enough gold or wood." }
-  const error = placementError(map, def, at, balance)
+  const error = placementError(map, def, at, balance, rotation)
   if (error) return { settlement, error }
   const building: BuildingDef = {
     id: `${def.id === "lumberCamp" ? "lumberCamp" : "settlement"}-${settlement.structures.length}`,
@@ -257,8 +261,8 @@ export function purchaseStructure(
     label: def.label,
     x: at.x,
     z: at.z,
-    w: def.w,
-    d: def.d,
+    ...rotatedFootprint(def, rotation),
+    rotation,
     height: def.height,
     color: def.color,
     roofColor: def.roofColor,
