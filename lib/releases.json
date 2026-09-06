@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "3aaf715bb96bf209e3a3e4142a6cf0ac52617fdc",
-  "releaseCount": 41,
+  "lastProcessedCommit": "96305ce904f7e5b45d8adecac0ba66e6b0a267af",
+  "releaseCount": 42,
   "releases": [
+    {
+      "version": "0.0.56",
+      "title": "Release 0.0.56",
+      "summary": "Add merchant cart and animal sprites with roadside trading (#73)",
+      "commit": "96305ce904f7e5b45d8adecac0ba66e6b0a267af"
+    },
     {
       "version": "0.0.55",
       "title": "Release 0.0.55",
