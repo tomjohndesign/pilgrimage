@@ -57,6 +57,7 @@ describe("balance presets", () => {
     const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
     delete old.balance.rules.visitRenown
     delete old.balance.buildings.lumberCamp
+    for (const id of ["monk-shelter", "shepherd-hut", "storehouse", "wood-shelter"]) delete old.balance.buildings[id]
     old.balance.rules.startingGold = 321
     old.balance.buildings.shelter.goldCost = 17
     const result = importBalance(JSON.stringify(old))
@@ -65,6 +66,8 @@ describe("balance presets", () => {
     expect(result.balance?.buildings.shelter.goldCost).toBe(17)
     expect(result.balance?.rules.visitRenown).toBe(0.5)
     expect(result.balance?.buildings.lumberCamp).toEqual(DEFAULT_BALANCE.buildings.lumberCamp)
+    for (const id of ["monk-shelter", "shepherd-hut", "storehouse", "wood-shelter"] as const)
+      expect(result.balance?.buildings[id]).toEqual(DEFAULT_BALANCE.buildings[id])
     old.balance.buildings.lumberCamp = { goldCost: -1 }
     expect(importBalance(JSON.stringify(old)).balance).toBeNull()
   })
