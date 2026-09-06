@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "f007dbd0463bdfaf40247aaf896a85f5eff0bbb5",
-  "releaseCount": 33,
+  "lastProcessedCommit": "fb5ef6a0bbdca967b2a7f59f853cc815b1ae3c78",
+  "releaseCount": 34,
   "releases": [
+    {
+      "version": "0.0.48",
+      "title": "Release 0.0.48",
+      "summary": "docs: require existing UI patterns and test environments (#68)",
+      "commit": "fb5ef6a0bbdca967b2a7f59f853cc815b1ae3c78"
+    },
     {
       "version": "0.0.47",
       "title": "Release 0.0.47",
