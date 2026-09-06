@@ -411,7 +411,7 @@ describe("stepSim", () => {
 })
 
 describe("left-hand walking lanes", () => {
-  it.each([1, -1] as const)("follows grid-aligned lanes through a stair-step road in direction %i", (direction) => {
+  it.each([1, -1] as const)("follows the rendered diagonal through a stair-step road in direction %i", (direction) => {
     const map = parseAsciiMap([".........", "===......", "..==.....", "...==....", "....=====", "........."])
     map.road = [[0, 1], [1, 1], [2, 1], [2, 2], [3, 2], [3, 3], [4, 3], [4, 4], [5, 4], [6, 4], [7, 4], [8, 4]]
       .map(([x, z]) => ({ x, z }))
@@ -421,8 +421,7 @@ describe("left-hand walking lanes", () => {
     let previous = { x: s.x, z: s.z }
     for (let tick = 0; tick < 10; tick++) {
       stepSim(sim, [traveler], map, 1, 0.1)
-      // Each straight segment follows one grid axis, even with path easing.
-      expect(Math.min(Math.abs(s.x - previous.x), Math.abs(s.z - previous.z))).toBeLessThan(1e-8)
+      expect(s.x - previous.x).toBeCloseTo(s.z - previous.z, 7)
       expect(Math.hypot(s.x - previous.x, s.z - previous.z)).toBeGreaterThan(0)
       expect(tileAt(map, worldToTileX(map, s.x), worldToTileZ(map, s.z))).toBe("path")
       previous = { x: s.x, z: s.z }

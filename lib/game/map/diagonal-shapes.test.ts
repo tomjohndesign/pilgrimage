@@ -25,8 +25,8 @@ describe("diagonal roads", () => {
       if (sides[2]) diagonal++
       else expect(diagonalRoadPoint(map, 3, 2)).toEqual({ x: 3, z: 2, laneScale: 1 })
     }
-    expect(diagonal).toBeGreaterThan(700)
-    expect(diagonal).toBeLessThan(800)
+    expect(diagonal).toBeGreaterThan(870)
+    expect(diagonal).toBeLessThan(930)
   })
 
   it("agrees at shared entrances across style-region boundaries", () => {

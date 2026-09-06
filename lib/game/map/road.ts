@@ -266,7 +266,7 @@ export function roadEdge(map: GameMap, x: number, z: number): RoadEdge {
 }
 
 /** Most suitable stretches straighten, with some ordinary bends for variety. */
-export const DIAGONAL_ROAD_SHARE = 0.75
+export const DIAGONAL_ROAD_SHARE = 0.9
 /** Choose a style over a stretch of land, rather than independently at every bend. */
 const ROAD_STYLE_REGION = 8
 

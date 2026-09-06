@@ -17,7 +17,7 @@ import { useBuildStore } from "@/lib/game/build-store"
 import type { Relic } from "@/lib/game/relic"
 import type { TreePlacement } from "@/lib/game/trees/placement"
 import { tileAt, worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
-import { createSim, simRegistry, stepSim } from "@/lib/game/sim"
+import { createSim, roadCartPose, simRegistry, stepSim } from "@/lib/game/sim"
 import type { Traveler } from "@/lib/game/travelers"
 import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
@@ -29,7 +29,7 @@ import {
 } from "@/lib/game/render/outline"
 
 import { TravelerFigure } from "./traveler-figure"
-import { cartLoadout, SHOP_SECONDS } from "@/lib/game/transport/assets"
+import { cartLoadout, cartOffset, SHOP_SECONDS } from "@/lib/game/transport/assets"
 
 /**
  * People on the road: directional walking sprites driven by the simulation in
@@ -156,6 +156,9 @@ export function Travelers({
       group.userData.distance = playback.paused ? 0 : moved
       group.userData.moving = moving
       group.userData.activity = s.activity
+      group.userData.cartPose = travelers[i].type.id === "vendor" && !s.track &&
+        ["walking", "seeking", "fleeing"].includes(s.activity)
+        ? roadCartPose(map, s, -cartOffset(cartLoadout(s.id).puller) * characterScale) : undefined
       group.userData.keeperTime = s.keeperTime ?? 0
       group.userData.keeperAudience = s.activity === "vending" && travelers.some(other => {
         const person = sim.travelers.get(other.id)
