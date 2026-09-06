@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "68690c95960c1f328bc1cb53561dc7db7d8a0073",
-  "releaseCount": 57,
+  "lastProcessedCommit": "f737f59039a4920a1e5c8563fc2f4334746d6087",
+  "releaseCount": 58,
   "releases": [
+    {
+      "version": "0.0.72",
+      "title": "Release 0.0.72",
+      "summary": "Boost saturation within renown influence areas (#91)",
+      "commit": "f737f59039a4920a1e5c8563fc2f4334746d6087"
+    },
     {
       "version": "0.0.71",
       "title": "Release 0.0.71",
