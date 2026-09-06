@@ -1,5 +1,5 @@
 import { rotatedFootprint, lumberCampEntry, type BuildingRotation } from "./building-rotation"
-import { groundHeight } from "./map/elevation"
+import { groundHeight, levelBuildingGround } from "./map/elevation"
 import { placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
 import { settlementRoute } from "./settlement-route"
 import { getBuildInfluence, type BuildInfluence } from "./build-influence"
@@ -23,6 +23,8 @@ export const STARTING_RESOURCES = {
 export const SETTLEMENT_RADIUS = DEFAULT_BALANCE.rules.buildRadius
 
 export interface Settlement {
+  /** Terrain after successful purchases; the generated base map stays immutable. */
+  elevation?: GameMap["elevation"]
   resources: Resources
   /** Cumulative harvest already credited; spending never credits it again. */
   deliveredWood: number
@@ -248,7 +250,7 @@ export function purchaseStructure(
 ): { settlement: Settlement; error: string | null } {
   const def = buildCatalog(balance).find((item) => item.id === type)
   if (!def) return { settlement, error: "Unknown structure." }
-  const map = { ...baseMap, buildings: [...baseMap.buildings, ...settlement.structures] }
+  const map = { ...baseMap, elevation: settlement.elevation ?? baseMap.elevation, buildings: [...baseMap.buildings, ...settlement.structures] }
   if (settlementRenown(map, residents, relics, balance, completedVisits).total < def.requiredRenown)
     return { settlement, error: `Requires ${def.requiredRenown} shrine renown.` }
   if (!canAfford(settlement.resources, def.cost))
@@ -270,6 +272,7 @@ export function purchaseStructure(
   return {
     settlement: {
       ...settlement,
+      elevation: levelBuildingGround(map, building),
       spentWood: settlement.spentWood + def.cost.wood,
       resources: {
         gold: settlement.resources.gold - def.cost.gold,

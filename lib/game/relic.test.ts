@@ -8,7 +8,9 @@ import {
   relicTitle,
   TURN_ASIDE_DRAW,
   turnsAside,
+  visitChance,
 } from "./relic"
+import { DEFAULT_BALANCE } from "./balance"
 import { generateTravelers, TRAVELER_TYPES, type Traveler, type TravelerAttributes } from "./travelers"
 
 const who = (piety: number, status: number): TravelerAttributes => ({
@@ -26,6 +28,36 @@ const who = (piety: number, status: number): TravelerAttributes => ({
 describe("relic draw", () => {
   const holy = { sanctity: 95, spectacle: 40, doubt: 15 }
   const dubious = { sanctity: 30, spectacle: 95, doubt: 90 }
+
+  it.each(["hunger", "thirst", "stamina"] as const)("requires a reputation for reliable hospitality when %s is empty", (need) => {
+    const traveler = { ...who(0, 100), hunger: 100, thirst: 100, stamina: 100, [need]: 0 }
+    const obscure = { sanctity: 0, spectacle: 0, doubt: 100 }
+    expect(visitChance(traveler, obscure, 0)).toBeCloseTo(0.1)
+    expect(visitChance(traveler, obscure, 10)).toBeCloseTo(0.19)
+    expect(visitChance(traveler, obscure, 50)).toBeCloseTo(0.55)
+    expect(visitChance(traveler, obscure, 100)).toBe(1)
+    expect(visitChance(traveler, obscure, 200)).toBe(1)
+    expect(visitChance(traveler, obscure, -100)).toBeCloseTo(0.1)
+    const balance = structuredClone(DEFAULT_BALANCE)
+    balance.rules.hospitalityBaseChance = 0.2
+    balance.rules.drawCap = 200
+    expect(visitChance(traveler, obscure, 100, balance)).toBeCloseTo(0.6)
+  })
+
+  it("starts with a minority of visitors and attracts a wider crowd as renown grows", () => {
+    let early = 0, established = 0, count = 0
+    for (let seed = 1; seed <= 20; seed++) {
+      const relic = generateRelic(seed)
+      for (const traveler of generateTravelers(seed, 60)) {
+        early += visitChance(traveler.attributes, relic.stats, 10)
+        established += visitChance(traveler.attributes, relic.stats, 100)
+        count++
+      }
+    }
+    expect(early / count).toBeGreaterThan(0.05)
+    expect(early / count).toBeLessThan(0.25)
+    expect(established).toBeGreaterThan(early * 2)
+  })
 
   it("pulls the devout harder toward a holy relic than the worldly", () => {
     expect(relicDraw(who(100, 20), holy, 10)).toBeGreaterThan(relicDraw(who(20, 20), holy, 10))
