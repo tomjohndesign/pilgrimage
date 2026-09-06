@@ -73,7 +73,9 @@ the same leg phase. Fixed FPS is a comparison tool, not the normal movement mode
 
 `walkContact()` selects the supporting foot of the **displayed** rig pose.
 `plantFoot()` anchors it in world space between atlas frames, including its
-height on slopes. Apply the correction to body and outline together. Keep the shared render order
+height on slopes. In the game, pass the map to `CharacterSprite` so new contacts
+sample the walking surface beneath the supporting foot and both depth passes
+follow the local terrain grade. Apply the correction to body and outline together. Keep the shared render order
 and terrain depth shader on both passes; character ground shadows remain disabled.
 Reset the contact at support changes, turns/view changes, stopping or teleports.
 Do not smooth away the correction or cap distance-driven poses at an unrelated

@@ -1,9 +1,8 @@
 "use client"
 
-import { groundHeight } from "@/lib/game/map/elevation"
-import { bridgeLayout } from "@/lib/game/map/bridges"
+import { walkingSurface } from "@/lib/game/map/walking-surface"
 
-import { buildingAt } from "@/lib/game/settlement"
+import { monkWander, type WanderSpot } from "@/lib/game/monk-wander"
 import { Suspense, useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
@@ -12,9 +11,7 @@ import { useSimulationStore } from "@/lib/game/simulation-store"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { selectElement } from "@/lib/game/selection"
 import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
-import { surfaceHeight } from "@/lib/game/map/bridges"
-import { TERRAIN } from "@/lib/game/map/terrain"
-import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
+import type { GameMap } from "@/lib/game/map/types"
 import { monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { createMonkFlight, monkGroundTime, stepMonkFlight, type MonkFlight } from "@/lib/game/monk-flight"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
@@ -32,48 +29,19 @@ import { MonkRocketGear, ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
  * between trips, keeping their rocket-powered gear equipped.
  */
 
-/** How far from the footprint the brothers will wander, in tiles. */
-const WANDER_RADIUS = 3
 const PAUSE_MIN_SECONDS = 2
 const PAUSE_MAX_SECONDS = 7
 /** Standing within this many tiles of the hovel's centre counts as keeping vigil. */
 const VIGIL_RADIUS = 1.8
 
-interface Spot {
-  x: number
-  y: number
-  z: number
-}
-
 interface MonkState {
   x: number
   y: number
   z: number
-  target: Spot
+  route: WanderSpot[]
   pause: number
   flight?: MonkFlight
   flightWait: number
-}
-
-/** Open ground around the hovel a monk may stand on: never the walls, never the woods. */
-function wanderSpots(map: GameMap): { spots: Spot[]; centre: { x: number; z: number } | null } {
-  const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
-  if (!hovel) return { spots: [], centre: null }
-  const centre = {
-    x: tileToWorldX(map, hovel.x) + (hovel.w - 1) / 2,
-    z: tileToWorldZ(map, hovel.z) + (hovel.d - 1) / 2,
-  }
-  const spots: Spot[] = []
-  for (let z = hovel.z - WANDER_RADIUS; z < hovel.z + hovel.d + WANDER_RADIUS; z++) {
-    for (let x = hovel.x - WANDER_RADIUS; x < hovel.x + hovel.w + WANDER_RADIUS; x++) {
-      const inFootprint = x >= hovel.x && x < hovel.x + hovel.w && z >= hovel.z && z < hovel.z + hovel.d
-      if (inFootprint || buildingAt(map, x, z)) continue
-      const terrain = tileAt(map, x, z)
-      if (!terrain || !TERRAIN[terrain].passable || terrain === "forest") continue
-      spots.push({ x: tileToWorldX(map, x), y: surfaceHeight(map, x, z), z: tileToWorldZ(map, z) })
-    }
-  }
-  return { spots, centre }
 }
 
 export function Monks({ map, monks, flying = false, characterScale = 1 }: { map: GameMap; monks: Monk[]; flying?: boolean; characterScale?: number }) {
@@ -81,21 +49,23 @@ export function Monks({ map, monks, flying = false, characterScale = 1 }: { map:
   const groupRefs = useRef<Array<THREE.Group | null>>([])
 
   const world = useMemo(() => {
-    const { spots, centre } = wanderSpots(map)
+    const wander = monkWander(map)
+    const { spots, centre } = wander
     const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.monkWander))
     const flightRng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.monkFlight))
-    const pick = (): Spot => {
+    const pick = (): WanderSpot => {
       const spot = spots[Math.floor(rng() * spots.length)]
       // Jitter within the tile so two brothers never stand on the same spot.
-      return { x: spot.x + (rng() - 0.5) * 0.5, y: spot.y, z: spot.z + (rng() - 0.5) * 0.5 }
+      const x = spot.x + (rng() - 0.5) * 0.5, z = spot.z + (rng() - 0.5) * 0.5
+      return { x, y: walkingSurface(map, x, z).height, z }
     }
     const states: MonkState[] = (spots.length ? monks : []).map((_, index) => {
       const start = pick()
       // One immediate demonstration; the other brothers take off in their own time.
-      return { ...start, target: pick(), pause: rng() * PAUSE_MAX_SECONDS, flightWait: index * 8 }
+      return { ...start, route: wander.route(start, pick()), pause: rng() * PAUSE_MAX_SECONDS, flightWait: index * 8 }
     })
     const activities = new Map<number, MonkActivity>()
-    return { spots, centre, rng, flightRng, pick, states, activities }
+    return { spots, centre, rng, flightRng, pick, states, activities, wander }
   }, [map, monks])
 
   // Publish activities so the HUD's monk panel can poll them.
@@ -153,7 +123,7 @@ export function Monks({ map, monks, flying = false, characterScale = 1 }: { map:
         }
         s.flight = undefined
         s.flightWait = monkGroundTime(world.flightRng)
-        s.target = world.pick()
+        s.route = world.wander.route(s, world.pick())
         s.pause = PAUSE_MIN_SECONDS + world.rng() * (PAUSE_MAX_SECONDS - PAUSE_MIN_SECONDS)
       }
       if (exhaust) exhaust.visible = false
@@ -169,27 +139,29 @@ export function Monks({ map, monks, flying = false, characterScale = 1 }: { map:
       } else {
         group.userData.activity = "walking"
         world.activities.set(monks[i].id, "walking")
-        const dx = s.target.x - s.x
-        const dz = s.target.z - s.z
+        const target = s.route[0] ?? s
+        const dx = target.x - s.x
+        const dz = target.z - s.z
         const dist = Math.hypot(dx, dz)
         const step = monkWalkSpeed(characterScale) * dt
         if (dist <= step) {
-          s.x = s.target.x
-          s.z = s.target.z
-          s.y = s.target.y
-          s.target = world.pick()
-          s.pause = PAUSE_MIN_SECONDS + world.rng() * (PAUSE_MAX_SECONDS - PAUSE_MIN_SECONDS)
+          s.x = target.x
+          s.z = target.z
+          s.y = target.y
+          s.route.shift()
+          if (!s.route.length) {
+            s.route = world.wander.route(s, world.pick())
+            s.pause = PAUSE_MIN_SECONDS + world.rng() * (PAUSE_MAX_SECONDS - PAUSE_MIN_SECONDS)
+          }
         } else {
           s.x += (dx / dist) * step
           s.z += (dz / dist) * step
-          s.y += (s.target.y - s.y) * Math.min(1, step / dist)
+          s.y += (target.y - s.y) * Math.min(1, step / dist)
           group.rotation.y = Math.atan2(dx, dz)
         }
       }
-      const tx = Math.floor(s.x + map.width / 2), tz = Math.floor(s.z + map.depth / 2)
-      const bridge = bridgeLayout(map).rise[tz * map.width + tx]
-      const y = map.elevation && !bridge
-        ? groundHeight(map, s.x + map.width / 2 - 0.5, s.z + map.depth / 2 - 0.5) : s.y
+      const y = walkingSurface(map, s.x, s.z).height
+      s.y = y
       group.position.set(s.x, y, s.z)
       group.userData.distance = Math.hypot(s.x - previousX, s.z - previousZ)
       group.userData.moving = group.userData.distance > 0
@@ -212,7 +184,7 @@ export function Monks({ map, monks, flying = false, characterScale = 1 }: { map:
             }}
           >
             <Suspense fallback={null}>
-              <CharacterSprite name="monk" type="friar" characterModel="base" characterScale={characterScale}
+              <CharacterSprite map={map} name="monk" type="friar" characterModel="base" characterScale={characterScale}
                 visualOverride={monkVisual(monk.attributes.age)} selected={selected} onClick={select}
                 outlineColor={[id.r, id.g, id.b]}
                 walkTuning={MONK_WALK_TUNING} />
