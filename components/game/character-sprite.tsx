@@ -27,7 +27,8 @@ import type { FigureClickHandler } from "./traveler-figure"
 
 let nextSpriteOrder = 1
 
-export function CharacterSprite({ map, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, age = 18, visualOverride, name = "traveler" }: {
+export function CharacterSprite({ map, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, age = 18, visualOverride, flightClip, name = "traveler" }: {
+  flightClip?: SpriteClip & { fps: number }
   map?: GameMap
   visualOverride?: ReturnType<typeof populationVisual>
   name?: "traveler" | "monk"
@@ -66,7 +67,8 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
       const clip = visual.actions[name]
       return clip ? [{ clip, url: clip.url }] : []
     }),
-  ], [visual])
+    ...(flightClip ? [{ clip: flightClip, url: flightClip.url }] : []),
+  ], [visual, flightClip])
   const actionIndices = useMemo(() => {
     let index = 2
     return Object.fromEntries(ACTION_CLIPS.flatMap(name => visual.actions[name] ? [[name, index++]] : []))
@@ -136,6 +138,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
       (parent.getWorldDirection(facing), Math.atan2(facing.x, facing.z))
     const yaw = Math.atan2(camera.matrixWorld.elements[8], camera.matrixWorld.elements[10])
     const moving = parent.userData.moving === true
+    const flight = parent.userData.activity === "flying" ? flightClip : undefined
     const requested = activityClip(parent.userData.activity, moving, parent.userData.carrying)
     const actionIndex = actionIndices[requested]
     const action = requested !== "walk" && requested !== "idle" ? visual.actions[requested] : undefined
@@ -145,7 +148,8 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     }
     if (parent.userData.motionReset) footPlant.current = null
     const dt = Math.min(delta, 0.1) * (parent.userData.playbackRate ?? 1)
-    if (requested !== lastClip.current) { actionClock.current = 0; lastClip.current = requested }
+    const clipKey = flight ? "flying" : requested
+    if (clipKey !== lastClip.current) { actionClock.current = 0; lastClip.current = clipKey }
     const previousActionTime = actionClock.current
     if (requested !== "carrying" || moving) actionClock.current += dt
     if (moving) {
@@ -154,9 +158,9 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
         visual.walk.columns, fps, stride, walkTuning?.sync !== false, visual.walk.strides ?? 1)
     }
     if (sprite.current) Object.assign(sprite.current.userData, { walkPhase: clock.current, walkStride: visual.walkStride * individualScale, distance: parent.userData.distance ?? 0 })
-    const clip: SpriteClip = action ?? (moving ? visual.walk : visual.idle)
-    const texture = textures[actionIndex ?? (moving ? 0 : 1)]
-    const frame = action ? requested === "carrying" ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) :
+    const clip: SpriteClip = flight ?? action ?? (moving ? visual.walk : visual.idle)
+    const texture = textures[flight ? textures.length - 1 : actionIndex ?? (moving ? 0 : 1)]
+    const frame = flight ? Math.floor(actionClock.current * flight.fps) % flight.columns : action ? requested === "carrying" ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) :
       Math.floor(actionClock.current * fps * (action.playbackRate ?? 1)) % clip.columns : moving ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) : clip.stillFrame
     if (requested === "treeFelling" && action && parent.userData.workTree) {
       const rate = fps * (action.playbackRate ?? 1)
@@ -164,7 +168,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
         strikeTree(parent.userData.workTree, heading)
       }
     }
-    if (sprite.current) sprite.current.userData.clip = action ? requested : moving ? "walk" : "idle"
+    if (sprite.current) sprite.current.userData.clip = flight ? "flying" : action ? requested : moving ? "walk" : "idle"
     const direction = spriteRow(heading, yaw)
     const row = visual.rowOffset + direction
     if (poseRoot.current) {

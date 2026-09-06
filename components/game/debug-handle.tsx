@@ -15,7 +15,6 @@ import type { MovementTuning } from "@/lib/game/motion"
 import type { EntState } from "@/lib/game/trees/ents"
 
 import { outlineFrameRef } from "./outline-pass"
-import { ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
 
 /**
  * Exposes a small handle on `window` so the scene can be driven deterministically
@@ -42,6 +41,13 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
       /** Live traveler sim state (stats, activities), for e2e assertions. */
       sim: () => (simRegistry.current ? [...simRegistry.current.travelers.values()] : []),
       time: () => simRegistry.current?.time ?? null,
+      /** Admission receipts and their live floating amounts for payment smoke tests. */
+      payments: () => ({
+        receipts: simRegistry.current?.admissionPayments ?? [],
+        effects: scene.getObjectByName("admission-effects")?.children.flatMap(object =>
+          object instanceof THREE.Sprite && object.visible
+            ? [{ amount: object.userData.amount, position: object.position.toArray(), opacity: object.material.opacity }] : []) ?? [],
+      }),
       setTerrainVisible: (visible: boolean) => { const terrain = scene.getObjectByName("terrain"); if (terrain) terrain.visible = visible },
       renderInfo: () => ({
         programs: gl.info.programs?.length ?? 0,
@@ -97,8 +103,8 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
           object.getWorldPosition(position)
           points.push({
             x: position.x, y: position.y, z: position.z,
-            flying: !!object.parent?.parent?.getObjectByName(ROCKET_EXHAUST_NAME)?.visible,
-            equipped: !!object.parent?.parent?.getObjectByName("monk-rocket-gear"),
+            flying: object.parent?.parent?.userData.activity === "flying",
+            equipped: object.parent?.parent?.userData.rocketPack === true,
             activity: object.parent?.parent?.userData.activity,
             phase: object.userData.walkPhase,
             columns: object instanceof THREE.Sprite ? 1 / (object.material.map?.repeat.x ?? 1) : 1,

@@ -1,12 +1,33 @@
 import { describe, expect, it } from "vitest"
 
-import { createMonkFlight, FLIGHT_ALTITUDE, FLIGHT_SPEED, stepMonkFlight } from "./monk-flight"
+import { createMonkFlight, FLIGHT_ALTITUDE, FLIGHT_SPEED, recallMonkFlight, stepMonkFlight } from "./monk-flight"
 import type { GameMap } from "./map/types"
 import { makeRng } from "./rng"
 
 const map: GameMap = { width: 40, depth: 24, tiles: Array(40 * 24).fill("water"), buildings: [] }
 
 describe("rocket-powered monks", () => {
+  it.each(["climbing", "cruising", "returning", "landing", "landed"] as const)("recalls a monk during %s without teleporting or abandoning a landing", phase => {
+    const rng = makeRng(8), home = { x: 2, y: 0.2, z: 3 }
+    const flight = createMonkFlight({ x: -5, y: 0.5, z: -3 }, home, map, rng)
+    flight.phase = phase
+    if (phase !== "climbing") flight.y = FLIGHT_ALTITUDE
+    if (phase === "returning") flight.target = { ...home, y: FLIGHT_ALTITUDE }
+    if (phase === "landing" || phase === "landed") Object.assign(flight, home, { y: phase === "landing" ? 2 : home.y })
+    const before = { x: flight.x, y: flight.y, z: flight.z }
+    recallMonkFlight(flight)
+    expect({ x: flight.x, y: flight.y, z: flight.z }).toEqual(before)
+    for (let i = 0; i < 150 && flight.phase !== "landed"; i++) {
+      recallMonkFlight(flight)
+      stepMonkFlight(flight, map, rng, 0.1)
+      expect(flight.phase).not.toBe("cruising")
+      if (flight.phase === "climbing") expect([flight.x, flight.z]).toEqual([before.x, before.z])
+      if (flight.phase === "returning") expect(flight.y).toBeGreaterThanOrEqual(FLIGHT_ALTITUDE)
+    }
+    expect(flight.phase).toBe("landed")
+    expect({ x: flight.x, y: flight.y, z: flight.z }).toEqual(home)
+  })
+
   it("takes off vertically before flying over impassable terrain", () => {
     const rng = makeRng(123)
     const home = { x: 0, y: 0.2, z: 0 }
