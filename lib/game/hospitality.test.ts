@@ -9,6 +9,7 @@ import { TILE_HEIGHT, type TerrainId } from "./map/terrain"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import { generateRelic, visitChance } from "./relic"
 import { createSim, stepSim, type SimState } from "./sim"
+import { DEFAULT_MOVEMENT, LINEAR_MOVEMENT } from "./motion"
 import { generateTravelers, TRAVELER_TYPES, type Traveler } from "./travelers"
 import { treeResource, treeStage, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, type WoodPile } from "./trees/timber"
 import type { TreePlacement } from "./trees/placement"
@@ -44,6 +45,49 @@ function run(sim: SimState, travelers: Traveler[], map: GameMap, seconds: number
 const obscure = { sanctity: 0, spectacle: 0, doubt: 100 }
 
 describe("shrine hospitality", () => {
+  it.each([LINEAR_MOVEMENT, DEFAULT_MOVEMENT])("keeps shrine visitors on opposite sides in both directions (%j)", (movement) => {
+    const { map, traveler } = fixture()
+    const travelers = [traveler(0), traveler(1)]
+    const sim = createSim(travelers, map, [], obscure)
+    for (const [index, s] of [...sim.travelers.values()].entries()) {
+      s.activity = index === 0 ? "toRelic" : "fromRelic"
+      s.branchProgress = 2
+      s.lane = (index === 0 ? 1 : -1) * s.laneOffset
+    }
+    for (let tick = 0; tick < 10; tick++) {
+      stepSim(sim, travelers, map, 1, 0.1, movement)
+      for (const [index, s] of [...sim.travelers.values()].entries()) {
+        const direction = index === 0 ? 1 : -1
+        expect((s.x - tileToWorldX(map, 10)) * direction).toBeCloseTo(s.laneOffset)
+      }
+    }
+  })
+
+  it.each([1, -1] as const)("keeps lane changes continuous through a complete shrine visit (road direction %i)", (direction) => {
+    const { map, traveler } = fixture()
+    const t = traveler(0, direction)
+    t.attributes.hunger = 0
+    const sim = createSim([t], map, [], obscure)
+    const s = sim.travelers.get(0)!
+    let returning = false
+    let rejoined = false
+    for (let tick = 0; tick < 6000; tick++) {
+      const before = { x: s.x, z: s.z }
+      stepSim(sim, [t], map, 1, 0.01, DEFAULT_MOVEMENT)
+      expect(Math.hypot(s.x - before.x, s.z - before.z)).toBeLessThan(0.025)
+      returning ||= s.activity === "fromRelic"
+      if (returning && s.activity === "walking") {
+        expect(s.x).toBeCloseTo(tileToWorldX(map, 10))
+        expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) - direction * s.laneOffset)
+        stepSim(sim, [t], map, 1, 0.01, DEFAULT_MOVEMENT)
+        expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) - direction * s.laneOffset)
+        rejoined = true
+        break
+      }
+    }
+    expect(rejoined).toBe(true)
+  })
+
   for (const need of ["hunger", "thirst", "stamina"] as const) {
     for (const direction of [1, -1] as const) {
       it(`draws a traveler with empty ${need} from direction ${direction}, restores needs and returns them`, () => {
@@ -371,13 +415,15 @@ describe("settlement route heights", () => {
       const sim = createSim([t], map)
       const s = sim.travelers.get(0)!
       s.activity = activity
+      s.lane = (activity === "fromRelic" ? -1 : 1) * s.laneOffset
       s.branchProgress = activity === "fromRelic" ? 2 : 1
       s.workRoute = map.site!.branch
       s.workProgress = 1
       s.y = TILE_HEIGHT
       stepSim(sim, [t], map, 1, 0.5)
       expect(s.y).toBeCloseTo(TILE_HEIGHT + BRIDGE_RISE * 0.75)
-      expect(s.x).toBeCloseTo(tileToWorldX(map, 10))
+      const lane = activity === "toRelic" ? s.laneOffset : activity === "fromRelic" ? -s.laneOffset : 0
+      expect(s.x).toBeCloseTo(tileToWorldX(map, 10) + lane)
       expect(s.z).toBeCloseTo(tileToWorldZ(map, 5.5))
     },
   )
