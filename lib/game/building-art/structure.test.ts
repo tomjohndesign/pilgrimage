@@ -33,7 +33,14 @@ describe("settlement construction", () => {
       expect(box.max.x, part.name).toBeLessThanOrEqual(building.w / 2 + .001)
       expect(box.min.z, part.name).toBeGreaterThanOrEqual(-building.d / 2 - .001)
       expect(box.max.z, part.name).toBeLessThanOrEqual(building.d / 2 + .001)
-      expect(box.min.y, part.name).toBeGreaterThanOrEqual(0)
+      const groundSurface = part.name === "floor" && building.buildType !== "storehouse"
+        || part.name.startsWith("paving-") || part.name.startsWith("garden-path-") || part.name === "hall-threshold"
+      expect(box.min.y, part.name).toBeGreaterThanOrEqual(groundSurface ? -.06 : -.001)
+      if (groundSurface) {
+        expect(box.min.y, part.name).toBeLessThan(0)
+        expect(box.max.y, part.name).toBeGreaterThan(0)
+        expect(box.max.y, part.name).toBeLessThanOrEqual(.003)
+      }
       expect(Number.isFinite(box.max.y), part.name).toBe(true)
       whole.union(box)
     }

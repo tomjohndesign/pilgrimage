@@ -1,6 +1,7 @@
 import { EARLY_MATERIALS as palette } from "./materials"
 import type { BuildingPart, Vec3 } from "./geometry"
 import type { BuildingRecipe } from "./style"
+import { BUILDING_FLOOR_TOP } from "./dimensions"
 
 /** The relic rests on the same slab in the game and in the workshop. */
 export const RELIC_TABLE_TOP = 0.44
@@ -11,7 +12,7 @@ type ConstructionRecipe = Omit<BuildingRecipe, "variant"> & { variant: BuildingR
 /** Small early medieval structures built directly in tile units. No plot padding. */
 export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
   const parts: BuildingPart[] = [], { width, depth, wallHeight: h, roofRise: rise, variant } = recipe
-  const w = width / 2, d = depth / 2, floor = variant === "storehouse" ? 0.3 : 0.06
+  const w = width / 2, d = depth / 2, floor = variant === "storehouse" ? 0.3 : 0
   let n = 0
   const random = () => { const v = Math.sin(++n * 127.1 + recipe.seed * 31.7) * 43758.5453; return v - Math.floor(v) }
   const box = (name: string, layer: BuildingPart["layer"], position: Vec3, size: Vec3, color: string, rotation?: Vec3, outline = true) => parts.push({ name, layer, position, size, color, rotation, outline })
@@ -35,7 +36,8 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     for(let i=0;i<8;i++) { const a=ring[i],b=ring[(i+1)%8]; vertices.push(x,y+thickness,z,x+a[0],y+thickness,z+a[1],x+b[0],y+thickness,z+b[1], x+a[0],y,z+a[1],x+b[0],y,z+b[1],x+b[0],y+thickness,z+b[1], x+a[0],y,z+a[1],x+b[0],y+thickness,z+b[1],x+a[0],y+thickness,z+a[1]) }
     face(name,"base",vertices,color)
   }
-  box("floor","base",[0,variant === "storehouse" ? floor-.025 : floor/2,0],[width-.04,variant === "storehouse" ? .05 : floor,depth-.04],variant === "enclosure" ? "#686857" : "#817052",undefined,false)
+  // Bury slab thickness below the walking plane. The closed store retains its timber platform.
+  box("floor","base",[0,(variant === "storehouse" ? floor : BUILDING_FLOOR_TOP)-.025,0],[width-.04,.05,depth-.04],variant === "enclosure" ? "#686857" : "#817052",undefined,false)
 
   // Screens: woven rods pass either side of stakes, with exposed patches of daub.
   function screen(name: string, a: Vec3, b: Vec3, height: number, daub = false) {
@@ -81,7 +83,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       }
     }
     const stones = Math.max(2,Math.ceil(depth/.23))
-    for (let i=0;i<stones;i++) flag(`garden-path-${i}`,0,-d+(i+.5)*depth/stones,width*.12,depth/stones-.025,floor,.025,palette.stone)
+    for (let i=0;i<stones;i++) flag(`garden-path-${i}`,0,-d+(i+.5)*depth/stones,width*.12,depth/stones-.025,-.023,.025,palette.stone)
     return parts
   }
   if (variant === "cross") {
@@ -102,10 +104,11 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     return parts
   }
   if(variant === "enclosure") {
+    // Keep stone tops only 0.002–0.003 above terrain, including their unevenness.
     const nx=Math.ceil(width/.36),nz=Math.ceil(depth/.38)
     for(let row=0;row<nz;row++) for(let col=0;col<nx;col++) {
       const sx=(width-.1)/nx,sz=(depth-.1)/nz
-      flag(`paving-${row}-${col}`,-w+.05+(col+.5)*sx,-d+.05+(row+.5)*sz,sx-.018-random()*.02,sz-.018-random()*.025,.032,.025+random()*.018,["#8f9083","#a19f90","#838779","#969485"][Math.floor(random()*4)])
+      flag(`paving-${row}-${col}`,-w+.05+(col+.5)*sx,-d+.05+(row+.5)*sz,sx-.018-random()*.02,sz-.018-random()*.025,-.03,.032+random()*.001,["#8f9083","#a19f90","#838779","#969485"][Math.floor(random()*4)])
     }
     // Four genuine gaps; gate leaves stand open inwards along the jambs.
     const opening=Math.min(.62,Math.min(width,depth)*.58)
@@ -129,10 +132,10 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     for(const s of [-1,1]) flag(`table-trestle-${s}`,s*tableW*.3,0,.13,tableD*.8,floor,RELIC_TABLE_TOP-floor-.09,"#75796e")
     flag("relic-table",0,0,tableW,tableD,RELIC_TABLE_TOP-.09,.09,"#aeaa97")
     if(width>=2&&depth>=2) {
-      for(let i=0;i<3;i++) box(`loose-plank-${i}`,"base",[-w+.45+i*.035,.094+i*.018,-d+.5],[.1,.026,.48],i%2?palette.paleWood:palette.wood,[0,.25+i*.27,0],false)
-      flag("offcut-stone",w-.38,-d+.4,.18,.13,.06,.1,palette.stone)
-      box("folded-cloth","base",[w-.42,.12,d-.42],[.25,.1,.19],"#8b8067",[0,.16,0],false)
-      pole("spare-pole",[-w+.32,.1,d-.45],[-w+.78,.12,d-.3],.024,"base")
+      for(let i=0;i<3;i++) box(`loose-plank-${i}`,"base",[-w+.45+i*.035,.034+i*.018,-d+.5],[.1,.026,.48],i%2?palette.paleWood:palette.wood,[0,.25+i*.27,0],false)
+      flag("offcut-stone",w-.38,-d+.4,.18,.13,0,.1,palette.stone)
+      box("folded-cloth","base",[w-.42,.06,d-.42],[.25,.1,.19],"#8b8067",[0,.16,0],false)
+      pole("spare-pole",[-w+.32,.04,d-.45],[-w+.78,.06,d-.3],.024,"base")
     }
     return parts
   }
@@ -157,7 +160,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       bench("hall-bench",0,-depth*.25,width*.65)
       // A pegged lintel and sheltered threshold distinguish the gathering hall.
       pole("hall-lintel",[-width*.24,eave-.08,z+.045],[width*.24,eave-.08,z+.045],.045)
-      flag("hall-threshold",0,z-.04,Math.min(.62,width*.6),.2,floor,.025,palette.stone)
+      flag("hall-threshold",0,z-.04,Math.min(.62,width*.6),.2,-.023,.025,palette.stone)
     }
   } else {
     screen("rear",[-x,0,-z],[x,0,-z],h*.9)
