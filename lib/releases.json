@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "10a940259f105ff41f02edc1a05f71373aa36a27",
-  "releaseCount": 31,
+  "lastProcessedCommit": "086845f8baaf788bfdf59ec2d4ed48be9adf390d",
+  "releaseCount": 32,
   "releases": [
+    {
+      "version": "0.0.46",
+      "title": "Release 0.0.46",
+      "summary": "Keep shrine visitors on opposite sides of the path (#65)",
+      "commit": "086845f8baaf788bfdf59ec2d4ed48be9adf390d"
+    },
     {
       "version": "0.0.45",
       "title": "Release 0.0.45",
