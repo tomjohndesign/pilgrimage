@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "086845f8baaf788bfdf59ec2d4ed48be9adf390d",
-  "releaseCount": 32,
+  "lastProcessedCommit": "f007dbd0463bdfaf40247aaf896a85f5eff0bbb5",
+  "releaseCount": 33,
   "releases": [
+    {
+      "version": "0.0.47",
+      "title": "Release 0.0.47",
+      "summary": "Refine character walking motion and add smaller footwear (#66)",
+      "commit": "f007dbd0463bdfaf40247aaf896a85f5eff0bbb5"
+    },
     {
       "version": "0.0.46",
       "title": "Release 0.0.46",
