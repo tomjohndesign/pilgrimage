@@ -194,7 +194,7 @@ export function Travelers({
               groupRefs.current[index] = node
             }}
           >
-            <TravelerFigure map={map} appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
+            <TravelerFigure map={map} age={traveler.attributes.age} appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
               characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
             <group name="carried-logs" visible={false} position={[0, 0.35, 0.2]} rotation={[0, 0, Math.PI / 2]} onClick={select}>
               <mesh><cylinderGeometry args={[0.12, 0.12, 0.6, 6]} /><meshLambertMaterial color="#89613c" /></mesh>
