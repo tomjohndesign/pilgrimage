@@ -59,7 +59,7 @@ speed, independent of frame rate and scale. Human walking geometry is unchanged.
 
 ## Current sheets: v11
 
-`public/textures/transport/v11/manifest.json` records all dimensions, anchors,
+`public/textures/transport/v12/manifest.json` records all dimensions, anchors,
 clips, timing, profiles, coats and variants. Every frame has binary alpha and at
 least four transparent pixels around its silhouette. Larger cells add padding
 at the same native pixel density as people.

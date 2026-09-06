@@ -1,5 +1,7 @@
 import { tileToWorldX, tileToWorldZ, type GameMap } from "./map/types"
 import { monkWander, type WanderSpot } from "./monk-wander"
+import type { MonkRoutine } from "./monk-routine"
+import { shrineLayout } from "./shrine-layout"
 import { BASE_PERSON, PERSON_CLIPS } from "./base-person/pose"
 
 export const RELIC_PRAYER_RADIUS = 3
@@ -36,9 +38,12 @@ export function processionGrounds(map: GameMap, wander = monkWander(map)) {
   const door = wander.spots.find(p => p.x === tileToWorldX(map, map.site!.door.x) && p.z === tileToWorldZ(map, map.site!.door.z))
   if (!door) return null
   const centre = wander.centre
-  // Use a reachable tile beside the table, entering through the shared grid gates.
-  const altar = [...wander.prayerSpots].sort((a, b) =>
-    Math.hypot(a.x - door.x, a.z - door.z) - Math.hypot(b.x - door.x, b.z - door.z))[0]
+  const shrine = map.buildings.find(b => b.id === map.site!.hovelId)
+  if (!shrine) return null
+  const { rotation } = shrineLayout(shrine, map.site.door)
+  // Collect from behind the altar, regardless of which way the shrine faces.
+  const altar = wander.prayerSpots.find(spot =>
+    (spot.x - centre.x) * -Math.sin(rotation) + (spot.z - centre.z) * -Math.cos(rotation) > 0.5)
   if (!altar) return null
   return { door, altar, centre, wander }
 }
@@ -53,6 +58,18 @@ export function startProcession(p: RelicProcession, monkId: number, actor: Wande
   const route = routeToAltar(actor, grounds)
   if (!route.length) return false
   Object.assign(p, { monkId, stage: "approaching", elapsed: 0, route, position: { x: actor.x, y: actor.y, z: actor.z } })
+  return true
+}
+
+/** A completed prayer arrival behind the altar can become a spontaneous procession. */
+export function startAltarProcession(p: RelicProcession, monkId: number, actor: MonkRoutine,
+  grounds: ProcessionGrounds): boolean {
+  if (actor.activity !== "praying" || actor.destination !== "prayer" || actor.route.length
+    || Math.hypot(actor.x - grounds.altar.x, actor.z - grounds.altar.z) > 0.01) return false
+  if (!startProcession(p, monkId, actor, grounds)) return false
+  // Already at the pickup point. Use the same hoist and return animation as a command.
+  p.stage = "lifting"
+  p.route = []
   return true
 }
 

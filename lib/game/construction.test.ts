@@ -9,14 +9,15 @@ import { createMonkRoutine, stepMonkRoutine } from "./monk-routine"
 import { createMonkNeeds, MONK_WAKE_AT, stepMonkWork } from "./monk-work"
 import { settlementRoute } from "./settlement-route"
 import { makeRng } from "./rng"
-import { lumberCamps } from "./settlement"
+import { woodcutterHuts } from "./settlement"
+import { rotatedFootprint, rotateBuildingPoint, type BuildingRotation } from "./building-rotation"
 
 function fixture(): GameMap {
   return { width: 18, depth: 18, tiles: Array(324).fill("grass"),
     buildings: [
       { id: "shrine", label: "Shrine", x: 7, z: 7, w: 3, d: 3, height: 1, color: "", roofColor: "" },
       { id: "shelter", buildType: "shelter", label: "Monk shelter", x: 7, z: 4, w: 2, d: 2, height: 0.7, color: "", roofColor: "" },
-      { id: "lumberCamp-0", buildType: "lumberCamp", label: "Site", x: 2, z: 10, w: 2, d: 2, height: 0.1, color: "", roofColor: "", construction: { work: 0, required: 12 } },
+      { id: "workshop-0", buildType: "workshop", label: "Site", x: 2, z: 10, w: 2, d: 2, height: 0.1, color: "", roofColor: "", construction: { work: 0, required: 12 } },
     ], site: { hovelId: "shrine", door: { x: 8, z: 10 }, branch: [], junction: 0 } }
 }
 function worker(map: GameMap, x = 8, z = 10): Worker {
@@ -24,6 +25,23 @@ function worker(map: GameMap, x = 8, z = 10): Worker {
 }
 
 describe("resident construction", () => {
+  it.each([0, 1, 2, 3] as BuildingRotation[])("builds and rests at the rotated entrance (%s)", rotation => {
+    const map = fixture(), site = map.buildings[2], actor = worker(map)
+    Object.assign(site, { rotation, ...rotatedFootprint({ w: 3, d: 2 }, rotation) })
+    expect(assignBuildingTask(actor, map, "build")).toBe(true)
+    while (actor.buildingTask!.route.length) stepBuildingTask(actor, map, 1, 0.1)
+    const local = rotateBuildingPoint(actor.x - tileToWorldX(map, site.x) - (site.w - 1) / 2,
+      actor.z - tileToWorldZ(map, site.z) - (site.d - 1) / 2, -rotation)
+    expect(local.z).toBeCloseTo(1 - 0.055 + constructionStandOff())
+    expect(stepBuildingTask(actor, map, 1, 0.1)).toBe("building")
+    site.construction!.work = site.construction!.required
+    site.buildType = "monk-shelter"
+    actor.buildingTask = undefined
+    expect(assignBuildingTask(actor, map, "rest", site.id)).toBe(true)
+    while (actor.buildingTask!.route.length) stepBuildingTask(actor, map, 1, 0.1)
+    expect(stepBuildingTask(actor, map, 1, 0.1)).toBe("sleeping")
+  })
+
   it("makes small sites quick and large footprints disproportionately slower", () => {
     expect(constructionWork(1, 1)).toBe(12)
     expect(constructionWork(2, 2)).toBe(96)
@@ -50,7 +68,7 @@ describe("resident construction", () => {
 
   it("reserves sites without jobs and only advances after a worker arrives", () => {
     const map = fixture(), site = map.buildings[2], actor = worker(map)
-    expect(lumberCamps(map)).toHaveLength(0)
+    expect(woodcutterHuts(map)).toHaveLength(0)
     expect(assignBuildingTask(actor, map, "build")).toBe(true)
     stepBuildingTask(actor, map, 1, 0)
     expect(site.construction!.work).toBe(0)
@@ -60,7 +78,7 @@ describe("resident construction", () => {
     expect(isComplete(site)).toBe(true)
     expect(site.construction!.work).toBe(12)
     expect(actor.buildingTask).toBeUndefined()
-    expect(lumberCamps(map)).toHaveLength(1)
+    expect(woodcutterHuts(map)).toHaveLength(1)
   })
 
   it("lets a resident step out of a newly placed footprint to build it", () => {

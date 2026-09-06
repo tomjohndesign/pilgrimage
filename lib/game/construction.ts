@@ -1,3 +1,4 @@
+import { buildingEntry, buildingYaw, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
 import { MALLET_CONTACT_REACH } from "./base-person/building"
 import { BASE_CHARACTER_SCALE, PERSON_SPRITE_SCALE } from "./base-person/gait"
 import { BASE_PERSON } from "./base-person/pose"
@@ -16,11 +17,13 @@ export function constructionStage(building: BuildingDef): number {
   return isComplete(building) ? 3 : Math.min(2, Math.floor(building.construction!.work / building.construction!.required * 3))
 }
 export function isMonkShelter(b: BuildingDef): boolean { return b.buildType === "shelter" || b.buildType === "monk-shelter" }
-export function buildingEntrance(b: BuildingDef): TilePos { return { x: b.x, z: b.z + b.d } }
+export function buildingEntrance(b: BuildingDef): TilePos { return buildingEntry(b) }
 
 export interface BuildingTask {
   buildingId: string
   purpose: "build" | "rest"
+  slot: number
+  heading: number
   route: WanderSpot[]
   destination: WanderSpot
   /** Reroute when placement changes the obstacles. */
@@ -41,6 +44,21 @@ export function constructionStandOff(characterScale = BASE_CHARACTER_SCALE): num
   return MALLET_CONTACT_REACH * PERSON_SPRITE_SCALE * characterScale / BASE_PERSON.camera.viewSize
 }
 
+/** Place work and rest positions in the same rotated local space as the building. */
+function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask["purpose"], slot: number, scale?: number) {
+  const local = rotatedFootprint(building, building.rotation)
+  const beds = Math.max(1, Math.floor((local.w - 0.3) / 0.55))
+  const x = purpose === "build" ? (slot % 4 - 1.5) * Math.min(0.45, (local.w - 0.5) / 3)
+    : (slot % beds - (beds - 1) / 2) * 0.5
+  const z = purpose === "build" ? local.d / 2 - 0.055 + constructionStandOff(scale) : -local.d * 0.08
+  const offset = rotateBuildingPoint(x, z, building.rotation)
+  const approach = rotateBuildingPoint(x, (local.d + 1) / 2, building.rotation)
+  const cx = tileToWorldX(map, building.x) + (building.w - 1) / 2
+  const cz = tileToWorldZ(map, building.z) + (building.d - 1) / 2
+  const frontage = { x: worldToTileX(map, cx + approach.x), z: worldToTileZ(map, cz + approach.z) }
+  return { destination: { x: cx + offset.x, z: cz + offset.z, y: surfaceHeight(map, frontage.x, frontage.z) }, frontage }
+}
+
 /** Only reachable jobs qualify; several free residents may cooperate on one site. */
 export function assignBuildingTask(actor: Worker, map: GameMap, purpose: BuildingTask["purpose"], focusedBuildingId?: string): boolean {
   const candidates = map.buildings.filter(b => purpose === "build" ? !isComplete(b) : isMonkShelter(b) && isComplete(b))
@@ -48,27 +66,14 @@ export function assignBuildingTask(actor: Worker, map: GameMap, purpose: Buildin
     .sort((a, b) => Math.hypot(tileToWorldX(map, a.x) - actor.x, tileToWorldZ(map, a.z) - actor.z) -
       Math.hypot(tileToWorldX(map, b.x) - actor.x, tileToWorldZ(map, b.z) - actor.z))
   for (const building of candidates) {
-    const entrance = buildingEntrance(building)
-    const destination = { x: tileToWorldX(map, entrance.x), y: surfaceHeight(map, entrance.x, entrance.z), z: tileToWorldZ(map, entrance.z) }
-    if (purpose === "rest") {
-      const beds = Math.max(1, Math.floor((building.w - 0.3) / 0.55))
-      destination.x += (building.w - 1) / 2 + ((actor.workSlot ?? 0) % beds - (beds - 1) / 2) * 0.5
-      destination.z = tileToWorldZ(map, building.z) + (building.d - 1) / 2 - building.d * 0.08
-    } else {
-      // The front wall sits just inside the footprint. End the walk at mallet
-      // reach, not at the centre of the next tile, and spread helpers along it.
-      destination.z -= 0.5 + 0.055 - constructionStandOff(actor.workScale)
-    }
     for (let attempt = 0; attempt < (purpose === "build" ? 4 : 1); attempt++) {
-      if (purpose === "build") destination.x = tileToWorldX(map, building.x) + (building.w - 1) / 2 +
-        (((actor.workSlot ?? 0) + attempt) % 4 - 1.5) * Math.min(0.45, (building.w - 0.5) / 3)
-      // Approach the front before the short final step to the wall. Even a
-      // large character must not cut diagonally through the footprint.
-      const frontage = { x: worldToTileX(map, destination.x), z: entrance.z }
+      const slot = (actor.workSlot ?? 0) + attempt
+      const { destination, frontage } = taskPosition(map, building, purpose, slot, actor.workScale)
       const route = purpose === "build" ? workerRoute(map, actor, frontage) : routeToDestination(map, actor, destination)
       if (!route) continue
-      if (purpose === "build") route.push({ ...destination })
-      actor.buildingTask = { buildingId: building.id, purpose, route, destination: { ...destination }, buildings: map.buildings }
+      if (purpose === "build") route.push(destination)
+      actor.buildingTask = { buildingId: building.id, purpose, slot, heading: Math.PI + buildingYaw(building.rotation), route,
+        destination: { ...destination }, buildings: map.buildings }
       return true
     }
   }
@@ -106,9 +111,10 @@ export function stepBuildingTask(actor: Worker, map: GameMap, speed: number, dt:
     actor.buildingTask = undefined
     return null
   }
-  const targetZ = task.purpose === "build" ? tileToWorldZ(map, building.z + building.d) - 0.555 + constructionStandOff(actor.workScale) : task.destination.z
-  const resized = Math.abs(task.destination.z - targetZ) > 0.001
-  task.destination.z = targetZ
+  const target = taskPosition(map, building, task.purpose, task.slot, actor.workScale)
+  const resized = Math.hypot(task.destination.x - target.destination.x, task.destination.z - target.destination.z) > 0.001
+  task.destination = target.destination
+  task.heading = Math.PI + buildingYaw(building.rotation)
   // Keep the current job and route when another site appears. Only an obstacle
   // on the remaining route or work position should interrupt a focused worker.
   const newObstacles = task.buildings === map.buildings ? [] : map.buildings.filter(b => b.id !== task.buildingId &&
@@ -119,7 +125,7 @@ export function stepBuildingTask(actor: Worker, map: GameMap, speed: number, dt:
   })
   task.buildings = map.buildings
   if (resized || routeBlocked || (!task.route.length && Math.hypot(actor.x - task.destination.x, actor.z - task.destination.z) > 0.001)) {
-    const route = task.purpose === "build" ? workerRoute(map, actor, { x: worldToTileX(map, task.destination.x), z: building.z + building.d }) : routeToDestination(map, actor, task.destination)
+    const route = task.purpose === "build" ? workerRoute(map, actor, target.frontage) : routeToDestination(map, actor, task.destination)
     if (route && task.purpose === "build") route.push(task.destination)
     if (!route) {
       // Try another work position on the same job before giving up on it.

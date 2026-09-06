@@ -15,11 +15,12 @@ export function activityClip(activity: Activity | MonkActivity | undefined, movi
     case "building": return "building"
     case "sleeping":
     case "camping": return "sleeping"
-    case "idle": return "sitting"
+    case "idle":
+      return "sitting"
+    case "visiting": return "praying"
     // Resident monks rest on open ground, so use their existing kneeling pose.
     case "resting":
-    case "vigil":
-    case "visiting": return "praying"
+    case "vigil": return "praying"
     case "working": return "treeFelling"
     // This simulation state processes fallen timber; the gathering pose is reserved for harvesting.
     case "gathering": return "woodcutting"

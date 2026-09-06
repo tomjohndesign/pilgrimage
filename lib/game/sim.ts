@@ -19,7 +19,7 @@ import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeR
 import { BUILDING_KINDS, buildingCentre, type PlacedBuilding } from "./buildings"
 import { generateRelic, hospitalityNeedThreshold, visitChance, type RelicStats } from "./relic"
 import { settlementRoute } from "./settlement-route"
-import { admissionFee, shrineVisitRoute } from "./shrine-visit"
+import { admissionFee, shrineVisitPlan } from "./shrine-visit"
 import type { TreePlacement } from "./trees/placement"
 import { TREE_SPECIES } from "./trees/species"
 import type { TilePos } from "./map/types"
@@ -97,7 +97,7 @@ export type Activity =
 
 export const ACTIVITY_LABELS: Record<Activity, string> = {
   toRelic: "Following the path to the shrine",
-  visiting: "Praying before the relic",
+  visiting: "Kneeling in the shrine",
   fromRelic: "Returning from the shrine",
   toWork: "Walking to work",
   working: "Felling a tree",
@@ -218,6 +218,8 @@ export interface SimTraveler {
   employer: string | null
   branchProgress: number
   shrineRoute: TilePos[] | null
+  /** Reserved until the visitor has left the shrine approach. */
+  shrineSeat?: string
   /** Road lane used when entering the shrine, including a reversed approach for shelter. */
   branchEntryLane: number
   visitCooldown: number
@@ -789,9 +791,10 @@ function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): 
   if (job && nextRoll(s) < (t.attributes.skills.some((skill) => BUILDING_KINDS[job.kind].trades.includes(skill)) ? 0.9 : 0.65)) {
     const route = settlementRoute(map, [...map.buildings, ...sim.buildings],
       { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
-      buildingEntry(job), false, true)
+      buildingEntry(job), false, true, s.shrineSeat)
     if (route) {
       s.employer = job.id
+      s.shrineSeat = undefined
       s.jobless = false
       startWorkRoute(s, route, "hauling")
       return
@@ -892,6 +895,7 @@ export function stepSim(
           s.lane = s.direction * s.laneOffset
           s.activity = "walking"
           s.shrineRoute = null
+          s.shrineSeat = undefined
           s.visitCooldown = 30
         }
         break
@@ -1104,11 +1108,15 @@ export function stepSim(
               hunger: s.hunger, thirst: s.thirst, stamina: s.stamina }, sim.relic, renown, sim.balance)
             s.visitCooldown = 5
             const wantsVisit = nextRoll(s) < chance && s.gold >= admissionFee(map)
-            const visitRoute = wantsVisit ? shrineVisitRoute(map, s.id, s.visits) : null
+            const occupiedSeats = new Set([...sim.travelers.values()].flatMap(other =>
+              other.shrineSeat && ["toRelic","visiting","fromRelic"].includes(other.activity) ? [other.shrineSeat] : []))
+            const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats) : null
+            const visitRoute = visit?.route
             if (visitRoute) {
               s.progress = site.junction
               s.branchProgress = 0
               s.shrineRoute = visitRoute
+              s.shrineSeat = visit!.seat
               s.admissionPaid = 0
               s.activity = "toRelic"
               s.targetId = null

@@ -4,7 +4,7 @@ import { createMonkNeeds, stepMonkWork, type MonkNeeds } from "@/lib/game/monk-w
 import { workerRoute } from "@/lib/game/construction"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
-import { createRelicProcession, nearProcession, processionGrounds, processionRegistry, startProcession, stepProcession } from "@/lib/game/relic-procession"
+import { createRelicProcession, nearProcession, processionGrounds, processionRegistry, startAltarProcession, startProcession, stepProcession } from "@/lib/game/relic-procession"
 import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
 import type { Relic } from "@/lib/game/relic"
 import { RelicDisplay, RELIC_DISPLAY_HEIGHT } from "./relic-display"
@@ -20,7 +20,7 @@ import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { selectElement } from "@/lib/game/selection"
 import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
 import type { GameMap } from "@/lib/game/map/types"
-import { monkStaminaRegistry, monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
+import { monkStaminaRegistry, monkRegistry, monkPositionRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { createMonkFlight, monkGroundTime, recallMonkFlight, stepMonkFlight, type MonkFlight } from "@/lib/game/monk-flight"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { encodeObjectId, residentObjectId, RELIC_OBJECT_ID } from "@/lib/game/render/outline"
@@ -30,7 +30,7 @@ import { rocketMonkVisual, rocketFlightClip } from "@/lib/game/rocket/assets"
 
 /**
  * The brothers follow grid routes and enter the shrine to pray. Players can
- * send one to carry the relic, drawing nearby monks and travelers into prayer.
+ * send one to carry the relic; brothers also take it out when visiting behind the altar.
  * Blaster Pastor sends them
  * on occasional cruises across the map; they return to their life at the shrine
  * between trips. Toggling it off recalls them and stows their packs on landing.
@@ -80,9 +80,12 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
   useEffect(() => {
     monkRegistry.current = world.activities
     monkStaminaRegistry.current = world.stamina
+    const positions = new Map(monks.map((m, i) => [m.id, world.states[i]]))
+    monkPositionRegistry.current = positions
     processionRegistry.current = world.procession
     useRelicProcessionStore.setState({ available: !!world.grounds, monkId: null, stage: "idle", returnRequested: false })
     return () => {
+      if (monkPositionRegistry.current === positions) monkPositionRegistry.current = null
       if (monkRegistry.current === world.activities) monkRegistry.current = null
       if (monkStaminaRegistry.current === world.stamina) monkStaminaRegistry.current = null
       if (processionRegistry.current === world.procession) {
@@ -90,7 +93,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         useRelicProcessionStore.setState({ available: false, monkId: null, stage: "idle", returnRequested: false })
       }
     }
-  }, [world])
+  }, [world, monks])
 
   useFrame((_, delta) => {
     const playback = useSimulationStore.getState()
@@ -102,6 +105,14 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       if (actor) actor.buildingTask = undefined
       if (!actor || actor.flight || !startProcession(world.procession, controls.monkId, actor, world.grounds)) {
         useRelicProcessionStore.setState({ monkId: null, returnRequested: false })
+      }
+    }
+    if (!playback.paused && world.procession.stage === "idle" && world.grounds) {
+      const index = world.states.findIndex(s => !s.flight &&
+        s.activity === "praying" && s.destination === "prayer" &&
+        Math.hypot(s.x - world.grounds!.altar.x, s.z - world.grounds!.altar.z) < .01)
+      if (index >= 0 && startAltarProcession(world.procession, monks[index].id, world.states[index], world.grounds)) {
+        useRelicProcessionStore.setState({ monkId: monks[index].id, stage: "lifting", returnRequested: false })
       }
     }
     // Advance the carrier first so every worshipper sees the same position this tick.
@@ -204,7 +215,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       if (!stepMonkWork(s, map, monkWalkSpeed(characterScale), dt))
         stepMonkRoutine(s, world.wander, world.rng, monkWalkSpeed(characterScale), dt)
       world.stamina.set(monks[i].id, s.stamina)
-      if (s.buildingTask && (s.activity === "building" || s.activity === "sleeping")) group.rotation.y = Math.PI
+      if (s.buildingTask && (s.activity === "building" || s.activity === "sleeping")) group.rotation.y = s.buildingTask.heading
       group.userData.activity = s.activity
       world.activities.set(monks[i].id, s.activity)
       if (s.activity === "praying" && world.centre) {

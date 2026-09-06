@@ -9,6 +9,11 @@ describe("simulation sprite poses", () => {
   ] as const)("shows %s as %s", (activity, clip) => {
     expect(activityClip(activity, false)).toBe(clip)
   })
+  it("keeps kneeling visitors praying when a procession passes, then walks away normally", () => {
+    expect(activityClip("visiting", false, 0)).toBe("praying")
+    expect(activityClip("praying", false, 0)).toBe("praying")
+    expect(activityClip("fromRelic", true, 0)).toBe("walk")
+  })
   it("walks between destinations and holds loads through stops", () => {
     for (const activity of ["toCamp", "toWork", "toRelic", "fromCamp", "fleeing"] as const) {
       expect(activityClip(activity, true)).toBe("walk")

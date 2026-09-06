@@ -634,7 +634,8 @@ export function createBasePersonRig(recipe = personRecipe()) {
       headPivot.rotation.y = -motion.chestYaw
       body.rotation.y = motion.hipYaw
       chest.rotation.y = motion.chestYaw - motion.hipYaw
-      const seated = clip === "sitting", praying = clip === "praying"
+      const chair = clip === "seatedPrayer"
+      const seated = clip === "sitting" || chair, praying = clip === "praying"
       const felling = clip === "treeFelling", splitting = clip === "woodcutting"
       const sleep = clip === "sleeping", chop = felling || splitting, gather = clip === "gathering"
       const drop = pelvisHeight(phase, clip, b) - b.hipHeight
@@ -644,8 +645,9 @@ export function createBasePersonRig(recipe = personRecipe()) {
       poseRoot.rotation.set(sleep ? -Math.PI / 2 : 0, sleep && female ? Math.PI / 2 : 0, 0)
       poseRoot.position.set(0, sleep ? female ? b.shoulderOffset + 0.06 : b.torsoTop * 0.78 : 0, sleep ? (b.headCenter + b.headHeight) / 2 + 0.03 : 0)
       body.position.y = b.hipHeight + drop
-      body.rotation.x = gather ? 0.18 + gathering.reach * 0.3 : felling ? 0.10 : splitting ? split.lean : praying ? 0.12 + wave * 0.025 : sleep ? wave * 0.008 : seated ? 0.035 * wave : 0
+      body.rotation.x = gather ? 0.18 + gathering.reach * 0.3 : felling ? 0.10 : splitting ? split.lean : praying ? 0.12 + wave * 0.025 : sleep ? wave * 0.008 : chair ? 0.015 : seated ? 0.008 * wave : 0
       body.rotation.y = felling ? swing.twist : splitting ? split.twist : motion.hipYaw
+      if (chair) headPivot.rotation.x = .16 + wave * .004
       if (splitting) headPivot.rotation.x = -body.rotation.x * 0.65
       headPivot.rotation.y = felling ? -swing.twist * 0.55 : splitting ? -split.twist * 0.6 : -motion.chestYaw
       basket.visible = gather
@@ -749,7 +751,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
           target.sub(body.position).applyQuaternion(body.quaternion.clone().invert())
           reach(limb, target.toArray() as Point3, true)
         }
-        else if (praying) reach(limb, [sign * 0.035, b.chestHeight - b.hipHeight, 0.33])
+        else if (praying || chair) reach(limb, [sign * 0.035, b.chestHeight - b.hipHeight, 0.33])
         else if (felling) {
           // Carry the two-handed grip with the chest as it twists, within both arms' reach.
           const target = new THREE.Vector3(Math.sin(swing.twist) * 0.28,

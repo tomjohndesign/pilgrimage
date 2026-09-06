@@ -140,7 +140,7 @@ describe("generateMap", () => {
         expect(map.site!.branch).not.toContainEqual({ x, z })
       }
       const hovel = map.buildings[0]
-      expect([hovel.w, hovel.d]).toEqual([3, 3])
+      expect([hovel.w, hovel.d]).toEqual([3, 5])
       const door = map.site!.door
       const centred = door.x === hovel.x + Math.floor(hovel.w / 2) || door.z === hovel.z + Math.floor(hovel.d / 2)
       expect(centred, `seed ${seed} track meets the middle of an entrance wall`).toBe(true)
@@ -152,7 +152,8 @@ describe("generateMap", () => {
           if (inFootprint) {
             expect(terrain, `seed ${seed} hovel stands on grass`).toBe("grass")
           } else {
-            expect(["path", "track"], `seed ${seed} path encircles every side and corner`).toContain(terrain)
+            expect(["grass", "path", "track"], `seed ${seed} shrine margin remains walkable`).toContain(terrain)
+            if (terrain === "track") expect(map.site!.branch.some(p => p.x === hovel.x + dx && p.z === hovel.z + dz), `seed ${seed} only the approach is paved`).toBe(true)
           }
         }
       }

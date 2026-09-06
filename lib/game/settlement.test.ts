@@ -90,7 +90,7 @@ describe("build and buy", () => {
     const map = testMap()
     map.buildings.push({ ...map.buildings[0], id: `${buildType}-0`, buildType, x: 10, z: 14, rotation: 1 })
     const cross = BUILD_CATALOG.find(item => item.id === "cross")!
-    expect(placementError(map, cross, { x: 9, z: 14 })).toMatch(/access to woodcutter huts and storehouses/)
+    expect(placementError(map, cross, { x: 9, z: 14 })).toMatch(/access to existing buildings/)
     expect(placementError(map, cross, { x: 10, z: 16 })).toBeNull()
   })
 

@@ -207,7 +207,7 @@ export function placementError(
     const candidate = { ...def, ...footprint, rotation, ...at, id: "construction-preview", construction: { work: 0, required: 1 } }
     const occupied = [...map.buildings, candidate]
     if (!settlementRoute(map, occupied, map.site.door, buildingEntrance(candidate)))
-      return "Keep a clear route to the construction entrance."
+      return "Keep access to the construction entrance clear."
     for (const camp of map.buildings.filter(b => b.buildType)) {
       if (!settlementRoute(map, occupied, map.site.door, buildingEntry(camp)))
         return "Keep access to existing buildings clear."
