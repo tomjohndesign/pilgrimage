@@ -179,9 +179,9 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
       if (event.defaultPrevented || target?.closest("input, textarea, select, [contenteditable=true]")) return
       const key = event.key.toLowerCase()
       const build = useBuildStore.getState()
-      if (event.metaKey && !event.ctrlKey && !event.altKey && build.tool && (key === "q" || key === "e")) {
+      if (!event.ctrlKey && !event.altKey && build.tool && key === "r") {
         event.preventDefault()
-        if (!event.repeat) build.rotateBuilding(key === "q" ? -1 : 1)
+        if (!event.repeat) build.rotateBuilding(event.metaKey ? -1 : 1)
         return
       }
       if (event.metaKey || event.ctrlKey || event.altKey) return
