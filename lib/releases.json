@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "d7a95ddcfa0133fca7b897d9a97f8b753c1496a1",
-  "releaseCount": 59,
+  "lastProcessedCommit": "c73c57e29a9f7b2813c0fad13792bbedc00cf792",
+  "releaseCount": 60,
   "releases": [
+    {
+      "version": "0.0.74",
+      "title": "Release 0.0.74",
+      "summary": "Reduce early shrine detours and slow traveler needs (#93)",
+      "commit": "c73c57e29a9f7b2813c0fad13792bbedc00cf792"
+    },
     {
       "version": "0.0.73",
       "title": "Release 0.0.73",
