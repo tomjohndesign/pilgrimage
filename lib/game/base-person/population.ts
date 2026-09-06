@@ -38,6 +38,7 @@ export function populationDesign(type: Pick<TravelerTypeDef, "color">, variant: 
 }
 
 export interface PopulationPack {
+  actionFrames?: Record<ActionClip, number>
   templateVersion: number
   cellSize: number
   anchor: number[]

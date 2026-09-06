@@ -128,7 +128,7 @@ export function renderPersonPreview(design: PersonDesign, clip: BaseClip, frame:
   const sockets: PersonPreview["sockets"] = []
   try {
     for (let row = 0; row < 8; row++) {
-      const rendered = session.render(clip, frame / session.recipe.framesPerCycle, row, sides)
+      const rendered = session.render(clip, frame / PERSON_CLIPS[clip].frames, row, sides)
       context.drawImage(rendered.canvas, 0, row * size)
       if (rendered.shadow) shadowContext.drawImage(rendered.shadow, 0, row * size)
       sockets.push(rendered.sockets)

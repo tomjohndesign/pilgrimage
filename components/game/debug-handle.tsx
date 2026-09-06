@@ -78,7 +78,7 @@ export function DebugHandle({ map, travelers, speed, movement }: { map: GameMap;
       },
       /** Monk positions and equipped boosters, for cheat-code smoke tests. */
       monks: () => {
-        const points: Array<{ x: number; y: number; z: number; flying: boolean; equipped: boolean }> = []
+        const points: Array<{ x: number; y: number; z: number; flying: boolean; equipped: boolean; activity: string; clip: string; offset: number[] }> = []
         const position = new THREE.Vector3()
         scene.traverse((object) => {
           if (object.name !== "monk") return
@@ -87,6 +87,9 @@ export function DebugHandle({ map, travelers, speed, movement }: { map: GameMap;
             x: position.x, y: position.y, z: position.z,
             flying: !!object.parent?.getObjectByName(ROCKET_EXHAUST_NAME)?.visible,
             equipped: !!object.parent?.getObjectByName("monk-rocket-gear"),
+            activity: object.parent?.userData.activity,
+            clip: object.userData.clip,
+            offset: object instanceof THREE.Sprite ? object.material.map?.offset.toArray() ?? [] : [],
           })
         })
         return points

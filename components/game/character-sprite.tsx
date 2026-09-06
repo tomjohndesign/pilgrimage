@@ -17,7 +17,10 @@ import { applySpriteDepth } from "@/lib/game/render/sprite-depth"
 import { OUTLINE_ID_LAYER_MASK, SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import type { FigureClickHandler } from "./traveler-figure"
 
-export function CharacterSprite({ type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance }: {
+export function CharacterSprite({ type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, visualOverride, name = "traveler", castShadow = true }: {
+  visualOverride?: ReturnType<typeof populationVisual>
+  name?: "traveler" | "monk"
+  castShadow?: boolean
   type: TravelerTypeId
   appearance?: TravelerAppearance
   selected?: boolean
@@ -32,9 +35,9 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
   const custom = usePersonDesignStore((s) => s.atlas)
   const population = usePopulationStore(s => s.pack)
   const varied = characterModel === "base" && !!appearance
-  const visual = useMemo(() => varied ? populationVisual(type, appearance.variant, population) :
-    { ...characterVisual(asset, characterModel, custom), rowOffset: 0, strideRatio: 1, design: undefined },
-    [asset, characterModel, custom, varied, appearance?.variant, population, type])
+  const visual = useMemo(() => visualOverride ?? (varied ? populationVisual(type, appearance.variant, population) :
+    { ...characterVisual(asset, characterModel, custom), rowOffset: 0, strideRatio: 1, design: undefined }),
+    [visualOverride, asset, characterModel, custom, varied, appearance?.variant, population, type])
   const individualScale = characterScale * (varied ? appearance.scale : 1)
   const size = visual.scale * individualScale
   const fps = characterFps ?? visual.fps
@@ -140,14 +143,16 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     const clip = action ?? (moving ? visual.walk : visual.idle)
     const texture = textures[actionIndex ?? (moving ? 0 : 1)]
     const frame = action ? requested === "carrying" ? Math.floor(clock.current * clip.columns) :
-      Math.floor(actionClock.current * fps) % clip.columns : moving ? Math.floor(clock.current * clip.columns) : clip.stillFrame
+      Math.floor(actionClock.current * fps * (action.playbackRate ?? 1)) % clip.columns : moving ? Math.floor(clock.current * clip.columns) : clip.stillFrame
+    if (sprite.current) sprite.current.userData.clip = action ? requested : moving ? "walk" : "idle"
+    const renderFps = fps * (action?.playbackRate ?? 1)
     const row = visual.rowOffset + spriteRow(heading, yaw)
     const previous = lastFrame.current
     if (previous.texture === texture && previous.row === row) {
       if (previous.frame === frame) return
-      if (walkTuning?.sync && frameElapsed.current < 1 / fps) return
+      if (walkTuning?.sync && frameElapsed.current < 1 / renderFps) return
     }
-    frameElapsed.current %= 1 / fps
+    frameElapsed.current %= 1 / renderFps
     previous.texture = texture; previous.frame = frame; previous.row = row
     texture.offset.set(frame / clip.columns, (clip.rows - 1 - row) / clip.rows)
     material.map = texture
@@ -161,8 +166,8 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
 
   return (
     <>
-      {shadowMaterial && <sprite name="traveler-shadow" material={shadowMaterial} scale={[size, size, 1]} center={center} raycast={() => {}} />}
-      <sprite ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name="traveler" material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync === true }} />
+      {castShadow && shadowMaterial && <sprite name="traveler-shadow" material={shadowMaterial} scale={[size, size, 1]} center={center} raycast={() => {}} />}
+      <sprite ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name={name} material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync === true }} />
       {outlineMaterial && <sprite layers-mask={OUTLINE_ID_LAYER_MASK} material={outlineMaterial}
         scale={[size, size, 1]} center={center} />}
     </>

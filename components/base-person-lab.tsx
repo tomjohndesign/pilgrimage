@@ -6,6 +6,7 @@ import { ArrowLeft, ArrowUpRight, Check, Pause, Play, RotateCcw, SlidersHorizont
 import { Section, Tuner } from "@/components/game/property-controls"
 import "./game/game-hud.css"
 import "./base-person-lab.css"
+import { actionPlaybackRate } from "@/lib/game/base-person/activity"
 import { BASE_PERSON, PERSON_CLIPS, SOCKET_NAMES, type BaseClip } from "@/lib/game/base-person/pose"
 import { cachedPersonBake, renderPersonPreview, type BasePersonBake, type PersonPreview } from "@/lib/game/base-person/bake"
 
@@ -91,9 +92,9 @@ export function BasePersonLab() {
   }, [design, clip, frame, sides, sheetMatchesDesign])
   useEffect(() => {
     if (!playing || clip === "idle") return
-    const timer = setInterval(() => setFrame((f) => (f + 1) % BASE_PERSON.framesPerCycle), 1000 / fps)
+    const timer = setInterval(() => setFrame((f) => (f + 1) % PERSON_CLIPS[clip].frames), 1000 / (fps * actionPlaybackRate(clip, design)))
     return () => clearInterval(timer)
-  }, [playing, clip, fps])
+  }, [playing, clip, fps, design.bodyType, design.walkStyle])
 
   const live = !sheetMatchesDesign && preview?.clip === clip && preview.sides === sides ? preview : null
   const columns = live ? 1 : PERSON_CLIPS[clip].frames
@@ -146,14 +147,16 @@ export function BasePersonLab() {
           <Section {...section("Presets")}><div className="person-presets">{Object.entries(PERSON_PRESETS).map(([name, preset]) => <button key={name} className={button} onClick={() => { setDesign({ ...preset }); setMessage("") }}>{name}</button>)}</div></Section>
           <Section {...section("Body")}>
             <label className="person-choice">Body type<select aria-label="Body type" value={design.bodyType} onChange={event => { const bodyType = event.currentTarget.value as PersonDesign["bodyType"]; setDesign(d => withBodyType(d, bodyType)); setMessage("") }}><option>Male</option><option>Female</option></select></label>
-            {controls(["head", "build", "torsoHeight", "neckHeight", "legs", "nose"])}
+            {controls(["head", "build", "torsoHeight", "neckHeight", "legs"])}
           </Section>
           <Section {...section("Arms")}>
             {controls(["shoulderHeight", "armSpacing", "upperArm", "forearm", "armAngle", "elbowBend", "armSwing", "hands", "sleeves"])}
           </Section>
           <Section {...section("Clothing")}>
+            <label className="person-choice">Garment<select aria-label="Garment" value={design.garment} onChange={event => { const garment = event.currentTarget.value as PersonDesign["garment"]; setDesign(d => ({ ...d, garment })); setMessage("") }}><option>Everyday</option><option>Robe</option></select></label>
+            <label className="person-choice">Belt<select aria-label="Belt" value={design.beltStyle} onChange={event => { const beltStyle = event.currentTarget.value as PersonDesign["beltStyle"]; setDesign(d => ({ ...d, beltStyle })); setMessage("") }}><option>Leather</option><option>Rope</option></select></label>
             {controls(["tunicLength", "hem"])}
-            <p className="person-hint">{design.bodyType === "Female" ? "Sleeveless ankle-length dress over a long-sleeved shirt." : "Hip-length shirt with loose sleeves and trousers."}</p>
+            <p className="person-hint">{design.garment === "Robe" ? "Ankle-length robe with full sleeves." : design.bodyType === "Female" ? "Sleeveless ankle-length dress over a long-sleeved shirt." : "Hip-length shirt with loose sleeves and trousers."}</p>
             <label className="person-choice">Clothing color<input type="color" aria-label="Clothing color" value={design.tunicColor} onChange={event => { const tunicColor = event.currentTarget.value; setDesign(d => ({ ...d, tunicColor })); setMessage("") }} /></label>
             {(design.bodyType === "Female" ? [["shirtColor", "Undershirt color"], ["coveringColor", "Head covering color"]] as const : [["trouserColor", "Trouser color"]] as const).map(([key, label]) => <label key={key} className="person-choice">{label}<input type="color" aria-label={label} value={design[key]} onChange={event => { const value = event.currentTarget.value; setDesign(d => ({ ...d, [key]: value })); setMessage("") }} /></label>)}
           </Section>
@@ -167,6 +170,7 @@ export function BasePersonLab() {
             {controls(["shadow", "ink"])}
           </Section>
           <Section {...section("Walking")}>
+            <label className="person-choice">Walk style<select aria-label="Walk style" value={design.walkStyle} onChange={event => { const walkStyle = event.currentTarget.value as PersonDesign["walkStyle"]; setDesign(d => ({ ...d, walkStyle })); setMessage("") }}><option>Natural</option><option>Devotional</option></select></label>
             {controls(["stride"])}
             <Tuner label="Walk timing" labelClassName="w-28" value={fps} min={1} max={24} display={`${fps} fps`} onChange={setFps} />
           </Section>
@@ -206,7 +210,7 @@ export function BasePersonLab() {
       <div className="person-preview" aria-label="Character preview">
         <div className="person-preview-toolbar hud-well">
           <div className="person-playback"><button className="hud-pause" aria-label={playing ? "Pause" : "Play"} disabled={clip === "idle" || view === "sheet"} onClick={() => setPlaying(!playing)}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
-            <label>Clip<select aria-label="Animation clip" value={clip} onChange={e => setClip(e.target.value as BaseClip)}>{Object.entries(PERSON_CLIPS).map(([id, entry]) => <option key={id} value={id}>{entry.label}</option>)}</select></label>
+            <label>Clip<select aria-label="Animation clip" value={clip} onChange={e => { setClip(e.target.value as BaseClip); setFrame(0) }}>{Object.entries(PERSON_CLIPS).map(([id, entry]) => <option key={id} value={id}>{entry.label}</option>)}</select></label>
             <label>Zoom<select aria-label="Pixel inspection zoom" value={zoom} onChange={e => setZoom(Number(e.target.value))}>{[1, 2, 4, 6, 8].map(n => <option key={n} value={n}>{n}×</option>)}</select></label>
           </div>
           <div className="person-view-buttons" aria-label="Preview modes">{([['character', 'Character'], ['native', 'Native size'], ['sheet', 'Sprite sheet']] as const).map(([mode, label]) => <button key={mode} className={button} aria-pressed={view === mode} onClick={() => setView(mode)}>{label}</button>)}</div>
@@ -218,7 +222,7 @@ export function BasePersonLab() {
           </div> : view === "native" ? <div className="person-native" aria-label="Native size lineup">
             {BASE_PERSON.directions.map((d, i) => <div key={d}><Tile url={url} shadowUrl={shadowUrl} row={i} frame={visibleFrame} columns={columns} name={`${d}, native ${BASE_PERSON.nominalHeightPixels}px person`} /><span>{d}</span></div>)}
           </div> : <div className="person-sprite" style={{ width: pixels * fittedZoom, height: pixels * fittedZoom }}>
-            {onion && !live && columns > 1 && <div className="absolute inset-0 opacity-25"><Tile url={url} row={row} frame={(frame + 7) % 8} columns={columns} zoom={fittedZoom} name="Previous frame ghost" /></div>}
+            {onion && !live && columns > 1 && <div className="absolute inset-0 opacity-25"><Tile url={url} row={row} frame={(frame + columns - 1) % columns} columns={columns} zoom={fittedZoom} name="Previous frame ghost" /></div>}
             <Tile url={url} shadowUrl={shadowUrl} row={row} frame={visibleFrame} columns={columns} zoom={fittedZoom} name={`Base person ${direction}, frame ${visibleFrame + 1}`} />
             {guides && <svg aria-label="Origin and attachment guides" className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${pixels} ${pixels}`}>
               <path d={`M${BASE_PERSON.anchor[0]} 0V${pixels} M0 ${BASE_PERSON.anchor[1]}H${pixels}`} stroke="#d9d5a7" strokeWidth="0.15" strokeDasharray="1 1" />
@@ -234,7 +238,7 @@ export function BasePersonLab() {
           <div className="person-direction-strip" aria-label="Character directions">{BASE_PERSON.directions.map((d, i) => <button key={d} aria-label={`Face ${d}`} aria-pressed={row === i} onClick={() => { setRow(i); setView("character") }} className="hud-building-tile person-direction">
             {bake && <Tile url={url} shadowUrl={shadowUrl} row={i} frame={visibleFrame} columns={columns} name={`${d} direction`} />}<span>{d}</span>
           </button>)}</div>
-          <div className="person-steps"><span>{PERSON_CLIPS[clip].label}</span><div>{Array.from({ length: PERSON_CLIPS[clip].frames }, (_, f) => <button key={f} className="hud-pause" disabled={!sheetMatchesDesign} aria-label={`Inspect step ${f + 1}`} aria-pressed={visibleFrame === f} onClick={() => { setFrame(f); setPlaying(false); setView("character") }}>{f + 1}</button>)}</div><span className="person-step-count">{clip === "idle" ? "Idle" : `${frame + 1} / 8`}</span></div>
+          <div className="person-steps"><span>{PERSON_CLIPS[clip].label}</span><div>{Array.from({ length: PERSON_CLIPS[clip].frames }, (_, f) => <button key={f} className="hud-pause" disabled={!sheetMatchesDesign} aria-label={`Inspect step ${f + 1}`} aria-pressed={visibleFrame === f} onClick={() => { setFrame(f); setPlaying(false); setView("character") }}>{f + 1}</button>)}</div><span className="person-step-count">{clip === "idle" ? "Idle" : `${frame + 1} / ${PERSON_CLIPS[clip].frames}`}</span></div>
         </div>
       </div>
     </div>
