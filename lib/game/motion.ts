@@ -44,7 +44,12 @@ export function roundedCorner(a: Point, b: Point, c: Point, offset: number, amou
 
 /** Distance mode is independent of render rate; fixed mode preserves the FPS dial. */
 export function advanceWalkPhase(phase: number, distance: number, dt: number, frames: number,
-  fps: number, stride: number, sync = true): number {
-  const cycles = sync ? distance / Math.max(0.01, stride) : dt * fps / frames
-  return (phase + cycles) % 1
+  fps: number, stride: number, sync = true, loopStrides = 1): number {
+  const cycles = sync ? distance / Math.max(0.01, stride) : dt * fps / frames * loopStrides
+  return (phase + cycles) % loopStrides
+}
+
+/** Select a pose without resetting leg phase when entering a shorter carrying clip. */
+export function walkClipFrame(phase: number, frames: number, strides = 1): number {
+  return Math.floor(((phase % strides + strides) % strides) / strides * frames + 1e-9) % frames
 }

@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { BASE_PERSON, PERSON_CLIPS } from "../base-person/pose"
+import { BASE_PERSON, PERSON_CLIPS, WALK_CLIP_STRIDES } from "../base-person/pose"
 import { personFrameRenderer, renderPersonPreview } from "../base-person/bake"
 import { KEEPER_CLIPS, KEEPER_COLUMNS } from "./keeper"
 import { merchantGesture } from "./merchant-poses"
@@ -89,7 +89,7 @@ export async function bakeTransport() {
     // A new carrying pose uses the unmodified population rig, camera and foot contacts.
     const designs = Array.from({ length: 6 }, (_, i) => pullingDesign(i))
     for (const clip of ["idle", "walk"] as const) {
-      const frames = clip === "walk" ? BASE_PERSON.framesPerCycle : 1
+      const frames = clip === "walk" ? PERSON_CLIPS.walk.frames : 1
       const sheet = canvas(BASE_PERSON.cellSize * frames, BASE_PERSON.cellSize * 8 * designs.length)
       for (const [variant, design] of designs.entries()) for (let f = 0; f < frames; f++) {
         const preview = renderPersonPreview(design, clip, f, false)
@@ -124,6 +124,6 @@ export async function bakeTransport() {
       animalRows: { donkey: 8, horse: 16 }, horseVariants: { common: { rowOffset: 0 }, noble: { rowOffset: 8 } },
       animalClips: { idle: { start: 0, frames: 1 }, walk: { start: 1, frames: TRANSPORT.animalFrames }, lower: { start: 1 + TRANSPORT.animalFrames, frames: TRANSPORT.lowerFrames }, graze: { start: 1 + TRANSPORT.animalFrames + TRANSPORT.lowerFrames, frames: TRANSPORT.grazeFrames, fps: 4 } },
       puller: { templateVersion: BASE_PERSON.version, cellSize: BASE_PERSON.cellSize, anchor: BASE_PERSON.anchor,
-        frames: BASE_PERSON.framesPerCycle, idleFrames: 1, rows: 48, camera: BASE_PERSON.camera, designs } } }
+        frames: PERSON_CLIPS.walk.frames, strides: WALK_CLIP_STRIDES, idleFrames: 1, rows: 48, camera: BASE_PERSON.camera, designs } } }
   } finally { renderer.dispose() }
 }

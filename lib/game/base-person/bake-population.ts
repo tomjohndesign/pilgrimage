@@ -1,7 +1,7 @@
 import { GREY_HAIR_COLOR, OLDER_TRAVELER_TYPES } from "../character-age"
 import { TRAVELER_TYPES, type TravelerTypeId } from "../travelers"
 import { bakeBasePerson } from "./bake"
-import { ACTION_CLIPS, BASE_PERSON, PERSON_CLIPS } from "./pose"
+import { ACTION_CLIPS, BASE_PERSON, PERSON_CLIPS, WALK_CLIP_STRIDES } from "./pose"
 import { DEFAULT_DESIGN, personRecipe, type PersonDesign } from "./design"
 import { POPULATION_PROFILES, populationDesign, type PopulationPack } from "./population"
 
@@ -51,6 +51,6 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
     const destination = grey ? greyCallings : callings
     destination[type.id as TravelerTypeId] = { walk: walk.toDataURL("image/png"), idle: idle.toDataURL("image/png"), actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, actions[clip].toDataURL("image/png")])) as NonNullable<PopulationPack["callings"][TravelerTypeId]["actions"]>, designs }
   }
-  return { frameCounts: Object.fromEntries(Object.entries(PERSON_CLIPS).map(([clip, definition]) => [clip, definition.frames])), templateVersion: BASE_PERSON.version, cellSize: size, anchor: BASE_PERSON.anchor,
+  return { walkStrides: WALK_CLIP_STRIDES, frameCounts: Object.fromEntries(Object.entries(PERSON_CLIPS).map(([clip, definition]) => [clip, definition.frames])), templateVersion: BASE_PERSON.version, cellSize: size, anchor: BASE_PERSON.anchor,
     rows: count * 8, callings, greyCallings, shadows: { walk: shadowWalk.toDataURL("image/png"), idle: shadowIdle.toDataURL("image/png"), actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, shadowActions[clip].toDataURL("image/png")])) as NonNullable<PopulationPack["shadows"]["actions"]> }, strideRatios }
 }

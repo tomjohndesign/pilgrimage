@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { readFileSync } from "node:fs"
 import { BASE_CHARACTER_SCALE, DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE, PERSON_SPRITE_SCALE, personWalkStride, walkSpeedScale, walkContact, plantFoot, type FootPlant } from "./gait"
-import { BASE_PERSON, legPose, PERSON_CLIPS } from "./pose"
+import { BASE_PERSON, legPose, PERSON_CLIPS, WALK_CLIP_STRIDES, WALK_FRAMES_PER_STRIDE } from "./pose"
 import { DEFAULT_DESIGN, PERSON_PRESETS, personRecipe } from "./design"
 import { DEFAULT_POPULATION, populationVisual } from "./population-assets"
 import { CHARACTER_ASSETS, characterVisual } from "../character-assets"
@@ -72,16 +72,16 @@ describe("walking at the rendered person's scale", () => {
       let plant: FootPlant | null = null
       let lastKey = "", lastZ = 0
       for (let tick = 0; tick < 1200; tick++) {
-        const phase = (tick / 120) % 1
-        const foot = walkContact(phase, PERSON_CLIPS.walk.frames, body)
-        const pose = legPose(foot.side, Math.floor(phase * PERSON_CLIPS.walk.frames) / PERSON_CLIPS.walk.frames, "walk", body)
+        const phase = (tick / 120) % WALK_CLIP_STRIDES
+        const foot = walkContact(phase, PERSON_CLIPS.walk.frames, body, WALK_CLIP_STRIDES)
+        const pose = legPose(foot.side, Math.floor(phase * WALK_FRAMES_PER_STRIDE + 1e-9) / WALK_FRAMES_PER_STRIDE, "walk", body)
         expect(pose.planted).toBe(true)
         const origin = { x: 0, z: tick / 120 * stride }
         const offset = { x: foot.x * rigScale, z: foot.z * rigScale }
         const result = plantFoot(plant, foot.side, origin, offset)
         const worldZ = origin.z + result.offset.z + offset.z
         if (lastKey === foot.side) expect(worldZ).toBeCloseTo(lastZ, 10)
-        expect(Math.abs(result.offset.z)).toBeLessThanOrEqual(stride / PERSON_CLIPS.walk.frames + 1e-8)
+        expect(Math.abs(result.offset.z)).toBeLessThanOrEqual(stride / WALK_FRAMES_PER_STRIDE + 1e-8)
         plant = result.plant; lastKey = foot.side; lastZ = worldZ
       }
     }

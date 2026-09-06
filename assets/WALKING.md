@@ -83,10 +83,24 @@ animation FPS: either change reintroduces foot sliding.
 
 ## Export all affected characters
 
-Walking and carrying currently use 20 poses per cycle. Other activities have
-their own frame counts and playback rates; read metadata rather than assuming
-every clip has eight or twenty columns. Keep the editor, baker, renderer,
-texture gallery and asset checkers consistent.
+Walking and carrying each use 20 poses over one full stride. Walk metadata
+publishes `walkStrides` so runtime distance timing stays tied to the rig. The
+right-hand staff plants and lifts with the left foot: the arm extends forward
+at planting and bends as the body passes the grounded tip. Rig pose phases are
+measured in strides. Other activities have their own frame counts and playback
+rates; read metadata rather than assuming every clip has eight or twenty columns.
+Keep the editor, baker, renderer, texture gallery and asset checkers consistent.
+
+The character editor exposes the rendered skeleton for every preset, calling,
+body profile and action. Optional `poseEdits` in downloaded design parameters
+store per-joint frame offsets and blend radii. Offsets interpolate locally and
+across the loop seam; the same rig applies them to previews and full bakes.
+Arm and leg IK preserve bone lengths. Walking stance feet remain locked; swing
+feet can be edited. Staff contact edits share the frame-zero ground anchor
+through the contact interval. Editor drafts save separately per character in
+browser storage; downloading parameters or copying JSON makes those edits portable.
+Imports retain v20 walking poses and rescale its 24-frame wood-splitting keys
+to the longer splitting sequence without changing their relative cycle timing.
 
 After changing leg poses or bake geometry, increment the template `version` in
 `assets/recipes/base-person.json`. This is an asset revision, not the game
@@ -95,8 +109,8 @@ release or package version. Tests require every active family to match it.
 Bake the base, every population profile/calling,
 and the Monk preset. Inspect the latest main branch before allocating versions.
 Published bakes are immutable; use new paths and update all active imports only
-after the exports exist. The current exports are base v23, population v15 and
-monks v14 (brown hair) / v15 (grey hair). For a subsequent change choose unused versions:
+after the exports exist. The current exports are base v24, population v16 and
+monks v16 (brown hair) / v17 (grey hair). For a subsequent change choose unused versions:
 
 ```sh
 npm run assets:base -- vNEXT --url http://localhost:3219
@@ -117,8 +131,8 @@ designs must be baked through the same current rig, not mapped onto stale sheets
   discrete poses. Verify no accumulated offset over repeated cycles, correct
   resets, and anchored height on slopes.
 - Run `npm test` and `npm run typecheck`, the base and population asset checkers,
-  and `node scripts/check-base-person.mjs v14 --monk` for the current monk bake.
-  Also check `node scripts/check-base-person.mjs v15 --monk` for grey-haired monks.
+  and `node scripts/check-base-person.mjs v16 --monk` for the current monk bake.
+  Also check `node scripts/check-base-person.mjs v17 --monk` for grey-haired monks.
   Check per-clip dimensions, matching shadows,
   palette, binary body alpha, safe margins and attachment registration.
 - Inspect side and diagonal views in the editor and on real road tiles. Check

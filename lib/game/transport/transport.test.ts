@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 import sharp from "sharp"
 import * as THREE from "three"
-import manifest from "../../../public/textures/transport/v8/manifest.json"
-import { BASE_PERSON, legPose } from "../base-person/pose"
+import manifest from "../../../public/textures/transport/v9/manifest.json"
+import { BASE_PERSON, PERSON_CLIPS, WALK_CLIP_STRIDES, legPose } from "../base-person/pose"
 import { personRecipe } from "../base-person/design"
 import { personWalkStride } from "../base-person/gait"
 import { populationDesign } from "../base-person/population"
@@ -28,6 +28,8 @@ describe("transport sheet contract", () => {
   })
   it("keeps exports on the current rig and the character pixel grid", () => {
     expect(manifest.puller.templateVersion).toBe(BASE_PERSON.version)
+    expect(manifest.puller.frames).toBe(PERSON_CLIPS.walk.frames)
+    expect(manifest.puller.strides).toBe(WALK_CLIP_STRIDES)
     expect(manifest.puller.designs).toEqual(Array.from({ length: 6 }, (_, i) => pullingDesign(i)))
     expect(manifest.directions).toEqual(BASE_PERSON.directions)
     expect(manifest.cellSize).toBe(TRANSPORT.cellSize)

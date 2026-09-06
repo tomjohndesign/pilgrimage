@@ -1,3 +1,4 @@
+import { validatePoseEdits, type PoseEdits } from "./pose-edits"
 import recipe from "../../../assets/recipes/base-person.json"
 
 export const DESIGN_CONTROLS = {
@@ -25,8 +26,15 @@ export const DESIGN_CONTROLS = {
   ink: { label: "Edge ink", min: 0, max: 1, step: 0.1 },
 } as const
 export type DesignKey = keyof typeof DESIGN_CONTROLS
-export const HAIR_STYLES = ["Bald", "Cropped", "Bob", "Long", "Tonsure"] as const
+export const HAIR_STYLES = ["Bald", "Cropped", "Bob", "Long", "Tonsure", "Wavy", "Ponytail", "Braids", "Bun"] as const
+export const HAT_STYLES = ["None", "Coif", "Travel hat", "Minstrel hat"] as const
+export const TUNIC_STYLES = ["Plain", "Particolour"] as const
 export type PersonDesign = Record<DesignKey, number> & {
+  poseEdits?: PoseEdits
+  hat: typeof HAT_STYLES[number]
+  tunicStyle: typeof TUNIC_STYLES[number]
+  satchel: boolean; walkingStick: boolean; guitar: boolean
+  accentColor: string
   bodyType: "Male" | "Female"
   garment: "Everyday" | "Robe"
   footwear: "Sandals" | "Boots"
@@ -37,6 +45,7 @@ export type PersonDesign = Record<DesignKey, number> & {
   hairStyle: typeof HAIR_STYLES[number]; beard: boolean
 }
 export const DEFAULT_DESIGN: PersonDesign = {
+  hat: "None", tunicStyle: "Plain", satchel: false, walkingStick: false, guitar: false, accentColor: "#d6b57b",
   bodyType: "Male", garment: "Everyday", footwear: "Boots", beltStyle: "Leather", walkStyle: "Natural", head: 1.2, build: 1, torsoHeight: 1, shoulderHeight: 1, neckHeight: 0.65, tunicLength: 1,
   legs: 0.9, feet: 1, footWidth: 0.95, footHeight: 0.7, hem: 1, sleeves: 1, stride: 0.8, ink: 0.6,
   armSpacing: 1, upperArm: 1, forearm: 1, armAngle: 3, elbowBend: 10, armSwing: 0.75, hands: 1,
@@ -45,10 +54,12 @@ export const DEFAULT_DESIGN: PersonDesign = {
 }
 export const PERSON_PRESETS: Record<string, PersonDesign> = {
   Storybook: DEFAULT_DESIGN,
-  Female: { ...DEFAULT_DESIGN, bodyType: "Female", hem: 1.15, hairStyle: "Long", beard: false },
+  Female: { ...DEFAULT_DESIGN, bodyType: "Female", hat: "Coif", hem: 1.15, hairStyle: "Long", beard: false },
   Monk: { ...DEFAULT_DESIGN, garment: "Robe", beltStyle: "Rope", tunicLength: 1.4, tunicColor: "#6b4932",
     trouserColor: "#6b4932", hairStyle: "Tonsure", sleeves: 1.15, hem: 1.1,
     feet: 0.75, footWidth: 0.7, stride: 0.75, armSwing: 0, walkStyle: "Devotional" },
+  Minstrel: { ...DEFAULT_DESIGN, tunicColor: "#7b4969", accentColor: "#d6b57b", tunicStyle: "Particolour", hat: "Minstrel hat", guitar: true, hairStyle: "Wavy", hem: 1.15, tunicLength: 1.15 },
+  Traveler: { ...DEFAULT_DESIGN, hat: "Travel hat", satchel: true, walkingStick: true, hairStyle: "Ponytail" },
   Stout: { ...DEFAULT_DESIGN, build: 1.2, tunicColor: "#866044", hairStyle: "Cropped", beard: true },
   Lanky: { ...DEFAULT_DESIGN, build: 0.85, legs: 1.15, head: 1, feet: 1.1, tunicColor: "#657b50", hairStyle: "Bob" },
 }
@@ -60,7 +71,7 @@ export function validatePersonDesign(input: unknown): PersonDesign {
     if (input.bodyType !== "Male" && input.bodyType !== "Female") throw new Error("Invalid body type.")
     result.bodyType = input.bodyType
   }
-  for (const [key, choices] of [["footwear", ["Sandals", "Boots"]], ["garment", ["Everyday", "Robe"]], ["beltStyle", ["Leather", "Rope"]], ["walkStyle", ["Natural", "Devotional"]]] as const) {
+  for (const [key, choices] of [["hat", HAT_STYLES], ["tunicStyle", TUNIC_STYLES], ["footwear", ["Sandals", "Boots"]], ["garment", ["Everyday", "Robe"]], ["beltStyle", ["Leather", "Rope"]], ["walkStyle", ["Natural", "Devotional"]]] as const) {
     if (key in input) {
       const value = (input as PersonDesign)[key]
       if (!(choices as readonly string[]).includes(value)) throw new Error(`Invalid ${key}.`)
@@ -73,7 +84,7 @@ export function validatePersonDesign(input: unknown): PersonDesign {
     if (typeof value !== "number" || !Number.isFinite(value) || value < range.min || value > range.max) throw new Error(`Invalid ${range.label.toLowerCase()}.`)
     result[key] = value
   }
-  for (const key of ["tunicColor", "skinColor", "hairColor", "shirtColor", "trouserColor", "coveringColor"] as const) {
+  for (const key of ["accentColor", "tunicColor", "skinColor", "hairColor", "shirtColor", "trouserColor", "coveringColor"] as const) {
     const value = key in input ? (input as PersonDesign)[key] : DEFAULT_DESIGN[key]
     if (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value)) throw new Error(`Invalid ${key}.`)
     result[key] = value.toLowerCase()
@@ -82,6 +93,13 @@ export function validatePersonDesign(input: unknown): PersonDesign {
     if (!HAIR_STYLES.includes((input as PersonDesign).hairStyle)) throw new Error("Invalid hair style.")
     result.hairStyle = (input as PersonDesign).hairStyle
   }
+  for (const key of ["satchel", "walkingStick", "guitar"] as const) {
+    if (key in input) {
+      if (typeof (input as PersonDesign)[key] !== "boolean") throw new Error(`Invalid ${key} option.`)
+      result[key] = (input as PersonDesign)[key]
+    }
+  }
+  if (!("hat" in input) && result.bodyType === "Female" && result.garment !== "Robe") result.hat = "Coif"
   if ("beard" in input) {
     if (typeof (input as PersonDesign).beard !== "boolean") throw new Error("Invalid beard option.")
     result.beard = (input as PersonDesign).beard
@@ -90,11 +108,12 @@ export function validatePersonDesign(input: unknown): PersonDesign {
     result.beard = false
     if (!("hairStyle" in input)) result.hairStyle = "Long"
   }
+  if ("poseEdits" in input) result.poseEdits = validatePoseEdits((input as PersonDesign).poseEdits)
   return result
 }
 export function withBodyType(design: PersonDesign, bodyType: PersonDesign["bodyType"]): PersonDesign {
   return validatePersonDesign({ ...design, bodyType,
-    ...(bodyType === "Female" ? { hairStyle: "Long", beard: false } : {}),
+    ...(bodyType === "Female" ? { hairStyle: "Long", beard: false, hat: design.hat === "None" ? "Coif" : design.hat } : {}),
   })
 }
 function shade(hex: string, factor: number) {
@@ -108,6 +127,7 @@ export function personRecipe(input: PersonDesign = DEFAULT_DESIGN) {
   const clothColors = design.bodyType === "Female" ? [design.shirtColor, design.coveringColor] : [design.trouserColor]
   result.renderPalette = [...new Set(["#30251e", "#503b2b", "#785637", "#d6b57b", "#657b50", "#bac8cf", "#ecf4f4", ...[0.5, 0.7, 0.9, 1.1, 1.3].map(f => shade(design.skinColor, f)),
     ...[0.55, 0.8, 1, 1.3].map(f => shade(design.tunicColor, f)), ...[0.65, 1, 1.4].map(f => shade(design.hairColor, f)), ...clothColors.flatMap(color => [0.55, 0.8, 1, 1.25].map(f => shade(color, f)))])]
+  for (const color of [design.accentColor, design.coveringColor]) result.renderPalette.push(...[0.55, 0.8, 1, 1.3].map(f => shade(color, f)))
   if (design.beltStyle === "Rope") result.renderPalette.push(...[0.65, 1, 1.25].map(f => shade(result.palette.belt, f)))
   b.headWidth *= design.head; b.headHeight *= design.head; b.headDepth *= design.head
   for (const key of ["torsoTop", "torsoBottom", "shoulderOffset", "legOffset", "thighWidth", "shinWidth"] as const) b[key] *= design.build

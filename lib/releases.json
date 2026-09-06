@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "71fa99f4be179f4e31551236f5b03f3bef64da4c",
-  "releaseCount": 38,
+  "lastProcessedCommit": "4cf2d4067f9de00eaa74c31ea5abef88ea91ac7a",
+  "releaseCount": 39,
   "releases": [
+    {
+      "version": "0.0.53",
+      "title": "Release 0.0.53",
+      "summary": "Add road accessories and editable character animation rigs (#72)",
+      "commit": "4cf2d4067f9de00eaa74c31ea5abef88ea91ac7a"
+    },
     {
       "version": "0.0.52",
       "title": "Release 0.0.52",
