@@ -1,18 +1,22 @@
+import { GREY_HAIR_AGE } from "../character-age"
 import { personWalkStride } from "./gait"
 import { actionPlaybackRate } from "./activity"
 import { ACTION_CLIPS, type ActionClip } from "./pose"
 import type { SpriteClip } from "../character-assets"
-import manifest from "../../../public/textures/characters/population/v7/manifest.json"
+import manifest from "../../../public/textures/characters/population/v15/manifest.json"
 import type { TravelerTypeId } from "../travelers"
 import { validatePersonDesign } from "./design"
 import type { PopulationPack } from "./population"
 
 export const DEFAULT_POPULATION: PopulationPack = { ...manifest, callings: Object.fromEntries(
   Object.entries(manifest.callings).map(([type, entry]) => [type, { ...entry, designs: entry.designs.map(validatePersonDesign) }]),
-) as PopulationPack["callings"] }
+) as PopulationPack["callings"], greyCallings: Object.fromEntries(
+  Object.entries(manifest.greyCallings).map(([type, entry]) => [type, { ...entry, designs: entry.designs.map(validatePersonDesign) }]),
+) as PopulationPack["greyCallings"] }
 
-export function populationVisual(type: TravelerTypeId, variant: number, custom: PopulationPack | null) {
-  const pack = custom ?? DEFAULT_POPULATION, calling = pack.callings[type]
+export function populationVisual(type: TravelerTypeId, variant: number, custom: PopulationPack | null, age = 18) {
+  const pack = custom ?? DEFAULT_POPULATION
+  const calling = (age >= GREY_HAIR_AGE ? pack.greyCallings?.[type] : undefined) ?? pack.callings[type]
   return {
     walk: { url: calling.walk, columns: pack.frameCounts?.walk ?? 8, rows: pack.rows, stillFrame: 0 },
     idle: { url: calling.idle, columns: 1, rows: pack.rows, stillFrame: 0 },

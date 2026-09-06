@@ -1,11 +1,12 @@
 import sharp from "sharp"
 import { readFileSync } from "node:fs"
-const version = process.argv[2] ?? "v7"
+const version = process.argv[2] ?? "v15"
 if (!/^v\d+$/.test(version)) throw new Error("Expected a population version such as v1")
 const pack = JSON.parse(readFileSync(`public/textures/characters/population/${version}/manifest.json`, "utf8"))
 const size = pack.cellSize
 let frames = 0
-for (const [type, entry] of Object.entries(pack.callings)) {
+for (const [type, entry] of Object.entries({ ...pack.callings, ...Object.fromEntries(Object.entries(pack.greyCallings ?? {}).map(([type, entry]) => [`${type}-grey`, entry])) })) {
+  if (Number(version.slice(1)) >= 13 && (!entry.actions?.treeFelling || !pack.shadows.actions?.treeFelling)) throw new Error(`Missing tree-felling action: ${type}`)
   if (Number(version.slice(1)) >= 2) for (const clip of ["sleeping", "sitting", "praying", "woodcutting", "gathering", "carrying"]) {
     if (!entry.actions?.[clip] || !pack.shadows.actions?.[clip]) throw new Error(`Missing action: ${type}/${clip}`)
   }
@@ -38,4 +39,4 @@ for (const [clip, url] of Object.entries({ walk: pack.shadows.walk, idle: pack.s
     if (alpha && Math.min(x % size, y % size, size - 1 - x % size, size - 1 - y % size) < 4) throw new Error("Shadow crosses frame padding")
   }
 }
-console.log(`Population ${version}: ${frames} body frames across 7 callings × 6 profiles; safe margins and shared shadows verified.`)
+console.log(`Population ${version}: ${frames} body frames across ${Object.keys(pack.callings).length} callings and ${Object.keys(pack.greyCallings ?? {}).length} grey-haired variants × 6 profiles; safe margins and shared shadows verified.`)

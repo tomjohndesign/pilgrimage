@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
+import type { GameMap } from "@/lib/game/map/types"
+import { walkingSurface } from "@/lib/game/map/walking-surface"
 import { usePixelWorldTexel } from "@/components/pixel-canvas"
 import { spriteRow } from "@/lib/game/character-assets"
 import { applySpriteDepth } from "@/lib/game/render/sprite-depth"
@@ -13,12 +15,12 @@ import { animalCoat } from "@/lib/game/transport/coats"
 import { TRANSPORT, CART, SHOP, cartUrl, animalUrl, type Puller, RIG_TO_WORLD, cartColumn, animalStride, type Animal, type Cargo, type HorseVariant } from "@/lib/game/transport/assets"
 import { KEEPER_CLIPS, KEEPER_COLUMNS } from "@/lib/game/transport/keeper"
 import { animalLeg } from "@/lib/game/transport/animal-pose"
-import manifest from "@/public/textures/transport/v7/manifest.json"
+import manifest from "@/public/textures/transport/v8/manifest.json"
 import type { FigureClickHandler } from "./traveler-figure"
 
-export function TransportSprite({ kind, coat, variant = 0, horseVariant = "common", cargo = "produce", puller = "hand", awning = false, characterScale = 1,
+export function TransportSprite({ map: terrain, kind, coat, variant = 0, horseVariant = "common", cargo = "produce", puller = "hand", awning = false, characterScale = 1,
   selected = false, outlineColor, onClick, position = [0, 0, 0] }: {
-  kind: "cart" | "merchant" | Animal; coat?: string; variant?: number; horseVariant?: HorseVariant; cargo?: Cargo; puller?: Puller; awning?: boolean; characterScale?: number
+  map?: GameMap; kind: "cart" | "merchant" | Animal; coat?: string; variant?: number; horseVariant?: HorseVariant; cargo?: Cargo; puller?: Puller; awning?: boolean; characterScale?: number
   selected?: boolean; outlineColor?: [number, number, number]; onClick?: FigureClickHandler; position?: [number, number, number]
 }) {
   const animal = kind === "donkey" || kind === "horse"
@@ -34,19 +36,21 @@ export function TransportSprite({ kind, coat, variant = 0, horseVariant = "commo
   }), [sources])
   const map = maps[0]
   const worldTexel = usePixelWorldTexel(), viewport = useMemo(() => new THREE.Vector4(), [])
+  const groundPlane = useMemo(() => ({ value: new THREE.Vector4() }), [])
+  const groundAt = useMemo(() => terrain ? (x: number, z: number) => walkingSurface(terrain, x, z).height : undefined, [terrain])
   const materials = useMemo(() => [false, true].map(idPass => {
     const material = new THREE.SpriteMaterial({ map, alphaTest: 0.5, transparent: false, toneMapped: false })
     material.onBeforeCompile = shader => {
-      applySpriteDepth(shader, viewport, worldTexel)
+      applySpriteDepth(shader, viewport, worldTexel, groundPlane)
       if (idPass) {
         shader.uniforms.transportId = { value: new THREE.Vector3(...(outlineColor ?? [0, 0, 0])) }
         shader.fragmentShader = "uniform vec3 transportId;\n" + shader.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\ndiffuseColor.rgb = transportId;")
       }
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => idPass ? "transport-id-v1" : "person-depth-v3"
+    material.customProgramCacheKey = () => idPass ? "transport-id-v2" : "person-depth-v4"
     return material
-  }), [map, viewport, worldTexel, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }), [map, viewport, worldTexel, groundPlane, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => { materials.forEach(m => m.dispose()) }, [materials])
   useEffect(() => () => maps.forEach(map => map.dispose()), [maps])
   const root = useRef<THREE.Group>(null), phase = useRef(0), grazingTime = useRef(0), plant = useRef<FootPlant | null>(null)
@@ -94,11 +98,17 @@ export function TransportSprite({ kind, coat, variant = 0, horseVariant = "commo
       const z = (-foot[0] * Math.sin(angle) + foot[2] * Math.cos(angle)) * scale * Math.sin(BASE_PERSON.camera.pitch * Math.PI / 180) / Math.sin(pitch)
       vectors.foot.set(x * Math.cos(yaw) + z * Math.sin(yaw), 0, -x * Math.sin(yaw) + z * Math.cos(yaw))
       group.getWorldPosition(vectors.origin)
-      const contact = plantFoot(plant.current, `${kind}:${horseVariant}:${side}:${row}:${yaw.toFixed(4)}:${pitch.toFixed(4)}:${characterScale}`, vectors.origin, vectors.foot)
+      const contact = plantFoot(plant.current, `${kind}:${horseVariant}:${side}:${row}:${yaw.toFixed(4)}:${pitch.toFixed(4)}:${characterScale}`, vectors.origin, vectors.foot, groundAt)
       plant.current = contact.plant
       vectors.corrected.set(vectors.origin.x + contact.offset.x, vectors.origin.y + contact.offset.y, vectors.origin.z + contact.offset.z)
       group.position.copy(parent.worldToLocal(vectors.corrected))
     } else plant.current = null
+    if (terrain) {
+      group.getWorldPosition(vectors.corrected)
+      const surface = walkingSurface(terrain, vectors.corrected.x, vectors.corrected.z)
+      groundPlane.value.set(-surface.dx, 1, -surface.dz,
+        surface.dx * vectors.corrected.x + surface.dz * vectors.corrected.z - surface.height)
+    } else groundPlane.value.set(0, 0, 0, 0)
   })
   const size = manifest.scale * characterScale
   const center = useMemo(() => new THREE.Vector2(manifest.anchor[0] / manifest.cellSize, 1 - manifest.anchor[1] / manifest.cellSize), [])

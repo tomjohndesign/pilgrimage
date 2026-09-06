@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, ArrowUpRight, Check, Pause, Play, RotateCcw, SlidersHorizontal, X } from "lucide-react"
+import { ArrowUpRight, Check, Pause, Play, RotateCcw, X } from "lucide-react"
+import { AssetEditorFrame, type AssetEditorNavigation } from "./asset-editor-frame"
 import { Section, Tuner } from "@/components/game/property-controls"
 import "./game/game-hud.css"
 import "./base-person-lab.css"
@@ -16,7 +17,7 @@ import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { MerchantMapPreview } from "./merchant-map-preview"
 import { COATS, animalCoat } from "@/lib/game/transport/coats"
 import { CARGO, TRANSPORT, CART, SHOP, cartUrl, animalUrl, type Puller, type ShopState, cartColumn, type Cargo, type CartMode, type HorseVariant } from "@/lib/game/transport/assets"
-import transportMetadata from "@/public/textures/transport/v7/manifest.json"
+import transportMetadata from "@/public/textures/transport/v8/manifest.json"
 
 const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse" } as const
 type Subject = keyof typeof SUBJECTS
@@ -38,7 +39,7 @@ function download(url: string, name: string) {
   const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; anchor.click()
 }
 
-export function BasePersonLab() {
+export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const [subject, setSubject] = useState<Subject>("person")
   const [cargo, setCargo] = useState<Cargo>("produce")
   const [view, setView] = useState<"character" | "native" | "sheet" | "map">("character")
@@ -69,6 +70,10 @@ export function BasePersonLab() {
   const [frame, setFrame] = useState(0)
   const [clip, setClip] = useState<BaseClip>("walk")
   const frameCount = isPerson ? PERSON_CLIPS[clip].frames : subject === "cart" ? shopState === "opening" || shopState === "packing" ? 48 : 120 : grazing ? TRANSPORT.grazeFrames : clip === "idle" ? 1 : transportMetadata.animalClips.walk.frames
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("clip")
+    if (requested && Object.keys(PERSON_CLIPS).includes(requested)) setClip(requested as BaseClip)
+  }, [])
   const [playing, setPlaying] = useState(true)
   const [fps, setFps] = useState(BASE_PERSON.defaultFps)
   const [zoom, setZoom] = useState(6)
@@ -120,10 +125,10 @@ export function BasePersonLab() {
     return () => cancelAnimationFrame(request)
   }, [design, clip, frame, sides, sheetMatchesDesign, isPerson])
   useEffect(() => {
-    if (!playing || frameCount === 1 || onMap) return
+    if (!active || !playing || frameCount === 1 || onMap) return
     const timer = setInterval(() => setFrame((f) => subject === "cart" && shopState !== "opening" && shopState !== "packing" ? f + 1 : (f + 1) % frameCount), 1000 / (fps * animationRate))
     return () => clearInterval(timer)
-  }, [playing, fps, frameCount, animationRate, subject, shopState, onMap])
+  }, [active, playing, fps, frameCount, animationRate, subject, shopState, onMap])
 
   const live = isPerson && !sheetMatchesDesign && preview?.clip === clip && preview.sides === sides ? preview : null
   const columns = isPerson ? live ? 1 : PERSON_CLIPS[clip].frames : subject === "cart" ? cartMode === "shop" ? transportMetadata.shop.frames : transportMetadata.cartColumns : transportMetadata.animalColumns
@@ -168,12 +173,12 @@ export function BasePersonLab() {
   })
   const ready = !busy && !error && !!bake && sheetMatchesDesign
 
-  return <section className="game-hud person-editor" aria-label="Character playground">
-    <div className="hud-frame" aria-hidden="true" />
-    <header className="person-header">
-      <div className="person-title"><Link href="/assets" className="hud-action" aria-label="Back to assets"><ArrowLeft size={14} />Assets</Link><h1>Character editor</h1><span className="person-version">{isPerson ? `Base person · v${BASE_PERSON.version}` : `${SUBJECTS[subject]} · ${TRANSPORT.version}`}</span></div>
-      <nav aria-label="Editor navigation"><button className="hud-action person-controls-toggle" aria-expanded={controlsOpen} onClick={() => setControlsOpen(!controlsOpen)}><SlidersHorizontal size={14} />Controls</button><Link className="hud-action" aria-label="On the road" href={`/play?characters=base&baseSize=1.5&fps=${fps}`}><span className="person-road-label">On the road</span><ArrowUpRight size={14} /></Link></nav>
-    </header>
+  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Character playground"
+    version={isPerson ? `Base person · v${BASE_PERSON.version}` : `${SUBJECTS[subject]} · ${TRANSPORT.version}`}
+    controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(!controlsOpen)}
+    roadHref={`/play?characters=base&baseSize=1.5&fps=${fps}`}
+    status={onMap ? "Full merchant journey · game scale · 11 × 7 tiles" : !isPerson ? `${subject === "horse" ? transportMetadata.animalProfiles[horseVariant].label : SUBJECTS[subject]} · ${clipLabel}` : dragging ? "Live preview · release to finish sprite sheets." : busy ? "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}
+    detail={onMap ? "8 camera angles · game scale" : `${subject === "cart" ? CART.directions : 8} directions · ${Number((fps * animationRate).toFixed(1))} fps`}>
     <div className="person-workspace">
       <aside className={`person-controls hud-well ${controlsOpen ? "is-open" : ""}`} aria-label="Character controls">
         <div className="person-panel-heading"><label className="person-choice">Asset<select aria-label="Character asset" value={subject} onChange={e => { setSubject(e.target.value as Subject); setFrame(0); setClip("walk") }}>{Object.entries(SUBJECTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><button className="hud-close person-controls-toggle" aria-label="Close character controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
@@ -273,7 +278,7 @@ export function BasePersonLab() {
           <div className="person-view-buttons" aria-label="Preview modes">{subject === "cart" && <button className={button} aria-pressed={onMap} onClick={() => { setView("map"); if (zoom < 4) setZoom(6) }}>Small map</button>}{([['character', 'Character'], ['native', 'Native size'], ['sheet', 'Sprite sheet']] as const).map(([mode, label]) => <button key={mode} className={button} aria-pressed={view === mode} onClick={() => setView(mode)}>{label}</button>)}</div>
         </div>
         <div ref={stageRef} className={`person-stage person-stage-${view}`}>
-          {onMap ? <MerchantMapPreview playing={playing} row={row} zoom={zoom} cargo={cargo} puller={cartPuller} horseVariant={horseVariant} coat={coat} /> : isPerson && (error || storeError) ? <p role="alert" className="person-stage-message">{error || storeError} Try another preset or smaller proportions.</p> : isPerson && !bake ? <p className="person-stage-message">Rendering the base person…</p> : view === "sheet" ? <div className="person-sheet">
+          {onMap ? <MerchantMapPreview playing={active && playing} row={row} zoom={zoom} cargo={cargo} puller={cartPuller} horseVariant={horseVariant} coat={coat} /> : isPerson && (error || storeError) ? <p role="alert" className="person-stage-message">{error || storeError} Try another preset or smaller proportions.</p> : isPerson && !bake ? <p className="person-stage-message">Rendering the base person…</p> : view === "sheet" ? <div className="person-sheet">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={url} width={pixels * columns} height={pixels * atlasRows} alt={`${SUBJECTS[subject]} ${clipLabel}: ${subject === "cart" ? CART.directions : 8} directions${subject === "horse" ? ", common and noble variants" : ""} and ${columns} frames`} />
           </div> : view === "native" ? <div className="person-native" aria-label="Native size lineup">
@@ -299,6 +304,5 @@ export function BasePersonLab() {
         </div>
       </div>
     </div>
-    <footer className="person-status"><span role="status">{onMap ? "Full merchant journey · game scale · 11 × 7 tiles" : !isPerson ? `${subject === "horse" ? transportMetadata.animalProfiles[horseVariant].label : SUBJECTS[subject]} · ${clipLabel}` : dragging ? "Live preview · release to finish sprite sheets." : busy ? "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}</span><span className="person-status-detail">{onMap ? "8 camera angles · game scale" : `${subject === "cart" ? CART.directions : 8} directions · ${Number((fps * animationRate).toFixed(1))} fps`}</span></footer>
-  </section>
+  </AssetEditorFrame>
 }

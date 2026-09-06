@@ -125,6 +125,19 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         visits: simRegistry.current?.visits ?? 0,
       }),
       treePlacements: () => simRegistry.current?.trees ?? [],
+      /** Exact relic position and pulse values for scene/selection smoke tests. */
+      relic: () => {
+        const object = scene.getObjectByName("relic")
+        if (!(object instanceof THREE.Mesh)) return null
+        const world = object.getWorldPosition(new THREE.Vector3())
+        const point = world.clone().project(camera), rect = gl.domElement.getBoundingClientRect()
+        const light = scene.getObjectByName("relic-light")
+        return {
+          world: world.toArray(), x: rect.left + (point.x + 1) / 2 * rect.width, y: rect.top + (1 - point.y) / 2 * rect.height,
+          emissiveIntensity: (object.material as THREE.MeshStandardMaterial).emissiveIntensity,
+          lightIntensity: light instanceof THREE.PointLight ? light.intensity : null,
+        }
+      },
       worldScreenPoint: (x: number, y: number, z: number) => {
         const rect = gl.domElement.getBoundingClientRect()
         const point = new THREE.Vector3(x, y, z).project(camera)

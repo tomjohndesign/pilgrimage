@@ -1,6 +1,8 @@
 "use client"
 
 import * as THREE from "three"
+import type { GameMap } from "@/lib/game/map/types"
+import { walkingSurface } from "@/lib/game/map/walking-surface"
 import { Suspense, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import type { TravelerTypeDef } from "@/lib/game/travelers"
@@ -22,10 +24,11 @@ export const BLOCK_HEIGHT = 0.55
 export type FigureClickHandler = (event: { delta: number; stopPropagation: () => void }) => void
 
 /** The person, cart and draught animal share one selection in game and previews. */
-export function TravelerFigure({ type, onClick, idColor, selected = false, awning = false, outlineColor,
+export function TravelerFigure({ map, age, type, onClick, idColor, selected = false, awning = false, outlineColor,
   characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance,
   cargo = "produce", puller = "hand", horseVariant = "common", coat,
 }: {
+  map?: GameMap; age?: number
   type: TravelerTypeDef; appearance?: TravelerAppearance; selected?: boolean; idColor?: THREE.Color
   onClick?: FigureClickHandler; awning?: boolean; outlineColor?: [number, number, number]
   characterModel?: CharacterModel; characterScale?: number; characterFps?: number; walkTuning?: WalkTuning
@@ -53,7 +56,7 @@ export function TravelerFigure({ type, onClick, idColor, selected = false, awnin
         : deployed ? alignCart(hitch, data.shopHeading ?? heading, wheelbase) : paused ? { ...previous, distance: 0 } : followCart(previous, hitch, wheelbase))
       const pose = cartPose.current!
       if (cart.current) {
-        cart.current.position.copy(parent.worldToLocal(point.set(pose.x, y, pose.z)))
+        cart.current.position.copy(parent.worldToLocal(point.set(pose.x, map ? walkingSurface(map, pose.x, pose.z).height : y, pose.z)))
         const distance = previous && !paused && !data.motionReset && !deployed ? Math.hypot(pose.x - previous.x, pose.z - previous.z) : 0
         cart.current.userData = { ...data, heading: deployed ? data.shopHeading ?? pose.heading : pose.heading, distance, moving: data.moving && !deployed }
       }
@@ -66,8 +69,10 @@ export function TravelerFigure({ type, onClick, idColor, selected = false, awnin
     group.position.set(animal ? 0.43 * characterScale : 0, 0, animal ? 0.22 * characterScale : 0)
     if (deployed && cartPose.current) {
       const pose = cartPose.current, location = stallPoint(pose, data.shopHeading ?? pose.heading, side, characterScale, keeper ?? STALL.merchant)
-      group.position.copy(parent.worldToLocal(point.set(location.x, y, location.z)))
+      group.position.copy(parent.worldToLocal(point.set(location.x, map ? walkingSurface(map, location.x, location.z).height : y, location.z)))
     }
+    group.getWorldPosition(point)
+    if (map) group.position.copy(parent.worldToLocal(point.set(point.x, walkingSurface(map, point.x, point.z).height, point.z)))
     group.getWorldPosition(point)
     const before = lastDriver.current, reset = data.motionReset || !before || before.deployed !== deployed
     const distance = !reset && !paused ? Math.hypot(point.x - before.x, point.z - before.z) : 0
@@ -102,19 +107,19 @@ export function TravelerFigure({ type, onClick, idColor, selected = false, awnin
   const color = outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] as [number, number, number] : undefined)
   return <Suspense fallback={null}>
     <group ref={driver} position={animal ? [0.43 * characterScale, 0, 0.22 * characterScale] : [0, 0, 0]}>
-      <CharacterSprite appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
+      <CharacterSprite map={map} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
         characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning}
         />
     </group>
     {vendor && !animal && characterModel === "base" && <group ref={pullingDriver}>
-      <CharacterSprite appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
+      <CharacterSprite map={map} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
         characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} visualOverride={pulling} />
     </group>}
     {vendor && <>
-      <group ref={cart}><TransportSprite kind="cart" cargo={cargo} puller={puller} awning={awning} characterScale={characterScale}
+      <group ref={cart}><TransportSprite map={map} kind="cart" cargo={cargo} puller={puller} awning={awning} characterScale={characterScale}
         selected={selected} outlineColor={color} onClick={onClick} /></group>
-      <group ref={setup} visible={false}><TransportSprite kind="merchant" variant={variant} characterScale={characterScale * (appearance?.scale ?? 1)} selected={selected} outlineColor={color} onClick={onClick} /></group>
+      <group ref={setup} visible={false}><TransportSprite map={map} kind="merchant" variant={variant} characterScale={characterScale * (appearance?.scale ?? 1)} selected={selected} outlineColor={color} onClick={onClick} /></group>
     </>}
-    {animal && <group ref={beast}><TransportSprite kind={puller as "donkey" | "horse"} coat={coat} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} /></group>}
+    {animal && <group ref={beast}><TransportSprite map={map} kind={puller as "donkey" | "horse"} coat={coat} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} /></group>}
   </Suspense>
 }

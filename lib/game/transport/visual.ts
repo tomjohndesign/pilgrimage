@@ -1,4 +1,4 @@
-import manifest from "../../../public/textures/transport/v7/manifest.json"
+import manifest from "../../../public/textures/transport/v8/manifest.json"
 import { populationVisual } from "../base-person/population-assets"
 import { personWalkStride } from "../base-person/gait"
 import { validatePersonDesign } from "../base-person/design"
