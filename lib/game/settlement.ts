@@ -3,6 +3,7 @@ import { placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from 
 import { settlementRoute } from "./settlement-route"
 import { getBuildInfluence, type BuildInfluence } from "./build-influence"
 import type { SimState } from "./sim"
+import { DEFAULT_ADMISSION_FEE } from "./shrine-visit"
 import { TERRAIN } from "./map/terrain"
 import { tileAt, type BuildingDef, type GameMap, type TilePos } from "./map/types"
 import type { Monk } from "./monks"
@@ -25,6 +26,8 @@ export interface Settlement {
   /** Cumulative harvest already credited; spending never credits it again. */
   deliveredWood: number
   spentWood: number
+  shrineAdmission: number
+  collectedAdmission: number
   /** Only player-built additions. The founding hovel stays on the base map. */
   structures: BuildingDef[]
 }
@@ -35,6 +38,18 @@ export function createSettlement(balance: GameBalance = DEFAULT_BALANCE): Settle
     structures: [],
     deliveredWood: 0,
     spentWood: 0,
+    shrineAdmission: DEFAULT_ADMISSION_FEE,
+    collectedAdmission: 0,
+  }
+}
+
+/** Admission is earned in the simulation and credited once, even after spending. */
+export function creditAdmission(settlement: Settlement, receipts: number): Settlement {
+  if (receipts <= settlement.collectedAdmission) return settlement
+  return {
+    ...settlement,
+    collectedAdmission: receipts,
+    resources: { ...settlement.resources, gold: settlement.resources.gold + receipts - settlement.collectedAdmission },
   }
 }
 
