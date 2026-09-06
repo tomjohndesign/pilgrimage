@@ -10,18 +10,18 @@ import { fallenTimberDimensions, type TreeResource } from "@/lib/game/trees/timb
 import { TreeStump } from "./tree-stump"
 
 /** The trunk stays until hauled away; its stump has a separate decay clock. */
-export function TreeRemains({ id, objectId, tree, resource, time, characterScale, animatedStumps }: {
-  id: number; objectId: number; tree: TreePlacement; resource: TreeResource; time: number; characterScale: number; animatedStumps: boolean
+export function TreeRemains({ id, objectId, tree, resource, time, characterScale }: {
+  id: number; objectId: number; tree: TreePlacement; resource: TreeResource; time: number; characterScale: number
 }) {
-  const stump = time < (resource.stumpUntil ?? 0)
   const fallen = resource.remainingWood > 0
+  const stump = fallen || time < (resource.stumpUntil ?? 0)
   if (!stump && !fallen) return null
   const { radius, length, offsetZ } = fallenTimberDimensions(resource)
   const select = (event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "tree", id }, event)
   const idColor = new THREE.Color(...encodeObjectId(objectId))
   return (
     <group name={`tree-remains-${id}`} position={[tree.x, tree.y, tree.z]} onClick={select}>
-      {stump && <Suspense fallback={null}><TreeStump id={id} objectId={objectId} characterScale={characterScale} animatedStumps={animatedStumps} /></Suspense>}
+      {stump && <Suspense fallback={null}><TreeStump id={id} objectId={objectId} characterScale={characterScale} /></Suspense>}
       {fallen && <group name={`fallen-tree-${id}`} position={[0, radius, offsetZ]} rotation={[0, 0, Math.PI / 2]}>
         <mesh layers-mask={OUTLINE_ID_LAYER_MASK}>
           <cylinderGeometry args={[radius * resource.trunkTaper, radius, length, 7]} />

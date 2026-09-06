@@ -9,6 +9,7 @@ import { walkContact, plantFoot, type FootPlant, DEFAULT_WALK_STRIDE } from "@/l
 import { ACTION_CLIPS } from "@/lib/game/base-person/pose"
 import { activityClip } from "@/lib/game/base-person/activity"
 import { crossedWoodcuttingImpact, woodcuttingProfile } from "@/lib/game/base-person/woodcutting"
+import { workContacts, workContactOrigin, trunkContact } from "@/lib/game/base-person/work-contact"
 import { strikeTree } from "@/lib/game/trees/impact"
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
@@ -57,6 +58,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   const size = visual.scale * individualScale
   const fps = characterFps ?? visual.fps
   const rigBody = useMemo(() => visual.design ? personRecipe(visual.design).body : null, [visual.design])
+  const work = useMemo(() => visual.design ? workContacts(visual.design) : null, [visual.design])
   const poseRoot = useRef<THREE.Group>(null)
   const attachmentRoot = useRef<THREE.Group>(null)
   const attachmentPoint = useMemo(() => new THREE.Vector3(), [])
@@ -138,7 +140,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     if (!parent) return
     // Road groups publish heading alongside position; avoid walking the scene
     // ancestry again for every sprite. Standalone previews use world facing.
-    const heading = typeof parent.userData.heading === "number" ? parent.userData.heading :
+    let heading = typeof parent.userData.heading === "number" ? parent.userData.heading :
       (parent.getWorldDirection(facing), Math.atan2(facing.x, facing.z))
     const yaw = Math.atan2(camera.matrixWorld.elements[8], camera.matrixWorld.elements[10])
     const moving = parent.userData.moving === true
@@ -146,6 +148,15 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     const requested = activityClip(parent.userData.activity, moving, parent.userData.carrying)
     const actionIndex = actionIndices[requested]
     const action = requested !== "walk" && requested !== "idle" ? visual.actions[requested] : undefined
+    const workTree = !moving && action && work && (requested === "treeFelling" || requested === "woodcutting")
+      ? parent.userData.workTree : undefined
+    const workPoint = workTree && work ? work[requested as keyof typeof work] : undefined
+    const workTarget = workTree && workPoint ? requested === "treeFelling"
+      ? trunkContact(workTree, workPoint[1] * size / BASE_PERSON.camera.viewSize) : workTree : undefined
+    if (workTarget && workPoint) {
+      parent.getWorldPosition(origin)
+      heading = Math.atan2(workTarget.x - origin.x, workTarget.z - origin.z) - Math.atan2(workPoint[0], workPoint[2])
+    }
     if (!seeded.current && parent.userData.initialized) {
       clock.current = (parent.userData.phase ?? 0) % 1
       seeded.current = true
@@ -181,7 +192,14 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     const direction = spriteRow(heading, yaw)
     const row = visual.rowOffset + direction
     if (poseRoot.current) {
-      if (moving && rigBody && walkTuning?.sync !== false) {
+      if (workTarget && workPoint) {
+        footPlant.current = null
+        const aligned = workContactOrigin(workTarget, workPoint, direction, yaw, pitch, size / BASE_PERSON.camera.viewSize, groundAt)
+        // Standing trunk and persistent stump share this world origin. Only the
+        // character moves into the authored work stance; the target never jumps.
+        corrected.set(aligned.x, aligned.y, aligned.z)
+        poseRoot.current.position.copy(parent.worldToLocal(corrected))
+      } else if (moving && rigBody && walkTuning?.sync !== false) {
         const foot = walkContact(clock.current, clip.columns, rigBody, clip.strides ?? 1)
         // Reconstruct the baked ground contact in the current camera's ground
         // plane. The selected direction, not the smoothed group heading, is

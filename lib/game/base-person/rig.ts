@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { createWoodLogGeometry, WOOD_LOG } from "../wood-log"
 import { editedLeg } from "./edited-leg"
 import { poseOffset } from "./pose-edits"
 import type { RigJoints } from "./rig-joints"
@@ -362,7 +363,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
   const axe = new THREE.Group()
   axe.name = "woodcutting-axe"
   axe.scale.setScalar(chopping.axeScale)
-  const wood = material("#785637"), steel = material("#bac8cf"), grain = material("#d6b57b")
+  const wood = material(WOOD_LOG.bark), steel = material("#bac8cf"), grain = material(WOOD_LOG.endGrain)
   const shaft = mesh(new THREE.CylinderGeometry(0.026, 0.032, 0.90, 6), wood, axe, [0, 0.27, 0])
   shaft.name = "axe-handle"
   // A slim wedge flares from the socket to a broad, sharpened cutting edge along +Z.
@@ -413,7 +414,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
   block.name = "chopping-block"
   const logHalves = [-1, 1].map(side => {
     // Two lengthwise half-cylinders form one upright round until the strike.
-    const half = mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.38, 6, 1, false, side < 0 ? Math.PI : 0, Math.PI), [wood, grain, grain], log)
+    const half = mesh(createWoodLogGeometry(side), [wood, grain, grain], log)
     half.name = side < 0 ? "log-left-half" : "log-right-half"
     const cut = mesh(new THREE.PlaneGeometry(0.28, 0.38), grain, half)
     cut.name = "log-split-face"
@@ -435,7 +436,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
     splitPile.add(piece)
   }
   log.add(splitPile)
-  const replacement = mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.38, 12), [wood, grain, grain], root)
+  const replacement = mesh(createWoodLogGeometry(), [wood, grain, grain], root)
   replacement.name = "replacement-log"
   replacement.scale.setScalar(chopping.logScale)
   replacement.visible = false
@@ -644,6 +645,8 @@ export function createBasePersonRig(recipe = personRecipe()) {
       pillow.visible = snores.visible = sleep
       snores.position.set(0.08, 0.55 + phase % 1 * 0.1, pillow.position.z)
       axe.visible = chop
+      // The persistent world stump supports the logs; body atlases never paint a second block.
+      block.visible = false
       log.visible = splitting
       replacement.visible = splitting
       replacement.position.copy(supplyPosition).lerp(loadedPosition, split.logTravel)
