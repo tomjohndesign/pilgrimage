@@ -1,12 +1,12 @@
 import type { Metadata } from "next"
-
-import { BasePersonLab } from "@/components/base-person-lab"
+import { Suspense } from "react"
+import { AssetPlayground } from "@/components/asset-playground"
 
 export const metadata: Metadata = {
-  title: "Pilgrimage — Characters",
-  description: "A tiny, consistent base person for every calling on the road.",
+  title: "Pilgrimage — Asset playground",
+  description: "Characters and procedural buildings in one shared playground.",
 }
 
 export default function CharactersPage() {
-  return <main><BasePersonLab /></main>
+  return <main><Suspense fallback={<p>Loading asset playground…</p>}><AssetPlayground /></Suspense></main>
 }

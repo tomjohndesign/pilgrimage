@@ -31,8 +31,8 @@ import { MonkRocketGear, ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
 
 const PAUSE_MIN_SECONDS = 2
 const PAUSE_MAX_SECONDS = 7
-/** Standing within this many tiles of the hovel's centre counts as keeping vigil. */
-const VIGIL_RADIUS = 1.8
+/** Extra distance beyond the hovel’s half-width that counts as keeping vigil. */
+const VIGIL_MARGIN = 1.1
 
 interface MonkState {
   x: number
@@ -65,7 +65,9 @@ export function Monks({ map, monks, flying = false, characterScale = 1 }: { map:
       return { ...start, route: wander.route(start, pick()), pause: rng() * PAUSE_MAX_SECONDS, flightWait: index * 8 }
     })
     const activities = new Map<number, MonkActivity>()
-    return { spots, centre, rng, flightRng, pick, states, activities, wander }
+    const hovel = map.buildings.find(b => b.id === map.site?.hovelId)
+    const vigilRadius = (hovel ? Math.max(hovel.w, hovel.d) / 2 : 0.7) + VIGIL_MARGIN
+    return { spots, centre, rng, flightRng, pick, states, activities, wander, vigilRadius }
   }, [map, monks])
 
   // Publish activities so the HUD's monk panel can poll them.
@@ -132,7 +134,7 @@ export function Monks({ map, monks, flying = false, characterScale = 1 }: { map:
       if (s.pause > 0) {
         s.pause -= dt
         const nearRelic =
-          !!world.centre && Math.hypot(s.x - world.centre.x, s.z - world.centre.z) <= VIGIL_RADIUS
+          !!world.centre && Math.hypot(s.x - world.centre.x, s.z - world.centre.z) <= world.vigilRadius
         group.userData.activity = nearRelic ? "vigil" : "resting"
         world.activities.set(monks[i].id, group.userData.activity)
         if (nearRelic && world.centre) group.rotation.y = Math.atan2(world.centre.x - s.x, world.centre.z - s.z)
