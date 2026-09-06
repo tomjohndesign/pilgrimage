@@ -1,11 +1,24 @@
 import type { BuildingDef } from "../map/types"
 import { buildingParts, type BuildingPart } from "./geometry"
+import { earlyBuildingParts, type SettlementBuildingType } from "./early-geometry"
 import { EARLY_BUILDINGS, earlyBuildingRecipe } from "./style"
 
 export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor">
 
-export function isProceduralStructure(buildType: string | undefined): boolean {
-  return EARLY_BUILDINGS.some((preset) => preset.id === buildType)
+/** Roof proportions for the original catalogue, using the shared rural kit. */
+const SETTLEMENT_ROOFS = {
+  shelter: 0.55,
+  workshop: 0.6,
+  hall: 0.75,
+  garden: 0,
+  cross: 0,
+  lumberCamp: 0,
+  market: 0.4,
+  "guard-post": 0.4,
+} satisfies Record<SettlementBuildingType, number>
+
+function isSettlementType(type: string | undefined): type is SettlementBuildingType {
+  return type !== undefined && Object.hasOwn(SETTLEMENT_ROOFS, type)
 }
 
 /** One source for placed structures, construction ghosts and build-menu images. */
@@ -13,18 +26,20 @@ export function structureParts(building: StructureAppearance): BuildingPart[] {
   const preset = EARLY_BUILDINGS.find((item) => item.id === building.buildType)
   if (preset) return buildingParts({ ...earlyBuildingRecipe(preset.id), width: building.w, depth: building.d, wallHeight: building.height })
 
-  const box = (name: string, layer: BuildingPart["layer"], position: BuildingPart["position"], size: BuildingPart["size"], color: string): BuildingPart =>
-    ({ name, layer, position, size, color })
-  if (building.buildType === "lumberCamp") return [
-    box("yard", "base", [0, 0.022, 0], [building.w * 0.98, 0.044, building.d * 0.98], "#a18a60"),
-    ...[-1, 1].flatMap((x) => [-1, 1].map((z) => box(`peg-${x}-${z}`, "wall",
-      [x * (building.w / 2 - 0.12), 0.13, z * (building.d / 2 - 0.12)], [0.08, 0.26, 0.08], "#705135"))),
-  ]
-  const cross = building.buildType === "cross"
-  return [
-    box("body", "wall", [0, building.height / 2, 0],
-      [cross ? 0.14 : building.w * 0.86, building.height, cross ? 0.14 : building.d * 0.86], building.color),
-    box("cap", "roof", [0, cross ? building.height * 0.72 : building.height + 0.09, 0],
-      [cross ? 0.7 : building.w * 0.98, 0.18, cross ? 0.14 : building.d * 0.98], building.roofColor),
-  ]
+  if (isSettlementType(building.buildType)) return earlyBuildingParts({
+    ...earlyBuildingRecipe("shepherd-hut"),
+    variant: building.buildType,
+    width: building.w,
+    depth: building.d,
+    wallHeight: building.height,
+    roofRise: SETTLEMENT_ROOFS[building.buildType],
+  })
+
+  // Untyped, older map structures also receive real construction at their footprint.
+  return buildingParts({
+    ...earlyBuildingRecipe("shepherd-hut"),
+    width: building.w,
+    depth: building.d,
+    wallHeight: Math.max(0.25, Math.min(1.4, building.height)),
+  })
 }
