@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "96c484a13c3dffc4b47cc672561197e438814cd0",
-  "releaseCount": 23,
+  "lastProcessedCommit": "eecd2901eccceb7132b627540016de8cb5eed6a8",
+  "releaseCount": 24,
   "releases": [
+    {
+      "version": "0.0.38",
+      "title": "Release 0.0.38",
+      "summary": "Add parametric monks and refine character activity animations (#56)",
+      "commit": "eecd2901eccceb7132b627540016de8cb5eed6a8"
+    },
     {
       "version": "0.0.37",
       "title": "Release 0.0.37",

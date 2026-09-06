@@ -4,7 +4,7 @@ import { groundHeight } from "@/lib/game/map/elevation"
 import { bridgeLayout } from "@/lib/game/map/bridges"
 
 import { buildingAt } from "@/lib/game/settlement"
-import { useEffect, useMemo, useRef } from "react"
+import { Suspense, useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
@@ -18,7 +18,9 @@ import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map
 import { monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { createMonkFlight, monkGroundTime, stepMonkFlight, type MonkFlight } from "@/lib/game/monk-flight"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
-import { encodeObjectId, OUTLINE_ID_LAYER_MASK, residentObjectId } from "@/lib/game/render/outline"
+import { encodeObjectId, residentObjectId } from "@/lib/game/render/outline"
+import { CharacterSprite } from "./character-sprite"
+import { MONK_VISUAL } from "@/lib/game/base-person/monk-assets"
 import { MonkRocketGear, ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
 
 /**
@@ -30,15 +32,9 @@ import { MonkRocketGear, ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
  * between trips, keeping their rocket-powered gear equipped.
  */
 
-const BODY: [number, number, number] = [0.3, 0.55, 0.3]
-/** The bare crown of a tonsure, so a monk reads differently from a friar on the road. */
-const CROWN: [number, number, number] = [0.14, 0.05, 0.14]
-const HABIT_COLOR = "#4e4034"
-const CROWN_COLOR = "#d7b58e"
-
 /** How far from the footprint the brothers will wander, in tiles. */
 const WANDER_RADIUS = 3
-const WALK_SPEED = 0.7
+const WALK_SPEED = 0.22
 const PAUSE_MIN_SECONDS = 2
 const PAUSE_MAX_SECONDS = 7
 /** Standing within this many tiles of the hovel's centre counts as keeping vigil. */
@@ -118,10 +114,13 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
       const s = world.states[i]
       const group = groupRefs.current[i]
       if (!group) continue
-      if (playback.paused) {
-        group.position.set(s.x, s.y, s.z)
-        continue
-      }
+      group.userData.initialized = true
+      group.userData.phase = i / Math.max(1, monks.length)
+      group.userData.playbackRate = playback.paused ? 0 : playback.speed
+      group.userData.distance = 0
+      const previousX = s.x, previousZ = s.z
+      if (playback.paused) continue
+      group.userData.moving = false
 
       const exhaust = group.getObjectByName(ROCKET_EXHAUST_NAME)
       if (flying) {
@@ -149,6 +148,7 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
         group.position.set(flight.x, flight.y, flight.z)
         if (flight.phase !== "landed") {
           if (exhaust) exhaust.visible = true
+          group.userData.activity = "flying"
           world.activities.set(monks[i].id, "flying")
           continue
         }
@@ -164,8 +164,11 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
         s.pause -= dt
         const nearRelic =
           !!world.centre && Math.hypot(s.x - world.centre.x, s.z - world.centre.z) <= VIGIL_RADIUS
-        world.activities.set(monks[i].id, nearRelic ? "vigil" : "resting")
+        group.userData.activity = nearRelic ? "vigil" : "resting"
+        world.activities.set(monks[i].id, group.userData.activity)
+        if (nearRelic && world.centre) group.rotation.y = Math.atan2(world.centre.x - s.x, world.centre.z - s.z)
       } else {
+        group.userData.activity = "walking"
         world.activities.set(monks[i].id, "walking")
         const dx = s.target.x - s.x
         const dz = s.target.z - s.z
@@ -189,6 +192,8 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
       const y = map.elevation && !bridge
         ? groundHeight(map, s.x + map.width / 2 - 0.5, s.z + map.depth / 2 - 0.5) : s.y
       group.position.set(s.x, y, s.z)
+      group.userData.distance = Math.hypot(s.x - previousX, s.z - previousZ)
+      group.userData.moving = group.userData.distance > 0
     }
   })
 
@@ -207,22 +212,12 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
               groupRefs.current[index] = node
             }}
           >
-            <mesh name="monk" position={[0, BODY[1] / 2, 0]} onClick={select}>
-              <boxGeometry args={BODY} />
-              <meshLambertMaterial color={HABIT_COLOR} />
-            </mesh>
-            <mesh position={[0, BODY[1] + CROWN[1] / 2, 0]} onClick={select}>
-              <boxGeometry args={CROWN} />
-              <meshLambertMaterial color={CROWN_COLOR} />
-            </mesh>
-            <mesh position={[0, BODY[1] / 2, 0]} layers-mask={OUTLINE_ID_LAYER_MASK}>
-              <boxGeometry args={BODY} />
-              <meshBasicMaterial color={id} toneMapped={false} />
-            </mesh>
-            <mesh position={[0, BODY[1] + CROWN[1] / 2, 0]} layers-mask={OUTLINE_ID_LAYER_MASK}>
-              <boxGeometry args={CROWN} />
-              <meshBasicMaterial color={id} toneMapped={false} />
-            </mesh>
+            <Suspense fallback={null}>
+              <CharacterSprite name="monk" type="friar" characterModel="base" characterScale={1.2}
+                visualOverride={MONK_VISUAL} selected={selected} onClick={select}
+                outlineColor={[id.r, id.g, id.b]}
+                walkTuning={{ sync: true, stride: 0.44 }} />
+            </Suspense>
             {flying && <MonkRocketGear phase={index} outlineColor={id} onClick={select} />}
             <CharacterHitTarget onClick={select} />
             {selected && <CharacterSelectionShadow map={map} flying={flying} />}

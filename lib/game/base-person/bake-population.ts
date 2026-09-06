@@ -1,6 +1,6 @@
 import { TRAVELER_TYPES, type TravelerTypeId } from "../travelers"
 import { bakeBasePerson } from "./bake"
-import { ACTION_CLIPS, BASE_PERSON } from "./pose"
+import { ACTION_CLIPS, BASE_PERSON, PERSON_CLIPS } from "./pose"
 import { DEFAULT_DESIGN, personRecipe, type PersonDesign } from "./design"
 import { POPULATION_PROFILES, populationDesign, type PopulationPack } from "./population"
 
@@ -14,7 +14,7 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
     return result
   }
   const shadowWalk = canvas(8), shadowIdle = canvas(1)
-  const shadowActions = Object.fromEntries(ACTION_CLIPS.map(clip => [clip, canvas(8)]))
+  const shadowActions = Object.fromEntries(ACTION_CLIPS.map(clip => [clip, canvas(PERSON_CLIPS[clip].frames)]))
   const draw = async (target: HTMLCanvasElement, url: string, variant: number) => {
     const image = new Image(); image.src = url; await image.decode()
     target.getContext("2d")!.drawImage(image, 0, variant * 8 * size)
@@ -25,7 +25,7 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
   const referenceStride = personRecipe(base).body.stride
   for (const [typeIndex, type] of types.entries()) {
     const walk = canvas(8), idle = canvas(1)
-    const actions = Object.fromEntries(ACTION_CLIPS.map(clip => [clip, canvas(8)]))
+    const actions = Object.fromEntries(ACTION_CLIPS.map(clip => [clip, canvas(PERSON_CLIPS[clip].frames)]))
     const designs: PersonDesign[] = []
     for (let variant = 0; variant < count; variant++) {
       // Let the map keep drawing and allow a newer edit to cancel this pack.
@@ -47,6 +47,6 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
     }
     callings[type.id as TravelerTypeId] = { walk: walk.toDataURL("image/png"), idle: idle.toDataURL("image/png"), actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, actions[clip].toDataURL("image/png")])) as NonNullable<PopulationPack["callings"][TravelerTypeId]["actions"]>, designs }
   }
-  return { templateVersion: BASE_PERSON.version, cellSize: size, anchor: BASE_PERSON.anchor,
+  return { actionFrames: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, PERSON_CLIPS[clip].frames])) as Record<typeof ACTION_CLIPS[number], number>, templateVersion: BASE_PERSON.version, cellSize: size, anchor: BASE_PERSON.anchor,
     rows: count * 8, callings, shadows: { walk: shadowWalk.toDataURL("image/png"), idle: shadowIdle.toDataURL("image/png"), actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, shadowActions[clip].toDataURL("image/png")])) as NonNullable<PopulationPack["shadows"]["actions"]> }, strideRatios }
 }
