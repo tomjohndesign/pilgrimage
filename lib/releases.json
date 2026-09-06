@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "f080b5f38d14b5fcf680066d8cbeccf6946242b1",
-  "releaseCount": 56,
+  "lastProcessedCommit": "68690c95960c1f328bc1cb53561dc7db7d8a0073",
+  "releaseCount": 57,
   "releases": [
+    {
+      "version": "0.0.71",
+      "title": "Release 0.0.71",
+      "summary": "Add building rotation and entrance highlights during placement (#89)",
+      "commit": "68690c95960c1f328bc1cb53561dc7db7d8a0073"
+    },
     {
       "version": "0.0.70",
       "title": "Release 0.0.70",
