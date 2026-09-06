@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "418a2f3b6df2b84d2bc8b2cd6df0e3ec8101bb61",
-  "releaseCount": 46,
+  "lastProcessedCommit": "87bcd3dbbe6b9f701bd2af78b5256a8725fec458",
+  "releaseCount": 48,
   "releases": [
+    {
+      "version": "0.0.62",
+      "title": "Release 0.0.62",
+      "summary": "Double default game speed and expand playback options (#82)",
+      "commit": "87bcd3dbbe6b9f701bd2af78b5256a8725fec458"
+    },
+    {
+      "version": "0.0.61",
+      "title": "Release 0.0.61",
+      "summary": "Replace placeholder buildings with parametric timber and thatch models (#81)",
+      "commit": "d7c203a0fee37af0d18bce3f08c5e1bf02336ced"
+    },
     {
       "version": "0.0.60",
       "title": "Release 0.0.60",
