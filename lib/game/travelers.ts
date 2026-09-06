@@ -194,7 +194,7 @@ export interface TravelerAttributes {
   gold: number
   /** Social standing, 0–100. */
   status: number
-  /** Needs, 0–100 — higher means more in need. */
+  /** Fullness and hydration, 0–100 — lower means more in need. */
   hunger: number
   thirst: number
   /** Devotion, 0–100. */

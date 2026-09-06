@@ -131,6 +131,7 @@ export const RULE_GROUPS = [
   "Relic renown",
   "Progression",
   "Traveler attraction",
+  "Traveler needs",
 ] as const
 export const RULE_FIELDS = [
   {
@@ -325,7 +326,7 @@ export const RULE_FIELDS = [
     group: "Traveler attraction",
     label: "Base draw multiplier",
     description: "Multiplier for a shrine with zero renown.",
-    default: 0.75,
+    default: 0.5,
     min: 0,
     max: 5,
     step: 0.01,
@@ -335,7 +336,7 @@ export const RULE_FIELDS = [
     group: "Traveler attraction",
     label: "Maximum renown draw bonus",
     description: "Added to the base multiplier once renown reaches the draw cap.",
-    default: 0.5,
+    default: 0.75,
     min: 0,
     max: 5,
     step: 0.01,
@@ -344,7 +345,7 @@ export const RULE_FIELDS = [
     key: "drawCap",
     group: "Traveler attraction",
     label: "Renown draw cap",
-    description: "Renown above this still counts for progression but adds no further attraction.",
+    description: "Renown at which relic attraction and hospitality reach their full strength. Higher renown still counts for progression.",
     default: 100,
     min: 1,
     max: 100000,
@@ -359,6 +360,26 @@ export const RULE_FIELDS = [
     min: 0,
     max: 1000,
     step: 1,
+  },
+  {
+    key: "hospitalityBaseChance", group: "Traveler attraction", label: "Hospitality chance at zero renown",
+    description: "Maximum chance of visiting for food, drink or rest at an unknown shrine. Scales up to 100% at the renown draw cap; needs below 60 increase the pull, reaching its maximum at 20.",
+    default: 0.1, min: 0, max: 1, step: 0.01,
+  },
+  {
+    key: "hungerDecay", group: "Traveler needs", label: "Hunger drain per game hour",
+    description: "Fullness lost per game hour. Default: hungry every 8 hours, or three full bars per day. Camping halves this rate; shrine hospitality restores it.",
+    default: 12.5, min: 0, max: 50, step: 0.1,
+  },
+  {
+    key: "thirstDecay", group: "Traveler needs", label: "Thirst drain per game hour",
+    description: "Hydration lost per game hour. Default: thirsty every 4 hours, or six full bars per day. Camping halves this rate; shrine hospitality restores it.",
+    default: 25, min: 0, max: 50, step: 0.1,
+  },
+  {
+    key: "staminaDecay", group: "Traveler needs", label: "Stamina drain per game hour",
+    description: "Energy lost per game hour. Default: exhausted after about 24 hours. Camping restores stamina and tending a parked stall holds it steady; drinking does not restore energy.",
+    default: 4.2, min: 0, max: 50, step: 0.1,
   },
 ] as const
 export type RuleKey = (typeof RULE_FIELDS)[number]["key"]
@@ -534,7 +555,14 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
     const buildings = record(saved?.buildings)
     return validateBalance(saved && rules && buildings ? {
       ...saved,
-      rules: { visitRenown: DEFAULT_BALANCE.rules.visitRenown, ...rules },
+      rules: {
+        visitRenown: DEFAULT_BALANCE.rules.visitRenown,
+        hospitalityBaseChance: DEFAULT_BALANCE.rules.hospitalityBaseChance,
+        hungerDecay: DEFAULT_BALANCE.rules.hungerDecay,
+        thirstDecay: DEFAULT_BALANCE.rules.thirstDecay,
+        staminaDecay: DEFAULT_BALANCE.rules.staminaDecay,
+        ...rules,
+      },
       buildings: {
         lumberCamp: DEFAULT_BALANCE.buildings.lumberCamp,
         ...Object.fromEntries(EARLY_BUILDINGS.filter((preset) => preset.id !== "enclosure")
