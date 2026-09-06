@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "fb5ef6a0bbdca967b2a7f59f853cc815b1ae3c78",
-  "releaseCount": 34,
+  "lastProcessedCommit": "922adcf61dd3b5a4065d17401b6ebd567a4445dd",
+  "releaseCount": 35,
   "releases": [
+    {
+      "version": "0.0.49",
+      "title": "Release 0.0.49",
+      "summary": "Add distinct tree felling and wood splitting animations (#67)",
+      "commit": "922adcf61dd3b5a4065d17401b6ebd567a4445dd"
+    },
     {
       "version": "0.0.48",
       "title": "Release 0.0.48",
