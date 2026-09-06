@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "eecd2901eccceb7132b627540016de8cb5eed6a8",
-  "releaseCount": 24,
+  "lastProcessedCommit": "185cecb0e9b9c03f3aab16ce1d6837417776d96d",
+  "releaseCount": 25,
   "releases": [
+    {
+      "version": "0.0.39",
+      "title": "Release 0.0.39",
+      "summary": "Fix overlapping character sprite banding and remove shadows (#58)",
+      "commit": "185cecb0e9b9c03f3aab16ce1d6837417776d96d"
+    },
     {
       "version": "0.0.38",
       "title": "Release 0.0.38",
