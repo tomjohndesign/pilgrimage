@@ -1,5 +1,7 @@
 "use client"
 
+import type { GameMap } from "@/lib/game/map/types"
+import { walkingSurface } from "@/lib/game/map/walking-surface"
 import { personRecipe } from "@/lib/game/base-person/design"
 import { BASE_PERSON } from "@/lib/game/base-person/pose"
 import { walkContact, plantFoot, type FootPlant, DEFAULT_WALK_STRIDE } from "@/lib/game/base-person/gait"
@@ -25,7 +27,8 @@ import type { FigureClickHandler } from "./traveler-figure"
 
 let nextSpriteOrder = 1
 
-export function CharacterSprite({ type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, visualOverride, name = "traveler" }: {
+export function CharacterSprite({ map, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, visualOverride, name = "traveler" }: {
+  map?: GameMap
   visualOverride?: ReturnType<typeof populationVisual>
   name?: "traveler" | "monk"
   type: TravelerTypeId
@@ -52,6 +55,7 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
   const rigBody = useMemo(() => visual.design ? personRecipe(visual.design).body : null, [visual.design])
   const poseRoot = useRef<THREE.Group>(null)
   const footPlant = useRef<FootPlant | null>(null)
+  useEffect(() => { footPlant.current = null }, [map, rigBody])
   const origin = useMemo(() => new THREE.Vector3(), [])
   const contact = useMemo(() => new THREE.Vector3(), [])
   const corrected = useMemo(() => new THREE.Vector3(), [])
@@ -82,14 +86,16 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
   }), [sources, textureEntries, visual.rowOffset])
   useEffect(() => () => textures.forEach((texture) => texture.dispose()), [textures])
   const worldTexel = usePixelWorldTexel()
+  const groundPlane = useMemo(() => ({ value: new THREE.Vector4() }), [])
+  const groundAt = useMemo(() => map ? (x: number, z: number) => walkingSurface(map, x, z).height : undefined, [map])
   const viewport = useMemo(() => new THREE.Vector4(), [])
   const material = useMemo(() => {
     const material = new THREE.SpriteMaterial({ map: textures[1], alphaTest: 0.5, transparent: false, toneMapped: false })
-    material.onBeforeCompile = (shader) => applySpriteDepth(shader, viewport, worldTexel)
+    material.onBeforeCompile = (shader) => applySpriteDepth(shader, viewport, worldTexel, groundPlane)
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "person-depth-v3"
+    material.customProgramCacheKey = () => "person-depth-v4"
     return material
-  }, [textures, viewport, worldTexel])
+  }, [textures, viewport, worldTexel, groundPlane])
   useEffect(() => () => material.dispose(), [material])
   const center = useMemo(() => new THREE.Vector2(...visual.center), [visual])
   const sprite = useRef<THREE.Sprite>(null)
@@ -108,15 +114,15 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     // Embedding IDs in shader source compiled a new program for every person.
     const id = new THREE.Vector3(...outlineColor)
     material.onBeforeCompile = (shader) => {
-      applySpriteDepth(shader, viewport, worldTexel)
+      applySpriteDepth(shader, viewport, worldTexel, groundPlane)
       shader.uniforms.travelerId = { value: id }
       shader.fragmentShader = "uniform vec3 travelerId;\n" + shader.fragmentShader.replace("#include <map_fragment>",
         "#include <map_fragment>\ndiffuseColor.rgb = travelerId;")
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "traveler-id-v5"
+    material.customProgramCacheKey = () => "traveler-id-v6"
     return material
-  }, [textures, viewport, worldTexel, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [textures, viewport, worldTexel, groundPlane, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => outlineMaterial?.dispose(), [outlineMaterial])
 
   useFrame(({ camera }, delta) => {
@@ -173,7 +179,7 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
         contact.set(x * Math.cos(yaw) + z * Math.sin(yaw), 0, -x * Math.sin(yaw) + z * Math.cos(yaw))
         parent.getWorldPosition(origin)
         const key = `${requested}:${foot.side}:${direction}:${yaw.toFixed(4)}:${pitch.toFixed(4)}:${size}`
-        const planted = plantFoot(footPlant.current, key, origin, contact)
+        const planted = plantFoot(footPlant.current, key, origin, contact, groundAt)
         footPlant.current = planted.plant
         corrected.set(origin.x + planted.offset.x, origin.y + planted.offset.y, origin.z + planted.offset.z)
         poseRoot.current.position.copy(parent.worldToLocal(corrected))
@@ -182,6 +188,14 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
         poseRoot.current.position.set(0, 0, 0)
       }
     }
+    // Ground and body/selection passes share the same local terrain plane.
+    // Flying monks release contact and use the normal airborne depth model.
+    if (map && parent.userData.activity !== "flying" && poseRoot.current) {
+      poseRoot.current.getWorldPosition(corrected)
+      const surface = walkingSurface(map, corrected.x, corrected.z)
+      groundPlane.value.set(-surface.dx, 1, -surface.dz,
+        surface.dx * corrected.x + surface.dz * corrected.z - surface.height)
+    } else groundPlane.value.set(0, 0, 0, 0)
     const previous = lastFrame.current
     // Distance timing must display the current pose even at low animation FPS.
     if (previous.texture === texture && previous.row === row && previous.frame === frame) return

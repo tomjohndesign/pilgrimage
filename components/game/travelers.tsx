@@ -1,7 +1,6 @@
 "use client"
 
-import { groundHeight } from "@/lib/game/map/elevation"
-import { bridgeLayout } from "@/lib/game/map/bridges"
+import { walkingSurface } from "@/lib/game/map/walking-surface"
 
 import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
@@ -172,10 +171,7 @@ export function Travelers({
 
       const logs = group.getObjectByName("carried-logs")
       if (logs) logs.visible = s.carrying > 0
-      const tx = Math.floor(s.x + map.width / 2), tz = Math.floor(s.z + map.depth / 2)
-      const bridge = bridgeLayout(map).rise[tz * map.width + tx]
-      const y = map.elevation && !bridge
-        ? groundHeight(map, s.x + map.width / 2 - 0.5, s.z + map.depth / 2 - 0.5) : s.y
+      const y = walkingSurface(map, s.x, s.z).height
       group.position.set(s.x, y, s.z)
       // Keep baked bodies at their authored proportions.
       group.scale.y = 1
@@ -198,7 +194,7 @@ export function Travelers({
               groupRefs.current[index] = node
             }}
           >
-            <TravelerFigure appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
+            <TravelerFigure map={map} appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
               characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
             <group name="carried-logs" visible={false} position={[0, 0.35, 0.2]} rotation={[0, 0, Math.PI / 2]} onClick={select}>
               <mesh><cylinderGeometry args={[0.12, 0.12, 0.6, 6]} /><meshLambertMaterial color="#89613c" /></mesh>
