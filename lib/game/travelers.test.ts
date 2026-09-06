@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { generateTravelers, travelerCountForMap, TRAVELER_TYPES } from "./travelers"
+import { POPULATION_PROFILES, travelerAppearance } from "./base-person/population"
 
 describe("travelerCountForMap", () => {
   it("preserves the default crowd and scales with map area", () => {
@@ -28,6 +29,25 @@ describe("travelerCountForMap", () => {
 })
 
 describe("generateTravelers", () => {
+  it("matches first names to the rendered population profile across seeds and callings", () => {
+    const women = new Set([
+      "Berta", "Dilys", "Frida", "Hawise", "Isolde", "Maude", "Osanna",
+      "Quenild", "Sybil", "Wilmot", "Ysabel",
+    ])
+    const callings = { Male: new Set<string>(), Female: new Set<string>() }
+    for (const seed of [0, 7, 12345, 31337]) {
+      for (const traveler of generateTravelers(seed, 500)) {
+        const { variant } = travelerAppearance(seed, traveler.id)
+        const { bodyType } = POPULATION_PROFILES[variant]
+        expect(women.has(traveler.name.split(" ")[0]), traveler.name).toBe(bodyType === "Female")
+        callings[bodyType].add(traveler.type.id)
+      }
+    }
+    for (const seen of Object.values(callings)) {
+      expect([...seen].sort()).toEqual(Object.keys(TRAVELER_TYPES).sort())
+    }
+  })
+
   it("is fully determined by its seed", () => {
     const a = generateTravelers(12345, 20)
     const b = generateTravelers(12345, 20)
