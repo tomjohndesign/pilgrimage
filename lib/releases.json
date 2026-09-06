@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "a1c9c4fd42a50330e1a33f3386c128045c858c19",
-  "releaseCount": 53,
+  "lastProcessedCommit": "b8e3b275a806bd51346a0e811b2d3f76db6c7270",
+  "releaseCount": 54,
   "releases": [
+    {
+      "version": "0.0.68",
+      "title": "Release 0.0.68",
+      "summary": "Make early shrine visits harder and balance needs around five-minute days (#88)",
+      "commit": "b8e3b275a806bd51346a0e811b2d3f76db6c7270"
+    },
     {
       "version": "0.0.67",
       "title": "Release 0.0.67",
