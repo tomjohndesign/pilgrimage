@@ -153,7 +153,12 @@ describe("generateMap", () => {
             expect(terrain, `seed ${seed} hovel stands on grass`).toBe("grass")
           } else {
             expect(["grass", "path", "track"], `seed ${seed} shrine margin remains walkable`).toContain(terrain)
-            if (terrain === "track") expect(map.site!.branch.some(p => p.x === hovel.x + dx && p.z === hovel.z + dz), `seed ${seed} only the approach is paved`).toBe(true)
+            if (terrain === "track") {
+              const onApproach = map.site!.branch.some(p => p.x === hovel.x + dx && p.z === hovel.z + dz)
+              const onShelterPath = (dz === -1 && dx >= (door.z < hovel.z ? 0 : -1) && dx <= (door.z < hovel.z ? 1 : 0)) ||
+                (door.z >= hovel.z && ((dx === -1 && dz >= -1) || (dz === hovel.d && dx <= 1)))
+              expect(onApproach || onShelterPath, `seed ${seed} only the approach and shelter connection are paved`).toBe(true)
+            }
           }
         }
       }

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 import type { BuildingDef } from "@/lib/game/map/types"
+import { rotatedFootprint } from "@/lib/game/building-rotation"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { structureParts } from "@/lib/game/building-art/structure"
 import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
@@ -19,7 +20,7 @@ export function ConstructionProgress({ building, characterScale }: { building: B
   useEffect(() => () => texture.dispose(), [texture])
   const height = useMemo(() => {
     const bounds = new THREE.Box3()
-    for (const part of structureParts(building)) {
+    for (const part of structureParts({ ...building, ...rotatedFootprint(building, building.rotation) })) {
       const transform = new THREE.Matrix4().compose(new THREE.Vector3(...part.position),
         new THREE.Quaternion().setFromEuler(new THREE.Euler(...part.rotation ?? [0, 0, 0])), new THREE.Vector3(1, 1, 1))
       if (part.size) bounds.union(new THREE.Box3(new THREE.Vector3(...part.size).multiplyScalar(-0.5), new THREE.Vector3(...part.size).multiplyScalar(0.5)).applyMatrix4(transform))
