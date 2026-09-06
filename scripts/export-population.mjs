@@ -9,7 +9,7 @@ const browser = await chromium.launch({ headless: true, args: ["--use-angle=meta
 try {
   const page = await browser.newPage()
   await page.goto(new URL("/assets/characters", origin).href, { waitUntil: "domcontentloaded", timeout: 120_000 })
-  await page.waitForFunction(() => window.__bakePersonPopulation)
+  await page.waitForFunction(() => window.__bakePersonPopulation, undefined, { timeout: 120_000 })
   page.on("pageerror", error => console.error(error.message))
   let lastProgress = -1
   await page.exposeFunction("__reportPopulationProgress", progress => {

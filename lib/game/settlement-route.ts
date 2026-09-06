@@ -12,6 +12,7 @@ export function settlementRoute(
   goal: TilePos,
   logging = false,
   enterShrine = false,
+  seat?: string,
 ): TilePos[] | null {
   if (!tileAt(map, start.x, start.z) || !tileAt(map, goal.x, goal.z)) return null
   const key = (p: TilePos) => p.z * map.width + p.x
@@ -33,7 +34,8 @@ export function settlementRoute(
       const next = { x: p.x + dx, z: p.z + dz }
       const terrain = tileAt(map, next.x, next.z)
       if (!terrain || !(TERRAIN[terrain].passable || (logging && isWoods(terrain)))) continue
-      if (!buildingStepAllowed(map, buildings, p, next, enterShrine)) continue
+      const seatAccess = current === origin || (next.x === goal.x && next.z === goal.z) ? seat : undefined
+      if (!buildingStepAllowed(map, buildings, p, next, enterShrine, seatAccess)) continue
       const index = key(next)
       if (map.tiles[current] !== "bridge" && terrain !== "bridge" && !Number.isFinite(elevationStep(map.elevation, current, index))) continue
       if (parents.has(index)) continue

@@ -193,7 +193,8 @@ const TRACK_MARGIN = 4
 
 export const HOVEL_ID = "hovel"
 /** Footprint of the hovel in tiles. */
-export const HOVEL_SIZE = 3
+export const HOVEL_WIDTH = 3
+export const HOVEL_DEPTH = 5
 
 /**
  * How far the hovel sits from the nearest road tile, in grid steps. Far — a
@@ -970,17 +971,17 @@ function foundSite(
   let best: TilePos = { x: EDGE_MARGIN, z: EDGE_MARGIN }
   let bestScore = -Infinity
   const outerMin = EDGE_MARGIN + 1 // leave room for the grass ring
-  for (let z = outerMin; z <= depth - HOVEL_SIZE - outerMin; z++) {
-    for (let x = outerMin; x <= width - HOVEL_SIZE - outerMin; x++) {
+  for (let z = outerMin; z <= depth - HOVEL_DEPTH - outerMin; z++) {
+    for (let x = outerMin; x <= width - HOVEL_WIDTH - outerMin; x++) {
       let low = Infinity, high = -Infinity
       let onRoad = false
       let grounded = true
       let dryTrack = false
       let nearest = Infinity
-      for (let dz = -1; dz <= HOVEL_SIZE; dz++) {
-        for (let dx = -1; dx <= HOVEL_SIZE; dx++) {
+      for (let dz = -1; dz <= HOVEL_DEPTH; dz++) {
+        for (let dx = -1; dx <= HOVEL_WIDTH; dx++) {
           const i = (z + dz) * width + (x + dx)
-          const inFootprint = dx >= 0 && dx < HOVEL_SIZE && dz >= 0 && dz < HOVEL_SIZE
+          const inFootprint = dx >= 0 && dx < HOVEL_WIDTH && dz >= 0 && dz < HOVEL_DEPTH
           // Footprint and ring must be dry, reachable land — no water, no
           // bridges, no lake-locked pockets.
           if (roadLand[i] !== 1) grounded = false
@@ -1004,19 +1005,19 @@ function foundSite(
       const bridgePenalty = dryTrack ? 0 : (width + depth) * 50
 
       let room = 0
-      for (let dz = -SITE_ROOM_RADIUS; dz < HOVEL_SIZE + SITE_ROOM_RADIUS; dz++) {
-        for (let dx = -SITE_ROOM_RADIUS; dx < HOVEL_SIZE + SITE_ROOM_RADIUS; dx++) {
+      for (let dz = -SITE_ROOM_RADIUS; dz < HOVEL_DEPTH + SITE_ROOM_RADIUS; dz++) {
+        for (let dx = -SITE_ROOM_RADIUS; dx < HOVEL_WIDTH + SITE_ROOM_RADIUS; dx++) {
           const nx = x + dx
           const nz = z + dz
           if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
           if (tiles[nz * width + nx] !== "grass") continue
           // The footprint itself counts extra: standing on grass beats being near it.
-          const inFootprint = dx >= 0 && dx < HOVEL_SIZE && dz >= 0 && dz < HOVEL_SIZE
+          const inFootprint = dx >= 0 && dx < HOVEL_WIDTH && dz >= 0 && dz < HOVEL_DEPTH
           room += inFootprint ? 4 : 1
         }
       }
 
-      const edgeDist = Math.min(x, z, width - HOVEL_SIZE - x, depth - HOVEL_SIZE - z)
+      const edgeDist = Math.min(x, z, width - HOVEL_WIDTH - x, depth - HOVEL_DEPTH - z)
       const edgePenalty = Math.max(0, SITE_EDGE_MARGIN - edgeDist) * SITE_EDGE_PENALTY
 
       const score = room - bandPenalty - bridgePenalty - edgePenalty + rng() * SITE_SCORE_JITTER
@@ -1028,9 +1029,9 @@ function foundSite(
   }
 
   const foundation = elevation.height[best.z * width + best.x]
-  // Level the enclosure and its continuous walking path, serving all four gates.
-  for (let dz = -1; dz <= HOVEL_SIZE; dz++) {
-    for (let dx = -1; dx <= HOVEL_SIZE; dx++) {
+  // Level the shrine and grass margin; only the approach branch becomes a path.
+  for (let dz = -1; dz <= HOVEL_DEPTH; dz++) {
+    for (let dx = -1; dx <= HOVEL_WIDTH; dx++) {
       const i = (best.z + dz) * width + (best.x + dx)
       elevation.height[i] = foundation
       if (
@@ -1040,9 +1041,6 @@ function foundSite(
         tiles[i] === "sand"
       ) {
         tiles[i] = "grass"
-      }
-      if ((dx === -1 || dz === -1 || dx === HOVEL_SIZE || dz === HOVEL_SIZE) && tiles[i] !== "path") {
-        tiles[i] = "track"
       }
     }
   }
@@ -1054,11 +1052,9 @@ function foundSite(
   const ring: TilePos[] = []
   // An architectural entrance sits at the centre of a wall. Pick the side
   // with the shortest dry approach, keeping the track aligned with its door.
-  for (const k of [Math.floor(HOVEL_SIZE / 2)]) {
+  for (const k of [Math.floor(HOVEL_WIDTH / 2)]) {
     ring.push({ x: best.x + k, z: best.z - 1 })
-    ring.push({ x: best.x + k, z: best.z + HOVEL_SIZE })
-    ring.push({ x: best.x - 1, z: best.z + k })
-    ring.push({ x: best.x + HOVEL_SIZE, z: best.z + k })
+    ring.push({ x: best.x + k, z: best.z + HOVEL_DEPTH })
   }
   let door = ring[0]
   let junction = lo
@@ -1105,8 +1101,8 @@ function foundSite(
   for (let i = 0; i < branchWander.length; i++) {
     if (onRoad[i]) branchWander[i] += BRANCH_AVOID_COST
   }
-  for (let dz = 0; dz < HOVEL_SIZE; dz++) {
-    for (let dx = 0; dx < HOVEL_SIZE; dx++) {
+  for (let dz = 0; dz < HOVEL_DEPTH; dz++) {
+    for (let dx = 0; dx < HOVEL_WIDTH; dx++) {
       branchWander[(best.z + dz) * width + (best.x + dx)] += BRANCH_AVOID_COST
     }
   }
@@ -1145,12 +1141,12 @@ function foundSite(
 
   const hovel: BuildingDef = {
     id: HOVEL_ID,
-    label: "Relic enclosure",
+    label: "Shrine",
     x: best.x,
     z: best.z,
-    w: HOVEL_SIZE,
-    d: HOVEL_SIZE,
-    height: 0.42,
+    w: HOVEL_WIDTH,
+    d: HOVEL_DEPTH,
+    height: 1.18,
     color: "#e7d8b9",
     roofColor: "#c4a05f",
   }

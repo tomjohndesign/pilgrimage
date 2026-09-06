@@ -4,7 +4,7 @@ Open **Assets → Playground → Buildings** at `/assets/characters?asset=buildi
 
 ## Current direction: Timber & earth, v5
 
-Early medieval rural structures use roundwood posts, woven screens, muted earthen infill, split planks and layered thatch. Avoid decorative late-medieval timber grids, glazed windows, chimneys and dressed-stone trim. The supplied hut photographs guide the small domestic structures; the plastered church models are references for a later, more substantial religious building, not the starting settlement.
+Early medieval rural structures use roundwood posts, woven screens, muted earthen infill, split planks and layered thatch. Avoid decorative late-medieval timber grids, glazed windows and dressed-stone trim; the live pilgrim shelter has a rough stone hearth and chimney. The supplied hut photographs guide the small domestic structures; the supplied church model guides the live shrine’s raised central roof, plastered lower walls and timber upper section.
 
 The construction baseline is informed by [West Stow’s reconstructed Anglo-Saxon village](https://www.weststow.org/anglo-saxon-village/) and [English Heritage’s early medieval architecture overview](https://www.english-heritage.org.uk/learn/story-of-england/early-medieval/architecture/). These support the timber-building direction; the game’s relic enclosure and building dimensions are authored gameplay designs, not archaeological reconstructions of a specific site.
 
@@ -13,14 +13,16 @@ The construction baseline is informed by [West Stow’s reconstructed Anglo-Saxo
 | Relic enclosure | 3×3 | Roofless; low rough timber walls, four open gates, rough flagstones, stone table, loose planks and scattered belongings |
 | Monks’ shelter | 3×2 | Open front, thatched gable, woven windbreaks, straw beds and rolled blankets |
 | Shepherd’s hut | 2×2 | Low earthen and wattle walls, plank door, steep thatched roof, bedding |
-| Raised store | 1×1 | Plank floor and walls on timber legs, grain sack, small thatched gable |
+| Raised store | 1×1 | Open timber posts, raised plank floor and entry ramp, grain sack, small thatched gable |
 | Wood shelter | 2×1 | Open lean-to, woven windbreaks, stacked firewood |
 
 Every width and depth is an integer from **1 to 5 tiles**. Dimensions describe the building itself, including its eaves; there is no surrounding tile allowance. Choosing a preset restores its authored proportions. The roof control is omitted for the open enclosure. All four isometric views come from the same model, and the preview uses actual game terrain and current base-character sprites at the game’s default scale.
 
 `early-geometry.ts` owns the new construction; `materials.ts` supplies its reusable muted palette. `buildingParts` dispatches between current structures and archived cottage models. `BuildingModel` batches fine details by layer and material before rendering through the existing `PixelCanvas`; selection still uses the existing object-ID renderer. Seeded paving, palings and straw stay deterministic across camera angles.
 
-The live starting shrine uses the **3×3 enclosure**, with the relic placed on `RELIC_TABLE_TOP` from the same model. The relic is visible and selectable without hiding the walls. `RelicDisplay` renders the same relic in the playground and game: a small cross on its lid, a warm halo, light over the paving and a point light pulse together every 3.2 seconds. Only mounted relic previews request animation frames. Plain crosses mark all four enclosure gateposts and both gables of the monks’ shelter; utility huts remain unadorned. The approach path meets a centred gate; the other gates remain visible openings. Pathfinding still treats the building footprint as occupied, as before. The other four types are workshop assets and are not automatically placed around the shrine or added to the settlement build menu.
+The live starting shrine uses a **3×5 footprint**, one entrance facing the founding track, four kneelers beside a central aisle, and a stone altar towards the rear. Its rough stone lower courses rise to the window sills, with uneven plaster above and arched openings in the raised timber section. Two lower thatched slopes meet the raised central roof, with a front cross and a larger rear cross on a small steeple. Candle stands flank the rear altar. Selecting any building removes the roof and near walls while retaining the walls opposite the camera. The relic, visitor headings and monks’ procession pickup share the same altar position; all shrine traffic crosses the single entrance. Only the approach to this door is paved. Visitors reserve separate kneelers, enter by the aisle, kneel facing the altar, and retrace their route when leaving. The workshop’s roofless enclosure remains a separate study.
+
+Live settlement buildings share geometry with construction previews and menu thumbnails. The woodcutter’s hut has a plain plank lean-to, floor straw beds, lumber, axes, chisels, a long saw, a hand-cranked sharpening stone, offcuts and sawdust. The pilgrim shelter has bedding, hanging clothes, a table, a chest and a corner hearth. `BuildingSmoke` is a reusable pixel-scale sprite emitter placed at the chimney mouth; the fire remains visible in cutaway. Storehouses have open sides and an entry ramp; their food and timber still reflect live inventories.
 
 ## Recipes and inspection
 

@@ -1,14 +1,15 @@
+import { wallSide } from "./cutaway"
 import type { BuildingDef } from "../map/types"
 import { buildingParts, type BuildingPart } from "./geometry"
 import { earlyBuildingParts, type SettlementBuildingType } from "./early-geometry"
-import { DEFAULT_RECIPE, EARLY_BUILDINGS, earlyBuildingRecipe } from "./style"
+import { EARLY_BUILDINGS, earlyBuildingRecipe } from "./style"
 
 export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor">
 
 /** Roof proportions for the original catalogue, using the shared rural kit. */
 const SETTLEMENT_ROOFS = {
   shelter: 0.55,
-  workshop: 0.6,
+  workshop: 0.3,
   hall: 0.75,
   garden: 0,
   cross: 0,
@@ -62,16 +63,14 @@ export function structureParts(building: StructureAppearance): BuildingPart[] {
   })
 }
 
-/** Cut away the shell while retaining the floor, furnishings and live contents. */
-export function visibleStructureParts(parts: BuildingPart[], cutaway: boolean): BuildingPart[] {
-  return cutaway ? parts.filter(p => p.layer === "base" || p.layer === "interior") : parts
+/** Remove every roof and the near walls; retain the walls behind the interior. */
+export function visibleStructureParts(parts: BuildingPart[], cutaway: boolean, camera: [number, number] = [1, 1]): BuildingPart[] {
+  return cutaway ? parts.filter(p => {
+    if (p.layer === "roof") return false
+    if (p.layer !== "wall") return true
+    const side = wallSide(p)
+    return side[0] * camera[0] + side[1] * camera[1] < -0.001
+  }) : parts
 }
 
-/** The shrine keeps four open gates beneath a canopy supported at the corners. */
-export function shrineStructureParts(width: number, depth: number): BuildingPart[] {
-  return [
-    ...buildingParts({ ...DEFAULT_RECIPE, width, depth }),
-    ...buildingParts({ ...earlyBuildingRecipe("monk-shelter"), width, depth, wallHeight: 0.9 })
-      .filter(p => p.layer === "roof" || p.name.startsWith("earthfast-post-")),
-  ]
-}
+export { shrineStructureParts } from "./shrine-geometry"

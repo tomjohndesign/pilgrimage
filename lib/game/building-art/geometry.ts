@@ -12,6 +12,7 @@ export interface BuildingPart {
   rotation?: Vec3
   vertices?: number[]
   color: string
+  cutawaySide?: [number, number]
   outline?: boolean
 }
 
