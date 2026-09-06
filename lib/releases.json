@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "3afc120a22a7db8869d945e9ebddd896284bbe7d",
-  "releaseCount": 36,
+  "lastProcessedCommit": "3083f11740391842877510eb4775c3458945aa74",
+  "releaseCount": 37,
   "releases": [
+    {
+      "version": "0.0.51",
+      "title": "Release 0.0.51",
+      "summary": "Lower character ages and add grey hair for older characters (#69)",
+      "commit": "3083f11740391842877510eb4775c3458945aa74"
+    },
     {
       "version": "0.0.50",
       "title": "Release 0.0.50",
