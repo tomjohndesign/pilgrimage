@@ -5,14 +5,14 @@ import { BASE_PERSON, legPose, PERSON_CLIPS, WALK_CLIP_STRIDES, WALK_FRAMES_PER_
 import { DEFAULT_DESIGN, PERSON_PRESETS, personRecipe } from "./design"
 import { DEFAULT_POPULATION, populationVisual } from "./population-assets"
 import { CHARACTER_ASSETS, characterVisual } from "../character-assets"
-import { MONK_VISUAL, monkWalkSpeed, MONK_WALK_TUNING } from "./monk-assets"
+import { MONK_VISUAL, monkVisual, monkWalkSpeed, MONK_WALK_TUNING } from "./monk-assets"
 
 const WALKING_DESIGNS = [...DEFAULT_POPULATION.callings.peasant.designs, ...Object.values(PERSON_PRESETS)]
 
 describe("walking at the rendered person's scale", () => {
   it("ships the current rig and walk frame count in every active character family", () => {
     const base = characterVisual(CHARACTER_ASSETS.peasant, "base")
-    const manifests = [base.walk.url.replace("-walk.png", ".json"), MONK_VISUAL.walk.url.replace("walk.png", "manifest.json")]
+    const manifests = [base.walk.url.replace("-walk.png", ".json"), MONK_VISUAL.walk.url.replace("walk.png", "manifest.json"), monkVisual(40).walk.url.replace("walk.png", "manifest.json")]
     for (const url of manifests) {
       const metadata = JSON.parse(readFileSync(`${process.cwd()}/public${url}`, "utf8"))
       expect(Number(String(metadata.version).replace(/^v/, ""))).toBe(BASE_PERSON.version)

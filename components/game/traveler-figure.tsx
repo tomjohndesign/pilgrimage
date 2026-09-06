@@ -1,5 +1,6 @@
 "use client"
 
+import type { GameMap } from "@/lib/game/map/types"
 import type * as THREE from "three"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 
@@ -68,6 +69,7 @@ function VendorCart({ onClick, awning, idColor }: { onClick?: FigureClickHandler
 }
 
 export function TravelerFigure({
+  map,
   type,
   onClick,
   idColor,
@@ -80,9 +82,12 @@ export function TravelerFigure({
   characterFps,
   walkTuning,
   appearance,
+  age,
 }: {
+  map?: GameMap
   type: TravelerTypeDef
   appearance?: TravelerAppearance
+  age?: number
   selected?: boolean
   idColor?: THREE.Color
   onClick?: FigureClickHandler
@@ -98,7 +103,7 @@ export function TravelerFigure({
   return (
     <>
       <Suspense fallback={null}>
-        <CharacterSprite appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] : undefined)} characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
+        <CharacterSprite map={map} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] : undefined)} characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
       </Suspense>
       {type.id === "vendor" && <VendorCart onClick={onClick} awning={awning} idColor={idColor} />}
     </>

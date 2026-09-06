@@ -24,3 +24,17 @@ it("accepts earlier parameter files and rejects partial invalid bundles atomical
     expect(() => parseCharacterEdits(JSON.stringify(value), "preset/Storybook")).toThrow()
   }
 })
+
+it("preserves v20 walking keys and rescales old splitting keys on import", async () => {
+  const { restoreCharacterDesign } = await import("./share-edits")
+  const { BASE_PERSON, PERSON_CLIPS } = await import("./pose")
+  const key = { frame: 6, radius: 3, offset: [0.02, 0, -0.08] as [number, number, number] }
+  const old = { ...DEFAULT_DESIGN, poseEdits: { walk: { rightHand: [key] }, woodcutting: { rightHand: [key] } } }
+  const imported = parseCharacterEdits(JSON.stringify({ format: "pilgrimage-character-edits", version: 1, templateVersion: 20, character: "preset/Traveler", drafts: { "preset/Traveler": old } }), "preset/Storybook")
+  const design = imported.drafts["preset/Traveler"]
+  expect(design.poseEdits?.walk?.rightHand).toEqual([key])
+  expect(design.poseEdits?.woodcutting?.rightHand?.[0]).toEqual({ ...key, frame: Math.round(6 * PERSON_CLIPS.woodcutting.frames / 24), radius: Math.round(3 * PERSON_CLIPS.woodcutting.frames / 24) })
+  expect(restoreCharacterDesign(old)).toEqual(design)
+  expect(restoreCharacterDesign(design, BASE_PERSON.version)).toEqual(design)
+  expect(old.poseEdits.woodcutting.rightHand[0]).toEqual(key)
+})

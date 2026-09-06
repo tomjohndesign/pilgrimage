@@ -91,8 +91,8 @@ describe("generateTravelers", () => {
         expect(need).toBeGreaterThanOrEqual(0)
         expect(need).toBeLessThanOrEqual(100)
       }
-      expect(a.age).toBeGreaterThanOrEqual(16)
-      expect(a.age).toBeLessThanOrEqual(60)
+      expect(a.age).toBeGreaterThanOrEqual(18)
+      expect(a.age).toBeLessThanOrEqual(["knight", "friar"].includes(t.type.id) ? 65 : 39)
       expect(Number.isInteger(a.gold)).toBe(true)
 
       expect(within(a.skills.length, t.type.skillCount)).toBe(true)

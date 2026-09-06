@@ -3,6 +3,8 @@
 import { create } from "zustand"
 import { validatePersonDesign, type PersonDesign } from "./design"
 import type { BasePersonBake } from "./bake"
+import { BASE_PERSON } from "./pose"
+import { restoreCharacterDesign } from "./share-edits"
 
 const STORAGE = "pilgrimage-person-design-v4"
 let hydrated = false
@@ -20,7 +22,7 @@ export const usePersonDesignStore = create<DesignState>((set, get) => ({
     const design = validatePersonDesign(input)
     if (JSON.stringify(design) !== JSON.stringify(atlas.metadata.design)) throw new Error("Wait for this design to finish rendering.")
     set({ design, atlas, error: "" })
-    try { localStorage.setItem(STORAGE, JSON.stringify(design)) } catch { set({ error: "Applied for this session; browser storage is unavailable." }) }
+    try { localStorage.setItem(STORAGE, JSON.stringify({ ...design, templateVersion: BASE_PERSON.version })) } catch { set({ error: "Applied for this session; browser storage is unavailable." }) }
   },
   reset: () => {
     set({ design: null, atlas: null, error: "" })
@@ -32,7 +34,8 @@ export const usePersonDesignStore = create<DesignState>((set, get) => ({
     try {
       const saved = localStorage.getItem(STORAGE)
       if (!saved) return
-      const design = validatePersonDesign(JSON.parse(saved))
+      const stored = JSON.parse(saved)
+      const design = restoreCharacterDesign(stored, stored?.templateVersion ?? 20)
       set({ design })
       const { cachedPersonBake } = await import("./bake")
       const atlas = cachedPersonBake(design)

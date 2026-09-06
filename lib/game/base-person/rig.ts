@@ -6,6 +6,7 @@ import { staffMotion } from "./staff-motion"
 import { createRoadAccessories } from "./road-accessories"
 import { gatheringMotion } from "./gathering"
 import { woodcuttingMotion, woodcuttingProfile } from "./woodcutting"
+import { splittingMotion, splittingTool } from "./splitting"
 import { personRecipe } from "./design"
 import { armAngle, legPose, pelvisHeight, walkBody, SOCKET_NAMES, type BaseClip, type BodySide, type Point3, type SocketName } from "./pose"
 
@@ -357,30 +358,40 @@ export function createBasePersonRig(recipe = personRecipe()) {
   body.position.y = b.hipHeight
   poseRoot.add(body); root.add(poseRoot)
   const chopping = woodcuttingProfile(recipe.design)
+  const axeHeadHeight = 0.68
   const axe = new THREE.Group()
   axe.name = "woodcutting-axe"
   axe.scale.setScalar(chopping.axeScale)
   const wood = material("#785637"), steel = material("#bac8cf"), grain = material("#d6b57b")
-  mesh(new THREE.CylinderGeometry(0.026, 0.032, 0.66, 6), wood, axe, [0, 0.20, 0])
-  // The broad blade lies in the Y/Z swing plane; X is its thin edge.
-  const blade = mesh(new THREE.BoxGeometry(0.085, 0.22, 0.4), steel, axe, [0, 0.46, 0.17])
+  const shaft = mesh(new THREE.CylinderGeometry(0.026, 0.032, 0.90, 6), wood, axe, [0, 0.27, 0])
+  shaft.name = "axe-handle"
+  // A slim wedge flares from the socket to a broad, sharpened cutting edge along +Z.
+  const bladeGeometry = new THREE.BoxGeometry(0.09, 0.18, 0.4)
+  const bladeVertices = bladeGeometry.getAttribute("position")
+  for (let i = 0; i < bladeVertices.count; i++) {
+    const edge = (bladeVertices.getZ(i) + 0.2) / 0.4
+    bladeVertices.setX(i, bladeVertices.getX(i) * (1 - 0.88 * edge))
+    bladeVertices.setY(i, bladeVertices.getY(i) * (0.5 + 0.5 * edge))
+  }
+  bladeGeometry.computeVertexNormals()
+  const blade = mesh(bladeGeometry, steel, axe, [0, axeHeadHeight, 0.17])
   blade.name = "axe-head"
   const shine = new THREE.MeshBasicMaterial({ color: "#ecf4f4", toneMapped: false })
   materials.push(shine)
   const glint = new THREE.Group()
   glint.name = "axe-glint"
   for (const side of [-1, 1]) {
-    mesh(new THREE.BoxGeometry(0.005, 0.15, 0.027), shine, glint, [side * 0.045, 0.49, 0.25])
-    mesh(new THREE.BoxGeometry(0.005, 0.027, 0.12), shine, glint, [side * 0.045, 0.49, 0.25])
+    mesh(new THREE.BoxGeometry(0.005, 0.12, 0.027), shine, glint, [side * 0.022, axeHeadHeight + 0.01, 0.25])
+    mesh(new THREE.BoxGeometry(0.005, 0.027, 0.08), shine, glint, [side * 0.022, axeHeadHeight + 0.01, 0.25])
   }
   axe.add(glint)
   const trail = new THREE.Group()
   trail.name = "axe-motion-streaks"
   for (const side of [-1, 1]) {
     const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(side * 0.06, 0.46, 0.17),
-      new THREE.Vector3(side * 0.06, 0.56, -0.03),
-      new THREE.Vector3(side * 0.06, 0.53, -0.22),
+      new THREE.Vector3(side * 0.06, axeHeadHeight, 0.17),
+      new THREE.Vector3(side * 0.06, axeHeadHeight + 0.10, -0.03),
+      new THREE.Vector3(side * 0.06, axeHeadHeight + 0.07, -0.22),
     ])
     mesh(new THREE.TubeGeometry(curve, 8, 0.014, 4, false), steel, trail)
   }
@@ -389,16 +400,48 @@ export function createBasePersonRig(recipe = personRecipe()) {
   axe.visible = false
   const log = new THREE.Group()
   log.name = "woodcutting-log"
-  log.position.z = 0.52
+  log.position.z = 0.82
+  log.position.y = 0.32
   log.scale.setScalar(chopping.logScale)
+  const gripSpacing = 0.18
+  const splitGrip = new THREE.Vector3(0, log.position.y + 0.38 * chopping.logScale + 0.33 * chopping.axeScale,
+    log.position.z - axeHeadHeight * chopping.axeScale)
+  // A low chopping block lets the arms deliver the blow while the chest stays upright.
+  const block = mesh(new THREE.CylinderGeometry(0.20, 0.21, log.position.y, 8), [wood, grain, wood], log,
+    [0, -log.position.y / (2 * chopping.logScale), 0])
+  block.scale.setScalar(1 / chopping.logScale)
+  block.name = "chopping-block"
   const logHalves = [-1, 1].map(side => {
     // Two lengthwise half-cylinders form one upright round until the strike.
     const half = mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.38, 6, 1, false, side < 0 ? Math.PI : 0, Math.PI), [wood, grain, grain], log)
     half.name = side < 0 ? "log-left-half" : "log-right-half"
     const cut = mesh(new THREE.PlaneGeometry(0.28, 0.38), grain, half)
+    cut.name = "log-split-face"
     cut.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2
+    for (const z of [-0.07, 0, 0.07]) {
+      const line = mesh(new THREE.BoxGeometry(0.008, 0.30, 0.012), wood, half, [-side * 0.004, 0, z])
+      line.name = "log-grain"
+    }
     return { half, side }
   })
+  // Earlier pieces remain on the ground as each freshly split pair lands in the pile.
+  const splitPile = new THREE.Group()
+  splitPile.name = "split-wood-pile"
+  for (const { half, side } of logHalves) {
+    const piece = half.clone(true)
+    piece.name = `stacked-${side < 0 ? "left" : "right"}-half`
+    piece.position.set(side * 0.42 / chopping.logScale, 0.14 - log.position.y / chopping.logScale, -0.16 / chopping.logScale)
+    piece.rotation.z = -side * Math.PI / 2
+    splitPile.add(piece)
+  }
+  log.add(splitPile)
+  const replacement = mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.38, 12), [wood, grain, grain], root)
+  replacement.name = "replacement-log"
+  replacement.scale.setScalar(chopping.logScale)
+  replacement.visible = false
+  const supplyPosition = new THREE.Vector3(0.60, 0.19 * chopping.logScale, 0.35)
+  const loadedPosition = new THREE.Vector3(0, log.position.y + 0.19 * chopping.logScale, log.position.z)
+  const logHold = new THREE.Vector3(0, 0.12 * chopping.logScale, -0.12 * chopping.logScale)
   const impact = new THREE.Group()
   impact.name = "woodcutting-impact"
   impact.position.y = 0.38
@@ -411,6 +454,17 @@ export function createBasePersonRig(recipe = personRecipe()) {
   log.add(impact)
   root.add(log)
   log.visible = false
+  const axeImpact = new THREE.Group()
+  axeImpact.name = "axe-impact-lines"
+  axeImpact.position.set(0, axeHeadHeight, 0.27)
+  for (const direction of [[-1, 0, 0], [1, 0, 0], [-0.6, 1, 0.7], [0.6, 1, 0.7], [-0.6, -0.7, 1], [0.6, -0.7, 1]]) {
+    const ray = new THREE.Vector3(...direction).normalize()
+    const mark = mesh(new THREE.BoxGeometry(0.035, 0.26, 0.035), shine, axeImpact)
+    mark.position.copy(ray).multiplyScalar(0.27)
+    mark.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ray)
+  }
+  axe.add(axeImpact)
+  axeImpact.visible = false
   const basket = new THREE.Group()
   basket.name = "gathering-basket"
   basket.position.set(-0.43, 0.115, 0.3)
@@ -558,6 +612,10 @@ export function createBasePersonRig(recipe = personRecipe()) {
     pose(phase: number, clip: BaseClip = "walk") {
       const wave = Math.sin(phase * Math.PI * 2)
       const swing = woodcuttingMotion(phase, chopping)
+      const split = splittingMotion(phase)
+      const tool = splittingTool(phase, b.shoulderHeight, b.hipHeight, splitGrip.toArray() as Point3)
+      const splitRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(tool.pitch, tool.yaw, tool.roll, "YXZ"))
+      const splitAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(splitRotation)
       const gathering = gatheringMotion(phase)
       const motion = walkBody(phase, clip)
       const devotional = recipe.design.walkStyle === "Devotional" && clip === "walk"
@@ -567,25 +625,40 @@ export function createBasePersonRig(recipe = personRecipe()) {
       body.rotation.y = motion.hipYaw
       chest.rotation.y = motion.chestYaw - motion.hipYaw
       const seated = clip === "sitting", praying = clip === "praying"
-      const sleep = clip === "sleeping", chop = clip === "woodcutting", gather = clip === "gathering"
+      const felling = clip === "treeFelling", splitting = clip === "woodcutting"
+      const sleep = clip === "sleeping", chop = felling || splitting, gather = clip === "gathering"
       const drop = pelvisHeight(phase, clip, b) - b.hipHeight
+      // Slide the resting grip up the shaft as the hips lower, keeping the blade above the ground.
+      const heldGrip = new THREE.Vector3(tool.x, tool.y + (drop - 0.02) * split.parked, tool.z)
+      const shaftGrip = splitting ? THREE.MathUtils.clamp(axeHeadHeight - (heldGrip.y - (0.10 * chopping.axeScale + 0.035)) / chopping.axeScale, 0, 0.50) * split.parked : 0
       poseRoot.rotation.set(sleep ? -Math.PI / 2 : 0, sleep && female ? Math.PI / 2 : 0, 0)
       poseRoot.position.set(0, sleep ? female ? b.shoulderOffset + 0.06 : b.torsoTop * 0.78 : 0, sleep ? (b.headCenter + b.headHeight) / 2 + 0.03 : 0)
       body.position.y = b.hipHeight + drop
-      body.rotation.x = gather ? 0.18 + gathering.reach * 0.3 : chop ? 0.08 + (1 - swing.lift) * chopping.lean : praying ? 0.12 + wave * 0.025 : sleep ? wave * 0.008 : seated ? 0.035 * wave : 0
+      body.rotation.x = gather ? 0.18 + gathering.reach * 0.3 : felling ? 0.10 : splitting ? split.lean : praying ? 0.12 + wave * 0.025 : sleep ? wave * 0.008 : seated ? 0.035 * wave : 0
+      body.rotation.y = felling ? swing.twist : splitting ? split.twist : motion.hipYaw
+      if (splitting) headPivot.rotation.x = -body.rotation.x * 0.65
+      headPivot.rotation.y = felling ? -swing.twist * 0.55 : splitting ? -split.twist * 0.6 : -motion.chestYaw
       basket.visible = gather
       picked.visible = gather && gathering.holding
       contents.visible = gather && gathering.deposited
       pillow.visible = snores.visible = sleep
       snores.position.set(0.08, 0.55 + phase % 1 * 0.1, pillow.position.z)
-      axe.visible = log.visible = chop
-      impact.visible = chop && swing.impact
-      glint.visible = chop && swing.glint
-      trail.visible = chop && swing.striking
+      axe.visible = chop
+      log.visible = splitting
+      replacement.visible = splitting
+      replacement.position.copy(supplyPosition).lerp(loadedPosition, split.logTravel)
+      replacement.position.y += Math.sin(split.logTravel * Math.PI) * 0.20
+      impact.visible = splitting && split.impact
+      axeImpact.visible = felling ? swing.impact : splitting && split.impact
+      glint.visible = felling ? swing.glint : splitting && split.glint
+      trail.visible = felling ? swing.striking : splitting && split.striking
       for (const { half, side } of logHalves) {
-        const tilt = swing.split * 1.15
+        const tilt = split.falling * Math.PI / 2
         const groundedY = 0.19 * Math.cos(tilt) + 0.14 * Math.sin(tilt)
-        half.position.set(side * swing.split * 0.48, groundedY + Math.sin(swing.split * Math.PI) * 0.18, swing.split * 0.06)
+        // Gravity pulls the opened halves off the block; their cut faces finish upwards.
+        half.position.set(side * split.falling * 0.42 / chopping.logScale,
+          groundedY - log.position.y / chopping.logScale * split.falling ** 2,
+          -split.falling * 0.16 / chopping.logScale)
         half.rotation.z = -side * tilt
       }
       for (const { geometry, positions, rest } of drapedParts) {
@@ -600,23 +673,25 @@ export function createBasePersonRig(recipe = personRecipe()) {
             (longGarment && (clip === "walk" || clip === "carrying") ? wave * 0.035 * recipe.design.stride * weight * weight : 0)
           const groundY = b.hipHeight + (0.035 - body.position.y + drapeZ * (geometry === torso.geometry ? torso.scale.z : 1) * Math.sin(body.rotation.x)) / Math.cos(body.rotation.x)
           if (longGarment && chop && y < waist) {
-            // Keep the hem around the planted legs as the chest bends into the blow.
-            // Counter-rotate progressively below the waist, anchoring the hem fully.
-            const angle = -body.rotation.x * Math.min(1, weight)
-            const localY = standingY - b.hipHeight
-            const localZ = drapeZ * (geometry === torso.geometry ? torso.scale.z : 1)
-            positions.setY(i, b.hipHeight + localY * Math.cos(angle) - localZ * Math.sin(angle))
-            positions.setZ(i, (localY * Math.sin(angle) + localZ * Math.cos(angle)) / (geometry === torso.geometry ? torso.scale.z : 1))
+            // Spread the garment over the wider stance, keeping its hem planted as the torso twists.
+            const xScale = geometry === torso.geometry ? torso.scale.x : 1
+            const zScale = geometry === torso.geometry ? torso.scale.z : 1
+            const w = Math.min(1, weight)
+            const point = new THREE.Vector3(rest[i * 3] * xScale * (1 + 0.45 * w), y - b.hipHeight - drop * w, drapeZ * zScale)
+            point.applyQuaternion(new THREE.Quaternion().slerp(body.quaternion.clone().invert(), w))
+            positions.setXYZ(i, point.x / xScale, point.y + b.hipHeight, point.z / zScale)
           } else {
+            positions.setX(i, rest[i * 3])
             positions.setY(i, seated || praying || gather ? Math.max(y, 0.07 - drop, groundY) : standingY)
             positions.setZ(i, drapeZ)
           }
           const twist = (motion.chestYaw - motion.hipYaw) * Math.max(0, Math.min(1,
             (y - waist) / (b.chestHeight - waist)))
           const depthScale = geometry === torso.geometry ? torso.scale.z : 1
+          const currentX = positions.getX(i)
           const currentZ = positions.getZ(i) * depthScale
-          positions.setX(i, x * Math.cos(twist) + currentZ * Math.sin(twist))
-          positions.setZ(i, (-x * Math.sin(twist) + currentZ * Math.cos(twist)) / depthScale)
+          positions.setX(i, currentX * Math.cos(twist) + currentZ * Math.sin(twist))
+          positions.setZ(i, (-currentX * Math.sin(twist) + currentZ * Math.cos(twist)) / depthScale)
         }
         positions.needsUpdate = true
         geometry.computeVertexNormals()
@@ -626,6 +701,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
         bone(limb.thigh, leg.hip, leg.knee)
         bone(limb.shin, leg.knee, leg.ankle)
         limb.foot.position.set(leg.ankle[0], leg.ankle[1] - b.ankleHeight + b.footHeight / 2, leg.ankle[2] + b.footLength * 0.22)
+        limb.foot.rotation.y = chop ? (limb.side === "left" ? 1 : -1) * 0.22 : 0
         limb.shoulder.position.y = b.shoulderHeight - waist - (limb.rear ? 0.045 : 0)
         const seamStart = limb.seamStart.clone()
         seamStart.y -= waist
@@ -641,7 +717,8 @@ export function createBasePersonRig(recipe = personRecipe()) {
           (limb.side === "left" ? 0 : Math.PI) - 0.35)) * 0.14 * recipe.design.armSwing : 0
         limb.elbow.rotation.set(-THREE.MathUtils.degToRad(recipe.design.elbowBend) - elbowSwing, 0, 0)
         const sign = limb.side === "left" ? 1 : -1
-        limb.hand.position.set(0, -b.forearmLength - 0.025 * recipe.design.hands, 0)
+        limb.hand.position.set(0, -b.forearmLength - (chop ? 0.04 : 0.025) * recipe.design.hands, 0)
+        limb.hand.scale.set(chop ? 0.065 : 0.043, chop ? 0.055 : 0.06, chop ? 0.060 : 0.04).multiplyScalar(recipe.design.hands)
         limb.hand.quaternion.identity()
         if (recipe.design.walkingStick && (clip === "walk" || clip === "idle") && limb.side === "right") {
           const { grip } = staffMotion(phase, b, clip === "walk", recipe.design.poseEdits)
@@ -654,8 +731,25 @@ export function createBasePersonRig(recipe = personRecipe()) {
         }
         else if (devotional) reach(limb, [sign * 0.018, waist - b.hipHeight + 0.045 + sign * 0.015, 0.30])
         else if (praying) reach(limb, [sign * 0.035, b.chestHeight - b.hipHeight, 0.33])
-        else if (chop) {
-          reach(limb, [sign * 0.035, -0.08 + swing.lift * (0.3 + chopping.reach), 0.40 - swing.lift * 0.17])
+        else if (felling) {
+          // Carry the two-handed grip with the chest as it twists, within both arms' reach.
+          const target = new THREE.Vector3(Math.sin(swing.twist) * 0.28,
+            b.shoulderHeight - 0.22, Math.cos(swing.twist) * 0.28)
+          target.add(new THREE.Vector3(Math.sin(swing.yaw), 0, Math.cos(swing.yaw))
+            .multiplyScalar(sign * gripSpacing * chopping.axeScale / 2))
+          target.sub(body.position).applyQuaternion(body.quaternion.clone().invert())
+          reach(limb, target.toArray() as Point3, true)
+        } else if (splitting) {
+          const target = heldGrip.clone()
+          if (limb.side === "left") {
+            target.addScaledVector(splitAxis, gripSpacing * chopping.axeScale)
+            const handLog = replacement.position.clone().add(logHold)
+            const resting = new THREE.Vector3(0.36, b.hipHeight + 0.10, 0.20)
+            resting.lerp(handLog, split.reachLog)
+            target.lerp(resting, split.release)
+          }
+          target.sub(body.position).applyQuaternion(body.quaternion.clone().invert())
+          reach(limb, target.toArray() as Point3, true)
         } else if (clip === "carrying") reach(limb, [sign * 0.2, 0.15, 0.34])
         else if (gather) {
           const target = limb.side === "left" ? new THREE.Vector3(b.legOffset, 0.26, 0.34) :
@@ -696,9 +790,14 @@ export function createBasePersonRig(recipe = personRecipe()) {
       root.updateMatrixWorld(true)
       roadAccessories.pose(clip, phase)
       if (chop) {
-        const desired = body.getWorldQuaternion(new THREE.Quaternion()).multiply(
-          new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 2.15 - swing.lift * 2.35))
+        const toolRotation = felling
+          ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), swing.yaw + Math.PI / 2)
+            .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2))
+          : splitRotation
+        // The blade stays vertical at contact, independently of the character's forward bend.
+        const desired = root.getWorldQuaternion(new THREE.Quaternion()).multiply(toolRotation)
         axe.quaternion.copy(sockets.rightHand.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(desired))
+        axe.position.set(0, -shaftGrip * chopping.axeScale, 0).applyQuaternion(axe.quaternion)
         axe.updateMatrixWorld(true)
       }
       // Long garments cover bent legs too; expose only the toes below the draped hem.

@@ -342,6 +342,12 @@ describe("tree resources and timber storage", () => {
     s.z = tileToWorldZ(map, camp.z + camp.d - 1)
     run(sim, [t], map, 30, () => s.activity === "working")
     expect(s.activity).toBe("working")
+    expect(s.workTarget).not.toBeNull()
+    expect(s.x).toBeCloseTo(s.workTarget!.x)
+    expect(s.z).toBeCloseTo(s.workTarget!.z)
+    const trunkDistance = Math.hypot(s.x - trees[0].x, s.z - trees[0].z)
+    expect(trunkDistance).toBeGreaterThan(0.25)
+    expect(trunkDistance).toBeLessThan(0.65)
     run(sim, [t], map, 10)
     const resource = sim.treeResources.get(0)!
     expect(resource.health).toBeGreaterThan(0)
@@ -356,6 +362,10 @@ describe("tree resources and timber storage", () => {
     expect(sim.piles.size).toBe(0)
     run(sim, [t], map, 10, () => s.carrying > 0)
     expect(s.carrying).toBe(TIMBER_LOAD)
+    const departure = { x: s.x, z: s.z }
+    stepSim(sim, [t], map, 1.5, 0)
+    expect(s.x).toBeCloseTo(departure.x)
+    expect(s.z).toBeCloseTo(departure.z)
     expect(resource.remainingWood).toBe(resource.wood - TIMBER_LOAD)
     expect(sim.wood).toBe(0)
     expect(sim.piles.size).toBe(0)

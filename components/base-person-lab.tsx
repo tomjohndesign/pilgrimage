@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, ArrowUpRight, Check, Pause, Play, RotateCcw, SlidersHorizontal, X } from "lucide-react"
+import { ArrowUpRight, Check, Pause, Play, RotateCcw, X } from "lucide-react"
+import { AssetEditorFrame, type AssetEditorNavigation } from "./asset-editor-frame"
 import { Section, Tuner } from "@/components/game/property-controls"
 import "./game/game-hud.css"
 import "./base-person-lab.css"
@@ -14,7 +15,7 @@ import { DEFAULT_DESIGN, DESIGN_CONTROLS, HAIR_STYLES, HAT_STYLES, TUNIC_STYLES,
 import { usePopulationStore } from "@/lib/game/base-person/population-store"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 
-import { characterEditsJson, parseCharacterEdits } from "@/lib/game/base-person/share-edits"
+import { characterEditsJson, parseCharacterEdits, restoreCharacterDesign } from "@/lib/game/base-person/share-edits"
 import { RigOverlay, RigInspector } from "./person-rig-editor"
 import { inspectRig } from "@/lib/game/base-person/rig-inspection"
 import { poseOffset, setPoseKey, type EditableJoint, type PoseEdits } from "@/lib/game/base-person/pose-edits"
@@ -45,7 +46,7 @@ function download(url: string, name: string) {
 /** Character proportions and editable animation poses.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0
  */
-export function BasePersonLab() {
+export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   useEffect(() => {
     if (process.env.NODE_ENV !== "development") return
     const target = window as unknown as { __bakePersonPopulation?: (progress?: (done: number) => void) => Promise<unknown> }
@@ -57,6 +58,10 @@ export function BasePersonLab() {
   const [row, setRow] = useState(1)
   const [frame, setFrame] = useState(0)
   const [clip, setClip] = useState<BaseClip>("walk")
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("clip")
+    if (requested && Object.keys(PERSON_CLIPS).includes(requested)) setClip(requested as BaseClip)
+  }, [])
   const [playing, setPlaying] = useState(true)
   const [fps, setFps] = useState(BASE_PERSON.defaultFps)
   const [zoom, setZoom] = useState(6)
@@ -86,7 +91,7 @@ export function BasePersonLab() {
     try {
       const stored = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null")
       if (stored?.drafts) {
-        for (const [id, value] of Object.entries(stored.drafts)) drafts.current[id] = validatePersonDesign(value)
+        for (const [id, value] of Object.entries(stored.drafts)) drafts.current[id] = restoreCharacterDesign(value, stored.templateVersion ?? 20)
         if (drafts.current[stored.character]) { setCharacter(stored.character); setDesign(drafts.current[stored.character]) }
       } else {
         void usePersonDesignStore.getState().hydrate()
@@ -98,7 +103,7 @@ export function BasePersonLab() {
   useEffect(() => {
     if (!draftsReady) return
     drafts.current[character] = design
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ character, drafts: drafts.current })) }
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ templateVersion: BASE_PERSON.version, character, drafts: drafts.current })) }
     catch { setMessage("Browser storage is unavailable. Copy edits as JSON to keep a backup.") }
   }, [design, character, draftsReady])
   const jsonDialog = useRef<HTMLDialogElement>(null)
@@ -124,8 +129,8 @@ export function BasePersonLab() {
       if (Object.keys(imported.drafts).some(id => !available.has(id))) throw new Error("These edits include an unknown character.")
       const merged = { ...drafts.current, [character]: design, ...imported.drafts }
       // Keep a recoverable copy of the pre-import drafts before replacing keys.
-      localStorage.setItem(`${DRAFT_KEY}-before-import`, JSON.stringify({ character, drafts: { ...drafts.current, [character]: design } }))
-      localStorage.setItem(DRAFT_KEY, JSON.stringify({ character: imported.character, drafts: merged }))
+      localStorage.setItem(`${DRAFT_KEY}-before-import`, JSON.stringify({ templateVersion: BASE_PERSON.version, character, drafts: { ...drafts.current, [character]: design } }))
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ templateVersion: BASE_PERSON.version, character: imported.character, drafts: merged }))
       drafts.current = merged
       setCharacter(imported.character); setDesign(merged[imported.character]); setHistory([]); setFuture([]); setPlaying(false)
       setMessage("JSON loaded. Other character drafts kept; previous edits backed up in this browser.")
@@ -187,10 +192,10 @@ export function BasePersonLab() {
     return () => cancelAnimationFrame(request)
   }, [design, clip, frame, sides, sheetMatchesDesign])
   useEffect(() => {
-    if (!playing || clip === "idle") return
+    if (!active || !playing || clip === "idle") return
     const timer = setInterval(() => setFrame((f) => (f + 1) % PERSON_CLIPS[clip].frames), 1000 / (fps * actionPlaybackRate(clip, design)))
     return () => clearInterval(timer)
-  }, [playing, clip, fps, design.bodyType, design.walkStyle])
+  }, [active, playing, clip, fps, design.bodyType, design.walkStyle])
 
   const live = !sheetMatchesDesign && preview?.clip === clip && preview.sides === sides ? preview : null
   const columns = live ? 1 : PERSON_CLIPS[clip].frames
@@ -232,12 +237,11 @@ export function BasePersonLab() {
   })
   const ready = !busy && !error && !!bake && sheetMatchesDesign
 
-  return <section className="game-hud person-editor" aria-label="Base person template">
-    <div className="hud-frame" aria-hidden="true" />
-    <header className="person-header">
-      <div className="person-title"><Link href="/assets" className="hud-action" aria-label="Back to assets"><ArrowLeft size={14} />Assets</Link><h1>Character editor</h1><span className="person-version">Base person · v{BASE_PERSON.version}</span></div>
-      <nav aria-label="Editor navigation"><button className="hud-action person-controls-toggle" aria-expanded={controlsOpen} onClick={() => setControlsOpen(!controlsOpen)}><SlidersHorizontal size={14} />Controls</button><Link className="hud-action" aria-label="On the road" href={`/play?characters=base&baseSize=1.5&fps=${fps}`}><span className="person-road-label">On the road</span><ArrowUpRight size={14} /></Link></nav>
-    </header>
+  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Base person template"
+    version={`Base person · v${BASE_PERSON.version}`} controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(!controlsOpen)}
+    roadHref={`/play?characters=base&baseSize=1.5&fps=${fps}`}
+    status={dragging ? "Live preview · release to finish sprite sheets." : busy ? "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}
+    detail={`8 directions · ${fps} fps`}>
     <div className="person-workspace">
       <aside className={`person-controls hud-well ${controlsOpen ? "is-open" : ""}`} aria-label="Character controls">
         <div className="person-panel-heading"><span>Person</span><button className="hud-close person-controls-toggle" aria-label="Close character controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
@@ -290,13 +294,13 @@ export function BasePersonLab() {
           <Section {...section("Files", false)}>
             <div className="person-file-actions">
               <button className={button} onClick={() => openJson()}>Copy / paste JSON</button>
-              <button className={button} onClick={() => { const url = URL.createObjectURL(new Blob([JSON.stringify(design, null, 2) + "\n"], { type: "application/json" })); download(url, `person-design-v${BASE_PERSON.version}.json`); setTimeout(() => URL.revokeObjectURL(url), 1000) }}>Download parameters</button>
+              <button className={button} onClick={() => { const url = URL.createObjectURL(new Blob([JSON.stringify({ ...design, templateVersion: BASE_PERSON.version }, null, 2) + "\n"], { type: "application/json" })); download(url, `person-design-v${BASE_PERSON.version}.json`); setTimeout(() => URL.revokeObjectURL(url), 1000) }}>Download parameters</button>
               <label className={`${button} person-file-input`}>Load parameters<input aria-label="Load person parameters" type="file" accept="application/json,.json" onChange={async event => {
                 const file = event.target.files?.[0]; event.target.value = ""
                 if (!file) return
                 try {
                   if (file.size > 262144) throw new Error("Parameter files must be under 256 KB.")
-                  setDesign(validatePersonDesign(JSON.parse(await file.text()))); setMessage("Parameters loaded. Preview them, then apply to road.")
+                  const loaded = JSON.parse(await file.text()); setDesign(restoreCharacterDesign(loaded, loaded?.templateVersion ?? 20)); setMessage("Parameters loaded. Preview them, then apply to road.")
                 } catch (e) { setMessage(e instanceof Error ? e.message : "Invalid parameter file.") }
               }} /></label>
               <button className={button} disabled={!ready} onClick={() => bake && download(bake.walk, `base-person-v${BASE_PERSON.version}-walk.png`)}>Download walk sheet</button>
@@ -390,6 +394,5 @@ export function BasePersonLab() {
         <div className="person-json-actions"><button className={button} onClick={() => void copyJson(jsonText)}>Copy JSON</button><button className={button} onClick={() => { const url = URL.createObjectURL(new Blob([editsJson()], { type: "application/json" })); download(url, "character-edits.json"); setTimeout(() => URL.revokeObjectURL(url), 1000) }}>Download all drafts</button><button className={button} onClick={loadJson}>Load JSON</button><button className={button} onClick={() => jsonDialog.current?.close()}>Close</button></div>
       </div>
     </dialog>
-    <footer className="person-status"><span role="status">{dragging ? "Live preview · release to finish sprite sheets." : busy ? "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}</span><span className="person-status-detail">8 directions · {fps} fps</span></footer>
-  </section>
+  </AssetEditorFrame>
 }

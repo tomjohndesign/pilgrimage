@@ -73,7 +73,9 @@ the same leg phase. Fixed FPS is a comparison tool, not the normal movement mode
 
 `walkContact()` selects the supporting foot of the **displayed** rig pose.
 `plantFoot()` anchors it in world space between atlas frames, including its
-height on slopes. Apply the correction to body and outline together. Keep the shared render order
+height on slopes. In the game, pass the map to `CharacterSprite` so new contacts
+sample the walking surface beneath the supporting foot and both depth passes
+follow the local terrain grade. Apply the correction to body and outline together. Keep the shared render order
 and terrain depth shader on both passes; character ground shadows remain disabled.
 Reset the contact at support changes, turns/view changes, stopping or teleports.
 Do not smooth away the correction or cap distance-driven poses at an unrelated
@@ -96,7 +98,9 @@ across the loop seam; the same rig applies them to previews and full bakes.
 Arm and leg IK preserve bone lengths. Walking stance feet remain locked; swing
 feet can be edited. Staff contact edits share the frame-zero ground anchor
 through the contact interval. Editor drafts save separately per character in
-browser storage; downloading parameters makes those edits portable.
+browser storage; downloading parameters or copying JSON makes those edits portable.
+Imports retain v20 walking poses and rescale its 24-frame wood-splitting keys
+to the longer splitting sequence without changing their relative cycle timing.
 
 After changing leg poses or bake geometry, increment the template `version` in
 `assets/recipes/base-person.json`. This is an asset revision, not the game
@@ -105,16 +109,17 @@ release or package version. Tests require every active family to match it.
 Bake the base, every population profile/calling,
 and the Monk preset. Inspect the latest main branch before allocating versions.
 Published bakes are immutable; use new paths and update all active imports only
-after the exports exist. The current exports are base v20, population v11 and
-monks v11. For a subsequent change choose unused versions:
+after the exports exist. The current exports are base v24, population v16 and
+monks v16 (brown hair) / v17 (grey hair). For a subsequent change choose unused versions:
 
 ```sh
 npm run assets:base -- vNEXT --url http://localhost:3219
 npm run assets:population -- vNEXT --url http://localhost:3219
 node scripts/export-monk.mjs vNEXT --url http://localhost:3219
+node scripts/export-monk.mjs vGREY --grey --url http://localhost:3219
 ```
 
-Replace `vNEXT` with an unused numeric version for each family. Custom browser
+Replace `vNEXT` and `vGREY` with unused numeric versions for each family. Custom browser
 designs must be baked through the same current rig, not mapped onto stale sheets.
 
 ## Required verification
@@ -126,7 +131,8 @@ designs must be baked through the same current rig, not mapped onto stale sheets
   discrete poses. Verify no accumulated offset over repeated cycles, correct
   resets, and anchored height on slopes.
 - Run `npm test` and `npm run typecheck`, the base and population asset checkers,
-  and `node scripts/check-base-person.mjs v11 --monk` for the current monk bake.
+  and `node scripts/check-base-person.mjs v16 --monk` for the current monk bake.
+  Also check `node scripts/check-base-person.mjs v17 --monk` for grey-haired monks.
   Check per-clip dimensions, matching shadows,
   palette, binary body alpha, safe margins and attachment registration.
 - Inspect side and diagonal views in the editor and on real road tiles. Check
