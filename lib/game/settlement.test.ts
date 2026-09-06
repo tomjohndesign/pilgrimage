@@ -6,6 +6,9 @@ import type { GameMap } from "./map/types"
 import { generateMonks } from "./monks"
 import { generateRelic, relicDraw } from "./relic"
 import { generateTravelers } from "./travelers"
+import { EARLY_BUILDINGS, earlyBuildingRecipe } from "./building-art/style"
+import { buildingParts } from "./building-art/geometry"
+import { structureParts } from "./building-art/structure"
 import {
   BUILD_CATALOG,
   buildTileError,
@@ -56,6 +59,28 @@ const shelter = BUILD_CATALOG.find((item) => item.id === "shelter")!
 const garden = BUILD_CATALOG.find((item) => item.id === "garden")!
 
 describe("build and buy", () => {
+  it.each(EARLY_BUILDINGS.filter((preset) => preset.id !== "enclosure"))(
+    "buys $name with its playground geometry and reserves its full footprint", (preset) => {
+      const def = BUILD_CATALOG.find((item) => item.id === preset.id)!
+      const at = { x: 10, z: 14 }, map = testMap()
+      const before = { ...createSettlement(), resources: { ...def.cost } }
+      const result = purchaseStructure(before, map, monks, [relic], def.id, at)
+      expect(result.error).toBeNull()
+      expect(result.settlement.resources).toEqual({ gold: 0, wood: 0 })
+      const placed = result.settlement.structures[0]
+      expect([placed.w, placed.d]).toEqual([preset.width, preset.depth])
+      expect(structureParts(placed)).toEqual(buildingParts(earlyBuildingRecipe(preset.id)))
+      expect(structureParts({ ...def, buildType: def.id })).toEqual(structureParts(placed))
+      const farCorner = { x: at.x + def.w - 1, z: at.z + def.d - 1 }
+      const occupied = { ...map, buildings: [...map.buildings, placed] }
+      expect(placementError(occupied, def, farCorner)).toMatch(/occupies/)
+      map.tiles[farCorner.z * map.width + farCorner.x] = "water"
+      const rejected = purchaseStructure(before, map, monks, [relic], def.id, at)
+      expect(rejected.error).toBeTruthy()
+      expect(rejected.settlement).toBe(before)
+    },
+  )
+
   it("keeps influence feedback and footprint checks aware of cliffs and uneven ground", () => {
     const map = testMap(), i = 14 * map.width + 11
     map.elevation = { settings: DEFAULT_ELEVATION, height: Array(900).fill(0), corners: Array(3600).fill(0), cliffs: Array(900).fill(0), slope: Array(900).fill(0) }

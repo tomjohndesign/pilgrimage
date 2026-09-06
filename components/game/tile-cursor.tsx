@@ -1,5 +1,8 @@
 "use client"
 
+import { StructureModel } from "@/components/building-lab/building-model"
+import { structureParts } from "@/lib/game/building-art/structure"
+
 import { useMemo } from "react"
 import { groundHeight } from "@/lib/game/map/elevation"
 
@@ -37,11 +40,12 @@ export function TileCursor({
     return new Float32Array([[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]].flatMap(([x, z]) =>
       [x, onBridge ? (ropeHeightAt(map, hovered.x + x * 0.999, hovered.z + z * 0.999) ?? centre) - centre : groundHeight(map, hovered.x + x * 0.999, hovered.z + z * 0.999) - centre, z]))
   }, [map, hovered])
+  const build = useMemo(() => buildCatalog(balance).find((item) => item.id === buildType), [balance, buildType])
+  const parts = useMemo(() => build ? structureParts({ ...build, buildType: build.id }) : [], [build])
   if (!hovered) return null
 
   if (!tileAt(map, hovered.x, hovered.z)) return null
 
-  const build = buildCatalog(balance).find((item) => item.id === buildType)
   if (build) {
     const valid =
       shrineRenown >= build.requiredRenown &&
@@ -53,18 +57,15 @@ export function TileCursor({
       <group
         position={[
           tileToWorldX(map, hovered.x) + (build.w - 1) / 2,
-          surfaceHeight(map, hovered.x, hovered.z) + 0.04,
+          groundHeight(map, hovered.x + (build.w - 1) / 2, hovered.z + (build.d - 1) / 2),
           tileToWorldZ(map, hovered.z) + (build.d - 1) / 2,
         ]}
       >
-        <mesh renderOrder={4}>
+        <mesh position={[0, 0.04, 0]} renderOrder={4}>
           <boxGeometry args={[build.w, 0.04, build.d]} />
           <meshBasicMaterial color={color} transparent opacity={0.65} depthWrite={false} />
         </mesh>
-        <mesh position={[0, build.height / 2, 0]} renderOrder={4}>
-          <boxGeometry args={[build.w * 0.86, build.height, build.d * 0.86]} />
-          <meshBasicMaterial color={color} wireframe transparent opacity={0.8} depthWrite={false} />
-        </mesh>
+        <StructureModel parts={parts} ghostColor={color} />
       </group>
     )
   }
