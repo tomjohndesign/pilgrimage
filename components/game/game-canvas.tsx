@@ -134,7 +134,7 @@ export function GameCanvas({
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />
       <PixelCharacters>
-        <Monks map={map} monks={monks} flying={blasterPastor} />
+        <Monks map={map} monks={monks} flying={blasterPastor} characterScale={characterScale} />
         <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown}
           characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
       </PixelCharacters>
