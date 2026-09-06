@@ -350,7 +350,9 @@ describe("lumber camps", () => {
     let maxWorkers = 0
     let sawWorking = false
     let sawHauling = false
-    for (let i = 0; i < 6000; i++) {
+    const expectedWood = trees.reduce((sum, tree, index) => sum + treeResource(tree, index, map.seed).wood, 0)
+    // Taller trunks need more hauling trips; wait for delivery within a bounded run.
+    for (let i = 0; i < 12000 && sim.wood < expectedWood; i++) {
       stepSim(sim, travelers, map, 1.5, 0.1)
       const workers = Array.from(sim.travelers.values()).filter((s) => s.employer)
       maxWorkers = Math.max(maxWorkers, workers.length)
@@ -368,7 +370,7 @@ describe("lumber camps", () => {
     expect(maxWorkers).toBe(3)
     expect(sawWorking && sawHauling).toBe(true)
     expect(sim.felled.size).toBe(trees.length)
-    expect(sim.wood).toBe(trees.reduce((sum, tree, index) => sum + treeResource(tree, index, map.seed).wood, 0))
+    expect(sim.wood).toBe(expectedWood)
     expect(Array.from(sim.piles.values()).reduce((sum, pile) => sum + pile.wood, 0)).toBe(sim.wood)
     expect(Array.from(sim.travelers.values()).filter((s) => s.employer)).toHaveLength(3)
   })
