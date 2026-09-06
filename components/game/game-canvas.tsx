@@ -145,7 +145,7 @@ export function GameCanvas({
         showGrid={showGrid}
       />
       <Bridges map={map} roadTier={roadTier} />
-      <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} animatedStumps={characterModel === "base"} />
+      <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} />
       <Environment map={map} />
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />

@@ -138,7 +138,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
     blurb:
       "Master of the southern chalk. A smooth grey trunk under one huge dense dome; the shade beneath is so deep the ground stays bare.",
     trunk: {
-      height: { min: 0.645, max: 1.29 },
+      height: { min: 0.75, max: 1.29 },
       radius: { min: 0.08, max: 0.1 },
       taper: 0.8,
       lean: 0.16,
@@ -214,9 +214,10 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
     label: "Hawthorn",
     latin: "Crataegus monogyna",
     blurb:
-      "The hedge and glade-edge tree, thorny and scruffy. Barely any trunk; a single low untidy blob of green.",
+      "The hedge and glade-edge tree, thorny and scruffy. A short exposed trunk beneath a single untidy blob of green.",
     trunk: {
-      height: { min: 0.21, max: 0.36 },
+      // Even forest-edge scrub leaves a bare trunk at the shared axe's contact height.
+      height: { min: 0.75, max: 0.84 },
       radius: { min: 0.04, max: 0.06 },
       taper: 0.85,
       lean: 0.12,
@@ -242,7 +243,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
     blurb:
       "Dark evergreen of the understorey, winter fodder for the animals. Small, tight and conical, almost black-green against the broadleaves.",
     trunk: {
-      height: { min: 0.27, max: 0.42 },
+      height: { min: 0.75, max: 0.9 },
       radius: { min: 0.04, max: 0.06 },
       taper: 0.86,
       lean: 0.04,

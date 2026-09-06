@@ -645,6 +645,8 @@ export function createBasePersonRig(recipe = personRecipe()) {
       pillow.visible = snores.visible = sleep
       snores.position.set(0.08, 0.55 + phase % 1 * 0.1, pillow.position.z)
       axe.visible = chop
+      // The persistent world stump supports the logs; body atlases never paint a second block.
+      block.visible = false
       log.visible = splitting
       replacement.visible = splitting
       replacement.position.copy(supplyPosition).lerp(loadedPosition, split.logTravel)

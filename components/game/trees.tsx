@@ -72,8 +72,8 @@ function makeCrownGeometry(shape: TreeSpeciesDef["crown"]["shape"]): THREE.Buffe
     : new THREE.IcosahedronGeometry(1, BLOB_DETAIL)
 }
 
-export function Trees({ map, placements: supplied, ents = false, characterScale = BASE_CHARACTER_SCALE, animatedStumps = false }: {
-  map: GameMap; placements?: TreePlacement[]; ents?: boolean; characterScale?: number; animatedStumps?: boolean
+export function Trees({ map, placements: supplied, ents = false, characterScale = BASE_CHARACTER_SCALE }: {
+  map: GameMap; placements?: TreePlacement[]; ents?: boolean; characterScale?: number
 }) {
   const selection = useCameraStore((s) => s.selection)
   const resources = useBuildStore((s) => s.treeResources)
@@ -94,7 +94,7 @@ export function Trees({ map, placements: supplied, ents = false, characterScale 
       <TreeField placements={placements} hidden={felled} onSelect={selectTree} entMap={ents ? map : undefined}
         seed={deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes)} idBase={map.buildings.length} />
       {Array.from(resources, ([id, resource]) => resource.health <= 0 && placements[id]
-        ? <TreeRemains key={id} id={id} objectId={treeObjectId(map.buildings.length, id)} tree={placements[id]} resource={resource} time={time} characterScale={characterScale} animatedStumps={animatedStumps} /> : null)}
+        ? <TreeRemains key={id} id={id} objectId={treeObjectId(map.buildings.length, id)} tree={placements[id]} resource={resource} time={time} characterScale={characterScale} /> : null)}
     </group>
   )
 }
