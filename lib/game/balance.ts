@@ -340,26 +340,41 @@ export const RULE_FIELDS = [
     key: "turnAsideDraw",
     group: "Traveler attraction",
     label: "Turn-aside draw threshold",
-    description: "Attraction score giving a rested traveler a 50% visit chance. Need for hospitality can increase it.",
+    description: "Attraction score giving a fully willing traveler a 50% faith visit chance. Early visits also require exceptional piety.",
     default: 40,
     min: 0,
     max: 1000,
     step: 1,
   },
   {
+    key: "earlyVisitPiety", group: "Traveler attraction", label: "Piety needed at zero renown",
+    description: "Faith visits begin above this piety and reach full willingness at 100. Renown adds up to 100 to effective piety, scaled by the square of renown / draw cap.",
+    default: 90, min: 0, max: 99, step: 1,
+  },
+  {
+    key: "hospitalityNeedThreshold", group: "Traveler attraction", label: "Food or water threshold at zero renown",
+    description: "Only fullness or hydration below this level draws a hospitality visit. Renown raises the threshold toward 60, scaled by the square of renown / draw cap. Tiredness alone does not attract visitors.",
+    default: 20, min: 1, max: 60, step: 1,
+  },
+  {
     key: "hospitalityBaseChance", group: "Traveler attraction", label: "Hospitality chance at zero renown",
-    description: "Maximum chance of visiting for food, drink or rest at an unknown shrine. Scales up to 100% at the renown draw cap; needs below 60 increase the pull, reaching its maximum at 20.",
+    description: "Maximum chance of visiting an unknown shrine for food or water, reached only with an empty meter. Scales down to zero at the food or water threshold.",
     default: 0.1, min: 0, max: 1, step: 0.01,
   },
   {
+    key: "hospitalityRenownBonus", group: "Traveler attraction", label: "Maximum renown hospitality bonus",
+    description: "Added to the maximum hospitality chance at the draw cap, scaled by the square of renown / draw cap. The resulting chance is capped at 100% and still requires food or water need.",
+    default: 0.5, min: 0, max: 1, step: 0.01,
+  },
+  {
     key: "hungerDecay", group: "Traveler needs", label: "Hunger drain per game hour",
-    description: "Fullness lost per game hour. Default: hungry every 8 hours, or three full bars per day. Camping halves this rate; shrine hospitality restores it.",
-    default: 12.5, min: 0, max: 50, step: 0.1,
+    description: "Fullness lost per game hour. Default: 72 points per day, with a full bar lasting about 33 hours. Camping halves this rate; shrine hospitality restores it.",
+    default: 3, min: 0, max: 50, step: 0.1,
   },
   {
     key: "thirstDecay", group: "Traveler needs", label: "Thirst drain per game hour",
-    description: "Hydration lost per game hour. Default: thirsty every 4 hours, or six full bars per day. Camping halves this rate; shrine hospitality restores it.",
-    default: 25, min: 0, max: 50, step: 0.1,
+    description: "Hydration lost per game hour. Default: 144 points per day, with a full bar lasting about 17 hours. Camping halves this rate; shrine hospitality restores it.",
+    default: 6, min: 0, max: 50, step: 0.1,
   },
   {
     key: "staminaDecay", group: "Traveler needs", label: "Stamina drain per game hour",
@@ -525,15 +540,15 @@ export function validateBalance(
   }
   return { balance: clean, error: null }
 }
-export const BALANCE_VERSION = 2
+export const BALANCE_VERSION = 3
 export function exportBalance(balance: GameBalance): string {
   return JSON.stringify({ version: BALANCE_VERSION, balance }, null, 2)
 }
 export function importBalance(json: string): ReturnType<typeof validateBalance> {
   try {
     const preset = record(JSON.parse(json))
-    if (preset?.version !== 1 && preset?.version !== BALANCE_VERSION)
-      return { balance: null, error: "Unsupported preset version. Expected version 1 or 2." }
+    if (preset?.version !== 1 && preset?.version !== 2 && preset?.version !== BALANCE_VERSION)
+      return { balance: null, error: "Unsupported preset version. Expected version 1, 2 or 3." }
     // Add defaults for new structures while retaining all authored settings.
     const saved = record(preset.balance)
     const rules = record(saved?.rules)
@@ -546,7 +561,13 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
         hungerDecay: DEFAULT_BALANCE.rules.hungerDecay,
         thirstDecay: DEFAULT_BALANCE.rules.thirstDecay,
         staminaDecay: DEFAULT_BALANCE.rules.staminaDecay,
+        earlyVisitPiety: DEFAULT_BALANCE.rules.earlyVisitPiety,
+        hospitalityNeedThreshold: DEFAULT_BALANCE.rules.hospitalityNeedThreshold,
+        hospitalityRenownBonus: DEFAULT_BALANCE.rules.hospitalityRenownBonus,
         ...rules,
+        // Adopt slower defaults in old saves without overwriting custom rates.
+        ...(preset.version !== BALANCE_VERSION && rules.hungerDecay === 12.5 ? { hungerDecay: DEFAULT_BALANCE.rules.hungerDecay } : {}),
+        ...(preset.version !== BALANCE_VERSION && rules.thirstDecay === 25 ? { thirstDecay: DEFAULT_BALANCE.rules.thirstDecay } : {}),
       },
       buildings: {
         storehouse: DEFAULT_BALANCE.buildings.storehouse,

@@ -16,7 +16,7 @@ import { DEFAULT_BALANCE, type GameBalance } from "./balance"
 import { buildingAt } from "./settlement"
 import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
 import { BUILDING_KINDS, buildingCentre, type PlacedBuilding } from "./buildings"
-import { generateRelic, visitChance, type RelicStats } from "./relic"
+import { generateRelic, hospitalityNeedThreshold, visitChance, type RelicStats } from "./relic"
 import { settlementRoute } from "./settlement-route"
 import { admissionFee, shrineVisitRoute } from "./shrine-visit"
 import type { TreePlacement } from "./trees/placement"
@@ -952,9 +952,12 @@ export function stepSim(
       case "walking":
       case "seeking":
       case "fleeing": {
-        // Nearby travelers seek the brothers before collapsing or chasing a cart.
+        // A hungry traveler may consider a shrine ahead on their own route.
+        // Never turn them back toward a junction they have already passed.
+        const renown = sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown
+        const ahead = map.site ? s.direction * (map.site.junction - s.progress) : -1
         const shelter = !!map.site && s.gold >= admissionFee(map) && !s.track && s.activity !== "fleeing" && s.visitCooldown <= 0 &&
-          Math.min(s.hunger, s.thirst, s.stamina) <= 40 && Math.abs(s.progress - map.site.junction) <= 12
+          Math.min(s.hunger, s.thirst) < hospitalityNeedThreshold(renown, sim.balance) && ahead >= 0 && ahead <= 12
         if (s.stamina <= 0 && !shelter) {
           startCamping(sim, s, t, map)
           break
@@ -1058,14 +1061,12 @@ export function stepSim(
           break
         }
 
-        if (shelter) direction = map.site!.junction >= s.progress ? 1 : -1
         const site = map.site
         if (site && site.branch.length >= 2 && s.activity !== "fleeing" && s.visitCooldown <= 0) {
           const distance = ((direction * (site.junction - s.progress)) % length + length) % length
           if (distance <= worldSpeed * haste * dt) {
-            const chance = Math.max(visitChance({ ...t.attributes, piety: s.piety,
-              hunger: s.hunger, thirst: s.thirst, stamina: s.stamina }, sim.relic, sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown, sim.balance),
-              findJob(sim, s, map) ? 0.8 : 0)
+            const chance = visitChance({ ...t.attributes, piety: s.piety,
+              hunger: s.hunger, thirst: s.thirst, stamina: s.stamina }, sim.relic, renown, sim.balance)
             s.visitCooldown = 5
             const wantsVisit = nextRoll(s) < chance && s.gold >= admissionFee(map)
             const visitRoute = wantsVisit ? shrineVisitRoute(map, s.id, s.visits) : null

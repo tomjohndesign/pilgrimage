@@ -82,6 +82,20 @@ describe("balance presets", () => {
     expect(result.balance?.buildings.workshop.woodIncome).toBe(0)
     expect(result.balance?.buildings.workshop.goldCost).toBe(71)
   })
+  it.each([1, 2])("updates old default need rates and adds attraction controls in version %i", (version) => {
+    const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
+    old.version = version
+    old.balance.rules.hungerDecay = 12.5
+    old.balance.rules.thirstDecay = 25
+    for (const key of ["earlyVisitPiety", "hospitalityNeedThreshold", "hospitalityRenownBonus"])
+      delete old.balance.rules[key]
+    const result = importBalance(JSON.stringify(old))
+    expect(result.error).toBeNull()
+    expect(result.balance?.rules).toEqual(DEFAULT_BALANCE.rules)
+    old.balance.rules.hungerDecay = 8
+    old.balance.rules.thirstDecay = 10
+    expect(importBalance(JSON.stringify(old)).balance?.rules).toMatchObject({ hungerDecay: 8, thirstDecay: 10 })
+  })
   it.each([NaN, Infinity, -1, 1.5, 100001, "200", null])(
     "rejects invalid starting supplies: %s",
     (value) => {
@@ -91,7 +105,7 @@ describe("balance presets", () => {
   )
   it("rejects missing fields, unknown versions and malformed JSON", () => {
     expect(validateBalance({ rules: {}, buildings: {} }).balance).toBeNull()
-    expect(importBalance('{"version":3}').error).toMatch(/version/)
+    expect(importBalance('{"version":99}').error).toMatch(/version/)
     expect(importBalance("oops").error).toMatch(/JSON/)
   })
   it("preserves custom needs and hospitality settings and rejects invalid values", () => {
