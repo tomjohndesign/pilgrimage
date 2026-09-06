@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { applySpriteDepth } from "@/lib/game/render/sprite-depth"
 import { cameraOffset, yawForView } from "@/lib/game/render/iso"
 import { actorPose, spriteRow, type Character, type LabSettings, type Method } from "@/lib/render-lab/settings"
 import { createWorld, disposeScene, lightScene } from "./world"
@@ -75,7 +76,7 @@ export class LabRenderer {
   private pass = imagePass()
   private bakes: Bake[] = []
   private bakeKey = ""
-  private depth = new THREE.Vector3(Math.SQRT1_2, Math.SQRT2, 1 / (FAR - NEAR))
+  private viewport = new THREE.Vector4()
   private right = new THREE.Vector3()
   private up = new THREE.Vector3()
   private back = new THREE.Vector3()
@@ -117,17 +118,11 @@ export class LabRenderer {
         this.textures.push(texture)
       }
       const material = new THREE.SpriteMaterial({ map: this.textures[i * sources.length], alphaTest: 0.5, transparent: false, toneMapped: false })
-      // Same upright/ground depth correction as the source workspace's
-      // lib/game/render/sprite-depth.ts. Prevents terrain cutting through toes.
-      material.onBeforeCompile = shader => {
-        shader.uniforms.spriteDepth = { value: this.depth }
-        shader.vertexShader = "varying float vSpriteHeight;\n" + shader.vertexShader.replace("#include <fog_vertex>", "#include <fog_vertex>\nvSpriteHeight = (uv.y - center.y) * length(modelMatrix[1].xyz);")
-        shader.fragmentShader = "varying float vSpriteHeight;\nuniform vec3 spriteDepth;\n" + shader.fragmentShader.replace("#include <logdepthbuf_fragment>", `#include <logdepthbuf_fragment>
-          float depthOffset = max(vSpriteHeight * spriteDepth.x, -vSpriteHeight * spriteDepth.y * 1.08);
-          gl_FragDepth = clamp(gl_FragCoord.z - (depthOffset + 0.005) * spriteDepth.z, 0.0, 1.0);`)
-      }
-      material.customProgramCacheKey = () => "lab-person-depth-v1"
+      material.onBeforeCompile = shader => applySpriteDepth(shader, this.viewport)
+      material.onBeforeRender = renderer => { renderer.getCurrentViewport(this.viewport) }
+      material.customProgramCacheKey = () => "lab-person-depth-v2"
       const sprite = new THREE.Sprite(material)
+      sprite.renderOrder = i + 1
       sprite.center.set(0.5, base ? 1 - 48.5 / 64 : 6 / 64)
       this.sprites.push(sprite)
       this.actors.add(sprite)

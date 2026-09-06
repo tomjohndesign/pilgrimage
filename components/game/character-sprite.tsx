@@ -2,7 +2,7 @@
 
 import { ACTION_CLIPS } from "@/lib/game/base-person/pose"
 import { activityClip } from "@/lib/game/base-person/activity"
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 import { characterVisual, spriteRow, type CharacterModel } from "@/lib/game/character-assets"
@@ -17,6 +17,8 @@ import { applySpriteDepth } from "@/lib/game/render/sprite-depth"
 import { OUTLINE_ID_LAYER_MASK, SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import type { FigureClickHandler } from "./traveler-figure"
 
+let nextSpriteOrder = 1
+
 export function CharacterSprite({ type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance }: {
   type: TravelerTypeId
   appearance?: TravelerAppearance
@@ -28,6 +30,7 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
   characterFps?: number
   walkTuning?: WalkTuning
 }) {
+  const [renderOrder] = useState(() => nextSpriteOrder++)
   const asset = useCharacterAssetStore((s) => s.assets[type])
   const custom = usePersonDesignStore((s) => s.atlas)
   const population = usePopulationStore(s => s.pack)
@@ -40,15 +43,14 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
   const fps = characterFps ?? visual.fps
   const textureEntries = useMemo(() => [
     { clip: visual.walk, url: visual.walk.url }, { clip: visual.idle, url: visual.idle.url },
-    ...(visual.shadow ? [{ clip: visual.walk, url: visual.shadow.walk }, { clip: visual.idle, url: visual.shadow.idle }] : []),
     ...ACTION_CLIPS.flatMap(name => {
       const clip = visual.actions[name]
-      return clip ? [{ clip, url: clip.url }, { clip, url: clip.shadow }] : []
+      return clip ? [{ clip, url: clip.url }] : []
     }),
   ], [visual])
   const actionIndices = useMemo(() => {
-    let index = visual.shadow ? 4 : 2
-    return Object.fromEntries(ACTION_CLIPS.flatMap(name => visual.actions[name] ? [[name, (index += 2) - 2]] : []))
+    let index = 2
+    return Object.fromEntries(ACTION_CLIPS.flatMap(name => visual.actions[name] ? [[name, index++]] : []))
   }, [visual])
   const sources = useLoader(THREE.TextureLoader, textureEntries.map(entry => entry.url))
   // Each traveler owns UV state; the loader still shares the decoded image.
@@ -65,22 +67,15 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     return map
   }), [sources, textureEntries, visual.rowOffset])
   useEffect(() => () => textures.forEach((texture) => texture.dispose()), [textures])
-  const depth = useMemo(() => new THREE.Vector3(Math.SQRT1_2, Math.SQRT2, 1 / 400), [])
+  const viewport = useMemo(() => new THREE.Vector4(), [])
   const material = useMemo(() => {
     const material = new THREE.SpriteMaterial({ map: textures[1], alphaTest: 0.5, transparent: false, toneMapped: false })
-    material.onBeforeCompile = (shader) => applySpriteDepth(shader, depth)
-    material.customProgramCacheKey = () => "person-depth-v1"
+    material.onBeforeCompile = (shader) => applySpriteDepth(shader, viewport)
+    material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
+    material.customProgramCacheKey = () => "person-depth-v2"
     return material
-  }, [textures, depth])
+  }, [textures, viewport])
   useEffect(() => () => material.dispose(), [material])
-  const shadowMaterial = useMemo(() => {
-    if (!visual.shadow) return null
-    const material = new THREE.SpriteMaterial({ map: textures[3], transparent: true, depthWrite: false, toneMapped: false })
-    material.onBeforeCompile = shader => applySpriteDepth(shader, depth, true)
-    material.customProgramCacheKey = () => "person-ground-shadow-v1"
-    return material
-  }, [textures, depth, visual.shadow])
-  useEffect(() => () => shadowMaterial?.dispose(), [shadowMaterial])
   const center = useMemo(() => new THREE.Vector2(...visual.center), [visual])
   const sprite = useRef<THREE.Sprite>(null)
   const clock = useRef(0)
@@ -99,19 +94,18 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     // Embedding IDs in shader source compiled a new program for every person.
     const id = new THREE.Vector3(...outlineColor)
     material.onBeforeCompile = (shader) => {
-      applySpriteDepth(shader, depth)
+      applySpriteDepth(shader, viewport)
       shader.uniforms.travelerId = { value: id }
       shader.fragmentShader = "uniform vec3 travelerId;\n" + shader.fragmentShader.replace("#include <map_fragment>",
         "#include <map_fragment>\ndiffuseColor.rgb = travelerId;")
     }
-    material.customProgramCacheKey = () => "traveler-id-v3"
+    material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
+    material.customProgramCacheKey = () => "traveler-id-v4"
     return material
-  }, [textures, depth, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [textures, viewport, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => outlineMaterial?.dispose(), [outlineMaterial])
 
   useFrame(({ camera }, delta) => {
-    const pitch = Math.max(0.01, Math.abs(camera.matrixWorld.elements[9] / camera.matrixWorld.elements[5]))
-    depth.set(pitch, 1 / pitch, Math.abs(camera.projectionMatrix.elements[10]) / 2)
     const parent = sprite.current?.parent
     if (!parent) return
     // Road groups publish heading alongside position; avoid walking the scene
@@ -152,18 +146,13 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     texture.offset.set(frame / clip.columns, (clip.rows - 1 - row) / clip.rows)
     material.map = texture
     if (outlineMaterial) outlineMaterial.map = texture
-    if (shadowMaterial) {
-      const shadowTexture = textures[actionIndex !== undefined ? actionIndex + 1 : moving ? 2 : 3]
-      shadowTexture.offset.copy(texture.offset)
-      shadowMaterial.map = shadowTexture
-    }
   })
 
+  // Equal-depth overlaps must choose the same traveler in the color and ID passes.
   return (
     <>
-      {shadowMaterial && <sprite name="traveler-shadow" material={shadowMaterial} scale={[size, size, 1]} center={center} raycast={() => {}} />}
-      <sprite ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name="traveler" material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync === true }} />
-      {outlineMaterial && <sprite layers-mask={OUTLINE_ID_LAYER_MASK} material={outlineMaterial}
+      <sprite renderOrder={renderOrder} ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name="traveler" material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync === true }} />
+      {outlineMaterial && <sprite renderOrder={renderOrder} layers-mask={OUTLINE_ID_LAYER_MASK} material={outlineMaterial}
         scale={[size, size, 1]} center={center} />}
     </>
   )
