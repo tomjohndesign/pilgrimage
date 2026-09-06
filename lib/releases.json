@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "185cecb0e9b9c03f3aab16ce1d6837417776d96d",
-  "releaseCount": 25,
+  "lastProcessedCommit": "01fb0fca22476e495549e63423b712a02294d71d",
+  "releaseCount": 26,
   "releases": [
+    {
+      "version": "0.0.40",
+      "title": "Release 0.0.40",
+      "summary": "Match scenery and outline pixels to character scale (#59)",
+      "commit": "01fb0fca22476e495549e63423b712a02294d71d"
+    },
     {
       "version": "0.0.39",
       "title": "Release 0.0.39",
