@@ -153,19 +153,19 @@ describe("stepSim", () => {
     const s = sim.travelers.get(0)!
     const hour = GAME_DAY_SECONDS / 24
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([67.5, 55, 75.8])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([77, 74, 75.8])
 
     Object.assign(sim.balance.rules, { hungerDecay: 2, thirstDecay: 6, staminaDecay: 0 })
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([65.5, 49, 75.8])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([75, 68, 75.8])
 
     s.activity = "camping"
     s.stamina = 0
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([64.5, 46, 60])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([74, 65, 60])
   })
 
-  it("uses three full hunger bars, six thirst bars and one stamina bar per active day", () => {
+  it("keeps food and water supplied longer over an active day", () => {
     const map = makeMap()
     const travelers = [makeTraveler(0, "knight", { hunger: 100, thirst: 100, stamina: 100 })]
     const sim = createSim(travelers, map)
@@ -180,7 +180,7 @@ describe("stepSim", () => {
         s.activity = "walking"
       }
     }
-    expect(depleted).toEqual({ hunger: 3, thirst: 6, stamina: 1 })
+    expect(depleted).toEqual({ hunger: 0, thirst: 1, stamina: 1 })
     expect(sim.time).toBeCloseTo(1.25)
   })
 
@@ -305,7 +305,7 @@ describe("stepSim", () => {
     expect(buyer.hunger).toBeLessThan(50)
   })
 
-  it("buys three meals and six drinks over a day with a vendor immediately available", () => {
+  it("needs only one drink in the first day when starting fully supplied", () => {
     const map = makeMap()
     const travelers = [
       makeTraveler(0, "pilgrim", { hunger: 100, thirst: 100, gold: 100 }),
@@ -323,9 +323,9 @@ describe("stepSim", () => {
       if (buyer.hunger > hunger) meals++
       if (buyer.thirst > thirst) drinks++
     }
-    expect({ meals, drinks }).toEqual({ meals: 3, drinks: 6 })
-    expect(buyer.gold).toBe(100 - 3 * FOOD_PRICE - 6 * WINE_PRICE)
-    expect(vendor.gold).toBe(3 * FOOD_PRICE + 6 * WINE_PRICE)
+    expect({ meals, drinks }).toEqual({ meals: 0, drinks: 1 })
+    expect(buyer.gold).toBe(100 - WINE_PRICE)
+    expect(vendor.gold).toBe(WINE_PRICE)
   })
 
   it("chases down a vendor further along the road", () => {

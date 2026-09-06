@@ -1,3 +1,4 @@
+import { buildingEntry, type BuildingRotation } from "./building-rotation"
 import { describe, expect, it } from "vitest"
 import { FOOD_TYPES, STOREHOUSE_FOOD_CAPACITY, depositFood, withdrawFood, storedFood, timberDestination, type FoodStock } from "./storage"
 import { buildingStepAllowed } from "./building-navigation"
@@ -12,6 +13,20 @@ const building = (id: string, x = 2, z = 2): BuildingDef => ({
 const world = (): GameMap => ({ width: 16, depth: 16, tiles: Array(256).fill("grass"), buildings: [building("hut"), building("store", 8, 2)] })
 
 describe("storehouse inventory", () => {
+  it.each([0, 1, 2, 3] as BuildingRotation[])("delivers to rotated storehouse and fallback hut entrances at rotation %i", rotation => {
+    const map = world(), from = { x: tileToWorldX(map, 7), z: tileToWorldZ(map, 8) }
+    for (const b of map.buildings) b.rotation = rotation
+    const [hut, store] = map.buildings
+    const destination = timberDestination(map, map.buildings, hut.id, from)
+    expect(destination?.building.id).toBe(store.id)
+    expect(destination?.route.at(-1)).toEqual(buildingEntry(store))
+    const entrance = buildingEntry(store)
+    map.tiles[entrance.z * map.width + entrance.x] = "water"
+    const fallback = timberDestination(map, map.buildings, hut.id, from)
+    expect(fallback?.building.id).toBe(hut.id)
+    expect(fallback?.route.at(-1)).toEqual(buildingEntry(hut))
+  })
+
   it("stores every food type under one capacity and keeps buildings separate", () => {
     const stores = new Map<string, FoodStock>(), store = building("store")
     for (const type of FOOD_TYPES) expect(depositFood(stores, store, type, 40)).toBe(40)

@@ -1,3 +1,4 @@
+import { buildingEntry } from "./building-rotation"
 import type { BuildingDef, GameMap } from "./map/types"
 import { worldToTileX, worldToTileZ } from "./map/types"
 import { settlementRoute } from "./settlement-route"
@@ -34,12 +35,12 @@ export function timberDestination(map: GameMap, buildings: readonly BuildingDef[
   const start = { x: worldToTileX(map, from.x), z: worldToTileZ(map, from.z) }
   const stores = buildings.filter(b => b.buildType === "storehouse")
     .flatMap(building => {
-      const route = settlementRoute(map, buildings, start, { x: building.x, z: building.z + building.d }, true)
+      const route = settlementRoute(map, buildings, start, buildingEntry(building), true)
       return route ? [{ building, route }] : []
     }).sort((a, b) => a.route.length - b.route.length)
   if (stores.length) return stores[0]
   const hut = buildings.find(b => b.id === employer)
   if (!hut) return null
-  const route = settlementRoute(map, buildings, start, { x: hut.x, z: hut.z + hut.d }, true)
+  const route = settlementRoute(map, buildings, start, buildingEntry(hut), true)
   return route ? { building: hut, route } : null
 }

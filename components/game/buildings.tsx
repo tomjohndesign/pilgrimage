@@ -1,7 +1,7 @@
 "use client"
 
 import { useUnitInterior } from "./use-unit-interior"
-
+import { buildingYaw, rotatedFootprint } from "@/lib/game/building-rotation"
 import { StructureModel } from "@/components/building-lab/building-model"
 import { structureParts } from "@/lib/game/building-art/structure"
 
@@ -31,7 +31,7 @@ export function Buildings({ map }: { map: GameMap }) {
   const foodStores = useBuildStore(s => s.foodStores)
   const piles = useBuildStore((s) => s.piles)
   const buildings = map.buildings
-  const models = useMemo(() => buildings.map(structureParts), [buildings])
+  const models = useMemo(() => buildings.map(building => structureParts({ ...building, ...rotatedFootprint(building, building.rotation) })), [buildings])
   const idColors = useMemo(
     // Component tuples straight into the working colour space — an ID is data,
     // not a colour, so it must dodge sRGB conversion to survive readback.
@@ -49,17 +49,18 @@ export function Buildings({ map }: { map: GameMap }) {
         const centreZ = tileToWorldZ(map, building.z) + (building.d - 1) / 2
         const baseY = groundHeight(map, building.x + (building.w - 1) / 2, building.z + (building.d - 1) / 2)
 
+        const local = rotatedFootprint(building, building.rotation)
         const cutaway = models[index].some(p => p.layer === "roof") && (
           unitInterior === building.id || isSelected(selection, { kind: "building", id: building.id }) ||
           (selection?.kind === "pile" && piles.some(p => p.id === selection.id && p.campId === building.id)))
         if (building.buildType === "storehouse" || building.buildType === "workshop") {
           return (
-            <group key={building.id} name={`storage-${building.id}`} position={[centreX, baseY, centreZ]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
+            <group key={building.id} name={`storage-${building.id}`} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
               <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} />
               {building.buildType === "storehouse" && FOOD_TYPES.map((type, slot) => {
                 const amount = foodStores.get(building.id)?.[type] ?? 0
-                return amount > 0 && <mesh key={type} position={[(slot - 1.5) * building.w * 0.21, 0.43, -building.d * 0.33]}>
-                  <boxGeometry args={[building.w * 0.14, 0.12, building.d * 0.12]} />
+                return amount > 0 && <mesh key={type} position={[(slot - 1.5) * local.w * 0.21, 0.43, -local.d * 0.33]}>
+                  <boxGeometry args={[local.w * 0.14, 0.12, local.d * 0.12]} />
                   <meshLambertMaterial color={["#a29978", "#748153", "#a67c56", "#828a88"][slot]} />
                 </mesh>
               })}
@@ -73,9 +74,9 @@ export function Buildings({ map }: { map: GameMap }) {
         }
 
         return (
-          <group key={building.id} position={[centreX, baseY, centreZ]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
+          <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
             <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} />
-            {building.buildType === "shelter" && <ShelterFire width={building.w} depth={building.d} height={building.height} cutaway={cutaway} />}
+            {building.buildType === "shelter" && <ShelterFire width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
           </group>
         )
       })}
