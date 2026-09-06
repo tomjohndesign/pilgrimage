@@ -48,63 +48,67 @@ export const PROTOTYPE_MAP_ROWS = [
 ]
 
 /**
- * Placeholder structures. Everything is a box for now — the point is to prove
- * the grid-to-world mapping and footprint sizing, not the art.
+ * Authored examples using the same procedural construction as the settlement.
  * All of these sit inside the plaza (x 17–23, z 9–15), clear of the road at z=12.
  */
 export const PROTOTYPE_BUILDINGS: BuildingDef[] = [
   {
     id: "relic",
+    buildType: "enclosure",
     label: "Relic Shrine",
     x: 19,
     z: 9,
     w: 2,
     d: 2,
-    height: 2.6,
+    height: 0.42,
     color: "#d6cbae",
     roofColor: "#a07830",
   },
   {
     id: "inn",
+    buildType: "shelter",
     label: "Inn",
     x: 17,
     z: 14,
     w: 2,
     d: 2,
-    height: 1.5,
+    height: 0.7,
     color: "#cbb894",
     roofColor: "#8a4b2f",
   },
   {
     id: "chapel",
+    buildType: "hall",
     label: "Chapel",
     x: 22,
     z: 14,
     w: 1,
     d: 1,
-    height: 1.9,
+    height: 0.85,
     color: "#d2cbb4",
     roofColor: "#6d5336",
   },
   {
     id: "guard-post",
+    buildType: "guard-post",
     label: "Guard Post",
     x: 22,
     z: 10,
     w: 1,
     d: 1,
-    height: 1.2,
+    height: 0.65,
     color: "#9a7550",
     roofColor: "#5c3f28",
   },
   {
     id: "market",
+    buildType: "market",
     label: "Market Stall",
     x: 17,
     z: 10,
     w: 1,
     d: 1,
-    height: 0.8,
+    height: 0.65,
     color: "#b08a5c",
     roofColor: "#8b1a1a",
   },

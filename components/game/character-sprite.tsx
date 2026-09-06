@@ -1,5 +1,6 @@
 "use client"
 
+import type { FrameRegistration } from "@/lib/game/base-person/bake"
 import type { GameMap } from "@/lib/game/map/types"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 import { personRecipe } from "@/lib/game/base-person/design"
@@ -9,7 +10,7 @@ import { ACTION_CLIPS } from "@/lib/game/base-person/pose"
 import { activityClip } from "@/lib/game/base-person/activity"
 import { crossedWoodcuttingImpact, woodcuttingProfile } from "@/lib/game/base-person/woodcutting"
 import { strikeTree } from "@/lib/game/trees/impact"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 import { usePixelWorldTexel } from "@/components/pixel-canvas"
@@ -27,7 +28,8 @@ import type { FigureClickHandler } from "./traveler-figure"
 
 let nextSpriteOrder = 1
 
-export function CharacterSprite({ map, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, age = 18, visualOverride, flightClip, name = "traveler" }: {
+export function CharacterSprite({ map, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, age = 18, visualOverride, attachment, flightClip, name = "traveler" }: {
+  attachment?: { content: ReactNode; clips: Partial<Record<"hoisting" | "procession", FrameRegistration[]>>; cellSize: number; anchor: number[]; restPosition?: [number, number, number] }
   flightClip?: SpriteClip & { fps: number }
   map?: GameMap
   visualOverride?: ReturnType<typeof populationVisual>
@@ -56,6 +58,8 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   const fps = characterFps ?? visual.fps
   const rigBody = useMemo(() => visual.design ? personRecipe(visual.design).body : null, [visual.design])
   const poseRoot = useRef<THREE.Group>(null)
+  const attachmentRoot = useRef<THREE.Group>(null)
+  const attachmentPoint = useMemo(() => new THREE.Vector3(), [])
   const footPlant = useRef<FootPlant | null>(null)
   useEffect(() => { footPlant.current = null }, [map, rigBody])
   const origin = useMemo(() => new THREE.Vector3(), [])
@@ -151,7 +155,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     const clipKey = flight ? "flying" : requested
     if (clipKey !== lastClip.current) { actionClock.current = 0; lastClip.current = clipKey }
     const previousActionTime = actionClock.current
-    if (requested !== "carrying" || moving) actionClock.current += dt
+    if ((requested !== "carrying" && requested !== "procession") || moving) actionClock.current += dt
     if (moving) {
       const stride = visual.walkStride * individualScale * (walkTuning?.stride ?? DEFAULT_WALK_STRIDE) / DEFAULT_WALK_STRIDE
       clock.current = advanceWalkPhase(clock.current, parent.userData.playbackRate === 0 ? 0 : parent.userData.distance ?? 0, dt,
@@ -160,8 +164,13 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     if (sprite.current) Object.assign(sprite.current.userData, { walkPhase: clock.current, walkStride: visual.walkStride * individualScale, distance: parent.userData.distance ?? 0 })
     const clip: SpriteClip = flight ?? action ?? (moving ? visual.walk : visual.idle)
     const texture = textures[flight ? textures.length - 1 : actionIndex ?? (moving ? 0 : 1)]
-    const frame = flight ? Math.floor(actionClock.current * flight.fps) % flight.columns : action ? requested === "carrying" ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) :
+    let frame = flight ? Math.floor(actionClock.current * flight.fps) % flight.columns : action ? (requested === "carrying" || requested === "procession") ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) :
       Math.floor(actionClock.current * fps * (action.playbackRate ?? 1)) % clip.columns : moving ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) : clip.stillFrame
+    if (requested === "hoisting") {
+      const progress = parent.userData.actionProgress ?? actionClock.current
+      frame = Math.min(clip.columns - 1, Math.floor(progress * fps))
+      if (parent.userData.lowering) frame = clip.columns - 1 - frame
+    }
     if (requested === "treeFelling" && action && parent.userData.workTree) {
       const rate = fps * (action.playbackRate ?? 1)
       if (crossedWoodcuttingImpact(previousActionTime * rate, actionClock.current * rate, clip.columns, woodcuttingProfile(visual.design))) {
@@ -194,6 +203,26 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
         poseRoot.current.position.set(0, 0, 0)
       }
     }
+    if (attachmentRoot.current && poseRoot.current && attachment) {
+      const frames = requested === "hoisting" || requested === "procession" ? attachment.clips[requested] : undefined
+      const hands = frames?.[direction * clip.columns + frame]?.sockets
+      attachmentRoot.current.visible = !!hands
+      if (hands) {
+        // Registrations use the same camera projection as the sprite. Carry the
+        // attachment in its corrected pose root so planted feet and hands agree.
+        const x = ((hands.leftHand.x + hands.rightHand.x) / 2 - attachment.anchor[0]) / attachment.cellSize * size
+        const y = (attachment.anchor[1] - (hands.leftHand.y + hands.rightHand.y) / 2) / attachment.cellSize * size
+        attachmentPoint.set(x, y, 0).applyQuaternion(camera.quaternion)
+        poseRoot.current.getWorldPosition(origin)
+        attachmentPoint.add(origin)
+        if (requested === "hoisting" && attachment.restPosition) {
+          const lift = frame / Math.max(1, clip.columns - 1)
+          origin.set(...attachment.restPosition)
+          attachmentPoint.lerp(origin, (1 - lift) ** 3)
+        }
+        attachmentRoot.current.position.copy(poseRoot.current.worldToLocal(attachmentPoint))
+      }
+    }
     // Ground and body/selection passes share the same local terrain plane.
     // Flying monks release contact and use the normal airborne depth model.
     if (map && parent.userData.activity !== "flying" && poseRoot.current) {
@@ -215,6 +244,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   return (
     <group ref={poseRoot}>
       <sprite renderOrder={renderOrder} ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name={name} material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync !== false }} />
+      {attachment && <group ref={attachmentRoot} visible={false}>{attachment.content}</group>}
       {outlineMaterial && <sprite renderOrder={renderOrder} layers-mask={OUTLINE_ID_LAYER_MASK} material={outlineMaterial}
         scale={[size, size, 1]} center={center} />}
     </group>

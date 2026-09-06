@@ -256,6 +256,70 @@ describe("shrine hospitality", () => {
 })
 
 describe("lumber camps", () => {
+  it.each(["none", "hunger", "thirst", "stamina"] as const)(
+    "only rests after a delivery when needs are low (low need: %s)", (need) => {
+      const { map, trees, camp, traveler } = fixture()
+      const t = traveler(0)
+      const sim = createSim([t], map)
+      sim.buildings = [camp]
+      sim.trees = [trees[0]]
+      const resource = treeResource(trees[0], 0, map.seed)
+      resource.health = 0
+      resource.remainingWood -= TIMBER_LOAD
+      sim.treeResources.set(0, resource)
+      sim.felled.add(0)
+      const s = sim.travelers.get(0)!
+      s.employer = camp.id
+      s.activity = "hauling"
+      s.workRoute = [{ x: camp.x, z: camp.z + camp.d - 1 }]
+      s.carrying = TIMBER_LOAD
+      s.hunger = s.thirst = s.stamina = 60
+      if (need !== "none") s[need] = 40
+
+      stepSim(sim, [t], map, 1.5, 0.1)
+
+      expect(sim.wood).toBe(TIMBER_LOAD)
+      expect([...sim.piles.values()].reduce((sum, pile) => sum + pile.wood, 0)).toBe(TIMBER_LOAD)
+      expect(s.carrying).toBe(0)
+      expect(s.gold).toBe(1)
+      if (need === "none") {
+        expect(s.activity).toBe("toWork")
+        expect(s.tree).toBe(0)
+        expect(Math.max(s.hunger, s.thirst, s.stamina)).toBeLessThan(60)
+      } else {
+        expect(s.activity).toBe("idle")
+        expect(s.tree).toBeNull()
+        run(sim, [t], map, 30, () => s.activity === "toWork")
+        expect(s.activity).toBe("toWork")
+        expect(Math.min(s.hunger, s.thirst, s.stamina)).toBeGreaterThanOrEqual(80)
+      }
+      run(sim, [t], map, 30, () => sim.wood > TIMBER_LOAD)
+      expect(sim.wood).toBe(2 * TIMBER_LOAD)
+      expect(resource.remainingWood + s.carrying + sim.wood).toBe(resource.wood)
+    },
+  )
+
+  it("waits at camp when a delivery leaves no more timber to collect", () => {
+    const { map, camp, traveler } = fixture()
+    const t = traveler(0)
+    const sim = createSim([t], map)
+    sim.buildings = [camp]
+    const s = sim.travelers.get(0)!
+    s.employer = camp.id
+    s.activity = "hauling"
+    s.workRoute = [{ x: camp.x, z: camp.z + camp.d - 1 }]
+    s.carrying = TIMBER_LOAD
+
+    stepSim(sim, [t], map, 1.5, 0.1)
+    run(sim, [t], map, 10)
+
+    expect(s.activity).toBe("idle")
+    expect(s.tree).toBeNull()
+    expect(s.carrying).toBe(0)
+    expect(sim.wood).toBe(TIMBER_LOAD)
+    expect(s.gold).toBe(1)
+  })
+
   it("waits for a walking Ent to replant before claiming it for timber", () => {
     const { map, trees, camp, traveler } = fixture()
     const t = traveler(0)

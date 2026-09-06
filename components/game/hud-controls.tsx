@@ -12,7 +12,7 @@ import { influenceRadius } from "@/lib/game/build-influence"
 import { canAfford, placementError } from "@/lib/game/settlement"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { formatGameTime, simRegistry } from "@/lib/game/sim"
-import { useSimulationStore } from "@/lib/game/simulation-store"
+import { SIMULATION_SPEEDS, useSimulationStore } from "@/lib/game/simulation-store"
 
 /** Hover and keyboard-focus help, positioned inside the viewport by Radix.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1N5-0
@@ -142,8 +142,8 @@ export function HudClock() {
       {paused ? <Play size={14} /> : <Pause size={14} />}
     </button>
     <div className="hud-speeds" aria-label="Simulation speed">
-      {([1, 2, 3] as const).map((value) => <button type="button" key={value} aria-label={`${value}× simulation speed`} aria-pressed={speed === value}
-        onClick={() => useSimulationStore.getState().setSpeed(value)}>{value}×</button>)}
+      {SIMULATION_SPEEDS.map(({ label, rate }) => <button type="button" key={rate} aria-label={`${label}× simulation speed`} aria-pressed={speed === rate}
+        onClick={() => useSimulationStore.getState().setSpeed(rate)}>{label}×</button>)}
     </div>
   </section>
 }

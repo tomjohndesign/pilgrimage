@@ -44,8 +44,8 @@ describe("building art contract", () => {
   it("sets floors, thresholds and open yards at the ground walking plane", () => {
     const surfaces = VARIANTS.flatMap(variant => buildingParts({ ...DEFAULT_RECIPE, variant: variant.id })
       .filter(p => p.name === "floor" || p.name === "threshold"))
-    surfaces.push(...structureParts({ buildType: "lumberCamp", w: 3, d: 3, height: 0.5, color: "#000000", roofColor: "#000000" })
-      .filter(p => p.name === "yard"))
+    surfaces.push(structureParts({ buildType: "lumberCamp", w: 3, d: 3, height: 0.5, color: "#000000", roofColor: "#000000" })
+      .find(p => p.name === "floor")!)
     for (const part of surfaces) {
       expect(part.position[1] - part.size![1] / 2).toBeLessThan(0)
       const top = part.position[1] + part.size![1] / 2
