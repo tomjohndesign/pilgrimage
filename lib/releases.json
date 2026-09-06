@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "01fb0fca22476e495549e63423b712a02294d71d",
-  "releaseCount": 26,
+  "lastProcessedCommit": "d90657a30a51656c7d941bfab4554613e6b2300c",
+  "releaseCount": 27,
   "releases": [
+    {
+      "version": "0.0.41",
+      "title": "Release 0.0.41",
+      "summary": "Unify monk and traveler character scaling (#60)",
+      "commit": "d90657a30a51656c7d941bfab4554613e6b2300c"
+    },
     {
       "version": "0.0.40",
       "title": "Release 0.0.40",
