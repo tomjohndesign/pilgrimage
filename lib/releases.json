@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "f737f59039a4920a1e5c8563fc2f4334746d6087",
-  "releaseCount": 58,
+  "lastProcessedCommit": "d7a95ddcfa0133fca7b897d9a97f8b753c1496a1",
+  "releaseCount": 59,
   "releases": [
+    {
+      "version": "0.0.73",
+      "title": "Release 0.0.73",
+      "summary": "Use R and Cmd+R to rotate buildings during placement",
+      "commit": "d7a95ddcfa0133fca7b897d9a97f8b753c1496a1"
+    },
     {
       "version": "0.0.72",
       "title": "Release 0.0.72",
