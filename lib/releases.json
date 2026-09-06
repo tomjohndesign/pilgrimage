@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "17917f72fbc13e9a4be0e5b310bb2bacc1e3ba1e",
-  "releaseCount": 29,
+  "lastProcessedCommit": "2a68826b4e79bc077ed2991143700281a278bc43",
+  "releaseCount": 30,
   "releases": [
+    {
+      "version": "0.0.44",
+      "title": "Release 0.0.44",
+      "summary": "Make resting monks kneel on the ground (#63)",
+      "commit": "2a68826b4e79bc077ed2991143700281a278bc43"
+    },
     {
       "version": "0.0.43",
       "title": "Release 0.0.43",
