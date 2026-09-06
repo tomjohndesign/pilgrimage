@@ -8,6 +8,8 @@ import { groundHeight } from "@/lib/game/map/elevation"
 import { useMemo } from "react"
 import * as THREE from "three"
 
+import { isSelected, useCameraStore } from "@/lib/game/camera-store"
+import { FOOD_TYPES } from "@/lib/game/storage"
 import { selectElement } from "@/lib/game/selection"
 import { useBuildStore } from "@/lib/game/build-store"
 import { pileOffset } from "@/lib/game/trees/timber"
@@ -21,9 +23,11 @@ import {
 
 /** Built structures share their geometry with the menu and placement preview. */
 export function Buildings({ map }: { map: GameMap }) {
+  const selection = useCameraStore(s => s.selection)
+  const foodStores = useBuildStore(s => s.foodStores)
   const piles = useBuildStore((s) => s.piles)
   const buildings = map.buildings
-  const models = useMemo(() => buildings.map((building) => structureParts({ ...building, buildType: building.buildType ?? (building.id.startsWith("lumberCamp-") ? "lumberCamp" : undefined) })), [buildings])
+  const models = useMemo(() => buildings.map(structureParts), [buildings])
   const idColors = useMemo(
     // Component tuples straight into the working colour space — an ID is data,
     // not a colour, so it must dodge sRGB conversion to survive readback.
@@ -41,13 +45,23 @@ export function Buildings({ map }: { map: GameMap }) {
         const centreZ = tileToWorldZ(map, building.z) + (building.d - 1) / 2
         const baseY = groundHeight(map, building.x + (building.w - 1) / 2, building.z + (building.d - 1) / 2)
 
-        if (building.buildType === "lumberCamp" || building.id.startsWith("lumberCamp-")) {
+        const cutaway = models[index].some(p => p.layer === "roof") && (
+          isSelected(selection, { kind: "building", id: building.id }) ||
+          (selection?.kind === "pile" && piles.some(p => p.id === selection.id && p.campId === building.id)))
+        if (building.buildType === "storehouse" || building.buildType === "workshop") {
           return (
-            <group key={building.id} name={`lumber-yard-${building.id}`} position={[centreX, baseY, centreZ]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
-              <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} />
+            <group key={building.id} name={`storage-${building.id}`} position={[centreX, baseY, centreZ]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
+              <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} />
+              {building.buildType === "storehouse" && FOOD_TYPES.map((type, slot) => {
+                const amount = foodStores.get(building.id)?.[type] ?? 0
+                return amount > 0 && <mesh key={type} position={[(slot - 1.5) * building.w * 0.21, 0.43, -building.d * 0.33]}>
+                  <boxGeometry args={[building.w * 0.14, 0.12, building.d * 0.12]} />
+                  <meshLambertMaterial color={["#a29978", "#748153", "#a67c56", "#828a88"][slot]} />
+                </mesh>
+              })}
               {piles.filter((pile) => pile.campId === building.id).map((pile) => {
                 const [x, z] = pileOffset(pile.slot)
-                return <group key={pile.id} position={[x, 0.03, z]}><WoodPile pile={pile} objectId={pileObjectId(piles.indexOf(pile))} /></group>
+                return <group key={pile.id} position={[x, building.buildType === "storehouse" ? 0.35 : 0.03, z * 0.7 + 0.2]}><WoodPile pile={pile} objectId={pileObjectId(piles.indexOf(pile))} /></group>
               })}
             </group>
           )
@@ -55,7 +69,7 @@ export function Buildings({ map }: { map: GameMap }) {
 
         return (
           <group key={building.id} position={[centreX, baseY, centreZ]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
-            <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} />
+            <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} />
           </group>
         )
       })}

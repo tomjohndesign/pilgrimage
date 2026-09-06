@@ -1,3 +1,4 @@
+import { timberDestination, type FoodStock } from "./storage"
 import { nearProcession, type RelicProcession } from "./relic-procession"
 import { roadsideStall, routePoint, routeLength, type StallRoute } from "./transport/roadside"
 import { roadLanePoint } from "./map/road-lane"
@@ -45,7 +46,7 @@ import type { Traveler } from "./travelers"
  *  - At the shrine junction, faith, hospitality and available work draw visitors
  *    down the branch. The brothers restore their needs and bestow piety before
  *    they return to the road; each visit spreads the shrine's renown.
- *  - Jobless visitors may settle into a lumber-camp slot, walk to a reserved
+ *  - Jobless visitors may settle into a woodcutter hut slot, walk to a reserved
  *    tree, fell it and haul logs home. Camps provide rest when needs run low.
  *  - Stamina at 0 → leave the road for the nearest open ground (grass, dirt,
  *    or a forest-floor clearing — never solid woods or the road itself) and
@@ -96,8 +97,8 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
   toWork: "Walking to work",
   working: "Felling a tree",
   gathering: "Cutting & gathering fallen timber",
-  hauling: "Carrying logs to camp",
-  idle: "At the lumber camp",
+  hauling: "Carrying logs to storage",
+  idle: "Resting from woodcutting",
   walking: "On the road",
   seeking: "Seeking food & drink",
   toStall: "Approaching the stall",
@@ -203,6 +204,7 @@ export interface SimTraveler {
   gold: number
   piety: number
   jobless: boolean
+  deliveryBuilding?: string | null
   employer: string | null
   branchProgress: number
   shrineRoute: TilePos[] | null
@@ -284,6 +286,7 @@ export interface SimState {
   constructionWood: number
   felled: Set<number>
   treeResources: Map<number, TreeResource>
+  foodStores: Map<string, FoodStock>
   piles: Map<string, WoodPile>
   resourceRevision: number
   buildings: readonly PlacedBuilding[]
@@ -460,6 +463,7 @@ export function createSim(
     constructionWood: 0,
     felled: new Set(),
     treeResources: new Map(),
+    foodStores: new Map(),
     piles: new Map(),
     resourceRevision: 0,
     buildings: [],
@@ -693,7 +697,7 @@ function pay(buyer: SimTraveler, vendor: SimTraveler, price: number): void {
   vendor.gold += paid
 }
 
-/** Unskilled applicants can fill any open lumber-camp slot. */
+/** Unskilled applicants can fill any open woodcutter hut slot. */
 function findJob(sim: SimState, s: SimTraveler, map: GameMap): PlacedBuilding | undefined {
   if (!s.jobless || s.employer) return undefined
   return sim.buildings.find((b) => {
@@ -775,7 +779,7 @@ function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): 
   if (job && nextRoll(s) < (t.attributes.skills.some((skill) => BUILDING_KINDS[job.kind].trades.includes(skill)) ? 0.9 : 0.65)) {
     const route = settlementRoute(map, [...map.buildings, ...sim.buildings],
       { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
-      { x: job.x, z: job.z + job.d - 1 }, false, true)
+      { x: job.x, z: job.z + job.d }, false, true)
     if (route) {
       s.employer = job.id
       s.jobless = false
@@ -913,23 +917,27 @@ export function stepSim(
         s.timer -= dt
         if (s.timer <= 0) {
           const tree = sim.treeResources.get(s.tree!)!
+          const destination = s.employer && timberDestination(map, [...map.buildings, ...sim.buildings], s.employer, s)
+          if (!destination) { s.timer = GAME_HOUR_SECONDS; break }
           s.carrying = Math.min(TIMBER_LOAD, tree.remainingWood)
           tree.remainingWood -= s.carrying
           sim.resourceRevision++
           s.tree = null
-          startWorkRoute(s, [...s.workRoute!].reverse(), "hauling")
+          s.deliveryBuilding = destination.building.id
+          startWorkRoute(s, destination.route, "hauling")
         }
         break
       }
       case "hauling": {
         if (stepWorkRoute(s, map, worldSpeed, dt)) {
           if (s.employer && s.carrying > 0) {
-            stackWood(sim.piles, s.employer, s.carrying)
+            stackWood(sim.piles, s.deliveryBuilding ?? s.employer, s.carrying)
             sim.wood += s.carrying
             sim.resourceRevision++
             s.gold++
           }
           s.carrying = 0
+          s.deliveryBuilding = null
           if (Math.min(s.hunger, s.thirst, s.stamina) > 40 && chooseTree(sim, s, map)) break
           s.activity = "idle"
           s.timer = GAME_HOUR_SECONDS

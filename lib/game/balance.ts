@@ -1,7 +1,7 @@
-import { EARLY_BUILDINGS, BUILDING_STYLE, type EarlyBuildingType } from "./building-art/style"
+import { STOREHOUSE_FOOD_CAPACITY } from "./storage"
 
 /** Pure balance data, shared by gameplay, the tuning page and the specification. */
-export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "lumberCamp" | Exclude<EarlyBuildingType, "enclosure">
+export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "storehouse"
 
 export interface Resources {
   gold: number
@@ -42,13 +42,13 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "workshop",
-    label: "Woodcutter’s lodge",
+    label: "Woodcutter’s hut",
     category: "buildings",
-    description: "Timber for the growing shrine.",
+    description: "Three jobs felling nearby trees. Workers carry timber to a storehouse or back to the hut.",
     cost: { gold: 60, wood: 45 },
     renown: 0,
     requiredRenown: 0,
-    income: { gold: 0, wood: 8 },
+    income: { gold: 0, wood: 0 },
     w: 2,
     d: 2,
     height: 0.85,
@@ -101,27 +101,12 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     roofColor: "#78504b",
   },
   {
-    id: "lumberCamp", label: "Lumber camp", category: "buildings",
-    description: "Three jobs for settlers. Workers fell nearby trees and deliver spendable wood.",
+    id: "storehouse", label: "Storehouse", category: "buildings",
+    description: "Covered storage for harvested timber, grain, vegetables, fruit and fish.",
     cost: { gold: 60, wood: 45 }, renown: 0, requiredRenown: 0,
-    income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.04,
+    income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.85,
     color: "#7a5a3a", roofColor: "#54402c",
   },
-  ...EARLY_BUILDINGS.filter((preset) => preset.id !== "enclosure").map((preset): BuildDefinition => ({
-    id: preset.id,
-    label: preset.name,
-    category: "buildings",
-    description: preset.description,
-    cost: { gold: preset.width * preset.depth * 10, wood: preset.width * preset.depth * 10 },
-    renown: 0,
-    requiredRenown: 0,
-    income: { gold: 0, wood: 0 },
-    w: preset.width,
-    d: preset.depth,
-    height: preset.wallHeight,
-    color: BUILDING_STYLE.palette.plaster,
-    roofColor: BUILDING_STYLE.palette.thatch,
-  })),
 ]
 
 export const RULE_GROUPS = [
@@ -457,7 +442,7 @@ export function buildingIncomeLabel(def: BuildDefinition, balance: GameBalance):
   ].filter(Boolean)
   return parts.length
     ? `${parts.join(" · ")} / ${balance.rules.incomeSeconds}s`
-    : def.id === "lumberCamp" ? "Workers deliver harvested wood" : "No resource income"
+    : def.id === "workshop" ? "3 woodcutting jobs" : def.id === "storehouse" ? `Timber storage · ${STOREHOUSE_FOOD_CAPACITY} food capacity` : "No resource income"
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -519,15 +504,15 @@ export function validateBalance(
   }
   return { balance: clean, error: null }
 }
-export const BALANCE_VERSION = 1
+export const BALANCE_VERSION = 2
 export function exportBalance(balance: GameBalance): string {
   return JSON.stringify({ version: BALANCE_VERSION, balance }, null, 2)
 }
 export function importBalance(json: string): ReturnType<typeof validateBalance> {
   try {
     const preset = record(JSON.parse(json))
-    if (preset?.version !== BALANCE_VERSION)
-      return { balance: null, error: "Unsupported preset version. Expected version 1." }
+    if (preset?.version !== 1 && preset?.version !== BALANCE_VERSION)
+      return { balance: null, error: "Unsupported preset version. Expected version 1 or 2." }
     // Add defaults for new structures while retaining all authored settings.
     const saved = record(preset.balance)
     const rules = record(saved?.rules)
@@ -536,10 +521,12 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
       ...saved,
       rules: { visitRenown: DEFAULT_BALANCE.rules.visitRenown, ...rules },
       buildings: {
-        lumberCamp: DEFAULT_BALANCE.buildings.lumberCamp,
-        ...Object.fromEntries(EARLY_BUILDINGS.filter((preset) => preset.id !== "enclosure")
-          .map((preset) => [preset.id, DEFAULT_BALANCE.buildings[preset.id]])),
+        storehouse: DEFAULT_BALANCE.buildings.storehouse,
         ...buildings,
+        // The hut now earns wood through deliveries; retire its old passive payment.
+        ...(preset.version === 1 && record(buildings.workshop) ? {
+          workshop: { ...record(buildings.workshop), woodIncome: 0 },
+        } : {}),
       },
     } : preset.balance)
   } catch {

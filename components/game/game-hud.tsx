@@ -1,5 +1,7 @@
 "use client"
 
+import { FOOD_TYPES, FOOD_LABELS, STOREHOUSE_FOOD_CAPACITY, emptyFoodStock, storedFood } from "@/lib/game/storage"
+
 import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/elevation"
 
 import Link from "next/link"
@@ -51,7 +53,7 @@ const CONTROLS: Array<[string, string]> = [
   ["W A S D", "Pan"],
   ["O", "Cycle outlines"],
   ["0", "Reset camera"],
-  ["B / L", "Build menu / lumber camp"],
+  ["B / L", "Build menu / woodcutter’s hut"],
   ["Esc", "Close panel & cancel building"],
   ["Return", "Cheat code"],
 ]
@@ -636,7 +638,7 @@ export function GameHud({
         setMenuOpen(false)
         if (event.key.toLowerCase() === "l") {
           setPanel("build")
-          if (map) economy.chooseBuild("lumberCamp")
+          if (map) economy.chooseBuild("workshop")
         } else {
           setPanel((current) => current === "build" ? null : "build")
           economy.chooseBuild(null)
@@ -670,6 +672,8 @@ export function GameHud({
   const piles = useBuildStore((s) => s.piles)
   const selectedBuilding = selection?.kind === "building" ? map?.buildings.find((b) => b.id === selection.id) : null
   const selectedDefinition = buildCatalog(economy.balance).find((item) => item.id === selectedBuilding?.buildType)
+  const foodStores = useBuildStore(s => s.foodStores)
+  const foodStock = foodStores.get(selectedBuilding?.id ?? "") ?? emptyFoodStock()
   const storedWood = piles.reduce((sum, pile) => sum + (pile.campId === selectedBuilding?.id ? pile.wood : 0), 0)
   const selectedRelic = selection?.kind === "relic"
 
@@ -1001,9 +1005,14 @@ export function GameHud({
                 <p className="text-[11px] text-ink-light">Collected · {economy.settlement.collectedAdmission} gold</p>
               </div>
             )}
-            {selectedBuilding.buildType === "lumberCamp" && (
+            {(selectedBuilding.buildType === "workshop" || selectedBuilding.buildType === "storehouse") && (
               <p className="mt-2 text-[11px] text-ink"><span className="text-ink-light">Stored wood</span> · {storedWood} wood</p>
             )}
+            {selectedBuilding.buildType === "storehouse" && <div className="mt-2 text-[11px] text-ink-light">
+              <p>Food stored · {storedFood(foodStock)} / {STOREHOUSE_FOOD_CAPACITY}</p>
+              {FOOD_TYPES.map(type => <p key={type}>{FOOD_LABELS[type]} · {foodStock[type]}</p>)}
+              <p className="mt-1 italic">Food supplies start empty; food gathering is still to come.</p>
+            </div>}
             {selectedDefinition && <>
               <p className="mt-2 text-[11px] text-ink-light">Contributes +{selectedDefinition.renown} shrine renown</p>
               <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">{selectedDefinition.description}</p>

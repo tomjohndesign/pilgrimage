@@ -190,25 +190,25 @@ export function placementError(
       if (map.elevation && Math.abs(groundHeight(map, x, z) - groundHeight(map, at.x, at.z)) > 0.2) return "Choose level ground away from cliffs."
     }
   }
-  if (def.id === "lumberCamp") {
-    const problem = placementProblem(map, map.buildings, "lumberCamp", at.x, at.z)
+  if (def.id === "workshop") {
+    const problem = placementProblem(map, map.buildings, "workshop", at.x, at.z)
     if (problem) return PLACEMENT_PROBLEM_LABELS[problem]
   }
-  // Every addition must preserve access to existing lumber yards.
+  // Every addition must preserve access to jobs and storage.
   if (map.site) {
-    const candidate = { ...def, ...at, id: def.id === "lumberCamp" ? "lumberCamp-preview" : "preview" }
+    const candidate = { ...def, ...at, id: def.id === "workshop" ? "workshop-preview" : "preview" }
     const occupied = [...map.buildings, candidate]
-    for (const camp of lumberCamps(map)) {
+    for (const camp of [...woodcutterHuts(map), ...map.buildings.filter(b => b.buildType === "storehouse"), ...(def.id === "storehouse" ? [candidate] : [])]) {
       if (!settlementRoute(map, occupied, map.site.door, { x: camp.x, z: camp.z + camp.d }))
-        return "Keep access to lumber camps clear."
+        return "Keep access to woodcutter huts and storehouses clear."
     }
   }
   return null
 }
 
-export function lumberCamps(map: GameMap): PlacedBuilding[] {
-  return map.buildings.filter((b) => b.buildType === "lumberCamp")
-    .map((b) => ({ ...b, kind: "lumberCamp" }))
+export function woodcutterHuts(map: GameMap): PlacedBuilding[] {
+  return map.buildings.filter((b) => b.buildType === "workshop")
+    .map((b) => ({ ...b, kind: "workshop" }))
 }
 
 export function creditTimber(settlement: Settlement, deliveredWood: number): Settlement {
@@ -252,7 +252,7 @@ export function purchaseStructure(
   const error = placementError(map, def, at, balance)
   if (error) return { settlement, error }
   const building: BuildingDef = {
-    id: `${def.id === "lumberCamp" ? "lumberCamp" : "settlement"}-${settlement.structures.length}`,
+    id: `${def.id === "workshop" ? "workshop" : "settlement"}-${settlement.structures.length}`,
     buildType: def.id,
     label: def.label,
     x: at.x,

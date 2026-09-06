@@ -37,7 +37,7 @@ describe("construction influence", () => {
     expect(placementError(map, shelter, { x: 18, z: 20 }, balance)).toMatch(/influence/)
   })
 
-  it.each(["shelter", "workshop", "lumberCamp"])("%s contributes neither renown nor further influence", (id) => {
+  it.each(["shelter", "workshop", "storehouse"])("%s contributes neither renown nor further influence", (id) => {
     const map = world()
     const built = { ...map, buildings: [...map.buildings, building(id, 20, 20)] }
     expect(buildInfluence(built)).toEqual(buildInfluence(map))

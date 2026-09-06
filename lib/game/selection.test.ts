@@ -5,13 +5,13 @@ import { selectElement, selectionObjectId } from "./selection"
 import { buildingObjectId, pileObjectId, RELIC_OBJECT_ID, residentObjectId, travelerObjectId, treeObjectId } from "./render/outline"
 
 const objects = {
-  buildings: [{ id: "hovel" }, { id: "lumberCamp-1" }],
+  buildings: [{ id: "hovel" }, { id: "workshop-1" }],
   travelers: [{ id: 41 }, { id: 9 }],
   monks: [{ id: 72 }, { id: 18 }],
   piles: [{ id: "pile-a" }, { id: "pile-b" }],
 }
 const selections: Selection[] = [
-  { kind: "tree", id: 6 }, { kind: "building", id: "lumberCamp-1" },
+  { kind: "tree", id: 6 }, { kind: "building", id: "workshop-1" },
   { kind: "traveler", id: 9 }, { kind: "monk", id: 18 },
   { kind: "pile", id: "pile-b" }, { kind: "relic" },
 ]
@@ -37,7 +37,7 @@ describe("shared selection", () => {
     useCameraStore.getState().select(previous)
     const event = { delta: 7, stopPropagation: vi.fn() }
     selectElement(candidate, event)
-    useBuildStore.getState().setTool("lumberCamp")
+    useBuildStore.getState().setTool("workshop")
     selectElement(candidate, { ...event, delta: 0 })
     expect(useCameraStore.getState().selection).toEqual(previous)
     expect(event.stopPropagation).not.toHaveBeenCalled()
