@@ -1,4 +1,6 @@
-import manifest from "../../../public/textures/characters/population/v1/manifest.json"
+import { ACTION_CLIPS, PERSON_CLIPS, type ActionClip } from "./pose"
+import type { SpriteClip } from "../character-assets"
+import manifest from "../../../public/textures/characters/population/v2/manifest.json"
 import type { TravelerTypeId } from "../travelers"
 import { validatePersonDesign } from "./design"
 import type { PopulationPack } from "./population"
@@ -12,6 +14,10 @@ export function populationVisual(type: TravelerTypeId, variant: number, custom: 
   return {
     walk: { url: calling.walk, columns: 8, rows: pack.rows, stillFrame: 0 },
     idle: { url: calling.idle, columns: 1, rows: pack.rows, stillFrame: 0 },
+    actions: Object.fromEntries(ACTION_CLIPS.flatMap(clip => {
+      const url = calling.actions?.[clip], shadow = pack.shadows.actions?.[clip]
+      return url && shadow ? [[clip, { url, shadow, columns: PERSON_CLIPS[clip].frames, rows: pack.rows, stillFrame: 0 }]] : []
+    })) as Partial<Record<ActionClip, SpriteClip & { shadow: string }>>,
     shadow: pack.shadows,
     center: [pack.anchor[0] / pack.cellSize, 1 - pack.anchor[1] / pack.cellSize] as [number, number],
     fps: 8, scale: 0.74 * pack.cellSize / 48,

@@ -1,6 +1,6 @@
 import sharp from "sharp"
 import { readFileSync } from "node:fs"
-const version = process.argv[2] ?? "v10"
+const version = process.argv[2] ?? "v11"
 if (!/^v\d+$/.test(version)) throw new Error("Expected a version such as v1")
 const prefix = `public/textures/characters/base/base-person-${version}`
 const metadata = JSON.parse(readFileSync(`${prefix}.json`, "utf8"))
@@ -10,9 +10,9 @@ const allowed = new Set((metadata.renderPalette ?? legacyPalette).map((hex) => h
 const size = metadata.cellSize
 const nominalHeight = metadata.nominalHeightPixels ?? 20 * size / 32
 let minHeight = Infinity, maxHeight = 0
-for (const clip of ["walk", "idle"]) {
-  const columns = clip === "walk" ? 8 : 1
-  const { data, info } = await sharp(`${prefix}-${clip}.png`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+for (const [clip, url] of Object.entries({ walk: metadata.images.walk, idle: metadata.images.idle, ...Object.fromEntries(Object.entries(metadata.images.actions ?? {}).map(([clip, entry]) => [clip, entry.url])) })) {
+  const columns = clip === "idle" ? 1 : 8
+  const { data, info } = await sharp(`public${url}`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
   if (info.width !== columns * size || info.height !== 8 * size) throw new Error(`Wrong ${clip} dimensions`)
   if (metadata.clips[clip].length !== columns * 8) throw new Error(`Missing ${clip} registrations`)
   for (let row = 0; row < 8; row++) for (let frame = 0; frame < columns; frame++) {
@@ -28,7 +28,7 @@ for (const clip of ["walk", "idle"]) {
       top = Math.min(top, y); bottom = Math.max(bottom, y); count++
     }
     const height = bottom - top + 1
-    if (count < 30 || height < nominalHeight * 0.85 || height > nominalHeight * 1.1) throw new Error(`Unexpected size: ${clip} ${row}/${frame}, ${height}px`)
+    if (count < 30 || ((clip === "idle" || clip === "walk") && (height < nominalHeight * 0.85 || height > nominalHeight * 1.1))) throw new Error(`Unexpected size: ${clip} ${row}/${frame}, ${height}px`)
     minHeight = Math.min(minHeight, height); maxHeight = Math.max(maxHeight, height)
     const registration = metadata.clips[clip][row * columns + frame]
     if (registration.direction !== recipe.directions[row] || registration.frame !== frame) throw new Error("Frame order mismatch")
@@ -36,14 +36,14 @@ for (const clip of ["walk", "idle"]) {
       if (![socket.x, socket.y, socket.depth].every(Number.isFinite) || socket.x < 0 || socket.x > size || socket.y < 0 || socket.y > size) throw new Error("Invalid socket coordinates")
     }
     const first = metadata.clips[clip][row * columns].sockets.head
-    if (Math.abs(first.x - registration.sockets.head.x) > 1e-8 || Math.abs(first.y - registration.sockets.head.y) > 1e-8) throw new Error("Head registration drift")
+    if ((clip === "idle" || clip === "walk") && (Math.abs(first.x - registration.sockets.head.x) > 1e-8 || Math.abs(first.y - registration.sockets.head.y) > 1e-8)) throw new Error("Head registration drift")
   }
 }
-console.log(`Base ${version}: 72 frames, ${minHeight}–${maxHeight}px figures, fixed palette, transparent margins and stable head/attachment registration.`)
+console.log(`Base ${version}: ${Object.values(metadata.clips).reduce((sum, frames) => sum + frames.length, 0)} frames, ${minHeight}–${maxHeight}px figures, fixed palette, transparent margins and registered attachments.`)
 
-if (metadata.images.shadowWalk) for (const clip of ["walk", "idle"]) {
-  const { data, info } = await sharp(`${prefix}-shadow-${clip}.png`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
-  if (info.width !== (clip === "walk" ? 8 : 1) * size || info.height !== 8 * size) throw new Error("Wrong shadow dimensions")
+if (metadata.images.shadowWalk) for (const [clip, url] of Object.entries({ walk: metadata.images.shadowWalk, idle: metadata.images.shadowIdle, ...Object.fromEntries(Object.entries(metadata.images.actions ?? {}).map(([clip, entry]) => [clip, entry.shadow])) })) {
+  const { data, info } = await sharp(`public${url}`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  if (info.width !== (clip === "idle" ? 1 : 8) * size || info.height !== 8 * size) throw new Error("Wrong shadow dimensions")
   let pixels = 0
   for (let y = 0; y < info.height; y++) for (let x = 0; x < info.width; x++) {
     const alpha = data[(y * info.width + x) * 4 + 3]

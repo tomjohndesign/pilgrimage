@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { BASE_PERSON, SOCKET_NAMES, type BaseClip, type SocketName } from "./pose"
+import { BASE_PERSON, PERSON_CLIPS, ACTION_CLIPS, SOCKET_NAMES, type BaseClip, type ActionClip, type SocketName } from "./pose"
 import { DEFAULT_DESIGN, personRecipe, type PersonDesign } from "./design"
 import { personCastShadow } from "./shadow"
 import { inkPersonFrame } from "./ink"
@@ -18,6 +18,7 @@ export interface BasePersonBake {
   debugIdle: string
   shadowWalk: string
   shadowIdle: string
+  actions: Record<ActionClip, { url: string; shadow: string; debug: string }>
   metadata: {
     template: string
     version: number
@@ -31,7 +32,7 @@ export interface BasePersonBake {
     handedness: string
     design: PersonDesign
     safePadding: number
-    clips: { walk: FrameRegistration[]; idle: FrameRegistration[] }
+    clips: Record<BaseClip, FrameRegistration[]>
   }
 }
 
@@ -88,7 +89,7 @@ function personFrameRenderer(design: PersonDesign) {
         rig.inkMask(false)
         const colors = context.getImageData(0, 0, size, size)
         const inked = inkPersonFrame(colors.data, maskContext.getImageData(0, 0, size, size).data, size, palette, recipe.design.ink)
-        if (inked.padding < 4) throw new Error("This design exceeds the four-pixel safe frame. Reduce the proportions.")
+        if (inked.padding < 4) throw new Error(`${clip}, ${recipe.directions[row]}, frame ${Math.round(phase * PERSON_CLIPS[clip].frames) + 1}: this design exceeds the four-pixel safe frame. Reduce the proportions.`)
         padding = inked.padding
         colors.data.set(inked.pixels)
         context.putImageData(colors, 0, 0)
@@ -140,11 +141,11 @@ export function renderPersonPreview(design: PersonDesign, clip: BaseClip, frame:
 export function bakeBasePerson(design: PersonDesign = DEFAULT_DESIGN, diagnostics = true): BasePersonBake {
   const session = personFrameRenderer(design)
   const recipe = session.recipe, size = recipe.cellSize
-  const clips = { walk: [] as FrameRegistration[], idle: [] as FrameRegistration[] }
+  const clips = Object.fromEntries(Object.keys(PERSON_CLIPS).map(clip => [clip, []])) as unknown as Record<BaseClip, FrameRegistration[]>
   let safePadding = size
-  const shadows = { walk: "", idle: "" }
+  const shadows = {} as Record<BaseClip, string>
   const render = (clip: BaseClip, debug: boolean) => {
-    const columns = clip === "walk" ? recipe.framesPerCycle : 1
+    const columns = PERSON_CLIPS[clip].frames
     const canvas = document.createElement("canvas")
     canvas.width = columns * size; canvas.height = 8 * size
     const context = canvas.getContext("2d")!
@@ -166,7 +167,12 @@ export function bakeBasePerson(design: PersonDesign = DEFAULT_DESIGN, diagnostic
     return canvas.toDataURL("image/png")
   }
   try {
+    const actions = Object.fromEntries(ACTION_CLIPS.map(clip => {
+      const url = render(clip, false)
+      return [clip, { url, shadow: shadows[clip], debug: diagnostics ? render(clip, true) : "" }]
+    })) as BasePersonBake["actions"]
     return {
+      actions,
       walk: render("walk", false), idle: render("idle", false),
       debugWalk: diagnostics ? render("walk", true) : "", debugIdle: diagnostics ? render("idle", true) : "",
       shadowWalk: shadows.walk, shadowIdle: shadows.idle,

@@ -1,3 +1,4 @@
+import { ACTION_CLIPS } from "./pose"
 import { describe, expect, it } from "vitest"
 import { TRAVELER_TYPES } from "../travelers"
 import { DEFAULT_DESIGN, DESIGN_CONTROLS, validatePersonDesign, type DesignKey } from "./design"
@@ -41,6 +42,12 @@ describe("road character population", () => {
       expect(visual.rowOffset).toBe(variant * 8)
       expect(visual.walk.rows).toBe(48)
       expect(visual.idle.rows).toBe(48)
+      for (const clip of ACTION_CLIPS) {
+        expect(visual.actions[clip]?.url).toContain(`${type.id}-${clip}.png`)
+        expect(visual.actions[clip]?.shadow).toContain(`shadow-${clip}.png`)
+        expect(visual.actions[clip]?.rows).toBe(visual.walk.rows)
+        expect(visual.actions[clip]?.columns).toBe(8)
+      }
       expect(visual.walk.columns).toBe(8)
       expect(visual.idle.columns).toBe(1)
       expect(visual.center).toEqual([0.5, 1 - 48.5 / 64])
