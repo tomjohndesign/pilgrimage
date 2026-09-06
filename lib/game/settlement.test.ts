@@ -1,5 +1,5 @@
 import { getBuildInfluence } from "./build-influence"
-import { DEFAULT_ELEVATION } from "./map/elevation"
+import { DEFAULT_ELEVATION, finishElevation, generateElevation, groundHeight } from "./map/elevation"
 import { describe, expect, it } from "vitest"
 import { generateMap } from "./map/generate-map"
 import type { GameMap } from "./map/types"
@@ -59,6 +59,37 @@ const shelter = BUILD_CATALOG.find((item) => item.id === "shelter")!
 const garden = BUILD_CATALOG.find((item) => item.id === "garden")!
 
 describe("build and buy", () => {
+  it("grades successful purchases cumulatively without editing terrain on rejected purchases", () => {
+    const map = testMap(), water = new Uint8Array(map.tiles.length)
+    map.elevation = generateElevation(1, map.width, map.depth, water)
+    map.elevation.height = map.elevation.height.map((_, i) => (i % map.width) * 0.025)
+    finishElevation(map.elevation, map.width, map.depth, water, [])
+    const original = structuredClone(map.elevation)
+    const before = { ...createSettlement(), resources: { gold: 1000, wood: 1000 } }
+    const at = { x: 11, z: 14 }
+    const previewHeight = groundHeight(map, at.x + (shelter.w - 1) / 2, at.z + (shelter.d - 1) / 2)
+    const first = purchaseStructure(before, map, monks, [relic], shelter.id, at)
+    expect(first.error).toBeNull()
+    const firstElevation = structuredClone(first.settlement.elevation!)
+    const second = purchaseStructure(first.settlement, map, monks, [relic], shelter.id, { x: 9, z: 14 })
+    expect(second.error).toBeNull()
+    expect(second.settlement.elevation).not.toBe(first.settlement.elevation)
+    for (const settlement of [first.settlement, second.settlement]) {
+      const placedMap = { ...map, elevation: settlement.elevation }
+      for (let z = at.z; z < at.z + shelter.d; z++) for (let x = at.x; x < at.x + shelter.w; x++) {
+        for (const dx of [-0.49, 0.49]) for (const dz of [-0.49, 0.49]) {
+          expect(groundHeight(placedMap, x + dx, z + dz)).toBeCloseTo(previewHeight)
+        }
+      }
+    }
+    const rejected = purchaseStructure(second.settlement, map, monks, [relic], shelter.id, at)
+    expect(rejected.error).toMatch(/occupies/)
+    expect(rejected.settlement).toBe(second.settlement)
+    expect(map.elevation).toEqual(original)
+    expect(first.settlement.elevation).toEqual(firstElevation)
+    expect(before.elevation).toBeUndefined()
+  })
+
   it.each(EARLY_BUILDINGS.filter((preset) => preset.id !== "enclosure"))(
     "buys $name with its playground geometry and reserves its full footprint", (preset) => {
       const def = BUILD_CATALOG.find((item) => item.id === preset.id)!
