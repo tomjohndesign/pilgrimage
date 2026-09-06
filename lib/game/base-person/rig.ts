@@ -1,4 +1,9 @@
 import * as THREE from "three"
+import { editedLeg } from "./edited-leg"
+import { poseOffset } from "./pose-edits"
+import type { RigJoints } from "./rig-joints"
+import { staffMotion } from "./staff-motion"
+import { createRoadAccessories } from "./road-accessories"
 import { gatheringMotion } from "./gathering"
 import { woodcuttingMotion, woodcuttingProfile } from "./woodcutting"
 import { splittingMotion, splittingTool } from "./splitting"
@@ -23,6 +28,8 @@ export function createBasePersonRig(recipe = personRecipe()) {
   const sleeveColor = female && !robe ? recipe.design.shirtColor : recipe.palette.tunic
   const palette = recipe.palette
   const skin = material(palette.skin), tunic = material(palette.tunic)
+  const accent = material(recipe.design.accentColor)
+  const playful = recipe.design.tunicStyle === "Particolour"
   const beltMaterial = material(palette.belt), hair = material(recipe.design.hairColor)
   const undershirt = material(recipe.design.shirtColor), covering = material(recipe.design.coveringColor)
   const leftDebug = material("#329bc2"), rightDebug = material("#db7540")
@@ -96,6 +103,25 @@ export function createBasePersonRig(recipe = personRecipe()) {
       geometry.addGroup(i, 3, shirtVisible ? 1 : 0)
     }
   }
+  if (playful) {
+    torso.material = [tunic, accent]
+    const geometry = torso.geometry, positions = geometry.getAttribute("position"), indices = geometry.index!
+    geometry.clearGroups()
+    for (let i = 0; i < indices.count; i += 3) {
+      const vertices = [indices.getX(i), indices.getX(i + 1), indices.getX(i + 2)]
+      const x = vertices.reduce((sum, v) => sum + positions.getX(v), 0) / 3
+      const y = vertices.reduce((sum, v) => sum + positions.getY(v), 0) / 3
+      geometry.addGroup(i, 3, (x > 0) !== (y < waist) ? 1 : 0)
+    }
+    // Alternating pointed hem tabs are part of the draped garment itself.
+    for (let i = 0; i < positions.count; i++) {
+      if (positions.getY(i) <= b.tunicHemUpper + 0.001) {
+        const angle = Math.atan2(positions.getX(i), positions.getZ(i))
+        positions.setY(i, positions.getY(i) + 0.045 * (1 + Math.cos(angle * 6)))
+      }
+    }
+    geometry.computeVertexNormals()
+  }
   torso.scale.z = 0.72
   if (recipe.design.beltStyle === "Rope") {
     const rope = (name: string, points: THREE.Vector3[], closed = false) => {
@@ -153,6 +179,26 @@ export function createBasePersonRig(recipe = personRecipe()) {
   } else if (recipe.design.hairStyle !== "Bald") {
     const cap = mesh(new THREE.SphereGeometry(1, 10, 5, 0, Math.PI * 2, 0, Math.PI * 0.51), hair, root, [0, b.headCenter + 0.02, -0.006])
     cap.scale.set(b.headWidth * 1.1, b.headHeight * 1.08, b.headDepth * 1.12)
+    if (recipe.design.hairStyle === "Wavy") {
+      for (let i = 0; i < 9; i++) {
+        const angle = i / 9 * Math.PI * 2
+        const curl = ellipsoid(root, [Math.sin(angle) * b.headWidth * 0.87, b.headCenter + (i % 2 ? 0.04 : 0.10), Math.cos(angle) * b.headDepth * 0.88], [0.085, 0.095, 0.075], hair)
+        curl.name = "hair-wave"
+      }
+    }
+    if (recipe.design.hairStyle === "Ponytail" || recipe.design.hairStyle === "Bun") {
+      const bun = recipe.design.hairStyle === "Bun"
+      const tail = ellipsoid(root, [0, b.headCenter + (bun ? 0.03 : -0.15), -b.headDepth * 1.2], bun ? [0.10, 0.10, 0.095] : [0.075, 0.23, 0.085], hair)
+      tail.name = bun ? "hair-bun" : "hair-ponytail"
+      const tie = ellipsoid(root, [0, b.headCenter, -b.headDepth * 1.35], [0.08, 0.025, 0.075], accent)
+      tie.name = "hair-tie"
+    }
+    if (recipe.design.hairStyle === "Braids") {
+      for (const sign of [-1, 1]) for (let i = 0; i < 5; i++) {
+        const braid = ellipsoid(root, [sign * (b.headWidth * 0.95 + (i % 2) * 0.015), b.headCenter - 0.04 - i * 0.067, -0.025], [0.052, 0.055, 0.052], i === 4 ? accent : hair)
+        braid.name = "hair-braid"
+      }
+    }
     if (recipe.design.hairStyle === "Long") {
       const back = mesh(new THREE.LatheGeometry([
         new THREE.Vector2(b.headWidth * 0.92, -b.headHeight * 1.8),
@@ -167,7 +213,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       back.scale.set(b.headWidth * 1.13, b.headHeight * 1.12, b.headDepth * 1.16)
     }
   }
-  if (female && !robe) {
+  if (recipe.design.hat === "Coif") {
     const coif = mesh(new THREE.SphereGeometry(1, 10, 5, 0, Math.PI * 2, 0, Math.PI * 0.48), covering, root, [0, b.headCenter + 0.06, -0.025])
     coif.name = "head-covering"
     coif.scale.set(b.headWidth * 1.18, b.headHeight * 1.08, b.headDepth * 1.2)
@@ -200,7 +246,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
 
   const limbs = (Object.keys({ left: 0, right: 0 }) as BodySide[]).map((side) => {
     const sign = side === "left" ? 1 : -1
-    const armSkin = material(palette.skin), armTunic = material(sleeveColor)
+    const armSkin = material(palette.skin), armColor = playful && side === "right" ? recipe.design.accentColor : sleeveColor, armTunic = material(armColor)
     const shoulder = new THREE.Group()
     shoulder.position.set(sign * b.shoulderOffset, b.shoulderHeight, 0)
     shoulder.name = `${side}-shoulder`
@@ -286,8 +332,9 @@ export function createBasePersonRig(recipe = personRecipe()) {
     for (const part of [seam, sleeve, forearm, hand]) part.userData.inkPart = side === "left" ? 8 : 9
     for (const part of [thigh, shin, foot]) part.userData.inkPart = side === "left" ? 6 : 7
     for (const object of [seam, sleeve, forearm, hand, thigh, shin, foot, ...shoeParts]) tracked.push({ mesh: object, normal: object.material, side })
-    return { side, shoulder, elbow, thigh, shin, foot, seam, seamStart, sleeve, forearm, hand, rear: false, armSkin, armTunic, armParts: [seam, sleeve, forearm, hand] }
+    return { side, shoulder, elbow, thigh, shin, foot, seam, seamStart, sleeve, forearm, hand, rear: false, armSkin, armTunic, armColor, armParts: [seam, sleeve, forearm, hand] }
   })
+  const roadAccessories = createRoadAccessories(recipe, sockets, root)
   // Separate the upper body at the hips, keeping all outfit pieces and sockets together.
   const body = new THREE.Group(), poseRoot = new THREE.Group()
   const legMeshes = new Set(limbs.flatMap(limb => [limb.thigh, limb.shin, limb.foot]))
@@ -470,16 +517,19 @@ export function createBasePersonRig(recipe = personRecipe()) {
   root.add(snores)
   snores.visible = false
   // Solve both arm bones to a hand target in the upper body's coordinates.
-  const reach = (limb: typeof limbs[number], target: Point3, grip = false) => {
-    const lowerLength = b.forearmLength + (grip ? 0.04 * recipe.design.hands : 0)
+  const reach = (limb: typeof limbs[number], target: Point3, palm = false, pole?: THREE.Vector3) => {
     const start = limb.shoulder.position.clone(), end = new THREE.Vector3(...target)
     end.y -= chest.position.y
     const axis = end.clone().sub(start)
-    const distance = Math.min(axis.length(), b.upperArmLength + lowerLength - 0.001)
+    const lowerLength = b.forearmLength + (palm ? 0.04 * recipe.design.hands : 0)
+    const distance = Math.max(Math.abs(b.upperArmLength - lowerLength) + 0.001, Math.min(axis.length(), b.upperArmLength + lowerLength - 0.001))
+    if (axis.lengthSq() < 1e-12) axis.set(0, -1, 0)
     axis.normalize(); end.copy(start).addScaledVector(axis, distance)
     const along = (b.upperArmLength ** 2 - lowerLength ** 2 + distance ** 2) / (2 * distance)
-    const bend = new THREE.Vector3(limb.side === "left" ? 1 : -1, -0.4, 0)
-    bend.addScaledVector(axis, -bend.dot(axis)).normalize()
+    const bend = pole ? pole.clone().sub(start) : new THREE.Vector3(limb.side === "left" ? 1 : -1, -0.4, 0)
+    bend.addScaledVector(axis, -bend.dot(axis))
+    if (bend.lengthSq() < 1e-12) { bend.set(0, 0, 1); if (Math.abs(axis.z) > 0.9) bend.set(1, 0, 0); bend.addScaledVector(axis, -bend.dot(axis)) }
+    bend.normalize()
     const joint = start.clone().addScaledVector(axis, along).addScaledVector(bend, Math.sqrt(Math.max(0, b.upperArmLength ** 2 - along ** 2)))
     limb.shoulder.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), joint.clone().sub(start).normalize())
     const lower = end.sub(joint).normalize().applyQuaternion(limb.shoulder.quaternion.clone().invert())
@@ -503,6 +553,29 @@ export function createBasePersonRig(recipe = personRecipe()) {
   const baseParts = new Map<THREE.Material, number>([[skin, 1], [tunic, 3], [beltMaterial, 5], [hair, 2], [covering, 2], [undershirt, 3]])
   return {
     root, sockets,
+    joints(): RigJoints {
+      root.updateMatrixWorld(true)
+      const point = (object: THREE.Object3D, local = new THREE.Vector3()) => root.worldToLocal(object.localToWorld(local)).toArray() as Point3
+      const result: RigJoints = { pelvis: point(body), head: point(head) }
+      const shoulders = limbs.map(limb => point(limb.shoulder))
+      result.chest = shoulders[0].map((v, i) => (v + shoulders[1][i]) / 2) as Point3
+      for (const limb of limbs) {
+        const side = limb.side
+        result[`${side}Shoulder`] = point(limb.shoulder)
+        result[`${side}Elbow`] = point(limb.elbow)
+        result[`${side}Hand`] = point(side === "left" ? sockets.leftHand : sockets.rightHand)
+        result[`${side}Hip`] = point(limb.thigh, new THREE.Vector3(0, 0.5, 0))
+        result[`${side}Knee`] = point(limb.thigh, new THREE.Vector3(0, -0.5, 0))
+        result[`${side}Foot`] = point(limb.shin, new THREE.Vector3(0, -0.5, 0))
+      }
+      const staff = root.getObjectByName("walking-staff")
+      if (staff?.visible && staff.children[0]) {
+        const shaft = staff.children[0] as THREE.Mesh<THREE.CylinderGeometry>
+        result.staffTip = point(shaft, new THREE.Vector3(0, -shaft.geometry.parameters.height / 2, 0))
+        result.staffTop = point(shaft, new THREE.Vector3(0, shaft.geometry.parameters.height / 2, 0))
+      }
+      return result
+    },
     view(row: number) {
       root.rotation.y = -row * Math.PI / 4
       snores.rotation.y = row * Math.PI / 4
@@ -512,7 +585,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
         const rear = depth < -0.1
         limb.rear = rear
         limb.armSkin.color.set(palette.skin).multiplyScalar(rear ? 0.8 : 1)
-        limb.armTunic.color.set(sleeveColor).multiplyScalar(rear ? 0.85 : 1)
+        limb.armTunic.color.set(limb.armColor).multiplyScalar(rear ? 0.85 : 1)
         // Screen depth controls edge priority; anatomical IDs stay fixed in diagnostics.
         for (const part of limb.armParts) part.userData.inkPart = part === limb.seam ? 3 :
           part === limb.hand ? (rear ? 2 : 10) : rear ? 2 : depth > 0.1 ? 9 : 8
@@ -547,7 +620,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       const motion = walkBody(phase, clip)
       const devotional = recipe.design.walkStyle === "Devotional" && clip === "walk"
       headPivot.rotation.x = devotional ? 0.42 : 0
-      headPivot.position.y = neckTop - waist + motion.headBob
+      headPivot.position.set(0, neckTop - waist + motion.headBob, 0)
       headPivot.rotation.y = -motion.chestYaw
       body.rotation.y = motion.hipYaw
       chest.rotation.y = motion.chestYaw - motion.hipYaw
@@ -624,7 +697,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
         geometry.computeVertexNormals()
       }
       for (const limb of limbs) {
-        const leg = legPose(limb.side, phase, clip, b)
+        const leg = editedLeg(limb.side, phase, clip, b, recipe.design.poseEdits, poseRoot.quaternion.clone().invert())
         bone(limb.thigh, leg.hip, leg.knee)
         bone(limb.shin, leg.knee, leg.ankle)
         limb.foot.position.set(leg.ankle[0], leg.ankle[1] - b.ankleHeight + b.footHeight / 2, leg.ankle[2] + b.footLength * 0.22)
@@ -644,10 +717,19 @@ export function createBasePersonRig(recipe = personRecipe()) {
           (limb.side === "left" ? 0 : Math.PI) - 0.35)) * 0.14 * recipe.design.armSwing : 0
         limb.elbow.rotation.set(-THREE.MathUtils.degToRad(recipe.design.elbowBend) - elbowSwing, 0, 0)
         const sign = limb.side === "left" ? 1 : -1
-        // Closed fists wrap visibly around the shaft instead of disappearing behind the sleeve cuffs.
-        limb.hand.position.y = -b.forearmLength - (chop ? 0.04 : 0.025) * recipe.design.hands
+        limb.hand.position.set(0, -b.forearmLength - (chop ? 0.04 : 0.025) * recipe.design.hands, 0)
         limb.hand.scale.set(chop ? 0.065 : 0.043, chop ? 0.055 : 0.06, chop ? 0.060 : 0.04).multiplyScalar(recipe.design.hands)
-        if (devotional) reach(limb, [sign * 0.018, waist - b.hipHeight + 0.045 + sign * 0.015, 0.30])
+        limb.hand.quaternion.identity()
+        if (recipe.design.walkingStick && (clip === "walk" || clip === "idle") && limb.side === "right") {
+          const { grip } = staffMotion(phase, b, clip === "walk", recipe.design.poseEdits)
+          root.updateMatrixWorld(true)
+          const target = chest.worldToLocal(root.localToWorld(new THREE.Vector3(...grip)))
+          target.y += chest.position.y
+          reach(limb, target.toArray() as Point3, true)
+          root.updateMatrixWorld(true)
+
+        }
+        else if (devotional) reach(limb, [sign * 0.018, waist - b.hipHeight + 0.045 + sign * 0.015, 0.30])
         else if (praying) reach(limb, [sign * 0.035, b.chestHeight - b.hipHeight, 0.33])
         else if (felling) {
           // Carry the two-handed grip with the chest as it twists, within both arms' reach.
@@ -678,8 +760,35 @@ export function createBasePersonRig(recipe = personRecipe()) {
         else if (seated) reach(limb, [sign * 0.21, 0.02, 0.30])
         else if (sleep) reach(limb, bundled ? [-sign * 0.035, 0.08, 0.23 + sign * 0.02] :
           female ? [sign * 0.055, 0.42, 0.25] : [sign * 0.09, 0.22, 0.24])
+        const handOffset = poseOffset(recipe.design.poseEdits, clip, limb.side === "left" ? "leftHand" : "rightHand", phase)
+        const elbowOffset = poseOffset(recipe.design.poseEdits, clip, limb.side === "left" ? "leftElbow" : "rightElbow", phase)
+        if ([...handOffset, ...elbowOffset].some(v => v !== 0)) {
+          root.updateMatrixWorld(true)
+          const handSocket = limb.side === "left" ? sockets.leftHand : sockets.rightHand
+          const hand = root.worldToLocal(handSocket.getWorldPosition(new THREE.Vector3())).add(new THREE.Vector3(...handOffset))
+          const elbow = root.worldToLocal(limb.elbow.getWorldPosition(new THREE.Vector3())).add(new THREE.Vector3(...elbowOffset))
+          const target = chest.worldToLocal(root.localToWorld(hand))
+          target.y += chest.position.y
+          const pole = chest.worldToLocal(root.localToWorld(elbow))
+          reach(limb, target.toArray() as Point3, true, pole)
+        }
+        if (recipe.design.walkingStick && (clip === "walk" || clip === "idle") && limb.side === "right") {
+          root.updateMatrixWorld(true)
+          const grip = sockets.rightHand.getWorldPosition(new THREE.Vector3())
+          const palm = grip.clone().add(new THREE.Vector3(0, 0.026, 0))
+          limb.hand.position.copy(limb.elbow.worldToLocal(palm))
+          const orientation = root.getWorldQuaternion(new THREE.Quaternion()).multiply(
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2))
+          limb.hand.quaternion.copy(limb.elbow.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(orientation))
+        }
       }
       root.updateMatrixWorld(true)
+      const headOffset = new THREE.Vector3(...poseOffset(recipe.design.poseEdits, clip, "head", phase))
+      const parent = headPivot.parent!
+      const zero = parent.worldToLocal(root.localToWorld(new THREE.Vector3()))
+      headPivot.position.add(parent.worldToLocal(root.localToWorld(headOffset)).sub(zero))
+      root.updateMatrixWorld(true)
+      roadAccessories.pose(clip, phase)
       if (chop) {
         const toolRotation = felling
           ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), swing.yaw + Math.PI / 2)
@@ -706,6 +815,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
     /** Attach future outfit geometry to these nodes before baking for correct occlusion. */
     attach(name: SocketName, accessory: THREE.Object3D) { sockets[name].add(accessory) },
     dispose() {
+      roadAccessories.dispose()
       for (const mask of masks.values()) mask.dispose()
       for (const geometry of geometries) geometry.dispose()
       for (const m of materials) m.dispose()

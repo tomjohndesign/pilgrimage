@@ -35,7 +35,7 @@ describe("character settings", () => {
     expect(original.walk.url).toBe(asset.sheet)
     expect(asset.sound).toContain("merchant-select")
   })
-  it("plays all twenty base walk frames and uses its dedicated idle pose", () => {
+  it("plays all sixty base walk frames and uses its dedicated idle pose", () => {
     const visual = characterVisual(CHARACTER_ASSETS.peasant, "base")
     expect(Array.from({ length: 21 }, (_, i) => spriteFrame((i + 0.01) / visual.fps, visual.fps, true, visual.walk.columns))).toEqual([...Array.from({ length: 20 }, (_, i) => i), 0])
     expect(spriteFrame(12, visual.fps, false, visual.idle.columns, visual.idle.stillFrame)).toBe(0)
