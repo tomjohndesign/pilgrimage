@@ -1,5 +1,6 @@
 import type { FoodStock } from "./storage"
 import { create } from "zustand"
+import { normalizeBuildingRotation, type BuildingRotation } from "./building-rotation"
 
 import type { SimState } from "./sim"
 import type { TreeResource, WoodPile } from "./trees/timber"
@@ -12,6 +13,8 @@ import type { Traveler } from "./travelers"
  */
 interface BuildState {
   tool: string | null
+  rotation: BuildingRotation
+  rotateBuilding: (direction: number) => void
   /** Placement indices of trees that have been cut. */
   felled: ReadonlySet<number>
   treeResources: ReadonlyMap<number, TreeResource>
@@ -32,6 +35,7 @@ interface BuildState {
 
 const emptyState = () => ({
   tool: null,
+  rotation: 0 as BuildingRotation,
   felled: new Set<number>(),
   treeResources: new Map<number, TreeResource>(),
   foodStores: new Map<string, FoodStock>(),
@@ -74,7 +78,8 @@ export const useBuildStore = create<BuildState>((set) => ({
       } : {}),
     }
   }),
-  setTool: (tool) => set({ tool }),
+  setTool: (tool) => set((s) => ({ tool, rotation: s.tool === tool ? s.rotation : 0 })),
+  rotateBuilding: (direction) => set((s) => s.tool ? { rotation: normalizeBuildingRotation(s.rotation + direction) } : {}),
   setFelled: (felled) => set({ felled }),
   reset: () => set(emptyState()),
 }))

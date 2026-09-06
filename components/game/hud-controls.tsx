@@ -3,12 +3,14 @@
 import Image from "next/image"
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react"
 import * as Tooltip from "@radix-ui/react-tooltip"
-import { Coins, Footprints, Hammer, House, Pause, Play, Sparkles, Users, X } from "lucide-react"
+import { Coins, Footprints, Hammer, House, Pause, Play, RotateCcw, RotateCw, Sparkles, Users, X } from "lucide-react"
 
 import type { useSettlement } from "@/hooks/use-settlement"
 import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
 import { BuildThumbnail } from "./build-thumbnail"
 import { influenceRadius } from "@/lib/game/build-influence"
+import { useBuildStore } from "@/lib/game/build-store"
+import { rotatedFootprint } from "@/lib/game/building-rotation"
 import { canAfford, placementError } from "@/lib/game/settlement"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { formatGameTime, simRegistry } from "@/lib/game/sim"
@@ -63,6 +65,8 @@ export function BuildControls({ economy, open, onToggle, onClose }: {
   onClose: () => void
 }) {
   const { map, balance, settlement, buildType, chooseBuild } = economy
+  const rotation = useBuildStore((s) => s.rotation)
+  const rotateBuilding = useBuildStore((s) => s.rotateBuilding)
   const hovered = useCameraStore((s) => s.hovered)
   const catalog = useMemo(() => [...buildCatalog(balance)].sort((a, b) =>
     a.id === "workshop" ? -1 : b.id === "workshop" ? 1 : 0), [balance])
@@ -72,35 +76,49 @@ export function BuildControls({ economy, open, onToggle, onClose }: {
     if (!selected) return null
     if (renown < selected.requiredRenown) return `Requires ${selected.requiredRenown} shrine renown.`
     if (!canAfford(settlement.resources, selected.cost)) return "Not enough gold or wood."
-    return map && hovered ? placementError(map, selected, hovered, balance) : null
-  }, [selected, renown, settlement.resources, map, hovered, balance])
+    return map && hovered ? placementError(map, selected, hovered, balance, rotation) : null
+  }, [selected, renown, settlement.resources, map, hovered, balance, rotation])
+
+  const footprint = selected && rotatedFootprint(selected, rotation)
 
   return <div className="hud-bottom-center">
     {open && <section id="build-tray" className="hud-well hud-build-tray" aria-label="Build options">
-      <div className="hud-building-tiles">
-        {catalog.map((item) => {
-          const locked = renown < item.requiredRenown
-          const unavailable = !map || locked || !canAfford(settlement.resources, item.cost)
-          return <HudHelp key={item.id} content={<>
-            <div className="hud-help-title">Build {item.label}{item.id === "workshop" && <kbd>L</kbd>}</div>
-            <p>{item.description}</p>
-            <div className="hud-help-meta">{item.cost.gold} gold · {item.cost.wood} wood · {item.w} × {item.d} tiles</div>
-            <p className="hud-help-secondary">{buildingIncomeLabel(item, balance)}</p>
-            <p className="hud-help-secondary">+{item.renown} shrine renown · {item.renown > 0
-              ? `${influenceRadius(item.renown, balance).toFixed(1)} tiles of influence`
-              : "Does not extend influence"}</p>
-            <p className="hud-help-secondary">{locked ? `Requires ${item.requiredRenown} shrine renown.`
-              : unavailable ? "Not enough supplies or the world is still loading."
-              : "Place inside shrine influence or beside the approach; the whole footprint must fit."}</p>
-          </>}>
-            <button type="button" className="hud-building-tile" aria-label={`Build ${item.label.toLowerCase()}`}
-              aria-pressed={buildType === item.id} aria-disabled={unavailable}
-              onClick={() => { if (!unavailable) chooseBuild(buildType === item.id ? null : item.id) }}>
-              <BuildThumbnail id={item.id} />
-              {item.id === "workshop" && <kbd>L</kbd>}
-            </button>
-          </HudHelp>
-        })}
+      <div className="hud-build-content">
+        <div className="hud-building-tiles">
+          {catalog.map((item) => {
+            const locked = renown < item.requiredRenown
+            const unavailable = !map || locked || !canAfford(settlement.resources, item.cost)
+            return <HudHelp key={item.id} content={<>
+              <div className="hud-help-title">Build {item.label}{item.id === "workshop" && <kbd>L</kbd>}</div>
+              <p>{item.description}</p>
+              <div className="hud-help-meta">{item.cost.gold} gold · {item.cost.wood} wood · {item.w} × {item.d} tiles</div>
+              <p className="hud-help-secondary">{buildingIncomeLabel(item, balance)}</p>
+              <p className="hud-help-secondary">+{item.renown} shrine renown · {item.renown > 0
+                ? `${influenceRadius(item.renown, balance).toFixed(1)} tiles of influence`
+                : "Does not extend influence"}</p>
+              <p className="hud-help-secondary">{locked ? `Requires ${item.requiredRenown} shrine renown.`
+                : unavailable ? "Not enough supplies or the world is still loading."
+                : "Place inside shrine influence or beside the approach; the whole footprint must fit."}</p>
+            </>}>
+              <button type="button" className="hud-building-tile" aria-label={`Build ${item.label.toLowerCase()}`}
+                aria-pressed={buildType === item.id} aria-disabled={unavailable}
+                onClick={() => { if (!unavailable) chooseBuild(buildType === item.id ? null : item.id) }}>
+                <BuildThumbnail id={item.id} />
+                {item.id === "workshop" && <kbd>L</kbd>}
+              </button>
+            </HudHelp>
+          })}
+        </div>
+        {selected && footprint && <div className="hud-build-rotation" role="group" aria-label="Building rotation">
+          <button type="button" className="hud-action" aria-label="Rotate building counterclockwise" aria-keyshortcuts="Meta+Q" title="Rotate counterclockwise (Cmd+Q)" onClick={() => rotateBuilding(-1)}>
+            <RotateCcw size={15} aria-hidden /> <kbd>⌘ Q</kbd>
+          </button>
+          <span>{rotation * 90}° · {footprint.w} × {footprint.d} tiles</span>
+          <button type="button" className="hud-action" aria-label="Rotate building clockwise" aria-keyshortcuts="Meta+E" title="Rotate clockwise (Cmd+E)" onClick={() => rotateBuilding(1)}>
+            <RotateCw size={15} aria-hidden /> <kbd>⌘ E</kbd>
+          </button>
+          <span className="hud-entry-key">Gold arrows mark entrances</span>
+        </div>}
       </div>
       <button type="button" className="hud-close" aria-label="Close build options" onClick={onClose}><X size={14} /></button>
     </section>}

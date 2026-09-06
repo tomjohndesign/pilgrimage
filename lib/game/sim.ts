@@ -1,3 +1,4 @@
+import { buildingEntry } from "./building-rotation"
 import { timberDestination, type FoodStock } from "./storage"
 import { nearProcession, type RelicProcession } from "./relic-procession"
 import { roadsideStall, routePoint, routeLength, type StallRoute } from "./transport/roadside"
@@ -777,7 +778,7 @@ function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): 
   if (job && nextRoll(s) < (t.attributes.skills.some((skill) => BUILDING_KINDS[job.kind].trades.includes(skill)) ? 0.9 : 0.65)) {
     const route = settlementRoute(map, [...map.buildings, ...sim.buildings],
       { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
-      { x: job.x, z: job.z + job.d }, false, true)
+      buildingEntry(job), false, true)
     if (route) {
       s.employer = job.id
       s.jobless = false

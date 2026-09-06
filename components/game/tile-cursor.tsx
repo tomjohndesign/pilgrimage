@@ -4,6 +4,9 @@ import { StructureModel } from "@/components/building-lab/building-model"
 import { structureParts } from "@/lib/game/building-art/structure"
 
 import { useMemo } from "react"
+import { useBuildStore } from "@/lib/game/build-store"
+import { buildingYaw, rotatedFootprint } from "@/lib/game/building-rotation"
+import { PlacementEntrances } from "./placement-entrances"
 import { groundHeight } from "@/lib/game/map/elevation"
 
 import { canAfford, placementError, type Resources } from "@/lib/game/settlement"
@@ -32,6 +35,7 @@ export function TileCursor({
   shrineRenown?: number
 }) {
   const balance = useBalanceStore((s) => s.balance)
+  const rotation = useBuildStore((s) => s.rotation)
   const hovered = useCameraStore((s) => s.hovered)
   const highlight = useMemo(() => {
     if (!hovered) return new Float32Array(0)
@@ -47,25 +51,29 @@ export function TileCursor({
   if (!tileAt(map, hovered.x, hovered.z)) return null
 
   if (build) {
+    const footprint = rotatedFootprint(build, rotation)
     const valid =
       shrineRenown >= build.requiredRenown &&
-      !placementError(map, build, hovered, balance) &&
+      !placementError(map, build, hovered, balance, rotation) &&
       !!resources &&
       canAfford(resources, build.cost)
     const color = valid ? "#93bc6c" : "#db6656"
     return (
       <group
         position={[
-          tileToWorldX(map, hovered.x) + (build.w - 1) / 2,
-          groundHeight(map, hovered.x + (build.w - 1) / 2, hovered.z + (build.d - 1) / 2),
-          tileToWorldZ(map, hovered.z) + (build.d - 1) / 2,
+          tileToWorldX(map, hovered.x) + (footprint.w - 1) / 2,
+          groundHeight(map, hovered.x + (footprint.w - 1) / 2, hovered.z + (footprint.d - 1) / 2),
+          tileToWorldZ(map, hovered.z) + (footprint.d - 1) / 2,
         ]}
       >
         <mesh position={[0, 0.04, 0]} renderOrder={4}>
-          <boxGeometry args={[build.w, 0.04, build.d]} />
+          <boxGeometry args={[footprint.w, 0.04, footprint.d]} />
           <meshBasicMaterial color={color} transparent opacity={0.65} depthWrite={false} />
         </mesh>
-        <StructureModel parts={parts} ghostColor={color} />
+        <group rotation={[0, buildingYaw(rotation), 0]}>
+          <StructureModel parts={parts} ghostColor={color} />
+          <PlacementEntrances type={build.id} w={build.w} d={build.d} />
+        </group>
       </group>
     )
   }
