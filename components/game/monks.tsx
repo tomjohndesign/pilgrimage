@@ -194,7 +194,7 @@ export function Monks({ map, monks, flying = false, characterScale = 1 }: { map:
       group.userData.distance = Math.hypot(s.x - previousX, s.z - previousZ)
       group.userData.moving = group.userData.distance > 0
     }
-  })
+  }, -3)
 
   if (world.spots.length === 0) return null
 

@@ -28,7 +28,7 @@ describe("walking at the rendered person's scale", () => {
     expect(MONK_VISUAL.walkStride).toBeCloseTo(personWalkStride(PERSON_PRESETS.Monk))
     for (const characterScale of [0.75, BASE_CHARACTER_SCALE, 2]) {
       const stride = MONK_VISUAL.walkStride * characterScale
-      expect(monkWalkSpeed(characterScale) / stride * 120).toBeCloseTo(108)
+      expect(monkWalkSpeed(characterScale) / stride * 120).toBeCloseTo(138)
     }
     expect(monkWalkSpeed(2)).toBeCloseTo(monkWalkSpeed(1) * 2)
     expect(MONK_WALK_TUNING).toEqual({ sync: true, stride: DEFAULT_WALK_STRIDE })
@@ -124,14 +124,14 @@ describe("walking at the rendered person's scale", () => {
     }
   })
 
-  it("uses a 108-step baseline and preserves cadence when the visible person is resized", () => {
+  it("uses a 138-step baseline and preserves cadence when the visible person is resized", () => {
     expect(DEFAULT_WALK_STRIDE).toBeCloseTo(0.353, 3)
-    expect(DEFAULT_WALK_SPEED).toBeCloseTo(0.318, 3)
+    expect(DEFAULT_WALK_SPEED).toBeCloseTo(0.406, 3)
     const stride = personWalkStride(DEFAULT_DESIGN)
     expect(walkSpeedScale(stride, BASE_CHARACTER_SCALE)).toBe(1)
     for (const scale of [0.75, 1.5, 2]) {
       const speed = DEFAULT_WALK_SPEED * walkSpeedScale(stride, scale)
-      expect(speed / (stride * scale) * 120).toBeCloseTo(108)
+      expect(speed / (stride * scale) * 120).toBeCloseTo(138)
     }
   })
 

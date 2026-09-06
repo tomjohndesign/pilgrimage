@@ -23,7 +23,7 @@ import { ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
  * (The world seed itself comes from the URL: /play?seed=….)
  * Development only; it is never mounted in a production build.
  */
-export function DebugHandle({ map, travelers, speed, movement, speedScales }: { map: GameMap; travelers: Traveler[]; speed: number; movement: MovementTuning; speedScales?: ReadonlyMap<number, number> }) {
+export function DebugHandle({ map, travelers, speed, movement, speedScales, characterScale }: { map: GameMap; travelers: Traveler[]; speed: number; movement: MovementTuning; speedScales?: ReadonlyMap<number, number>; characterScale?: number }) {
   const { gl, camera, scene } = useThree()
 
   useEffect(() => {
@@ -57,6 +57,18 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales }: { 
           const image = map?.image as HTMLImageElement | undefined
           sprites.push({ model: object.userData.characterModel, calling: object.userData.calling, variant: object.userData.variant, bodyType: object.userData.bodyType, appearanceScale: object.userData.appearanceScale, position: object.getWorldPosition(new THREE.Vector3()).toArray(), phase: object.userData.walkPhase, sync: object.userData.sync, fps: object.userData.fps, sheet: image?.src ?? "",
             repeat: map?.repeat.toArray() ?? [], offset: map?.offset.toArray() ?? [], center: object.center.toArray(), scale: object.scale.toArray() })
+        })
+        return sprites
+      },
+      transportSprites: () => {
+        const sprites: Array<{ kind: string; position: number[]; sheet: string; columns: number; rows: number; visible: boolean; heading: number; grazing: boolean }> = []
+        scene.traverse(object => {
+          if (!(object instanceof THREE.Sprite) || !["cart", "horse", "donkey", "merchant"].includes(object.name)) return
+          const map = object.material.map, data = object.parent?.parent?.userData
+          let visible = true; object.traverseAncestors(parent => { visible &&= parent.visible })
+          sprites.push({ kind: object.name, position: object.getWorldPosition(new THREE.Vector3()).toArray(), sheet: (map?.image as HTMLImageElement)?.src ?? "",
+            columns: 1 / (map?.repeat.x ?? 1), rows: 1 / (map?.repeat.y ?? 1), visible,
+            heading: data?.heading ?? 0, grazing: data?.grazing === true })
         })
         return sprites
       },
@@ -101,7 +113,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales }: { 
         const sim = simRegistry.current
         if (!sim) return
         const ticks = Math.ceil(Math.max(0, Math.min(120, seconds)) * 10)
-        for (let i = 0; i < ticks; i++) stepSim(sim, travelers, map, speed, 0.1, movement, speedScales)
+        for (let i = 0; i < ticks; i++) stepSim(sim, travelers, map, speed, 0.1, movement, speedScales, characterScale)
         useBuildStore.getState().syncResources(sim, travelers)
       },
       settlement: () => ({
@@ -157,7 +169,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales }: { 
     return () => {
       delete (window as unknown as Record<string, unknown>).__pilgrimage
     }
-  }, [gl, camera, scene, map, travelers, speed, movement, speedScales])
+  }, [gl, camera, scene, map, travelers, speed, movement, speedScales, characterScale])
 
   return null
 }

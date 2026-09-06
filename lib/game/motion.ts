@@ -44,7 +44,7 @@ export function roundedCorner(a: Point, b: Point, c: Point, offset: number, amou
 
 /** Distance mode is independent of render rate; fixed mode preserves the FPS dial. */
 export function advanceWalkPhase(phase: number, distance: number, dt: number, frames: number,
-  fps: number, stride: number, sync: boolean): number {
+  fps: number, stride: number, sync = true): number {
   const cycles = sync ? distance / Math.max(0.01, stride) : dt * fps / frames
   return (phase + cycles) % 1
 }

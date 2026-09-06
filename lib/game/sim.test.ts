@@ -298,6 +298,36 @@ describe("stepSim", () => {
     ).toBe(true)
   })
 
+  it("briefly opens and packs animal-drawn shops, waiting for recall before departure", () => {
+    for (const id of [4, 8]) { // donkey and horse
+      const map = makeMap(), travelers = [makeTraveler(id, "vendor", { stamina: 100, hunger: 100, thirst: 100 })]
+      const sim = createSim(travelers, map), vendor = sim.travelers.get(id)!
+      vendor.timer = 0
+      expect(runUntil(sim, travelers, map, () => vendor.activity === "openingShop", 60)).toBe(true)
+      expect(vendor.pasture).toBeDefined()
+      expect(Math.abs(worldToTileZ(map, vendor.z) - 4)).toBe(2)
+      const originalProgress = vendor.progress, returnProgress = vendor.stallRoute!.returnProgress
+      expect((returnProgress - originalProgress) * vendor.direction).toBeGreaterThan(0)
+      const parked = [vendor.x, vendor.z]
+      stepSim(sim, travelers, map, 1, 1)
+      expect(vendor.activity).toBe("openingShop")
+      expect([vendor.x, vendor.z]).toEqual(parked)
+      expect(runUntil(sim, travelers, map, () => vendor.activity === "vending", 5)).toBe(true)
+      vendor.timer = 100
+      for (let i = 0; i < 30; i++) stepSim(sim, travelers, map, 1, 0.1)
+      vendor.timer = 0
+      stepSim(sim, travelers, map, 1, 0.1)
+      expect(runUntil(sim, travelers, map, () => vendor.activity === "packingShop", 25)).toBe(true)
+      stepSim(sim, travelers, map, 1, 1)
+      expect(vendor.activity).toBe("packingShop")
+      expect([vendor.x, vendor.z]).toEqual(parked)
+      expect(runUntil(sim, travelers, map, () => vendor.activity === "fromShop", 30)).toBe(true)
+      expect(vendor.pasture).toBeUndefined()
+      expect(runUntil(sim, travelers, map, () => vendor.activity === "walking", 10)).toBe(true)
+      expect(vendor.progress).toBeCloseTo(returnProgress)
+    }
+  })
+
   it("holds stamina steady while minding the stall", () => {
     const map = makeMap()
     const travelers = [makeTraveler(1, "vendor", { stamina: 50, hunger: 100, thirst: 100 })]
@@ -326,6 +356,26 @@ describe("stepSim", () => {
     expect(runUntil(sim, travelers, map, () => buyer.hunger > 50, 30)).toBe(true)
     expect(vendor.gold).toBe(FOOD_PRICE)
     expect(vendor.activity).toBe("vending")
+  })
+
+  it("walks customers along the path, up to the frontage, and back after the purchase", () => {
+    const map = makeMap(), travelers = [makeTraveler(4, "vendor", { hunger: 100, thirst: 100, stamina: 100 }), makeTraveler(0, "peasant", { hunger: 100, thirst: 100, stamina: 100, gold: 20 }, 0.2)]
+    const sim = createSim(travelers, map), vendor = sim.travelers.get(4)!, buyer = sim.travelers.get(0)!
+    vendor.timer = 0
+    expect(runUntil(sim, travelers, map, () => vendor.activity === "vending", 60)).toBe(true)
+    vendor.timer = 999; buyer.hunger = 0
+    expect(runUntil(sim, travelers, map, () => buyer.activity === "toStall", 60)).toBe(true)
+    expect(tileAt(map, worldToTileX(map, buyer.x), worldToTileZ(map, buyer.z))).toBe("path")
+    expect(buyer.progress).toBeCloseTo(vendor.stallRoute!.entranceProgress)
+    expect(buyer.hunger).toBe(0)
+    expect(runUntil(sim, travelers, map, () => buyer.activity === "browsing", 10)).toBe(true)
+    expect(buyer.x).toBeCloseTo(vendor.stallRoute!.frontage.x)
+    expect(buyer.z).toBeCloseTo(vendor.stallRoute!.frontage.z)
+    expect(buyer.hunger).toBe(0)
+    expect(runUntil(sim, travelers, map, () => buyer.activity === "fromStall", 5)).toBe(true)
+    expect(buyer.hunger).toBeGreaterThan(99)
+    expect(runUntil(sim, travelers, map, () => buyer.activity === "walking", 10)).toBe(true)
+    expect(tileAt(map, worldToTileX(map, buyer.x), worldToTileZ(map, buyer.z))).toBe("path")
   })
 
   it("lets vendors eat from their own stock for free", () => {

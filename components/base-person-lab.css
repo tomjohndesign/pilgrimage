@@ -26,6 +26,8 @@
 .person-workspace { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 8px; min-height: 0; padding: 0 6px; }
 .person-controls { min-height: 0; display: flex; flex-direction: column; }
 .person-panel-heading { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #5d5038; font: 13px var(--font-cinzel), serif; color: #eddbb2; }
+.person-panel-heading .person-choice { flex: 1; gap: 12px; }
+.person-panel-heading .person-choice select { width: auto; flex: 1; }
 .person-controls-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 12px 14px; scrollbar-width: thin; scrollbar-color: #726242 #211e16; }
 .person-controls-scroll section { gap: 8px; padding-top: 12px; padding-bottom: 12px; }
 .person-controls-scroll section > div { gap: 6px; }
@@ -96,3 +98,17 @@
 @media (max-width: 480px) {
   .person-road-label { display: none; }
 }
+
+.merchant-map-preview { width: 100%; height: 100%; display: grid; grid-template-rows: minmax(0, 1fr) auto auto; }
+.merchant-map-scene { min-height: 0; position: relative; }
+.merchant-map-caption { display: flex; justify-content: space-between; gap: 8px; padding: 8px 12px; font-size: 12px; color: #e5d9b9; background: #252b1c; }
+.merchant-map-controls { padding: 8px; display: grid; gap: 8px; }
+.merchant-map-stages, .merchant-map-timeline { display: flex; align-items: center; gap: 6px; }
+.merchant-map-stages { flex-wrap: wrap; justify-content: center; }
+.merchant-map-stages button[aria-pressed="true"] { background: #594b31; border-color: #bea067; }
+.merchant-map-timeline input { flex: 1; min-width: 30px; accent-color: #d4b57a; }
+.merchant-map-timeline label { display: flex; gap: 6px; align-items: center; color: #d4c297; font-size: 12px; }
+@media (max-width: 760px) { .merchant-map-caption > span:last-child { display: none; } .merchant-map-stages .hud-action { font-size: 10px; padding: 4px 6px; } }
+.person-preview, .merchant-map-preview { grid-template-columns: minmax(0, 1fr); }
+.merchant-map-preview, .merchant-map-controls { min-width: 0; }
+@media (max-width: 760px) { .person-view-buttons { flex-wrap: wrap; } }

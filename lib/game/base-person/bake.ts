@@ -39,7 +39,7 @@ export interface BasePersonBake {
 let bakeRenderer: THREE.WebGLRenderer | undefined
 
 /** Shared camera, ink and registration for both live previews and exported sheets. */
-function personFrameRenderer(design: PersonDesign) {
+export function personFrameRenderer(design: PersonDesign) {
   const recipe = personRecipe(design)
   const size = recipe.cellSize
   // One small renderer per page, reused while adjusting parameters.
@@ -73,10 +73,11 @@ function personFrameRenderer(design: PersonDesign) {
   const maskContext = maskCanvas.getContext("2d", { willReadFrequently: true })!
   return {
     recipe,
-    render(clip: BaseClip, phase: number, row: number, debug: boolean) {
+    render(clip: BaseClip, phase: number, row: number, debug: boolean, poseOverride?: (rig: ReturnType<typeof createBasePersonRig>) => void) {
       rig.trackSides(debug)
       rig.view(row)
       rig.pose(phase, clip)
+      poseOverride?.(rig)
       renderer.render(scene, camera)
       context.clearRect(0, 0, size, size)
       context.drawImage(renderer.domElement, 0, 0)

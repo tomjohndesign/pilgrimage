@@ -1,3 +1,11 @@
+import { roadsideStall, routePoint, routeLength, type StallRoute } from "./transport/roadside"
+import { keeperRoutine } from "./transport/keeper"
+import { personWalkStride } from "./base-person/gait"
+import { populationDesign, travelerAppearance } from "./base-person/population"
+import { animalClearance } from "./transport/stall"
+import { BASE_CHARACTER_SCALE } from "./base-person/gait"
+import { cartOffset, SHOP_SECONDS, cartLoadout } from "./transport/assets"
+import { createPasture, stepPasture, type PastureAnimal } from "./transport/pasture"
 import { LINEAR_MOVEMENT, easeProgress, easeSpeed, paceVariation, roundedCorner, type MovementTuning } from "./motion"
 import { DEFAULT_BALANCE, type GameBalance } from "./balance"
 import { buildingAt } from "./settlement"
@@ -64,11 +72,16 @@ export type Activity =
   | "idle"
   | "walking"
   | "seeking"
+  | "toStall"
+  | "browsing"
+  | "fromStall"
   | "fleeing"
   | "toCamp"
   | "camping"
   | "fromCamp"
   | "toShop"
+  | "openingShop"
+  | "packingShop"
   | "vending"
   | "fromShop"
 
@@ -83,11 +96,16 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
   idle: "At the lumber camp",
   walking: "On the road",
   seeking: "Seeking food & drink",
+  toStall: "Approaching the stall",
+  browsing: "Buying food & drink",
+  fromStall: "Returning to the path",
   fleeing: "Turned back",
   toCamp: "Making camp",
   camping: "Camping",
   fromCamp: "Breaking camp",
   toShop: "Setting up shop",
+  openingShop: "Unloading wares",
+  packingShop: "Packing wares & bringing the animal back",
   vending: "Selling wares",
   fromShop: "Packing up",
 }
@@ -167,6 +185,11 @@ function roll(id: number, n: number): number {
 }
 
 export interface SimTraveler {
+  keeperTime?: number
+  customerVisit?: { vendorId: number; road: { x: number; y: number; z: number }; frontage: { x: number; y: number; z: number } }
+  stallRoute?: StallRoute
+  pasture?: PastureAnimal
+
   id: number
   activity: Activity
   gold: number
@@ -493,7 +516,7 @@ function findNearbySpot(
   return best
 }
 
-const STALL_ACTIVITIES: readonly Activity[] = ["toShop", "vending"]
+const STALL_ACTIVITIES: readonly Activity[] = ["toShop", "openingShop", "vending", "packingShop"]
 const CAMP_ACTIVITIES: readonly Activity[] = ["toCamp", "camping"]
 
 /** Spread same-tile pitches apart with a per-traveler hash, not RNG. */
@@ -556,6 +579,15 @@ function stepOffRoadWalk(
   s.y = from.y + (to.y - from.y) * eased
   s.z = from.z + (to.z - from.z) * eased
   return s.walkT >= 1
+}
+
+function stepStallWalk(map: GameMap, s: SimTraveler, leaving: boolean, distance: number): boolean {
+  if (!s.stallRoute) return stepOffRoadWalk(s, leaving ? currentRoutePoint(map, s) : s.spot!, distance, 1)
+  const route = leaving ? s.stallRoute.exit : s.stallRoute.entry
+  s.walkT = Math.min(routeLength(route), s.walkT + distance)
+  const p = routePoint(route, s.walkT)
+  s.x = p.x; s.z = p.z; s.y = surfaceHeight(map, worldToTileX(map, p.x), worldToTileZ(map, p.z))
+  return s.walkT >= routeLength(route)
 }
 
 function routeState(t: Traveler, s: SimTraveler): RouteState {
@@ -672,6 +704,7 @@ export function stepSim(
   movement: MovementTuning = LINEAR_MOVEMENT,
   /** Rendered stride relative to the reference person, keyed by traveler ID. */
   speedScales?: ReadonlyMap<number, number>,
+  characterScale = BASE_CHARACTER_SCALE,
 ): void {
   if (!map.road || map.road.length < 2) return
   const length = map.road.length - 1
@@ -712,10 +745,15 @@ export function stepSim(
     }
 
     const targetSpeed = t.pace * baseSpeed * (speedScales?.get(t.id) ?? 1) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
-    s.moveSpeed = camping || sheltered || s.activity === "working" || s.activity === "vending" ? 0 :
+    s.moveSpeed = camping || sheltered || s.activity === "working" || s.activity === "browsing" || s.activity === "openingShop" || s.activity === "packingShop" || s.activity === "vending" ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed
 
+    if (s.pasture && (s.activity === "openingShop" || s.activity === "vending" || s.activity === "packingShop")) {
+      s.pasture.obstacles = [...sim.travelers.values()].flatMap(other =>
+        other.stallRoute && ["openingShop", "vending", "packingShop"].includes(other.activity) ? other.stallRoute.obstacles : [])
+      stepPasture(map, s.pasture, dt, Math.max(0.01, targetSpeed), s.activity === "packingShop")
+    }
     switch (s.activity) {
       case "toRelic":
       case "fromRelic": {
@@ -812,12 +850,17 @@ export function stepSim(
           if (s.fleeTimer <= 0) s.activity = "walking"
         }
         // A vendor whose walking stint is up pulls off to the side of the path.
-        if (isVendor && !shelter) {
+        if (isVendor && !shelter && !s.track) {
           s.timer -= dt
           if (s.timer <= 0) {
-            s.spot = pitchSpot(map, s, s)
-            startOffRoadWalk(s, "toShop")
-            break
+            const pitch = roadsideStall(map, s, s.progress, s.direction, -cartOffset(cartLoadout(s.id).puller) * characterScale, characterScale, cartLoadout(s.id).puller)
+            if (pitch) {
+              s.stallRoute = pitch
+              s.spot = { ...pitch.park, y: surfaceHeight(map, worldToTileX(map, pitch.park.x), worldToTileZ(map, pitch.park.z)) }
+              startOffRoadWalk(s, "toShop")
+              break
+            }
+            s.timer = 5
           }
         }
         // Nobody goes shopping from the middle of the dark forest: on a track
@@ -836,12 +879,25 @@ export function stepSim(
             .map((v) => sim.travelers.get(v.id))
             .filter(
               (v): v is SimTraveler =>
-                !!v && !CAMP_ACTIVITIES.includes(v.activity) && v.activity !== "fromCamp",
+                !!v && v.activity !== "openingShop" && v.activity !== "packingShop" && !CAMP_ACTIVITIES.includes(v.activity) && v.activity !== "fromCamp",
             )
             .sort((a, b) => Math.abs(a.progress - s.progress) - Math.abs(b.progress - s.progress))[0]
 
           if (vendor) {
             s.targetId = vendor.id
+            if (vendor.activity === "vending" && vendor.stallRoute && !s.track) {
+              const entrance = vendor.stallRoute.entranceProgress
+              const remaining = entrance - s.progress, step = worldSpeed * SEEK_HASTE * dt
+              s.progress += Math.sign(remaining) * Math.min(Math.abs(remaining), step)
+              const at = currentRoutePoint(map, s, movement.pathEase)
+              s.x = at.x; s.y = at.y; s.z = at.z
+              if (Math.abs(remaining) <= step) {
+                const front = vendor.stallRoute.frontage
+                s.customerVisit = { vendorId: vendor.id, road: at, frontage: { ...front, y: surfaceHeight(map, worldToTileX(map, front.x), worldToTileZ(map, front.z)) } }
+                startOffRoadWalk(s, "toStall")
+              }
+              break
+            }
             const range = vendor.activity === "vending" ? STALL_TRADE_RANGE : TRADE_RANGE
             if (Math.hypot(vendor.x - s.x, vendor.z - s.z) <= range) {
               if (s.hunger <= BUY_THRESHOLD) {
@@ -944,21 +1000,64 @@ export function stepSim(
         break
       }
 
-      case "toShop": {
-        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, movement.pathEase)) {
-          s.activity = "vending"
-          s.timer = vendShopSeconds(s.id, s.cycle)
+      case "toStall": {
+        const visit = s.customerVisit!, vendor = sim.travelers.get(visit.vendorId)
+        if (!vendor || vendor.activity !== "vending") { startOffRoadWalk(s, "fromStall"); break }
+        if (stepOffRoadWalk(s, visit.frontage, worldSpeed, dt)) { s.activity = "browsing"; s.timer = 2 }
+        break
+      }
+      case "browsing": {
+        const vendor = sim.travelers.get(s.customerVisit!.vendorId)
+        s.timer = Math.max(0, s.timer - dt)
+        if (s.timer === 0 || !vendor || vendor.activity !== "vending") {
+          if (vendor?.activity === "vending") {
+            if (s.hunger <= BUY_THRESHOLD) { pay(s, vendor, FOOD_PRICE); s.hunger = 100 }
+            if (s.thirst <= BUY_THRESHOLD) { pay(s, vendor, WINE_PRICE); s.thirst = 100; s.stamina = Math.min(100, s.stamina + WINE_STAMINA_BONUS) }
+          }
+          startOffRoadWalk(s, "fromStall")
+        }
+        break
+      }
+      case "fromStall": {
+        if (stepOffRoadWalk(s, s.customerVisit!.road, worldSpeed, dt)) {
+          s.activity = "walking"; s.customerVisit = undefined; s.walkFrom = null
         }
         break
       }
 
+      case "toShop": {
+        if (stepStallWalk(map, s, false, worldSpeed * dt)) {
+          s.activity = "openingShop"
+          s.timer = SHOP_SECONDS
+          if (cartLoadout(s.id).puller !== "hand") s.pasture = createPasture(s, s.stallRoute?.obstacles, animalClearance(cartLoadout(s.id).puller, characterScale))
+
+        }
+        break
+      }
+
+      case "openingShop": {
+        s.timer = Math.max(0, s.timer - dt)
+        if (s.timer === 0) { s.activity = "vending"; s.keeperTime = 0; s.timer = vendShopSeconds(s.id, s.cycle) }
+        break
+      }
+      case "packingShop": {
+        s.timer = Math.max(0, s.timer - dt)
+        if (s.timer === 0 && (!s.pasture || s.pasture.ready)) {
+          s.pasture = undefined
+          startOffRoadWalk(s, "fromShop")
+        }
+        break
+      }
       case "vending": {
-        // The stall stands beside the path; customers come to it.
+        // Finish the keeper's short return walk before unloading the site.
+        s.keeperTime = (s.keeperTime ?? 0) + dt
         s.timer -= dt
-        if (s.timer <= 0) {
+        const keeperHome = keeperRoutine(s.keeperTime, cartLoadout(s.id).puller, characterScale, personWalkStride(populationDesign(t.type, travelerAppearance(map.seed ?? 0, t.id).variant)) * characterScale).atHome
+        if (s.timer <= 0 && keeperHome) {
           s.cycle++
           if (s.spot) {
-            startOffRoadWalk(s, "fromShop")
+            s.activity = "packingShop"
+            s.timer = SHOP_SECONDS
           } else {
             s.timer = vendWalkSeconds(s.id, s.cycle)
             s.activity = "walking"
@@ -968,8 +1067,9 @@ export function stepSim(
       }
 
       case "fromShop": {
-        const back = currentRoutePoint(map, s, movement.pathEase)
-        if (stepOffRoadWalk(s, back, worldSpeed, dt, movement.pathEase)) {
+        if (stepStallWalk(map, s, true, worldSpeed * dt)) {
+          if (s.stallRoute) s.progress = s.stallRoute.returnProgress
+          s.stallRoute = undefined
           s.activity = "walking"
           s.spot = null
           s.walkFrom = null
