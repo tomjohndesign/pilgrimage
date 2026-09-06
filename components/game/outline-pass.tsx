@@ -119,7 +119,7 @@ const FRAGMENT_SHADER = /* glsl */ `
       gl_FragColor = vec4(uSelectionFill, uSelectionOpacity);
       finishColor(); return;
     }
-    // A thin halo belongs outside the shape, on its background side only.
+    // The halo belongs outside the shape, on its background side only.
     // Nearer objects still hide the selected object and its highlight.
     if (!uCharacterSelected && uSelectedId > 0.5) {
       bool selectedEdge =
@@ -318,8 +318,14 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
       if (needsOutline) {
         pass.uniforms.tId.value = ids.texture
         pass.uniforms.tDepth.value = ids.depthTexture
-        // One texel at each subject's own resolution: coarse scenery, fine figures.
-        pass.uniforms.uTexel.value.set(1 / ids.width, 1 / ids.height)
+        // One world texel for every border, including display-resolution figures.
+        // The crop converts the world buffer's texel size to display UVs, keeping
+        // selections and overlap halos equally thick through zoom and DPR changes.
+        if (characterPass) {
+          pass.uniforms.uTexel.value.set(1 / (target.width * stage.scale.x), 1 / (target.height * stage.scale.y))
+        } else {
+          pass.uniforms.uTexel.value.set(1 / ids.width, 1 / ids.height)
+        }
         pass.uniforms.uMode.value = MODE_INT[mode]
         pass.uniforms.uSelectedId.value = selectedId
         pass.uniforms.uCharacterSelected.value = characterSelected
