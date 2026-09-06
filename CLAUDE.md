@@ -2,6 +2,14 @@
 
 ## Rules
 
+- **Pixels must be uniform throughout the app.** Use the character's apparent
+  pixel size as the reference for trees, scenery, edges, selection outlines,
+  shadows, and effects, regardless of whether artwork is procedural, generated,
+  or a static asset. Match visual pixel size through asset/material settings and
+  outline sampling in the existing renderer. Do not replace render passes or
+  increase unbounded render-target sizes to enforce this visual rule. Check the
+  result beside a character at the same zoom, including selection and overlap.
+
 - **Property panels are opt-in development tools.** For a branch that needs the
   World tuning sidebar, set `NEXT_PUBLIC_PROPERTY_PANELS=1` in that workspace's
   gitignored `.env.local` and restart `npm run dev` (or run
