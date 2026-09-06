@@ -246,8 +246,11 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     if (map && parent.userData.activity !== "flying" && poseRoot.current) {
       poseRoot.current.getWorldPosition(corrected)
       const surface = walkingSurface(map, corrected.x, corrected.z)
+      // Floor-level furniture supports the feet too. Its enlarged depth pixels
+      // must not slice the sprite (or create false internal outline edges).
+      const height = surface.height + (parent.userData.supportHeight ?? 0)
       groundPlane.value.set(-surface.dx, 1, -surface.dz,
-        surface.dx * corrected.x + surface.dz * corrected.z - surface.height)
+        surface.dx * corrected.x + surface.dz * corrected.z - height)
     } else groundPlane.value.set(0, 0, 0, 0)
     const previous = lastFrame.current
     // Distance timing must display the current pose even at low animation FPS.

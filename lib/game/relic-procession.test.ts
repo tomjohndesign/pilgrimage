@@ -1,9 +1,11 @@
+import { createMonkRoutine, stepMonkRoutine } from "./monk-routine"
+import { tileToWorldX, tileToWorldZ } from "./map/types"
 import { describe, expect, it } from "vitest"
-import { createRelicProcession, nearProcession, processionGrounds, relicIsCarried, startProcession, stepProcession } from "./relic-procession"
+import { createRelicProcession, nearProcession, processionGrounds, relicIsCarried, startAltarProcession, startProcession, stepProcession } from "./relic-procession"
 import { createSim, stepSim } from "./sim"
 import { generateTravelers, TRAVELER_TYPES } from "./travelers"
 import { worldToTileX, worldToTileZ, type GameMap } from "./map/types"
-import { buildingStepAllowed } from "./building-navigation"
+import { shrineFurnitureClear, buildingStepAllowed, containsTile } from "./building-navigation"
 import { admissionFee, shrineVisitRoute } from "./shrine-visit"
 
 function fixture() {
@@ -18,6 +20,51 @@ function fixture() {
 }
 
 describe("relic procession", () => {
+  it.each([0, 1, 2, 3])("collects behind the altar for shrine orientation %i", direction => {
+    const { map } = fixture()
+    const b = map.buildings[0]
+    Object.assign(b, { w: direction % 2 ? 5 : 3, d: direction % 2 ? 3 : 5 })
+    map.site!.door = [{ x: 7, z: 11 }, { x: 11, z: 7 }, { x: 7, z: 5 }, { x: 5, z: 7 }][direction]
+    const grounds = processionGrounds(map)!
+    const rear = [{ x: 7, z: 6 }, { x: 6, z: 7 }, { x: 7, z: 10 }, { x: 10, z: 7 }][direction]
+    expect(grounds.altar.x).toBe(tileToWorldX(map, rear.x))
+    expect(grounds.altar.z).toBe(tileToWorldZ(map, rear.z))
+  })
+
+  it("spontaneously hoists on a rear altar visit, parades, and leaves after returning", () => {
+    const { grounds, p, pick } = fixture()
+    const index = grounds.wander.prayerSpots.indexOf(grounds.altar)
+    const actor = createMonkRoutine(grounds.wander, index, () => .5)
+    expect(startAltarProcession(p, index, actor, grounds)).toBe(false)
+    for (let tick = 0; tick < 1000 && p.stage === "idle"; tick++) {
+      stepMonkRoutine(actor, grounds.wander, () => .5, .4, .1)
+      startAltarProcession(p, index, actor, grounds)
+    }
+    expect(p.stage).toBe("lifting")
+    expect(p.monkId).toBe(index)
+    expect(startAltarProcession(p, index + 1, actor, grounds)).toBe(false)
+    const stages = new Set([p.stage])
+    let exit = null
+    for (let tick = 0; tick < 2000 && !exit; tick++) {
+      exit = stepProcession(p, actor, grounds, .1, .4, pick)
+      stages.add(p.stage)
+    }
+    expect([...stages]).toEqual(["lifting", "carrying", "returning", "lowering", "idle"])
+    expect(exit?.length).toBeGreaterThan(0)
+    Object.assign(actor, { route: exit, pause: 0, destination: "grounds", activity: "walking" })
+    expect(startAltarProcession(p, index, actor, grounds)).toBe(false)
+  })
+
+  it("leaves front and side altar worshippers praying", () => {
+    const { grounds, p } = fixture()
+    for (const [index, spot] of grounds.wander.prayerSpots.entries()) {
+      if (spot === grounds.altar) continue
+      const actor = createMonkRoutine(grounds.wander, index, () => .5)
+      Object.assign(actor, spot, { activity: "praying", destination: "prayer" })
+      expect(startAltarProcession(p, index, actor, grounds)).toBe(false)
+    }
+  })
+
   it("collects from every shrine prayer spot and keeps procession routes on the grid", () => {
     const { map, grounds, pick } = fixture()
     for (const spot of grounds.wander.prayerSpots) {
@@ -29,8 +76,9 @@ describe("relic procession", () => {
         const exit = stepProcession(p, actor, grounds, 0.1, 0.4, pick)
         const to = { x: worldToTileX(map, actor.x), z: worldToTileZ(map, actor.z) }
         const tx = actor.x + map.width / 2 - 0.5, tz = actor.z + map.depth / 2 - 0.5
-        expect(Math.min(Math.abs(tx - Math.round(tx)), Math.abs(tz - Math.round(tz)))).toBeLessThan(1e-8)
-        if (from.x !== to.x || from.z !== to.z) expect(buildingStepAllowed(map, map.buildings, from, to, true)).toBe(true)
+        expect(Math.min(Math.abs(tx * 2 - Math.round(tx * 2)), Math.abs(tz * 2 - Math.round(tz * 2)))).toBeLessThan(1e-8)
+        if (containsTile(map.buildings[0], from) !== containsTile(map.buildings[0], to)) expect(buildingStepAllowed(map, map.buildings, from, to, true)).toBe(true)
+        expect(shrineFurnitureClear(map.buildings[0], map.site!.door, { x: tx, z: tz }, { x: tx, z: tz })).toBe(true)
         if (exit) { completed = true; break }
       }
       expect(completed).toBe(true)

@@ -1,3 +1,4 @@
+import { shrineLayout, shrineSeats } from "./shrine-layout"
 import { buildingStepAllowed, shrineGates } from "./building-navigation"
 import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 import { settlementRoute } from "./settlement-route"
@@ -8,26 +9,36 @@ export function admissionFee(map: GameMap): number {
   return map.buildings.find(b => b.id === map.site?.hovelId)?.admissionFee ?? DEFAULT_ADMISSION_FEE
 }
 
-/** Join the approach to a gate via the grounds, then step inside to pray.
- * Rotate preferred gates between visitors and repeat visits. */
-export function shrineVisitRoute(map: GameMap, visitor: number, visits: number): TilePos[] | null {
+/** Reserve a kneeler before leaving the road; enter by the aisle and retrace it on exit. */
+export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, occupied: ReadonlySet<string> = new Set()) {
   const site = map.site
   const shrine = map.buildings.find(b => b.id === site?.hovelId)
   if (!site || !shrine) return null
-  const gates = shrineGates(shrine)
-  for (let i = 0; i < gates.length; i++) {
-    const gate = gates[(visitor + visits + i) % gates.length]
-    if (!buildingStepAllowed(map, map.buildings, gate.outside, gate.inside, true)) continue
-    const approach = settlementRoute(map, map.buildings, site.door, gate.outside)
-    if (approach) return [...site.branch, ...approach.slice(1), gate.inside]
+  const gate = shrineGates(shrine, site.door)[0]
+  if (!buildingStepAllowed(map,map.buildings,gate.outside,gate.inside,true)) return null
+  const seats=shrineSeats(shrine,site.door),layout=shrineLayout(shrine,site.door)
+  for(let i=0;i<seats.length;i++) {
+    const seat=seats[(visitor+visits+i)%seats.length]
+    if(occupied.has(seat.id)) continue
+    const sideways=Math.abs(Math.sin(layout.rotation))>.5
+    const aisle={x:sideways?seat.tile.x:shrine.x+Math.floor(shrine.w/2),z:sideways?shrine.z+Math.floor(shrine.d/2):seat.tile.z}
+    const toAisle=settlementRoute(map,map.buildings,gate.inside,aisle,false,true)
+    const inside=toAisle && buildingStepAllowed(map,map.buildings,aisle,seat.tile,true,seat.id)
+      ? [...toAisle,seat.tile] : settlementRoute(map,map.buildings,gate.inside,seat.tile,false,true,seat.id)
+    const approach=settlementRoute(map,map.buildings,site.door,gate.outside)
+    if(inside && approach) return {seat:seat.id,route:[...site.branch,...approach.slice(1),...inside]}
   }
   return null
 }
 
-/** Match the displayed relic at the centre of the enclosure. */
+export function shrineVisitRoute(map: GameMap, visitor: number, visits: number): TilePos[] | null {
+  return shrineVisitPlan(map,visitor,visits)?.route ?? null
+}
+
+/** Match the displayed relic on the altar towards the rear. */
 export function relicHeading(map: GameMap, visitor: { x: number; z: number }): number | null {
   const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
   if (!shrine) return null
-  return Math.atan2(tileToWorldX(map, shrine.x) + (shrine.w - 1) / 2 - visitor.x,
-    tileToWorldZ(map, shrine.z) + (shrine.d - 1) / 2 - visitor.z)
+  const { altar } = shrineLayout(shrine, map.site?.door)
+  return Math.atan2(tileToWorldX(map, altar.x) - visitor.x, tileToWorldZ(map, altar.z) - visitor.z)
 }

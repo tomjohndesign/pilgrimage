@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 
 const args = process.argv.slice(2), index = args.indexOf("--url")
 const origin = index < 0 ? "http://localhost:3000" : args[index + 1]
-const directory = "public/textures/characters/rockets/v3"
+const directory = "public/textures/characters/rockets/v4"
 if (existsSync(directory)) throw new Error("This rocket version exists; publish a new version instead of overwriting it.")
 const browser = await chromium.launch({ headless: true, args: ["--use-angle=metal"] })
 try {
