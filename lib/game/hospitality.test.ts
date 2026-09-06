@@ -10,7 +10,7 @@ import { generateMap } from "./map/generate-map"
 import { TILE_HEIGHT, type TerrainId } from "./map/terrain"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import { generateRelic, visitChance } from "./relic"
-import { createSim, stepSim, type SimState } from "./sim"
+import { createSim, stepSim, GAME_DAY_SECONDS, type SimState } from "./sim"
 import { DEFAULT_MOVEMENT, LINEAR_MOVEMENT } from "./motion"
 import { generateTravelers, TRAVELER_TYPES, type Traveler } from "./travelers"
 import { treeResource, treeStage, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, type WoodPile } from "./trees/timber"
@@ -46,7 +46,36 @@ function run(sim: SimState, travelers: Traveler[], map: GameMap, seconds: number
 
 const obscure = { sanctity: 0, spectacle: 0, doubt: 100 }
 
+/** Established hospitality isolates the visit lifecycle from attraction rolls. */
+function createEstablishedShrine(travelers: Traveler[], map: GameMap) {
+  const sim = createSim(travelers, map, [], obscure)
+  sim.shrineRenown = sim.balance.rules.drawCap
+  return sim
+}
+
 describe("shrine hospitality", () => {
+  it("earns more junction visits through shrine renown and completed visits", () => {
+    const accepted = (renown: number, visits: number) => {
+      let count = 0
+      for (let id = 0; id < 40; id++) {
+        const { map, traveler } = fixture()
+        const t = traveler(id, id % 2 === 0 ? 1 : -1)
+        t.attributes.hunger = 20
+        const sim = createSim([t], map, [], obscure)
+        sim.shrineRenown = renown
+        sim.visits = visits
+        run(sim, [t], map, 1)
+        if (sim.travelers.get(id)!.activity === "toRelic") count++
+      }
+      return count
+    }
+    const early = accepted(0, 0)
+    expect(early).toBeGreaterThan(0)
+    expect(early).toBeLessThan(12)
+    expect(accepted(DEFAULT_BALANCE.rules.drawCap, 0)).toBe(40)
+    expect(accepted(0, DEFAULT_BALANCE.rules.drawCap / DEFAULT_BALANCE.rules.visitRenown)).toBe(40)
+  })
+
   it.each([0, 1, 2, 3])("enters gate %i, faces the relic, pays once and walks back out", (id) => {
     const { map, traveler } = fixture()
     const shrine = map.buildings[0]
@@ -54,7 +83,7 @@ describe("shrine hospitality", () => {
     const t = traveler(id)
     t.attributes.gold = 10
     t.attributes.hunger = 0
-    const sim = createSim([t], map, [], obscure)
+    const sim = createEstablishedShrine([t], map)
     const s = sim.travelers.get(id)!
     const route = shrineVisitRoute(map, id, 0)!
     expect(route.at(-1)).toEqual(shrineGates(shrine)[id].inside)
@@ -92,7 +121,7 @@ describe("shrine hospitality", () => {
     const t = traveler(0)
     t.attributes.gold = 2
     t.attributes.hunger = 30
-    const sim = createSim([t], map, [], obscure)
+    const sim = createEstablishedShrine([t], map)
     const s = sim.travelers.get(0)!
     run(sim, [t], map, 1)
     expect(s.activity).toBe("walking")
@@ -136,7 +165,7 @@ describe("shrine hospitality", () => {
     t.attributes.gold = 10
     t.attributes.hunger = 0
     map.buildings[0].admissionFee = 3
-    const sim = createSim([t], map, [], obscure), s = sim.travelers.get(0)!
+    const sim = createEstablishedShrine([t], map), s = sim.travelers.get(0)!
     run(sim, [t], map, 60, () => s.activity === "fromRelic")
     const paidPiety = s.piety
     expect(paidPiety).toBeGreaterThan(0)
@@ -155,7 +184,7 @@ describe("shrine hospitality", () => {
   it.each([LINEAR_MOVEMENT, DEFAULT_MOVEMENT])("keeps shrine visitors on opposite sides in both directions (%j)", (movement) => {
     const { map, traveler } = fixture()
     const travelers = [traveler(0), traveler(1)]
-    const sim = createSim(travelers, map, [], obscure)
+    const sim = createEstablishedShrine(travelers, map)
     for (const [index, s] of [...sim.travelers.values()].entries()) {
       s.activity = index === 0 ? "toRelic" : "fromRelic"
       s.branchProgress = 2
@@ -174,11 +203,11 @@ describe("shrine hospitality", () => {
     const { map, traveler } = fixture()
     const t = traveler(0, direction)
     t.attributes.hunger = 0
-    const sim = createSim([t], map, [], obscure)
+    const sim = createEstablishedShrine([t], map)
     const s = sim.travelers.get(0)!
     let returning = false
     let rejoined = false
-    for (let tick = 0; tick < 6000; tick++) {
+    for (let tick = 0; tick < GAME_DAY_SECONDS / 2 / 0.01; tick++) {
       const before = { x: s.x, z: s.z }
       stepSim(sim, [t], map, 1, 0.01, DEFAULT_MOVEMENT)
       expect(Math.hypot(s.x - before.x, s.z - before.z)).toBeLessThan(0.025)
@@ -201,7 +230,7 @@ describe("shrine hospitality", () => {
         const { map, traveler } = fixture()
         const t = traveler(0, direction)
         t.attributes[need] = 0
-        const sim = createSim([t], map, [], obscure)
+        const sim = createEstablishedShrine([t], map)
         const s = sim.travelers.get(t.id)!
         const identity = structuredClone(t)
         run(sim, [t], map, 1)
@@ -230,17 +259,18 @@ describe("shrine hospitality", () => {
     const t = traveler(0)
     t.offset = 8.5 / 29
     t.attributes.hunger = 0
-    const sim = createSim([t], map)
+    const sim = createEstablishedShrine([t], map)
     stepSim(sim, [t], map, 5, 1)
     expect(sim.travelers.get(0)!.activity).toBe("toRelic")
   })
 
-  it("keeps faith relevant for rested travelers and makes dire need certain", () => {
+  it("keeps faith relevant and reserves certain hospitality visits for established shrines", () => {
     const { traveler } = fixture()
     const a = traveler(0).attributes
     const holy = { sanctity: 95, spectacle: 40, doubt: 15 }
     expect(visitChance({ ...a, piety: 100 }, holy)).toBeGreaterThan(visitChance(a, holy))
-    expect(visitChance({ ...a, hunger: 0 }, obscure)).toBe(1)
+    expect(visitChance({ ...a, hunger: 0 }, obscure)).toBe(0.1)
+    expect(visitChance({ ...a, hunger: 0 }, obscure, DEFAULT_BALANCE.rules.drawCap)).toBe(1)
     expect(visitChance({ ...a, thirst: 35 }, obscure)).toBeGreaterThan(visitChance(a, obscure))
   })
 
@@ -293,7 +323,7 @@ describe("lumber camps", () => {
         expect(s.activity).toBe("toWork")
         expect(Math.min(s.hunger, s.thirst, s.stamina)).toBeGreaterThanOrEqual(80)
       }
-      run(sim, [t], map, 30, () => sim.wood > TIMBER_LOAD)
+      run(sim, [t], map, GAME_DAY_SECONDS / 4, () => sim.wood > TIMBER_LOAD)
       expect(sim.wood).toBe(2 * TIMBER_LOAD)
       expect(resource.remainingWood + s.carrying + sim.wood).toBe(resource.wood)
     },
@@ -416,7 +446,7 @@ describe("lumber camps", () => {
     let sawHauling = false
     const expectedWood = trees.reduce((sum, tree, index) => sum + treeResource(tree, index, map.seed).wood, 0)
     // Taller trunks need more hauling trips; wait for delivery within a bounded run.
-    for (let i = 0; i < 12000 && sim.wood < expectedWood; i++) {
+    for (let i = 0; i < 10 * GAME_DAY_SECONDS / 0.1 && sim.wood < expectedWood; i++) {
       stepSim(sim, travelers, map, 1.5, 0.1)
       const workers = Array.from(sim.travelers.values()).filter((s) => s.employer)
       maxWorkers = Math.max(maxWorkers, workers.length)
@@ -528,13 +558,13 @@ describe("tree resources and timber storage", () => {
     expect(resource.health).toBeLessThan(resource.maxHealth)
     expect(treeStage(resource, sim.time)).toBe("Being felled")
     expect(sim.felled.size).toBe(0)
-    run(sim, [t], map, 120, () => s.activity === "gathering")
+    run(sim, [t], map, GAME_DAY_SECONDS, () => s.activity === "gathering")
     expect(resource.health).toBe(0)
     expect(treeStage(resource, sim.time)).toBe("Fallen")
     expect(resource.stumpUntil! - resource.felledAt!).toBeCloseTo(STUMP_LIFETIME_DAYS)
     expect(resource.remainingWood).toBe(resource.wood)
     expect(sim.piles.size).toBe(0)
-    run(sim, [t], map, 10, () => s.carrying > 0)
+    run(sim, [t], map, GAME_DAY_SECONDS / 12, () => s.carrying > 0)
     expect(s.carrying).toBe(TIMBER_LOAD)
     const departure = { x: s.x, z: s.z }
     stepSim(sim, [t], map, 1.5, 0)
@@ -549,7 +579,7 @@ describe("tree resources and timber storage", () => {
     expect(s.x).toBeLessThan(tileToWorldX(map, camp.x + camp.w))
     expect(s.z).toBeGreaterThanOrEqual(tileToWorldZ(map, camp.z))
     expect(s.z).toBeLessThan(tileToWorldZ(map, camp.z + camp.d))
-    for (let i = 0; i < 2000; i++) {
+    for (let i = 0; i < 2 * GAME_DAY_SECONDS / 0.1 && sim.wood < resource.wood; i++) {
       stepSim(sim, [t], map, 1.5, 0.1)
       expect(resource.remainingWood + s.carrying + sim.wood).toBe(resource.wood)
     }
