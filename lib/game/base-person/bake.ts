@@ -41,7 +41,7 @@ export interface BasePersonBake {
 let bakeRenderer: THREE.WebGLRenderer | undefined
 
 /** Shared camera, ink and registration for both live previews and exported sheets. */
-export function personFrameRenderer(design: PersonDesign) {
+export function personFrameRenderer(design: PersonDesign, extraPalette: string[] = []) {
   const recipe = personRecipe(design)
   const size = recipe.cellSize
   // One small renderer per page, reused while adjusting parameters.
@@ -60,7 +60,7 @@ export function personFrameRenderer(design: PersonDesign) {
   scene.add(light)
   const camera = personCamera(recipe)
   const position = new THREE.Vector3()
-  const palette = recipe.renderPalette.map((hex) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)))
+  const palette = [...recipe.renderPalette, ...extraPalette].map((hex) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)))
   const canvas = document.createElement("canvas")
   canvas.width = size; canvas.height = size
   const context = canvas.getContext("2d", { willReadFrequently: true })!

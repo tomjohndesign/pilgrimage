@@ -1028,7 +1028,7 @@ function foundSite(
   }
 
   const foundation = elevation.height[best.z * width + best.x]
-  // --- Guarantee footing: footprint plus ring become grass ---------------------
+  // Level the enclosure and its continuous walking path, serving all four gates.
   for (let dz = -1; dz <= HOVEL_SIZE; dz++) {
     for (let dx = -1; dx <= HOVEL_SIZE; dx++) {
       const i = (best.z + dz) * width + (best.x + dx)
@@ -1040,6 +1040,9 @@ function foundSite(
         tiles[i] === "sand"
       ) {
         tiles[i] = "grass"
+      }
+      if ((dx === -1 || dz === -1 || dx === HOVEL_SIZE || dz === HOVEL_SIZE) && tiles[i] !== "path") {
+        tiles[i] = "track"
       }
     }
   }

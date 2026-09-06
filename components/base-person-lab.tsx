@@ -17,13 +17,14 @@ import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { MerchantMapPreview } from "./merchant-map-preview"
 import { COATS, animalCoat } from "@/lib/game/transport/coats"
 import { CARGO, TRANSPORT, CART, SHOP, cartUrl, animalUrl, type Puller, type ShopState, cartColumn, type Cargo, type CartMode, type HorseVariant } from "@/lib/game/transport/assets"
-import transportMetadata from "@/public/textures/transport/v9/manifest.json"
+import transportMetadata from "@/public/textures/transport/v10/manifest.json"
 
 const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse" } as const
 type Subject = keyof typeof SUBJECTS
 declare global { interface Window {
   __transportBake?: typeof import("@/lib/game/transport/bake").bakeTransport
   __choppingBlockBake?: typeof import("@/lib/game/base-person/bake").bakeChoppingBlock
+  __rocketMonkBake?: typeof import("@/lib/game/rocket/bake").bakeRocketMonks
 } }
 
 import { characterEditsJson, parseCharacterEdits, restoreCharacterDesign } from "@/lib/game/base-person/share-edits"
@@ -81,7 +82,8 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     target.__bakePersonPopulation = async progress => (await import("@/lib/game/base-person/bake-population")).bakePopulation(undefined, progress)
     window.__transportBake = async () => (await import("@/lib/game/transport/bake")).bakeTransport()
     window.__choppingBlockBake = bakeChoppingBlock
-    return () => { delete target.__bakePersonPopulation; delete window.__transportBake; delete window.__choppingBlockBake }
+    window.__rocketMonkBake = async () => (await import("@/lib/game/rocket/bake")).bakeRocketMonks()
+    return () => { delete target.__bakePersonPopulation; delete window.__transportBake; delete window.__choppingBlockBake; delete window.__rocketMonkBake }
   }, [])
   const [bake, setBake] = useState<BasePersonBake | null>(null)
   const [error, setError] = useState("")

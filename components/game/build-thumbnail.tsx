@@ -4,7 +4,7 @@ import Image from "next/image"
 import { useEffect, useState } from "react"
 import * as THREE from "three"
 import { BUILD_CATALOG, type BuildId } from "@/lib/game/balance"
-import { isProceduralStructure, structureParts } from "@/lib/game/building-art/structure"
+import { structureParts } from "@/lib/game/building-art/structure"
 import { batchDetails } from "@/components/building-lab/building-model"
 import { BUILDING_STYLE } from "@/lib/game/building-art/style"
 import { cameraOffset, lightOffsetForYaw, yawForView } from "@/lib/game/render/iso"
@@ -33,13 +33,11 @@ function buildThumbnails() {
         if (part.rotation) mesh.rotation.set(...part.rotation)
         model.add(mesh)
         geometries.push(geometry); materials.push(material)
-        if (isProceduralStructure(definition.id)) {
-          if (part.outline !== false && !/^(reed-|thatch-grain-|thatch-highlight-)/.test(part.name)) {
-            const edges = new THREE.EdgesGeometry(geometry, 25)
-            const ink = new THREE.LineBasicMaterial({ color: BUILDING_STYLE.palette.ink, transparent: true, opacity: 0.65 })
-            mesh.add(new THREE.LineSegments(edges, ink))
-            geometries.push(edges); materials.push(ink)
-          }
+        if (part.outline !== false && !/^(reed-|thatch-grain-|thatch-highlight-)/.test(part.name)) {
+          const edges = new THREE.EdgesGeometry(geometry, 25)
+          const ink = new THREE.LineBasicMaterial({ color: BUILDING_STYLE.palette.ink, transparent: true, opacity: 0.65 })
+          mesh.add(new THREE.LineSegments(edges, ink))
+          geometries.push(edges); materials.push(ink)
         }
       }
       const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 400)

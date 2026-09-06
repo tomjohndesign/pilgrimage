@@ -109,8 +109,8 @@ release or package version. Tests require every active family to match it.
 Bake the base, every population profile/calling,
 and the Monk preset. Inspect the latest main branch before allocating versions.
 Published bakes are immutable; use new paths and update all active imports only
-after the exports exist. The current exports are base v24, population v16 and
-monks v16 (brown hair) / v17 (grey hair). For a subsequent change choose unused versions:
+after the exports exist. The current exports are base v25, population v17 and
+monks v18 (brown hair) / v19 (grey hair). For a subsequent change choose unused versions:
 
 ```sh
 npm run assets:base -- vNEXT --url http://localhost:3219
@@ -131,8 +131,8 @@ designs must be baked through the same current rig, not mapped onto stale sheets
   discrete poses. Verify no accumulated offset over repeated cycles, correct
   resets, and anchored height on slopes.
 - Run `npm test` and `npm run typecheck`, the base and population asset checkers,
-  and `node scripts/check-base-person.mjs v16 --monk` for the current monk bake.
-  Also check `node scripts/check-base-person.mjs v17 --monk` for grey-haired monks.
+  and `node scripts/check-base-person.mjs v18 --monk` for the current monk bake.
+  Also check `node scripts/check-base-person.mjs v19 --monk` for grey-haired monks.
   Check per-clip dimensions, matching shadows,
   palette, binary body alpha, safe margins and attachment registration.
 - Inspect side and diagonal views in the editor and on real road tiles. Check

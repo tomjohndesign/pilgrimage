@@ -48,7 +48,7 @@ export function TreeStump({ id, objectId, characterScale, animatedStumps }: {
     if (!root.current) return
     root.current.visible = true
     for (const worker of simRegistry.current?.travelers.values() ?? []) {
-      if (animatedStumps && worker.tree === id && worker.activity === "gathering") { root.current.visible = false; break }
+      if (animatedStumps && worker.tree === id && worker.activity === "gathering" && !worker.praying) { root.current.visible = false; break }
     }
     const yaw = Math.atan2(camera.matrixWorld.elements[8], camera.matrixWorld.elements[10])
     map.offset.y = 1 - (spriteRow(0, yaw) + 1) / manifest.rows
