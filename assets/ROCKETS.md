@@ -19,7 +19,7 @@ To export from the existing development character editor:
 node scripts/export-rocket-monks.mjs --url http://localhost:3247
 ```
 
-The v3 exporter refuses to overwrite published files. For subsequent revisions,
+The v4 exporter refuses to overwrite published files. For subsequent revisions,
 allocate a new directory and asset version in the exporter and baker, and update
 the manifest import in `lib/game/rocket/assets.ts` after exporting. Base person
 and ordinary monk sheets are unaffected by equipment-only edits. Re-export the
