@@ -24,10 +24,12 @@ import type { CharacterModel } from "@/lib/game/character-assets"
 import { playCharacterSound, stopCharacterSound } from "@/lib/game/character-audio"
 import {
   encodeObjectId,
-  OUTLINE_ID_LAYER_MASK,
   travelerObjectId,
 } from "@/lib/game/render/outline"
 
+import { BASE_CHARACTER_SCALE } from "@/lib/game/base-person/gait"
+import { WoodLog } from "./wood-log"
+import { PixelCharacters } from "@/components/pixel-canvas"
 import { TravelerFigure } from "./traveler-figure"
 import { cartLoadout, SHOP_SECONDS } from "@/lib/game/transport/assets"
 
@@ -76,6 +78,7 @@ export function Travelers({
   const selection = useCameraStore((s) => s.selection)
   const resourceElapsed = useRef(0)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
+  const logRefs = useRef<Array<THREE.Group | null>>([])
 
   const sim = useMemo(() => createSim([], map, [], relic.stats), [map.road, relic])
   useEffect(() => {
@@ -173,13 +176,17 @@ export function Travelers({
       group.userData.phase = travelers[i].id * 0.137
       group.userData.heading = group.rotation.y
 
-      const logs = group.getObjectByName("carried-logs")
-      if (logs) logs.visible = s.carrying > 0
       const y = walkingSurface(map, s.x, s.z).height
       group.position.set(s.x, y, s.z)
       // Keep baked bodies at their authored proportions.
       group.scale.y = 1
       group.rotation.z = 0
+      const logs = logRefs.current[i]
+      if (logs) {
+        logs.visible = s.carrying > 0
+        logs.position.copy(group.position)
+        logs.quaternion.copy(group.quaternion)
+      }
     }
   }, -3)
 
@@ -187,30 +194,37 @@ export function Travelers({
 
   return (
     <group>
-      {travelers.map((traveler, index) => {
-        const selected = isSelected(selection, { kind: "traveler", id: traveler.id })
-        const idColor = new THREE.Color(...encodeObjectId(travelerObjectId(index)))
-        const select = (event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "traveler", id: traveler.id }, event)
-        return (
-          <group
-            key={traveler.id}
-            ref={(node) => {
-              groupRefs.current[index] = node
-            }}
-          >
-            <TravelerFigure map={map} age={traveler.attributes.age} {...cartLoadout(traveler.id)} appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
-              characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
-            <group name="carried-logs" visible={false} position={[0, 0.35, 0.2]} rotation={[0, 0, Math.PI / 2]} onClick={select}>
-              <mesh><cylinderGeometry args={[0.12, 0.12, 0.6, 6]} /><meshLambertMaterial color="#89613c" /></mesh>
-              <mesh layers-mask={OUTLINE_ID_LAYER_MASK}>
-                <cylinderGeometry args={[0.12, 0.12, 0.6, 6]} /><meshBasicMaterial color={idColor} toneMapped={false} />
-              </mesh>
+      <PixelCharacters>
+        {travelers.map((traveler, index) => {
+          const selected = isSelected(selection, { kind: "traveler", id: traveler.id })
+          const idColor = new THREE.Color(...encodeObjectId(travelerObjectId(index)))
+          const select = (event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "traveler", id: traveler.id }, event)
+          return (
+            <group
+              key={traveler.id}
+              ref={(node) => {
+                groupRefs.current[index] = node
+              }}
+            >
+              <TravelerFigure map={map} age={traveler.attributes.age} {...cartLoadout(traveler.id)} appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
+                characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
+              <CharacterHitTarget onClick={select} />
+              {selected && <CharacterSelectionShadow map={map} />}
             </group>
-
-            <CharacterHitTarget onClick={select} />
-            {selected && <CharacterSelectionShadow map={map} />}
+          )
+        })}
+      </PixelCharacters>
+      {/* Geometry shares the camp's world pixel grid; only baked people use the character pass. */}
+      {travelers.map((traveler, index) => {
+        const scale = characterScale * (characterModel === "base" ? appearances[index]?.scale ?? 1 : 1)
+        const idColor = new THREE.Color(...encodeObjectId(travelerObjectId(index)))
+        return <group key={traveler.id} name="carried-logs" visible={false}
+          ref={(node) => { logRefs.current[index] = node }}
+          onClick={(event) => selectElement({ kind: "traveler", id: traveler.id }, event)}>
+          <group position={[0, 0.35 * scale / BASE_CHARACTER_SCALE, 0.2 * scale / BASE_CHARACTER_SCALE]} rotation={[0, 0, Math.PI / 2]}>
+            <WoodLog idColor={idColor} characterScale={scale} />
           </group>
-        )
+        </group>
       })}
     </group>
   )
