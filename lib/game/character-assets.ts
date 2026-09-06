@@ -1,10 +1,11 @@
+import { ACTION_CLIPS, PERSON_CLIPS, type ActionClip } from "./base-person/pose"
 import type { BasePersonBake } from "./base-person/bake"
 import type { TravelerTypeId } from "./travelers"
-import baseMetadata from "../../public/textures/characters/base/base-person-v10.json"
+import baseMetadata from "../../public/textures/characters/base/base-person-v11.json"
 
 export type CharacterModel = "base" | "callings"
 
-interface SpriteClip {
+export interface SpriteClip {
   url: string
   columns: number
   rows: number
@@ -17,12 +18,16 @@ export function characterVisual(asset: CharacterAsset, model: CharacterModel, cu
   if (model === "base") return {
     walk: { url: custom?.walk ?? baseMetadata.images.walk, columns: metadata.frameCount, rows: metadata.directions.length, stillFrame: 0 } satisfies SpriteClip,
     idle: { url: custom?.idle ?? baseMetadata.images.idle, columns: 1, rows: metadata.directions.length, stillFrame: 0 } satisfies SpriteClip,
+    actions: Object.fromEntries(ACTION_CLIPS.flatMap(clip => {
+      const action = custom?.actions?.[clip] ?? baseMetadata.images.actions[clip]
+      return action ? [[clip, { url: action.url, shadow: action.shadow, columns: PERSON_CLIPS[clip].frames, rows: metadata.directions.length, stillFrame: 0 }]] : []
+    })) as Partial<Record<ActionClip, SpriteClip & { shadow: string }>>,
     shadow: { walk: custom?.shadowWalk ?? baseMetadata.images.shadowWalk, idle: custom?.shadowIdle ?? baseMetadata.images.shadowIdle },
     center: [metadata.anchor[0] / metadata.cellSize, 1 - metadata.anchor[1] / metadata.cellSize] as [number, number],
     fps: 8, scale: 0.74 * metadata.cellSize / 48,
   }
   const clip: SpriteClip = { url: asset.sheet, columns: 4, rows: 8, stillFrame: 1 }
-  return { walk: clip, idle: clip, shadow: null, center: [0.5, 6 / 64] as [number, number], fps: asset.fps, scale: asset.scale }
+  return { walk: clip, idle: clip, actions: {} as Partial<Record<ActionClip, SpriteClip & { shadow: string }>>, shadow: null, center: [0.5, 6 / 64] as [number, number], fps: asset.fps, scale: asset.scale }
 }
 
 /** Screen-relative facing, clockwise from the front, matching the atlas rows. */

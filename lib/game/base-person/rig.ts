@@ -215,8 +215,38 @@ export function createBasePersonRig(recipe = personRecipe()) {
     for (const part of [seam, sleeve, forearm, hand]) part.userData.inkPart = side === "left" ? 8 : 9
     for (const part of [thigh, shin, foot]) part.userData.inkPart = side === "left" ? 6 : 7
     for (const object of [seam, sleeve, forearm, hand, thigh, shin, foot]) tracked.push({ mesh: object, normal: object.material, side })
-    return { side, shoulder, thigh, shin, foot, armSkin, armTunic, armParts: [seam, sleeve, forearm, hand] }
+    return { side, shoulder, elbow, thigh, shin, foot, armSkin, armTunic, armParts: [seam, sleeve, forearm, hand] }
   })
+  // Separate the upper body at the hips, keeping all outfit pieces and sockets together.
+  const body = new THREE.Group(), poseRoot = new THREE.Group()
+  const legMeshes = new Set(limbs.flatMap(limb => [limb.thigh, limb.shin, limb.foot]))
+  for (const child of [...root.children]) {
+    if (legMeshes.has(child as THREE.Mesh)) poseRoot.add(child)
+    else { body.add(child); child.position.y -= b.hipHeight }
+  }
+  body.position.y = b.hipHeight
+  poseRoot.add(body); root.add(poseRoot)
+  const axe = new THREE.Group()
+  axe.name = "woodcutting-axe"
+  const wood = material("#785637"), steel = material("#a4b4b5")
+  mesh(new THREE.CylinderGeometry(0.022, 0.028, 0.62, 6), wood, axe, [0, 0.20, 0])
+  mesh(new THREE.BoxGeometry(0.24, 0.14, 0.055), steel, axe, [0.09, 0.46, 0])
+  sockets.rightHand.add(axe)
+  axe.visible = false
+  // Solve both arm bones to a hand target in the upper body's coordinates.
+  const reach = (limb: typeof limbs[number], target: Point3) => {
+    const start = limb.shoulder.position.clone(), end = new THREE.Vector3(...target)
+    const axis = end.clone().sub(start)
+    const distance = Math.min(axis.length(), b.upperArmLength + b.forearmLength - 0.001)
+    axis.normalize(); end.copy(start).addScaledVector(axis, distance)
+    const along = (b.upperArmLength ** 2 - b.forearmLength ** 2 + distance ** 2) / (2 * distance)
+    const bend = new THREE.Vector3(limb.side === "left" ? 1 : -1, -0.4, 0)
+    bend.addScaledVector(axis, -bend.dot(axis)).normalize()
+    const joint = start.clone().addScaledVector(axis, along).addScaledVector(bend, Math.sqrt(Math.max(0, b.upperArmLength ** 2 - along ** 2)))
+    limb.shoulder.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), joint.clone().sub(start).normalize())
+    const lower = end.sub(joint).normalize().applyQuaternion(limb.shoulder.quaternion.clone().invert())
+    limb.elbow.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), lower)
+  }
   const from = new THREE.Vector3(), to = new THREE.Vector3(), direction = new THREE.Vector3()
   const up = new THREE.Vector3(0, 1, 0)
   const bone = (object: THREE.Mesh, a: Point3, c: Point3) => {
@@ -260,22 +290,54 @@ export function createBasePersonRig(recipe = personRecipe()) {
       })
     },
     pose(phase: number, clip: BaseClip = "walk") {
-      if (female) {
-        const sway = clip === "walk" ? Math.sin(phase * Math.PI * 2) * 0.035 * recipe.design.stride : 0
-        for (let i = 0; i < skirtPositions.count; i++) {
-          const weight = Math.max(0, (waist - restSkirt[i * 3 + 1]) / (waist - b.tunicHem))
-          skirtPositions.setZ(i, restSkirt[i * 3 + 2] + sway * weight * weight)
-        }
-        skirtPositions.needsUpdate = true
-        torso.geometry.computeVertexNormals()
+      const wave = Math.sin(phase * Math.PI * 2)
+      const seated = clip === "sitting", praying = clip === "praying"
+      const sleep = clip === "sleeping", chop = clip === "woodcutting", gather = clip === "gathering"
+      const drop = seated ? 0.25 - b.hipHeight : praying ? 0.1 + b.thighLength * 0.9 - b.hipHeight : gather ? -0.24 : 0
+      poseRoot.rotation.set(sleep ? -Math.PI / 2 : 0, 0, 0)
+      poseRoot.position.set(0, sleep ? b.torsoTop * 0.78 : 0, sleep ? (b.headCenter + b.headHeight) / 2 + 0.03 : 0)
+      body.position.y = b.hipHeight + drop
+      body.rotation.x = gather ? 0.85 + wave * 0.12 : chop ? 0.12 + (1 - Math.cos(phase * Math.PI * 2)) * 0.12 : praying ? 0.12 + wave * 0.025 : sleep ? wave * 0.008 : seated ? 0.035 * wave : 0
+      axe.visible = chop
+      for (let i = 0; i < skirtPositions.count; i++) {
+        const y = restSkirt[i * 3 + 1], z = restSkirt[i * 3 + 2]
+        const weight = Math.max(0, (waist - y) / (waist - b.tunicHem))
+        // Drape long skirts over bent knees, with the hem resting above ground.
+        skirtPositions.setY(i, seated || praying || gather ? Math.max(y, 0.07 - drop) : y)
+        skirtPositions.setZ(i, z + ((seated ? 0.48 : praying ? 0.19 : 0) * weight) +
+          (female && (clip === "walk" || clip === "carrying") ? wave * 0.035 * recipe.design.stride * weight * weight : 0))
       }
+      skirtPositions.needsUpdate = true
+      torso.geometry.computeVertexNormals()
       for (const limb of limbs) {
         const leg = legPose(limb.side, phase, clip, b)
         bone(limb.thigh, leg.hip, leg.knee)
         bone(limb.shin, leg.knee, leg.ankle)
         limb.foot.position.set(leg.ankle[0], leg.ankle[1] - b.ankleHeight + b.footHeight / 2, leg.ankle[2] + b.footLength * 0.22)
-        limb.shoulder.rotation.x = armAngle(limb.side, phase, clip) * recipe.design.armSwing
+        limb.shoulder.rotation.set(armAngle(limb.side, phase, clip) * recipe.design.armSwing, 0,
+          (limb.side === "left" ? 1 : -1) * THREE.MathUtils.degToRad(recipe.design.armAngle))
+        limb.elbow.rotation.set(-THREE.MathUtils.degToRad(recipe.design.elbowBend), 0, 0)
+        const sign = limb.side === "left" ? 1 : -1
+        if (praying) reach(limb, [sign * 0.035, b.chestHeight - b.hipHeight, 0.33])
+        else if (chop) {
+          const lift = (1 + Math.cos(phase * Math.PI * 2)) / 2
+          reach(limb, [sign * 0.035, 0.22 + lift * 0.72, 0.36 - lift * 0.13])
+        } else if (clip === "carrying") reach(limb, [sign * 0.2, 0.15, 0.34])
+        else if (gather) reach(limb, [sign * 0.16, -0.12 + wave * 0.06, 0.36])
+        else if (seated) reach(limb, [sign * 0.21, 0.02, 0.30])
+        else if (sleep) reach(limb, [sign * 0.09, 0.22, 0.24])
       }
+      root.updateMatrixWorld(true)
+      if (chop) {
+        const lift = (1 + Math.cos(phase * Math.PI * 2)) / 2
+        const desired = body.getWorldQuaternion(new THREE.Quaternion()).multiply(
+          new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 1.35 - lift * 1.55))
+        axe.quaternion.copy(sockets.rightHand.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(desired))
+        axe.updateMatrixWorld(true)
+      }
+      // The clipping plane follows a lying body; bent legs are covered by the draped mesh.
+      hemPlane.set(new THREE.Vector3(0, -1, 0), seated || praying || gather || chop ? 10 : b.tunicHem + 0.012)
+      hemPlane.applyMatrix4(poseRoot.matrixWorld)
       root.updateMatrixWorld(true)
     },
     trackSides(enabled: boolean) {

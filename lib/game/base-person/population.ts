@@ -1,3 +1,4 @@
+import type { ActionClip } from "./pose"
 import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
 import type { TravelerTypeDef, TravelerTypeId } from "../travelers"
 import { DEFAULT_DESIGN, DESIGN_CONTROLS, validatePersonDesign, type DesignKey, type PersonDesign } from "./design"
@@ -41,7 +42,7 @@ export interface PopulationPack {
   cellSize: number
   anchor: number[]
   rows: number
-  callings: Record<TravelerTypeId, { walk: string; idle: string; designs: PersonDesign[] }>
-  shadows: { walk: string; idle: string }
+  callings: Record<TravelerTypeId, { walk: string; idle: string; designs: PersonDesign[]; actions?: Record<ActionClip, string> }>
+  shadows: { walk: string; idle: string; actions?: Record<ActionClip, string> }
   strideRatios: number[]
 }

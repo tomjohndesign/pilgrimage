@@ -1,6 +1,6 @@
 import { TRAVELER_TYPES, type TravelerTypeId } from "../travelers"
 import { bakeBasePerson } from "./bake"
-import { BASE_PERSON } from "./pose"
+import { ACTION_CLIPS, BASE_PERSON } from "./pose"
 import { DEFAULT_DESIGN, personRecipe, type PersonDesign } from "./design"
 import { POPULATION_PROFILES, populationDesign, type PopulationPack } from "./population"
 
@@ -14,6 +14,7 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
     return result
   }
   const shadowWalk = canvas(8), shadowIdle = canvas(1)
+  const shadowActions = Object.fromEntries(ACTION_CLIPS.map(clip => [clip, canvas(8)]))
   const draw = async (target: HTMLCanvasElement, url: string, variant: number) => {
     const image = new Image(); image.src = url; await image.decode()
     target.getContext("2d")!.drawImage(image, 0, variant * 8 * size)
@@ -24,23 +25,28 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
   const referenceStride = personRecipe(base).body.stride
   for (const [typeIndex, type] of types.entries()) {
     const walk = canvas(8), idle = canvas(1)
+    const actions = Object.fromEntries(ACTION_CLIPS.map(clip => [clip, canvas(8)]))
     const designs: PersonDesign[] = []
     for (let variant = 0; variant < count; variant++) {
       // Let the map keep drawing and allow a newer edit to cancel this pack.
       await new Promise(resolve => setTimeout(resolve, 0))
       if (cancelled()) throw new DOMException("Superseded character design", "AbortError")
       const design = populationDesign(type, variant, base)
-      const bake = bakeBasePerson(design, false)
+      let bake
+      try { bake = bakeBasePerson(design, false) }
+      catch (error) { throw new Error(`${type.id}, profile ${variant + 1}: ${error instanceof Error ? error.message : error}`) }
       designs.push(design)
       await draw(walk, bake.walk, variant); await draw(idle, bake.idle, variant)
+      for (const clip of ACTION_CLIPS) await draw(actions[clip], bake.actions[clip].url, variant)
       if (typeIndex === 0) {
+        for (const clip of ACTION_CLIPS) await draw(shadowActions[clip], bake.actions[clip].shadow, variant)
         await draw(shadowWalk, bake.shadowWalk, variant); await draw(shadowIdle, bake.shadowIdle, variant)
         strideRatios.push(personRecipe(design).body.stride / referenceStride)
       }
       progress((typeIndex * count + variant + 1) / (types.length * count))
     }
-    callings[type.id as TravelerTypeId] = { walk: walk.toDataURL("image/png"), idle: idle.toDataURL("image/png"), designs }
+    callings[type.id as TravelerTypeId] = { walk: walk.toDataURL("image/png"), idle: idle.toDataURL("image/png"), actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, actions[clip].toDataURL("image/png")])) as NonNullable<PopulationPack["callings"][TravelerTypeId]["actions"]>, designs }
   }
   return { templateVersion: BASE_PERSON.version, cellSize: size, anchor: BASE_PERSON.anchor,
-    rows: count * 8, callings, shadows: { walk: shadowWalk.toDataURL("image/png"), idle: shadowIdle.toDataURL("image/png") }, strideRatios }
+    rows: count * 8, callings, shadows: { walk: shadowWalk.toDataURL("image/png"), idle: shadowIdle.toDataURL("image/png"), actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, shadowActions[clip].toDataURL("image/png")])) as NonNullable<PopulationPack["shadows"]["actions"]> }, strideRatios }
 }

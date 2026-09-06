@@ -15,17 +15,26 @@ const browser = await chromium.launch({ headless: true, args: ["--use-angle=meta
 try {
   const page = await browser.newPage()
   await page.goto(new URL("/assets/characters", origin).href)
-  await page.waitForFunction(() => window.__basePersonBake, undefined, { timeout: 30_000 })
+  await page.waitForFunction(() => window.__basePersonBake, undefined, { timeout: 120_000 })
   const bake = await page.evaluate(() => window.__basePersonBake)
   mkdirSync("public/textures/characters/base", { recursive: true })
   for (const [key, suffix] of Object.entries({ walk: "walk.png", idle: "idle.png", debugWalk: "sides-walk.png", debugIdle: "sides-idle.png", shadowWalk: "shadow-walk.png", shadowIdle: "shadow-idle.png" })) {
     writeFileSync(path(suffix), Buffer.from(bake[key].split(",")[1], "base64"))
   }
+  const actions = {}
+  for (const [clip, entry] of Object.entries(bake.actions)) {
+    actions[clip] = {}
+    for (const [kind, data] of Object.entries(entry)) {
+      const suffix = `${kind === "url" ? clip : `${kind}-${clip}`}.png`
+      writeFileSync(path(suffix), Buffer.from(data.split(",")[1], "base64"))
+      actions[clip][kind] = `/${path(suffix).replace(/^public\//, "")}`
+    }
+  }
   const recipe = readFileSync("assets/recipes/base-person.json")
   const metadata = { ...bake.metadata, version, recipe: "assets/recipes/base-person.json",
     recipeSha256: createHash("sha256").update(recipe).digest("hex"),
-    images: { walk: `/${prefix.replace(/^public\//, "")}-walk.png`, idle: `/${prefix.replace(/^public\//, "")}-idle.png`, shadowWalk: `/${prefix.replace(/^public\//, "")}-shadow-walk.png`, shadowIdle: `/${prefix.replace(/^public\//, "")}-shadow-idle.png` },
+    images: { actions, walk: `/${prefix.replace(/^public\//, "")}-walk.png`, idle: `/${prefix.replace(/^public\//, "")}-idle.png`, shadowWalk: `/${prefix.replace(/^public\//, "")}-shadow-walk.png`, shadowIdle: `/${prefix.replace(/^public\//, "")}-shadow-idle.png` },
   }
   writeFileSync(path("json"), JSON.stringify(metadata, null, 2) + "\n")
-  console.log(`Exported ${prefix}: 64 walk frames, 8 idle views, anatomical-side diagnostics and socket coordinates.`)
+  console.log(`Exported ${prefix}: ${Object.values(bake.metadata.clips).reduce((sum, frames) => sum + frames.length, 0)} poses, shadows, anatomical-side diagnostics and socket coordinates.`)
 } finally { await browser.close() }

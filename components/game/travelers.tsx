@@ -140,16 +140,22 @@ export function Travelers({
       const dz = s.z - group.position.z
       const distance = Math.hypot(dx, dz)
       const moved = group.userData.initialized === true && distance < 2 ? distance : 0
-      const moving = moved > 1e-6
-      if (moving) {
+      const moving = playback.paused ? group.userData.moving === true : moved > 1e-6
+      if (moving && !playback.paused) {
         const target = Math.atan2(dx, dz)
         const turn = Math.atan2(Math.sin(target - group.rotation.y), Math.cos(target - group.rotation.y))
         const blend = movement.pathEase === 0 ? 1 : 1 - Math.exp(-Math.min(delta, 0.1) / (movement.pathEase * 0.18))
         group.rotation.y += turn * blend
       }
+      const workTree = s.tree === null ? undefined : trees[s.tree]
+      if (!playback.paused && !moving && workTree && (s.activity === "working" || s.activity === "gathering")) {
+        group.rotation.y = Math.atan2(workTree.x - s.x, workTree.z - s.z)
+      }
       group.userData.playbackRate = playback.paused ? 0 : playback.speed
       group.userData.distance = moved
       group.userData.moving = moving
+      group.userData.activity = s.activity
+      group.userData.carrying = s.carrying
       group.userData.initialized = true
       group.userData.phase = travelers[i].id * 0.137
       group.userData.heading = group.rotation.y
@@ -169,10 +175,8 @@ export function Travelers({
         ? groundHeight(map, s.x + map.width / 2 - 0.5, s.z + map.depth / 2 - 0.5) : s.y
       group.position.set(s.x, y, s.z)
       // Keep baked bodies and ground shadows at their authored proportions.
-      // Camping/visiting already select the idle clip.
       group.scale.y = 1
-      if (s.activity === "working") group.rotation.z = Math.sin(sim.time * 1800) * 0.12
-      else group.rotation.z = 0
+      group.rotation.z = 0
     }
   })
 
