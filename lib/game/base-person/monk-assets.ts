@@ -1,4 +1,4 @@
-import manifest from "../../../public/textures/characters/monks/v3/manifest.json"
+import manifest from "../../../public/textures/characters/monks/v4/manifest.json"
 import { actionPlaybackRate } from "./activity"
 import { ACTION_CLIPS } from "./pose"
 import { personRecipe, validatePersonDesign } from "./design"

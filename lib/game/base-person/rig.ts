@@ -313,10 +313,23 @@ export function createBasePersonRig(recipe = personRecipe()) {
   log.position.z = 0.52
   log.scale.setScalar(chopping.logScale)
   const logHalves = [-1, 1].map(side => {
-    const half = mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.25, 8), [wood, grain, grain], log)
+    // Two lengthwise half-cylinders form one upright round until the strike.
+    const half = mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.38, 6, 1, false, side < 0 ? Math.PI : 0, Math.PI), [wood, grain, grain], log)
     half.name = side < 0 ? "log-left-half" : "log-right-half"
+    const cut = mesh(new THREE.PlaneGeometry(0.28, 0.38), grain, half)
+    cut.rotation.y = side < 0 ? Math.PI / 2 : -Math.PI / 2
     return { half, side }
   })
+  const impact = new THREE.Group()
+  impact.name = "woodcutting-impact"
+  impact.position.y = 0.38
+  for (const direction of [[-1, 0.6, 0], [1, 0.6, 0], [0, 1, 0], [0, 0.5, -1], [0, 0.5, 1]]) {
+    const ray = new THREE.Vector3(...direction).normalize()
+    const mark = mesh(new THREE.ConeGeometry(0.035, 0.19, 4), shine, impact)
+    mark.position.copy(ray).multiplyScalar(0.16)
+    mark.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ray)
+  }
+  log.add(impact)
   root.add(log)
   log.visible = false
   const basket = new THREE.Group()
@@ -448,11 +461,14 @@ export function createBasePersonRig(recipe = personRecipe()) {
       pillow.visible = snores.visible = sleep
       snores.position.set(0.08, 0.55 + phase % 1 * 0.1, pillow.position.z)
       axe.visible = log.visible = chop
+      impact.visible = chop && swing.impact
       glint.visible = chop && swing.glint
       trail.visible = chop && swing.striking
       for (const { half, side } of logHalves) {
-        half.position.set(side * (0.125 + swing.split * 0.14), 0.14 + swing.split * 0.035, swing.split * 0.035)
-        half.rotation.z = Math.PI / 2 + side * swing.split * 0.3
+        const tilt = swing.split * 1.15
+        const groundedY = 0.19 * Math.cos(tilt) + 0.14 * Math.sin(tilt)
+        half.position.set(side * swing.split * 0.48, groundedY + Math.sin(swing.split * Math.PI) * 0.18, swing.split * 0.06)
+        half.rotation.z = -side * tilt
       }
       for (const { geometry, positions, rest } of drapedParts) {
         for (let i = 0; i < positions.count; i++) {

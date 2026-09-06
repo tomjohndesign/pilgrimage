@@ -1,7 +1,7 @@
 import { actionPlaybackRate } from "./activity"
 import { ACTION_CLIPS, type ActionClip } from "./pose"
 import type { SpriteClip } from "../character-assets"
-import manifest from "../../../public/textures/characters/population/v3/manifest.json"
+import manifest from "../../../public/textures/characters/population/v4/manifest.json"
 import type { TravelerTypeId } from "../travelers"
 import { validatePersonDesign } from "./design"
 import type { PopulationPack } from "./population"

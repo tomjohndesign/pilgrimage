@@ -16,6 +16,8 @@ export function woodcuttingMotion(phase: number, profile = woodcuttingProfile())
     lift,
     striking: stroke > 0 && stroke < 1,
     glint: p >= profile.liftEnd - 0.09 && p <= profile.liftEnd,
-    split: p < profile.strikeEnd ? 0 : Math.min(1, (p - profile.strikeEnd) / 0.06),
+    // One of the 24 baked frames catches the contact flash for every profile.
+    impact: p >= profile.strikeEnd && p < profile.strikeEnd + 1 / 24,
+    split: p < profile.strikeEnd ? 0 : Math.min(1, (p - profile.strikeEnd) / 0.18),
   }
 }

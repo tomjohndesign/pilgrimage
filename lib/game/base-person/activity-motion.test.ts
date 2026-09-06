@@ -19,7 +19,8 @@ describe("character activity motions", () => {
       expect(profile.liftEnd).toBeGreaterThan(profile.strikeEnd - profile.liftEnd)
       expect(woodcuttingMotion(profile.liftEnd, profile).lift).toBeCloseTo(1)
       const impact = woodcuttingMotion(0.9, profile)
-      expect(impact).toMatchObject({ lift: 0, striking: false, split: 1 })
+      expect(impact).toMatchObject({ lift: 0, striking: false })
+      expect(impact.split).toBeCloseTo(1)
       expect(woodcuttingMotion(1, profile)).toEqual(woodcuttingMotion(0, profile))
     }
     const duration = (design: typeof DEFAULT_DESIGN) => PERSON_CLIPS.woodcutting.frames / (8 * actionPlaybackRate("woodcutting", design))
@@ -40,14 +41,34 @@ describe("character activity motions", () => {
         const left = rig.root.getObjectByName("log-left-half")!, right = rig.root.getObjectByName("log-right-half")!
         rig.pose(0, "woodcutting")
         const joined = right.position.x - left.position.x
+        expect(joined).toBe(0)
+        expect(left.rotation.z).toBeCloseTo(0)
+        expect(right.rotation.z).toBeCloseTo(0)
+        // Grain runs vertically through each half; they meet on the X=0 cut.
+        for (const half of [left, right] as THREE.Mesh[]) {
+          half.geometry.computeBoundingBox()
+          const bounds = half.geometry.boundingBox!
+          expect(bounds.max.y - bounds.min.y).toBeCloseTo(0.38)
+          expect(bounds.max.x - bounds.min.x).toBeCloseTo(0.14)
+        }
         const profile = woodcuttingProfile(design)
         rig.pose(profile.liftEnd, "woodcutting")
         expect(rig.root.getObjectByName("axe-glint")!.visible).toBe(true)
         rig.pose((profile.liftEnd + profile.strikeEnd) / 2, "woodcutting")
         expect(rig.root.getObjectByName("axe-motion-streaks")!.visible).toBe(true)
         expect(right.position.x - left.position.x).toBe(joined)
+        const impactFrames = Array.from({ length: PERSON_CLIPS.woodcutting.frames }, (_, frame) => {
+          rig.pose(frame / PERSON_CLIPS.woodcutting.frames, "woodcutting")
+          return rig.root.getObjectByName("woodcutting-impact")!.visible
+        })
+        expect(impactFrames.filter(Boolean)).toHaveLength(1)
+        expect(impactFrames.findIndex(Boolean) / PERSON_CLIPS.woodcutting.frames).toBeGreaterThanOrEqual(profile.strikeEnd)
+        rig.pose(profile.strikeEnd + 0.09, "woodcutting")
+        const airborneY = left.position.y
         rig.pose(0.9, "woodcutting")
-        expect(right.position.x - left.position.x).toBeGreaterThan(joined)
+        expect(right.position.x - left.position.x).toBeGreaterThan(0.9)
+        expect(left.position.y).toBeLessThan(airborneY)
+        expect(rig.root.getObjectByName("woodcutting-impact")!.visible).toBe(false)
         expect(rig.root.getObjectByName("axe-motion-streaks")!.visible).toBe(false)
         rig.pose(0, "idle")
         expect(rig.root.getObjectByName("woodcutting-log")!.visible).toBe(false)

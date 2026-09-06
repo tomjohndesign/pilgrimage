@@ -1,6 +1,6 @@
 import sharp from "sharp"
 import { readFileSync } from "node:fs"
-const version = process.argv[2] ?? "v12"
+const version = process.argv[2] ?? "v13"
 if (!/^v\d+$/.test(version)) throw new Error("Expected a version such as v1")
 const prefix = `public/textures/characters/base/base-person-${version}`
 const metadata = JSON.parse(readFileSync(`${prefix}.json`, "utf8"))
