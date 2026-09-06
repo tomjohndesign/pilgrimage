@@ -10,6 +10,11 @@ export function personCastShadow(source: HTMLCanvasElement, anchor: number[], op
   const shadow = document.createElement("canvas")
   shadow.width = size; shadow.height = size
   const context = shadow.getContext("2d")!
+  // Longer tools can project a faint blurred tail beyond the body's safe area.
+  // Keep each shadow inside its atlas cell so adjacent poses cannot bleed into it.
+  context.beginPath()
+  context.rect(4, 4, size - 8, size - 8)
+  context.clip()
   context.globalAlpha = opacity
   context.filter = "blur(0.35px)"
   // Project down and to the right from the fixed ground anchor. Lighting is

@@ -8,6 +8,7 @@ import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { CHARACTER_PIXELS_PER_UNIT } from "@/lib/game/render/pixel-scale"
 import { BASE_CHARACTER_SCALE, DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE } from "@/lib/game/base-person/gait"
+import { BASE_PERSON } from "@/lib/game/base-person/pose"
 import { DEFAULT_MOVEMENT } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
 import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER } from "@/lib/game/map/road"
@@ -108,7 +109,7 @@ export const DEFAULT_SETTINGS: MapSettings = {
   relicDistance: DEFAULT_RELIC_DISTANCE,
   traffic: DEFAULT_TRAFFIC,
   walkSpeed: DEFAULT_WALK_SPEED,
-  characterFps: 8,
+  characterFps: BASE_PERSON.defaultFps,
   walkSync: true,
   stride: DEFAULT_WALK_STRIDE,
   paceVariation: DEFAULT_MOVEMENT.variation,

@@ -1,7 +1,7 @@
-import manifest from "../../../public/textures/characters/monks/v7/manifest.json"
+import manifest from "../../../public/textures/characters/monks/v14/manifest.json"
 import { DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE, personWalkStride, walkSpeedScale } from "./gait"
 import { actionPlaybackRate } from "./activity"
-import { ACTION_CLIPS } from "./pose"
+import { ACTION_CLIPS, BASE_PERSON } from "./pose"
 import { personRecipe, validatePersonDesign } from "./design"
 import type { populationVisual } from "./population-assets"
 
@@ -15,7 +15,7 @@ export const MONK_VISUAL: ReturnType<typeof populationVisual> = {
   }])),
   shadow: { walk: manifest.images.shadowWalk, idle: manifest.images.shadowIdle },
   center: [manifest.anchor[0] / manifest.cellSize, 1 - manifest.anchor[1] / manifest.cellSize],
-  fps: 8,
+  fps: BASE_PERSON.defaultFps,
   scale: 0.74 * manifest.cellSize / 48,
   rowOffset: 0,
   strideRatio: personRecipe(validatePersonDesign(manifest.design)).body.stride / personRecipe().body.stride,

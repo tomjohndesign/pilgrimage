@@ -27,6 +27,7 @@ import {
 } from "@/lib/game/trees/species"
 import { useTreeTuningStore } from "@/lib/game/trees/tree-tuning-store"
 import { createEnt, stepEnt, type EntState } from "@/lib/game/trees/ents"
+import { TREE_IMPACT_DURATION, treeImpactAngle, treeImpacts } from "@/lib/game/trees/impact"
 
 /**
  * Parametric species trees, drawn as instanced low-poly primitives.
@@ -184,6 +185,19 @@ function SpeciesBatch({ def, trees, entMap, onSelect }: {
   )
   const legsRef = useRef<THREE.InstancedMesh>(null)
   const legIdsRef = useRef<THREE.InstancedMesh>(null)
+  const hitInstances = useMemo(() => {
+    let firstCrown = 0
+    return new Map(trees.map((tree, trunkIndex) => {
+      const entry = { trunkIndex, firstCrown, crownCount: tree.shape.crown.length }
+      firstCrown += entry.crownCount
+      return [tree.placement, entry] as const
+    }))
+  }, [trees])
+  const hitRest = useRef(new Map<TreePlacement, { trunk: THREE.Matrix4; crowns: THREE.Matrix4[] }>())
+  useEffect(() => () => {
+    for (const tree of hitInstances.keys()) treeImpacts.delete(tree)
+    hitRest.current.clear()
+  }, [hitInstances])
   const movingTrees = useMemo(() => {
     let crownStart = 0
     return trees.flatMap((tree, trunkIndex) => {
@@ -203,6 +217,9 @@ function SpeciesBatch({ def, trees, entMap, onSelect }: {
     rotation: new THREE.Quaternion(),
     scale: new THREE.Vector3(),
     euler: new THREE.Euler(),
+    hitTransform: new THREE.Matrix4(),
+    hitOrigin: new THREE.Matrix4(),
+    hitAxis: new THREE.Vector3(),
   }), [])
 
   // Meshes are created by the instanced mesh elements; instance counts are
@@ -358,6 +375,47 @@ function SpeciesBatch({ def, trees, entMap, onSelect }: {
         if (mesh) mesh.instanceMatrix.needsUpdate = true
       }
     }
+  })
+
+  useFrame((_, delta) => {
+    const playback = useSimulationStore.getState()
+    if (playback.paused || treeImpacts.size === 0) return
+    const { trunk, crown, trunkId, crownId } = refs
+    if (!trunk.current || !crown.current || !trunkId.current || !crownId.current) return
+    const { matrix, hitTransform, hitOrigin, hitAxis } = scratch
+    let changed = false
+    for (const [tree, hit] of treeImpacts) {
+      const entry = hitInstances.get(tree)
+      if (!entry) continue
+      let rest = hitRest.current.get(tree)
+      if (!rest) {
+        rest = { trunk: new THREE.Matrix4(), crowns: Array.from({ length: entry.crownCount }, () => new THREE.Matrix4()) }
+        trunk.current.getMatrixAt(entry.trunkIndex, rest.trunk)
+        rest.crowns.forEach((base, part) => crown.current!.getMatrixAt(entry.firstCrown + part, base))
+        hitRest.current.set(tree, rest)
+      }
+      hit.elapsed += Math.min(delta, 0.1) * playback.speed
+      // Rotate the entire tree around its planted base, including its selection silhouette.
+      const y = tree.y - TRUNK_SINK
+      hitTransform.makeTranslation(tree.x, y, tree.z)
+      hitAxis.set(Math.cos(hit.heading), 0, -Math.sin(hit.heading))
+      hitTransform.multiply(hitOrigin.makeRotationAxis(hitAxis, treeImpactAngle(hit.elapsed)))
+      hitTransform.multiply(hitOrigin.makeTranslation(-tree.x, -y, -tree.z))
+      matrix.multiplyMatrices(hitTransform, rest.trunk)
+      trunk.current.setMatrixAt(entry.trunkIndex, matrix)
+      trunkId.current.setMatrixAt(entry.trunkIndex, matrix)
+      rest.crowns.forEach((base, part) => {
+        matrix.multiplyMatrices(hitTransform, base)
+        crown.current!.setMatrixAt(entry.firstCrown + part, matrix)
+        crownId.current!.setMatrixAt(entry.firstCrown + part, matrix)
+      })
+      changed = true
+      if (hit.elapsed >= TREE_IMPACT_DURATION) {
+        treeImpacts.delete(tree)
+        hitRest.current.delete(tree)
+      }
+    }
+    if (changed) for (const mesh of [trunk.current, crown.current, trunkId.current, crownId.current]) mesh.instanceMatrix.needsUpdate = true
   })
 
   if (trunkCount === 0) return null
