@@ -1,3 +1,4 @@
+import { buildingMotion, MALLET_HEAD_HEIGHT } from "./building"
 import * as THREE from "three"
 import { createWoodLogGeometry, WOOD_LOG } from "../wood-log"
 import { editedLeg } from "./edited-leg"
@@ -364,6 +365,13 @@ export function createBasePersonRig(recipe = personRecipe()) {
   axe.name = "woodcutting-axe"
   axe.scale.setScalar(chopping.axeScale)
   const wood = material(WOOD_LOG.bark), steel = material("#bac8cf"), grain = material(WOOD_LOG.endGrain)
+  const mallet = new THREE.Group()
+  mallet.name = "building-mallet"
+  mesh(new THREE.CylinderGeometry(0.028, 0.035, 0.46, 6), wood, mallet, [0, 0.17, 0]).name = "mallet-handle"
+  mesh(new THREE.BoxGeometry(0.25, 0.17, 0.18), wood, mallet, [0, MALLET_HEAD_HEIGHT, 0]).name = "mallet-head"
+  for (const side of [-1, 1]) mesh(new THREE.BoxGeometry(0.012, 0.14, 0.15), grain, mallet, [side * 0.127, MALLET_HEAD_HEIGHT, 0])
+  sockets.rightHand.add(mallet)
+  mallet.visible = false
   const shaft = mesh(new THREE.CylinderGeometry(0.026, 0.032, 0.90, 6), wood, axe, [0, 0.27, 0])
   shaft.name = "axe-handle"
   // A slim wedge flares from the socket to a broad, sharpened cutting edge along +Z.
@@ -618,6 +626,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       const splitRotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(tool.pitch, tool.yaw, tool.roll, "YXZ"))
       const splitAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(splitRotation)
       const gathering = gatheringMotion(phase)
+      const building = clip === "building", hammer = buildingMotion(phase)
       const motion = walkBody(phase, clip)
       const devotional = recipe.design.walkStyle === "Devotional" && clip === "walk"
       headPivot.rotation.x = devotional ? 0.42 : 0
@@ -645,6 +654,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       pillow.visible = snores.visible = sleep
       snores.position.set(0.08, 0.55 + phase % 1 * 0.1, pillow.position.z)
       axe.visible = chop
+      mallet.visible = building
       // The persistent world stump supports the logs; body atlases never paint a second block.
       block.visible = false
       log.visible = splitting
@@ -733,6 +743,12 @@ export function createBasePersonRig(recipe = personRecipe()) {
 
         }
         else if (devotional) reach(limb, [sign * 0.018, waist - b.hipHeight + 0.045 + sign * 0.015, 0.30])
+        else if (building) {
+          const target = new THREE.Vector3(sign * b.shoulderOffset,
+            b.shoulderHeight + (limb.side === "right" ? hammer.gripY : -0.25), limb.side === "right" ? hammer.gripZ : 0.27)
+          target.sub(body.position).applyQuaternion(body.quaternion.clone().invert())
+          reach(limb, target.toArray() as Point3, true)
+        }
         else if (praying) reach(limb, [sign * 0.035, b.chestHeight - b.hipHeight, 0.33])
         else if (felling) {
           // Carry the two-handed grip with the chest as it twists, within both arms' reach.
@@ -800,6 +816,12 @@ export function createBasePersonRig(recipe = personRecipe()) {
       headPivot.position.add(parent.worldToLocal(root.localToWorld(headOffset)).sub(zero))
       root.updateMatrixWorld(true)
       roadAccessories.pose(clip, phase)
+      if (building) {
+        const desired = root.getWorldQuaternion(new THREE.Quaternion()).multiply(
+          new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), hammer.pitch))
+        mallet.quaternion.copy(sockets.rightHand.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(desired))
+        mallet.updateMatrixWorld(true)
+      }
       if (chop) {
         const toolRotation = felling
           ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), swing.yaw + Math.PI / 2)

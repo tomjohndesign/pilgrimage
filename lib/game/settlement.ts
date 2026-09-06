@@ -1,3 +1,4 @@
+import { buildingEntrance, constructionWork, isComplete } from "./construction"
 import { groundHeight } from "./map/elevation"
 import { placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
 import { settlementRoute } from "./settlement-route"
@@ -85,6 +86,7 @@ export function settlementRenown(
   let buildings = 0
   let scenery = 0
   for (const building of map.buildings) {
+    if (!isComplete(building)) continue
     if (building.id === map.site?.hovelId) buildings += balance.rules.hovelRenown
     const def = buildCatalog(balance).find((item) => item.id === building.buildType)
     if (def?.category === "buildings") buildings += def.renown
@@ -124,6 +126,7 @@ export function settlementIncome(
     wood: residentCount * balance.rules.residentWood,
   }
   for (const building of settlement.structures) {
+    if (!isComplete(building)) continue
     const def = buildCatalog(balance).find((item) => item.id === building.buildType)
     if (def) {
       income.gold += def.income.gold
@@ -194,20 +197,22 @@ export function placementError(
     const problem = placementProblem(map, map.buildings, "lumberCamp", at.x, at.z)
     if (problem) return PLACEMENT_PROBLEM_LABELS[problem]
   }
-  // Every addition must preserve access to existing lumber yards.
+  // Reserve reachable construction frontage and preserve existing entrances.
   if (map.site) {
-    const candidate = { ...def, ...at, id: def.id === "lumberCamp" ? "lumberCamp-preview" : "preview" }
+    const candidate = { ...def, ...at, id: def.id === "lumberCamp" ? "lumberCamp-preview" : "preview", construction: { work: 0, required: 1 } }
     const occupied = [...map.buildings, candidate]
-    for (const camp of lumberCamps(map)) {
+    if (!settlementRoute(map, occupied, map.site.door, buildingEntrance(candidate)))
+      return "Keep a clear route to the construction entrance."
+    for (const camp of map.buildings.filter(b => b.buildType)) {
       if (!settlementRoute(map, occupied, map.site.door, { x: camp.x, z: camp.z + camp.d }))
-        return "Keep access to lumber camps clear."
+        return "Keep access to existing buildings clear."
     }
   }
   return null
 }
 
 export function lumberCamps(map: GameMap): PlacedBuilding[] {
-  return map.buildings.filter((b) => b.buildType === "lumberCamp")
+  return map.buildings.filter((b) => b.buildType === "lumberCamp" && isComplete(b))
     .map((b) => ({ ...b, kind: "lumberCamp" }))
 }
 
@@ -262,6 +267,7 @@ export function purchaseStructure(
     height: def.height,
     color: def.color,
     roofColor: def.roofColor,
+    construction: { work: 0, required: constructionWork(def.w, def.d), cost: { ...def.cost } },
   }
   return {
     settlement: {

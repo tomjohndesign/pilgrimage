@@ -1,5 +1,7 @@
 "use client"
 
+import { createMonkNeeds, stepMonkWork, type MonkNeeds } from "@/lib/game/monk-work"
+import { workerRoute } from "@/lib/game/construction"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
 import { createRelicProcession, nearProcession, processionGrounds, processionRegistry, startProcession, stepProcession } from "@/lib/game/relic-procession"
@@ -18,7 +20,7 @@ import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { selectElement } from "@/lib/game/selection"
 import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
 import type { GameMap } from "@/lib/game/map/types"
-import { monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
+import { monkStaminaRegistry, monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { createMonkFlight, monkGroundTime, recallMonkFlight, stepMonkFlight, type MonkFlight } from "@/lib/game/monk-flight"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { encodeObjectId, residentObjectId, RELIC_OBJECT_ID } from "@/lib/game/render/outline"
@@ -34,7 +36,8 @@ import { rocketMonkVisual, rocketFlightClip } from "@/lib/game/rocket/assets"
  * between trips. Toggling it off recalls them and stows their packs on landing.
  */
 
-interface MonkState extends MonkRoutine {
+interface MonkState extends MonkRoutine, MonkNeeds {
+  workScale?: number
   flight?: MonkFlight
   flightWait: number
 }
@@ -54,20 +57,34 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       return spot
     }
     const states: MonkState[] = (spots.length ? monks : []).map((_, index) => ({
-      ...createMonkRoutine(wander, index, rng), flightWait: index * 8,
+      ...createMonkRoutine(wander, index, rng), ...createMonkNeeds(index), flightWait: index * 8,
     }))
     const activities = new Map<number, MonkActivity>()
-    return { spots, centre, rng, flightRng, pick, states, activities, wander,
+    return { stamina: new Map<number, number>(), spots, centre, rng, flightRng, pick, states, activities, wander,
       procession: createRelicProcession(), grounds: processionGrounds(map, wander) }
-  }, [map, monks])
+  }, [map.road, monks])
+  const navigation = useMemo(() => monkWander(map), [map])
+  world.pick = () => navigation.spots[Math.floor(world.rng() * navigation.spots.length)]
+  world.wander = navigation
+  world.spots = navigation.spots
+  world.centre = navigation.centre
+  world.grounds = useMemo(() => processionGrounds(map, navigation), [map, navigation])
+  useEffect(() => {
+    for (const state of world.states) {
+      if (state.buildingTask || state.flight) continue
+      if (map.site) { state.route = workerRoute(map, state, map.site.door) ?? []; state.destination = "home" }
+    }
+  }, [map, world])
 
   // Publish activities so the HUD's monk panel can poll them.
   useEffect(() => {
     monkRegistry.current = world.activities
+    monkStaminaRegistry.current = world.stamina
     processionRegistry.current = world.procession
     useRelicProcessionStore.setState({ available: !!world.grounds, monkId: null, stage: "idle", returnRequested: false })
     return () => {
       if (monkRegistry.current === world.activities) monkRegistry.current = null
+      if (monkStaminaRegistry.current === world.stamina) monkStaminaRegistry.current = null
       if (processionRegistry.current === world.procession) {
         processionRegistry.current = null
         useRelicProcessionStore.setState({ available: false, monkId: null, stage: "idle", returnRequested: false })
@@ -82,6 +99,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
     if (!playback.paused && controls.monkId !== null && world.procession.stage === "idle" && world.grounds) {
       const index = monks.findIndex(m => m.id === controls.monkId)
       const actor = world.states[index]
+      if (actor) actor.buildingTask = undefined
       if (!actor || actor.flight || !startProcession(world.procession, controls.monkId, actor, world.grounds)) {
         useRelicProcessionStore.setState({ monkId: null, returnRequested: false })
       }
@@ -107,6 +125,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
     const airborne = new Set<number>()
     for (let i = 0; i < world.states.length; i++) {
       const s = world.states[i]
+      s.workScale = characterScale
       const group = groupRefs.current[i]
       if (!group) continue
       group.userData.initialized = true
@@ -131,7 +150,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         group.position.set(s.x, s.y, s.z)
         continue
       }
-      const praying = !s.flight && nearProcession(world.procession, s, group.userData.activity === "praying")
+      const praying = !s.flight && s.buildingTask?.purpose !== "rest" && nearProcession(world.procession, s, group.userData.activity === "praying")
       group.userData.moving = false
       if (praying && world.procession.position) {
         group.userData.activity = "praying"
@@ -143,7 +162,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
 
       if (flying) {
         s.flightWait -= dt
-        if (!s.flight && s.flightWait <= 0 && s.destination === "grounds" && s.activity === "resting") {
+        if (!s.flight && s.flightWait <= 0 && s.destination === "grounds" && s.activity === "resting" && !s.buildingTask && s.stamina > 25) {
           s.flight = createMonkFlight(s, world.pick(), map, world.flightRng)
         }
       }
@@ -182,7 +201,10 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       }
       group.rotation.x = 0
 
-      stepMonkRoutine(s, world.wander, world.rng, monkWalkSpeed(characterScale), dt)
+      if (!stepMonkWork(s, map, monkWalkSpeed(characterScale), dt))
+        stepMonkRoutine(s, world.wander, world.rng, monkWalkSpeed(characterScale), dt)
+      world.stamina.set(monks[i].id, s.stamina)
+      if (s.buildingTask && (s.activity === "building" || s.activity === "sleeping")) group.rotation.y = Math.PI
       group.userData.activity = s.activity
       world.activities.set(monks[i].id, s.activity)
       if (s.activity === "praying" && world.centre) {

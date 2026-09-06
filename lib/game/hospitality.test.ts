@@ -256,6 +256,26 @@ describe("shrine hospitality", () => {
 })
 
 describe("lumber camps", () => {
+  it("sends an idle settled worker to build, then returns them to camp", () => {
+    const { map, camp, traveler } = fixture()
+    const t = traveler(0), sim = createSim([t], map), actor = sim.travelers.get(0)!
+    const site = { ...camp, id: "construction-site", x: 5, z: 6, construction: { work: 0, required: 2 } }
+    map.buildings.push(camp, site)
+    sim.buildings = [camp]
+    actor.employer = camp.id
+    actor.activity = "idle"
+    actor.x = tileToWorldX(map, camp.x); actor.z = tileToWorldZ(map, camp.z + camp.d)
+    stepSim(sim, [t], map, 1.5, 0.1)
+    expect(actor.activity).toBe("toBuild")
+    expect(site.construction.work).toBe(0)
+    run(sim, [t], map, 60, () => actor.activity === "fromBuild")
+    expect(site.construction.work).toBe(2)
+    run(sim, [t], map, 60, () => actor.activity === "idle")
+    expect(actor.x).toBeCloseTo(tileToWorldX(map, camp.x))
+    expect(actor.z).toBeCloseTo(tileToWorldZ(map, camp.z + camp.d))
+    expect(actor.employer).toBe(camp.id)
+  })
+
   it.each(["none", "hunger", "thirst", "stamina"] as const)(
     "only rests after a delivery when needs are low (low need: %s)", (need) => {
       const { map, trees, camp, traveler } = fixture()
@@ -350,6 +370,7 @@ describe("lumber camps", () => {
     const blocked = purchaseStructure(before, map, [], [], "lumberCamp", { x: 0, z: 8 })
     expect(blocked.error).toBeTruthy()
     expect(blocked.settlement).toBe(before)
+    bought.settlement.structures[0].construction!.work = bought.settlement.structures[0].construction!.required
     const builtMap = { ...map, buildings: [...map.buildings, ...bought.settlement.structures] }
     const t = traveler(0)
     t.attributes.hunger = 0

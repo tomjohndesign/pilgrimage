@@ -44,13 +44,15 @@ describe("construction influence", () => {
     expect(settlementRenown(built, [], []).total).toBe(settlementRenown(map, [], []).total)
   })
 
-  it("a purchased devotional landmark extends connected territory immediately", () => {
+  it("a devotional landmark extends connected territory only after construction", () => {
     const map = world()
     expect(inside(map, 26, 20)).toBe(false)
     const purchase = purchaseStructure(createSettlement(), map, [], [], "cross", { x: 21, z: 20 })
     expect(purchase.error).toBeNull()
     const built = { ...map, buildings: [...map.buildings, ...purchase.settlement.structures] }
-    expect(placementError(built, shelter, { x: 26, z: 20 })).toBeNull()
+    expect(placementError(built, shelter, { x: 26, z: 20 })).not.toBeNull()
+    purchase.settlement.structures[0].construction!.work = purchase.settlement.structures[0].construction!.required
+    expect(placementError({ ...built }, shelter, { x: 26, z: 20 })).toBeNull()
     expect(settlementRenown(built, [], []).total).toBe(7)
   })
 

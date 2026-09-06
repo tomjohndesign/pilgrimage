@@ -147,7 +147,7 @@ export function GameCanvas({
       <Bridges map={map} roadTier={roadTier} />
       <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} />
       <Environment map={map} />
-      <Buildings map={map} />
+      <Buildings map={map} characterScale={characterScale} />
       <Shrine map={map} relic={relic} />
       <PixelCharacters>
         <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />

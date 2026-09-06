@@ -1,5 +1,6 @@
 "use client"
 
+import { isComplete, isMonkShelter } from "@/lib/game/construction"
 import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/elevation"
 
 import Link from "next/link"
@@ -18,14 +19,14 @@ import {
 import { clampRoadTier, ROAD_TIERS } from "@/lib/game/map/road"
 import { MIN_MAP_SIZE } from "@/lib/game/map/generate-map"
 import { TERRAIN } from "@/lib/game/map/terrain"
-import { tileAt, type GameMap } from "@/lib/game/map/types"
+import { tileAt, type BuildingDef, type GameMap } from "@/lib/game/map/types"
 import { nerve } from "@/lib/game/route-choice"
 import { parseSeed } from "@/lib/game/rng"
 import { CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
-import { MONK_ACTIVITY_LABELS, monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
+import { MONK_ACTIVITY_LABELS, monkStaminaRegistry, monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { relicTitle, type Relic } from "@/lib/game/relic"
 import { DEFAULT_TRAFFIC, type Traveler } from "@/lib/game/travelers"
 import type { PixelationProps } from "@/components/pixel-canvas"
@@ -484,6 +485,21 @@ function RelicPanel({ relic }: { relic: Relic }) {
   )
 }
 
+function ConstructionStatus({ building }: { building: BuildingDef }) {
+  const read = () => building.construction ? Math.round(100 * building.construction.work / building.construction.required) : 100
+  const [progress, setProgress] = useState(read)
+  useEffect(() => {
+    setProgress(read())
+    const timer = setInterval(() => setProgress(read()), 250)
+    return () => clearInterval(timer)
+  }, [building])
+  if (progress >= 100) return null
+  return <div className="mt-2">
+    <StatBar label="Construction" value={progress} />
+    <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">Idle residents build this site. Benefits begin when construction finishes.</p>
+  </div>
+}
+
 /** The scene writes monk activities at frame rate; sample on the HUD's own schedule. */
 function useMonkActivity(monkId: number): MonkActivity | null {
   const [activity, setActivity] = useState<MonkActivity | null>(null)
@@ -501,6 +517,13 @@ function MonkPanel({ monk }: { monk: Monk }) {
   const balance = useBalanceStore((s) => s.balance)
   const a = monk.attributes
   const activity = useMonkActivity(monk.id)
+  const [stamina, setStamina] = useState(100)
+  useEffect(() => {
+    const read = () => setStamina(monkStaminaRegistry.current?.get(monk.id) ?? 100)
+    read()
+    const timer = setInterval(read, 250)
+    return () => clearInterval(timer)
+  }, [monk.id])
   const procession = useRelicProcessionStore()
   const carryingRelic = procession.monkId === monk.id
   return (
@@ -528,6 +551,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
 
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
         <StatBar label="Piety" value={a.piety} />
+        <StatBar label="Stamina" value={stamina} />
         <div className="mt-1 text-[11px] text-ink-light">Contributes +{individualRenown(monk, balance)} shrine renown</div>
       </div>
 
@@ -990,6 +1014,8 @@ export function GameHud({
             <Panel>
             <div className="flex items-center justify-between gap-4"><Label>{selectedDefinition?.category === "scenery" ? "Scenery" : "Building"}</Label><button type="button" aria-label="Dismiss building" onClick={() => useCameraStore.getState().select(null)} className="pointer-events-auto text-xs text-ink-light">✕</button></div>
             <p className="mt-1 font-display text-xs text-ink">{selectedBuilding.label}</p>
+            <ConstructionStatus building={selectedBuilding} />
+            {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">Tired monks sleep here until their stamina recovers.</p>}
             {selectedBuilding.id === map?.site?.hovelId && (
               <div className="mt-3 flex flex-col gap-1.5">
                 <label htmlFor="shrine-admission" className="text-[11px] text-ink-light">Admission · gold per visitor</label>
@@ -1004,7 +1030,7 @@ export function GameHud({
             {selectedBuilding.buildType === "lumberCamp" && (
               <p className="mt-2 text-[11px] text-ink"><span className="text-ink-light">Stored wood</span> · {storedWood} wood</p>
             )}
-            {selectedDefinition && <>
+            {selectedDefinition && isComplete(selectedBuilding) && <>
               <p className="mt-2 text-[11px] text-ink-light">Contributes +{selectedDefinition.renown} shrine renown</p>
               <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">{selectedDefinition.description}</p>
               <p className="mt-1 text-[11px] text-ink-light">{buildingIncomeLabel(selectedDefinition, economy.balance)}</p>

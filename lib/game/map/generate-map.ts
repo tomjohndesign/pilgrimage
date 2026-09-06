@@ -23,8 +23,8 @@ import { generateWater, WATER_KIND_LAKE, WATER_KIND_RIVER } from "./water"
  *
  * Every world also comes founded: the monks' hovel already stands, with the
  * relic inside, deep in the woods a long way off the road, and a beaten track
- * branches from the road to its door. That is the one building the generator
- * places — everything else is the player's job. The game begins with the hovel
+ * branches from the road to its door. A completed monk shelter faces the gate path
+ * beside it; subsequent structures are built by residents. The game begins with the hovel
  * because without it there is nothing for travelers to turn aside for.
  *
  * Two kinds of openness, on purpose:
@@ -788,7 +788,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   }
 
   // --- Founding site: the hovel, its glade, and the branch to its door -------
-  const { hovel, site } = foundSite(
+  const { hovel, shelter, site } = foundSite(
     tiles,
     width,
     depth,
@@ -836,12 +836,16 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     reached = reachableFrom(tiles, roadTiles, width, depth, elevation)
   }
 
+  // Trail repairs must leave the shelter foundation clear.
+  for (let z = shelter.z; z < shelter.z + shelter.d; z++)
+    for (let x = shelter.x; x < shelter.x + shelter.w; x++) tiles[z * width + x] = "grass"
+
   const map: GameMap = {
     elevation,
     width,
     depth,
     tiles,
-    buildings: [hovel],
+    buildings: [hovel, shelter],
     seed,
     road,
     shortcuts,
@@ -928,7 +932,7 @@ function foundSite(
   passKind: Uint8Array,
   roadLand: Uint8Array,
   elevation: ElevationInfo,
-): { hovel: BuildingDef; site: FoundingSite } {
+): { hovel: BuildingDef; shelter: BuildingDef; site: FoundingSite } {
   const { min: bandMin, max: bandMax } = relicDistanceBand(relicDistance)
 
   // Distance from the road is measured as it will be walked: dry, around
@@ -994,6 +998,12 @@ function foundSite(
           }
         }
       }
+      // Reserve a three-tile shelter north of the gate path, on the same level.
+      for (let dz = -3; dz <= -2; dz++) for (let dx = 0; dx < 3; dx++) {
+        const i = (z + dz) * width + x + dx
+        if (z + dz < 0 || roadLand[i] !== 1 || tiles[i] === "path") grounded = false
+        low = Math.min(low, elevation.height[i]); high = Math.max(high, elevation.height[i])
+      }
       if (onRoad || !grounded || high - low > 0.18) continue
 
       // Outside the band, every step of shortfall or excess costs more than any
@@ -1027,7 +1037,18 @@ function foundSite(
     }
   }
 
+  const shelter: BuildingDef = {
+    id: "founding-shelter", buildType: "monk-shelter", label: "Monk shelter",
+    x: best.x, z: best.z - 3, w: 3, d: 2, height: 0.8,
+    color: "#b99a72", roofColor: "#855642",
+  }
   const foundation = elevation.height[best.z * width + best.x]
+  for (let z = shelter.z; z < shelter.z + shelter.d; z++) for (let x = shelter.x; x < shelter.x + shelter.w; x++) {
+    const i = z * width + x
+    elevation.height[i] = foundation
+    tiles[i] = "grass"
+    offRoad[i] = WATER_KIND_LAKE
+  }
   // Level the enclosure and its continuous walking path, serving all four gates.
   for (let dz = -1; dz <= HOVEL_SIZE; dz++) {
     for (let dx = -1; dx <= HOVEL_SIZE; dx++) {
@@ -1110,6 +1131,8 @@ function foundSite(
       branchWander[(best.z + dz) * width + (best.x + dx)] += BRANCH_AVOID_COST
     }
   }
+  for (let z = shelter.z; z < shelter.z + shelter.d; z++) for (let x = shelter.x; x < shelter.x + shelter.w; x++)
+    branchWander[z * width + x] += BRANCH_AVOID_COST
   // Dry and clear of the road first (the road is a wall, bar the junction
   // itself); then the road merely avoided; a bridge only when no dry way
   // exists at all; and blind as a last resort.
@@ -1155,7 +1178,7 @@ function foundSite(
     roofColor: "#c4a05f",
   }
 
-  return { hovel, site: { junction, branch, door, hovelId: HOVEL_ID } }
+  return { hovel, shelter, site: { junction, branch, door, hovelId: HOVEL_ID } }
 }
 
 /**

@@ -157,6 +157,7 @@ export function Travelers({
       if (s.activity === "visiting" && !s.praying) {
         group.rotation.y = relicHeading(map, s) ?? group.rotation.y
       }
+      if (s.activity === "building") group.rotation.y = Math.PI
       group.userData.workTree = workTree
       if (!playback.paused && !moving && workTree && (s.activity === "working" || s.activity === "gathering")) {
         group.rotation.y = Math.atan2(workTree.x - s.x, workTree.z - s.z)

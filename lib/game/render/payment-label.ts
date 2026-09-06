@@ -2,6 +2,10 @@ import * as THREE from "three"
 
 // Native bitmap lettering keeps these small amounts crisp beside the characters.
 const GLYPHS: Record<string, string[]> = {
+  "-": ["00000", "00000", "00000", "11111", "00000", "00000", "00000"],
+  // Native-pixel coin and timber icons for resource spending.
+  "g": ["01110", "11001", "10101", "10101", "10101", "10011", "01110"],
+  "w": ["000011100", "000110110", "001100101", "011001001", "110010010", "100100100", "011111000"],
   "+": ["00000", "00100", "00100", "11111", "00100", "00100", "00000"],
   "$": ["00100", "01111", "10100", "01110", "00101", "11110", "00100"],
   "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
@@ -17,16 +21,21 @@ const GLYPHS: Record<string, string[]> = {
 }
 
 /** Gold income with a one-native-pixel dark border, using the scene's pixel size. */
-export function paymentLabel(amount: number): THREE.DataTexture {
-  const text = `+$${amount}`, width = text.length * 6 + 1, height = 9
+export function paymentLabel(amount: number, resource?: "gold" | "wood"): THREE.DataTexture {
+  const text = resource ? `${resource === "gold" ? "g" : "w"}-${amount}` : `+$${amount}`
+  const width = [...text].reduce((sum, glyph) => sum + GLYPHS[glyph][0].length + 1, 1), height = 9
   const data = new Uint8Array(width * height * 4)
   const points: Array<[number, number]> = []
-  for (let i = 0; i < text.length; i++) GLYPHS[text[i]].forEach((row, y) => {
-    for (let x = 0; x < row.length; x++) if (row[x] === "1") points.push([i * 6 + x + 1, 7 - y])
-  })
+  let cursor = 1
+  for (const glyph of text) {
+    GLYPHS[glyph].forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) if (row[x] === "1") points.push([cursor + x, 7 - y])
+    })
+    cursor += GLYPHS[glyph][0].length + 1
+  }
   const paint = (x: number, y: number, color: number[]) => data.set(color, (y * width + x) * 4)
   for (const [x, y] of points) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) paint(x + dx, y + dy, [48, 33, 12, 255])
-  for (const [x, y] of points) paint(x, y, [255, 216, 106, 255])
+  for (const [x, y] of points) paint(x, y, resource ? [255, 108, 96, 255] : [255, 216, 106, 255])
   const texture = new THREE.DataTexture(data, width, height)
   texture.colorSpace = THREE.SRGBColorSpace
   texture.magFilter = texture.minFilter = THREE.NearestFilter
