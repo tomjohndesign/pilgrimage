@@ -10,8 +10,9 @@ export function activityClip(activity: Activity | MonkActivity | undefined, movi
   if (moving) return "walk"
   switch (activity) {
     case "camping": return "sleeping"
-    case "resting":
     case "idle": return "sitting"
+    // Resident monks rest on open ground, so use their existing kneeling pose.
+    case "resting":
     case "vigil":
     case "visiting": return "praying"
     case "working": return "woodcutting"
