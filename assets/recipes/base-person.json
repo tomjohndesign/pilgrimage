@@ -1,10 +1,10 @@
 {
-  "version": 13,
+  "version": 14,
   "id": "base-person",
   "status": "base template for review",
   "cellSize": 64,
   "nominalHeightPixels": 35,
-  "columns": 8,
+  "columns": 20,
   "rows": 8,
   "anchor": [
     32,
@@ -24,8 +24,8 @@
     "E",
     "SE"
   ],
-  "framesPerCycle": 8,
-  "defaultFps": 8,
+  "framesPerCycle": 20,
+  "defaultFps": 18,
   "palette": {
     "tunic": "#507186",
     "belt": "#38291f",

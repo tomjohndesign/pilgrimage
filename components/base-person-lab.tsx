@@ -33,8 +33,8 @@ function download(url: string, name: string) {
 export function BasePersonLab() {
   useEffect(() => {
     if (process.env.NODE_ENV !== "development") return
-    const target = window as unknown as { __bakePersonPopulation?: () => Promise<unknown> }
-    target.__bakePersonPopulation = async () => (await import("@/lib/game/base-person/bake-population")).bakePopulation()
+    const target = window as unknown as { __bakePersonPopulation?: (progress?: (done: number) => void) => Promise<unknown> }
+    target.__bakePersonPopulation = async progress => (await import("@/lib/game/base-person/bake-population")).bakePopulation(undefined, progress)
     return () => { delete target.__bakePersonPopulation }
   }, [])
   const [bake, setBake] = useState<BasePersonBake | null>(null)
@@ -43,7 +43,7 @@ export function BasePersonLab() {
   const [frame, setFrame] = useState(0)
   const [clip, setClip] = useState<BaseClip>("walk")
   const [playing, setPlaying] = useState(true)
-  const [fps, setFps] = useState(8)
+  const [fps, setFps] = useState(BASE_PERSON.defaultFps)
   const [zoom, setZoom] = useState(6)
   const [guides, setGuides] = useState(false)
   const [onion, setOnion] = useState(false)
@@ -84,7 +84,7 @@ export function BasePersonLab() {
     // Coalesce inputs into a paint, without waiting for the user to stop dragging.
     const request = requestAnimationFrame(() => {
       try {
-        setPreview(renderPersonPreview(design, clip, PERSON_CLIPS[clip].frames > 1 ? frame : 0, sides))
+        setPreview(renderPersonPreview(design, clip, frame % PERSON_CLIPS[clip].frames, sides))
         setError("")
       } catch (e) { setError(e instanceof Error ? e.message : "The preview could not render.") }
     })
@@ -98,7 +98,7 @@ export function BasePersonLab() {
 
   const live = !sheetMatchesDesign && preview?.clip === clip && preview.sides === sides ? preview : null
   const columns = live ? 1 : PERSON_CLIPS[clip].frames
-  const visibleFrame = live ? 0 : PERSON_CLIPS[clip].frames > 1 ? frame : 0
+  const visibleFrame = live ? 0 : frame % PERSON_CLIPS[clip].frames
   const url = live?.url ?? (bake ? clip === "walk" || clip === "idle" ? sides ? clip === "walk" ? bake.debugWalk : bake.debugIdle : bake[clip] : sides ? bake.actions[clip].debug : bake.actions[clip].url : "")
   const shadowUrl = sides ? undefined : live?.shadowUrl ?? (clip === "walk" ? bake?.shadowWalk : clip === "idle" ? bake?.shadowIdle : bake?.actions[clip].shadow)
   const renderPalette = personRecipe(design).renderPalette
@@ -138,7 +138,7 @@ export function BasePersonLab() {
     <div className="hud-frame" aria-hidden="true" />
     <header className="person-header">
       <div className="person-title"><Link href="/assets" className="hud-action" aria-label="Back to assets"><ArrowLeft size={14} />Assets</Link><h1>Character editor</h1><span className="person-version">Base person · v{BASE_PERSON.version}</span></div>
-      <nav aria-label="Editor navigation"><button className="hud-action person-controls-toggle" aria-expanded={controlsOpen} onClick={() => setControlsOpen(!controlsOpen)}><SlidersHorizontal size={14} />Controls</button><Link className="hud-action" aria-label="On the road" href={`/play?characters=base&baseSize=1.5&speed=0.5&fps=${fps}`}><span className="person-road-label">On the road</span><ArrowUpRight size={14} /></Link></nav>
+      <nav aria-label="Editor navigation"><button className="hud-action person-controls-toggle" aria-expanded={controlsOpen} onClick={() => setControlsOpen(!controlsOpen)}><SlidersHorizontal size={14} />Controls</button><Link className="hud-action" aria-label="On the road" href={`/play?characters=base&baseSize=1.5&fps=${fps}`}><span className="person-road-label">On the road</span><ArrowUpRight size={14} /></Link></nav>
     </header>
     <div className="person-workspace">
       <aside className={`person-controls hud-well ${controlsOpen ? "is-open" : ""}`} aria-label="Character controls">
@@ -222,7 +222,7 @@ export function BasePersonLab() {
           </div> : view === "native" ? <div className="person-native" aria-label="Native size lineup">
             {BASE_PERSON.directions.map((d, i) => <div key={d}><Tile url={url} shadowUrl={shadowUrl} row={i} frame={visibleFrame} columns={columns} name={`${d}, native ${BASE_PERSON.nominalHeightPixels}px person`} /><span>{d}</span></div>)}
           </div> : <div className="person-sprite" style={{ width: pixels * fittedZoom, height: pixels * fittedZoom }}>
-            {onion && !live && columns > 1 && <div className="absolute inset-0 opacity-25"><Tile url={url} row={row} frame={(frame + columns - 1) % columns} columns={columns} zoom={fittedZoom} name="Previous frame ghost" /></div>}
+            {onion && !live && columns > 1 && <div className="absolute inset-0 opacity-25"><Tile url={url} row={row} frame={(visibleFrame + columns - 1) % columns} columns={columns} zoom={fittedZoom} name="Previous frame ghost" /></div>}
             <Tile url={url} shadowUrl={shadowUrl} row={row} frame={visibleFrame} columns={columns} zoom={fittedZoom} name={`Base person ${direction}, frame ${visibleFrame + 1}`} />
             {guides && <svg aria-label="Origin and attachment guides" className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${pixels} ${pixels}`}>
               <path d={`M${BASE_PERSON.anchor[0]} 0V${pixels} M0 ${BASE_PERSON.anchor[1]}H${pixels}`} stroke="#d9d5a7" strokeWidth="0.15" strokeDasharray="1 1" />
@@ -238,7 +238,7 @@ export function BasePersonLab() {
           <div className="person-direction-strip" aria-label="Character directions">{BASE_PERSON.directions.map((d, i) => <button key={d} aria-label={`Face ${d}`} aria-pressed={row === i} onClick={() => { setRow(i); setView("character") }} className="hud-building-tile person-direction">
             {bake && <Tile url={url} shadowUrl={shadowUrl} row={i} frame={visibleFrame} columns={columns} name={`${d} direction`} />}<span>{d}</span>
           </button>)}</div>
-          <div className="person-steps"><span>{PERSON_CLIPS[clip].label}</span><div>{Array.from({ length: PERSON_CLIPS[clip].frames }, (_, f) => <button key={f} className="hud-pause" disabled={!sheetMatchesDesign} aria-label={`Inspect step ${f + 1}`} aria-pressed={visibleFrame === f} onClick={() => { setFrame(f); setPlaying(false); setView("character") }}>{f + 1}</button>)}</div><span className="person-step-count">{clip === "idle" ? "Idle" : `${frame + 1} / ${PERSON_CLIPS[clip].frames}`}</span></div>
+          <div className="person-steps"><span>{PERSON_CLIPS[clip].label}</span><div>{Array.from({ length: PERSON_CLIPS[clip].frames }, (_, f) => <button key={f} className="hud-pause" disabled={!sheetMatchesDesign} aria-label={`Inspect step ${f + 1}`} aria-pressed={visibleFrame === f} onClick={() => { setFrame(f); setPlaying(false); setView("character") }}>{f + 1}</button>)}</div><span className="person-step-count">{clip === "idle" ? "Idle" : `${visibleFrame + 1} / ${columns}`}</span></div>
         </div>
       </div>
     </div>

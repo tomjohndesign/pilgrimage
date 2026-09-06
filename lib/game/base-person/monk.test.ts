@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 import { DEFAULT_DESIGN, PERSON_PRESETS, personRecipe, validatePersonDesign } from "./design"
 import { MONK_VISUAL } from "./monk-assets"
-import { ACTION_CLIPS, PERSON_CLIPS } from "./pose"
+import { ACTION_CLIPS, PERSON_CLIPS, pelvisHeight } from "./pose"
 import { createBasePersonRig } from "./rig"
 
 describe("parametric monks", () => {
@@ -32,7 +32,7 @@ describe("parametric monks", () => {
       const ring = rig.root.getObjectByName("tonsure") as THREE.Mesh
       const ray = new THREE.Raycaster(new THREE.Vector3(0, 3, 0), new THREE.Vector3(0, -1, 0))
       expect(ray.intersectObject(ring)).toHaveLength(0)
-      expect(ray.intersectObject(rig.root)[0].point.y).toBeCloseTo(b.headCenter + b.headHeight * 1.02)
+      expect(ray.intersectObject(rig.root)[0].point.y).toBeCloseTo(b.headCenter + b.headHeight * 1.02 + pelvisHeight(0, "idle", b) - b.hipHeight)
       expect(rig.root.getObjectByName("rope-belt")).toBeDefined()
       for (const index of [0, 1]) {
         const tail = rig.root.getObjectByName(`rope-tail-${index}`) as THREE.Mesh
@@ -65,8 +65,9 @@ describe("parametric monks", () => {
         const left = rig.sockets.leftHand.getWorldPosition(new THREE.Vector3())
         const right = rig.sockets.rightHand.getWorldPosition(new THREE.Vector3())
         expect(left.distanceTo(right)).toBeLessThan(0.1)
-        const hands = [left.toArray(), right.toArray()]
-        if (firstHands) expect(hands).toEqual(firstHands)
+        const rise = pelvisHeight(i / 8, "walk", recipe.body) - recipe.body.hipHeight
+        const hands = [left.toArray(), right.toArray()].map(([x, y, z]) => [x, y - rise, z])
+        if (firstHands) hands.forEach((hand, j) => hand.forEach((v, k) => expect(v).toBeCloseTo(firstHands![j][k], 10)))
         else firstHands = hands
         expect(rig.sockets.head.getWorldPosition(new THREE.Vector3()).y)
           .toBeLessThan(natural.sockets.head.getWorldPosition(new THREE.Vector3()).y)
@@ -115,8 +116,8 @@ describe("parametric monks", () => {
         expect(png.readUInt32BE(20)).toBe(8 * 64)
       }
     }
-    for (const [url, columns] of [[MONK_VISUAL.walk.url, 8], [MONK_VISUAL.idle.url, 1],
-      [MONK_VISUAL.shadow.walk, 8], [MONK_VISUAL.shadow.idle, 1]] as const) {
+    for (const [url, columns] of [[MONK_VISUAL.walk.url, PERSON_CLIPS.walk.frames], [MONK_VISUAL.idle.url, 1],
+      [MONK_VISUAL.shadow.walk, PERSON_CLIPS.walk.frames], [MONK_VISUAL.shadow.idle, 1]] as const) {
       const png = readFileSync(`${process.cwd()}/public${url}`)
       expect(png.subarray(1, 4).toString()).toBe("PNG")
       expect(png.readUInt32BE(16)).toBe(columns * 64)

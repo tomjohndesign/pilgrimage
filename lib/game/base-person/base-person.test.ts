@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import * as THREE from "three"
-import { BASE_PERSON, armAngle, legPose, type Point3 } from "./pose"
+import { BASE_PERSON, armAngle, legPose, pelvisHeight, type Point3 } from "./pose"
 import { DEFAULT_DESIGN, PERSON_PRESETS, personRecipe } from "./design"
 import { createBasePersonRig } from "./rig"
 
@@ -51,7 +51,8 @@ describe("shared person template", () => {
         rig.root.rotation.y = -row * Math.PI / 4
         rig.pose(frame / 8)
         rig.sockets.head.getWorldPosition(head)
-        expect(head.y).toBe(recipe.body.headCenter + recipe.body.headHeight + 0.02)
+        expect(head.y).toBeCloseTo(recipe.body.headCenter + recipe.body.headHeight + 0.02
+          + pelvisHeight(frame / 8, "walk", recipe.body) - recipe.body.hipHeight, 10)
         expect(rig.sockets.leftHip.position.x).toBeGreaterThan(0)
         expect(rig.sockets.rightHip.position.x).toBeLessThan(0)
         rig.sockets.leftHand.getWorldPosition(hand)

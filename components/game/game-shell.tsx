@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { CHARACTER_PIXELS_PER_UNIT } from "@/lib/game/render/pixel-scale"
+import { BASE_CHARACTER_SCALE, DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE } from "@/lib/game/base-person/gait"
 import { DEFAULT_MOVEMENT } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
 import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER } from "@/lib/game/map/road"
@@ -64,7 +65,7 @@ export interface MapSettings {
   relicDistance: number
   /** Traffic density, in travelers per 128 × 128 tiles. */
   traffic: number
-  /** Base walking speed in tiles per second. */
+  /** Walking speed in tiles per second at the reference character size. */
   walkSpeed: number
   characterFps: number
   walkSync: boolean
@@ -106,15 +107,15 @@ export const DEFAULT_SETTINGS: MapSettings = {
   darkForests: DEFAULT_DARK_FOREST_COUNT,
   relicDistance: DEFAULT_RELIC_DISTANCE,
   traffic: DEFAULT_TRAFFIC,
-  walkSpeed: 0.5,
+  walkSpeed: DEFAULT_WALK_SPEED,
   characterFps: 8,
   walkSync: true,
-  stride: 0.44,
+  stride: DEFAULT_WALK_STRIDE,
   paceVariation: DEFAULT_MOVEMENT.variation,
   pathEase: DEFAULT_MOVEMENT.pathEase,
   acceleration: DEFAULT_MOVEMENT.acceleration,
   characterModel: "base",
-  baseSize: 1.5,
+  baseSize: BASE_CHARACTER_SCALE,
   draftSize: 1,
   road: DEFAULT_ROAD_TIER,
   roadOpacity: DEFAULT_ROAD_LOOK.opacity,

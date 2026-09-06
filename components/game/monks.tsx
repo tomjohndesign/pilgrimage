@@ -20,7 +20,7 @@ import { createMonkFlight, monkGroundTime, stepMonkFlight, type MonkFlight } fro
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { encodeObjectId, residentObjectId } from "@/lib/game/render/outline"
 import { CharacterSprite } from "./character-sprite"
-import { MONK_VISUAL } from "@/lib/game/base-person/monk-assets"
+import { MONK_VISUAL, monkWalkSpeed, MONK_WALK_TUNING } from "@/lib/game/base-person/monk-assets"
 import { MonkRocketGear, ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
 
 /**
@@ -34,7 +34,6 @@ import { MonkRocketGear, ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
 
 /** How far from the footprint the brothers will wander, in tiles. */
 const WANDER_RADIUS = 3
-const WALK_SPEED = 0.22
 const PAUSE_MIN_SECONDS = 2
 const PAUSE_MAX_SECONDS = 7
 /** Standing within this many tiles of the hovel's centre counts as keeping vigil. */
@@ -173,7 +172,7 @@ export function Monks({ map, monks, flying = false, characterScale = 1 }: { map:
         const dx = s.target.x - s.x
         const dz = s.target.z - s.z
         const dist = Math.hypot(dx, dz)
-        const step = WALK_SPEED * dt
+        const step = monkWalkSpeed(characterScale) * dt
         if (dist <= step) {
           s.x = s.target.x
           s.z = s.target.z
@@ -216,7 +215,7 @@ export function Monks({ map, monks, flying = false, characterScale = 1 }: { map:
               <CharacterSprite name="monk" type="friar" characterModel="base" characterScale={characterScale}
                 visualOverride={MONK_VISUAL} selected={selected} onClick={select}
                 outlineColor={[id.r, id.g, id.b]}
-                walkTuning={{ sync: true, stride: 0.44 }} />
+                walkTuning={MONK_WALK_TUNING} />
             </Suspense>
             {flying && <MonkRocketGear phase={index} outlineColor={id} onClick={select} />}
             <CharacterHitTarget onClick={select} />

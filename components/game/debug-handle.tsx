@@ -23,7 +23,7 @@ import { ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
  * (The world seed itself comes from the URL: /play?seed=….)
  * Development only; it is never mounted in a production build.
  */
-export function DebugHandle({ map, travelers, speed, movement }: { map: GameMap; travelers: Traveler[]; speed: number; movement: MovementTuning }) {
+export function DebugHandle({ map, travelers, speed, movement, speedScales }: { map: GameMap; travelers: Traveler[]; speed: number; movement: MovementTuning; speedScales?: ReadonlyMap<number, number> }) {
   const { gl, camera, scene } = useThree()
 
   useEffect(() => {
@@ -50,12 +50,12 @@ export function DebugHandle({ map, travelers, speed, movement }: { map: GameMap;
       }),
       /** Sprite layout and active clip for comparing road character models. */
       travelerSprites: () => {
-        const sprites: Array<{ model: string; calling: string; variant: number | null; bodyType: string; appearanceScale: number; phase: number; sync: boolean; fps: number; sheet: string; repeat: number[]; offset: number[]; center: number[]; scale: number[] }> = []
+        const sprites: Array<{ model: string; calling: string; variant: number | null; bodyType: string; appearanceScale: number; position: number[]; phase: number; sync: boolean; fps: number; sheet: string; repeat: number[]; offset: number[]; center: number[]; scale: number[] }> = []
         scene.traverse((object) => {
           if (object.name !== "traveler" || !(object instanceof THREE.Sprite)) return
           const map = object.material.map
           const image = map?.image as HTMLImageElement | undefined
-          sprites.push({ model: object.userData.characterModel, calling: object.userData.calling, variant: object.userData.variant, bodyType: object.userData.bodyType, appearanceScale: object.userData.appearanceScale, phase: object.userData.walkPhase, sync: object.userData.sync, fps: object.userData.fps, sheet: image?.src ?? "",
+          sprites.push({ model: object.userData.characterModel, calling: object.userData.calling, variant: object.userData.variant, bodyType: object.userData.bodyType, appearanceScale: object.userData.appearanceScale, position: object.getWorldPosition(new THREE.Vector3()).toArray(), phase: object.userData.walkPhase, sync: object.userData.sync, fps: object.userData.fps, sheet: image?.src ?? "",
             repeat: map?.repeat.toArray() ?? [], offset: map?.offset.toArray() ?? [], center: object.center.toArray(), scale: object.scale.toArray() })
         })
         return sprites
@@ -78,16 +78,18 @@ export function DebugHandle({ map, travelers, speed, movement }: { map: GameMap;
       },
       /** Monk positions and equipped boosters, for cheat-code smoke tests. */
       monks: () => {
-        const points: Array<{ x: number; y: number; z: number; flying: boolean; equipped: boolean; activity: string; clip: string; offset: number[] }> = []
+        const points: Array<{ x: number; y: number; z: number; flying: boolean; equipped: boolean; activity: string; clip: string; phase: number; columns: number; offset: number[] }> = []
         const position = new THREE.Vector3()
         scene.traverse((object) => {
           if (object.name !== "monk") return
           object.getWorldPosition(position)
           points.push({
             x: position.x, y: position.y, z: position.z,
-            flying: !!object.parent?.getObjectByName(ROCKET_EXHAUST_NAME)?.visible,
-            equipped: !!object.parent?.getObjectByName("monk-rocket-gear"),
-            activity: object.parent?.userData.activity,
+            flying: !!object.parent?.parent?.getObjectByName(ROCKET_EXHAUST_NAME)?.visible,
+            equipped: !!object.parent?.parent?.getObjectByName("monk-rocket-gear"),
+            activity: object.parent?.parent?.userData.activity,
+            phase: object.userData.walkPhase,
+            columns: object instanceof THREE.Sprite ? 1 / (object.material.map?.repeat.x ?? 1) : 1,
             clip: object.userData.clip,
             offset: object instanceof THREE.Sprite ? object.material.map?.offset.toArray() ?? [] : [],
           })
@@ -99,7 +101,7 @@ export function DebugHandle({ map, travelers, speed, movement }: { map: GameMap;
         const sim = simRegistry.current
         if (!sim) return
         const ticks = Math.ceil(Math.max(0, Math.min(120, seconds)) * 10)
-        for (let i = 0; i < ticks; i++) stepSim(sim, travelers, map, speed, 0.1, movement)
+        for (let i = 0; i < ticks; i++) stepSim(sim, travelers, map, speed, 0.1, movement, speedScales)
         useBuildStore.getState().syncResources(sim, travelers)
       },
       settlement: () => ({
@@ -155,7 +157,7 @@ export function DebugHandle({ map, travelers, speed, movement }: { map: GameMap;
     return () => {
       delete (window as unknown as Record<string, unknown>).__pilgrimage
     }
-  }, [gl, camera, scene, map, travelers, speed, movement])
+  }, [gl, camera, scene, map, travelers, speed, movement, speedScales])
 
   return null
 }

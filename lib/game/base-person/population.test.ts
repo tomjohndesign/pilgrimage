@@ -1,7 +1,6 @@
-import { ACTION_CLIPS } from "./pose"
+import { ACTION_CLIPS, PERSON_CLIPS } from "./pose"
 import { describe, expect, it } from "vitest"
 import { TRAVELER_TYPES } from "../travelers"
-import { PERSON_CLIPS } from "./pose"
 import { DEFAULT_DESIGN, DESIGN_CONTROLS, validatePersonDesign, type DesignKey } from "./design"
 import { populationDesign, POPULATION_PROFILES, travelerAppearance } from "./population"
 import { DEFAULT_POPULATION, populationVisual } from "./population-assets"
@@ -47,7 +46,7 @@ describe("road character population", () => {
         expect(visual.actions[clip]?.rows).toBe(visual.walk.rows)
         expect(visual.actions[clip]?.columns).toBe(PERSON_CLIPS[clip].frames)
       }
-      expect(visual.walk.columns).toBe(8)
+      expect(visual.walk.columns).toBe(20)
       expect(visual.idle.columns).toBe(1)
       expect(visual.center).toEqual([0.5, 1 - 48.5 / 64])
       expect(visual.strideRatio).toBeGreaterThan(0)

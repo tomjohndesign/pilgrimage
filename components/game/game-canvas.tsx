@@ -1,6 +1,11 @@
 "use client"
 
 import { useEffect, useMemo } from "react"
+import { travelerAppearance } from "@/lib/game/base-person/population"
+import { populationVisual } from "@/lib/game/base-person/population-assets"
+import { walkSpeedScale } from "@/lib/game/base-person/gait"
+import { characterVisual } from "@/lib/game/character-assets"
+import { useCharacterAssetStore } from "@/lib/game/character-asset-store"
 import { usePopulationStore } from "@/lib/game/base-person/population-store"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { PixelCanvas, PixelCharacters, type PixelationProps } from "@/components/pixel-canvas"
@@ -91,6 +96,15 @@ export function GameCanvas({
   /** Draw the global tile lattice over the ground. Off by default. */
   showGrid?: boolean
 } & PixelationProps) {
+  const population = usePopulationStore(s => s.pack)
+  const assets = useCharacterAssetStore(s => s.assets)
+  const speedScales = useMemo(() => new Map(travelers.map(traveler => {
+    const appearance = travelerAppearance(map.seed ?? 0, traveler.id)
+    const visual = characterModel === "base" ? populationVisual(traveler.type.id, appearance.variant, population)
+      : characterVisual(assets[traveler.type.id], "callings")
+    const scale = characterScale * (characterModel === "base" ? appearance.scale : 1)
+    return [traveler.id, walkSpeedScale(visual.walkStride, scale)]
+  })), [travelers, map.seed, characterModel, characterScale, population, assets])
   const foundation = usePersonDesignStore(s => s.design)
   useEffect(() => { void usePersonDesignStore.getState().hydrate() }, [])
   useEffect(() => { void usePopulationStore.getState().prepare(foundation) }, [foundation])
@@ -135,7 +149,7 @@ export function GameCanvas({
       <Shrine map={map} relic={relic} />
       <PixelCharacters>
         <Monks map={map} monks={monks} flying={blasterPastor} characterScale={characterScale} />
-        <Travelers map={map} travelers={travelers} speed={walkSpeed} relic={relic} trees={trees} shrineRenown={baseRenown}
+        <Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
           characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
       </PixelCharacters>
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
@@ -143,7 +157,7 @@ export function GameCanvas({
 
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
-      <DebugHandle map={map} travelers={travelers} speed={walkSpeed} movement={movement} />
+      <DebugHandle map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} movement={movement} />
     </PixelCanvas>
   )
 }

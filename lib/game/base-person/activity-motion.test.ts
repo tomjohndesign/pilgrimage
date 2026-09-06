@@ -83,7 +83,8 @@ describe("character activity motions", () => {
         const dress = rig.root.getObjectByName(design.garment === "Robe" ? "robe" : "sleeveless-dress") as THREE.Mesh
         const positions = dress.geometry.getAttribute("position")
         rig.pose(0, "idle")
-        const hem = Array.from({ length: positions.count }, (_, i) => i).filter(i => Math.abs(positions.getY(i) - recipe.body.tunicHem) < 0.001)
+        const hem = Array.from({ length: positions.count }, (_, i) => i).filter(i => Math.abs(new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(dress.matrixWorld).y - recipe.body.tunicHem) < 0.001)
+        expect(hem.length).toBeGreaterThan(0)
         const rest = hem.map(i => new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(dress.matrixWorld))
         for (let frame = 0; frame < PERSON_CLIPS.woodcutting.frames; frame++) {
           rig.pose(frame / PERSON_CLIPS.woodcutting.frames, "woodcutting")
