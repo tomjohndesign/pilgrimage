@@ -220,7 +220,7 @@ function SpeciesEditor({ def }: { def: TreeSpeciesDef }) {
             label="Height"
             range={def.trunk.height}
             min={0.1}
-            max={2}
+            max={3}
             step={0.01}
             onChange={(height) => trunk({ height })}
           />
@@ -288,7 +288,7 @@ function SpeciesEditor({ def }: { def: TreeSpeciesDef }) {
             label="Squash"
             range={def.crown.squash}
             min={0.3}
-            max={2.5}
+            max={4}
             step={0.05}
             onChange={(squash) => crown({ squash })}
           />

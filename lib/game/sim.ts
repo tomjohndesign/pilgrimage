@@ -1,3 +1,4 @@
+import { nearProcession, type RelicProcession } from "./relic-procession"
 import { roadsideStall, routePoint, routeLength, type StallRoute } from "./transport/roadside"
 import { roadLanePoint } from "./map/road-lane"
 import { cartOnRoute } from "./transport/follow"
@@ -15,6 +16,7 @@ import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeR
 import { BUILDING_KINDS, buildingCentre, type PlacedBuilding } from "./buildings"
 import { generateRelic, visitChance, type RelicStats } from "./relic"
 import { settlementRoute } from "./settlement-route"
+import { admissionFee, shrineVisitRoute } from "./shrine-visit"
 import type { TreePlacement } from "./trees/placement"
 import { TREE_SPECIES } from "./trees/species"
 import type { TilePos } from "./map/types"
@@ -44,7 +46,7 @@ import type { Traveler } from "./travelers"
  *    down the branch. The brothers restore their needs and bestow piety before
  *    they return to the road; each visit spreads the shrine's renown.
  *  - Jobless visitors may settle into a lumber-camp slot, walk to a reserved
- *    tree, fell it and haul logs home. Camps provide rest between work trips.
+ *    tree, fell it and haul logs home. Camps provide rest when needs run low.
  *  - Stamina at 0 → leave the road for the nearest open ground (grass, dirt,
  *    or a forest-floor clearing — never solid woods or the road itself) and
  *    camp until rested. A roadside stall is
@@ -89,7 +91,7 @@ export type Activity =
 
 export const ACTIVITY_LABELS: Record<Activity, string> = {
   toRelic: "Following the path to the shrine",
-  visiting: "Food, lodging & blessings",
+  visiting: "Praying before the relic",
   fromRelic: "Returning from the shrine",
   toWork: "Walking to work",
   working: "Felling a tree",
@@ -187,6 +189,10 @@ function roll(id: number, n: number): number {
 }
 
 export interface SimTraveler {
+  /** Prayer interrupts travel/work without discarding its route or reservations. */
+  praying?: boolean
+  /** Actual gold paid for this visit, captured on admission. */
+  admissionPaid: number
   keeperTime?: number
   customerVisit?: { vendorId: number; road: { x: number; y: number; z: number }; frontage: { x: number; y: number; z: number } }
   stallRoute?: StallRoute
@@ -199,6 +205,7 @@ export interface SimTraveler {
   jobless: boolean
   employer: string | null
   branchProgress: number
+  shrineRoute: TilePos[] | null
   /** Road lane used when entering the shrine, including a reversed approach for shelter. */
   branchEntryLane: number
   visitCooldown: number
@@ -256,6 +263,9 @@ export interface SimTraveler {
 }
 
 export interface SimState {
+  procession?: RelicProcession | null
+  admissionSequence: number
+  admissionPayments: AdmissionPayment[]
   seed: number
   travelers: Map<number, SimTraveler>
   /** Game time in days since the sim began (fractional). */
@@ -269,6 +279,8 @@ export interface SimState {
   balance: GameBalance
   visits: number
   wood: number
+  /** Cumulative admission receipts; the economy credits each payment once. */
+  shrineGold: number
   constructionWood: number
   felled: Set<number>
   treeResources: Map<number, TreeResource>
@@ -276,6 +288,15 @@ export interface SimState {
   resourceRevision: number
   buildings: readonly PlacedBuilding[]
   trees: readonly TreePlacement[]
+}
+
+export interface AdmissionPayment {
+  id: number
+  travelerId: number
+  amount: number
+  x: number
+  y: number
+  z: number
 }
 
 /**
@@ -393,7 +414,10 @@ function currentRoutePoint(map: GameMap, s: SimTraveler): WorldPoint {
 /** Join the shrine's walking lanes to the traveler's road lane over the first tile. */
 function shrineWorldPoint(map: GameMap, s: SimTraveler): WorldPoint {
   const site = map.site!
-  const point = routeWorldPoint(map, site.branch, s.branchProgress, s.lane)
+  const route = s.shrineRoute ?? site.branch
+  // Leave the walking lane before reaching the grounds; cross gates centrally.
+  const laneBlend = s.shrineRoute ? Math.max(0, Math.min(1, site.branch.length - 1 - s.branchProgress)) : 1
+  const point = routeWorldPoint(map, route, s.branchProgress, s.lane * laneBlend)
   if (s.branchProgress < 1) {
     const start = routeWorldPoint(map, site.branch, 0, s.lane)
     const roadLane = s.activity === "toRelic" ? s.branchEntryLane : s.direction * s.laneOffset
@@ -420,6 +444,8 @@ export function createSim(
   relic: RelicStats = generateRelic(map.seed ?? 0).stats,
 ): SimState {
   const sim: SimState = {
+    admissionSequence: 0,
+    admissionPayments: [],
     seed: map.seed ?? 0,
     travelers: new Map(),
     time: START_TIME,
@@ -430,6 +456,7 @@ export function createSim(
     balance: DEFAULT_BALANCE,
     visits: 0,
     wood: 0,
+    shrineGold: 0,
     constructionWood: 0,
     felled: new Set(),
     treeResources: new Map(),
@@ -448,6 +475,7 @@ export function createSim(
     const lane = t.direction * laneOffset
     const at = roadWorldPoint(map, progress, lane)
     sim.travelers.set(t.id, {
+      admissionPaid: 0,
       id: t.id,
       activity: "walking",
       gold: t.attributes.gold,
@@ -455,6 +483,7 @@ export function createSim(
       jobless: t.attributes.jobless,
       employer: null,
       branchProgress: 0,
+      shrineRoute: null,
       branchEntryLane: lane,
       visitCooldown: 0,
       visits: 0,
@@ -740,11 +769,13 @@ function chooseTree(sim: SimState, s: SimTraveler, map: GameMap): boolean {
 function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): void {
   s.visits++
   sim.visits++
-  s.piety = Math.min(100, s.piety + 4 + sim.relic.sanctity / 25)
+  if (s.admissionPaid > 0) s.piety = Math.min(100, s.piety + 4 + sim.relic.sanctity / 25)
+  s.admissionPaid = 0
   const job = findJob(sim, s, map)
   if (job && nextRoll(s) < (t.attributes.skills.some((skill) => BUILDING_KINDS[job.kind].trades.includes(skill)) ? 0.9 : 0.65)) {
-    const route = settlementRoute(map, [...map.buildings, ...sim.buildings], map.site!.door,
-      { x: job.x, z: job.z + job.d - 1 })
+    const route = settlementRoute(map, [...map.buildings, ...sim.buildings],
+      { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
+      { x: job.x, z: job.z + job.d - 1 }, false, true)
     if (route) {
       s.employer = job.id
       s.jobless = false
@@ -774,6 +805,8 @@ export function stepSim(
   for (const t of travelers) {
     const s = sim.travelers.get(t.id)
     if (!s) continue
+    s.praying = nearProcession(sim.procession, s, s.praying)
+    if (s.praying) { s.moveSpeed = 0; continue }
     s.visitCooldown = Math.max(0, s.visitCooldown - dt)
     const camping = s.activity === "camping"
     const sheltered = s.activity === "visiting" || s.activity === "idle"
@@ -817,7 +850,7 @@ export function stepSim(
     switch (s.activity) {
       case "toRelic":
       case "fromRelic": {
-        const branch = map.site!.branch
+        const branch = s.shrineRoute ?? map.site!.branch
         const inbound = s.activity === "toRelic"
         s.branchProgress = Math.max(0, Math.min(branch.length - 1,
           s.branchProgress + (inbound ? 1 : -1) * worldSpeed * dt))
@@ -827,11 +860,25 @@ export function stepSim(
         s.y = at.y
         s.z = at.z
         if (inbound && s.branchProgress >= branch.length - 1) {
-          s.activity = "visiting"
-          s.timer = 2 * GAME_HOUR_SECONDS
+          const fee = admissionFee(map)
+          if (s.gold >= fee) {
+            s.gold -= fee
+            sim.shrineGold += fee
+            s.admissionPaid = fee
+            if (fee > 0) {
+              sim.admissionPayments.push({ id: ++sim.admissionSequence, travelerId: s.id, amount: fee, x: s.x, y: s.y, z: s.z })
+              // Presentation reads these receipts by sequence; long games stay bounded.
+              if (sim.admissionPayments.length > 64) sim.admissionPayments.shift()
+            }
+            s.activity = "visiting"
+            s.timer = 2 * GAME_HOUR_SECONDS
+          } else {
+            s.activity = "fromRelic"
+          }
         } else if (!inbound && s.branchProgress <= 0) {
           s.lane = s.direction * s.laneOffset
           s.activity = "walking"
+          s.shrineRoute = null
           s.visitCooldown = 30
         }
         break
@@ -883,6 +930,7 @@ export function stepSim(
             s.gold++
           }
           s.carrying = 0
+          if (Math.min(s.hunger, s.thirst, s.stamina) > 40 && chooseTree(sim, s, map)) break
           s.activity = "idle"
           s.timer = GAME_HOUR_SECONDS
         }
@@ -899,7 +947,7 @@ export function stepSim(
       case "seeking":
       case "fleeing": {
         // Nearby travelers seek the brothers before collapsing or chasing a cart.
-        const shelter = !!map.site && !s.track && s.activity !== "fleeing" && s.visitCooldown <= 0 &&
+        const shelter = !!map.site && s.gold >= admissionFee(map) && !s.track && s.activity !== "fleeing" && s.visitCooldown <= 0 &&
           Math.min(s.hunger, s.thirst, s.stamina) <= 40 && Math.abs(s.progress - map.site.junction) <= 12
         if (s.stamina <= 0 && !shelter) {
           startCamping(sim, s, t, map)
@@ -1014,9 +1062,13 @@ export function stepSim(
               hunger: s.hunger, thirst: s.thirst, stamina: s.stamina }, sim.relic, sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown, sim.balance),
               findJob(sim, s, map) ? 0.8 : 0)
             s.visitCooldown = 5
-            if (nextRoll(s) < chance) {
+            const wantsVisit = nextRoll(s) < chance && s.gold >= admissionFee(map)
+            const visitRoute = wantsVisit ? shrineVisitRoute(map, s.id, s.visits) : null
+            if (visitRoute) {
               s.progress = site.junction
               s.branchProgress = 0
+              s.shrineRoute = visitRoute
+              s.admissionPaid = 0
               s.activity = "toRelic"
               s.targetId = null
               s.branchEntryLane = s.lane

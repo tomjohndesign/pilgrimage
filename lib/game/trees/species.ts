@@ -112,7 +112,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
     blurb:
       "The medieval tree: timber frames, ships, and acorns for the pigs. Short stout trunk under a broad, lumpy crown, often wider than it is tall.",
     trunk: {
-      height: { min: 0.49, max: 0.74 },
+      height: { min: 0.735, max: 1.11 },
       radius: { min: 0.09, max: 0.12 },
       taper: 0.57,
       lean: 0,
@@ -122,7 +122,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
       shape: "blob",
       blobs: { min: 6, max: 6 },
       radius: { min: 0.33, max: 0.68 },
-      squash: { min: 0.72, max: 0.9 },
+      squash: { min: 1.08, max: 1.35 },
       lift: 0.45,
       spread: 0.5,
       color: "#4f6a2e",
@@ -138,7 +138,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
     blurb:
       "Master of the southern chalk. A smooth grey trunk under one huge dense dome; the shade beneath is so deep the ground stays bare.",
     trunk: {
-      height: { min: 0.43, max: 0.86 },
+      height: { min: 0.75, max: 1.29 },
       radius: { min: 0.08, max: 0.1 },
       taper: 0.8,
       lean: 0.16,
@@ -148,7 +148,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
       shape: "blob",
       blobs: { min: 3, max: 3 },
       radius: { min: 0.38, max: 0.6 },
-      squash: { min: 0.75, max: 1.6 },
+      squash: { min: 1.125, max: 2.4 },
       lift: 0.45,
       spread: 0.6,
       color: "#3f5a2a",
@@ -164,7 +164,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
     blurb:
       "Pioneer of clearings and poor ground. A slender white trunk carrying a small, light, high crown that lets the sun through.",
     trunk: {
-      height: { min: 0.54, max: 1.1 },
+      height: { min: 0.81, max: 1.65 },
       radius: { min: 0.07, max: 0.08 },
       taper: 0.52,
       lean: 0.1,
@@ -174,7 +174,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
       shape: "blob",
       blobs: { min: 4, max: 5 },
       radius: { min: 0.1, max: 0.33 },
-      squash: { min: 1.9, max: 2.5 },
+      squash: { min: 2.85, max: 3.75 },
       lift: 0.2,
       spread: 0.55,
       color: "#7a9a3c",
@@ -190,7 +190,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
     blurb:
       "The one big native conifer. A long bare reddish trunk with a flat tuft of canopy perched right at the top — unmistakable from any distance.",
     trunk: {
-      height: { min: 0.52, max: 1.39 },
+      height: { min: 0.78, max: 2.085 },
       radius: { min: 0.06, max: 0.08 },
       taper: 0.54,
       lean: 0,
@@ -200,7 +200,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
       shape: "cone",
       blobs: { min: 2, max: 5 },
       radius: { min: 0.29, max: 0.41 },
-      squash: { min: 1.55, max: 2.45 },
+      squash: { min: 2.325, max: 3.675 },
       lift: 0.2,
       spread: 0.35,
       color: "#2f5030",
@@ -214,9 +214,10 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
     label: "Hawthorn",
     latin: "Crataegus monogyna",
     blurb:
-      "The hedge and glade-edge tree, thorny and scruffy. Barely any trunk; a single low untidy blob of green.",
+      "The hedge and glade-edge tree, thorny and scruffy. A short exposed trunk beneath a single untidy blob of green.",
     trunk: {
-      height: { min: 0.14, max: 0.24 },
+      // Even forest-edge scrub leaves a bare trunk at the shared axe's contact height.
+      height: { min: 0.75, max: 0.84 },
       radius: { min: 0.04, max: 0.06 },
       taper: 0.85,
       lean: 0.12,
@@ -226,7 +227,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
       shape: "blob",
       blobs: { min: 1, max: 2 },
       radius: { min: 0.24, max: 0.32 },
-      squash: { min: 0.8, max: 1 },
+      squash: { min: 1.2, max: 1.5 },
       lift: 0.5,
       spread: 0.45,
       color: "#587a30",
@@ -242,7 +243,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
     blurb:
       "Dark evergreen of the understorey, winter fodder for the animals. Small, tight and conical, almost black-green against the broadleaves.",
     trunk: {
-      height: { min: 0.18, max: 0.28 },
+      height: { min: 0.75, max: 0.9 },
       radius: { min: 0.04, max: 0.06 },
       taper: 0.86,
       lean: 0.04,
@@ -252,7 +253,7 @@ export const TREE_SPECIES: Record<TreeSpeciesId, TreeSpeciesDef> = {
       shape: "cone",
       blobs: { min: 4, max: 5 },
       radius: { min: 0.23, max: 0.29 },
-      squash: { min: 0.65, max: 1.2 },
+      squash: { min: 0.975, max: 1.8 },
       lift: 0.7,
       spread: 0.6,
       color: "#294a26",

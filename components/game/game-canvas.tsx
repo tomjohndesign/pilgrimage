@@ -145,15 +145,15 @@ export function GameCanvas({
         showGrid={showGrid}
       />
       <Bridges map={map} roadTier={roadTier} />
-      <Trees map={map} placements={trees} ents={lastMarch} />
+      <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} />
       <Environment map={map} />
       <Buildings map={map} />
       <Shrine map={map} relic={relic} />
       <PixelCharacters>
-        <Monks map={map} monks={monks} flying={blasterPastor} characterScale={characterScale} />
-        <Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
-          characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
+        <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
       </PixelCharacters>
+      <Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
+        characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
       {buildType && <BuildInfluenceOverlay map={map} />}
 

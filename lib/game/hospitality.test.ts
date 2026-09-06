@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { DEFAULT_BALANCE } from "./balance"
-import { createSettlement, purchaseStructure, lumberCamps, creditTimber, syncTimberSpending, settlementRenown } from "./settlement"
+import { createSettlement, purchaseStructure, lumberCamps, creditTimber, creditAdmission, syncTimberSpending, settlementRenown } from "./settlement"
+import { buildingStepAllowed, containsTile, shrineGates } from "./building-navigation"
+import { relicHeading, shrineVisitRoute } from "./shrine-visit"
 import { BUILDING_KINDS, placementProblem, planBuilding } from "./buildings"
 import { useBuildStore } from "./build-store"
 import { BRIDGE_RISE } from "./map/bridges"
@@ -22,7 +24,7 @@ function fixture() {
       door: { x: 10, z: 8 }, hovelId: "hovel" } }
   for (const p of map.road!) map.tiles[p.z * width + p.x] = "path"
   for (const p of map.site!.branch.slice(1)) map.tiles[p.z * width + p.x] = "track"
-  map.buildings.push({ id: "hovel", label: "Shrine", x: 9, z: 9, w: 2, d: 2, height: 1, color: "tan", roofColor: "brown" })
+  map.buildings.push({ id: "hovel", admissionFee: 0, label: "Shrine", x: 9, z: 9, w: 3, d: 3, height: 1, color: "tan", roofColor: "brown" })
   const trees: TreePlacement[] = Array.from({ length: 6 }, (_, i) => {
     const x = 16 + i % 3, z = 10 + Math.floor(i / 3)
     map.tiles[z * width + x] = "forest"
@@ -45,6 +47,111 @@ function run(sim: SimState, travelers: Traveler[], map: GameMap, seconds: number
 const obscure = { sanctity: 0, spectacle: 0, doubt: 100 }
 
 describe("shrine hospitality", () => {
+  it.each([0, 1, 2, 3])("enters gate %i, faces the relic, pays once and walks back out", (id) => {
+    const { map, traveler } = fixture()
+    const shrine = map.buildings[0]
+    shrine.admissionFee = 3
+    const t = traveler(id)
+    t.attributes.gold = 10
+    t.attributes.hunger = 0
+    const sim = createSim([t], map, [], obscure)
+    const s = sim.travelers.get(id)!
+    const route = shrineVisitRoute(map, id, 0)!
+    expect(route.at(-1)).toEqual(shrineGates(shrine)[id].inside)
+    for (let i = 1; i < route.length; i++) {
+      expect(Math.abs(route[i].x - route[i - 1].x) + Math.abs(route[i].z - route[i - 1].z)).toBe(1)
+      expect(buildingStepAllowed(map, map.buildings, route[i - 1], route[i], true)).toBe(true)
+    }
+    run(sim, [t], map, 60, () => s.activity === "visiting")
+    expect(s.activity).toBe("visiting")
+    expect(containsTile(shrine, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) })).toBe(true)
+    expect(s.gold).toBe(7)
+    expect(sim.shrineGold).toBe(3)
+    expect(sim.admissionPayments).toEqual([{ id: 1, travelerId: id, amount: 3, x: s.x, y: s.y, z: s.z }])
+    expect(s.admissionPaid).toBe(3)
+    const heading = relicHeading(map, s)!
+    expect(s.x + Math.sin(heading)).toBeCloseTo(tileToWorldX(map, shrine.x + 1))
+    expect(s.z + Math.cos(heading)).toBeCloseTo(tileToWorldZ(map, shrine.z + 1))
+    shrine.admissionFee = 0 // A paid visit keeps its reward even if the price changes.
+    run(sim, [t], map, 60, () => s.activity === "fromRelic")
+    expect(s.visits).toBe(1)
+    expect(s.piety).toBeGreaterThan(t.attributes.piety)
+    expect(s.admissionPaid).toBe(0)
+    run(sim, [t], map, 30, () => s.activity === "walking")
+    expect(s.activity).toBe("walking")
+    expect(s.gold).toBe(7)
+    expect(sim.shrineGold).toBe(3)
+    expect(s.shrineRoute).toBeNull()
+    expect(t.attributes.gold).toBe(10)
+    expect(sim.admissionPayments).toHaveLength(1)
+  })
+
+  it("passes an unaffordable shrine and returns unpaid if the fee rises during the approach", () => {
+    const { map, traveler } = fixture()
+    map.buildings[0].admissionFee = 3
+    const t = traveler(0)
+    t.attributes.gold = 2
+    t.attributes.hunger = 30
+    const sim = createSim([t], map, [], obscure)
+    const s = sim.travelers.get(0)!
+    run(sim, [t], map, 1)
+    expect(s.activity).toBe("walking")
+    expect(s.progress).toBeGreaterThan(map.site!.junction)
+    s.gold = 3
+    s.progress = map.site!.junction - 0.1
+    s.visitCooldown = 0
+    s.hunger = 0
+    run(sim, [t], map, 1, () => s.activity === "toRelic")
+    expect(s.activity).toBe("toRelic")
+    map.buildings[0].admissionFee = 4
+    run(sim, [t], map, 60, () => s.activity === "fromRelic")
+    expect(s.activity).toBe("fromRelic")
+    expect(s.gold).toBe(3)
+    expect(sim.shrineGold).toBe(0)
+    expect(sim.visits).toBe(0)
+    expect(sim.admissionPayments).toHaveLength(0)
+  })
+
+  it("credits admission receipts once across spending and clears them for a new world", () => {
+    const initial = createSettlement()
+    expect(initial.shrineAdmission).toBe(2)
+    const paid = creditAdmission(initial, 6)
+    expect(paid.resources.gold).toBe(initial.resources.gold + 6)
+    const spent = { ...paid, resources: { ...paid.resources, gold: 0 } }
+    expect(creditAdmission(spent, 6)).toBe(spent)
+    expect(creditAdmission(spent, 8).resources.gold).toBe(2)
+    const { map } = fixture()
+    const sim = createSim([], map)
+    sim.shrineGold = 6
+    useBuildStore.getState().syncResources(sim)
+    expect(useBuildStore.getState().shrineGold).toBe(6)
+    useBuildStore.getState().reset()
+    expect(useBuildStore.getState().shrineGold).toBe(0)
+    expect(createSettlement().collectedAdmission).toBe(0)
+  })
+
+  it("never carries a paid visit's piety entitlement into a later free visit", () => {
+    const { map, traveler } = fixture()
+    const t = traveler(0)
+    t.attributes.gold = 10
+    t.attributes.hunger = 0
+    map.buildings[0].admissionFee = 3
+    const sim = createSim([t], map, [], obscure), s = sim.travelers.get(0)!
+    run(sim, [t], map, 60, () => s.activity === "fromRelic")
+    const paidPiety = s.piety
+    expect(paidPiety).toBeGreaterThan(0)
+    map.buildings[0].admissionFee = 0
+    s.activity = "toRelic"
+    run(sim, [t], map, 1, () => s.activity === "visiting")
+    expect(s.admissionPaid).toBe(0)
+    map.buildings[0].admissionFee = 5 // Changing the current price cannot create a payment.
+    run(sim, [t], map, 60, () => s.activity === "fromRelic")
+    expect(s.visits).toBe(2)
+    expect(s.piety).toBe(paidPiety)
+    expect(s.gold).toBe(7)
+    expect(sim.admissionPayments).toHaveLength(1)
+  })
+
   it.each([LINEAR_MOVEMENT, DEFAULT_MOVEMENT])("keeps shrine visitors on opposite sides in both directions (%j)", (movement) => {
     const { map, traveler } = fixture()
     const travelers = [traveler(0), traveler(1)]
@@ -102,7 +209,8 @@ describe("shrine hospitality", () => {
         run(sim, [t], map, 60, () => s.activity === "fromRelic")
         expect(s.visits).toBe(1)
         expect(Math.min(s.hunger, s.thirst, s.stamina)).toBeGreaterThanOrEqual(95)
-        expect(s.piety).toBeGreaterThan(t.attributes.piety)
+        expect(s.piety).toBe(t.attributes.piety)
+        expect(sim.admissionPayments).toHaveLength(0)
         expect(s.gold).toBe(0)
         expect(sim.visits * sim.balance.rules.visitRenown).toBe(0.5)
         expect(sim.relic).toEqual(obscure)
@@ -148,6 +256,70 @@ describe("shrine hospitality", () => {
 })
 
 describe("lumber camps", () => {
+  it.each(["none", "hunger", "thirst", "stamina"] as const)(
+    "only rests after a delivery when needs are low (low need: %s)", (need) => {
+      const { map, trees, camp, traveler } = fixture()
+      const t = traveler(0)
+      const sim = createSim([t], map)
+      sim.buildings = [camp]
+      sim.trees = [trees[0]]
+      const resource = treeResource(trees[0], 0, map.seed)
+      resource.health = 0
+      resource.remainingWood -= TIMBER_LOAD
+      sim.treeResources.set(0, resource)
+      sim.felled.add(0)
+      const s = sim.travelers.get(0)!
+      s.employer = camp.id
+      s.activity = "hauling"
+      s.workRoute = [{ x: camp.x, z: camp.z + camp.d - 1 }]
+      s.carrying = TIMBER_LOAD
+      s.hunger = s.thirst = s.stamina = 60
+      if (need !== "none") s[need] = 40
+
+      stepSim(sim, [t], map, 1.5, 0.1)
+
+      expect(sim.wood).toBe(TIMBER_LOAD)
+      expect([...sim.piles.values()].reduce((sum, pile) => sum + pile.wood, 0)).toBe(TIMBER_LOAD)
+      expect(s.carrying).toBe(0)
+      expect(s.gold).toBe(1)
+      if (need === "none") {
+        expect(s.activity).toBe("toWork")
+        expect(s.tree).toBe(0)
+        expect(Math.max(s.hunger, s.thirst, s.stamina)).toBeLessThan(60)
+      } else {
+        expect(s.activity).toBe("idle")
+        expect(s.tree).toBeNull()
+        run(sim, [t], map, 30, () => s.activity === "toWork")
+        expect(s.activity).toBe("toWork")
+        expect(Math.min(s.hunger, s.thirst, s.stamina)).toBeGreaterThanOrEqual(80)
+      }
+      run(sim, [t], map, 30, () => sim.wood > TIMBER_LOAD)
+      expect(sim.wood).toBe(2 * TIMBER_LOAD)
+      expect(resource.remainingWood + s.carrying + sim.wood).toBe(resource.wood)
+    },
+  )
+
+  it("waits at camp when a delivery leaves no more timber to collect", () => {
+    const { map, camp, traveler } = fixture()
+    const t = traveler(0)
+    const sim = createSim([t], map)
+    sim.buildings = [camp]
+    const s = sim.travelers.get(0)!
+    s.employer = camp.id
+    s.activity = "hauling"
+    s.workRoute = [{ x: camp.x, z: camp.z + camp.d - 1 }]
+    s.carrying = TIMBER_LOAD
+
+    stepSim(sim, [t], map, 1.5, 0.1)
+    run(sim, [t], map, 10)
+
+    expect(s.activity).toBe("idle")
+    expect(s.tree).toBeNull()
+    expect(s.carrying).toBe(0)
+    expect(sim.wood).toBe(TIMBER_LOAD)
+    expect(s.gold).toBe(1)
+  })
+
   it("waits for a walking Ent to replant before claiming it for timber", () => {
     const { map, trees, camp, traveler } = fixture()
     const t = traveler(0)
@@ -242,7 +414,9 @@ describe("lumber camps", () => {
     let maxWorkers = 0
     let sawWorking = false
     let sawHauling = false
-    for (let i = 0; i < 6000; i++) {
+    const expectedWood = trees.reduce((sum, tree, index) => sum + treeResource(tree, index, map.seed).wood, 0)
+    // Taller trunks need more hauling trips; wait for delivery within a bounded run.
+    for (let i = 0; i < 12000 && sim.wood < expectedWood; i++) {
       stepSim(sim, travelers, map, 1.5, 0.1)
       const workers = Array.from(sim.travelers.values()).filter((s) => s.employer)
       maxWorkers = Math.max(maxWorkers, workers.length)
@@ -260,7 +434,7 @@ describe("lumber camps", () => {
     expect(maxWorkers).toBe(3)
     expect(sawWorking && sawHauling).toBe(true)
     expect(sim.felled.size).toBe(trees.length)
-    expect(sim.wood).toBe(trees.reduce((sum, tree, index) => sum + treeResource(tree, index, map.seed).wood, 0))
+    expect(sim.wood).toBe(expectedWood)
     expect(Array.from(sim.piles.values()).reduce((sum, pile) => sum + pile.wood, 0)).toBe(sim.wood)
     expect(Array.from(sim.travelers.values()).filter((s) => s.employer)).toHaveLength(3)
   })

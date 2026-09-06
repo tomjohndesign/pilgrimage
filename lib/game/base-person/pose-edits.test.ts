@@ -65,6 +65,8 @@ describe("editable pose keys", () => {
     }
     expect(inspectRig(DEFAULT_DESIGN, "walk", 0, 1).leftFoot?.editable).toBe(false)
     expect(inspectRig(DEFAULT_DESIGN, "walk", 15, 1).leftFoot?.editable).toBe(true)
+    expect(inspectRig(DEFAULT_DESIGN, "procession", 0, 1).leftFoot?.editable).toBe(false)
+    expect(inspectRig(DEFAULT_DESIGN, "procession", 15, 1).leftFoot?.editable).toBe(true)
   })
   it("extends the staff arm at planting and bends it as the body follows", () => {
     for (const design of [PERSON_PRESETS.Traveler, PERSON_PRESETS.Stout, PERSON_PRESETS.Lanky]) {
@@ -87,12 +89,12 @@ describe("leg pose authoring", () => {
     const { legPose } = await import("./pose")
     for (const design of Object.values(PERSON_PRESETS)) {
       const b = personRecipe(design).body
-      for (const side of ["left", "right"] as const) for (const axis of [0, 1, 2]) for (const sign of [-1, 1]) {
+      for (const clip of ["walk", "procession"] as const) for (const side of ["left", "right"] as const) for (const axis of [0, 1, 2]) for (const sign of [-1, 1]) {
         const offset: Point3 = [0, 0, 0]; offset[axis] = 0.45 * sign
         const keys = Array.from({ length: 20 }, (_, frame) => ({ frame, offset, radius: 3 }))
-        const edits: PoseEdits = { walk: { [`${side}Foot`]: keys, [`${side}Knee`]: keys } }
+        const edits: PoseEdits = { [clip]: { [`${side}Foot`]: keys, [`${side}Knee`]: keys } }
         for (let frame = 0; frame < 20; frame++) {
-          const leg = editedLeg(side, frame / 20, "walk", b, edits), base = legPose(side, frame / 20, "walk", b)
+          const leg = editedLeg(side, frame / 20, clip, b, edits), base = legPose(side, frame / 20, clip, b)
           expect(distance(leg.hip, leg.knee)).toBeCloseTo(b.thighLength, 6)
           expect(distance(leg.knee, leg.ankle)).toBeCloseTo(b.shinLength, 6)
           expect(leg.ankle[1]).toBeGreaterThanOrEqual(b.ankleHeight - 1e-8)

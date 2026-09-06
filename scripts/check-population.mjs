@@ -1,11 +1,14 @@
 import sharp from "sharp"
 import { readFileSync } from "node:fs"
-const version = process.argv[2] ?? "v16"
+const version = process.argv[2] ?? "v18"
 if (!/^v\d+$/.test(version)) throw new Error("Expected a population version such as v1")
 const pack = JSON.parse(readFileSync(`public/textures/characters/population/${version}/manifest.json`, "utf8"))
 const size = pack.cellSize
 let frames = 0
 for (const [type, entry] of Object.entries({ ...pack.callings, ...Object.fromEntries(Object.entries(pack.greyCallings ?? {}).map(([type, entry]) => [`${type}-grey`, entry])) })) {
+  if (Number(version.slice(1)) >= 17) for (const clip of ["hoisting", "procession"]) {
+    if (!entry.actions?.[clip] || !pack.shadows.actions?.[clip]) throw new Error(`Missing action: ${type}/${clip}`)
+  }
   if (Number(version.slice(1)) >= 13 && (!entry.actions?.treeFelling || !pack.shadows.actions?.treeFelling)) throw new Error(`Missing tree-felling action: ${type}`)
   if (Number(version.slice(1)) >= 2) for (const clip of ["sleeping", "sitting", "praying", "woodcutting", "gathering", "carrying"]) {
     if (!entry.actions?.[clip] || !pack.shadows.actions?.[clip]) throw new Error(`Missing action: ${type}/${clip}`)

@@ -1,5 +1,6 @@
 "use client"
 
+import type { FrameRegistration } from "@/lib/game/base-person/bake"
 import type { GameMap } from "@/lib/game/map/types"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 import { personRecipe } from "@/lib/game/base-person/design"
@@ -8,8 +9,9 @@ import { walkContact, plantFoot, type FootPlant, DEFAULT_WALK_STRIDE } from "@/l
 import { ACTION_CLIPS } from "@/lib/game/base-person/pose"
 import { activityClip } from "@/lib/game/base-person/activity"
 import { crossedWoodcuttingImpact, woodcuttingProfile } from "@/lib/game/base-person/woodcutting"
+import { workContacts, workContactOrigin, trunkContact } from "@/lib/game/base-person/work-contact"
 import { strikeTree } from "@/lib/game/trees/impact"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 import { usePixelWorldTexel } from "@/components/pixel-canvas"
@@ -27,7 +29,8 @@ import type { FigureClickHandler } from "./traveler-figure"
 
 let nextSpriteOrder = 1
 
-export function CharacterSprite({ map, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, age = 18, visualOverride, flightClip, name = "traveler" }: {
+export function CharacterSprite({ map, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, age = 18, visualOverride, attachment, flightClip, name = "traveler" }: {
+  attachment?: { content: ReactNode; clips: Partial<Record<"hoisting" | "procession", FrameRegistration[]>>; cellSize: number; anchor: number[]; restPosition?: [number, number, number] }
   flightClip?: SpriteClip & { fps: number }
   map?: GameMap
   visualOverride?: ReturnType<typeof populationVisual>
@@ -55,7 +58,10 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   const size = visual.scale * individualScale
   const fps = characterFps ?? visual.fps
   const rigBody = useMemo(() => visual.design ? personRecipe(visual.design).body : null, [visual.design])
+  const work = useMemo(() => visual.design ? workContacts(visual.design) : null, [visual.design])
   const poseRoot = useRef<THREE.Group>(null)
+  const attachmentRoot = useRef<THREE.Group>(null)
+  const attachmentPoint = useMemo(() => new THREE.Vector3(), [])
   const footPlant = useRef<FootPlant | null>(null)
   useEffect(() => { footPlant.current = null }, [map, rigBody])
   const origin = useMemo(() => new THREE.Vector3(), [])
@@ -134,7 +140,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     if (!parent) return
     // Road groups publish heading alongside position; avoid walking the scene
     // ancestry again for every sprite. Standalone previews use world facing.
-    const heading = typeof parent.userData.heading === "number" ? parent.userData.heading :
+    let heading = typeof parent.userData.heading === "number" ? parent.userData.heading :
       (parent.getWorldDirection(facing), Math.atan2(facing.x, facing.z))
     const yaw = Math.atan2(camera.matrixWorld.elements[8], camera.matrixWorld.elements[10])
     const moving = parent.userData.moving === true
@@ -142,6 +148,15 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     const requested = activityClip(parent.userData.activity, moving, parent.userData.carrying)
     const actionIndex = actionIndices[requested]
     const action = requested !== "walk" && requested !== "idle" ? visual.actions[requested] : undefined
+    const workTree = !moving && action && work && (requested === "treeFelling" || requested === "woodcutting")
+      ? parent.userData.workTree : undefined
+    const workPoint = workTree && work ? work[requested as keyof typeof work] : undefined
+    const workTarget = workTree && workPoint ? requested === "treeFelling"
+      ? trunkContact(workTree, workPoint[1] * size / BASE_PERSON.camera.viewSize) : workTree : undefined
+    if (workTarget && workPoint) {
+      parent.getWorldPosition(origin)
+      heading = Math.atan2(workTarget.x - origin.x, workTarget.z - origin.z) - Math.atan2(workPoint[0], workPoint[2])
+    }
     if (!seeded.current && parent.userData.initialized) {
       clock.current = (parent.userData.phase ?? 0) % 1
       seeded.current = true
@@ -151,7 +166,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     const clipKey = flight ? "flying" : requested
     if (clipKey !== lastClip.current) { actionClock.current = 0; lastClip.current = clipKey }
     const previousActionTime = actionClock.current
-    if (requested !== "carrying" || moving) actionClock.current += dt
+    if ((requested !== "carrying" && requested !== "procession") || moving) actionClock.current += dt
     if (moving) {
       const stride = visual.walkStride * individualScale * (walkTuning?.stride ?? DEFAULT_WALK_STRIDE) / DEFAULT_WALK_STRIDE
       clock.current = advanceWalkPhase(clock.current, parent.userData.playbackRate === 0 ? 0 : parent.userData.distance ?? 0, dt,
@@ -160,8 +175,13 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     if (sprite.current) Object.assign(sprite.current.userData, { walkPhase: clock.current, walkStride: visual.walkStride * individualScale, distance: parent.userData.distance ?? 0 })
     const clip: SpriteClip = flight ?? action ?? (moving ? visual.walk : visual.idle)
     const texture = textures[flight ? textures.length - 1 : actionIndex ?? (moving ? 0 : 1)]
-    const frame = flight ? Math.floor(actionClock.current * flight.fps) % flight.columns : action ? requested === "carrying" ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) :
+    let frame = flight ? Math.floor(actionClock.current * flight.fps) % flight.columns : action ? (requested === "carrying" || requested === "procession") ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) :
       Math.floor(actionClock.current * fps * (action.playbackRate ?? 1)) % clip.columns : moving ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) : clip.stillFrame
+    if (requested === "hoisting") {
+      const progress = parent.userData.actionProgress ?? actionClock.current
+      frame = Math.min(clip.columns - 1, Math.floor(progress * fps))
+      if (parent.userData.lowering) frame = clip.columns - 1 - frame
+    }
     if (requested === "treeFelling" && action && parent.userData.workTree) {
       const rate = fps * (action.playbackRate ?? 1)
       if (crossedWoodcuttingImpact(previousActionTime * rate, actionClock.current * rate, clip.columns, woodcuttingProfile(visual.design))) {
@@ -172,7 +192,14 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     const direction = spriteRow(heading, yaw)
     const row = visual.rowOffset + direction
     if (poseRoot.current) {
-      if (moving && rigBody && walkTuning?.sync !== false) {
+      if (workTarget && workPoint) {
+        footPlant.current = null
+        const aligned = workContactOrigin(workTarget, workPoint, direction, yaw, pitch, size / BASE_PERSON.camera.viewSize, groundAt)
+        // Standing trunk and persistent stump share this world origin. Only the
+        // character moves into the authored work stance; the target never jumps.
+        corrected.set(aligned.x, aligned.y, aligned.z)
+        poseRoot.current.position.copy(parent.worldToLocal(corrected))
+      } else if (moving && rigBody && walkTuning?.sync !== false) {
         const foot = walkContact(clock.current, clip.columns, rigBody, clip.strides ?? 1)
         // Reconstruct the baked ground contact in the current camera's ground
         // plane. The selected direction, not the smoothed group heading, is
@@ -192,6 +219,26 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
       } else {
         footPlant.current = null
         poseRoot.current.position.set(0, 0, 0)
+      }
+    }
+    if (attachmentRoot.current && poseRoot.current && attachment) {
+      const frames = requested === "hoisting" || requested === "procession" ? attachment.clips[requested] : undefined
+      const hands = frames?.[direction * clip.columns + frame]?.sockets
+      attachmentRoot.current.visible = !!hands
+      if (hands) {
+        // Registrations use the same camera projection as the sprite. Carry the
+        // attachment in its corrected pose root so planted feet and hands agree.
+        const x = ((hands.leftHand.x + hands.rightHand.x) / 2 - attachment.anchor[0]) / attachment.cellSize * size
+        const y = (attachment.anchor[1] - (hands.leftHand.y + hands.rightHand.y) / 2) / attachment.cellSize * size
+        attachmentPoint.set(x, y, 0).applyQuaternion(camera.quaternion)
+        poseRoot.current.getWorldPosition(origin)
+        attachmentPoint.add(origin)
+        if (requested === "hoisting" && attachment.restPosition) {
+          const lift = frame / Math.max(1, clip.columns - 1)
+          origin.set(...attachment.restPosition)
+          attachmentPoint.lerp(origin, (1 - lift) ** 3)
+        }
+        attachmentRoot.current.position.copy(poseRoot.current.worldToLocal(attachmentPoint))
       }
     }
     // Ground and body/selection passes share the same local terrain plane.
@@ -215,6 +262,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   return (
     <group ref={poseRoot}>
       <sprite renderOrder={renderOrder} ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name={name} material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync !== false }} />
+      {attachment && <group ref={attachmentRoot} visible={false}>{attachment.content}</group>}
       {outlineMaterial && <sprite renderOrder={renderOrder} layers-mask={OUTLINE_ID_LAYER_MASK} material={outlineMaterial}
         scale={[size, size, 1]} center={center} />}
     </group>

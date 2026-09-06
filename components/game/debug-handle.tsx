@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { processionRegistry } from "@/lib/game/relic-procession"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -41,6 +42,13 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
       /** Live traveler sim state (stats, activities), for e2e assertions. */
       sim: () => (simRegistry.current ? [...simRegistry.current.travelers.values()] : []),
       time: () => simRegistry.current?.time ?? null,
+      /** Admission receipts and their live floating amounts for payment smoke tests. */
+      payments: () => ({
+        receipts: simRegistry.current?.admissionPayments ?? [],
+        effects: scene.getObjectByName("admission-effects")?.children.flatMap(object =>
+          object instanceof THREE.Sprite && object.visible
+            ? [{ amount: object.userData.amount, position: object.position.toArray(), opacity: object.material.opacity }] : []) ?? [],
+      }),
       setTerrainVisible: (visible: boolean) => { const terrain = scene.getObjectByName("terrain"); if (terrain) terrain.visible = visible },
       renderInfo: () => ({
         programs: gl.info.programs?.length ?? 0,
@@ -125,12 +133,14 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
       }),
       treePlacements: () => simRegistry.current?.trees ?? [],
       /** Exact relic position and pulse values for scene/selection smoke tests. */
+      procession: () => processionRegistry.current,
       relic: () => {
-        const object = scene.getObjectByName("relic")
+        let object: THREE.Object3D | undefined
+        scene.traverseVisible(candidate => { if (candidate.name === "relic") object = candidate })
         if (!(object instanceof THREE.Mesh)) return null
         const world = object.getWorldPosition(new THREE.Vector3())
         const point = world.clone().project(camera), rect = gl.domElement.getBoundingClientRect()
-        const light = scene.getObjectByName("relic-light")
+        const light = object.parent?.parent?.getObjectByName("relic-light")
         return {
           world: world.toArray(), x: rect.left + (point.x + 1) / 2 * rect.width, y: rect.top + (1 - point.y) / 2 * rect.height,
           emissiveIntensity: (object.material as THREE.MeshStandardMaterial).emissiveIntensity,

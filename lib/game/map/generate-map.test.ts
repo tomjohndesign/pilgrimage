@@ -144,8 +144,7 @@ describe("generateMap", () => {
           if (inFootprint) {
             expect(terrain, `seed ${seed} hovel stands on grass`).toBe("grass")
           } else {
-            // The ring is grass except where the track arrives at the door.
-            expect(["grass", "track"], `seed ${seed} hovel has breathing room`).toContain(terrain)
+            expect(["path", "track"], `seed ${seed} path encircles every side and corner`).toContain(terrain)
           }
         }
       }

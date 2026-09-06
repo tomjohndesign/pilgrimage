@@ -125,7 +125,10 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       const copyCamera = new THREE.Camera()
       let floorCompared = 0, floorClipped = 0
       back.visible = false
-      for (const [dx, dz] of [[0, 0], [0.3, 0], [-0.3, 0], [0.2, 0.25], [-0.2, -0.25]]) {
+      // Building paving clears terrain by at most 0.003 world units; characters
+      // still stand at terrain height and must keep their complete foot silhouette.
+      for (const floorLift of [0, 0.003]) for (const [dx, dz] of [[0, 0], [0.3, 0], [-0.3, 0], [0.2, 0.25], [-0.2, -0.25]]) {
+        floor.position.y = floorLift
         groundPlane.value.set(-dx, 1, -dz, 0)
         floor.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(-dx, 1, -dz).normalize())
       for (const resolution of [30, 60, 120]) {

@@ -46,8 +46,9 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
     const group = driver.current, parent = group?.parent
     if (!group || !parent) return
     const data = parent.userData, paused = data.playbackRate === 0
-    const deployed = vendor && (data.activity === undefined ? awning : ["openingShop", "vending", "packingShop"].includes(data.activity))
-    const working = deployed && data.activity !== "vending" && (data.shopProgress ?? 0) > 0
+    const praying = data.activity === "praying", routineActivity = data.routineActivity ?? data.activity
+    const deployed = vendor && (routineActivity === undefined ? awning : ["openingShop", "vending", "packingShop"].includes(routineActivity))
+    const working = deployed && !praying && routineActivity !== "vending" && (data.shopProgress ?? 0) > 0
     parent.getWorldPosition(point)
     const heading = data.heading ?? Math.atan2(parent.matrixWorld.elements[8], parent.matrixWorld.elements[10])
     const hitch = { x: point.x, z: point.z }, y = point.y, wheelbase = -cartOffset(puller) * characterScale
@@ -65,13 +66,13 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
       if (cart.current) {
         cart.current.position.copy(parent.worldToLocal(point.set(pose.x, map ? walkingSurface(map, pose.x, pose.z).height : y, pose.z)))
         const distance = previous && !paused && !data.motionReset && !deployed ? Math.hypot(pose.x - previous.x, pose.z - previous.z) : 0
-        cart.current.userData = { ...data, heading: deployed ? data.shopHeading ?? pose.heading : pose.heading, distance, moving: data.moving && !deployed }
+        cart.current.userData = { ...data, activity: routineActivity, playbackRate: praying ? 0 : data.playbackRate, heading: deployed ? data.shopHeading ?? pose.heading : pose.heading, distance, moving: data.moving && !deployed }
       }
     }
     const side = data.shopSide ?? 1
-    const keeper = data.activity === "vending" ? keeperRoutine(data.keeperTime ?? 0, puller, characterScale,
+    const keeper = routineActivity === "vending" ? keeperRoutine(data.keeperTime ?? 0, puller, characterScale,
       personWalkStride(populationDesign(type, appearance?.variant ?? 0)) * characterScale, data.keeperAudience !== false) : null
-    const keeperAction = keeper && keeper.pose !== "walk" && keeper.pose !== "idle"
+    const keeperAction = !praying && keeper && keeper.pose !== "walk" && keeper.pose !== "idle"
     const keeperHeading = (data.shopHeading ?? heading) + (keeper?.moving ? Math.atan2(Math.sin(keeper.heading) * side, Math.cos(keeper.heading)) : -side * Math.PI / 2)
     group.position.set(animal ? 0.43 * characterScale : 0, 0, animal ? 0.22 * characterScale : 0)
     if (deployed && cartPose.current) {
@@ -84,8 +85,8 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
     const before = lastDriver.current, reset = data.motionReset || !before || before.deployed !== deployed
     const distance = !reset && !paused ? Math.hypot(point.x - before.x, point.z - before.z) : 0
     lastDriver.current = { x: point.x, z: point.z, deployed }
-    group.userData = { ...data, motionReset: reset, distance, heading: deployed ? keeperHeading : data.heading, activity: deployed ? undefined : data.activity, moving: deployed ? keeper?.moving === true : data.moving }
-    const pullingNow = vendor && !animal && characterModel === "base" && !deployed
+    group.userData = { ...data, motionReset: reset, distance, heading: praying ? data.heading : deployed ? keeperHeading : data.heading, activity: praying ? "praying" : deployed ? undefined : data.activity, moving: !praying && (deployed ? keeper?.moving === true : data.moving) }
+    const pullingNow = vendor && !animal && characterModel === "base" && !deployed && !praying
     group.visible = !working && !keeperAction && !pullingNow
     if (pullingDriver.current) {
       pullingDriver.current.visible = pullingNow
@@ -103,8 +104,8 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
       if (deployed && pasture) {
         beast.current.position.copy(parent.worldToLocal(point.set(pasture.x, data.pastureY ?? y, pasture.z)))
         const previous = lastAnimal.current, distance = previous && !data.motionReset && !paused ? Math.hypot(pasture.x - previous.x, pasture.z - previous.z) : 0
-        beast.current.userData = { ...data, heading: pasture.moving ? pasture.heading : priorHeading ?? data.heading, hitched: false,
-          moving: pasture.moving, distance, grazing: data.pastureGrass && !pasture.returning && !pasture.moving }
+        beast.current.userData = { ...data, heading: pasture.moving && !praying ? pasture.heading : priorHeading ?? data.heading, hitched: false,
+          moving: pasture.moving && !praying, distance, grazing: data.pastureGrass && !pasture.returning && !pasture.moving }
         lastAnimal.current = { x: pasture.x, z: pasture.z }
       } else { beast.current.position.set(0, 0, 0); lastAnimal.current = null }
     }
