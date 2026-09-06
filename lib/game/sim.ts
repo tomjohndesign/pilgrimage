@@ -1,3 +1,4 @@
+import { nearProcession, type RelicProcession } from "./relic-procession"
 import { LINEAR_MOVEMENT, easeProgress, easeSpeed, paceVariation, roundedCorner, type MovementTuning } from "./motion"
 import { DEFAULT_BALANCE, type GameBalance } from "./balance"
 import { buildingAt } from "./settlement"
@@ -168,6 +169,8 @@ function roll(id: number, n: number): number {
 }
 
 export interface SimTraveler {
+  /** Prayer interrupts travel/work without discarding its route or reservations. */
+  praying?: boolean
   id: number
   activity: Activity
   gold: number
@@ -231,6 +234,7 @@ export interface SimTraveler {
 }
 
 export interface SimState {
+  procession?: RelicProcession | null
   seed: number
   travelers: Map<number, SimTraveler>
   /** Game time in days since the sim began (fractional). */
@@ -708,6 +712,8 @@ export function stepSim(
   for (const t of travelers) {
     const s = sim.travelers.get(t.id)
     if (!s) continue
+    s.praying = nearProcession(sim.procession, s, s.praying)
+    if (s.praying) { s.moveSpeed = 0; continue }
     s.visitCooldown = Math.max(0, s.visitCooldown - dt)
     const camping = s.activity === "camping"
     const sheltered = s.activity === "visiting" || s.activity === "idle"

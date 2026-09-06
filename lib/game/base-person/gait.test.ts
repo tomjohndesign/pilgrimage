@@ -17,7 +17,9 @@ describe("walking at the rendered person's scale", () => {
       const metadata = JSON.parse(readFileSync(`${process.cwd()}/public${url}`, "utf8"))
       expect(Number(String(metadata.version).replace(/^v/, ""))).toBe(BASE_PERSON.version)
       expect(metadata.frameCount).toBe(PERSON_CLIPS.walk.frames)
-      expect(metadata.clips.carrying.length / metadata.directions.length).toBe(PERSON_CLIPS.carrying.frames)
+      for (const clip of ["carrying", "procession", "hoisting"] as const) {
+        expect(metadata.clips[clip].length / metadata.directions.length).toBe(PERSON_CLIPS[clip].frames)
+      }
     }
     expect(DEFAULT_POPULATION.templateVersion).toBe(BASE_PERSON.version)
     expect(DEFAULT_POPULATION.frameCounts?.walk).toBe(PERSON_CLIPS.walk.frames)
@@ -37,7 +39,7 @@ describe("walking at the rendered person's scale", () => {
   it("preserves both leg lengths and forward knee bend for every preset and body profile", () => {
     for (const design of WALKING_DESIGNS) {
       const body = personRecipe(design).body
-      for (const clip of ["walk", "carrying"] as const) for (const side of ["left", "right"] as const) {
+      for (const clip of ["walk", "carrying", "procession"] as const) for (const side of ["left", "right"] as const) {
         for (let tick = 0; tick < 120; tick++) {
           const leg = legPose(side, tick / 120, clip, body)
           const distance = (a: number[], b: number[]) => Math.hypot(...a.map((value, i) => value - b[i]))
@@ -110,7 +112,7 @@ describe("walking at the rendered person's scale", () => {
       const body = personRecipe(design).body
       const stride = personWalkStride(design) * scale
       const rigToWorld = PERSON_SPRITE_SCALE * scale / BASE_PERSON.camera.viewSize
-      for (const clip of ["walk", "carrying"] as const) for (const side of ["left", "right"] as const) {
+      for (const clip of ["walk", "carrying", "procession"] as const) for (const side of ["left", "right"] as const) {
         let plantedZ: number | undefined
         for (let frame = 0; frame < 8; frame++) {
           const phase = frame / 8

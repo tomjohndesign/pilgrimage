@@ -17,9 +17,11 @@ export const PERSON_CLIPS = {
   woodcutting: { label: "Chopping · fallen wood", frames: SPLITTING_FRAMES },
   gathering: { label: "Gathering", frames: 24 },
   carrying: { label: "Carrying", frames: 20 },
+  hoisting: { label: "Hoisting relic", frames: 16 },
+  procession: { label: "Carrying overhead", frames: 20 },
 } as const
 export type BaseClip = keyof typeof PERSON_CLIPS
-export const ACTION_CLIPS = ["sleeping", "sitting", "praying", "treeFelling", "woodcutting", "gathering", "carrying"] as const
+export const ACTION_CLIPS = ["sleeping", "sitting", "praying", "treeFelling", "woodcutting", "gathering", "carrying", "hoisting", "procession"] as const
 export type ActionClip = typeof ACTION_CLIPS[number]
 
 export function choppingHipDrop(clip: BaseClip, phase = 0, hipHeight = BASE_PERSON.body.hipHeight) {
@@ -51,7 +53,7 @@ export function walkFoot(side: BodySide, phase: number, b = BASE_PERSON.body) {
 
 /** Small opposing hip/chest turns, with one soft head bounce per footfall. */
 export function walkBody(phase: number, clip: BaseClip) {
-  const moving = clip === "walk" || clip === "carrying"
+  const moving = clip === "walk" || clip === "carrying" || clip === "procession"
   const cycle = ((phase % 1 + 1) % 1) * Math.PI * 2
   const hipYaw = moving ? -Math.cos(cycle) * 0.065 : 0
   return { hipYaw, chestYaw: -hipYaw * 0.75,
@@ -74,7 +76,7 @@ export function pelvisHeight(phase: number, clip: BaseClip, b = BASE_PERSON.body
   // Eight degrees of resting knee flexion: upright, without locking the joint.
   const reachSquared = b.thighLength ** 2 + b.shinLength ** 2
     + 2 * b.thighLength * b.shinLength * Math.cos(8 * Math.PI / 180)
-  if (clip !== "walk" && clip !== "carrying") return b.ankleHeight + Math.sqrt(reachSquared)
+  if (clip !== "walk" && clip !== "carrying" && clip !== "procession") return b.ankleHeight + Math.sqrt(reachSquared)
   // One pelvis for both legs. Its height follows the most extended leg and
   // falls slightly in double support; it never stretches either leg to reach.
   return Math.min(...(["left", "right"] as const).map(side => {
@@ -113,7 +115,7 @@ export function legPose(side: BodySide, phase: number, clip: BaseClip, b = BASE_
     const knee = hip.map((v, i) => v + axis[i] * along + bend[i] / bendLength * height) as Point3
     return { hip, knee, ankle, planted: true }
   }
-  const walking = clip === "walk" || clip === "carrying"
+  const walking = clip === "walk" || clip === "carrying" || clip === "procession"
   const x = (side === "left" ? 1 : -1) * b.legOffset
   const target = walkFoot(side, phase, b)
   const planted = !walking || target.planted

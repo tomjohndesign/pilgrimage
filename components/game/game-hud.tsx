@@ -24,6 +24,7 @@ import { parseSeed } from "@/lib/game/rng"
 import { CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, simRegistry, type SimTraveler } from "@/lib/game/sim"
+import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
 import { MONK_ACTIVITY_LABELS, monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { relicTitle, type Relic } from "@/lib/game/relic"
 import { DEFAULT_TRAFFIC, type Traveler } from "@/lib/game/travelers"
@@ -324,7 +325,7 @@ function TravelerPanel({ traveler }: { traveler: Traveler }) {
         </div>
         {live && (
           <div className="text-[11px] italic text-gold">
-            {ACTIVITY_LABELS[live.activity]}
+            {live.praying ? "Kneeling in prayer before the relic" : ACTIVITY_LABELS[live.activity]}
             {live.employer && " · Settler"}
             {live.track && " · on the dark track"}
           </div>
@@ -443,6 +444,7 @@ function ElevationReadout({ map }: { map: GameMap }) {
 
 /** What the monks keep in the hovel: the relic's name, nature, and pull. */
 function RelicPanel({ relic }: { relic: Relic }) {
+  const procession = useRelicProcessionStore()
   const balance = useBalanceStore((s) => s.balance)
   const s = relic.stats
   return (
@@ -470,6 +472,9 @@ function RelicPanel({ relic }: { relic: Relic }) {
       </div>
 
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
+        {procession.monkId !== null && <button type="button" className="hud-action mb-2"
+          disabled={procession.returnRequested || procession.stage === "returning" || procession.stage === "lowering"}
+          onClick={procession.returnRelic}>Return relic</button>}
         <StatBar label="Sanctity" value={s.sanctity} />
         <StatBar label="Spectacle" value={s.spectacle} />
         <StatBar label="Doubt" value={s.doubt} />
@@ -496,6 +501,8 @@ function MonkPanel({ monk }: { monk: Monk }) {
   const balance = useBalanceStore((s) => s.balance)
   const a = monk.attributes
   const activity = useMonkActivity(monk.id)
+  const procession = useRelicProcessionStore()
+  const carryingRelic = procession.monkId === monk.id
   return (
     <Panel>
       <div className="flex items-baseline justify-between gap-4">
@@ -522,6 +529,15 @@ function MonkPanel({ monk }: { monk: Monk }) {
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
         <StatBar label="Piety" value={a.piety} />
         <div className="mt-1 text-[11px] text-ink-light">Contributes +{individualRenown(monk, balance)} shrine renown</div>
+      </div>
+
+      <div className="mt-2 border-t border-rule pt-2">
+        <button type="button" className="hud-action" disabled={!procession.available || activity === "flying" ||
+          (procession.monkId !== null && !carryingRelic) || (carryingRelic && (procession.returnRequested || procession.stage === "lowering" || procession.stage === "returning"))}
+          onClick={() => carryingRelic ? procession.returnRelic() : procession.request(monk.id)}>
+          {carryingRelic ? "Return relic" : "Carry relic in procession"}
+        </button>
+        <p className="mt-1 text-[11px] italic text-ink-light">Nearby folk kneel and pray. The relic returns to its table after the procession.</p>
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">

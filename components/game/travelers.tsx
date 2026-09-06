@@ -1,5 +1,6 @@
 "use client"
 
+import { processionRegistry } from "@/lib/game/relic-procession"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
 import { useEffect, useMemo, useRef } from "react"
@@ -115,6 +116,7 @@ export function Travelers({
   useFrame((_, delta) => {
     // A background tab hands us a huge delta; clamp so nobody teleports.
     const build = useBuildStore.getState()
+    sim.procession = processionRegistry.current
     sim.buildings = camps
     sim.shrineRenown = shrineRenown
     sim.balance = useBalanceStore.getState().balance
@@ -156,7 +158,10 @@ export function Travelers({
       group.userData.playbackRate = playback.paused ? 0 : playback.speed
       group.userData.distance = moved
       group.userData.moving = moving
-      group.userData.activity = s.activity
+      if (!playback.paused && s.praying && sim.procession?.position) {
+        group.rotation.y = Math.atan2(sim.procession.position.x - s.x, sim.procession.position.z - s.z)
+      }
+      group.userData.activity = s.praying ? "praying" : s.activity
       group.userData.carrying = s.carrying
       group.userData.initialized = true
       group.userData.phase = travelers[i].id * 0.137
@@ -170,7 +175,7 @@ export function Travelers({
       }
 
       const logs = group.getObjectByName("carried-logs")
-      if (logs) logs.visible = s.carrying > 0
+      if (logs) logs.visible = s.carrying > 0 && !s.praying
       const y = walkingSurface(map, s.x, s.z).height
       group.position.set(s.x, y, s.z)
       // Keep baked bodies at their authored proportions.

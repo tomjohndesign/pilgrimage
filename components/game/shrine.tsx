@@ -2,7 +2,9 @@
 
 import { groundHeight } from "@/lib/game/map/elevation"
 
-import { useMemo } from "react"
+import { useFrame } from "@react-three/fiber"
+import { processionRegistry, relicIsCarried } from "@/lib/game/relic-procession"
+import { useMemo, useRef } from "react"
 import * as THREE from "three"
 
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
@@ -25,6 +27,10 @@ import {
 const WALL_HEIGHT = DEFAULT_RECIPE.wallHeight
 
 export function Shrine({ map, relic }: { map: GameMap; relic: Relic }) {
+  const relicGroup = useRef<THREE.Group>(null)
+  useFrame(() => {
+    if (relicGroup.current) relicGroup.current.visible = !processionRegistry.current || !relicIsCarried(processionRegistry.current)
+  })
   const selected = useCameraStore(s => isSelected(s.selection, { kind: "relic" }) || isSelected(s.selection, { kind: "building", id: map.site?.hovelId ?? "" }))
   const hovelIndex = map.buildings.findIndex((b) => b.id === map.site?.hovelId)
   const hovel = hovelIndex >= 0 ? map.buildings[hovelIndex] : null
@@ -57,7 +63,7 @@ export function Shrine({ map, relic }: { map: GameMap; relic: Relic }) {
       <group rotation={[0, layout.rotation, 0]}>
         <BuildingModel recipe={layout.recipe} idColor={shrineId} onClick={event => selectElement({ kind: "building", id: hovel.id }, event)} />
       </group>
-      <RelicDisplay color={relic.color} idColor={relicId} onClick={select} />
+      <group ref={relicGroup}><RelicDisplay color={relic.color} idColor={relicId} onClick={select} /></group>
 
       {selected && (
         <mesh position={[0, WALL_HEIGHT + DEFAULT_RECIPE.roofRise + 0.35, 0]}>

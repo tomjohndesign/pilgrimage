@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { processionRegistry } from "@/lib/game/relic-procession"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -114,12 +115,14 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales }: { 
       }),
       treePlacements: () => simRegistry.current?.trees ?? [],
       /** Exact relic position and pulse values for scene/selection smoke tests. */
+      procession: () => processionRegistry.current,
       relic: () => {
-        const object = scene.getObjectByName("relic")
+        let object: THREE.Object3D | undefined
+        scene.traverseVisible(candidate => { if (candidate.name === "relic") object = candidate })
         if (!(object instanceof THREE.Mesh)) return null
         const world = object.getWorldPosition(new THREE.Vector3())
         const point = world.clone().project(camera), rect = gl.domElement.getBoundingClientRect()
-        const light = scene.getObjectByName("relic-light")
+        const light = object.parent?.parent?.getObjectByName("relic-light")
         return {
           world: world.toArray(), x: rect.left + (point.x + 1) / 2 * rect.width, y: rect.top + (1 - point.y) / 2 * rect.height,
           emissiveIntensity: (object.material as THREE.MeshStandardMaterial).emissiveIntensity,

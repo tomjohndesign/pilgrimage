@@ -6,6 +6,9 @@ import { BASE_PERSON, PERSON_CLIPS, type BaseClip } from "./pose"
 
 /** Visuals follow simulation state; freezing playback does not change the pose. */
 export function activityClip(activity: Activity | MonkActivity | undefined, moving: boolean, carrying = 0): BaseClip {
+  if (activity === "praying") return "praying"
+  if (activity === "hoisting") return "hoisting"
+  if (activity === "procession") return "procession"
   if (carrying > 0) return "carrying"
   if (moving) return "walk"
   switch (activity) {

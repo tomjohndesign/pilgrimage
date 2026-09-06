@@ -1,6 +1,6 @@
-import greyManifest from "../../../public/textures/characters/monks/v15/manifest.json"
+import greyManifest from "../../../public/textures/characters/monks/v17/manifest.json"
 import { GREY_HAIR_AGE } from "../character-age"
-import manifest from "../../../public/textures/characters/monks/v14/manifest.json"
+import manifest from "../../../public/textures/characters/monks/v16/manifest.json"
 import { DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE, personWalkStride, walkSpeedScale } from "./gait"
 import { actionPlaybackRate } from "./activity"
 import { ACTION_CLIPS, BASE_PERSON } from "./pose"
@@ -39,3 +39,13 @@ export function monkWalkSpeed(characterScale: number): number {
   return DEFAULT_WALK_SPEED * walkSpeedScale(MONK_VISUAL.walkStride, characterScale)
 }
 export const MONK_WALK_TUNING = { sync: true, stride: DEFAULT_WALK_STRIDE }
+
+/** Baked hand registrations keep the single carried relic on both palms. */
+export function monkRelicAttachment(age: number) {
+  const source = age >= GREY_HAIR_AGE ? greyManifest : manifest
+  return { clips: source.clips, cellSize: source.cellSize, anchor: source.anchor }
+}
+
+export function monkRelicTrayWidth(characterScale: number): number {
+  return 2 * personRecipe(MONK_VISUAL.design).body.shoulderOffset * MONK_VISUAL.scale / BASE_PERSON.camera.viewSize * characterScale + 0.03
+}
