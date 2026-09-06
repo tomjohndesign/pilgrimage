@@ -58,8 +58,7 @@ describe("balance presets", () => {
     delete old.balance.rules.visitRenown
     for (const key of ["hospitalityBaseChance", "hungerDecay", "thirstDecay", "staminaDecay"])
       delete old.balance.rules[key]
-    delete old.balance.buildings.lumberCamp
-    for (const id of ["monk-shelter", "shepherd-hut", "storehouse", "wood-shelter"]) delete old.balance.buildings[id]
+    delete old.balance.buildings.storehouse
     old.balance.rules.startingGold = 321
     old.balance.buildings.shelter.goldCost = 17
     const result = importBalance(JSON.stringify(old))
@@ -69,11 +68,19 @@ describe("balance presets", () => {
     expect(result.balance?.rules.visitRenown).toBe(0.5)
     for (const key of ["hospitalityBaseChance", "hungerDecay", "thirstDecay", "staminaDecay"] as const)
       expect(result.balance?.rules[key]).toBe(DEFAULT_BALANCE.rules[key])
-    expect(result.balance?.buildings.lumberCamp).toEqual(DEFAULT_BALANCE.buildings.lumberCamp)
-    for (const id of ["monk-shelter", "shepherd-hut", "storehouse", "wood-shelter"] as const)
-      expect(result.balance?.buildings[id]).toEqual(DEFAULT_BALANCE.buildings[id])
-    old.balance.buildings.lumberCamp = { goldCost: -1 }
+    expect(result.balance?.buildings.storehouse).toEqual(DEFAULT_BALANCE.buildings.storehouse)
+    old.balance.buildings.storehouse = { goldCost: -1 }
     expect(importBalance(JSON.stringify(old)).balance).toBeNull()
+  })
+  it("retires the lodge’s passive wood income when importing an old preset", () => {
+    const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
+    old.version = 1
+    old.balance.buildings.workshop.woodIncome = 8
+    old.balance.buildings.workshop.goldCost = 71
+    const result = importBalance(JSON.stringify(old))
+    expect(result.error).toBeNull()
+    expect(result.balance?.buildings.workshop.woodIncome).toBe(0)
+    expect(result.balance?.buildings.workshop.goldCost).toBe(71)
   })
   it.each([NaN, Infinity, -1, 1.5, 100001, "200", null])(
     "rejects invalid starting supplies: %s",
@@ -84,7 +91,7 @@ describe("balance presets", () => {
   )
   it("rejects missing fields, unknown versions and malformed JSON", () => {
     expect(validateBalance({ rules: {}, buildings: {} }).balance).toBeNull()
-    expect(importBalance('{"version":2}').error).toMatch(/version/)
+    expect(importBalance('{"version":3}').error).toMatch(/version/)
     expect(importBalance("oops").error).toMatch(/JSON/)
   })
   it("preserves custom needs and hospitality settings and rejects invalid values", () => {

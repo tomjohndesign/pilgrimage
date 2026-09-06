@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { Vector3 } from "three"
-import { buildingYaw, lumberCampEntry, rotateBuildingPoint, type BuildingRotation } from "./building-rotation"
+import { buildingYaw, buildingEntry, rotateBuildingPoint, type BuildingRotation } from "./building-rotation"
 import { useBuildStore } from "./build-store"
 import { placementProblem } from "./buildings"
 import type { GameMap } from "./map/types"
@@ -33,7 +33,7 @@ describe("building rotation", () => {
     expect(rendered.x).toBeCloseTo(point.x)
     expect(rendered.z).toBeCloseTo(point.z)
     const camp = { x: 5, z: 5, w: 2, d: 2, rotation }
-    const outside = lumberCampEntry(camp), inside = lumberCampEntry(camp, true)
+    const outside = buildingEntry(camp), inside = buildingEntry(camp, true)
     expect(Math.abs(outside.x - inside.x) + Math.abs(outside.z - inside.z)).toBe(1)
     expect(inside.x).toBeGreaterThanOrEqual(5)
     expect(inside.x).toBeLessThan(7)
@@ -44,8 +44,8 @@ describe("building rotation", () => {
       site: { hovelId: "hovel", junction: 0, branch: [], door: { x: 2, z: 2 } },
     }
     map.tiles[5 * map.width + 9] = "forest"
-    expect(placementProblem(map, [], "lumberCamp", 5, 5, rotation)).toBeNull()
+    expect(placementProblem(map, [], "workshop", 5, 5, rotation)).toBeNull()
     map.tiles[outside.z * map.width + outside.x] = "water"
-    expect(placementProblem(map, [], "lumberCamp", 5, 5, rotation)).toBe("access")
+    expect(placementProblem(map, [], "workshop", 5, 5, rotation)).toBe("access")
   })
 })

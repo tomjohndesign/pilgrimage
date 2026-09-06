@@ -155,7 +155,7 @@ export function GameCanvas({
       <Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
         characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
-      {buildType && <BuildInfluenceOverlay map={map} />}
+      <BuildInfluenceOverlay map={map} buildMode={!!buildType} />
 
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />

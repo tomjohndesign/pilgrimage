@@ -5,6 +5,7 @@ import * as THREE from "three"
 import type { ThreeEvent } from "@react-three/fiber"
 import { buildingParts, type BuildingPart } from "@/lib/game/building-art/geometry"
 import { BUILDING_STYLE, type BuildingRecipe } from "@/lib/game/building-art/style"
+import { visibleStructureParts } from "@/lib/game/building-art/structure"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 
 function Part({ part, idColor, onClick, ghostColor, ink = true }: { part: BuildingPart; idColor?: THREE.Color; onClick?: (event: ThreeEvent<MouseEvent>) => void; ghostColor?: string; ink?: boolean }) {
@@ -60,13 +61,13 @@ export function BuildingModel({ recipe, cutaway = false, idColor, onClick, ink =
   recipe: BuildingRecipe; cutaway?: boolean; idColor?: THREE.Color; onClick?: (event: ThreeEvent<MouseEvent>) => void; ink?: boolean
 }) {
   const parts = useMemo(() => batchDetails(buildingParts(recipe)), [recipe])
-  return <group name="ink-and-thatch-building">{parts.filter((p) => !cutaway || p.layer === "base").map((part) => <Part key={part.name} part={part} idColor={idColor} onClick={onClick} ink={ink} />)}</group>
+  return <group name="ink-and-thatch-building">{visibleStructureParts(parts, cutaway).map((part) => <Part key={part.name} part={part} idColor={idColor} onClick={onClick} ink={ink} />)}</group>
 }
 
 /** Ghosts retain every surface, with frame lines only on structural parts. */
-export function StructureModel({ parts, idColor, ghostColor, ink = true }: {
-  parts: BuildingPart[]; idColor?: THREE.Color; ghostColor?: string; ink?: boolean
+export function StructureModel({ parts, idColor, ghostColor, ink = true, cutaway = false }: {
+  parts: BuildingPart[]; idColor?: THREE.Color; ghostColor?: string; ink?: boolean; cutaway?: boolean
 }) {
   const rendered = useMemo(() => batchDetails(parts), [parts])
-  return <group>{rendered.map((part) => <Part key={part.name} part={part} idColor={idColor} ghostColor={ghostColor} ink={ink} />)}</group>
+  return <group>{visibleStructureParts(rendered, cutaway).map((part) => <Part key={part.name} part={part} idColor={idColor} ghostColor={ghostColor} ink={ink} />)}</group>
 }

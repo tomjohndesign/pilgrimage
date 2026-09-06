@@ -25,8 +25,8 @@ export function rotateBuildingPoint(x: number, z: number, rotation = 0): TilePos
   }
 }
 
-/** Keep the yard's original front-left arrival tile attached to its open side. */
-export function lumberCampEntry(building: Pick<BuildingDef, "x" | "z" | "w" | "d" | "rotation">, inside = false): TilePos {
+/** Keep the building's front-left arrival tile attached to its entrance side. */
+export function buildingEntry(building: Pick<BuildingDef, "x" | "z" | "w" | "d" | "rotation">, inside = false): TilePos {
   const local = rotatedFootprint(building, building.rotation)
   const offset = rotateBuildingPoint(-(local.w - 1) / 2, (local.d - 1) / 2 + (inside ? 0 : 1), building.rotation)
   return { x: building.x + (building.w - 1) / 2 + offset.x, z: building.z + (building.d - 1) / 2 + offset.z }

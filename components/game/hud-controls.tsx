@@ -69,7 +69,7 @@ export function BuildControls({ economy, open, onToggle, onClose }: {
   const rotateBuilding = useBuildStore((s) => s.rotateBuilding)
   const hovered = useCameraStore((s) => s.hovered)
   const catalog = useMemo(() => [...buildCatalog(balance)].sort((a, b) =>
-    a.id === "lumberCamp" ? -1 : b.id === "lumberCamp" ? 1 : 0), [balance])
+    a.id === "workshop" ? -1 : b.id === "workshop" ? 1 : 0), [balance])
   const renown = economy.renown?.total ?? 0
   const selected = catalog.find((item) => item.id === buildType)
   const problem = useMemo(() => {
@@ -89,7 +89,7 @@ export function BuildControls({ economy, open, onToggle, onClose }: {
             const locked = renown < item.requiredRenown
             const unavailable = !map || locked || !canAfford(settlement.resources, item.cost)
             return <HudHelp key={item.id} content={<>
-              <div className="hud-help-title">Build {item.label}{item.id === "lumberCamp" && <kbd>L</kbd>}</div>
+              <div className="hud-help-title">Build {item.label}{item.id === "workshop" && <kbd>L</kbd>}</div>
               <p>{item.description}</p>
               <div className="hud-help-meta">{item.cost.gold} gold · {item.cost.wood} wood · {item.w} × {item.d} tiles</div>
               <p className="hud-help-secondary">{buildingIncomeLabel(item, balance)}</p>
@@ -104,7 +104,7 @@ export function BuildControls({ economy, open, onToggle, onClose }: {
                 aria-pressed={buildType === item.id} aria-disabled={unavailable}
                 onClick={() => { if (!unavailable) chooseBuild(buildType === item.id ? null : item.id) }}>
                 <BuildThumbnail id={item.id} />
-                {item.id === "lumberCamp" && <kbd>L</kbd>}
+                {item.id === "workshop" && <kbd>L</kbd>}
               </button>
             </HudHelp>
           })}

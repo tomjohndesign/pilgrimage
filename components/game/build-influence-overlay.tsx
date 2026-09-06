@@ -10,11 +10,12 @@ import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { buildTileError } from "@/lib/game/settlement"
 
 /**
- * Build-mode ground availability and the boundary of radiated influence.
+ * A faint, persistent boundary of radiated influence, with stronger edges and
+ * ground availability while building.
  * The cursor separately validates the selected footprint, supplies and camp access.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0
  */
-export function BuildInfluenceOverlay({ map }: { map: GameMap }) {
+export function BuildInfluenceOverlay({ map, buildMode }: { map: GameMap; buildMode: boolean }) {
   const balance = useBalanceStore((s) => s.balance)
   const geometry = useMemo(() => {
     const field = getBuildInfluence(map, balance)
@@ -54,11 +55,11 @@ export function BuildInfluenceOverlay({ map }: { map: GameMap }) {
   useEffect(() => () => { geometry.tiles.dispose(); geometry.boundary.dispose() }, [geometry])
   return (
     <group>
-      <mesh geometry={geometry.tiles} renderOrder={2} raycast={() => {}}>
+      <mesh geometry={geometry.tiles} visible={buildMode} renderOrder={2} raycast={() => {}}>
         <meshBasicMaterial vertexColors transparent opacity={0.28} depthWrite={false} />
       </mesh>
       <lineSegments geometry={geometry.boundary} renderOrder={3} raycast={() => {}}>
-        <lineBasicMaterial color="#e4c77f" transparent opacity={0.9} depthWrite={false} />
+        <lineBasicMaterial color="#e4c77f" transparent opacity={buildMode ? 0.9 : 0.25} depthWrite={false} />
       </lineSegments>
     </group>
   )

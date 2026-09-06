@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { DEFAULT_BALANCE } from "./balance"
-import { createSettlement, purchaseStructure, lumberCamps, creditTimber, creditAdmission, syncTimberSpending, settlementRenown } from "./settlement"
+import { createSettlement, purchaseStructure, woodcutterHuts, creditTimber, creditAdmission, syncTimberSpending, settlementRenown } from "./settlement"
 import { buildingStepAllowed, containsTile, shrineGates } from "./building-navigation"
 import { relicHeading, shrineVisitRoute } from "./shrine-visit"
 import { BUILDING_KINDS, placementProblem, planBuilding } from "./buildings"
@@ -30,7 +30,7 @@ function fixture() {
     map.tiles[z * width + x] = "forest"
     return { x: tileToWorldX(map, x), y: TILE_HEIGHT, z: tileToWorldZ(map, z), species: "oak" }
   })
-  const camp = planBuilding(map, map.buildings, "lumberCamp", 13, 8, 0)!
+  const camp = planBuilding(map, map.buildings, "workshop", 13, 8, 0)!
   const traveler = (id: number, direction: 1 | -1 = 1): Traveler => ({
     id, name: `Traveler ${id}`, type: TRAVELER_TYPES.peasant, direction, pace: 1,
     offset: (10 - direction * 0.2) / (width - 1),
@@ -285,7 +285,7 @@ describe("shrine hospitality", () => {
   })
 })
 
-describe("lumber camps", () => {
+describe("woodcutter huts", () => {
   it.each(["none", "hunger", "thirst", "stamina"] as const)(
     "only rests after a delivery when needs are low (low need: %s)", (need) => {
       const { map, trees, camp, traveler } = fixture()
@@ -301,7 +301,7 @@ describe("lumber camps", () => {
       const s = sim.travelers.get(0)!
       s.employer = camp.id
       s.activity = "hauling"
-      s.workRoute = [{ x: camp.x, z: camp.z + camp.d - 1 }]
+      s.workRoute = [{ x: camp.x, z: camp.z + camp.d }]
       s.carrying = TIMBER_LOAD
       s.hunger = s.thirst = s.stamina = 60
       if (need !== "none") s[need] = 40
@@ -337,7 +337,7 @@ describe("lumber camps", () => {
     const s = sim.travelers.get(0)!
     s.employer = camp.id
     s.activity = "hauling"
-    s.workRoute = [{ x: camp.x, z: camp.z + camp.d - 1 }]
+    s.workRoute = [{ x: camp.x, z: camp.z + camp.d }]
     s.carrying = TIMBER_LOAD
 
     stepSim(sim, [t], map, 1.5, 0.1)
@@ -371,13 +371,13 @@ describe("lumber camps", () => {
   })
 
 
-  it("purchases a working camp and credits deliveries once, even after spending wood", () => {
+  it("purchases a working hut and credits deliveries once, even after spending wood", () => {
     const { map, trees, traveler } = fixture()
     const before = createSettlement()
-    const bought = purchaseStructure(before, map, [], [], "lumberCamp", { x: 13, z: 8 })
+    const bought = purchaseStructure(before, map, [], [], "workshop", { x: 13, z: 8 })
     expect(bought.error).toBeNull()
     expect(bought.settlement.resources).toEqual({ gold: 140, wood: 115 })
-    const blocked = purchaseStructure(before, map, [], [], "lumberCamp", { x: 0, z: 8 })
+    const blocked = purchaseStructure(before, map, [], [], "workshop", { x: 0, z: 8 })
     expect(blocked.error).toBeTruthy()
     expect(blocked.settlement).toBe(before)
     const builtMap = { ...map, buildings: [...map.buildings, ...bought.settlement.structures] }
@@ -385,7 +385,7 @@ describe("lumber camps", () => {
     t.attributes.hunger = 0
     t.attributes.jobless = true
     const sim = createSim([t], builtMap, [], obscure)
-    sim.buildings = lumberCamps(builtMap)
+    sim.buildings = woodcutterHuts(builtMap)
     sim.trees = trees
     syncTimberSpending(sim, bought.settlement.spentWood)
     run(sim, [t], builtMap, 300, () => sim.wood > 0)
@@ -450,7 +450,7 @@ describe("lumber camps", () => {
       stepSim(sim, travelers, map, 1.5, 0.1)
       const workers = Array.from(sim.travelers.values()).filter((s) => s.employer)
       maxWorkers = Math.max(maxWorkers, workers.length)
-      expect(workers.length).toBeLessThanOrEqual(BUILDING_KINDS.lumberCamp.jobs)
+      expect(workers.length).toBeLessThanOrEqual(BUILDING_KINDS.workshop.jobs)
       const reserved = workers.flatMap((s) => s.tree === null ? [] : [s.tree])
       expect(new Set(reserved).size).toBe(reserved.length)
       for (const worker of workers) {
@@ -469,6 +469,26 @@ describe("lumber camps", () => {
     expect(Array.from(sim.travelers.values()).filter((s) => s.employer)).toHaveLength(3)
   })
 
+  it("delivers harvested wood to a storehouse without moving the worker’s job", () => {
+    const { map, camp, trees, traveler } = fixture()
+    const t = traveler(0)
+    map.buildings.push(camp, { ...camp, id: "storehouse-1", buildType: "storehouse", x: 13, z: 12 })
+    const sim = createSim([t], map)
+    sim.buildings = woodcutterHuts(map)
+    sim.trees = [trees[0]]
+    const s = sim.travelers.get(t.id)!
+    s.employer = camp.id
+    s.activity = "idle"
+    s.timer = 0
+    s.x = tileToWorldX(map, camp.x)
+    s.z = tileToWorldZ(map, camp.z + camp.d)
+    run(sim, [t], map, 300, () => sim.wood > 0)
+    expect(sim.wood).toBeGreaterThan(0)
+    expect(s.employer).toBe(camp.id)
+    expect([...sim.piles.values()].every(p => p.campId === "storehouse-1")).toBe(true)
+    expect([...sim.piles.values()].reduce((n, p) => n + p.wood, 0)).toBe(sim.wood)
+  })
+
   it("does not recruit employed travelers", () => {
     const { map, trees, camp, traveler } = fixture()
     const t = traveler(0)
@@ -484,16 +504,16 @@ describe("lumber camps", () => {
 
   it("rejects water, roads, occupied footprints, remote woods and disconnected entrances", () => {
     const { map, camp } = fixture()
-    expect(placementProblem(map, map.buildings, "lumberCamp", 13, 8)).toBeNull()
-    expect(placementProblem(map, [...map.buildings, camp], "lumberCamp", 14, 8)).toBe("occupied")
-    expect(placementProblem(map, map.buildings, "lumberCamp", 10, 4)).toBe("terrain")
-    expect(placementProblem(map, map.buildings, "lumberCamp", 29, 17)).toBe("terrain")
-    expect(placementProblem(map, map.buildings, "lumberCamp", 0, 0)).toBe("noWoods")
+    expect(placementProblem(map, map.buildings, "workshop", 13, 8)).toBeNull()
+    expect(placementProblem(map, [...map.buildings, camp], "workshop", 14, 8)).toBe("occupied")
+    expect(placementProblem(map, map.buildings, "workshop", 10, 4)).toBe("terrain")
+    expect(placementProblem(map, map.buildings, "workshop", 29, 17)).toBe("terrain")
+    expect(placementProblem(map, map.buildings, "workshop", 0, 0)).toBe("noWoods")
     map.tiles[8 * map.width + 13] = "water"
-    expect(placementProblem(map, map.buildings, "lumberCamp", 13, 8)).toBe("terrain")
+    expect(placementProblem(map, map.buildings, "workshop", 13, 8)).toBe("terrain")
     map.tiles[8 * map.width + 13] = "grass"
     for (let z = 0; z < map.depth; z++) map.tiles[z * map.width + 12] = "water"
-    expect(placementProblem(map, map.buildings, "lumberCamp", 13, 8)).toBe("access")
+    expect(placementProblem(map, map.buildings, "workshop", 13, 8)).toBe("access")
   })
 
   it("rejects woods stranded across water even within the work radius", () => {
@@ -503,14 +523,14 @@ describe("lumber camps", () => {
         if (x === 15 || x === 19 || z === 9 || z === 12) map.tiles[z * map.width + x] = "water"
       }
     }
-    expect(placementProblem(map, map.buildings, "lumberCamp", 13, 8)).toBe("noWoods")
+    expect(placementProblem(map, map.buildings, "workshop", 13, 8)).toBe("noWoods")
   })
 
   it("clears simulation snapshots, cut trees and the tool for a new world", () => {
     const { map, traveler } = fixture()
     const store = useBuildStore.getState()
     store.syncResources(createSim([traveler(0)], map))
-    store.setTool("lumberCamp")
+    store.setTool("workshop")
     store.setFelled(new Set([1]))
     store.reset()
     expect(useBuildStore.getState()).toMatchObject({ simulation: null, settlers: [], wood: 0, visits: 0, tool: null })
@@ -543,7 +563,7 @@ describe("tree resources and timber storage", () => {
     s.activity = "idle"
     s.timer = 0
     s.x = tileToWorldX(map, camp.x)
-    s.z = tileToWorldZ(map, camp.z + camp.d - 1)
+    s.z = tileToWorldZ(map, camp.z + camp.d)
     run(sim, [t], map, 30, () => s.activity === "working")
     expect(s.activity).toBe("working")
     expect(s.workTarget).not.toBeNull()
@@ -577,8 +597,7 @@ describe("tree resources and timber storage", () => {
     expect(sim.wood).toBe(TIMBER_LOAD)
     expect(s.x).toBeGreaterThanOrEqual(tileToWorldX(map, camp.x))
     expect(s.x).toBeLessThan(tileToWorldX(map, camp.x + camp.w))
-    expect(s.z).toBeGreaterThanOrEqual(tileToWorldZ(map, camp.z))
-    expect(s.z).toBeLessThan(tileToWorldZ(map, camp.z + camp.d))
+    expect(s.z).toBe(tileToWorldZ(map, camp.z + camp.d))
     for (let i = 0; i < 2 * GAME_DAY_SECONDS / 0.1 && sim.wood < resource.wood; i++) {
       stepSim(sim, [t], map, 1.5, 0.1)
       expect(resource.remainingWood + s.carrying + sim.wood).toBe(resource.wood)

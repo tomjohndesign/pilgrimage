@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "b8e3b275a806bd51346a0e811b2d3f76db6c7270",
-  "releaseCount": 54,
+  "lastProcessedCommit": "48ef309dbcfc7ad868d8d63d60d19a866d528fdc",
+  "releaseCount": 55,
   "releases": [
+    {
+      "version": "0.0.69",
+      "title": "Release 0.0.69",
+      "summary": "Reveal selected building interiors and consolidate jobs and storage (#87)",
+      "commit": "48ef309dbcfc7ad868d8d63d60d19a866d528fdc"
+    },
     {
       "version": "0.0.68",
       "title": "Release 0.0.68",

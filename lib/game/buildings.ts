@@ -1,4 +1,4 @@
-import { rotatedFootprint, lumberCampEntry, type BuildingRotation } from "./building-rotation"
+import { rotatedFootprint, buildingEntry, type BuildingRotation } from "./building-rotation"
 import { settlementRoute } from "./settlement-route"
 import { isWoods, TERRAIN } from "./map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } from "./map/types"
@@ -9,12 +9,12 @@ import { tileAt, tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } fr
  * jobs without knowing how it is drawn.
  *
  * A building is a change to the world that travelers react to (see sim.ts):
- * a lumber camp is a place with work in it, and a jobless traveler who hears
+ * a woodcutter’s hut is a place with work in it, and a jobless traveler who hears
  * of an open place at the junction may settle and take it. The generator
  * places only the hovel; everything here is the player's doing.
  */
 
-export type BuildingKind = "lumberCamp"
+export type BuildingKind = "workshop"
 
 export interface BuildingKindDef {
   id: BuildingKind
@@ -37,13 +37,13 @@ export interface BuildingKindDef {
 }
 
 export const BUILDING_KINDS: Record<BuildingKind, BuildingKindDef> = {
-  lumberCamp: {
-    id: "lumberCamp",
-    label: "Lumber camp",
-    blurb: "Unskilled work felling the woods within reach; timber is carried home and stacked in an open storage yard.",
+  workshop: {
+    id: "workshop",
+    label: "Woodcutter’s hut",
+    blurb: "Three jobs felling nearby woods and carrying timber to storage.",
     w: 2,
     d: 2,
-    height: 0.04,
+    height: 0.85,
     color: "#7a5a3a",
     roofColor: "#54402c",
     jobs: 3,
@@ -72,7 +72,7 @@ function footprintsOverlap(
   return a.x < b.x + b.w && b.x < a.x + a.w && a.z < b.z + b.d && b.z < a.z + a.d
 }
 
-/** Woods within the work radius that a logger can reach from the camp entrance. */
+/** Woods within the work radius that a logger can reach from the building entrance. */
 export function hasWoodsInReach(
   map: GameMap, def: BuildingKindDef, x: number, z: number,
   existing: readonly BuildingDef[] = [],
@@ -86,8 +86,8 @@ export function hasWoodsInReach(
     for (let tx = Math.floor(cx - r); tx <= Math.ceil(cx + r); tx++) {
       if (Math.hypot(tx - cx, tz - cz) > r) continue
       const terrain = tileAt(map, tx, tz)
-      if (terrain && isWoods(terrain) && settlementRoute(map, [...existing, { ...def, ...footprint, rotation, x, z, id: "lumberCamp-preview" }],
-        lumberCampEntry({ ...footprint, rotation, x, z }), { x: tx, z: tz }, true)) return true
+      if (terrain && isWoods(terrain) && settlementRoute(map, [...existing, { ...def, ...footprint, rotation, x, z, id: "workshop-preview" }],
+        buildingEntry({ ...footprint, rotation, x, z }), { x: tx, z: tz }, true)) return true
     }
   }
   return false
@@ -99,13 +99,13 @@ export const PLACEMENT_PROBLEM_LABELS: Record<PlacementProblem, string> = {
   terrain: "Needs open, buildable ground",
   occupied: "Something already stands here",
   noWoods: "No woods within reach",
-  access: "Needs a clear route from the shrine to the camp entrance",
+  access: "Needs a clear route from the shrine to the building entrance",
 }
 
 /**
  * Why a building of this kind can't go with its origin (minimum corner) on
  * tile (x, z), or null if it can: every footprint tile must be buildable
- * ground, nothing may already stand there, and a lumber camp needs trees to
+ * ground, nothing may already stand there, and a woodcutter’s hut needs trees to
  * fell within its reach.
  */
 export function placementProblem(
@@ -126,12 +126,12 @@ export function placementProblem(
   }
   if (existing.some((b) => footprintsOverlap(b, footprint))) return "occupied"
   if (map.site) {
-    const planned = { ...def, ...footprint, rotation, id: "lumberCamp-preview" }
-    const entrance = lumberCampEntry(planned)
+    const planned = { ...def, ...footprint, rotation, id: "workshop-preview" }
+    const entrance = buildingEntry(planned)
     if (!settlementRoute(map, [...existing, planned], map.site.door, entrance)) return "access"
-    // A new footprint must not cut off a camp already connected to the shrine.
-    if (existing.some((b) => b.id.startsWith("lumberCamp-") &&
-      !settlementRoute(map, [...existing, planned], map.site!.door, lumberCampEntry(b)))) return "access"
+    // A new footprint must not cut off a building already connected to the shrine.
+    if (existing.some((b) => (b.buildType === "workshop" || b.buildType === "storehouse" || b.id.startsWith("workshop-")) &&
+      !settlementRoute(map, [...existing, planned], map.site!.door, buildingEntry(b)))) return "access"
   }
   if (def.workRadius > 0 && !hasWoodsInReach(map, def, x, z, existing, rotation)) return "noWoods"
   return null
@@ -152,6 +152,7 @@ export function planBuilding(
   return {
     id: `${kind}-${serial}`,
     kind,
+    buildType: kind,
     label: def.label,
     x,
     z,
