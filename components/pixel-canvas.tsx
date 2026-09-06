@@ -5,8 +5,10 @@ import { Canvas, useFrame, type CanvasProps } from "@react-three/fiber"
 import * as THREE from "three"
 import { CHARACTER_COLOR_LAYER, tagPixelCharacters, withoutPixelCharacters } from "@/lib/game/render/pixel-characters"
 
+import { CHARACTER_PIXELS_PER_UNIT } from "@/lib/game/render/pixel-scale"
+
 export interface PixelationProps {
-  /** Rendered pixels per world unit. Lower is chunkier and cheaper. Default: 25.
+  /** Rendered pixels per world unit. Lower is chunkier and cheaper. Default: native character density.
    * Clamped to 1–64 and GPU texture limits. */
   pixelsPerUnit?: number
   /** Turn off the low-resolution world render for comparison. Default: true. */
@@ -124,6 +126,7 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
       right: new THREE.Vector3(),
       up: new THREE.Vector3(),
       center: new THREE.Vector3(),
+      displaySize: new THREE.Vector2(),
       stage: { phase: "all", scale: uniforms.uScale.value, offset: uniforms.uOffset.value } as PixelSceneStage,
     }
   }, [])
@@ -153,7 +156,10 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
       const width = (cam.right - cam.left) / cam.zoom
       const height = (cam.top - cam.bottom) / cam.zoom
       const maxSize = Math.floor(gl.capabilities.maxTextureSize / BUFFER_STEP) * BUFFER_STEP
-      const density = Math.min(pixelsPerUnit, (maxSize - 2) / Math.max(width, height))
+      gl.getDrawingBufferSize(r.displaySize)
+      // Match character detail without drawing pixels smaller than the display.
+      const density = Math.min(pixelsPerUnit, r.displaySize.x / width,
+        r.displaySize.y / height, (maxSize - 2) / Math.max(width, height))
       // Two extra texels cover the subpixel camera offset at either edge.
       const bufferWidth = Math.ceil((width * density + 2) / BUFFER_STEP) * BUFFER_STEP
       const bufferHeight = Math.ceil((height * density + 2) / BUFFER_STEP) * BUFFER_STEP
@@ -227,13 +233,13 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
 export function PixelCanvas({
   children,
   style,
-  pixelsPerUnit = 25,
+  pixelsPerUnit = CHARACTER_PIXELS_PER_UNIT,
   pixelated = true,
   outputDpr = 1,
   ...props
 }: Omit<CanvasProps, "dpr" | "gl"> & PixelationProps) {
   const renderer = useMemo<PixelRenderer>(() => ({ scene: { current: null }, frame: { current: null }, characters: new Set(), worldTexel: { value: 0 } }), [])
-  const density = Number.isFinite(pixelsPerUnit) ? THREE.MathUtils.clamp(pixelsPerUnit, 1, 64) : 25
+  const density = Number.isFinite(pixelsPerUnit) ? THREE.MathUtils.clamp(pixelsPerUnit, 1, 64) : CHARACTER_PIXELS_PER_UNIT
   const dpr = Number.isFinite(outputDpr) ? THREE.MathUtils.clamp(outputDpr, 0.5, 2) : 1
   return (
     <Canvas

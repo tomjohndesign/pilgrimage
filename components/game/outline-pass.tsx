@@ -51,6 +51,7 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform bool uCharacterPass;
   uniform float uCharacterIdMin;
   uniform vec2 uTexel;
+  uniform vec2 uPixelOffset;
   uniform int uMode; // 1 = overlap only, 2 = full silhouette
   uniform vec3 uColor;
   uniform float uSelectedId;
@@ -89,13 +90,16 @@ const FRAGMENT_SHADER = /* glsl */ `
   }
 
   void main() {
-    float idC = idAt(vUv);
-    float dC = texture2D(tDepth, vUv).x;
+    // Sample selection and overlap edges on the scenery pixel grid even when
+    // character IDs are drawn at display resolution. This changes only edges.
+    vec2 pixelUv = (floor(vUv / uTexel + uPixelOffset) + 0.5 - uPixelOffset) * uTexel;
+    float idC = idAt(pixelUv);
+    float dC = texture2D(tDepth, pixelUv).x;
     if (uCharacterSelected) {
-      vec4 character = texture2D(tCharacter, vUv);
+      vec4 character = texture2D(tCharacter, pixelUv);
       if (character.a > 0.5) {
         bool hidden = abs(idC - uSelectedId) > 0.5
-          && texture2D(tCharacterDepth, vUv).x > dC + 1.0e-5;
+          && texture2D(tCharacterDepth, pixelUv).x > dC + 1.0e-5;
         if (hidden) {
           // A 50% mask over just the overlapping silhouette lets the real
           // character show through while keeping the foreground readable.
@@ -106,10 +110,10 @@ const FRAGMENT_SHADER = /* glsl */ `
         finishColor(); return;
       }
       bool characterEdge =
-        texture2D(tCharacter, vUv + vec2(uTexel.x, 0.0)).a > 0.5 ||
-        texture2D(tCharacter, vUv - vec2(uTexel.x, 0.0)).a > 0.5 ||
-        texture2D(tCharacter, vUv + vec2(0.0, uTexel.y)).a > 0.5 ||
-        texture2D(tCharacter, vUv - vec2(0.0, uTexel.y)).a > 0.5;
+        texture2D(tCharacter, pixelUv + vec2(uTexel.x, 0.0)).a > 0.5 ||
+        texture2D(tCharacter, pixelUv - vec2(uTexel.x, 0.0)).a > 0.5 ||
+        texture2D(tCharacter, pixelUv + vec2(0.0, uTexel.y)).a > 0.5 ||
+        texture2D(tCharacter, pixelUv - vec2(0.0, uTexel.y)).a > 0.5;
       if (characterEdge) {
         gl_FragColor = vec4(uSelectionColor, uSelectionOutlineOpacity);
         finishColor(); return;
@@ -123,10 +127,10 @@ const FRAGMENT_SHADER = /* glsl */ `
     // Nearer objects still hide the selected object and its highlight.
     if (!uCharacterSelected && uSelectedId > 0.5) {
       bool selectedEdge =
-        selectedNeighbour(vUv + vec2(uTexel.x, 0.0), dC) ||
-        selectedNeighbour(vUv - vec2(uTexel.x, 0.0), dC) ||
-        selectedNeighbour(vUv + vec2(0.0, uTexel.y), dC) ||
-        selectedNeighbour(vUv - vec2(0.0, uTexel.y), dC);
+        selectedNeighbour(pixelUv + vec2(uTexel.x, 0.0), dC) ||
+        selectedNeighbour(pixelUv - vec2(uTexel.x, 0.0), dC) ||
+        selectedNeighbour(pixelUv + vec2(0.0, uTexel.y), dC) ||
+        selectedNeighbour(pixelUv - vec2(0.0, uTexel.y), dC);
       if (selectedEdge) {
         gl_FragColor = vec4(uSelectionColor, uSelectionOutlineOpacity);
         finishColor(); return;
@@ -135,10 +139,10 @@ const FRAGMENT_SHADER = /* glsl */ `
     if (uMode == 0) discard;
     if (uMode == 1 && idC < 0.5) discard; // overlap halos land only on objects
     bool edge =
-      occludedBy(vUv + vec2(uTexel.x, 0.0), idC, dC) ||
-      occludedBy(vUv - vec2(uTexel.x, 0.0), idC, dC) ||
-      occludedBy(vUv + vec2(0.0, uTexel.y), idC, dC) ||
-      occludedBy(vUv - vec2(0.0, uTexel.y), idC, dC);
+      occludedBy(pixelUv + vec2(uTexel.x, 0.0), idC, dC) ||
+      occludedBy(pixelUv - vec2(uTexel.x, 0.0), idC, dC) ||
+      occludedBy(pixelUv + vec2(0.0, uTexel.y), idC, dC) ||
+      occludedBy(pixelUv - vec2(0.0, uTexel.y), idC, dC);
     if (!edge) discard;
     gl_FragColor = vec4(uColor, 1.0);
     finishColor();
@@ -224,6 +228,7 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
       uCharacterPass: { value: false },
       uCharacterIdMin: { value: MAX_OBJECT_ID - 0x2000 + 1 },
       uTexel: { value: new THREE.Vector2() },
+      uPixelOffset: { value: new THREE.Vector2() },
       uMode: { value: 0 },
       uColor: { value: new THREE.Color(OUTLINE_COLOR) },
       uSelectedId: { value: 0 },
@@ -323,8 +328,12 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
         // selections and overlap halos equally thick through zoom and DPR changes.
         if (characterPass) {
           pass.uniforms.uTexel.value.set(1 / (target.width * stage.scale.x), 1 / (target.height * stage.scale.y))
+          pass.uniforms.uPixelOffset.value.set(
+            ((1 - stage.scale.x) * 0.5 + stage.offset.x) * target.width,
+            ((1 - stage.scale.y) * 0.5 + stage.offset.y) * target.height)
         } else {
           pass.uniforms.uTexel.value.set(1 / ids.width, 1 / ids.height)
+          pass.uniforms.uPixelOffset.value.set(0, 0)
         }
         pass.uniforms.uMode.value = MODE_INT[mode]
         pass.uniforms.uSelectedId.value = selectedId

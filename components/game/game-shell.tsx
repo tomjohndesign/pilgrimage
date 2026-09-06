@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react"
 
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
+import { CHARACTER_PIXELS_PER_UNIT } from "@/lib/game/render/pixel-scale"
 import { DEFAULT_MOVEMENT } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
 import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER } from "@/lib/game/map/road"
@@ -155,7 +156,7 @@ export function GameShell({
   })
   const [pixelationOverrides, setPixelationOverrides] = useState<PixelationProps>({})
   const pixelationSettings = {
-    pixelsPerUnit: pixelationOverrides.pixelsPerUnit ?? pixelation?.pixelsPerUnit ?? 25,
+    pixelsPerUnit: pixelationOverrides.pixelsPerUnit ?? pixelation?.pixelsPerUnit ?? CHARACTER_PIXELS_PER_UNIT,
     outputDpr: pixelationOverrides.outputDpr ?? pixelation?.outputDpr ?? 1,
     pixelated: pixelationOverrides.pixelated ?? pixelation?.pixelated ?? true,
   }
