@@ -56,11 +56,11 @@ export function batchDetails(parts: BuildingPart[]): BuildingPart[] {
 }
 
 /** Shared procedural building; cutting away the shell exposes the relic inside. */
-export function BuildingModel({ recipe, cutaway = false, idColor, onClick }: {
-  recipe: BuildingRecipe; cutaway?: boolean; idColor?: THREE.Color; onClick?: (event: ThreeEvent<MouseEvent>) => void
+export function BuildingModel({ recipe, cutaway = false, idColor, onClick, ink = true }: {
+  recipe: BuildingRecipe; cutaway?: boolean; idColor?: THREE.Color; onClick?: (event: ThreeEvent<MouseEvent>) => void; ink?: boolean
 }) {
   const parts = useMemo(() => batchDetails(buildingParts(recipe)), [recipe])
-  return <group name="ink-and-thatch-building">{parts.filter((p) => !cutaway || p.layer === "base").map((part) => <Part key={part.name} part={part} idColor={idColor} onClick={onClick} />)}</group>
+  return <group name="ink-and-thatch-building">{parts.filter((p) => !cutaway || p.layer === "base").map((part) => <Part key={part.name} part={part} idColor={idColor} onClick={onClick} ink={ink} />)}</group>
 }
 
 /** Ghosts retain every surface, with frame lines only on structural parts. */

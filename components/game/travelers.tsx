@@ -18,6 +18,7 @@ import type { Relic } from "@/lib/game/relic"
 import type { TreePlacement } from "@/lib/game/trees/placement"
 import { tileAt, worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
 import { createSim, simRegistry, stepSim } from "@/lib/game/sim"
+import { relicHeading } from "@/lib/game/shrine-visit"
 import type { Traveler } from "@/lib/game/travelers"
 import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
@@ -29,6 +30,7 @@ import {
 } from "@/lib/game/render/outline"
 
 import { TravelerFigure } from "./traveler-figure"
+import { AdmissionEffects } from "./admission-effects"
 import { cartLoadout, SHOP_SECONDS } from "@/lib/game/transport/assets"
 
 /**
@@ -147,6 +149,9 @@ export function Travelers({
         group.rotation.y += turn * blend
       }
       const workTree = s.tree === null ? undefined : trees[s.tree]
+      if (s.activity === "visiting") {
+        group.rotation.y = relicHeading(map, s) ?? group.rotation.y
+      }
       group.userData.workTree = workTree
       if (!playback.paused && !moving && workTree && (s.activity === "working" || s.activity === "gathering")) {
         group.rotation.y = Math.atan2(workTree.x - s.x, workTree.z - s.z)
@@ -187,6 +192,7 @@ export function Travelers({
 
   return (
     <group>
+      <AdmissionEffects sim={sim} characterScale={characterScale} />
       {travelers.map((traveler, index) => {
         const selected = isSelected(selection, { kind: "traveler", id: traveler.id })
         const idColor = new THREE.Color(...encodeObjectId(travelerObjectId(index)))

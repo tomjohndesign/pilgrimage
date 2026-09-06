@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "e5f01b9bd2421c426e7047b659761acfcfd8f2f9",
-  "releaseCount": 43,
+  "lastProcessedCommit": "9bee01a7c43eabc51026a988a06be65a2dcf95bf",
+  "releaseCount": 45,
   "releases": [
+    {
+      "version": "0.0.59",
+      "title": "Release 0.0.59",
+      "summary": "Add paid relic visits with gate access and payment effects (#79)",
+      "commit": "9bee01a7c43eabc51026a988a06be65a2dcf95bf"
+    },
+    {
+      "version": "0.0.58",
+      "title": "Release 0.0.58",
+      "summary": "Fix character outline alignment and building occlusion (#78)",
+      "commit": "95453ad8552777921096eb8768ab95918dfc9acf"
+    },
     {
       "version": "0.0.57",
       "title": "Release 0.0.57",

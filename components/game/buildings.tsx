@@ -44,7 +44,7 @@ export function Buildings({ map }: { map: GameMap }) {
         if (building.buildType === "lumberCamp" || building.id.startsWith("lumberCamp-")) {
           return (
             <group key={building.id} name={`lumber-yard-${building.id}`} position={[centreX, baseY, centreZ]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
-              <StructureModel parts={models[index]} idColor={idColors[index]} />
+              <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} />
               {piles.filter((pile) => pile.campId === building.id).map((pile) => {
                 const [x, z] = pileOffset(pile.slot)
                 return <group key={pile.id} position={[x, 0.03, z]}><WoodPile pile={pile} objectId={pileObjectId(piles.indexOf(pile))} /></group>
@@ -55,7 +55,7 @@ export function Buildings({ map }: { map: GameMap }) {
 
         return (
           <group key={building.id} position={[centreX, baseY, centreZ]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
-            <StructureModel parts={models[index]} idColor={idColors[index]} />
+            <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} />
           </group>
         )
       })}
