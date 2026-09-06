@@ -4,6 +4,8 @@ import type { BuildingRecipe } from "./style"
 
 /** Scale of authored timber, stone and straw details, independent of tile size. */
 export const BUILDING_DETAIL_SCALE = 0.5
+/** Clear terrain z-fighting while staying below the sprite's ground clearance. */
+export const BUILDING_FLOOR_TOP = 0.001
 export const BUILDING_BASE_HEIGHT = 0.08
 export const BUILDING_EAVE_OFFSET = 0.04
 export const HOVEL_WALL_HEIGHT = 0.9

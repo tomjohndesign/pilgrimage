@@ -1,6 +1,6 @@
 import { earlyBuildingParts } from "./early-geometry"
 import { BUILDING_STYLE, isEarlyBuilding, type BuildingRecipe } from "./style"
-import { BUILDING_DETAIL_SCALE } from "./dimensions"
+import { BUILDING_DETAIL_SCALE, BUILDING_FLOOR_TOP } from "./dimensions"
 import { HOVEL_DOOR_HEIGHT, HOVEL_DOOR_WIDTH } from "../world-scale"
 
 export type Vec3 = [number, number, number]
@@ -23,7 +23,7 @@ function constructionParts(recipe: BuildingRecipe, doorOffset: number): Building
   const parts: BuildingPart[] = []
   const box = (name: string, layer: BuildingPart["layer"], position: Vec3, size: Vec3, color: string, rotation?: Vec3) => parts.push({ name, layer, position, size, color, rotation })
   const face = (name: string, layer: BuildingPart["layer"], vertices: number[], color: string) => parts.push({ name, layer, position: [0, 0, 0], vertices, color })
-  box("floor", "base", [0, 0.06, 0], [w, 0.12, d], "#a39170")
+  box("floor", "base", [0, BUILDING_FLOOR_TOP / BUILDING_DETAIL_SCALE - 0.06, 0], [w, 0.12, d], "#a39170")
   // Blocks leave real mortar gaps without a texture dependency.
   for (const side of [-1, 1]) {
     for (let i = 0; i < Math.ceil(w); i++) box(`stone-x-${side}-${i}`, "base", [-w / 2 + (i + 0.5) * w / Math.ceil(w), base / 2, side * (d / 2 - 0.1)], [w / Math.ceil(w) - 0.025, base, 0.22], p.stone)
@@ -41,7 +41,7 @@ function constructionParts(recipe: BuildingRecipe, doorOffset: number): Building
   for (const x of [door - 0.46, door + 0.46]) box(`door-post-${x}`, "wall", [x, base + doorHeight / 2, front + 0.09], [0.12, doorHeight, 0.17], p.timber)
   box("doorway-shadow", "wall", [door, base + doorHeight / 2, front - 0.12], [doorWidth, doorHeight, 0.03], p.ink)
   box("door-lintel", "wall", [door, base + doorHeight, front + 0.09], [1.05, 0.14, 0.18], p.timber)
-  box("threshold", "base", [door, 0.13, front + 0.11], [1, 0.1, 0.4], p.stone)
+  box("threshold", "base", [door, BUILDING_FLOOR_TOP / BUILDING_DETAIL_SCALE - 0.05, front + 0.11], [1, 0.1, 0.4], p.stone)
   for (const x of [-w / 2, w / 2]) {
     for (const z of [-d / 2, 0, d / 2]) box(`oak-post-${x}-${z}`, "wall", [x, base + h / 2, z], [0.15, h + 0.08, 0.15], p.timber)
     box(`oak-sill-${x}`, "wall", [x, base + 0.18, 0], [0.18, 0.12, d], p.timber)

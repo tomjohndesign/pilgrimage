@@ -3,6 +3,7 @@ import { Box3, BoxGeometry, BufferGeometry, Float32BufferAttribute, Matrix4, Eul
 import { PERSON_HEIGHT, HOVEL_DOOR_HEIGHT, HOVEL_DOOR_WIDTH } from "../world-scale"
 import { buildingDimensions } from "./dimensions"
 import { buildingParts } from "./geometry"
+import { structureParts } from "./structure"
 import { LEGACY_RECIPE as DEFAULT_RECIPE, VARIANTS, buildingPrompt, recipeSchema } from "./style"
 
 describe("building art contract", () => {
@@ -38,6 +39,18 @@ describe("building art contract", () => {
       expect(left.position[0] + left.size![0]/2).toBeCloseTo(-HOVEL_DOOR_WIDTH / 2)
       expect(right.position[0] - right.size![0]/2).toBeCloseTo(HOVEL_DOOR_WIDTH / 2)
       expect(parts.some((p) => p.name === "ridge-cap")).toBe(true)
+    }
+  })
+  it("sets floors, thresholds and open yards at the ground walking plane", () => {
+    const surfaces = VARIANTS.flatMap(variant => buildingParts({ ...DEFAULT_RECIPE, variant: variant.id })
+      .filter(p => p.name === "floor" || p.name === "threshold"))
+    surfaces.push(...structureParts({ buildType: "lumberCamp", w: 3, d: 3, height: 0.5, color: "#000000", roofColor: "#000000" })
+      .filter(p => p.name === "yard"))
+    for (const part of surfaces) {
+      expect(part.position[1] - part.size![1] / 2).toBeLessThan(0)
+      const top = part.position[1] + part.size![1] / 2
+      expect(top).toBeGreaterThan(0)
+      expect(top).toBeLessThan(0.005)
     }
   })
   it("sizes the entrance for a real game character and keeps the hovel below four people tall", () => {

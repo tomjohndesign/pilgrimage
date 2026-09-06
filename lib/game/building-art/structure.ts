@@ -1,6 +1,7 @@
 import type { BuildingDef } from "../map/types"
 import { buildingParts, type BuildingPart } from "./geometry"
 import { EARLY_BUILDINGS, earlyBuildingRecipe } from "./style"
+import { BUILDING_FLOOR_TOP } from "./dimensions"
 
 export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor">
 
@@ -16,7 +17,7 @@ export function structureParts(building: StructureAppearance): BuildingPart[] {
   const box = (name: string, layer: BuildingPart["layer"], position: BuildingPart["position"], size: BuildingPart["size"], color: string): BuildingPart =>
     ({ name, layer, position, size, color })
   if (building.buildType === "lumberCamp") return [
-    box("yard", "base", [0, 0.022, 0], [building.w * 0.98, 0.044, building.d * 0.98], "#a18a60"),
+    box("yard", "base", [0, BUILDING_FLOOR_TOP - 0.022, 0], [building.w * 0.98, 0.044, building.d * 0.98], "#a18a60"),
     ...[-1, 1].flatMap((x) => [-1, 1].map((z) => box(`peg-${x}-${z}`, "wall",
       [x * (building.w / 2 - 0.12), 0.13, z * (building.d / 2 - 0.12)], [0.08, 0.26, 0.08], "#705135"))),
   ]

@@ -48,6 +48,23 @@ describe("early medieval building kit", () => {
     expect(parts.some(p=>p.name.startsWith("paving-"))).toBe(true)
     expect(parts.filter(p=>p.name.startsWith("loose-plank-"))).toHaveLength(3)
   })
+  it("keeps ground floors and paving below character foot clearance", () => {
+    for (const preset of EARLY_BUILDINGS.filter(p => p.id !== "storehouse")) {
+      for (const seed of [0, 17, 99999]) {
+        const parts = buildingParts({ ...earlyBuildingRecipe(preset.id), seed })
+        const floor = bounds(parts.find(p => p.name === "floor")!)
+        expect(floor.min.y).toBeLessThan(0)
+        expect(floor.max.y).toBeGreaterThan(0)
+        expect(floor.max.y).toBeLessThan(0.005)
+        for (const paving of parts.filter(p => p.name.startsWith("paving-"))) {
+          const stone = bounds(paving)
+          expect(stone.min.y).toBeLessThan(0)
+          expect(stone.max.y).toBeGreaterThan(floor.max.y)
+          expect(stone.max.y).toBeLessThanOrEqual(0.003)
+        }
+      }
+    }
+  })
   it("marks religious structures with crosses while keeping all four gateways open", () => {
     const enclosure=buildingParts(DEFAULT_RECIPE)
     expect(enclosure.filter(p=>p.name.startsWith("gate-cross-upright-"))).toHaveLength(4)
