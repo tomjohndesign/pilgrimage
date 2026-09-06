@@ -1,6 +1,6 @@
 import { makeRng } from "../rng"
 import { TILE_HEIGHT } from "./terrain"
-import type { GameMap } from "./types"
+import type { BuildingDef, GameMap } from "./types"
 import { ROUTE_DIRS } from "./route"
 
 /** Independent generation and display controls; heights are in tile units. */
@@ -129,10 +129,8 @@ export function generateElevation(seed: number, width: number, depth: number, wa
   return { settings, height, corners: [], slope: [], cliffs: [] }
 }
 
-/** Rebuild after grading a founding footprint. Water corners retain their channel levels. */
-export function finishElevation(e: ElevationInfo, width: number, depth: number, water: Uint8Array, surface: number[]): void {
+function updateElevationEdges(e: ElevationInfo, width: number, depth: number, water: Uint8Array, surface: number[]): void {
   e.slope = e.height.map(() => 0); e.cliffs = e.height.map(() => 0)
-  e.corners = new Array(e.height.length * 4)
   for (let z = 0; z < depth; z++) for (let x = 0; x < width; x++) {
     const i = z * width + x, h = water[i] ? surface[i] : e.height[i]
     ROUTE_DIRS.forEach(([dx, dz], side) => {
@@ -143,6 +141,12 @@ export function finishElevation(e: ElevationInfo, width: number, depth: number, 
       if (delta >= e.settings.cliffThreshold) e.cliffs[i] |= 1 << side
     })
   }
+}
+
+/** Rebuild after grading a founding footprint. Water corners retain their channel levels. */
+export function finishElevation(e: ElevationInfo, width: number, depth: number, water: Uint8Array, surface: number[]): void {
+  updateElevationEdges(e, width, depth, water, surface)
+  e.corners = new Array(e.height.length * 4)
   // At each lattice vertex, connected dry tiles share one corner height.
   // Group by walkable edges, so a slope never develops a crack beside a cliff.
   for (let vz = 0; vz <= depth; vz++) for (let vx = 0; vx <= width; vx++) {
@@ -171,6 +175,46 @@ export function finishElevation(e: ElevationInfo, width: number, depth: number, 
       for (const p of group) e.corners[p.i * 4 + p.corner] = h
     }
   }
+}
+
+/**
+ * Cut and fill a purchased footprint at the height shown by its placement ghost.
+ * Pin every corner, including the perimeter: averaging tile heights alone would
+ * let the surrounding slope poke back through the floor. Unoccupied dry tiles
+ * sharing those corners meet the pad; existing foundations and water stay put.
+ * Adjacent buildings at different heights retain a small terrace between them.
+ */
+export function levelBuildingGround(map: GameMap, building: Pick<BuildingDef, "x" | "z" | "w" | "d">): ElevationInfo | undefined {
+  const original = map.elevation
+  if (!original) return undefined
+  const { x, z, w, d } = building
+  const foundation = groundHeight(map, x + (w - 1) / 2, z + (d - 1) / 2) - TILE_HEIGHT
+  const elevation = { ...original, height: [...original.height], corners: [...original.corners] }
+  const inside = (tx: number, tz: number) => tx >= x && tx < x + w && tz >= z && tz < z + d
+  const water = Uint8Array.from(map.tiles, (terrain, i) =>
+    (map.water ? map.water.depth[i] > 0 : terrain === "water" || terrain === "bridge") ? 1 : 0)
+  for (let tz = z; tz < z + d; tz++) for (let tx = x; tx < x + w; tx++) {
+    elevation.height[tz * map.width + tx] = foundation
+  }
+  for (let vz = z; vz <= z + d; vz++) for (let vx = x; vx <= x + w; vx++) {
+    const touching: Array<{ x: number; z: number; i: number; corner: number }> = []
+    for (let dz = -1; dz <= 0; dz++) for (let dx = -1; dx <= 0; dx++) {
+      const tx = vx + dx, tz = vz + dz
+      if (tx < 0 || tz < 0 || tx >= map.width || tz >= map.depth) continue
+      touching.push({ x: tx, z: tz, i: tz * map.width + tx, corner: (dx === -1 ? 1 : 0) + (dz === -1 ? 2 : 0) })
+    }
+    const sharedHeights = touching.filter((t) => inside(t.x, t.z)).map((t) => original.corners[t.i * 4 + t.corner])
+    for (const t of touching) {
+      if (water[t.i]) continue
+      if (!inside(t.x, t.z)) {
+        if (!sharedHeights.includes(original.corners[t.i * 4 + t.corner])) continue
+        if (map.buildings.some((b) => t.x >= b.x && t.x < b.x + b.w && t.z >= b.z && t.z < b.z + b.d)) continue
+      }
+      elevation.corners[t.i * 4 + t.corner] = foundation
+    }
+  }
+  updateElevationEdges(elevation, map.width, map.depth, water, map.water?.surface ?? original.height)
+  return elevation
 }
 
 export function elevationStep(e: ElevationInfo | undefined, a: number, b: number): number {
