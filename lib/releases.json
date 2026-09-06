@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "4cf2d4067f9de00eaa74c31ea5abef88ea91ac7a",
-  "releaseCount": 39,
+  "lastProcessedCommit": "882bd1d8c8072a9693a382774ccbecec5af45b22",
+  "releaseCount": 40,
   "releases": [
+    {
+      "version": "0.0.54",
+      "title": "Release 0.0.54",
+      "summary": "Add playground buildings with matching build tiles and placement previews (#75)",
+      "commit": "882bd1d8c8072a9693a382774ccbecec5af45b22"
+    },
     {
       "version": "0.0.53",
       "title": "Release 0.0.53",
