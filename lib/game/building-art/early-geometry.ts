@@ -5,8 +5,11 @@ import type { BuildingRecipe } from "./style"
 /** The relic rests on the same slab in the game and in the workshop. */
 export const RELIC_TABLE_TOP = 0.44
 
+export type SettlementBuildingType = "shelter" | "workshop" | "hall" | "garden" | "cross" | "lumberCamp" | "market" | "guard-post"
+type ConstructionRecipe = Omit<BuildingRecipe, "variant"> & { variant: BuildingRecipe["variant"] | SettlementBuildingType }
+
 /** Small early medieval structures built directly in tile units. No plot padding. */
-export function earlyBuildingParts(recipe: BuildingRecipe): BuildingPart[] {
+export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
   const parts: BuildingPart[] = [], { width, depth, wallHeight: h, roofRise: rise, variant } = recipe
   const w = width / 2, d = depth / 2, floor = variant === "storehouse" ? 0.3 : 0.06
   let n = 0
@@ -58,6 +61,46 @@ export function earlyBuildingParts(recipe: BuildingRecipe): BuildingPart[] {
     box(`wool-cover-${index}`,"base",[x,floor+.08,z+.06],[.28,.035,length*.65],index%2?"#817864":"#716e57",undefined,false)
     box(`rolled-blanket-${index}`,"base",[x,floor+.1,z-length*.32],[.3,.11,.12],"#a3987a",undefined,false)
   }
+  function bench(name: string, x: number, z: number, length: number, top = .3) {
+    for (const end of [-1, 1]) pole(`${name}-leg-${end}`, [x+end*length*.35,floor,z], [x+end*length*.35,floor+top,z], .035)
+    box(`${name}-seat`, "wall", [x,floor+top,z], [length,.045,.18], palette.paleWood, undefined, false)
+  }
+  if (variant === "garden") {
+    // Two herb beds leave a narrow flagstone walk between them.
+    for (const side of [-1, 1]) {
+      const cx = side*width*.26, bedWidth = width*.36, bedDepth = depth-.2
+      box(`herb-bed-${side}`, "base", [cx,floor+.025,0], [bedWidth,.05,bedDepth], "#655640", undefined, false)
+      for (const edge of [-1, 1]) {
+        pole(`bed-edge-long-${side}-${edge}`, [cx+edge*bedWidth/2,floor+.055,-bedDepth/2], [cx+edge*bedWidth/2,floor+.055,bedDepth/2], .025, "base")
+        pole(`bed-edge-short-${side}-${edge}`, [cx-bedWidth/2,floor+.055,edge*bedDepth/2], [cx+bedWidth/2,floor+.055,edge*bedDepth/2], .025, "base")
+      }
+      const rows = Math.max(2,Math.floor(bedDepth/.2)), cols = Math.max(2,Math.floor(bedWidth/.2))
+      for (let row=0;row<rows;row++) for (let col=0;col<cols;col++) {
+        const px=cx+(col-(cols-1)/2)*bedWidth/cols, pz=(row-(rows-1)/2)*bedDepth/rows, y=floor+.09+random()*.04
+        for (let leaf=0;leaf<3;leaf++) box(`herb-${side}-${row}-${col}-${leaf}`, "base", [px,y+leaf*.015,pz], [.12,.035,.045], ["#657451","#7c8960","#92966b"][leaf], [0,leaf*Math.PI/3,.15], false)
+      }
+    }
+    const stones = Math.max(2,Math.ceil(depth/.23))
+    for (let i=0;i<stones;i++) flag(`garden-path-${i}`,0,-d+(i+.5)*depth/stones,width*.12,depth/stones-.025,floor,.025,palette.stone)
+    return parts
+  }
+  if (variant === "cross") {
+    flag("cross-footing",0,0,Math.min(.55,width*.7),Math.min(.45,depth*.7),floor,.1,palette.stone)
+    box("cross-upright","wall",[0,floor+h/2,0],[.105,h,.095],palette.wood)
+    box("cross-arm","wall",[0,floor+h*.73,0],[Math.min(.65,width*.8),.095,.095],palette.paleWood)
+    box("cross-peg","wall",[0,floor+h*.73,.055],[.035,.035,.025],palette.darkWood,undefined,false)
+    for (const side of [-1,1]) pole(`cross-grain-${side}`,[side*.025,floor+.2,.049],[side*.02,floor+h-.055,.049],.004,"wall",palette.darkWood)
+    return parts
+  }
+  if (variant === "lumberCamp") {
+    // Keep the yard open: its four timber stacks are live simulation objects.
+    const edgeX=w-.1, edgeZ=d-.1
+    for (const x of [-edgeX,edgeX]) for (const z of [-edgeZ,edgeZ]) pole(`yard-post-${x}-${z}`,[x,floor,z],[x,.32,z],.045)
+    for (const x of [-edgeX,edgeX]) pole(`yard-side-${x}`,[x,.2,-edgeZ],[x,.2,edgeZ],.025)
+    pole("yard-back",[-edgeX,.2,-edgeZ],[edgeX,.2,-edgeZ],.025)
+    for (let i=0;i<3;i++) box(`yard-offcut-${i}`,"base",[-w+.16+i*.06,.09,-d+.19],[.04,.035,.25],palette.paleWood,[0,.25,0],false)
+    return parts
+  }
   if(variant === "enclosure") {
     const nx=Math.ceil(width/.36),nz=Math.ceil(depth/.38)
     for(let row=0;row<nz;row++) for(let col=0;col<nx;col++) {
@@ -101,7 +144,7 @@ export function earlyBuildingParts(recipe: BuildingRecipe): BuildingPart[] {
     box("grain-sack","base",[0,floor+.16,-depth*.12],[Math.min(.3,width*.3),.27,Math.min(.25,depth*.3)],"#a29978",undefined,false)
   } else for(const a of [-x,x]) for(const b of [-z,z]) pole(`earthfast-post-${a}-${b}`,[a,0,b],[a,eave+(variant === "wood-shelter" && b < 0 ? rise : 0)+.06,b],.043)
 
-  if(variant === "shepherd-hut" || variant === "storehouse") {
+  if(variant === "shepherd-hut" || variant === "storehouse" || variant === "hall") {
     const door=Math.min(.44,width*.5), left=(width-.26-door)/2
     screen("rear",[-x,0,-z],[x,0,-z],h,true)
     for(const a of [-x,x]) screen(`side-${a}`,[a,0,-z],[a,0,z],h,variant!=="storehouse")
@@ -110,16 +153,34 @@ export function earlyBuildingParts(recipe: BuildingRecipe): BuildingPart[] {
     for(let i=0;i<4;i++) box(`door-board-${i}`,"wall",[-door*.38+i*door*.24,floor+h*.43,z+.013],[door*.22,h*.86,.025],i%2?palette.wood:palette.paleWood,undefined,false)
     for(const y of [.2,.7]) box(`door-rail-${y}`,"wall",[0,floor+h*y,z+.04],[door,.04,.03],palette.darkWood,undefined,false)
     if(variant === "shepherd-hut") bedding(-width*.2,-depth*.15,0,Math.min(.7,depth*.6))
+    if(variant === "hall") {
+      bench("hall-bench",0,-depth*.25,width*.65)
+      // A pegged lintel and sheltered threshold distinguish the gathering hall.
+      pole("hall-lintel",[-width*.24,eave-.08,z+.045],[width*.24,eave-.08,z+.045],.045)
+      flag("hall-threshold",0,z-.04,Math.min(.62,width*.6),.2,floor,.025,palette.stone)
+    }
   } else {
     screen("rear",[-x,0,-z],[x,0,-z],h*.9)
     for(const a of [-x,x]) screen(`windbreak-${a}`,[a,0,-z],[a,0,z*.3],h*.6)
-    if(variant === "monk-shelter") {
+    if(variant === "monk-shelter" || variant === "shelter") {
       const beds=Math.max(1,Math.floor((width-.3)/.55))
       for(let i=0;i<beds;i++) bedding((i-(beds-1)/2)*.5,-depth*.08,i,Math.min(.72,depth*.6))
+      if (variant === "shelter") bench("pilgrim-bench",0,depth*.3,width*.65,.24)
+    } else if (variant === "market") {
+      bench("stall-counter",0,depth*.23,width*.72,.38)
+      for (let i=0;i<3;i++) box(`market-sack-${i}`,"base",[(i-1)*width*.2,floor+.15,-depth*.16],[width*.16,.3,depth*.25],[palette.strawDark,"#8b8067",palette.earth][i],undefined,false)
+    } else if (variant === "guard-post") {
+      bench("watch-seat",0,-depth*.16,width*.6,.24)
+      pole("watch-staff",[x-.08,floor,-z+.06],[x-.08,eave+.1,-z+.06],.02)
     } else {
       for(let row=0;row<3;row++) for(let i=0;i<Math.max(2,Math.floor(width/.14)-3-row);i++) {
         const count=Math.max(2,Math.floor(width/.14)-3-row),px=(i-(count-1)/2)*.12
         pole(`firewood-${row}-${i}`,[px,floor+.065+row*.085,-depth*.2],[px+.008,floor+.065+row*.085,depth*.18],.052,"base",i%3?palette.wood:palette.paleWood)
+      }
+      if (variant === "workshop") {
+        bench("workbench",0,depth*.28,width*.65,.38)
+        pole("axe-handle",[-.2,floor+.42,depth*.28],[.2,floor+.43,depth*.28],.014,"wall",palette.darkWood)
+        box("axe-head","wall",[.17,floor+.46,depth*.28],[.08,.08,.035],"#787970",undefined,false)
       }
     }
   }
@@ -150,7 +211,7 @@ export function earlyBuildingParts(recipe: BuildingRecipe): BuildingPart[] {
     }
   }
   if(!lean) {
-    if(variant === "monk-shelter") {
+    if(variant === "monk-shelter" || variant === "hall") {
       // Plain pegged wooden crosses at both gable ends; no ornament on utility huts.
       for(const end of [-1,1]) {
         box(`shelter-cross-upright-${end}`,"roof",[0,eave+rise+.13,end*z],[.04,.32,.04],palette.paleWood)
@@ -158,7 +219,7 @@ export function earlyBuildingParts(recipe: BuildingRecipe): BuildingPart[] {
       }
     }
     pole("ridge-pole",[0,eave+rise+.045,-roofZ+.04],[0,eave+rise+.045,roofZ-.04],.045,"roof",palette.darkWood)
-    if(variant === "shepherd-hut" || variant === "storehouse") for(const s of [-1,1]) {
+    if(variant === "shepherd-hut" || variant === "storehouse" || variant === "hall") for(const s of [-1,1]) {
       face(`woven-gable-${s}`,"roof",[-x,eave,s*z,x,eave,s*z,0,eave+rise-.045,s*z],palette.wattle)
       pole(`gable-post-${s}`,[0,eave,s*z],[0,eave+rise,s*z],.029,"roof")
     }

@@ -671,7 +671,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
           const standingY = longGarment && !sleep ? y - drop * Math.min(1, weight) : y
           // The robe and hanging rope ends drape together over bent knees.
           const drapeZ = z + ((seated ? 0.48 : praying || gather ? 0.19 : 0) * weight) +
-            (longGarment && (clip === "walk" || clip === "carrying") ? wave * 0.035 * recipe.design.stride * weight * weight : 0)
+            (longGarment && (clip === "walk" || clip === "carrying" || clip === "procession") ? wave * 0.035 * recipe.design.stride * weight * weight : 0)
           const groundY = b.hipHeight + (0.035 - body.position.y + drapeZ * (geometry === torso.geometry ? torso.scale.z : 1) * Math.sin(body.rotation.x)) / Math.cos(body.rotation.x)
           if (longGarment && chop && y < waist) {
             // Spread the garment over the wider stance, keeping its hem planted as the torso twists.
@@ -751,6 +751,14 @@ export function createBasePersonRig(recipe = personRecipe()) {
           }
           target.sub(body.position).applyQuaternion(body.quaternion.clone().invert())
           reach(limb, target.toArray() as Point3, true)
+        } else if (clip === "hoisting" || clip === "procession") {
+          const lift = clip === "procession" ? 1 : Math.min(1, phase * 16 / 15)
+          const eased = lift * lift * (3 - 2 * lift)
+          const low = new THREE.Vector3(sign * 0.2, 0.15, 0.34)
+          // Arms rise beside the head, using the same two-bone solver and sockets.
+          const high = new THREE.Vector3(sign * b.shoulderOffset,
+            b.shoulderHeight - b.hipHeight + b.upperArmLength + b.forearmLength - 0.015, 0.04)
+          reach(limb, low.lerp(high, eased).toArray() as Point3, true)
         } else if (clip === "carrying") reach(limb, [sign * 0.2, 0.15, 0.34])
         else if (gather) {
           const target = limb.side === "left" ? new THREE.Vector3(b.legOffset, 0.26, 0.34) :

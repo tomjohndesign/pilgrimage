@@ -17,7 +17,7 @@ export function inspectRig(design: PersonDesign, clip: BaseClip, frame: number, 
     const result: RigInspection = {}
     for (const [name, position] of Object.entries(rig.joints()) as [RigJoint, Point3][]) {
       const projected = rig.root.localToWorld(new THREE.Vector3(...position)).project(camera)
-      const groundLocked = (name === "leftFoot" || name === "rightFoot") && (clip === "walk" || clip === "carrying") && walkFoot(name === "leftFoot" ? "left" : "right", phase, recipe.body).planted
+      const groundLocked = (name === "leftFoot" || name === "rightFoot") && (clip === "walk" || clip === "carrying" || clip === "procession") && walkFoot(name === "leftFoot" ? "left" : "right", phase, recipe.body).planted
       const editable = EDITABLE_JOINTS.includes(name as EditableJoint) && !groundLocked
       result[name] = { position, screen: [(projected.x + 1) * BASE_PERSON.cellSize / 2, (1 - projected.y) * BASE_PERSON.cellSize / 2], editable,
         reason: groundLocked ? "Planted foot: ground contact stays locked. Select a swing frame to adjust it." : !editable ? "This joint follows the body proportions and the shared skeleton." : undefined }

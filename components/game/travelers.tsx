@@ -1,5 +1,6 @@
 "use client"
 
+import { processionRegistry } from "@/lib/game/relic-procession"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
 import { useEffect, useMemo, useRef } from "react"
@@ -118,6 +119,7 @@ export function Travelers({
   useFrame((_, delta) => {
     // A background tab hands us a huge delta; clamp so nobody teleports.
     const build = useBuildStore.getState()
+    sim.procession = processionRegistry.current
     sim.buildings = camps
     sim.shrineRenown = shrineRenown
     sim.balance = useBalanceStore.getState().balance
@@ -152,7 +154,7 @@ export function Travelers({
         group.rotation.y += turn * blend
       }
       const workTree = s.tree === null ? undefined : trees[s.tree]
-      if (s.activity === "visiting") {
+      if (s.activity === "visiting" && !s.praying) {
         group.rotation.y = relicHeading(map, s) ?? group.rotation.y
       }
       group.userData.workTree = workTree
@@ -163,7 +165,11 @@ export function Travelers({
       group.userData.motionReset = group.userData.initialized !== true || distance >= 2
       group.userData.distance = playback.paused ? 0 : moved
       group.userData.moving = moving
-      group.userData.activity = s.activity
+      if (!playback.paused && s.praying && sim.procession?.position) {
+        group.rotation.y = Math.atan2(sim.procession.position.x - s.x, sim.procession.position.z - s.z)
+      }
+      group.userData.activity = s.praying ? "praying" : s.activity
+      group.userData.routineActivity = s.activity
       group.userData.keeperTime = s.keeperTime ?? 0
       group.userData.keeperAudience = s.activity === "vending" && travelers.some(other => {
         const person = sim.travelers.get(other.id)
@@ -188,7 +194,7 @@ export function Travelers({
       group.rotation.z = 0
       const logs = logRefs.current[i]
       if (logs) {
-        logs.visible = s.carrying > 0
+        logs.visible = s.carrying > 0 && !s.praying
         logs.position.copy(group.position)
         logs.quaternion.copy(group.quaternion)
       }
