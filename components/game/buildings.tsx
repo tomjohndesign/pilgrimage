@@ -1,7 +1,7 @@
 "use client"
 
 import { StructureModel } from "@/components/building-lab/building-model"
-import { isProceduralStructure, structureParts } from "@/lib/game/building-art/structure"
+import { structureParts } from "@/lib/game/building-art/structure"
 
 import { groundHeight } from "@/lib/game/map/elevation"
 
@@ -55,7 +55,7 @@ export function Buildings({ map }: { map: GameMap }) {
 
         return (
           <group key={building.id} position={[centreX, baseY, centreZ]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
-            <StructureModel parts={models[index]} idColor={idColors[index]} ink={isProceduralStructure(building.buildType)} />
+            <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} />
           </group>
         )
       })}
