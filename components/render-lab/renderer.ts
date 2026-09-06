@@ -77,6 +77,7 @@ export class LabRenderer {
   private bakes: Bake[] = []
   private bakeKey = ""
   private viewport = new THREE.Vector4()
+  private worldTexel = { value: 0 }
   private right = new THREE.Vector3()
   private up = new THREE.Vector3()
   private back = new THREE.Vector3()
@@ -118,9 +119,9 @@ export class LabRenderer {
         this.textures.push(texture)
       }
       const material = new THREE.SpriteMaterial({ map: this.textures[i * sources.length], alphaTest: 0.5, transparent: false, toneMapped: false })
-      material.onBeforeCompile = shader => applySpriteDepth(shader, this.viewport)
+      material.onBeforeCompile = shader => applySpriteDepth(shader, this.viewport, this.worldTexel)
       material.onBeforeRender = renderer => { renderer.getCurrentViewport(this.viewport) }
-      material.customProgramCacheKey = () => "lab-person-depth-v2"
+      material.customProgramCacheKey = () => "lab-person-depth-v3"
       const sprite = new THREE.Sprite(material)
       sprite.renderOrder = i + 1
       sprite.center.set(0.5, base ? 1 - 48.5 / 64 : 6 / 64)
@@ -208,6 +209,7 @@ export class LabRenderer {
 
     const maxSize = Math.floor(this.gl.capabilities.maxTextureSize / 128) * 128
     const density = Math.min(settings.density, (maxSize - 2) / Math.max(width, height))
+    this.worldTexel.value = method === "hybrid" || method === "asset" ? 1 / density : 0
     const base = this.character === "base"
     const moving = settings.motion === "walk" || settings.motion === "diagonal"
     const columns = base ? (moving ? 8 : 1) : 4

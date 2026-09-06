@@ -5,6 +5,7 @@ import { activityClip } from "@/lib/game/base-person/activity"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
+import { usePixelWorldTexel } from "@/components/pixel-canvas"
 import { characterVisual, spriteRow, type CharacterModel } from "@/lib/game/character-assets"
 import { usePopulationStore } from "@/lib/game/base-person/population-store"
 import { populationVisual } from "@/lib/game/base-person/population-assets"
@@ -69,14 +70,15 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     return map
   }), [sources, textureEntries, visual.rowOffset])
   useEffect(() => () => textures.forEach((texture) => texture.dispose()), [textures])
+  const worldTexel = usePixelWorldTexel()
   const viewport = useMemo(() => new THREE.Vector4(), [])
   const material = useMemo(() => {
     const material = new THREE.SpriteMaterial({ map: textures[1], alphaTest: 0.5, transparent: false, toneMapped: false })
-    material.onBeforeCompile = (shader) => applySpriteDepth(shader, viewport)
+    material.onBeforeCompile = (shader) => applySpriteDepth(shader, viewport, worldTexel)
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "person-depth-v2"
+    material.customProgramCacheKey = () => "person-depth-v3"
     return material
-  }, [textures, viewport])
+  }, [textures, viewport, worldTexel])
   useEffect(() => () => material.dispose(), [material])
   const center = useMemo(() => new THREE.Vector2(...visual.center), [visual])
   const sprite = useRef<THREE.Sprite>(null)
@@ -96,15 +98,15 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     // Embedding IDs in shader source compiled a new program for every person.
     const id = new THREE.Vector3(...outlineColor)
     material.onBeforeCompile = (shader) => {
-      applySpriteDepth(shader, viewport)
+      applySpriteDepth(shader, viewport, worldTexel)
       shader.uniforms.travelerId = { value: id }
       shader.fragmentShader = "uniform vec3 travelerId;\n" + shader.fragmentShader.replace("#include <map_fragment>",
         "#include <map_fragment>\ndiffuseColor.rgb = travelerId;")
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "traveler-id-v4"
+    material.customProgramCacheKey = () => "traveler-id-v5"
     return material
-  }, [textures, viewport, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [textures, viewport, worldTexel, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => outlineMaterial?.dispose(), [outlineMaterial])
 
   useFrame(({ camera }, delta) => {
