@@ -17,7 +17,7 @@ import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { MerchantMapPreview } from "./merchant-map-preview"
 import { COATS, animalCoat } from "@/lib/game/transport/coats"
 import { CARGO, TRANSPORT, CART, SHOP, cartUrl, animalUrl, type Puller, type ShopState, cartColumn, type Cargo, type CartMode, type HorseVariant } from "@/lib/game/transport/assets"
-import transportMetadata from "@/public/textures/transport/v9/manifest.json"
+import transportMetadata from "@/public/textures/transport/v10/manifest.json"
 
 const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse" } as const
 type Subject = keyof typeof SUBJECTS

@@ -1,3 +1,4 @@
+import { nearProcession, type RelicProcession } from "./relic-procession"
 import { roadsideStall, routePoint, routeLength, type StallRoute } from "./transport/roadside"
 import { keeperRoutine } from "./transport/keeper"
 import { personWalkStride } from "./base-person/gait"
@@ -186,6 +187,8 @@ function roll(id: number, n: number): number {
 }
 
 export interface SimTraveler {
+  /** Prayer interrupts travel/work without discarding its route or reservations. */
+  praying?: boolean
   /** Actual gold paid for this visit, captured on admission. */
   admissionPaid: number
   keeperTime?: number
@@ -258,6 +261,7 @@ export interface SimTraveler {
 }
 
 export interface SimState {
+  procession?: RelicProcession | null
   admissionSequence: number
   admissionPayments: AdmissionPayment[]
   seed: number
@@ -777,6 +781,8 @@ export function stepSim(
   for (const t of travelers) {
     const s = sim.travelers.get(t.id)
     if (!s) continue
+    s.praying = nearProcession(sim.procession, s, s.praying)
+    if (s.praying) { s.moveSpeed = 0; continue }
     s.visitCooldown = Math.max(0, s.visitCooldown - dt)
     const camping = s.activity === "camping"
     const sheltered = s.activity === "visiting" || s.activity === "idle"

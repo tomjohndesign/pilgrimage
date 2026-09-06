@@ -6,6 +6,9 @@ import { BASE_PERSON, PERSON_CLIPS, type BaseClip } from "./pose"
 
 /** Visuals follow simulation state; freezing playback does not change the pose. */
 export function activityClip(activity: Activity | MonkActivity | undefined, moving: boolean, carrying = 0): BaseClip {
+  if (activity === "praying") return "praying"
+  if (activity === "hoisting") return "hoisting"
+  if (activity === "procession") return "procession"
   if (carrying > 0) return "carrying"
   if (moving) return "walk"
   switch (activity) {
@@ -14,7 +17,6 @@ export function activityClip(activity: Activity | MonkActivity | undefined, movi
     // Resident monks rest on open ground, so use their existing kneeling pose.
     case "resting":
     case "vigil":
-    case "praying":
     case "visiting": return "praying"
     case "working": return "treeFelling"
     // This simulation state processes fallen timber; the gathering pose is reserved for harvesting.

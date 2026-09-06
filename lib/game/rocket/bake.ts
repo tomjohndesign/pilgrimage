@@ -30,6 +30,6 @@ export async function bakeRocketMonks() {
       }
     } finally { gear?.dispose(); session.dispose() }
   }
-  return { images, metadata: { version: 1, templateVersion: BASE_PERSON.version, cellSize: BASE_PERSON.cellSize,
+  return { images, metadata: { version: 2, templateVersion: BASE_PERSON.version, cellSize: BASE_PERSON.cellSize,
     anchor: BASE_PERSON.anchor, camera: BASE_PERSON.camera, directions: BASE_PERSON.directions, frameCounts, flightFps: 12, safePadding } }
 }
