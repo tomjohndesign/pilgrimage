@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "99b07db04e5a9fafabec971119412a74dfa17c02",
-  "releaseCount": 49,
+  "lastProcessedCommit": "0b39bdf424a95e697808a2953344eb8a3bbe7171",
+  "releaseCount": 50,
   "releases": [
+    {
+      "version": "0.0.64",
+      "title": "Release 0.0.64",
+      "summary": "Keep building walking floors at ground level (#84)",
+      "commit": "0b39bdf424a95e697808a2953344eb8a3bbe7171"
+    },
     {
       "version": "0.0.63",
       "title": "Release 0.0.63",
