@@ -1,4 +1,5 @@
 {
+  "walkStrides": 1,
   "frameCounts": {
     "idle": 1,
     "walk": 20,
@@ -8,9 +9,7 @@
     "treeFelling": 24,
     "woodcutting": 64,
     "gathering": 24,
-    "carrying": 20,
-    "hoisting": 16,
-    "procession": 20
+    "carrying": 20
   },
   "templateVersion": 24,
   "cellSize": 64,
@@ -30,12 +29,16 @@
         "treeFelling": "/textures/characters/population/v16/peasant-treeFelling.png",
         "woodcutting": "/textures/characters/population/v16/peasant-woodcutting.png",
         "gathering": "/textures/characters/population/v16/peasant-gathering.png",
-        "carrying": "/textures/characters/population/v16/peasant-carrying.png",
-        "hoisting": "/textures/characters/population/v16/peasant-hoisting.png",
-        "procession": "/textures/characters/population/v16/peasant-procession.png"
+        "carrying": "/textures/characters/population/v16/peasant-carrying.png"
       },
       "designs": [
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": true,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Sandals",
@@ -73,6 +76,12 @@
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": true,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Sandals",
@@ -106,10 +115,16 @@
           "tunicColor": "#9c8b66",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Bald",
+          "hairStyle": "Wavy",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": true,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Sandals",
@@ -143,10 +158,16 @@
           "tunicColor": "#9c8b66",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Bob",
+          "hairStyle": "Cropped",
           "beard": true
         },
         {
+          "hat": "Coif",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Sandals",
@@ -180,10 +201,16 @@
           "tunicColor": "#9c8b66",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Braids",
           "beard": false
         },
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Sandals",
@@ -217,10 +244,16 @@
           "tunicColor": "#9c8b66",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Ponytail",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Sandals",
@@ -254,7 +287,7 @@
           "tunicColor": "#9c8b66",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Bun",
           "beard": false
         }
       ]
@@ -269,12 +302,16 @@
         "treeFelling": "/textures/characters/population/v16/pilgrim-treeFelling.png",
         "woodcutting": "/textures/characters/population/v16/pilgrim-woodcutting.png",
         "gathering": "/textures/characters/population/v16/pilgrim-gathering.png",
-        "carrying": "/textures/characters/population/v16/pilgrim-carrying.png",
-        "hoisting": "/textures/characters/population/v16/pilgrim-hoisting.png",
-        "procession": "/textures/characters/population/v16/pilgrim-procession.png"
+        "carrying": "/textures/characters/population/v16/pilgrim-carrying.png"
       },
       "designs": [
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -312,6 +349,12 @@
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -345,10 +388,16 @@
           "tunicColor": "#8a7f9e",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Bald",
+          "hairStyle": "Wavy",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -382,10 +431,16 @@
           "tunicColor": "#8a7f9e",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Bob",
+          "hairStyle": "Cropped",
           "beard": true
         },
         {
+          "hat": "Coif",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -419,10 +474,16 @@
           "tunicColor": "#8a7f9e",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Braids",
           "beard": false
         },
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -456,10 +517,16 @@
           "tunicColor": "#8a7f9e",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Ponytail",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -493,7 +560,7 @@
           "tunicColor": "#8a7f9e",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Bun",
           "beard": false
         }
       ]
@@ -508,12 +575,16 @@
         "treeFelling": "/textures/characters/population/v16/merchant-treeFelling.png",
         "woodcutting": "/textures/characters/population/v16/merchant-woodcutting.png",
         "gathering": "/textures/characters/population/v16/merchant-gathering.png",
-        "carrying": "/textures/characters/population/v16/merchant-carrying.png",
-        "hoisting": "/textures/characters/population/v16/merchant-hoisting.png",
-        "procession": "/textures/characters/population/v16/merchant-procession.png"
+        "carrying": "/textures/characters/population/v16/merchant-carrying.png"
       },
       "designs": [
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -551,6 +622,12 @@
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -584,10 +661,16 @@
           "tunicColor": "#b3762f",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Bald",
+          "hairStyle": "Wavy",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -621,10 +704,16 @@
           "tunicColor": "#b3762f",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Bob",
+          "hairStyle": "Cropped",
           "beard": true
         },
         {
+          "hat": "Coif",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -658,10 +747,16 @@
           "tunicColor": "#b3762f",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Braids",
           "beard": false
         },
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -695,10 +790,16 @@
           "tunicColor": "#b3762f",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Ponytail",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -732,7 +833,7 @@
           "tunicColor": "#b3762f",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Bun",
           "beard": false
         }
       ]
@@ -747,12 +848,16 @@
         "treeFelling": "/textures/characters/population/v16/friar-treeFelling.png",
         "woodcutting": "/textures/characters/population/v16/friar-woodcutting.png",
         "gathering": "/textures/characters/population/v16/friar-gathering.png",
-        "carrying": "/textures/characters/population/v16/friar-carrying.png",
-        "hoisting": "/textures/characters/population/v16/friar-hoisting.png",
-        "procession": "/textures/characters/population/v16/friar-procession.png"
+        "carrying": "/textures/characters/population/v16/friar-carrying.png"
       },
       "designs": [
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -790,6 +895,12 @@
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -823,10 +934,16 @@
           "tunicColor": "#6d5638",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Bald",
+          "hairStyle": "Wavy",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -860,10 +977,16 @@
           "tunicColor": "#6d5638",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Bob",
+          "hairStyle": "Cropped",
           "beard": true
         },
         {
+          "hat": "Coif",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -897,10 +1020,16 @@
           "tunicColor": "#6d5638",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Braids",
           "beard": false
         },
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -934,10 +1063,16 @@
           "tunicColor": "#6d5638",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Ponytail",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -971,7 +1106,7 @@
           "tunicColor": "#6d5638",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Bun",
           "beard": false
         }
       ]
@@ -986,12 +1121,16 @@
         "treeFelling": "/textures/characters/population/v16/knight-treeFelling.png",
         "woodcutting": "/textures/characters/population/v16/knight-woodcutting.png",
         "gathering": "/textures/characters/population/v16/knight-gathering.png",
-        "carrying": "/textures/characters/population/v16/knight-carrying.png",
-        "hoisting": "/textures/characters/population/v16/knight-hoisting.png",
-        "procession": "/textures/characters/population/v16/knight-procession.png"
+        "carrying": "/textures/characters/population/v16/knight-carrying.png"
       },
       "designs": [
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1029,6 +1168,12 @@
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1062,10 +1207,16 @@
           "tunicColor": "#96393a",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Bald",
+          "hairStyle": "Wavy",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1099,10 +1250,16 @@
           "tunicColor": "#96393a",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Bob",
+          "hairStyle": "Cropped",
           "beard": true
         },
         {
+          "hat": "Coif",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1136,10 +1293,16 @@
           "tunicColor": "#96393a",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Braids",
           "beard": false
         },
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1173,10 +1336,16 @@
           "tunicColor": "#96393a",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Ponytail",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1210,7 +1379,7 @@
           "tunicColor": "#96393a",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Bun",
           "beard": false
         }
       ]
@@ -1225,12 +1394,16 @@
         "treeFelling": "/textures/characters/population/v16/minstrel-treeFelling.png",
         "woodcutting": "/textures/characters/population/v16/minstrel-woodcutting.png",
         "gathering": "/textures/characters/population/v16/minstrel-gathering.png",
-        "carrying": "/textures/characters/population/v16/minstrel-carrying.png",
-        "hoisting": "/textures/characters/population/v16/minstrel-hoisting.png",
-        "procession": "/textures/characters/population/v16/minstrel-procession.png"
+        "carrying": "/textures/characters/population/v16/minstrel-carrying.png"
       },
       "designs": [
         {
+          "hat": "Minstrel hat",
+          "tunicStyle": "Particolour",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": true,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1241,12 +1414,12 @@
           "torsoHeight": 1,
           "shoulderHeight": 1,
           "neckHeight": 0.65,
-          "tunicLength": 1,
+          "tunicLength": 1.15,
           "legs": 0.9,
           "feet": 1,
           "footWidth": 0.95,
           "footHeight": 0.7,
-          "hem": 1,
+          "hem": 1.2,
           "sleeves": 1,
           "stride": 0.8,
           "ink": 0.6,
@@ -1268,6 +1441,12 @@
           "beard": false
         },
         {
+          "hat": "Minstrel hat",
+          "tunicStyle": "Particolour",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": true,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1278,12 +1457,12 @@
           "torsoHeight": 1.15,
           "shoulderHeight": 1,
           "neckHeight": 0.75,
-          "tunicLength": 1,
+          "tunicLength": 1.15,
           "legs": 1.05,
           "feet": 1,
           "footWidth": 0.95,
           "footHeight": 0.7,
-          "hem": 1,
+          "hem": 1.2,
           "sleeves": 1,
           "stride": 0.8,
           "ink": 0.6,
@@ -1301,10 +1480,16 @@
           "tunicColor": "#3f7d6c",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Bald",
+          "hairStyle": "Wavy",
           "beard": false
         },
         {
+          "hat": "Minstrel hat",
+          "tunicStyle": "Particolour",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": true,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1315,12 +1500,12 @@
           "torsoHeight": 0.95,
           "shoulderHeight": 1,
           "neckHeight": 0.65,
-          "tunicLength": 1,
+          "tunicLength": 1.15,
           "legs": 0.85,
           "feet": 1.1,
           "footWidth": 0.95,
           "footHeight": 0.7,
-          "hem": 1,
+          "hem": 1.2,
           "sleeves": 1.15,
           "stride": 0.8,
           "ink": 0.6,
@@ -1338,10 +1523,16 @@
           "tunicColor": "#3f7d6c",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Bob",
+          "hairStyle": "Cropped",
           "beard": true
         },
         {
+          "hat": "Minstrel hat",
+          "tunicStyle": "Particolour",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": true,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1352,12 +1543,12 @@
           "torsoHeight": 1,
           "shoulderHeight": 1,
           "neckHeight": 0.65,
-          "tunicLength": 1,
+          "tunicLength": 1.15,
           "legs": 0.9,
           "feet": 1,
           "footWidth": 0.95,
           "footHeight": 0.7,
-          "hem": 1.1,
+          "hem": 1.2,
           "sleeves": 1,
           "stride": 0.8,
           "ink": 0.6,
@@ -1375,10 +1566,16 @@
           "tunicColor": "#3f7d6c",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Braids",
           "beard": false
         },
         {
+          "hat": "Minstrel hat",
+          "tunicStyle": "Particolour",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": true,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1389,12 +1586,12 @@
           "torsoHeight": 1.15,
           "shoulderHeight": 1,
           "neckHeight": 0.75,
-          "tunicLength": 1,
+          "tunicLength": 1.15,
           "legs": 1.05,
           "feet": 1,
           "footWidth": 0.95,
           "footHeight": 0.7,
-          "hem": 1.05,
+          "hem": 1.2,
           "sleeves": 1,
           "stride": 0.8,
           "ink": 0.6,
@@ -1412,10 +1609,16 @@
           "tunicColor": "#3f7d6c",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Ponytail",
           "beard": false
         },
         {
+          "hat": "Minstrel hat",
+          "tunicStyle": "Particolour",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": true,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1426,12 +1629,12 @@
           "torsoHeight": 0.95,
           "shoulderHeight": 1,
           "neckHeight": 0.65,
-          "tunicLength": 1,
+          "tunicLength": 1.15,
           "legs": 0.85,
           "feet": 1.05,
           "footWidth": 0.95,
           "footHeight": 0.7,
-          "hem": 1.15,
+          "hem": 1.2,
           "sleeves": 1.1,
           "stride": 0.8,
           "ink": 0.6,
@@ -1449,7 +1652,7 @@
           "tunicColor": "#3f7d6c",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Bun",
           "beard": false
         }
       ]
@@ -1464,12 +1667,16 @@
         "treeFelling": "/textures/characters/population/v16/vendor-treeFelling.png",
         "woodcutting": "/textures/characters/population/v16/vendor-woodcutting.png",
         "gathering": "/textures/characters/population/v16/vendor-gathering.png",
-        "carrying": "/textures/characters/population/v16/vendor-carrying.png",
-        "hoisting": "/textures/characters/population/v16/vendor-hoisting.png",
-        "procession": "/textures/characters/population/v16/vendor-procession.png"
+        "carrying": "/textures/characters/population/v16/vendor-carrying.png"
       },
       "designs": [
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1507,6 +1714,12 @@
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1540,10 +1753,16 @@
           "tunicColor": "#d1a33c",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Bald",
+          "hairStyle": "Wavy",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1577,10 +1796,16 @@
           "tunicColor": "#d1a33c",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Bob",
+          "hairStyle": "Cropped",
           "beard": true
         },
         {
+          "hat": "Coif",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1614,10 +1839,16 @@
           "tunicColor": "#d1a33c",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Braids",
           "beard": false
         },
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1651,10 +1882,16 @@
           "tunicColor": "#d1a33c",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Ponytail",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1688,7 +1925,7 @@
           "tunicColor": "#d1a33c",
           "skinColor": "#c99a72",
           "hairColor": "#4a3221",
-          "hairStyle": "Long",
+          "hairStyle": "Bun",
           "beard": false
         }
       ]
@@ -1705,12 +1942,16 @@
         "treeFelling": "/textures/characters/population/v16/knight-grey-treeFelling.png",
         "woodcutting": "/textures/characters/population/v16/knight-grey-woodcutting.png",
         "gathering": "/textures/characters/population/v16/knight-grey-gathering.png",
-        "carrying": "/textures/characters/population/v16/knight-grey-carrying.png",
-        "hoisting": "/textures/characters/population/v16/knight-grey-hoisting.png",
-        "procession": "/textures/characters/population/v16/knight-grey-procession.png"
+        "carrying": "/textures/characters/population/v16/knight-grey-carrying.png"
       },
       "designs": [
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1748,6 +1989,12 @@
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1781,10 +2028,16 @@
           "tunicColor": "#96393a",
           "skinColor": "#c99a72",
           "hairColor": "#a8aaa5",
-          "hairStyle": "Bald",
+          "hairStyle": "Wavy",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1818,10 +2071,16 @@
           "tunicColor": "#96393a",
           "skinColor": "#c99a72",
           "hairColor": "#a8aaa5",
-          "hairStyle": "Bob",
+          "hairStyle": "Cropped",
           "beard": true
         },
         {
+          "hat": "Coif",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1855,10 +2114,16 @@
           "tunicColor": "#96393a",
           "skinColor": "#c99a72",
           "hairColor": "#a8aaa5",
-          "hairStyle": "Long",
+          "hairStyle": "Braids",
           "beard": false
         },
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1892,10 +2157,16 @@
           "tunicColor": "#96393a",
           "skinColor": "#c99a72",
           "hairColor": "#a8aaa5",
-          "hairStyle": "Long",
+          "hairStyle": "Ponytail",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1929,7 +2200,7 @@
           "tunicColor": "#96393a",
           "skinColor": "#c99a72",
           "hairColor": "#a8aaa5",
-          "hairStyle": "Long",
+          "hairStyle": "Bun",
           "beard": false
         }
       ]
@@ -1944,12 +2215,16 @@
         "treeFelling": "/textures/characters/population/v16/friar-grey-treeFelling.png",
         "woodcutting": "/textures/characters/population/v16/friar-grey-woodcutting.png",
         "gathering": "/textures/characters/population/v16/friar-grey-gathering.png",
-        "carrying": "/textures/characters/population/v16/friar-grey-carrying.png",
-        "hoisting": "/textures/characters/population/v16/friar-grey-hoisting.png",
-        "procession": "/textures/characters/population/v16/friar-grey-procession.png"
+        "carrying": "/textures/characters/population/v16/friar-grey-carrying.png"
       },
       "designs": [
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -1987,6 +2262,12 @@
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -2020,10 +2301,16 @@
           "tunicColor": "#6d5638",
           "skinColor": "#c99a72",
           "hairColor": "#a8aaa5",
-          "hairStyle": "Bald",
+          "hairStyle": "Wavy",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Male",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -2057,10 +2344,16 @@
           "tunicColor": "#6d5638",
           "skinColor": "#c99a72",
           "hairColor": "#a8aaa5",
-          "hairStyle": "Bob",
+          "hairStyle": "Cropped",
           "beard": true
         },
         {
+          "hat": "Coif",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -2094,10 +2387,16 @@
           "tunicColor": "#6d5638",
           "skinColor": "#c99a72",
           "hairColor": "#a8aaa5",
-          "hairStyle": "Long",
+          "hairStyle": "Braids",
           "beard": false
         },
         {
+          "hat": "Travel hat",
+          "tunicStyle": "Plain",
+          "satchel": false,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -2131,10 +2430,16 @@
           "tunicColor": "#6d5638",
           "skinColor": "#c99a72",
           "hairColor": "#a8aaa5",
-          "hairStyle": "Long",
+          "hairStyle": "Ponytail",
           "beard": false
         },
         {
+          "hat": "None",
+          "tunicStyle": "Plain",
+          "satchel": true,
+          "walkingStick": false,
+          "guitar": false,
+          "accentColor": "#d6b57b",
           "bodyType": "Female",
           "garment": "Everyday",
           "footwear": "Boots",
@@ -2168,7 +2473,7 @@
           "tunicColor": "#6d5638",
           "skinColor": "#c99a72",
           "hairColor": "#a8aaa5",
-          "hairStyle": "Long",
+          "hairStyle": "Bun",
           "beard": false
         }
       ]
@@ -2184,9 +2489,7 @@
       "treeFelling": "/textures/characters/population/v16/shadow-treeFelling.png",
       "woodcutting": "/textures/characters/population/v16/shadow-woodcutting.png",
       "gathering": "/textures/characters/population/v16/shadow-gathering.png",
-      "carrying": "/textures/characters/population/v16/shadow-carrying.png",
-      "hoisting": "/textures/characters/population/v16/shadow-hoisting.png",
-      "procession": "/textures/characters/population/v16/shadow-procession.png"
+      "carrying": "/textures/characters/population/v16/shadow-carrying.png"
     }
   },
   "strideRatios": [

@@ -19,6 +19,9 @@ export function inkPersonFrame(source: Uint8ClampedArray, parts: Uint8ClampedArr
     const next = neighbors.find(([nx, ny]) => solid(nx, ny))
     if (!occupied && (!next || strength === 0)) continue
     const sample = occupied ? i : (next![1] * size + next![0]) * 4
+    // Thin props retain their native width; selection still uses the same
+    // one-pixel scene outline as the rest of the character.
+    if (!occupied && parts[sample] === 11) continue
     let color = Array.from(source.subarray(sample, sample + 3))
     const interior = occupied && neighbors.every(([nx, ny]) => solid(nx, ny)) && neighbors.some(([nx, ny]) => {
       const other = parts[(ny * size + nx) * 4]

@@ -16,16 +16,18 @@ export function personWalkStride(design: PersonDesign, spriteScale = PERSON_SPRI
 
 /** About 0.353 tiles per left/right cycle at the default on-road size. */
 export const DEFAULT_WALK_STRIDE = personWalkStride(DEFAULT_DESIGN) * BASE_CHARACTER_SCALE
-/** 108 steps/minute; personal pace and gentle variation modulate this baseline. */
-export const DEFAULT_WALK_SPEED = DEFAULT_WALK_STRIDE * 108 / 120
+/** Brisk walking; personal pace and gentle variation modulate this baseline. */
+export const DEFAULT_WALK_CADENCE = 1.15
+export const DEFAULT_WALK_SPEED = DEFAULT_WALK_STRIDE * DEFAULT_WALK_CADENCE
 
 export function walkSpeedScale(stride: number, characterScale: number): number {
   return stride * characterScale / DEFAULT_WALK_STRIDE
 }
 
 /** Ground contact of the load-bearing foot in the actual displayed rig pose. */
-export function walkContact(phase: number, frames: number, body: typeof BASE_PERSON.body) {
-  const framePhase = Math.floor(phase * frames) / frames
+export function walkContact(phase: number, frames: number, body: typeof BASE_PERSON.body, strides = 1) {
+  const perStride = frames / strides
+  const framePhase = (Math.floor(phase * perStride + 1e-9) % perStride) / perStride
   // Transfer weight after the short double-support interval, while both soles
   // are down. Each foot then supports the body through its flat stance.
   const side: BodySide = framePhase >= WALK_STANCE_FRACTION - 0.5 && framePhase < WALK_STANCE_FRACTION ? "left" : "right"

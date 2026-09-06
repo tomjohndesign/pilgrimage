@@ -298,6 +298,36 @@ describe("stepSim", () => {
     ).toBe(true)
   })
 
+  it("briefly opens and packs animal-drawn shops, waiting for recall before departure", () => {
+    for (const id of [4, 8]) { // donkey and horse
+      const map = makeMap(), travelers = [makeTraveler(id, "vendor", { stamina: 100, hunger: 100, thirst: 100 })]
+      const sim = createSim(travelers, map), vendor = sim.travelers.get(id)!
+      vendor.timer = 0
+      expect(runUntil(sim, travelers, map, () => vendor.activity === "openingShop", 60)).toBe(true)
+      expect(vendor.pasture).toBeDefined()
+      expect(Math.abs(worldToTileZ(map, vendor.z) - 4)).toBe(2)
+      const originalProgress = vendor.progress, returnProgress = vendor.stallRoute!.returnProgress
+      expect((returnProgress - originalProgress) * vendor.direction).toBeGreaterThan(0)
+      const parked = [vendor.x, vendor.z]
+      stepSim(sim, travelers, map, 1, 1)
+      expect(vendor.activity).toBe("openingShop")
+      expect([vendor.x, vendor.z]).toEqual(parked)
+      expect(runUntil(sim, travelers, map, () => vendor.activity === "vending", 5)).toBe(true)
+      vendor.timer = 100
+      for (let i = 0; i < 30; i++) stepSim(sim, travelers, map, 1, 0.1)
+      vendor.timer = 0
+      stepSim(sim, travelers, map, 1, 0.1)
+      expect(runUntil(sim, travelers, map, () => vendor.activity === "packingShop", 25)).toBe(true)
+      stepSim(sim, travelers, map, 1, 1)
+      expect(vendor.activity).toBe("packingShop")
+      expect([vendor.x, vendor.z]).toEqual(parked)
+      expect(runUntil(sim, travelers, map, () => vendor.activity === "fromShop", 30)).toBe(true)
+      expect(vendor.pasture).toBeUndefined()
+      expect(runUntil(sim, travelers, map, () => vendor.activity === "walking", 10)).toBe(true)
+      expect(vendor.progress).toBeCloseTo(returnProgress)
+    }
+  })
+
   it("holds stamina steady while minding the stall", () => {
     const map = makeMap()
     const travelers = [makeTraveler(1, "vendor", { stamina: 50, hunger: 100, thirst: 100 })]
@@ -328,6 +358,33 @@ describe("stepSim", () => {
     expect(vendor.activity).toBe("vending")
   })
 
+  it("walks customers along the path, up to the frontage, and back after the purchase", () => {
+    const map = makeMap(), travelers = [makeTraveler(4, "vendor", { hunger: 100, thirst: 100, stamina: 100 }), makeTraveler(0, "peasant", { hunger: 100, thirst: 100, stamina: 100, gold: 20 }, 0.2)]
+    const sim = createSim(travelers, map), vendor = sim.travelers.get(4)!, buyer = sim.travelers.get(0)!
+    vendor.timer = 0
+    expect(runUntil(sim, travelers, map, () => vendor.activity === "vending", 60)).toBe(true)
+    vendor.timer = 999; buyer.hunger = 0
+    expect(runUntil(sim, travelers, map, () => buyer.activity === "toStall", 60)).toBe(true)
+    expect(tileAt(map, worldToTileX(map, buyer.x), worldToTileZ(map, buyer.z))).toBe("path")
+    expect(buyer.progress).toBeCloseTo(vendor.stallRoute!.entranceProgress)
+    expect(buyer.hunger).toBe(0)
+    expect(runUntil(sim, travelers, map, () => {
+      const visit = buyer.customerVisit!, road = visit.road, front = visit.frontage
+      // Do not overshoot into the wares while aligning to a grid-tile centre.
+      expect(buyer.x).toBeCloseTo(road.x)
+      expect(buyer.z).toBeGreaterThanOrEqual(Math.min(road.z, front.z) - 1e-8)
+      expect(buyer.z).toBeLessThanOrEqual(Math.max(road.z, front.z) + 1e-8)
+      return buyer.activity === "browsing"
+    }, 10)).toBe(true)
+    expect(buyer.x).toBeCloseTo(vendor.stallRoute!.frontage.x)
+    expect(buyer.z).toBeCloseTo(vendor.stallRoute!.frontage.z)
+    expect(buyer.hunger).toBe(0)
+    expect(runUntil(sim, travelers, map, () => buyer.activity === "fromStall", 5)).toBe(true)
+    expect(buyer.hunger).toBeGreaterThan(99)
+    expect(runUntil(sim, travelers, map, () => buyer.activity === "walking", 10)).toBe(true)
+    expect(tileAt(map, worldToTileX(map, buyer.x), worldToTileZ(map, buyer.z))).toBe("path")
+  })
+
   it("lets vendors eat from their own stock for free", () => {
     const map = makeMap()
     const travelers = [makeTraveler(0, "vendor", { hunger: 0.1, gold: 50 })]
@@ -354,7 +411,7 @@ describe("stepSim", () => {
 })
 
 describe("left-hand walking lanes", () => {
-  it.each([1, -1] as const)("follows a diagonal ribbon continuously in direction %i", (direction) => {
+  it.each([1, -1] as const)("follows grid-aligned lanes through a stair-step road in direction %i", (direction) => {
     const map = parseAsciiMap([".........", "===......", "..==.....", "...==....", "....=====", "........."])
     map.road = [[0, 1], [1, 1], [2, 1], [2, 2], [3, 2], [3, 3], [4, 3], [4, 4], [5, 4], [6, 4], [7, 4], [8, 4]]
       .map(([x, z]) => ({ x, z }))
@@ -364,9 +421,9 @@ describe("left-hand walking lanes", () => {
     let previous = { x: s.x, z: s.z }
     for (let tick = 0; tick < 10; tick++) {
       stepSim(sim, [traveler], map, 1, 0.1)
-      // Both coordinates change together; the lane stays on the path tiles.
-      expect(s.x - previous.x).toBeCloseTo(s.z - previous.z)
-      expect((s.x - previous.x) * direction).toBeGreaterThan(0)
+      // Each straight segment follows one grid axis, even with path easing.
+      expect(Math.min(Math.abs(s.x - previous.x), Math.abs(s.z - previous.z))).toBeLessThan(1e-8)
+      expect(Math.hypot(s.x - previous.x, s.z - previous.z)).toBeGreaterThan(0)
       expect(tileAt(map, worldToTileX(map, s.x), worldToTileZ(map, s.z))).toBe("path")
       previous = { x: s.x, z: s.z }
     }
@@ -621,5 +678,51 @@ describe("tracks through the dark forest", () => {
     expect(runUntil(sim, travelers, map, () => s.activity === "walking", 60)).toBe(true)
     expect(s.track).not.toBeNull()
     expect(tileAt(map, worldToTileX(map, s.x), worldToTileZ(map, s.z))).toBe("track")
+  })
+})
+
+describe("off-road grid walking", () => {
+  it.each(["toCamp", "toShop"] as const)("routes %s around a wall and water instead of walking straight through them", (activity) => {
+    const map = makeMap()
+    map.buildings.push({ id: "inn", label: "Inn", x: 12, z: 5, w: 2, d: 2, height: 1, color: "", roofColor: "" })
+    map.tiles[6 * map.width + 11] = "water"
+    const traveler = makeTraveler(0, activity === "toShop" ? "vendor" : "knight", {}, 12 / 23)
+    const sim = createSim([traveler], map), s = sim.travelers.get(0)!
+    s.activity = activity
+    s.spot = { x: tileToWorldX(map, 12), y: TILE_HEIGHT, z: tileToWorldZ(map, 7) }
+    s.walkFrom = { x: s.x, y: s.y, z: s.z }
+    for (let i = 0; i < 2000 && s.activity === activity; i++) {
+      const before = { x: s.x, z: s.z }
+      stepSim(sim, [traveler], map, 1, 0.01, DEFAULT_MOVEMENT)
+      const x = worldToTileX(map, s.x), z = worldToTileZ(map, s.z)
+      expect(x >= 12 && x < 14 && z >= 5 && z < 7).toBe(false)
+      expect(tileAt(map, x, z)).not.toBe("water")
+      expect(Math.hypot(s.x - before.x, s.z - before.z)).toBeLessThanOrEqual(s.moveSpeed * 0.01 + 1e-8)
+    }
+    expect(s.activity).toBe(activity === "toCamp" ? "camping" : "openingShop")
+    expect(s.x).toBe(s.spot.x)
+    expect(s.z).toBe(s.spot.z)
+    // Force the return journey and check the same obstacles in reverse.
+    s.activity = activity === "toCamp" ? "fromCamp" : "fromShop"
+    s.offRoadRoute = null
+    for (let i = 0; i < 2000 && !["walking"].includes(s.activity); i++) {
+      stepSim(sim, [traveler], map, 1, 0.01)
+      const x = worldToTileX(map, s.x), z = worldToTileZ(map, s.z)
+      expect(x >= 12 && x < 14 && z >= 5 && z < 7).toBe(false)
+      expect(tileAt(map, x, z)).not.toBe("water")
+    }
+    expect(s.activity).toBe("walking")
+    expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) - s.laneOffset)
+  })
+
+  it("does not choose a camping spot across an impassable forest ridge", () => {
+    const map = makeMap(), traveler = makeTraveler(0, "knight", { stamina: 0 })
+    const sim = createSim([traveler], map), s = sim.travelers.get(0)!
+    // A nearby vendor attracts the camper toward the unreachable side.
+    const vendor = { ...s, id: 1, activity: "vending" as const, spot: { x: s.x, y: TILE_HEIGHT, z: tileToWorldZ(map, 2) } }
+    sim.travelers.set(1, vendor)
+    stepSim(sim, [traveler], map, 1, 0.1)
+    expect(s.spot).not.toBeNull()
+    expect(worldToTileZ(map, s.spot!.z)).toBeGreaterThan(4)
   })
 })

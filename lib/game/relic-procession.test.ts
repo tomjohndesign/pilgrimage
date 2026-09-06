@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest"
 import { createRelicProcession, nearProcession, processionGrounds, relicIsCarried, startProcession, stepProcession } from "./relic-procession"
 import { createSim, stepSim } from "./sim"
-import { generateTravelers } from "./travelers"
-import type { GameMap } from "./map/types"
+import { generateTravelers, TRAVELER_TYPES } from "./travelers"
+import { worldToTileX, worldToTileZ, type GameMap } from "./map/types"
+import { buildingStepAllowed } from "./building-navigation"
 
 function fixture() {
   const map: GameMap = { width: 15, depth: 15, tiles: Array(225).fill("grass"), seed: 1,
@@ -16,6 +17,25 @@ function fixture() {
 }
 
 describe("relic procession", () => {
+  it("collects from every shrine prayer spot and keeps procession routes on the grid", () => {
+    const { map, grounds, pick } = fixture()
+    for (const spot of grounds.wander.prayerSpots) {
+      const actor = { ...spot }, p = createRelicProcession()
+      expect(startProcession(p, 0, actor, grounds)).toBe(true)
+      let completed = false
+      for (let tick = 0; tick < 2000; tick++) {
+        const from = { x: worldToTileX(map, actor.x), z: worldToTileZ(map, actor.z) }
+        const exit = stepProcession(p, actor, grounds, 0.1, 0.4, pick)
+        const to = { x: worldToTileX(map, actor.x), z: worldToTileZ(map, actor.z) }
+        const tx = actor.x + map.width / 2 - 0.5, tz = actor.z + map.depth / 2 - 0.5
+        expect(Math.min(Math.abs(tx - Math.round(tx)), Math.abs(tz - Math.round(tz)))).toBeLessThan(1e-8)
+        if (from.x !== to.x || from.z !== to.z) expect(buildingStepAllowed(map, map.buildings, from, to, true)).toBe(true)
+        if (exit) { completed = true; break }
+      }
+      expect(completed).toBe(true)
+    }
+  })
+
   it("collects one relic through the gate, walks, and returns it to the table", () => {
     const { grounds, actor, p, pick } = fixture()
     expect(startProcession(p, 0, actor, grounds)).toBe(true)
@@ -36,7 +56,7 @@ describe("relic procession", () => {
     expect(distance).toBeGreaterThan(5)
     expect(carriedDistance).toBeGreaterThan(3)
     expect(actor).toEqual(grounds.altar)
-    expect(exit?.[0]).toEqual(grounds.gate)
+    expect(exit).toEqual(grounds.wander.route(actor, pick()))
     expect(p.monkId).toBeNull()
     expect(relicIsCarried(p)).toBe(false)
     expect(startProcession(p, 0, actor, grounds)).toBe(true)
@@ -88,5 +108,25 @@ describe("relic procession", () => {
     expect(s.carrying).toBe(5)
     expect(s.tree).toBe(3)
     expect(s.activity).toBe("hauling")
+  })
+
+  it("pauses a merchant's shop routine and resumes at the same point after prayer", () => {
+    const { map, p } = fixture()
+    const travelers = generateTravelers(1, 1).map(t => ({ ...t, type: TRAVELER_TYPES.vendor }))
+    const sim = createSim(travelers, map), merchant = sim.travelers.get(travelers[0].id)!
+    sim.procession = p
+    Object.assign(merchant, { activity: "vending", keeperTime: 4.5, timer: 20 })
+    Object.assign(p, { stage: "carrying", position: { x: merchant.x, y: merchant.y, z: merchant.z } })
+    stepSim(sim, travelers, map, 0.4, 0.1)
+    expect(merchant.praying).toBe(true)
+    expect(merchant.activity).toBe("vending")
+    expect(merchant.keeperTime).toBe(4.5)
+    expect(merchant.timer).toBe(20)
+    p.stage = "idle"
+    stepSim(sim, travelers, map, 0.4, 0.1)
+    expect(merchant.praying).toBe(false)
+    expect(merchant.activity).toBe("vending")
+    expect(merchant.keeperTime).toBeCloseTo(4.6)
+    expect(merchant.timer).toBeCloseTo(19.9)
   })
 })

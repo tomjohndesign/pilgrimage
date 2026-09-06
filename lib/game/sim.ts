@@ -1,5 +1,13 @@
 import { nearProcession, type RelicProcession } from "./relic-procession"
-import { LINEAR_MOVEMENT, easeProgress, easeSpeed, paceVariation, roundedCorner, type MovementTuning } from "./motion"
+import { roadsideStall, routePoint, routeLength, type StallRoute } from "./transport/roadside"
+import { keeperRoutine } from "./transport/keeper"
+import { personWalkStride } from "./base-person/gait"
+import { populationDesign, travelerAppearance } from "./base-person/population"
+import { animalClearance } from "./transport/stall"
+import { BASE_CHARACTER_SCALE } from "./base-person/gait"
+import { cartOffset, SHOP_SECONDS, cartLoadout } from "./transport/assets"
+import { createPasture, stepPasture, type PastureAnimal } from "./transport/pasture"
+import { LINEAR_MOVEMENT, easeSpeed, paceVariation, type MovementTuning } from "./motion"
 import { DEFAULT_BALANCE, type GameBalance } from "./balance"
 import { buildingAt } from "./settlement"
 import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
@@ -11,7 +19,6 @@ import { TREE_SPECIES } from "./trees/species"
 import type { TilePos } from "./map/types"
 import { computeDangerField, encounterChance, type ThreatSource } from "./map/danger"
 import { surfaceHeight, ropeHeightAt } from "./map/bridges"
-import { diagonalRoadPoint } from "./map/road"
 import {
   tileAt,
   tileToWorldX,
@@ -66,11 +73,16 @@ export type Activity =
   | "idle"
   | "walking"
   | "seeking"
+  | "toStall"
+  | "browsing"
+  | "fromStall"
   | "fleeing"
   | "toCamp"
   | "camping"
   | "fromCamp"
   | "toShop"
+  | "openingShop"
+  | "packingShop"
   | "vending"
   | "fromShop"
 
@@ -85,11 +97,16 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
   idle: "At the lumber camp",
   walking: "On the road",
   seeking: "Seeking food & drink",
+  toStall: "Approaching the stall",
+  browsing: "Buying food & drink",
+  fromStall: "Returning to the path",
   fleeing: "Turned back",
   toCamp: "Making camp",
   camping: "Camping",
   fromCamp: "Breaking camp",
   toShop: "Setting up shop",
+  openingShop: "Unloading wares",
+  packingShop: "Packing wares & bringing the animal back",
   vending: "Selling wares",
   fromShop: "Packing up",
 }
@@ -171,6 +188,11 @@ function roll(id: number, n: number): number {
 export interface SimTraveler {
   /** Prayer interrupts travel/work without discarding its route or reservations. */
   praying?: boolean
+  keeperTime?: number
+  customerVisit?: { vendorId: number; road: { x: number; y: number; z: number }; frontage: { x: number; y: number; z: number } }
+  stallRoute?: StallRoute
+  pasture?: PastureAnimal
+
   id: number
   activity: Activity
   gold: number
@@ -225,6 +247,7 @@ export interface SimTraveler {
   /** The off-road pitch — a camp or a stall, depending on activity. */
   spot: { x: number; y: number; z: number } | null
   walkT: number
+  offRoadRoute: WorldPoint[] | null
   /** Vendor being chased while seeking. */
   targetId: number | null
   /** Vendors only: seconds left in the current walk-or-shop stint. */
@@ -287,8 +310,7 @@ function laneVertex(
   // A doubled-back vertex has no intersection; keep its outgoing normal.
   const nx = divisor > 0 ? (inZ + outZ) / divisor : outZ
   const nz = divisor > 0 ? -(inX + outX) / divisor : -outX
-  const centre = diagonalRoadPoint(map, p.x, p.z)
-  return { x: centre.x + nx * lane * centre.laneScale, z: centre.z + nz * lane * centre.laneScale }
+  return { x: p.x + nx * lane, z: p.z + nz * lane }
 }
 
 interface WorldPoint {
@@ -308,7 +330,6 @@ function routeWorldPoint(
   p: number,
   lane = 0,
   junctions?: { entry: number; exit: number },
-  pathEase = 0,
 ): WorldPoint {
   if (route.length === 1) return {
     x: tileToWorldX(map, route[0].x),
@@ -333,40 +354,30 @@ function routeWorldPoint(
   const ay = surfaceHeight(map, route[i0].x, route[i0].z)
   const by = surfaceHeight(map, route[i0 + 1].x, route[i0 + 1].z)
   const point = { x: ax + (bx - ax) * frac, y: ropeHeightAt(map, a.x + (b.x - a.x) * frac, a.z + (b.z - a.z) * frac) ?? ay + (by - ay) * frac, z: az + (bz - az) * frac }
-  const cornerIndex = Math.round(p)
-  if (pathEase > 0 && cornerIndex > 0 && cornerIndex < route.length - 1) {
-    const previous = route[cornerIndex - 1], corner = route[cornerIndex], next = route[cornerIndex + 1]
-    // Use integer route tiles for bridge heights, and lane vertices for the arc.
-    const height = surfaceHeight(map, corner.x, corner.z)
-    if (surfaceHeight(map, previous.x, previous.z) === height && surfaceHeight(map, next.x, next.z) === height) {
-      const rounded = roundedCorner(vertex(cornerIndex - 1), vertex(cornerIndex), vertex(cornerIndex + 1), p - cornerIndex, pathEase)
-      if (rounded) { point.x = tileToWorldX(map, rounded.x); point.z = tileToWorldZ(map, rounded.z) }
-    }
-  }
   return point
 }
 
-function roadWorldPoint(map: GameMap, p: number, lane: number, pathEase = 0): WorldPoint {
-  return routeWorldPoint(map, map.road!, p, lane, undefined, pathEase)
+function roadWorldPoint(map: GameMap, p: number, lane: number): WorldPoint {
+  return routeWorldPoint(map, map.road!, p, lane)
 }
 
 /** Where on their route — road or track — the traveler currently belongs. */
-function currentRoutePoint(map: GameMap, s: SimTraveler, pathEase = 0): WorldPoint {
+function currentRoutePoint(map: GameMap, s: SimTraveler): WorldPoint {
   if (s.track) {
     const track = map.shortcuts![s.track.index]
-    return routeWorldPoint(map, track.tiles, s.track.progress, s.lane, track, pathEase)
+    return routeWorldPoint(map, track.tiles, s.track.progress, s.lane, track)
   }
-  return roadWorldPoint(map, s.progress, s.lane, pathEase)
+  return roadWorldPoint(map, s.progress, s.lane)
 }
 
 /** Join the shrine's walking lanes to the traveler's road lane over the first tile. */
-function shrineWorldPoint(map: GameMap, s: SimTraveler, pathEase = 0): WorldPoint {
+function shrineWorldPoint(map: GameMap, s: SimTraveler): WorldPoint {
   const site = map.site!
-  const point = routeWorldPoint(map, site.branch, s.branchProgress, s.lane, undefined, pathEase)
+  const point = routeWorldPoint(map, site.branch, s.branchProgress, s.lane)
   if (s.branchProgress < 1) {
     const start = routeWorldPoint(map, site.branch, 0, s.lane)
     const roadLane = s.activity === "toRelic" ? s.branchEntryLane : s.direction * s.laneOffset
-    const road = roadWorldPoint(map, site.junction, roadLane, pathEase)
+    const road = roadWorldPoint(map, site.junction, roadLane)
     const blend = 1 - s.branchProgress
     point.x += (road.x - start.x) * blend
     point.y += (road.y - start.y) * blend
@@ -450,6 +461,7 @@ export function createSim(
       walkFrom: null,
       spot: null,
       walkT: 0,
+      offRoadRoute: null,
       targetId: null,
       timer: t.type.id === "vendor" ? vendWalkSeconds(t.id, 0) : 0,
       cycle: 0,
@@ -462,7 +474,7 @@ export function createSim(
  * Nearest open tile to a world point: grass, dirt, or a forest-floor clearing —
  * never solid woods or the road itself.
  */
-function findClearTile(map: GameMap, wx: number, wz: number): { x: number; z: number } | null {
+function findClearTile(map: GameMap, wx: number, wz: number, start: TilePos): { x: number; z: number } | null {
   const cx = worldToTileX(map, wx)
   const cz = worldToTileZ(map, wz)
   for (let r = 0; r <= CAMP_SEARCH_RADIUS; r++) {
@@ -471,7 +483,8 @@ function findClearTile(map: GameMap, wx: number, wz: number): { x: number; z: nu
         if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue
         const terrain = tileAt(map, cx + dx, cz + dz)
         if ((terrain === "grass" || terrain === "dirt" || terrain === "clearing") && !buildingAt(map, cx + dx, cz + dz)) {
-          return { x: cx + dx, z: cz + dz }
+          const goal = { x: cx + dx, z: cz + dz }
+          if (settlementRoute(map, map.buildings, start, goal)) return goal
         }
       }
     }
@@ -501,16 +514,8 @@ function findNearbySpot(
   return best
 }
 
-const STALL_ACTIVITIES: readonly Activity[] = ["toShop", "vending"]
+const STALL_ACTIVITIES: readonly Activity[] = ["toShop", "openingShop", "vending", "packingShop"]
 const CAMP_ACTIVITIES: readonly Activity[] = ["toCamp", "camping"]
-
-/** Spread same-tile pitches apart with a per-traveler hash, not RNG. */
-function pitchJitter(id: number): { x: number; z: number } {
-  return {
-    x: (((id * 73) % 100) / 100 - 0.5) * 0.6,
-    z: (((id * 37) % 100) / 100 - 0.5) * 0.6,
-  }
-}
 
 /** World-space pitch on the nearest clearing to `anchor`, or in place if none. */
 function pitchSpot(
@@ -518,13 +523,12 @@ function pitchSpot(
   s: SimTraveler,
   anchor: { x: number; z: number },
 ): { x: number; y: number; z: number } {
-  const tile = findClearTile(map, anchor.x, anchor.z)
-  const jitter = pitchJitter(s.id)
+  const tile = findClearTile(map, anchor.x, anchor.z, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) })
   return tile
     ? {
-        x: tileToWorldX(map, tile.x) + jitter.x,
+        x: tileToWorldX(map, tile.x),
         y: surfaceHeight(map, tile.x, tile.z),
-        z: tileToWorldZ(map, tile.z) + jitter.z,
+        z: tileToWorldZ(map, tile.z),
       }
     : { x: s.x, y: s.y, z: s.z }
 }
@@ -532,6 +536,7 @@ function pitchSpot(
 function startOffRoadWalk(s: SimTraveler, activity: Activity): void {
   s.walkFrom = { x: s.x, y: s.y, z: s.z }
   s.walkT = 0
+  s.offRoadRoute = null
   s.activity = activity
   s.targetId = null
 }
@@ -548,22 +553,58 @@ function startCamping(sim: SimState, s: SimTraveler, traveler: Traveler, map: Ga
   startOffRoadWalk(s, "toCamp")
 }
 
-/** Advance an off-road walk; returns true when the far end is reached. */
+/** Camps and stalls use the same four-neighbour routing as settlement work. */
 function stepOffRoadWalk(
   s: SimTraveler,
-  to: { x: number; y: number; z: number },
+  to: WorldPoint,
   worldSpeed: number,
   dt: number,
-  pathEase = 0,
+  map: GameMap,
 ): boolean {
-  const from = s.walkFrom!
-  const dist = Math.max(0.001, Math.hypot(to.x - from.x, to.z - from.z))
-  s.walkT = Math.min(1, s.walkT + (worldSpeed * dt) / dist)
-  const eased = easeProgress(s.walkT, pathEase)
-  s.x = from.x + (to.x - from.x) * eased
-  s.y = from.y + (to.y - from.y) * eased
-  s.z = from.z + (to.z - from.z) * eased
-  return s.walkT >= 1
+  if (!s.offRoadRoute) {
+    const route = settlementRoute(map, map.buildings,
+      { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
+      { x: worldToTileX(map, to.x), z: worldToTileZ(map, to.z) })
+    if (!route) return false
+    const points = route.map(p => ({ x: tileToWorldX(map, p.x), y: surfaceHeight(map, p.x, p.z), z: tileToWorldZ(map, p.z) }))
+    // Align to/from the road lane inside its tile; never take a diagonal shortcut.
+    const first = points[0], last = points.at(-1)!
+    s.offRoadRoute = [
+      { x: first.x, y: s.y, z: s.z }, ...points,
+      { x: to.x, y: last.y, z: last.z }, { ...to },
+    ]
+  }
+  let distance = worldSpeed * dt
+  while (s.offRoadRoute.length) {
+    const target = s.offRoadRoute[0]
+    const dx = target.x - s.x, dz = target.z - s.z, length = Math.hypot(dx, dz)
+    if (length > distance) {
+      const t = distance / length
+      s.x += dx * t; s.y += (target.y - s.y) * t; s.z += dz * t
+      return false
+    }
+    s.x = target.x; s.y = target.y; s.z = target.z
+    distance -= length
+    s.offRoadRoute.shift()
+  }
+  s.walkT = 1
+  return true
+}
+
+/** Customers have already aligned with the entrance on the road. Their final
+ * axis-aligned leg stops at the frontage, before the display tile's centre. */
+function startCustomerWalk(s: SimTraveler, activity: "toStall" | "fromStall"): void {
+  startOffRoadWalk(s, activity)
+  s.offRoadRoute = [{ ...s.customerVisit![activity === "toStall" ? "frontage" : "road"] }]
+}
+
+function stepStallWalk(map: GameMap, s: SimTraveler, leaving: boolean, distance: number): boolean {
+  if (!s.stallRoute) return stepOffRoadWalk(s, leaving ? currentRoutePoint(map, s) : s.spot!, distance, 1, map)
+  const route = leaving ? s.stallRoute.exit : s.stallRoute.entry
+  s.walkT = Math.min(routeLength(route), s.walkT + distance)
+  const p = routePoint(route, s.walkT)
+  s.x = p.x; s.z = p.z; s.y = surfaceHeight(map, worldToTileX(map, p.x), worldToTileZ(map, p.z))
+  return s.walkT >= routeLength(route)
 }
 
 function routeState(t: Traveler, s: SimTraveler): RouteState {
@@ -703,6 +744,7 @@ export function stepSim(
   movement: MovementTuning = LINEAR_MOVEMENT,
   /** Rendered stride relative to the reference person, keyed by traveler ID. */
   speedScales?: ReadonlyMap<number, number>,
+  characterScale = BASE_CHARACTER_SCALE,
 ): void {
   if (!map.road || map.road.length < 2) return
   const length = map.road.length - 1
@@ -745,10 +787,15 @@ export function stepSim(
     }
 
     const targetSpeed = t.pace * baseSpeed * (speedScales?.get(t.id) ?? 1) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
-    s.moveSpeed = camping || sheltered || s.activity === "working" || s.activity === "vending" ? 0 :
+    s.moveSpeed = camping || sheltered || s.activity === "working" || s.activity === "browsing" || s.activity === "openingShop" || s.activity === "packingShop" || s.activity === "vending" ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed
 
+    if (s.pasture && (s.activity === "openingShop" || s.activity === "vending" || s.activity === "packingShop")) {
+      s.pasture.obstacles = [...sim.travelers.values()].flatMap(other =>
+        other.stallRoute && ["openingShop", "vending", "packingShop"].includes(other.activity) ? other.stallRoute.obstacles : [])
+      stepPasture(map, s.pasture, dt, Math.max(0.01, targetSpeed), s.activity === "packingShop")
+    }
     switch (s.activity) {
       case "toRelic":
       case "fromRelic": {
@@ -757,7 +804,7 @@ export function stepSim(
         s.branchProgress = Math.max(0, Math.min(branch.length - 1,
           s.branchProgress + (inbound ? 1 : -1) * worldSpeed * dt))
         stepLane(s, inbound ? 1 : -1, worldSpeed * dt)
-        const at = shrineWorldPoint(map, s, movement.pathEase)
+        const at = shrineWorldPoint(map, s)
         s.x = at.x
         s.y = at.y
         s.z = at.z
@@ -845,12 +892,17 @@ export function stepSim(
           if (s.fleeTimer <= 0) s.activity = "walking"
         }
         // A vendor whose walking stint is up pulls off to the side of the path.
-        if (isVendor && !shelter) {
+        if (isVendor && !shelter && !s.track) {
           s.timer -= dt
           if (s.timer <= 0) {
-            s.spot = pitchSpot(map, s, s)
-            startOffRoadWalk(s, "toShop")
-            break
+            const pitch = roadsideStall(map, s, s.progress, s.direction, -cartOffset(cartLoadout(s.id).puller) * characterScale, characterScale, cartLoadout(s.id).puller)
+            if (pitch) {
+              s.stallRoute = pitch
+              s.spot = { ...pitch.park, y: surfaceHeight(map, worldToTileX(map, pitch.park.x), worldToTileZ(map, pitch.park.z)) }
+              startOffRoadWalk(s, "toShop")
+              break
+            }
+            s.timer = 5
           }
         }
         // Nobody goes shopping from the middle of the dark forest: on a track
@@ -869,12 +921,25 @@ export function stepSim(
             .map((v) => sim.travelers.get(v.id))
             .filter(
               (v): v is SimTraveler =>
-                !!v && !CAMP_ACTIVITIES.includes(v.activity) && v.activity !== "fromCamp",
+                !!v && v.activity !== "openingShop" && v.activity !== "packingShop" && !CAMP_ACTIVITIES.includes(v.activity) && v.activity !== "fromCamp",
             )
             .sort((a, b) => Math.abs(a.progress - s.progress) - Math.abs(b.progress - s.progress))[0]
 
           if (vendor) {
             s.targetId = vendor.id
+            if (vendor.activity === "vending" && vendor.stallRoute && !s.track) {
+              const entrance = vendor.stallRoute.entranceProgress
+              const remaining = entrance - s.progress, step = worldSpeed * SEEK_HASTE * dt
+              s.progress += Math.sign(remaining) * Math.min(Math.abs(remaining), step)
+              const at = currentRoutePoint(map, s)
+              s.x = at.x; s.y = at.y; s.z = at.z
+              if (Math.abs(remaining) <= step) {
+                const front = vendor.stallRoute.frontage
+                s.customerVisit = { vendorId: vendor.id, road: at, frontage: { ...front, y: surfaceHeight(map, worldToTileX(map, front.x), worldToTileZ(map, front.z)) } }
+                startCustomerWalk(s, "toStall")
+              }
+              break
+            }
             const range = vendor.activity === "vending" ? STALL_TRADE_RANGE : TRADE_RANGE
             if (Math.hypot(vendor.x - s.x, vendor.z - s.z) <= range) {
               if (s.hunger <= BUY_THRESHOLD) {
@@ -915,7 +980,7 @@ export function stepSim(
             }
           }
           stepLane(s, s.activity === "fleeing" ? s.direction : direction, worldSpeed * haste * dt)
-          const at = currentRoutePoint(map, s, movement.pathEase)
+          const at = currentRoutePoint(map, s)
           s.x = at.x
           s.y = at.y
           s.z = at.z
@@ -938,7 +1003,7 @@ export function stepSim(
               s.targetId = null
               s.branchEntryLane = s.lane
               s.lane = s.laneOffset
-              const at = shrineWorldPoint(map, s, movement.pathEase)
+              const at = shrineWorldPoint(map, s)
               s.x = at.x
               s.y = at.y
               s.z = at.z
@@ -970,28 +1035,71 @@ export function stepSim(
           }
         }
         stepLane(s, s.activity === "fleeing" ? s.direction : direction, worldSpeed * haste * dt)
-        const at = currentRoutePoint(map, s, movement.pathEase)
+        const at = currentRoutePoint(map, s)
         s.x = at.x
         s.y = at.y
         s.z = at.z
         break
       }
 
-      case "toShop": {
-        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, movement.pathEase)) {
-          s.activity = "vending"
-          s.timer = vendShopSeconds(s.id, s.cycle)
+      case "toStall": {
+        const visit = s.customerVisit!, vendor = sim.travelers.get(visit.vendorId)
+        if (!vendor || vendor.activity !== "vending") { startCustomerWalk(s, "fromStall"); break }
+        if (stepOffRoadWalk(s, visit.frontage, worldSpeed, dt, map)) { s.activity = "browsing"; s.timer = 2 }
+        break
+      }
+      case "browsing": {
+        const vendor = sim.travelers.get(s.customerVisit!.vendorId)
+        s.timer = Math.max(0, s.timer - dt)
+        if (s.timer === 0 || !vendor || vendor.activity !== "vending") {
+          if (vendor?.activity === "vending") {
+            if (s.hunger <= BUY_THRESHOLD) { pay(s, vendor, FOOD_PRICE); s.hunger = 100 }
+            if (s.thirst <= BUY_THRESHOLD) { pay(s, vendor, WINE_PRICE); s.thirst = 100; s.stamina = Math.min(100, s.stamina + WINE_STAMINA_BONUS) }
+          }
+          startCustomerWalk(s, "fromStall")
+        }
+        break
+      }
+      case "fromStall": {
+        if (stepOffRoadWalk(s, s.customerVisit!.road, worldSpeed, dt, map)) {
+          s.activity = "walking"; s.customerVisit = undefined; s.walkFrom = null
         }
         break
       }
 
+      case "toShop": {
+        if (stepStallWalk(map, s, false, worldSpeed * dt)) {
+          s.activity = "openingShop"
+          s.timer = SHOP_SECONDS
+          if (cartLoadout(s.id).puller !== "hand") s.pasture = createPasture(s, s.stallRoute?.obstacles, animalClearance(cartLoadout(s.id).puller, characterScale))
+
+        }
+        break
+      }
+
+      case "openingShop": {
+        s.timer = Math.max(0, s.timer - dt)
+        if (s.timer === 0) { s.activity = "vending"; s.keeperTime = 0; s.timer = vendShopSeconds(s.id, s.cycle) }
+        break
+      }
+      case "packingShop": {
+        s.timer = Math.max(0, s.timer - dt)
+        if (s.timer === 0 && (!s.pasture || s.pasture.ready)) {
+          s.pasture = undefined
+          startOffRoadWalk(s, "fromShop")
+        }
+        break
+      }
       case "vending": {
-        // The stall stands beside the path; customers come to it.
+        // Finish the keeper's short return walk before unloading the site.
+        s.keeperTime = (s.keeperTime ?? 0) + dt
         s.timer -= dt
-        if (s.timer <= 0) {
+        const keeperHome = keeperRoutine(s.keeperTime, cartLoadout(s.id).puller, characterScale, personWalkStride(populationDesign(t.type, travelerAppearance(map.seed ?? 0, t.id).variant)) * characterScale).atHome
+        if (s.timer <= 0 && keeperHome) {
           s.cycle++
           if (s.spot) {
-            startOffRoadWalk(s, "fromShop")
+            s.activity = "packingShop"
+            s.timer = SHOP_SECONDS
           } else {
             s.timer = vendWalkSeconds(s.id, s.cycle)
             s.activity = "walking"
@@ -1001,8 +1109,9 @@ export function stepSim(
       }
 
       case "fromShop": {
-        const back = currentRoutePoint(map, s, movement.pathEase)
-        if (stepOffRoadWalk(s, back, worldSpeed, dt, movement.pathEase)) {
+        if (stepStallWalk(map, s, true, worldSpeed * dt)) {
+          if (s.stallRoute) s.progress = s.stallRoute.returnProgress
+          s.stallRoute = undefined
           s.activity = "walking"
           s.spot = null
           s.walkFrom = null
@@ -1012,7 +1121,7 @@ export function stepSim(
       }
 
       case "toCamp": {
-        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, movement.pathEase)) s.activity = "camping"
+        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, map)) s.activity = "camping"
         break
       }
 
@@ -1022,8 +1131,8 @@ export function stepSim(
       }
 
       case "fromCamp": {
-        const back = currentRoutePoint(map, s, movement.pathEase)
-        if (stepOffRoadWalk(s, back, worldSpeed, dt, movement.pathEase)) {
+        const back = currentRoutePoint(map, s)
+        if (stepOffRoadWalk(s, back, worldSpeed, dt, map)) {
           s.activity = "walking"
           s.spot = null
           s.walkFrom = null

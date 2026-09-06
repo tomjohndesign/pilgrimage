@@ -1,5 +1,6 @@
 import * as THREE from "three"
-import { BASE_PERSON, PERSON_CLIPS, ACTION_CLIPS, SOCKET_NAMES, type BaseClip, type ActionClip, type SocketName } from "./pose"
+import { personCamera } from "./camera"
+import { BASE_PERSON, PERSON_CLIPS, WALK_CLIP_STRIDES, ACTION_CLIPS, SOCKET_NAMES, type BaseClip, type ActionClip, type SocketName } from "./pose"
 import { DEFAULT_DESIGN, personRecipe, type PersonDesign } from "./design"
 import { personCastShadow } from "./shadow"
 import { inkPersonFrame } from "./ink"
@@ -28,6 +29,7 @@ export interface BasePersonBake {
     anchor: number[]
     directions: string[]
     frameCount: number
+    walkStrides: number
     camera: typeof BASE_PERSON.camera
     handedness: string
     design: PersonDesign
@@ -39,7 +41,7 @@ export interface BasePersonBake {
 let bakeRenderer: THREE.WebGLRenderer | undefined
 
 /** Shared camera, ink and registration for both live previews and exported sheets. */
-function personFrameRenderer(design: PersonDesign) {
+export function personFrameRenderer(design: PersonDesign) {
   const recipe = personRecipe(design)
   const size = recipe.cellSize
   // One small renderer per page, reused while adjusting parameters.
@@ -56,13 +58,7 @@ function personFrameRenderer(design: PersonDesign) {
   const light = new THREE.DirectionalLight(0xffffff, 1.8)
   light.position.set(-3, 7, 5)
   scene.add(light)
-  const pitch = recipe.camera.pitch * Math.PI / 180
-  const extent = recipe.camera.viewSize
-  const targetY = ((recipe.anchor[1] - size / 2) / size * extent) / Math.cos(pitch)
-  const camera = new THREE.OrthographicCamera(-extent / 2, extent / 2, extent / 2, -extent / 2, 0.1, 30)
-  camera.position.set(0, targetY + 10 * Math.sin(pitch), 10 * Math.cos(pitch))
-  camera.lookAt(0, targetY, 0)
-  camera.updateMatrixWorld(true)
+  const camera = personCamera(recipe)
   const position = new THREE.Vector3()
   const palette = recipe.renderPalette.map((hex) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)))
   const canvas = document.createElement("canvas")
@@ -73,10 +69,11 @@ function personFrameRenderer(design: PersonDesign) {
   const maskContext = maskCanvas.getContext("2d", { willReadFrequently: true })!
   return {
     recipe,
-    render(clip: BaseClip, phase: number, row: number, debug: boolean) {
+    render(clip: BaseClip, phase: number, row: number, debug: boolean, poseOverride?: (rig: ReturnType<typeof createBasePersonRig>) => void) {
       rig.trackSides(debug)
       rig.view(row)
-      rig.pose(phase, clip)
+      rig.pose(phase * (clip === "walk" ? WALK_CLIP_STRIDES : 1), clip)
+      poseOverride?.(rig)
       renderer.render(scene, camera)
       context.clearRect(0, 0, size, size)
       context.drawImage(renderer.domElement, 0, 0)
@@ -180,7 +177,7 @@ export function bakeBasePerson(design: PersonDesign = DEFAULT_DESIGN, diagnostic
         template: recipe.id, version: recipe.version, cellSize: size,
         nominalHeightPixels: recipe.nominalHeightPixels, renderPalette: recipe.renderPalette,
         anchor: recipe.anchor, directions: recipe.directions,
-        frameCount: recipe.framesPerCycle, camera: recipe.camera,
+        frameCount: PERSON_CLIPS.walk.frames, walkStrides: WALK_CLIP_STRIDES, camera: recipe.camera,
         design: recipe.design, safePadding,
         handedness: "+X = anatomical left; +Z = forward. Never mirror a dressed sprite.", clips,
       },

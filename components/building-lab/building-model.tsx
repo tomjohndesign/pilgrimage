@@ -7,7 +7,7 @@ import { buildingParts, type BuildingPart } from "@/lib/game/building-art/geomet
 import { BUILDING_STYLE, type BuildingRecipe } from "@/lib/game/building-art/style"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 
-function Part({ part, idColor, onClick }: { part: BuildingPart; idColor?: THREE.Color; onClick?: (event: ThreeEvent<MouseEvent>) => void }) {
+function Part({ part, idColor, onClick, ghostColor, ink = true }: { part: BuildingPart; idColor?: THREE.Color; onClick?: (event: ThreeEvent<MouseEvent>) => void; ghostColor?: string; ink?: boolean }) {
   const geometry = useMemo(() => {
     if (part.size) return new THREE.BoxGeometry(...part.size)
     const result = new THREE.BufferGeometry()
@@ -17,11 +17,19 @@ function Part({ part, idColor, onClick }: { part: BuildingPart; idColor?: THREE.
   }, [part])
   const edges = useMemo(() => new THREE.EdgesGeometry(geometry, 25), [geometry])
   useEffect(() => () => { geometry.dispose(); edges.dispose() }, [geometry, edges])
+  if (ghostColor) return <group position={part.position} rotation={part.rotation}>
+    <mesh geometry={geometry} renderOrder={4} raycast={() => {}}>
+      <meshBasicMaterial color={ghostColor} transparent opacity={0.12} depthWrite={false} side={THREE.DoubleSide} />
+    </mesh>
+    {part.outline !== false && <lineSegments geometry={edges} renderOrder={5} raycast={() => {}}>
+      <lineBasicMaterial color={ghostColor} transparent opacity={0.8} depthWrite={false} />
+    </lineSegments>}
+  </group>
   return <group position={part.position} rotation={part.rotation}>
     <mesh name={part.name} geometry={geometry} onClick={onClick}>
       <meshLambertMaterial color={part.color} side={THREE.DoubleSide} />
     </mesh>
-    {part.outline !== false && !part.name.startsWith("reed-") && !part.name.startsWith("thatch-grain-") && !part.name.startsWith("thatch-highlight-") && <lineSegments geometry={edges} raycast={() => {}}>
+    {ink && part.outline !== false && !part.name.startsWith("reed-") && !part.name.startsWith("thatch-grain-") && !part.name.startsWith("thatch-highlight-") && <lineSegments geometry={edges} raycast={() => {}}>
       <lineBasicMaterial color={BUILDING_STYLE.palette.ink} transparent opacity={0.65} />
     </lineSegments>}
     {idColor && <mesh geometry={geometry} layers-mask={OUTLINE_ID_LAYER_MASK}>
@@ -31,7 +39,7 @@ function Part({ part, idColor, onClick }: { part: BuildingPart; idColor?: THREE.
 }
 
 /** Material details share meshes, keeping four-view previews inexpensive. */
-function batchDetails(parts: BuildingPart[]): BuildingPart[] {
+export function batchDetails(parts: BuildingPart[]): BuildingPart[] {
   const visible: BuildingPart[] = [], groups = new Map<string, BuildingPart>()
   for (const part of parts) {
     if (part.outline !== false) { visible.push(part); continue }
@@ -53,4 +61,12 @@ export function BuildingModel({ recipe, cutaway = false, idColor, onClick }: {
 }) {
   const parts = useMemo(() => batchDetails(buildingParts(recipe)), [recipe])
   return <group name="ink-and-thatch-building">{parts.filter((p) => !cutaway || p.layer === "base").map((part) => <Part key={part.name} part={part} idColor={idColor} onClick={onClick} />)}</group>
+}
+
+/** Ghosts retain every surface, with frame lines only on structural parts. */
+export function StructureModel({ parts, idColor, ghostColor, ink = true }: {
+  parts: BuildingPart[]; idColor?: THREE.Color; ghostColor?: string; ink?: boolean
+}) {
+  const rendered = useMemo(() => batchDetails(parts), [parts])
+  return <group>{rendered.map((part) => <Part key={part.name} part={part} idColor={idColor} ghostColor={ghostColor} ink={ink} />)}</group>
 }

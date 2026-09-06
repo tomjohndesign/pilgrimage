@@ -1,5 +1,7 @@
+import { EARLY_BUILDINGS, BUILDING_STYLE, type EarlyBuildingType } from "./building-art/style"
+
 /** Pure balance data, shared by gameplay, the tuning page and the specification. */
-export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "lumberCamp"
+export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "lumberCamp" | Exclude<EarlyBuildingType, "enclosure">
 
 export interface Resources {
   gold: number
@@ -105,6 +107,21 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.04,
     color: "#7a5a3a", roofColor: "#54402c",
   },
+  ...EARLY_BUILDINGS.filter((preset) => preset.id !== "enclosure").map((preset): BuildDefinition => ({
+    id: preset.id,
+    label: preset.name,
+    category: "buildings",
+    description: preset.description,
+    cost: { gold: preset.width * preset.depth * 10, wood: preset.width * preset.depth * 10 },
+    renown: 0,
+    requiredRenown: 0,
+    income: { gold: 0, wood: 0 },
+    w: preset.width,
+    d: preset.depth,
+    height: preset.wallHeight,
+    color: BUILDING_STYLE.palette.plaster,
+    roofColor: BUILDING_STYLE.palette.thatch,
+  })),
 ]
 
 export const RULE_GROUPS = [
@@ -511,14 +528,19 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
     const preset = record(JSON.parse(json))
     if (preset?.version !== BALANCE_VERSION)
       return { balance: null, error: "Unsupported preset version. Expected version 1." }
-    // Version 1 presets made before lumber camps keep every existing setting.
+    // Add defaults for new structures while retaining all authored settings.
     const saved = record(preset.balance)
     const rules = record(saved?.rules)
     const buildings = record(saved?.buildings)
     return validateBalance(saved && rules && buildings ? {
       ...saved,
       rules: { visitRenown: DEFAULT_BALANCE.rules.visitRenown, ...rules },
-      buildings: { lumberCamp: DEFAULT_BALANCE.buildings.lumberCamp, ...buildings },
+      buildings: {
+        lumberCamp: DEFAULT_BALANCE.buildings.lumberCamp,
+        ...Object.fromEntries(EARLY_BUILDINGS.filter((preset) => preset.id !== "enclosure")
+          .map((preset) => [preset.id, DEFAULT_BALANCE.buildings[preset.id]])),
+        ...buildings,
+      },
     } : preset.balance)
   } catch {
     return { balance: null, error: "This file is not valid JSON." }

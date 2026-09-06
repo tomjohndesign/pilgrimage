@@ -24,7 +24,7 @@ describe("monks wandering around the shrine", () => {
     expect(wander.spots.some(p => worldToTileX(map, p.x) === 5 && worldToTileZ(map, p.z) === 5)).toBe(false)
   })
 
-  it("routes both ways around buildings, water, woods and cliffs, including jittered endpoints", () => {
+  it("snaps destinations to the grid and routes around buildings, water, woods and cliffs", () => {
     const map = grounds()
     map.elevation!.height[5 * 9 + 5] = 2
     map.tiles[3 * 9 + 4] = "water"
@@ -35,7 +35,7 @@ describe("monks wandering around the shrine", () => {
       const start = { ...a, x: a.x + 0.24, z: a.z - 0.24 }
       const goal = { ...b, x: b.x - 0.24, z: b.z + 0.24 }
       const path = wander.route(start, goal)
-      expect(path.at(-1)).toEqual(goal)
+      expect(path.at(-1)).toEqual(b)
       let previous = start
       for (const point of path) {
         let last = worldToTileZ(map, previous.z) * 9 + worldToTileX(map, previous.x)
@@ -59,7 +59,7 @@ describe("monks wandering around the shrine", () => {
     finishElevation(map.elevation!, 9, 9, new Uint8Array(81), Array(81).fill(0))
     const wander = monkWander(map)
     const goal = { x: tileToWorldX(map, 7), y: 1.6, z: tileToWorldZ(map, 5) }
-    expect(wander.route(wander.spots[0], goal).at(-1)).toEqual(goal)
+    expect(wander.route(wander.spots[0], goal).at(-1)).toMatchObject({ x: goal.x, z: goal.z })
   })
 
   it("has no wanderers without an accessible shrine door", () => {

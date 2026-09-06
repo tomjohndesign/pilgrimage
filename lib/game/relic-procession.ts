@@ -1,4 +1,3 @@
-import { walkingSurface } from "./map/walking-surface"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "./map/types"
 import { monkWander, type WanderSpot } from "./monk-wander"
 import { BASE_PERSON, PERSON_CLIPS } from "./base-person/pose"
@@ -37,27 +36,16 @@ export function processionGrounds(map: GameMap, wander = monkWander(map)) {
   const door = wander.spots.find(p => p.x === tileToWorldX(map, map.site!.door.x) && p.z === tileToWorldZ(map, map.site!.door.z))
   if (!door) return null
   const centre = wander.centre
-  const dx = door.x - centre.x, dz = door.z - centre.z
-  const alongX = Math.abs(dx) > Math.abs(dz)
-  // Align with the open gate, then stop beside the table instead of crossing it.
-  const gate = { ...door, x: alongX ? door.x : centre.x, z: alongX ? centre.z : door.z }
-  const altar = { x: centre.x + (alongX ? Math.sign(dx) * 0.5 : 0),
-    z: centre.z + (alongX ? 0 : Math.sign(dz) * 0.5), y: 0 }
-  altar.y = walkingSurface(map, altar.x, altar.z).height
-  return { door, gate, altar, centre, wander }
+  // Use a reachable tile beside the table, entering through the shared grid gates.
+  const altar = [...wander.prayerSpots].sort((a, b) =>
+    Math.hypot(a.x - door.x, a.z - door.z) - Math.hypot(b.x - door.x, b.z - door.z))[0]
+  if (!altar) return null
+  return { door, altar, centre, wander }
 }
 export type ProcessionGrounds = NonNullable<ReturnType<typeof processionGrounds>>
 
 function routeToAltar(actor: WanderSpot, grounds: ProcessionGrounds): WanderSpot[] {
-  const route = grounds.wander.route(actor, grounds.door)
-  if (route.length) return [...route, grounds.gate, grounds.altar]
-  // A second command can arrive while the previous carrier is still leaving
-  // the enclosure. He can turn back along the same unobstructed gate corridor.
-  const { altar, gate } = grounds
-  const dx = gate.x - altar.x, dz = gate.z - altar.z, lengthSquared = dx * dx + dz * dz
-  const t = lengthSquared ? ((actor.x - altar.x) * dx + (actor.z - altar.z) * dz) / lengthSquared : 0
-  if (t >= 0 && t <= 1 && Math.hypot(actor.x - altar.x - dx * t, actor.z - altar.z - dz * t) < 0.05) return [altar]
-  return []
+  return grounds.wander.route(actor, grounds.altar)
 }
 
 export function startProcession(p: RelicProcession, monkId: number, actor: WanderSpot, grounds: ProcessionGrounds): boolean {
@@ -101,10 +89,10 @@ export function stepProcession(p: RelicProcession, actor: WanderSpot, grounds: P
   } else if (p.elapsed >= RELIC_LIFT_SECONDS) {
     if (p.stage === "lifting") {
       enter("carrying")
-      p.route = [grounds.gate, grounds.door, ...grounds.wander.route(grounds.door, pick())]
+      p.route = grounds.wander.route(actor, pick())
     } else {
       Object.assign(p, createRelicProcession())
-      return [grounds.gate, grounds.door, ...grounds.wander.route(grounds.door, pick())]
+      return grounds.wander.route(actor, pick())
     }
   }
   p.position = { x: actor.x, y: actor.y, z: actor.z }

@@ -14,11 +14,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 import { usePixelWorldTexel } from "@/components/pixel-canvas"
-import { characterVisual, spriteRow, type CharacterModel } from "@/lib/game/character-assets"
+import { characterVisual, spriteRow, type SpriteClip, type CharacterModel } from "@/lib/game/character-assets"
 import { usePopulationStore } from "@/lib/game/base-person/population-store"
 import { populationVisual } from "@/lib/game/base-person/population-assets"
 import type { TravelerAppearance } from "@/lib/game/base-person/population"
-import { advanceWalkPhase, type WalkTuning } from "@/lib/game/motion"
+import { advanceWalkPhase, walkClipFrame, type WalkTuning } from "@/lib/game/motion"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { useCharacterAssetStore } from "@/lib/game/character-asset-store"
 import type { TravelerTypeId } from "@/lib/game/travelers"
@@ -147,20 +147,21 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
       clock.current = (parent.userData.phase ?? 0) % 1
       seeded.current = true
     }
+    if (parent.userData.motionReset) footPlant.current = null
     const dt = Math.min(delta, 0.1) * (parent.userData.playbackRate ?? 1)
     if (requested !== lastClip.current) { actionClock.current = 0; lastClip.current = requested }
     const previousActionTime = actionClock.current
     if ((requested !== "carrying" && requested !== "procession") || moving) actionClock.current += dt
     if (moving) {
       const stride = visual.walkStride * individualScale * (walkTuning?.stride ?? DEFAULT_WALK_STRIDE) / DEFAULT_WALK_STRIDE
-      clock.current = advanceWalkPhase(clock.current, parent.userData.distance ?? 0, dt,
-        visual.walk.columns, fps, stride, walkTuning?.sync === true)
+      clock.current = advanceWalkPhase(clock.current, parent.userData.playbackRate === 0 ? 0 : parent.userData.distance ?? 0, dt,
+        visual.walk.columns, fps, stride, walkTuning?.sync !== false, visual.walk.strides ?? 1)
     }
-    if (sprite.current) sprite.current.userData.walkPhase = clock.current
-    const clip = action ?? (moving ? visual.walk : visual.idle)
+    if (sprite.current) Object.assign(sprite.current.userData, { walkPhase: clock.current, walkStride: visual.walkStride * individualScale, distance: parent.userData.distance ?? 0 })
+    const clip: SpriteClip = action ?? (moving ? visual.walk : visual.idle)
     const texture = textures[actionIndex ?? (moving ? 0 : 1)]
-    let frame = action ? (requested === "carrying" || requested === "procession") ? Math.floor(clock.current * clip.columns) :
-      Math.floor(actionClock.current * fps * (action.playbackRate ?? 1)) % clip.columns : moving ? Math.floor(clock.current * clip.columns) : clip.stillFrame
+    let frame = action ? (requested === "carrying" || requested === "procession") ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) :
+      Math.floor(actionClock.current * fps * (action.playbackRate ?? 1)) % clip.columns : moving ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) : clip.stillFrame
     if (requested === "hoisting") {
       const progress = parent.userData.actionProgress ?? actionClock.current
       frame = Math.min(clip.columns - 1, Math.floor(progress * fps))
@@ -176,8 +177,8 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     const direction = spriteRow(heading, yaw)
     const row = visual.rowOffset + direction
     if (poseRoot.current) {
-      if (moving && rigBody && walkTuning?.sync) {
-        const foot = walkContact(clock.current, clip.columns, rigBody)
+      if (moving && rigBody && walkTuning?.sync !== false) {
+        const foot = walkContact(clock.current, clip.columns, rigBody, clip.strides ?? 1)
         // Reconstruct the baked ground contact in the current camera's ground
         // plane. The selected direction, not the smoothed group heading, is
         // what the artwork shows. This also handles changes in camera pitch.
@@ -238,7 +239,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   // Equal-depth overlaps must choose the same traveler in the color and ID passes.
   return (
     <group ref={poseRoot}>
-      <sprite renderOrder={renderOrder} ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name={name} material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync === true }} />
+      <sprite renderOrder={renderOrder} ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name={name} material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync !== false }} />
       {attachment && <group ref={attachmentRoot} visible={false}>{attachment.content}</group>}
       {outlineMaterial && <sprite renderOrder={renderOrder} layers-mask={OUTLINE_ID_LAYER_MASK} material={outlineMaterial}
         scale={[size, size, 1]} center={center} />}

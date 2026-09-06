@@ -1,111 +1,126 @@
 "use client"
 
+import * as THREE from "three"
 import type { GameMap } from "@/lib/game/map/types"
-import type * as THREE from "three"
-import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
-
+import { walkingSurface } from "@/lib/game/map/walking-surface"
+import { Suspense, useMemo, useRef } from "react"
+import { useFrame } from "@react-three/fiber"
 import type { TravelerTypeDef } from "@/lib/game/travelers"
-import { Suspense } from "react"
 import { CharacterSprite } from "./character-sprite"
+import { TransportSprite } from "./transport-sprite"
 import type { TravelerAppearance } from "@/lib/game/base-person/population"
+import { pullingVisual } from "@/lib/game/transport/visual"
+import { cartOffset, type Cargo, type Puller, type HorseVariant } from "@/lib/game/transport/assets"
+import { personWalkStride } from "@/lib/game/base-person/gait"
+import { keeperRoutine } from "@/lib/game/transport/keeper"
+import { populationDesign } from "@/lib/game/base-person/population"
+import { STALL, stallPoint } from "@/lib/game/transport/stall"
+import { alignCart, followCart, type CartPose } from "@/lib/game/transport/follow"
 import type { WalkTuning } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
 
-/**
- * The visible body of one traveler: a tiny eight-direction sprite,
- * plus the cart for vendors. Shared between the road (components/game/
- * travelers.tsx) and the /assets/characters gallery, so the gallery shows the
- * exact figure the player meets in game.
- */
-
 export const BLOCK_WIDTH = 0.3
 export const BLOCK_HEIGHT = 0.55
-
-/**
- * The vendor's cart trails behind on the group's local -z; the group is rotated
- * to face the direction of travel so the cart follows properly around bends.
- */
-export const CART_BED: [number, number, number] = [0.42, 0.16, 0.5]
-export const CART_OFFSET_Z = -0.5
-
-/**
- * Cart pieces plus the shop awning. The awning is always mounted and toggled
- * via `visible` from useFrame (by its name), because the vending state changes
- * in the sim at frame rate, outside React.
- */
-export const AWNING_NAME = "vendor-awning"
-
 export type FigureClickHandler = (event: { delta: number; stopPropagation: () => void }) => void
 
-function FigureBox({ name, position, args, color, idColor, onClick }: {
-  name?: string
-  position: [number, number, number]
-  args: [number, number, number]
-  color: string
-  idColor?: THREE.Color
-  onClick?: FigureClickHandler
-}) {
-  return <group position={position} onClick={onClick}>
-    <mesh name={name}><boxGeometry args={args} /><meshLambertMaterial color={color} /></mesh>
-    {idColor && <mesh layers-mask={OUTLINE_ID_LAYER_MASK}>
-      <boxGeometry args={args} /><meshBasicMaterial color={idColor} toneMapped={false} />
-    </mesh>}
-  </group>
-}
-
-function VendorCart({ onClick, awning, idColor }: { onClick?: FigureClickHandler; awning: boolean; idColor?: THREE.Color }) {
-  return (
-    <group position={[0, 0, CART_OFFSET_Z]}>
-      <FigureBox position={[0, 0.18, 0]} args={CART_BED} color="#6f4f2a" idColor={idColor} onClick={onClick} />
-      <FigureBox position={[0, 0.33, 0]} args={[0.28, 0.14, 0.34]} color="#8a2f2f" idColor={idColor} onClick={onClick} />
-      {[-0.26, 0.26].map((x) => (
-        <FigureBox key={x} position={[x, 0.12, 0]} args={[0.06, 0.24, 0.24]} color="#3a2c1a" idColor={idColor} onClick={onClick} />
-      ))}
-      <group name={AWNING_NAME} visible={awning}>
-        <FigureBox position={[0, 0.75, 0.05]} args={[0.62, 0.04, 0.72]} color="#d8d0b8" idColor={idColor} onClick={onClick} />
-      </group>
-    </group>
-  )
-}
-
-export function TravelerFigure({
-  map,
-  type,
-  onClick,
-  idColor,
-  selected = false,
-  /** Initial awning state for vendors; the sim flips it live on the road. */
-  awning = false,
-  outlineColor,
-  characterModel = "callings",
-  characterScale = 1,
-  characterFps,
-  walkTuning,
-  appearance,
-  age,
+/** The person, cart and draught animal share one selection in game and previews. */
+export function TravelerFigure({ map, age, type, onClick, idColor, selected = false, awning = false, outlineColor,
+  characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance,
+  cargo = "produce", puller = "hand", horseVariant = "common", coat,
 }: {
-  map?: GameMap
-  type: TravelerTypeDef
-  appearance?: TravelerAppearance
-  age?: number
-  selected?: boolean
-  idColor?: THREE.Color
-  onClick?: FigureClickHandler
-  awning?: boolean
-  outlineColor?: [number, number, number]
-  characterModel?: CharacterModel
-  /** Uniform size multiplier; leaves the sprite's foot anchor fixed. */
-  characterScale?: number
-  /** Animation frames per second, independent of movement pace. */
-  characterFps?: number
-  walkTuning?: WalkTuning
+  map?: GameMap; age?: number
+  type: TravelerTypeDef; appearance?: TravelerAppearance; selected?: boolean; idColor?: THREE.Color
+  onClick?: FigureClickHandler; awning?: boolean; outlineColor?: [number, number, number]
+  characterModel?: CharacterModel; characterScale?: number; characterFps?: number; walkTuning?: WalkTuning
+  cargo?: Cargo; puller?: Puller; horseVariant?: HorseVariant; coat?: string
 }) {
-  return (
-    <>
-      <Suspense fallback={null}>
-        <CharacterSprite map={map} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] : undefined)} characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
-      </Suspense>
-      {type.id === "vendor" && <VendorCart onClick={onClick} awning={awning} idColor={idColor} />}
-    </>
-  )
+  const vendor = type.id === "vendor", animal = vendor && puller !== "hand"
+  const driver = useRef<THREE.Group>(null), setup = useRef<THREE.Group>(null), beast = useRef<THREE.Group>(null)
+  const cart = useRef<THREE.Group>(null), pullingDriver = useRef<THREE.Group>(null)
+  const point = useMemo(() => new THREE.Vector3(), [])
+  const cartPose = useRef<CartPose | null>(null)
+  const lastAnimal = useRef<{ x: number; z: number } | null>(null)
+  const lastDriver = useRef<{ x: number; z: number; deployed: boolean } | null>(null)
+  useFrame(() => {
+    const group = driver.current, parent = group?.parent
+    if (!group || !parent) return
+    const data = parent.userData, paused = data.playbackRate === 0
+    const praying = data.activity === "praying", routineActivity = data.routineActivity ?? data.activity
+    const deployed = vendor && (routineActivity === undefined ? awning : ["openingShop", "vending", "packingShop"].includes(routineActivity))
+    const working = deployed && !praying && routineActivity !== "vending" && (data.shopProgress ?? 0) > 0
+    parent.getWorldPosition(point)
+    const heading = data.heading ?? Math.atan2(parent.matrixWorld.elements[8], parent.matrixWorld.elements[10])
+    const hitch = { x: point.x, z: point.z }, y = point.y, wheelbase = -cartOffset(puller) * characterScale
+    const previous = cartPose.current
+    if (vendor) {
+      cartPose.current = data.cartPose ?? (!previous || data.motionReset ? alignCart(hitch, heading, wheelbase)
+        : deployed ? alignCart(hitch, data.shopHeading ?? heading, wheelbase) : paused ? { ...previous, distance: 0 } : followCart(previous, hitch, wheelbase))
+      const pose = cartPose.current!
+      if (cart.current) {
+        cart.current.position.copy(parent.worldToLocal(point.set(pose.x, map ? walkingSurface(map, pose.x, pose.z).height : y, pose.z)))
+        const distance = previous && !paused && !data.motionReset && !deployed ? Math.hypot(pose.x - previous.x, pose.z - previous.z) : 0
+        cart.current.userData = { ...data, activity: routineActivity, playbackRate: praying ? 0 : data.playbackRate, heading: deployed ? data.shopHeading ?? pose.heading : pose.heading, distance, moving: data.moving && !deployed }
+      }
+    }
+    const side = data.shopSide ?? 1
+    const keeper = routineActivity === "vending" ? keeperRoutine(data.keeperTime ?? 0, puller, characterScale,
+      personWalkStride(populationDesign(type, appearance?.variant ?? 0)) * characterScale, data.keeperAudience !== false) : null
+    const keeperAction = !praying && keeper && keeper.pose !== "walk" && keeper.pose !== "idle"
+    const keeperHeading = (data.shopHeading ?? heading) + (keeper?.moving ? Math.atan2(Math.sin(keeper.heading) * side, Math.cos(keeper.heading)) : -side * Math.PI / 2)
+    group.position.set(animal ? 0.43 * characterScale : 0, 0, animal ? 0.22 * characterScale : 0)
+    if (deployed && cartPose.current) {
+      const pose = cartPose.current, location = stallPoint(pose, data.shopHeading ?? pose.heading, side, characterScale, keeper ?? STALL.merchant)
+      group.position.copy(parent.worldToLocal(point.set(location.x, map ? walkingSurface(map, location.x, location.z).height : y, location.z)))
+    }
+    group.getWorldPosition(point)
+    if (map) group.position.copy(parent.worldToLocal(point.set(point.x, walkingSurface(map, point.x, point.z).height, point.z)))
+    group.getWorldPosition(point)
+    const before = lastDriver.current, reset = data.motionReset || !before || before.deployed !== deployed
+    const distance = !reset && !paused ? Math.hypot(point.x - before.x, point.z - before.z) : 0
+    lastDriver.current = { x: point.x, z: point.z, deployed }
+    group.userData = { ...data, motionReset: reset, distance, heading: praying ? data.heading : deployed ? keeperHeading : data.heading, activity: praying ? "praying" : deployed ? undefined : data.activity, moving: !praying && (deployed ? keeper?.moving === true : data.moving) }
+    const pullingNow = vendor && !animal && characterModel === "base" && !deployed && !praying
+    group.visible = !working && !keeperAction && !pullingNow
+    if (pullingDriver.current) {
+      pullingDriver.current.visible = pullingNow
+      pullingDriver.current.position.copy(group.position)
+      pullingDriver.current.userData = group.userData
+    }
+    if (setup.current) {
+      setup.current.visible = working || !!keeperAction
+      setup.current.userData = { ...data, keeperPose: keeperAction ? keeper.pose : undefined, keeperPhase: keeper?.phase ?? 0, heading: keeperHeading, moving: false, distance: 0 }
+      setup.current.position.copy(group.position)
+    }
+    if (beast.current) {
+      const pasture = data.pasture, priorHeading = beast.current.userData.heading
+      beast.current.userData = { ...data, grazing: false, hitched: !deployed }
+      if (deployed && pasture) {
+        beast.current.position.copy(parent.worldToLocal(point.set(pasture.x, data.pastureY ?? y, pasture.z)))
+        const previous = lastAnimal.current, distance = previous && !data.motionReset && !paused ? Math.hypot(pasture.x - previous.x, pasture.z - previous.z) : 0
+        beast.current.userData = { ...data, heading: pasture.moving && !praying ? pasture.heading : priorHeading ?? data.heading, hitched: false,
+          moving: pasture.moving && !praying, distance, grazing: data.pastureGrass && !pasture.returning && !pasture.moving }
+        lastAnimal.current = { x: pasture.x, z: pasture.z }
+      } else { beast.current.position.set(0, 0, 0); lastAnimal.current = null }
+    }
+  }, -2)
+  const variant = appearance?.variant ?? 0
+  const pulling = useMemo(() => pullingVisual(variant), [variant])
+  const color = outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] as [number, number, number] : undefined)
+  return <Suspense fallback={null}>
+    <group ref={driver} position={animal ? [0.43 * characterScale, 0, 0.22 * characterScale] : [0, 0, 0]}>
+      <CharacterSprite map={map} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
+        characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning}
+        />
+    </group>
+    {vendor && !animal && characterModel === "base" && <group ref={pullingDriver}>
+      <CharacterSprite map={map} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
+        characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} visualOverride={pulling} />
+    </group>}
+    {vendor && <>
+      <group ref={cart}><TransportSprite map={map} kind="cart" cargo={cargo} puller={puller} awning={awning} characterScale={characterScale}
+        selected={selected} outlineColor={color} onClick={onClick} /></group>
+      <group ref={setup} visible={false}><TransportSprite map={map} kind="merchant" variant={variant} characterScale={characterScale * (appearance?.scale ?? 1)} selected={selected} outlineColor={color} onClick={onClick} /></group>
+    </>}
+    {animal && <group ref={beast}><TransportSprite map={map} kind={puller as "donkey" | "horse"} coat={coat} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} /></group>}
+  </Suspense>
 }

@@ -1,6 +1,6 @@
 {
   "name": "my-project",
-  "version": "0.0.52",
+  "version": "0.0.55",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -19,7 +19,8 @@
     "assets:base": "node scripts/export-base-person.mjs",
     "assets:check-base": "node scripts/check-base-person.mjs",
     "assets:population": "node scripts/export-population.mjs",
-    "assets:check-population": "node scripts/check-population.mjs"
+    "assets:check-population": "node scripts/check-population.mjs",
+    "assets:transport": "node scripts/export-transport.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

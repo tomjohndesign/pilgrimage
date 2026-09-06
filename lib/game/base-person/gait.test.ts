@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { readFileSync } from "node:fs"
 import { BASE_CHARACTER_SCALE, DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE, PERSON_SPRITE_SCALE, personWalkStride, walkSpeedScale, walkContact, plantFoot, type FootPlant } from "./gait"
-import { BASE_PERSON, legPose, PERSON_CLIPS } from "./pose"
+import { BASE_PERSON, legPose, PERSON_CLIPS, WALK_CLIP_STRIDES, WALK_FRAMES_PER_STRIDE } from "./pose"
 import { DEFAULT_DESIGN, PERSON_PRESETS, personRecipe } from "./design"
 import { DEFAULT_POPULATION, populationVisual } from "./population-assets"
 import { CHARACTER_ASSETS, characterVisual } from "../character-assets"
@@ -30,7 +30,7 @@ describe("walking at the rendered person's scale", () => {
     expect(MONK_VISUAL.walkStride).toBeCloseTo(personWalkStride(PERSON_PRESETS.Monk))
     for (const characterScale of [0.75, BASE_CHARACTER_SCALE, 2]) {
       const stride = MONK_VISUAL.walkStride * characterScale
-      expect(monkWalkSpeed(characterScale) / stride * 120).toBeCloseTo(108)
+      expect(monkWalkSpeed(characterScale) / stride * 120).toBeCloseTo(138)
     }
     expect(monkWalkSpeed(2)).toBeCloseTo(monkWalkSpeed(1) * 2)
     expect(MONK_WALK_TUNING).toEqual({ sync: true, stride: DEFAULT_WALK_STRIDE })
@@ -74,16 +74,16 @@ describe("walking at the rendered person's scale", () => {
       let plant: FootPlant | null = null
       let lastKey = "", lastZ = 0
       for (let tick = 0; tick < 1200; tick++) {
-        const phase = (tick / 120) % 1
-        const foot = walkContact(phase, PERSON_CLIPS.walk.frames, body)
-        const pose = legPose(foot.side, Math.floor(phase * PERSON_CLIPS.walk.frames) / PERSON_CLIPS.walk.frames, "walk", body)
+        const phase = (tick / 120) % WALK_CLIP_STRIDES
+        const foot = walkContact(phase, PERSON_CLIPS.walk.frames, body, WALK_CLIP_STRIDES)
+        const pose = legPose(foot.side, Math.floor(phase * WALK_FRAMES_PER_STRIDE + 1e-9) / WALK_FRAMES_PER_STRIDE, "walk", body)
         expect(pose.planted).toBe(true)
         const origin = { x: 0, z: tick / 120 * stride }
         const offset = { x: foot.x * rigScale, z: foot.z * rigScale }
         const result = plantFoot(plant, foot.side, origin, offset)
         const worldZ = origin.z + result.offset.z + offset.z
         if (lastKey === foot.side) expect(worldZ).toBeCloseTo(lastZ, 10)
-        expect(Math.abs(result.offset.z)).toBeLessThanOrEqual(stride / PERSON_CLIPS.walk.frames + 1e-8)
+        expect(Math.abs(result.offset.z)).toBeLessThanOrEqual(stride / WALK_FRAMES_PER_STRIDE + 1e-8)
         plant = result.plant; lastKey = foot.side; lastZ = worldZ
       }
     }
@@ -126,14 +126,14 @@ describe("walking at the rendered person's scale", () => {
     }
   })
 
-  it("uses a 108-step baseline and preserves cadence when the visible person is resized", () => {
+  it("uses a 138-step baseline and preserves cadence when the visible person is resized", () => {
     expect(DEFAULT_WALK_STRIDE).toBeCloseTo(0.353, 3)
-    expect(DEFAULT_WALK_SPEED).toBeCloseTo(0.318, 3)
+    expect(DEFAULT_WALK_SPEED).toBeCloseTo(0.406, 3)
     const stride = personWalkStride(DEFAULT_DESIGN)
     expect(walkSpeedScale(stride, BASE_CHARACTER_SCALE)).toBe(1)
     for (const scale of [0.75, 1.5, 2]) {
       const speed = DEFAULT_WALK_SPEED * walkSpeedScale(stride, scale)
-      expect(speed / (stride * scale) * 120).toBeCloseTo(108)
+      expect(speed / (stride * scale) * 120).toBeCloseTo(138)
     }
   })
 

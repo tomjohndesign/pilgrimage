@@ -4,7 +4,7 @@ import { actionPlaybackRate } from "./base-person/activity"
 import { ACTION_CLIPS, type ActionClip } from "./base-person/pose"
 import type { BasePersonBake } from "./base-person/bake"
 import type { TravelerTypeId } from "./travelers"
-import baseMetadata from "../../public/textures/characters/base/base-person-v24.json"
+import baseMetadata from "../../public/textures/characters/base/base-person-v25.json"
 
 export type CharacterModel = "base" | "callings"
 
@@ -14,13 +14,15 @@ export interface SpriteClip {
   rows: number
   stillFrame: number
   playbackRate?: number
+  /** Number of full leg strides represented by this atlas loop. */
+  strides?: number
 }
 
 /** Layout belongs to the selected art, independently of traveler identity/SFX. */
 export function characterVisual(asset: CharacterAsset, model: CharacterModel, custom?: BasePersonBake | null) {
   const metadata = custom?.metadata ?? baseMetadata
   if (model === "base") return {
-    walk: { url: custom?.walk ?? baseMetadata.images.walk, columns: metadata.frameCount, rows: metadata.directions.length, stillFrame: 0 } satisfies SpriteClip,
+    walk: { strides: "walkStrides" in metadata ? Number(metadata.walkStrides) : 1, url: custom?.walk ?? baseMetadata.images.walk, columns: metadata.frameCount, rows: metadata.directions.length, stillFrame: 0 } satisfies SpriteClip,
     idle: { url: custom?.idle ?? baseMetadata.images.idle, columns: 1, rows: metadata.directions.length, stillFrame: 0 } satisfies SpriteClip,
     actions: Object.fromEntries(ACTION_CLIPS.flatMap(clip => {
       const action = custom?.actions?.[clip] ?? baseMetadata.images.actions[clip]
@@ -71,8 +73,8 @@ export const CHARACTER_ASSETS = Object.fromEntries(
 ) as Record<TravelerTypeId, CharacterAsset>
 
 /** Heading is atan2(world dx, world dz), yaw points from the target to camera. */
-export function spriteRow(heading: number, cameraYaw: number): number {
-  return ((Math.round((cameraYaw - heading) / (Math.PI / 4)) % 8) + 8) % 8
+export function spriteRow(heading: number, cameraYaw: number, directions = 8): number {
+  return ((Math.round((cameraYaw - heading) / (Math.PI * 2 / directions)) % directions) + directions) % directions
 }
 
 export function spriteFrame(seconds: number, fps: number, moving = true, columns = 4, stillFrame = 1): number {

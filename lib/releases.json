@@ -1,7 +1,25 @@
 {
-  "lastProcessedCommit": "71fa99f4be179f4e31551236f5b03f3bef64da4c",
-  "releaseCount": 38,
+  "lastProcessedCommit": "3aaf715bb96bf209e3a3e4142a6cf0ac52617fdc",
+  "releaseCount": 41,
   "releases": [
+    {
+      "version": "0.0.55",
+      "title": "Release 0.0.55",
+      "summary": "Keep characters on grid routes and add monk shrine prayers (#74)",
+      "commit": "3aaf715bb96bf209e3a3e4142a6cf0ac52617fdc"
+    },
+    {
+      "version": "0.0.54",
+      "title": "Release 0.0.54",
+      "summary": "Add playground buildings with matching build tiles and placement previews (#75)",
+      "commit": "882bd1d8c8072a9693a382774ccbecec5af45b22"
+    },
+    {
+      "version": "0.0.53",
+      "title": "Release 0.0.53",
+      "summary": "Add road accessories and editable character animation rigs (#72)",
+      "commit": "4cf2d4067f9de00eaa74c31ea5abef88ea91ac7a"
+    },
     {
       "version": "0.0.52",
       "title": "Release 0.0.52",

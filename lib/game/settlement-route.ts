@@ -1,3 +1,4 @@
+import { buildingStepAllowed } from "./building-navigation"
 import { elevationStep } from "./map/elevation"
 import { ROUTE_DIRS } from "./map/route"
 import { isWoods, TERRAIN } from "./map/terrain"
@@ -10,7 +11,9 @@ export function settlementRoute(
   start: TilePos,
   goal: TilePos,
   logging = false,
+  enterShrine = false,
 ): TilePos[] | null {
+  if (!tileAt(map, start.x, start.z) || !tileAt(map, goal.x, goal.z)) return null
   const key = (p: TilePos) => p.z * map.width + p.x
   const origin = key(start)
   const end = key(goal)
@@ -30,7 +33,7 @@ export function settlementRoute(
       const next = { x: p.x + dx, z: p.z + dz }
       const terrain = tileAt(map, next.x, next.z)
       if (!terrain || !(TERRAIN[terrain].passable || (logging && isWoods(terrain)))) continue
-      if (buildings.some((b) => !b.id.startsWith("lumberCamp-") && next.x >= b.x && next.x < b.x + b.w && next.z >= b.z && next.z < b.z + b.d)) continue
+      if (!buildingStepAllowed(map, buildings, p, next, enterShrine)) continue
       const index = key(next)
       if (map.tiles[current] !== "bridge" && terrain !== "bridge" && !Number.isFinite(elevationStep(map.elevation, current, index))) continue
       if (parents.has(index)) continue
