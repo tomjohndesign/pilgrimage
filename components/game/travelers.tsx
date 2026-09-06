@@ -174,7 +174,7 @@ export function Travelers({
       const y = map.elevation && !bridge
         ? groundHeight(map, s.x + map.width / 2 - 0.5, s.z + map.depth / 2 - 0.5) : s.y
       group.position.set(s.x, y, s.z)
-      // Keep baked bodies and ground shadows at their authored proportions.
+      // Keep baked bodies at their authored proportions.
       group.scale.y = 1
       group.rotation.z = 0
     }

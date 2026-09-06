@@ -1,16 +1,28 @@
 import type * as THREE from "three"
 
 /**
- * A flat billboard has one depth, so the nearer ground cuts through its toes.
- * Treat pixels above the anchor as upright and those below it as lying along
- * the ground. A small clearance avoids depth ties along the sole. This preserves ground contact and depth tests against scenery.
+ * Upright bodies and grounded toes, with a small clearance above terrain.
+ * Compute both depth planes from the anchor, then sample them at screen Y.
+ * Interpolating UV height separately on each quad causes coplanar sprites of
+ * different sizes to disagree by a depth-buffer step, producing striped overlaps.
+ * Flat coefficients make coincident sprites agree across both triangles and
+ * across the color/ID passes. The viewport must match the current render target.
+ * Like the game's cameras, this depth model is orthographic.
  */
-export function applySpriteDepth(shader: Parameters<THREE.Material["onBeforeCompile"]>[0], depth: THREE.Vector3, groundOnly = false) {
-  shader.uniforms.spriteDepth = { value: depth }
-  shader.vertexShader = "varying float vSpriteHeight;\n" + shader.vertexShader.replace(
-    "#include <fog_vertex>", "#include <fog_vertex>\nvSpriteHeight = (uv.y - center.y) * length(modelMatrix[1].xyz);")
-  shader.fragmentShader = "varying float vSpriteHeight;\nuniform vec3 spriteDepth;\n" + shader.fragmentShader.replace(
+export function applySpriteDepth(shader: Parameters<THREE.Material["onBeforeCompile"]>[0], viewport: THREE.Vector4) {
+  shader.uniforms.spriteViewport = { value: viewport }
+  shader.vertexShader = "flat varying vec4 vSpritePlanes;\n" + shader.vertexShader.replace(
+    "#include <fog_vertex>", `#include <fog_vertex>
+    vec4 anchor = projectionMatrix * modelViewMatrix[3];
+    float anchorY = anchor.y * 0.5 + 0.5;
+    float depthScale = abs(projectionMatrix[2][2]) * 0.5;
+    float anchorDepth = anchor.z * 0.5 + 0.5 - 0.005 * depthScale;
+    float pitch = max(0.01, abs(viewMatrix[1][2] / viewMatrix[1][1]));
+    vec2 slopes = vec2(pitch, -1.08 / pitch) * (2.0 / projectionMatrix[1][1]) * depthScale;
+    vSpritePlanes = vec4(anchorDepth + anchorY * slopes, slopes);`)
+  shader.fragmentShader = "flat varying vec4 vSpritePlanes;\nuniform vec4 spriteViewport;\n" + shader.fragmentShader.replace(
     "#include <logdepthbuf_fragment>", `#include <logdepthbuf_fragment>
-    float depthOffset = ${groundOnly ? "-vSpriteHeight * spriteDepth.y" : "max(vSpriteHeight * spriteDepth.x, -vSpriteHeight * spriteDepth.y * 1.08)"};
-    gl_FragDepth = clamp(gl_FragCoord.z - (depthOffset + 0.005) * spriteDepth.z, 0.0, 1.0);`)
+    float screenY = (gl_FragCoord.y - spriteViewport.y) / spriteViewport.w;
+    vec2 depths = vSpritePlanes.xy - screenY * vSpritePlanes.zw;
+    gl_FragDepth = clamp(min(depths.x, depths.y), 0.0, 1.0);`)
 }

@@ -215,7 +215,7 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
             <Suspense fallback={null}>
               <CharacterSprite name="monk" type="friar" characterModel="base" characterScale={1.2}
                 visualOverride={MONK_VISUAL} selected={selected} onClick={select}
-                outlineColor={[id.r, id.g, id.b]} castShadow={!flying}
+                outlineColor={[id.r, id.g, id.b]}
                 walkTuning={{ sync: true, stride: 0.44 }} />
             </Suspense>
             {flying && <MonkRocketGear phase={index} outlineColor={id} onClick={select} />}
