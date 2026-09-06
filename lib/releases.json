@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "48ef309dbcfc7ad868d8d63d60d19a866d528fdc",
-  "releaseCount": 55,
+  "lastProcessedCommit": "68690c95960c1f328bc1cb53561dc7db7d8a0073",
+  "releaseCount": 57,
   "releases": [
+    {
+      "version": "0.0.71",
+      "title": "Release 0.0.71",
+      "summary": "Add building rotation and entrance highlights during placement (#89)",
+      "commit": "68690c95960c1f328bc1cb53561dc7db7d8a0073"
+    },
+    {
+      "version": "0.0.70",
+      "title": "Release 0.0.70",
+      "summary": "Keep renown influence edges faintly visible during play (#90)",
+      "commit": "f080b5f38d14b5fcf680066d8cbeccf6946242b1"
+    },
     {
       "version": "0.0.69",
       "title": "Release 0.0.69",
