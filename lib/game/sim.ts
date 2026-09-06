@@ -42,7 +42,7 @@ import type { Traveler } from "./travelers"
  *    down the branch. The brothers restore their needs and bestow piety before
  *    they return to the road; each visit spreads the shrine's renown.
  *  - Jobless visitors may settle into a lumber-camp slot, walk to a reserved
- *    tree, fell it and haul logs home. Camps provide rest between work trips.
+ *    tree, fell it and haul logs home. Camps provide rest when needs run low.
  *  - Stamina at 0 → leave the road for the nearest open ground (grass, dirt,
  *    or a forest-floor clearing — never solid woods or the road itself) and
  *    camp until rested. A roadside stall is
@@ -859,6 +859,7 @@ export function stepSim(
             s.gold++
           }
           s.carrying = 0
+          if (Math.min(s.hunger, s.thirst, s.stamina) > 40 && chooseTree(sim, s, map)) break
           s.activity = "idle"
           s.timer = GAME_HOUR_SECONDS
         }
