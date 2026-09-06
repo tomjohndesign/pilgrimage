@@ -42,6 +42,10 @@ export function BasePersonLab() {
   const [row, setRow] = useState(1)
   const [frame, setFrame] = useState(0)
   const [clip, setClip] = useState<BaseClip>("walk")
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("clip")
+    if (requested && Object.keys(PERSON_CLIPS).includes(requested)) setClip(requested as BaseClip)
+  }, [])
   const [playing, setPlaying] = useState(true)
   const [fps, setFps] = useState(8)
   const [zoom, setZoom] = useState(6)

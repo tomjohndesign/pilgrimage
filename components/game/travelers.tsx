@@ -148,6 +148,7 @@ export function Travelers({
         group.rotation.y += turn * blend
       }
       const workTree = s.tree === null ? undefined : trees[s.tree]
+      group.userData.workTree = workTree
       if (!playback.paused && !moving && workTree && (s.activity === "working" || s.activity === "gathering")) {
         group.rotation.y = Math.atan2(workTree.x - s.x, workTree.z - s.z)
       }

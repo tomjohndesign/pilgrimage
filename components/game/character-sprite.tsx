@@ -2,6 +2,8 @@
 
 import { ACTION_CLIPS } from "@/lib/game/base-person/pose"
 import { activityClip } from "@/lib/game/base-person/activity"
+import { crossedWoodcuttingImpact, woodcuttingProfile } from "@/lib/game/base-person/woodcutting"
+import { strikeTree } from "@/lib/game/trees/impact"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
@@ -126,6 +128,7 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     const dt = Math.min(delta, 0.1) * (parent.userData.playbackRate ?? 1)
     frameElapsed.current += dt
     if (requested !== lastClip.current) { actionClock.current = 0; lastClip.current = requested }
+    const previousActionTime = actionClock.current
     if (requested !== "carrying" || moving) actionClock.current += dt
     if (moving) {
       const stride = (walkTuning?.stride ?? 0.44) * individualScale * visual.strideRatio / (characterModel === "base" ? 1.5 : 1)
@@ -137,6 +140,12 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     const texture = textures[actionIndex ?? (moving ? 0 : 1)]
     const frame = action ? requested === "carrying" ? Math.floor(clock.current * clip.columns) :
       Math.floor(actionClock.current * fps * (action.playbackRate ?? 1)) % clip.columns : moving ? Math.floor(clock.current * clip.columns) : clip.stillFrame
+    if (requested === "treeFelling" && action && parent.userData.workTree) {
+      const rate = fps * (action.playbackRate ?? 1)
+      if (crossedWoodcuttingImpact(previousActionTime * rate, actionClock.current * rate, clip.columns, woodcuttingProfile(visual.design))) {
+        strikeTree(parent.userData.workTree, heading)
+      }
+    }
     if (sprite.current) sprite.current.userData.clip = action ? requested : moving ? "walk" : "idle"
     const renderFps = fps * (action?.playbackRate ?? 1)
     const row = visual.rowOffset + spriteRow(heading, yaw)

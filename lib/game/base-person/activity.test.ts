@@ -5,7 +5,7 @@ describe("simulation sprite poses", () => {
   it.each([
     ["vigil", "praying"], ["resting", "sitting"], ["walking", "idle"], ["flying", "idle"],
     ["camping", "sleeping"], ["idle", "sitting"], ["visiting", "praying"],
-    ["working", "woodcutting"], ["gathering", "gathering"], ["vending", "idle"],
+    ["working", "treeFelling"], ["gathering", "woodcutting"], ["vending", "idle"],
   ] as const)("shows %s as %s", (activity, clip) => {
     expect(activityClip(activity, false)).toBe(clip)
   })
