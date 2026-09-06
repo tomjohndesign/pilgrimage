@@ -24,7 +24,11 @@ export function inkPersonFrame(source: Uint8ClampedArray, parts: Uint8ClampedArr
       const other = parts[(ny * size + nx) * 4]
       return other > 0 && other < parts[i]
     })
-    if (!occupied || interior) color = color.map((v, channel) => v * (1 - strength) + palette[0][channel] * strength)
+    // Same-cloth sleeve/torso joins need a hint of depth, not a black cut line.
+    const clothJoin = interior && (parts[i] === 8 || parts[i] === 9) && neighbors.some(([nx, ny]) =>
+      parts[(ny * size + nx) * 4] === 3)
+    const edgeStrength = strength * (clothJoin ? 0.25 : 1)
+    if (!occupied || interior) color = color.map((v, channel) => v * (1 - edgeStrength) + palette[0][channel] * edgeStrength)
     output.set([...closest(color), 255], i)
     padding = Math.min(padding, x, y, size - 1 - x, size - 1 - y)
   }

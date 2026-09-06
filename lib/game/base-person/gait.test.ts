@@ -45,7 +45,7 @@ describe("walking at the rendered person's scale", () => {
           expect(distance(leg.knee, leg.ankle)).toBeCloseTo(body.shinLength, 10)
           // The knee must lie forward of the straight hip-to-ankle line.
           const fraction = (leg.knee[1] - leg.hip[1]) / (leg.ankle[1] - leg.hip[1])
-          expect(leg.knee[2]).toBeGreaterThan(leg.ankle[2] * fraction)
+          expect(leg.knee[2]).toBeGreaterThan(leg.hip[2] + (leg.ankle[2] - leg.hip[2]) * fraction)
           if (leg.planted) expect(leg.ankle[1]).toBe(body.ankleHeight)
         }
       }

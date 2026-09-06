@@ -42,6 +42,21 @@ export function walkFoot(side: BodySide, phase: number, b = BASE_PERSON.body) {
     b.ankleHeight + (planted ? 0 : b.footLift * Math.sin(u * Math.PI) ** 2), z] as Point3, planted }
 }
 
+/** Small opposing hip/chest turns, with one soft head bounce per footfall. */
+export function walkBody(phase: number, clip: BaseClip) {
+  const moving = clip === "walk" || clip === "carrying"
+  const cycle = ((phase % 1 + 1) % 1) * Math.PI * 2
+  const hipYaw = moving ? -Math.cos(cycle) * 0.065 : 0
+  return { hipYaw, chestYaw: -hipYaw * 0.75,
+    headBob: moving ? 0.012 * (1 - Math.cos(cycle * 2)) : 0 }
+}
+
+function hipOffset(side: BodySide, phase: number, clip: BaseClip, b = BASE_PERSON.body): Point3 {
+  const x = (side === "left" ? 1 : -1) * b.legOffset
+  const { hipYaw } = walkBody(phase, clip)
+  return [x * Math.cos(hipYaw), 0, -x * Math.sin(hipYaw)]
+}
+
 /** Let the support leg extend, rather than forcing both knees into a crouch. */
 export function pelvisHeight(phase: number, clip: BaseClip, b = BASE_PERSON.body): number {
   if (clip === "sleeping") return b.hipHeight
@@ -56,7 +71,8 @@ export function pelvisHeight(phase: number, clip: BaseClip, b = BASE_PERSON.body
   // falls slightly in double support; it never stretches either leg to reach.
   return Math.min(...(["left", "right"] as const).map(side => {
     const { ankle } = walkFoot(side, phase, b)
-    return ankle[1] + Math.sqrt(Math.max(0, reachSquared - ankle[2] ** 2))
+    const hip = hipOffset(side, phase, clip, b)
+    return ankle[1] + Math.sqrt(Math.max(0, reachSquared - (ankle[2] - hip[2]) ** 2 - (ankle[0] - hip[0]) ** 2))
   }))
 }
 
@@ -76,14 +92,19 @@ export function legPose(side: BodySide, phase: number, clip: BaseClip, b = BASE_
   const target = walkFoot(side, phase, b)
   const planted = !walking || target.planted
   const [_, y, z] = walking ? target.ankle : [x, b.ankleHeight, 0]
-  const hip: Point3 = [x, pelvisHeight(phase, clip, b), 0]
+  const hip = hipOffset(side, phase, clip, b)
+  hip[1] = pelvisHeight(phase, clip, b)
   const ankle: Point3 = [x, y, z]
   // Two-bone IK: the knee always bends forward, lengths never change.
-  const dy = y - hip[1]
-  const distance = Math.hypot(dy, z)
+  const delta = ankle.map((value, i) => value - hip[i])
+  const distance = Math.hypot(...delta)
+  const axis = delta.map(value => value / distance)
   const a = (b.thighLength ** 2 - b.shinLength ** 2 + distance ** 2) / (2 * distance)
   const bend = Math.sqrt(Math.max(0, b.thighLength ** 2 - a ** 2))
-  const knee: Point3 = [x, hip[1] + dy / distance * a + z / distance * bend, z / distance * a - dy / distance * bend]
+  // Project forward onto the plane perpendicular to the hip/ankle axis.
+  const forward = axis.map((value, i) => (i === 2 ? 1 : 0) - value * axis[2])
+  const forwardLength = Math.hypot(...forward)
+  const knee = hip.map((value, i) => value + axis[i] * a + forward[i] / forwardLength * bend) as Point3
   return { hip, knee, ankle, planted }
 }
 

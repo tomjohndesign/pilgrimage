@@ -21,6 +21,10 @@ template for new walking characters.
   forward. The pelvis follows the legs' reachable height; do not hold it low
   enough to force a permanent crouch. Standing knees have eight degrees of soft
   flexion. Seated, kneeling, sleeping and work poses retain their own posture.
+- Hips pivot gently against the chest on each stride. Solve legs from those
+  rotated hips while keeping foot targets fixed; head bob and elbow flexion
+  follow the same distance-driven cycle. Footwear retains the shared sole
+  envelope: sandals for peasants, ankle boots for other callings and monks.
 - Robes, skirts, belts, hands and attachment sockets must follow the pelvis.
   Update the garment clipping plane with it. A long garment is not a reason to
   skip the underlying leg solver or hide invalid knees.
@@ -89,8 +93,8 @@ release or package version. Tests require every active family to match it.
 Bake the base, every population profile/calling,
 and the Monk preset. Inspect the latest main branch before allocating versions.
 Published bakes are immutable; use new paths and update all active imports only
-after the exports exist. The current exports are base v14, population v5 and
-monks v5. For a subsequent change choose unused versions:
+after the exports exist. The current exports are base v16, population v7 and
+monks v7. For a subsequent change choose unused versions:
 
 ```sh
 npm run assets:base -- vNEXT --url http://localhost:3219
@@ -110,7 +114,7 @@ designs must be baked through the same current rig, not mapped onto stale sheets
   discrete poses. Verify no accumulated offset over repeated cycles, correct
   resets, and anchored height on slopes.
 - Run `npm test` and `npm run typecheck`, the base and population asset checkers,
-  and `node scripts/check-base-person.mjs v5 --monk` for the current monk bake.
+  and `node scripts/check-base-person.mjs v7 --monk` for the current monk bake.
   Check per-clip dimensions, matching shadows,
   palette, binary body alpha, safe margins and attachment registration.
 - Inspect side and diagonal views in the editor and on real road tiles. Check

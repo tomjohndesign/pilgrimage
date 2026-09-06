@@ -146,7 +146,7 @@ describe("parametric people", () => {
     const size = 16, pixels = new Uint8ClampedArray(size * size * 4), parts = new Uint8ClampedArray(pixels.length)
     for (let y = 5; y < 11; y++) for (let x = 5; x < 11; x++) {
       const i = (y * size + x) * 4
-      pixels.set([150, 150, 150, 255], i); parts.set([x < 8 ? 3 : 8, 0, 0, 255], i)
+      pixels.set([150, 150, 150, 255], i); parts.set([x < 8 ? 3 : 10, 0, 0, 255], i)
     }
     const palette = [[30, 25, 20], [150, 150, 150]]
     const plain = inkPersonFrame(pixels, parts, size, palette, 0)

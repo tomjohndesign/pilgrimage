@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 import * as THREE from "three"
-import { BASE_PERSON, armAngle, legPose, pelvisHeight, type Point3 } from "./pose"
+import { BASE_PERSON, armAngle, legPose, pelvisHeight, walkBody, type Point3 } from "./pose"
 import { DEFAULT_DESIGN, PERSON_PRESETS, personRecipe } from "./design"
 import { createBasePersonRig } from "./rig"
 
@@ -52,7 +52,7 @@ describe("shared person template", () => {
         rig.pose(frame / 8)
         rig.sockets.head.getWorldPosition(head)
         expect(head.y).toBeCloseTo(recipe.body.headCenter + recipe.body.headHeight + 0.02
-          + pelvisHeight(frame / 8, "walk", recipe.body) - recipe.body.hipHeight, 10)
+          + pelvisHeight(frame / 8, "walk", recipe.body) - recipe.body.hipHeight + walkBody(frame / 8, "walk").headBob, 10)
         expect(rig.sockets.leftHip.position.x).toBeGreaterThan(0)
         expect(rig.sockets.rightHip.position.x).toBeLessThan(0)
         rig.sockets.leftHand.getWorldPosition(hand)
@@ -98,7 +98,7 @@ describe("shared person template", () => {
         if (female) expect(new Set(body.geometry.groups.map(group => group.materialIndex))).toEqual(new Set([0, 1]))
         const legs: THREE.Mesh[] = []
         rig.root.traverse(object => { if (object instanceof THREE.Mesh && object.userData.clipAboveHem) legs.push(object) })
-        expect(legs).toHaveLength(female ? 6 : 4)
+        expect(legs).toHaveLength(female ? 10 : 4)
         for (let row = 0; row < 8; row++) for (let frame = 0; frame < 8; frame++) {
           rig.view(row); rig.pose(frame / 8)
           for (const debug of [false, true]) {
