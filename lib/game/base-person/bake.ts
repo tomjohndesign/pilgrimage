@@ -102,6 +102,29 @@ export function personFrameRenderer(design: PersonDesign, extraPalette: string[]
   }
 }
 
+/** Export the animation's own block with the same camera, palette and pixel ink. */
+export function bakeChoppingBlock() {
+  const session = personFrameRenderer(DEFAULT_DESIGN)
+  const size = session.recipe.cellSize
+  const canvas = document.createElement("canvas")
+  canvas.width = size; canvas.height = 8 * size
+  const context = canvas.getContext("2d")!
+  try {
+    for (let row = 0; row < 8; row++) {
+      const rendered = session.render("woodcutting", 0, row, false, rig => {
+        rig.root.traverse(object => {
+          if (object instanceof THREE.Mesh) object.visible = object.name === "chopping-block"
+        })
+        // The actor's block sits ahead of their feet; standalone remains anchor at the tree.
+        rig.root.getObjectByName("woodcutting-log")!.position.z = 0
+      })
+      context.drawImage(rendered.canvas, 0, row * size)
+    }
+    return { url: canvas.toDataURL("image/png"), cellSize: size, anchor: session.recipe.anchor,
+      rows: 8, templateVersion: session.recipe.version }
+  } finally { session.dispose() }
+}
+
 export interface PersonPreview {
   url: string
   shadowUrl: string

@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useSimulationStore } from "@/lib/game/simulation-store"
+import { BASE_CHARACTER_SCALE } from "@/lib/game/base-person/gait"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
@@ -71,7 +72,9 @@ function makeCrownGeometry(shape: TreeSpeciesDef["crown"]["shape"]): THREE.Buffe
     : new THREE.IcosahedronGeometry(1, BLOB_DETAIL)
 }
 
-export function Trees({ map, placements: supplied, ents = false }: { map: GameMap; placements?: TreePlacement[]; ents?: boolean }) {
+export function Trees({ map, placements: supplied, ents = false, characterScale = BASE_CHARACTER_SCALE, animatedStumps = false }: {
+  map: GameMap; placements?: TreePlacement[]; ents?: boolean; characterScale?: number; animatedStumps?: boolean
+}) {
   const selection = useCameraStore((s) => s.selection)
   const resources = useBuildStore((s) => s.treeResources)
   const time = useBuildStore((s) => s.time)
@@ -91,7 +94,7 @@ export function Trees({ map, placements: supplied, ents = false }: { map: GameMa
       <TreeField placements={placements} hidden={felled} onSelect={selectTree} entMap={ents ? map : undefined}
         seed={deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes)} idBase={map.buildings.length} />
       {Array.from(resources, ([id, resource]) => resource.health <= 0 && placements[id]
-        ? <TreeRemains key={id} id={id} objectId={treeObjectId(map.buildings.length, id)} tree={placements[id]} resource={resource} time={time} /> : null)}
+        ? <TreeRemains key={id} id={id} objectId={treeObjectId(map.buildings.length, id)} tree={placements[id]} resource={resource} time={time} characterScale={characterScale} animatedStumps={animatedStumps} /> : null)}
     </group>
   )
 }
