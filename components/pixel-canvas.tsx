@@ -27,8 +27,15 @@ interface PixelRenderer {
   scene: { current: RenderScene | null }
   frame: { current: (() => void) | null }
   characters: Set<THREE.Object3D>
+  worldTexel: { value: number }
 }
 const PixelRenderContext = createContext<PixelRenderer | null>(null)
+const NATIVE_WORLD_TEXEL = { value: 0 }
+
+/** World-space size of an enlarged scenery texel during the character pass. */
+export function usePixelWorldTexel() {
+  return useContext(PixelRenderContext)?.worldTexel ?? NATIVE_WORLD_TEXEL
+}
 
 /** Character roots keep their original layers for picking and the unpixelated view. */
 export function PixelCharacters({ children }: { children: ReactNode }) {
@@ -134,6 +141,7 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
         gl.setRenderTarget(target)
         gl.render(scene, cam)
       })
+      renderer.worldTexel.value = 0
       const cam = camera as THREE.OrthographicCamera
       const r = resources
       if (!pixelated || !cam.isOrthographicCamera) {
@@ -188,9 +196,11 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
           scene.background = null
           gl.autoClear = false
           camera.layers.set(CHARACTER_COLOR_LAYER)
+          renderer.worldTexel.value = 1 / density
           r.stage.phase = "characters"
           renderScene(camera, null, r.stage)
         } finally {
+          renderer.worldTexel.value = 0
           scene.background = background
           camera.layers.mask = mask
           gl.autoClear = autoClear
@@ -222,7 +232,7 @@ export function PixelCanvas({
   outputDpr = 1,
   ...props
 }: Omit<CanvasProps, "dpr" | "gl"> & PixelationProps) {
-  const renderer = useMemo<PixelRenderer>(() => ({ scene: { current: null }, frame: { current: null }, characters: new Set() }), [])
+  const renderer = useMemo<PixelRenderer>(() => ({ scene: { current: null }, frame: { current: null }, characters: new Set(), worldTexel: { value: 0 } }), [])
   const density = Number.isFinite(pixelsPerUnit) ? THREE.MathUtils.clamp(pixelsPerUnit, 1, 64) : 25
   const dpr = Number.isFinite(outputDpr) ? THREE.MathUtils.clamp(outputDpr, 0.5, 2) : 1
   return (
