@@ -7,14 +7,12 @@ import { populationDesign, POPULATION_PROFILES, travelerAppearance } from "./pop
 import { DEFAULT_POPULATION, populationVisual } from "./population-assets"
 
 describe("road character population", () => {
-  it("keeps identity stable across ordering and crowd size, with mixed bodies and sizes", () => {
+  it("keeps identity stable across ordering and crowd size, with mixed bodies at a uniform scale", () => {
     const people = Array.from({ length: 200 }, (_, id) => travelerAppearance(12345, id))
     expect(new Set(people.map(p => p.variant)).size).toBe(6)
-    expect(new Set(people.map(p => p.scale)).size).toBeGreaterThan(15)
+    expect(new Set(people.map(p => p.scale))).toEqual(new Set([1]))
     for (let id = 0; id < people.length; id++) {
       expect(travelerAppearance(12345, id)).toEqual(people[id])
-      expect(people[id].scale).toBeGreaterThanOrEqual(0.9)
-      expect(people[id].scale).toBeLessThanOrEqual(1.1)
       expect(POPULATION_PROFILES[people[id].variant].bodyType).toBe(people[id].bodyType)
       if (id % 2 === 1) expect(people[id].bodyType).not.toBe(people[id - 1].bodyType)
     }

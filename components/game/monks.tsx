@@ -77,7 +77,7 @@ function wanderSpots(map: GameMap): { spots: Spot[]; centre: { x: number; z: num
   return { spots, centre }
 }
 
-export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Monk[]; flying?: boolean }) {
+export function Monks({ map, monks, flying = false, characterScale = 1 }: { map: GameMap; monks: Monk[]; flying?: boolean; characterScale?: number }) {
   const selection = useCameraStore((s) => s.selection)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
 
@@ -213,7 +213,7 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
             }}
           >
             <Suspense fallback={null}>
-              <CharacterSprite name="monk" type="friar" characterModel="base" characterScale={1.2}
+              <CharacterSprite name="monk" type="friar" characterModel="base" characterScale={characterScale}
                 visualOverride={MONK_VISUAL} selected={selected} onClick={select}
                 outlineColor={[id.r, id.g, id.b]}
                 walkTuning={{ sync: true, stride: 0.44 }} />

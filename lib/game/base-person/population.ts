@@ -22,7 +22,7 @@ export function travelerAppearance(seed: number, id: number): TravelerAppearance
   const female = ((id & 1) ^ (pair < 0.5 ? 0 : 1)) === 1
   const random = makeRng(deriveSeed(root, id + 104729))
   return { variant: (female ? 3 : 0) + Math.floor(random() * 3),
-    scale: Math.round((0.9 + random() * 0.2) * 100) / 100, bodyType: female ? "Female" : "Male" }
+    scale: 1, bodyType: female ? "Female" : "Male" }
 }
 
 export function populationDesign(type: Pick<TravelerTypeDef, "color">, variant: number, base: PersonDesign = DEFAULT_DESIGN): PersonDesign {
