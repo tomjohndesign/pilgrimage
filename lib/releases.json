@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "0b39bdf424a95e697808a2953344eb8a3bbe7171",
-  "releaseCount": 50,
+  "lastProcessedCommit": "06c5a5ffd48bf1788b8c41a10cac8964f07ebe7a",
+  "releaseCount": 51,
   "releases": [
+    {
+      "version": "0.0.65",
+      "title": "Release 0.0.65",
+      "summary": "Raise trees and align shared timber sprites with chopping animations (#83)",
+      "commit": "06c5a5ffd48bf1788b8c41a10cac8964f07ebe7a"
+    },
     {
       "version": "0.0.64",
       "title": "Release 0.0.64",
