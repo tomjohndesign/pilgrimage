@@ -1,5 +1,7 @@
 "use client"
 
+import { ACTION_CLIPS } from "@/lib/game/base-person/pose"
+import { activityClip } from "@/lib/game/base-person/activity"
 import { useEffect, useMemo, useRef } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
@@ -36,7 +38,19 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
   const individualScale = characterScale * (varied ? appearance.scale : 1)
   const size = visual.scale * individualScale
   const fps = characterFps ?? visual.fps
-  const sources = useLoader(THREE.TextureLoader, [visual.walk.url, visual.idle.url, ...(visual.shadow ? [visual.shadow.walk, visual.shadow.idle] : [])])
+  const textureEntries = useMemo(() => [
+    { clip: visual.walk, url: visual.walk.url }, { clip: visual.idle, url: visual.idle.url },
+    ...(visual.shadow ? [{ clip: visual.walk, url: visual.shadow.walk }, { clip: visual.idle, url: visual.shadow.idle }] : []),
+    ...ACTION_CLIPS.flatMap(name => {
+      const clip = visual.actions[name]
+      return clip ? [{ clip, url: clip.url }, { clip, url: clip.shadow }] : []
+    }),
+  ], [visual])
+  const actionIndices = useMemo(() => {
+    let index = visual.shadow ? 4 : 2
+    return Object.fromEntries(ACTION_CLIPS.flatMap(name => visual.actions[name] ? [[name, (index += 2) - 2]] : []))
+  }, [visual])
+  const sources = useLoader(THREE.TextureLoader, textureEntries.map(entry => entry.url))
   // Each traveler owns UV state; the loader still shares the decoded image.
   const textures = useMemo(() => sources.map((source, index) => {
     const map = source.clone()
@@ -44,12 +58,12 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     map.magFilter = THREE.NearestFilter
     map.minFilter = THREE.NearestFilter
     map.generateMipmaps = false
-    const clip = index % 2 === 0 ? visual.walk : visual.idle
+    const clip = textureEntries[index].clip
     map.repeat.set(1 / clip.columns, 1 / clip.rows)
     map.offset.set(clip.stillFrame / clip.columns, (clip.rows - 1 - visual.rowOffset) / clip.rows)
     map.needsUpdate = true
     return map
-  }), [sources, visual])
+  }), [sources, textureEntries, visual.rowOffset])
   useEffect(() => () => textures.forEach((texture) => texture.dispose()), [textures])
   const depth = useMemo(() => new THREE.Vector3(Math.SQRT1_2, Math.SQRT2, 1 / 400), [])
   const material = useMemo(() => {
@@ -70,6 +84,8 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
   const center = useMemo(() => new THREE.Vector2(...visual.center), [visual])
   const sprite = useRef<THREE.Sprite>(null)
   const clock = useRef(0)
+  const actionClock = useRef(0)
+  const lastClip = useRef("")
   const seeded = useRef(false)
   const frameElapsed = useRef(0)
   const facing = useMemo(() => new THREE.Vector3(), [])
@@ -102,21 +118,27 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
       (parent.getWorldDirection(facing), Math.atan2(facing.x, facing.z))
     const yaw = Math.atan2(camera.matrixWorld.elements[8], camera.matrixWorld.elements[10])
     const moving = parent.userData.moving === true
+    const requested = activityClip(parent.userData.activity, moving, parent.userData.carrying)
+    const actionIndex = actionIndices[requested]
+    const action = requested !== "walk" && requested !== "idle" ? visual.actions[requested] : undefined
     if (!seeded.current && parent.userData.initialized) {
       clock.current = (parent.userData.phase ?? 0) % 1
       seeded.current = true
     }
     const dt = Math.min(delta, 0.1) * (parent.userData.playbackRate ?? 1)
     frameElapsed.current += dt
+    if (requested !== lastClip.current) { actionClock.current = 0; lastClip.current = requested }
+    if (requested !== "carrying" || moving) actionClock.current += dt
     if (moving) {
       const stride = (walkTuning?.stride ?? 0.44) * individualScale * visual.strideRatio / (characterModel === "base" ? 1.5 : 1)
       clock.current = advanceWalkPhase(clock.current, parent.userData.distance ?? 0, dt,
         visual.walk.columns, fps, stride, walkTuning?.sync === true)
     }
     if (sprite.current) sprite.current.userData.walkPhase = clock.current
-    const clip = moving ? visual.walk : visual.idle
-    const texture = textures[moving ? 0 : 1]
-    const frame = moving ? Math.floor(clock.current * clip.columns) : clip.stillFrame
+    const clip = action ?? (moving ? visual.walk : visual.idle)
+    const texture = textures[actionIndex ?? (moving ? 0 : 1)]
+    const frame = action ? requested === "carrying" ? Math.floor(clock.current * clip.columns) :
+      Math.floor(actionClock.current * fps) % clip.columns : moving ? Math.floor(clock.current * clip.columns) : clip.stillFrame
     const row = visual.rowOffset + spriteRow(heading, yaw)
     const previous = lastFrame.current
     if (previous.texture === texture && previous.row === row) {
@@ -129,7 +151,7 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     material.map = texture
     if (outlineMaterial) outlineMaterial.map = texture
     if (shadowMaterial) {
-      const shadowTexture = textures[moving ? 2 : 3]
+      const shadowTexture = textures[actionIndex !== undefined ? actionIndex + 1 : moving ? 2 : 3]
       shadowTexture.offset.copy(texture.offset)
       shadowMaterial.map = shadowTexture
     }

@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowUpRight, Check, Pause, Play, RotateCcw, SlidersHorizont
 import { Section, Tuner } from "@/components/game/property-controls"
 import "./game/game-hud.css"
 import "./base-person-lab.css"
-import { BASE_PERSON, SOCKET_NAMES, type BaseClip } from "@/lib/game/base-person/pose"
+import { BASE_PERSON, PERSON_CLIPS, SOCKET_NAMES, type BaseClip } from "@/lib/game/base-person/pose"
 import { cachedPersonBake, renderPersonPreview, type BasePersonBake, type PersonPreview } from "@/lib/game/base-person/bake"
 
 import { DEFAULT_DESIGN, DESIGN_CONTROLS, HAIR_STYLES, PERSON_PRESETS, personRecipe, withBodyType, validatePersonDesign, type DesignKey, type PersonDesign } from "@/lib/game/base-person/design"
@@ -83,7 +83,7 @@ export function BasePersonLab() {
     // Coalesce inputs into a paint, without waiting for the user to stop dragging.
     const request = requestAnimationFrame(() => {
       try {
-        setPreview(renderPersonPreview(design, clip, clip === "walk" ? frame : 0, sides))
+        setPreview(renderPersonPreview(design, clip, PERSON_CLIPS[clip].frames > 1 ? frame : 0, sides))
         setError("")
       } catch (e) { setError(e instanceof Error ? e.message : "The preview could not render.") }
     })
@@ -96,10 +96,10 @@ export function BasePersonLab() {
   }, [playing, clip, fps])
 
   const live = !sheetMatchesDesign && preview?.clip === clip && preview.sides === sides ? preview : null
-  const columns = live ? 1 : clip === "walk" ? 8 : 1
-  const visibleFrame = live ? 0 : clip === "walk" ? frame : 0
-  const url = live?.url ?? (bake ? sides ? clip === "walk" ? bake.debugWalk : bake.debugIdle : bake[clip] : "")
-  const shadowUrl = sides ? undefined : live?.shadowUrl ?? (clip === "walk" ? bake?.shadowWalk : bake?.shadowIdle)
+  const columns = live ? 1 : PERSON_CLIPS[clip].frames
+  const visibleFrame = live ? 0 : PERSON_CLIPS[clip].frames > 1 ? frame : 0
+  const url = live?.url ?? (bake ? clip === "walk" || clip === "idle" ? sides ? clip === "walk" ? bake.debugWalk : bake.debugIdle : bake[clip] : sides ? bake.actions[clip].debug : bake.actions[clip].url : "")
+  const shadowUrl = sides ? undefined : live?.shadowUrl ?? (clip === "walk" ? bake?.shadowWalk : clip === "idle" ? bake?.shadowIdle : bake?.actions[clip].shadow)
   const renderPalette = personRecipe(design).renderPalette
   const sockets = live?.sockets[row] ?? bake?.metadata.clips[clip][row * columns + visibleFrame]?.sockets
   const pixels = BASE_PERSON.cellSize
@@ -191,6 +191,7 @@ export function BasePersonLab() {
               <button className={button} disabled={!ready} onClick={() => bake && download(bake.walk, `base-person-v${BASE_PERSON.version}-walk.png`)}>Download walk sheet</button>
               <button className={button} disabled={!ready} onClick={() => bake && download(bake.idle, `base-person-v${BASE_PERSON.version}-idle.png`)}>Download idle sheet</button>
               <button className={button} disabled={!ready} onClick={() => bake && download(bake.shadowWalk, `base-person-v${BASE_PERSON.version}-shadow-walk.png`)}>Download walk shadows</button>
+              <button className={button} disabled={!ready} onClick={() => download(url, `base-person-v${BASE_PERSON.version}-${clip}.png`)}>Download selected pose sheet</button>
               <button className={button} disabled={!ready} onClick={jsonDownload}>Download attachment data</button>
               <Link className={button} href="/assets/characters/callings">Earlier character drafts <ArrowUpRight size={12} /></Link>
             </div>
@@ -205,7 +206,7 @@ export function BasePersonLab() {
       <div className="person-preview" aria-label="Character preview">
         <div className="person-preview-toolbar hud-well">
           <div className="person-playback"><button className="hud-pause" aria-label={playing ? "Pause" : "Play"} disabled={clip === "idle" || view === "sheet"} onClick={() => setPlaying(!playing)}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
-            <label>Clip<select aria-label="Animation clip" value={clip} onChange={e => setClip(e.target.value as BaseClip)}><option value="walk">Walk</option><option value="idle">Idle</option></select></label>
+            <label>Clip<select aria-label="Animation clip" value={clip} onChange={e => setClip(e.target.value as BaseClip)}>{Object.entries(PERSON_CLIPS).map(([id, entry]) => <option key={id} value={id}>{entry.label}</option>)}</select></label>
             <label>Zoom<select aria-label="Pixel inspection zoom" value={zoom} onChange={e => setZoom(Number(e.target.value))}>{[1, 2, 4, 6, 8].map(n => <option key={n} value={n}>{n}×</option>)}</select></label>
           </div>
           <div className="person-view-buttons" aria-label="Preview modes">{([['character', 'Character'], ['native', 'Native size'], ['sheet', 'Sprite sheet']] as const).map(([mode, label]) => <button key={mode} className={button} aria-pressed={view === mode} onClick={() => setView(mode)}>{label}</button>)}</div>
@@ -213,11 +214,11 @@ export function BasePersonLab() {
         <div ref={stageRef} className={`person-stage person-stage-${view}`}>
           {error || storeError ? <p role="alert" className="person-stage-message">{error || storeError} Try another preset or smaller proportions.</p> : !bake ? <p className="person-stage-message">Rendering the base person…</p> : view === "sheet" ? <div className="person-sheet">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={sides ? bake.debugWalk : bake.walk} width={pixels * 8} height={pixels * 8} alt="Base person: eight directions and eight walk frames" />
+            <img src={url} width={pixels * columns} height={pixels * 8} alt={`${PERSON_CLIPS[clip].label}: eight directions and ${columns} frames`} />
           </div> : view === "native" ? <div className="person-native" aria-label="Native size lineup">
             {BASE_PERSON.directions.map((d, i) => <div key={d}><Tile url={url} shadowUrl={shadowUrl} row={i} frame={visibleFrame} columns={columns} name={`${d}, native ${BASE_PERSON.nominalHeightPixels}px person`} /><span>{d}</span></div>)}
           </div> : <div className="person-sprite" style={{ width: pixels * fittedZoom, height: pixels * fittedZoom }}>
-            {onion && !live && clip === "walk" && <div className="absolute inset-0 opacity-25"><Tile url={url} row={row} frame={(frame + 7) % 8} columns={columns} zoom={fittedZoom} name="Previous frame ghost" /></div>}
+            {onion && !live && columns > 1 && <div className="absolute inset-0 opacity-25"><Tile url={url} row={row} frame={(frame + 7) % 8} columns={columns} zoom={fittedZoom} name="Previous frame ghost" /></div>}
             <Tile url={url} shadowUrl={shadowUrl} row={row} frame={visibleFrame} columns={columns} zoom={fittedZoom} name={`Base person ${direction}, frame ${visibleFrame + 1}`} />
             {guides && <svg aria-label="Origin and attachment guides" className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${pixels} ${pixels}`}>
               <path d={`M${BASE_PERSON.anchor[0]} 0V${pixels} M0 ${BASE_PERSON.anchor[1]}H${pixels}`} stroke="#d9d5a7" strokeWidth="0.15" strokeDasharray="1 1" />
@@ -227,13 +228,13 @@ export function BasePersonLab() {
               })}
             </svg>}
           </div>}
-          <div className="person-stage-caption">{view === "native" ? "Actual pixels · 1×" : view === "sheet" ? "Walk atlas · 64 poses" : `${direction} · ${fittedZoom}×${fittedZoom < zoom ? " · fitted to view" : ""}`}</div>
+          <div className="person-stage-caption">{view === "native" ? "Actual pixels · 1×" : view === "sheet" ? `${PERSON_CLIPS[clip].label} atlas · ${columns * 8} poses` : `${direction} · ${fittedZoom}×${fittedZoom < zoom ? " · fitted to view" : ""}`}</div>
         </div>
         <div className="person-animation-dock hud-well">
           <div className="person-direction-strip" aria-label="Character directions">{BASE_PERSON.directions.map((d, i) => <button key={d} aria-label={`Face ${d}`} aria-pressed={row === i} onClick={() => { setRow(i); setView("character") }} className="hud-building-tile person-direction">
             {bake && <Tile url={url} shadowUrl={shadowUrl} row={i} frame={visibleFrame} columns={columns} name={`${d} direction`} />}<span>{d}</span>
           </button>)}</div>
-          <div className="person-steps"><span>Walk cycle</span><div>{Array.from({ length: 8 }, (_, f) => <button key={f} className="hud-pause" disabled={!sheetMatchesDesign} aria-label={`Inspect step ${f + 1}`} aria-pressed={clip === "walk" && frame === f} onClick={() => { setFrame(f); setClip("walk"); setPlaying(false); setView("character") }}>{f + 1}</button>)}</div><span className="person-step-count">{clip === "idle" ? "Idle" : `${frame + 1} / 8`}</span></div>
+          <div className="person-steps"><span>{PERSON_CLIPS[clip].label}</span><div>{Array.from({ length: PERSON_CLIPS[clip].frames }, (_, f) => <button key={f} className="hud-pause" disabled={!sheetMatchesDesign} aria-label={`Inspect step ${f + 1}`} aria-pressed={visibleFrame === f} onClick={() => { setFrame(f); setPlaying(false); setView("character") }}>{f + 1}</button>)}</div><span className="person-step-count">{clip === "idle" ? "Idle" : `${frame + 1} / 8`}</span></div>
         </div>
       </div>
     </div>

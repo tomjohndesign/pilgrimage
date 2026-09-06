@@ -14,6 +14,8 @@ try {
   mkdirSync(prefix, { recursive: true })
   const save = (name, data) => { writeFileSync(`${prefix}/${name}.png`, Buffer.from(data.split(",")[1], "base64")); return `/${prefix.replace(/^public\//, "")}/${name}.png` }
   for (const [type, entry] of Object.entries(pack.callings)) for (const clip of ["walk", "idle"]) entry[clip] = save(`${type}-${clip}`, entry[clip])
+  for (const [type, entry] of Object.entries(pack.callings)) for (const [clip, data] of Object.entries(entry.actions ?? {})) entry.actions[clip] = save(`${type}-${clip}`, data)
+  for (const [clip, data] of Object.entries(pack.shadows.actions ?? {})) pack.shadows.actions[clip] = save(`shadow-${clip}`, data)
   for (const clip of ["walk", "idle"]) pack.shadows[clip] = save(`shadow-${clip}`, pack.shadows[clip])
   writeFileSync(`${prefix}/manifest.json`, JSON.stringify(pack, null, 2) + "\n")
   console.log(`Exported ${Object.keys(pack.callings).length} callings × 6 body profiles, with shared shadows: ${prefix}`)
