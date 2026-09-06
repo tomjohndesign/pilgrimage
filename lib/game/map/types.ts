@@ -4,6 +4,8 @@ export interface BuildingDef {
   id: string
   /** Player-built catalogue entry; absent on the founding hovel. */
   buildType?: string
+  /** Gold paid by each visitor entering the relic enclosure. */
+  admissionFee?: number
   label: string
   /** Origin tile — the minimum corner of the footprint. */
   x: number
