@@ -10,7 +10,9 @@ if (existsSync(directory)) throw new Error("This monk version already exists; us
 const browser = await chromium.launch({ headless: true, args: ["--use-angle=metal"] })
 try {
   const page = await browser.newPage()
-  await page.goto(new URL("/assets/characters", origin).href)
+  await page.goto(new URL("/assets/characters", origin).href, { waitUntil: "domcontentloaded", timeout: 120_000 })
+  // Wait for the editor to hydrate before selecting a preset; hydration restores its saved design.
+  await page.waitForFunction(() => !!window.__basePersonBake, undefined, { timeout: 120_000 })
   await page.getByRole("button", { name: "Monk", exact: true }).click()
   await page.waitForFunction(() => window.__basePersonBake?.metadata.design.garment === "Robe" && !!window.__basePersonBake.actions, undefined, { timeout: 120_000 })
   if (grey) {

@@ -2,6 +2,17 @@
 
 ## Rules
 
+- **Reuse existing UI and design patterns.** Before adding or changing UI,
+  inspect the application for existing components and patterns. Reuse its
+  buttons, cards, fonts, styling, layouts, and interactions wherever an
+  equivalent already exists. Do not generate replacement UI, duplicate
+  components, or introduce new patterns for an existing purpose. Extend the
+  shared component when needed, keeping it consistent with the application.
+
+- **Use the existing test environment.** Validate changes through the
+  repository's existing test setup and application workflows. Do not create
+  new test environments, standalone demo apps, or parallel testing setups.
+
 - **Pixels must be uniform throughout the app.** Use the character's apparent
   pixel size as the reference for trees, scenery, edges, selection outlines,
   shadows, and effects, regardless of whether artwork is procedural, generated,

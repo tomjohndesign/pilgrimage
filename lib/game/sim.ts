@@ -6,6 +6,7 @@ import { BUILDING_KINDS, buildingCentre, type PlacedBuilding } from "./buildings
 import { generateRelic, visitChance, type RelicStats } from "./relic"
 import { settlementRoute } from "./settlement-route"
 import type { TreePlacement } from "./trees/placement"
+import { TREE_SPECIES } from "./trees/species"
 import type { TilePos } from "./map/types"
 import { computeDangerField, encounterChance, type ThreatSource } from "./map/danger"
 import { surfaceHeight, ropeHeightAt } from "./map/bridges"
@@ -179,6 +180,8 @@ export interface SimTraveler {
   visitCooldown: number
   visits: number
   workRoute: TilePos[] | null
+  /** Exact working position beside the trunk; also anchors the return trip. */
+  workTarget: WorldPoint | null
   workProgress: number
   tree: number | null
   carrying: number
@@ -421,6 +424,7 @@ export function createSim(
       visitCooldown: 0,
       visits: 0,
       workRoute: null,
+      workTarget: null,
       workProgress: 0,
       tree: null,
       carrying: 0,
@@ -616,6 +620,18 @@ function stepWorkRoute(s: SimTraveler, map: GameMap, speed: number, dt: number):
   const route = s.workRoute!
   s.workProgress = Math.min(route.length - 1, s.workProgress + speed * dt)
   const at = routeWorldPoint(map, route, s.workProgress)
+  if (s.workTarget) {
+    const last = route.length - 1
+    const inbound = s.activity === "toWork"
+    if (inbound && s.workProgress >= Math.max(0, last - 1) || s.activity === "hauling" && s.workProgress <= 1) {
+      const a = inbound ? routeWorldPoint(map, route, Math.max(0, last - 1)) : s.workTarget
+      const b = inbound ? s.workTarget : routeWorldPoint(map, route, Math.min(1, last))
+      const blend = last === 0 ? 1 : inbound ? s.workProgress - (last - 1) : s.workProgress
+      at.x = a.x + (b.x - a.x) * blend
+      at.y = a.y + (b.y - a.y) * blend
+      at.z = a.z + (b.z - a.z) * blend
+    }
+  }
   s.x = at.x
   s.y = at.y
   s.z = at.z
@@ -638,6 +654,17 @@ function chooseTree(sim: SimState, s: SimTraveler, map: GameMap): boolean {
       { x: worldToTileX(map, tree.x), z: worldToTileZ(map, tree.z) }, true)
     if (!route) continue
     s.tree = index
+    // Approach from the route's last step, leaving room for the waist-height axe stroke.
+    const approach = routeWorldPoint(map, route, Math.max(0, route.length - 2))
+    const dx = approach.x - tree.x, dz = approach.z - tree.z
+    const distance = Math.hypot(dx, dz)
+    const radius = TREE_SPECIES[tree.species].trunk.radius
+    const standOff = (tree.shape?.trunkRadius ?? (radius.min + radius.max) / 2) * (tree.scale ?? 1) + 0.31
+    s.workTarget = {
+      x: tree.x + (distance > 1e-6 ? dx / distance : 0) * standOff,
+      y: tree.y,
+      z: tree.z + (distance > 1e-6 ? dz / distance : 1) * standOff,
+    }
     if (!sim.treeResources.has(index)) sim.treeResources.set(index, treeResource(tree, index, map.seed))
     startWorkRoute(s, route, "toWork")
     return true

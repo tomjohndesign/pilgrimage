@@ -1,4 +1,5 @@
 import recipe from "../../../assets/recipes/base-person.json"
+import { SPLITTING_FRAMES, splittingMotion } from "./splitting"
 
 export const BASE_PERSON = recipe
 export const WALK_STANCE_FRACTION = 0.6
@@ -12,13 +13,19 @@ export const PERSON_CLIPS = {
   sleeping: { label: "Sleeping", frames: 16 },
   sitting: { label: "Sitting", frames: 8 },
   praying: { label: "Praying", frames: 8 },
-  woodcutting: { label: "Woodcutting", frames: 24 },
+  treeFelling: { label: "Chopping · standing tree", frames: 24 },
+  woodcutting: { label: "Chopping · fallen wood", frames: SPLITTING_FRAMES },
   gathering: { label: "Gathering", frames: 24 },
   carrying: { label: "Carrying", frames: 20 },
 } as const
 export type BaseClip = keyof typeof PERSON_CLIPS
-export const ACTION_CLIPS = ["sleeping", "sitting", "praying", "woodcutting", "gathering", "carrying"] as const
+export const ACTION_CLIPS = ["sleeping", "sitting", "praying", "treeFelling", "woodcutting", "gathering", "carrying"] as const
 export type ActionClip = typeof ACTION_CLIPS[number]
+
+export function choppingHipDrop(clip: BaseClip, phase = 0, hipHeight = BASE_PERSON.body.hipHeight) {
+  if (clip === "woodcutting") return Math.max(splittingMotion(phase).drop, 0.22 - hipHeight)
+  return clip === "treeFelling" ? -0.08 : 0
+}
 
 export interface LegPose {
   hip: Point3
@@ -59,6 +66,7 @@ function hipOffset(side: BodySide, phase: number, clip: BaseClip, b = BASE_PERSO
 
 /** Let the support leg extend, rather than forcing both knees into a crouch. */
 export function pelvisHeight(phase: number, clip: BaseClip, b = BASE_PERSON.body): number {
+  if (clip === "treeFelling" || clip === "woodcutting") return b.hipHeight + choppingHipDrop(clip, phase, b.hipHeight)
   if (clip === "sleeping") return b.hipHeight
   if (clip === "sitting") return 0.25
   if (clip === "praying") return 0.1 + b.thighLength * 0.9
@@ -85,6 +93,24 @@ export function legPose(side: BodySide, phase: number, clip: BaseClip, b = BASE_
     const kneeY = kneeling ? 0.1 : 0.1 + b.shinLength * 0.8
     const knee: Point3 = [x, kneeY, Math.sqrt(Math.max(0.01, b.thighLength ** 2 - (hip[1] - kneeY) ** 2))]
     const ankle: Point3 = [x, 0.1, knee[2] + b.shinLength * (kneeling ? -1 : 0.6)]
+    return { hip, knee, ankle, planted: true }
+  }
+  if (clip === "treeFelling" || clip === "woodcutting") {
+    const sign = side === "left" ? 1 : -1
+    const hip: Point3 = [sign * b.legOffset, b.hipHeight + choppingHipDrop(clip, phase, b.hipHeight), 0]
+    const ankle: Point3 = [sign * (b.legOffset + 0.15), b.ankleHeight, sign * 0.16]
+    const delta = ankle.map((v, i) => v - hip[i])
+    const distance = Math.hypot(...delta)
+    const axis = delta.map(v => v / distance)
+    // Project forward onto the knee's bend plane: planted feet, fixed bone lengths.
+    const squat = clip === "woodcutting" ? Math.max(0, (-choppingHipDrop(clip, phase, b.hipHeight) - 0.20) / 0.24) : 0
+    const desired = [sign * squat * 0.6, squat * 1.5, 1]
+    const dot = desired.reduce((sum, v, i) => sum + v * axis[i], 0)
+    const bend = desired.map((v, i) => v - axis[i] * dot)
+    const bendLength = Math.hypot(...bend)
+    const along = (b.thighLength ** 2 - b.shinLength ** 2 + distance ** 2) / (2 * distance)
+    const height = Math.sqrt(Math.max(0, b.thighLength ** 2 - along ** 2))
+    const knee = hip.map((v, i) => v + axis[i] * along + bend[i] / bendLength * height) as Point3
     return { hip, knee, ankle, planted: true }
   }
   const walking = clip === "walk" || clip === "carrying"

@@ -31,7 +31,7 @@ describe("activity rig", () => {
           const first = position()
           rig.pose(1, clip)
           position().forEach((p, i) => p.forEach((v, j) => expect(v).toBeCloseTo(first[i][j], 8)))
-          expect(rig.root.getObjectByName("woodcutting-axe")!.visible).toBe(clip === "woodcutting")
+          expect(rig.root.getObjectByName("woodcutting-axe")!.visible).toBe(clip === "woodcutting" || clip === "treeFelling")
           rig.pose(0, "idle")
           expect(position()).toEqual(rest)
         }

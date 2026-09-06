@@ -8,7 +8,7 @@ if (existsSync(prefix)) throw new Error("This population version already exists;
 const browser = await chromium.launch({ headless: true, args: ["--use-angle=metal"] })
 try {
   const page = await browser.newPage()
-  await page.goto(new URL("/assets/characters", origin).href)
+  await page.goto(new URL("/assets/characters", origin).href, { waitUntil: "domcontentloaded", timeout: 120_000 })
   await page.waitForFunction(() => window.__bakePersonPopulation)
   page.on("pageerror", error => console.error(error.message))
   let lastProgress = -1
