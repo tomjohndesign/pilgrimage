@@ -1,0 +1,275 @@
+{
+  "style": "pilgrimage-buildings-v3",
+  "recipe": {
+    "subject": "Hovel of the Relic",
+    "variant": "porch",
+    "width": 5,
+    "depth": 5,
+    "wallHeight": 0.9,
+    "roofRise": 0.825,
+    "seed": 17,
+    "view": 0,
+    "output": "concept",
+    "notes": "A humble monks’ refuge. A tiny wooden cross over the entrance; a subdued golden glint within."
+  },
+  "prompt": "Use case: stylized-concept\n\nAsset type: one 2048×2048 four-view concept atlas for Pilgrimage. Four equal 1024×1024 cells in a 2×2 layout. This is ONE building rotated, not four variants.\n\nStyle contract: pilgrimage-buildings-v3 — Ink & thatch.\n\nSubject: Hovel of the Relic. Reserved plot exactly 5 × 5 ground tiles; building footprint 2.5 × 2.5 units, centred within that plot with a forecourt. One tile is one world unit. Walls 0.9 units high; roof rises 0.825 units above the eaves.\n\nHuman scale: an adult game character is 0.55 units tall and 0.3 units wide. The door opening is 0.7 high × 0.4 wide, with only modest headroom. These dimensions are authoritative: no oversized doorway, no enlarged walls, no exaggerated roof. Match the reference person in the guide, then omit the person from the finished sprite.\n\nConstruction: A continuous gabled thatch roof sheltering a recessed south entrance with two wooden porch posts. The porch stays inside the footprint. Warm limewashed daub, dark oak framing, low rough stone footing, tiny shuttered windows, a clear open doorway.\n\nArt direction: Slightly irregular ink contours; broad, quiet colour washes. Thick straw eaves, limewashed daub, visible timber and a low stone footing. A clear entrance and a useful silhouette before surface detail. Sparse hatching follows the material: down the straw, along the grain. One orthographic camera, consistent scale, light from the upper left. Original medieval history-book illustration; flat restrained watercolour with confident dark brown pen lines.\n\nPalette: ink #352b24, plaster #e7d8b9, timber #715139, thatch #c4a05f, thatchShade #927344, stone #a29c8b, moss #7e8860. Muted blue-grey shade.\n\nRequired view order: top-left 0 southeast (south entrance + east wall); top-right 1 northeast (north rear + east wall); bottom-left 2 northwest (north rear + west wall); bottom-right 3 southwest (south entrance + west wall). The entrance always remains on the south side. Rear views must show a solid rear wall, not another door. Rotate the whole building in 90° steps; never mirror or invent new windows.\n\nCamera: match the supplied isometric registration guide exactly. Orthographic, elevation 35.26438968°, yaw 45° + view index × 90°. Ground axes rise at 30° to horizontal; verticals stay vertical. No perspective convergence. Footprint corners, ridge direction, width, depth and height must register across all four views.\n\nRegistration in EVERY cell: ground-centre anchor at (50%,72%); scale 0.097980 of cell width per world unit (100.33 px/unit at 1024). Use the supplied guide as the geometry and placement authority. The map guide shows the actual procedural building on game terrain; keep its camera, scale and ground position. Walls and roof stay inside the 5×5 tile reservation. Do not independently centre or scale individual views.\n\nComposition: exactly four complete buildings, one per quadrant, with the same anchor, scale and geometry. No borders or gaps between cells. Erase guide grid, red registration dots and labels from the finished art. Terrain, roads, grid lines and scenery in the map guide are context only. Return the building alone, with no terrain islands or external shadows; the workshop will place it back on those tiles. Preserve large shapes at 128px per view.\n\nBackdrop: uniform warm ivory #f3eddf. This is a concept, not an alpha-ready sprite.\n\nDetails: A humble monks’ refuge. A tiny wooden cross over the entrance; a subdued golden glint within.\n\nAvoid: text, labels, people, landscape, glossy 3D, photorealism, pixel art, excessive fine hatching, ornate fantasy architecture. Roof intact unless explicitly requested otherwise.\n\nArchitecture consistency: the north rear wall has no door, cross or windows. Each east and west wall has one centred shuttered window. View0: doorway LEFT/window RIGHT; view1: window LEFT/plain rear RIGHT; view2: plain rear LEFT/window RIGHT; view3: window LEFT/doorway RIGHT. Preserve these details as the camera rotates.\n\nInput roles: image 1 is the mandatory four-view geometric registration guide; any further image is a material and line-style reference. Preserve guide geometry even if the style reference has looser perspective. All four views must describe the same building.",
+  "generation": {
+    "mode": "built-in image generation edit",
+    "model": null,
+    "inputs": [
+      "hovel-porch-views-v2.png"
+    ],
+    "prompts": [
+      "Edit the provided four-view porch cottage atlas, preserving EXACTLY its four roof directions, four viewing angles, positions, timber porch posts, and where its doors and windows are. Make the DOORWAYS 20% shorter, keeping threshold positions, so they are modest human-size entrances rather than tall portals. Fill the newly exposed space above each shorter doorway with matching pale daub. Preserve roof and wall sizes. Simplify straw hatching slightly into short strokes. Uniform solid warm ivory #f3eddf backdrop. This is an opaque concept illustration; no transparency or checkerboard. Keep all four complete views. Top-left entrance gable LEFT; top-right plain rear gable RIGHT; bottom-left plain rear gable LEFT; bottom-right entrance gable RIGHT. The cross remains immediately above each doorway. No new openings, text, people, terrain or exterior shadows."
+    ]
+  },
+  "atlas": {
+    "columns": 2,
+    "rows": 2,
+    "targetCellSize": [
+      1024,
+      1024
+    ],
+    "order": [
+      "Southeast",
+      "Northeast",
+      "Northwest",
+      "Southwest"
+    ]
+  },
+  "placement": {
+    "plot": [
+      5,
+      5
+    ],
+    "footprint": [
+      2.5,
+      2.5
+    ],
+    "humanScale": {
+      "personHeight": 0.55,
+      "doorHeight": 0.7,
+      "doorWidth": 0.4
+    },
+    "origin": "centre of ground footprint",
+    "cameraPitch": 35.264389682754654,
+    "normalizedPixelsPerUnit": 0.09797958971132714,
+    "normalizedAnchor": [
+      0.5,
+      0.72
+    ],
+    "views": [
+      {
+        "id": 0,
+        "name": "Southeast",
+        "faces": "south entrance + east wall",
+        "column": 0,
+        "row": 0,
+        "normalizedCell": [
+          0,
+          0,
+          0.5,
+          0.5
+        ],
+        "footprintPolygon": [
+          [
+            0.5,
+            0.5199999999999999
+          ],
+          [
+            0.8464101615137756,
+            0.72
+          ],
+          [
+            0.5,
+            0.92
+          ],
+          [
+            0.15358983848622448,
+            0.72
+          ]
+        ]
+      },
+      {
+        "id": 1,
+        "name": "Northeast",
+        "faces": "north rear + east wall",
+        "column": 1,
+        "row": 0,
+        "normalizedCell": [
+          0.5,
+          0,
+          0.5,
+          0.5
+        ],
+        "footprintPolygon": [
+          [
+            0.8464101615137756,
+            0.72
+          ],
+          [
+            0.5,
+            0.92
+          ],
+          [
+            0.15358983848622448,
+            0.72
+          ],
+          [
+            0.5,
+            0.5199999999999999
+          ]
+        ]
+      },
+      {
+        "id": 2,
+        "name": "Northwest",
+        "faces": "north rear + west wall",
+        "column": 0,
+        "row": 1,
+        "normalizedCell": [
+          0,
+          0.5,
+          0.5,
+          0.5
+        ],
+        "footprintPolygon": [
+          [
+            0.5000000000000001,
+            0.92
+          ],
+          [
+            0.15358983848622448,
+            0.72
+          ],
+          [
+            0.49999999999999994,
+            0.5199999999999999
+          ],
+          [
+            0.8464101615137756,
+            0.72
+          ]
+        ]
+      },
+      {
+        "id": 3,
+        "name": "Southwest",
+        "faces": "south entrance + west wall",
+        "column": 1,
+        "row": 1,
+        "normalizedCell": [
+          0.5,
+          0.5,
+          0.5,
+          0.5
+        ],
+        "footprintPolygon": [
+          [
+            0.15358983848622448,
+            0.72
+          ],
+          [
+            0.4999999999999999,
+            0.5199999999999999
+          ],
+          [
+            0.8464101615137756,
+            0.72
+          ],
+          [
+            0.5000000000000001,
+            0.92
+          ]
+        ]
+      }
+    ],
+    "status": "Four views required. Registration values are targets; compare generated pixels against the grid before game integration."
+  },
+  "sourceImage": "hovel-porch-views-v4.png",
+  "sourceRegistrations": [
+    [
+      [
+        0.1371610845295056,
+        0.7352472089314195
+      ],
+      [
+        0.4784688995215311,
+        0.8947368421052632
+      ],
+      [
+        0.8787878787878788,
+        0.7001594896331739
+      ],
+      [
+        0.4784688995215311,
+        0.6762360446570973
+      ]
+    ],
+    [
+      [
+        0.1467304625199362,
+        0.7113237639553429
+      ],
+      [
+        0.5103668261562998,
+        0.8883572567783095
+      ],
+      [
+        0.8676236044657097,
+        0.7320574162679426
+      ],
+      [
+        0.5103668261562998,
+        0.6650717703349283
+      ]
+    ],
+    [
+      [
+        0.1467304625199362,
+        0.6491228070175439
+      ],
+      [
+        0.4800637958532695,
+        0.8054226475279107
+      ],
+      [
+        0.8421052631578947,
+        0.6299840510366826
+      ],
+      [
+        0.4800637958532695,
+        0.580542264752791
+      ]
+    ],
+    [
+      [
+        0.12280701754385964,
+        0.6347687400318979
+      ],
+      [
+        0.5055821371610846,
+        0.8181818181818182
+      ],
+      [
+        0.8660287081339713,
+        0.6523125996810207
+      ],
+      [
+        0.5055821371610846,
+        0.5901116427432217
+      ]
+    ]
+  ],
+  "actualAtlasSize": [
+    1254,
+    1254
+  ],
+  "actualHasAlpha": false,
+  "exportedAtlas": "hovel-porch-registered-v4.png",
+  "validation": {
+    "status": "ground-and-eave-registered",
+    "requiresVisualReview": true
+  },
+  "provenance": "Made with the built-in image tool, whose model ID is not exposed. Door proportions were refined against game characters. Ivory concept background; not production alpha. Fitted exports already apply sourceRegistrations. The v3 style contract and human-scale dimensions are retained; v4 is the artwork revision."
+}

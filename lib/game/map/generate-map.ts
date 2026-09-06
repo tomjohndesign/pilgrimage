@@ -193,7 +193,7 @@ const TRACK_MARGIN = 4
 
 export const HOVEL_ID = "hovel"
 /** Footprint of the hovel in tiles. */
-export const HOVEL_SIZE = 2
+export const HOVEL_SIZE = 3
 
 /**
  * How far the hovel sits from the nearest road tile, in grid steps. Far — a
@@ -1049,7 +1049,9 @@ function foundSite(
   // bank and the track can reach the door without touching road or water.
   // Straight-line distance is only the fallback for a hovel no such walk reaches.
   const ring: TilePos[] = []
-  for (let k = 0; k < HOVEL_SIZE; k++) {
+  // An architectural entrance sits at the centre of a wall. Pick the side
+  // with the shortest dry approach, keeping the track aligned with its door.
+  for (const k of [Math.floor(HOVEL_SIZE / 2)]) {
     ring.push({ x: best.x + k, z: best.z - 1 })
     ring.push({ x: best.x + k, z: best.z + HOVEL_SIZE })
     ring.push({ x: best.x - 1, z: best.z + k })
@@ -1140,14 +1142,14 @@ function foundSite(
 
   const hovel: BuildingDef = {
     id: HOVEL_ID,
-    label: "Hovel of the Relic",
+    label: "Relic enclosure",
     x: best.x,
     z: best.z,
     w: HOVEL_SIZE,
     d: HOVEL_SIZE,
-    height: 0.55,
-    color: "#8c7658",
-    roofColor: "#5b4631",
+    height: 0.42,
+    color: "#e7d8b9",
+    roofColor: "#c4a05f",
   }
 
   return { hovel, site: { junction, branch, door, hovelId: HOVEL_ID } }

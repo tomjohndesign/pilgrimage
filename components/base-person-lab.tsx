@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, ArrowUpRight, Check, Pause, Play, RotateCcw, SlidersHorizontal, X } from "lucide-react"
+import { ArrowUpRight, Check, Pause, Play, RotateCcw, X } from "lucide-react"
+import { AssetEditorFrame, type AssetEditorNavigation } from "./asset-editor-frame"
 import { Section, Tuner } from "@/components/game/property-controls"
 import "./game/game-hud.css"
 import "./base-person-lab.css"
@@ -30,7 +31,7 @@ function download(url: string, name: string) {
   const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; anchor.click()
 }
 
-export function BasePersonLab() {
+export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   useEffect(() => {
     if (process.env.NODE_ENV !== "development") return
     const target = window as unknown as { __bakePersonPopulation?: (progress?: (done: number) => void) => Promise<unknown> }
@@ -95,10 +96,10 @@ export function BasePersonLab() {
     return () => cancelAnimationFrame(request)
   }, [design, clip, frame, sides, sheetMatchesDesign])
   useEffect(() => {
-    if (!playing || clip === "idle") return
+    if (!active || !playing || clip === "idle") return
     const timer = setInterval(() => setFrame((f) => (f + 1) % PERSON_CLIPS[clip].frames), 1000 / (fps * actionPlaybackRate(clip, design)))
     return () => clearInterval(timer)
-  }, [playing, clip, fps, design.bodyType, design.walkStyle])
+  }, [active, playing, clip, fps, design.bodyType, design.walkStyle])
 
   const live = !sheetMatchesDesign && preview?.clip === clip && preview.sides === sides ? preview : null
   const columns = live ? 1 : PERSON_CLIPS[clip].frames
@@ -138,12 +139,11 @@ export function BasePersonLab() {
   })
   const ready = !busy && !error && !!bake && sheetMatchesDesign
 
-  return <section className="game-hud person-editor" aria-label="Base person template">
-    <div className="hud-frame" aria-hidden="true" />
-    <header className="person-header">
-      <div className="person-title"><Link href="/assets" className="hud-action" aria-label="Back to assets"><ArrowLeft size={14} />Assets</Link><h1>Character editor</h1><span className="person-version">Base person · v{BASE_PERSON.version}</span></div>
-      <nav aria-label="Editor navigation"><button className="hud-action person-controls-toggle" aria-expanded={controlsOpen} onClick={() => setControlsOpen(!controlsOpen)}><SlidersHorizontal size={14} />Controls</button><Link className="hud-action" aria-label="On the road" href={`/play?characters=base&baseSize=1.5&fps=${fps}`}><span className="person-road-label">On the road</span><ArrowUpRight size={14} /></Link></nav>
-    </header>
+  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Base person template"
+    version={`Base person · v${BASE_PERSON.version}`} controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(!controlsOpen)}
+    roadHref={`/play?characters=base&baseSize=1.5&fps=${fps}`}
+    status={dragging ? "Live preview · release to finish sprite sheets." : busy ? "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}
+    detail={`8 directions · ${fps} fps`}>
     <div className="person-workspace">
       <aside className={`person-controls hud-well ${controlsOpen ? "is-open" : ""}`} aria-label="Character controls">
         <div className="person-panel-heading"><span>Person</span><button className="hud-close person-controls-toggle" aria-label="Close character controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
@@ -246,6 +246,5 @@ export function BasePersonLab() {
         </div>
       </div>
     </div>
-    <footer className="person-status"><span role="status">{dragging ? "Live preview · release to finish sprite sheets." : busy ? "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}</span><span className="person-status-detail">8 directions · {fps} fps</span></footer>
-  </section>
+  </AssetEditorFrame>
 }

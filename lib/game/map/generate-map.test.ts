@@ -132,6 +132,10 @@ describe("generateMap", () => {
       const map = mapFor(seed)
       expect(map.buildings.map((b) => b.id), `seed ${seed} has only the hovel`).toEqual([HOVEL_ID])
       const hovel = map.buildings[0]
+      expect([hovel.w, hovel.d]).toEqual([3, 3])
+      const door = map.site!.door
+      const centred = door.x === hovel.x + Math.floor(hovel.w / 2) || door.z === hovel.z + Math.floor(hovel.d / 2)
+      expect(centred, `seed ${seed} track meets the middle of an entrance wall`).toBe(true)
       expect(map.site?.hovelId).toBe(HOVEL_ID)
       for (let dz = -1; dz <= hovel.d; dz++) {
         for (let dx = -1; dx <= hovel.w; dx++) {
