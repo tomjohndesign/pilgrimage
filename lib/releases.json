@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "9bee01a7c43eabc51026a988a06be65a2dcf95bf",
-  "releaseCount": 45,
+  "lastProcessedCommit": "418a2f3b6df2b84d2bc8b2cd6df0e3ec8101bb61",
+  "releaseCount": 46,
   "releases": [
+    {
+      "version": "0.0.60",
+      "title": "Release 0.0.60",
+      "summary": "Add monk relic processions and nearby prayer (#76)",
+      "commit": "418a2f3b6df2b84d2bc8b2cd6df0e3ec8101bb61"
+    },
     {
       "version": "0.0.59",
       "title": "Release 0.0.59",
