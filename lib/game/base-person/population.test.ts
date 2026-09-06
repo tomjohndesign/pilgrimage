@@ -1,3 +1,5 @@
+import { GREY_HAIR_COLOR } from "../character-age"
+import { monkVisual } from "./monk-assets"
 import { ACTION_CLIPS, PERSON_CLIPS } from "./pose"
 import { describe, expect, it } from "vitest"
 import { TRAVELER_TYPES } from "../travelers"
@@ -33,6 +35,32 @@ describe("road character population", () => {
     expect(new Set(profiles.map(p => p.torsoHeight)).size).toBe(3)
     expect(new Set(profiles.map(p => p.build)).size).toBeGreaterThan(2)
   })
+  it("selects grey hair at 40 while preserving bodies, gait and every activity", () => {
+    for (const type of ["knight", "friar"] as const) for (let variant = 0; variant < 6; variant++) {
+      const young = populationVisual(type, variant, null, 39)
+      const old = populationVisual(type, variant, null, 40)
+      expect(old.design).toEqual({ ...young.design, hairColor: GREY_HAIR_COLOR })
+      expect(old.rowOffset).toBe(young.rowOffset)
+      expect(old.walkStride).toBe(young.walkStride)
+      expect(old.center).toEqual(young.center)
+      expect(old.scale).toBe(young.scale)
+      expect(old.walk.url).toContain(`${type}-grey-walk.png`)
+      expect(old.idle.url).toContain(`${type}-grey-idle.png`)
+      for (const clip of ACTION_CLIPS) {
+        expect(old.actions[clip]?.url).toContain(`${type}-grey-${clip}.png`)
+        expect(old.actions[clip]?.columns).toBe(young.actions[clip]?.columns)
+      }
+    }
+    const youngMonk = monkVisual(39), oldMonk = monkVisual(40)
+    expect(oldMonk.design).toEqual({ ...youngMonk.design, hairColor: GREY_HAIR_COLOR })
+    expect(oldMonk.walkStride).toBe(youngMonk.walkStride)
+    expect(oldMonk.walk.columns).toBe(youngMonk.walk.columns)
+    for (const clip of ACTION_CLIPS) {
+      expect(oldMonk.actions[clip]?.url).not.toBe(youngMonk.actions[clip]?.url)
+      expect(oldMonk.actions[clip]?.columns).toBe(youngMonk.actions[clip]?.columns)
+    }
+  })
+
   it("registers every calling and body in matching walk, idle and shadow rows", () => {
     for (const type of Object.values(TRAVELER_TYPES)) for (let variant = 0; variant < 6; variant++) {
       const visual = populationVisual(type.id, variant, null)

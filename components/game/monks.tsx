@@ -20,7 +20,7 @@ import { createMonkFlight, monkGroundTime, stepMonkFlight, type MonkFlight } fro
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { encodeObjectId, residentObjectId } from "@/lib/game/render/outline"
 import { CharacterSprite } from "./character-sprite"
-import { MONK_VISUAL, monkWalkSpeed, MONK_WALK_TUNING } from "@/lib/game/base-person/monk-assets"
+import { monkVisual, monkWalkSpeed, MONK_WALK_TUNING } from "@/lib/game/base-person/monk-assets"
 import { MonkRocketGear, ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
 
 /**
@@ -213,7 +213,7 @@ export function Monks({ map, monks, flying = false, characterScale = 1 }: { map:
           >
             <Suspense fallback={null}>
               <CharacterSprite name="monk" type="friar" characterModel="base" characterScale={characterScale}
-                visualOverride={MONK_VISUAL} selected={selected} onClick={select}
+                visualOverride={monkVisual(monk.attributes.age)} selected={selected} onClick={select}
                 outlineColor={[id.r, id.g, id.b]}
                 walkTuning={MONK_WALK_TUNING} />
             </Suspense>

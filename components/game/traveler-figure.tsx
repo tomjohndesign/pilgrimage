@@ -80,9 +80,11 @@ export function TravelerFigure({
   characterFps,
   walkTuning,
   appearance,
+  age,
 }: {
   type: TravelerTypeDef
   appearance?: TravelerAppearance
+  age?: number
   selected?: boolean
   idColor?: THREE.Color
   onClick?: FigureClickHandler
@@ -98,7 +100,7 @@ export function TravelerFigure({
   return (
     <>
       <Suspense fallback={null}>
-        <CharacterSprite appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] : undefined)} characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
+        <CharacterSprite age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] : undefined)} characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
       </Suspense>
       {type.id === "vendor" && <VendorCart onClick={onClick} awning={awning} idColor={idColor} />}
     </>

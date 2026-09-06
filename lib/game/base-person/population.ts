@@ -45,6 +45,7 @@ export interface PopulationPack {
   anchor: number[]
   rows: number
   callings: Record<TravelerTypeId, { walk: string; idle: string; designs: PersonDesign[]; actions?: Record<ActionClip, string> }>
+  greyCallings?: Partial<PopulationPack["callings"]>
   shadows: { walk: string; idle: string; actions?: Record<ActionClip, string> }
   strideRatios: number[]
 }

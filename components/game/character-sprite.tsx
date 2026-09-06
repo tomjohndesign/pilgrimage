@@ -23,11 +23,12 @@ import type { FigureClickHandler } from "./traveler-figure"
 
 let nextSpriteOrder = 1
 
-export function CharacterSprite({ type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, visualOverride, name = "traveler" }: {
+export function CharacterSprite({ type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, age = 18, visualOverride, name = "traveler" }: {
   visualOverride?: ReturnType<typeof populationVisual>
   name?: "traveler" | "monk"
   type: TravelerTypeId
   appearance?: TravelerAppearance
+  age?: number
   selected?: boolean
   onClick?: FigureClickHandler
   outlineColor?: [number, number, number]
@@ -41,9 +42,9 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
   const custom = usePersonDesignStore((s) => s.atlas)
   const population = usePopulationStore(s => s.pack)
   const varied = characterModel === "base" && !!appearance
-  const visual = useMemo(() => visualOverride ?? (varied ? populationVisual(type, appearance.variant, population) :
+  const visual = useMemo(() => visualOverride ?? (varied ? populationVisual(type, appearance.variant, population, age) :
     { ...characterVisual(asset, characterModel, custom), rowOffset: 0, strideRatio: 1 }),
-    [visualOverride, asset, characterModel, custom, varied, appearance?.variant, population, type])
+    [visualOverride, asset, characterModel, custom, varied, appearance?.variant, population, type, age])
   const individualScale = characterScale * (varied ? appearance.scale : 1)
   const size = visual.scale * individualScale
   const fps = characterFps ?? visual.fps

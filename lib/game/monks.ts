@@ -1,3 +1,4 @@
+import { rollCharacterAge } from "./character-age"
 import { deriveSeed, makeRng, SEED_STREAM } from "./rng"
 
 /**
@@ -27,7 +28,6 @@ export interface Monk {
 
 const DUTIES = ["Keeper of the Relic", "Cellarer", "Chanter", "Almoner", "Infirmarian", "Gardener"]
 const SKILLS = ["letters", "chant", "healing", "brewing", "herb lore", "carpentry", "masonry", "illumination"]
-const AGE = { min: 22, max: 68 }
 const PIETY = { min: 75, max: 100 }
 const SKILL_COUNT = { min: 1, max: 3 }
 
@@ -78,7 +78,7 @@ export function generateMonks(seed: number, count = MONK_COUNT): Monk[] {
     name: `Brother ${name}`,
     duty: duties[i],
     attributes: {
-      age: roll(rng, AGE),
+      age: rollCharacterAge(rng, true),
       piety: roll(rng, PIETY),
       skills: pickDistinct(rng, SKILLS, roll(rng, SKILL_COUNT)),
     },
