@@ -13,7 +13,7 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
     result.width = columns * size; result.height = count * 8 * size
     return result
   }
-  const shadowWalk = canvas(8), shadowIdle = canvas(1)
+  const shadowWalk = canvas(PERSON_CLIPS.walk.frames), shadowIdle = canvas(1)
   const shadowActions = Object.fromEntries(ACTION_CLIPS.map(clip => [clip, canvas(PERSON_CLIPS[clip].frames)]))
   const draw = async (target: HTMLCanvasElement, url: string, variant: number) => {
     const image = new Image(); image.src = url; await image.decode()
@@ -24,7 +24,7 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
   const strideRatios: number[] = []
   const referenceStride = personRecipe(base).body.stride
   for (const [typeIndex, type] of types.entries()) {
-    const walk = canvas(8), idle = canvas(1)
+    const walk = canvas(PERSON_CLIPS.walk.frames), idle = canvas(1)
     const actions = Object.fromEntries(ACTION_CLIPS.map(clip => [clip, canvas(PERSON_CLIPS[clip].frames)]))
     const designs: PersonDesign[] = []
     for (let variant = 0; variant < count; variant++) {
@@ -47,6 +47,6 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
     }
     callings[type.id as TravelerTypeId] = { walk: walk.toDataURL("image/png"), idle: idle.toDataURL("image/png"), actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, actions[clip].toDataURL("image/png")])) as NonNullable<PopulationPack["callings"][TravelerTypeId]["actions"]>, designs }
   }
-  return { actionFrames: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, PERSON_CLIPS[clip].frames])) as Record<typeof ACTION_CLIPS[number], number>, templateVersion: BASE_PERSON.version, cellSize: size, anchor: BASE_PERSON.anchor,
+  return { frameCounts: Object.fromEntries(Object.entries(PERSON_CLIPS).map(([clip, definition]) => [clip, definition.frames])), templateVersion: BASE_PERSON.version, cellSize: size, anchor: BASE_PERSON.anchor,
     rows: count * 8, callings, shadows: { walk: shadowWalk.toDataURL("image/png"), idle: shadowIdle.toDataURL("image/png"), actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, shadowActions[clip].toDataURL("image/png")])) as NonNullable<PopulationPack["shadows"]["actions"]> }, strideRatios }
 }

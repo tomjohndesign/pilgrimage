@@ -10,7 +10,13 @@ try {
   const page = await browser.newPage()
   await page.goto(new URL("/assets/characters", origin).href)
   await page.waitForFunction(() => window.__bakePersonPopulation)
-  const pack = await page.evaluate(() => window.__bakePersonPopulation())
+  page.on("pageerror", error => console.error(error.message))
+  let lastProgress = -1
+  await page.exposeFunction("__reportPopulationProgress", progress => {
+    const percent = Math.floor(progress * 100)
+    if (percent >= lastProgress + 10 || percent === 100) { console.log(`Baking population: ${percent}%`); lastProgress = percent }
+  })
+  const pack = await page.evaluate(() => window.__bakePersonPopulation(window.__reportPopulationProgress))
   mkdirSync(prefix, { recursive: true })
   const save = (name, data) => { writeFileSync(`${prefix}/${name}.png`, Buffer.from(data.split(",")[1], "base64")); return `/${prefix.replace(/^public\//, "")}/${name}.png` }
   for (const [type, entry] of Object.entries(pack.callings)) for (const clip of ["walk", "idle"]) entry[clip] = save(`${type}-${clip}`, entry[clip])

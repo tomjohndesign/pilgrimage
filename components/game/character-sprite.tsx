@@ -1,5 +1,8 @@
 "use client"
 
+import { personRecipe } from "@/lib/game/base-person/design"
+import { BASE_PERSON } from "@/lib/game/base-person/pose"
+import { walkContact, plantFoot, type FootPlant, DEFAULT_WALK_STRIDE } from "@/lib/game/base-person/gait"
 import { ACTION_CLIPS } from "@/lib/game/base-person/pose"
 import { activityClip } from "@/lib/game/base-person/activity"
 import { crossedWoodcuttingImpact, woodcuttingProfile } from "@/lib/game/base-person/woodcutting"
@@ -7,6 +10,7 @@ import { strikeTree } from "@/lib/game/trees/impact"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
+import { usePixelWorldTexel } from "@/components/pixel-canvas"
 import { characterVisual, spriteRow, type CharacterModel } from "@/lib/game/character-assets"
 import { usePopulationStore } from "@/lib/game/base-person/population-store"
 import { populationVisual } from "@/lib/game/base-person/population-assets"
@@ -40,11 +44,17 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
   const population = usePopulationStore(s => s.pack)
   const varied = characterModel === "base" && !!appearance
   const visual = useMemo(() => visualOverride ?? (varied ? populationVisual(type, appearance.variant, population) :
-    { ...characterVisual(asset, characterModel, custom), rowOffset: 0, strideRatio: 1, design: undefined }),
+    { ...characterVisual(asset, characterModel, custom), rowOffset: 0, strideRatio: 1 }),
     [visualOverride, asset, characterModel, custom, varied, appearance?.variant, population, type])
   const individualScale = characterScale * (varied ? appearance.scale : 1)
   const size = visual.scale * individualScale
   const fps = characterFps ?? visual.fps
+  const rigBody = useMemo(() => visual.design ? personRecipe(visual.design).body : null, [visual.design])
+  const poseRoot = useRef<THREE.Group>(null)
+  const footPlant = useRef<FootPlant | null>(null)
+  const origin = useMemo(() => new THREE.Vector3(), [])
+  const contact = useMemo(() => new THREE.Vector3(), [])
+  const corrected = useMemo(() => new THREE.Vector3(), [])
   const textureEntries = useMemo(() => [
     { clip: visual.walk, url: visual.walk.url }, { clip: visual.idle, url: visual.idle.url },
     ...ACTION_CLIPS.flatMap(name => {
@@ -71,14 +81,15 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     return map
   }), [sources, textureEntries, visual.rowOffset])
   useEffect(() => () => textures.forEach((texture) => texture.dispose()), [textures])
+  const worldTexel = usePixelWorldTexel()
   const viewport = useMemo(() => new THREE.Vector4(), [])
   const material = useMemo(() => {
     const material = new THREE.SpriteMaterial({ map: textures[1], alphaTest: 0.5, transparent: false, toneMapped: false })
-    material.onBeforeCompile = (shader) => applySpriteDepth(shader, viewport)
+    material.onBeforeCompile = (shader) => applySpriteDepth(shader, viewport, worldTexel)
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "person-depth-v2"
+    material.customProgramCacheKey = () => "person-depth-v3"
     return material
-  }, [textures, viewport])
+  }, [textures, viewport, worldTexel])
   useEffect(() => () => material.dispose(), [material])
   const center = useMemo(() => new THREE.Vector2(...visual.center), [visual])
   const sprite = useRef<THREE.Sprite>(null)
@@ -86,7 +97,6 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
   const actionClock = useRef(0)
   const lastClip = useRef("")
   const seeded = useRef(false)
-  const frameElapsed = useRef(0)
   const facing = useMemo(() => new THREE.Vector3(), [])
   const lastFrame = useRef({ texture: null as THREE.Texture | null, frame: -1, row: -1 })
   const outlineMaterial = useMemo(() => {
@@ -98,19 +108,20 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     // Embedding IDs in shader source compiled a new program for every person.
     const id = new THREE.Vector3(...outlineColor)
     material.onBeforeCompile = (shader) => {
-      applySpriteDepth(shader, viewport)
+      applySpriteDepth(shader, viewport, worldTexel)
       shader.uniforms.travelerId = { value: id }
       shader.fragmentShader = "uniform vec3 travelerId;\n" + shader.fragmentShader.replace("#include <map_fragment>",
         "#include <map_fragment>\ndiffuseColor.rgb = travelerId;")
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "traveler-id-v4"
+    material.customProgramCacheKey = () => "traveler-id-v5"
     return material
-  }, [textures, viewport, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [textures, viewport, worldTexel, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => outlineMaterial?.dispose(), [outlineMaterial])
 
   useFrame(({ camera }, delta) => {
-    const parent = sprite.current?.parent
+    const pitch = Math.max(0.01, Math.abs(camera.matrixWorld.elements[9] / camera.matrixWorld.elements[5]))
+    const parent = poseRoot.current?.parent
     if (!parent) return
     // Road groups publish heading alongside position; avoid walking the scene
     // ancestry again for every sprite. Standalone previews use world facing.
@@ -126,12 +137,11 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
       seeded.current = true
     }
     const dt = Math.min(delta, 0.1) * (parent.userData.playbackRate ?? 1)
-    frameElapsed.current += dt
     if (requested !== lastClip.current) { actionClock.current = 0; lastClip.current = requested }
     const previousActionTime = actionClock.current
     if (requested !== "carrying" || moving) actionClock.current += dt
     if (moving) {
-      const stride = (walkTuning?.stride ?? 0.44) * individualScale * visual.strideRatio / (characterModel === "base" ? 1.5 : 1)
+      const stride = visual.walkStride * individualScale * (walkTuning?.stride ?? DEFAULT_WALK_STRIDE) / DEFAULT_WALK_STRIDE
       clock.current = advanceWalkPhase(clock.current, parent.userData.distance ?? 0, dt,
         visual.walk.columns, fps, stride, walkTuning?.sync === true)
     }
@@ -147,14 +157,34 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
       }
     }
     if (sprite.current) sprite.current.userData.clip = action ? requested : moving ? "walk" : "idle"
-    const renderFps = fps * (action?.playbackRate ?? 1)
-    const row = visual.rowOffset + spriteRow(heading, yaw)
-    const previous = lastFrame.current
-    if (previous.texture === texture && previous.row === row) {
-      if (previous.frame === frame) return
-      if (walkTuning?.sync && frameElapsed.current < 1 / renderFps) return
+    const direction = spriteRow(heading, yaw)
+    const row = visual.rowOffset + direction
+    if (poseRoot.current) {
+      if (moving && rigBody && walkTuning?.sync) {
+        const foot = walkContact(clock.current, clip.columns, rigBody)
+        // Reconstruct the baked ground contact in the current camera's ground
+        // plane. The selected direction, not the smoothed group heading, is
+        // what the artwork shows. This also handles changes in camera pitch.
+        const rigScale = size / BASE_PERSON.camera.viewSize
+        const angle = -direction * Math.PI / 4
+        const x = (foot.x * Math.cos(angle) + foot.z * Math.sin(angle)) * rigScale
+        const z = (-foot.x * Math.sin(angle) + foot.z * Math.cos(angle)) * rigScale
+          * Math.sin(BASE_PERSON.camera.pitch * Math.PI / 180) / Math.sin(Math.atan(pitch))
+        contact.set(x * Math.cos(yaw) + z * Math.sin(yaw), 0, -x * Math.sin(yaw) + z * Math.cos(yaw))
+        parent.getWorldPosition(origin)
+        const key = `${requested}:${foot.side}:${direction}:${yaw.toFixed(4)}:${pitch.toFixed(4)}:${size}`
+        const planted = plantFoot(footPlant.current, key, origin, contact)
+        footPlant.current = planted.plant
+        corrected.set(origin.x + planted.offset.x, origin.y + planted.offset.y, origin.z + planted.offset.z)
+        poseRoot.current.position.copy(parent.worldToLocal(corrected))
+      } else {
+        footPlant.current = null
+        poseRoot.current.position.set(0, 0, 0)
+      }
     }
-    frameElapsed.current %= 1 / renderFps
+    const previous = lastFrame.current
+    // Distance timing must display the current pose even at low animation FPS.
+    if (previous.texture === texture && previous.row === row && previous.frame === frame) return
     previous.texture = texture; previous.frame = frame; previous.row = row
     texture.offset.set(frame / clip.columns, (clip.rows - 1 - row) / clip.rows)
     material.map = texture
@@ -163,10 +193,10 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
 
   // Equal-depth overlaps must choose the same traveler in the color and ID passes.
   return (
-    <>
+    <group ref={poseRoot}>
       <sprite renderOrder={renderOrder} ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name={name} material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync === true }} />
       {outlineMaterial && <sprite renderOrder={renderOrder} layers-mask={OUTLINE_ID_LAYER_MASK} material={outlineMaterial}
         scale={[size, size, 1]} center={center} />}
-    </>
+    </group>
   )
 }

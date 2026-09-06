@@ -1,9 +1,10 @@
 import { validatePersonDesign } from "./base-person/design"
+import { personWalkStride } from "./base-person/gait"
 import { actionPlaybackRate } from "./base-person/activity"
 import { ACTION_CLIPS, type ActionClip } from "./base-person/pose"
 import type { BasePersonBake } from "./base-person/bake"
 import type { TravelerTypeId } from "./travelers"
-import baseMetadata from "../../public/textures/characters/base/base-person-v22.json"
+import baseMetadata from "../../public/textures/characters/base/base-person-v23.json"
 
 export type CharacterModel = "base" | "callings"
 
@@ -27,10 +28,12 @@ export function characterVisual(asset: CharacterAsset, model: CharacterModel, cu
     })) as Partial<Record<ActionClip, SpriteClip & { shadow: string }>>,
     shadow: { walk: custom?.shadowWalk ?? baseMetadata.images.shadowWalk, idle: custom?.shadowIdle ?? baseMetadata.images.shadowIdle },
     center: [metadata.anchor[0] / metadata.cellSize, 1 - metadata.anchor[1] / metadata.cellSize] as [number, number],
-    fps: 8, scale: 0.74 * metadata.cellSize / 48,
+    fps: 18, scale: 0.74 * metadata.cellSize / 48,
+    design: validatePersonDesign(metadata.design),
+    walkStride: personWalkStride(validatePersonDesign(metadata.design), 0.74 * metadata.cellSize / 48, metadata.camera.viewSize),
   }
   const clip: SpriteClip = { url: asset.sheet, columns: 4, rows: 8, stillFrame: 1 }
-  return { walk: clip, idle: clip, actions: {} as Partial<Record<ActionClip, SpriteClip & { shadow: string }>>, shadow: null, center: [0.5, 6 / 64] as [number, number], fps: asset.fps, scale: asset.scale }
+  return { walk: clip, idle: clip, actions: {} as Partial<Record<ActionClip, SpriteClip & { shadow: string }>>, shadow: null, center: [0.5, 6 / 64] as [number, number], fps: asset.fps, scale: asset.scale, walkStride: 0.44 * asset.scale / 0.74, design: undefined }
 }
 
 /** Screen-relative facing, clockwise from the front, matching the atlas rows. */

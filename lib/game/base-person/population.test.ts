@@ -1,20 +1,17 @@
-import { ACTION_CLIPS } from "./pose"
+import { ACTION_CLIPS, PERSON_CLIPS } from "./pose"
 import { describe, expect, it } from "vitest"
 import { TRAVELER_TYPES } from "../travelers"
-import { PERSON_CLIPS } from "./pose"
 import { DEFAULT_DESIGN, DESIGN_CONTROLS, validatePersonDesign, type DesignKey } from "./design"
 import { populationDesign, POPULATION_PROFILES, travelerAppearance } from "./population"
 import { DEFAULT_POPULATION, populationVisual } from "./population-assets"
 
 describe("road character population", () => {
-  it("keeps identity stable across ordering and crowd size, with mixed bodies and sizes", () => {
+  it("keeps identity stable across ordering and crowd size, with mixed bodies at a uniform scale", () => {
     const people = Array.from({ length: 200 }, (_, id) => travelerAppearance(12345, id))
     expect(new Set(people.map(p => p.variant)).size).toBe(6)
-    expect(new Set(people.map(p => p.scale)).size).toBeGreaterThan(15)
+    expect(new Set(people.map(p => p.scale))).toEqual(new Set([1]))
     for (let id = 0; id < people.length; id++) {
       expect(travelerAppearance(12345, id)).toEqual(people[id])
-      expect(people[id].scale).toBeGreaterThanOrEqual(0.9)
-      expect(people[id].scale).toBeLessThanOrEqual(1.1)
       expect(POPULATION_PROFILES[people[id].variant].bodyType).toBe(people[id].bodyType)
       if (id % 2 === 1) expect(people[id].bodyType).not.toBe(people[id - 1].bodyType)
     }
@@ -49,7 +46,7 @@ describe("road character population", () => {
         expect(visual.actions[clip]?.rows).toBe(visual.walk.rows)
         expect(visual.actions[clip]?.columns).toBe(PERSON_CLIPS[clip].frames)
       }
-      expect(visual.walk.columns).toBe(8)
+      expect(visual.walk.columns).toBe(20)
       expect(visual.idle.columns).toBe(1)
       expect(visual.center).toEqual([0.5, 1 - 48.5 / 64])
       expect(visual.strideRatio).toBeGreaterThan(0)

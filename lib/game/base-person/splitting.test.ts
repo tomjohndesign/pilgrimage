@@ -4,7 +4,7 @@ import { PERSON_PRESETS, personRecipe } from "./design"
 import { createBasePersonRig } from "./rig"
 import { POPULATION_PROFILES, populationDesign } from "./population"
 import { TRAVELER_TYPES } from "../travelers"
-import { legPose } from "./pose"
+import { BASE_PERSON, legPose } from "./pose"
 import { actionPlaybackRate } from "./activity"
 import { SPLITTING_CONTACT, SPLITTING_FRAMES, SPLITTING_LANDED, SPLITTING_PICKUP, SPLITTING_PLACED, splittingMotion } from "./splitting"
 
@@ -137,7 +137,9 @@ describe("splitting and reloading wood", () => {
           expect(leg.ankle).toEqual(legPose(side, 0, "woodcutting", recipe.body).ankle)
         }
         // One full load/split cycle fits in the simulation's five-second gathering interval.
-        expect(SPLITTING_FRAMES / (8 * actionPlaybackRate("woodcutting", design))).toBeLessThanOrEqual(5)
+        const duration = SPLITTING_FRAMES / (BASE_PERSON.defaultFps * actionPlaybackRate("woodcutting", design))
+        expect(duration).toBeGreaterThan(3)
+        expect(duration).toBeLessThanOrEqual(5)
         rig.pose(0, "idle")
         expect(round.visible).toBe(false)
       } finally { rig.dispose() }

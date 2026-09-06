@@ -813,10 +813,10 @@ export function GameHud({
           <Tuner
             label="Pace"
             value={settings.walkSpeed}
-            display={settings.walkSpeed.toFixed(1)}
-            min={0.2}
+            display={settings.walkSpeed.toFixed(2)}
+            min={0.1}
             max={5}
-            step={0.1}
+            step={0.01}
             onChange={(walkSpeed) => set({ walkSpeed })}
           />
           <Tuner
@@ -830,7 +830,7 @@ export function GameHud({
           <Tuner label="Stride" value={settings.stride} display={`${settings.stride.toFixed(2)} tiles`}
             min={0.15} max={1.2} step={0.01} onChange={(stride) => set({ stride })} />
           <p className="py-1 text-[11px] leading-relaxed text-ink-light">{settings.walkSync ?
-            "Stride sets travel per full walk cycle. Longer strides mean fewer steps. FPS caps frame changes." :
+            "Pace and stride scale with each person’s size and step reach. Stride is tiles per two steps at the reference size. Match travel keeps feet in time with movement; FPS controls other activities." :
             "FPS sets the walk cadence directly. Switch to Match travel to use Stride."}</p>
           <Tuner label="Variation" value={settings.paceVariation} display={`${Math.round(settings.paceVariation * 100)}%`}
             min={0} max={0.4} step={0.01} onChange={(paceVariation) => set({ paceVariation })} />

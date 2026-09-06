@@ -1,4 +1,5 @@
 import { deriveSeed, makeRng, SEED_STREAM } from "./rng"
+import { travelerAppearance } from "./base-person/population"
 import type { GameMap } from "./map/types"
 
 /**
@@ -165,12 +166,16 @@ const THIRST: StatRange = { min: 20, max: 80 }
 const STAMINA: StatRange = { min: 40, max: 100 }
 const AGE: StatRange = { min: 16, max: 60 }
 
-const FIRST_NAMES = [
-  "Aldous", "Berta", "Cedric", "Dilys", "Edmund", "Frida", "Godwin", "Hawise",
-  "Isolde", "Jocelin", "Kenrick", "Leofric", "Maude", "Norbert", "Osanna",
-  "Piers", "Quenild", "Roger", "Sybil", "Tancred", "Ulric", "Venn", "Wilmot",
-  "Ysabel",
-]
+const FIRST_NAMES = {
+  Male: [
+    "Aldous", "Cedric", "Edmund", "Godwin", "Jocelin", "Kenrick", "Leofric",
+    "Norbert", "Piers", "Roger", "Tancred", "Ulric", "Venn",
+  ],
+  Female: [
+    "Berta", "Dilys", "Frida", "Hawise", "Isolde", "Maude", "Osanna",
+    "Quenild", "Sybil", "Wilmot", "Ysabel",
+  ],
+}
 
 const BYNAMES = [
   "of the Vale", "the Stout", "of Greyford", "the Lame", "Longstride",
@@ -281,9 +286,12 @@ export function generateTravelers(seed: number, count: number): Traveler[] {
     if (i === count - 1 && count >= 6 && !travelers.some((t) => t.type.id === "vendor")) {
       type = TRAVELER_TYPES.vendor
     }
+    // Match the body's seeded assignment used by the scene without consuming
+    // another roll from the stream that determines attributes and movement.
+    const firstNames = FIRST_NAMES[travelerAppearance(seed, i).bodyType]
     travelers.push({
       id: i,
-      name: `${FIRST_NAMES[Math.floor(rng() * FIRST_NAMES.length)]} ${
+      name: `${firstNames[Math.floor(rng() * firstNames.length)]} ${
         BYNAMES[Math.floor(rng() * BYNAMES.length)]
       }`,
       type,

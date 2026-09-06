@@ -22,12 +22,12 @@ export function travelerAppearance(seed: number, id: number): TravelerAppearance
   const female = ((id & 1) ^ (pair < 0.5 ? 0 : 1)) === 1
   const random = makeRng(deriveSeed(root, id + 104729))
   return { variant: (female ? 3 : 0) + Math.floor(random() * 3),
-    scale: Math.round((0.9 + random() * 0.2) * 100) / 100, bodyType: female ? "Female" : "Male" }
+    scale: 1, bodyType: female ? "Female" : "Male" }
 }
 
-export function populationDesign(type: Pick<TravelerTypeDef, "color">, variant: number, base: PersonDesign = DEFAULT_DESIGN): PersonDesign {
+export function populationDesign(type: Pick<TravelerTypeDef, "id" | "color">, variant: number, base: PersonDesign = DEFAULT_DESIGN): PersonDesign {
   const profile = POPULATION_PROFILES[variant]
-  const design = { ...base, bodyType: profile.bodyType, tunicColor: type.color,
+  const design = { ...base, footwear: type.id === "peasant" ? "Sandals" as const : "Boots" as const, bodyType: profile.bodyType, tunicColor: type.color,
     hairStyle: profile.hair, beard: profile.bodyType === "Male" && (base.beard || variant === 2) }
   for (const [key, delta] of Object.entries(profile.deltas) as [DesignKey, number][]) {
     const range = DESIGN_CONTROLS[key]
@@ -39,6 +39,7 @@ export function populationDesign(type: Pick<TravelerTypeDef, "color">, variant: 
 
 export interface PopulationPack {
   actionFrames?: Record<ActionClip, number>
+  frameCounts?: Partial<Record<import("./pose").BaseClip, number>>
   templateVersion: number
   cellSize: number
   anchor: number[]

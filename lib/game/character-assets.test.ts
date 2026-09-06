@@ -26,7 +26,7 @@ describe("character settings", () => {
     const asset = CHARACTER_ASSETS.merchant
     const base = characterVisual(asset, "base")
     const original = characterVisual(asset, "callings")
-    expect(base.walk.columns).toBe(8)
+    expect(base.walk.columns).toBe(20)
     expect(base.idle.columns).toBe(1)
     expect(base.center).toEqual([0.5, 1 - 48.5 / 64])
     expect(base.idle.url).toContain("-idle.png")
@@ -35,9 +35,9 @@ describe("character settings", () => {
     expect(original.walk.url).toBe(asset.sheet)
     expect(asset.sound).toContain("merchant-select")
   })
-  it("plays all eight base walk frames and uses its dedicated idle pose", () => {
+  it("plays all twenty base walk frames and uses its dedicated idle pose", () => {
     const visual = characterVisual(CHARACTER_ASSETS.peasant, "base")
-    expect(Array.from({ length: 9 }, (_, i) => spriteFrame(i / 8, visual.fps, true, visual.walk.columns))).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 0])
+    expect(Array.from({ length: 21 }, (_, i) => spriteFrame((i + 0.01) / visual.fps, visual.fps, true, visual.walk.columns))).toEqual([...Array.from({ length: 20 }, (_, i) => i), 0])
     expect(spriteFrame(12, visual.fps, false, visual.idle.columns, visual.idle.stillFrame)).toBe(0)
   })
   it("roundtrips all seven defaults", () => {

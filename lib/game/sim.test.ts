@@ -97,6 +97,17 @@ function makeTraveler(
   }
 }
 
+it("scales distance traveled with each character's rendered stride", () => {
+  const map = makeMap()
+  const travelers = [makeTraveler(1, "peasant"), makeTraveler(2, "peasant")]
+  const sim = createSim(travelers, map)
+  const starts = travelers.map(t => sim.travelers.get(t.id)!.x)
+  const scales = new Map([[1, 0.5], [2, 1.5]])
+  for (let frame = 0; frame < 60; frame++) stepSim(sim, travelers, map, 0.32, 1 / 60, LINEAR_MOVEMENT, scales)
+  expect(sim.travelers.get(1)!.x - starts[0]).toBeCloseTo(0.16, 8)
+  expect(sim.travelers.get(2)!.x - starts[1]).toBeCloseTo(0.48, 8)
+})
+
 /** Step in 100 ms ticks until `pred` holds; false if `maxSeconds` runs out. */
 function runUntil(
   sim: SimState,

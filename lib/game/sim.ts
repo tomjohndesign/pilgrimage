@@ -175,6 +175,8 @@ export interface SimTraveler {
   jobless: boolean
   employer: string | null
   branchProgress: number
+  /** Road lane used when entering the shrine, including a reversed approach for shelter. */
+  branchEntryLane: number
   visitCooldown: number
   visits: number
   workRoute: TilePos[] | null
@@ -353,6 +355,22 @@ function currentRoutePoint(map: GameMap, s: SimTraveler, pathEase = 0): WorldPoi
   return roadWorldPoint(map, s.progress, s.lane, pathEase)
 }
 
+/** Join the shrine's walking lanes to the traveler's road lane over the first tile. */
+function shrineWorldPoint(map: GameMap, s: SimTraveler, pathEase = 0): WorldPoint {
+  const site = map.site!
+  const point = routeWorldPoint(map, site.branch, s.branchProgress, s.lane, undefined, pathEase)
+  if (s.branchProgress < 1) {
+    const start = routeWorldPoint(map, site.branch, 0, s.lane)
+    const roadLane = s.activity === "toRelic" ? s.branchEntryLane : s.direction * s.laneOffset
+    const road = roadWorldPoint(map, site.junction, roadLane, pathEase)
+    const blend = 1 - s.branchProgress
+    point.x += (road.x - start.x) * blend
+    point.y += (road.y - start.y) * blend
+    point.z += (road.z - start.z) * blend
+  }
+  return point
+}
+
 /** Cross to the new left lane over a short walk, including when seeking food. */
 function stepLane(s: SimTraveler, direction: 1 | -1, distance: number): void {
   const target = direction * s.laneOffset
@@ -402,6 +420,7 @@ export function createSim(
       jobless: t.attributes.jobless,
       employer: null,
       branchProgress: 0,
+      branchEntryLane: lane,
       visitCooldown: 0,
       visits: 0,
       workRoute: null,
@@ -678,6 +697,8 @@ export function stepSim(
   baseSpeed: number,
   dt: number,
   movement: MovementTuning = LINEAR_MOVEMENT,
+  /** Rendered stride relative to the reference person, keyed by traveler ID. */
+  speedScales?: ReadonlyMap<number, number>,
 ): void {
   if (!map.road || map.road.length < 2) return
   const length = map.road.length - 1
@@ -717,7 +738,7 @@ export function stepSim(
       }
     }
 
-    const targetSpeed = t.pace * baseSpeed * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+    const targetSpeed = t.pace * baseSpeed * (speedScales?.get(t.id) ?? 1) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
     s.moveSpeed = camping || sheltered || s.activity === "working" || s.activity === "vending" ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed
@@ -729,7 +750,8 @@ export function stepSim(
         const inbound = s.activity === "toRelic"
         s.branchProgress = Math.max(0, Math.min(branch.length - 1,
           s.branchProgress + (inbound ? 1 : -1) * worldSpeed * dt))
-        const at = routeWorldPoint(map, branch, s.branchProgress)
+        stepLane(s, inbound ? 1 : -1, worldSpeed * dt)
+        const at = shrineWorldPoint(map, s, movement.pathEase)
         s.x = at.x
         s.y = at.y
         s.z = at.z
@@ -737,6 +759,7 @@ export function stepSim(
           s.activity = "visiting"
           s.timer = 2 * GAME_HOUR_SECONDS
         } else if (!inbound && s.branchProgress <= 0) {
+          s.lane = s.direction * s.laneOffset
           s.activity = "walking"
           s.visitCooldown = 30
         }
@@ -907,7 +930,9 @@ export function stepSim(
               s.branchProgress = 0
               s.activity = "toRelic"
               s.targetId = null
-              const at = routeWorldPoint(map, site.branch, 0)
+              s.branchEntryLane = s.lane
+              s.lane = s.laneOffset
+              const at = shrineWorldPoint(map, s, movement.pathEase)
               s.x = at.x
               s.y = at.y
               s.z = at.z

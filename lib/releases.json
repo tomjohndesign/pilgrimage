@@ -1,7 +1,49 @@
 {
-  "lastProcessedCommit": "01fb0fca22476e495549e63423b712a02294d71d",
-  "releaseCount": 26,
+  "lastProcessedCommit": "f007dbd0463bdfaf40247aaf896a85f5eff0bbb5",
+  "releaseCount": 33,
   "releases": [
+    {
+      "version": "0.0.47",
+      "title": "Release 0.0.47",
+      "summary": "Refine character walking motion and add smaller footwear (#66)",
+      "commit": "f007dbd0463bdfaf40247aaf896a85f5eff0bbb5"
+    },
+    {
+      "version": "0.0.46",
+      "title": "Release 0.0.46",
+      "summary": "Keep shrine visitors on opposite sides of the path (#65)",
+      "commit": "086845f8baaf788bfdf59ec2d4ed48be9adf390d"
+    },
+    {
+      "version": "0.0.45",
+      "title": "Release 0.0.45",
+      "summary": "Fix rigged walking strides and planted feet across all characters (#64)",
+      "commit": "10a940259f105ff41f02edc1a05f71373aa36a27"
+    },
+    {
+      "version": "0.0.44",
+      "title": "Release 0.0.44",
+      "summary": "Make resting monks kneel on the ground (#63)",
+      "commit": "2a68826b4e79bc077ed2991143700281a278bc43"
+    },
+    {
+      "version": "0.0.43",
+      "title": "Release 0.0.43",
+      "summary": "Match traveler names to character appearance (#62)",
+      "commit": "17917f72fbc13e9a4be0e5b310bb2bacc1e3ba1e"
+    },
+    {
+      "version": "0.0.42",
+      "title": "Release 0.0.42",
+      "summary": "Keep character feet above pixelated terrain (#61)",
+      "commit": "9077c8d71c97c2a74583878fd385195b7f539091"
+    },
+    {
+      "version": "0.0.41",
+      "title": "Release 0.0.41",
+      "summary": "Unify monk and traveler character scaling (#60)",
+      "commit": "d90657a30a51656c7d941bfab4554613e6b2300c"
+    },
     {
       "version": "0.0.40",
       "title": "Release 0.0.40",

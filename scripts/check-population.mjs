@@ -1,19 +1,19 @@
 import sharp from "sharp"
 import { readFileSync } from "node:fs"
-const version = process.argv[2] ?? "v13"
+const version = process.argv[2] ?? "v14"
 if (!/^v\d+$/.test(version)) throw new Error("Expected a population version such as v1")
 const pack = JSON.parse(readFileSync(`public/textures/characters/population/${version}/manifest.json`, "utf8"))
 const size = pack.cellSize
 let frames = 0
 for (const [type, entry] of Object.entries(pack.callings)) {
-  if (Number(version.slice(1)) >= 5 && (!entry.actions?.treeFelling || !pack.shadows.actions?.treeFelling)) throw new Error(`Missing tree-felling action: ${type}`)
+  if (Number(version.slice(1)) >= 13 && (!entry.actions?.treeFelling || !pack.shadows.actions?.treeFelling)) throw new Error(`Missing tree-felling action: ${type}`)
   if (Number(version.slice(1)) >= 2) for (const clip of ["sleeping", "sitting", "praying", "woodcutting", "gathering", "carrying"]) {
     if (!entry.actions?.[clip] || !pack.shadows.actions?.[clip]) throw new Error(`Missing action: ${type}/${clip}`)
   }
   if (entry.designs.length !== 6) throw new Error(`Missing profiles: ${type}`)
   for (const [clip, url] of Object.entries({ walk: entry.walk, idle: entry.idle, ...entry.actions })) {
     const { data, info } = await sharp(`public${url}`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
-    const columns = pack.actionFrames?.[clip] ?? (clip === "idle" ? 1 : 8)
+    const columns = pack.frameCounts?.[clip] ?? pack.actionFrames?.[clip] ?? (clip === "idle" ? 1 : 8)
     if (info.width !== size * columns || info.height !== pack.rows * size) throw new Error(`Wrong dimensions: ${type}/${clip}`)
     for (let row = 0; row < pack.rows; row++) for (let frame = 0; frame < columns; frame++) {
       let solid = 0
@@ -32,7 +32,7 @@ for (const [type, entry] of Object.entries(pack.callings)) {
 }
 for (const [clip, url] of Object.entries({ walk: pack.shadows.walk, idle: pack.shadows.idle, ...pack.shadows.actions })) {
   const { data, info } = await sharp(`public${url}`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
-  if (info.width !== (pack.actionFrames?.[clip] ?? (clip === "idle" ? 1 : 8)) * size || info.height !== pack.rows * size) throw new Error("Shadow dimensions do not match bodies")
+  if (info.width !== (pack.frameCounts?.[clip] ?? pack.actionFrames?.[clip] ?? (clip === "idle" ? 1 : 8)) * size || info.height !== pack.rows * size) throw new Error("Shadow dimensions do not match bodies")
   for (let y = 0; y < info.height; y++) for (let x = 0; x < info.width; x++) {
     const alpha = data[(y * info.width + x) * 4 + 3]
     if (alpha > 80) throw new Error("Shadow is too dark")
