@@ -9,7 +9,7 @@ import { RelicDisplay, RELIC_DISPLAY_HEIGHT } from "./relic-display"
 
 import { createMonkRoutine, stepMonkRoutine, type MonkRoutine } from "@/lib/game/monk-routine"
 import { monkWander, type WanderSpot } from "@/lib/game/monk-wander"
-import { Suspense, useEffect, useMemo, useRef } from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
@@ -19,19 +19,19 @@ import { selectElement } from "@/lib/game/selection"
 import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
 import type { GameMap } from "@/lib/game/map/types"
 import { monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
-import { createMonkFlight, monkGroundTime, stepMonkFlight, type MonkFlight } from "@/lib/game/monk-flight"
+import { createMonkFlight, monkGroundTime, recallMonkFlight, stepMonkFlight, type MonkFlight } from "@/lib/game/monk-flight"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { encodeObjectId, residentObjectId, RELIC_OBJECT_ID } from "@/lib/game/render/outline"
 import { CharacterSprite } from "./character-sprite"
 import { monkVisual, monkWalkSpeed, monkRelicAttachment, monkRelicTrayWidth, MONK_WALK_TUNING } from "@/lib/game/base-person/monk-assets"
-import { MonkRocketGear, ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
+import { rocketMonkVisual, rocketFlightClip } from "@/lib/game/rocket/assets"
 
 /**
  * The brothers follow grid routes and enter the shrine to pray. Players can
  * send one to carry the relic, drawing nearby monks and travelers into prayer.
  * Blaster Pastor sends them
  * on occasional cruises across the map; they return to their life at the shrine
- * between trips, keeping their rocket-powered gear equipped.
+ * between trips. Toggling it off recalls them and stows their packs on landing.
  */
 
 interface MonkState extends MonkRoutine {
@@ -42,6 +42,7 @@ interface MonkState extends MonkRoutine {
 export function Monks({ map, monks, relic, flying = false, characterScale = 1 }: { map: GameMap; monks: Monk[]; relic: Relic; flying?: boolean; characterScale?: number }) {
   const selection = useCameraStore((s) => s.selection)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
+  const [airborneIds, setAirborneIds] = useState<ReadonlySet<number>>(new Set())
 
   const world = useMemo(() => {
     const wander = monkWander(map)
@@ -103,6 +104,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
           ...(exit ? { returnRequested: false } : {}) })
       }
     }
+    const airborne = new Set<number>()
     for (let i = 0; i < world.states.length; i++) {
       const s = world.states[i]
       const group = groupRefs.current[i]
@@ -111,6 +113,11 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       group.userData.phase = i / Math.max(1, monks.length)
       group.userData.playbackRate = playback.paused ? 0 : playback.speed
       if (i !== carrierIndex || playback.paused) group.userData.distance = 0
+      if (s.flight) {
+        if (!flying) recallMonkFlight(s.flight)
+        airborne.add(monks[i].id)
+      }
+      group.userData.rocketPack = flying || !!s.flight
       const previousX = s.x, previousZ = s.z
       if (playback.paused) continue
       if (i === carrierIndex) {
@@ -134,7 +141,6 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         continue
       }
 
-      const exhaust = group.getObjectByName(ROCKET_EXHAUST_NAME)
       if (flying) {
         s.flightWait -= dt
         if (!s.flight && s.flightWait <= 0 && s.destination === "grounds" && s.activity === "resting") {
@@ -159,12 +165,14 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         group.rotation.x = flight.phase === "cruising" || flight.phase === "returning" ? 0.15 : 0
         group.position.set(flight.x, flight.y, flight.z)
         if (flight.phase !== "landed") {
-          if (exhaust) exhaust.visible = true
+          airborne.add(monks[i].id)
           group.userData.activity = "flying"
           world.activities.set(monks[i].id, "flying")
           continue
         }
         s.flight = undefined
+        airborne.delete(monks[i].id)
+        group.userData.rocketPack = flying
         s.flightWait = monkGroundTime(world.flightRng)
         s.route = []
         s.pause = 2 + world.rng() * 5
@@ -172,7 +180,6 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         s.destination = "grounds"
         s.outings = 0
       }
-      if (exhaust) exhaust.visible = false
       group.rotation.x = 0
 
       stepMonkRoutine(s, world.wander, world.rng, monkWalkSpeed(characterScale), dt)
@@ -189,6 +196,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       group.userData.distance = Math.hypot(s.x - previousX, s.z - previousZ)
       group.userData.moving = group.userData.distance > 0
     }
+    if (airborne.size !== airborneIds.size || [...airborne].some(id => !airborneIds.has(id))) setAirborneIds(airborne)
   }, -3)
 
   if (world.spots.length === 0) return null
@@ -204,6 +212,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
           const relicHit = event.intersections?.some(hit => hit.object.name === "relic")
           selectElement(relicHit ? { kind: "relic" } : { kind: "monk", id: monk.id }, event)
         }
+        const equipped = flying || airborneIds.has(monk.id)
         return (
           <group
             key={monk.id}
@@ -213,7 +222,8 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
           >
             <Suspense fallback={null}>
               <CharacterSprite map={map} name="monk" type="friar" characterModel="base" characterScale={characterScale}
-                visualOverride={monkVisual(monk.attributes.age)} attachment={{ ...monkRelicAttachment(monk.attributes.age),
+                visualOverride={equipped ? rocketMonkVisual(monk.attributes.age) : monkVisual(monk.attributes.age)}
+                flightClip={equipped ? rocketFlightClip(monk.attributes.age) : undefined} attachment={{ ...monkRelicAttachment(monk.attributes.age),
                   restPosition: world.centre ? [world.centre.x, walkingSurface(map, world.centre.x, world.centre.z).height + RELIC_DISPLAY_HEIGHT - .12, world.centre.z] : undefined,
                   content: <RelicDisplay color={relic.color} height={0.12} groundGlow={false} trayWidth={monkRelicTrayWidth(characterScale)}
                     idColor={new THREE.Color(...encodeObjectId(RELIC_OBJECT_ID))}
@@ -221,9 +231,8 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
                 outlineColor={[id.r, id.g, id.b]}
                 walkTuning={MONK_WALK_TUNING} />
             </Suspense>
-            {flying && <MonkRocketGear phase={index} outlineColor={id} onClick={select} />}
             <CharacterHitTarget onClick={select} />
-            {selected && <CharacterSelectionShadow map={map} flying={flying} />}
+            {selected && <CharacterSelectionShadow map={map} flying={airborneIds.has(monk.id)} />}
           </group>
         )
       })}

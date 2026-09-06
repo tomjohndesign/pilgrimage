@@ -342,7 +342,7 @@ export function GameShell({
         onReroll={() => setSeed(randomSeed())}
         onSeedChange={setSeed}
       />
-      <CheatBar onBlasterPastor={() => setBlasterPastor(true)} onLastMarch={() => setLastMarch(true)} />
+      <CheatBar blasterPastor={blasterPastor} onBlasterPastor={() => setBlasterPastor(active => !active)} onLastMarch={() => setLastMarch(true)} />
     </div>
   )
 }

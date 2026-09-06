@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 
 /** Return opens the console without stealing Enter from existing HUD controls. */
-export function CheatBar({ onBlasterPastor, onLastMarch }: {
+export function CheatBar({ onBlasterPastor, onLastMarch, blasterPastor = false }: {
+  blasterPastor?: boolean
   onBlasterPastor: () => void
   onLastMarch: () => void
 }) {
@@ -69,7 +70,9 @@ export function CheatBar({ onBlasterPastor, onLastMarch }: {
               close()
             } else if (code.trim().toLowerCase() === "blasterpastor") {
               onBlasterPastor()
-              setMessage("Blaster Pastor activated — the brothers will take rocket trips and return to the shrine!")
+              setMessage(blasterPastor
+                ? "Blaster Pastor recalled — the brothers are returning to the shrine and putting away their rocket packs."
+                : "Blaster Pastor activated — the brothers will take rocket trips and return to the shrine!")
               close()
             } else if (code.trim().toLowerCase() === "thelastmarchoftheents") {
               onLastMarch()

@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "3aaf715bb96bf209e3a3e4142a6cf0ac52617fdc",
-  "releaseCount": 41,
+  "lastProcessedCommit": "e5f01b9bd2421c426e7047b659761acfcfd8f2f9",
+  "releaseCount": 43,
   "releases": [
+    {
+      "version": "0.0.57",
+      "title": "Release 0.0.57",
+      "summary": "Refresh Blaster Pastor sprites and add monk recall (#77)",
+      "commit": "e5f01b9bd2421c426e7047b659761acfcfd8f2f9"
+    },
+    {
+      "version": "0.0.56",
+      "title": "Release 0.0.56",
+      "summary": "Add merchant cart and animal sprites with roadside trading (#73)",
+      "commit": "96305ce904f7e5b45d8adecac0ba66e6b0a267af"
+    },
     {
       "version": "0.0.55",
       "title": "Release 0.0.55",
