@@ -1,3 +1,4 @@
+import { assignBuildingTask, buildingEntrance, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
 import { buildingEntry } from "./building-rotation"
 import { timberDestination, type FoodStock } from "./storage"
 import { nearProcession, type RelicProcession } from "./relic-procession"
@@ -76,6 +77,9 @@ export type Activity =
   | "gathering"
   | "hauling"
   | "idle"
+  | "fromBuild"
+  | "toBuild"
+  | "building"
   | "walking"
   | "seeking"
   | "toStall"
@@ -100,6 +104,9 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
   gathering: "Cutting & gathering fallen timber",
   hauling: "Carrying logs to storage",
   idle: "Resting from woodcutting",
+  fromBuild: "Returning to the woodcutter hut",
+  toBuild: "Going to a construction site",
+  building: "Building a structure",
   walking: "On the road",
   seeking: "Seeking food & drink",
   toStall: "Approaching the stall",
@@ -189,6 +196,10 @@ function roll(id: number, n: number): number {
 }
 
 export interface SimTraveler {
+  workScale?: number
+  workSlot?: number
+  buildingTask?: BuildingTask
+  constructionReturn?: import("./monk-wander").WanderSpot[]
   /** Prayer interrupts travel/work without discarding its route or reservations. */
   praying?: boolean
   /** Actual gold paid for this visit, captured on admission. */
@@ -843,7 +854,7 @@ export function stepSim(
     }
 
     const targetSpeed = t.pace * baseSpeed * (speedScales?.get(t.id) ?? 1) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
-    s.moveSpeed = camping || sheltered || s.activity === "working" || s.activity === "browsing" || s.activity === "openingShop" || s.activity === "packingShop" || s.activity === "vending" ? 0 :
+    s.moveSpeed = camping || sheltered || s.activity === "working" || s.activity === "building" || s.activity === "browsing" || s.activity === "openingShop" || s.activity === "packingShop" || s.activity === "vending" ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed
 
@@ -946,7 +957,31 @@ export function stepSim(
         }
         break
       }
+      case "toBuild":
+      case "building": {
+        if (dt <= 0) break
+        if (Math.min(s.hunger, s.thirst, s.stamina) <= 40) s.buildingTask = undefined
+        const state = stepBuildingTask(s, map, targetSpeed, dt)
+        if (!state) {
+          const camp = sim.buildings.find(b => b.id === s.employer)
+          s.constructionReturn = camp ? workerRoute(map, s, buildingEntrance(camp)) ?? [] : []
+          s.activity = "fromBuild"
+        } else s.activity = state === "walking" ? "toBuild" : "building"
+        break
+      }
+      case "fromBuild": {
+        if (walkWorker(s, s.constructionReturn ?? [], targetSpeed, dt)) {
+          s.activity = "idle"; s.timer = GAME_HOUR_SECONDS; s.constructionReturn = undefined
+        }
+        break
+      }
       case "idle": {
+        s.workScale = characterScale
+        s.workSlot = s.id
+        if (Math.min(s.hunger, s.thirst, s.stamina) >= 80 && assignBuildingTask(s, map, "build")) {
+          s.activity = "toBuild"
+          break
+        }
         s.timer -= dt
         if (s.timer <= 0 && Math.min(s.hunger, s.thirst, s.stamina) >= 80) {
           if (!chooseTree(sim, s, map)) s.timer = GAME_HOUR_SECONDS

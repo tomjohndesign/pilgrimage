@@ -1,3 +1,5 @@
+import { buildingEntry } from "./building-rotation"
+import { isComplete, isMonkShelter } from "./construction"
 import { shrineLayout, shrineKneelers } from "./shrine-layout"
 import type { BuildingDef, GameMap, TilePos } from "./map/types"
 
@@ -54,6 +56,13 @@ export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDe
   for (const building of buildings) {
     const a = containsTile(building, from), b = containsTile(building, to)
     if (!a && !b) continue
+    if (enterShrine && isMonkShelter(building) && isComplete(building)) {
+      if (a && b) continue
+      const inside = a ? from : to, outside = a ? to : from
+      const entry = buildingEntry(building), inward = buildingEntry(building, true)
+      if (inside.x === inward.x && inside.z === inward.z && outside.x === entry.x && outside.z === entry.z) continue
+      return false
+    }
     if (!enterShrine || building.id !== map.site?.hovelId) return false
     if (!shrineFurnitureClear(building, map.site?.door, from, to, seat)) return false
     // Leave the relic table clear.

@@ -4,7 +4,7 @@ import { actionPlaybackRate } from "./base-person/activity"
 import { ACTION_CLIPS, type ActionClip } from "./base-person/pose"
 import type { BasePersonBake } from "./base-person/bake"
 import type { TravelerTypeId } from "./travelers"
-import baseMetadata from "../../public/textures/characters/base/base-person-v27.json"
+import baseMetadata from "../../public/textures/characters/base/base-person-v28.json"
 
 export type CharacterModel = "base" | "callings"
 

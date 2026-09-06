@@ -8,6 +8,8 @@ export interface BuildingDef {
   rotation?: import("../building-rotation").BuildingRotation
   /** Gold paid by each visitor entering the relic enclosure. */
   admissionFee?: number
+  /** Live worker progress; absent on completed founding structures. */
+  construction?: import("../construction").Construction
   label: string
   /** Origin tile — the minimum corner of the footprint. */
   x: number

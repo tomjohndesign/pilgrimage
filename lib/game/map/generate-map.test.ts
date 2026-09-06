@@ -127,10 +127,18 @@ describe("generateMap", () => {
     expect(mapFor(1).tiles).not.toEqual(mapFor(2).tiles)
   })
 
-  it("generates exactly one building, the founded hovel, standing on grass off the road", () => {
+  it("founds the shrine and a completed monk shelter beside its gate path", () => {
     for (const seed of SEEDS) {
       const map = mapFor(seed)
-      expect(map.buildings.map((b) => b.id), `seed ${seed} has only the hovel`).toEqual([HOVEL_ID])
+      expect(map.buildings.map((b) => b.id), `seed ${seed} has shrine and shelter`).toEqual([HOVEL_ID, "founding-shelter"])
+      const shelter = map.buildings[1]
+      expect(shelter.construction).toBeUndefined()
+      expect(shelter.buildType).toBe("monk-shelter")
+      expect(tileAt(map, shelter.x, shelter.z + shelter.d)).toBe("track")
+      for (let z = shelter.z; z < shelter.z + shelter.d; z++) for (let x = shelter.x; x < shelter.x + shelter.w; x++) {
+        expect(tileAt(map, x, z)).toBe("grass")
+        expect(map.site!.branch).not.toContainEqual({ x, z })
+      }
       const hovel = map.buildings[0]
       expect([hovel.w, hovel.d]).toEqual([3, 5])
       const door = map.site!.door
@@ -145,7 +153,12 @@ describe("generateMap", () => {
             expect(terrain, `seed ${seed} hovel stands on grass`).toBe("grass")
           } else {
             expect(["grass", "path", "track"], `seed ${seed} shrine margin remains walkable`).toContain(terrain)
-            if (terrain === "track") expect(map.site!.branch.some(p => p.x === hovel.x + dx && p.z === hovel.z + dz), `seed ${seed} only the approach is paved`).toBe(true)
+            if (terrain === "track") {
+              const onApproach = map.site!.branch.some(p => p.x === hovel.x + dx && p.z === hovel.z + dz)
+              const onShelterPath = (dz === -1 && dx >= (door.z < hovel.z ? 0 : -1) && dx <= (door.z < hovel.z ? 1 : 0)) ||
+                (door.z >= hovel.z && ((dx === -1 && dz >= -1) || (dz === hovel.d && dx <= 1)))
+              expect(onApproach || onShelterPath, `seed ${seed} only the approach and shelter connection are paved`).toBe(true)
+            }
           }
         }
       }
@@ -276,7 +289,7 @@ describe("generateMap", () => {
   it("sites the hovel on small maps too, scaling the band down", () => {
     for (const seed of SEEDS.slice(0, 10)) {
       const map = generateMap({ seed, width: 32, depth: 32 })
-      expect(map.buildings).toHaveLength(1)
+      expect(map.buildings).toHaveLength(2)
       expect(map.site!.branch.length).toBeGreaterThan(1)
     }
   }, SWEEP_TIMEOUT)
@@ -299,7 +312,7 @@ describe("generateMap", () => {
     const map = generateMap({ seed: 99, width: 512, depth: 512 })
     expect(map.tiles).toHaveLength(512 * 512)
     expect(map.tiles.every((t) => t in TERRAIN)).toBe(true)
-    expect(map.buildings.map((b) => b.id)).toEqual([HOVEL_ID])
+    expect(map.buildings.map((b) => b.id)).toEqual([HOVEL_ID, "founding-shelter"])
     const road = reachablePath(map)
     expect([...road].some((key) => key.startsWith(`${map.width - 1},`))).toBe(true)
   }, SWEEP_TIMEOUT)
