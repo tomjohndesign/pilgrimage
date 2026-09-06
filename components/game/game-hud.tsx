@@ -990,6 +990,17 @@ export function GameHud({
             <Panel>
             <div className="flex items-center justify-between gap-4"><Label>{selectedDefinition?.category === "scenery" ? "Scenery" : "Building"}</Label><button type="button" aria-label="Dismiss building" onClick={() => useCameraStore.getState().select(null)} className="pointer-events-auto text-xs text-ink-light">✕</button></div>
             <p className="mt-1 font-display text-xs text-ink">{selectedBuilding.label}</p>
+            {selectedBuilding.id === map?.site?.hovelId && (
+              <div className="mt-3 flex flex-col gap-1.5">
+                <label htmlFor="shrine-admission" className="text-[11px] text-ink-light">Admission · gold per visitor</label>
+                <input id="shrine-admission" type="number" min={0} step={1}
+                  value={economy.settlement.shrineAdmission}
+                  onChange={event => economy.setShrineAdmission(event.target.valueAsNumber)}
+                  className="pointer-events-auto w-24 border border-rule bg-parchment px-2 py-1 text-[13px] text-ink outline-none focus:border-gold" />
+                <p className="max-w-56 text-[11px] text-ink-light">Paid on entry. Only paying visitors gain piety. Set 0 for free entry without a piety reward.</p>
+                <p className="text-[11px] text-ink-light">Collected · {economy.settlement.collectedAdmission} gold</p>
+              </div>
+            )}
             {selectedBuilding.buildType === "lumberCamp" && (
               <p className="mt-2 text-[11px] text-ink"><span className="text-ink-light">Stored wood</span> · {storedWood} wood</p>
             )}

@@ -5,7 +5,7 @@ import type { GameMap, TilePos } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
 import { useBuildStore } from "@/lib/game/build-store"
-import { collectIncome, createSettlement, purchaseStructure, creditTimber, syncTimberSpending, settlementRenown } from "@/lib/game/settlement"
+import { collectIncome, createSettlement, purchaseStructure, creditTimber, creditAdmission, syncTimberSpending, settlementRenown } from "@/lib/game/settlement"
 
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { useBalanceStore } from "@/lib/game/balance-store"
@@ -19,6 +19,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   const world = ready ? baseMap : null
   const simulation = useBuildStore((s) => s.simulation)
   const wood = useBuildStore((s) => s.wood)
+  const shrineGold = useBuildStore((s) => s.shrineGold)
   const visitCount = useBuildStore((s) => s.visits)
   const settlers = useBuildStore((s) => s.settlers)
   const sameWorld = !!world && simulation?.world.road === world.road
@@ -39,9 +40,10 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   const map = useMemo(
     () =>
       world
-        ? { ...world, buildings: [...world.buildings, ...session.settlement.structures] }
+        ? { ...world, buildings: [...world.buildings.map(b => b.id === world.site?.hovelId
+          ? { ...b, admissionFee: session.settlement.shrineAdmission } : b), ...session.settlement.structures] }
         : null,
-    [world, session.settlement.structures],
+    [world, session.settlement.structures, session.settlement.shrineAdmission],
   )
 
   useEffect(() => {
@@ -52,10 +54,10 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     if (!sameWorld) return
     setSession((current) => {
       if (current.world !== world) return current
-      const settlement = creditTimber(current.settlement, wood)
+      const settlement = creditAdmission(creditTimber(current.settlement, wood), shrineGold)
       return settlement === current.settlement ? current : { ...current, settlement }
     })
-  }, [sameWorld, wood, world])
+  }, [sameWorld, wood, shrineGold, world])
 
   useEffect(() => {
     if (sameWorld && simulation) syncTimberSpending(simulation, session.settlement.spentWood)
@@ -92,6 +94,10 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
 
   const chooseBuild = useCallback((buildType: string | null) =>
     setSession((current) => ({ ...current, buildType, message: "" })), [])
+  const setShrineAdmission = useCallback((fee: number) => {
+    if (!Number.isSafeInteger(fee) || fee < 0) return
+    setSession(current => ({ ...current, settlement: { ...current.settlement, shrineAdmission: fee } }))
+  }, [])
   const place = (at: TilePos) => {
     setSession((current) => {
       if (!baseMap || !relic || current.world !== baseMap || !current.buildType) return current
@@ -124,6 +130,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     buildType: session.buildType,
     message: session.message,
     chooseBuild,
+    setShrineAdmission,
     place,
   }
 }

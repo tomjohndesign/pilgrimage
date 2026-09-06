@@ -4,6 +4,7 @@ import { createSim, stepSim } from "./sim"
 import { generateTravelers, TRAVELER_TYPES } from "./travelers"
 import { worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import { buildingStepAllowed } from "./building-navigation"
+import { admissionFee, shrineVisitRoute } from "./shrine-visit"
 
 function fixture() {
   const map: GameMap = { width: 15, depth: 15, tiles: Array(225).fill("grass"), seed: 1,
@@ -128,5 +129,36 @@ describe("relic procession", () => {
     expect(merchant.activity).toBe("vending")
     expect(merchant.keeperTime).toBeCloseTo(4.6)
     expect(merchant.timer).toBeCloseTo(19.9)
+  })
+
+  it("preserves admission and paid visit time when a procession interrupts a visitor", () => {
+    const { map, p } = fixture(), travelers = generateTravelers(1, 1)
+    const sim = createSim(travelers, map), visitor = sim.travelers.get(travelers[0].id)!
+    const route = shrineVisitRoute(map, visitor.id, 0)!
+    Object.assign(visitor, { activity: "toRelic", shrineRoute: route, branchProgress: route.length - 1,
+      gold: 10, hunger: 100, thirst: 100, stamina: 100 })
+    sim.procession = p
+    const pray = () => Object.assign(p, { stage: "carrying", position: { x: visitor.x, y: visitor.y, z: visitor.z } })
+    pray()
+    stepSim(sim, travelers, map, 0.4, 0.1)
+    expect(visitor.praying).toBe(true)
+    expect(visitor.gold).toBe(10)
+    expect(sim.admissionPayments).toHaveLength(0)
+    p.stage = "idle"
+    stepSim(sim, travelers, map, 0.4, 0.1)
+    expect(visitor.activity).toBe("visiting")
+    expect(visitor.gold).toBe(10 - admissionFee(map))
+    expect(sim.admissionPayments).toHaveLength(1)
+    const timer = visitor.timer
+    pray()
+    stepSim(sim, travelers, map, 0.4, 0.1)
+    expect(visitor.timer).toBe(timer)
+    expect(visitor.admissionPaid).toBe(admissionFee(map))
+    p.stage = "idle"
+    stepSim(sim, travelers, map, 0.4, 0.1)
+    expect(visitor.timer).toBeCloseTo(timer - 0.1)
+    expect(visitor.gold).toBe(10 - admissionFee(map))
+    expect(sim.shrineGold).toBe(admissionFee(map))
+    expect(sim.admissionPayments).toHaveLength(1)
   })
 })

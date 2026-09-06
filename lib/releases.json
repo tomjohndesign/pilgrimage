@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "95453ad8552777921096eb8768ab95918dfc9acf",
-  "releaseCount": 44,
+  "lastProcessedCommit": "9bee01a7c43eabc51026a988a06be65a2dcf95bf",
+  "releaseCount": 45,
   "releases": [
+    {
+      "version": "0.0.59",
+      "title": "Release 0.0.59",
+      "summary": "Add paid relic visits with gate access and payment effects (#79)",
+      "commit": "9bee01a7c43eabc51026a988a06be65a2dcf95bf"
+    },
     {
       "version": "0.0.58",
       "title": "Release 0.0.58",
