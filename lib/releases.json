@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "46330dcc30baa387260f47cb15b50cc026d1ec35",
-  "releaseCount": 22,
+  "lastProcessedCommit": "96c484a13c3dffc4b47cc672561197e438814cd0",
+  "releaseCount": 23,
   "releases": [
+    {
+      "version": "0.0.37",
+      "title": "Release 0.0.37",
+      "summary": "Add sleeping, prayer and work poses to character sprites (#57)",
+      "commit": "96c484a13c3dffc4b47cc672561197e438814cd0"
+    },
     {
       "version": "0.0.36",
       "title": "Release 0.0.36",
