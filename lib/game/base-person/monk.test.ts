@@ -8,9 +8,9 @@ import { createBasePersonRig } from "./rig"
 
 describe("parametric monks", () => {
   it("keeps legacy clothing defaults and validates the new outfit choices", () => {
-    const { garment: _garment, beltStyle: _belt, ...legacy } = DEFAULT_DESIGN
+    const { garment: _garment, beltStyle: _belt, walkStyle: _walkStyle, ...legacy } = DEFAULT_DESIGN
     expect(validatePersonDesign(legacy)).toEqual(DEFAULT_DESIGN)
-    for (const input of [{ garment: "Unknown" }, { beltStyle: "Unknown" }]) {
+    for (const input of [{ garment: "Unknown" }, { beltStyle: "Unknown" }, { walkStyle: "Unknown" }]) {
       expect(() => validatePersonDesign({ ...DEFAULT_DESIGN, ...input })).toThrow()
     }
   })
@@ -48,6 +48,32 @@ describe("parametric monks", () => {
       rig.pose(0.75, "idle")
       expect(Array.from(robe.geometry.getAttribute("position").array)).toEqual(idle)
     } finally { rig.dispose() }
+  })
+
+  it("walks with a bowed head, folded hands and small bare feet", () => {
+    const recipe = personRecipe(PERSON_PRESETS.Monk), rig = createBasePersonRig(recipe)
+    const natural = createBasePersonRig(personRecipe({ ...PERSON_PRESETS.Monk, walkStyle: "Natural" }))
+    try {
+      const defaultBody = personRecipe().body
+      expect(recipe.body.footLength).toBeLessThan(defaultBody.footLength * 0.8)
+      expect(recipe.body.footWidth).toBeLessThan(defaultBody.footWidth * 0.8)
+      const foot = rig.root.getObjectByName("left-foot") as THREE.Mesh
+      expect((foot.material as THREE.MeshLambertMaterial).color.getHexString()).toBe(recipe.palette.skin.slice(1))
+      let firstHands: number[][] | undefined
+      for (let i = 0; i <= 8; i++) {
+        rig.pose(i / 8, "walk"); natural.pose(i / 8, "walk")
+        const left = rig.sockets.leftHand.getWorldPosition(new THREE.Vector3())
+        const right = rig.sockets.rightHand.getWorldPosition(new THREE.Vector3())
+        expect(left.distanceTo(right)).toBeLessThan(0.1)
+        const hands = [left.toArray(), right.toArray()]
+        if (firstHands) expect(hands).toEqual(firstHands)
+        else firstHands = hands
+        expect(rig.sockets.head.getWorldPosition(new THREE.Vector3()).y)
+          .toBeLessThan(natural.sockets.head.getWorldPosition(new THREE.Vector3()).y)
+      }
+      rig.pose(0, "idle")
+      expect(rig.root.getObjectByName("head-pivot")!.rotation.x).toBe(0)
+    } finally { rig.dispose(); natural.dispose() }
   })
 
   it("loops the new poses, keeps rope ends above ground, and restores the standing robe", () => {

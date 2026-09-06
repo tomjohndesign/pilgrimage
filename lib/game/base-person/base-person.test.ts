@@ -7,6 +7,18 @@ import { createBasePersonRig } from "./rig"
 const length = (a: Point3, b: Point3) => Math.hypot(...a.map((v, i) => v - b[i]))
 
 describe("shared person template", () => {
+  it("uses a smooth head without separate nose or ear geometry for either body", () => {
+    for (const design of [DEFAULT_DESIGN, PERSON_PRESETS.Female, PERSON_PRESETS.Monk]) {
+      const rig = createBasePersonRig(personRecipe(design))
+      try {
+        const head = rig.root.getObjectByName("head-pivot")!
+        const skinParts = head.children.filter(part => part instanceof THREE.Mesh &&
+          (part.material as THREE.MeshLambertMaterial).color.getHexString() === design.skinColor.slice(1))
+        expect(skinParts.map(part => part.name)).toEqual(["head-shape"])
+      } finally { rig.dispose() }
+    }
+  })
+
   it("never stretches either leg or lifts a planted foot across a complete walk", () => {
     for (let step = 0; step < 240; step++) for (const side of ["left", "right"] as const) {
       const pose = legPose(side, step / 240, "walk")

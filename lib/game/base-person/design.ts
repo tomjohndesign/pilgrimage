@@ -21,7 +21,6 @@ export const DESIGN_CONTROLS = {
   hands: { label: "Hand size", min: 0.75, max: 1.4, step: 0.05 },
   sleeves: { label: "Sleeve fullness", min: 0.8, max: 1.5, step: 0.05 },
   stride: { label: "Step reach", min: 0.75, max: 1.1, step: 0.05 },
-  nose: { label: "Nose size", min: 0.7, max: 1.4, step: 0.05 },
   shadow: { label: "Cast shadow", min: 0, max: 0.3, step: 0.02 },
   ink: { label: "Edge ink", min: 0, max: 1, step: 0.1 },
 } as const
@@ -31,26 +30,28 @@ export type PersonDesign = Record<DesignKey, number> & {
   bodyType: "Male" | "Female"
   garment: "Everyday" | "Robe"
   beltStyle: "Leather" | "Rope"
+  walkStyle: "Natural" | "Devotional"
   tunicColor: string; skinColor: string; hairColor: string
   shirtColor: string; trouserColor: string; coveringColor: string
   hairStyle: typeof HAIR_STYLES[number]; beard: boolean
 }
 export const DEFAULT_DESIGN: PersonDesign = {
-  bodyType: "Male", garment: "Everyday", beltStyle: "Leather", head: 1.2, build: 1, torsoHeight: 1, shoulderHeight: 1, neckHeight: 0.65, tunicLength: 1,
+  bodyType: "Male", garment: "Everyday", beltStyle: "Leather", walkStyle: "Natural", head: 1.2, build: 1, torsoHeight: 1, shoulderHeight: 1, neckHeight: 0.65, tunicLength: 1,
   legs: 0.9, feet: 1, footWidth: 0.95, footHeight: 0.7, hem: 1, sleeves: 1, stride: 0.8, ink: 0.6,
   armSpacing: 1, upperArm: 1, forearm: 1, armAngle: 3, elbowBend: 10, armSwing: 0.75, hands: 1,
   shirtColor: "#c7b59b", trouserColor: "#514638", coveringColor: "#d6cab1",
-  nose: 1, shadow: 0.16, tunicColor: "#507186", skinColor: "#c99a72", hairColor: "#4a3221", hairStyle: "Bald", beard: false,
+  shadow: 0.16, tunicColor: "#507186", skinColor: "#c99a72", hairColor: "#4a3221", hairStyle: "Bald", beard: false,
 }
 export const PERSON_PRESETS: Record<string, PersonDesign> = {
   Storybook: DEFAULT_DESIGN,
   Female: { ...DEFAULT_DESIGN, bodyType: "Female", hem: 1.15, hairStyle: "Long", beard: false },
   Monk: { ...DEFAULT_DESIGN, garment: "Robe", beltStyle: "Rope", tunicLength: 1.4, tunicColor: "#6b4932",
-    trouserColor: "#6b4932", hairStyle: "Tonsure", sleeves: 1.15, hem: 1.1 },
+    trouserColor: "#6b4932", hairStyle: "Tonsure", sleeves: 1.15, hem: 1.1,
+    feet: 0.75, footWidth: 0.7, stride: 0.75, armSwing: 0, walkStyle: "Devotional" },
   Stout: { ...DEFAULT_DESIGN, build: 1.2, tunicColor: "#866044", hairStyle: "Cropped", beard: true },
   Lanky: { ...DEFAULT_DESIGN, build: 0.85, legs: 1.15, head: 1, feet: 1.1, tunicColor: "#657b50", hairStyle: "Bob" },
 }
-const legacyDefaults: Partial<Record<DesignKey, number>> = { armSpacing: 1, upperArm: 1, forearm: 1, armAngle: 3, elbowBend: 10, armSwing: 0.75, hands: 1, sleeves: 1, torsoHeight: 1, footWidth: 1, footHeight: 1, tunicLength: 1, shoulderHeight: 1, neckHeight: 1, nose: 1, shadow: 0.16 }
+const legacyDefaults: Partial<Record<DesignKey, number>> = { armSpacing: 1, upperArm: 1, forearm: 1, armAngle: 3, elbowBend: 10, armSwing: 0.75, hands: 1, sleeves: 1, torsoHeight: 1, footWidth: 1, footHeight: 1, tunicLength: 1, shoulderHeight: 1, neckHeight: 1, shadow: 0.16 }
 export function validatePersonDesign(input: unknown): PersonDesign {
   if (!input || typeof input !== "object") throw new Error("Expected person parameters.")
   const result = { ...DEFAULT_DESIGN }
@@ -58,7 +59,7 @@ export function validatePersonDesign(input: unknown): PersonDesign {
     if (input.bodyType !== "Male" && input.bodyType !== "Female") throw new Error("Invalid body type.")
     result.bodyType = input.bodyType
   }
-  for (const [key, choices] of [["garment", ["Everyday", "Robe"]], ["beltStyle", ["Leather", "Rope"]]] as const) {
+  for (const [key, choices] of [["garment", ["Everyday", "Robe"]], ["beltStyle", ["Leather", "Rope"]], ["walkStyle", ["Natural", "Devotional"]]] as const) {
     if (key in input) {
       const value = (input as PersonDesign)[key]
       if (!(choices as readonly string[]).includes(value)) throw new Error(`Invalid ${key}.`)
@@ -104,7 +105,7 @@ export function personRecipe(input: PersonDesign = DEFAULT_DESIGN) {
   result.palette.tunic = design.tunicColor; result.palette.skin = design.skinColor
   if (design.beltStyle === "Rope") result.palette.belt = "#c9ac78"
   const clothColors = design.bodyType === "Female" ? [design.shirtColor, design.coveringColor] : [design.trouserColor]
-  result.renderPalette = [...new Set(["#30251e", ...[0.5, 0.7, 0.9, 1.1, 1.3].map(f => shade(design.skinColor, f)),
+  result.renderPalette = [...new Set(["#30251e", "#785637", "#d6b57b", "#657b50", "#bac8cf", "#ecf4f4", ...[0.5, 0.7, 0.9, 1.1, 1.3].map(f => shade(design.skinColor, f)),
     ...[0.55, 0.8, 1, 1.3].map(f => shade(design.tunicColor, f)), ...[0.65, 1, 1.4].map(f => shade(design.hairColor, f)), ...clothColors.flatMap(color => [0.55, 0.8, 1, 1.25].map(f => shade(color, f)))])]
   if (design.beltStyle === "Rope") result.renderPalette.push(...[0.65, 1, 1.25].map(f => shade(result.palette.belt, f)))
   b.headWidth *= design.head; b.headHeight *= design.head; b.headDepth *= design.head

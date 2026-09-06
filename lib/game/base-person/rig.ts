@@ -1,4 +1,6 @@
 import * as THREE from "three"
+import { gatheringMotion } from "./gathering"
+import { woodcuttingMotion, woodcuttingProfile } from "./woodcutting"
 import { personRecipe } from "./design"
 import { armAngle, legPose, SOCKET_NAMES, type BaseClip, type BodySide, type Point3, type SocketName } from "./pose"
 
@@ -8,7 +10,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
   root.name = "base-person"
   const geometries: THREE.BufferGeometry[] = []
   const ropeTails: THREE.BufferGeometry[] = []
-  const materials: THREE.MeshLambertMaterial[] = []
+  const materials: THREE.Material[] = []
   const material = (color: string) => {
     const m = new THREE.MeshLambertMaterial({ color, flatShading: true })
     materials.push(m)
@@ -45,6 +47,8 @@ export function createBasePersonRig(recipe = personRecipe()) {
   const hemPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), b.tunicHem + 0.012)
   const legCloth = material(female ? palette.skin : recipe.design.trouserColor)
   legCloth.clippingPlanes = [hemPlane]
+  const bareFoot = material(palette.skin)
+  bareFoot.clippingPlanes = [hemPlane]
   const leftLegDebug = material("#329bc2"), rightLegDebug = material("#db7540")
   leftLegDebug.clippingPlanes = rightLegDebug.clippingPlanes = [hemPlane]
   // Authored contour: shoulder, chest, pinched waist and a flared skirt.
@@ -124,6 +128,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
   const neckBottom = b.torsoShoulderHeight - 0.015
   const neckTop = b.headCenter - b.headHeight * 0.72
   mesh(new THREE.CylinderGeometry(0.065, 0.078, neckTop - neckBottom, 8), skin, root, [0, (neckBottom + neckTop) / 2, 0])
+  const firstHeadPart = root.children.length
   const head = mesh(new THREE.LatheGeometry([
     new THREE.Vector2(b.headWidth * 0.5, -b.headHeight),
     new THREE.Vector2(b.headWidth * 0.85, -b.headHeight * 0.6),
@@ -132,11 +137,8 @@ export function createBasePersonRig(recipe = personRecipe()) {
     new THREE.Vector2(b.headWidth * 0.4, b.headHeight),
     new THREE.Vector2(0, b.headHeight * 1.02),
   ], 10), skin, root, [0, b.headCenter, 0])
+  head.name = "head-shape"
   head.scale.z = b.headDepth / b.headWidth
-  // A small wedge makes the side-facing nose readable at native resolution.
-  const nose = mesh(new THREE.ConeGeometry(b.headWidth * 0.28 * recipe.design.nose, b.headDepth * 0.65 * recipe.design.nose, 4), skin, root,
-    [0, b.headCenter - 0.015, b.headDepth * (0.85 + 0.23 * recipe.design.nose)])
-  nose.rotation.x = Math.PI / 2
   if (recipe.design.hairStyle === "Tonsure") {
     // An open ring follows the scalp; the actual skin crown stays exposed.
     const ring = mesh(new THREE.LatheGeometry([
@@ -181,6 +183,15 @@ export function createBasePersonRig(recipe = personRecipe()) {
     beard.scale.set(b.headWidth * 0.9, b.headHeight * 0.55, b.headDepth * 1.08)
   }
   socket("head", root, [0, b.headCenter + b.headHeight + 0.02, 0])
+  // Turn the complete head around its neck attachment, including hair and sockets.
+  const headPivot = new THREE.Group()
+  headPivot.name = "head-pivot"
+  headPivot.position.y = neckTop
+  for (const part of root.children.slice(firstHeadPart)) {
+    headPivot.add(part)
+    part.position.y -= neckTop
+  }
+  root.add(headPivot)
   socket("back", root, [0, b.chestHeight, -b.torsoTop * 0.8])
   socket("leftHip", root, [b.torsoBottom, b.hipHeight + 0.02, 0])
   socket("rightHip", root, [-b.torsoBottom, b.hipHeight + 0.02, 0])
@@ -244,10 +255,11 @@ export function createBasePersonRig(recipe = personRecipe()) {
     footGeometry.rotateX(Math.PI / 2)
     footGeometry.translate(0, b.footHeight / 2, 0)
     const foot = mesh(footGeometry, skin, root)
+    foot.name = `${side}-foot`
     thigh.name = `${side}-${female ? "leg" : "trouser"}-upper`
     shin.name = `${side}-${female ? "leg" : "trouser"}-lower`
     if (longGarment) {
-      foot.material = legCloth
+      foot.material = bareFoot
       foot.userData.clipAboveHem = true
     }
     for (const part of [thigh, shin]) part.userData.clipAboveHem = true
@@ -265,13 +277,99 @@ export function createBasePersonRig(recipe = personRecipe()) {
   }
   body.position.y = b.hipHeight
   poseRoot.add(body); root.add(poseRoot)
+  const chopping = woodcuttingProfile(recipe.design)
   const axe = new THREE.Group()
   axe.name = "woodcutting-axe"
-  const wood = material("#785637"), steel = material("#a4b4b5")
-  mesh(new THREE.CylinderGeometry(0.022, 0.028, 0.62, 6), wood, axe, [0, 0.20, 0])
-  mesh(new THREE.BoxGeometry(0.24, 0.14, 0.055), steel, axe, [0.09, 0.46, 0])
+  axe.scale.setScalar(chopping.axeScale)
+  const wood = material("#785637"), steel = material("#bac8cf"), grain = material("#d6b57b")
+  mesh(new THREE.CylinderGeometry(0.026, 0.032, 0.66, 6), wood, axe, [0, 0.20, 0])
+  // The broad blade lies in the Y/Z swing plane; X is its thin edge.
+  const blade = mesh(new THREE.BoxGeometry(0.085, 0.22, 0.4), steel, axe, [0, 0.46, 0.17])
+  blade.name = "axe-head"
+  const shine = new THREE.MeshBasicMaterial({ color: "#ecf4f4", toneMapped: false })
+  materials.push(shine)
+  const glint = new THREE.Group()
+  glint.name = "axe-glint"
+  for (const side of [-1, 1]) {
+    mesh(new THREE.BoxGeometry(0.005, 0.15, 0.027), shine, glint, [side * 0.045, 0.49, 0.25])
+    mesh(new THREE.BoxGeometry(0.005, 0.027, 0.12), shine, glint, [side * 0.045, 0.49, 0.25])
+  }
+  axe.add(glint)
+  const trail = new THREE.Group()
+  trail.name = "axe-motion-streaks"
+  for (const side of [-1, 1]) {
+    const curve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(side * 0.06, 0.46, 0.17),
+      new THREE.Vector3(side * 0.06, 0.56, -0.03),
+      new THREE.Vector3(side * 0.06, 0.53, -0.22),
+    ])
+    mesh(new THREE.TubeGeometry(curve, 8, 0.014, 4, false), steel, trail)
+  }
+  axe.add(trail)
   sockets.rightHand.add(axe)
   axe.visible = false
+  const log = new THREE.Group()
+  log.name = "woodcutting-log"
+  log.position.z = 0.52
+  log.scale.setScalar(chopping.logScale)
+  const logHalves = [-1, 1].map(side => {
+    const half = mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.25, 8), [wood, grain, grain], log)
+    half.name = side < 0 ? "log-left-half" : "log-right-half"
+    return { half, side }
+  })
+  root.add(log)
+  log.visible = false
+  const basket = new THREE.Group()
+  basket.name = "gathering-basket"
+  basket.position.set(-0.43, 0.115, 0.3)
+  basket.scale.setScalar(female ? 0.7 : 1)
+  mesh(new THREE.CylinderGeometry(0.21, 0.16, 0.22, 10, 1, true), wood, basket)
+  const rim = mesh(new THREE.TorusGeometry(0.21, 0.018, 4, 12), grain, basket, [0, 0.11, 0])
+  rim.rotation.x = Math.PI / 2
+  const handle = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(-0.2, 0.1, 0), new THREE.Vector3(-0.15, 0.28, 0),
+    new THREE.Vector3(0.15, 0.28, 0), new THREE.Vector3(0.2, 0.1, 0),
+  ])
+  mesh(new THREE.TubeGeometry(handle, 12, 0.016, 4, false), grain, basket)
+  const harvest = material("#657b50")
+  const contents = new THREE.Group()
+  for (const x of [-0.08, 0, 0.08]) ellipsoid(contents, [x, 0.07, 0], [0.06, 0.035, 0.08], harvest)
+  basket.add(contents)
+  root.add(basket)
+  basket.visible = false
+  const picked = ellipsoid(sockets.rightHand, [0, -0.02, 0], [0.045, 0.035, 0.045], harvest)
+  picked.name = "gathered-item"
+  picked.visible = false
+  const pillow = new THREE.Group()
+  pillow.name = "sleep-pillow"
+  pillow.position.set(0, 0.05, -(b.headCenter - (b.headCenter + b.headHeight) / 2 - 0.03) - 0.08)
+  const bundled = recipe.design.walkStyle === "Devotional"
+  for (let i = 0; i < 9; i++) {
+    const straw = mesh(new THREE.BoxGeometry(bundled ? 0.36 : 0.42, 0.03, 0.04), grain, pillow,
+      [Math.sin(i * 2) * (bundled ? 0.01 : 0.025), bundled ? (i % 3) * 0.025 : 0, (Math.floor(i / 3) - 1) * (bundled ? 0.08 : 0.11)])
+    straw.rotation.y = bundled ? 0 : Math.sin(i) * 0.35
+  }
+  if (bundled) for (const x of [-0.085, 0.085]) {
+    const tie = mesh(new THREE.TorusGeometry(0.1, 0.012, 4, 8), beltMaterial, pillow, [x, 0.025, 0])
+    tie.rotation.y = Math.PI / 2
+  }
+  root.add(pillow)
+  pillow.visible = false
+  const snores = new THREE.Group()
+  snores.name = "sleep-zzz"
+  const zShape = new THREE.Shape()
+  zShape.moveTo(-0.5, 0.5); zShape.lineTo(0.5, 0.5); zShape.lineTo(0.5, 0.28)
+  zShape.lineTo(-0.15, -0.28); zShape.lineTo(0.5, -0.28); zShape.lineTo(0.5, -0.5)
+  zShape.lineTo(-0.5, -0.5); zShape.lineTo(-0.5, -0.28); zShape.lineTo(0.15, 0.28)
+  zShape.lineTo(-0.5, 0.28); zShape.closePath()
+  const zMaterial = new THREE.MeshBasicMaterial({ color: "#bac8cf", side: THREE.DoubleSide, toneMapped: false })
+  materials.push(zMaterial)
+  for (let i = 0; i < 3; i++) {
+    const z = mesh(new THREE.ShapeGeometry(zShape), zMaterial, snores, [i * 0.18, i * 0.16, 0])
+    z.scale.setScalar(0.14 + i * 0.04)
+  }
+  root.add(snores)
+  snores.visible = false
   // Solve both arm bones to a hand target in the upper body's coordinates.
   const reach = (limb: typeof limbs[number], target: Point3) => {
     const start = limb.shoulder.position.clone(), end = new THREE.Vector3(...target)
@@ -306,6 +404,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
     root, sockets,
     view(row: number) {
       root.rotation.y = -row * Math.PI / 4
+      snores.rotation.y = row * Math.PI / 4
       const facing = Math.sin(row * Math.PI / 4)
       for (const limb of limbs) {
         const depth = (limb.side === "left" ? 1 : -1) * facing
@@ -332,22 +431,49 @@ export function createBasePersonRig(recipe = personRecipe()) {
     },
     pose(phase: number, clip: BaseClip = "walk") {
       const wave = Math.sin(phase * Math.PI * 2)
+      const swing = woodcuttingMotion(phase, chopping)
+      const gathering = gatheringMotion(phase)
+      const devotional = recipe.design.walkStyle === "Devotional" && clip === "walk"
+      headPivot.rotation.x = devotional ? 0.42 : 0
       const seated = clip === "sitting", praying = clip === "praying"
       const sleep = clip === "sleeping", chop = clip === "woodcutting", gather = clip === "gathering"
-      const drop = seated ? 0.25 - b.hipHeight : praying ? 0.1 + b.thighLength * 0.9 - b.hipHeight : gather ? -0.24 : 0
-      poseRoot.rotation.set(sleep ? -Math.PI / 2 : 0, 0, 0)
-      poseRoot.position.set(0, sleep ? b.torsoTop * 0.78 : 0, sleep ? (b.headCenter + b.headHeight) / 2 + 0.03 : 0)
+      const drop = seated ? 0.25 - b.hipHeight : praying ? 0.1 + b.thighLength * 0.9 - b.hipHeight : gather ? 0.22 - b.hipHeight : 0
+      poseRoot.rotation.set(sleep ? -Math.PI / 2 : 0, sleep && female ? Math.PI / 2 : 0, 0)
+      poseRoot.position.set(0, sleep ? female ? b.shoulderOffset + 0.06 : b.torsoTop * 0.78 : 0, sleep ? (b.headCenter + b.headHeight) / 2 + 0.03 : 0)
       body.position.y = b.hipHeight + drop
-      body.rotation.x = gather ? 0.85 + wave * 0.12 : chop ? 0.12 + (1 - Math.cos(phase * Math.PI * 2)) * 0.12 : praying ? 0.12 + wave * 0.025 : sleep ? wave * 0.008 : seated ? 0.035 * wave : 0
-      axe.visible = chop
+      body.rotation.x = gather ? 0.18 + gathering.reach * 0.3 : chop ? 0.08 + (1 - swing.lift) * chopping.lean : praying ? 0.12 + wave * 0.025 : sleep ? wave * 0.008 : seated ? 0.035 * wave : 0
+      basket.visible = gather
+      picked.visible = gather && gathering.holding
+      contents.visible = gather && gathering.deposited
+      pillow.visible = snores.visible = sleep
+      snores.position.set(0.08, 0.55 + phase % 1 * 0.1, pillow.position.z)
+      axe.visible = log.visible = chop
+      glint.visible = chop && swing.glint
+      trail.visible = chop && swing.striking
+      for (const { half, side } of logHalves) {
+        half.position.set(side * (0.125 + swing.split * 0.14), 0.14 + swing.split * 0.035, swing.split * 0.035)
+        half.rotation.z = Math.PI / 2 + side * swing.split * 0.3
+      }
       for (const { geometry, positions, rest } of drapedParts) {
         for (let i = 0; i < positions.count; i++) {
           const y = rest[i * 3 + 1], z = rest[i * 3 + 2]
           const weight = Math.max(0, (waist - y) / (waist - b.tunicHem))
           // The robe and hanging rope ends drape together over bent knees.
-          positions.setY(i, seated || praying || gather ? Math.max(y, 0.07 - drop) : y)
-          positions.setZ(i, z + ((seated ? 0.48 : praying ? 0.19 : 0) * weight) +
-            (longGarment && (clip === "walk" || clip === "carrying") ? wave * 0.035 * recipe.design.stride * weight * weight : 0))
+          const drapeZ = z + ((seated ? 0.48 : praying || gather ? 0.19 : 0) * weight) +
+            (longGarment && (clip === "walk" || clip === "carrying") ? wave * 0.035 * recipe.design.stride * weight * weight : 0)
+          const groundY = b.hipHeight + (0.035 - body.position.y + drapeZ * (geometry === torso.geometry ? torso.scale.z : 1) * Math.sin(body.rotation.x)) / Math.cos(body.rotation.x)
+          if (longGarment && chop && y < waist) {
+            // Keep the hem around the planted legs as the chest bends into the blow.
+            // Counter-rotate progressively below the waist, anchoring the hem fully.
+            const angle = -body.rotation.x * Math.min(1, weight)
+            const localY = y - b.hipHeight
+            const localZ = drapeZ * (geometry === torso.geometry ? torso.scale.z : 1)
+            positions.setY(i, b.hipHeight + localY * Math.cos(angle) - localZ * Math.sin(angle))
+            positions.setZ(i, (localY * Math.sin(angle) + localZ * Math.cos(angle)) / (geometry === torso.geometry ? torso.scale.z : 1))
+          } else {
+            positions.setY(i, seated || praying || gather ? Math.max(y, 0.07 - drop, groundY) : y)
+            positions.setZ(i, drapeZ)
+          }
         }
         positions.needsUpdate = true
         geometry.computeVertexNormals()
@@ -361,25 +487,32 @@ export function createBasePersonRig(recipe = personRecipe()) {
           (limb.side === "left" ? 1 : -1) * THREE.MathUtils.degToRad(recipe.design.armAngle))
         limb.elbow.rotation.set(-THREE.MathUtils.degToRad(recipe.design.elbowBend), 0, 0)
         const sign = limb.side === "left" ? 1 : -1
-        if (praying) reach(limb, [sign * 0.035, b.chestHeight - b.hipHeight, 0.33])
+        if (devotional) reach(limb, [sign * 0.018, waist - b.hipHeight + 0.045 + sign * 0.015, 0.30])
+        else if (praying) reach(limb, [sign * 0.035, b.chestHeight - b.hipHeight, 0.33])
         else if (chop) {
-          const lift = (1 + Math.cos(phase * Math.PI * 2)) / 2
-          reach(limb, [sign * 0.035, 0.22 + lift * 0.72, 0.36 - lift * 0.13])
+          reach(limb, [sign * 0.035, -0.08 + swing.lift * (0.3 + chopping.reach), 0.40 - swing.lift * 0.17])
         } else if (clip === "carrying") reach(limb, [sign * 0.2, 0.15, 0.34])
-        else if (gather) reach(limb, [sign * 0.16, -0.12 + wave * 0.06, 0.36])
+        else if (gather) {
+          const target = limb.side === "left" ? new THREE.Vector3(b.legOffset, 0.26, 0.34) :
+            new THREE.Vector3(-0.43, 0.23, 0.3).lerp(new THREE.Vector3(-0.14, 0.09, 0.74), gathering.reach)
+          target.sub(body.position).applyQuaternion(body.quaternion.clone().invert())
+          reach(limb, target.toArray() as Point3)
+        }
         else if (seated) reach(limb, [sign * 0.21, 0.02, 0.30])
-        else if (sleep) reach(limb, [sign * 0.09, 0.22, 0.24])
+        else if (sleep) reach(limb, bundled ? [-sign * 0.035, 0.08, 0.23 + sign * 0.02] :
+          female ? [sign * 0.055, 0.42, 0.25] : [sign * 0.09, 0.22, 0.24])
       }
       root.updateMatrixWorld(true)
       if (chop) {
-        const lift = (1 + Math.cos(phase * Math.PI * 2)) / 2
         const desired = body.getWorldQuaternion(new THREE.Quaternion()).multiply(
-          new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 1.35 - lift * 1.55))
+          new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), 2.15 - swing.lift * 2.35))
         axe.quaternion.copy(sockets.rightHand.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(desired))
         axe.updateMatrixWorld(true)
       }
-      // The clipping plane follows a lying body; bent legs are covered by the draped mesh.
-      hemPlane.set(new THREE.Vector3(0, -1, 0), seated || praying || gather || chop ? 10 : b.tunicHem + 0.012)
+      // Long garments cover bent legs too; expose only the toes below the draped hem.
+      const hemHeight = longGarment && (seated || praying || gather) ? 0.08 :
+        seated || praying || gather || (chop && !longGarment) ? 10 : b.tunicHem + 0.012
+      hemPlane.set(new THREE.Vector3(0, -1, 0), hemHeight)
       hemPlane.applyMatrix4(poseRoot.matrixWorld)
       root.updateMatrixWorld(true)
     },

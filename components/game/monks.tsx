@@ -34,7 +34,7 @@ import { MonkRocketGear, ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
 
 /** How far from the footprint the brothers will wander, in tiles. */
 const WANDER_RADIUS = 3
-const WALK_SPEED = 0.7
+const WALK_SPEED = 0.22
 const PAUSE_MIN_SECONDS = 2
 const PAUSE_MAX_SECONDS = 7
 /** Standing within this many tiles of the hovel's centre counts as keeping vigil. */

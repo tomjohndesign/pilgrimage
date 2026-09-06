@@ -1,6 +1,6 @@
 import sharp from "sharp"
 import { readFileSync } from "node:fs"
-const version = process.argv[2] ?? "v11"
+const version = process.argv[2] ?? "v12"
 if (!/^v\d+$/.test(version)) throw new Error("Expected a version such as v1")
 const prefix = `public/textures/characters/base/base-person-${version}`
 const metadata = JSON.parse(readFileSync(`${prefix}.json`, "utf8"))
@@ -11,7 +11,7 @@ const size = metadata.cellSize
 const nominalHeight = metadata.nominalHeightPixels ?? 20 * size / 32
 let minHeight = Infinity, maxHeight = 0
 for (const [clip, url] of Object.entries({ walk: metadata.images.walk, idle: metadata.images.idle, ...Object.fromEntries(Object.entries(metadata.images.actions ?? {}).map(([clip, entry]) => [clip, entry.url])) })) {
-  const columns = clip === "idle" ? 1 : 8
+  const columns = metadata.clips[clip].length / metadata.directions.length
   const { data, info } = await sharp(`public${url}`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
   if (info.width !== columns * size || info.height !== 8 * size) throw new Error(`Wrong ${clip} dimensions`)
   if (metadata.clips[clip].length !== columns * 8) throw new Error(`Missing ${clip} registrations`)
@@ -43,7 +43,7 @@ console.log(`Base ${version}: ${Object.values(metadata.clips).reduce((sum, frame
 
 if (metadata.images.shadowWalk) for (const [clip, url] of Object.entries({ walk: metadata.images.shadowWalk, idle: metadata.images.shadowIdle, ...Object.fromEntries(Object.entries(metadata.images.actions ?? {}).map(([clip, entry]) => [clip, entry.shadow])) })) {
   const { data, info } = await sharp(`public${url}`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
-  if (info.width !== (clip === "idle" ? 1 : 8) * size || info.height !== 8 * size) throw new Error("Wrong shadow dimensions")
+  if (info.width !== (metadata.clips[clip].length / metadata.directions.length) * size || info.height !== 8 * size) throw new Error("Wrong shadow dimensions")
   let pixels = 0
   for (let y = 0; y < info.height; y++) for (let x = 0; x < info.width; x++) {
     const alpha = data[(y * info.width + x) * 4 + 3]
