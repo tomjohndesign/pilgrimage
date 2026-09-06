@@ -161,9 +161,9 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
   },
 }
 
-/** Needs everyone shares regardless of calling; refill/decay comes later. */
-const HUNGER: StatRange = { min: 20, max: 80 }
-const THIRST: StatRange = { min: 20, max: 80 }
+/** Passing travelers start supplied for their own journey. */
+const HUNGER: StatRange = { min: 80, max: 100 }
+const THIRST: StatRange = { min: 80, max: 100 }
 const STAMINA: StatRange = { min: 40, max: 100 }
 
 const FIRST_NAMES = {

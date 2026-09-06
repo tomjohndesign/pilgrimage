@@ -29,22 +29,22 @@ describe("relic draw", () => {
   const holy = { sanctity: 95, spectacle: 40, doubt: 15 }
   const dubious = { sanctity: 30, spectacle: 95, doubt: 90 }
 
-  it.each(["hunger", "thirst", "stamina"] as const)("requires a reputation for reliable hospitality when %s is empty", (need) => {
+  it.each(["hunger", "thirst"] as const)("requires a reputation for reliable hospitality when %s is empty", (need) => {
     const traveler = { ...who(0, 100), hunger: 100, thirst: 100, stamina: 100, [need]: 0 }
     const obscure = { sanctity: 0, spectacle: 0, doubt: 100 }
     expect(visitChance(traveler, obscure, 0)).toBeCloseTo(0.1)
-    expect(visitChance(traveler, obscure, 10)).toBeCloseTo(0.19)
-    expect(visitChance(traveler, obscure, 50)).toBeCloseTo(0.55)
-    expect(visitChance(traveler, obscure, 100)).toBe(1)
-    expect(visitChance(traveler, obscure, 200)).toBe(1)
+    expect(visitChance(traveler, obscure, 10)).toBeCloseTo(0.105)
+    expect(visitChance(traveler, obscure, 50)).toBeCloseTo(0.225)
+    expect(visitChance(traveler, obscure, 100)).toBeCloseTo(0.6)
+    expect(visitChance(traveler, obscure, 200)).toBeCloseTo(0.6)
     expect(visitChance(traveler, obscure, -100)).toBeCloseTo(0.1)
     const balance = structuredClone(DEFAULT_BALANCE)
     balance.rules.hospitalityBaseChance = 0.2
     balance.rules.drawCap = 200
-    expect(visitChance(traveler, obscure, 100, balance)).toBeCloseTo(0.6)
+    expect(visitChance(traveler, obscure, 100, balance)).toBeCloseTo(0.325)
   })
 
-  it("starts with a minority of visitors and attracts a wider crowd as renown grows", () => {
+  it("starts with rare visitors and attracts a wider crowd as renown grows", () => {
     let early = 0, established = 0, count = 0
     for (let seed = 1; seed <= 20; seed++) {
       const relic = generateRelic(seed)
@@ -54,9 +54,42 @@ describe("relic draw", () => {
         count++
       }
     }
-    expect(early / count).toBeGreaterThan(0.05)
-    expect(early / count).toBeLessThan(0.25)
+    expect(early / count).toBeGreaterThan(0)
+    expect(early / count).toBeLessThan(0.03)
     expect(established).toBeGreaterThan(early * 2)
+  })
+
+  it("keeps ordinary and moderately needy passersby on their way at founding renown", () => {
+    for (const renown of [0, 10, 20, 30]) {
+      for (const piety of [0, 30, 60, 80]) {
+        expect(visitChance({ ...who(piety, 0), hunger: 30, thirst: 30 }, holy, renown)).toBe(0)
+        expect(visitChance({ ...who(piety, 0), hunger: 30, thirst: 30 }, dubious, renown)).toBe(0)
+      }
+    }
+    expect(visitChance(who(95, 20), holy, 0)).toBeGreaterThan(0)
+  })
+
+  it("only draws food and water need below the threshold, never tiredness alone", () => {
+    const obscure = { sanctity: 0, spectacle: 0, doubt: 100 }
+    const traveler = { ...who(0, 100), hunger: 100, thirst: 100, stamina: 0 }
+    for (const renown of [0, 30, 100]) expect(visitChance(traveler, obscure, renown)).toBe(0)
+    for (const need of ["hunger", "thirst"] as const) {
+      expect(visitChance({ ...traveler, [need]: 20 }, obscure, 0)).toBe(0)
+      expect(visitChance({ ...traveler, [need]: 10 }, obscure, 0)).toBeCloseTo(0.05)
+      expect(visitChance({ ...traveler, [need]: 30 }, obscure, 100)).toBeCloseTo(0.3)
+    }
+    expect(visitChance({ ...traveler, hunger: 60, thirst: 60 }, obscure, 100)).toBe(0)
+  })
+
+  it("applies live piety, need and hospitality strength settings", () => {
+    const balance = structuredClone(DEFAULT_BALANCE)
+    balance.rules.earlyVisitPiety = 70
+    expect(visitChance(who(80, 0), holy, 0, balance)).toBeGreaterThan(0)
+    balance.rules.hospitalityNeedThreshold = 40
+    balance.rules.hospitalityRenownBonus = 0.2
+    expect(visitChance(who(0, 100), holy, 0, balance)).toBe(0)
+    expect(visitChance({ ...who(0, 100), hunger: 20 }, holy, 0, balance)).toBeCloseTo(0.05)
+    expect(visitChance({ ...who(0, 100), thirst: 0 }, { sanctity: 0, spectacle: 0, doubt: 100 }, 100, balance)).toBeCloseTo(0.3)
   })
 
   it("pulls the devout harder toward a holy relic than the worldly", () => {

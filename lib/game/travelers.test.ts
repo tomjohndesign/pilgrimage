@@ -29,6 +29,14 @@ describe("travelerCountForMap", () => {
 })
 
 describe("generateTravelers", () => {
+  it("starts passing travelers supplied for their own journey", () => {
+    for (const seed of [1, 42, 12345]) {
+      for (const { attributes } of generateTravelers(seed, 100)) {
+        expect(attributes.hunger).toBeGreaterThanOrEqual(80)
+        expect(attributes.thirst).toBeGreaterThanOrEqual(80)
+      }
+    }
+  })
   it("matches first names to the rendered population profile across seeds and callings", () => {
     const women = new Set([
       "Berta", "Dilys", "Frida", "Hawise", "Isolde", "Maude", "Osanna",

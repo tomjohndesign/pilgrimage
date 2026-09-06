@@ -12,6 +12,7 @@ import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } 
 import { generateRelic, visitChance } from "./relic"
 import { createSim, stepSim, GAME_DAY_SECONDS, type SimState } from "./sim"
 import { DEFAULT_MOVEMENT, LINEAR_MOVEMENT } from "./motion"
+import { generateMonks } from "./monks"
 import { generateTravelers, TRAVELER_TYPES, type Traveler } from "./travelers"
 import { treeResource, treeStage, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, type WoodPile } from "./trees/timber"
 import type { TreePlacement } from "./trees/placement"
@@ -46,9 +47,11 @@ function run(sim: SimState, travelers: Traveler[], map: GameMap, seconds: number
 
 const obscure = { sanctity: 0, spectacle: 0, doubt: 100 }
 
-/** Established hospitality isolates the visit lifecycle from attraction rolls. */
+/** Guaranteed hospitality isolates the visit lifecycle from attraction rolls. */
 function createEstablishedShrine(travelers: Traveler[], map: GameMap) {
   const sim = createSim(travelers, map, [], obscure)
+  sim.balance = structuredClone(DEFAULT_BALANCE)
+  sim.balance.rules.hospitalityBaseChance = 1
   sim.shrineRenown = sim.balance.rules.drawCap
   return sim
 }
@@ -60,7 +63,7 @@ describe("shrine hospitality", () => {
       for (let id = 0; id < 40; id++) {
         const { map, traveler } = fixture()
         const t = traveler(id, id % 2 === 0 ? 1 : -1)
-        t.attributes.hunger = 20
+        t.attributes.hunger = 0
         const sim = createSim([t], map, [], obscure)
         sim.shrineRenown = renown
         sim.visits = visits
@@ -72,8 +75,10 @@ describe("shrine hospitality", () => {
     const early = accepted(0, 0)
     expect(early).toBeGreaterThan(0)
     expect(early).toBeLessThan(12)
-    expect(accepted(DEFAULT_BALANCE.rules.drawCap, 0)).toBe(40)
-    expect(accepted(0, DEFAULT_BALANCE.rules.drawCap / DEFAULT_BALANCE.rules.visitRenown)).toBe(40)
+    const established = accepted(DEFAULT_BALANCE.rules.drawCap, 0)
+    expect(established).toBeGreaterThan(early * 2)
+    expect(established).toBeLessThan(40)
+    expect(accepted(0, DEFAULT_BALANCE.rules.drawCap / DEFAULT_BALANCE.rules.visitRenown)).toBe(established)
   })
 
   it.each([0, 1, 2, 3])("enters gate %i, faces the relic, pays once and walks back out", (id) => {
@@ -224,7 +229,7 @@ describe("shrine hospitality", () => {
     expect(rejoined).toBe(true)
   })
 
-  for (const need of ["hunger", "thirst", "stamina"] as const) {
+  for (const need of ["hunger", "thirst"] as const) {
     for (const direction of [1, -1] as const) {
       it(`draws a traveler with empty ${need} from direction ${direction}, restores needs and returns them`, () => {
         const { map, traveler } = fixture()
@@ -264,24 +269,62 @@ describe("shrine hospitality", () => {
     expect(sim.travelers.get(0)!.activity).toBe("toRelic")
   })
 
-  it("keeps faith relevant and reserves certain hospitality visits for established shrines", () => {
+  it("keeps faith relevant and limits early hospitality to desperate needs", () => {
     const { traveler } = fixture()
     const a = traveler(0).attributes
     const holy = { sanctity: 95, spectacle: 40, doubt: 15 }
     expect(visitChance({ ...a, piety: 100 }, holy)).toBeGreaterThan(visitChance(a, holy))
     expect(visitChance({ ...a, hunger: 0 }, obscure)).toBe(0.1)
-    expect(visitChance({ ...a, hunger: 0 }, obscure, DEFAULT_BALANCE.rules.drawCap)).toBe(1)
-    expect(visitChance({ ...a, thirst: 35 }, obscure)).toBeGreaterThan(visitChance(a, obscure))
+    expect(visitChance({ ...a, hunger: 0 }, obscure, DEFAULT_BALANCE.rules.drawCap)).toBeCloseTo(0.6)
+    expect(visitChance({ ...a, thirst: 35 }, obscure)).toBe(0)
   })
 
-  it("produces actual visits on generated worlds", () => {
+  it.each([1, -1] as const)("does not turn desperate travelers back toward the shrine (direction %i)", (direction) => {
+    const { map, traveler } = fixture()
+    const t = traveler(0, direction)
+    t.offset = (map.site!.junction + direction * 2) / (map.road!.length - 1)
+    t.attributes.thirst = 10
+    const sim = createEstablishedShrine([t], map)
+    const s = sim.travelers.get(t.id)!
+    const before = s.progress
+    run(sim, [t], map, 1)
+    expect((s.progress - before) * direction).toBeGreaterThan(0)
+    expect(s.activity).toBe("walking")
+    expect(s.direction).toBe(direction)
+  })
+
+  it("does not lure ordinary passersby with a job vacancy or moderate needs", () => {
+    for (let id = 0; id < 40; id++) {
+      const { map, camp, trees, traveler } = fixture()
+      const t = traveler(id, id % 2 === 0 ? 1 : -1)
+      Object.assign(t.attributes, { jobless: true, hunger: 35, thirst: 35 })
+      const sim = createSim([t], map, [], obscure)
+      sim.buildings = [camp]
+      sim.trees = trees
+      sim.shrineRenown = 20
+      run(sim, [t], map, 1)
+      const s = sim.travelers.get(id)!
+      expect(s.activity).toBe("walking")
+      expect((s.progress - map.site!.junction) * t.direction).toBeGreaterThan(0)
+    }
+  })
+
+  it("earns more actual visits on generated worlds as the shrine becomes known", () => {
+    let early = 0, established = 0
     for (const seed of [1, 42, 12345]) {
       const map = generateMap({ seed })
       const travelers = generateTravelers(seed, 30)
-      const sim = createSim(travelers, map, [], generateRelic(seed).stats)
-      run(sim, travelers, map, 240)
-      expect(sim.visits, `seed ${seed}`).toBeGreaterThan(0)
+      const relic = generateRelic(seed)
+      for (const known of [false, true]) {
+        const sim = createSim(travelers, map, [], relic.stats)
+        sim.shrineRenown = known ? DEFAULT_BALANCE.rules.drawCap : settlementRenown(map, generateMonks(seed), [relic]).total
+        run(sim, travelers, map, 240)
+        if (known) established += sim.visits
+        else early += sim.visits
+      }
     }
+    expect(established).toBeGreaterThan(early)
+    expect(early).toBeLessThan(9) // Under one visit per ten initial passersby across these worlds.
   })
 })
 
@@ -384,7 +427,7 @@ describe("woodcutter huts", () => {
     const t = traveler(0)
     t.attributes.hunger = 0
     t.attributes.jobless = true
-    const sim = createSim([t], builtMap, [], obscure)
+    const sim = createEstablishedShrine([t], builtMap)
     sim.buildings = woodcutterHuts(builtMap)
     sim.trees = trees
     syncTimberSpending(sim, bought.settlement.spentWood)
@@ -438,7 +481,7 @@ describe("woodcutter huts", () => {
       t.attributes.jobless = true
       return t
     })
-    const sim = createSim(travelers, map, [], obscure)
+    const sim = createEstablishedShrine(travelers, map)
     sim.buildings = [camp]
     sim.trees = trees
     let maxWorkers = 0
@@ -493,7 +536,7 @@ describe("woodcutter huts", () => {
     const { map, trees, camp, traveler } = fixture()
     const t = traveler(0)
     t.attributes.hunger = 0
-    const sim = createSim([t], map)
+    const sim = createEstablishedShrine([t], map)
     sim.buildings = [camp]
     sim.trees = trees
     run(sim, [t], map, 120)
