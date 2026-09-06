@@ -2,6 +2,7 @@
 
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
+import { createMonkRoutine, stepMonkRoutine, type MonkRoutine } from "@/lib/game/monk-routine"
 import { monkWander, type WanderSpot } from "@/lib/game/monk-wander"
 import { Suspense, useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
@@ -21,25 +22,14 @@ import { monkVisual, monkWalkSpeed, MONK_WALK_TUNING } from "@/lib/game/base-per
 import { MonkRocketGear, ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
 
 /**
- * The brothers drift between the open tiles around the hovel,
- * stand a while, and drift on — enough that the place is plainly
- * lived in. Ambient motion only; they aren't in the traveler sim. Click one
+ * The brothers follow the grid around the shrine and regularly enter through
+ * its gates to kneel beside the relic. Ambient motion only; they aren't in the traveler sim. Click one
  * to select him — the HUD names him and his office. Blaster Pastor sends them
  * on occasional cruises across the map; they return to their life at the shrine
  * between trips, keeping their rocket-powered gear equipped.
  */
 
-const PAUSE_MIN_SECONDS = 2
-const PAUSE_MAX_SECONDS = 7
-/** Extra distance beyond the hovel’s half-width that counts as keeping vigil. */
-const VIGIL_MARGIN = 1.1
-
-interface MonkState {
-  x: number
-  y: number
-  z: number
-  route: WanderSpot[]
-  pause: number
+interface MonkState extends MonkRoutine {
   flight?: MonkFlight
   flightWait: number
 }
@@ -55,19 +45,13 @@ export function Monks({ map, monks, flying = false, characterScale = 1 }: { map:
     const flightRng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.monkFlight))
     const pick = (): WanderSpot => {
       const spot = spots[Math.floor(rng() * spots.length)]
-      // Jitter within the tile so two brothers never stand on the same spot.
-      const x = spot.x + (rng() - 0.5) * 0.5, z = spot.z + (rng() - 0.5) * 0.5
-      return { x, y: walkingSurface(map, x, z).height, z }
+      return spot
     }
-    const states: MonkState[] = (spots.length ? monks : []).map((_, index) => {
-      const start = pick()
-      // One immediate demonstration; the other brothers take off in their own time.
-      return { ...start, route: wander.route(start, pick()), pause: rng() * PAUSE_MAX_SECONDS, flightWait: index * 8 }
-    })
+    const states: MonkState[] = (spots.length ? monks : []).map((_, index) => ({
+      ...createMonkRoutine(wander, index, rng), flightWait: index * 8,
+    }))
     const activities = new Map<number, MonkActivity>()
-    const hovel = map.buildings.find(b => b.id === map.site?.hovelId)
-    const vigilRadius = (hovel ? Math.max(hovel.w, hovel.d) / 2 : 0.7) + VIGIL_MARGIN
-    return { spots, centre, rng, flightRng, pick, states, activities, wander, vigilRadius }
+    return { spots, centre, rng, flightRng, pick, states, activities, wander }
   }, [map, monks])
 
   // Publish activities so the HUD's monk panel can poll them.
@@ -96,7 +80,7 @@ export function Monks({ map, monks, flying = false, characterScale = 1 }: { map:
       const exhaust = group.getObjectByName(ROCKET_EXHAUST_NAME)
       if (flying) {
         s.flightWait -= dt
-        if (!s.flight && s.flightWait <= 0) {
+        if (!s.flight && s.flightWait <= 0 && s.destination === "grounds" && s.activity === "resting") {
           s.flight = createMonkFlight(s, world.pick(), map, world.flightRng)
         }
       }
@@ -125,42 +109,22 @@ export function Monks({ map, monks, flying = false, characterScale = 1 }: { map:
         }
         s.flight = undefined
         s.flightWait = monkGroundTime(world.flightRng)
-        s.route = world.wander.route(s, world.pick())
-        s.pause = PAUSE_MIN_SECONDS + world.rng() * (PAUSE_MAX_SECONDS - PAUSE_MIN_SECONDS)
+        s.route = []
+        s.pause = 2 + world.rng() * 5
+        s.activity = "resting"
+        s.destination = "grounds"
+        s.outings = 0
       }
       if (exhaust) exhaust.visible = false
       group.rotation.x = 0
 
-      if (s.pause > 0) {
-        s.pause -= dt
-        const nearRelic =
-          !!world.centre && Math.hypot(s.x - world.centre.x, s.z - world.centre.z) <= world.vigilRadius
-        group.userData.activity = nearRelic ? "vigil" : "resting"
-        world.activities.set(monks[i].id, group.userData.activity)
-        if (nearRelic && world.centre) group.rotation.y = Math.atan2(world.centre.x - s.x, world.centre.z - s.z)
-      } else {
-        group.userData.activity = "walking"
-        world.activities.set(monks[i].id, "walking")
-        const target = s.route[0] ?? s
-        const dx = target.x - s.x
-        const dz = target.z - s.z
-        const dist = Math.hypot(dx, dz)
-        const step = monkWalkSpeed(characterScale) * dt
-        if (dist <= step) {
-          s.x = target.x
-          s.z = target.z
-          s.y = target.y
-          s.route.shift()
-          if (!s.route.length) {
-            s.route = world.wander.route(s, world.pick())
-            s.pause = PAUSE_MIN_SECONDS + world.rng() * (PAUSE_MAX_SECONDS - PAUSE_MIN_SECONDS)
-          }
-        } else {
-          s.x += (dx / dist) * step
-          s.z += (dz / dist) * step
-          s.y += (target.y - s.y) * Math.min(1, step / dist)
-          group.rotation.y = Math.atan2(dx, dz)
-        }
+      stepMonkRoutine(s, world.wander, world.rng, monkWalkSpeed(characterScale), dt)
+      group.userData.activity = s.activity
+      world.activities.set(monks[i].id, s.activity)
+      if (s.activity === "praying" && world.centre) {
+        group.rotation.y = Math.atan2(world.centre.x - s.x, world.centre.z - s.z)
+      } else if (Math.hypot(s.x - previousX, s.z - previousZ) > 0) {
+        group.rotation.y = Math.atan2(s.x - previousX, s.z - previousZ)
       }
       const y = walkingSurface(map, s.x, s.z).height
       s.y = y

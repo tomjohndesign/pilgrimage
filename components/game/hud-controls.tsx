@@ -6,7 +6,8 @@ import * as Tooltip from "@radix-ui/react-tooltip"
 import { Coins, Footprints, Hammer, House, Pause, Play, Sparkles, Users, X } from "lucide-react"
 
 import type { useSettlement } from "@/hooks/use-settlement"
-import { buildCatalog, buildingIncomeLabel, type BuildId } from "@/lib/game/balance"
+import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
+import { BuildThumbnail } from "./build-thumbnail"
 import { influenceRadius } from "@/lib/game/build-influence"
 import { canAfford, placementError } from "@/lib/game/settlement"
 import { useCameraStore } from "@/lib/game/camera-store"
@@ -49,10 +50,6 @@ export function HudResources({ economy, settlers, open, onToggle }: {
       </button>
     </HudHelp>
   </div>
-}
-
-const BUILD_ICONS: Record<BuildId, string> = {
-  lumberCamp: "camp", shelter: "inn", workshop: "tavern", hall: "inn", garden: "garden", cross: "cross",
 }
 
 /** Small illustrated commands use the live economy's catalogue and placement rules.
@@ -99,7 +96,7 @@ export function BuildControls({ economy, open, onToggle, onClose }: {
             <button type="button" className="hud-building-tile" aria-label={`Build ${item.label.toLowerCase()}`}
               aria-pressed={buildType === item.id} aria-disabled={unavailable}
               onClick={() => { if (!unavailable) chooseBuild(buildType === item.id ? null : item.id) }}>
-              <Image src={`/game-icons/${BUILD_ICONS[item.id]}.svg`} alt="" width={54} height={49} />
+              <BuildThumbnail id={item.id} />
               {item.id === "lumberCamp" && <kbd>L</kbd>}
             </button>
           </HudHelp>
