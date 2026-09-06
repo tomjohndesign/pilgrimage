@@ -149,18 +149,29 @@ On the road, **Base size** and **Draft size** independently scale the current sp
 
 Version 3’s longer 0.62-unit foot sweep remains the starting gait. Parameters constrain step reach to the available leg length, retaining planted feet and fixed bones. Earlier exports remain available.
 
-## Walking controls
+## Walking controls and stride authoring
 
-Play defaults to **Base size 150%**, **Pace 0.5**, and **Anim FPS 8**. The **Walking** panel now separates:
+Follow [Walking rig and stride rules](WALKING.md) for every new character,
+variant and outfit, including monks. The shared rig now drives walking and
+carrying with 20 poses per cycle, a pelvis that follows the supporting leg,
+and foot contacts anchored between displayed frames. Long robe and dress hems
+stay at ankle height as the pelvis rises.
 
-- **Timing — Match travel** (default): cycle phase follows actual distance moved. **Stride** is world tiles per complete left/right cycle at the reference size (150% for the base, 100% for drafts); changing character size scales this distance proportionally. Longer strides produce fewer cycles per tile. It calibrates the baked gait against world travel, without stretching individual images. FPS caps displayed frame changes.
-- **Timing — Fixed FPS**: the earlier independent cadence, for direct comparison. Stride has no effect in this mode.
-- **Variation**: smooth deterministic changes in each person's pace, default ±15% maximum, with different rhythms per identity. Zero gives steady pace.
-- **Path ease**: short curves around road corners, eased heading changes, and eased departures/arrivals at camps and shops. Curves stay inside neighboring path tiles; changing heights retain the original bridge ramp interpolation. Zero restores the linear path.
-- **Accel**: response time in seconds for starts and changes in pace. Zero is immediate.
+Play defaults to Base size 150%, approximately 0.318 reference tiles/second,
+and 0.353 reference tiles per full left/right cycle. Speed and stride scale
+with each person's authored step reach and size, including monks. The default
+cadence is 108 steps/minute before personal pace differences. Distance timing
+is the normal game mode; Fixed FPS is available for comparison. Animation FPS
+must not cap distance-driven poses. Other activities retain their own frame
+counts and playback rates.
 
-Settings save in the URL as `timing=distance|fps`, `stride`, `variation`, `easing`, `acceleration`, `speed`, and `fps`. Changes do not recreate the simulation. Movement tuning applies inside the simulation, so selected stats and rendered positions agree. Map-edge wraps reset the animation distance sample instead of counting a teleport as a stride. Idle uses its dedicated sheet and stops advancing the cycle.
+The Walking controls expose timing, reference pace, reference stride, pace
+variation, path easing and acceleration. Settings save in the Play URL as
+`timing`, `speed`, `stride`, `fps`, `variation`, `easing`, and `acceleration`.
+Defaults use an 8% pace variation, and do not recreate the simulation when
+adjusted. Pause freezes movement, phase and the current foot contact. Teleports
+reset the distance sample and release the old contact.
 
-The initial 0.44-tile cycle matches the new 0.62-unit foot sweep over the 60% planted portion of the gait, converted by the 1.48-world-unit cell scale / 3.4667 camera extent. Tune it by watching the planted foot against the road.
-
-The renderer shares one compiled outline shader across travelers using an ID uniform and updates atlas state only when needed. Motion tests check distance/cadence independence, speed easing, bounded pace variation and continuous corner geometry. Rig tests check limb lengths, planted feet, handedness, attachment registration and loop closure.
+The current shared exports are base v14, population v5 and monks v5. Earlier
+version-specific export examples above document the archived assets; use fresh
+version numbers and the commands in [WALKING.md](WALKING.md) for new work.

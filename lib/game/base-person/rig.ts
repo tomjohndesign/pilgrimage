@@ -2,7 +2,7 @@ import * as THREE from "three"
 import { gatheringMotion } from "./gathering"
 import { woodcuttingMotion, woodcuttingProfile } from "./woodcutting"
 import { personRecipe } from "./design"
-import { armAngle, legPose, SOCKET_NAMES, type BaseClip, type BodySide, type Point3, type SocketName } from "./pose"
+import { armAngle, legPose, pelvisHeight, SOCKET_NAMES, type BaseClip, type BodySide, type Point3, type SocketName } from "./pose"
 
 /** One authored body; all directions, poses and future outfits reuse this rig. */
 export function createBasePersonRig(recipe = personRecipe()) {
@@ -450,7 +450,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       headPivot.rotation.x = devotional ? 0.42 : 0
       const seated = clip === "sitting", praying = clip === "praying"
       const sleep = clip === "sleeping", chop = clip === "woodcutting", gather = clip === "gathering"
-      const drop = seated ? 0.25 - b.hipHeight : praying ? 0.1 + b.thighLength * 0.9 - b.hipHeight : gather ? 0.22 - b.hipHeight : 0
+      const drop = pelvisHeight(phase, clip, b) - b.hipHeight
       poseRoot.rotation.set(sleep ? -Math.PI / 2 : 0, sleep && female ? Math.PI / 2 : 0, 0)
       poseRoot.position.set(0, sleep ? female ? b.shoulderOffset + 0.06 : b.torsoTop * 0.78 : 0, sleep ? (b.headCenter + b.headHeight) / 2 + 0.03 : 0)
       body.position.y = b.hipHeight + drop
@@ -474,6 +474,9 @@ export function createBasePersonRig(recipe = personRecipe()) {
         for (let i = 0; i < positions.count; i++) {
           const y = rest[i * 3 + 1], z = rest[i * 3 + 2]
           const weight = Math.max(0, (waist - y) / (waist - b.tunicHem))
+          // Let the torso ride over the supporting leg while long hems remain
+          // ankle-length. The cloth lengthens below the waist, not at the neck.
+          const standingY = longGarment && !sleep ? y - drop * Math.min(1, weight) : y
           // The robe and hanging rope ends drape together over bent knees.
           const drapeZ = z + ((seated ? 0.48 : praying || gather ? 0.19 : 0) * weight) +
             (longGarment && (clip === "walk" || clip === "carrying") ? wave * 0.035 * recipe.design.stride * weight * weight : 0)
@@ -482,12 +485,12 @@ export function createBasePersonRig(recipe = personRecipe()) {
             // Keep the hem around the planted legs as the chest bends into the blow.
             // Counter-rotate progressively below the waist, anchoring the hem fully.
             const angle = -body.rotation.x * Math.min(1, weight)
-            const localY = y - b.hipHeight
+            const localY = standingY - b.hipHeight
             const localZ = drapeZ * (geometry === torso.geometry ? torso.scale.z : 1)
             positions.setY(i, b.hipHeight + localY * Math.cos(angle) - localZ * Math.sin(angle))
             positions.setZ(i, (localY * Math.sin(angle) + localZ * Math.cos(angle)) / (geometry === torso.geometry ? torso.scale.z : 1))
           } else {
-            positions.setY(i, seated || praying || gather ? Math.max(y, 0.07 - drop, groundY) : y)
+            positions.setY(i, seated || praying || gather ? Math.max(y, 0.07 - drop, groundY) : standingY)
             positions.setZ(i, drapeZ)
           }
         }
@@ -527,7 +530,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       }
       // Long garments cover bent legs too; expose only the toes below the draped hem.
       const hemHeight = longGarment && (seated || praying || gather) ? 0.08 :
-        seated || praying || gather || (chop && !longGarment) ? 10 : b.tunicHem + 0.012
+        seated || praying || gather || (chop && !longGarment) ? 10 : b.tunicHem + (longGarment ? 0 : drop) + 0.012
       hemPlane.set(new THREE.Vector3(0, -1, 0), hemHeight)
       hemPlane.applyMatrix4(poseRoot.matrixWorld)
       root.updateMatrixWorld(true)

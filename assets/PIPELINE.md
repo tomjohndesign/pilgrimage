@@ -1,12 +1,13 @@
 # Texture, sprite, and sound pipeline
 
-**Current character work: [the shared base person](BASE_PERSON.md).** It uses
+**Current character work: [the shared base person](BASE_PERSON.md).**
+All character additions must follow [the walking rig and stride rules](WALKING.md). It uses
 64px padded cells and a visible 30–35px figure, rendered from one rig for consistent
 proportions and attachment points. The map uses calling-colored clothing and six
-male/female body profiles with stable individual size variations. Review and edit
+male/female body profiles at the same shared size as resident monks. Review and edit
 the foundation at `/assets/characters`; browse the shipped population at
-`/assets/textures#characters`. Export new versions with `npm run assets:population -- v2`
-and validate with `npm run assets:check-population -- v2` (see the base-person
+`/assets/textures#characters`. Export to an unused version with `npm run assets:population -- vNEXT`
+and validate with `npm run assets:check-population -- vNEXT` (see the base-person
 export instructions for the development server URL). The older
 imagegen outfits below are drafts, now at `/assets/characters/callings`.
 

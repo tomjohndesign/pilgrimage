@@ -48,6 +48,7 @@ export function Travelers({
   map,
   travelers,
   speed,
+  speedScales,
   characterModel = "callings",
   characterScale = 1,
   characterFps,
@@ -62,8 +63,9 @@ export function Travelers({
   relic: Relic
   trees: TreePlacement[]
   shrineRenown: number
-  /** Base walking speed in tiles per second; each traveler's pace scales it. */
+  /** Reference walking speed in tiles per second, scaled by size and personal pace. */
   speed: number
+  speedScales?: ReadonlyMap<number, number>
   /** Swaps only the figure; identities, simulation and selection sounds stay shared. */
   characterModel?: CharacterModel
   /** Uniform size multiplier; leaves the sprite's foot anchor fixed. */
@@ -122,7 +124,7 @@ export function Travelers({
     // Keep each tick bounded at faster speeds, including work and routing.
     if (!playback.paused) {
       for (let tick = 0; tick < playback.speed; tick++) {
-        stepSim(sim, travelers, map, speed, Math.min(delta, 0.1), movement)
+        stepSim(sim, travelers, map, speed, Math.min(delta, 0.1), movement, speedScales)
       }
     }
     resourceElapsed.current += delta

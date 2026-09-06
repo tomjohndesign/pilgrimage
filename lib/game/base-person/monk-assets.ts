@@ -1,4 +1,5 @@
-import manifest from "../../../public/textures/characters/monks/v4/manifest.json"
+import manifest from "../../../public/textures/characters/monks/v5/manifest.json"
+import { DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE, personWalkStride, walkSpeedScale } from "./gait"
 import { actionPlaybackRate } from "./activity"
 import { ACTION_CLIPS } from "./pose"
 import { personRecipe, validatePersonDesign } from "./design"
@@ -19,4 +20,11 @@ export const MONK_VISUAL: ReturnType<typeof populationVisual> = {
   rowOffset: 0,
   strideRatio: personRecipe(validatePersonDesign(manifest.design)).body.stride / personRecipe().body.stride,
   design: validatePersonDesign(manifest.design),
+  walkStride: personWalkStride(validatePersonDesign(manifest.design), 0.74 * manifest.cellSize / 48, manifest.camera.viewSize),
 }
+
+/** Use the same size setting as travelers for both rendered stride and travel. */
+export function monkWalkSpeed(characterScale: number): number {
+  return DEFAULT_WALK_SPEED * walkSpeedScale(MONK_VISUAL.walkStride, characterScale)
+}
+export const MONK_WALK_TUNING = { sync: true, stride: DEFAULT_WALK_STRIDE }

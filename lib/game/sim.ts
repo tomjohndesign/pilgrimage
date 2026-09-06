@@ -651,6 +651,8 @@ export function stepSim(
   baseSpeed: number,
   dt: number,
   movement: MovementTuning = LINEAR_MOVEMENT,
+  /** Rendered stride relative to the reference person, keyed by traveler ID. */
+  speedScales?: ReadonlyMap<number, number>,
 ): void {
   if (!map.road || map.road.length < 2) return
   const length = map.road.length - 1
@@ -690,7 +692,7 @@ export function stepSim(
       }
     }
 
-    const targetSpeed = t.pace * baseSpeed * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+    const targetSpeed = t.pace * baseSpeed * (speedScales?.get(t.id) ?? 1) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
     s.moveSpeed = camping || sheltered || s.activity === "working" || s.activity === "vending" ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed

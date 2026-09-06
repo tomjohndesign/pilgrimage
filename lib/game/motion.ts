@@ -12,7 +12,7 @@ export interface MovementTuning {
 
 /** Zero tuning retains the original simulation for callers and saved tests. */
 export const LINEAR_MOVEMENT: MovementTuning = { variation: 0, pathEase: 0, acceleration: 0 }
-export const DEFAULT_MOVEMENT: MovementTuning = { variation: 0.15, pathEase: 0.65, acceleration: 0.35 }
+export const DEFAULT_MOVEMENT: MovementTuning = { variation: 0.08, pathEase: 0.65, acceleration: 0.35 }
 
 /** Smooth, bounded changes in pace, with a repeatable rhythm for each person. */
 export function paceVariation(id: number, seconds: number, amount: number): number {

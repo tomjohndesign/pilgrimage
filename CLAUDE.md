@@ -10,6 +10,15 @@
   increase unbounded render-target sizes to enforce this visual rule. Check the
   result beside a character at the same zoom, including selection and overlap.
 
+- **All new walking characters use the shared leg rig and ground contacts.**
+  Follow [assets/WALKING.md](assets/WALKING.md) for stride calculation, knee
+  posture, movement timing, and validation. Travelers, monks, new outfits and
+  carrying poses must use the same distance-driven walk and planted-foot logic.
+  Derive travel speed from the rendered rig's stride and scale; do not copy a
+  magic speed or stride from another character. Regenerate every affected
+  character family after rig changes, using fresh asset versions. Keep action
+  frame counts and timing from the selected asset's metadata.
+
 - **Property panels are opt-in development tools.** For a branch that needs the
   World tuning sidebar, set `NEXT_PUBLIC_PROPERTY_PANELS=1` in that workspace's
   gitignored `.env.local` and restart `npm run dev` (or run
