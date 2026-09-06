@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "87bcd3dbbe6b9f701bd2af78b5256a8725fec458",
-  "releaseCount": 48,
+  "lastProcessedCommit": "99b07db04e5a9fafabec971119412a74dfa17c02",
+  "releaseCount": 49,
   "releases": [
+    {
+      "version": "0.0.63",
+      "title": "Release 0.0.63",
+      "summary": "Keep lumber workers working between deliveries and unify stump artwork (#80)",
+      "commit": "99b07db04e5a9fafabec971119412a74dfa17c02"
+    },
     {
       "version": "0.0.62",
       "title": "Release 0.0.62",
