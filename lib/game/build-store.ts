@@ -1,3 +1,4 @@
+import type { FoodStock } from "./storage"
 import { create } from "zustand"
 
 import type { SimState } from "./sim"
@@ -14,6 +15,7 @@ interface BuildState {
   /** Placement indices of trees that have been cut. */
   felled: ReadonlySet<number>
   treeResources: ReadonlyMap<number, TreeResource>
+  foodStores: ReadonlyMap<string, FoodStock>
   piles: readonly WoodPile[]
   time: number
   resourceRevision: number
@@ -32,6 +34,7 @@ const emptyState = () => ({
   tool: null,
   felled: new Set<number>(),
   treeResources: new Map<number, TreeResource>(),
+  foodStores: new Map<string, FoodStock>(),
   piles: [] as WoodPile[],
   time: 0,
   resourceRevision: -1,
@@ -61,6 +64,8 @@ export const useBuildStore = create<BuildState>((set) => ({
       visits: sim.visits,
       settlers: JSON.stringify(s.settlers) === JSON.stringify(settlers) ? s.settlers : settlers,
       time: sim.time,
+      ...(s.foodStores.size !== sim.foodStores.size || Array.from(sim.foodStores).some(([id, stock]) => s.foodStores.get(id) !== stock)
+        ? { foodStores: new Map(sim.foodStores) } : {}),
       ...(s.simulation !== sim || s.resourceRevision !== sim.resourceRevision ? {
         resourceRevision: sim.resourceRevision,
         felled: s.simulation === sim && s.felled.size === sim.felled.size ? s.felled : new Set(sim.felled),

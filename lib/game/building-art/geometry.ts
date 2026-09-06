@@ -6,7 +6,7 @@ import { HOVEL_DOOR_HEIGHT, HOVEL_DOOR_WIDTH } from "../world-scale"
 export type Vec3 = [number, number, number]
 export interface BuildingPart {
   name: string
-  layer: "base" | "wall" | "roof"
+  layer: "base" | "interior" | "wall" | "roof"
   position: Vec3
   size?: Vec3
   rotation?: Vec3

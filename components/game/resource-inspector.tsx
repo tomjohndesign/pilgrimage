@@ -49,9 +49,9 @@ export function ResourceInspector({ selection }: { selection: Extract<Selection,
     content = <>
       <Row label="Stored timber">{pile.wood} wood</Row>
       <Row label="Stacked logs">{pileLogCount(pile.wood)} · {WOOD_PER_LOG} wood each</Row>
-      <Row label="Location">Lumber camp</Row>
+      <Row label="Location">Timber storage</Row>
       <Row label="Camp stock">{Array.from(sim.piles.values()).filter((p) => p.campId === pile.campId).reduce((sum, p) => sum + p.wood, 0)} wood</Row>
-      <p className="mt-2 italic text-ink-light">Delivered here by the camp’s woodcutters.</p>
+      <p className="mt-2 italic text-ink-light">Delivered here by the settlement’s woodcutters.</p>
     </>
   }
   return <div className="hud-inspector-content w-[250px] border border-rule bg-parchment/95 px-4 py-3 text-[11px] text-ink">

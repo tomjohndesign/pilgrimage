@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { Box3, BoxGeometry, BufferGeometry, Euler, Float32BufferAttribute, Matrix4, Quaternion, Vector3 } from "three"
 import { BUILD_CATALOG } from "../balance"
 import { PROTOTYPE_BUILDINGS } from "../map/prototype-map"
-import { structureParts } from "./structure"
+import { structureParts, visibleStructureParts, shrineStructureParts } from "./structure"
 import type { BuildingPart } from "./geometry"
 
 function bounds(part: BuildingPart) {
@@ -59,15 +59,33 @@ describe("settlement construction", () => {
     for (const parts of [shelter, workshop]) expect(parts.some(part => part.name.includes("cross-"))).toBe(false)
   })
 
-  it("keeps scenery roofless and the lumber yard clear for live timber stacks", () => {
-    expect(partsFor("garden").some(part => part.name.startsWith("herb-"))).toBe(true)
-    expect(partsFor("cross").some(part => part.name === "cross-footing")).toBe(true)
-    for (const id of ["garden", "cross", "lumberCamp"]) expect(partsFor(id).some(part => part.layer === "roof")).toBe(false)
-    const yard = partsFor("lumberCamp")
-    expect(yard.some(part => part.name.startsWith("firewood-"))).toBe(false)
-    // Beyond the ground surface, the existing storage area and front entrance stay open.
-    const storage = new Box3(new Vector3(-.8, .12, -.7), new Vector3(.8, 1.5, 1))
-    expect(yard.some(part => bounds(part).intersectsBox(storage))).toBe(false)
+  it("keeps scenery roofless and provides a covered store with room for live stocks", () => {
+    for (const id of ["garden", "cross"]) expect(partsFor(id).some(part => part.layer === "roof")).toBe(false)
+    const store = partsFor("storehouse")
+    expect(store.some(p => p.layer === "roof")).toBe(true)
+    expect(store.some(p => p.name === "grain-sack" || p.name.startsWith("firewood-"))).toBe(false)
+  })
+
+  it("reveals furnished interiors when selected and restores the complete shell on deselection", () => {
+    for (const def of catalogue.filter(b => b.category === "buildings")) {
+      const parts = structureParts(def), inside = visibleStructureParts(parts, true)
+      expect(inside.some(p => p.layer === "wall" || p.layer === "roof")).toBe(false)
+      expect(inside.some(p => p.name === "floor")).toBe(true)
+      expect(visibleStructureParts(parts, false)).toBe(parts)
+    }
+    const workshop = visibleStructureParts(partsFor("workshop"), true)
+    expect(workshop.some(p => p.name === "workbench-seat")).toBe(true)
+    expect(workshop.some(p => p.name === "axe-head")).toBe(true)
+  })
+
+  it("covers the shrine while retaining its four gates and revealed relic table", () => {
+    const parts = shrineStructureParts(3, 3)
+    expect(new Set(parts.map(p => p.name)).size).toBe(parts.length)
+    expect(parts.some(p => p.layer === "roof")).toBe(true)
+    expect(parts.filter(p => p.name.startsWith("open-gate-"))).toHaveLength(4)
+    const inside = visibleStructureParts(parts, true)
+    expect(inside.some(p => p.name === "relic-table")).toBe(true)
+    expect(inside.some(p => p.layer === "roof")).toBe(false)
   })
 
   it("gives untyped legacy map buildings the shared hut construction", () => {
