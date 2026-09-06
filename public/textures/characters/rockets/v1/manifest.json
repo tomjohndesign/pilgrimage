@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "templateVersion": 24,
+  "cellSize": 64,
+  "anchor": [
+    32,
+    48.5
+  ],
+  "camera": {
+    "pitch": 35.264389682754654,
+    "viewSize": 3.466666666666667
+  },
+  "directions": [
+    "S",
+    "SW",
+    "W",
+    "NW",
+    "N",
+    "NE",
+    "E",
+    "SE"
+  ],
+  "frameCounts": {
+    "idle": 1,
+    "walk": 20,
+    "sleeping": 16,
+    "sitting": 8,
+    "praying": 8,
+    "treeFelling": 24,
+    "woodcutting": 64,
+    "gathering": 24,
+    "carrying": 20,
+    "flying": 8
+  },
+  "flightFps": 12,
+  "safePadding": 4
+}

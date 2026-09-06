@@ -43,13 +43,25 @@ export function pickFlightTarget(map: GameMap, rng: () => number): FlightPoint {
   }
 }
 
+/** Recall safely: finish clearing the canopy, then take the direct route home. */
+export function recallMonkFlight(flight: MonkFlight) {
+  flight.cruiseRemaining = 0
+  if (flight.phase === "cruising") {
+    flight.phase = "returning"
+    flight.target = { ...flight.home, y: FLIGHT_ALTITUDE }
+  }
+}
+
 /** A short cruise, a return above the shrine, then a vertical landing on open ground. */
 export function stepMonkFlight(flight: MonkFlight, map: GameMap, rng: () => number, delta: number) {
   const dt = Math.max(0, Math.min(delta, 0.1))
   if (flight.phase === "landed") return
   if (flight.phase === "climbing") {
     flight.y = Math.min(FLIGHT_ALTITUDE, flight.y + CLIMB_SPEED * dt)
-    if (flight.y >= FLIGHT_ALTITUDE) flight.phase = "cruising"
+    if (flight.y >= FLIGHT_ALTITUDE) {
+      flight.phase = "cruising"
+      if (flight.cruiseRemaining <= 0) recallMonkFlight(flight)
+    }
     return
   }
   if (flight.phase === "landing") {

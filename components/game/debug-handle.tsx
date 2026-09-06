@@ -15,7 +15,6 @@ import type { MovementTuning } from "@/lib/game/motion"
 import type { EntState } from "@/lib/game/trees/ents"
 
 import { outlineFrameRef } from "./outline-pass"
-import { ROCKET_EXHAUST_NAME } from "./monk-rocket-gear"
 
 /**
  * Exposes a small handle on `window` so the scene can be driven deterministically
@@ -97,8 +96,8 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
           object.getWorldPosition(position)
           points.push({
             x: position.x, y: position.y, z: position.z,
-            flying: !!object.parent?.parent?.getObjectByName(ROCKET_EXHAUST_NAME)?.visible,
-            equipped: !!object.parent?.parent?.getObjectByName("monk-rocket-gear"),
+            flying: object.parent?.parent?.userData.activity === "flying",
+            equipped: object.parent?.parent?.userData.rocketPack === true,
             activity: object.parent?.parent?.userData.activity,
             phase: object.userData.walkPhase,
             columns: object instanceof THREE.Sprite ? 1 / (object.material.map?.repeat.x ?? 1) : 1,
