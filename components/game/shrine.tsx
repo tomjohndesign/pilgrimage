@@ -61,7 +61,7 @@ export function Shrine({ map, relic }: { map: GameMap; relic: Relic }) {
   return (
     <group position={[layout.centreX, layout.baseY, layout.centreZ]}>
       <group rotation={[0, layout.rotation, 0]}>
-        <BuildingModel recipe={layout.recipe} idColor={shrineId} onClick={event => selectElement({ kind: "building", id: hovel.id }, event)} />
+        <BuildingModel recipe={layout.recipe} idColor={shrineId} ink={false} onClick={event => selectElement({ kind: "building", id: hovel.id }, event)} />
       </group>
       <group ref={relicGroup}><RelicDisplay color={relic.color} idColor={relicId} onClick={select} /></group>
 

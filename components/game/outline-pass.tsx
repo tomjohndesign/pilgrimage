@@ -51,7 +51,6 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform bool uCharacterPass;
   uniform float uCharacterIdMin;
   uniform vec2 uTexel;
-  uniform vec2 uPixelOffset;
   uniform int uMode; // 1 = overlap only, 2 = full silhouette
   uniform vec3 uColor;
   uniform float uSelectedId;
@@ -90,9 +89,12 @@ const FRAGMENT_SHADER = /* glsl */ `
   }
 
   void main() {
-    // Sample selection and overlap edges on the scenery pixel grid even when
-    // character IDs are drawn at display resolution. This changes only edges.
-    vec2 pixelUv = (floor(vUv / uTexel + uPixelOffset) + 0.5 - uPixelOffset) * uTexel;
+    // IDs and depth already match the visible raster in each pass. Snapping
+    // display-resolution characters to scenery texel centres moves their edges
+    // away from the sprite and can paint ink across an occluding wall.
+    // Keep the sample on the visible pixel; uTexel still sets one world-pixel
+    // border width, just as it does for trees and buildings.
+    vec2 pixelUv = vUv;
     float idC = idAt(pixelUv);
     float dC = texture2D(tDepth, pixelUv).x;
     if (uCharacterSelected) {
@@ -228,7 +230,6 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
       uCharacterPass: { value: false },
       uCharacterIdMin: { value: MAX_OBJECT_ID - 0x2000 + 1 },
       uTexel: { value: new THREE.Vector2() },
-      uPixelOffset: { value: new THREE.Vector2() },
       uMode: { value: 0 },
       uColor: { value: new THREE.Color(OUTLINE_COLOR) },
       uSelectedId: { value: 0 },
@@ -328,12 +329,8 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
         // selections and overlap halos equally thick through zoom and DPR changes.
         if (characterPass) {
           pass.uniforms.uTexel.value.set(1 / (target.width * stage.scale.x), 1 / (target.height * stage.scale.y))
-          pass.uniforms.uPixelOffset.value.set(
-            ((1 - stage.scale.x) * 0.5 + stage.offset.x) * target.width,
-            ((1 - stage.scale.y) * 0.5 + stage.offset.y) * target.height)
         } else {
           pass.uniforms.uTexel.value.set(1 / ids.width, 1 / ids.height)
-          pass.uniforms.uPixelOffset.value.set(0, 0)
         }
         pass.uniforms.uMode.value = MODE_INT[mode]
         pass.uniforms.uSelectedId.value = selectedId
