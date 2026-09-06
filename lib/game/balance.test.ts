@@ -56,6 +56,8 @@ describe("balance presets", () => {
   it("migrates earlier version 1 presets without losing edits", () => {
     const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
     delete old.balance.rules.visitRenown
+    for (const key of ["hospitalityBaseChance", "hungerDecay", "thirstDecay", "staminaDecay"])
+      delete old.balance.rules[key]
     delete old.balance.buildings.storehouse
     old.balance.rules.startingGold = 321
     old.balance.buildings.shelter.goldCost = 17
@@ -64,6 +66,8 @@ describe("balance presets", () => {
     expect(result.balance?.rules.startingGold).toBe(321)
     expect(result.balance?.buildings.shelter.goldCost).toBe(17)
     expect(result.balance?.rules.visitRenown).toBe(0.5)
+    for (const key of ["hospitalityBaseChance", "hungerDecay", "thirstDecay", "staminaDecay"] as const)
+      expect(result.balance?.rules[key]).toBe(DEFAULT_BALANCE.rules[key])
     expect(result.balance?.buildings.storehouse).toEqual(DEFAULT_BALANCE.buildings.storehouse)
     old.balance.buildings.storehouse = { goldCost: -1 }
     expect(importBalance(JSON.stringify(old)).balance).toBeNull()
@@ -89,6 +93,19 @@ describe("balance presets", () => {
     expect(validateBalance({ rules: {}, buildings: {} }).balance).toBeNull()
     expect(importBalance('{"version":3}').error).toMatch(/version/)
     expect(importBalance("oops").error).toMatch(/JSON/)
+  })
+  it("preserves custom needs and hospitality settings and rejects invalid values", () => {
+    const balance = fresh()
+    balance.rules.hospitalityBaseChance = 0.35
+    balance.rules.hungerDecay = 0
+    balance.rules.thirstDecay = 2.5
+    balance.rules.staminaDecay = 7
+    expect(importBalance(exportBalance(balance)).balance).toEqual(balance)
+    balance.rules.hospitalityBaseChance = 1.1
+    expect(importBalance(exportBalance(balance)).balance).toBeNull()
+    balance.rules.hospitalityBaseChance = 0.35
+    balance.rules.thirstDecay = -1
+    expect(importBalance(exportBalance(balance)).balance).toBeNull()
   })
   it("rejects zero divisors, sub-second timers and unordered tiers", () => {
     for (const key of ["pietyDivisor", "relicDivisor", "drawCap", "incomeSeconds"] as const) {
