@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "2290db26c014bfa34e4d415cac4b880cafb34c4e",
-  "releaseCount": 21,
+  "lastProcessedCommit": "46330dcc30baa387260f47cb15b50cc026d1ec35",
+  "releaseCount": 22,
   "releases": [
+    {
+      "version": "0.0.36",
+      "title": "Release 0.0.36",
+      "summary": "Fix character outline artifacts and match selection border thickness (#55)",
+      "commit": "46330dcc30baa387260f47cb15b50cc026d1ec35"
+    },
     {
       "version": "0.0.35",
       "title": "Release 0.0.35",
