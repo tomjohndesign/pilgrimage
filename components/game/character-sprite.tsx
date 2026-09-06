@@ -76,7 +76,9 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
   const lastFrame = useRef({ texture: null as THREE.Texture | null, frame: -1, row: -1 })
   const outlineMaterial = useMemo(() => {
     if (!outlineColor) return null
-    const material = new THREE.SpriteMaterial({ map: textures[1], alphaTest: 0.5, toneMapped: false })
+    // SpriteMaterial defaults to transparent. Blending an ID with the background
+    // invents different objects along translucent ink edges, causing false halos.
+    const material = new THREE.SpriteMaterial({ map: textures[1], alphaTest: 0.5, transparent: false, toneMapped: false })
     // Every traveler shares one compiled ID shader; identity is a uniform.
     // Embedding IDs in shader source compiled a new program for every person.
     const id = new THREE.Vector3(...outlineColor)
