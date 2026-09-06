@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "c73c57e29a9f7b2813c0fad13792bbedc00cf792",
-  "releaseCount": 60,
+  "lastProcessedCommit": "9e759ff1592819a762a709b0e6662e243a5fe711",
+  "releaseCount": 61,
   "releases": [
+    {
+      "version": "0.0.75",
+      "title": "Release 0.0.75",
+      "summary": "Add distinct building interiors and shrine worship behavior (#94)",
+      "commit": "9e759ff1592819a762a709b0e6662e243a5fe711"
+    },
     {
       "version": "0.0.74",
       "title": "Release 0.0.74",
