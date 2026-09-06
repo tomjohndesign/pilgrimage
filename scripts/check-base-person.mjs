@@ -1,7 +1,7 @@
 import sharp from "sharp"
 import { readFileSync } from "node:fs"
 const monk = process.argv.includes("--monk")
-const version = process.argv[2] ?? (monk ? "v5" : "v14")
+const version = process.argv[2] ?? (monk ? "v7" : "v16")
 if (!/^v\d+$/.test(version)) throw new Error("Expected a version such as v1")
 const prefix = monk ? `public/textures/characters/monks/${version}/manifest` : `public/textures/characters/base/base-person-${version}`
 const metadata = JSON.parse(readFileSync(`${prefix}.json`, "utf8"))
@@ -37,7 +37,7 @@ for (const [clip, url] of Object.entries({ walk: metadata.images.walk, idle: met
       if (![socket.x, socket.y, socket.depth].every(Number.isFinite) || socket.x < 0 || socket.x > size || socket.y < 0 || socket.y > size) throw new Error("Invalid socket coordinates")
     }
     const first = metadata.clips[clip][row * columns].sockets.head
-    if ((clip === "idle" || clip === "walk") && (Math.abs(first.x - registration.sockets.head.x) > 1e-8 || Math.abs(first.y - registration.sockets.head.y) > (Number(String(metadata.version).replace(/^v/, "")) >= 14 ? 2 : 1e-8))) throw new Error("Head registration exceeds the supported pelvis rise")
+    if ((clip === "idle" || clip === "walk") && (Math.abs(first.x - registration.sockets.head.x) > (Number(String(metadata.version).replace(/^v/, "")) >= 15 ? 0.5 : 1e-8) || Math.abs(first.y - registration.sockets.head.y) > (Number(String(metadata.version).replace(/^v/, "")) >= 14 ? 2 : 1e-8))) throw new Error("Head registration exceeds the supported walk bob and turn")
   }
 }
 console.log(`${monk ? "Monk" : "Base"} ${version}: ${Object.values(metadata.clips).reduce((sum, frames) => sum + frames.length, 0)} frames, ${minHeight}–${maxHeight}px figures, fixed palette, transparent margins and registered attachments.`)

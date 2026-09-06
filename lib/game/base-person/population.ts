@@ -25,9 +25,9 @@ export function travelerAppearance(seed: number, id: number): TravelerAppearance
     scale: 1, bodyType: female ? "Female" : "Male" }
 }
 
-export function populationDesign(type: Pick<TravelerTypeDef, "color">, variant: number, base: PersonDesign = DEFAULT_DESIGN): PersonDesign {
+export function populationDesign(type: Pick<TravelerTypeDef, "id" | "color">, variant: number, base: PersonDesign = DEFAULT_DESIGN): PersonDesign {
   const profile = POPULATION_PROFILES[variant]
-  const design = { ...base, bodyType: profile.bodyType, tunicColor: type.color,
+  const design = { ...base, footwear: type.id === "peasant" ? "Sandals" as const : "Boots" as const, bodyType: profile.bodyType, tunicColor: type.color,
     hairStyle: profile.hair, beard: profile.bodyType === "Male" && (base.beard || variant === 2) }
   for (const [key, delta] of Object.entries(profile.deltas) as [DesignKey, number][]) {
     const range = DESIGN_CONTROLS[key]

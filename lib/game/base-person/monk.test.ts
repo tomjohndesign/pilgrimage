@@ -50,7 +50,7 @@ describe("parametric monks", () => {
     } finally { rig.dispose() }
   })
 
-  it("walks with a bowed head, folded hands and small bare feet", () => {
+  it("walks with a bowed head, folded hands and small boots", () => {
     const recipe = personRecipe(PERSON_PRESETS.Monk), rig = createBasePersonRig(recipe)
     const natural = createBasePersonRig(personRecipe({ ...PERSON_PRESETS.Monk, walkStyle: "Natural" }))
     try {
@@ -58,15 +58,15 @@ describe("parametric monks", () => {
       expect(recipe.body.footLength).toBeLessThan(defaultBody.footLength * 0.8)
       expect(recipe.body.footWidth).toBeLessThan(defaultBody.footWidth * 0.8)
       const foot = rig.root.getObjectByName("left-foot") as THREE.Mesh
-      expect((foot.material as THREE.MeshLambertMaterial).color.getHexString()).toBe(recipe.palette.skin.slice(1))
+      expect((foot.material as THREE.MeshLambertMaterial).color.getHexString()).toBe("785637")
       let firstHands: number[][] | undefined
       for (let i = 0; i <= 8; i++) {
         rig.pose(i / 8, "walk"); natural.pose(i / 8, "walk")
         const left = rig.sockets.leftHand.getWorldPosition(new THREE.Vector3())
         const right = rig.sockets.rightHand.getWorldPosition(new THREE.Vector3())
         expect(left.distanceTo(right)).toBeLessThan(0.1)
-        const rise = pelvisHeight(i / 8, "walk", recipe.body) - recipe.body.hipHeight
-        const hands = [left.toArray(), right.toArray()].map(([x, y, z]) => [x, y - rise, z])
+        const chest = rig.root.getObjectByName("chest-pivot")!
+        const hands = [left, right].map(hand => chest.worldToLocal(hand.clone()).toArray())
         if (firstHands) hands.forEach((hand, j) => hand.forEach((v, k) => expect(v).toBeCloseTo(firstHands![j][k], 10)))
         else firstHands = hands
         expect(rig.sockets.head.getWorldPosition(new THREE.Vector3()).y)

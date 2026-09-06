@@ -2,7 +2,7 @@ import * as THREE from "three"
 import { gatheringMotion } from "./gathering"
 import { woodcuttingMotion, woodcuttingProfile } from "./woodcutting"
 import { personRecipe } from "./design"
-import { armAngle, legPose, pelvisHeight, SOCKET_NAMES, type BaseClip, type BodySide, type Point3, type SocketName } from "./pose"
+import { armAngle, legPose, pelvisHeight, walkBody, SOCKET_NAMES, type BaseClip, type BodySide, type Point3, type SocketName } from "./pose"
 
 /** One authored body; all directions, poses and future outfits reuse this rig. */
 export function createBasePersonRig(recipe = personRecipe()) {
@@ -47,8 +47,9 @@ export function createBasePersonRig(recipe = personRecipe()) {
   const hemPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), b.tunicHem + 0.012)
   const legCloth = material(female ? palette.skin : recipe.design.trouserColor)
   legCloth.clippingPlanes = [hemPlane]
-  const bareFoot = material(palette.skin)
-  bareFoot.clippingPlanes = [hemPlane]
+  const leather = material("#785637"), soleMaterial = material("#503b2b")
+  const footSkin = material(palette.skin)
+  if (longGarment) for (const m of [leather, soleMaterial, footSkin]) m.clippingPlanes = [hemPlane]
   const leftLegDebug = material("#329bc2"), rightLegDebug = material("#db7540")
   leftLegDebug.clippingPlanes = rightLegDebug.clippingPlanes = [hemPlane]
   // Authored contour: shoulder, chest, pinched waist and a flared skirt.
@@ -241,7 +242,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
     socket(side === "left" ? "leftHand" : "rightHand", elbow, [0, -b.forearmLength - 0.04 * recipe.design.hands, 0])
     const thigh = mesh(new THREE.CylinderGeometry(b.thighWidth, b.shinWidth, 1, 6), legCloth, root)
     const shin = mesh(new THREE.CylinderGeometry(b.shinWidth, b.shinWidth * 0.8, 1, 6), legCloth, root)
-    // Rounded heel and broad forefoot, with no sole or boot cuff.
+    // Keep the authored sole envelope and ground contact for both shoe styles.
     const sole = new THREE.Shape()
     sole.moveTo(-b.footWidth * 0.28, -b.footLength * 0.42)
     sole.quadraticCurveTo(0, -b.footLength * 0.50, b.footWidth * 0.28, -b.footLength * 0.42)
@@ -254,19 +255,37 @@ export function createBasePersonRig(recipe = personRecipe()) {
       bevelThickness: 0.012, bevelSize: 0.012, bevelSegments: 1, curveSegments: 3, steps: 1 })
     footGeometry.rotateX(Math.PI / 2)
     footGeometry.translate(0, b.footHeight / 2, 0)
-    const foot = mesh(footGeometry, skin, root)
+    const foot = mesh(footGeometry, recipe.design.footwear === "Sandals" ? footSkin : leather, root)
     foot.name = `${side}-foot`
     thigh.name = `${side}-${female ? "leg" : "trouser"}-upper`
     shin.name = `${side}-${female ? "leg" : "trouser"}-lower`
-    if (longGarment) {
-      foot.material = bareFoot
-      foot.userData.clipAboveHem = true
+    const outsole = mesh(footGeometry.clone(), soleMaterial, foot)
+    outsole.name = `${side}-sole`
+    outsole.scale.y = 0.28
+    outsole.position.y = -b.footHeight * 0.36
+    const shoeParts = [outsole]
+    if (recipe.design.footwear === "Sandals") {
+      for (const z of [-0.12, 0.25]) {
+        const strap = mesh(new THREE.BoxGeometry(b.footWidth * 0.88, 0.024, b.footLength * 0.14), leather, foot,
+          [0, b.footHeight * 0.5, b.footLength * z])
+        strap.name = `${side}-sandal-strap`
+        shoeParts.push(strap)
+      }
+    } else {
+      const cuff = mesh(new THREE.CylinderGeometry(b.shinWidth * 1.06, b.shinWidth * 0.95, 0.15, 8), leather, foot,
+        [0, b.footHeight * 0.5 + 0.055, -b.footLength * 0.22])
+      cuff.name = `${side}-boot-cuff`
+      shoeParts.push(cuff)
+    }
+    for (const part of [foot, ...shoeParts]) {
+      part.userData.clipAboveHem = longGarment
+      part.userData.inkPart = side === "left" ? 6 : 7
     }
     for (const part of [thigh, shin]) part.userData.clipAboveHem = true
     for (const part of [seam, sleeve, forearm, hand]) part.userData.inkPart = side === "left" ? 8 : 9
     for (const part of [thigh, shin, foot]) part.userData.inkPart = side === "left" ? 6 : 7
-    for (const object of [seam, sleeve, forearm, hand, thigh, shin, foot]) tracked.push({ mesh: object, normal: object.material, side })
-    return { side, shoulder, elbow, thigh, shin, foot, armSkin, armTunic, armParts: [seam, sleeve, forearm, hand] }
+    for (const object of [seam, sleeve, forearm, hand, thigh, shin, foot, ...shoeParts]) tracked.push({ mesh: object, normal: object.material, side })
+    return { side, shoulder, elbow, thigh, shin, foot, seam, seamStart, sleeve, forearm, hand, rear: false, armSkin, armTunic, armParts: [seam, sleeve, forearm, hand] }
   })
   // Separate the upper body at the hips, keeping all outfit pieces and sockets together.
   const body = new THREE.Group(), poseRoot = new THREE.Group()
@@ -275,6 +294,19 @@ export function createBasePersonRig(recipe = personRecipe()) {
     if (legMeshes.has(child as THREE.Mesh)) poseRoot.add(child)
     else { body.add(child); child.position.y -= b.hipHeight }
   }
+  body.name = "pelvis"
+  const chest = new THREE.Group()
+  chest.name = "chest-pivot"
+  chest.position.y = waist - b.hipHeight
+  // The torso mesh twists continuously; rigid head/arm attachments follow its top.
+  for (const child of [...body.children]) {
+    if (child === torso || child.name.startsWith("rope-") ||
+      child === sockets.leftHip || child === sockets.rightHip ||
+      (child instanceof THREE.Mesh && child.material === beltMaterial)) continue
+    chest.add(child)
+    child.position.y -= chest.position.y
+  }
+  body.add(chest)
   body.position.y = b.hipHeight
   poseRoot.add(body); root.add(poseRoot)
   const chopping = woodcuttingProfile(recipe.design)
@@ -386,6 +418,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
   // Solve both arm bones to a hand target in the upper body's coordinates.
   const reach = (limb: typeof limbs[number], target: Point3) => {
     const start = limb.shoulder.position.clone(), end = new THREE.Vector3(...target)
+    end.y -= chest.position.y
     const axis = end.clone().sub(start)
     const distance = Math.min(axis.length(), b.upperArmLength + b.forearmLength - 0.001)
     axis.normalize(); end.copy(start).addScaledVector(axis, distance)
@@ -422,10 +455,16 @@ export function createBasePersonRig(recipe = personRecipe()) {
       for (const limb of limbs) {
         const depth = (limb.side === "left" ? 1 : -1) * facing
         const rear = depth < -0.1
-        limb.armSkin.color.set(palette.skin).multiplyScalar(rear ? 0.55 : 1)
-        limb.armTunic.color.set(sleeveColor).multiplyScalar(rear ? 0.68 : 1)
+        limb.rear = rear
+        limb.armSkin.color.set(palette.skin).multiplyScalar(rear ? 0.8 : 1)
+        limb.armTunic.color.set(sleeveColor).multiplyScalar(rear ? 0.85 : 1)
         // Screen depth controls edge priority; anatomical IDs stay fixed in diagnostics.
-        for (const part of limb.armParts) part.userData.inkPart = rear ? 2 : depth > 0.1 ? 9 : 8
+        for (const part of limb.armParts) part.userData.inkPart = part === limb.seam ? 3 :
+          part === limb.hand ? (rear ? 2 : 10) : rear ? 2 : depth > 0.1 ? 9 : 8
+        // Reduce sleeve bulk, not bone length, and lower the distant attachment.
+        for (const part of [limb.sleeve, limb.forearm]) part.scale.set(rear ? 0.82 : 1, 1, rear ? 0.82 : 1)
+        limb.hand.scale.set(0.043 * recipe.design.hands * (rear ? 0.88 : 1),
+          0.06 * recipe.design.hands, 0.04 * recipe.design.hands * (rear ? 0.88 : 1))
       }
     },
     inkMask(enabled: boolean) {
@@ -446,8 +485,13 @@ export function createBasePersonRig(recipe = personRecipe()) {
       const wave = Math.sin(phase * Math.PI * 2)
       const swing = woodcuttingMotion(phase, chopping)
       const gathering = gatheringMotion(phase)
+      const motion = walkBody(phase, clip)
       const devotional = recipe.design.walkStyle === "Devotional" && clip === "walk"
       headPivot.rotation.x = devotional ? 0.42 : 0
+      headPivot.position.y = neckTop - waist + motion.headBob
+      headPivot.rotation.y = -motion.chestYaw
+      body.rotation.y = motion.hipYaw
+      chest.rotation.y = motion.chestYaw - motion.hipYaw
       const seated = clip === "sitting", praying = clip === "praying"
       const sleep = clip === "sleeping", chop = clip === "woodcutting", gather = clip === "gathering"
       const drop = pelvisHeight(phase, clip, b) - b.hipHeight
@@ -472,7 +516,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       }
       for (const { geometry, positions, rest } of drapedParts) {
         for (let i = 0; i < positions.count; i++) {
-          const y = rest[i * 3 + 1], z = rest[i * 3 + 2]
+          const x = rest[i * 3], y = rest[i * 3 + 1], z = rest[i * 3 + 2]
           const weight = Math.max(0, (waist - y) / (waist - b.tunicHem))
           // Let the torso ride over the supporting leg while long hems remain
           // ankle-length. The cloth lengthens below the waist, not at the neck.
@@ -493,6 +537,12 @@ export function createBasePersonRig(recipe = personRecipe()) {
             positions.setY(i, seated || praying || gather ? Math.max(y, 0.07 - drop, groundY) : standingY)
             positions.setZ(i, drapeZ)
           }
+          const twist = (motion.chestYaw - motion.hipYaw) * Math.max(0, Math.min(1,
+            (y - waist) / (b.chestHeight - waist)))
+          const depthScale = geometry === torso.geometry ? torso.scale.z : 1
+          const currentZ = positions.getZ(i) * depthScale
+          positions.setX(i, x * Math.cos(twist) + currentZ * Math.sin(twist))
+          positions.setZ(i, (-x * Math.sin(twist) + currentZ * Math.cos(twist)) / depthScale)
         }
         positions.needsUpdate = true
         geometry.computeVertexNormals()
@@ -502,9 +552,20 @@ export function createBasePersonRig(recipe = personRecipe()) {
         bone(limb.thigh, leg.hip, leg.knee)
         bone(limb.shin, leg.knee, leg.ankle)
         limb.foot.position.set(leg.ankle[0], leg.ankle[1] - b.ankleHeight + b.footHeight / 2, leg.ankle[2] + b.footLength * 0.22)
+        limb.shoulder.position.y = b.shoulderHeight - waist - (limb.rear ? 0.045 : 0)
+        const seamStart = limb.seamStart.clone()
+        seamStart.y -= waist
+        const seamVector = limb.shoulder.position.clone().sub(seamStart)
+        limb.seam.position.copy(seamStart).add(limb.shoulder.position).multiplyScalar(0.5)
+        limb.seam.scale.set(limb.rear ? 0.82 : 1,
+          seamVector.length() / Math.max(0.001, new THREE.Vector3((limb.side === "left" ? 1 : -1) * b.shoulderOffset, b.shoulderHeight, 0).sub(limb.seamStart).length()),
+          limb.rear ? 0.82 : 1)
+        limb.seam.quaternion.setFromUnitVectors(up, seamVector.normalize())
         limb.shoulder.rotation.set(armAngle(limb.side, phase, clip) * recipe.design.armSwing, 0,
           (limb.side === "left" ? 1 : -1) * THREE.MathUtils.degToRad(recipe.design.armAngle))
-        limb.elbow.rotation.set(-THREE.MathUtils.degToRad(recipe.design.elbowBend), 0, 0)
+        const elbowSwing = clip === "walk" ? (1 - Math.cos(phase * Math.PI * 2 +
+          (limb.side === "left" ? 0 : Math.PI) - 0.35)) * 0.14 * recipe.design.armSwing : 0
+        limb.elbow.rotation.set(-THREE.MathUtils.degToRad(recipe.design.elbowBend) - elbowSwing, 0, 0)
         const sign = limb.side === "left" ? 1 : -1
         if (devotional) reach(limb, [sign * 0.018, waist - b.hipHeight + 0.045 + sign * 0.015, 0.30])
         else if (praying) reach(limb, [sign * 0.035, b.chestHeight - b.hipHeight, 0.33])

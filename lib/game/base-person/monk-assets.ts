@@ -1,4 +1,4 @@
-import manifest from "../../../public/textures/characters/monks/v5/manifest.json"
+import manifest from "../../../public/textures/characters/monks/v7/manifest.json"
 import { DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE, personWalkStride, walkSpeedScale } from "./gait"
 import { actionPlaybackRate } from "./activity"
 import { ACTION_CLIPS } from "./pose"

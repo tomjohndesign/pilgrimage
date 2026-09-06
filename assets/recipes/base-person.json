@@ -1,5 +1,5 @@
 {
-  "version": 14,
+  "version": 16,
   "id": "base-person",
   "status": "base template for review",
   "cellSize": 64,
@@ -53,12 +53,12 @@
     "torsoCenter": 1.105,
     "thighWidth": 0.105,
     "shinWidth": 0.09,
-    "footWidth": 0.22,
-    "footHeight": 0.1,
-    "footLength": 0.34
+    "footWidth": 0.187,
+    "footHeight": 0.09,
+    "footLength": 0.289
   },
   "styleReference": "https://github.com/OpenRCT2/OpenRCT2/issues/7125",
-  "styleNotes": "User book-photo references: about five heads high, shaped jaw and a smooth face without nose or ear geometry, a visible neck above lowered shoulders, pinched waist and flared hem. Screenshot-tuned defaults keep the male base bald and barefoot, with an optional cropped/bob/long hairstyle and short beard. Tunic-covered legs are clipped at the hem; far-arm shading and edge priority follow the viewing direction. Selective ink edges separate overlapping parts. Male profiles have broad shoulders and a tapered waist; female profiles have wider hips, a subtle tunic bust contour and long hair without facial hair. Torso height and shoulder offset are independent. Foot length, width and height are independent parameters. Male outfits use hip-length shirts with full gathered sleeves and trousers. Female outfits use sleeveless ankle-length dresses over contrasting long-sleeved shirts, with a cloth coif and back drape over long hair. Both remain barefoot. Garment length is constrained by body type; sleeve fullness and clothing layer colors are parametric. The shirt shoulder surface closes around the neck, and cloth seams keep sleeves joined across adjustable arm spacing and shoulder heights. Defaults lower shoulders to 100% and bring arm roots closer to the torso. Upper-arm length, forearm length, arm angle, elbow bend, hand size and arm swing are independently tunable.",
+  "styleNotes": "User book-photo references: about five heads high, shaped jaw and a smooth face without nose or ear geometry, a visible neck above lowered shoulders, pinched waist and flared hem. Screenshot-tuned defaults keep the male base bald and booted, with an optional cropped/bob/long hairstyle and short beard. Tunic-covered legs are clipped at the hem; far-arm shading and edge priority follow the viewing direction. Selective ink edges separate overlapping parts. Male profiles have broad shoulders and a tapered waist; female profiles have wider hips, a subtle tunic bust contour and long hair without facial hair. Torso height and shoulder offset are independent. Foot length, width and height are independent parameters. Male outfits use hip-length shirts with full gathered sleeves and trousers. Female outfits use sleeveless ankle-length dresses over contrasting long-sleeved shirts, with a cloth coif and back drape over long hair. Peasants wear strapped sandals; other callings and monks wear ankle boots. Garment length is constrained by body type; sleeve fullness and clothing layer colors are parametric. The shirt shoulder surface closes around the neck, and cloth seams keep sleeves joined across adjustable arm spacing and shoulder heights. Defaults lower shoulders to 100% and bring arm roots closer to the torso. Upper-arm length, forearm length, arm angle, elbow bend, hand size and arm swing are independently tunable.",
   "renderPalette": [
     "#30251e",
     "#503b2b",

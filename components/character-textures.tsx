@@ -26,10 +26,10 @@ export function CharacterTextures() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div><h3 className="font-display text-lg">Base person · shared template</h3><p className="mt-2 text-sm text-ink-light">Storybook ~35px figures · 64px padded cells · custom colour palette · eight directions</p>
           <p className="mt-2 max-w-lg text-xs leading-relaxed text-ink-light">The new foundation for character outfits. One body and walk cycle keep proportions and accessory attachment points consistent.</p>
-          <div className="mt-4 flex flex-wrap gap-4 text-xs underline underline-offset-4"><Link href="/assets/characters">Inspect the base →</Link><a href="/textures/characters/base/base-person-v14-walk.png" download>Walk sheet</a><a href="/textures/characters/base/base-person-v14-idle.png" download>Idle sheet</a><a href="/textures/characters/base/base-person-v14.json" download>Attachment data</a><a href="/textures/characters/base/base-person-v14-shadow-walk.png" download>Shadow sheet</a></div>
+          <div className="mt-4 flex flex-wrap gap-4 text-xs underline underline-offset-4"><Link href="/assets/characters">Inspect the base →</Link><a href="/textures/characters/base/base-person-v16-walk.png" download>Walk sheet</a><a href="/textures/characters/base/base-person-v16-idle.png" download>Idle sheet</a><a href="/textures/characters/base/base-person-v16.json" download>Attachment data</a><a href="/textures/characters/base/base-person-v16-shadow-walk.png" download>Shadow sheet</a></div>
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/textures/characters/base/base-person-v14-walk.png" width={1280} height={512} alt="Shared base person, 160 walk poses at native resolution" className="max-w-full bg-[#62724d]" style={{ imageRendering: "pixelated" }} />
+        <img src="/textures/characters/base/base-person-v16-walk.png" width={1280} height={512} alt="Shared base person, 160 walk poses at native resolution" className="max-w-full bg-[#62724d]" style={{ imageRendering: "pixelated" }} />
       </div>
     </article>
     <p className="mb-5 text-center text-sm text-[#b9ad92]">Earlier image-generated drafts · retained for comparison</p>
