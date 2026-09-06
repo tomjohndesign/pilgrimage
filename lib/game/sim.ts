@@ -1,5 +1,7 @@
 import { nearProcession, type RelicProcession } from "./relic-procession"
 import { roadsideStall, routePoint, routeLength, type StallRoute } from "./transport/roadside"
+import { roadLanePoint } from "./map/road-lane"
+import { cartOnRoute } from "./transport/follow"
 import { keeperRoutine } from "./transport/keeper"
 import { personWalkStride } from "./base-person/gait"
 import { populationDesign, travelerAppearance } from "./base-person/population"
@@ -358,24 +360,46 @@ function routeWorldPoint(
   const vertex = (i: number) => {
     // Tracks meet the same lane point as the road at both junctions.
     if (junctions && (i === 0 || i === route.length - 1)) {
-      return laneVertex(map, map.road!, i === 0 ? junctions.entry : junctions.exit, lane)
+      const junction = i === 0 ? junctions.entry : junctions.exit
+      return roadLanePoint(map, map.road!, junction, lane) ?? laneVertex(map, map.road!, junction, lane)
     }
     return laneVertex(map, route, i, lane)
   }
   const a = vertex(i0)
   const b = vertex(i0 + 1)
-  const ax = tileToWorldX(map, a.x)
-  const az = tileToWorldZ(map, a.z)
-  const bx = tileToWorldX(map, b.x)
-  const bz = tileToWorldZ(map, b.z)
   const ay = surfaceHeight(map, route[i0].x, route[i0].z)
   const by = surfaceHeight(map, route[i0 + 1].x, route[i0 + 1].z)
-  const point = { x: ax + (bx - ax) * frac, y: ropeHeightAt(map, a.x + (b.x - a.x) * frac, a.z + (b.z - a.z) * frac) ?? ay + (by - ay) * frac, z: az + (bz - az) * frac }
+  const curved = roadLanePoint(map, route, p, lane)
+  // Preserve a shortcut's shared road-lane endpoint, blending to its own
+  // tangent entrance over the first/last half tile.
+  if (curved && junctions) {
+    const end = p < 0.5 ? 0 : p > route.length - 1.5 ? route.length - 1 : -1
+    if (end >= 0) {
+      const own = roadLanePoint(map, route, end, lane)!
+      const shared = vertex(end)
+      const weight = Math.max(0, 1 - 2 * Math.abs(p - end))
+      curved.x += (shared.x - own.x) * weight
+      curved.z += (shared.z - own.z) * weight
+    }
+  }
+  const tx = curved?.x ?? a.x + (b.x - a.x) * frac
+  const tz = curved?.z ?? a.z + (b.z - a.z) * frac
+  const point = { x: tileToWorldX(map, tx),
+    y: ropeHeightAt(map, tx, tz) ?? ay + (by - ay) * frac,
+    z: tileToWorldZ(map, tz) }
   return point
 }
 
 function roadWorldPoint(map: GameMap, p: number, lane: number): WorldPoint {
   return routeWorldPoint(map, map.road!, p, lane)
+}
+
+/** Road convoys keep both the puller and axle on their curved walking lane. */
+export function roadCartPose(map: GameMap, s: SimTraveler, wheelbase: number) {
+  return cartOnRoute(s.progress, s.direction, wheelbase, p => {
+    const lane = roadLanePoint(map, map.road!, p, s.lane)
+    return lane ? { x: tileToWorldX(map, lane.x), z: tileToWorldZ(map, lane.z) } : roadWorldPoint(map, p, s.lane)
+  })
 }
 
 /** Where on their route — road or track — the traveler currently belongs. */

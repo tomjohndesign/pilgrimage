@@ -39,6 +39,7 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
   const cart = useRef<THREE.Group>(null), pullingDriver = useRef<THREE.Group>(null)
   const point = useMemo(() => new THREE.Vector3(), [])
   const cartPose = useRef<CartPose | null>(null)
+  const followingRoad = useRef(false)
   const lastAnimal = useRef<{ x: number; z: number } | null>(null)
   const lastDriver = useRef<{ x: number; z: number; deployed: boolean } | null>(null)
   useFrame(() => {
@@ -53,8 +54,14 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
     const hitch = { x: point.x, z: point.z }, y = point.y, wheelbase = -cartOffset(puller) * characterScale
     const previous = cartPose.current
     if (vendor) {
-      cartPose.current = data.cartPose ?? (!previous || data.motionReset ? alignCart(hitch, heading, wheelbase)
-        : deployed ? alignCart(hitch, data.shopHeading ?? heading, wheelbase) : paused ? { ...previous, distance: 0 } : followCart(previous, hitch, wheelbase))
+      const roadPose = data.cartPose as CartPose | undefined
+      const freePose = !previous || data.motionReset ? alignCart(hitch, heading, wheelbase)
+        : deployed ? alignCart(hitch, data.shopHeading ?? heading, wheelbase) : paused ? { ...previous, distance: 0 } : followCart(previous, hitch, wheelbase)
+      // Let the axle finish returning from a roadside stop before guiding it
+      // along the road again; switching immediately would snap it off the verge.
+      if (!roadPose) followingRoad.current = false
+      else if (!previous || data.motionReset || Math.hypot(freePose.x - roadPose.x, freePose.z - roadPose.z) < 0.02) followingRoad.current = true
+      cartPose.current = roadPose && followingRoad.current ? roadPose : freePose
       const pose = cartPose.current!
       if (cart.current) {
         cart.current.position.copy(parent.worldToLocal(point.set(pose.x, map ? walkingSurface(map, pose.x, pose.z).height : y, pose.z)))
