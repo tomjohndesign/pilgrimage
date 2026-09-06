@@ -44,7 +44,7 @@ pixel height. Use each variant's actual design, including custom designs. A
 larger body takes proportionally longer steps.
 
 The default reference is a base person at 150% size: about 0.353 tiles per
-stride and 0.318 tiles/second, targeting 108 steps/minute before personal pace
+stride and 0.406 tiles/second, targeting 138 steps/minute before personal pace
 variation. Derive a character's speed with `walkSpeedScale()` and
 `DEFAULT_WALK_SPEED`. Monks and travelers share the world character size setting; monks use the
 same calculation with their shorter authored reach. Do not add a separate monk

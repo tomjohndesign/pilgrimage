@@ -14,6 +14,14 @@ import { cachedPersonBake, renderPersonPreview, type BasePersonBake, type Person
 import { DEFAULT_DESIGN, DESIGN_CONTROLS, HAIR_STYLES, HAT_STYLES, TUNIC_STYLES, PERSON_PRESETS, personRecipe, withBodyType, validatePersonDesign, type DesignKey, type PersonDesign } from "@/lib/game/base-person/design"
 import { usePopulationStore } from "@/lib/game/base-person/population-store"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
+import { MerchantMapPreview } from "./merchant-map-preview"
+import { COATS, animalCoat } from "@/lib/game/transport/coats"
+import { CARGO, TRANSPORT, CART, SHOP, cartUrl, animalUrl, type Puller, type ShopState, cartColumn, type Cargo, type CartMode, type HorseVariant } from "@/lib/game/transport/assets"
+import transportMetadata from "@/public/textures/transport/v9/manifest.json"
+
+const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse" } as const
+type Subject = keyof typeof SUBJECTS
+declare global { interface Window { __transportBake?: typeof import("@/lib/game/transport/bake").bakeTransport } }
 
 import { characterEditsJson, parseCharacterEdits, restoreCharacterDesign } from "@/lib/game/base-person/share-edits"
 import { RigOverlay, RigInspector } from "./person-rig-editor"
@@ -29,13 +37,13 @@ const ROAD_DESIGNS = Object.values(TRAVELER_TYPES).flatMap(type => POPULATION_PR
 const DRAFT_KEY = "pilgrimage-rig-editor-v1"
 const button = "hud-action"
 
-function Tile({ url, shadowUrl, row, frame, columns, zoom = 1, name }: {
-  url: string; shadowUrl?: string; row: number; frame: number; columns: number; zoom?: number; name: string
+function Tile({ url, shadowUrl, row, frame, columns, zoom = 1, name, cellSize = BASE_PERSON.cellSize, rows = 8 }: {
+  url: string; shadowUrl?: string; row: number; frame: number; columns: number; zoom?: number; name: string; cellSize?: number; rows?: number
 }) {
-  const size = BASE_PERSON.cellSize * zoom
+  const size = cellSize * zoom
   return <span role="img" aria-label={name} className="block shrink-0" style={{ width: size, height: size,
     imageRendering: "pixelated", backgroundImage: `url("${url}")${shadowUrl ? `, url("${shadowUrl}")` : ""}`,
-    backgroundSize: `${columns * size}px ${8 * size}px`, backgroundPosition: `${-frame * size}px ${-row * size}px`,
+    backgroundSize: `${columns * size}px ${rows * size}px`, backgroundPosition: `${-frame * size}px ${-row * size}px`,
   }} />
 }
 
@@ -47,17 +55,36 @@ function download(url: string, name: string) {
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0
  */
 export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
+  const [subject, setSubject] = useState<Subject>("person")
+  const [cargo, setCargo] = useState<Cargo>("produce")
+  const [view, setView] = useState<"character" | "native" | "sheet" | "map">("character")
+  const [shopState, setShopState] = useState<ShopState>("travel")
+  const [cartPuller, setCartPuller] = useState<Puller>("donkey")
+  const cartMode: CartMode = shopState === "travel" ? cartPuller : "shop"
+  const [coat, setCoat] = useState("")
+  const [grazing, setGrazing] = useState(false)
+  const [horseVariant, setHorseVariant] = useState<HorseVariant>("common")
+  const isPerson = subject === "person"
+  const onMap = subject === "cart" && view === "map"
+  useEffect(() => { setView(subject === "cart" ? "map" : "character"); if (subject === "cart") setZoom(6) }, [subject])
+  const animalKind = subject === "cart" ? cartPuller === "hand" ? null : cartPuller : subject === "horse" || subject === "donkey" ? subject : null
+  useEffect(() => {
+    const asset = new URLSearchParams(window.location.search).get("asset")
+    if (asset && Object.hasOwn(SUBJECTS, asset)) setSubject(asset as Subject)
+  }, [])
   useEffect(() => {
     if (process.env.NODE_ENV !== "development") return
     const target = window as unknown as { __bakePersonPopulation?: (progress?: (done: number) => void) => Promise<unknown> }
     target.__bakePersonPopulation = async progress => (await import("@/lib/game/base-person/bake-population")).bakePopulation(undefined, progress)
-    return () => { delete target.__bakePersonPopulation }
+    window.__transportBake = async () => (await import("@/lib/game/transport/bake")).bakeTransport()
+    return () => { delete target.__bakePersonPopulation; delete window.__transportBake }
   }, [])
   const [bake, setBake] = useState<BasePersonBake | null>(null)
   const [error, setError] = useState("")
   const [row, setRow] = useState(1)
   const [frame, setFrame] = useState(0)
   const [clip, setClip] = useState<BaseClip>("walk")
+  const frameCount = isPerson ? PERSON_CLIPS[clip].frames : subject === "cart" ? shopState === "opening" || shopState === "packing" ? 48 : 120 : grazing ? TRANSPORT.grazeFrames : clip === "idle" ? 1 : transportMetadata.animalClips.walk.frames
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("clip")
     if (requested && Object.keys(PERSON_CLIPS).includes(requested)) setClip(requested as BaseClip)
@@ -69,6 +96,8 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   const [onion, setOnion] = useState(false)
   const [sides, setSides] = useState(false)
   const [design, setDesign] = useState<PersonDesign>(DEFAULT_DESIGN)
+  const animationRate = isPerson ? actionPlaybackRate(clip, design) : subject === "cart" ? 12 / BASE_PERSON.defaultFps
+    : grazing ? transportMetadata.animalClips.graze.fps / BASE_PERSON.defaultFps : transportMetadata.animalProfiles[subject === "donkey" ? "donkey" : horseVariant].cyclesPerSecond * transportMetadata.animalClips.walk.frames / BASE_PERSON.defaultFps
   const [busy, setBusy] = useState(true)
   const [dragging, setDragging] = useState(false)
   const [preview, setPreview] = useState<PersonPreview | null>(null)
@@ -141,7 +170,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     drafts.current[character] = design
     setCharacter(id); setDesign(drafts.current[id] ?? { ...initial }); setHistory([]); setFuture([]); setMessage("")
   }
-  const inspected = useMemo(() => showRig ? inspectRig(design, clip, frame % PERSON_CLIPS[clip].frames, row) : {}, [showRig, design, clip, frame, row])
+  const inspected = useMemo(() => isPerson && showRig ? inspectRig(design, clip, frame % PERSON_CLIPS[clip].frames, row) : {}, [isPerson, showRig, design, clip, frame, row])
   const editFrame = (joint: EditableJoint) => joint === "staffTip" && clip === "walk" && staffMotion(frame / PERSON_CLIPS.walk.frames, personRecipe(design).body).planted ? 0 : frame % PERSON_CLIPS[clip].frames
   const currentOffset = (joint: EditableJoint) => poseOffset(design.poseEdits, clip, joint, editFrame(joint) / PERSON_CLIPS[clip].frames)
   const selectedKey = design.poseEdits?.[clip]?.[selectedJoint as EditableJoint]?.find(k => k.frame === editFrame(selectedJoint as EditableJoint))
@@ -169,7 +198,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     setBusy(true)
     const target = window as unknown as { __basePersonBake?: BasePersonBake }
     delete target.__basePersonBake
-    if (dragging) return
+    if (dragging || !isPerson) { if (!isPerson) setBusy(false); return }
     const timer = setTimeout(() => {
       try {
         const result = cachedPersonBake(design)
@@ -179,9 +208,9 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
       setBusy(false)
     }, 180)
     return () => { clearTimeout(timer); delete target.__basePersonBake }
-  }, [design, dragging])
+  }, [design, dragging, isPerson])
   useEffect(() => {
-    if (sheetMatchesDesign) return
+    if (sheetMatchesDesign || !isPerson) return
     // Coalesce inputs into a paint, without waiting for the user to stop dragging.
     const request = requestAnimationFrame(() => {
       try {
@@ -190,21 +219,27 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
       } catch (e) { setError(e instanceof Error ? e.message : "The preview could not render.") }
     })
     return () => cancelAnimationFrame(request)
-  }, [design, clip, frame, sides, sheetMatchesDesign])
+  }, [design, clip, frame, sides, sheetMatchesDesign, isPerson])
   useEffect(() => {
-    if (!active || !playing || clip === "idle") return
-    const timer = setInterval(() => setFrame((f) => (f + 1) % PERSON_CLIPS[clip].frames), 1000 / (fps * actionPlaybackRate(clip, design)))
+    if (!active || !playing || frameCount === 1 || onMap) return
+    const timer = setInterval(() => setFrame((f) => subject === "cart" && shopState !== "opening" && shopState !== "packing" ? f + 1 : (f + 1) % frameCount), 1000 / (fps * animationRate))
     return () => clearInterval(timer)
-  }, [active, playing, clip, fps, design.bodyType, design.walkStyle])
+  }, [active, playing, fps, frameCount, animationRate, subject, shopState, onMap])
 
-  const live = !sheetMatchesDesign && preview?.clip === clip && preview.sides === sides ? preview : null
-  const columns = live ? 1 : PERSON_CLIPS[clip].frames
-  const visibleFrame = live ? 0 : frame % PERSON_CLIPS[clip].frames
-  const url = live?.url ?? (bake ? clip === "walk" || clip === "idle" ? sides ? clip === "walk" ? bake.debugWalk : bake.debugIdle : bake[clip] : sides ? bake.actions[clip].debug : bake.actions[clip].url : "")
-  const shadowUrl = sides ? undefined : live?.shadowUrl ?? (clip === "walk" ? bake?.shadowWalk : clip === "idle" ? bake?.shadowIdle : bake?.actions[clip].shadow)
+  const live = isPerson && !sheetMatchesDesign && preview?.clip === clip && preview.sides === sides ? preview : null
+  const columns = isPerson ? live ? 1 : PERSON_CLIPS[clip].frames : subject === "cart" ? cartMode === "shop" ? transportMetadata.shop.frames : transportMetadata.cartColumns : transportMetadata.animalColumns
+  const step = frame % frameCount
+  const firstColumn = isPerson ? 0 : subject === "cart" ? cartColumn(cargo, cartMode, 0) : grazing ? transportMetadata.animalClips.graze.start : clip === "idle" ? transportMetadata.animalClips.idle.start : transportMetadata.animalClips.walk.start
+  const visibleFrame = live ? 0 : subject === "cart" ? cartMode === "shop" ? Math.round((shopState === "opening" ? step / 47 : shopState === "packing" ? 1 - step / 47 : 1) * (TRANSPORT.shopFrames - 1)) : step % TRANSPORT.wheelFrames : firstColumn + step
+  const url = !isPerson ? subject === "cart" ? cartUrl(cargo, cartMode, 1, cartPuller === "hand") : animalUrl(subject, animalCoat(subject, coat).id) : live?.url ?? (bake ? clip === "walk" || clip === "idle" ? sides ? clip === "walk" ? bake.debugWalk : bake.debugIdle : bake[clip] : sides ? bake.actions[clip].debug : bake.actions[clip].url : "")
+  const shadowUrl = !isPerson || sides ? undefined : live?.shadowUrl ?? (clip === "walk" ? bake?.shadowWalk : clip === "idle" ? bake?.shadowIdle : bake?.actions[clip].shadow)
   const renderPalette = personRecipe(design).renderPalette
-  const sockets = live?.sockets[row] ?? bake?.metadata.clips[clip][row * columns + visibleFrame]?.sockets
-  const pixels = BASE_PERSON.cellSize
+  const sockets = isPerson ? live?.sockets[row] ?? bake?.metadata.clips[clip][row * columns + visibleFrame]?.sockets : undefined
+  const pixels = isPerson ? BASE_PERSON.cellSize : subject === "cart" ? cartMode === "shop" ? SHOP.cellSize : CART.cellSize : transportMetadata.cellSize
+  const directionStep = subject === "cart" ? CART.directions / 8 : 1
+  const atlasRows = subject === "cart" ? CART.directions : subject === "horse" ? transportMetadata.animalRows.horse : 8
+  const rowOffset = subject === "horse" ? transportMetadata.horseVariants[horseVariant].rowOffset : 0
+  const clipLabel = subject === "cart" ? { travel: `Pulled by ${cartPuller}`, opening: "Opening shop", trading: "Open for business", packing: "Packing up" }[shopState] : !isPerson && grazing ? "Grazing" : PERSON_CLIPS[clip].label
   const direction = BASE_PERSON.directions[row]
   const jsonDownload = () => {
     if (!bake) return
@@ -214,7 +249,6 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
   const [controlsOpen, setControlsOpen] = useState(false)
-  const [view, setView] = useState<"character" | "native" | "sheet">("character")
   const [stageSize, setStageSize] = useState({ width: 640, height: 640 })
   const stageRef = useRef<HTMLDivElement>(null)
   const viewDrag = useRef<{ pointer: number; x: number; row: number } | null>(null)
@@ -237,15 +271,17 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   })
   const ready = !busy && !error && !!bake && sheetMatchesDesign
 
-  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Base person template"
-    version={`Base person · v${BASE_PERSON.version}`} controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(!controlsOpen)}
+  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Character playground"
+    version={isPerson ? `Base person · v${BASE_PERSON.version}` : `${SUBJECTS[subject]} · ${TRANSPORT.version}`}
+    controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(!controlsOpen)}
     roadHref={`/play?characters=base&baseSize=1.5&fps=${fps}`}
-    status={dragging ? "Live preview · release to finish sprite sheets." : busy ? "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}
-    detail={`8 directions · ${fps} fps`}>
+    status={onMap ? "Full merchant journey · game scale · 11 × 7 tiles" : !isPerson ? `${subject === "horse" ? transportMetadata.animalProfiles[horseVariant].label : SUBJECTS[subject]} · ${clipLabel}` : dragging ? "Live preview · release to finish sprite sheets." : busy ? "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}
+    detail={onMap ? "8 camera angles · game scale" : `${subject === "cart" ? CART.directions : 8} directions · ${Number((fps * animationRate).toFixed(1))} fps`}>
     <div className="person-workspace">
       <aside className={`person-controls hud-well ${controlsOpen ? "is-open" : ""}`} aria-label="Character controls">
-        <div className="person-panel-heading"><span>Person</span><button className="hud-close person-controls-toggle" aria-label="Close character controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
+        <div className="person-panel-heading"><label className="person-choice">Asset<select aria-label="Character asset" value={subject} onChange={e => { setSubject(e.target.value as Subject); setFrame(0); setClip("walk") }}>{Object.entries(SUBJECTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><button className="hud-close person-controls-toggle" aria-label="Close character controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
         <div className="person-controls-scroll">
+          {isPerson ? <>
           <Section {...section("Presets")}><div className="person-presets">{Object.entries(PERSON_PRESETS).map(([name, preset]) => <button key={name} className={button} onClick={() => chooseCharacter(`preset/${name}`, preset)}>{name}</button>)}</div></Section>
           <Section {...section("Road characters")}><label className="person-choice">Character<select aria-label="Road character" value={character.startsWith("preset/") ? "" : character} onChange={e => { const entry = ROAD_DESIGNS.find(d => d.id === e.target.value); if (entry) chooseCharacter(entry.id, entry.design) }}><option value="" disabled>Choose calling / body</option>{ROAD_DESIGNS.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select></label></Section>
           <Section {...section("Body")}>
@@ -311,20 +347,42 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
               <Link className={button} href="/assets/characters/callings">Earlier character drafts <ArrowUpRight size={12} /></Link>
             </div>
           </Section>
+          </> : <>
+            {subject === "horse" && <Section {...section("Horse")}>
+              <label className="person-choice">Variant<select aria-label="Horse variant" value={horseVariant} onChange={e => { setHorseVariant(e.target.value as HorseVariant); setFrame(0) }}><option value="common">Common horse</option><option value="noble">Noble horse</option></select></label>
+              <p className="person-hint">{horseVariant === "noble" ? "Deep chest, strong haunches and a proud carriage. A powerful, deliberate walk." : "Lean, worn and lower-headed, with a measured, weary walk."}</p>
+            </Section>}
+            {subject === "donkey" && <p className="person-hint">A slightly stooped head and a slow, weighty plod.</p>}
+            {animalKind && <Section {...section("Coat")}><label className="person-choice">Natural coat<select aria-label="Animal coat" value={animalCoat(animalKind, coat).id} onChange={e => setCoat(e.target.value)}>{COATS[animalKind].map(value => <option key={value.id} value={value.id}>{value.label}</option>)}</select></label>
+              {subject !== "cart" && <label className="person-check"><input type="checkbox" checked={grazing} onChange={e => { setGrazing(e.target.checked); setFrame(0) }} />Grazing</label>}
+            </Section>}
+            {subject === "cart" && <Section {...section("Cart")}>
+              <label className="person-choice">Offering<select aria-label="Offering" value={cargo} onChange={e => { setCargo(e.target.value as Cargo); setFrame(0) }}>{CARGO.map(value => <option key={value}>{value}</option>)}</select></label>
+              <label className="person-choice">Puller<select aria-label="Cart puller" value={cartPuller} onChange={e => { setCartPuller(e.target.value as Puller); setFrame(0) }}><option value="hand">Person</option><option value="donkey">Donkey</option><option value="horse">Horse</option></select></label>
+              {cartPuller === "horse" && <label className="person-choice">Horse<select aria-label="Cart horse variant" value={horseVariant} onChange={e => setHorseVariant(e.target.value as HorseVariant)}><option value="common">Common</option><option value="noble">Noble</option></select></label>}
+              <label className="person-choice" style={onMap ? { display: "none" } : undefined}>Setup<select aria-label="Cart setup" value={shopState} onChange={e => { setShopState(e.target.value as ShopState); setFrame(0) }}><option value="travel">Travelling</option><option value="opening">Opening shop</option><option value="trading">Open for business</option><option value="packing">Packing up</option></select></label>
+              <p className="person-hint">The map runs the whole journey at the game’s default scale. A customer visits the stall; the animal grazes beside the road and returns before departure.</p>
+            </Section>}
+            {!onMap && <Section {...section("Animation")}><Tuner label="Timing" labelClassName="w-28" value={fps} min={1} max={24} display={`${(fps * animationRate).toFixed(1)} fps`} onChange={setFps} /></Section>}
+            <Section {...section("Files")}><div className="person-file-actions">
+              <a className={button} href={url} download>Download sprite sheet</a>
+              <a className={button} href={`/textures/transport/${TRANSPORT.version}/manifest.json`} download>Download sheet metadata</a>
+            </div><p className="person-hint">{pixels} × {pixels} px cell · {subject === "cart" ? CART.directions : 8} directions<br />{transportMetadata.safePadding} px safe margin</p></Section>
+          </>}
         </div>
-        <footer className="person-panel-footer">
+        {isPerson && <footer className="person-panel-footer">
           <p className="person-hint">Apply these proportions to the mixed crowd. Clothing keeps each calling’s color.</p>
           <button className={`${button} person-apply`} disabled={!ready} onClick={() => { if (bake) { applyDesign(design, bake); void usePopulationStore.getState().prepare(design); setMessage("Foundation saved. Road characters keep their calling colors and varied bodies.") } }}><Check size={14} />Apply to road</button>
           <button className={button} onClick={() => { usePersonDesignStore.getState().reset(); void usePopulationStore.getState().prepare(null); setDesign({ ...DEFAULT_DESIGN }); setMessage("Project default restored on the road.") }}><RotateCcw size={12} />Restore project default</button>
-        </footer>
+        </footer>}
       </aside>
       <div className="person-preview" aria-label="Character preview">
         <div className="person-preview-toolbar hud-well">
-          <div className="person-playback"><button className="hud-pause" aria-label={playing ? "Pause" : "Play"} disabled={clip === "idle" || view === "sheet"} onClick={() => setPlaying(!playing)}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
-            <label>Clip<select aria-label="Animation clip" value={clip} onChange={e => { setClip(e.target.value as BaseClip); setFrame(0) }}>{Object.entries(PERSON_CLIPS).map(([id, entry]) => <option key={id} value={id}>{entry.label}</option>)}</select></label>
-            <label>Zoom<select aria-label="Pixel inspection zoom" value={zoom} onChange={e => setZoom(Number(e.target.value))}>{[1, 2, 4, 6, 8].map(n => <option key={n} value={n}>{n}×</option>)}</select></label>
+          <div className="person-playback"><button className="hud-pause" aria-label={playing ? "Pause" : "Play"} disabled={frameCount === 1 || view === "sheet"} onClick={() => setPlaying(!playing)}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
+            <label style={subject === "cart" ? { display: "none" } : undefined}>Clip<select aria-label="Animation clip" value={clip} onChange={e => { setClip(e.target.value as BaseClip); setFrame(0) }}>{Object.entries(PERSON_CLIPS).filter(([id]) => isPerson || id === "walk" || id === "idle").map(([id, entry]) => <option key={id} value={id}>{entry.label}</option>)}</select></label>
+            <label>{onMap ? "View" : "Zoom"}<select aria-label={onMap ? "Map framing" : "Pixel inspection zoom"} value={zoom} onChange={e => setZoom(Number(e.target.value))}>{(onMap ? [4, 6, 8] : [1, 2, 4, 6, 8]).map(n => <option key={n} value={n}>{onMap ? ({ 4: "Wide", 6: "Map", 8: "Close" } as Record<number, string>)[n] : `${n}×`}</option>)}</select></label>
           </div>
-          <div className="person-view-buttons" aria-label="Preview modes"><button className={button} disabled={!draftsReady} onClick={() => void copyJson()}>Copy edits as JSON</button><button className={button} aria-pressed={showRig} onClick={() => { setShowRig(!showRig); setView("character"); setPlaying(false) }}>Show rig</button>{([['character', 'Character'], ['native', 'Native size'], ['sheet', 'Sprite sheet']] as const).map(([mode, label]) => <button key={mode} className={button} aria-pressed={view === mode} onClick={() => setView(mode)}>{label}</button>)}</div>
+          <div className="person-view-buttons" aria-label="Preview modes">{isPerson && <><button className={button} disabled={!draftsReady} onClick={() => void copyJson()}>Copy edits as JSON</button><button className={button} aria-pressed={showRig} onClick={() => { setShowRig(!showRig); setView("character"); setPlaying(false) }}>Show rig</button></>}{subject === "cart" && <button className={button} aria-pressed={onMap} onClick={() => { setView("map"); if (zoom < 4) setZoom(6) }}>Small map</button>}{([['character', 'Character'], ['native', 'Native size'], ['sheet', 'Sprite sheet']] as const).map(([mode, label]) => <button key={mode} className={button} aria-pressed={view === mode} onClick={() => setView(mode)}>{label}</button>)}</div>
         </div>
         <div className="person-stage-layout"><div ref={stageRef} className={`person-stage person-stage-${view}${scrubbingViews ? " is-scrubbing" : ""}`}
           onPointerDown={event => {
@@ -349,16 +407,16 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
           onLostPointerCapture={event => {
             if (viewDrag.current?.pointer === event.pointerId) { viewDrag.current = null; setScrubbingViews(false) }
           }}>
-          {!bake && !preview ? <p className="person-stage-message">Rendering the base person…</p> : view === "sheet" ? <div className="person-sheet">
+          {onMap ? <MerchantMapPreview playing={active && playing} row={row} zoom={zoom} cargo={cargo} puller={cartPuller} horseVariant={horseVariant} coat={coat} /> : isPerson && !bake && !preview ? <p className="person-stage-message">Rendering the base person…</p> : view === "sheet" ? <div className="person-sheet">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={url} width={pixels * columns} height={pixels * 8} alt={`${PERSON_CLIPS[clip].label}: eight directions and ${columns} frames`} />
+            <img src={url} width={pixels * columns} height={pixels * atlasRows} alt={`${SUBJECTS[subject]} ${clipLabel}: ${subject === "cart" ? CART.directions : 8} directions${subject === "horse" ? ", common and noble variants" : ""} and ${columns} frames`} />
           </div> : view === "native" ? <div className="person-native" aria-label="Native size lineup">
-            {BASE_PERSON.directions.map((d, i) => <div key={d}><Tile url={url} shadowUrl={shadowUrl} row={i} frame={visibleFrame} columns={columns} name={`${d}, native ${BASE_PERSON.nominalHeightPixels}px person`} /><span>{d}</span></div>)}
+            {BASE_PERSON.directions.map((d, i) => <div key={d}><Tile url={url} shadowUrl={shadowUrl} row={rowOffset + i * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} name={`${d}, native ${SUBJECTS[subject]}`} /><span>{d}</span></div>)}
           </div> : <div className="person-sprite" style={{ width: pixels * fittedZoom, height: pixels * fittedZoom }}>
-            {onion && !live && columns > 1 && <div className="absolute inset-0 opacity-25"><Tile url={url} row={row} frame={(visibleFrame + columns - 1) % columns} columns={columns} zoom={fittedZoom} name="Previous frame ghost" /></div>}
-            <Tile url={url} shadowUrl={shadowUrl} row={row} frame={visibleFrame} columns={columns} zoom={fittedZoom} name={`Base person ${direction}, frame ${visibleFrame + 1}`} />
-            {showRig && <RigOverlay joints={inspected} selected={selectedJoint} row={row} offset={currentOffset} onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} onChange={changeJoint} onDrag={rigDragging} />}
-            {guides && <svg aria-label="Origin and attachment guides" className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${pixels} ${pixels}`}>
+            {isPerson && onion && !live && columns > 1 && <div className="absolute inset-0 opacity-25"><Tile url={url} row={row} frame={(visibleFrame + columns - 1) % columns} columns={columns} zoom={fittedZoom} name="Previous frame ghost" /></div>}
+            <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + row * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={fittedZoom} name={`${SUBJECTS[subject]} ${direction}, frame ${step + 1}`} />
+            {isPerson && showRig && <RigOverlay joints={inspected} selected={selectedJoint} row={row} offset={currentOffset} onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} onChange={changeJoint} onDrag={rigDragging} />}
+            {isPerson && guides && <svg aria-label="Origin and attachment guides" className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${pixels} ${pixels}`}>
               <path d={`M${BASE_PERSON.anchor[0]} 0V${pixels} M0 ${BASE_PERSON.anchor[1]}H${pixels}`} stroke="#d9d5a7" strokeWidth="0.15" strokeDasharray="1 1" />
               {SOCKET_NAMES.map(name => {
                 const point = sockets?.[name]
@@ -366,10 +424,10 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
               })}
             </svg>}
           </div>}
-          {(error || storeError) && <p role="alert" className="person-stage-error">{error || storeError} Adjust the pose or undo to recover.</p>}
-          <div className="person-stage-caption">{view === "native" ? "Actual pixels · 1×" : view === "sheet" ? `${PERSON_CLIPS[clip].label} atlas · ${columns * 8} poses` : `${direction} · ${fittedZoom}×${fittedZoom < zoom ? " · fitted to view" : ""} · Drag left / right to turn`}</div>
+          {isPerson && (error || storeError) && <p role="alert" className="person-stage-error">{error || storeError} Adjust the pose or undo to recover.</p>}
+          <div className="person-stage-caption" style={onMap ? { display: "none" } : undefined}>{view === "native" ? "Actual pixels · 1×" : view === "sheet" ? `${SUBJECTS[subject]} atlas · ${columns * atlasRows} poses` : `${direction} · ${fittedZoom}×${(fittedZoom) < zoom ? " · fitted to view" : ""}${view === "character" ? " · Drag left / right to turn" : ""}`}</div>
         </div>
-        {showRig && <RigInspector joints={inspected} selected={selectedJoint} offset={currentOffset(selectedJoint as EditableJoint)} frame={frame} radius={radius} maxRadius={Math.max(1, Math.floor(PERSON_CLIPS[clip].frames / 2))} keyed={!!selectedKey}
+        {isPerson && showRig && <RigInspector joints={inspected} selected={selectedJoint} offset={currentOffset(selectedJoint as EditableJoint)} frame={frame} radius={radius} maxRadius={Math.max(1, Math.floor(PERSON_CLIPS[clip].frames / 2))} keyed={!!selectedKey}
           onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} onChange={offset => changeJoint(selectedJoint as EditableJoint, offset)} onRadius={blend => changeJoint(selectedJoint as EditableJoint, currentOffset(selectedJoint as EditableJoint), blend)}
           onReset={() => commitPose(setPoseKey(design.poseEdits, clip, selectedJoint as EditableJoint, null, editFrame(selectedJoint as EditableJoint)))}
           onResetClip={() => { const edits = { ...design.poseEdits }; delete edits[clip]; commitPose(edits) }}
@@ -378,10 +436,10 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
           onRedo={() => { const next = future.at(-1); if (next) { setHistory(h => [...h, design.poseEdits ?? {}]); setFuture(f => f.slice(0, -1)); setDesign(d => ({ ...d, poseEdits: next })) } }} />}
         </div>
         <div className="person-animation-dock hud-well">
-          <div className="person-direction-strip" aria-label="Character directions">{BASE_PERSON.directions.map((d, i) => <button key={d} aria-label={`Face ${d}`} aria-pressed={row === i} onClick={() => { setRow(i); setView("character") }} className="hud-building-tile person-direction">
-            {bake && <Tile url={url} shadowUrl={shadowUrl} row={i} frame={visibleFrame} columns={columns} name={`${d} direction`} />}<span>{d}</span>
+          <div className="person-direction-strip" aria-label="Character directions">{BASE_PERSON.directions.map((d, i) => <button key={d} aria-label={`Face ${d}`} aria-pressed={row === i} onClick={() => { setRow(i); if (!onMap) setView("character") }} className="hud-building-tile person-direction">
+            {(!isPerson || bake) && <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + i * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={BASE_PERSON.cellSize / pixels} name={`${d} direction`} />}<span>{d}</span>
           </button>)}</div>
-          <div className="person-steps"><span>{PERSON_CLIPS[clip].label}</span><div>{Array.from({ length: PERSON_CLIPS[clip].frames }, (_, f) => <button key={f} className="hud-pause" data-keyed={Object.values(design.poseEdits?.[clip] ?? {}).some(keys => keys?.some(key => key.frame === f))} aria-label={`Inspect step ${f + 1}`} aria-pressed={frame === f} onClick={() => { setFrame(f); setPlaying(false); setView("character") }}>{f + 1}</button>)}</div><span className="person-step-count">{clip === "idle" ? "Idle" : `${frame + 1} / ${PERSON_CLIPS[clip].frames}`}</span></div>
+          {!onMap && <div className="person-steps"><span>{clipLabel}</span><div>{Array.from({ length: (isPerson ? frameCount : Math.min(frameCount, 24)) }, (_, i) => Math.floor(i * frameCount / (isPerson ? frameCount : Math.min(frameCount, 24)))).map((f) => <button key={f} className="hud-pause" data-keyed={isPerson && Object.values(design.poseEdits?.[clip] ?? {}).some(keys => keys?.some(key => key.frame === f))} aria-label={`Inspect step ${f + 1}`} aria-pressed={step === f} onClick={() => { setFrame(f); setPlaying(false); setView("character") }}>{f + 1}</button>)}</div><span className="person-step-count">{frameCount === 1 ? "Still" : `${step + 1} / ${frameCount}`}</span></div>}
         </div>
       </div>
     </div>

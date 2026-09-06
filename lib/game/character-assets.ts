@@ -73,8 +73,8 @@ export const CHARACTER_ASSETS = Object.fromEntries(
 ) as Record<TravelerTypeId, CharacterAsset>
 
 /** Heading is atan2(world dx, world dz), yaw points from the target to camera. */
-export function spriteRow(heading: number, cameraYaw: number): number {
-  return ((Math.round((cameraYaw - heading) / (Math.PI / 4)) % 8) + 8) % 8
+export function spriteRow(heading: number, cameraYaw: number, directions = 8): number {
+  return ((Math.round((cameraYaw - heading) / (Math.PI * 2 / directions)) % directions) + directions) % directions
 }
 
 export function spriteFrame(seconds: number, fps: number, moving = true, columns = 4, stillFrame = 1): number {

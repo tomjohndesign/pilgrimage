@@ -16,8 +16,9 @@ export function personWalkStride(design: PersonDesign, spriteScale = PERSON_SPRI
 
 /** About 0.353 tiles per left/right cycle at the default on-road size. */
 export const DEFAULT_WALK_STRIDE = personWalkStride(DEFAULT_DESIGN) * BASE_CHARACTER_SCALE
-/** 108 steps/minute; personal pace and gentle variation modulate this baseline. */
-export const DEFAULT_WALK_SPEED = DEFAULT_WALK_STRIDE * 108 / 120
+/** Brisk walking; personal pace and gentle variation modulate this baseline. */
+export const DEFAULT_WALK_CADENCE = 1.15
+export const DEFAULT_WALK_SPEED = DEFAULT_WALK_STRIDE * DEFAULT_WALK_CADENCE
 
 export function walkSpeedScale(stride: number, characterScale: number): number {
   return stride * characterScale / DEFAULT_WALK_STRIDE

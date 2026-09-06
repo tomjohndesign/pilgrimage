@@ -34,6 +34,7 @@ import { DebugHandle } from "./debug-handle"
 import { Environment } from "./environment"
 import { Monks } from "./monks"
 import { OutlinePass } from "./outline-pass"
+import { vendorSpeedScale } from "@/lib/game/transport/assets"
 import { Shrine } from "./shrine"
 import type { RoadLook } from "@/lib/game/map/road"
 import { TerrainTiles } from "./terrain-tiles"
@@ -103,7 +104,8 @@ export function GameCanvas({
     const visual = characterModel === "base" ? populationVisual(traveler.type.id, appearance.variant, population, traveler.attributes.age)
       : characterVisual(assets[traveler.type.id], "callings")
     const scale = characterScale * (characterModel === "base" ? appearance.scale : 1)
-    return [traveler.id, walkSpeedScale(visual.walkStride, scale)]
+    const personSpeedScale = walkSpeedScale(visual.walkStride, scale)
+    return [traveler.id, traveler.type.id === "vendor" ? vendorSpeedScale(traveler.id, scale, personSpeedScale) : personSpeedScale]
   })), [travelers, map.seed, characterModel, characterScale, population, assets])
   const foundation = usePersonDesignStore(s => s.design)
   useEffect(() => { void usePersonDesignStore.getState().hydrate() }, [])
@@ -157,7 +159,7 @@ export function GameCanvas({
 
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
-      <DebugHandle map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} movement={movement} />
+      <DebugHandle characterScale={characterScale} map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} movement={movement} />
     </PixelCanvas>
   )
 }

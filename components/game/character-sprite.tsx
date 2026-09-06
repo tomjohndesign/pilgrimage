@@ -143,16 +143,17 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
       clock.current = (parent.userData.phase ?? 0) % 1
       seeded.current = true
     }
+    if (parent.userData.motionReset) footPlant.current = null
     const dt = Math.min(delta, 0.1) * (parent.userData.playbackRate ?? 1)
     if (requested !== lastClip.current) { actionClock.current = 0; lastClip.current = requested }
     const previousActionTime = actionClock.current
     if (requested !== "carrying" || moving) actionClock.current += dt
     if (moving) {
       const stride = visual.walkStride * individualScale * (walkTuning?.stride ?? DEFAULT_WALK_STRIDE) / DEFAULT_WALK_STRIDE
-      clock.current = advanceWalkPhase(clock.current, parent.userData.distance ?? 0, dt,
-        visual.walk.columns, fps, stride, walkTuning?.sync === true, visual.walk.strides ?? 1)
+      clock.current = advanceWalkPhase(clock.current, parent.userData.playbackRate === 0 ? 0 : parent.userData.distance ?? 0, dt,
+        visual.walk.columns, fps, stride, walkTuning?.sync !== false, visual.walk.strides ?? 1)
     }
-    if (sprite.current) sprite.current.userData.walkPhase = clock.current
+    if (sprite.current) Object.assign(sprite.current.userData, { walkPhase: clock.current, walkStride: visual.walkStride * individualScale, distance: parent.userData.distance ?? 0 })
     const clip: SpriteClip = action ?? (moving ? visual.walk : visual.idle)
     const texture = textures[actionIndex ?? (moving ? 0 : 1)]
     const frame = action ? requested === "carrying" ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) :
@@ -167,7 +168,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     const direction = spriteRow(heading, yaw)
     const row = visual.rowOffset + direction
     if (poseRoot.current) {
-      if (moving && rigBody && walkTuning?.sync) {
+      if (moving && rigBody && walkTuning?.sync !== false) {
         const foot = walkContact(clock.current, clip.columns, rigBody, clip.strides ?? 1)
         // Reconstruct the baked ground contact in the current camera's ground
         // plane. The selected direction, not the smoothed group heading, is
@@ -209,7 +210,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   // Equal-depth overlaps must choose the same traveler in the color and ID passes.
   return (
     <group ref={poseRoot}>
-      <sprite renderOrder={renderOrder} ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name={name} material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync === true }} />
+      <sprite renderOrder={renderOrder} ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name={name} material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync !== false }} />
       {outlineMaterial && <sprite renderOrder={renderOrder} layers-mask={OUTLINE_ID_LAYER_MASK} material={outlineMaterial}
         scale={[size, size, 1]} center={center} />}
     </group>

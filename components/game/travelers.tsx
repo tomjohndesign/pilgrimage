@@ -16,7 +16,7 @@ import { lumberCamps } from "@/lib/game/settlement"
 import { useBuildStore } from "@/lib/game/build-store"
 import type { Relic } from "@/lib/game/relic"
 import type { TreePlacement } from "@/lib/game/trees/placement"
-import type { GameMap } from "@/lib/game/map/types"
+import { tileAt, worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
 import { createSim, simRegistry, stepSim } from "@/lib/game/sim"
 import type { Traveler } from "@/lib/game/travelers"
 import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/game/motion"
@@ -28,10 +28,8 @@ import {
   travelerObjectId,
 } from "@/lib/game/render/outline"
 
-import {
-  AWNING_NAME,
-  TravelerFigure,
-} from "./traveler-figure"
+import { TravelerFigure } from "./traveler-figure"
+import { cartLoadout, SHOP_SECONDS } from "@/lib/game/transport/assets"
 
 /**
  * People on the road: directional walking sprites driven by the simulation in
@@ -123,7 +121,7 @@ export function Travelers({
     // Keep each tick bounded at faster speeds, including work and routing.
     if (!playback.paused) {
       for (let tick = 0; tick < playback.speed; tick++) {
-        stepSim(sim, travelers, map, speed, Math.min(delta, 0.1), movement, speedScales)
+        stepSim(sim, travelers, map, speed, Math.min(delta, 0.1), movement, speedScales, characterScale)
       }
     }
     resourceElapsed.current += delta
@@ -154,20 +152,26 @@ export function Travelers({
         group.rotation.y = Math.atan2(workTree.x - s.x, workTree.z - s.z)
       }
       group.userData.playbackRate = playback.paused ? 0 : playback.speed
-      group.userData.distance = moved
+      group.userData.motionReset = group.userData.initialized !== true || distance >= 2
+      group.userData.distance = playback.paused ? 0 : moved
       group.userData.moving = moving
       group.userData.activity = s.activity
+      group.userData.keeperTime = s.keeperTime ?? 0
+      group.userData.keeperAudience = s.activity === "vending" && travelers.some(other => {
+        const person = sim.travelers.get(other.id)
+        return other.id !== s.id && person && Math.hypot(person.x - s.x, person.z - s.z) < 3
+      })
+      group.userData.shopHeading = s.stallRoute?.heading
+      group.userData.shopSide = s.stallRoute?.side ?? 1
+      group.userData.shopProgress = s.activity === "openingShop" ? 1 - s.timer / SHOP_SECONDS : s.activity === "packingShop" ? s.timer / SHOP_SECONDS : s.activity === "vending" ? 1 : 0
+      group.userData.pasture = s.pasture
+      const pastureTerrain = s.pasture ? tileAt(map, worldToTileX(map, s.pasture.x), worldToTileZ(map, s.pasture.z)) : null
+      group.userData.pastureY = s.pasture ? walkingSurface(map, s.pasture.x, s.pasture.z).height : s.y
+      group.userData.pastureGrass = pastureTerrain === "grass" || pastureTerrain === "clearing"
       group.userData.carrying = s.carrying
       group.userData.initialized = true
       group.userData.phase = travelers[i].id * 0.137
       group.userData.heading = group.rotation.y
-
-      if (travelers[i].type.id === "vendor") {
-        // Face the direction of travel so the cart trails behind; hold the
-        // last heading while parked or camped.
-        const awning = group.getObjectByName(AWNING_NAME)
-        if (awning) awning.visible = s.activity === "vending"
-      }
 
       const logs = group.getObjectByName("carried-logs")
       if (logs) logs.visible = s.carrying > 0
@@ -177,7 +181,7 @@ export function Travelers({
       group.scale.y = 1
       group.rotation.z = 0
     }
-  })
+  }, -3)
 
   if (!map.road || map.road.length < 2 || travelers.length === 0) return null
 
@@ -194,7 +198,7 @@ export function Travelers({
               groupRefs.current[index] = node
             }}
           >
-            <TravelerFigure map={map} age={traveler.attributes.age} appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
+            <TravelerFigure map={map} age={traveler.attributes.age} {...cartLoadout(traveler.id)} appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
               characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
             <group name="carried-logs" visible={false} position={[0, 0.35, 0.2]} rotation={[0, 0, Math.PI / 2]} onClick={select}>
               <mesh><cylinderGeometry args={[0.12, 0.12, 0.6, 6]} /><meshLambertMaterial color="#89613c" /></mesh>
