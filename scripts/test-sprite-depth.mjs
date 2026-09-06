@@ -36,11 +36,12 @@ test("sprites preserve overlaps, terrain contact, and scenery occlusion", async 
       gl.setSize(384, 384)
       const viewport = new THREE.Vector4()
       const worldTexel = { value: 0 }
+      const groundPlane = { value: new THREE.Vector4() }
       const scene = new THREE.Scene()
       const camera = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, 0.1, 400)
       const makeSprite = (color, order) => {
         const material = new THREE.SpriteMaterial({ color, transparent: false, toneMapped: false })
-        material.onBeforeCompile = shader => applySpriteDepth(shader, viewport, worldTexel)
+        material.onBeforeCompile = shader => applySpriteDepth(shader, viewport, worldTexel, groundPlane)
         material.onBeforeRender = renderer => renderer.getCurrentViewport(viewport)
         const sprite = new THREE.Sprite(material)
         sprite.center.set(0.5, 0.2421875)
@@ -122,6 +123,9 @@ test("sprites preserve overlaps, terrain contact, and scenery occlusion", async 
       const copyCamera = new THREE.Camera()
       let floorCompared = 0, floorClipped = 0
       back.visible = false
+      for (const [dx, dz] of [[0, 0], [0.3, 0], [-0.3, 0], [0.2, 0.25], [-0.2, -0.25]]) {
+        groundPlane.value.set(-dx, 1, -dz, 0)
+        floor.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(-dx, 1, -dz).normalize())
       for (const resolution of [30, 60, 120]) {
         const ground = new THREE.WebGLRenderTarget(resolution, resolution, {
           depthTexture: new THREE.DepthTexture(resolution, resolution),
@@ -132,7 +136,7 @@ test("sprites preserve overlaps, terrain contact, and scenery occlusion", async 
           camera.updateProjectionMatrix()
           worldTexel.value = 2.4 / zoom / resolution
           for (const shift of [0, 0.003, 0.013, 0.025]) {
-            front.position.set(shift, 0, shift)
+            front.position.set(shift, (dx + dz) * shift, shift)
             const expected = new Uint8Array(480 * 480 * 4), actual = expected.slice()
             gl.autoClear = true
             gl.setRenderTarget(output)
@@ -154,6 +158,7 @@ test("sprites preserve overlaps, terrain contact, and scenery occlusion", async 
         }
         ground.depthTexture.dispose()
         ground.dispose()
+      }
       }
       output.dispose()
       floor.geometry.dispose()

@@ -3,15 +3,22 @@ import { chromium } from "playwright"
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 const args = process.argv.slice(2), version = args.find(arg => /^v\d+$/.test(arg))
 const urlIndex = args.indexOf("--url"), origin = urlIndex < 0 ? "http://localhost:3000" : args[urlIndex + 1]
-if (!version) throw new Error("Usage: node scripts/export-monk.mjs v1 [--url http://localhost:3000]")
+if (!version) throw new Error("Usage: node scripts/export-monk.mjs v1 [--grey] [--url http://localhost:3000]")
+const grey = args.includes("--grey")
 const directory = `public/textures/characters/monks/${version}`
 if (existsSync(directory)) throw new Error("This monk version already exists; use a new version.")
 const browser = await chromium.launch({ headless: true, args: ["--use-angle=metal"] })
 try {
   const page = await browser.newPage()
-  await page.goto(new URL("/assets/characters", origin).href)
+  await page.goto(new URL("/assets/characters", origin).href, { waitUntil: "domcontentloaded", timeout: 120_000 })
+  // Wait for the editor to hydrate before selecting a preset; hydration restores its saved design.
+  await page.waitForFunction(() => !!window.__basePersonBake, undefined, { timeout: 120_000 })
   await page.getByRole("button", { name: "Monk", exact: true }).click()
   await page.waitForFunction(() => window.__basePersonBake?.metadata.design.garment === "Robe" && !!window.__basePersonBake.actions, undefined, { timeout: 120_000 })
+  if (grey) {
+    await page.getByLabel("Hair color", { exact: true }).fill("#a8aaa5")
+    await page.waitForFunction(() => window.__basePersonBake?.metadata.design.hairColor === "#a8aaa5", undefined, { timeout: 120_000 })
+  }
   const bake = await page.evaluate(() => window.__basePersonBake)
   mkdirSync(directory, { recursive: true })
   const images = {}

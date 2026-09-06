@@ -1,4 +1,5 @@
 import { deriveSeed, makeRng, SEED_STREAM } from "./rng"
+import { OLDER_TRAVELER_TYPES, rollCharacterAge } from "./character-age"
 import { travelerAppearance } from "./base-person/population"
 import type { GameMap } from "./map/types"
 
@@ -164,7 +165,6 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
 const HUNGER: StatRange = { min: 20, max: 80 }
 const THIRST: StatRange = { min: 20, max: 80 }
 const STAMINA: StatRange = { min: 40, max: 100 }
-const AGE: StatRange = { min: 16, max: 60 }
 
 const FIRST_NAMES = {
   Male: [
@@ -259,7 +259,7 @@ function rollAttributes(rng: () => number, type: TravelerTypeDef): TravelerAttri
     stamina: rollStat(rng, STAMINA),
     jobless: rng() < type.joblessChance,
     skills: rollSkills(rng, type),
-    age: rollStat(rng, AGE),
+    age: rollCharacterAge(rng, OLDER_TRAVELER_TYPES.some(id => id === type.id)),
   }
 }
 

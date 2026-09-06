@@ -1,3 +1,4 @@
+import { GREY_HAIR_COLOR, OLDER_TRAVELER_TYPES } from "../character-age"
 import { TRAVELER_TYPES, type TravelerTypeId } from "../travelers"
 import { bakeBasePerson } from "./bake"
 import { ACTION_CLIPS, BASE_PERSON, PERSON_CLIPS } from "./pose"
@@ -20,10 +21,12 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
     target.getContext("2d")!.drawImage(image, 0, variant * 8 * size)
   }
   const callings = {} as PopulationPack["callings"]
-  const types = Object.values(TRAVELER_TYPES)
+  const greyCallings: PopulationPack["greyCallings"] = {}
+  const types = [...Object.values(TRAVELER_TYPES).map(type => ({ type, grey: false })),
+    ...OLDER_TRAVELER_TYPES.map(id => ({ type: TRAVELER_TYPES[id], grey: true }))]
   const strideRatios: number[] = []
   const referenceStride = personRecipe(base).body.stride
-  for (const [typeIndex, type] of types.entries()) {
+  for (const [typeIndex, { type, grey }] of types.entries()) {
     const walk = canvas(PERSON_CLIPS.walk.frames), idle = canvas(1)
     const actions = Object.fromEntries(ACTION_CLIPS.map(clip => [clip, canvas(PERSON_CLIPS[clip].frames)]))
     const designs: PersonDesign[] = []
@@ -31,7 +34,7 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
       // Let the map keep drawing and allow a newer edit to cancel this pack.
       await new Promise(resolve => setTimeout(resolve, 0))
       if (cancelled()) throw new DOMException("Superseded character design", "AbortError")
-      const design = populationDesign(type, variant, base)
+      const design = populationDesign(type, variant, grey ? { ...base, hairColor: GREY_HAIR_COLOR } : base)
       let bake
       try { bake = bakeBasePerson(design, false) }
       catch (error) { throw new Error(`${type.id}, profile ${variant + 1}: ${error instanceof Error ? error.message : error}`) }
@@ -45,8 +48,9 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
       }
       progress((typeIndex * count + variant + 1) / (types.length * count))
     }
-    callings[type.id as TravelerTypeId] = { walk: walk.toDataURL("image/png"), idle: idle.toDataURL("image/png"), actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, actions[clip].toDataURL("image/png")])) as NonNullable<PopulationPack["callings"][TravelerTypeId]["actions"]>, designs }
+    const destination = grey ? greyCallings : callings
+    destination[type.id as TravelerTypeId] = { walk: walk.toDataURL("image/png"), idle: idle.toDataURL("image/png"), actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, actions[clip].toDataURL("image/png")])) as NonNullable<PopulationPack["callings"][TravelerTypeId]["actions"]>, designs }
   }
   return { frameCounts: Object.fromEntries(Object.entries(PERSON_CLIPS).map(([clip, definition]) => [clip, definition.frames])), templateVersion: BASE_PERSON.version, cellSize: size, anchor: BASE_PERSON.anchor,
-    rows: count * 8, callings, shadows: { walk: shadowWalk.toDataURL("image/png"), idle: shadowIdle.toDataURL("image/png"), actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, shadowActions[clip].toDataURL("image/png")])) as NonNullable<PopulationPack["shadows"]["actions"]> }, strideRatios }
+    rows: count * 8, callings, greyCallings, shadows: { walk: shadowWalk.toDataURL("image/png"), idle: shadowIdle.toDataURL("image/png"), actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, shadowActions[clip].toDataURL("image/png")])) as NonNullable<PopulationPack["shadows"]["actions"]> }, strideRatios }
 }

@@ -41,9 +41,11 @@ export interface FootPlant {
 }
 
 /** Preserve the rig's support contact between atlas frames, including turns. */
-export function plantFoot(previous: FootPlant | null, key: string, origin: GroundPoint, foot: GroundPoint) {
+export function plantFoot(previous: FootPlant | null, key: string, origin: GroundPoint, foot: GroundPoint,
+  groundHeight?: (x: number, z: number) => number) {
   const reset = !previous || previous.key !== key || Math.hypot(origin.x - previous.origin.x, origin.z - previous.origin.z) > 1
   const anchor = reset ? { x: origin.x + foot.x, y: (origin.y ?? 0) + (foot.y ?? 0), z: origin.z + foot.z } : previous.anchor
+  if (reset && groundHeight) anchor.y = groundHeight(anchor.x, anchor.z)
   return {
     plant: { key, anchor, origin: { ...origin } },
     offset: { x: anchor.x - origin.x - foot.x, y: (anchor.y ?? 0) - (origin.y ?? 0) - (foot.y ?? 0), z: anchor.z - origin.z - foot.z },
