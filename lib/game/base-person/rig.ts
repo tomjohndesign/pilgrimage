@@ -14,7 +14,9 @@ export function createBasePersonRig(recipe = personRecipe()) {
     return m
   }
   const female = recipe.design.bodyType === "Female"
-  const sleeveColor = female ? recipe.design.shirtColor : recipe.palette.tunic
+  const robe = recipe.design.garment === "Robe"
+  const longGarment = female || robe
+  const sleeveColor = female && !robe ? recipe.design.shirtColor : recipe.palette.tunic
   const palette = recipe.palette
   const skin = material(palette.skin), tunic = material(palette.tunic)
   const beltMaterial = material(palette.belt), hair = material(recipe.design.hairColor)
@@ -71,9 +73,9 @@ export function createBasePersonRig(recipe = personRecipe()) {
     positions.needsUpdate = true
     torso.geometry.computeVertexNormals()
   }
-  torso.name = female ? "sleeveless-dress" : "shirt"
+  torso.name = robe ? "robe" : female ? "sleeveless-dress" : "shirt"
   torso.userData.inkPart = 3
-  if (female) {
+  if (female && !robe) {
     // The upper shirt and dress straps share a surface: no intersecting layers
     // or flickering at the neckline. Two broad straps cross front and back.
     torso.material = [tunic, undershirt]
@@ -88,8 +90,34 @@ export function createBasePersonRig(recipe = personRecipe()) {
     }
   }
   torso.scale.z = 0.72
-  const belt = mesh(new THREE.CylinderGeometry(b.waistRadius * 1.02, b.waistRadius * 1.04, 0.035, 12), beltMaterial, root, [0, waist, 0])
-  belt.scale.z = 0.74
+  if (recipe.design.beltStyle === "Rope") {
+    const rope = (name: string, points: THREE.Vector3[], closed = false) => {
+      const curve = new THREE.CatmullRomCurve3(points, closed)
+      const cord = mesh(new THREE.TubeGeometry(curve, closed ? 48 : 20, 0.028, 5, closed), beltMaterial, root)
+      cord.name = name
+      // Keep the narrow, light cord readable against the robe after pixel inking.
+      cord.userData.inkPart = 3
+    }
+    rope("rope-belt", Array.from({ length: 24 }, (_, i) => {
+      const angle = i / 24 * Math.PI * 2
+      return new THREE.Vector3(Math.sin(angle) * b.waistRadius * 1.06, waist, Math.cos(angle) * b.waistRadius * 0.79)
+    }), true)
+    const front = b.waistRadius * 0.79
+    const knot = ellipsoid(root, [0.055, waist, front + 0.025], [0.034, 0.035, 0.032], beltMaterial)
+    knot.name = "rope-knot"
+    knot.userData.inkPart = 3
+    for (const [index, offset] of [-0.02, 0.03].entries()) {
+      rope(`rope-tail-${index}`, [
+        new THREE.Vector3(0.055, waist, front + 0.03),
+        new THREE.Vector3(0.055 + offset, waist - 0.16, front + 0.075),
+        new THREE.Vector3(0.065 + offset, waist - 0.36, front + 0.09),
+        new THREE.Vector3(0.04 + offset, b.tunicHem + 0.16 + index * 0.08, b.torsoBottom * recipe.design.hem * 0.96),
+      ])
+    }
+  } else {
+    const belt = mesh(new THREE.CylinderGeometry(b.waistRadius * 1.02, b.waistRadius * 1.04, 0.035, 12), beltMaterial, root, [0, waist, 0])
+    belt.scale.z = 0.74
+  }
   // Join the lowered collar to the jaw, retaining a visible neck at every head size.
   const neckBottom = b.torsoShoulderHeight - 0.015
   const neckTop = b.headCenter - b.headHeight * 0.72
@@ -107,7 +135,16 @@ export function createBasePersonRig(recipe = personRecipe()) {
   const nose = mesh(new THREE.ConeGeometry(b.headWidth * 0.28 * recipe.design.nose, b.headDepth * 0.65 * recipe.design.nose, 4), skin, root,
     [0, b.headCenter - 0.015, b.headDepth * (0.85 + 0.23 * recipe.design.nose)])
   nose.rotation.x = Math.PI / 2
-  if (recipe.design.hairStyle !== "Bald") {
+  if (recipe.design.hairStyle === "Tonsure") {
+    // An open ring follows the scalp; the actual skin crown stays exposed.
+    const ring = mesh(new THREE.LatheGeometry([
+      new THREE.Vector2(b.headWidth * 1.04, b.headHeight * 0.05),
+      new THREE.Vector2(b.headWidth * 0.96, b.headHeight * 0.6),
+    ], 10), hair, root, [0, b.headCenter, 0])
+    ring.name = "tonsure"
+    ring.scale.z = b.headDepth / b.headWidth
+    hair.side = THREE.DoubleSide
+  } else if (recipe.design.hairStyle !== "Bald") {
     const cap = mesh(new THREE.SphereGeometry(1, 10, 5, 0, Math.PI * 2, 0, Math.PI * 0.51), hair, root, [0, b.headCenter + 0.02, -0.006])
     cap.scale.set(b.headWidth * 1.1, b.headHeight * 1.08, b.headDepth * 1.12)
     if (recipe.design.hairStyle === "Long") {
@@ -124,7 +161,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       back.scale.set(b.headWidth * 1.13, b.headHeight * 1.12, b.headDepth * 1.16)
     }
   }
-  if (female) {
+  if (female && !robe) {
     const coif = mesh(new THREE.SphereGeometry(1, 10, 5, 0, Math.PI * 2, 0, Math.PI * 0.48), covering, root, [0, b.headCenter + 0.06, -0.025])
     coif.name = "head-covering"
     coif.scale.set(b.headWidth * 1.18, b.headHeight * 1.08, b.headDepth * 1.2)
@@ -207,7 +244,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
     const foot = mesh(footGeometry, skin, root)
     thigh.name = `${side}-${female ? "leg" : "trouser"}-upper`
     shin.name = `${side}-${female ? "leg" : "trouser"}-lower`
-    if (female) {
+    if (longGarment) {
       foot.material = legCloth
       foot.userData.clipAboveHem = true
     }
@@ -260,7 +297,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       })
     },
     pose(phase: number, clip: BaseClip = "walk") {
-      if (female) {
+      if (longGarment) {
         const sway = clip === "walk" ? Math.sin(phase * Math.PI * 2) * 0.035 * recipe.design.stride : 0
         for (let i = 0; i < skirtPositions.count; i++) {
           const weight = Math.max(0, (waist - restSkirt[i * 3 + 1]) / (waist - b.tunicHem))

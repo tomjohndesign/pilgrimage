@@ -1,8 +1,11 @@
 import manifest from "../../../public/textures/characters/population/v1/manifest.json"
 import type { TravelerTypeId } from "../travelers"
+import { validatePersonDesign } from "./design"
 import type { PopulationPack } from "./population"
 
-export const DEFAULT_POPULATION = manifest as PopulationPack
+export const DEFAULT_POPULATION: PopulationPack = { ...manifest, callings: Object.fromEntries(
+  Object.entries(manifest.callings).map(([type, entry]) => [type, { ...entry, designs: entry.designs.map(validatePersonDesign) }]),
+) as PopulationPack["callings"] }
 
 export function populationVisual(type: TravelerTypeId, variant: number, custom: PopulationPack | null) {
   const pack = custom ?? DEFAULT_POPULATION, calling = pack.callings[type]
