@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest"
+import { DEFAULT_BALANCE } from "./balance"
+import { SIMULATION_SPEEDS } from "./simulation-store"
 
 import { DEFAULT_MOVEMENT, LINEAR_MOVEMENT } from "./motion"
 import { BRIDGE_RISE } from "./map/bridges"
@@ -12,7 +14,6 @@ import {
   formatGameTime,
   stepSim,
   WINE_PRICE,
-  WINE_STAMINA_BONUS,
   type SimState,
 } from "./sim"
 import {
@@ -124,6 +125,10 @@ function runUntil(
 }
 
 describe("game time", () => {
+  it("lasts five real minutes at the displayed normal speed", () => {
+    const normal = SIMULATION_SPEEDS.find(speed => speed.label === 1)!
+    expect(GAME_DAY_SECONDS / normal.rate).toBe(300)
+  })
   it("advances with real time at the configured day length", () => {
     const map = makeMap()
     const travelers = [makeTraveler(0, "knight")]
@@ -140,6 +145,45 @@ describe("game time", () => {
 })
 
 describe("stepSim", () => {
+  it("uses live needs tuning for walkers and keeps camping's reduced drain", () => {
+    const map = makeMap()
+    const travelers = [makeTraveler(0, "knight")]
+    const sim = createSim(travelers, map)
+    sim.balance = structuredClone(DEFAULT_BALANCE)
+    const s = sim.travelers.get(0)!
+    const hour = GAME_DAY_SECONDS / 24
+    stepSim(sim, travelers, map, 1, hour)
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([77, 74, 75.8])
+
+    Object.assign(sim.balance.rules, { hungerDecay: 2, thirstDecay: 6, staminaDecay: 0 })
+    stepSim(sim, travelers, map, 1, hour)
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([75, 68, 75.8])
+
+    s.activity = "camping"
+    s.stamina = 0
+    stepSim(sim, travelers, map, 1, hour)
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([74, 65, 60])
+  })
+
+  it("keeps food and water supplied longer over an active day", () => {
+    const map = makeMap()
+    const travelers = [makeTraveler(0, "knight", { hunger: 100, thirst: 100, stamina: 100 })]
+    const sim = createSim(travelers, map)
+    const s = sim.travelers.get(0)!
+    const depleted = { hunger: 0, thirst: 0, stamina: 0 }
+    for (let elapsed = 0; elapsed < GAME_DAY_SECONDS; elapsed += 0.25) {
+      stepSim(sim, travelers, map, 1, 0.25)
+      for (const need of ["hunger", "thirst", "stamina"] as const) {
+        if (s[need] > 0) continue
+        depleted[need]++
+        s[need] = 100 // Immediate replenishment measures the active-day baseline.
+        s.activity = "walking"
+      }
+    }
+    expect(depleted).toEqual({ hunger: 0, thirst: 1, stamina: 1 })
+    expect(sim.time).toBeCloseTo(1.25)
+  })
+
   it("wears travelers down as they walk", () => {
     const map = makeMap()
     const travelers = [makeTraveler(0, "knight")]
@@ -170,7 +214,7 @@ describe("stepSim", () => {
     stepSim(sim, travelers, map, 1, 0.5)
     expect(s.stamina).toBeGreaterThan(staminaAsleep)
 
-    expect(runUntil(sim, travelers, map, () => s.activity === "walking", 30)).toBe(true)
+    expect(runUntil(sim, travelers, map, () => s.activity === "walking", GAME_DAY_SECONDS / 4)).toBe(true)
     expect(s.stamina).toBeGreaterThan(90)
     expect(s.spot).toBeNull()
     expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) - s.laneOffset)
@@ -244,10 +288,10 @@ describe("stepSim", () => {
     expect(buyer.activity).toBe("walking")
   })
 
-  it("wine refills thirst and restores some stamina", () => {
+  it("wine refills thirst without replacing sleep or buying a half-full meal", () => {
     const map = makeMap()
     const travelers = [
-      makeTraveler(0, "minstrel", { thirst: 0.1, hunger: 100, stamina: 50, gold: 10 }, 0.5),
+      makeTraveler(0, "minstrel", { thirst: 0.1, hunger: 50, stamina: 50, gold: 10 }, 0.5),
       makeTraveler(1, "vendor", { gold: 0 }, 0.5),
     ]
     const sim = createSim(travelers, map)
@@ -257,8 +301,31 @@ describe("stepSim", () => {
     expect(runUntil(sim, travelers, map, () => buyer.thirst > 50, 10)).toBe(true)
     expect(buyer.gold).toBe(10 - WINE_PRICE)
     expect(vendor.gold).toBe(WINE_PRICE)
-    // Roughly the bonus over where they were, less a moment of walking decay.
-    expect(buyer.stamina).toBeGreaterThan(50 + WINE_STAMINA_BONUS - 5)
+    expect(buyer.stamina).toBeLessThan(50)
+    expect(buyer.hunger).toBeLessThan(50)
+  })
+
+  it("needs only one drink in the first day when starting fully supplied", () => {
+    const map = makeMap()
+    const travelers = [
+      makeTraveler(0, "pilgrim", { hunger: 100, thirst: 100, gold: 100 }),
+      makeTraveler(1, "vendor", { gold: 0 }),
+    ]
+    const sim = createSim(travelers, map)
+    sim.balance = structuredClone(DEFAULT_BALANCE)
+    sim.balance.rules.staminaDecay = 0 // Isolate food and drink from sleep.
+    const buyer = sim.travelers.get(0)!, vendor = sim.travelers.get(1)!
+    vendor.timer = GAME_DAY_SECONDS + 1
+    let meals = 0, drinks = 0
+    for (let elapsed = 0; elapsed < GAME_DAY_SECONDS; elapsed += 0.25) {
+      const { hunger, thirst } = buyer
+      stepSim(sim, travelers, map, 0, 0.25)
+      if (buyer.hunger > hunger) meals++
+      if (buyer.thirst > thirst) drinks++
+    }
+    expect({ meals, drinks }).toEqual({ meals: 0, drinks: 1 })
+    expect(buyer.gold).toBe(100 - WINE_PRICE)
+    expect(vendor.gold).toBe(WINE_PRICE)
   })
 
   it("chases down a vendor further along the road", () => {
@@ -280,7 +347,7 @@ describe("stepSim", () => {
     const sim = createSim(travelers, map)
     const s = sim.travelers.get(1)!
 
-    expect(runUntil(sim, travelers, map, () => s.activity === "vending", 60)).toBe(true)
+    expect(runUntil(sim, travelers, map, () => s.activity === "vending", GAME_DAY_SECONDS / 2)).toBe(true)
     // The stall stands on a clearing, off the road.
     const terrain = tileAt(map, worldToTileX(map, s.spot!.x), worldToTileZ(map, s.spot!.z))
     expect(["grass", "dirt", "clearing"]).toContain(terrain)
@@ -291,7 +358,7 @@ describe("stepSim", () => {
     expect(s.x).toBe(parkedX)
     expect(s.z).toBe(parkedZ)
 
-    expect(runUntil(sim, travelers, map, () => s.activity === "walking", 40)).toBe(true)
+    expect(runUntil(sim, travelers, map, () => s.activity === "walking", GAME_DAY_SECONDS / 3)).toBe(true)
     expect(s.spot).toBeNull()
     expect(
       runUntil(sim, travelers, map, () => Math.hypot(s.x - parkedX, s.z - parkedZ) > 1, 10),
@@ -557,7 +624,7 @@ describe("danger on the road", () => {
     expect(sawFleeing).toBe(true)
     expect(s.direction).toBe(-1)
     // The fright wears off and they walk on — in the new direction.
-    expect(runUntil(sim, travelers, map, () => s.activity === "walking", 30)).toBe(true)
+    expect(runUntil(sim, travelers, map, () => s.activity === "walking", GAME_DAY_SECONDS / 4)).toBe(true)
     expect(s.direction).toBe(-1)
   })
 

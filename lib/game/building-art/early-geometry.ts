@@ -64,8 +64,8 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     box(`rolled-blanket-${index}`,"base",[x,floor+.1,z-length*.32],[.3,.11,.12],"#a3987a",undefined,false)
   }
   function bench(name: string, x: number, z: number, length: number, top = .3) {
-    for (const end of [-1, 1]) pole(`${name}-leg-${end}`, [x+end*length*.35,floor,z], [x+end*length*.35,floor+top,z], .035)
-    box(`${name}-seat`, "wall", [x,floor+top,z], [length,.045,.18], palette.paleWood, undefined, false)
+    for (const end of [-1, 1]) pole(`${name}-leg-${end}`, [x+end*length*.35,floor,z], [x+end*length*.35,floor+top,z], .035, "interior")
+    box(`${name}-seat`, "interior", [x,floor+top,z], [length,.045,.18], palette.paleWood, undefined, false)
   }
   if (variant === "garden") {
     // Two herb beds leave a narrow flagstone walk between them.
@@ -142,7 +142,10 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
 
   const x=w-.13,z=d-.13, eave=floor+h
   if(variant === "storehouse") {
-    for(const a of [-x,x]) for(const b of [-z,z]) pole(`raised-leg-${a}-${b}`,[a,0,b],[a,eave,b],.045)
+    for(const a of [-x,x]) for(const b of [-z,z]) {
+      pole(`raised-leg-${a}-${b}`,[a,0,b],[a,floor,b],.045,"base")
+      pole(`raised-post-${a}-${b}`,[a,floor,b],[a,eave,b],.045)
+    }
     for(let i=0;i<Math.ceil(width/.12);i++) box(`floor-board-${i}`,"base",[-w+.07+i*(width-.14)/Math.max(1,Math.ceil(width/.12)-1),floor+.025,0],[.085,.045,depth-.12],palette.paleWood,undefined,false)
     box("grain-sack","base",[0,floor+.16,-depth*.12],[Math.min(.3,width*.3),.27,Math.min(.25,depth*.3)],"#a29978",undefined,false)
   } else for(const a of [-x,x]) for(const b of [-z,z]) pole(`earthfast-post-${a}-${b}`,[a,0,b],[a,eave+(variant === "wood-shelter" && b < 0 ? rise : 0)+.06,b],.043)
@@ -181,9 +184,9 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
         pole(`firewood-${row}-${i}`,[px,floor+.065+row*.085,-depth*.2],[px+.008,floor+.065+row*.085,depth*.18],.052,"base",i%3?palette.wood:palette.paleWood)
       }
       if (variant === "workshop") {
-        bench("workbench",0,depth*.28,width*.65,.38)
-        pole("axe-handle",[-.2,floor+.42,depth*.28],[.2,floor+.43,depth*.28],.014,"wall",palette.darkWood)
-        box("axe-head","wall",[.17,floor+.46,depth*.28],[.08,.08,.035],"#787970",undefined,false)
+        bench("workbench",0,-depth*.3,width*.65,.38)
+        pole("axe-handle",[-.2,floor+.42,-depth*.3],[.2,floor+.43,-depth*.3],.014,"interior",palette.darkWood)
+        box("axe-head","interior",[.17,floor+.46,-depth*.3],[.08,.08,.035],"#787970",undefined,false)
       }
     }
   }

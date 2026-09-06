@@ -19,9 +19,6 @@ export function shrineGates(building: BuildingDef): Array<{ outside: TilePos; in
 /** Closed buildings block walking. Shrine visits cross walls only at a gate. */
 export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDef[], from: TilePos, to: TilePos, enterShrine = false): boolean {
   for (const building of buildings) {
-    // Lumber camps are open yards, with no walls or doors.
-    if ((building.buildType === "lumberCamp" || building.id.startsWith("lumberCamp-")) &&
-      (!building.construction || building.construction.work >= building.construction.required)) continue
     const a = containsTile(building, from), b = containsTile(building, to)
     if (!a && !b) continue
     if (enterShrine && isMonkShelter(building) && isComplete(building)) {

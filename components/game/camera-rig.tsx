@@ -176,10 +176,15 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
 
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
-      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey ||
-          target?.closest("input, textarea, select, [contenteditable=true]")) return
-
+      if (event.defaultPrevented || target?.closest("input, textarea, select, [contenteditable=true]")) return
       const key = event.key.toLowerCase()
+      const build = useBuildStore.getState()
+      if (!event.ctrlKey && !event.altKey && build.tool && key === "r") {
+        event.preventDefault()
+        if (!event.repeat) build.rotateBuilding(event.metaKey ? -1 : 1)
+        return
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return
       heldKeys.current.add(key)
 
       // Rotation and zoom fire once per press, not on auto-repeat.

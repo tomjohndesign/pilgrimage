@@ -4,6 +4,8 @@ export interface BuildingDef {
   id: string
   /** Player-built catalogue entry; absent on the founding hovel. */
   buildType?: string
+  /** Clockwise quarter turns; w/d already describe the rotated footprint. */
+  rotation?: import("../building-rotation").BuildingRotation
   /** Gold paid by each visitor entering the relic enclosure. */
   admissionFee?: number
   /** Live worker progress; absent on completed founding structures. */

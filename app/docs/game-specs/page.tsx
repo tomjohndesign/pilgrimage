@@ -188,13 +188,24 @@ export default function GameSpecsPage() {
         </p>
         <p className="mt-3">
           Defaults range from ×{r.drawBase} at zero renown to ×{r.drawBase + r.drawBonus} at{" "}
-          {r.drawCap} renown. A rested traveler has a 50% visit chance at a draw of {r.turnAsideDraw};
-          the chance rises linearly from 0 to 100% across scores {r.turnAsideDraw - 25}–{r.turnAsideDraw + 25}.
-          Hunger, thirst or exhaustion can increase that chance, and available work gives eligible
-          jobless travelers at least an 80% chance. The simulation rolls at the junction and routes
-          visitors to the shrine for food, rest and blessings. The HUD rounds the sum of faith and
-          hospitality chances as its forecast; actual visits also depend on changing needs and jobs.
+          {r.drawCap} renown. The faith chance rises linearly from 0 to 100% across draw scores{" "}
+          {r.turnAsideDraw - 25}–{r.turnAsideDraw + 25}, then scales by willingness to detour.
+          At zero renown, willingness starts above {r.earlyVisitPiety} piety and reaches full strength
+          at 100. Let q = (clamp(renown, 0, draw cap) ÷ draw cap)²: renown adds 100 × q to effective
+          piety before willingness is calculated.
+        </p>
+        <p className="mt-3">
+          Hospitality requires fullness or hydration below {r.hospitalityNeedThreshold} + (60 −{" "}
+          {r.hospitalityNeedThreshold}) × q. Its chance grows from zero at that threshold to a maximum
+          of {r.hospitalityBaseChance} + {r.hospitalityRenownBonus} × q at an empty meter, capped at 100%.
+          Tiredness and job vacancies alone do not attract visitors. Travelers roll the higher of faith
+          and hospitality chances when crossing the junction; they do not turn back to seek the shrine.
+          The HUD forecasts that same chance, while actual visits require affordable admission and a clear route.
           Higher renown does not increase the road’s traveler count or spawn new archetypes.
+        </p>
+        <p className="mt-3">
+          Passing travelers start with 80–100 fullness and hydration. These lose {r.hungerDecay} and{" "}
+          {r.thirstDecay} points per game hour respectively; camping halves both rates.
         </p>
 
         <h2 className={heading}>Tuning while playing</h2>

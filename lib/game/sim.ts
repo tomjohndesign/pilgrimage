@@ -1,4 +1,6 @@
 import { assignBuildingTask, buildingEntrance, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
+import { buildingEntry } from "./building-rotation"
+import { timberDestination, type FoodStock } from "./storage"
 import { nearProcession, type RelicProcession } from "./relic-procession"
 import { roadsideStall, routePoint, routeLength, type StallRoute } from "./transport/roadside"
 import { roadLanePoint } from "./map/road-lane"
@@ -15,7 +17,7 @@ import { DEFAULT_BALANCE, type GameBalance } from "./balance"
 import { buildingAt } from "./settlement"
 import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
 import { BUILDING_KINDS, buildingCentre, type PlacedBuilding } from "./buildings"
-import { generateRelic, visitChance, type RelicStats } from "./relic"
+import { generateRelic, hospitalityNeedThreshold, visitChance, type RelicStats } from "./relic"
 import { settlementRoute } from "./settlement-route"
 import { admissionFee, shrineVisitRoute } from "./shrine-visit"
 import type { TreePlacement } from "./trees/placement"
@@ -46,7 +48,7 @@ import type { Traveler } from "./travelers"
  *  - At the shrine junction, faith, hospitality and available work draw visitors
  *    down the branch. The brothers restore their needs and bestow piety before
  *    they return to the road; each visit spreads the shrine's renown.
- *  - Jobless visitors may settle into a lumber-camp slot, walk to a reserved
+ *  - Jobless visitors may settle into a woodcutter hut slot, walk to a reserved
  *    tree, fell it and haul logs home. Camps provide rest when needs run low.
  *  - Stamina at 0 → leave the road for the nearest open ground (grass, dirt,
  *    or a forest-floor clearing — never solid woods or the road itself) and
@@ -54,7 +56,7 @@ import type { Traveler } from "./travelers"
  *    the favourite pitch for anyone; pilgrims will otherwise join an existing
  *    camp rather than camp alone.
  *  - Hunger or thirst at 0 → chase down a vendor and buy: food refills hunger,
- *    wine refills thirst and some stamina. Gold changes hands.
+ *    wine refills thirst. Energy returns through rest. Gold changes hands.
  *  - Vendors walk a stretch, then pull the cart off to the side of the path and
  *    keep shop for a few hours before moving on. They eat their own stock free.
  *  - Danger (see map/danger.ts) is met tile by tile: each new tile rolls for
@@ -100,9 +102,9 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
   toWork: "Walking to work",
   working: "Felling a tree",
   gathering: "Cutting & gathering fallen timber",
-  hauling: "Carrying logs to camp",
-  idle: "At the lumber camp",
-  fromBuild: "Returning to the lumber camp",
+  hauling: "Carrying logs to storage",
+  idle: "Resting from woodcutting",
+  fromBuild: "Returning to the woodcutter hut",
   toBuild: "Going to a construction site",
   building: "Building a structure",
   walking: "On the road",
@@ -123,8 +125,10 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
 
 // --- Game time ---------------------------------------------------------------
 
-/** Real seconds per game day; the one knob that scales the whole rhythm. */
-export const GAME_DAY_SECONDS = 120
+/** Simulation seconds per day: 5 real minutes at the HUD's 1× (2 sim seconds/real second).
+ * Roughly one uninterrupted walk along a generated 128×128 map's winding road.
+ */
+export const GAME_DAY_SECONDS = 600
 const GAME_HOUR_SECONDS = GAME_DAY_SECONDS / 24
 
 /** The sim opens at dawn on day one. */
@@ -140,21 +144,17 @@ export function formatGameTime(time: number): string {
 }
 
 // --- Tuning ------------------------------------------------------------------
-// Need rates are per game hour: a rested traveler walks dry in well under a
-// day, and a camp is a few hours' rest — watchable at the default day length.
+// Need rates are per game hour and read from the live balance below. A camp
+// is a few hours' rest — watchable at the default day length.
 
-export const STAMINA_DECAY = 6
-export const HUNGER_DECAY = 8
-export const THIRST_DECAY = 10
 export const CAMP_STAMINA_REGEN = 60
 /** Resting slows the need for food and drink but doesn't stop it. */
 const CAMP_NEED_FACTOR = 0.5
 
 export const FOOD_PRICE = 2
 export const WINE_PRICE = 3
-export const WINE_STAMINA_BONUS = 25
-/** At the vendor, top up any need at or below this — not just the empty one. */
-const BUY_THRESHOLD = 50
+/** Top up near-empty needs, so each drink doesn't also become a half-full meal. */
+const BUY_THRESHOLD = 10
 /** Close enough to trade, in tiles; a parked stall serves a wider reach. */
 const TRADE_RANGE = 1.2
 const STALL_TRADE_RANGE = 2.6
@@ -214,6 +214,7 @@ export interface SimTraveler {
   gold: number
   piety: number
   jobless: boolean
+  deliveryBuilding?: string | null
   employer: string | null
   branchProgress: number
   shrineRoute: TilePos[] | null
@@ -295,6 +296,7 @@ export interface SimState {
   constructionWood: number
   felled: Set<number>
   treeResources: Map<number, TreeResource>
+  foodStores: Map<string, FoodStock>
   piles: Map<string, WoodPile>
   resourceRevision: number
   buildings: readonly PlacedBuilding[]
@@ -471,6 +473,7 @@ export function createSim(
     constructionWood: 0,
     felled: new Set(),
     treeResources: new Map(),
+    foodStores: new Map(),
     piles: new Map(),
     resourceRevision: 0,
     buildings: [],
@@ -704,7 +707,7 @@ function pay(buyer: SimTraveler, vendor: SimTraveler, price: number): void {
   vendor.gold += paid
 }
 
-/** Unskilled applicants can fill any open lumber-camp slot. */
+/** Unskilled applicants can fill any open woodcutter hut slot. */
 function findJob(sim: SimState, s: SimTraveler, map: GameMap): PlacedBuilding | undefined {
   if (!s.jobless || s.employer) return undefined
   return sim.buildings.find((b) => {
@@ -786,7 +789,7 @@ function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): 
   if (job && nextRoll(s) < (t.attributes.skills.some((skill) => BUILDING_KINDS[job.kind].trades.includes(skill)) ? 0.9 : 0.65)) {
     const route = settlementRoute(map, [...map.buildings, ...sim.buildings],
       { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
-      { x: job.x, z: job.z + job.d - 1 }, false, true)
+      buildingEntry(job), false, true)
     if (route) {
       s.employer = job.id
       s.jobless = false
@@ -825,12 +828,12 @@ export function stepSim(
 
     // --- Needs march on ------------------------------------------------------
     const needFactor = camping ? CAMP_NEED_FACTOR : 1
-    s.hunger = Math.max(0, s.hunger - HUNGER_DECAY * needFactor * hours)
-    s.thirst = Math.max(0, s.thirst - THIRST_DECAY * needFactor * hours)
+    s.hunger = Math.max(0, s.hunger - sim.balance.rules.hungerDecay * needFactor * hours)
+    s.thirst = Math.max(0, s.thirst - sim.balance.rules.thirstDecay * needFactor * hours)
     if (camping) s.stamina = Math.min(100, s.stamina + CAMP_STAMINA_REGEN * hours)
     // Minding a parked stall neither drains nor restores the legs.
     else if (s.activity !== "vending") {
-      s.stamina = Math.max(0, s.stamina - STAMINA_DECAY * hours)
+      s.stamina = Math.max(0, s.stamina - sim.balance.rules.staminaDecay * hours)
     }
 
     if (sheltered) {
@@ -844,7 +847,6 @@ export function stepSim(
       if (s.hunger <= 0) s.hunger = 100
       if (s.thirst <= 0) {
         s.thirst = 100
-        s.stamina = Math.min(100, s.stamina + WINE_STAMINA_BONUS)
       }
     }
 
@@ -924,23 +926,27 @@ export function stepSim(
         s.timer -= dt
         if (s.timer <= 0) {
           const tree = sim.treeResources.get(s.tree!)!
+          const destination = s.employer && timberDestination(map, [...map.buildings, ...sim.buildings], s.employer, s)
+          if (!destination) { s.timer = GAME_HOUR_SECONDS; break }
           s.carrying = Math.min(TIMBER_LOAD, tree.remainingWood)
           tree.remainingWood -= s.carrying
           sim.resourceRevision++
           s.tree = null
-          startWorkRoute(s, [...s.workRoute!].reverse(), "hauling")
+          s.deliveryBuilding = destination.building.id
+          startWorkRoute(s, destination.route, "hauling")
         }
         break
       }
       case "hauling": {
         if (stepWorkRoute(s, map, worldSpeed, dt)) {
           if (s.employer && s.carrying > 0) {
-            stackWood(sim.piles, s.employer, s.carrying)
+            stackWood(sim.piles, s.deliveryBuilding ?? s.employer, s.carrying)
             sim.wood += s.carrying
             sim.resourceRevision++
             s.gold++
           }
           s.carrying = 0
+          s.deliveryBuilding = null
           if (Math.min(s.hunger, s.thirst, s.stamina) > 40 && chooseTree(sim, s, map)) break
           s.activity = "idle"
           s.timer = GAME_HOUR_SECONDS
@@ -981,9 +987,12 @@ export function stepSim(
       case "walking":
       case "seeking":
       case "fleeing": {
-        // Nearby travelers seek the brothers before collapsing or chasing a cart.
+        // A hungry traveler may consider a shrine ahead on their own route.
+        // Never turn them back toward a junction they have already passed.
+        const renown = sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown
+        const ahead = map.site ? s.direction * (map.site.junction - s.progress) : -1
         const shelter = !!map.site && s.gold >= admissionFee(map) && !s.track && s.activity !== "fleeing" && s.visitCooldown <= 0 &&
-          Math.min(s.hunger, s.thirst, s.stamina) <= 40 && Math.abs(s.progress - map.site.junction) <= 12
+          Math.min(s.hunger, s.thirst) < hospitalityNeedThreshold(renown, sim.balance) && ahead >= 0 && ahead <= 12
         if (s.stamina <= 0 && !shelter) {
           startCamping(sim, s, t, map)
           break
@@ -1050,7 +1059,6 @@ export function stepSim(
               if (s.thirst <= BUY_THRESHOLD) {
                 pay(s, vendor, WINE_PRICE)
                 s.thirst = 100
-                s.stamina = Math.min(100, s.stamina + WINE_STAMINA_BONUS)
               }
               s.activity = "walking"
               s.targetId = null
@@ -1088,14 +1096,12 @@ export function stepSim(
           break
         }
 
-        if (shelter) direction = map.site!.junction >= s.progress ? 1 : -1
         const site = map.site
         if (site && site.branch.length >= 2 && s.activity !== "fleeing" && s.visitCooldown <= 0) {
           const distance = ((direction * (site.junction - s.progress)) % length + length) % length
           if (distance <= worldSpeed * haste * dt) {
-            const chance = Math.max(visitChance({ ...t.attributes, piety: s.piety,
-              hunger: s.hunger, thirst: s.thirst, stamina: s.stamina }, sim.relic, sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown, sim.balance),
-              findJob(sim, s, map) ? 0.8 : 0)
+            const chance = visitChance({ ...t.attributes, piety: s.piety,
+              hunger: s.hunger, thirst: s.thirst, stamina: s.stamina }, sim.relic, renown, sim.balance)
             s.visitCooldown = 5
             const wantsVisit = nextRoll(s) < chance && s.gold >= admissionFee(map)
             const visitRoute = wantsVisit ? shrineVisitRoute(map, s.id, s.visits) : null
@@ -1159,7 +1165,7 @@ export function stepSim(
         if (s.timer === 0 || !vendor || vendor.activity !== "vending") {
           if (vendor?.activity === "vending") {
             if (s.hunger <= BUY_THRESHOLD) { pay(s, vendor, FOOD_PRICE); s.hunger = 100 }
-            if (s.thirst <= BUY_THRESHOLD) { pay(s, vendor, WINE_PRICE); s.thirst = 100; s.stamina = Math.min(100, s.stamina + WINE_STAMINA_BONUS) }
+            if (s.thirst <= BUY_THRESHOLD) { pay(s, vendor, WINE_PRICE); s.thirst = 100 }
           }
           startCustomerWalk(s, "fromStall")
         }

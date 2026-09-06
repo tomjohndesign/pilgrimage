@@ -58,10 +58,10 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   const map = useMemo(
     () =>
       world
-        ? { ...world, buildings: [...world.buildings.map(b => b.id === world.site?.hovelId
+        ? { ...world, elevation: session.settlement.elevation ?? world.elevation, buildings: [...world.buildings.map(b => b.id === world.site?.hovelId
           ? { ...b, admissionFee: session.settlement.shrineAdmission } : b), ...session.settlement.structures] }
         : null,
-    [world, session.settlement.structures, session.settlement.shrineAdmission],
+    [world, session.settlement.elevation, session.settlement.structures, session.settlement.shrineAdmission],
   )
 
   useEffect(() => {
@@ -117,6 +117,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     setSession(current => ({ ...current, settlement: { ...current.settlement, shrineAdmission: fee } }))
   }, [])
   const place = (at: TilePos) => {
+    const rotation = useBuildStore.getState().rotation
     setSession((current) => {
       if (!baseMap || !relic || current.world !== baseMap || !current.buildType) return current
       const result = purchaseStructure(
@@ -128,6 +129,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
         at,
         balanceRef.current,
         visits,
+        rotation,
       )
       return {
         ...current,

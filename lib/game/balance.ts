@@ -1,7 +1,7 @@
-import { EARLY_BUILDINGS, BUILDING_STYLE, type EarlyBuildingType } from "./building-art/style"
+import { STOREHOUSE_FOOD_CAPACITY } from "./storage"
 
 /** Pure balance data, shared by gameplay, the tuning page and the specification. */
-export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "lumberCamp" | Exclude<EarlyBuildingType, "enclosure">
+export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "storehouse"
 
 export interface Resources {
   gold: number
@@ -42,13 +42,13 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "workshop",
-    label: "Woodcutter’s lodge",
+    label: "Woodcutter’s hut",
     category: "buildings",
-    description: "Timber for the growing shrine.",
+    description: "Three jobs felling nearby trees. Workers carry timber to a storehouse or back to the hut.",
     cost: { gold: 60, wood: 45 },
     renown: 0,
     requiredRenown: 0,
-    income: { gold: 0, wood: 8 },
+    income: { gold: 0, wood: 0 },
     w: 2,
     d: 2,
     height: 0.85,
@@ -101,27 +101,12 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     roofColor: "#78504b",
   },
   {
-    id: "lumberCamp", label: "Lumber camp", category: "buildings",
-    description: "Three jobs for settlers. Workers fell nearby trees and deliver spendable wood.",
+    id: "storehouse", label: "Storehouse", category: "buildings",
+    description: "Covered storage for harvested timber, grain, vegetables, fruit and fish.",
     cost: { gold: 60, wood: 45 }, renown: 0, requiredRenown: 0,
-    income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.04,
+    income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.85,
     color: "#7a5a3a", roofColor: "#54402c",
   },
-  ...EARLY_BUILDINGS.filter((preset) => preset.id !== "enclosure").map((preset): BuildDefinition => ({
-    id: preset.id,
-    label: preset.name,
-    category: "buildings",
-    description: preset.description,
-    cost: { gold: preset.width * preset.depth * 10, wood: preset.width * preset.depth * 10 },
-    renown: 0,
-    requiredRenown: 0,
-    income: { gold: 0, wood: 0 },
-    w: preset.width,
-    d: preset.depth,
-    height: preset.wallHeight,
-    color: BUILDING_STYLE.palette.plaster,
-    roofColor: BUILDING_STYLE.palette.thatch,
-  })),
 ]
 
 export const RULE_GROUPS = [
@@ -131,6 +116,7 @@ export const RULE_GROUPS = [
   "Relic renown",
   "Progression",
   "Traveler attraction",
+  "Traveler needs",
 ] as const
 export const RULE_FIELDS = [
   {
@@ -325,7 +311,7 @@ export const RULE_FIELDS = [
     group: "Traveler attraction",
     label: "Base draw multiplier",
     description: "Multiplier for a shrine with zero renown.",
-    default: 0.75,
+    default: 0.5,
     min: 0,
     max: 5,
     step: 0.01,
@@ -335,7 +321,7 @@ export const RULE_FIELDS = [
     group: "Traveler attraction",
     label: "Maximum renown draw bonus",
     description: "Added to the base multiplier once renown reaches the draw cap.",
-    default: 0.5,
+    default: 0.75,
     min: 0,
     max: 5,
     step: 0.01,
@@ -344,7 +330,7 @@ export const RULE_FIELDS = [
     key: "drawCap",
     group: "Traveler attraction",
     label: "Renown draw cap",
-    description: "Renown above this still counts for progression but adds no further attraction.",
+    description: "Renown at which relic attraction and hospitality reach their full strength. Higher renown still counts for progression.",
     default: 100,
     min: 1,
     max: 100000,
@@ -354,11 +340,46 @@ export const RULE_FIELDS = [
     key: "turnAsideDraw",
     group: "Traveler attraction",
     label: "Turn-aside draw threshold",
-    description: "Attraction score giving a rested traveler a 50% visit chance. Need for hospitality can increase it.",
+    description: "Attraction score giving a fully willing traveler a 50% faith visit chance. Early visits also require exceptional piety.",
     default: 40,
     min: 0,
     max: 1000,
     step: 1,
+  },
+  {
+    key: "earlyVisitPiety", group: "Traveler attraction", label: "Piety needed at zero renown",
+    description: "Faith visits begin above this piety and reach full willingness at 100. Renown adds up to 100 to effective piety, scaled by the square of renown / draw cap.",
+    default: 90, min: 0, max: 99, step: 1,
+  },
+  {
+    key: "hospitalityNeedThreshold", group: "Traveler attraction", label: "Food or water threshold at zero renown",
+    description: "Only fullness or hydration below this level draws a hospitality visit. Renown raises the threshold toward 60, scaled by the square of renown / draw cap. Tiredness alone does not attract visitors.",
+    default: 20, min: 1, max: 60, step: 1,
+  },
+  {
+    key: "hospitalityBaseChance", group: "Traveler attraction", label: "Hospitality chance at zero renown",
+    description: "Maximum chance of visiting an unknown shrine for food or water, reached only with an empty meter. Scales down to zero at the food or water threshold.",
+    default: 0.1, min: 0, max: 1, step: 0.01,
+  },
+  {
+    key: "hospitalityRenownBonus", group: "Traveler attraction", label: "Maximum renown hospitality bonus",
+    description: "Added to the maximum hospitality chance at the draw cap, scaled by the square of renown / draw cap. The resulting chance is capped at 100% and still requires food or water need.",
+    default: 0.5, min: 0, max: 1, step: 0.01,
+  },
+  {
+    key: "hungerDecay", group: "Traveler needs", label: "Hunger drain per game hour",
+    description: "Fullness lost per game hour. Default: 72 points per day, with a full bar lasting about 33 hours. Camping halves this rate; shrine hospitality restores it.",
+    default: 3, min: 0, max: 50, step: 0.1,
+  },
+  {
+    key: "thirstDecay", group: "Traveler needs", label: "Thirst drain per game hour",
+    description: "Hydration lost per game hour. Default: 144 points per day, with a full bar lasting about 17 hours. Camping halves this rate; shrine hospitality restores it.",
+    default: 6, min: 0, max: 50, step: 0.1,
+  },
+  {
+    key: "staminaDecay", group: "Traveler needs", label: "Stamina drain per game hour",
+    description: "Energy lost per game hour. Default: exhausted after about 24 hours. Camping restores stamina and tending a parked stall holds it steady; drinking does not restore energy.",
+    default: 4.2, min: 0, max: 50, step: 0.1,
   },
 ] as const
 export type RuleKey = (typeof RULE_FIELDS)[number]["key"]
@@ -457,7 +478,7 @@ export function buildingIncomeLabel(def: BuildDefinition, balance: GameBalance):
   ].filter(Boolean)
   return parts.length
     ? `${parts.join(" · ")} / ${balance.rules.incomeSeconds}s`
-    : def.id === "lumberCamp" ? "Workers deliver harvested wood" : "No resource income"
+    : def.id === "workshop" ? "3 woodcutting jobs" : def.id === "storehouse" ? `Timber storage · ${STOREHOUSE_FOOD_CAPACITY} food capacity` : "No resource income"
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -519,27 +540,42 @@ export function validateBalance(
   }
   return { balance: clean, error: null }
 }
-export const BALANCE_VERSION = 1
+export const BALANCE_VERSION = 3
 export function exportBalance(balance: GameBalance): string {
   return JSON.stringify({ version: BALANCE_VERSION, balance }, null, 2)
 }
 export function importBalance(json: string): ReturnType<typeof validateBalance> {
   try {
     const preset = record(JSON.parse(json))
-    if (preset?.version !== BALANCE_VERSION)
-      return { balance: null, error: "Unsupported preset version. Expected version 1." }
+    if (preset?.version !== 1 && preset?.version !== 2 && preset?.version !== BALANCE_VERSION)
+      return { balance: null, error: "Unsupported preset version. Expected version 1, 2 or 3." }
     // Add defaults for new structures while retaining all authored settings.
     const saved = record(preset.balance)
     const rules = record(saved?.rules)
     const buildings = record(saved?.buildings)
     return validateBalance(saved && rules && buildings ? {
       ...saved,
-      rules: { visitRenown: DEFAULT_BALANCE.rules.visitRenown, ...rules },
+      rules: {
+        visitRenown: DEFAULT_BALANCE.rules.visitRenown,
+        hospitalityBaseChance: DEFAULT_BALANCE.rules.hospitalityBaseChance,
+        hungerDecay: DEFAULT_BALANCE.rules.hungerDecay,
+        thirstDecay: DEFAULT_BALANCE.rules.thirstDecay,
+        staminaDecay: DEFAULT_BALANCE.rules.staminaDecay,
+        earlyVisitPiety: DEFAULT_BALANCE.rules.earlyVisitPiety,
+        hospitalityNeedThreshold: DEFAULT_BALANCE.rules.hospitalityNeedThreshold,
+        hospitalityRenownBonus: DEFAULT_BALANCE.rules.hospitalityRenownBonus,
+        ...rules,
+        // Adopt slower defaults in old saves without overwriting custom rates.
+        ...(preset.version !== BALANCE_VERSION && rules.hungerDecay === 12.5 ? { hungerDecay: DEFAULT_BALANCE.rules.hungerDecay } : {}),
+        ...(preset.version !== BALANCE_VERSION && rules.thirstDecay === 25 ? { thirstDecay: DEFAULT_BALANCE.rules.thirstDecay } : {}),
+      },
       buildings: {
-        lumberCamp: DEFAULT_BALANCE.buildings.lumberCamp,
-        ...Object.fromEntries(EARLY_BUILDINGS.filter((preset) => preset.id !== "enclosure")
-          .map((preset) => [preset.id, DEFAULT_BALANCE.buildings[preset.id]])),
+        storehouse: DEFAULT_BALANCE.buildings.storehouse,
         ...buildings,
+        // The hut now earns wood through deliveries; retire its old passive payment.
+        ...(preset.version === 1 && record(buildings.workshop) ? {
+          workshop: { ...record(buildings.workshop), woodIncome: 0 },
+        } : {}),
       },
     } : preset.balance)
   } catch {

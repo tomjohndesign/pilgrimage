@@ -130,19 +130,34 @@ export const VISIT_DRAW_FLOOR = DEFAULT_BALANCE.rules.turnAsideDraw - 25
 export const VISIT_DRAW_CEILING = DEFAULT_BALANCE.rules.turnAsideDraw + 25
 export const TURN_ASIDE_DRAW = (VISIT_DRAW_FLOOR + VISIT_DRAW_CEILING) / 2
 
+/** Word of mouth grows slowly while the shrine is still barely known. */
+function reputationModifier(shrineRenown: number, balance: GameBalance): number {
+  return Math.min(1, Math.max(0, shrineRenown) / balance.rules.drawCap) ** 2
+}
+
+/** Renown makes less urgent food and water needs worth a detour. */
+export function hospitalityNeedThreshold(shrineRenown: number, balance: GameBalance = DEFAULT_BALANCE): number {
+  return balance.rules.hospitalityNeedThreshold + (60 - balance.rules.hospitalityNeedThreshold) * reputationModifier(shrineRenown, balance)
+}
+
 /**
  * The chance, 0–1, that this traveler turns down the branch when they reach
- * the junction. A chance rather than a threshold so the road's ordinary folk
- * still wander in now and then, while the devout all but always do. The sim
- * rolls it (see sim.ts); the HUD's forecast rounds it.
+ * the junction. Early visitors are exceptionally pious or desperate for food
+ * or water. Renown broadens those motives, but never creates a motive by itself.
+ * The sim rolls it (see sim.ts); the HUD's forecast rounds it.
  */
 export function visitChance(who: TravelerAttributes, stats: RelicStats, shrineRenown = 0, balance: GameBalance = DEFAULT_BALANCE): number {
   const draw = relicDraw(who, stats, shrineRenown, balance)
-  const devotion = Math.max(0, Math.min(1, (draw - (balance.rules.turnAsideDraw - 25)) / 50))
-  // These are fullness/energy meters: low values mean greater need. Hospitality
-  // is known at the junction even when the relic itself is obscure.
-  const need = Math.min(who.hunger, who.thirst, who.stamina)
-  const hospitality = Math.max(0, Math.min(1, (60 - need) / 40))
+  const r = balance.rules
+  const reputation = reputationModifier(shrineRenown, balance)
+  const willingness = Math.max(0, Math.min(1, (who.piety + 100 * reputation - r.earlyVisitPiety) / (100 - r.earlyVisitPiety)))
+  const devotion = Math.max(0, Math.min(1, (draw - (r.turnAsideDraw - 25)) / 50)) * willingness
+  // Tired travelers can camp along their own route. Only food and water create
+  // hospitality draw; neither a job vacancy nor renown alone is a destination.
+  const need = Math.min(who.hunger, who.thirst)
+  const threshold = hospitalityNeedThreshold(shrineRenown, balance)
+  const hospitalityReach = Math.min(1, r.hospitalityBaseChance + r.hospitalityRenownBonus * reputation)
+  const hospitality = Math.max(0, Math.min(1, (threshold - need) / threshold)) * hospitalityReach
   return Math.max(devotion, hospitality)
 }
 
