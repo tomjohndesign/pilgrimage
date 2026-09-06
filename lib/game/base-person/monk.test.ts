@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 import { DEFAULT_DESIGN, PERSON_PRESETS, personRecipe, validatePersonDesign } from "./design"
 import { MONK_VISUAL } from "./monk-assets"
+import { ACTION_CLIPS, PERSON_CLIPS } from "./pose"
 import { createBasePersonRig } from "./rig"
 
 describe("parametric monks", () => {
@@ -49,8 +50,45 @@ describe("parametric monks", () => {
     } finally { rig.dispose() }
   })
 
+  it("loops the new poses, keeps rope ends above ground, and restores the standing robe", () => {
+    const rig = createBasePersonRig(personRecipe(PERSON_PRESETS.Monk))
+    const parts = ["robe", "rope-tail-0", "rope-tail-1"].map(name => rig.root.getObjectByName(name) as THREE.Mesh)
+    const vertices = () => parts.map(part => Array.from(part.geometry.getAttribute("position").array))
+    try {
+      rig.pose(0, "idle")
+      const rest = vertices()
+      for (const clip of ACTION_CLIPS) {
+        rig.pose(0, clip)
+        const first = vertices()
+        rig.pose(1, clip)
+        vertices().forEach((points, i) => points.forEach((v, j) => expect(v).toBeCloseTo(first[i][j], 8)))
+        if (clip === "sitting" || clip === "praying") {
+          for (const part of parts.slice(1)) {
+            const positions = part.geometry.getAttribute("position")
+            for (let i = 0; i < positions.count; i++) {
+              const point = new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(part.matrixWorld)
+              expect(point.y).toBeGreaterThan(-0.03)
+            }
+          }
+        }
+        rig.pose(0, "idle")
+        expect(vertices()).toEqual(rest)
+      }
+    } finally { rig.dispose() }
+  })
+
   it("ships the current Monk preset in matching eight-direction sprite and shadow sheets", () => {
     expect(MONK_VISUAL.design).toEqual(PERSON_PRESETS.Monk)
+    expect(Object.keys(MONK_VISUAL.actions)).toEqual([...ACTION_CLIPS])
+    for (const clip of ACTION_CLIPS) {
+      const action = MONK_VISUAL.actions[clip]!
+      expect(action.columns).toBe(PERSON_CLIPS[clip].frames)
+      for (const url of [action.url, action.shadow]) {
+        const png = readFileSync(`${process.cwd()}/public${url}`)
+        expect(png.readUInt32BE(16)).toBe(action.columns * 64)
+        expect(png.readUInt32BE(20)).toBe(8 * 64)
+      }
+    }
     for (const [url, columns] of [[MONK_VISUAL.walk.url, 8], [MONK_VISUAL.idle.url, 1],
       [MONK_VISUAL.shadow.walk, 8], [MONK_VISUAL.shadow.idle, 1]] as const) {
       const png = readFileSync(`${process.cwd()}/public${url}`)

@@ -144,6 +144,7 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     const texture = textures[actionIndex ?? (moving ? 0 : 1)]
     const frame = action ? requested === "carrying" ? Math.floor(clock.current * clip.columns) :
       Math.floor(actionClock.current * fps) % clip.columns : moving ? Math.floor(clock.current * clip.columns) : clip.stillFrame
+    if (sprite.current) sprite.current.userData.clip = action ? requested : moving ? "walk" : "idle"
     const row = visual.rowOffset + spriteRow(heading, yaw)
     const previous = lastFrame.current
     if (previous.texture === texture && previous.row === row) {

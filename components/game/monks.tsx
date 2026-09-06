@@ -117,13 +117,10 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
       group.userData.initialized = true
       group.userData.phase = i / Math.max(1, monks.length)
       group.userData.playbackRate = playback.paused ? 0 : playback.speed
-      group.userData.moving = false
       group.userData.distance = 0
       const previousX = s.x, previousZ = s.z
-      if (playback.paused) {
-        group.position.set(s.x, s.y, s.z)
-        continue
-      }
+      if (playback.paused) continue
+      group.userData.moving = false
 
       const exhaust = group.getObjectByName(ROCKET_EXHAUST_NAME)
       if (flying) {
@@ -151,6 +148,7 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
         group.position.set(flight.x, flight.y, flight.z)
         if (flight.phase !== "landed") {
           if (exhaust) exhaust.visible = true
+          group.userData.activity = "flying"
           world.activities.set(monks[i].id, "flying")
           continue
         }
@@ -166,8 +164,11 @@ export function Monks({ map, monks, flying = false }: { map: GameMap; monks: Mon
         s.pause -= dt
         const nearRelic =
           !!world.centre && Math.hypot(s.x - world.centre.x, s.z - world.centre.z) <= VIGIL_RADIUS
-        world.activities.set(monks[i].id, nearRelic ? "vigil" : "resting")
+        group.userData.activity = nearRelic ? "vigil" : "resting"
+        world.activities.set(monks[i].id, group.userData.activity)
+        if (nearRelic && world.centre) group.rotation.y = Math.atan2(world.centre.x - s.x, world.centre.z - s.z)
       } else {
+        group.userData.activity = "walking"
         world.activities.set(monks[i].id, "walking")
         const dx = s.target.x - s.x
         const dz = s.target.z - s.z

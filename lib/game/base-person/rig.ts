@@ -7,6 +7,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
   const root = new THREE.Group()
   root.name = "base-person"
   const geometries: THREE.BufferGeometry[] = []
+  const ropeTails: THREE.BufferGeometry[] = []
   const materials: THREE.MeshLambertMaterial[] = []
   const material = (color: string) => {
     const m = new THREE.MeshLambertMaterial({ color, flatShading: true })
@@ -95,6 +96,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       const curve = new THREE.CatmullRomCurve3(points, closed)
       const cord = mesh(new THREE.TubeGeometry(curve, closed ? 48 : 20, 0.028, 5, closed), beltMaterial, root)
       cord.name = name
+      if (!closed) ropeTails.push(cord.geometry)
       // Keep the narrow, light cord readable against the robe after pixel inking.
       cord.userData.inkPart = 3
     }
@@ -293,8 +295,10 @@ export function createBasePersonRig(recipe = personRecipe()) {
     object.scale.y = direction.length()
     object.quaternion.setFromUnitVectors(up, direction.normalize())
   }
-  const skirtPositions = torso.geometry.getAttribute("position")
-  const restSkirt = new Float32Array(skirtPositions.array)
+  const drapedParts = [torso.geometry, ...ropeTails].map(geometry => ({
+    geometry, positions: geometry.getAttribute("position"),
+    rest: new Float32Array(geometry.getAttribute("position").array),
+  }))
   const masks = new Map<string, THREE.MeshBasicMaterial>()
   const masked: Array<{ mesh: THREE.Mesh; material: THREE.Material | THREE.Material[] }> = []
   const baseParts = new Map<THREE.Material, number>([[skin, 1], [tunic, 3], [beltMaterial, 5], [hair, 2], [covering, 2], [undershirt, 3]])
@@ -336,16 +340,18 @@ export function createBasePersonRig(recipe = personRecipe()) {
       body.position.y = b.hipHeight + drop
       body.rotation.x = gather ? 0.85 + wave * 0.12 : chop ? 0.12 + (1 - Math.cos(phase * Math.PI * 2)) * 0.12 : praying ? 0.12 + wave * 0.025 : sleep ? wave * 0.008 : seated ? 0.035 * wave : 0
       axe.visible = chop
-      for (let i = 0; i < skirtPositions.count; i++) {
-        const y = restSkirt[i * 3 + 1], z = restSkirt[i * 3 + 2]
-        const weight = Math.max(0, (waist - y) / (waist - b.tunicHem))
-        // Drape long skirts over bent knees, with the hem resting above ground.
-        skirtPositions.setY(i, seated || praying || gather ? Math.max(y, 0.07 - drop) : y)
-        skirtPositions.setZ(i, z + ((seated ? 0.48 : praying ? 0.19 : 0) * weight) +
-          (longGarment && (clip === "walk" || clip === "carrying") ? wave * 0.035 * recipe.design.stride * weight * weight : 0))
+      for (const { geometry, positions, rest } of drapedParts) {
+        for (let i = 0; i < positions.count; i++) {
+          const y = rest[i * 3 + 1], z = rest[i * 3 + 2]
+          const weight = Math.max(0, (waist - y) / (waist - b.tunicHem))
+          // The robe and hanging rope ends drape together over bent knees.
+          positions.setY(i, seated || praying || gather ? Math.max(y, 0.07 - drop) : y)
+          positions.setZ(i, z + ((seated ? 0.48 : praying ? 0.19 : 0) * weight) +
+            (longGarment && (clip === "walk" || clip === "carrying") ? wave * 0.035 * recipe.design.stride * weight * weight : 0))
+        }
+        positions.needsUpdate = true
+        geometry.computeVertexNormals()
       }
-      skirtPositions.needsUpdate = true
-      torso.geometry.computeVertexNormals()
       for (const limb of limbs) {
         const leg = legPose(limb.side, phase, clip, b)
         bone(limb.thigh, leg.hip, leg.knee)
