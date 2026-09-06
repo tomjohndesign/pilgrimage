@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "3083f11740391842877510eb4775c3458945aa74",
-  "releaseCount": 37,
+  "lastProcessedCommit": "71fa99f4be179f4e31551236f5b03f3bef64da4c",
+  "releaseCount": 38,
   "releases": [
+    {
+      "version": "0.0.52",
+      "title": "Release 0.0.52",
+      "summary": "Add early medieval buildings to the shared asset playground (#71)",
+      "commit": "71fa99f4be179f4e31551236f5b03f3bef64da4c"
+    },
     {
       "version": "0.0.51",
       "title": "Release 0.0.51",
