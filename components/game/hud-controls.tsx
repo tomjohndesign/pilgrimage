@@ -110,12 +110,12 @@ export function BuildControls({ economy, open, onToggle, onClose }: {
           })}
         </div>
         {selected && footprint && <div className="hud-build-rotation" role="group" aria-label="Building rotation">
-          <button type="button" className="hud-action" aria-label="Rotate building counterclockwise" aria-keyshortcuts="Meta+Q" title="Rotate counterclockwise (Cmd+Q)" onClick={() => rotateBuilding(-1)}>
-            <RotateCcw size={15} aria-hidden /> <kbd>⌘ Q</kbd>
+          <button type="button" className="hud-action" aria-label="Rotate building counterclockwise" aria-keyshortcuts="Meta+R" title="Rotate counterclockwise (Cmd+R)" onClick={() => rotateBuilding(-1)}>
+            <RotateCcw size={15} aria-hidden /> <kbd>⌘ R</kbd>
           </button>
           <span>{rotation * 90}° · {footprint.w} × {footprint.d} tiles</span>
-          <button type="button" className="hud-action" aria-label="Rotate building clockwise" aria-keyshortcuts="Meta+E" title="Rotate clockwise (Cmd+E)" onClick={() => rotateBuilding(1)}>
-            <RotateCw size={15} aria-hidden /> <kbd>⌘ E</kbd>
+          <button type="button" className="hud-action" aria-label="Rotate building clockwise" aria-keyshortcuts="R" title="Rotate clockwise (R)" onClick={() => rotateBuilding(1)}>
+            <RotateCw size={15} aria-hidden /> <kbd>R</kbd>
           </button>
           <span className="hud-entry-key">Gold arrows mark entrances</span>
         </div>}
