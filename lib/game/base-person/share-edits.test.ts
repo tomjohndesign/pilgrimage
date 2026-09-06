@@ -1,0 +1,26 @@
+import { expect, it } from "vitest"
+import { DEFAULT_DESIGN, PERSON_PRESETS } from "./design"
+import { characterEditsJson, parseCharacterEdits } from "./share-edits"
+
+it("round-trips every character and uses the latest unsaved pose for the current character", () => {
+  const traveler = { ...PERSON_PRESETS.Traveler, poseEdits: { walk: { rightHand: [{ frame: 0, radius: 3, offset: [0.1, 0, 0] as [number, number, number] }] } } }
+  const drafts = { "preset/Traveler": DEFAULT_DESIGN, "preset/Monk": PERSON_PRESETS.Monk }
+  const json = characterEditsJson("preset/Traveler", drafts, traveler)
+  const imported = parseCharacterEdits(json, "preset/Storybook")
+  expect(imported.character).toBe("preset/Traveler")
+  expect(imported.drafts).toEqual({ ...drafts, "preset/Traveler": traveler })
+  expect(drafts["preset/Traveler"]).toBe(DEFAULT_DESIGN)
+})
+
+it("accepts earlier parameter files and rejects partial invalid bundles atomically", () => {
+  expect(parseCharacterEdits(JSON.stringify(DEFAULT_DESIGN), "preset/Storybook").drafts).toEqual({ "preset/Storybook": DEFAULT_DESIGN })
+  const json = characterEditsJson("preset/Traveler", { "preset/Monk": PERSON_PRESETS.Monk }, PERSON_PRESETS.Traveler)
+  for (const corrupt of [
+    (value: any) => { value.drafts["preset/Monk"].poseEdits = { walk: { head: [{ frame: 99, radius: 3, offset: [0, 0, 0] }] } } },
+    (value: any) => { value.character = "missing" },
+    (value: any) => { value.templateVersion = 0 },
+  ]) {
+    const value = JSON.parse(json); corrupt(value)
+    expect(() => parseCharacterEdits(JSON.stringify(value), "preset/Storybook")).toThrow()
+  }
+})

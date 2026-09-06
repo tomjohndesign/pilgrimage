@@ -24,8 +24,9 @@ export function walkSpeedScale(stride: number, characterScale: number): number {
 }
 
 /** Ground contact of the load-bearing foot in the actual displayed rig pose. */
-export function walkContact(phase: number, frames: number, body: typeof BASE_PERSON.body) {
-  const framePhase = Math.floor(phase * frames) / frames
+export function walkContact(phase: number, frames: number, body: typeof BASE_PERSON.body, strides = 1) {
+  const perStride = frames / strides
+  const framePhase = (Math.floor(phase * perStride + 1e-9) % perStride) / perStride
   // Transfer weight after the short double-support interval, while both soles
   // are down. Each foot then supports the body through its flat stance.
   const side: BodySide = framePhase >= WALK_STANCE_FRACTION - 0.5 && framePhase < WALK_STANCE_FRACTION ? "left" : "right"

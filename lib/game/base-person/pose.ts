@@ -6,9 +6,11 @@ export type Point3 = [number, number, number]
 export type BodySide = "left" | "right"
 export const SOCKET_NAMES = ["head", "back", "leftHip", "rightHip", "leftHand", "rightHand"] as const
 export type SocketName = typeof SOCKET_NAMES[number]
+export const WALK_CLIP_STRIDES = 1
+export const WALK_FRAMES_PER_STRIDE = 20
 export const PERSON_CLIPS = {
   idle: { label: "Idle", frames: 1 },
-  walk: { label: "Walking", frames: 20 },
+  walk: { label: "Walking", frames: WALK_FRAMES_PER_STRIDE * WALK_CLIP_STRIDES },
   sleeping: { label: "Sleeping", frames: 16 },
   sitting: { label: "Sitting", frames: 8 },
   praying: { label: "Praying", frames: 8 },

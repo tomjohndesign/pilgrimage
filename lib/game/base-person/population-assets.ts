@@ -2,7 +2,7 @@ import { personWalkStride } from "./gait"
 import { actionPlaybackRate } from "./activity"
 import { ACTION_CLIPS, type ActionClip } from "./pose"
 import type { SpriteClip } from "../character-assets"
-import manifest from "../../../public/textures/characters/population/v7/manifest.json"
+import manifest from "../../../public/textures/characters/population/v11/manifest.json"
 import type { TravelerTypeId } from "../travelers"
 import { validatePersonDesign } from "./design"
 import type { PopulationPack } from "./population"
@@ -14,7 +14,7 @@ export const DEFAULT_POPULATION: PopulationPack = { ...manifest, callings: Objec
 export function populationVisual(type: TravelerTypeId, variant: number, custom: PopulationPack | null) {
   const pack = custom ?? DEFAULT_POPULATION, calling = pack.callings[type]
   return {
-    walk: { url: calling.walk, columns: pack.frameCounts?.walk ?? 8, rows: pack.rows, stillFrame: 0 },
+    walk: { strides: pack.walkStrides ?? 1, url: calling.walk, columns: pack.frameCounts?.walk ?? 8, rows: pack.rows, stillFrame: 0 },
     idle: { url: calling.idle, columns: 1, rows: pack.rows, stillFrame: 0 },
     actions: Object.fromEntries(ACTION_CLIPS.flatMap(clip => {
       const url = calling.actions?.[clip], shadow = pack.shadows.actions?.[clip]

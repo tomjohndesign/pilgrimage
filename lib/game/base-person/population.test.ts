@@ -26,7 +26,7 @@ describe("road character population", () => {
         expect(validatePersonDesign(design)).toEqual(design)
         expect(design.tunicColor).toBe(type.color)
         expect(design.bodyType).toBe(variant < 3 ? "Male" : "Female")
-        if (variant >= 3) { expect(design.beard).toBe(false); expect(design.hairStyle).toBe("Long") }
+        if (variant >= 3) { expect(design.beard).toBe(false); expect(design.hairStyle).toBe(POPULATION_PROFILES[variant].hair) }
       }
     }
     const profiles = POPULATION_PROFILES.map((_, i) => populationDesign(TRAVELER_TYPES.peasant, i))
@@ -47,6 +47,7 @@ describe("road character population", () => {
         expect(visual.actions[clip]?.columns).toBe(PERSON_CLIPS[clip].frames)
       }
       expect(visual.walk.columns).toBe(20)
+      expect(visual.walk.strides).toBe(1)
       expect(visual.idle.columns).toBe(1)
       expect(visual.center).toEqual([0.5, 1 - 48.5 / 64])
       expect(visual.strideRatio).toBeGreaterThan(0)

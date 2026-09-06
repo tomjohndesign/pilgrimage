@@ -9,11 +9,11 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 import { usePixelWorldTexel } from "@/components/pixel-canvas"
-import { characterVisual, spriteRow, type CharacterModel } from "@/lib/game/character-assets"
+import { characterVisual, spriteRow, type SpriteClip, type CharacterModel } from "@/lib/game/character-assets"
 import { usePopulationStore } from "@/lib/game/base-person/population-store"
 import { populationVisual } from "@/lib/game/base-person/population-assets"
 import type { TravelerAppearance } from "@/lib/game/base-person/population"
-import { advanceWalkPhase, type WalkTuning } from "@/lib/game/motion"
+import { advanceWalkPhase, walkClipFrame, type WalkTuning } from "@/lib/game/motion"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { useCharacterAssetStore } from "@/lib/game/character-asset-store"
 import type { TravelerTypeId } from "@/lib/game/travelers"
@@ -140,19 +140,19 @@ export function CharacterSprite({ type, onClick, outlineColor, selected = false,
     if (moving) {
       const stride = visual.walkStride * individualScale * (walkTuning?.stride ?? DEFAULT_WALK_STRIDE) / DEFAULT_WALK_STRIDE
       clock.current = advanceWalkPhase(clock.current, parent.userData.distance ?? 0, dt,
-        visual.walk.columns, fps, stride, walkTuning?.sync === true)
+        visual.walk.columns, fps, stride, walkTuning?.sync === true, visual.walk.strides ?? 1)
     }
     if (sprite.current) sprite.current.userData.walkPhase = clock.current
-    const clip = action ?? (moving ? visual.walk : visual.idle)
+    const clip: SpriteClip = action ?? (moving ? visual.walk : visual.idle)
     const texture = textures[actionIndex ?? (moving ? 0 : 1)]
-    const frame = action ? requested === "carrying" ? Math.floor(clock.current * clip.columns) :
-      Math.floor(actionClock.current * fps * (action.playbackRate ?? 1)) % clip.columns : moving ? Math.floor(clock.current * clip.columns) : clip.stillFrame
+    const frame = action ? requested === "carrying" ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) :
+      Math.floor(actionClock.current * fps * (action.playbackRate ?? 1)) % clip.columns : moving ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) : clip.stillFrame
     if (sprite.current) sprite.current.userData.clip = action ? requested : moving ? "walk" : "idle"
     const direction = spriteRow(heading, yaw)
     const row = visual.rowOffset + direction
     if (poseRoot.current) {
       if (moving && rigBody && walkTuning?.sync) {
-        const foot = walkContact(clock.current, clip.columns, rigBody)
+        const foot = walkContact(clock.current, clip.columns, rigBody, clip.strides ?? 1)
         // Reconstruct the baked ground contact in the current camera's ground
         // plane. The selected direction, not the smoothed group heading, is
         // what the artwork shows. This also handles changes in camera pitch.
