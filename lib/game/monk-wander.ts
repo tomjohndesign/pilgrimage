@@ -1,3 +1,4 @@
+import { buildingStepAllowed, shrineGates } from "./building-navigation"
 import { surfaceHeight } from "./map/bridges"
 import { elevationStep } from "./map/elevation"
 import { ROUTE_DIRS } from "./map/route"
@@ -18,13 +19,16 @@ export function monkWander(map: GameMap, radius = 3) {
   if (hovel) for (let z = hovel.z - radius; z < hovel.z + hovel.d + radius; z++) {
     for (let x = hovel.x - radius; x < hovel.x + hovel.w + radius; x++) {
       const terrain = tileAt(map, x, z)
-      if (!terrain || !TERRAIN[terrain].passable || buildingAt(map, x, z)) continue
+      const building = buildingAt(map, x, z)
+      if (!terrain || !TERRAIN[terrain].passable || (building && building.id !== hovel.id)) continue
+      if (x === hovel.x + Math.floor(hovel.w / 2) && z === hovel.z + Math.floor(hovel.d / 2)) continue
       candidates.set(z * map.width + x, { x: tileToWorldX(map, x), y: surfaceHeight(map, x, z), z: tileToWorldZ(map, z) })
     }
   }
   const neighbours = (i: number) => ROUTE_DIRS.flatMap(([dx, dz]) => {
     const x = i % map.width + dx, z = Math.floor(i / map.width) + dz, n = z * map.width + x
     if (x < 0 || x >= map.width || !candidates.has(n)) return []
+    if (!buildingStepAllowed(map, map.buildings, { x: i % map.width, z: Math.floor(i / map.width) }, { x, z }, true)) return []
     if (map.tiles[i] !== "bridge" && map.tiles[n] !== "bridge" && !Number.isFinite(elevationStep(map.elevation, i, n))) return []
     return [n]
   })
@@ -38,12 +42,14 @@ export function monkWander(map: GameMap, radius = 3) {
   const key = (p: WanderSpot) => worldToTileZ(map, p.z) * map.width + worldToTileX(map, p.x)
   return {
     centre,
-    spots: queue.map(i => candidates.get(i)!),
-    /** Visit tile centres at corners so jitter never cuts across a wall or cliff. */
+    spots: queue.filter(i => !buildingAt(map, i % map.width, Math.floor(i / map.width))).map(i => candidates.get(i)!),
+    prayerSpots: hovel ? shrineGates(hovel).map(g => g.inside.z * map.width + g.inside.x)
+      .filter(i => reachable.has(i)).map(i => candidates.get(i)!) : [],
+    /** Follow neighbouring tile centres, including the shrine gate crossings. */
     route(start: WanderSpot, goal: WanderSpot): WanderSpot[] {
       const a = key(start), b = key(goal)
       if (!reachable.has(a) || !reachable.has(b)) return []
-      if (a === b) return [goal]
+      if (a === b) return [candidates.get(b)!]
       const parents = new Map<number, number>([[a, -1]]), open = [a]
       for (let head = 0; head < open.length; head++) {
         const current = open[head]
@@ -55,7 +61,7 @@ export function monkWander(map: GameMap, radius = 3) {
       if (!parents.has(b)) return []
       const path: WanderSpot[] = []
       for (let i = b; i !== -1; i = parents.get(i)!) path.push(candidates.get(i)!)
-      return [...path.reverse(), goal]
+      return path.reverse()
     },
   }
 }

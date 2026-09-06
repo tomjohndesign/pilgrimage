@@ -32,10 +32,11 @@ const PIETY = { min: 75, max: 100 }
 const SKILL_COUNT = { min: 1, max: 3 }
 
 /** What a brother is up to, for the HUD; set by the scene's ambient loop. */
-export type MonkActivity = "vigil" | "walking" | "resting" | "flying"
+export type MonkActivity = "vigil" | "praying" | "walking" | "resting" | "flying"
 
 export const MONK_ACTIVITY_LABELS: Record<MonkActivity, string> = {
   vigil: "Keeping vigil at the relic",
+  praying: "Praying with the relic inside the shrine",
   walking: "About the grounds",
   resting: "At rest",
   flying: "Flying with rocket boosters",

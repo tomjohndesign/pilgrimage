@@ -1,4 +1,4 @@
-import { LINEAR_MOVEMENT, easeProgress, easeSpeed, paceVariation, roundedCorner, type MovementTuning } from "./motion"
+import { LINEAR_MOVEMENT, easeSpeed, paceVariation, type MovementTuning } from "./motion"
 import { DEFAULT_BALANCE, type GameBalance } from "./balance"
 import { buildingAt } from "./settlement"
 import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
@@ -10,7 +10,6 @@ import { TREE_SPECIES } from "./trees/species"
 import type { TilePos } from "./map/types"
 import { computeDangerField, encounterChance, type ThreatSource } from "./map/danger"
 import { surfaceHeight, ropeHeightAt } from "./map/bridges"
-import { diagonalRoadPoint } from "./map/road"
 import {
   tileAt,
   tileToWorldX,
@@ -222,6 +221,7 @@ export interface SimTraveler {
   /** The off-road pitch — a camp or a stall, depending on activity. */
   spot: { x: number; y: number; z: number } | null
   walkT: number
+  offRoadRoute: WorldPoint[] | null
   /** Vendor being chased while seeking. */
   targetId: number | null
   /** Vendors only: seconds left in the current walk-or-shop stint. */
@@ -283,8 +283,7 @@ function laneVertex(
   // A doubled-back vertex has no intersection; keep its outgoing normal.
   const nx = divisor > 0 ? (inZ + outZ) / divisor : outZ
   const nz = divisor > 0 ? -(inX + outX) / divisor : -outX
-  const centre = diagonalRoadPoint(map, p.x, p.z)
-  return { x: centre.x + nx * lane * centre.laneScale, z: centre.z + nz * lane * centre.laneScale }
+  return { x: p.x + nx * lane, z: p.z + nz * lane }
 }
 
 interface WorldPoint {
@@ -304,7 +303,6 @@ function routeWorldPoint(
   p: number,
   lane = 0,
   junctions?: { entry: number; exit: number },
-  pathEase = 0,
 ): WorldPoint {
   if (route.length === 1) return {
     x: tileToWorldX(map, route[0].x),
@@ -329,40 +327,30 @@ function routeWorldPoint(
   const ay = surfaceHeight(map, route[i0].x, route[i0].z)
   const by = surfaceHeight(map, route[i0 + 1].x, route[i0 + 1].z)
   const point = { x: ax + (bx - ax) * frac, y: ropeHeightAt(map, a.x + (b.x - a.x) * frac, a.z + (b.z - a.z) * frac) ?? ay + (by - ay) * frac, z: az + (bz - az) * frac }
-  const cornerIndex = Math.round(p)
-  if (pathEase > 0 && cornerIndex > 0 && cornerIndex < route.length - 1) {
-    const previous = route[cornerIndex - 1], corner = route[cornerIndex], next = route[cornerIndex + 1]
-    // Use integer route tiles for bridge heights, and lane vertices for the arc.
-    const height = surfaceHeight(map, corner.x, corner.z)
-    if (surfaceHeight(map, previous.x, previous.z) === height && surfaceHeight(map, next.x, next.z) === height) {
-      const rounded = roundedCorner(vertex(cornerIndex - 1), vertex(cornerIndex), vertex(cornerIndex + 1), p - cornerIndex, pathEase)
-      if (rounded) { point.x = tileToWorldX(map, rounded.x); point.z = tileToWorldZ(map, rounded.z) }
-    }
-  }
   return point
 }
 
-function roadWorldPoint(map: GameMap, p: number, lane: number, pathEase = 0): WorldPoint {
-  return routeWorldPoint(map, map.road!, p, lane, undefined, pathEase)
+function roadWorldPoint(map: GameMap, p: number, lane: number): WorldPoint {
+  return routeWorldPoint(map, map.road!, p, lane)
 }
 
 /** Where on their route — road or track — the traveler currently belongs. */
-function currentRoutePoint(map: GameMap, s: SimTraveler, pathEase = 0): WorldPoint {
+function currentRoutePoint(map: GameMap, s: SimTraveler): WorldPoint {
   if (s.track) {
     const track = map.shortcuts![s.track.index]
-    return routeWorldPoint(map, track.tiles, s.track.progress, s.lane, track, pathEase)
+    return routeWorldPoint(map, track.tiles, s.track.progress, s.lane, track)
   }
-  return roadWorldPoint(map, s.progress, s.lane, pathEase)
+  return roadWorldPoint(map, s.progress, s.lane)
 }
 
 /** Join the shrine's walking lanes to the traveler's road lane over the first tile. */
-function shrineWorldPoint(map: GameMap, s: SimTraveler, pathEase = 0): WorldPoint {
+function shrineWorldPoint(map: GameMap, s: SimTraveler): WorldPoint {
   const site = map.site!
-  const point = routeWorldPoint(map, site.branch, s.branchProgress, s.lane, undefined, pathEase)
+  const point = routeWorldPoint(map, site.branch, s.branchProgress, s.lane)
   if (s.branchProgress < 1) {
     const start = routeWorldPoint(map, site.branch, 0, s.lane)
     const roadLane = s.activity === "toRelic" ? s.branchEntryLane : s.direction * s.laneOffset
-    const road = roadWorldPoint(map, site.junction, roadLane, pathEase)
+    const road = roadWorldPoint(map, site.junction, roadLane)
     const blend = 1 - s.branchProgress
     point.x += (road.x - start.x) * blend
     point.y += (road.y - start.y) * blend
@@ -446,6 +434,7 @@ export function createSim(
       walkFrom: null,
       spot: null,
       walkT: 0,
+      offRoadRoute: null,
       targetId: null,
       timer: t.type.id === "vendor" ? vendWalkSeconds(t.id, 0) : 0,
       cycle: 0,
@@ -458,7 +447,7 @@ export function createSim(
  * Nearest open tile to a world point: grass, dirt, or a forest-floor clearing —
  * never solid woods or the road itself.
  */
-function findClearTile(map: GameMap, wx: number, wz: number): { x: number; z: number } | null {
+function findClearTile(map: GameMap, wx: number, wz: number, start: TilePos): { x: number; z: number } | null {
   const cx = worldToTileX(map, wx)
   const cz = worldToTileZ(map, wz)
   for (let r = 0; r <= CAMP_SEARCH_RADIUS; r++) {
@@ -467,7 +456,8 @@ function findClearTile(map: GameMap, wx: number, wz: number): { x: number; z: nu
         if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue
         const terrain = tileAt(map, cx + dx, cz + dz)
         if ((terrain === "grass" || terrain === "dirt" || terrain === "clearing") && !buildingAt(map, cx + dx, cz + dz)) {
-          return { x: cx + dx, z: cz + dz }
+          const goal = { x: cx + dx, z: cz + dz }
+          if (settlementRoute(map, map.buildings, start, goal)) return goal
         }
       }
     }
@@ -500,27 +490,18 @@ function findNearbySpot(
 const STALL_ACTIVITIES: readonly Activity[] = ["toShop", "vending"]
 const CAMP_ACTIVITIES: readonly Activity[] = ["toCamp", "camping"]
 
-/** Spread same-tile pitches apart with a per-traveler hash, not RNG. */
-function pitchJitter(id: number): { x: number; z: number } {
-  return {
-    x: (((id * 73) % 100) / 100 - 0.5) * 0.6,
-    z: (((id * 37) % 100) / 100 - 0.5) * 0.6,
-  }
-}
-
 /** World-space pitch on the nearest clearing to `anchor`, or in place if none. */
 function pitchSpot(
   map: GameMap,
   s: SimTraveler,
   anchor: { x: number; z: number },
 ): { x: number; y: number; z: number } {
-  const tile = findClearTile(map, anchor.x, anchor.z)
-  const jitter = pitchJitter(s.id)
+  const tile = findClearTile(map, anchor.x, anchor.z, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) })
   return tile
     ? {
-        x: tileToWorldX(map, tile.x) + jitter.x,
+        x: tileToWorldX(map, tile.x),
         y: surfaceHeight(map, tile.x, tile.z),
-        z: tileToWorldZ(map, tile.z) + jitter.z,
+        z: tileToWorldZ(map, tile.z),
       }
     : { x: s.x, y: s.y, z: s.z }
 }
@@ -528,6 +509,7 @@ function pitchSpot(
 function startOffRoadWalk(s: SimTraveler, activity: Activity): void {
   s.walkFrom = { x: s.x, y: s.y, z: s.z }
   s.walkT = 0
+  s.offRoadRoute = null
   s.activity = activity
   s.targetId = null
 }
@@ -544,22 +526,42 @@ function startCamping(sim: SimState, s: SimTraveler, traveler: Traveler, map: Ga
   startOffRoadWalk(s, "toCamp")
 }
 
-/** Advance an off-road walk; returns true when the far end is reached. */
+/** Camps and stalls use the same four-neighbour routing as settlement work. */
 function stepOffRoadWalk(
   s: SimTraveler,
-  to: { x: number; y: number; z: number },
+  to: WorldPoint,
   worldSpeed: number,
   dt: number,
-  pathEase = 0,
+  map: GameMap,
 ): boolean {
-  const from = s.walkFrom!
-  const dist = Math.max(0.001, Math.hypot(to.x - from.x, to.z - from.z))
-  s.walkT = Math.min(1, s.walkT + (worldSpeed * dt) / dist)
-  const eased = easeProgress(s.walkT, pathEase)
-  s.x = from.x + (to.x - from.x) * eased
-  s.y = from.y + (to.y - from.y) * eased
-  s.z = from.z + (to.z - from.z) * eased
-  return s.walkT >= 1
+  if (!s.offRoadRoute) {
+    const route = settlementRoute(map, map.buildings,
+      { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
+      { x: worldToTileX(map, to.x), z: worldToTileZ(map, to.z) })
+    if (!route) return false
+    const points = route.map(p => ({ x: tileToWorldX(map, p.x), y: surfaceHeight(map, p.x, p.z), z: tileToWorldZ(map, p.z) }))
+    // Align to/from the road lane inside its tile; never take a diagonal shortcut.
+    const first = points[0], last = points.at(-1)!
+    s.offRoadRoute = [
+      { x: first.x, y: s.y, z: s.z }, ...points,
+      { x: to.x, y: last.y, z: last.z }, { ...to },
+    ]
+  }
+  let distance = worldSpeed * dt
+  while (s.offRoadRoute.length) {
+    const target = s.offRoadRoute[0]
+    const dx = target.x - s.x, dz = target.z - s.z, length = Math.hypot(dx, dz)
+    if (length > distance) {
+      const t = distance / length
+      s.x += dx * t; s.y += (target.y - s.y) * t; s.z += dz * t
+      return false
+    }
+    s.x = target.x; s.y = target.y; s.z = target.z
+    distance -= length
+    s.offRoadRoute.shift()
+  }
+  s.walkT = 1
+  return true
 }
 
 function routeState(t: Traveler, s: SimTraveler): RouteState {
@@ -751,7 +753,7 @@ export function stepSim(
         s.branchProgress = Math.max(0, Math.min(branch.length - 1,
           s.branchProgress + (inbound ? 1 : -1) * worldSpeed * dt))
         stepLane(s, inbound ? 1 : -1, worldSpeed * dt)
-        const at = shrineWorldPoint(map, s, movement.pathEase)
+        const at = shrineWorldPoint(map, s)
         s.x = at.x
         s.y = at.y
         s.z = at.z
@@ -909,7 +911,7 @@ export function stepSim(
             }
           }
           stepLane(s, s.activity === "fleeing" ? s.direction : direction, worldSpeed * haste * dt)
-          const at = currentRoutePoint(map, s, movement.pathEase)
+          const at = currentRoutePoint(map, s)
           s.x = at.x
           s.y = at.y
           s.z = at.z
@@ -932,7 +934,7 @@ export function stepSim(
               s.targetId = null
               s.branchEntryLane = s.lane
               s.lane = s.laneOffset
-              const at = shrineWorldPoint(map, s, movement.pathEase)
+              const at = shrineWorldPoint(map, s)
               s.x = at.x
               s.y = at.y
               s.z = at.z
@@ -964,7 +966,7 @@ export function stepSim(
           }
         }
         stepLane(s, s.activity === "fleeing" ? s.direction : direction, worldSpeed * haste * dt)
-        const at = currentRoutePoint(map, s, movement.pathEase)
+        const at = currentRoutePoint(map, s)
         s.x = at.x
         s.y = at.y
         s.z = at.z
@@ -972,7 +974,7 @@ export function stepSim(
       }
 
       case "toShop": {
-        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, movement.pathEase)) {
+        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, map)) {
           s.activity = "vending"
           s.timer = vendShopSeconds(s.id, s.cycle)
         }
@@ -995,8 +997,8 @@ export function stepSim(
       }
 
       case "fromShop": {
-        const back = currentRoutePoint(map, s, movement.pathEase)
-        if (stepOffRoadWalk(s, back, worldSpeed, dt, movement.pathEase)) {
+        const back = currentRoutePoint(map, s)
+        if (stepOffRoadWalk(s, back, worldSpeed, dt, map)) {
           s.activity = "walking"
           s.spot = null
           s.walkFrom = null
@@ -1006,7 +1008,7 @@ export function stepSim(
       }
 
       case "toCamp": {
-        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, movement.pathEase)) s.activity = "camping"
+        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, map)) s.activity = "camping"
         break
       }
 
@@ -1016,8 +1018,8 @@ export function stepSim(
       }
 
       case "fromCamp": {
-        const back = currentRoutePoint(map, s, movement.pathEase)
-        if (stepOffRoadWalk(s, back, worldSpeed, dt, movement.pathEase)) {
+        const back = currentRoutePoint(map, s)
+        if (stepOffRoadWalk(s, back, worldSpeed, dt, map)) {
           s.activity = "walking"
           s.spot = null
           s.walkFrom = null
