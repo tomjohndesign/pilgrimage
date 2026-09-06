@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "9077c8d71c97c2a74583878fd385195b7f539091",
-  "releaseCount": 28,
+  "lastProcessedCommit": "17917f72fbc13e9a4be0e5b310bb2bacc1e3ba1e",
+  "releaseCount": 29,
   "releases": [
+    {
+      "version": "0.0.43",
+      "title": "Release 0.0.43",
+      "summary": "Match traveler names to character appearance (#62)",
+      "commit": "17917f72fbc13e9a4be0e5b310bb2bacc1e3ba1e"
+    },
     {
       "version": "0.0.42",
       "title": "Release 0.0.42",
