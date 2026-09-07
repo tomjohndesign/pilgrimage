@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "83c5895823c904181523ef6faaa807ae8d3f13f4",
-  "releaseCount": 70,
+  "lastProcessedCommit": "7b8781e2295a2ce7f8b0b13b5b56cc7df0fe4888",
+  "releaseCount": 72,
   "releases": [
+    {
+      "version": "0.0.86",
+      "title": "Release 0.0.86",
+      "summary": "Add traffic-driven path playgrounds and a working village (#106)",
+      "commit": "7b8781e2295a2ce7f8b0b13b5b56cc7df0fe4888"
+    },
+    {
+      "version": "0.0.85",
+      "title": "Release 0.0.85",
+      "summary": "Add mounted knights, equipped squires, and grounded animal walks (#105)",
+      "commit": "dcff7d46881eea5741b15534b2f9975d9e3a89af"
+    },
     {
       "version": "0.0.84",
       "title": "Release 0.0.84",
