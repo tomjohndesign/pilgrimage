@@ -1,10 +1,12 @@
+import { smoothWalkingRoute } from "./walking-shortcuts"
+import { footpathRouteCost } from "./footpaths"
 import { shrineLayout } from "./shrine-layout"
 import { buildingStepAllowed, containsTile, shrineFurnitureClear } from "./building-navigation"
 import { surfaceHeight } from "./map/bridges"
 import { walkingSurface } from "./map/walking-surface"
 import { elevationStep } from "./map/elevation"
 import { MinHeap, ROUTE_DIRS } from "./map/route"
-import { TERRAIN, walkingRouteCost } from "./map/terrain"
+import { TERRAIN } from "./map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 import { buildingAt } from "./settlement"
 
@@ -77,7 +79,7 @@ export function monkWander(map: GameMap, radius = 3) {
     centre,
     spots: nodes.filter(n => !n.inside).map(n => n.spot),
     prayerSpots,
-    route(start: WanderSpot, goal: WanderSpot): WanderSpot[] {
+    route(start: WanderSpot, goal: WanderSpot, exploring = false): WanderSpot[] {
       const first = nearest(start), last = nearest(goal)
       if (!first || !last) return []
       const a = key(first.tile), b = key(last.tile)
@@ -93,7 +95,7 @@ export function monkWander(map: GameMap, radius = 3) {
         for (const n of adjacent.get(current)!) {
           const to = candidates.get(n)!.tile
           const cost = costs.get(current)! + Math.hypot(to.x - from.x, to.z - from.z)
-            * walkingRouteCost(tileAt(map, Math.round(to.x), Math.round(to.z))!)
+            * footpathRouteCost(map, from, to)
           if (cost >= (costs.get(n) ?? Infinity)) continue
           costs.set(n, cost); parents.set(n, current); open.push(nodeIndices.get(n)!, cost)
         }
@@ -101,7 +103,7 @@ export function monkWander(map: GameMap, radius = 3) {
       if (!parents.has(b)) return []
       const path: WanderSpot[] = []
       for (let i: string | null = b; i !== null; i = parents.get(i)!) path.push(candidates.get(i)!.spot)
-      return path.reverse()
+      return smoothWalkingRoute(map, path.reverse(), exploring)
     },
   }
 }

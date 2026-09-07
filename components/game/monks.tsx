@@ -1,5 +1,6 @@
 "use client"
 
+import { recordWalkingPath } from "@/lib/game/footpaths"
 import { PietyEffects } from "./admission-effects"
 import { PixelCharacters } from "@/components/pixel-canvas"
 import { createMonkNeeds, replanMonkAfterMapChange, stepMonkWork, type MonkNeeds } from "@/lib/game/monk-work"
@@ -142,6 +143,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       const actor = world.states[carrierIndex], group = groupRefs.current[carrierIndex]
       const x = actor.x, z = actor.z
       const exit = stepProcession(world.procession, actor, world.grounds, dt, monkWalkSpeed(characterScale), world.pick, controls.returnRequested)
+      if (map.footpaths) recordWalkingPath(map.footpaths, map, { x, z }, actor)
       if (exit) { actor.route = exit; actor.pause = 0; actor.destination = "grounds"; actor.activity = "walking" }
       if (group) {
         group.userData.distance = Math.hypot(actor.x - x, actor.z - z)
@@ -200,6 +202,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
           s.flight = createMonkFlight(s, world.pick(), map, world.flightRng)
         }
       }
+      const wasFlying = !!s.flight
       if (s.flight) {
         const flight = s.flight
         for (let tick = 0; tick < playback.speed; tick++) {
@@ -240,6 +243,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       if (evangelismRequested && !evangelizing) useMonkEvangelismStore.getState().recall(monks[i].id)
       if (!evangelizing && !stepMonkWork(s, map, monkWalkSpeed(characterScale), dt))
         stepMonkRoutine(s, world.wander, world.rng, monkWalkSpeed(characterScale), dt)
+      if (map.footpaths && !wasFlying) recordWalkingPath(map.footpaths, map, { x: previousX, z: previousZ }, s)
       world.stamina.set(monks[i].id, s.stamina)
       if (s.buildingTask && (s.activity === "building" || s.activity === "sleeping")) group.rotation.y = s.buildingTask.heading
       group.userData.activity = s.activity

@@ -1,3 +1,4 @@
+import { straightenRoad } from "./straighten-road"
 import { beachAccess } from "./beaches"
 import { taperRiverBanks, gradeBridgeApproaches } from "./river-banks"
 import { bridgeLayout } from "./bridges"
@@ -628,7 +629,9 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     tiles[i] === "darkwood" ? DARK_ROAD_COST : DARK_ROAD_COST * darkShade[i]
   const roadCost = new Float64Array(width * depth)
   for (let i = 0; i < roadCost.length; i++) {
-    roadCost[i] = roadWander[i] + groundCost(i) + darkPenalty(i)
+    // The provisional line locates forest crossings; the finished road should
+    // already take an economical line rather than invite walkers to straighten it.
+    roadCost[i] = roadWander[i] * .175 + groundCost(i) + darkPenalty(i)
     trailWander[i] += darkPenalty(i)
     // Trails, unlike the road, never enter old growth at all.
     if (tiles[i] === "darkwood") walkable[i] = WATER_KIND_LAKE
@@ -670,11 +673,11 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   stops.push(provisional[provisional.length - 1])
   const roadRoute: number[] = []
   for (let st = 0; st < stops.length - 1; st++) {
-    const segment = routeRoad(
+    const segment = straightenRoad({ width, depth, tiles, buildings: [], elevation }, routeRoad(
       { x: stops[st] % width, z: Math.floor(stops[st] / width) },
       { x: stops[st + 1] % width, z: Math.floor(stops[st + 1] / width) },
       roadCost,
-    )
+    ))
     // Reserve these crossings before the next segment chooses a bridge.
     for (const i of segment) if (kind[i]) passKind[i] = 0
     // Consecutive segments share their junction tile; keep it once.

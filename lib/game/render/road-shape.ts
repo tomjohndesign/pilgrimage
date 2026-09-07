@@ -1,4 +1,5 @@
 import { ROAD_CORNER_SHOULDER_RADIUS } from "../map/road"
+import { DIRT_START, DIRT_FULL } from "./path-appearance"
 
 /**
  * Road coverage in tile-local XZ. Opposite entrances share a straight track;
@@ -55,13 +56,17 @@ export const ROAD_SHAPE_GLSL = /* glsl */ `
     return texture2D(roadSegments, uv);
   }
 
-  vec2 diagonalRoadShape(vec2 p, vec2 range, float edgeNoise, float targetEdge, float roughness, out float segmentOpacity) {
+  vec2 diagonalRoadShape(vec2 p, vec2 range, float edgeNoise, float targetEdge, float roughness, out float segmentOpacity, out float grassWear) {
     vec2 distanceToTrack = vec2(100.0);
     float cartDistance = 100.0;
+    float mainOpacity = 0.0, trackOpacity = 0.0, cartOpacity = 0.0;
     vec2 mainWear = vec2(0.0);
     vec2 trackWear = vec2(0.0);
     float localDistance = 100.0;
     vec4 localWear = vec4(0.0);
+    vec2 contacts = vec2(0.0, -100.0);
+    float contactOpacity = 0.0;
+    grassWear = 0.0;
     for (int segment = 0; segment < int(range.y); segment++) {
       float index = range.x + float(segment) * 2.0;
       vec4 endpoints = roadSegmentTexel(index);
@@ -69,8 +74,17 @@ export const ROAD_SHAPE_GLSL = /* glsl */ `
       vec2 along = endpoints.zw - endpoints.xy;
       float t = clamp(dot(p - endpoints.xy, along) / max(dot(along, along), 0.000001), 0.0, 1.0);
       float distance = length(p - endpoints.xy - along * t);
-      if (wear.z > 2.5) {
-        cartDistance = min(cartDistance, distance);
+      if (wear.z > 3.5) {
+        // Each segment is one actual foot lane or wheel, never a mirrored
+        // pair. Union coverage so independently worn lanes retain their gap.
+        vec2 contact = roadStrip(distance, wear.x + edgeNoise, 1.0, roughness);
+        float dirt = smoothstep(${DIRT_START}, ${DIRT_FULL}, wear.y);
+        grassWear = max(grassWear, contact.x * wear.w * (1.0 - dirt));
+        contacts.x = max(contacts.x, contact.x * wear.w * dirt);
+        if (dirt * wear.w > 0.001) contacts.y = max(contacts.y, contact.y - wear.x - edgeNoise);
+        if (contact.x > 0.001) contactOpacity = max(contactOpacity, wear.w * dirt);
+      } else if (wear.z > 2.5) {
+        if (distance < cartDistance) { cartDistance = distance; cartOpacity = wear.w; }
       } else if (wear.z > 1.5) {
         // Nearest centreline first: overlapping end caps must not paint rings
         // across a continuing rut's grassy median. Keep that segment's wear.
@@ -81,9 +95,11 @@ export const ROAD_SHAPE_GLSL = /* glsl */ `
       } else if (wear.z < 0.5) {
         distanceToTrack.x = min(distanceToTrack.x, distance);
         mainWear = wear.xy;
+        mainOpacity = wear.w;
       } else {
         distanceToTrack.y = min(distanceToTrack.y, distance);
         trackWear = wear.xy;
+        trackOpacity = wear.w;
       }
     }
     // Union centreline distances before drawing ruts; overlapping caps must
@@ -92,15 +108,20 @@ export const ROAD_SHAPE_GLSL = /* glsl */ `
     vec2 track = roadStrip(distanceToTrack.y, trackWear.x + edgeNoise, trackWear.y, roughness);
     vec2 local = roadStrip(localDistance, localWear.x + edgeNoise, localWear.y, roughness);
     // Very light footsteps remain translucent and fully abandoned segments disappear.
+    main.x *= mainOpacity;
+    track.x *= trackOpacity;
     local.x *= localWear.w;
     // Express both boundaries relative to the receiving tile's edge value,
     // so its outline follows the source wear too, including on grass tiles.
     // Cart ruts add faded wear without changing the road boundary.
-    float cartWear = 0.68 * (1.0 - smoothstep(0.045, 0.12, cartDistance + roughness * 0.2));
-    segmentOpacity = localDistance < 99.0 ? localWear.w : 1.0;
+    float cartWear = cartOpacity * 0.68 * (1.0 - smoothstep(0.045, 0.12, cartDistance + roughness * 0.2));
+    segmentOpacity = max(max(main.x > 0.001 ? mainOpacity : 0.0, track.x > 0.001 ? trackOpacity : 0.0),
+      max(max(local.x > 0.001 ? localWear.w : 0.0, cartWear > 0.001 ? cartOpacity : 0.0), contactOpacity));
+    float mainBoundary = mix(-100.0, main.y - mainWear.x - edgeNoise, step(0.001, mainOpacity));
+    float trackBoundary = mix(-100.0, track.y - trackWear.x - edgeNoise, step(0.001, trackOpacity));
     float localBoundary = mix(-100.0, local.y - localWear.x - edgeNoise, step(0.001, localWear.w));
-    return vec2(max(max(max(main.x, track.x), local.x), cartWear),
-      max(max(main.y - mainWear.x - edgeNoise, track.y - trackWear.x - edgeNoise), localBoundary) + targetEdge);
+    return vec2(max(max(max(max(main.x, track.x), local.x), cartWear), contacts.x),
+      max(max(max(mainBoundary, trackBoundary), localBoundary), contacts.y) + targetEdge);
   }
 
   vec2 roadShape(vec2 p, vec4 connected, vec4 diagonal, vec4 filledCorners, float edge, float inner, float roughness) {

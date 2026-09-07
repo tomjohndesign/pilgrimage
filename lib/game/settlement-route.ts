@@ -1,7 +1,8 @@
+import { footpathRouteCost } from "./footpaths"
 import { buildingStepAllowed } from "./building-navigation"
 import { elevationStep } from "./map/elevation"
 import { MinHeap, ROUTE_DIRS } from "./map/route"
-import { isWoods, TERRAIN, walkingRouteCost } from "./map/terrain"
+import { isWoods, TERRAIN } from "./map/terrain"
 import { tileAt, type BuildingDef, type GameMap, type TilePos } from "./map/types"
 
 /** Prefer paths around water and footprints; woodcutters may enter the woods to work. */
@@ -44,7 +45,7 @@ export function settlementRoute(
       if (!buildingStepAllowed(map, buildings, p, next, enterShrine, seatAccess)) continue
       const index = key(next)
       if (map.tiles[current] !== "bridge" && terrain !== "bridge" && !Number.isFinite(elevationStep(map.elevation, current, index))) continue
-      const cost = costs.get(current)! + walkingRouteCost(terrain)
+      const cost = costs.get(current)! + footpathRouteCost(map, p, next)
       if (cost >= (costs.get(index) ?? Infinity)) continue
       costs.set(index, cost)
       parents.set(index, current)
