@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "ea7dfa11b1b5bfe984622c733682e4dd45725a17",
-  "releaseCount": 81,
+  "lastProcessedCommit": "22ae86fc4f4171835c49da43835e570f940d5610",
+  "releaseCount": 82,
   "releases": [
+    {
+      "version": "0.0.96",
+      "title": "Release 0.0.96",
+      "summary": "Keep monks on their errands when a building is placed; default maps to 192×192 (#115)",
+      "commit": "22ae86fc4f4171835c49da43835e570f940d5610"
+    },
     {
       "version": "0.0.95",
       "title": "Release 0.0.95",
