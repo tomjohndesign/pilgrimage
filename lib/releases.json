@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "c3048523715360deafdae02a13cacd7428323227",
-  "releaseCount": 85,
+  "lastProcessedCommit": "efb8773aef32fb4d620ae833b92ca6c52aef3a66",
+  "releaseCount": 86,
   "releases": [
+    {
+      "version": "0.0.100",
+      "title": "Release 0.0.100",
+      "summary": "Add shared southeast lighting and six-species foliage sprites (#118)",
+      "commit": "efb8773aef32fb4d620ae833b92ca6c52aef3a66"
+    },
     {
       "version": "0.0.99",
       "title": "Release 0.0.99",
