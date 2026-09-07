@@ -32,6 +32,11 @@ export function animalPoseKey(edits: AnimalRigEdits, clip: AnimalClip, joint: An
   const keys = setPoseKey({ walk: { head: edits.clips[clip]?.keys?.[joint] ?? [] } }, "walk", "head", key, frame).walk!.head!
   return { version: 1, clips: { ...edits.clips, [clip]: { ...edits.clips[clip], keys: { ...edits.clips[clip]?.keys, [joint]: keys } } } }
 }
+export function animalClearFrame(edits: AnimalRigEdits, clip: AnimalClip, frame: number): AnimalRigEdits {
+  let result = edits
+  for (const joint of Object.keys(edits.clips[clip]?.keys ?? {}) as AnimalJoint[]) result = animalPoseKey(result, clip, joint, null, frame)
+  return result
+}
 export function validateAnimalEdits(input: unknown): AnimalRigEdits {
   if (!input || typeof input !== "object" || (input as AnimalRigEdits).version !== 1) throw new Error("Use an animal rig settings file (version 1).")
   const source = (input as AnimalRigEdits).clips

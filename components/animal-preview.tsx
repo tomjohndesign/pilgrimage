@@ -31,7 +31,7 @@ export function AnimalPreview({ subject, lineup, motion, playing, row, zoom, rat
   subject: AnimalSubject; lineup: boolean; motion: AnimalMotion; playing: boolean; row: number; zoom: number; rate: number; coat: string; horseVariant: HorseVariant; onSelect: (subject: AnimalSubject) => void
   directionCanvases: RefObject<(HTMLCanvasElement | null)[]>
   construction: boolean; showRig: boolean; frame: number; edits: AnimalRigEdits; joints: AnimalInspection; selected: AnimalJoint
-  onInspect: (frame: number, joints: AnimalInspection) => void; onJoint: (joint: AnimalJoint) => void; onPose: (joint: AnimalJoint, offset: Point3) => void; onDrag: (active: boolean) => void
+  onInspect: (frame: number, joints: AnimalInspection) => void; onJoint: (joint: AnimalJoint) => void; onPose: (changes: [AnimalJoint, Point3][]) => void; onDrag: (active: boolean) => void
 }) {
   const host = useRef<HTMLDivElement>(null)
   const state = useRef({ motion, playing, row, rate, showRig, inspectedFrame, edits, onInspect })
@@ -84,11 +84,12 @@ export function AnimalPreview({ subject, lineup, motion, playing, row, zoom, rat
         if(shelter)scene.add(hole.root)
         scene.add(rig.root); renderer.render(scene, camera)
         context.clearRect(0, 0, canvas.width, canvas.height); context.drawImage(renderer.domElement, 0, 0)
-        if (kind === subject && now - inspectedAt > 50) {
+        // Handles follow every frame while the rig is shown so a drag never trails the pointer.
+        if (kind === subject && now - inspectedAt > (s.showRig ? 15 : 50)) {
           const inspection: AnimalInspection = {}
           for (const [name, joint] of Object.entries(s.showRig && rig.root.visible ? rig.joints() : {})) {
             point.set(...joint.position); rig.root.localToWorld(point); point.project(camera)
-            inspection[name as AnimalJoint] = { ...joint, screen: [(point.x + 1) * 32, (1 - point.y) * 32] }
+            inspection[name as AnimalJoint] = { ...joint, screen: [(point.x + 1) * 32, (1 - point.y) * 32], depth: point.z }
           }
           s.onInspect(Math.floor(phase * ANIMAL_FRAMES), inspection); inspectedAt = now
         }

@@ -210,9 +210,32 @@ describe("resident construction", () => {
 })
 
 describe("monk fatigue and rest", () => {
-  it("leaves work when tired, walks to shelter, sleeps, then resumes work and prayer", () => {
+  it.each([false, true])("finishes the assigned build before resting despite exhaustion (at work: %s)", atWork => {
+    const map = fixture(), site = map.buildings[2], grounds = monkWander(map)
+    const monk = { ...createMonkRoutine(grounds, 0, makeRng(1)), ...createMonkNeeds(0) }
+    site.construction!.required = constructionWork(site.w, site.d)
+    stepMonkWork(monk, map, 1, 0.1)
+    if (atWork) {
+      for (let i = 0; i < 300 && monk.activity !== "building"; i++) stepMonkWork(monk, map, 1, 0.1)
+      expect(monk.activity).toBe("building")
+    }
+    const task = monk.buildingTask, spare = worker(map)
+    expect(task?.purpose).toBe("build")
+    monk.stamina = 0
+    for (let i = 0; i < 1500 && !isComplete(site); i++) {
+      stepMonkWork(monk, map, 1, 0.1)
+      expect(monk.buildingTask).toBe(task)
+      expect(assignBuildingTask(spare, map, "build")).toBe(false)
+    }
+    expect(isComplete(site)).toBe(true)
+    for (let i = 0; i < 300 && monk.activity !== "sleeping"; i++) stepMonkWork(monk, map, 1, 0.1)
+    expect(monk.activity).toBe("sleeping")
+    expect(monk.stamina).toBeGreaterThan(0)
+  })
+
+  it("rests before taking new work when tired, then resumes work and prayer", () => {
     const map = fixture(), grounds = monkWander(map), rng = makeRng(1)
-    const monk = { ...createMonkRoutine(grounds, 0, rng), ...createMonkNeeds(0), stamina: 26 }
+    const monk = { ...createMonkRoutine(grounds, 0, rng), ...createMonkNeeds(0), stamina: 10 }
     map.buildings[2].construction!.required = 30
     let slept = false, woke = false, built = false, prayed = false
     for (let i = 0; i < 4000; i++) {

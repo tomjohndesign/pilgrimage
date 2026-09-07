@@ -3,6 +3,7 @@ import { uncoverHead } from "./head-covering"
 import type { PersonRecipe } from "./design"
 import type { BaseClip, SocketName } from "./pose"
 import { staffDimensions, staffMotion } from "./staff-motion"
+import type { PoseEdits } from "./pose-edits"
 
 /** Socket-mounted equipment is baked with the person for all eight views. */
 export function createRoadAccessories(recipe: PersonRecipe, sockets: Record<SocketName, THREE.Object3D>, root: THREE.Object3D) {
@@ -91,14 +92,14 @@ export function createRoadAccessories(recipe: PersonRecipe, sockets: Record<Sock
     staff.children.forEach(part => { part.userData.inkPart = 11 })
   }
   return {
-    pose(clip: BaseClip, phase: number) {
+    pose(clip: BaseClip, phase: number, edits: PoseEdits | undefined = design.poseEdits) {
       const road = clip === "walk" || clip === "idle"
       hat.visible = clip !== "sleeping" && !uncoverHead(design.bodyType, clip)
       satchel.visible = road && design.satchel
       lute.visible = road && design.lute
       staff.visible = road && design.walkingStick
       if (staff.visible) {
-        const { tip, planted } = staffMotion(phase, b, clip === "walk", design.poseEdits)
+        const { tip, planted } = staffMotion(phase, b, clip === "walk", edits)
         const grip = root.worldToLocal(sockets.rightHand.getWorldPosition(new THREE.Vector3()))
         const axis = grip.clone().sub(new THREE.Vector3(...tip))
         const gripDistance = axis.length()

@@ -1123,7 +1123,7 @@ export function stepSim(
       case "toBuild":
       case "building": {
         if (dt <= 0) break
-        if (Math.min(s.hunger, s.thirst, s.stamina) <= 40) s.buildingTask = undefined
+        // Finish the assigned site before returning to camp to recover needs.
         const state = stepBuildingTask(s, map, targetSpeed, dt)
         if (!state) {
           const camp = sim.buildings.find(b => b.id === s.employer)
