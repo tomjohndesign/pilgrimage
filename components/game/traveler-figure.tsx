@@ -17,7 +17,7 @@ import { personWalkStride } from "@/lib/game/base-person/gait"
 import { keeperRoutine } from "@/lib/game/transport/keeper"
 import { populationDesign } from "@/lib/game/base-person/population"
 import { STALL, stallPoint } from "@/lib/game/transport/stall"
-import { animalTravel } from "@/lib/game/transport/animal-travel"
+import { animalTravel, hitchedAnimalTravel } from "@/lib/game/transport/animal-travel"
 import { roadCartPose } from "@/lib/game/transport/bridge-guide"
 import { alignCart, followCart, type CartPose } from "@/lib/game/transport/follow"
 import type { WalkTuning } from "@/lib/game/motion"
@@ -44,7 +44,7 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
   const point = useMemo(() => new THREE.Vector3(), [])
   const cartPose = useRef<CartPose | null>(null)
   const followingRoad = useRef(false)
-  const lastAnimal = useRef<{ x: number; z: number } | null>(null)
+  const lastAnimal = useRef<{ x: number; z: number; hitched: boolean } | null>(null)
   const lastDriver = useRef<{ x: number; z: number; deployed: boolean } | null>(null)
   useFrame(() => {
     const group = driver.current, parent = group?.parent
@@ -111,20 +111,20 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
       const pasture = data.pasture, priorHeading = beast.current.userData.heading
       const last = lastAnimal.current
       const travel = data.animalHeading !== undefined ? { heading: data.animalHeading, reversing: data.reversing === true }
-        : last && !data.motionReset ? animalTravel(priorHeading ?? heading, hitch.x - last.x, hitch.z - last.z) : { heading, reversing: false }
-      beast.current.userData = { ...data, ...travel, grazing: false, hitched: !deployed }
+        : last?.hitched && !data.motionReset ? animalTravel(priorHeading ?? heading, hitch.x - last.x, hitch.z - last.z) : { heading, reversing: false }
+      beast.current.userData = { ...data, ...hitchedAnimalTravel(cartPose.current!, travel), grazing: false, hitched: !deployed }
       if (deployed && pasture) {
         beast.current.position.copy(parent.worldToLocal(point.set(pasture.x, data.pastureY ?? y, pasture.z)))
         const previous = lastAnimal.current, distance = previous && !data.motionReset && !paused ? Math.hypot(pasture.x - previous.x, pasture.z - previous.z) : 0
         beast.current.userData = { ...data, heading: pasture.moving && !praying ? pasture.heading : priorHeading ?? data.heading, reversing: pasture.reversing, hitched: false,
           moving: pasture.moving && !praying, distance, grazing: data.pastureGrass && !pasture.returning && !pasture.moving }
-        lastAnimal.current = { x: pasture.x, z: pasture.z }
+        lastAnimal.current = { x: pasture.x, z: pasture.z, hitched: false }
       } else if (parking) {
         const hitch = parking.pose.hitch
         beast.current.position.copy(parent.worldToLocal(point.set(hitch.x, map ? walkingSurface(map, hitch.x, hitch.z).height : y, hitch.z)))
-        beast.current.userData = { ...data, heading: parking.pose.heading, hitched: true, moving: !onFoot && data.moving, distance: onFoot ? 0 : data.distance, grazing: false }
+        beast.current.userData = { ...data, ...hitchedAnimalTravel(parking.pose, { heading: parking.pose.heading, reversing: false }), hitched: true, moving: !onFoot && data.moving, distance: onFoot ? 0 : data.distance, grazing: false }
         lastAnimal.current = null
-      } else { beast.current.position.set(0, 0, 0); lastAnimal.current = { ...hitch } }
+      } else { beast.current.position.set(0, 0, 0); lastAnimal.current = { ...hitch, hitched: !deployed } }
     }
   }, -2)
   const variant = appearance?.variant ?? 0
