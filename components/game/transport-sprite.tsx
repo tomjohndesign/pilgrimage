@@ -1,21 +1,23 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 import type { GameMap } from "@/lib/game/map/types"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 import { usePixelWorldTexel } from "@/components/pixel-canvas"
 import { spriteRow } from "@/lib/game/character-assets"
-import { applySpriteDepth } from "@/lib/game/render/sprite-depth"
+import { applySpriteDepth, configureSpriteDepthTexture, spriteRenderOrder, type SpritePoseDepth } from "@/lib/game/render/sprite-depth"
 import { OUTLINE_ID_LAYER_MASK, SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import { plantFoot, type FootPlant } from "@/lib/game/base-person/gait"
 import { BASE_PERSON, WALK_STANCE_FRACTION } from "@/lib/game/base-person/pose"
 import { animalCoat } from "@/lib/game/transport/coats"
 import { TRANSPORT, CART, SHOP, cartUrl, animalUrl, type Puller, RIG_TO_WORLD, cartColumn, animalStride, type Animal, type Cargo, type HorseVariant } from "@/lib/game/transport/assets"
 import { KEEPER_CLIPS, KEEPER_COLUMNS } from "@/lib/game/transport/keeper"
+import { useAnimalRigStore } from "@/lib/game/wildlife/rig-store"
+import { createEditedAnimalFrame } from "@/lib/game/transport/edited-frame"
 import { animalLeg } from "@/lib/game/transport/animal-pose"
-import manifest from "@/public/textures/transport/v14/manifest.json"
+import manifest from "@/public/textures/transport/v16/manifest.json"
 import type { FigureClickHandler } from "./traveler-figure"
 
 export function TransportSprite({ map: terrain, kind, coat, variant = 0, horseVariant = "common", cargo = "produce", puller = "hand", awning = false, characterScale = 1,
@@ -24,16 +26,25 @@ export function TransportSprite({ map: terrain, kind, coat, variant = 0, horseVa
   selected?: boolean; outlineColor?: [number, number, number]; onClick?: FigureClickHandler; position?: [number, number, number]
 }) {
   const animal = kind === "donkey" || kind === "horse"
-  const sources = useLoader(THREE.TextureLoader, kind === "cart" ? [cartUrl(cargo, puller), cartUrl(cargo, "shop", 1, puller === "hand"), cartUrl(cargo, "shop", -1, puller === "hand")]
-    : kind === "merchant" ? [`/textures/transport/${TRANSPORT.version}/merchant-setup.png`, `/textures/transport/${TRANSPORT.version}/merchant-selling.png`] : [animalUrl(kind, animalCoat(kind, coat).id), animalUrl(kind, animalCoat(kind, coat).id, true)])
+  const edits = useAnimalRigStore(state => state.designs[kind])
+  const hasEdits = animal && !!edits && Object.keys(edits.clips).length > 0
+  const edited = useMemo(() => hasEdits && (kind === "donkey" || kind === "horse") ? createEditedAnimalFrame(kind, horseVariant, coat) : null, [hasEdits, kind, horseVariant, coat])
+  useEffect(() => () => edited?.dispose(), [edited])
+  const [renderOrder] = useState(spriteRenderOrder)
+  const urls = kind === "cart" ? [cartUrl(cargo, puller), cartUrl(cargo, "shop", 1, puller === "hand"), cartUrl(cargo, "shop", -1, puller === "hand")]
+    : kind === "merchant" ? [`/textures/transport/${TRANSPORT.version}/merchant-setup.png`, `/textures/transport/${TRANSPORT.version}/merchant-selling.png`] : [animalUrl(kind, animalCoat(kind, coat).id), animalUrl(kind, animalCoat(kind, coat).id, true)]
+  const sources = useLoader(THREE.TextureLoader, [...urls, ...urls.map(url => url.replace(/([^/]+)$/, "depth-$1"))])
+  const poseDepth = useMemo<SpritePoseDepth>(() => ({ map: { value: null }, enabled: { value: true } }), [])
+  const depths = useMemo(() => sources.slice(urls.length).map(configureSpriteDepthTexture), [sources, urls.length])
+
   const rows = kind === "cart" ? CART.directions : kind === "merchant" ? manifest.puller.rows : kind === "horse" ? manifest.animalRows.horse : 8
   const rowOffset = kind === "merchant" ? variant * 8 : kind === "horse" ? manifest.horseVariants[horseVariant].rowOffset : 0
   const walk = manifest.animalClips.walk
-  const maps = useMemo(() => sources.map(source => {
+  const maps = useMemo(() => sources.slice(0, urls.length).map(source => {
     const map = source.clone(); map.magFilter = map.minFilter = THREE.NearestFilter
     map.colorSpace = THREE.SRGBColorSpace; map.generateMipmaps = false; map.needsUpdate = true
     return map
-  }), [sources])
+  }), [sources, urls.length])
   const map = maps[0]
   const worldTexel = usePixelWorldTexel(), viewport = useMemo(() => new THREE.Vector4(), [])
   const groundPlane = useMemo(() => ({ value: new THREE.Vector4() }), [])
@@ -41,16 +52,16 @@ export function TransportSprite({ map: terrain, kind, coat, variant = 0, horseVa
   const materials = useMemo(() => [false, true].map(idPass => {
     const material = new THREE.SpriteMaterial({ map, alphaTest: 0.5, transparent: false, toneMapped: false })
     material.onBeforeCompile = shader => {
-      applySpriteDepth(shader, viewport, worldTexel, groundPlane)
+      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth)
       if (idPass) {
         shader.uniforms.transportId = { value: new THREE.Vector3(...(outlineColor ?? [0, 0, 0])) }
         shader.fragmentShader = "uniform vec3 transportId;\n" + shader.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\ndiffuseColor.rgb = transportId;")
       }
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => idPass ? "transport-id-v2" : "person-depth-v4"
+    material.customProgramCacheKey = () => idPass ? "transport-id-v3" : "person-depth-v5"
     return material
-  }), [map, viewport, worldTexel, groundPlane, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }), [map, viewport, worldTexel, groundPlane, poseDepth, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => { materials.forEach(m => m.dispose()) }, [materials])
   useEffect(() => () => maps.forEach(map => map.dispose()), [maps])
   const root = useRef<THREE.Group>(null), phase = useRef(0), grazingTime = useRef(0), plant = useRef<FootPlant | null>(null)
@@ -77,8 +88,17 @@ export function TransportSprite({ map: terrain, kind, coat, variant = 0, horseVa
       : moving ? walk.start + Math.floor(phase.current * walk.frames)
       : data.grazing ? grazingTime.current < 0.75 ? lower.start + Math.min(lower.frames - 1, Math.floor(grazingTime.current / 0.75 * lower.frames))
         : graze.start + Math.floor((grazingTime.current - 0.75) * graze.fps) % graze.frames : manifest.animalClips.idle.start
-    const active = maps[keeperClip ? 1 : kind === "cart" && shop ? data.shopSide < 0 ? 2 : 1 : animal && data.hitched ? 1 : 0]
+    const textureIndex = keeperClip ? 1 : kind === "cart" && shop ? data.shopSide < 0 ? 2 : 1 : animal && data.hitched ? 1 : 0
+    let active: THREE.Texture = maps[textureIndex]
+    poseDepth.map.value = depths[textureIndex]
     active.repeat.set(1 / columns, 1 / rows); active.offset.set(column / columns, (rows - 1 - rowOffset - row) / rows)
+    if (edited && edits) {
+      const grazeAmount = data.grazing ? Math.min(1, grazingTime.current / 0.75) : 0
+      const idlePhase = grazingTime.current * 0.8 * (edits.clips.graze?.cadence ?? 1)
+      edited.draw(moving ? phase.current : idlePhase % 1, moving, grazeAmount, row, edits, !!data.hitched)
+      active = edited.texture
+      poseDepth.map.value = edited.depthTexture
+    }
     for (const material of materials) material.map = active
     const cell = kind === "merchant" ? manifest.puller.cellSize : kind === "cart" ? shop ? SHOP.cellSize : CART.cellSize : manifest.cellSize
     const anchor = kind === "merchant" ? manifest.puller.anchor : kind === "cart" ? shop ? SHOP.anchor : CART.anchor : manifest.anchor
@@ -89,7 +109,7 @@ export function TransportSprite({ map: terrain, kind, coat, variant = 0, horseVa
     } })
     group.position.set(...position)
     if (animal && moving) {
-      const displayed = Math.floor(phase.current * walk.frames) / walk.frames
+      const displayed = edited ? phase.current : Math.floor(phase.current * walk.frames) / walk.frames
       const side = displayed >= WALK_STANCE_FRACTION - 0.5 && displayed < WALK_STANCE_FRACTION ? "left" : "right"
       const foot = animalLeg(kind, side, false, displayed, true, horseVariant).ankle
       const angle = -row * Math.PI / 4, scale = RIG_TO_WORLD * characterScale
@@ -113,8 +133,8 @@ export function TransportSprite({ map: terrain, kind, coat, variant = 0, horseVa
   const size = manifest.scale * characterScale
   const center = useMemo(() => new THREE.Vector2(manifest.anchor[0] / manifest.cellSize, 1 - manifest.anchor[1] / manifest.cellSize), [])
   return <group ref={root} position={position}>
-    <sprite name={kind} material={materials[0]} center={center} scale={[size, size, 1]} onClick={onClick}
+    <sprite name={kind} renderOrder={renderOrder} material={materials[0]} center={center} scale={[size, size, 1]} onClick={onClick}
       layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} />
-    {outlineColor && <sprite material={materials[1]} center={center} scale={[size, size, 1]} layers-mask={OUTLINE_ID_LAYER_MASK} />}
+    {outlineColor && <sprite renderOrder={renderOrder} material={materials[1]} center={center} scale={[size, size, 1]} layers-mask={OUTLINE_ID_LAYER_MASK} />}
   </group>
 }

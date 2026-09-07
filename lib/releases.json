@@ -1,7 +1,37 @@
 {
-  "lastProcessedCommit": "e7a4d1c73e4339a7f26fdddf88513305a053209c",
-  "releaseCount": 65,
+  "lastProcessedCommit": "83c5895823c904181523ef6faaa807ae8d3f13f4",
+  "releaseCount": 70,
   "releases": [
+    {
+      "version": "0.0.84",
+      "title": "Release 0.0.84",
+      "summary": "Add map wildlife and shared animal rig playground (#104)",
+      "commit": "83c5895823c904181523ef6faaa807ae8d3f13f4"
+    },
+    {
+      "version": "0.0.83",
+      "title": "Release 0.0.83",
+      "summary": "Fix character and scenery overlaps with per-pose sprite depth (#102)",
+      "commit": "b80af2f1cd3174999aa00d72948b7be0a84eb88c"
+    },
+    {
+      "version": "0.0.82",
+      "title": "Release 0.0.82",
+      "summary": "Keep merchant stalls open all day and add roadside minstrel performances (#101)",
+      "commit": "197064bbba95c051e426d22b3e17c8fcb18a572d"
+    },
+    {
+      "version": "0.0.81",
+      "title": "Release 0.0.81",
+      "summary": "Limit construction crews by building size and prefer paths (#100)",
+      "commit": "d3fc878a7b5a9b0d2ed15fa6e8ec12605512aa96"
+    },
+    {
+      "version": "0.0.80",
+      "title": "Release 0.0.80",
+      "summary": "Add monk roadside evangelism task (#99)",
+      "commit": "f9e83010afba2c172e69a12a9204be9fcfc21b17"
+    },
     {
       "version": "0.0.79",
       "title": "Release 0.0.79",

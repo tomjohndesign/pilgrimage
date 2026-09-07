@@ -146,6 +146,7 @@ export function shrineStructureParts(width: number, depth: number): BuildingPart
   for (const kneeler of shrineKneelers(width,depth)) {
     const {x,z,length,id}=kneeler
     box(`${id}-pad`, "interior", [x, KNEELER_PAD_TOP-.003, z-.07], [length, .006, .2], "#9d8865")
+    parts[parts.length - 1].support = { clips: ["praying"], anchorOffset: [0, .07], heading: Math.PI }
     for (const end of [-1, 1]) {
       box(`${id}-foot-${end}`, "interior", [x+end*length*.36,.004,z-.1], [.075,.008,.46], palette.darkWood)
       box(`${id}-post-${end}`, "interior", [x+end*length*.42,.18,z-.27], [.045,.36,.045])

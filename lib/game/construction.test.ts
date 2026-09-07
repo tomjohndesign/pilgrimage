@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { assignBuildingTask, buildingEntrance, constructionStandOff, constructionStage, constructionWork, isComplete, stepBuildingTask, type Worker } from "./construction"
+import { assignBuildingTask, buildingEntrance, constructionBuilders, constructionStandOff, constructionStage, constructionWork, isComplete, stepBuildingTask, type Worker } from "./construction"
 import { constructionParts } from "./building-art/construction"
 import { structureParts } from "./building-art/structure"
 import { generateMap } from "./map/generate-map"
@@ -11,6 +11,7 @@ import { settlementRoute } from "./settlement-route"
 import { makeRng } from "./rng"
 import { woodcutterHuts } from "./settlement"
 import { rotatedFootprint, rotateBuildingPoint, type BuildingRotation } from "./building-rotation"
+import { characterSupport } from "./character-support"
 
 function fixture(): GameMap {
   return { width: 18, depth: 18, tiles: Array(324).fill("grass"),
@@ -47,6 +48,39 @@ describe("resident construction", () => {
     expect(constructionWork(2, 2)).toBe(96)
     expect(constructionWork(3, 2)).toBe(216)
     expect(constructionWork(4, 3)).toBe(864)
+  })
+
+  it.each([[1, 1, 1], [2, 1, 1], [2, 2, 1], [3, 2, 2], [3, 3, 3], [4, 4, 4], [8, 8, 4]])(
+    "limits a %s by %s site to %s builders, including those still walking", (w, d, limit) => {
+      const map = fixture(), site = map.buildings[2]
+      Object.assign(site, { x: 0, z: 10, w, d })
+      // Keep the largest footprint and frontage inside the fixture.
+      map.depth = 24; map.tiles = Array(map.width * map.depth).fill("grass")
+      const actors = Array.from({ length: 5 }, () => worker(map, 10, 20))
+      expect(constructionBuilders(w, d)).toBe(limit)
+      for (let i = 0; i < actors.length; i++) expect(assignBuildingTask(actors[i], map, "build")).toBe(i < limit)
+      expect(site.construction!.work).toBe(0)
+      expect(new Set(actors.slice(0, limit).map(actor => actor.buildingTask!.slot % 4)).size).toBe(limit)
+      // Republishing the map must preserve reservations and let an existing worker reroute.
+      const published = { ...map, buildings: [...map.buildings] }
+      expect(assignBuildingTask(actors[0], published, "build", site.id)).toBe(true)
+      expect(assignBuildingTask(actors[limit], published, "build")).toBe(false)
+      actors[0].buildingTask = undefined
+      expect(assignBuildingTask(actors[limit], published, "build")).toBe(true)
+    },
+  )
+
+  it("sends spare builders to another site and releases reservations for rest", () => {
+    const map = fixture(), a = worker(map), b = worker(map), c = worker(map)
+    const site = map.buildings[2]
+    expect(assignBuildingTask(a, map, "build")).toBe(true)
+    map.buildings.push({ ...site, id: "second-site", x: 12, construction: { work: 0, required: 96 } })
+    expect(assignBuildingTask(b, map, "build")).toBe(true)
+    expect(b.buildingTask!.buildingId).toBe("second-site")
+    expect(assignBuildingTask(c, map, "build")).toBe(false)
+    expect(assignBuildingTask(a, map, "rest")).toBe(true)
+    expect(assignBuildingTask(c, map, "build")).toBe(true)
+    expect(c.buildingTask!.buildingId).toBe(site.id)
   })
 
   it.each([false, true])("keeps the current job when another site is placed (at work: %s)", atWork => {
@@ -91,6 +125,7 @@ describe("resident construction", () => {
 
   it("adds cooperative work without crediting absent or paused workers", () => {
     const map = fixture(), site = map.buildings[2], a = worker(map, 2, 12), b = worker(map, 2, 12)
+    site.w = 3
     for (const actor of [a, b]) {
       assignBuildingTask(actor, map, "build")
       while (actor.buildingTask!.route.length) stepBuildingTask(actor, map, 1, 0.1)
@@ -128,6 +163,7 @@ describe("resident construction", () => {
 
   it.each([0.5, 1.5, 4])("stands at mallet reach from the wall at character scale %s", scale => {
     const map = fixture(), site = map.buildings[2]
+    site.w = 4; site.d = 4
     const actors = Array.from({ length: 4 }, (_, workSlot) => ({ ...worker(map), workSlot, workScale: scale }))
     for (const actor of actors) {
       assignBuildingTask(actor, map, "build")
@@ -183,8 +219,10 @@ describe("monk fatigue and rest", () => {
       if (!stepMonkWork(monk, map, 1, 0.1)) stepMonkRoutine(monk, grounds, rng, 1, 0.1)
       if (monk.activity === "sleeping") {
         slept = true
-        expect(monk.x).toBe(tileToWorldX(map, 7))
-        expect(monk.z).toBeCloseTo(tileToWorldZ(map, 4) + 0.5 - 0.16)
+        const bed = characterSupport(map, monk.x, monk.z, "sleeping")
+        expect(bed).toBeDefined()
+        expect(monk.x).toBeCloseTo(bed!.anchor.x)
+        expect(monk.z).toBeCloseTo(bed!.anchor.z)
       }
       if (slept && monk.stamina >= MONK_WAKE_AT) woke = true
       if (woke && monk.activity === "building") built = true

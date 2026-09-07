@@ -4,7 +4,7 @@ import { AssetPlayground } from "@/components/asset-playground"
 
 export const metadata: Metadata = {
   title: "Pilgrimage — Asset playground",
-  description: "Characters and procedural buildings in one shared playground.",
+  description: "Characters, animals and procedural buildings in one shared playground.",
 }
 
 export default function CharactersPage() {

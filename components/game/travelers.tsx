@@ -19,7 +19,7 @@ import type { Relic } from "@/lib/game/relic"
 import type { TreePlacement } from "@/lib/game/trees/placement"
 import { tileAt, worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
 import { createSim, roadCartPose, simRegistry, stepSim } from "@/lib/game/sim"
-import { shrineLayout, KNEELER_PAD_TOP } from "@/lib/game/shrine-layout"
+import { shrineLayout } from "@/lib/game/shrine-layout"
 import type { Traveler } from "@/lib/game/travelers"
 import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
@@ -92,7 +92,10 @@ export function Travelers({
       if (!sim.travelers.has(id)) sim.travelers.set(id, traveler)
     }
     for (const id of sim.travelers.keys()) {
-      if (!fresh.travelers.has(id)) sim.travelers.delete(id)
+      if (!fresh.travelers.has(id)) {
+        sim.travelers.get(id)!.buildingTask = undefined
+        sim.travelers.delete(id)
+      }
     }
   }, [sim, travelers, map, relic])
 
@@ -102,6 +105,7 @@ export function Travelers({
   useEffect(() => {
     simRegistry.current = sim
     return () => {
+      for (const traveler of sim.travelers.values()) traveler.buildingTask = undefined
       if (simRegistry.current === sim) simRegistry.current = null
     }
   }, [sim])
@@ -159,6 +163,13 @@ export function Travelers({
       if (s.activity === "visiting" && !!s.shrineSeat) {
         group.rotation.y = kneelingHeading
       }
+      if (s.activity === "performing" && s.walkFrom) {
+        group.rotation.y = Math.atan2(s.walkFrom.x - s.x, s.walkFrom.z - s.z)
+      }
+      if (s.activity === "listening" && s.musicVisit) {
+        const performer = sim.travelers.get(s.musicVisit.performerId)
+        if (performer) group.rotation.y = Math.atan2(performer.x - s.x, performer.z - s.z)
+      }
       if (s.activity === "building") group.rotation.y = s.buildingTask?.heading ?? Math.PI
       group.userData.workTree = workTree
       if (!playback.paused && !moving && workTree && (s.activity === "working" || s.activity === "gathering")) {
@@ -194,7 +205,6 @@ export function Travelers({
       group.userData.heading = group.rotation.y
 
       const y = walkingSurface(map, s.x, s.z).height
-      group.userData.supportHeight = s.activity === "visiting" && s.shrineSeat ? KNEELER_PAD_TOP : 0
       group.position.set(s.x, y, s.z)
       // Keep baked bodies at their authored proportions.
       group.scale.y = 1

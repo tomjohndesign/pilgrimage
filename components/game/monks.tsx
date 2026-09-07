@@ -3,6 +3,8 @@
 import { PietyEffects } from "./admission-effects"
 import { PixelCharacters } from "@/components/pixel-canvas"
 import { createMonkNeeds, stepMonkWork, type MonkNeeds } from "@/lib/game/monk-work"
+import { preachingRegistry, preachingSpots, stepMonkEvangelism, type PreachingTask } from "@/lib/game/monk-evangelism"
+import { useMonkEvangelismStore } from "@/lib/game/monk-evangelism-store"
 import { workerRoute } from "@/lib/game/construction"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
@@ -39,6 +41,7 @@ import { rocketMonkVisual, rocketFlightClip } from "@/lib/game/rocket/assets"
  */
 
 interface MonkState extends MonkRoutine, MonkNeeds {
+  preachingTask?: PreachingTask
   workScale?: number
   flight?: MonkFlight
   piety: number
@@ -74,13 +77,20 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
   world.grounds = useMemo(() => processionGrounds(map, navigation), [map, navigation])
   useEffect(() => {
     for (const state of world.states) {
-      if (state.buildingTask || state.flight) continue
+      if (state.buildingTask || state.flight || state.preachingTask) continue
       if (map.site) { state.route = workerRoute(map, state, map.site.door) ?? []; state.destination = "home" }
     }
   }, [map, world])
 
+  useEffect(() => {
+    useMonkEvangelismStore.setState({ available: preachingSpots(map).length > 0 })
+  }, [map])
+
   // Publish activities so the HUD's monk panel can poll them.
   useEffect(() => {
+    const preachers = { road: map.road, monks: world.states }
+    preachingRegistry.current = preachers
+    useMonkEvangelismStore.setState({ assigned: new Set() })
     monkRegistry.current = world.activities
     monkStaminaRegistry.current = world.stamina
     const positions = new Map(monks.map((m, i) => [m.id, world.states[i]]))
@@ -88,6 +98,11 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
     processionRegistry.current = world.procession
     useRelicProcessionStore.setState({ available: !!world.grounds, monkId: null, stage: "idle", returnRequested: false })
     return () => {
+      for (const state of world.states) state.buildingTask = undefined
+      if (preachingRegistry.current === preachers) {
+        preachingRegistry.current = null
+        useMonkEvangelismStore.setState({ available: false, assigned: new Set() })
+      }
       if (monkPositionRegistry.current === positions) monkPositionRegistry.current = null
       if (monkRegistry.current === world.activities) monkRegistry.current = null
       if (monkStaminaRegistry.current === world.stamina) monkStaminaRegistry.current = null
@@ -107,12 +122,13 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       const index = monks.findIndex(m => m.id === controls.monkId)
       const actor = world.states[index]
       if (actor) actor.buildingTask = undefined
-      if (!actor || actor.flight || !startProcession(world.procession, controls.monkId, actor, world.grounds)) {
+      if (!actor || actor.flight || actor.preachingTask || useMonkEvangelismStore.getState().assigned.has(controls.monkId) || !startProcession(world.procession, controls.monkId, actor, world.grounds)) {
         useRelicProcessionStore.setState({ monkId: null, returnRequested: false })
       }
     }
     if (!playback.paused && world.procession.stage === "idle" && world.grounds) {
-      const index = world.states.findIndex(s => !s.flight && !s.processionConsidered &&
+      const index = world.states.findIndex((s, index) => !s.flight && !s.processionConsidered &&
+        !s.preachingTask && !useMonkEvangelismStore.getState().assigned.has(monks[index].id) &&
         s.activity === "praying" && s.destination === "prayer" &&
         Math.hypot(s.x - world.grounds!.altar.x, s.z - world.grounds!.altar.z) < .01)
       if (index >= 0 && startAltarProcession(world.procession, monks[index].id, world.states[index], world.grounds, world.rng)) {
@@ -165,7 +181,8 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         group.position.set(s.x, s.y, s.z)
         continue
       }
-      const praying = !s.flight && s.buildingTask?.purpose !== "rest" && nearProcession(world.procession, s, group.userData.activity === "praying")
+      const evangelismRequested = useMonkEvangelismStore.getState().assigned.has(monks[i].id)
+      const praying = !evangelismRequested && !s.preachingTask && !s.flight && s.buildingTask?.purpose !== "rest" && nearProcession(world.procession, s, group.userData.activity === "praying")
       group.userData.moving = false
       if (praying && world.procession.position) {
         blessByProcession(world.procession, `monk:${monks[i].id}`, s)
@@ -178,7 +195,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
 
       if (flying) {
         s.flightWait -= dt
-        if (!s.flight && s.flightWait <= 0 && s.destination === "grounds" && s.activity === "resting" && !s.buildingTask && s.stamina > 25) {
+        if (!evangelismRequested && !s.preachingTask && !s.flight && s.flightWait <= 0 && s.destination === "grounds" && s.activity === "resting" && !s.buildingTask && s.stamina > 25) {
           s.flight = createMonkFlight(s, world.pick(), map, world.flightRng)
         }
       }
@@ -217,13 +234,18 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       }
       group.rotation.x = 0
 
-      if (!stepMonkWork(s, map, monkWalkSpeed(characterScale), dt))
+      const evangelizing = stepMonkEvangelism(s, map, evangelismRequested, monkWalkSpeed(characterScale), dt,
+        world.states.filter(other => other !== s && other.preachingTask).map(other => other.preachingTask!.tile))
+      if (evangelismRequested && !evangelizing) useMonkEvangelismStore.getState().recall(monks[i].id)
+      if (!evangelizing && !stepMonkWork(s, map, monkWalkSpeed(characterScale), dt))
         stepMonkRoutine(s, world.wander, world.rng, monkWalkSpeed(characterScale), dt)
       world.stamina.set(monks[i].id, s.stamina)
       if (s.buildingTask && (s.activity === "building" || s.activity === "sleeping")) group.rotation.y = s.buildingTask.heading
       group.userData.activity = s.activity
       world.activities.set(monks[i].id, s.activity)
-      if (s.activity === "praying" && world.centre) {
+      if (s.activity === "preaching" && s.preachingTask) {
+        group.rotation.y = s.preachingTask.heading
+      } else if (s.activity === "praying" && world.centre) {
         group.rotation.y = Math.atan2(world.centre.x - s.x, world.centre.z - s.z)
       } else if (Math.hypot(s.x - previousX, s.z - previousZ) > 0) {
         group.rotation.y = Math.atan2(s.x - previousX, s.z - previousZ)

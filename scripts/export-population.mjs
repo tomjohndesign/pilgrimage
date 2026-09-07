@@ -32,9 +32,11 @@ try {
   const save = (name, data) => { writeFileSync(`${prefix}/${name}.png`, Buffer.from(data.split(",")[1], "base64")); return `/${prefix.replace(/^public\//, "")}/${name}.png` }
   for (const [type, entry] of Object.entries(pack.callings)) for (const clip of ["walk", "idle"]) entry[clip] = save(`${type}-${clip}`, entry[clip])
   for (const [type, entry] of Object.entries(pack.callings)) for (const [clip, data] of Object.entries(entry.actions ?? {})) entry.actions[clip] = save(`${type}-${clip}`, data)
+  for (const [type, entry] of Object.entries(pack.callings)) for (const [clip, data] of Object.entries(entry.depths)) entry.depths[clip] = save(`${type}-depth-${clip}`, data)
   for (const [type, entry] of Object.entries(pack.greyCallings ?? {})) {
     for (const clip of ["walk", "idle"]) entry[clip] = save(`${type}-grey-${clip}`, entry[clip])
     for (const [clip, data] of Object.entries(entry.actions ?? {})) entry.actions[clip] = save(`${type}-grey-${clip}`, data)
+    for (const [clip, data] of Object.entries(entry.depths)) entry.depths[clip] = save(`${type}-grey-depth-${clip}`, data)
   }
   for (const [clip, data] of Object.entries(pack.shadows.actions ?? {})) pack.shadows.actions[clip] = save(`shadow-${clip}`, data)
   for (const clip of ["walk", "idle"]) pack.shadows[clip] = save(`shadow-${clip}`, pack.shadows[clip])

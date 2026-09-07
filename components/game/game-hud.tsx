@@ -28,12 +28,15 @@ import { CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
+import { MONK_TIRED_AT } from "@/lib/game/monk-work"
+import { useMonkEvangelismStore } from "@/lib/game/monk-evangelism-store"
 import { MONK_ACTIVITY_LABELS, monkStaminaRegistry, monkRegistry, monkPositionRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { relicTitle, type Relic } from "@/lib/game/relic"
 import { DEFAULT_TRAFFIC, type Traveler } from "@/lib/game/travelers"
 import type { PixelationProps } from "@/components/pixel-canvas"
 
 import type { MapSettings } from "./game-shell"
+import { AnimalInspector } from "./animal-inspector"
 import { ResourceInspector } from "./resource-inspector"
 import { Minimap } from "./minimap"
 import { SettlementPanel } from "./settlement-panel"
@@ -528,6 +531,8 @@ function MonkPanel({ monk }: { monk: Monk }) {
   }, [monk.id])
   const procession = useRelicProcessionStore()
   const carryingRelic = procession.monkId === monk.id
+  const evangelism = useMonkEvangelismStore()
+  const evangelizing = evangelism.assigned.has(monk.id)
   return (
     <Panel>
       <div className="flex items-baseline justify-between gap-4">
@@ -553,12 +558,21 @@ function MonkPanel({ monk }: { monk: Monk }) {
 
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
         <StatBar label="Piety" value={piety ?? a.piety} />
-        <StatBar label="Stamina" value={stamina} />
+        <StatBar label="Stamina" value={Math.round(stamina)} />
         <div className="mt-1 text-[11px] text-ink-light">Contributes +{individualRenown(monk, balance)} shrine renown</div>
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
-        <button type="button" className="hud-action" disabled={!procession.available || activity === "flying" ||
+        <button type="button" className="hud-action"
+          disabled={!evangelizing && (!evangelism.available || carryingRelic || activity === "flying" || stamina <= MONK_TIRED_AT)}
+          onClick={() => evangelizing ? evangelism.recall(monk.id) : evangelism.request(monk.id)}>
+          {evangelizing ? "Recall from preaching" : "Evangelize on the main road"}
+        </button>
+        <p className="mt-1 text-[11px] italic text-ink-light">Preach beside the junction until recalled or tired. Gives passing travelers a 5% extra chance to visit the relic, independent of a cross. Extra preachers do not stack.</p>
+      </div>
+
+      <div className="mt-2 border-t border-rule pt-2">
+        <button type="button" className="hud-action" disabled={!procession.available || evangelizing || activity === "toEvangelize" || activity === "preaching" || activity === "flying" ||
           (procession.monkId !== null && !carryingRelic) || (carryingRelic && (procession.returnRequested || procession.stage === "lowering" || procession.stage === "returning"))}
           onClick={() => carryingRelic ? procession.returnRelic() : procession.request(monk.id)}>
           {carryingRelic ? "Return relic" : "Carry relic in procession"}
@@ -1046,6 +1060,7 @@ export function GameHud({
             </>}
           </Panel>
           )}
+          {selection?.kind === "animal" && <AnimalInspector id={selection.id} />}
           {selectedTraveler && <TravelerPanel traveler={selectedTraveler} />}
           {selectedMonk && <MonkPanel monk={selectedMonk} />}
           {selectedRelic && relic && <RelicPanel relic={relic} />}
