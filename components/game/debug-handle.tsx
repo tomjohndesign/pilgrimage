@@ -13,6 +13,7 @@ import type { OutlineMode } from "@/lib/game/render/outline"
 import type { Traveler } from "@/lib/game/travelers"
 import { simRegistry, stepSim } from "@/lib/game/sim"
 import type { MovementTuning } from "@/lib/game/motion"
+import { strikeTree } from "@/lib/game/trees/impact"
 import type { EntState } from "@/lib/game/trees/ents"
 
 import { outlineFrameRef } from "./outline-pass"
@@ -81,6 +82,8 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         })
         return sprites
       },
+      burrows: () => scene.getObjectByName("wildlife")?.userData.burrows ?? [],
+      wildlife: () => scene.getObjectByName("wildlife")?.userData.animals ?? [],
       transportSprites: () => {
         const sprites: Array<{ kind: string; position: number[]; sheet: string; columns: number; rows: number; visible: boolean; heading: number; grazing: boolean }> = []
         scene.traverse(object => {
@@ -146,6 +149,10 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         visits: simRegistry.current?.visits ?? 0,
       }),
       treePlacements: () => simRegistry.current?.trees ?? [],
+      strikeTree: (index: number) => {
+        const tree = simRegistry.current?.trees?.[index]
+        if (tree) strikeTree(tree, 0)
+      },
       /** Exact relic position and pulse values for scene/selection smoke tests. */
       procession: () => processionRegistry.current,
       relic: () => {

@@ -97,6 +97,11 @@ export function placedObjectId(placedIndex: number): number {
   return MAX_OBJECT_ID - 0x2000 - placedIndex
 }
 
+/** Wildlife have their own block below settlement IDs. */
+export function wildlifeObjectId(animalIndex: number): number {
+  return MAX_OBJECT_ID - 0x4000 - animalIndex
+}
+
 /**
  * The relic sits alone in the middle of the ID space, so it outlines against
  * the shrine that houses it rather than merging into the walls.

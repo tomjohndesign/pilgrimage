@@ -1,3 +1,4 @@
+import { animalOffset, type AnimalRigEdits, type AnimalClip, type AnimalJoint } from "../wildlife/rig-edits"
 import { animalCoat } from "./coats"
 import * as THREE from "three"
 import { animalProfile, type Animal, type HorseVariant } from "./assets"
@@ -141,7 +142,9 @@ export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", 
     const mesh = m.mesh(geometry, color, a, legs), delta = new THREE.Vector3(...b).sub(new THREE.Vector3(...a))
     mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), delta.clone().normalize()); mesh.scale.z = delta.length()
   }
-  return { ...m, pose(phase: number, moving: boolean, grazing = 0) {
+  const joints: Partial<Record<AnimalJoint, { position: Point; editable: boolean; reason?: string }>> = {}
+  return { ...m, joints: () => joints, pose(phase: number, moving: boolean, grazing = 0, edits?: AnimalRigEdits) {
+    const clip: AnimalClip = moving ? "walk" : grazing > 0.5 ? "graze" : "idle"
     const motion = animalMotion(kind, phase, moving, variant)
     for (const { geometry, bind } of skin) {
       const positions = geometry.attributes.position as THREE.BufferAttribute
@@ -165,17 +168,34 @@ export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", 
       neck.rotation.x = THREE.MathUtils.lerp(neck.rotation.x, (lo + hi) / 2, grazing)
       neck.rotation.y = Math.sin(phase * Math.PI * 2) * 0.035 * grazing
     }
+    const headOffset = animalOffset(edits, clip, "head", phase)
+    head.position.set(poll[0] + headOffset[0], poll[1] + headOffset[1], poll[2] + headOffset[2])
     ears.forEach((ear, i) => { ear.rotation.x = (common ? -0.22 : donkey ? 0.08 : 0) + (moving ? Math.sin(phase * Math.PI * 2 + i) * 0.04 : 0) })
     tail.position.set(...spinePoint([0, h + (noble ? 0.49 : 0.38), -length * 0.97], kind, phase, moving, variant)); tail.rotation.set(motion.pitch, motion.tail, motion.roll + motion.tail * 0.3)
     if (grazing) { tail.rotation.y += Math.sin(phase * Math.PI * 2) * 0.32 * grazing; tail.rotation.z += Math.sin(phase * Math.PI * 4) * 0.07 * grazing }
+    const tailOffset = animalOffset(edits, clip, "tail", phase)
+    tail.position.add(new THREE.Vector3(...tailOffset))
+    joints.chest = { position: spinePoint([0, h + 0.2, profile.legZ], kind, phase, moving, variant), editable: false }
+    joints.pelvis = { position: spinePoint([0, h + 0.2, -profile.legZ], kind, phase, moving, variant), editable: false }
     for (const child of [...legs.children]) { legs.remove(child); if (child instanceof THREE.Mesh) child.geometry.dispose() }
     for (const rear of [false, true]) for (const side of ["left", "right"] as const) {
       const p = animalLeg(kind, side, rear, phase, moving, variant), muscle = noble ? 1.2 : donkey ? 0.85 : 0.83
+      const register = (name: AnimalJoint, position: Point) => { joints[name] = { position, editable: false, reason: "This joint follows the shared equine contact solver." } }
+      register(`${side}${rear ? "Hip" : "Shoulder"}`, p.hip)
+      register(`${side}${rear ? "Thigh" : "Elbow"}`, p.upperJoint)
+      register(`${side}${rear ? "Knee" : "Wrist"}`, p.knee)
+      register(`${side}${rear ? "Foot" : "Hand"}`, p.ankle)
       segment(p.hip, p.upperJoint, [0.12 * muscle, (rear ? 0.16 : 0.125) * muscle, 0.075 * muscle], coat)
       segment(p.upperJoint, p.knee, [0.08 * muscle, 0.09 * muscle, 0.045], coat)
       segment(p.knee, p.ankle, [0.053, 0.046, 0.038], points)
       m.mesh(loft([{ at: [p.ankle[0], p.ankle[1] - 0.035, p.ankle[2] - 0.055], width: 0.073, top: 0.035, bottom: 0.035 },
         { at: [p.ankle[0], p.ankle[1] - 0.035, p.ankle[2] + 0.105], width: 0.078, top: 0.025, bottom: 0.035 }], 8), "#3d3a32", [0, 0, 0], legs)
     }
+    m.root.updateMatrixWorld(true)
+    const position = new THREE.Vector3()
+    head.getWorldPosition(position); m.root.worldToLocal(position)
+    joints.head = { position: position.toArray() as Point, editable: true }
+    tail.getWorldPosition(position); m.root.worldToLocal(position)
+    joints.tail = { position: position.toArray() as Point, editable: true }
   } }
 }
