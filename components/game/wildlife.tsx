@@ -101,7 +101,9 @@ function RabbitHole({ burrow, map, scale }: { burrow: import("@/lib/game/wildlif
   const rig = useMemo(() => createBurrowRig(), [])
   useEffect(() => () => rig.dispose(), [rig])
   const surface = walkingSurface(map, burrow.x, burrow.z)
-  return <group name="rabbit-burrow" position={[burrow.x, surface.height, burrow.z]} rotation={[0, burrow.heading, 0]} scale={RIG_TO_WORLD * scale}>
+  const c = Math.cos(burrow.heading), s = Math.sin(burrow.heading)
+  const rotation = new THREE.Euler(-Math.atan(surface.dx * s + surface.dz * c), burrow.heading, Math.atan(surface.dx * c - surface.dz * s), "YXZ")
+  return <group name="rabbit-burrow" position={[burrow.x, surface.height, burrow.z]} rotation={rotation} scale={RIG_TO_WORLD * scale}>
     <primitive object={rig.root} />
   </group>
 }

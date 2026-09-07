@@ -1,3 +1,5 @@
+import * as THREE from "three"
+import { createBurrowRig } from "./burrow"
 import { it, expect } from "vitest"
 import { burrowMotion, burrowPreview, burrowApproach, BURROW_SECONDS } from "./burrow-motion"
 import { createWildlifeRig } from "./rig"
@@ -43,4 +45,27 @@ it("aligns at the approach and applies saved entry and exit timing in the world"
   Object.assign(rabbit,{burrowState:"emerging",shelter:1,concealed:false})
   stepWildlife(world,map,.1,1,new Set(),[],{rabbit:{version:1,clips:{burrow:{cadence:.5}}}})
   expect(rabbit.shelter).toBeCloseTo(1-.05/BURROW_SECONDS)
+})
+
+it("keeps the hole flat and fully conceals the rabbit below ground at the end of entry", () => {
+  const hole = createBurrowRig(), rabbit = createWildlifeRig("rabbit")
+  const bounds = new THREE.Box3().setFromObject(hole.root)
+  expect(bounds.min.y).toBeGreaterThanOrEqual(0)
+  expect(bounds.max.y).toBeLessThan(.03)
+  for (const entering of [true, false]) {
+    const motion = burrowMotion(1, entering)
+    rabbit.pose(motion.clipPhase, false, 0, 0, false, "walk", { clip: "burrow", burrow: { ...motion, concealed: true } })
+    rabbit.root.position.set(0, motion.y, motion.z)
+    rabbit.root.rotation.set(motion.pitch, motion.heading, 0, "YXZ")
+    expect(new THREE.Box3().setFromObject(rabbit.root).max.y).toBeLessThan(0)
+  }
+  // The nose leads down through the opening, with the same path in reverse on exit.
+  const entering = burrowMotion(.5, true), emerging = burrowMotion(.5, false)
+  expect(entering.y).toBeLessThan(-.3)
+  expect(entering.z).toBeGreaterThan(-.6)
+  expect(entering.z).toBeLessThan(.6)
+  expect(entering.y).toBe(emerging.y)
+  expect(entering.z).toBe(emerging.z)
+  expect(entering.pitch).toBe(-emerging.pitch)
+  hole.dispose(); rabbit.dispose()
 })
