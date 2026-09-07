@@ -98,6 +98,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
     processionRegistry.current = world.procession
     useRelicProcessionStore.setState({ available: !!world.grounds, monkId: null, stage: "idle", returnRequested: false })
     return () => {
+      for (const state of world.states) state.buildingTask = undefined
       if (preachingRegistry.current === preachers) {
         preachingRegistry.current = null
         useMonkEvangelismStore.setState({ available: false, assigned: new Set() })

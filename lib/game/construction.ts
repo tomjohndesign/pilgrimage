@@ -10,6 +10,8 @@ import type { WanderSpot } from "./monk-wander"
 export interface Construction { work: number; required: number; cost?: { gold: number; wood: number } }
 /** Worker-seconds: small sites finish quickly; doubling the area quadruples the work. */
 export function constructionWork(w: number, d: number): number { return Math.max(12, 6 * (w * d) ** 2) }
+/** Small sites need one builder; each additional four tiles adds a place, up to four. */
+export function constructionBuilders(w: number, d: number): number { return Math.min(4, Math.max(1, Math.ceil(w * d / 4))) }
 export function isComplete(building: BuildingDef): boolean {
   return !building.construction || building.construction.work >= building.construction.required
 }
@@ -30,6 +32,16 @@ export interface BuildingTask {
   buildings: readonly BuildingDef[]
 }
 export interface Worker extends WanderSpot { buildingTask?: BuildingTask; workSlot?: number; workScale?: number }
+// Construction survives map publications and is shared by monks and settlers.
+// Keep reservations out of saved game data; a cancelled/replaced task frees its place.
+const buildingCrews = new WeakMap<Construction, Map<Worker, BuildingTask>>()
+function constructionCrew(building: BuildingDef): Map<Worker, BuildingTask> {
+  const construction = building.construction!
+  let crew = buildingCrews.get(construction)
+  if (!crew) { crew = new Map(); buildingCrews.set(construction, crew) }
+  for (const [worker, task] of crew) if (worker.buildingTask !== task) crew.delete(worker)
+  return crew
+}
 export function workerRoute(map: GameMap, actor: WanderSpot, goal: TilePos): WanderSpot[] | null {
   const start = { x: worldToTileX(map, actor.x), z: worldToTileZ(map, actor.z) }
   // A footprint may be placed beneath an idle resident. Let them leave that
@@ -59,21 +71,26 @@ function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask
   return { destination: { x: cx + offset.x, z: cz + offset.z, y: surfaceHeight(map, frontage.x, frontage.z) }, frontage }
 }
 
-/** Only reachable jobs qualify; several free residents may cooperate on one site. */
+/** Reserve a place before walking so en-route builders count toward the site's crew. */
 export function assignBuildingTask(actor: Worker, map: GameMap, purpose: BuildingTask["purpose"], focusedBuildingId?: string): boolean {
   const candidates = map.buildings.filter(b => purpose === "build" ? !isComplete(b) : isMonkShelter(b) && isComplete(b))
     .filter(b => !focusedBuildingId || b.id === focusedBuildingId)
     .sort((a, b) => Math.hypot(tileToWorldX(map, a.x) - actor.x, tileToWorldZ(map, a.z) - actor.z) -
       Math.hypot(tileToWorldX(map, b.x) - actor.x, tileToWorldZ(map, b.z) - actor.z))
   for (const building of candidates) {
+    const crew = purpose === "build" ? constructionCrew(building) : null
+    const others = crew ? [...crew.keys()].filter(worker => worker !== actor) : []
+    if (others.length >= constructionBuilders(building.w, building.d)) continue
     for (let attempt = 0; attempt < (purpose === "build" ? 4 : 1); attempt++) {
       const slot = (actor.workSlot ?? 0) + attempt
+      if (others.some(worker => worker.buildingTask!.slot % 4 === slot % 4)) continue
       const { destination, frontage } = taskPosition(map, building, purpose, slot, actor.workScale)
       const route = purpose === "build" ? workerRoute(map, actor, frontage) : routeToDestination(map, actor, destination)
       if (!route) continue
       if (purpose === "build") route.push(destination)
       actor.buildingTask = { buildingId: building.id, purpose, slot, heading: Math.PI + buildingYaw(building.rotation), route,
         destination: { ...destination }, buildings: map.buildings }
+      crew?.set(actor, actor.buildingTask)
       return true
     }
   }

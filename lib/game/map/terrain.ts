@@ -26,6 +26,11 @@ export function isWoods(id: TerrainId): boolean {
   return id === "forest" || id === "darkwood"
 }
 
+/** A modest detour along a road beats crossing open ground; off-road goals stay reachable. */
+export function walkingRouteCost(id: TerrainId): number {
+  return id === "path" || id === "track" || id === "bridge" ? 1 : 3
+}
+
 export interface TerrainDef {
   id: TerrainId
   label: string
