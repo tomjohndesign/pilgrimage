@@ -12,6 +12,8 @@ export function activityClip(activity: Activity | MonkActivity | undefined, movi
   if (carrying > 0) return "carrying"
   if (moving) return "walk"
   switch (activity) {
+    // Roadside sermons keep the brother standing and facing passing travelers.
+    case "preaching": return "idle"
     case "building": return "building"
     case "sleeping":
     case "camping": return "sleeping"

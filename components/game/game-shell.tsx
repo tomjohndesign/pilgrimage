@@ -16,7 +16,7 @@ import { loadSavedSeed } from "@/lib/game/seed-storage"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import { generateRelic, visitChance } from "@/lib/game/relic"
-import { settlementEvangelism } from "@/lib/game/settlement"
+import { roadsideEvangelism } from "@/lib/game/monk-evangelism"
 import { DEFAULT_TRAFFIC, generateTravelers, travelerCountForMap } from "@/lib/game/travelers"
 import {
   DEFAULT_CLEARING_COUNT,
@@ -267,7 +267,13 @@ export function GameShell({
   const economy = useSettlement(baseMap, monks, relic)
   const map = economy.map
   const renown = economy.renown
-  const evangelism = map ? settlementEvangelism(map) : 0
+  const [evangelism, setEvangelism] = useState(0)
+  useEffect(() => {
+    const read = () => setEvangelism(map ? roadsideEvangelism(map) : 0)
+    read()
+    const timer = setInterval(read, 250)
+    return () => clearInterval(timer)
+  }, [map])
   const relicTraffic = useMemo(
     () => (relic ? Math.round(travelers.reduce((sum, t) => sum + visitChance(t.attributes, relic.stats, renown?.total ?? 0, economy.balance, evangelism), 0)) : 0),
     [travelers, relic, renown, economy.balance, evangelism],

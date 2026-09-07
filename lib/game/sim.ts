@@ -14,7 +14,8 @@ import { cartOffset, SHOP_SECONDS, cartLoadout } from "./transport/assets"
 import { createPasture, stepPasture, type PastureAnimal } from "./transport/pasture"
 import { LINEAR_MOVEMENT, easeSpeed, paceVariation, type MovementTuning } from "./motion"
 import { DEFAULT_BALANCE, type GameBalance } from "./balance"
-import { buildingAt, settlementEvangelism } from "./settlement"
+import { roadsideEvangelism } from "./monk-evangelism"
+import { buildingAt } from "./settlement"
 import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
 import { BUILDING_KINDS, buildingCentre, type PlacedBuilding } from "./buildings"
 import { generateRelic, hospitalityNeedThreshold, visitChance, type RelicStats } from "./relic"
@@ -1111,7 +1112,7 @@ export function stepSim(
               hunger: s.hunger, thirst: s.thirst, stamina: s.stamina }, sim.relic, renown, sim.balance)
             s.visitCooldown = 5
             const ordinaryVisit = nextRoll(s) < chance
-            const evangelism = ordinaryVisit ? 0 : settlementEvangelism(map)
+            const evangelism = ordinaryVisit ? 0 : roadsideEvangelism(map)
             const persuaded = evangelism > 0 && nextRoll(s) < evangelism
             const wantsVisit = (ordinaryVisit || persuaded) && s.gold >= admissionFee(map)
             const occupiedSeats = new Set([...sim.travelers.values()].flatMap(other =>
