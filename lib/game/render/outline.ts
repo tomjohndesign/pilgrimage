@@ -102,6 +102,9 @@ export function wildlifeObjectId(animalIndex: number): number {
   return MAX_OBJECT_ID - 0x4000 - animalIndex
 }
 
+/** The lone wayside signpost, below wildlife and clear of every growing block. */
+export const SIGNPOST_OBJECT_ID = MAX_OBJECT_ID - 0x5000
+
 /**
  * The relic sits alone in the middle of the ID space, so it outlines against
  * the shrine that houses it rather than merging into the walls.

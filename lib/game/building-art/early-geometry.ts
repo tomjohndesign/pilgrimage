@@ -15,7 +15,8 @@ export const RELIC_TABLE_TOP = 0.44
 
 export type SettlementBuildingType = "shelter" | "workshop" | "hall" | "garden" | "cross" | "lumberCamp" | "market" | "guard-post"
 type ConstructionRecipe = Omit<BuildingRecipe, "variant"> & {
-  variant: BuildingRecipe["variant"] | SettlementBuildingType
+  /** "signpost" is scenery the generator places, not anything the player builds. */
+  variant: BuildingRecipe["variant"] | SettlementBuildingType | "signpost"
   /** The shrine's raised nave retains its bespoke gabled construction. */
   roofForm?: "single-plane" | "gable"
 }
@@ -68,6 +69,39 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     const vertices: number[] = []
     for(let i=0;i<8;i++) { const a=ring[i],b=ring[(i+1)%8]; vertices.push(x,y+thickness,z,x+a[0],y+thickness,z+a[1],x+b[0],y+thickness,z+b[1], x+a[0],y,z+a[1],x+b[0],y,z+b[1],x+b[0],y+thickness,z+b[1], x+a[0],y,z+a[1],x+b[0],y+thickness,z+b[1],x+a[0],y+thickness,z+a[1]) }
     face(name,"base",vertices,color)
+  }
+  // A wayside marker, not a building: no floor slab and no tile-square footing.
+  // The board points along local +X; the map turns it onto the shrine's bearing.
+  if (variant === "signpost") {
+    const board = { back: -.055, tip: .4, nose: .12, low: h - .31, high: h - .12, half: .024 }
+    const packing = [[-.085,-.055,.11,.1],[.075,.05,.1,.085],[.015,-.09,.085,.08],[-.06,.075,.08,.075]]
+    packing.forEach(([x,z,sx,sz],i) => flag(`signpost-stone-${i}`,x,z,sx,sz,-.012,.035+random()*.018,palette.stone))
+    pole("signpost-post",[0,0,0],[0,h,0],.056)
+    // Riven board: a five-sided profile in X/Y extruded through its thickness,
+    // so the far end comes to a real point rather than a sawn-off plank end.
+    const profile = [[board.back,board.low],[board.tip-board.nose,board.low],[board.tip,(board.low+board.high)/2],[board.tip-board.nose,board.high],[board.back,board.high]]
+    const vertices: number[] = []
+    for (let i=1;i<profile.length-1;i++) {
+      const a=profile[0],b=profile[i],c=profile[i+1]
+      vertices.push(a[0],a[1],board.half,b[0],b[1],board.half,c[0],c[1],board.half,
+        a[0],a[1],-board.half,c[0],c[1],-board.half,b[0],b[1],-board.half)
+    }
+    for (let i=0;i<profile.length;i++) {
+      const a=profile[i],b=profile[(i+1)%profile.length]
+      vertices.push(a[0],a[1],-board.half,b[0],b[1],-board.half,b[0],b[1],board.half,
+        a[0],a[1],-board.half,b[0],b[1],board.half,a[0],a[1],board.half)
+    }
+    face("signpost-board","wall",vertices,palette.paleWood,true)
+    box("signpost-peg","wall",[0,(board.low+board.high)/2,board.half+.013],[.03,.03,.026],palette.darkWood,undefined,false)
+    // The cross says whose road this is; the board says which way along it. Its
+    // arms lie across the board, so whichever of the two the camera foreshortens
+    // the other stands broadside and the marker never reads as a bare stake.
+    const head = "#a58c66"
+    box("signpost-cross-upright","wall",[0,h+.11,0],[.052,.24,.06],head)
+    box("signpost-cross-arm","wall",[0,h+.155,0],[.052,.058,.26],head)
+    box("signpost-cross-peg","wall",[.031,h+.155,0],[.022,.03,.03],palette.darkWood,undefined,false)
+    for (const side of [-1,1]) pole(`signpost-grain-${side}`,[side*.014,.1,.044],[side*.011,h-.05,.038],.004,"wall",palette.darkWood)
+    return parts
   }
   // Bury slab thickness below the walking plane; inset the store platform for its ramp.
   box("floor","base",[0,(variant === "storehouse" ? floor : BUILDING_FLOOR_TOP)-.025,variant === "storehouse" ? (rampStart-d+.02)/2 : 0],[width-.04,.05,variant === "storehouse" ? rampStart+d-.02 : depth-.04],variant === "enclosure" ? "#686857" : "#817052",undefined,false)
