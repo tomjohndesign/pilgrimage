@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "efb8773aef32fb4d620ae833b92ca6c52aef3a66",
-  "releaseCount": 86,
+  "lastProcessedCommit": "22f4c7a861d118ac9653bf4b7f5438a6add102ab",
+  "releaseCount": 87,
   "releases": [
+    {
+      "version": "0.0.101",
+      "title": "Release 0.0.101",
+      "summary": "Let walkers wear footpaths and straighten inherited roads (#120)",
+      "commit": "22f4c7a861d118ac9653bf4b7f5438a6add102ab"
+    },
     {
       "version": "0.0.100",
       "title": "Release 0.0.100",
