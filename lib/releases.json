@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "dd9ea8c3bbba270f37fd9c298ec0ad138c366fb9",
-  "releaseCount": 96,
+  "lastProcessedCommit": "c1dc64c16c09555f28ea66a5404fa50fb0c53641",
+  "releaseCount": 97,
   "releases": [
+    {
+      "version": "0.0.111",
+      "title": "Release 0.0.111",
+      "summary": "Trace people and road verges through the trees that hide them (#130)",
+      "commit": "c1dc64c16c09555f28ea66a5404fa50fb0c53641"
+    },
     {
       "version": "0.0.110",
       "title": "Release 0.0.110",
