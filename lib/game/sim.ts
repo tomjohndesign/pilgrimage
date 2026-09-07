@@ -1,3 +1,5 @@
+import { findRoadShortcut, retireBypassedRoad, exploresRoadShortcut, type WalkingShortcut } from "./walking-shortcuts"
+import { createFootpaths, HEAVY_PATH_WEAR, recordWalkingPath, regrowFootpaths, type Footpaths } from "./footpaths"
 import { knightMounted, knightLoadout, knightTravelSpeed, type HorseRest } from "./knights"
 import { knightDesign } from "./knight/design"
 import { DEFAULT_WALK_SPEED, DEFAULT_WALK_CADENCE, personWalkStride } from "./base-person/gait"
@@ -222,6 +224,8 @@ function minstrelWalkSeconds(id: number, cycle: number): number {
 }
 
 export interface SimTraveler {
+  roadShortcut?: WalkingShortcut
+  shortcutCheck?: number
   musicCooldown?: number
   musicVisit?: { performerId: number; cycle: number; spot: WorldPoint }
   /** Horse waits on a reserved verge beside a tree until its rider returns. */
@@ -311,6 +315,7 @@ export interface SimTraveler {
 }
 
 export interface SimState {
+  footpaths: Footpaths
   procession?: RelicProcession | null
   admissionSequence: number
   admissionPayments: AdmissionPayment[]
@@ -443,6 +448,21 @@ function roadWorldPoint(map: GameMap, p: number, lane: number): WorldPoint {
   return routeWorldPoint(map, map.road!, p, lane)
 }
 
+/** A cut spends real walking distance while retaining the road's logical progress. */
+function stepRoadShortcut(s: SimTraveler, map: GameMap, distance: number): void {
+  const cut = s.roadShortcut!
+  cut.distance = Math.min(cut.length, cut.distance + Math.max(0, distance))
+  const t = cut.distance / cut.length
+  s.x = cut.from.x + (cut.to.x - cut.from.x) * t
+  s.z = cut.from.z + (cut.to.z - cut.from.z) * t
+  s.y = walkingSurface(map, s.x, s.z).height
+  s.progress = cut.start + (cut.end - cut.start) * t
+  if (cut.distance >= cut.length) {
+    retireBypassedRoad(map, cut)
+    s.roadShortcut = undefined
+  }
+}
+
 /** Where on their route — road or track — the traveler currently belongs. */
 function currentRoutePoint(map: GameMap, s: SimTraveler): WorldPoint {
   if (s.track) {
@@ -511,6 +531,7 @@ export function createSim(
   relic: RelicStats = generateRelic(map.seed ?? 0).stats,
 ): SimState {
   const sim: SimState = {
+    footpaths: map.footpaths ?? createFootpaths(map),
     admissionSequence: 0,
     admissionPayments: [],
     seed: map.seed ?? 0,
@@ -914,6 +935,10 @@ export function stepSim(
   const length = map.road.length - 1
   sim.time += dt / GAME_DAY_SECONDS
   const hours = dt / GAME_HOUR_SECONDS
+  const previousPositions = dt > 0 ? new Map([...sim.travelers].map(([id, s]) => [id, { x: s.x, z: s.z, cycle: s.cycle }])) : null
+  regrowFootpaths(sim.footpaths, dt / GAME_DAY_SECONDS)
+  const roadWalkers = travelers.filter(t => t.type.id !== "vendor" && t.type.id !== "knight")
+  const explorerRanks = new Map(roadWalkers.map((t, index) => [t.id, index]))
 
   for (const t of travelers) {
     const s = sim.travelers.get(t.id)
@@ -966,6 +991,10 @@ export function stepSim(
     s.moveSpeed = camping || sheltered || s.activity === "working" || s.activity === "building" || s.activity === "browsing" || s.activity === "performing" || s.activity === "listening" || s.activity === "openingShop" || s.activity === "packingShop" || s.activity === "vending" ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed
+    if (s.roadShortcut) {
+      stepRoadShortcut(s, map, worldSpeed * dt)
+      continue
+    }
 
     if (s.pasture && (s.activity === "openingShop" || s.activity === "vending" || s.activity === "packingShop")) {
       s.pasture.obstacles = [...sim.travelers.values()].flatMap(other =>
@@ -1094,7 +1123,7 @@ export function stepSim(
       case "toBuild":
       case "building": {
         if (dt <= 0) break
-        if (Math.min(s.hunger, s.thirst, s.stamina) <= 40) s.buildingTask = undefined
+        // Finish the assigned site before returning to camp to recover needs.
         const state = stepBuildingTask(s, map, targetSpeed, dt)
         if (!state) {
           const camp = sim.buildings.find(b => b.id === s.employer)
@@ -1308,6 +1337,15 @@ export function stepSim(
             }
           }
         }
+        if (dt > 0 && s.activity === "walking" && !needsParking && map.footpaths) {
+          const check = Math.floor(s.progress) * 2 + (direction === 1 ? 1 : 0)
+          if (s.shortcutCheck !== check) {
+            s.shortcutCheck = check
+            s.roadShortcut = findRoadShortcut(map, s.progress, direction,
+              p => roadWorldPoint(map, p, s.lane), exploresRoadShortcut(explorerRanks.get(s.id)!, s.cycle, map.seed ?? 0, roadWalkers.length)) ?? undefined
+            if (s.roadShortcut) { stepRoadShortcut(s, map, worldSpeed * dt); break }
+          }
+        }
         const next = s.convoy ? advanceCartProgress(map, s.progress, direction * worldSpeed * haste * dt)
           : s.progress + direction * worldSpeed * haste * dt
         // Walkers wrap at the map edges (leave east, arrive west); seekers
@@ -1479,5 +1517,11 @@ export function stepSim(
         break
       }
     }
+  }
+  if (previousPositions) for (const traveler of travelers) {
+    const from = previousPositions.get(traveler.id), to = sim.travelers.get(traveler.id)
+    // Vendors' ground contacts are recorded from the rendered driver and axle,
+    // so a seated driver cannot leave an invented third track down the middle.
+    if (from && to && !to.convoy && to.cycle === from.cycle) recordWalkingPath(sim.footpaths, map, from, to, traveler.type.id === "knight" && knightMounted(to.activity, to.horseRest) ? HEAVY_PATH_WEAR : 1)
   }
 }

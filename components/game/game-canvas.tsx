@@ -1,5 +1,7 @@
 "use client"
 
+import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
+
 import { useEffect, useMemo } from "react"
 import { travelerAppearance } from "@/lib/game/base-person/population"
 import { populationVisual } from "@/lib/game/base-person/population-assets"
@@ -16,6 +18,8 @@ import type { TilePos } from "@/lib/game/map/types"
 import { deriveSeed, SEED_STREAM } from "@/lib/game/rng"
 import { growTreePlacements } from "@/lib/game/trees/dimensions"
 import { placeTrees } from "@/lib/game/trees/placement"
+import { foliageSpacing } from "@/lib/game/trees/foliage/spacing"
+import { DEFAULT_TREE_MODEL, type TreeModel } from "@/lib/game/trees/render-model"
 import { useTreeTuningStore } from "@/lib/game/trees/tree-tuning-store"
 import type { GameMap } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
@@ -38,7 +42,7 @@ import { RenownSaturation } from "./renown-saturation"
 import { vendorSpeedScale } from "@/lib/game/transport/assets"
 import { Shrine } from "./shrine"
 import type { RoadLook } from "@/lib/game/map/road"
-import { TerrainTiles } from "./terrain-tiles"
+import { WalkingTerrain } from "./walking-terrain"
 import { TileCursor } from "./tile-cursor"
 import { Travelers } from "./travelers"
 import { Trees } from "./trees"
@@ -56,6 +60,7 @@ export function GameCanvas({
   walkSpeed,
   characterModel = "callings",
   characterScale = 1,
+  treeModel = DEFAULT_TREE_MODEL,
   characterFps,
   walkTuning,
   movement = LINEAR_MOVEMENT,
@@ -86,6 +91,8 @@ export function GameCanvas({
   characterModel?: CharacterModel
   /** Uniform size multiplier; leaves the sprite's foot anchor fixed. */
   characterScale?: number
+  /** Parametric trees or the baked foliage sprites; sprites stand one to a tile. */
+  treeModel?: TreeModel
   /** Animation frames per second, independent of movement pace. */
   characterFps?: number
   walkTuning?: WalkTuning
@@ -114,8 +121,8 @@ export function GameCanvas({
   useEffect(() => { void usePopulationStore.getState().prepare(foundation) }, [foundation])
   const species = useTreeTuningStore((s) => s.species)
   const variance = useTreeTuningStore((s) => s.variance)
-  const trees = useMemo(() => growTreePlacements(placeTrees(map, species),
-    deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes), species, variance), [map.tiles, species, variance])
+  const trees = useMemo(() => growTreePlacements(placeTrees(map, treeModel === "sprites" ? foliageSpacing(species) : species),
+    deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes), species, variance), [map.tiles, species, variance, treeModel])
   return (
     <PixelCanvas
       {...pixelation}
@@ -134,12 +141,12 @@ export function GameCanvas({
         chained to the camera's yaw (see CameraLight) so the dark faces stay on
         the same side of the screen in every view.
       */}
-      <ambientLight intensity={0.5} />
-      <hemisphereLight args={["#bcd0f0", "#3a2a16", 0.45]} />
+      <ambientLight intensity={SURFACE_LIGHT.ambient} />
+      <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
       <CameraLight />
 
       <RenownSaturation map={map}>
-        <TerrainTiles
+        <WalkingTerrain
           map={map}
           roadTier={roadTier}
           traffic={travelers.length}
@@ -148,7 +155,7 @@ export function GameCanvas({
           showGrid={showGrid}
         />
         <Bridges map={map} roadTier={roadTier} />
-        <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} />
+        <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} model={treeModel} />
         <Environment map={map} />
         <Wildlife map={map} trees={trees} characterScale={characterScale} />
         <Buildings map={map} characterScale={characterScale} />

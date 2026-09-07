@@ -1,5 +1,7 @@
 "use client"
 
+import { addSurfaceLighting } from "@/lib/game/render/lighting"
+
 import Image from "next/image"
 import { useEffect, useState } from "react"
 import * as THREE from "three"
@@ -8,7 +10,7 @@ import { structureParts } from "@/lib/game/building-art/structure"
 import { batchDetails } from "@/components/building-lab/building-model"
 import { BUILDING_STYLE } from "@/lib/game/building-art/style"
 import { buildingPartGeometry, BUILDING_DIRT_TEXTURE, configureBuildingDirt, dirtFloorMaterial } from "@/lib/game/building-art/part-geometry"
-import { cameraOffset, lightOffsetForYaw, yawForView } from "@/lib/game/render/iso"
+import { cameraOffset, yawForView } from "@/lib/game/render/iso"
 
 let thumbnails: Promise<Partial<Record<BuildId, string>>> | undefined
 
@@ -60,9 +62,8 @@ async function buildThumbnails() {
       camera.top = centre.y + halfHeight
       camera.bottom = centre.y - halfHeight
       camera.updateProjectionMatrix()
-      const light = new THREE.DirectionalLight(0xffffff, 2)
-      light.position.set(...lightOffsetForYaw(yaw))
-      scene.add(model, new THREE.AmbientLight(0xffffff, 1.3), light)
+      scene.add(model)
+      addSurfaceLighting(scene, yaw)
       try {
         renderer.render(scene, camera)
         images[definition.id] = renderer.domElement.toDataURL()

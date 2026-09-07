@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { BUILD_CATALOG } from "./balance"
 import { activityClip } from "./base-person/activity"
-import { generateMap } from "./map/generate-map"
+import { generateMap, MIN_MAP_SIZE } from "./map/generate-map"
+
+/** Floor-size worlds: which seeds have open roadside ground at the junction depends on the map size. */
+const FLOOR = { width: MIN_MAP_SIZE, depth: MIN_MAP_SIZE }
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import { createMonkRoutine } from "./monk-routine"
 import { monkWander } from "./monk-wander"
@@ -101,7 +104,7 @@ describe("roadside preaching", () => {
   })
 
   it.each([1, 42, 12345])("finds a reachable roadside position in generated world %i", seed => {
-    const map = generateMap({ seed }), grounds = monkWander(map)
+    const map = generateMap({ ...FLOOR, seed }), grounds = monkWander(map)
     const monk = { ...createMonkRoutine(grounds, 0, () => .5), ...createMonkNeeds(0) }
     expect(stepMonkEvangelism(monk, map, true, 2, .1)).toBe(true)
     arrive(monk, map)

@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic"
 import { useEffect, useState } from "react"
+import { DEFAULT_FOLIAGE, FOLIAGE_SPECIES, isFoliageSpecies, type FoliageAtlas, type FoliageDesigns } from "@/lib/game/trees/foliage/design"
+import { DEFAULT_FOLIAGE_ATLAS } from "@/lib/game/trees/foliage/assets"
 
 import {
   TREE_SPECIES_ORDER,
@@ -58,6 +60,7 @@ function LabButton({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       className={`border px-2 py-1 font-display text-[9px] uppercase tracking-[2px] transition-colors hover:border-gold hover:text-red ${
         active ? "border-gold bg-gold text-parchment hover:text-parchment" : "border-rule bg-parchment-dark text-ink"
@@ -93,6 +96,7 @@ function Slider({
       </div>
       <input
         type="range"
+        aria-label={label}
         min={min}
         max={max}
         step={step}
@@ -399,9 +403,39 @@ export function TreeLab() {
   const setVariance = useTreeTuningStore((s) => s.setVariance)
   const resetAll = useTreeTuningStore((s) => s.resetAll)
 
+  const [rendering, setRendering] = useState<"sprites" | "geometry">("sprites")
+  const [foliage, setFoliage] = useState<FoliageDesigns>(() => structuredClone(DEFAULT_FOLIAGE))
+  const [atlas, setAtlas] = useState<FoliageAtlas>(DEFAULT_FOLIAGE_ATLAS)
+  const [baking, setBaking] = useState(false)
+  const [bakeError, setBakeError] = useState("")
+  useEffect(() => {
+    let cancelled = false
+    const target = window as unknown as { __foliageAtlas?: FoliageAtlas; __bakeTreeFoliage?: () => Promise<FoliageAtlas> }
+    target.__bakeTreeFoliage = async () => {
+      const { bakeFoliage } = await import("@/lib/game/trees/foliage/bake")
+      return bakeFoliage(foliage)
+    }
+    if (JSON.stringify(foliage) === JSON.stringify(DEFAULT_FOLIAGE)) {
+      setAtlas(DEFAULT_FOLIAGE_ATLAS); target.__foliageAtlas = DEFAULT_FOLIAGE_ATLAS
+      setBaking(false); setBakeError("")
+      return () => { delete target.__bakeTreeFoliage; delete target.__foliageAtlas }
+    }
+    setBaking(true); setBakeError("")
+    const timer = setTimeout(async () => {
+      try {
+        const { bakeFoliage } = await import("@/lib/game/trees/foliage/bake")
+        const result = await bakeFoliage(foliage, () => cancelled)
+        if (!cancelled) { setAtlas(result); target.__foliageAtlas = result }
+      } catch (error) {
+        if (!cancelled) setBakeError(error instanceof Error ? error.message : "The trees could not be baked.")
+      } finally { if (!cancelled) setBaking(false) }
+    }, 250)
+    return () => { cancelled = true; clearTimeout(timer); delete target.__bakeTreeFoliage; delete target.__foliageAtlas }
+  }, [foliage])
   const [selected, setSelected] = useState<TreeSpeciesId | "all">("all")
   const [lineupSeed, setLineupSeed] = useState(1)
   const [lineupView, setLineupView] = useState(0)
+  const [darkForest, setDarkForest] = useState(false)
   const [mapSeed, setMapSeed] = useState<number | null>(null)
   const [mapSize, setMapSize] = useState(48)
   const [copied, setCopied] = useState(false)
@@ -415,6 +449,7 @@ export function TreeLab() {
   useEffect(() => {
     const wanted = new URLSearchParams(window.location.search).get("species")
     if (wanted && (TREE_SPECIES_ORDER as string[]).includes(wanted)) {
+      if (!isFoliageSpecies(wanted)) setRendering("geometry")
       setSelected(wanted as TreeSpeciesId)
     }
   }, [])
@@ -426,7 +461,7 @@ export function TreeLab() {
   }, [copied])
 
   const copyJson = async () => {
-    await navigator.clipboard.writeText(JSON.stringify(species, null, 2))
+    await navigator.clipboard.writeText(JSON.stringify(rendering === "sprites" ? foliage : species, null, 2))
     setCopied(true)
   }
 
@@ -436,29 +471,54 @@ export function TreeLab() {
     <div className="flex w-full flex-col gap-8">
       <Card
         title="Species"
-        subtitle="Each tree samples its trunk, crown and branch count from its species' ranges, so no two are identical and none is out of character."
+        subtitle={rendering === "sprites" ? "All six species: branching silhouettes, simplified foliage and a darker woodland palette. Monks show the game’s native pixel scale." : "Compare the current geometric trees and tune their species ranges."}
       >
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          <LabButton active={rendering === "sprites"} onClick={() => { setRendering("sprites"); setSelected("all") }}>Pixel foliage</LabButton>
+          <LabButton active={rendering === "geometry"} onClick={() => setRendering("geometry")}>Current trees</LabButton>
+          {baking && <span className="text-[12px] italic text-ink-light">Updating foliage…</span>}
+          {bakeError && <span role="alert" className="text-[12px] text-red">{bakeError}</span>}
+        </div>
         <div className="mb-3 flex flex-wrap items-center gap-1.5">
           <LabButton active={selected === "all"} onClick={() => setSelected("all")}>
             All species
           </LabButton>
-          {TREE_SPECIES_ORDER.map((id) => (
+          {(rendering === "sprites" ? FOLIAGE_SPECIES : TREE_SPECIES_ORDER).map((id) => (
             <LabButton key={id} active={selected === id} onClick={() => setSelected(id)}>
               {species[id].label}
               {isSpeciesTuned(species[id]) ? " ✦" : ""}
             </LabButton>
           ))}
           <span className="flex-1" />
+          {rendering === "sprites" && <LabButton active={darkForest} onClick={() => setDarkForest(value => !value)}>Dark forest</LabButton>}
           <LabButton onClick={() => setLineupView((v) => (v + 1) % 4)}>View {lineupView + 1}</LabButton>
           <LabButton onClick={() => setLineupSeed(randomSeed())}>Reroll</LabButton>
         </div>
 
-        <div className="aspect-[3/1] w-full border border-rule">
-          <TreeLineup species={selected} seed={lineupSeed} view={lineupView} />
-        </div>
+        {(rendering === "sprites" && selected === "all" ? [0, 1] : [0]).map(speciesPage => <div key={speciesPage} className="mb-3">
+          <div className="aspect-[3/1] w-full border border-rule">
+            <TreeLineup species={selected} seed={lineupSeed} view={lineupView} darkForest={darkForest} speciesPage={speciesPage} atlas={rendering === "sprites" ? atlas : undefined} />
+          </div>
+          {rendering === "sprites" && selected === "all" && <div className="mt-2 grid grid-cols-3 text-center font-display text-[9px] uppercase tracking-[2px] text-gold">
+            {FOLIAGE_SPECIES.slice(speciesPage * 3, speciesPage * 3 + 3).map(id => <span key={id}>{species[id].label}</span>)}
+          </div>}
+        </div>)}
 
         <div className="mt-5">
-          {selected === "all" ? (
+          {rendering === "sprites" ? (
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              {(selected !== "all" && isFoliageSpecies(selected) ? [selected] : FOLIAGE_SPECIES).map(id => <div key={id}>
+                <Label>{species[id].label}</Label>
+                {([
+                  ["height", "Height", 1.4, 3.25, 0.05],
+                  ["spread", "Branch spread", 0.55, 1.2, 0.05],
+                  ["density", "Foliage density", 0.4, 1.4, 0.05],
+                  ["leafSize", "Leaf clusters", 0.6, 1.3, 0.05],
+                ] as const).map(([key, label, min, max, step]) => <Slider key={key} label={label} value={foliage[id][key]} min={min} max={max} step={step} format={v => v.toFixed(2)}
+                  onChange={value => setFoliage(old => ({ ...old, [id]: { ...old[id], [key]: value } }))} />)}
+              </div>)}
+            </div>
+          ) : selected === "all" ? (
             <p className="text-[13px] text-ink-light">
               One of each, left to right:{" "}
               {TREE_SPECIES_ORDER.map((id) => species[id].label).join(", ")}. Pick a species above
@@ -470,6 +530,7 @@ export function TreeLab() {
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-1.5 border-t border-rule pt-4">
+          {rendering === "geometry" && <>
           <div className="w-52">
             <Slider
               label="Variance"
@@ -481,16 +542,17 @@ export function TreeLab() {
               onChange={setVariance}
             />
           </div>
+          </>}
           <span className="flex-1" />
           <LabButton onClick={copyJson}>Copy species JSON</LabButton>
           {copied && <span className="text-[11px] italic text-ink-light">Copied ✦</span>}
-          {anyTuned && <LabButton onClick={resetAll}>Reset all</LabButton>}
+          {rendering === "sprites" ? <LabButton onClick={() => setFoliage(structuredClone(DEFAULT_FOLIAGE))}>Reset foliage</LabButton> : anyTuned && <LabButton onClick={resetAll}>Reset all</LabButton>}
         </div>
-        <p className="mt-2 text-[12px] text-ink-light">
+        {rendering === "geometry" && <p className="mt-2 text-[12px] text-ink-light">
           Variance narrows every range toward its midpoint — 0% makes each species a clone.
           Tuned values live only on this page; paste the JSON into{" "}
           <code className="text-[11px]">lib/game/trees/species.ts</code> to keep them.
-        </p>
+        </p>}
       </Card>
 
       <Card
@@ -512,7 +574,7 @@ export function TreeLab() {
         </div>
         <div className="relative aspect-[16/9] w-full border border-rule bg-[#14100a]">
           {mapSeed !== null && (
-            <TreeMapPreview seed={mapSeed} size={mapSize} />
+            <TreeMapPreview seed={mapSeed} size={mapSize} atlas={rendering === "sprites" ? atlas ?? undefined : undefined} />
           )}
         </div>
       </Card>

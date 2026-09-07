@@ -2,7 +2,7 @@
 
 import type { ComponentProps } from "react"
 import { JointOverlay, CharacterRigInspector } from "./character-rig-editor"
-import { RIG_BONES, RIG_LABELS, type RigJoint } from "@/lib/game/base-person/rig-joints"
+import { RIG_BONES, RIG_CARRIED_BONES, RIG_LABELS, type RigJoint } from "@/lib/game/base-person/rig-joints"
 import { type RigInspection } from "@/lib/game/base-person/rig-inspection"
 import { type EditableJoint } from "@/lib/game/base-person/pose-edits"
 import type { Point3 } from "@/lib/game/base-person/pose"
@@ -12,10 +12,10 @@ import type { Point3 } from "@/lib/game/base-person/pose"
  */
 export function RigOverlay({ joints, selected, row, offset, onSelect, onChange, onDrag }: {
   joints: RigInspection; selected: RigJoint; row: number; offset: (joint: EditableJoint) => Point3
-  onSelect: (joint: RigJoint) => void; onChange: (joint: EditableJoint, offset: Point3) => void; onDrag: (active: boolean) => void
+  onSelect: (joint: RigJoint) => void; onChange: (changes: [EditableJoint, Point3][]) => void; onDrag: (active: boolean) => void
 }) {
-  return <JointOverlay joints={joints} selected={selected} row={row} bones={RIG_BONES} labels={RIG_LABELS}
-    offset={joint => offset(joint as EditableJoint)} onSelect={onSelect} onChange={(joint, value) => onChange(joint as EditableJoint, value)} onDrag={onDrag} />
+  return <JointOverlay joints={joints} selected={selected} row={row} bones={RIG_BONES} carried={RIG_CARRIED_BONES} labels={RIG_LABELS}
+    offset={joint => offset(joint as EditableJoint)} onSelect={onSelect} onChange={changes => onChange(changes as [EditableJoint, Point3][])} onDrag={onDrag} />
 }
 
 export function RigInspector(props: Omit<ComponentProps<typeof CharacterRigInspector<RigJoint>>, "labels" | "axisLocked" | "footer">) {

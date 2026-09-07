@@ -10,7 +10,10 @@ import {
   routeDanger,
   type ThreatSource,
 } from "./danger"
-import { generateMap } from "./generate-map"
+import { generateMap, MIN_MAP_SIZE } from "./generate-map"
+
+/** Generated-world sweeps run at the size floor, where their odds were tuned. */
+const FLOOR = { width: MIN_MAP_SIZE, depth: MIN_MAP_SIZE }
 import type { TerrainId } from "./terrain"
 import type { GameMap } from "./types"
 
@@ -44,7 +47,7 @@ describe("computeDangerField", () => {
   })
 
   it("stays within [0, 1] and is deterministic on generated maps", () => {
-    const map = generateMap({ seed: 4242 })
+    const map = generateMap({ ...FLOOR, seed: 4242 })
     const a = computeDangerField(map)
     expect(a).toEqual(computeDangerField(map))
     for (const d of a) {
@@ -126,7 +129,7 @@ describe("arrivalOdds", () => {
     let knightTrackOdds = 0
     let tracks = 0
     for (const seed of SEEDS) {
-      const m = generateMap({ seed })
+      const m = generateMap({ ...FLOOR, seed })
       const field = computeDangerField(m)
       roadOdds += arrivalOdds(field, m, m.road!, 0.35)
       for (const track of m.shortcuts ?? []) {

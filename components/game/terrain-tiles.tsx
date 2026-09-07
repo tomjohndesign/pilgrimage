@@ -5,6 +5,7 @@ import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
 import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
+import { foundingRoadStrength, foundingRoadTraffic } from "@/lib/game/footpaths"
 import { dirtFloorMask, DIRT_FLOOR_GLSL } from "@/lib/game/building-art/dirt-floor"
 import { GROUND_SURFACE_GLSL, ROAD_UV_SCALE, GRASS_UV_SCALE } from "@/lib/game/render/ground-surface"
 import { ElevationEdges } from "./elevation-edges"
@@ -36,7 +37,6 @@ import {
 } from "@/lib/game/map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
-import { cartCornerWear } from "@/lib/game/render/cart-wear"
 import { diagonalRoadSegments, roadSegmentWear, type RoadSegment } from "@/lib/game/render/road-segments"
 import { ROAD_SHAPE_GLSL } from "@/lib/game/render/road-shape"
 import { DEFAULT_TRAFFIC } from "@/lib/game/travelers"
@@ -251,13 +251,13 @@ function makeTileMaterial({
           attribute vec4 aRoadCorners;
           attribute vec4 aRoadShoulders;
           attribute vec4 aLandOverlay;
-          attribute vec3 aLand;
+          attribute vec4 aLand;
           varying vec2 vRoadSegments;
           varying vec4 vRoadOpen;
           varying vec4 vRoadCorners;
           varying vec4 vRoadShoulders;
           varying vec4 vLandOverlay;
-          varying vec3 vLand;
+          varying vec4 vLand;
         #endif
         #include <common>`,
       )
@@ -334,7 +334,7 @@ function makeTileMaterial({
           varying vec4 vRoadCorners;
           varying vec4 vRoadShoulders;
           varying vec4 vLandOverlay;
-          varying vec3 vLand;
+          varying vec4 vLand;
           ${ROAD_SHAPE_GLSL}
         #endif
         ${GROUND_SURFACE_GLSL}
@@ -395,9 +395,16 @@ function makeTileMaterial({
             if (vGrass > 0.5) shape = vec2(0.0, -1.0);
             shape = max(shape, roadShoulders(vTileLocal, vRoadShoulders,
               edge, (tuft - 0.5) * 0.2 * roadEdgeWear));
-            float segmentOpacity;
+            float originalOpacity = shape.x > 0.001 ? vLand.w : 0.0;
+            shape.x *= vLand.w;
+            shape.y = mix(-100.0, shape.y, step(0.001, vLand.w));
+            float segmentOpacity, grassWear;
             shape = max(shape, diagonalRoadShape(vTileLocal, vRoadSegments,
-              edge - vEdge, edge, (tuft - 0.5) * 0.2 * roadEdgeWear, segmentOpacity));
+              edge - vEdge, edge, (tuft - 0.5) * 0.2 * roadEdgeWear, segmentOpacity, grassWear));
+            segmentOpacity = max(segmentOpacity, originalOpacity);
+            // First repeat visits only dull the existing grass. Keep its texture
+            // and draw neither a dirt surface nor an outline until sustained use.
+            landTop = mix(landTop, landTop * vec3(0.85, 0.90, 0.80), grassWear * (1.0 - shore));
             float floorBare = dirtFloorCover(world, vTileLocal);
             if (!roadIsDirt && floorBare > 0.0) {
               vec4 floorTex = sampleTiled(trailMap, world * ${ROAD_UV_SCALE}, world);
@@ -488,7 +495,7 @@ function addTileAttributes(geometry: THREE.BufferGeometry, slots: number, road: 
     // Grain and the two rut edges packed together: vertex attributes are a
     // scarce resource (16 is a common limit) and the instance matrix alone
     // takes four.
-    geometry.setAttribute("aLand", new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3))
+    geometry.setAttribute("aLand", new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4))
   }
 }
 
@@ -622,6 +629,7 @@ export function TerrainTiles({
   look = DEFAULT_ROAD_LOOK,
   showGrid = false,
   traveledRoads,
+  regrowRoads = false,
 }: {
   map: GameMap
   /** Road development tier — index into ROAD_TIERS. */
@@ -636,6 +644,8 @@ export function TerrainTiles({
   showGrid?: boolean
   /** Optional snapshot of actual traveled segments and their individual compaction. */
   traveledRoads?: ReadonlyMap<number, readonly RoadSegment[]>
+  /** Live game roads lose their inherited surface when walkers stop using them. */
+  regrowRoads?: boolean
 }) {
   const groundMeshRef = useRef<THREE.InstancedMesh>(null)
   const roadMeshRef = useRef<THREE.InstancedMesh>(null)
@@ -659,9 +669,12 @@ export function TerrainTiles({
     const segments = traveledRoads
       ? new Map([...traveledRoads].filter(([index]) => !coveredLand.has(index)))
       : diagonalRoadSegments(map, coveredLand)
-    for (const [index, wear] of cartCornerWear(map, coveredLand)) segments.set(index, [...(segments.get(index) ?? []), ...wear])
+    if (regrowRoads && !tier.paved) for (const [index, roads] of segments) {
+      const opacity = foundingRoadStrength(map, index)
+      segments.set(index, roads.map(s => s[4] < 2 || s[4] === 3 ? [s[0], s[1], s[2], s[3], s[4], opacity] : s))
+    }
     return segments
-  }, [map, coveredLand, traveledRoads])
+  }, [map, coveredLand, traveledRoads, regrowRoads, tier.paved])
   const segmentData = useMemo(() => {
     const count = [...diagonalSegments.values()].reduce((sum, segments) => sum + segments.length * 2, 0)
     const width = Math.min(1024, Math.max(1, count))
@@ -673,14 +686,14 @@ export function TerrainTiles({
       ranges.set(index, [offset, segments.length])
       for (const segment of segments) {
         data.set([segment[0], segment[1], segment[2], segment[3]], offset * 4)
-        data.set(roadSegmentWear(segment, traffic, relicTraffic, tier.tier), (offset + 1) * 4)
+        data.set(roadSegmentWear(segment, regrowRoads ? foundingRoadTraffic(map, index, traffic) : traffic, regrowRoads ? foundingRoadTraffic(map, index, relicTraffic) : relicTraffic, tier.tier), (offset + 1) * 4)
         offset += 2
       }
     }
     const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat, THREE.FloatType)
     texture.needsUpdate = true
     return { texture, ranges }
-  }, [diagonalSegments, traffic, relicTraffic, tier.tier])
+  }, [diagonalSegments, traffic, relicTraffic, tier.tier, map, regrowRoads])
   useEffect(() => () => segmentData.texture.dispose(), [segmentData])
   const roadCount = useMemo(
     () => map.tiles.reduce((n, t, i) => ((isRoadTerrain(t) || shoulders.has(i) || diagonalSegments.has(i) || floors.tiles.has(i)) && !coveredLand.has(i) ? n + 1 : n), 0),
@@ -889,7 +902,7 @@ export function TerrainTiles({
           // The grain a land tile here would have had, from the same draw
           // (under the same canopy), and the rut edges for this road's own
           // traffic.
-          const wear = terrain === "track" ? trackWearBy : roadWearBy
+          const wear = regrowRoads ? roadWear(foundingRoadTraffic(map, index, terrain === "track" ? relicTraffic : traffic), tier.tier) : terrain === "track" ? trackWearBy : roadWearBy
           const landJitter = (1 + grain * TERRAIN.grass.jitter) * canopy
 
           {
@@ -911,7 +924,7 @@ export function TerrainTiles({
             const shoreCode = shoulderOnly ? shorelineCorners(map, x, z).reduce((code, flag, corner) => code + flag * 2 ** corner, 0) : 0
             target.surface.setX(i, shoulderOnly ? 1 + 2 * shoreCode : 0)
             target.landOverlay.setXYZW(i, landOverlay.x, landOverlay.y, landOverlay.z, landOverlay.w)
-            target.land.setXYZ(i, landJitter, wear.edge, wear.inner)
+            target.land.setXYZW(i, landJitter, wear.edge, wear.inner, regrowRoads && !tier.paved ? foundingRoadStrength(map, index) : 1)
           }
           continue
         }
@@ -980,6 +993,7 @@ export function TerrainTiles({
     shoulders,
     diagonalSegments,
     segmentData,
+    regrowRoads,
     floors,
   ])
 

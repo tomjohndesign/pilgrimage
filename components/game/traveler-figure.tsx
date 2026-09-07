@@ -1,6 +1,7 @@
 "use client"
 
 import { AnimalTether } from "./animal-tether"
+import { HEAVY_PATH_WEAR, recordCartPath, recordWalkingPath } from "@/lib/game/footpaths"
 import * as THREE from "three"
 import type { GameMap } from "@/lib/game/map/types"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
@@ -18,7 +19,7 @@ import { personWalkStride } from "@/lib/game/base-person/gait"
 import { keeperRoutine } from "@/lib/game/transport/keeper"
 import { populationDesign } from "@/lib/game/base-person/population"
 import { STALL, stallPoint } from "@/lib/game/transport/stall"
-import { animalTravel } from "@/lib/game/transport/animal-travel"
+import { animalTravel, hitchedAnimalTravel } from "@/lib/game/transport/animal-travel"
 import { roadCartPose } from "@/lib/game/transport/bridge-guide"
 import { alignCart, followCart, type CartPose } from "@/lib/game/transport/follow"
 import type { WalkTuning } from "@/lib/game/motion"
@@ -45,7 +46,7 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
   const point = useMemo(() => new THREE.Vector3(), [])
   const cartPose = useRef<CartPose | null>(null)
   const followingRoad = useRef(false)
-  const lastAnimal = useRef<{ x: number; z: number } | null>(null)
+  const lastAnimal = useRef<{ x: number; z: number; hitched: boolean } | null>(null)
   const lastDriver = useRef<{ x: number; z: number; deployed: boolean } | null>(null)
   useFrame(() => {
     const group = driver.current, parent = group?.parent
@@ -72,6 +73,9 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
       else if (!previous || data.motionReset || Math.hypot(freePose.x - roadPose.x, freePose.z - roadPose.z) < 0.02) followingRoad.current = true
       cartPose.current = parking ? parking.pose : roadPose && (data.cartManeuver || followingRoad.current) ? roadPose : freePose
       const pose = cartPose.current!
+      if (map?.footpaths && previous && !paused && !data.motionReset && !deployed && !onFoot) {
+        recordCartPath(map.footpaths, map, previous, pose, characterScale)
+      }
       if (cart.current) {
         cart.current.position.copy(parent.worldToLocal(point.set(pose.x, map ? walkingSurface(map, pose.x, pose.z).height : y, pose.z)))
         const distance = previous && !paused && !data.motionReset && !deployed
@@ -95,6 +99,9 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
     const before = lastDriver.current, reset = data.motionReset || !before || before.deployed !== deployed
     const distance = !reset && !paused ? Math.hypot(point.x - before.x, point.z - before.z) : 0
     lastDriver.current = { x: point.x, z: point.z, deployed }
+    if (vendor && map?.footpaths && before && !reset && !paused && !riding && !working) {
+      recordWalkingPath(map.footpaths, map, before, { x: point.x, z: point.z })
+    }
     group.userData = { ...data, motionReset: reset, distance, heading: praying ? data.heading : deployed ? keeperHeading : data.heading, activity: praying ? "praying" : deployed ? undefined : data.activity, moving: !praying && (deployed ? keeper?.moving === true : data.moving) }
     const pullingNow = vendor && !animal && characterModel === "base" && !deployed && !praying && !onFoot
     group.visible = !riding && !working && !keeperAction && !pullingNow
@@ -109,23 +116,27 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
       setup.current.position.copy(group.position)
     }
     if (beast.current) {
+      const beforeAnimal = lastAnimal.current
       const pasture = data.pasture, priorHeading = beast.current.userData.heading
       const last = lastAnimal.current
       const travel = data.animalHeading !== undefined ? { heading: data.animalHeading, reversing: data.reversing === true }
-        : last && !data.motionReset ? animalTravel(priorHeading ?? heading, hitch.x - last.x, hitch.z - last.z) : { heading, reversing: false }
-      beast.current.userData = { ...data, ...travel, grazing: false, hitched: !deployed }
+        : last?.hitched && !data.motionReset ? animalTravel(priorHeading ?? heading, hitch.x - last.x, hitch.z - last.z) : { heading, reversing: false }
+      beast.current.userData = { ...data, ...hitchedAnimalTravel(cartPose.current!, travel), grazing: false, hitched: !deployed }
       if (deployed && pasture) {
         beast.current.position.copy(parent.worldToLocal(point.set(pasture.x, data.pastureY ?? y, pasture.z)))
         const previous = lastAnimal.current, distance = previous && !data.motionReset && !paused ? Math.hypot(pasture.x - previous.x, pasture.z - previous.z) : 0
         beast.current.userData = { ...data, tether: pasture.returning ? undefined : pasture.tether, heading: pasture.moving && !praying ? pasture.heading : priorHeading ?? data.heading, reversing: pasture.reversing, hitched: false,
           moving: pasture.moving && !praying, distance, grazing: !pasture.tether && data.pastureGrass && !pasture.returning && !pasture.moving }
-        lastAnimal.current = { x: pasture.x, z: pasture.z }
+        lastAnimal.current = { x: pasture.x, z: pasture.z, hitched: false }
       } else if (parking) {
         const hitch = parking.pose.hitch
         beast.current.position.copy(parent.worldToLocal(point.set(hitch.x, map ? walkingSurface(map, hitch.x, hitch.z).height : y, hitch.z)))
-        beast.current.userData = { ...data, tether: onFoot ? parking.tree : undefined, heading: parking.pose.heading, hitched: true, moving: !onFoot && data.moving, distance: onFoot ? 0 : data.distance, grazing: false }
+        beast.current.userData = { ...data, tether: onFoot ? parking.tree : undefined, ...hitchedAnimalTravel(parking.pose, { heading: parking.pose.heading, reversing: false }), hitched: true, moving: !onFoot && data.moving, distance: onFoot ? 0 : data.distance, grazing: false }
         lastAnimal.current = null
-      } else { beast.current.position.set(0, 0, 0); lastAnimal.current = { ...hitch } }
+      } else { beast.current.position.set(0, 0, 0); lastAnimal.current = { ...hitch, hitched: !deployed } }
+      if (animal && map?.footpaths && beforeAnimal && lastAnimal.current && !paused && !data.motionReset) {
+        recordWalkingPath(map.footpaths, map, beforeAnimal, lastAnimal.current, HEAVY_PATH_WEAR)
+      }
     }
   }, -2)
   const variant = appearance?.variant ?? 0

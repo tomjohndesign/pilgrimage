@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type RefObject } from "react"
 import * as THREE from "three"
+import { addSurfaceLighting } from "@/lib/game/render/lighting"
 import { personCamera } from "@/lib/game/base-person/camera"
 import { BASE_PERSON } from "@/lib/game/base-person/pose"
 import { createAnimalRig } from "@/lib/game/transport/animal-rig"
@@ -31,7 +32,7 @@ export function AnimalPreview({ subject, lineup, motion, playing, row, zoom, rat
   subject: AnimalSubject; lineup: boolean; motion: AnimalMotion; playing: boolean; row: number; zoom: number; rate: number; coat: string; horseVariant: HorseVariant; onSelect: (subject: AnimalSubject) => void
   directionCanvases: RefObject<(HTMLCanvasElement | null)[]>
   construction: boolean; showRig: boolean; frame: number; edits: AnimalRigEdits; joints: AnimalInspection; selected: AnimalJoint
-  onInspect: (frame: number, joints: AnimalInspection) => void; onJoint: (joint: AnimalJoint) => void; onPose: (joint: AnimalJoint, offset: Point3) => void; onDrag: (active: boolean) => void
+  onInspect: (frame: number, joints: AnimalInspection) => void; onJoint: (joint: AnimalJoint) => void; onPose: (changes: [AnimalJoint, Point3][]) => void; onDrag: (active: boolean) => void
 }) {
   const host = useRef<HTMLDivElement>(null)
   const state = useRef({ motion, playing, row, rate, showRig, inspectedFrame, edits, onInspect })
@@ -43,8 +44,7 @@ export function AnimalPreview({ subject, lineup, motion, playing, row, zoom, rat
     renderer.setPixelRatio(1); renderer.setSize(BASE_PERSON.cellSize, BASE_PERSON.cellSize); renderer.localClippingEnabled = true
     renderer.setClearColor(0, 0)
     const scene = new THREE.Scene(), camera = personCamera()
-    scene.add(new THREE.AmbientLight("#ffffff", 1.1))
-    const light = new THREE.DirectionalLight("#ffffff", 1.8); light.position.set(-3, 7, 5); scene.add(light)
+    addSurfaceLighting(scene)
     const hole = createBurrowRig(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
     const actors = (lineup ? SUBJECTS : [subject]).map(kind => {
       const equine = kind === "donkey" || kind === "horse"
@@ -84,11 +84,12 @@ export function AnimalPreview({ subject, lineup, motion, playing, row, zoom, rat
         if(shelter)scene.add(hole.root)
         scene.add(rig.root); renderer.render(scene, camera)
         context.clearRect(0, 0, canvas.width, canvas.height); context.drawImage(renderer.domElement, 0, 0)
-        if (kind === subject && now - inspectedAt > 50) {
+        // Handles follow every frame while the rig is shown so a drag never trails the pointer.
+        if (kind === subject && now - inspectedAt > (s.showRig ? 15 : 50)) {
           const inspection: AnimalInspection = {}
           for (const [name, joint] of Object.entries(s.showRig && rig.root.visible ? rig.joints() : {})) {
             point.set(...joint.position); rig.root.localToWorld(point); point.project(camera)
-            inspection[name as AnimalJoint] = { ...joint, screen: [(point.x + 1) * 32, (1 - point.y) * 32] }
+            inspection[name as AnimalJoint] = { ...joint, screen: [(point.x + 1) * 32, (1 - point.y) * 32], depth: point.z }
           }
           s.onInspect(Math.floor(phase * ANIMAL_FRAMES), inspection); inspectedAt = now
         }

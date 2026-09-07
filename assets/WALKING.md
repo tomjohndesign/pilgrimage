@@ -118,9 +118,9 @@ release or package version. Tests require every active family to match it.
 Bake the base, every population profile/calling,
 and the Monk preset. Inspect the latest main branch before allocating versions.
 Published bakes are immutable; use new paths and update all active imports only
-after the exports exist. The current exports are base v31, population v23,
-monks v32 (brown hair) / v33 (grey hair), rockets v9, transport v20, knights v7
-and minstrel v2.
+after the exports exist. The current exports are base v32, population v25,
+monks v34 (brown hair) / v35 (grey hair), rockets v11, transport v21, knights v9
+and minstrel v3. These color sheets share the [southeast surface lighting](LIGHTING.md).
 For a subsequent change choose unused versions:
 
 ```sh
@@ -148,8 +148,8 @@ designs must be baked through the same current rig, not mapped onto stale sheets
   discrete poses. Verify no accumulated offset over repeated cycles, correct
   resets, and anchored height on slopes.
 - Run `npm test` and `npm run typecheck`, the base and population asset checkers,
-  and `node scripts/check-base-person.mjs v32 --monk` for the current monk bake.
-  Also check `node scripts/check-base-person.mjs v33 --monk` for grey-haired monks.
+  and `node scripts/check-base-person.mjs v34 --monk` for the current monk bake.
+  Also check `node scripts/check-base-person.mjs v35 --monk` for grey-haired monks.
   Check per-clip dimensions, matching shadows,
   palette, binary body alpha, safe margins and attachment registration.
 - Inspect side and diagonal views in the editor and on real road tiles. Check

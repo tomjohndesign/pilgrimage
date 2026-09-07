@@ -152,6 +152,25 @@ describe("game time", () => {
 })
 
 describe("stepSim", () => {
+  it("records a traveler walking to camp, without wearing ground while paused or resting", () => {
+    const map = makeMap(), traveler = makeTraveler(0, "pilgrim")
+    const sim = createSim([traveler], map), s = sim.travelers.get(traveler.id)!
+    s.x = tileToWorldX(map, 10); s.z = tileToWorldZ(map, 5)
+    s.activity = "toCamp"
+    s.walkFrom = { x: s.x, y: s.y, z: s.z }
+    s.spot = { x: tileToWorldX(map, 10), y: s.y, z: tileToWorldZ(map, 7) }
+    stepSim(sim, [traveler], map, 1, 0)
+    expect(sim.footpaths.edges.size).toBe(0)
+    for (let i = 0; i < 200 && s.activity === "toCamp"; i++) stepSim(sim, [traveler], map, 1, .1)
+    expect(s.activity).toBe("camping")
+    expect(sim.footpaths.edges.size).toBeGreaterThan(0)
+    const edges = structuredClone(sim.footpaths.edges)
+    stepSim(sim, [traveler], map, 1, 0)
+    expect(sim.footpaths.edges).toEqual(edges)
+    stepSim(sim, [traveler], map, 1, .1)
+    for (const [key, edge] of sim.footpaths.edges) expect(edge.wear).toBeLessThanOrEqual(edges.get(key)!.wear)
+  })
+
   it("uses live needs tuning for walkers and keeps camping's reduced drain", () => {
     const map = makeMap()
     const travelers = [makeTraveler(0, "knight")]

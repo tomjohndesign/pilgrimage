@@ -7,7 +7,7 @@ import ts from "typescript"
 
 // Real GPU depth testing: unit tests cannot catch interpolation/quantization seams.
 test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned outlines", async () => {
-  const metadata = JSON.parse(await readFile(new URL("../public/textures/characters/base/base-person-v31.json", import.meta.url), "utf8"))
+  const metadata = JSON.parse(await readFile(new URL("../public/textures/characters/base/base-person-v32.json", import.meta.url), "utf8"))
   const poseClips = Object.fromEntries(Object.entries(metadata.clips).map(([clip, frames]) => [clip, frames.length / metadata.directions.length]))
   const shader = ts.transpileModule(await readFile(new URL("../lib/game/render/sprite-depth.ts", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.ESNext },
@@ -24,9 +24,23 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     "driver.png": "cart-produce-driver.png", "driver-depth.png": "depth-cart-produce-driver.png" }
   const outlineSource = await readFile(new URL("../components/game/outline-pass.tsx", import.meta.url), "utf8")
   const outlineFragment = outlineSource.match(/const FRAGMENT_SHADER = \/\* glsl \*\/ `([\s\S]*?)`/)[1]
+  const foliageManifest = JSON.parse(await readFile(new URL("../public/textures/trees/foliage/v5/manifest.json", import.meta.url), "utf8"))
+  const foliageModules = {}
+  for (const name of ["material", "raycast"]) {
+    foliageModules[name] = ts.transpileModule(await readFile(new URL(`../lib/game/trees/foliage/${name}.ts`, import.meta.url), "utf8"), {
+      compilerOptions: { module: ts.ModuleKind.ESNext },
+    }).outputText.replace('"../../render/sprite-depth"', '"/shader.js"').replace('"./design"', '"/foliage-design.js"')
+  }
   const server = createServer(async (request, response) => {
     const name = request.url.slice(1)
-    if (name === "shader.js") {
+    if (name === "foliage-design.js") {
+      response.setHeader("Content-Type", "text/javascript"); response.end(`export const FOLIAGE_FRAME = ${JSON.stringify(foliageManifest.frame)}`)
+    } else if (name.startsWith("foliage-") && name.endsWith(".js")) {
+      response.setHeader("Content-Type", "text/javascript"); response.end(foliageModules[name.slice(8, -3)])
+    } else if (["foliage-color.png", "foliage-depth.png"].includes(name)) {
+      response.setHeader("Content-Type", "image/png")
+      response.end(await readFile(new URL(`../public${foliageManifest[name.includes("color") ? "color" : "depth"]}`, import.meta.url)))
+    } else if (name === "shader.js") {
       response.setHeader("Content-Type", "text/javascript")
       response.end(shader)
     } else if (name === "baker.js") {
@@ -424,6 +438,85 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       return { cases, compared, mismatches, occlusionFailures, floorCompared, floorClipped, supportCompared, supportClipped, poseCompared, poseMismatches, poseVisible, poseHidden, bakeCompared, bakeError,
         outlineCompared, outlineMismatches, selectionMismatches }
     }, { outlineFragment, poseClips })
+    const foliage = await page.evaluate(async () => {
+      const THREE = await import("/three.module.js")
+      const { foliageMaterial } = await import("/foliage-material.js")
+      const { foliageRaycast } = await import("/foliage-raycast.js")
+      const { FOLIAGE_FRAME: frame } = await import("/foliage-design.js")
+      const [color, depth] = await Promise.all(["color", "depth"].map(kind => new THREE.TextureLoader().loadAsync(`/foliage-${kind}.png`)))
+      for (const texture of [color, depth]) { texture.minFilter = texture.magFilter = THREE.NearestFilter; texture.generateMipmaps = false }
+      const gl = new THREE.WebGLRenderer({ antialias: false }), size = 192
+      gl.setSize(size, size); gl.setClearColor(0, 0)
+      const target = new THREE.WebGLRenderTarget(size, size, { depthTexture: new THREE.DepthTexture(size, size) })
+      const ztarget = new THREE.WebGLRenderTarget(size, size, { type: THREE.FloatType })
+      const scene = new THREE.Scene(), view = { value: 0 }
+      const camera = new THREE.OrthographicCamera(-2.5, 2.5, 2.5, -2.5, 0.1, 100)
+      camera.position.set(12, 10, 24); camera.lookAt(12, 5, 15); camera.updateMatrixWorld()
+      const trees = [0, 1].map(i => {
+        const geometry = new THREE.PlaneGeometry(1, 1)
+        geometry.translate(0, frame.anchor[1] / frame.cellSize - 0.5, 0)
+        geometry.setAttribute("foliageFrame", new THREE.InstancedBufferAttribute(new Float32Array([0, i * 3]), 2))
+        geometry.setAttribute("foliageId", new THREE.InstancedBufferAttribute(new Float32Array(i ? [0, 1, 0] : [1, 0, 0]), 3))
+        const mesh = new THREE.InstancedMesh(geometry, foliageMaterial(color, depth, view, { value: 0 }, true), 1)
+        mesh.position.set(2, 0.8, 4)
+        mesh.setMatrixAt(0, new THREE.Matrix4().makeTranslation(10 + i * 0.25, 3, 11 + i * 0.35))
+        mesh.raycast = foliageRaycast(geometry, color, depth, view, () => camera)
+        mesh.frustumCulled = false; scene.add(mesh); return mesh
+      })
+      const copyScene = new THREE.Scene(), copyCamera = new THREE.Camera()
+      const copy = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+        uniforms: { map: { value: target.depthTexture } },
+        vertexShader: "varying vec2 v; void main(){v=uv;gl_Position=vec4(position,1.0);}",
+        fragmentShader: "uniform sampler2D map; varying vec2 v; void main(){gl_FragColor=vec4(texture2D(map,v).r,0.0,0.0,1.0);}",
+      })); copyScene.add(copy)
+      const capture = () => {
+        gl.setRenderTarget(target); gl.render(scene, camera)
+        const pixels = new Uint8Array(size * size * 4), z = new Float32Array(size * size * 4)
+        gl.readRenderTargetPixels(target, 0, 0, size, size, pixels)
+        gl.setRenderTarget(ztarget); gl.render(copyScene, copyCamera); gl.readRenderTargetPixels(ztarget, 0, 0, size, size, z)
+        return { pixels, z }
+      }
+      const pickExamples = []
+      let overlap = 0, mismatches = 0, picked = 0, pickMismatches = 0, holes = 0
+      const ray = new THREE.Raycaster()
+      for (let direction = 0; direction < 8; direction++) {
+        view.value = direction
+        trees[1].visible = false; const a = capture()
+        trees[0].visible = false; trees[1].visible = true; const b = capture()
+        trees[0].visible = true; const both = capture()
+        for (let i = 0; i < both.pixels.length; i += 4) {
+          if (a.pixels[i + 3] && b.pixels[i + 3]) {
+            overlap++
+            const expected = a.z[i] < b.z[i] ? a : b
+            if (both.pixels[i] !== expected.pixels[i]) mismatches++
+          }
+          if (i / 4 % 7 !== 0) continue
+          const x = i / 4 % size, y = Math.floor(i / 4 / size)
+          ray.setFromCamera(new THREE.Vector2((x + 0.5) / size * 2 - 1, (y + 0.5) / size * 2 - 1), camera)
+          // Rasterizers quantize projected vertices to subpixels. Compare texel
+          // interiors; a CPU ray exactly on a leaf edge can land on either texel.
+          const nearTexelEdge = trees.some(tree => {
+            const matrix = new THREE.Matrix4(); tree.getMatrixAt(0, matrix); matrix.premultiply(tree.matrixWorld)
+            const anchor = new THREE.Vector3().setFromMatrixPosition(matrix).project(camera)
+            const u = (((x + 0.5) / size * 2 - 1 - anchor.x) * 2.5 / frame.extent + 0.5) * frame.cellSize
+            const v = (((y + 0.5) / size * 2 - 1 - anchor.y) * 2.5 / frame.extent + 1 - frame.anchor[1] / frame.cellSize) * frame.cellSize
+            return Math.abs(u - Math.round(u)) < 0.1 || Math.abs(v - Math.round(v)) < 0.1
+          })
+          if (nearTexelEdge) continue
+          const hits = ray.intersectObjects(trees, false)
+          if (both.pixels[i + 3]) {
+            picked++
+            if (!hits.length || hits[0].object !== trees[both.pixels[i] ? 0 : 1]) { pickMismatches++; if (pickExamples.length < 12) pickExamples.push({x,y,direction,expected:both.pixels[i] ? 0 : 1,hits:hits.map(h=>({tree:trees.indexOf(h.object),distance:h.distance,uv:h.uv.toArray()})),z:[a.z[i],b.z[i]]}) }
+          } else { holes++; if (hits.length) pickMismatches++ }
+        }
+      }
+      trees.forEach(tree => { tree.geometry.dispose(); tree.material.dispose(); tree.dispose() })
+      copy.geometry.dispose(); copy.material.dispose(); color.dispose(); depth.dispose(); target.dispose(); ztarget.dispose(); gl.dispose()
+      return { overlap, mismatches, picked, holes, pickMismatches, pickExamples }
+    })
+    assert.ok(foliage.overlap > 1000 && foliage.picked > 1000 && foliage.holes > 1000, JSON.stringify(foliage))
+    assert.equal(foliage.mismatches, 0, `instanced tree depth must match solo surfaces: ${JSON.stringify(foliage)}`)
+    assert.equal(foliage.pickMismatches, 0, `picking must follow visible foliage and leaf holes: ${JSON.stringify(foliage)}`)
     assert.deepEqual(errors, [], "WebGL shaders should compile without errors")
     assert.ok(result.compared > 10000, "must compare visible overlapping pixels")
     assert.equal(result.mismatches, 0, JSON.stringify(result))

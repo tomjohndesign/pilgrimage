@@ -1,5 +1,7 @@
 "use client"
 
+import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
+
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
@@ -137,7 +139,7 @@ export function MerchantMapPreview({ playing, row, zoom, ...options }: {
   const jump = (time: number) => { clock.current = time; setSeek(time); setFrame(demo.frames[Math.min(demo.frames.length - 1, Math.round(time / demo.step))]) }
   return <div className="merchant-map-preview" aria-label="Merchant journey on a small map">
     <div className="merchant-map-scene"><PixelCanvas orthographic camera={CAMERA}>
-      <color attach="background" args={["#252b1c"]} /><ambientLight intensity={0.5} /><hemisphereLight args={["#bcd0f0", "#3a2a16", 0.45]} /><CameraLight />
+      <color attach="background" args={["#252b1c"]} /><ambientLight intensity={SURFACE_LIGHT.ambient} /><hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} /><CameraLight />
       <MapCamera row={row} zoom={zoom} map={demo.map} />
       <Suspense fallback={null}><TerrainTiles map={demo.map} showGrid traffic={3} /><Trees map={demo.map} /><Bridges map={demo.map} />
         {demo.turning && trails && <TurningTrails demo={demo} />}

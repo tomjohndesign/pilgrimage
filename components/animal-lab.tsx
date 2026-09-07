@@ -30,7 +30,7 @@ const HABITATS: Record<AnimalSubject, string> = {
 import { CharacterAnimationDock } from "./character-rig-editor"
 import { AnimalRigInspector, type AnimalInspection } from "./animal-rig-editor"
 import { useAnimalRigStore } from "@/lib/game/wildlife/rig-store"
-import { ANIMAL_FRAMES, EMPTY_ANIMAL_EDITS, animalPoseKey, type AnimalJoint, type AnimalRigEdits } from "@/lib/game/wildlife/rig-edits"
+import { ANIMAL_FRAMES, EMPTY_ANIMAL_EDITS, animalClearFrame, animalPoseKey, type AnimalJoint, type AnimalRigEdits } from "@/lib/game/wildlife/rig-edits"
 import { BASE_PERSON } from "@/lib/game/base-person/pose"
 import { ASSET_ZOOMS, useAssetPreviewStore, usePreviewWheel } from "./asset-preview-controls"
 const DIRECTIONS = BASE_PERSON.directions
@@ -70,12 +70,28 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
   const [joints, setJoints] = useState<AnimalInspection>({}), [selectedJoint, setSelectedJoint] = useState<AnimalJoint>("head")
   const [history, setHistory] = useState<AnimalRigEdits[]>([]), [future, setFuture] = useState<AnimalRigEdits[]>([])
   const dragEdit = useRef<AnimalRigEdits | null>(null)
-  const edits = useAnimalRigStore(state => state.designs[subject]) ?? EMPTY_ANIMAL_EDITS
+  // A drag poses a local draft; the persisted store (and its localStorage write) only sees the release.
+  const [draft, setDraft] = useState<AnimalRigEdits | null>(null)
+  const stored = useAnimalRigStore(state => state.designs[subject]) ?? EMPTY_ANIMAL_EDITS
+  const edits = draft ?? stored
   const save = useAnimalRigStore(state => state.save)
-  useEffect(() => { setHistory([]); setFuture([]); setFrame(0); setSelectedJoint("head") }, [subject])
-  const commit = (next: AnimalRigEdits) => { if (!dragEdit.current) setHistory(h => [...h.slice(-49), edits]); setFuture([]); save(subject, next) }
+  useEffect(() => { setHistory([]); setFuture([]); setFrame(0); setSelectedJoint("head"); setDraft(null) }, [subject])
+  const commit = (next: AnimalRigEdits) => {
+    if (dragEdit.current) { setDraft(next); return }
+    setHistory(h => [...h.slice(-49), edits]); setFuture([]); save(subject, next)
+  }
+  const endDrag = () => {
+    const before = dragEdit.current
+    if (!before) return
+    dragEdit.current = null
+    setDraft(current => {
+      if (current && JSON.stringify(current) !== JSON.stringify(before)) { setHistory(h => [...h.slice(-49), before]); setFuture([]); save(subject, current) }
+      return null
+    })
+  }
   const actions = animalActions(subject), action = actions.includes(motion) ? motion : actions.includes("graze") ? "graze" : bird ? "fly" : "idle"
   const actionLabel = ACTION_LABELS[action]
+  const frameKeyed = (step: number) => Object.values(edits.clips[action]?.keys ?? {}).some(keys => keys?.some(key => key.frame === step))
   return <AssetEditorFrame mode={mode} onModeChange={onModeChange} version="11 animals" label="Animal asset playground"
     controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(v => !v)}
     status={`${lineup ? "All animals" : ANIMAL_SUBJECTS[subject]} · ${actionLabel}${playing ? "" : " · Paused"}`}
@@ -122,13 +138,13 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
           <div style={{ transform: `translate(${offset[0]}px, ${offset[1]}px)` }}>
           {active && <AnimalPreview subject={subject} lineup={lineup} motion={action} playing={playing} row={row} zoom={zoom} rate={rate} coat={coat} horseVariant={horseVariant} onSelect={choose} directionCanvases={directionCanvases} showRig={showRig} construction={construction && !bird && !equine} frame={frame} edits={edits} joints={joints} selected={selectedJoint}
             onInspect={(next, inspection) => { setFrame(next); setJoints(inspection) }} onJoint={joint => { setSelectedJoint(joint); setPlaying(false) }}
-            onPose={(joint, value) => commit(animalPoseKey(edits, action, joint, { frame, offset: value, radius: 4 }, frame))}
-            onDrag={active => { if (active) { dragEdit.current = edits; setPlaying(false) } else if (dragEdit.current) { setHistory(h => [...h.slice(-49), dragEdit.current!]); dragEdit.current = null } }} />}
+            onPose={changes => commit(changes.reduce((next, [joint, value]) => animalPoseKey(next, action, joint, { frame, offset: value, radius: 4 }, frame), edits))}
+            onDrag={active => { if (active) { dragEdit.current = edits; setPlaying(false) } else endDrag() }} />}
           </div>
           <span className="person-stage-caption">{lineup ? "Deer · sheep · goats · rabbits · birds · boars · foxes · donkey · horse" : `${equine ? ANIMAL_SUBJECTS[subject] : WILDLIFE_PROFILES[subject].label} · ${actionLabel}`}</span>
         </div>
         {showRig && !lineup && <AnimalRigInspector joints={joints} selected={selectedJoint} onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} edits={edits} clip={action} frame={frame}
-          onChange={commit} bird={bird} equine={equine}
+          onChange={commit} frameKeyed={frameKeyed(frame)} onResetFrame={() => commit(animalClearFrame(edits, action, frame))} bird={bird} equine={equine}
           canUndo={history.length > 0} canRedo={future.length > 0}
           onUndo={() => { const previous = history.at(-1); if (previous) { setFuture(f => [...f, edits]); setHistory(h => h.slice(0, -1)); save(subject, previous) } }}
           onRedo={() => { const next = future.at(-1); if (next) { setHistory(h => [...h, edits]); setFuture(f => f.slice(0, -1)); save(subject, next) } }} />}
@@ -136,7 +152,7 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
         <CharacterAnimationDock directions={DIRECTIONS} row={row} onDirection={next => { setRow(next); setLineup(false) }}
           renderDirection={index => <span role="img" aria-label={`${DIRECTIONS[index]} direction`} className="block shrink-0" style={{ width: 64, height: 64 }}><canvas ref={canvas => { directionCanvases.current[index] = canvas }} width={64} height={64} style={{ imageRendering: "pixelated" }} /></span>}
           frameCount={ANIMAL_FRAMES} frame={frame} clipLabel={actionLabel}
-          keyed={step => Object.values(edits.clips[action]?.keys ?? {}).some(keys => keys?.some(key => key.frame === step))}
+          keyed={step => frameKeyed(step)}
           onFrame={next => { setFrame(next); setPlaying(false); setLineup(false) }} />
       </div>
     </div>

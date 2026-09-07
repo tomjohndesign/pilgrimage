@@ -9,7 +9,7 @@ import type { TreePlacement } from "../trees/placement"
 import { habitatAllows, wildlifeHabitat, wildlifeSegmentClear } from "./habitat"
 import { createWildlife, startleWildlife, stepWildlife } from "./simulation"
 import { burrowApproach } from "./burrow-motion"
-import { isBird, WILDLIFE_PROFILES, wildlifeStride } from "./species"
+import { isBird, isDomestic, WILDLIFE_PROFILES, wildlifeStride } from "./species"
 import { createWildlifeRig } from "./rig"
 
 function fixture() {
@@ -65,14 +65,38 @@ describe("wildlife habitats and social groups", () => {
     for (let i = 0; i < 4; i++) map.elevation.corners[(23 * 48 + 14) * 4 + i] = 2
     expect(wildlifeSegmentClear(habitat, "goat", { x: -12, z: -0.5 }, { x: -7, z: -0.5 })).toBe(false)
   })
-  it("keeps herds close and all ground animals in valid habitats over sustained wandering", () => {
+  it("keeps loose herds within reach and ground animals in valid habitats over sustained wandering", () => {
     const { map, trees } = fixture(), world = createWildlife(map, trees)
     for (let tick = 0; tick < 1800; tick++) stepWildlife(world, map, 0.1)
     for (const animal of world.animals.filter(a => !isBird(a.kind))) {
       expect(habitatAllows(world.habitat, animal.kind, animal)).toBe(true)
       const leader = world.animals[animal.leader]
-      expect(Math.hypot(animal.x - leader.x, animal.z - leader.z)).toBeLessThan(3.5)
+      if (isDomestic(animal.kind) || animal.kind === "deer") expect(Math.hypot(animal.x - leader.x, animal.z - leader.z)).toBeLessThan(8)
     }
+  })
+  it("allows excursions and reunions while most followers stay loosely together and herds migrate", () => {
+    const map: GameMap = { width: 64, depth: 64, tiles: Array(4096).fill("grass"), buildings: [], seed: 12 }
+    const world = createWildlife(map, [])
+    const followers = world.animals.filter(a => (isDomestic(a.kind) || a.kind === "deer") && a.id !== a.leader)
+    const departed = new Set<number>(), reunited = new Set<number>()
+    let together = 0, spaced = 0, samples = 0, migration = 0
+    for (let tick = 0; tick < 12000; tick++) {
+      stepWildlife(world, map, .1)
+      for (const animal of followers) {
+        const leader = world.animals[animal.leader], distance = Math.hypot(animal.x - leader.x, animal.z - leader.z)
+        samples++
+        if (distance < 4.5) together++
+        if (distance > 1.5) spaced++
+        if (animal.roamTime > 0 && distance > 4) departed.add(animal.id)
+        if (departed.has(animal.id) && animal.roamTime <= 0 && distance < 3) reunited.add(animal.id)
+        migration = Math.max(migration, Math.hypot(leader.x - leader.home.x, leader.z - leader.home.z))
+      }
+    }
+    expect(together / samples).toBeGreaterThan(.75)
+    expect(spaced / samples).toBeGreaterThan(.65)
+    expect(departed.size).toBeGreaterThan(0)
+    expect(reunited.size).toBeGreaterThan(0)
+    expect(migration).toBeGreaterThan(7)
   })
   it("does not spawn isolated sheep or goats when a whole herd cannot fit", () => {
     const map: GameMap = { width: 3, depth: 3, tiles: Array(9).fill("water"), buildings: [], seed: 3 }
@@ -86,7 +110,7 @@ describe("birds", () => {
   it("flushes a perched flock on a chop, flies, and lands on another standing tree", () => {
     const { map, trees } = fixture(), world = createWildlife(map, trees)
     const sparrow = world.animals.find(a => a.kind === "sparrow")!, tree = trees[sparrow.perch!]
-    const affected = world.animals.filter(a => a.perch === sparrow.perch)
+    const affected = world.animals.filter(a => !a.reserve && a.perch === sparrow.perch)
     startleWildlife(world, tree, map, new Set())
     expect(affected.every(a => a.flight !== null)).toBe(true)
     let landed = false
@@ -207,7 +231,7 @@ describe("species behavior", () => {
     expect(world.animals.filter(a => a.kind === "boar").every(a => ["idle", "graze"].includes(a.action))).toBe(true)
     expect([...observed].filter(value => value.startsWith("sheep:"))).toEqual(["sheep:walk"])
     expect([...observed].filter(value => value.startsWith("goat:"))).toEqual(["goat:walk"])
-    expect(resting.get("goat")! / total.get("goat")!).toBeGreaterThan(0.8)
+    expect(resting.get("goat")! / total.get("goat")!).toBeGreaterThan(0.6)
     expect([...observed].some(value => value === "boar:leap" || value === "boar:hop")).toBe(false)
   })
   it("enters the actual burrow, pauses underground, and emerges at the same opening", () => {

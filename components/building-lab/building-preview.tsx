@@ -1,5 +1,7 @@
 "use client"
 
+import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
+
 import { Canvas, useThree } from "@react-three/fiber"
 import { useEffect } from "react"
 import { cameraOffset, yawForView, lightOffsetForYaw } from "@/lib/game/render/iso"
@@ -22,8 +24,9 @@ export function BuildingPreview({ recipe, cutaway, grid }: { recipe: BuildingRec
   return <Canvas fallback={<p style={{ padding: 32, color: "#352b24" }}>This preview needs WebGL. Concept art and prompt exports are still available.</p>} orthographic camera={{ position: cameraOffset(yawForView(recipe.view)), near: 0.1, far: 400, zoom: 35 }} dpr={[1, 2]}>
     <color attach="background" args={["#d8dcc1"]} />
     <Camera view={recipe.view} footprint={Math.max(recipe.width, recipe.depth)} />
-    <ambientLight intensity={1.3} />
-    <directionalLight intensity={2} position={lightOffsetForYaw(yawForView(recipe.view))} />
+    <ambientLight intensity={SURFACE_LIGHT.ambient} />
+    <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
+    <directionalLight intensity={SURFACE_LIGHT.sun} position={lightOffsetForYaw(yawForView(recipe.view))} />
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.04, 0]}>
       <planeGeometry args={[200,200]} /><meshLambertMaterial color="#aeb78e" />
     </mesh>

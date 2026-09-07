@@ -1,0 +1,132 @@
+{
+  "version": "0.0.97",
+  "environment": "production",
+  "sessionMinutes": 3,
+  "browser": "Chrome",
+  "browserMajor": 140,
+  "platform": "macOS",
+  "viewport": "large",
+  "runtimeErrors": {
+    "errors": 1,
+    "rejections": 0,
+    "webglContextLosses": 0
+  },
+  "seed": 1234,
+  "settings": {
+    "size": 1,
+    "coverage": 1,
+    "glades": 1,
+    "clearings": 1,
+    "darkForests": 1,
+    "relicDistance": 1,
+    "traffic": 1,
+    "walkSpeed": 1,
+    "characterFps": 1,
+    "stride": 1,
+    "paceVariation": 1,
+    "pathEase": 1,
+    "acceleration": 1,
+    "baseSize": 1,
+    "draftSize": 1,
+    "road": 1,
+    "roadOpacity": 1,
+    "roadShade": 1,
+    "roadEdgeLine": 1,
+    "roadEdgeWidth": 1,
+    "water": 1,
+    "rivers": 1,
+    "lakes": 1,
+    "ponds": 1,
+    "walkSync": true,
+    "characterModel": "base",
+    "elevation": {
+      "noiseSeed": 0.0,
+      "maxHeight": 2.4,
+      "scale": 36.0,
+      "detail": 0.12,
+      "power": 2.0,
+      "cliffLength": 20.0,
+      "cliffRoughness": 0.7,
+      "cliffDensity": 1.0,
+      "bridgeSag": 0.55,
+      "cliffHeight": 1.0,
+      "cliffThreshold": 0.65,
+      "slopeCost": 24.0,
+      "bankTaper": 10.0,
+      "bankSlope": 0.16,
+      "beachHeight": 0.3,
+      "beachSlope": 0.25,
+      "lakeTaper": 14.0,
+      "lakeCliffs": 0.25,
+      "lakeShelf": 3.0,
+      "erosionScale": 9.0,
+      "bankWidth": 5.0,
+      "riverCut": 0.8,
+      "cutFrequency": 0.55,
+      "riverDrop": 0.002,
+      "waterfallDrop": 0.8,
+      "waterfallSpacing": 90.0,
+      "waterDepth": 0.4,
+      "edgeWidth": 0.045,
+      "edgeStrength": 0.7,
+      "shimmerCoverage": 0.45,
+      "shimmerSize": 6.0,
+      "shimmerSpeed": 0.5,
+      "shimmerStrength": 0.35,
+      "waterfallTurbulence": 0.75,
+      "turbulenceReach": 3.0,
+      "turbulenceSpeed": 1.8,
+      "foam": 0.45
+    }
+  },
+  "pixelation": {
+    "pixelated": true,
+    "pixelsPerUnit": 16,
+    "outputDpr": 1
+  },
+  "camera": {
+    "targetX": 0,
+    "targetZ": 0,
+    "viewIndex": 0,
+    "viewSize": 32,
+    "outlineMode": "overlap"
+  },
+  "simulation": {
+    "paused": false,
+    "speed": 2,
+    "time": 100
+  },
+  "population": {
+    "travelers": 10,
+    "monks": 3,
+    "residents": 3,
+    "relicTraffic": 2
+  },
+  "settlement": {
+    "gold": 120,
+    "wood": 160,
+    "visits": 4,
+    "shrineAdmission": 1,
+    "felledTrees": 0,
+    "woodPiles": 0
+  },
+  "buildings": [
+    {
+      "x": 5,
+      "z": 6,
+      "w": 2,
+      "d": 2,
+      "rotation": 0,
+      "type": "shelter",
+      "construction": {
+        "work": 10,
+        "required": 30
+      }
+    }
+  ],
+  "omittedBuildings": 0,
+  "cheats": {
+    "blasterPastor": false,
+    "lastMarch": false
+  }
+}

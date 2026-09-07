@@ -1,7 +1,67 @@
 {
-  "lastProcessedCommit": "995b2fa26e86d74d311fe447ce2e24dede875987",
-  "releaseCount": 78,
+  "lastProcessedCommit": "331102de627b2010e43398b2f778056df3def0e0",
+  "releaseCount": 88,
   "releases": [
+    {
+      "version": "0.0.102",
+      "title": "Release 0.0.102",
+      "summary": "Add a World panel toggle to draw the forest with the pixel foliage sprites (#121)",
+      "commit": "331102de627b2010e43398b2f778056df3def0e0"
+    },
+    {
+      "version": "0.0.101",
+      "title": "Release 0.0.101",
+      "summary": "Let walkers wear footpaths and straighten inherited roads (#120)",
+      "commit": "22f4c7a861d118ac9653bf4b7f5438a6add102ab"
+    },
+    {
+      "version": "0.0.100",
+      "title": "Release 0.0.100",
+      "summary": "Add shared southeast lighting and six-species foliage sprites (#118)",
+      "commit": "efb8773aef32fb4d620ae833b92ca6c52aef3a66"
+    },
+    {
+      "version": "0.0.99",
+      "title": "Release 0.0.99",
+      "summary": "Make the rig editor responsive: progress while baking, true drag targets, bone drags, key resets (#119)",
+      "commit": "c3048523715360deafdae02a13cacd7428323227"
+    },
+    {
+      "version": "0.0.98",
+      "title": "Release 0.0.98",
+      "summary": "Add anonymous bug reports from world settings (#117)",
+      "commit": "a247f1aaab7274a204564819792f25a6f6dd4a85"
+    },
+    {
+      "version": "0.0.97",
+      "title": "Release 0.0.97",
+      "summary": "Keep builders assigned until construction is complete (#116)",
+      "commit": "e78200b126faec4e31ee37052dce59451dd2755b"
+    },
+    {
+      "version": "0.0.96",
+      "title": "Release 0.0.96",
+      "summary": "Keep monks on their errands when a building is placed; default maps to 192×192 (#115)",
+      "commit": "22ae86fc4f4171835c49da43835e570f940d5610"
+    },
+    {
+      "version": "0.0.95",
+      "title": "Release 0.0.95",
+      "summary": "Let animal herds roam loosely and rabbits enter ground-level holes (#114)",
+      "commit": "ea7dfa11b1b5bfe984622c733682e4dd45725a17"
+    },
+    {
+      "version": "0.0.94",
+      "title": "Release 0.0.94",
+      "summary": "Keep hitched animals facing away from their carts (#110)",
+      "commit": "0b205202034830ecca9586bf8df7593979727f9e"
+    },
+    {
+      "version": "0.0.93",
+      "title": "Release 0.0.93",
+      "summary": "Expand character population slider for playtesting (#113)",
+      "commit": "f2050b5d6997d4a577d44f3a994e0093e7546da2"
+    },
     {
       "version": "0.0.92",
       "title": "Release 0.0.92",

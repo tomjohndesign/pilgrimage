@@ -83,6 +83,7 @@ export function Travelers({
   const appearances = useMemo(() => travelers.map(t => travelerAppearance(map.seed ?? 0, t.id)), [travelers, map.seed])
   const selection = useCameraStore((s) => s.selection)
   const resourceElapsed = useRef(0)
+  const obstacleSource = useRef<{ trees: TreePlacement[]; felled: number } | null>(null)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
   const logRefs = useRef<Array<THREE.Group | null>>([])
 
@@ -131,6 +132,10 @@ export function Travelers({
     sim.shrineRenown = shrineRenown
     sim.balance = useBalanceStore.getState().balance
     sim.trees = trees
+    if (map.footpaths && (obstacleSource.current?.trees !== trees || obstacleSource.current.felled !== sim.felled.size)) {
+      map.footpaths.obstacles = trees.flatMap((tree, index) => sim.felled.has(index) ? [] : [{ x: tree.x, z: tree.z, radius: Math.max(.18, (tree.footprint ?? .3) * .5) }])
+      obstacleSource.current = { trees, felled: sim.felled.size }
+    }
     const playback = useSimulationStore.getState()
     // Keep each tick bounded at faster speeds, including work and routing.
     if (!playback.paused) {

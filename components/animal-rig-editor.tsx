@@ -8,14 +8,14 @@ import type { Point3 } from "@/lib/game/base-person/pose"
 export type AnimalInspection = Partial<Record<AnimalJoint, InspectedJoint>>
 export function AnimalRigOverlay({ joints, selected, row, edits, clip, phase, onSelect, onChange, onDrag }: {
   joints: AnimalInspection; selected: AnimalJoint; row: number; edits: AnimalRigEdits; clip: AnimalClip; phase: number
-  onSelect: (joint: AnimalJoint) => void; onChange: (joint: AnimalJoint, offset: Point3) => void; onDrag: (active: boolean) => void
+  onSelect: (joint: AnimalJoint) => void; onChange: (changes: [AnimalJoint, Point3][]) => void; onDrag: (active: boolean) => void
 }) {
   return <JointOverlay joints={joints} selected={selected} row={row} bones={joints.neck ? ANIMAL_BONES : [...ANIMAL_BONES, ["chest", "head"]]} labels={ANIMAL_JOINT_LABELS} label="Animal rig"
     offset={joint => animalOffset(edits, clip, joint, phase)} onSelect={onSelect} onChange={onChange} onDrag={onDrag} />
 }
-export function AnimalRigInspector({ joints, selected, onSelect, edits, clip, frame, onChange, onUndo, onRedo, canUndo, canRedo, bird, equine }: {
-  joints: AnimalInspection; selected: AnimalJoint; onSelect: (joint: AnimalJoint) => void; edits: AnimalRigEdits; clip: AnimalClip; frame: number
-  onChange: (edits: AnimalRigEdits) => void; onUndo: () => void; onRedo: () => void; canUndo: boolean; canRedo: boolean; bird: boolean; equine: boolean
+export function AnimalRigInspector({ joints, selected, onSelect, edits, clip, frame, frameKeyed, onChange, onResetFrame, onUndo, onRedo, canUndo, canRedo, bird, equine }: {
+  joints: AnimalInspection; selected: AnimalJoint; onSelect: (joint: AnimalJoint) => void; edits: AnimalRigEdits; clip: AnimalClip; frame: number; frameKeyed: boolean
+  onChange: (edits: AnimalRigEdits) => void; onResetFrame: () => void; onUndo: () => void; onRedo: () => void; canUndo: boolean; canRedo: boolean; bird: boolean; equine: boolean
 }) {
   const input = useRef<HTMLInputElement>(null), [message, setMessage] = useState("")
   const current = edits.clips[clip] ?? {}, offset = animalOffset(edits, clip, selected, frame / ANIMAL_FRAMES)
@@ -26,9 +26,10 @@ export function AnimalRigInspector({ joints, selected, onSelect, edits, clip, fr
     const a = document.createElement("a"); a.href = url; a.download = "animal-rig.json"; a.click(); URL.revokeObjectURL(url)
   }
   return <CharacterRigInspector joints={joints} selected={selected} labels={ANIMAL_JOINT_LABELS} onSelect={onSelect}
-    offset={offset} frame={frame} radius={key?.radius ?? 4} maxRadius={10} keyed={!!key}
+    offset={offset} frame={frame} radius={key?.radius ?? 4} maxRadius={10} keyed={!!key} frameKeyed={frameKeyed}
     onChange={update} onRadius={radius => onChange(animalPoseKey(edits, clip, selected, { frame, offset, radius }, frame))}
     onReset={() => onChange(animalPoseKey(edits, clip, selected, null, frame))}
+    onResetKey={() => update([0, 0, 0])} onResetFrame={onResetFrame}
     onResetClip={() => { const clips = { ...edits.clips }; delete clips[clip]; onChange({ ...edits, clips }) }}
     canUndo={canUndo} canRedo={canRedo} onUndo={onUndo} onRedo={onRedo}
     footer={<>

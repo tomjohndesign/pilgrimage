@@ -19,6 +19,8 @@ export interface WildlifeAnimal extends Point {
   burrow: number | null; burrowState: "outside" | "returning" | "entering" | "inside" | "emerging"; shelter: number; outsideTime: number; reserve: boolean; moving: boolean; distance: number; target: Point | null; home: Point
   perch: number | null; flight: null | { from: Point & { y: number }; to: Point & { y: number }; elapsed: number; duration: number; height: number; perch: number | null; sheltered: boolean }
   frightened: number; concealed: boolean; transient: boolean
+  /** Positive seconds explore; negative seconds wait before another excursion. */
+  roamTime: number; regrouping: boolean
 }
 export interface RabbitBurrow extends Point { id: number; group: number; y: number; heading: number }
 export interface WildlifeWorld {
@@ -47,7 +49,8 @@ export function createWildlife(map: GameMap, trees: readonly TreePlacement[], sc
     const animal: WildlifeAnimal = { id, kind, group, leader, ...at, y: walkingSurface(map, at.x, at.z).height,
       heading: rng() * Math.PI * 2, phase: rng(), age: rng() * 20, rest: restDuration(kind, rng()), grazing: kind === "fox" || isBird(kind) ? 0 : 1, gait: kind === "rabbit" ? "hop" : "walk", speed: 0, drive: 0,
       action: kind === "fox" ? "lie" : "graze", lying: 0, actionAge: 0, burrow: null, burrowState: "outside", shelter: 0, outsideTime: rng() * 18, reserve: false, moving: false, distance: 0,
-      target: null, home: { ...at }, perch, flight: null, frightened: 0, concealed: false, transient: false }
+      target: null, home: { ...at }, perch, flight: null, frightened: 0, concealed: false, transient: false,
+      roamTime: -30 - rng() * 60, regrouping: false }
     if (perch !== null) Object.assign(animal, treePerch(trees[perch], id))
     world.animals.push(animal)
     return animal
@@ -68,9 +71,10 @@ export function createWildlife(map: GameMap, trees: readonly TreePlacement[], sc
       const home = sites[Math.floor(rng() * sites.length)], spots: Point[] = [{ ...home }]
       if (world.animals.some(a => !isBird(a.kind) && Math.hypot(a.x - home.x, a.z - home.z) < 3)) continue
       for (let n = 0; n < 80 && spots.length < count; n++) {
-        const angle = rng() * Math.PI * 2, radius = 0.45 * scale + rng() * 1.1
+        const social = kind === "deer" || isDomestic(kind)
+        const angle = rng() * Math.PI * 2, radius = social ? (0.9 + rng() * 2.2) * scale : 0.45 * scale + rng() * 1.1
         const at = { x: home.x + Math.sin(angle) * radius, z: home.z + Math.cos(angle) * radius }
-        if (spots.some(p => Math.hypot(p.x - at.x, p.z - at.z) < 0.45 * scale)) continue
+        if (spots.some(p => Math.hypot(p.x - at.x, p.z - at.z) < (social ? 0.85 : 0.45) * scale)) continue
         if (wildlifeSegmentClear(world.habitat, kind, home, at, map, 0.2 * scale)) spots.push(at)
       }
       if (spots.length !== count) continue
@@ -239,7 +243,17 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
     }
     const separation = Math.hypot(animal.x - leader.x, animal.z - leader.z)
     const herd = animal.kind === "deer" || domestic
-    if (herd && animal.leader !== animal.id && separation > 1.8) animal.rest = 0
+    const follower = herd && animal.leader !== animal.id
+    if (follower) {
+      if (animal.roamTime > 0) {
+        animal.roamTime = Math.max(0, animal.roamTime - dt)
+        if (animal.roamTime === 0) { animal.regrouping = true; animal.target = null; animal.roamTime = -60 - rng() * 60 }
+      } else animal.roamTime = Math.min(0, animal.roamTime + dt)
+      // Hysteresis lets a straggler settle back into the loose group before grazing.
+      if (separation > (animal.roamTime > 0 ? 7 : 4.5) * scale) animal.regrouping = true
+      if (animal.regrouping && separation < 3 * scale) animal.regrouping = false
+      if (animal.regrouping) animal.rest = 0
+    }
     if (!habitatAllows(habitat, animal.kind, animal, map, 0.2 * scale)) { animal.rest = 0; animal.target = null }
     animal.rest -= dt
     const settle = animal.rest > 1.6 && !animal.target && !animal.frightened
@@ -251,20 +265,30 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
     if (animal.rest > 0 || animal.lying > 0.01) {
       animal.moving = false; animal.speed = 0; animal.drive = approach(animal.drive, 0, 3); continue
     }
-    if (herd && animal.leader !== animal.id && separation > 2.1 && animal.target && Math.hypot(animal.target.x - leader.x, animal.target.z - leader.z) > 1.3) animal.target = null
-    if (herd && animal.leader === animal.id && world.animals.some(a => a.leader === animal.id && Math.hypot(a.x - animal.x, a.z - animal.z) > 2.4)) {
+    if (follower && animal.regrouping && animal.target && Math.hypot(animal.target.x - leader.x, animal.target.z - leader.z) > 3.5 * scale) animal.target = null
+    if (herd && animal.leader === animal.id && world.animals.some(a => a.leader === animal.id && a.roamTime <= 0 && Math.hypot(a.x - animal.x, a.z - animal.z) > 6 * scale)) {
       animal.moving = false; animal.speed = 0; animal.drive = approach(animal.drive, 0, 3); continue
     }
     if (!animal.target) {
       if(animal.burrowState === "returning")animal.burrowState="outside"
       animal.gait = chooseGait(animal.kind, animal.frightened > 0, rng())
+      // Only one member explores at a time; the rest continue grazing together.
+      if (follower && !animal.regrouping && animal.roamTime === 0 && !animal.frightened && rng() < 0.22
+        && !world.animals.some(other => other.group === animal.group && other.roamTime > 0)) animal.roamTime = 25 + rng() * 20
       for (let attempt = 0; attempt < 18; attempt++) {
-        const angle = threat ? Math.atan2(animal.x - threat.x, animal.z - threat.z) + (rng() - 0.5) : rng() * Math.PI * 2
-        const follower = herd && animal.id !== animal.leader, origin = follower ? leader : animal
+        const exploring = follower && animal.roamTime > 0 && !animal.regrouping
+        const angle = threat ? Math.atan2(animal.x - threat.x, animal.z - threat.z) + (rng() - 0.5)
+          : herd && !follower && attempt < 12 ? animal.heading + (rng() - 0.5) * 1.4 : rng() * Math.PI * 2
+        const origin = follower && (animal.regrouping || exploring) && !threat ? leader : animal
         const running = animal.gait === "gallop" || animal.gait === "canter" || animal.gait === "trot"
-        const radius = follower ? 0.5 + rng() * 0.8 : (running ? 1.2 : 0.35) + rng() * (animal.frightened ? 3 : running ? 2.3 : 0.75)
+        const radius = (threat ? 2 + rng() * 3 : exploring ? 4.5 + rng() * 1.5 : animal.regrouping ? 1.8 + rng() * 1.2
+          : herd ? 0.8 + rng() * 1.4 : (running ? 1.2 : 0.35) + rng() * (animal.frightened ? 3 : running ? 2.3 : 0.75)) * scale
         const target = { x: origin.x + Math.sin(angle) * radius, z: origin.z + Math.cos(angle) * radius }
-        if (Math.hypot(target.x - animal.home.x, target.z - animal.home.z) > (burrow ? 3 : domestic ? 7 : 10)) continue
+        if (follower && !exploring && !threat && Math.hypot(target.x - leader.x, target.z - leader.z) > 3.8 * scale) continue
+        // Herds migrate through suitable habitat; only den-bound/solitary animals keep a fixed home range.
+        if (!herd && Math.hypot(target.x - animal.home.x, target.z - animal.home.z) > (burrow ? 3 : 10)) continue
+        if (herd && world.animals.some(other => other !== animal && !other.concealed && !isBird(other.kind)
+          && Math.hypot(other.x - target.x, other.z - target.z) < 0.85 * scale)) continue
         if (!domestic && people.some(p => Math.hypot(p.x - target.x, p.z - target.z) < 2.5)) continue
         if (!habitatAllows(habitat, animal.kind, target, map, 0.2 * scale)) continue
         if (!wildlifeSegmentClear(habitat, animal.kind, animal, target, map, 0.2 * scale)) continue
@@ -295,7 +319,7 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
     const next = { x: animal.x + dx / distance * step, z: animal.z + dz / distance * step }
     if (!wildlifeSegmentClear(habitat, animal.kind, animal, next, map, 0.2 * scale)) { animal.target = null; animal.rest = 0.5; animal.moving = false; continue }
     if (world.animals.some(other => other !== animal && !other.concealed && !isBird(other.kind) && !(burrow && other.burrow === animal.burrow)
-      && Math.hypot(other.x - next.x, other.z - next.z) < 0.32 * scale
+      && Math.hypot(other.x - next.x, other.z - next.z) < (herd ? 0.6 : 0.32) * scale
       && Math.hypot(other.x - next.x, other.z - next.z) < Math.hypot(other.x - animal.x, other.z - animal.z))) {
       animal.target = null; animal.rest = 0.5; animal.moving = false; continue
     }

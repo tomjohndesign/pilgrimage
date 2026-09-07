@@ -5,6 +5,9 @@ atlas. All world meshes use their normal depth buffer; buildings do not need
 special rendering rules for each character or activity. The archived generated
 calling sheets have no source geometry and retain their comparison renderer.
 
+Surface lighting is baked into the paired color sheet; follow [LIGHTING.md](LIGHTING.md)
+for the shared southeast light and export coverage.
+
 ## Bake contract
 
 `spriteDepthBaker` renders the posed rig through the same orthographic camera,

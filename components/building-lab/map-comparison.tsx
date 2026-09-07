@@ -1,5 +1,7 @@
 "use client"
 
+import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
+
 import { RelicDisplay } from "@/components/game/relic-display"
 
 import { Suspense, useEffect, useMemo, useState } from "react"
@@ -166,9 +168,9 @@ export function ProceduralMapScene({ recipe, grid, zoom, cutaway, onGuideReady, 
       <Canvas frameloop="demand" orthographic camera={{ near: 0.1, far: 400 }} outputDpr={1} fallback={<p>This map preview needs WebGL.</p>}>
         <color attach="background" args={["#14100a"]} />
         <SceneCamera recipe={recipe} zoom={zoom} />
-        <ambientLight intensity={0.5} />
-        <hemisphereLight args={["#bcd0f0", "#3a2a16", 0.45]} />
-        <directionalLight name="workshop-sun" position={lightOffsetForYaw(yawForView(recipe.view))} intensity={2.7} />
+        <ambientLight intensity={SURFACE_LIGHT.ambient} />
+        <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
+        <directionalLight name="workshop-sun" position={lightOffsetForYaw(yawForView(recipe.view))} intensity={SURFACE_LIGHT.sun} />
         <Suspense fallback={null}>
           <Site recipe={recipe} grid={grid} />
           <group position={[0, TILE_HEIGHT, 0]}><BuildingModel terrainFloors recipe={recipe} cutaway={cutaway} />{recipe.variant === "enclosure" && <RelicDisplay />}</group>
@@ -194,9 +196,9 @@ export function MapComparison({ recipe, imageRecipe, image, registrations, label
         <Canvas frameloop="demand" orthographic camera={{ near: 0.1, far: 400 }} outputDpr={1} fallback={<p>This map preview needs WebGL. Art & exports is still available.</p>}>
           <color attach="background" args={["#14100a"]} />
           <SceneCamera recipe={recipe} zoom={zoom} />
-          <ambientLight intensity={0.5} />
-          <hemisphereLight args={["#bcd0f0", "#3a2a16", 0.45]} />
-          <directionalLight name="workshop-sun" position={lightOffsetForYaw(yawForView(recipe.view))} intensity={2.7} />
+          <ambientLight intensity={SURFACE_LIGHT.ambient} />
+          <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
+          <directionalLight name="workshop-sun" position={lightOffsetForYaw(yawForView(recipe.view))} intensity={SURFACE_LIGHT.sun} />
           <Suspense fallback={null}>
             <Site recipe={recipe} grid={grid} />
             {kind === "procedural" ? <><group position={[0, TILE_HEIGHT, 0]}><BuildingModel terrainFloors recipe={recipe} />{recipe.variant === "enclosure" && <RelicDisplay />}</group><GuideCapture recipe={recipe} onReady={onGuideReady} /></> : <IllustratedBuilding image={image} recipe={imageRecipe} view={recipe.view} registrations={registrations} onStatus={setStatus} />}

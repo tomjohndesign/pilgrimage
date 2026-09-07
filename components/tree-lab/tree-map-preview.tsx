@@ -1,5 +1,7 @@
 "use client"
 
+import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
+
 import { Suspense, useEffect, useMemo } from "react"
 import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
 
@@ -8,6 +10,11 @@ import { CameraRig } from "@/components/game/camera-rig"
 import { Environment } from "@/components/game/environment"
 import { OutlinePass } from "@/components/game/outline-pass"
 import { TerrainTiles } from "@/components/game/terrain-tiles"
+import { FoliageField } from "@/components/game/foliage-field"
+import type { FoliageAtlas } from "@/lib/game/trees/foliage/design"
+import { foliageSpacing } from "@/lib/game/trees/foliage/spacing"
+import { TREE_SPECIES } from "@/lib/game/trees/species"
+import { placeTrees } from "@/lib/game/trees/placement"
 import { Trees } from "@/components/game/trees"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { generateMap } from "@/lib/game/map/generate-map"
@@ -20,8 +27,17 @@ import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
  * without the lab depending on world state. Same controls as /play: drag to
  * pan, scroll to zoom, Q/E to rotate, O to cycle outlines.
  */
-export function TreeMapPreview({ seed, size, ...pixelation }: { seed: number; size: number } & PixelationProps) {
+export function TreeMapPreview({ seed, size, atlas, ...pixelation }: { seed: number; size: number; atlas?: FoliageAtlas } & PixelationProps) {
   const map = useMemo(() => generateMap({ seed, width: size, depth: size }), [seed, size])
+
+  const prototype = !!atlas
+  const placements = useMemo(() => placeTrees(map, prototype ? foliageSpacing(TREE_SPECIES) : TREE_SPECIES), [map, prototype])
+  useEffect(() => {
+    if (!prototype) return
+    const { outlineMode, selection } = useCameraStore.getState()
+    useCameraStore.setState({ outlineMode: "off", selection: null })
+    return () => { useCameraStore.setState({ outlineMode, selection }) }
+  }, [prototype])
 
   useEffect(() => {
     const store = useCameraStore.getState()
@@ -36,18 +52,18 @@ export function TreeMapPreview({ seed, size, ...pixelation }: { seed: number; si
       camera={{ manual: true, position: [20, 20, 20], near: CAM_NEAR, far: CAM_FAR }}
     >
       <color attach="background" args={["#14100a"]} />
-      <ambientLight intensity={0.5} />
-      <hemisphereLight args={["#bcd0f0", "#3a2a16", 0.45]} />
+      <ambientLight intensity={SURFACE_LIGHT.ambient} />
+      <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
       <CameraLight />
 
       <Suspense fallback={null}>
         <TerrainTiles map={map} />
       </Suspense>
-      <Trees map={map} />
+      <Suspense fallback={null}>{atlas ? <FoliageField atlas={atlas} placements={placements} seed={seed} onSelect={id => useCameraStore.getState().select({ kind: "tree", id })} /> : <Trees map={map} />}</Suspense>
       <Environment map={map} />
 
       <CameraRig map={map} />
-      <OutlinePass />
+      <OutlinePass objects={atlas ? { buildings: [], travelers: [], monks: [] } : undefined} />
     </PixelCanvas>
   )
 }

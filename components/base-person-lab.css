@@ -111,6 +111,8 @@
 .person-rig-axes label { min-width: 0; }
 .person-steps button[data-keyed="true"] { box-shadow: inset 0 -3px #f5ce72; }
 .person-stage-error { position: absolute; top: 8px; left: 8px; right: 8px; background: #211e16e8; padding: 8px; font-size: 12px; pointer-events: none; }
+.person-stage-progress { position: absolute; top: 8px; right: 8px; display: flex; flex-direction: column; gap: 5px; padding: 6px 10px; font-size: 11px; color: #f2e8d5; pointer-events: none; }
+.person-stage-progress > i { display: block; height: 3px; background: #f5ce72; transition: width .12s linear; }
 @media (max-width: 1150px) { .person-rig-inspector { width: 210px; } }
 @media (max-width: 900px) { .person-stage-layout:has(.person-rig-inspector) { flex-direction: column; } .person-rig-inspector { width: 100%; max-height: 190px; } .person-rig-fields { gap: 6px; } }
 .person-json-dialog { position: fixed; inset: 0; margin: auto; width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; background: #211e16; color: #f2e8d5; border: 1px solid #d4b57a; padding: 0; box-shadow: 0 20px 80px #0009; }

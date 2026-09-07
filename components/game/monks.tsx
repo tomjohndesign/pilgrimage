@@ -1,11 +1,11 @@
 "use client"
 
+import { recordWalkingPath } from "@/lib/game/footpaths"
 import { PietyEffects } from "./admission-effects"
 import { PixelCharacters } from "@/components/pixel-canvas"
-import { createMonkNeeds, stepMonkWork, type MonkNeeds } from "@/lib/game/monk-work"
+import { createMonkNeeds, replanMonkAfterMapChange, stepMonkWork, type MonkNeeds } from "@/lib/game/monk-work"
 import { preachingRegistry, preachingSpots, stepMonkEvangelism, type PreachingTask } from "@/lib/game/monk-evangelism"
 import { useMonkEvangelismStore } from "@/lib/game/monk-evangelism-store"
-import { workerRoute } from "@/lib/game/construction"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
 import { blessByProcession, createRelicProcession, nearProcession, processionGrounds, processionRegistry, startAltarProcession, startProcession, stepProcession } from "@/lib/game/relic-procession"
@@ -75,12 +75,14 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
   world.spots = navigation.spots
   world.centre = navigation.centre
   world.grounds = useMemo(() => processionGrounds(map, navigation), [map, navigation])
+  // A placed building must not restart the brothers' day: only routes and
+  // resting spots a new footprint now blocks get re-planned.
   useEffect(() => {
     for (const state of world.states) {
       if (state.buildingTask || state.flight || state.preachingTask) continue
-      if (map.site) { state.route = workerRoute(map, state, map.site.door) ?? []; state.destination = "home" }
+      replanMonkAfterMapChange(state, map, navigation)
     }
-  }, [map, world])
+  }, [map, world, navigation])
 
   useEffect(() => {
     useMonkEvangelismStore.setState({ available: preachingSpots(map).length > 0 })
@@ -141,6 +143,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       const actor = world.states[carrierIndex], group = groupRefs.current[carrierIndex]
       const x = actor.x, z = actor.z
       const exit = stepProcession(world.procession, actor, world.grounds, dt, monkWalkSpeed(characterScale), world.pick, controls.returnRequested)
+      if (map.footpaths) recordWalkingPath(map.footpaths, map, { x, z }, actor)
       if (exit) { actor.route = exit; actor.pause = 0; actor.destination = "grounds"; actor.activity = "walking" }
       if (group) {
         group.userData.distance = Math.hypot(actor.x - x, actor.z - z)
@@ -199,6 +202,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
           s.flight = createMonkFlight(s, world.pick(), map, world.flightRng)
         }
       }
+      const wasFlying = !!s.flight
       if (s.flight) {
         const flight = s.flight
         for (let tick = 0; tick < playback.speed; tick++) {
@@ -239,6 +243,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       if (evangelismRequested && !evangelizing) useMonkEvangelismStore.getState().recall(monks[i].id)
       if (!evangelizing && !stepMonkWork(s, map, monkWalkSpeed(characterScale), dt))
         stepMonkRoutine(s, world.wander, world.rng, monkWalkSpeed(characterScale), dt)
+      if (map.footpaths && !wasFlying) recordWalkingPath(map.footpaths, map, { x: previousX, z: previousZ }, s)
       world.stamina.set(monks[i].id, s.stamina)
       if (s.buildingTask && (s.activity === "building" || s.activity === "sleeping")) group.rotation.y = s.buildingTask.heading
       group.userData.activity = s.activity

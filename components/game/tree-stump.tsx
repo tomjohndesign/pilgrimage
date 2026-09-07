@@ -8,7 +8,7 @@ import { PERSON_SPRITE_SCALE } from "@/lib/game/base-person/gait"
 import { spriteRow } from "@/lib/game/character-assets"
 import { encodeObjectId, OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 import { applySpriteDepth } from "@/lib/game/render/sprite-depth"
-import manifest from "@/public/textures/trees/chopping-block/v2/manifest.json"
+import manifest from "@/public/textures/trees/chopping-block/v3/manifest.json"
 
 /** The animation’s inked block stays rooted here throughout felling and splitting. */
 export function TreeStump({ id, objectId, characterScale }: {
