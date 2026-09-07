@@ -5,6 +5,8 @@ import { BUILD_CATALOG } from "../balance"
 import { PROTOTYPE_BUILDINGS } from "../map/prototype-map"
 import { structureParts, visibleStructureParts } from "./structure"
 import type { BuildingPart } from "./geometry"
+import { workshopLayout, workshopPileOffset } from "../workshop-layout"
+import { WOOD_LOG, woodLogScale } from "../wood-log"
 
 function bounds(part: BuildingPart) {
   const geometry = part.size ? new BoxGeometry(...part.size)
@@ -67,6 +69,35 @@ describe("settlement construction", () => {
     expect(store.some(p => /^(rear-|side-|front-|door-|woven-gable)/.test(p.name))).toBe(false)
     expect(store.some(p => p.name === "entry-ramp")).toBe(true)
     expect(store.some(p => p.name === "grain-sack" || p.name.startsWith("firewood-"))).toBe(false)
+  })
+
+  it("shelters the hut's beds, bench and two timber bays while leaving the work yard open", () => {
+    const hut = catalogue.find(b => b.id === "workshop")!
+    expect([hut.w, hut.d]).toEqual([3, 2])
+    const parts = partsFor("workshop")
+    expect(parts.find(p => p.name === "floor")?.surface).toBe("trail")
+    expect(parts.some(p => p.name.startsWith("roof-plank-"))).toBe(false)
+    const roof = parts.filter(p => p.name.startsWith("thatch-bundle-")).map(bounds)
+    const covered = (x: number, z: number) => roof.some(b => x >= b.min.x && x <= b.max.x && z >= b.min.z && z <= b.max.z)
+    for (const part of parts.filter(p => p.name.startsWith("straw-bed-") || p.name === "workbench-seat")) {
+      expect(covered(part.position[0], part.position[2]), part.name).toBe(true)
+    }
+    expect(covered(-.4, .5)).toBe(false)
+    const layout = workshopLayout(hut.w, hut.d)
+    expect(layout.bayWidth * layout.bayDepth * 2).toBe(2)
+    const scale = woodLogScale(), radius = WOOD_LOG.radius * scale
+    const occupied: Box3[] = []
+    for (let slot=0;slot<4;slot++) {
+      const [x,z] = workshopPileOffset(slot,hut.w,hut.d)
+      const stack = new Box3(new Vector3(x-1.5*radius*2.05-radius,0,z-WOOD_LOG.length*scale/2),
+        new Vector3(x+2*radius*2.05+radius,.8,z+WOOD_LOG.length*scale/2))
+      expect(stack.min.x).toBeGreaterThan(layout.storageX-layout.bayWidth/2)
+      expect(stack.max.x).toBeLessThan(layout.storageX+layout.bayWidth/2)
+      expect(covered(stack.min.x, stack.min.z)).toBe(true)
+      expect(covered(stack.max.x, stack.max.z)).toBe(true)
+      expect(occupied.some(other => other.intersectsBox(stack))).toBe(false)
+      occupied.push(stack)
+    }
   })
 
   it("reveals furnished interiors when selected and restores the complete shell on deselection", () => {

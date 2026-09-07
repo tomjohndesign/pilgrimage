@@ -7,13 +7,19 @@ import { BUILD_CATALOG, type BuildId } from "@/lib/game/balance"
 import { structureParts } from "@/lib/game/building-art/structure"
 import { batchDetails } from "@/components/building-lab/building-model"
 import { BUILDING_STYLE } from "@/lib/game/building-art/style"
+import { buildingPartGeometry, BUILDING_DIRT_TEXTURE, configureBuildingDirt, dirtFloorMaterial } from "@/lib/game/building-art/part-geometry"
 import { cameraOffset, lightOffsetForYaw, yawForView } from "@/lib/game/render/iso"
 
-let thumbnails: Partial<Record<BuildId, string>> | undefined
+let thumbnails: Promise<Partial<Record<BuildId, string>>> | undefined
 
 /** Bake the actual meshes once, with one short-lived WebGL context for the tray. */
-function buildThumbnails() {
-  if (thumbnails) return thumbnails
+async function buildThumbnails() {
+  const load = async (url: string, fallbackColor: number[]) => configureBuildingDirt(await new THREE.TextureLoader().loadAsync(url).catch(() => {
+    const fallback = new THREE.DataTexture(new Uint8Array(fallbackColor), 1, 1)
+    fallback.needsUpdate = true
+    return fallback
+  }))
+  const [dirt, grass] = await Promise.all([load(BUILDING_DIRT_TEXTURE, [164,147,114,255]), load("/textures/grass.png", [148,161,88,255])])
   const images: Partial<Record<BuildId, string>> = {}
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false })
   renderer.setSize(54, 49)
@@ -24,10 +30,9 @@ function buildThumbnails() {
       const scene = new THREE.Scene(), model = new THREE.Group()
       const geometries: THREE.BufferGeometry[] = [], materials: THREE.Material[] = []
       for (const part of batchDetails(structureParts({ ...definition, buildType: definition.id }))) {
-        const geometry = part.size ? new THREE.BoxGeometry(...part.size)
-          : new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(part.vertices!, 3))
-        geometry.computeVertexNormals()
-        const material = new THREE.MeshLambertMaterial({ color: part.color, side: THREE.DoubleSide })
+        const geometry = buildingPartGeometry(part)
+        const material = part.surface === "trail" ? dirtFloorMaterial(part, dirt, grass)
+          : new THREE.MeshLambertMaterial({ color: part.color, side: THREE.DoubleSide })
         const mesh = new THREE.Mesh(geometry, material)
         mesh.position.set(...part.position)
         if (part.rotation) mesh.rotation.set(...part.rotation)
@@ -66,9 +71,10 @@ function buildThumbnails() {
         materials.forEach((material) => material.dispose())
       }
     }
-    thumbnails = images
     return images
   } finally {
+    dirt.dispose()
+    grass.dispose()
     renderer.dispose()
     renderer.forceContextLoss()
   }
@@ -76,6 +82,11 @@ function buildThumbnails() {
 
 export function BuildThumbnail({ id }: { id: BuildId }) {
   const [src, setSrc] = useState<string>()
-  useEffect(() => { setSrc(buildThumbnails()[id]) }, [id])
+  useEffect(() => {
+    let active = true
+    thumbnails ??= buildThumbnails()
+    void thumbnails.then(images => { if (active) setSrc(images[id]) }).catch(() => { thumbnails = undefined })
+    return () => { active = false }
+  }, [id])
   return src ? <Image src={src} unoptimized alt="" width={54} height={49} /> : null
 }

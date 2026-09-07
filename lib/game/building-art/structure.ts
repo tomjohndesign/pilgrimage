@@ -9,7 +9,7 @@ export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "h
 /** Roof proportions for the original catalogue, using the shared rural kit. */
 const SETTLEMENT_ROOFS = {
   shelter: 0.55,
-  workshop: 0.3,
+  workshop: 0.5,
   hall: 0.75,
   garden: 0,
   cross: 0,

@@ -51,7 +51,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     renown: 0,
     requiredRenown: 0,
     income: { gold: 0, wood: 0 },
-    w: 2,
+    w: 3,
     d: 2,
     height: 0.85,
     color: "#8c7658",

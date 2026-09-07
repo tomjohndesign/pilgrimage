@@ -13,6 +13,8 @@ export interface BuildingPart {
   rotation?: Vec3
   vertices?: number[]
   color: string
+  /** Ground surface uses the same dirt texture and tile scale as paths. */
+  surface?: "trail"
   cutawaySide?: [number, number]
   outline?: boolean
   /** Usable top face. Navigation and sprites share the authored furniture contact. */
@@ -28,6 +30,8 @@ function constructionParts(recipe: BuildingRecipe, doorOffset: number): Building
   const box = (name: string, layer: BuildingPart["layer"], position: Vec3, size: Vec3, color: string, rotation?: Vec3) => parts.push({ name, layer, position, size, color, rotation })
   const face = (name: string, layer: BuildingPart["layer"], vertices: number[], color: string) => parts.push({ name, layer, position: [0, 0, 0], vertices, color })
   box("floor", "base", [0, BUILDING_FLOOR_TOP / BUILDING_DETAIL_SCALE - 0.06, 0], [w, 0.12, d], "#a39170")
+  parts[0].surface = "trail"
+  parts[0].color = "#ffffff"
   // Blocks leave real mortar gaps without a texture dependency.
   for (const side of [-1, 1]) {
     for (let i = 0; i < Math.ceil(w); i++) box(`stone-x-${side}-${i}`, "base", [-w / 2 + (i + 0.5) * w / Math.ceil(w), base / 2, side * (d / 2 - 0.1)], [w / Math.ceil(w) - 0.025, base, 0.22], p.stone)
