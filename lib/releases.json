@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "9689da0b2e4cf7eb3f925c49558c45377ec86243",
-  "releaseCount": 73,
+  "lastProcessedCommit": "2aec0f2125b8c2104b0613e63bc575e5503dbe97",
+  "releaseCount": 74,
   "releases": [
+    {
+      "version": "0.0.88",
+      "title": "Release 0.0.88",
+      "summary": "Prevent terrain from clipping through founding building floors (#107)",
+      "commit": "2aec0f2125b8c2104b0613e63bc575e5503dbe97"
+    },
     {
       "version": "0.0.87",
       "title": "Release 0.0.87",
