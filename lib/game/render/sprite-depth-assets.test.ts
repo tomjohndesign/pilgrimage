@@ -8,6 +8,7 @@ import { rocketMonkVisual, rocketFlightClip } from "../rocket/assets"
 import { pullingVisual } from "../transport/visual"
 import { TRANSPORT } from "../transport/assets"
 import { TRAVELER_TYPES } from "../travelers"
+import { MINSTREL_PLAYING } from "../minstrel/assets"
 
 describe("active sprite depth assets", () => {
   it("provides registered geometry depth for every active character and transport clip", async () => {
@@ -22,6 +23,7 @@ describe("active sprite depth assets", () => {
     }
     const base = characterVisual(CHARACTER_ASSETS.peasant, "base")
     clip(base.walk); clip(base.idle)
+    clip(MINSTREL_PLAYING)
     for (const action of Object.values(base.actions)) clip(action)
     for (const type of Object.values(TRAVELER_TYPES)) for (const age of [30, 80]) for (let variant = 0; variant < 6; variant++) {
       visual(populationVisual(type.id, variant, null, age))

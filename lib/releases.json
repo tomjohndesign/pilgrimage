@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "f9e83010afba2c172e69a12a9204be9fcfc21b17",
-  "releaseCount": 66,
+  "lastProcessedCommit": "197064bbba95c051e426d22b3e17c8fcb18a572d",
+  "releaseCount": 68,
   "releases": [
+    {
+      "version": "0.0.82",
+      "title": "Release 0.0.82",
+      "summary": "Keep merchant stalls open all day and add roadside minstrel performances (#101)",
+      "commit": "197064bbba95c051e426d22b3e17c8fcb18a572d"
+    },
+    {
+      "version": "0.0.81",
+      "title": "Release 0.0.81",
+      "summary": "Limit construction crews by building size and prefer paths (#100)",
+      "commit": "d3fc878a7b5a9b0d2ed15fa6e8ec12605512aa96"
+    },
     {
       "version": "0.0.80",
       "title": "Release 0.0.80",

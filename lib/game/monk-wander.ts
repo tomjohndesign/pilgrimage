@@ -3,8 +3,8 @@ import { buildingStepAllowed, containsTile, shrineFurnitureClear } from "./build
 import { surfaceHeight } from "./map/bridges"
 import { walkingSurface } from "./map/walking-surface"
 import { elevationStep } from "./map/elevation"
-import { ROUTE_DIRS } from "./map/route"
-import { TERRAIN } from "./map/terrain"
+import { MinHeap, ROUTE_DIRS } from "./map/route"
+import { TERRAIN, walkingRouteCost } from "./map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 import { buildingAt } from "./settlement"
 
@@ -58,6 +58,7 @@ export function monkWander(map: GameMap, radius = 3) {
     if (!reachable.has(n)) { reachable.add(n); queue.push(n) }
   }
   const nodes = queue.map(id => candidates.get(id)!)
+  const nodeIndices = new Map(queue.map((id, index) => [id, index]))
   const prayerSpots: WanderSpot[] = []
   if (layout) for (const [dx, dz] of ROUTE_DIRS) {
     const target = { x: tileToWorldX(map, layout.altarTile.x + dx), z: tileToWorldZ(map, layout.altarTile.z + dz) }
@@ -80,11 +81,22 @@ export function monkWander(map: GameMap, radius = 3) {
       const first = nearest(start), last = nearest(goal)
       if (!first || !last) return []
       const a = key(first.tile), b = key(last.tile)
-      const parents = new Map<string, string | null>([[a, null]]), open = [a]
-      for (let head = 0; head < open.length; head++) {
-        const current = open[head]
+      const parents = new Map<string, string | null>([[a, null]])
+      const costs = new Map<string, number>([[a, 0]]), closed = new Set<string>(), open = new MinHeap()
+      open.push(nodeIndices.get(a)!, 0)
+      while (open.size) {
+        const current = queue[open.pop()]
+        if (closed.has(current)) continue
+        closed.add(current)
         if (current === b) break
-        for (const n of adjacent.get(current)!) if (!parents.has(n)) { parents.set(n, current); open.push(n) }
+        const from = candidates.get(current)!.tile
+        for (const n of adjacent.get(current)!) {
+          const to = candidates.get(n)!.tile
+          const cost = costs.get(current)! + Math.hypot(to.x - from.x, to.z - from.z)
+            * walkingRouteCost(tileAt(map, Math.round(to.x), Math.round(to.z))!)
+          if (cost >= (costs.get(n) ?? Infinity)) continue
+          costs.set(n, cost); parents.set(n, current); open.push(nodeIndices.get(n)!, cost)
+        }
       }
       if (!parents.has(b)) return []
       const path: WanderSpot[] = []

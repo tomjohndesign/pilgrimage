@@ -92,7 +92,10 @@ export function Travelers({
       if (!sim.travelers.has(id)) sim.travelers.set(id, traveler)
     }
     for (const id of sim.travelers.keys()) {
-      if (!fresh.travelers.has(id)) sim.travelers.delete(id)
+      if (!fresh.travelers.has(id)) {
+        sim.travelers.get(id)!.buildingTask = undefined
+        sim.travelers.delete(id)
+      }
     }
   }, [sim, travelers, map, relic])
 
@@ -102,6 +105,7 @@ export function Travelers({
   useEffect(() => {
     simRegistry.current = sim
     return () => {
+      for (const traveler of sim.travelers.values()) traveler.buildingTask = undefined
       if (simRegistry.current === sim) simRegistry.current = null
     }
   }, [sim])
@@ -158,6 +162,13 @@ export function Travelers({
       const workTree = s.tree === null ? undefined : trees[s.tree]
       if (s.activity === "visiting" && !!s.shrineSeat) {
         group.rotation.y = kneelingHeading
+      }
+      if (s.activity === "performing" && s.walkFrom) {
+        group.rotation.y = Math.atan2(s.walkFrom.x - s.x, s.walkFrom.z - s.z)
+      }
+      if (s.activity === "listening" && s.musicVisit) {
+        const performer = sim.travelers.get(s.musicVisit.performerId)
+        if (performer) group.rotation.y = Math.atan2(performer.x - s.x, performer.z - s.z)
       }
       if (s.activity === "building") group.rotation.y = s.buildingTask?.heading ?? Math.PI
       group.userData.workTree = workTree
