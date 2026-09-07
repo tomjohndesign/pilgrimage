@@ -27,7 +27,8 @@ export function rotateBuildingPoint(x: number, z: number, rotation = 0): TilePos
 
 /** Centre a doorway on a whole tile, including even-width building fronts. */
 export function buildingDoorOffset(width: number, type?: string): number {
-  return (type === "workshop" ? 0 : Math.floor((width-1)/2))-(width-1)/2
+  // The woodcutter opens onto its left-hand court; the sheep pen onto its hut door.
+  return (type === "workshop" || type === "sheep-pen" ? 0 : Math.floor((width-1)/2))-(width-1)/2
 }
 
 /** Keep an integer arrival tile aligned with the door or the workshop's open court. */

@@ -2,6 +2,7 @@ import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotat
 import { settlementRoute } from "./settlement-route"
 import { isWoods, TERRAIN } from "./map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } from "./map/types"
+import { WORK_POSTS } from "./work-posts"
 
 /**
  * What the player can build, and where. Pure data — no three.js, no React —
@@ -14,7 +15,7 @@ import { tileAt, tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } fr
  * places the shrine and monk shelter; lumber camps are the player's doing.
  */
 
-export type BuildingKind = "workshop"
+export type BuildingKind = "workshop" | "tavern" | "sheep-pen" | "market"
 
 export interface BuildingKindDef {
   id: BuildingKind
@@ -34,6 +35,8 @@ export interface BuildingKindDef {
   workRadius: number
   /** Trades that take to the work eagerly; anyone jobless will still take it. */
   trades: readonly string[]
+  /** Only a passing vendor keeps this place; settlers cannot take the job. */
+  vendorKept?: boolean
 }
 
 export const BUILDING_KINDS: Record<BuildingKind, BuildingKindDef> = {
@@ -50,6 +53,59 @@ export const BUILDING_KINDS: Record<BuildingKind, BuildingKindDef> = {
     workRadius: 8,
     trades: ["woodcutting", "labour"],
   },
+  tavern: {
+    id: "tavern",
+    label: "Tavern",
+    blurb: "Two jobs behind the counter, serving food and drink for gold.",
+    w: 3,
+    d: 4,
+    height: 0.78,
+    color: "#8c7658",
+    roofColor: "#a59164",
+    jobs: 2,
+    workRadius: 0,
+    trades: ["brewing", "cooking", "haggling"],
+  },
+  "sheep-pen": {
+    id: "sheep-pen",
+    label: "Sheep pen",
+    blurb: "Two herding jobs tending the fold.",
+    w: 3,
+    d: 2,
+    height: 0.70,
+    color: "#8c7658",
+    roofColor: "#a59164",
+    jobs: 2,
+    workRadius: 0,
+    trades: ["herding", "farming", "labour"],
+  },
+  market: {
+    id: "market",
+    label: "Market stall",
+    blurb: "A stall for one keeper, selling food and wares.",
+    w: 2,
+    d: 2,
+    height: 0.65,
+    color: "#8c7658",
+    roofColor: "#a59164",
+    jobs: 1,
+    workRadius: 0,
+    trades: ["haggling", "appraisal", "cart driving"],
+    vendorKept: true,
+  },
+}
+
+/** Work kept at a stand inside the building rather than ranging outside it. */
+export function isPostedWork(kind: BuildingKind): boolean {
+  return !!WORK_POSTS[kind]?.length
+}
+
+/** Places the player can build that hire, in the order the sim considers them. */
+export const JOB_KINDS: readonly BuildingKind[] = ["workshop", "tavern", "sheep-pen", "market"]
+
+/** The kind of work a placed structure offers, if any. */
+export function buildingKind(buildType: string | undefined): BuildingKind | null {
+  return JOB_KINDS.find(kind => kind === buildType) ?? null
 }
 
 /** A building the player put down: a BuildingDef that also knows its kind. */

@@ -8,7 +8,7 @@ import { singlePlaneRoofRise } from "./dimensions"
 export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor">
 
 const SETTLEMENT_TYPES: readonly SettlementBuildingType[] = [
-  "shelter", "workshop", "hall", "garden", "cross", "lumberCamp", "market", "guard-post",
+  "shelter", "workshop", "hall", "garden", "cross", "lumberCamp", "market", "guard-post", "sheep-pen",
 ]
 
 function isSettlementType(type: string | undefined): type is SettlementBuildingType {
@@ -40,7 +40,7 @@ export function structureParts(building: StructureAppearance): BuildingPart[] {
   }
 
   if (isSettlementType(building.buildType)) return earlyBuildingParts({
-    ...earlyBuildingRecipe("shepherd-hut"),
+    ...earlyBuildingRecipe("house"),
     variant: building.buildType,
     width: building.w,
     depth: building.d,
@@ -50,7 +50,7 @@ export function structureParts(building: StructureAppearance): BuildingPart[] {
 
   // Untyped, older map structures also receive real construction at their footprint.
   return buildingParts({
-    ...earlyBuildingRecipe("shepherd-hut"),
+    ...earlyBuildingRecipe("house"),
     width: building.w,
     depth: building.d,
     wallHeight: Math.max(0.25, Math.min(1.4, building.height)),

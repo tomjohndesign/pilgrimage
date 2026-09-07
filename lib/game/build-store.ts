@@ -25,6 +25,7 @@ interface BuildState {
   simulation: SimState | null
   wood: number
   shrineGold: number
+  tradeGold: number
   visits: number
   settlers: Monk[]
   syncResources: (sim: SimState, travelers?: readonly Traveler[]) => void
@@ -45,6 +46,7 @@ const emptyState = () => ({
   simulation: null,
   wood: 0,
   shrineGold: 0,
+  tradeGold: 0,
   visits: 0,
   settlers: [] as Monk[],
 })
@@ -65,6 +67,7 @@ export const useBuildStore = create<BuildState>((set) => ({
       simulation: sim,
       wood: sim.wood,
       shrineGold: sim.shrineGold,
+      tradeGold: sim.tradeGold,
       visits: sim.visits,
       settlers: JSON.stringify(s.settlers) === JSON.stringify(settlers) ? s.settlers : settlers,
       time: sim.time,

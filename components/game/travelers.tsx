@@ -13,7 +13,7 @@ import { useSimulationStore } from "@/lib/game/simulation-store"
 import { selectElement } from "@/lib/game/selection"
 import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
 import { useBalanceStore } from "@/lib/game/balance-store"
-import { woodcutterHuts } from "@/lib/game/settlement"
+import { jobBuildings } from "@/lib/game/settlement"
 import { useBuildStore } from "@/lib/game/build-store"
 import type { Relic } from "@/lib/game/relic"
 import type { TreePlacement } from "@/lib/game/trees/placement"
@@ -101,7 +101,7 @@ export function Travelers({
     }
   }, [sim, travelers, map, relic])
 
-  const camps = useMemo(() => woodcutterHuts(map), [map])
+  const camps = useMemo(() => jobBuildings(map), [map])
 
   // Publish the running sim so the HUD's traveler panel can poll live stats.
   useEffect(() => {
