@@ -1,3 +1,4 @@
+import { BUILDING_FRAMES } from "./building"
 import recipe from "../../../assets/recipes/base-person.json"
 import { SPLITTING_FRAMES, splittingMotion } from "./splitting"
 
@@ -14,16 +15,18 @@ export const PERSON_CLIPS = {
   walk: { label: "Walking", frames: WALK_FRAMES_PER_STRIDE * WALK_CLIP_STRIDES },
   sleeping: { label: "Sleeping", frames: 16 },
   sitting: { label: "Sitting", frames: 8 },
+  seatedPrayer: { label: "Seated prayer", frames: 8 },
   praying: { label: "Praying", frames: 8 },
   treeFelling: { label: "Chopping · standing tree", frames: 24 },
   woodcutting: { label: "Chopping · fallen wood", frames: SPLITTING_FRAMES },
+  building: { label: "Building · wooden mallet", frames: BUILDING_FRAMES },
   gathering: { label: "Gathering", frames: 24 },
   carrying: { label: "Carrying", frames: 20 },
   hoisting: { label: "Hoisting relic", frames: 16 },
   procession: { label: "Carrying overhead", frames: 20 },
 } as const
 export type BaseClip = keyof typeof PERSON_CLIPS
-export const ACTION_CLIPS = ["sleeping", "sitting", "praying", "treeFelling", "woodcutting", "gathering", "carrying", "hoisting", "procession"] as const
+export const ACTION_CLIPS = ["sleeping", "sitting", "seatedPrayer", "praying", "treeFelling", "woodcutting", "building", "gathering", "carrying", "hoisting", "procession"] as const
 export type ActionClip = typeof ACTION_CLIPS[number]
 
 export function choppingHipDrop(clip: BaseClip, phase = 0, hipHeight = BASE_PERSON.body.hipHeight) {
@@ -72,6 +75,7 @@ function hipOffset(side: BodySide, phase: number, clip: BaseClip, b = BASE_PERSO
 export function pelvisHeight(phase: number, clip: BaseClip, b = BASE_PERSON.body): number {
   if (clip === "treeFelling" || clip === "woodcutting") return b.hipHeight + choppingHipDrop(clip, phase, b.hipHeight)
   if (clip === "sleeping") return b.hipHeight
+  if (clip === "seatedPrayer") return b.ankleHeight + b.shinLength
   if (clip === "sitting") return 0.25
   if (clip === "praying") return 0.1 + b.thighLength * 0.9
   if (clip === "gathering") return 0.22
@@ -90,6 +94,12 @@ export function pelvisHeight(phase: number, clip: BaseClip, b = BASE_PERSON.body
 
 /** +Z is forward; +X is the person's own LEFT, which appears right in front view. */
 export function legPose(side: BodySide, phase: number, clip: BaseClip, b = BASE_PERSON.body): LegPose {
+  if (clip === "seatedPrayer") {
+    const x = (side === "left" ? 1 : -1) * b.legOffset
+    const height = pelvisHeight(phase, clip, b)
+    return { hip: [x, height, 0], knee: [x, height, b.thighLength],
+      ankle: [x, b.ankleHeight, b.thighLength], planted: true }
+  }
   if (clip === "sitting" || clip === "praying" || clip === "gathering") {
     const x = (side === "left" ? 1 : -1) * b.legOffset
     const kneeling = clip !== "sitting"

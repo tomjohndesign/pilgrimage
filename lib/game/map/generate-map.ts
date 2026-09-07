@@ -23,8 +23,8 @@ import { generateWater, WATER_KIND_LAKE, WATER_KIND_RIVER } from "./water"
  *
  * Every world also comes founded: the monks' hovel already stands, with the
  * relic inside, deep in the woods a long way off the road, and a beaten track
- * branches from the road to its door. That is the one building the generator
- * places — everything else is the player's job. The game begins with the hovel
+ * branches from the road to its door. A completed monk shelter faces the gate path
+ * beside it; subsequent structures are built by residents. The game begins with the hovel
  * because without it there is nothing for travelers to turn aside for.
  *
  * Two kinds of openness, on purpose:
@@ -193,7 +193,8 @@ const TRACK_MARGIN = 4
 
 export const HOVEL_ID = "hovel"
 /** Footprint of the hovel in tiles. */
-export const HOVEL_SIZE = 3
+export const HOVEL_WIDTH = 3
+export const HOVEL_DEPTH = 5
 
 /**
  * How far the hovel sits from the nearest road tile, in grid steps. Far — a
@@ -788,7 +789,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   }
 
   // --- Founding site: the hovel, its glade, and the branch to its door -------
-  const { hovel, site } = foundSite(
+  const { hovel, shelter, site } = foundSite(
     tiles,
     width,
     depth,
@@ -836,12 +837,16 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     reached = reachableFrom(tiles, roadTiles, width, depth, elevation)
   }
 
+  // Trail repairs must leave the shelter foundation clear.
+  for (let z = shelter.z; z < shelter.z + shelter.d; z++)
+    for (let x = shelter.x; x < shelter.x + shelter.w; x++) tiles[z * width + x] = "grass"
+
   const map: GameMap = {
     elevation,
     width,
     depth,
     tiles,
-    buildings: [hovel],
+    buildings: [hovel, shelter],
     seed,
     road,
     shortcuts,
@@ -928,7 +933,7 @@ function foundSite(
   passKind: Uint8Array,
   roadLand: Uint8Array,
   elevation: ElevationInfo,
-): { hovel: BuildingDef; site: FoundingSite } {
+): { hovel: BuildingDef; shelter: BuildingDef; site: FoundingSite } {
   const { min: bandMin, max: bandMax } = relicDistanceBand(relicDistance)
 
   // Distance from the road is measured as it will be walked: dry, around
@@ -970,17 +975,17 @@ function foundSite(
   let best: TilePos = { x: EDGE_MARGIN, z: EDGE_MARGIN }
   let bestScore = -Infinity
   const outerMin = EDGE_MARGIN + 1 // leave room for the grass ring
-  for (let z = outerMin; z <= depth - HOVEL_SIZE - outerMin; z++) {
-    for (let x = outerMin; x <= width - HOVEL_SIZE - outerMin; x++) {
+  for (let z = outerMin; z <= depth - HOVEL_DEPTH - outerMin; z++) {
+    for (let x = outerMin; x <= width - HOVEL_WIDTH - outerMin; x++) {
       let low = Infinity, high = -Infinity
       let onRoad = false
       let grounded = true
       let dryTrack = false
       let nearest = Infinity
-      for (let dz = -1; dz <= HOVEL_SIZE; dz++) {
-        for (let dx = -1; dx <= HOVEL_SIZE; dx++) {
+      for (let dz = -1; dz <= HOVEL_DEPTH; dz++) {
+        for (let dx = -1; dx <= HOVEL_WIDTH; dx++) {
           const i = (z + dz) * width + (x + dx)
-          const inFootprint = dx >= 0 && dx < HOVEL_SIZE && dz >= 0 && dz < HOVEL_SIZE
+          const inFootprint = dx >= 0 && dx < HOVEL_WIDTH && dz >= 0 && dz < HOVEL_DEPTH
           // Footprint and ring must be dry, reachable land — no water, no
           // bridges, no lake-locked pockets.
           if (roadLand[i] !== 1) grounded = false
@@ -994,6 +999,12 @@ function foundSite(
           }
         }
       }
+      // Reserve a three-tile shelter north of the gate path, on the same level.
+      for (let dz = -3; dz <= -2; dz++) for (let dx = 0; dx < 3; dx++) {
+        const i = (z + dz) * width + x + dx
+        if (z + dz < 0 || roadLand[i] !== 1 || tiles[i] === "path") grounded = false
+        low = Math.min(low, elevation.height[i]); high = Math.max(high, elevation.height[i])
+      }
       if (onRoad || !grounded || high - low > 0.18) continue
 
       // Outside the band, every step of shortfall or excess costs more than any
@@ -1004,19 +1015,19 @@ function foundSite(
       const bridgePenalty = dryTrack ? 0 : (width + depth) * 50
 
       let room = 0
-      for (let dz = -SITE_ROOM_RADIUS; dz < HOVEL_SIZE + SITE_ROOM_RADIUS; dz++) {
-        for (let dx = -SITE_ROOM_RADIUS; dx < HOVEL_SIZE + SITE_ROOM_RADIUS; dx++) {
+      for (let dz = -SITE_ROOM_RADIUS; dz < HOVEL_DEPTH + SITE_ROOM_RADIUS; dz++) {
+        for (let dx = -SITE_ROOM_RADIUS; dx < HOVEL_WIDTH + SITE_ROOM_RADIUS; dx++) {
           const nx = x + dx
           const nz = z + dz
           if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
           if (tiles[nz * width + nx] !== "grass") continue
           // The footprint itself counts extra: standing on grass beats being near it.
-          const inFootprint = dx >= 0 && dx < HOVEL_SIZE && dz >= 0 && dz < HOVEL_SIZE
+          const inFootprint = dx >= 0 && dx < HOVEL_WIDTH && dz >= 0 && dz < HOVEL_DEPTH
           room += inFootprint ? 4 : 1
         }
       }
 
-      const edgeDist = Math.min(x, z, width - HOVEL_SIZE - x, depth - HOVEL_SIZE - z)
+      const edgeDist = Math.min(x, z, width - HOVEL_WIDTH - x, depth - HOVEL_DEPTH - z)
       const edgePenalty = Math.max(0, SITE_EDGE_MARGIN - edgeDist) * SITE_EDGE_PENALTY
 
       const score = room - bandPenalty - bridgePenalty - edgePenalty + rng() * SITE_SCORE_JITTER
@@ -1027,10 +1038,21 @@ function foundSite(
     }
   }
 
+  const shelter: BuildingDef = {
+    id: "founding-shelter", buildType: "monk-shelter", label: "Monk shelter",
+    x: best.x, z: best.z - 3, w: 3, d: 2, height: 0.8,
+    color: "#b99a72", roofColor: "#855642",
+  }
   const foundation = elevation.height[best.z * width + best.x]
-  // Level the enclosure and its continuous walking path, serving all four gates.
-  for (let dz = -1; dz <= HOVEL_SIZE; dz++) {
-    for (let dx = -1; dx <= HOVEL_SIZE; dx++) {
+  for (let z = shelter.z; z < shelter.z + shelter.d; z++) for (let x = shelter.x; x < shelter.x + shelter.w; x++) {
+    const i = z * width + x
+    elevation.height[i] = foundation
+    tiles[i] = "grass"
+    offRoad[i] = WATER_KIND_LAKE
+  }
+  // Level the shrine and grass margin; only the approach branch becomes a path.
+  for (let dz = -1; dz <= HOVEL_DEPTH; dz++) {
+    for (let dx = -1; dx <= HOVEL_WIDTH; dx++) {
       const i = (best.z + dz) * width + (best.x + dx)
       elevation.height[i] = foundation
       if (
@@ -1040,9 +1062,6 @@ function foundSite(
         tiles[i] === "sand"
       ) {
         tiles[i] = "grass"
-      }
-      if ((dx === -1 || dz === -1 || dx === HOVEL_SIZE || dz === HOVEL_SIZE) && tiles[i] !== "path") {
-        tiles[i] = "track"
       }
     }
   }
@@ -1054,11 +1073,9 @@ function foundSite(
   const ring: TilePos[] = []
   // An architectural entrance sits at the centre of a wall. Pick the side
   // with the shortest dry approach, keeping the track aligned with its door.
-  for (const k of [Math.floor(HOVEL_SIZE / 2)]) {
+  for (const k of [Math.floor(HOVEL_WIDTH / 2)]) {
     ring.push({ x: best.x + k, z: best.z - 1 })
-    ring.push({ x: best.x + k, z: best.z + HOVEL_SIZE })
-    ring.push({ x: best.x - 1, z: best.z + k })
-    ring.push({ x: best.x + HOVEL_SIZE, z: best.z + k })
+    ring.push({ x: best.x + k, z: best.z + HOVEL_DEPTH })
   }
   let door = ring[0]
   let junction = lo
@@ -1105,11 +1122,13 @@ function foundSite(
   for (let i = 0; i < branchWander.length; i++) {
     if (onRoad[i]) branchWander[i] += BRANCH_AVOID_COST
   }
-  for (let dz = 0; dz < HOVEL_SIZE; dz++) {
-    for (let dx = 0; dx < HOVEL_SIZE; dx++) {
+  for (let dz = 0; dz < HOVEL_DEPTH; dz++) {
+    for (let dx = 0; dx < HOVEL_WIDTH; dx++) {
       branchWander[(best.z + dz) * width + (best.x + dx)] += BRANCH_AVOID_COST
     }
   }
+  for (let z = shelter.z; z < shelter.z + shelter.d; z++) for (let x = shelter.x; x < shelter.x + shelter.w; x++)
+    branchWander[z * width + x] += BRANCH_AVOID_COST
   // Dry and clear of the road first (the road is a wall, bar the junction
   // itself); then the road merely avoided; a bridge only when no dry way
   // exists at all; and blind as a last resort.
@@ -1143,19 +1162,35 @@ function foundSite(
     if (r >= 0) junction = r
   }
 
+  // Connect the shelter to the chosen shrine entrance, around the wall when
+  // the approach is on the far side of the longer shrine.
+  const shelterPath = [{ x: shelter.x, z: shelter.z + shelter.d }]
+  if (door.z >= best.z) shelterPath.push({ x: best.x - 1, z: best.z - 1 }, { x: best.x - 1, z: door.z })
+  shelterPath.push(door)
+  for (let i = 1; i < shelterPath.length; i++) {
+    const p = { ...shelterPath[i - 1] }, end = shelterPath[i]
+    for (;;) {
+      const index = p.z * width + p.x
+      if (tiles[index] !== "path" && tiles[index] !== "bridge") tiles[index] = "track"
+      if (p.x === end.x && p.z === end.z) break
+      p.x += Math.sign(end.x - p.x)
+      p.z += Math.sign(end.z - p.z)
+    }
+  }
+
   const hovel: BuildingDef = {
     id: HOVEL_ID,
-    label: "Relic enclosure",
+    label: "Shrine",
     x: best.x,
     z: best.z,
-    w: HOVEL_SIZE,
-    d: HOVEL_SIZE,
-    height: 0.42,
+    w: HOVEL_WIDTH,
+    d: HOVEL_DEPTH,
+    height: 1.18,
     color: "#e7d8b9",
     roofColor: "#c4a05f",
   }
 
-  return { hovel, site: { junction, branch, door, hovelId: HOVEL_ID } }
+  return { hovel, shelter, site: { junction, branch, door, hovelId: HOVEL_ID } }
 }
 
 /**

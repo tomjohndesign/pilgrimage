@@ -170,6 +170,7 @@ describe("tuned gameplay", () => {
       x: 22,
       z: 18,
     }).settlement
+    existing.structures[0].construction!.work = existing.structures[0].construction!.required
     const before = structuredClone(existing)
     const balance = fresh()
     balance.buildings.shelter.renown = 50

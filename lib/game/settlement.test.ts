@@ -90,7 +90,7 @@ describe("build and buy", () => {
     const map = testMap()
     map.buildings.push({ ...map.buildings[0], id: `${buildType}-0`, buildType, x: 10, z: 14, rotation: 1 })
     const cross = BUILD_CATALOG.find(item => item.id === "cross")!
-    expect(placementError(map, cross, { x: 9, z: 14 })).toMatch(/access to woodcutter huts and storehouses/)
+    expect(placementError(map, cross, { x: 9, z: 14 })).toMatch(/access to existing buildings/)
     expect(placementError(map, cross, { x: 10, z: 16 })).toBeNull()
   })
 
@@ -191,6 +191,7 @@ describe("build and buy", () => {
       z: 14,
       w: 2,
       d: 2,
+      construction: { work: 0, required: 96, cost: { gold: 45, wood: 35 } },
     })
     expect(before.resources).toEqual(STARTING_RESOURCES)
     expect(before.structures).toHaveLength(0)
@@ -307,6 +308,7 @@ describe("shrine renown and income", () => {
       x: 18,
       z: 14,
     }).settlement
+    for (const b of second.structures) b.construction!.work = b.construction!.required
     const relics = [relic, generateRelic(42)]
     const total = settlementRenown(
       { ...map, buildings: [...map.buildings, ...second.structures] },
@@ -327,6 +329,7 @@ describe("shrine renown and income", () => {
       x: 18,
       z: 14,
     }).settlement
+    for (const b of purchase.structures) b.construction!.work = b.construction!.required
     const after = settlementRenown(
       { ...map, buildings: [...map.buildings, ...purchase.structures] },
       monks,

@@ -1,3 +1,4 @@
+import { assignBuildingTask, buildingEntrance, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
 import { buildingEntry } from "./building-rotation"
 import { timberDestination, type FoodStock } from "./storage"
 import { nearProcession, type RelicProcession } from "./relic-procession"
@@ -18,7 +19,7 @@ import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeR
 import { BUILDING_KINDS, buildingCentre, type PlacedBuilding } from "./buildings"
 import { generateRelic, hospitalityNeedThreshold, visitChance, type RelicStats } from "./relic"
 import { settlementRoute } from "./settlement-route"
-import { admissionFee, shrineVisitRoute } from "./shrine-visit"
+import { admissionFee, shrineVisitPlan } from "./shrine-visit"
 import type { TreePlacement } from "./trees/placement"
 import { TREE_SPECIES } from "./trees/species"
 import type { TilePos } from "./map/types"
@@ -76,6 +77,9 @@ export type Activity =
   | "gathering"
   | "hauling"
   | "idle"
+  | "fromBuild"
+  | "toBuild"
+  | "building"
   | "walking"
   | "seeking"
   | "toStall"
@@ -93,13 +97,16 @@ export type Activity =
 
 export const ACTIVITY_LABELS: Record<Activity, string> = {
   toRelic: "Following the path to the shrine",
-  visiting: "Praying before the relic",
+  visiting: "Kneeling in the shrine",
   fromRelic: "Returning from the shrine",
   toWork: "Walking to work",
   working: "Felling a tree",
   gathering: "Cutting & gathering fallen timber",
   hauling: "Carrying logs to storage",
   idle: "Resting from woodcutting",
+  fromBuild: "Returning to the woodcutter hut",
+  toBuild: "Going to a construction site",
+  building: "Building a structure",
   walking: "On the road",
   seeking: "Seeking food & drink",
   toStall: "Approaching the stall",
@@ -189,6 +196,10 @@ function roll(id: number, n: number): number {
 }
 
 export interface SimTraveler {
+  workScale?: number
+  workSlot?: number
+  buildingTask?: BuildingTask
+  constructionReturn?: import("./monk-wander").WanderSpot[]
   /** Prayer interrupts travel/work without discarding its route or reservations. */
   praying?: boolean
   /** Actual gold paid for this visit, captured on admission. */
@@ -207,6 +218,8 @@ export interface SimTraveler {
   employer: string | null
   branchProgress: number
   shrineRoute: TilePos[] | null
+  /** Reserved until the visitor has left the shrine approach. */
+  shrineSeat?: string
   /** Road lane used when entering the shrine, including a reversed approach for shelter. */
   branchEntryLane: number
   visitCooldown: number
@@ -778,9 +791,10 @@ function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): 
   if (job && nextRoll(s) < (t.attributes.skills.some((skill) => BUILDING_KINDS[job.kind].trades.includes(skill)) ? 0.9 : 0.65)) {
     const route = settlementRoute(map, [...map.buildings, ...sim.buildings],
       { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
-      buildingEntry(job), false, true)
+      buildingEntry(job), false, true, s.shrineSeat)
     if (route) {
       s.employer = job.id
+      s.shrineSeat = undefined
       s.jobless = false
       startWorkRoute(s, route, "hauling")
       return
@@ -840,7 +854,7 @@ export function stepSim(
     }
 
     const targetSpeed = t.pace * baseSpeed * (speedScales?.get(t.id) ?? 1) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
-    s.moveSpeed = camping || sheltered || s.activity === "working" || s.activity === "browsing" || s.activity === "openingShop" || s.activity === "packingShop" || s.activity === "vending" ? 0 :
+    s.moveSpeed = camping || sheltered || s.activity === "working" || s.activity === "building" || s.activity === "browsing" || s.activity === "openingShop" || s.activity === "packingShop" || s.activity === "vending" ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed
 
@@ -881,6 +895,7 @@ export function stepSim(
           s.lane = s.direction * s.laneOffset
           s.activity = "walking"
           s.shrineRoute = null
+          s.shrineSeat = undefined
           s.visitCooldown = 30
         }
         break
@@ -942,7 +957,31 @@ export function stepSim(
         }
         break
       }
+      case "toBuild":
+      case "building": {
+        if (dt <= 0) break
+        if (Math.min(s.hunger, s.thirst, s.stamina) <= 40) s.buildingTask = undefined
+        const state = stepBuildingTask(s, map, targetSpeed, dt)
+        if (!state) {
+          const camp = sim.buildings.find(b => b.id === s.employer)
+          s.constructionReturn = camp ? workerRoute(map, s, buildingEntrance(camp)) ?? [] : []
+          s.activity = "fromBuild"
+        } else s.activity = state === "walking" ? "toBuild" : "building"
+        break
+      }
+      case "fromBuild": {
+        if (walkWorker(s, s.constructionReturn ?? [], targetSpeed, dt)) {
+          s.activity = "idle"; s.timer = GAME_HOUR_SECONDS; s.constructionReturn = undefined
+        }
+        break
+      }
       case "idle": {
+        s.workScale = characterScale
+        s.workSlot = s.id
+        if (Math.min(s.hunger, s.thirst, s.stamina) >= 80 && assignBuildingTask(s, map, "build")) {
+          s.activity = "toBuild"
+          break
+        }
         s.timer -= dt
         if (s.timer <= 0 && Math.min(s.hunger, s.thirst, s.stamina) >= 80) {
           if (!chooseTree(sim, s, map)) s.timer = GAME_HOUR_SECONDS
@@ -1069,11 +1108,15 @@ export function stepSim(
               hunger: s.hunger, thirst: s.thirst, stamina: s.stamina }, sim.relic, renown, sim.balance)
             s.visitCooldown = 5
             const wantsVisit = nextRoll(s) < chance && s.gold >= admissionFee(map)
-            const visitRoute = wantsVisit ? shrineVisitRoute(map, s.id, s.visits) : null
+            const occupiedSeats = new Set([...sim.travelers.values()].flatMap(other =>
+              other.shrineSeat && ["toRelic","visiting","fromRelic"].includes(other.activity) ? [other.shrineSeat] : []))
+            const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats) : null
+            const visitRoute = visit?.route
             if (visitRoute) {
               s.progress = site.junction
               s.branchProgress = 0
               s.shrineRoute = visitRoute
+              s.shrineSeat = visit!.seat
               s.admissionPaid = 0
               s.activity = "toRelic"
               s.targetId = null

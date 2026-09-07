@@ -25,6 +25,7 @@
     "walk": 20,
     "sleeping": 16,
     "sitting": 8,
+    "seatedPrayer": 8,
     "praying": 8,
     "treeFelling": 24,
     "woodcutting": 64,

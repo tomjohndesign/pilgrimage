@@ -38,3 +38,12 @@ it("preserves v20 walking keys and rescales old splitting keys on import", async
   expect(restoreCharacterDesign(design, BASE_PERSON.version)).toEqual(design)
   expect(old.poseEdits.woodcutting.rightHand[0]).toEqual(key)
 })
+
+// The mallet is additive: saved timing for every existing action is unchanged.
+it("imports v26 designs without retiming their existing pose edits", () => {
+  const key = { frame: 40, radius: 5, offset: [0.02, 0, -0.08] as [number, number, number] }
+  const design = { ...PERSON_PRESETS.Monk, poseEdits: { woodcutting: { rightHand: [key] } } }
+  const result = parseCharacterEdits(JSON.stringify({ format: "pilgrimage-character-edits", version: 1,
+    templateVersion: 26, character: "preset/Monk", drafts: { "preset/Monk": design } }), "preset/Storybook")
+  expect(result.drafts["preset/Monk"]).toEqual(design)
+})

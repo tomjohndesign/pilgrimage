@@ -1,5 +1,7 @@
 "use client"
 
+import { useUnitInterior } from "./use-unit-interior"
+
 import { groundHeight } from "@/lib/game/map/elevation"
 
 import { useFrame } from "@react-three/fiber"
@@ -14,19 +16,16 @@ import type { Relic } from "@/lib/game/relic"
 import { StructureModel } from "@/components/building-lab/building-model"
 import { RelicDisplay } from "./relic-display"
 import { shrineStructureParts } from "@/lib/game/building-art/structure"
-import { DEFAULT_RECIPE } from "@/lib/game/building-art/style"
+import { shrineLayout } from "@/lib/game/shrine-layout"
 import {
   buildingObjectId,
   encodeObjectId,
   RELIC_OBJECT_ID,
 } from "@/lib/game/render/outline"
 
-/**
- * A thatched canopy covers the four-gate relic enclosure until selected.
- */
-const WALL_HEIGHT = DEFAULT_RECIPE.wallHeight
-
+/** A timber upper nave and lower thatched aisles shelter the rear altar. */
 export function Shrine({ map, relic }: { map: GameMap; relic: Relic }) {
+  const unitInterior = useUnitInterior(map)
   const relicGroup = useRef<THREE.Group>(null)
   useFrame(() => {
     if (relicGroup.current) relicGroup.current.visible = !processionRegistry.current || !relicIsCarried(processionRegistry.current)
@@ -37,11 +36,10 @@ export function Shrine({ map, relic }: { map: GameMap; relic: Relic }) {
 
   const layout = useMemo(() => {
     if (!hovel || !map.site) return null
-    const door = map.site.door
-    const rotation = door.x < hovel.x ? -Math.PI / 2 : door.x >= hovel.x + hovel.w ? Math.PI / 2 : door.z < hovel.z ? Math.PI : 0
+    const shape = shrineLayout(hovel, map.site.door)
     return {
-      rotation,
-      parts: shrineStructureParts(hovel.w, hovel.d),
+      ...shape,
+      parts: shrineStructureParts(shape.width, shape.depth),
       centreX: tileToWorldX(map, hovel.x) + (hovel.w - 1) / 2,
       centreZ: tileToWorldZ(map, hovel.z) + (hovel.d - 1) / 2,
       baseY: groundHeight(map, hovel.x + (hovel.w - 1) / 2, hovel.z + (hovel.d - 1) / 2),
@@ -61,16 +59,11 @@ export function Shrine({ map, relic }: { map: GameMap; relic: Relic }) {
   return (
     <group position={[layout.centreX, layout.baseY, layout.centreZ]}>
       <group rotation={[0, layout.rotation, 0]} onClick={event => selectElement({ kind: "building", id: hovel.id }, event)}>
-        <StructureModel parts={layout.parts} cutaway={selected} idColor={shrineId} ink={false} />
+        <StructureModel parts={layout.parts} cutaway={selected || unitInterior === hovel.id} idColor={shrineId} ink={false} />
+        {[-1,1].map(side => <pointLight key={side} position={[side*.73,.8,layout.altarZ+.08]} color="#ffd184" intensity={.18} distance={1.8} decay={2} />)}
       </group>
-      <group ref={relicGroup}><RelicDisplay color={relic.color} idColor={relicId} onClick={select} /></group>
+      <group ref={relicGroup} position={[layout.offset.x,0,layout.offset.z]}><RelicDisplay color={relic.color} idColor={relicId} onClick={select} /></group>
 
-      {selected && (
-        <mesh position={[0, WALL_HEIGHT + DEFAULT_RECIPE.roofRise + 0.35, 0]}>
-          <boxGeometry args={[0.2, 0.05, 0.2]} />
-          <meshBasicMaterial color="#d8a93f" />
-        </mesh>
-      )}
     </group>
   )
 }

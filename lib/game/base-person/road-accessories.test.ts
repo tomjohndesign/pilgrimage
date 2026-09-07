@@ -71,7 +71,7 @@ describe("road outfits", () => {
       expect(hand.y - rig.sockets.rightHand.getWorldPosition(new THREE.Vector3()).y).toBeCloseTo(0.026)
       expect(staff.visible).toBe(true)
     }
-    for (const clip of ["sleeping", "sitting", "carrying", "praying", "woodcutting", "gathering"] as const) {
+    for (const clip of ["sleeping", "sitting", "seatedPrayer", "building", "carrying", "praying", "woodcutting", "gathering"] as const) {
       rig.pose(0.3, clip)
       for (const name of ["walking-staff", "road-lute", "road-satchel"]) expect(rig.root.getObjectByName(name)!.visible).toBe(false)
     }
