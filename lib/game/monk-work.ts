@@ -1,6 +1,8 @@
 import { assignBuildingTask, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
-import type { GameMap } from "./map/types"
+import { worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import type { MonkRoutine } from "./monk-routine"
+import type { monkWander, WanderSpot } from "./monk-wander"
+import { buildingAt } from "./settlement"
 
 export const MONK_TIRED_AT = 25
 export const MONK_WAKE_AT = 95
@@ -43,4 +45,29 @@ export function stepMonkWork(s: MonkRoutine & MonkNeeds, map: GameMap, speed: nu
     return true
   }
   return false
+}
+
+/**
+ * Keep a brother on his errand after the map changes beneath him. Placing a
+ * building must not restart anyone's day: only a route that now crosses a new
+ * footprint is re-planned to the same goal, and only a brother standing inside
+ * a fresh footprint walks out to the door. Everyone else carries on.
+ */
+export function replanMonkAfterMapChange(s: MonkRoutine, map: GameMap, wander: Pick<ReturnType<typeof monkWander>, "route">): void {
+  const blocked = (p: WanderSpot) => {
+    const building = buildingAt(map, worldToTileX(map, p.x), worldToTileZ(map, p.z))
+    return !!building && building.id !== map.site?.hovelId
+  }
+  const goHome = () => {
+    if (!map.site) return
+    s.route = workerRoute(map, s, map.site.door) ?? []
+    s.destination = "home"
+    s.pause = 0
+  }
+  if (blocked(s)) { goHome(); return }
+  if (!s.route.some(blocked)) return
+  const goal = s.route[s.route.length - 1]
+  const route = s.destination === "home" && map.site ? workerRoute(map, s, map.site.door) ?? [] : wander.route(s, goal)
+  if (route.length) s.route = route
+  else goHome()
 }

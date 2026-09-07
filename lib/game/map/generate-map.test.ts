@@ -1,7 +1,7 @@
 import { elevationStep } from "./elevation"
 import { describe, expect, it } from "vitest"
 
-import { DEFAULT_RELIC_DISTANCE, generateMap, HOVEL_ID, relicDistanceBand } from "./generate-map"
+import { DEFAULT_RELIC_DISTANCE, generateMap, HOVEL_ID, MIN_MAP_SIZE, relicDistanceBand } from "./generate-map"
 import { isWoods, TERRAIN } from "./terrain"
 import { MAX_RIVER_WIDTH } from "./water"
 import { tileAt, type GameMap } from "./types"
@@ -12,12 +12,18 @@ const SEEDS = Array.from({ length: 40 }, (_, i) => i * 7919 + 1)
 /** Maps take real time at the 128×128 floor, so suite-wide loops share them. */
 const SWEEP_TIMEOUT = 30_000
 
-/** Default-options maps, shared across tests — nothing mutates them. */
+/**
+ * Generator sweeps run at the size floor: their thresholds were tuned there,
+ * and it keeps the suite quick as the playable default grows.
+ */
+const FLOOR = { width: MIN_MAP_SIZE, depth: MIN_MAP_SIZE }
+
+/** Floor-size maps, shared across tests — nothing mutates them. */
 const mapCache = new Map<number, GameMap>()
 function mapFor(seed: number): GameMap {
   let map = mapCache.get(seed)
   if (!map) {
-    map = generateMap({ seed })
+    map = generateMap({ ...FLOOR, seed })
     mapCache.set(seed, map)
   }
   return map
@@ -28,7 +34,7 @@ const lakeCache = new Map<number, GameMap>()
 function lakeMapFor(seed: number): GameMap {
   let map = lakeCache.get(seed)
   if (!map) {
-    map = generateMap({ seed, lakeCount: 1, riverCount: 0, pondCount: 0 })
+    map = generateMap({ ...FLOOR, seed, lakeCount: 1, riverCount: 0, pondCount: 0 })
     lakeCache.set(seed, map)
   }
   return map
@@ -115,8 +121,8 @@ function waterBodies(map: GameMap): number[][] {
 
 describe("generateMap", () => {
   it("is fully determined by its seed", () => {
-    const a = generateMap({ seed: 12345 })
-    const b = generateMap({ seed: 12345 })
+    const a = generateMap({ ...FLOOR, seed: 12345 })
+    const b = generateMap({ ...FLOOR, seed: 12345 })
     expect(a.tiles).toEqual(b.tiles)
     expect(a.water).toEqual(b.water)
     expect(a.road).toEqual(b.road)
@@ -213,8 +219,8 @@ describe("generateMap", () => {
 
   it("moves the hovel further out when asked", () => {
     for (const seed of SEEDS.slice(0, 10)) {
-      const near = hovelRoadDistance(generateMap({ seed, relicDistance: 8 }))
-      const far = hovelRoadDistance(generateMap({ seed, relicDistance: 32 }))
+      const near = hovelRoadDistance(generateMap({ ...FLOOR, seed, relicDistance: 8 }))
+      const far = hovelRoadDistance(generateMap({ ...FLOOR, seed, relicDistance: 32 }))
       expect(far, `seed ${seed} far > near`).toBeGreaterThan(near)
       expect(near).toBeLessThanOrEqual(relicDistanceBand(8).max)
       expect(far).toBeGreaterThanOrEqual(relicDistanceBand(32).min)
@@ -279,7 +285,7 @@ describe("generateMap", () => {
   }, SWEEP_TIMEOUT)
 
   it("founds a hovel even on a map with no glades to speak of", () => {
-    const map = generateMap({ seed: 7, forestCoverage: 0.98, gladeCount: 1, clearingCount: 0 })
+    const map = generateMap({ ...FLOOR, seed: 7, forestCoverage: 0.98, gladeCount: 1, clearingCount: 0 })
     const hovel = map.buildings[0]
     expect(hovel).toBeDefined()
     expect(tileAt(map, hovel.x, hovel.z)).toBe("grass")
@@ -480,8 +486,8 @@ describe("generateMap", () => {
 
   it("scales forest area with the coverage knob", () => {
     for (const seed of SEEDS.slice(0, 10)) {
-      const sparse = generateMap({ seed, forestCoverage: 0.45 })
-      const dense = generateMap({ seed, forestCoverage: 0.85 })
+      const sparse = generateMap({ ...FLOOR, seed, forestCoverage: 0.45 })
+      const dense = generateMap({ ...FLOOR, seed, forestCoverage: 0.85 })
       const fraction = (m: GameMap) => countTerrain(m, "forest") / landTiles(m)
       expect(fraction(dense), `seed ${seed} dense > sparse`).toBeGreaterThan(fraction(sparse))
       expect(fraction(dense), `seed ${seed} dense is dense`).toBeGreaterThan(0.6)
@@ -491,8 +497,8 @@ describe("generateMap", () => {
 
   it("scatters more clearings when asked", () => {
     for (const seed of SEEDS.slice(0, 10)) {
-      const few = generateMap({ seed, clearingCount: 0 })
-      const many = generateMap({ seed, clearingCount: 25 })
+      const few = generateMap({ ...FLOOR, seed, clearingCount: 0 })
+      const many = generateMap({ ...FLOOR, seed, clearingCount: 25 })
       expect(
         countTerrain(many, "clearing"),
         `seed ${seed} clearings scale`,
@@ -527,7 +533,7 @@ describe("generateMap", () => {
   )
 
   it("grows no dark forest when asked not to", () => {
-    const map = generateMap({ seed: 5, darkForestCount: 0 })
+    const map = generateMap({ ...FLOOR, seed: 5, darkForestCount: 0 })
     expect(countTerrain(map, "darkwood")).toBe(0)
     expect(map.shortcuts).toEqual([])
   })
@@ -536,7 +542,7 @@ describe("generateMap", () => {
     "routes the road around dark forest when flat land permits a detour",
     () => {
       for (const seed of SEEDS) {
-        const map = generateMap({ seed, elevation: { maxHeight: 0 } })
+        const map = generateMap({ ...FLOOR, seed, elevation: { maxHeight: 0 } })
         // A road tile with old growth on both flanks is a road *through* the
         // dark forest. Skirting it never produces one.
         let through = 0
@@ -623,7 +629,7 @@ describe("generateMap", () => {
     let roadside = 0
     let mapWide = 0
     for (const seed of SEEDS) {
-      const map = generateMap({ seed, elevation: { maxHeight: 0, slopeCost: 0, riverDrop: 0, waterfallDrop: 0 } })
+      const map = generateMap({ ...FLOOR, seed, elevation: { maxHeight: 0, slopeCost: 0, riverDrop: 0, waterfallDrop: 0 } })
       const beside = roadsideForestShare(map)
       const overall = countTerrain(map, "forest") / landTiles(map)
       roadside += beside
@@ -654,8 +660,8 @@ describe("generateMap", () => {
     // see "is fully determined by its seed".)
     let moved = 0
     for (const seed of SEEDS.slice(0, 10)) {
-      const a = generateMap({ seed, forestCoverage: 0.5, gladeCount: 3, clearingCount: 0 })
-      const b = generateMap({ seed, forestCoverage: 0.85, gladeCount: 8, clearingCount: 20 })
+      const a = generateMap({ ...FLOOR, seed, forestCoverage: 0.5, gladeCount: 3, clearingCount: 0 })
+      const b = generateMap({ ...FLOOR, seed, forestCoverage: 0.85, gladeCount: 8, clearingCount: 20 })
       if (JSON.stringify(a.road) !== JSON.stringify(b.road)) moved++
     }
     expect(moved, "the road follows the land").toBeGreaterThanOrEqual(8)
@@ -663,7 +669,7 @@ describe("generateMap", () => {
 
   it("generates no water when the coverage knob is zero", () => {
     for (const seed of SEEDS.slice(0, 10)) {
-      const map = generateMap({ seed, waterCoverage: 0 })
+      const map = generateMap({ ...FLOOR, seed, waterCoverage: 0 })
       expect(countTerrain(map, "water"), `seed ${seed} has no water`).toBe(0)
       expect(countTerrain(map, "sand"), `seed ${seed} has no beaches`).toBe(0)
       expect(countTerrain(map, "bridge"), `seed ${seed} has no bridges`).toBe(0)
@@ -835,7 +841,7 @@ describe("generateMap", () => {
     let seedsWithBars = 0
     const sample = SEEDS.slice(0, 15)
     for (const seed of sample) {
-      const map = generateMap({ seed, riverCount: 1, lakeCount: 0, pondCount: 0 })
+      const map = generateMap({ ...FLOOR, seed, riverCount: 1, lakeCount: 0, pondCount: 0 })
       // With no lakes there are no beach rings, so any sand is a point bar —
       // and every bar must hug the river.
       let bars = 0
@@ -868,7 +874,7 @@ describe("generateMap", () => {
     // the longest run of river water on any border line stays a few widths.
     const limit = MAX_RIVER_WIDTH * 4
     for (const seed of SEEDS) {
-      const map = generateMap({ seed, riverCount: 2, lakeCount: 0, pondCount: 0 })
+      const map = generateMap({ ...FLOOR, seed, riverCount: 2, lakeCount: 0, pondCount: 0 })
       const lines: Array<Array<[number, number]>> = [
         Array.from({ length: map.width }, (_, x) => [x, 0] as [number, number]),
         Array.from({ length: map.width }, (_, x) => [x, map.depth - 1] as [number, number]),
@@ -889,7 +895,7 @@ describe("generateMap", () => {
 
   it("keeps the road connected across forced rivers", () => {
     for (const seed of SEEDS.slice(0, 15)) {
-      const map = generateMap({ seed, riverCount: 2 })
+      const map = generateMap({ ...FLOOR, seed, riverCount: 2 })
       expect(roadReachesEast(map), `seed ${seed} road crosses the rivers`).toBe(true)
     }
   }, SWEEP_TIMEOUT)
