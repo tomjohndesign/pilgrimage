@@ -49,6 +49,12 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
           object instanceof THREE.Sprite && object.visible
             ? [{ amount: object.userData.amount, position: object.position.toArray(), opacity: object.material.opacity }] : []) ?? [],
       }),
+      piety: () => ({
+        blessings: processionRegistry.current?.blessings ?? [],
+        effects: scene.getObjectByName("piety-effects")?.children.flatMap(object =>
+          object instanceof THREE.Sprite && object.visible
+            ? [{ amount: object.userData.amount, position: object.position.toArray(), opacity: object.material.opacity }] : []) ?? [],
+      }),
       setTerrainVisible: (visible: boolean) => { const terrain = scene.getObjectByName("terrain"); if (terrain) terrain.visible = visible },
       renderInfo: () => ({
         programs: gl.info.programs?.length ?? 0,

@@ -91,4 +91,4 @@ export function generateMonks(seed: number, count = MONK_COUNT): Monk[] {
 }
 
 /** Live ground/flight coordinates for following the selected monk into interiors. */
-export const monkPositionRegistry: { current: Map<number, { x: number; y: number; z: number }> | null } = { current: null }
+export const monkPositionRegistry: { current: Map<number, { x: number; y: number; z: number; piety?: number }> | null } = { current: null }

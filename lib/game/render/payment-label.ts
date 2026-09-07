@@ -3,6 +3,7 @@ import * as THREE from "three"
 // Native bitmap lettering keeps these small amounts crisp beside the characters.
 const GLYPHS: Record<string, string[]> = {
   "+": ["00000", "00100", "00100", "11111", "00100", "00100", "00000"],
+  "✝": ["00100", "00100", "11111", "00100", "00100", "00100", "00100"],
   "$": ["00100", "01111", "10100", "01110", "00101", "11110", "00100"],
   "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
   "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
@@ -16,9 +17,9 @@ const GLYPHS: Record<string, string[]> = {
   "9": ["01110", "10001", "10001", "01111", "00001", "00001", "01110"],
 }
 
-/** Gold income with a one-native-pixel dark border, using the scene's pixel size. */
-export function paymentLabel(amount: number): THREE.DataTexture {
-  const text = `+$${amount}`, width = text.length * 6 + 1, height = 9
+/** Gold or piety gains with a one-native-pixel border, using the scene's pixel size. */
+export function paymentLabel(amount: number, symbol: "gold" | "cross" = "gold"): THREE.DataTexture {
+  const text = `+${symbol === "cross" ? "✝" : "$"}${Math.round(amount)}`, width = text.length * 6 + 1, height = 9
   const data = new Uint8Array(width * height * 4)
   const points: Array<[number, number]> = []
   for (let i = 0; i < text.length; i++) GLYPHS[text[i]].forEach((row, y) => {

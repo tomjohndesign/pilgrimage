@@ -1,6 +1,6 @@
 import { buildingEntry } from "./building-rotation"
 import { timberDestination, type FoodStock } from "./storage"
-import { nearProcession, type RelicProcession } from "./relic-procession"
+import { blessByProcession, nearProcession, type RelicProcession } from "./relic-procession"
 import { roadsideStall, routePoint, routeLength, type StallRoute } from "./transport/roadside"
 import { roadLanePoint } from "./map/road-lane"
 import { cartOnRoute } from "./transport/follow"
@@ -812,7 +812,10 @@ export function stepSim(
     const s = sim.travelers.get(t.id)
     if (!s) continue
     s.praying = nearProcession(sim.procession, s, s.praying)
-    if (s.praying) { s.moveSpeed = 0; continue }
+    if (s.praying) {
+      if (dt > 0 && sim.procession) blessByProcession(sim.procession, `traveler:${s.id}`, s)
+      s.moveSpeed = 0; continue
+    }
     s.visitCooldown = Math.max(0, s.visitCooldown - dt)
     const camping = s.activity === "camping"
     const sheltered = s.activity === "visiting" || s.activity === "idle"

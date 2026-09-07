@@ -8,6 +8,7 @@ export interface MonkRoutine extends WanderSpot {
   activity: MonkActivity
   destination: "grounds" | "prayer"
   outings: number
+  processionConsidered?: boolean
   prayerSpot: WanderSpot | undefined
 }
 
@@ -45,6 +46,7 @@ export function stepMonkRoutine(s: MonkRoutine, grounds: Grounds, rng: () => num
     s.route.shift()
   }
   if (s.destination === "prayer") {
+    s.processionConsidered = false
     s.activity = "praying"
     s.pause = 10 + rng() * 6
     s.outings = 2
