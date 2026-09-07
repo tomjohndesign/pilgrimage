@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "7879e1dbb973fccc07103c84b51ba0f01d38fd77",
-  "releaseCount": 94,
+  "lastProcessedCommit": "dd9ea8c3bbba270f37fd9c298ec0ad138c366fb9",
+  "releaseCount": 96,
   "releases": [
+    {
+      "version": "0.0.110",
+      "title": "Release 0.0.110",
+      "summary": "Leave doorways open instead of hanging a plank door (#129)",
+      "commit": "dd9ea8c3bbba270f37fd9c298ec0ad138c366fb9"
+    },
+    {
+      "version": "0.0.109",
+      "title": "Release 0.0.109",
+      "summary": "Cull scenery and characters off camera; resolve road shortcuts once per stretch (#128)",
+      "commit": "8648bcfa2eaa11a048f2bdaef014e9b33c1a4b7b"
+    },
     {
       "version": "0.0.108",
       "title": "Release 0.0.108",
