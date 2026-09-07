@@ -24,7 +24,7 @@ import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileAt, type BuildingDef, type GameMap } from "@/lib/game/map/types"
 import { nerve } from "@/lib/game/route-choice"
 import { parseSeed } from "@/lib/game/rng"
-import { CURRENT_VERSION } from "@/lib/changelog"
+import { CHANGELOG, CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
@@ -46,6 +46,11 @@ import { individualRenown, relicRenown } from "@/lib/game/settlement"
 import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { MusicPlayer } from "./music-player"
+import { HudButton } from "./hud-button"
+import { BugReportDialog } from "./bug-report-dialog"
+import { browserDiagnostics, diagnosticsSchema, type BugReportDiagnostics } from "@/lib/bug-report"
+import { useBugReportRuntime } from "@/hooks/use-bug-report-runtime"
+import { useSimulationStore } from "@/lib/game/simulation-store"
 import { Section, Tuner } from "./property-controls"
 import { BuildControls, HudClock, HudHelp, HudResources } from "./hud-controls"
 
@@ -83,25 +88,6 @@ function Label({ children }: { children: React.ReactNode }) {
     <div className="font-display text-[9px] uppercase tracking-[2px] text-gold">{children}</div>
   )
 }
-
-function HudButton({
-  children,
-  onClick,
-}: {
-  children: React.ReactNode
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="pointer-events-auto border border-rule bg-parchment-dark px-2 py-1 font-display text-[9px] uppercase tracking-[2px] text-ink transition-colors hover:border-gold hover:text-red"
-    >
-      {children}
-    </button>
-  )
-}
-
 
 function TrafficDensity({ value, travelerCount, onChange }: {
   value: number
@@ -614,7 +600,9 @@ export function GameHud({
   onPixelationChange,
   onReroll,
   onSeedChange,
+  cheats,
 }: {
+  cheats: { blasterPastor: boolean; lastMarch: boolean }
   economy: ReturnType<typeof useSettlement>
   map: GameMap | null
   seed: number | null
@@ -630,6 +618,39 @@ export function GameHud({
   onReroll: () => void
   onSeedChange: (seed: number) => void
 }) {
+  const readRuntime = useBugReportRuntime()
+  const [report, setReport] = useState<BugReportDiagnostics | null>(null)
+  const [reportError, setReportError] = useState("")
+  function openBugReport() {
+    const build = useBuildStore.getState()
+    const buildings = map?.buildings ?? []
+    const snapshot = diagnosticsSchema.safeParse({
+      version: CHANGELOG[0].version,
+      environment: process.env.NODE_ENV === "development" ? "development" : "production",
+      ...readRuntime(),
+      ...browserDiagnostics(navigator.userAgent, window.innerWidth),
+      seed, settings, pixelation,
+      camera: useCameraStore.getState(),
+      simulation: { ...useSimulationStore.getState(), time: build.simulation?.time ?? build.time },
+      population: { travelers: travelers.length, monks: monks.length, residents: economy.residents.length, relicTraffic },
+      settlement: { ...economy.settlement.resources, visits: economy.visits,
+        shrineAdmission: economy.settlement.shrineAdmission, felledTrees: build.felled.size, woodPiles: build.piles.length },
+      buildings: buildings.slice(0, 100).map(building => ({
+        x: building.x, z: building.z, w: building.w, d: building.d, rotation: building.rotation ?? 0,
+        type: !building.buildType ? "founding"
+          : ["shelter", "monk-shelter", "workshop", "garden", "cross", "hall", "storehouse"].includes(building.buildType) ? building.buildType : "other",
+        construction: building.construction ?? null,
+      })),
+      omittedBuildings: Math.max(0, buildings.length - 100),
+      cheats,
+    })
+    if (!snapshot.success) {
+      setReportError("Session diagnostics could not be captured. Try opening the report again after the map has loaded.")
+      return
+    }
+    setReportError("")
+    setReport(snapshot.data)
+  }
   const set = (patch: Partial<MapSettings>) => onSettingsChange({ ...settings, ...patch })
   const selection = useCameraStore((s) => s.selection)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -717,6 +738,7 @@ export function GameHud({
 
   return (
     <Tooltip.Provider delayDuration={180} skipDelayDuration={100}>
+    <BugReportDialog diagnostics={report} onClose={() => setReport(null)} />
     <div className="game-hud">
       <div className="hud-frame" aria-hidden="true" />
       <header className="hud-header">
@@ -760,7 +782,11 @@ export function GameHud({
 
       {panel === "world" && <aside id="world-settings" className="hud-world hud-well" aria-label="World settings">
         <div className="hud-world-heading"><span>World</span><button type="button" aria-label="Close world settings" onClick={() => setPanel(null)}><X size={16} /></button></div>
-        <div className="mb-4"><HudButton onClick={onReroll}>✦ New Map</HudButton></div>
+        <div className="mb-4 flex flex-wrap gap-2">
+          <HudButton onClick={onReroll}>✦ New Map</HudButton>
+          <HudButton id="bug-report-button" onClick={openBugReport}>Report a bug</HudButton>
+        </div>
+        {reportError && <p role="alert" className="mb-4 text-sm text-red">{reportError}</p>}
         {SHOW_PROPERTY_PANELS && <>
         <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />

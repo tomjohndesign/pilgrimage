@@ -336,6 +336,7 @@ export function GameShell({
         </div>
       )}
       <GameHud
+        cheats={{ blasterPastor, lastMarch }}
         map={map}
         seed={seed}
         relic={relic}

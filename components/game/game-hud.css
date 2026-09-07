@@ -123,7 +123,7 @@
 .hud-world-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 0 var(--hud-space); font-family: var(--font-cinzel), serif; font-size: 14px; }
 .hud-world-heading button { cursor: pointer; }
 .hud-inspector { min-height: 0; overflow-y: auto; overscroll-behavior: contain; border-bottom: 1px solid #8c784c; }
-.hud-inspector, .hud-world, .hud-menu {
+.hud-inspector, .hud-world, .hud-menu, .hud-report {
   --parchment: #211e16;
   --parchment-dark: #423725;
   --ink: #f2e8d5;
@@ -168,3 +168,5 @@
 .hud-traffic { position: absolute; top: calc(var(--hud-header-height) + var(--hud-space) * 2); left: var(--hud-space); width: 216px; gap: 8px; padding: 3px var(--hud-space); z-index: 24; font-size: 12px; }
 .hud-traffic input { min-width: 0; width: 100%; accent-color: #bea067; }
 .hud-traffic output { min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+
+.hud-report { font-family: var(--font-garamond), Georgia, serif; }
