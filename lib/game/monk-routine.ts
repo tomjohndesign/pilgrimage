@@ -6,7 +6,7 @@ export interface MonkRoutine extends WanderSpot {
   route: WanderSpot[]
   pause: number
   activity: MonkActivity
-  destination: "grounds" | "prayer"
+  destination: "grounds" | "prayer" | "home"
   outings: number
   processionConsidered?: boolean
   prayerSpot: WanderSpot | undefined

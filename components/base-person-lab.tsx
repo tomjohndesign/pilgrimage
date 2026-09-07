@@ -17,7 +17,7 @@ import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { MerchantMapPreview } from "./merchant-map-preview"
 import { COATS, animalCoat } from "@/lib/game/transport/coats"
 import { CARGO, TRANSPORT, CART, SHOP, cartUrl, animalUrl, type Puller, type ShopState, cartColumn, type Cargo, type CartMode, type HorseVariant } from "@/lib/game/transport/assets"
-import transportMetadata from "@/public/textures/transport/v12/manifest.json"
+import transportMetadata from "@/public/textures/transport/v14/manifest.json"
 
 const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse" } as const
 type Subject = keyof typeof SUBJECTS
@@ -309,7 +309,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
           </Section>
           <Section {...section("Road accessories")}>
             <label className="person-choice">Hat<select aria-label="Hat" value={design.hat} onChange={event => { const hat = event.currentTarget.value as PersonDesign["hat"]; setDesign(d => ({ ...d, hat })); setMessage("") }}>{HAT_STYLES.map(style => <option key={style}>{style}</option>)}</select></label>
-            {([["satchel", "Satchel"], ["walkingStick", "Walking staff"], ["guitar", "Guitar"]] as const).map(([key, label]) => <label key={key} className="person-check"><input aria-label={label} type="checkbox" checked={design[key]} onChange={event => { const value = event.currentTarget.checked; setDesign(d => ({ ...d, [key]: value })); setMessage("") }} />{label}</label>)}
+            {([["satchel", "Satchel"], ["walkingStick", "Walking staff"], ["lute", "Lute"]] as const).map(([key, label]) => <label key={key} className="person-check"><input aria-label={label} type="checkbox" checked={design[key]} onChange={event => { const value = event.currentTarget.checked; setDesign(d => ({ ...d, [key]: value })); setMessage("") }} />{label}</label>)}
             <p className="person-hint">Road equipment is worn while walking or idle. Other activities free the hands and set bags and instruments aside.</p>
           </Section>
           <Section {...section("Feet")}>

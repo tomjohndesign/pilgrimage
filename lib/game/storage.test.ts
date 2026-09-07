@@ -13,6 +13,20 @@ const building = (id: string, x = 2, z = 2): BuildingDef => ({
 const world = (): GameMap => ({ width: 16, depth: 16, tiles: Array(256).fill("grass"), buildings: [building("hut"), building("store", 8, 2)] })
 
 describe("storehouse inventory", () => {
+  it("waits for construction before accepting resources or exposing jobs", () => {
+    const map = world(), [hut, store] = map.buildings
+    const from = { x: tileToWorldX(map, 7), z: tileToWorldZ(map, 8) }
+    store.construction = { work: 0, required: 96 }
+    expect(depositFood(new Map(), store, "grain", 10)).toBe(0)
+    expect(timberDestination(map, map.buildings, hut.id, from)?.building.id).toBe(hut.id)
+    hut.construction = { work: 0, required: 96 }
+    expect(woodcutterHuts(map)).toEqual([])
+    expect(timberDestination(map, map.buildings, hut.id, from)).toBeNull()
+    store.construction.work = 96
+    expect(depositFood(new Map(), store, "grain", 10)).toBe(10)
+    expect(timberDestination(map, map.buildings, hut.id, from)?.building.id).toBe(store.id)
+  })
+
   it.each([0, 1, 2, 3] as BuildingRotation[])("delivers to rotated storehouse and fallback hut entrances at rotation %i", rotation => {
     const map = world(), from = { x: tileToWorldX(map, 7), z: tileToWorldZ(map, 8) }
     for (const b of map.buildings) b.rotation = rotation

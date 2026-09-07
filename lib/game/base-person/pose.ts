@@ -1,3 +1,4 @@
+import { BUILDING_FRAMES } from "./building"
 import recipe from "../../../assets/recipes/base-person.json"
 import { SPLITTING_FRAMES, splittingMotion } from "./splitting"
 
@@ -18,13 +19,14 @@ export const PERSON_CLIPS = {
   praying: { label: "Praying", frames: 8 },
   treeFelling: { label: "Chopping · standing tree", frames: 24 },
   woodcutting: { label: "Chopping · fallen wood", frames: SPLITTING_FRAMES },
+  building: { label: "Building · wooden mallet", frames: BUILDING_FRAMES },
   gathering: { label: "Gathering", frames: 24 },
   carrying: { label: "Carrying", frames: 20 },
   hoisting: { label: "Hoisting relic", frames: 16 },
   procession: { label: "Carrying overhead", frames: 20 },
 } as const
 export type BaseClip = keyof typeof PERSON_CLIPS
-export const ACTION_CLIPS = ["sleeping", "sitting", "seatedPrayer", "praying", "treeFelling", "woodcutting", "gathering", "carrying", "hoisting", "procession"] as const
+export const ACTION_CLIPS = ["sleeping", "sitting", "seatedPrayer", "praying", "treeFelling", "woodcutting", "building", "gathering", "carrying", "hoisting", "procession"] as const
 export type ActionClip = typeof ACTION_CLIPS[number]
 
 export function choppingHipDrop(clip: BaseClip, phase = 0, hipHeight = BASE_PERSON.body.hipHeight) {

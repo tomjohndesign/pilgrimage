@@ -1,13 +1,18 @@
 "use client"
 
-import { useUnitInterior } from "./use-unit-interior"
+import { ConstructionProgress } from "./construction-progress"
+import { ConstructionCostEffects, type ConstructionCostHandle } from "./construction-cost-effects"
+import { PixelCharacters } from "@/components/pixel-canvas"
 import { buildingYaw, rotatedFootprint } from "@/lib/game/building-rotation"
+import { useUnitInterior } from "./use-unit-interior"
+
 import { StructureModel } from "@/components/building-lab/building-model"
-import { structureParts } from "@/lib/game/building-art/structure"
+import { constructionParts } from "@/lib/game/building-art/construction"
+import { isComplete } from "@/lib/game/construction"
 
 import { groundHeight } from "@/lib/game/map/elevation"
 
-import { useMemo } from "react"
+import { useMemo, useRef } from "react"
 import * as THREE from "three"
 
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
@@ -17,7 +22,7 @@ import { useBuildStore } from "@/lib/game/build-store"
 import { pileOffset } from "@/lib/game/trees/timber"
 import { ShelterFire } from "./building-smoke"
 import { WoodPile } from "./wood-pile"
-import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
+import { tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } from "@/lib/game/map/types"
 import {
   buildingObjectId,
   pileObjectId,
@@ -25,13 +30,17 @@ import {
 } from "@/lib/game/render/outline"
 
 /** Built structures share their geometry with the menu and placement preview. */
-export function Buildings({ map }: { map: GameMap }) {
+export function Buildings({ map, characterScale = 1.5 }: { map: GameMap; characterScale?: number }) {
+  const costs = useRef<ConstructionCostHandle>(null)
+  const selectSite = (building: BuildingDef, event: Parameters<typeof selectElement>[1]) => {
+    if (selectElement({ kind: "building", id: building.id }, event)) costs.current?.show(building)
+  }
   const unitInterior = useUnitInterior(map)
   const selection = useCameraStore(s => s.selection)
   const foodStores = useBuildStore(s => s.foodStores)
   const piles = useBuildStore((s) => s.piles)
   const buildings = map.buildings
-  const models = useMemo(() => buildings.map(building => structureParts({ ...building, ...rotatedFootprint(building, building.rotation) })), [buildings])
+  const models = useMemo(() => buildings.map(building => constructionParts({ ...building, ...rotatedFootprint(building, building.rotation) })), [buildings])
   const idColors = useMemo(
     // Component tuples straight into the working colour space — an ID is data,
     // not a colour, so it must dodge sRGB conversion to survive readback.
@@ -41,6 +50,7 @@ export function Buildings({ map }: { map: GameMap }) {
 
   return (
     <group>
+      <PixelCharacters><ConstructionCostEffects ref={costs} map={map} characterScale={characterScale} /></PixelCharacters>
       {buildings.map((building, index) => {
         // The hovel has its own geometry (see shrine.tsx); its ID slot stays reserved.
         if (building.id === map.site?.hovelId) return null
@@ -55,8 +65,9 @@ export function Buildings({ map }: { map: GameMap }) {
           (selection?.kind === "pile" && piles.some(p => p.id === selection.id && p.campId === building.id)))
         if (building.buildType === "storehouse" || building.buildType === "workshop") {
           return (
-            <group key={building.id} name={`storage-${building.id}`} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
+            <group key={building.id} name={`storage-${building.id}`} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
               <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} />
+              {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
               {building.buildType === "storehouse" && FOOD_TYPES.map((type, slot) => {
                 const amount = foodStores.get(building.id)?.[type] ?? 0
                 return amount > 0 && <mesh key={type} position={[(slot - 1.5) * local.w * 0.21, 0.43, -local.d * 0.33]}>
@@ -74,9 +85,10 @@ export function Buildings({ map }: { map: GameMap }) {
         }
 
         return (
-          <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectElement({ kind: "building", id: building.id }, event)}>
+          <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
             <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} />
-            {building.buildType === "shelter" && <ShelterFire width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
+            {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
+            {isComplete(building) && building.buildType === "shelter" && <ShelterFire width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
           </group>
         )
       })}

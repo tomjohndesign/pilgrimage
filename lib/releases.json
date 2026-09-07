@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "9e759ff1592819a762a709b0e6662e243a5fe711",
-  "releaseCount": 61,
+  "lastProcessedCommit": "cf58ed133f3e22ff6a02635d9c803cbb4c1e0e96",
+  "releaseCount": 63,
   "releases": [
+    {
+      "version": "0.0.77",
+      "title": "Release 0.0.77",
+      "summary": "Replace traveler hats and guitar with medieval caps and lute (#96)",
+      "commit": "cf58ed133f3e22ff6a02635d9c803cbb4c1e0e96"
+    },
+    {
+      "version": "0.0.76",
+      "title": "Release 0.0.76",
+      "summary": "Add focused building construction and monk shelter rest (#95)",
+      "commit": "560f4e8390a1e7e15621534b00e1410730a6815a"
+    },
     {
       "version": "0.0.75",
       "title": "Release 0.0.75",
