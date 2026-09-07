@@ -65,8 +65,8 @@ import { generateWater, WATER_KIND_LAKE, WATER_KIND_RIVER } from "./water"
 /** Worlds are big; nothing generates smaller than this on a side. */
 export const MIN_MAP_SIZE = 128
 
-export const DEFAULT_MAP_WIDTH = 128
-export const DEFAULT_MAP_DEPTH = 128
+export const DEFAULT_MAP_WIDTH = 192
+export const DEFAULT_MAP_DEPTH = 192
 
 export interface GenerateMapOptions {
   elevation?: Partial<ElevationSettings>
@@ -201,7 +201,7 @@ export const HOVEL_DEPTH = 5
  * real journey into the woods, not a stroll off the verge: the gap between
  * road and relic is the ground the whole settlement will grow on, and the
  * further the relic, the more world there is to build before the two meet.
- * On the 128-tile default map this puts the hovel over a third of the way
+ * On the 192-tile default map this puts the hovel a quarter of the way
  * across from the road. The generator accepts a band of ±25% around this
  * target.
  */
