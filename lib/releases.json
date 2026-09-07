@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "e78200b126faec4e31ee37052dce59451dd2755b",
-  "releaseCount": 83,
+  "lastProcessedCommit": "a247f1aaab7274a204564819792f25a6f6dd4a85",
+  "releaseCount": 84,
   "releases": [
+    {
+      "version": "0.0.98",
+      "title": "Release 0.0.98",
+      "summary": "Add anonymous bug reports from world settings (#117)",
+      "commit": "a247f1aaab7274a204564819792f25a6f6dd4a85"
+    },
     {
       "version": "0.0.97",
       "title": "Release 0.0.97",
