@@ -13,7 +13,7 @@ import { selectElement } from "@/lib/game/selection"
 
 /** Props belong to the reserved approach square, outside the shell's occupied tiles. */
 export function EntranceDetails({map,idColors,onSelect}:{map:GameMap;idColors:Color[];onSelect:(building:BuildingDef,event:Parameters<typeof selectElement>[1])=>void}) {
-  const models=useMemo(()=>map.buildings.map(b=>entranceParts(b.id===map.site?.hovelId ? "shrine" : b.buildType ?? "shepherd-hut",b.height)),[map.buildings,map.site?.hovelId])
+  const models=useMemo(()=>map.buildings.map(b=>entranceParts(b.id===map.site?.hovelId ? "shrine" : b.buildType ?? "house",b.height)),[map.buildings,map.site?.hovelId])
   return <group name="entrance-details">
     {map.buildings.map((building,index)=>{
       const at=buildingApproach(map,building)

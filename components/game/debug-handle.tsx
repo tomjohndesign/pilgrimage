@@ -140,6 +140,12 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         for (let i = 0; i < ticks; i++) stepSim(sim, travelers, map, speed, 0.1, movement, speedScales, characterScale)
         useBuildStore.getState().syncResources(sim, travelers)
       },
+      /** Live settlement loop: who works where, who lives where, and the takings. */
+      travelers: () => [...(simRegistry.current?.travelers.values() ?? [])].map(s => ({
+        id: s.id, activity: s.activity, employer: s.employer, home: s.home, jobSlot: s.jobSlot,
+        gold: s.gold, hunger: Math.round(s.hunger), thirst: Math.round(s.thirst), stamina: Math.round(s.stamina),
+      })),
+      takings: () => ({ shrineGold: simRegistry.current?.shrineGold ?? 0, tradeGold: simRegistry.current?.tradeGold ?? 0 }),
       settlement: () => ({
         buildings: map.buildings,
         felled: [...useBuildStore.getState().felled],

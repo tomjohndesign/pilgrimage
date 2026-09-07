@@ -67,7 +67,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
       const data = JSON.parse(await file.text()), value = data.recipe ?? data
       const legacy = ["gable", "hipped", "porch"].includes(value.variant)
       if (legacy) {
-        const preset = earlyBuildingRecipe(value.variant === "porch" ? "monk-shelter" : "shepherd-hut")
+        const preset = earlyBuildingRecipe(value.variant === "porch" ? "monk-shelter" : "house")
         Object.assign(value, { variant: preset.variant, width: Math.max(1, Math.min(5, value.width)), depth: Math.max(1, Math.min(5, value.depth)), wallHeight: preset.wallHeight, roofRise: preset.roofRise })
       }
       const parsed = recipeSchema.parse(value)
