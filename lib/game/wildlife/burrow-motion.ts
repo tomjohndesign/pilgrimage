@@ -2,18 +2,18 @@ import { easeWing } from "./motion"
 import { RIG_TO_WORLD } from "../transport/assets"
 
 export const BURROW_SECONDS = 3
-export const BURROW_APPROACH = .78
+export const BURROW_APPROACH = .95
 export const BURROW_STRIDE = .28
 
 /** Entrance faces +Z. All distances are rig units, shared by the map and editor. */
 export function burrowMotion(shelter: number, entering: boolean) {
   const t=Math.max(0,Math.min(1,shelter)), travel=easeWing(t)
-  const z=BURROW_APPROACH-1.7*travel
-  const y=-.88*easeWing((travel-.22)/.78)
+  const z=BURROW_APPROACH-1.65*travel
+  const y=-1.05*easeWing((travel-.06)/.88)
   const tuck=easeWing(t/.20)
   return {z,y,heading:entering?Math.PI:0,tuck,
-    pitch:(entering?1:-1)*.20*Math.sin(travel*Math.PI),
-    stridePhase:(entering?1.7*travel:1.7*(1-travel))/BURROW_STRIDE,
+    pitch:(entering?1:-1)*.55*Math.sin(travel*Math.PI),
+    stridePhase:(entering?1.65*travel:1.65*(1-travel))/BURROW_STRIDE,
     drive:easeWing(t/.12)*easeWing((1-t)/.12),
     clipPhase:entering?.1+t*.32:.58+(1-t)*.32}
 }
