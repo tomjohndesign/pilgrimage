@@ -24,7 +24,7 @@ export async function bakeRocketMonks() {
           const phase = frame / frames
           const result = session.render(name === "flying" ? "idle" : name as BaseClip, phase, row, false, rig => {
             gear ??= createRocketRig(rig)
-            gear.pose(phase, name === "flying")
+            gear.pose(phase, name === "flying", name === "flying" ? "idle" : name as BaseClip)
           })
           safePadding = Math.min(safePadding, result.padding)
           ctx.drawImage(result.canvas, frame * BASE_PERSON.cellSize, row * BASE_PERSON.cellSize)
@@ -36,6 +36,6 @@ export async function bakeRocketMonks() {
       }
     } finally { gear?.dispose(); session.dispose() }
   }
-  return { images, metadata: { version: 9, depthEncoding: SPRITE_DEPTH_ENCODING, templateVersion: BASE_PERSON.version, cellSize: BASE_PERSON.cellSize,
+  return { images, metadata: { version: 10, depthEncoding: SPRITE_DEPTH_ENCODING, templateVersion: BASE_PERSON.version, cellSize: BASE_PERSON.cellSize,
     anchor: BASE_PERSON.anchor, camera: BASE_PERSON.camera, directions: BASE_PERSON.directions, frameCounts, flightFps: 12, safePadding } }
 }

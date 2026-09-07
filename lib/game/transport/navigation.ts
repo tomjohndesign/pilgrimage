@@ -1,3 +1,5 @@
+import type { TreePlacement } from "../trees/placement"
+import { pastureSegmentClear, type StallObstacle } from "./stall"
 import { cartGroundContacts, onBridgeDeck } from "./bridge-guide"
 import { cartRoutePoint } from "./route"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, tileAt, type GameMap } from "../map/types"
@@ -7,22 +9,32 @@ import { groundHeight } from "../map/elevation"
 import { TILE_HEIGHT } from "../map/terrain"
 import { BASE_CHARACTER_SCALE } from "../base-person/gait"
 import { RIG_TO_WORLD, CART_WIDTH_SCALE, type Puller } from "./assets"
-import { cartOnRoute, followCart, type CartPose } from "./follow"
-import { roundRoute, routeLength, routePoint, type Point } from "./roadside"
+import { alignCart, cartOnRoute, followCart, type CartPose } from "./follow"
+import { roadsideStall, roundRoute, routeLength, routePoint, type Point } from "./roadside"
 
 /** Only wagons ease into wider turns; the terrain and walking lanes stay fixed. */
 export function convoyPoint(map: GameMap, progress: number, _scale = BASE_CHARACTER_SCALE): Point {
   return cartRoutePoint(map, progress)
 }
 
+/** Shared oriented footprints for carts, shafts and unmounted horses. */
+export function convoyBounds(pose: CartPose, puller: Puller, scale: number, animalHeading = pose.heading): StallObstacle[] {
+  const unit = RIG_TO_WORLD * scale
+  const wheelbase = Math.hypot(pose.hitch.x - pose.x, pose.hitch.z - pose.z)
+  const boxes: Array<{ centre: Point; width: number; back: number; front: number; heading?: number }> = wheelbase > 0 ? [{ centre: pose, width: 1.06 * CART_WIDTH_SCALE * unit, back: 1.02 * unit, front: 1.02 * unit },
+    { centre: pose, width: 0.68 * unit, back: 0, front: wheelbase }] : []
+  if (puller !== "hand") boxes.push({ centre: pose.hitch, width: 0.5 * unit, back: 1.1 * unit, front: 1.75 * unit, heading: animalHeading })
+  return boxes.map(box => {
+    const heading = box.heading ?? pose.heading, shift = (box.front - box.back) / 2
+    return { x: box.centre.x + Math.sin(heading) * shift, z: box.centre.z + Math.cos(heading) * shift,
+      heading, halfWidth: box.width, halfLength: (box.front + box.back) / 2 }
+  })
+}
+
 /** Test oriented body bounds against every touched tile, including shafts and
  * the animal's head. Tile/box SAT catches edges without a per-pixel grid. */
 export function convoyClear(map: GameMap, pose: CartPose, puller: Puller, scale: number, grassOnly = false, animalHeading = pose.heading): boolean {
-  const unit = RIG_TO_WORLD * scale
-  const wheelbase = Math.hypot(pose.hitch.x - pose.x, pose.hitch.z - pose.z)
-  const boxes: Array<{ centre: Point; width: number; back: number; front: number; heading?: number }> = [{ centre: pose, width: 1.06 * CART_WIDTH_SCALE * unit, back: 1.02 * unit, front: 1.02 * unit },
-    { centre: pose, width: 0.68 * unit, back: 0, front: wheelbase }]
-  if (puller !== "hand") boxes.push({ centre: pose.hitch, width: 0.5 * unit, back: 1.1 * unit, front: 1.75 * unit, heading: animalHeading })
+  const boxes = convoyBounds(pose, puller, scale, animalHeading)
   const layout = bridgeLayout(map)
   const supported=(p:Point)=>{
     if(onBridgeDeck(map,p.x,p.z))return true
@@ -36,16 +48,15 @@ export function convoyClear(map: GameMap, pose: CartPose, puller: Puller, scale:
   const height = layout.rise[hz * map.width + hx] || bridgeCornerAt(map, pose.hitch.x, pose.hitch.z)
     ? TILE_HEIGHT : groundHeight(map, hx, hz)
   for (const box of boxes) {
-    const sin = Math.sin(box.heading ?? pose.heading), cos = Math.cos(box.heading ?? pose.heading)
-    const halfLength = (box.front + box.back) / 2, shift = (box.front - box.back) / 2
-    const cx = box.centre.x + sin * shift, cz = box.centre.z + cos * shift
-    const rx = Math.abs(cos) * box.width + Math.abs(sin) * halfLength
-    const rz = Math.abs(sin) * box.width + Math.abs(cos) * halfLength
+    const sin = Math.sin(box.heading), cos = Math.cos(box.heading)
+    const halfLength = box.halfLength, cx = box.x, cz = box.z
+    const rx = Math.abs(cos) * box.halfWidth + Math.abs(sin) * halfLength
+    const rz = Math.abs(sin) * box.halfWidth + Math.abs(cos) * halfLength
     for (let z = worldToTileZ(map, cz - rz); z <= worldToTileZ(map, cz + rz); z++) {
       for (let x = worldToTileX(map, cx - rx); x <= worldToTileX(map, cx + rx); x++) {
         const dx = tileToWorldX(map, x) - cx, dz = tileToWorldZ(map, z) - cz
         const tileRadius = (Math.abs(sin) + Math.abs(cos)) / 2
-        if (Math.abs(dx * cos - dz * sin) >= box.width + tileRadius - 1e-6 ||
+        if (Math.abs(dx * cos - dz * sin) >= box.halfWidth + tileRadius - 1e-6 ||
           Math.abs(dx * sin + dz * cos) >= halfLength + tileRadius - 1e-6) continue
         const terrain = tileAt(map, x, z)
         // A corner extension covers part of a water tile. Clip this body's
@@ -54,7 +65,7 @@ export function convoyClear(map: GameMap, pose: CartPose, puller: Puller, scale:
           // The bridge assist permits body/shaft overhang while the animal
           // and both wheels remain supported. Woods/buildings still collide.
           if(bridgeOverhang)continue
-          let polygon: Point[] = [[-1,-1],[1,-1],[1,1],[-1,1]].map(([u,v])=>({x:cx+cos*box.width*u+sin*halfLength*v,z:cz-sin*box.width*u+cos*halfLength*v}))
+          let polygon: Point[] = [[-1,-1],[1,-1],[1,1],[-1,1]].map(([u,v])=>({x:cx+cos*box.halfWidth*u+sin*halfLength*v,z:cz-sin*box.halfWidth*u+cos*halfLength*v}))
           for (const [axis,edge,sign] of [["x",tileToWorldX(map,x)-0.5,1],["x",tileToWorldX(map,x)+0.5,-1],["z",tileToWorldZ(map,z)-0.5,1],["z",tileToWorldZ(map,z)+0.5,-1]] as const) {
             const clipped: Point[]=[]
             for(let i=0;i<polygon.length;i++){
@@ -79,13 +90,52 @@ export function convoyClear(map: GameMap, pose: CartPose, puller: Puller, scale:
 }
 
 export interface ShrineParking {
-  entry: Point[]; exit: Point[]; pose: CartPose; parked: CartPose; returnProgress: number; distance: number; walking: boolean
+  entry: Point[]; exit: Point[]; pose: CartPose; parked: CartPose; returnProgress: number; distance: number; walking: boolean; tree?: TreePlacement
+}
+
+export interface ParkingContext {
+  trees: readonly TreePlacement[]
+  obstacles?: readonly StallObstacle[]
+  people?: readonly Point[]
+}
+
+function overlaps(a: StallObstacle, b: StallObstacle) {
+  return [a.heading, b.heading].every(heading => [heading, heading + Math.PI / 2].every(axis => {
+    const x = Math.cos(axis), z = -Math.sin(axis)
+    const radius = (box: StallObstacle) => Math.abs(x * Math.cos(box.heading) - z * Math.sin(box.heading)) * box.halfWidth +
+      Math.abs(x * Math.sin(box.heading) + z * Math.cos(box.heading)) * box.halfLength
+    return Math.abs((a.x - b.x) * x + (a.z - b.z) * z) < radius(a) + radius(b) + 0.12
+  }))
+}
+
+/** Account for actual trunks, reserved transport, stalls and people as well as terrain. */
+export function parkingClear(map: GameMap, pose: CartPose, puller: Puller, scale: number, context: ParkingContext, grassOnly = false) {
+  if (!convoyClear(map, pose, puller, scale, grassOnly)) return false
+  const bounds = convoyBounds(pose, puller, scale)
+  return !(context.obstacles ?? []).some(obstacle => bounds.some(box => overlaps(box, obstacle))) &&
+    context.trees.every(tree => pastureSegmentClear(tree, tree, bounds, (tree.shape?.trunkRadius ?? 0.18) * (tree.scale ?? 1) + 0.08)) &&
+    (context.people ?? []).every(person => pastureSegmentClear(person, person, bounds, 0.2))
+}
+
+/** A short tie stays on this verge; it must not cross a walking or driving path. */
+export function parkingTree(map: GameMap, pose: CartPose, trees: readonly TreePlacement[]) {
+  return trees.filter(tree => {
+    const distance = Math.hypot(tree.x - pose.hitch.x, tree.z - pose.hitch.z)
+    if (tree.walking || distance > 2.5 || distance < 0.65) return false
+    for (let d = 0; d < distance - 0.35; d += 0.1) {
+      const x = worldToTileX(map, pose.hitch.x + (tree.x - pose.hitch.x) * d / distance)
+      const z = worldToTileZ(map, pose.hitch.z + (tree.z - pose.hitch.z) * d / distance)
+      if (!["grass", "clearing", "forest", "darkwood"].includes(tileAt(map, x, z) ?? "") || buildingAt(map, x, z)) return false
+    }
+    return true
+  }).sort((a, b) => Math.hypot(a.x - pose.hitch.x, a.z - pose.hitch.z) - Math.hypot(b.x - pose.hitch.x, b.z - pose.hitch.z))[0]
 }
 
 /** Try compact pull-offs near the junction. Validate the entire rigid convoy
  * through arrival AND departure before committing; blocked grass means no visit. */
 export function shrineParking(map: GameMap, progress: number, direction: 1 | -1, wheelbase: number, puller: Puller, scale: number,
-  occupied: readonly CartPose[] = []): ShrineParking | null {
+  occupied: readonly CartPose[] = [], context: ParkingContext = { trees: [] }): ShrineParking | null {
+  const reserved = { ...context, obstacles: [...(context.obstacles ?? []), ...occupied.flatMap(pose => convoyBounds(pose, "horse", scale))] }
   const start = convoyPoint(map, progress, scale), ahead = convoyPoint(map, progress + direction * 0.1, scale)
   const heading = Math.atan2(ahead.x - start.x, ahead.z - start.z)
   const initial = cartOnRoute(progress, direction, wheelbase, p => convoyPoint(map, p, scale))
@@ -95,7 +145,6 @@ export function shrineParking(map: GameMap, progress: number, direction: 1 | -1,
     const local = (along: number, across: number) => ({ x: start.x + Math.sin(heading) * along + Math.cos(heading) * across * side,
       z: start.z + Math.cos(heading) * along - Math.sin(heading) * across * side })
     const park = local(2 + wheelbase, depth), end = convoyPoint(map, returnProgress, scale)
-    if (occupied.some(p => Math.hypot(p.hitch.x - park.x, p.hitch.z - park.z) < wheelbase * 2 + 1)) continue
     const departure = local(2.6 + wheelbase, depth)
     // Pull forward onto the road; never ask the horse to reverse the wagon.
     if ((end.x - departure.x) * Math.sin(heading) + (end.z - departure.z) * Math.cos(heading) < 0.5) continue
@@ -106,12 +155,31 @@ export function shrineParking(map: GameMap, progress: number, direction: 1 | -1,
       const length = routeLength(route)
       for (let d = 0; d < length + 0.04; d += 0.04) {
         pose = followCart(pose, routePoint(route, Math.min(d, length)), wheelbase)
-        if (!convoyClear(map, pose, puller, scale)) { valid = false; break }
+        if (!parkingClear(map, pose, puller, scale, reserved)) { valid = false; break }
       }
       if (!valid) break
-      if (route === entry) { parked = pose; if (!convoyClear(map, parked, puller, scale, true)) { valid = false; break } }
+      if (route === entry) { parked = pose; if (!parkingClear(map, parked, puller, scale, reserved, true)) { valid = false; break } }
     }
-    if (valid) return { entry, exit, pose: initial, parked, returnProgress: returnProgress + direction * 0.5, distance: 0, walking: false }
+    const tree = valid && puller !== "hand" ? parkingTree(map, parked, context.trees) : undefined
+    if (valid && (puller === "hand" || tree)) return { tree, entry, exit, pose: initial, parked, returnProgress: returnProgress + direction * 0.5, distance: 0, walking: false }
   }
   return null
+}
+
+/** Market stops use the same clearance and tree requirement, trying either verge. */
+export function stallParking(map: GameMap, from: Point, progress: number, direction: 1 | -1, wheelbase: number, scale: number, puller: Puller, context: ParkingContext) {
+  return roadsideStall(map, from, progress, direction, wheelbase, scale, puller, pitch => {
+    const parked = alignCart(pitch.park, pitch.heading, wheelbase)
+    pitch.tree = puller === "hand" ? undefined : parkingTree(map, parked, context.trees)
+    if (!parkingClear(map, parked, puller, scale, context, true) || (puller !== "hand" && !pitch.tree)) return false
+    let pose = alignCart(from, pitch.heading, wheelbase)
+    for (const route of [pitch.entry, pitch.exit]) {
+      const length = routeLength(route)
+      for (let d = 0; d <= length + 0.04; d += 0.04) {
+        pose = followCart(pose, routePoint(route, Math.min(d, length)), wheelbase)
+        if (!parkingClear(map, pose, puller, scale, context)) return false
+      }
+    }
+    return true
+  })
 }

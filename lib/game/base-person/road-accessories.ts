@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { uncoverHead } from "./head-covering"
 import type { PersonRecipe } from "./design"
 import type { BaseClip, SocketName } from "./pose"
 import { staffDimensions, staffMotion } from "./staff-motion"
@@ -92,7 +93,7 @@ export function createRoadAccessories(recipe: PersonRecipe, sockets: Record<Sock
   return {
     pose(clip: BaseClip, phase: number) {
       const road = clip === "walk" || clip === "idle"
-      hat.visible = clip !== "sleeping"
+      hat.visible = clip !== "sleeping" && !uncoverHead(design.bodyType, clip)
       satchel.visible = road && design.satchel
       lute.visible = road && design.lute
       staff.visible = road && design.walkingStick

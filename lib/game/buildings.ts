@@ -41,7 +41,7 @@ export const BUILDING_KINDS: Record<BuildingKind, BuildingKindDef> = {
     id: "workshop",
     label: "Woodcutter’s hut",
     blurb: "Three jobs felling nearby woods and carrying timber to storage.",
-    w: 2,
+    w: 3,
     d: 2,
     height: 0.85,
     color: "#7a5a3a",

@@ -13,6 +13,7 @@ export function constructionParts(building: BuildingDef): BuildingPart[] {
   const box = (name: string, position: [number, number, number], size: [number, number, number], color: string) =>
     parts.push({ name: `construction-${name}`, layer: "wall", position, size, color })
   box("earth", [0, 0.025, 0], [w, 0.05, d], "#8d785a")
+  if (finished.some(p => p.surface === "trail")) parts[parts.length - 1].surface = "trail"
   for (const x of [-w / 2, w / 2]) for (const z of [-d / 2, d / 2]) {
     box(`post-${x}-${z}`, [x, (stage ? h : 0.25) / 2, z], [0.09, stage ? h : 0.25, 0.09], "#785638")
   }

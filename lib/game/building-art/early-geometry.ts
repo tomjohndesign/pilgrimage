@@ -2,6 +2,8 @@ import { EARLY_MATERIALS as palette } from "./materials"
 import type { BuildingPart, Vec3 } from "./geometry"
 import type { BuildingRecipe } from "./style"
 import { furnishingParts } from "./furnishings"
+import { hasDirtFloor } from "./dirt-floor"
+import { workshopLayout } from "../workshop-layout"
 import { BUILDING_FLOOR_TOP } from "./dimensions"
 
 /** The relic rests on the same slab in the game and in the workshop. */
@@ -39,6 +41,10 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
   }
   // Bury slab thickness below the walking plane; inset the store platform for its ramp.
   box("floor","base",[0,(variant === "storehouse" ? floor : BUILDING_FLOOR_TOP)-.025,variant === "storehouse" ? (rampStart-d+.02)/2 : 0],[width-.04,.05,variant === "storehouse" ? rampStart+d-.02 : depth-.04],variant === "enclosure" ? "#686857" : "#817052",undefined,false)
+  if (hasDirtFloor(variant)) {
+    parts[0].surface = "trail"
+    parts[0].color = "#ffffff"
+  }
 
   // Screens: woven rods pass either side of stakes, with exposed patches of daub.
   function screen(name: string, a: Vec3, b: Vec3, height: number, daub = false) {
@@ -134,6 +140,49 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     return parts
   }
 
+  if (variant === "workshop") {
+    const layout = workshopLayout(width, depth)
+    const { coreWidth, coreX, storageX, bayDepth } = layout
+    const props = furnishingParts("workshop", coreWidth, depth, h, rise)
+    for (const part of props) part.position[0] += coreX
+    parts.push(...props)
+    bench("workbench", coreX, -depth*.3, coreWidth*.65, .38)
+    pole("axe-handle", [coreX-.2,.42,-depth*.3], [coreX+.2,.43,-depth*.3], .014, "interior", palette.darkWood)
+    box("axe-head", "interior", [coreX+.17,.46,-depth*.3], [.08,.08,.035], "#787970", undefined, false)
+    screen("rear", [-w+.13,0,-d+.13], [w-.13,0,-d+.13], h*.9)
+    screen("bed-windbreak", [-w+.13,0,-d+.13], [-w+.13,0,d-.13], h*.6)
+    // Two square bays: low roundwood sleepers keep harvested logs off the earth.
+    for (let bay=0;bay<2;bay++) {
+      const z=(bay-.5)*bayDepth, half=layout.bayWidth/2-.08
+      for (const side of [-1,1]) {
+        pole(`wood-bay-${bay}-sleeper-${side}`, [storageX-half,.045,z+side*bayDepth*.2], [storageX+half,.045,z+side*bayDepth*.2], .035, "interior")
+        pole(`wood-bay-${bay}-rail-${side}`, [storageX+side*half,.085,z-bayDepth*.42], [storageX+side*half,.085,z+bayDepth*.42], .022, "interior")
+      }
+    }
+    // The same lapped thatch as the rural kit, cropped into a shelter around the open yard.
+    const roofY=(z:number)=>h+rise*(d-.045-z)/(depth-.09)
+    const roofs = [
+      {name:"rear",left:-w+.05,right:storageX-layout.bayWidth/2,back:-d+.045,front:-depth*.16},
+      {name:"beds",left:-w+.05,right:coreX-coreWidth*.34+.27,back:-depth*.16,front:d-.045},
+      {name:"wood",left:storageX-layout.bayWidth/2,right:w-.05,back:-d+.045,front:d-.045},
+    ]
+    for (const roof of roofs) {
+      const roofWidth=roof.right-roof.left, roofDepth=roof.front-roof.back
+      const kit=earlyBuildingParts({...recipe,variant:"wood-shelter",width:roofWidth+.1,depth:roofDepth+.09,wallHeight:roofY(roof.front),roofRise:roofY(roof.back)-roofY(roof.front)})
+      for (const part of kit.filter(p=>p.name.startsWith("thatch-"))) {
+        parts.push({...part,name:`${part.name}-${roof.name}`,position:[(roof.left+roof.right)/2,0,(roof.back+roof.front)/2]})
+      }
+      for (const side of [roof.left+.055,roof.right-.055]) {
+        pole(`roof-rafter-${roof.name}-${side}`, [side,roofY(roof.back),roof.back+.045], [side,roofY(roof.front),roof.front-.045], .03, "roof")
+      }
+      for (const z of [roof.back+.09,roof.front-.09]) {
+        pole(`roof-beam-${roof.name}-${z}`, [roof.left+.055,roofY(z),z], [roof.right-.055,roofY(z),z], .03, "roof")
+        for (const x of [roof.left+.09,roof.right-.09]) pole(`hut-post-${roof.name}-${x}-${z}`, [x,0,z], [x,roofY(z),z], .035)
+      }
+    }
+    return parts
+  }
+
   const x=w-.13,z=d-.13, eave=floor+h
   if(variant === "storehouse") {
     for(const a of [-x,x]) for(const b of [-z,rampStart-.06]) {
@@ -142,7 +191,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     }
     for(let i=0;i<Math.ceil(width/.12);i++) box(`floor-board-${i}`,"base",[-w+.07+i*(width-.14)/Math.max(1,Math.ceil(width/.12)-1),floor+.025,(rampStart-d+.06)/2],[.085,.045,rampStart+d-.06],palette.paleWood,undefined,false)
     box("grain-sack","base",[0,floor+.16,-depth*.12],[Math.min(.3,width*.3),.27,Math.min(.25,depth*.3)],"#a29978",undefined,false)
-  } else for(const a of [-x,x]) for(const b of [-z,z]) pole(`earthfast-post-${a}-${b}`,[a,0,b],[a,eave+((variant === "wood-shelter" || variant === "workshop") && b < 0 ? rise : 0)+.06,b],.043)
+  } else for(const a of [-x,x]) for(const b of [-z,z]) pole(`earthfast-post-${a}-${b}`,[a,0,b],[a,eave+(variant === "wood-shelter" && b < 0 ? rise : 0)+.06,b],.043)
 
   if(variant === "storehouse") {
     const rampWidth=Math.min(.72,width*.65), front=d-.025, top=floor+.048
@@ -191,16 +240,10 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
         const count=Math.max(2,Math.floor(width/.14)-3-row),px=(i-(count-1)/2)*.12
         pole(`firewood-${row}-${i}`,[px,floor+.065+row*.085,-depth*.2],[px+.008,floor+.065+row*.085,depth*.18],.052,"base",i%3?palette.wood:palette.paleWood)
       }
-      if (variant === "workshop") {
-        parts.push(...furnishingParts("workshop",width,depth,h,rise))
-        bench("workbench",0,-depth*.3,width*.65,.38)
-        pole("axe-handle",[-.2,floor+.42,-depth*.3],[.2,floor+.43,-depth*.3],.014,"interior",palette.darkWood)
-        box("axe-head","interior",[.17,floor+.46,-depth*.3],[.08,.08,.035],"#787970",undefined,false)
-      }
     }
   }
   // Lapped bundles: visibly stepped edges, fine strokes following the fall of straw.
-  const lean=variant === "wood-shelter" || variant === "workshop", roofX=w-.05,roofZ=d-.045
+  const lean=variant === "wood-shelter", roofX=w-.05,roofZ=d-.045
   function roofSide(sign: number) {
     const slope=Math.hypot(lean?depth-.09:roofX,rise), bands=Math.max(3,Math.ceil(slope/.23)), bundles=Math.max(3,Math.ceil((lean?width-.1:depth-.09)/.2))
     const at=(t:number,along:number,lift:number): Vec3 => lean?[along,eave+rise*(1-t)+lift,-roofZ+2*roofZ*t]:[sign*roofX*t,eave+rise*(1-t)+lift,along]
@@ -217,14 +260,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     }
     face(`thatch-grain-${sign}`,"roof",grain,"#91805b")
   }
-  if(variant === "workshop") {
-    const count=Math.ceil((width-.1)/.16)
-    for(let i=0;i<count;i++) {
-      const a=-roofX+i*2*roofX/count,b=a+2*roofX/count-.008
-      face(`roof-plank-${i}`,"roof",[a,eave+rise+.04,-roofZ,b,eave+rise+.04,-roofZ,b,eave+.04,roofZ,a,eave+rise+.04,-roofZ,b,eave+.04,roofZ,a,eave+.04,roofZ],i%3 ? palette.wood : palette.paleWood)
-    }
-    for(const side of [-1,1]) pole(`lean-rafter-${side}`,[side*x,eave+rise,-z],[side*x,eave,z],.04,"roof")
-  } else if(lean) roofSide(1); else {roofSide(-1);roofSide(1)}
+  if(lean) roofSide(1); else {roofSide(-1);roofSide(1)}
   for(const side of [-1,1]) {
     pole(`eave-pole-${side}`,[-x,eave,side*z],[x,eave,side*z],.037,"roof")
     if(!lean) {

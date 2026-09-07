@@ -34,7 +34,7 @@ export async function bakeKnights() {
       let gear: ReturnType<typeof equipKnight> | undefined
       try {
         for (let row = 0; row < 8; row++) for (let f = 0; f < frames; f++) {
-          const rendered = session.render(clip, f / frames, row, false, rig => { gear ??= equipKnight(rig, variant) })
+          const rendered = session.render(clip, f / frames, row, false, rig => { gear ??= equipKnight(rig, variant); gear.pose(clip) })
           target.ctx.drawImage(rendered.canvas, f * size, (variant * 8 + row) * size)
           target.depthCtx.drawImage(rendered.depth!, f * size, (variant * 8 + row) * size)
         }

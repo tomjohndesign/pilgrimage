@@ -711,7 +711,7 @@ describe("woodcutter huts", () => {
         if (x === 15 || x === 19 || z === 9 || z === 12) map.tiles[z * map.width + x] = "water"
       }
     }
-    expect(placementProblem(map, map.buildings, "workshop", 13, 8)).toBe("noWoods")
+    expect(placementProblem(map, map.buildings, "workshop", 12, 8)).toBe("noWoods")
   })
 
   it("clears simulation snapshots, cut trees and the tool for a new world", () => {

@@ -19,6 +19,7 @@ import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { FOOD_TYPES } from "@/lib/game/storage"
 import { selectElement } from "@/lib/game/selection"
 import { useBuildStore } from "@/lib/game/build-store"
+import { workshopPileOffset } from "@/lib/game/workshop-layout"
 import { pileOffset } from "@/lib/game/trees/timber"
 import { ShelterFire } from "./building-smoke"
 import { WoodPile } from "./wood-pile"
@@ -66,7 +67,7 @@ export function Buildings({ map, characterScale = 1.5 }: { map: GameMap; charact
         if (building.buildType === "storehouse" || building.buildType === "workshop") {
           return (
             <group key={building.id} name={`storage-${building.id}`} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
-              <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} />
+              <StructureModel terrainFloors parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} />
               {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
               {building.buildType === "storehouse" && FOOD_TYPES.map((type, slot) => {
                 const amount = foodStores.get(building.id)?.[type] ?? 0
@@ -76,9 +77,9 @@ export function Buildings({ map, characterScale = 1.5 }: { map: GameMap; charact
                 </mesh>
               })}
               {piles.filter((pile) => pile.campId === building.id).map((pile) => {
-                const [x, z] = pileOffset(pile.slot)
                 const store = building.buildType === "storehouse"
-                return <group key={pile.id} position={[store ? x : x * 0.5, store ? 0.35 : 0.03, store ? z * 0.5 - 0.1 : z * 0.3 + 0.24]}><WoodPile pile={pile} objectId={pileObjectId(piles.indexOf(pile))} /></group>
+                const [x, z] = store ? pileOffset(pile.slot) : workshopPileOffset(pile.slot, local.w, local.d)
+                return <group key={pile.id} position={[x, store ? 0.35 : 0.08, store ? z * 0.5 - 0.1 : z]}><WoodPile pile={pile} objectId={pileObjectId(piles.indexOf(pile))} /></group>
               })}
             </group>
           )
@@ -86,7 +87,7 @@ export function Buildings({ map, characterScale = 1.5 }: { map: GameMap; charact
 
         return (
           <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
-            <StructureModel parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} />
+            <StructureModel terrainFloors parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} />
             {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
             {isComplete(building) && building.buildType === "shelter" && <ShelterFire width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
           </group>

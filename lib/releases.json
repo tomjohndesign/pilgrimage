@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "0c9e1e0dd879c86420914432c5d31126fc4ecac1",
-  "releaseCount": 76,
+  "lastProcessedCommit": "995b2fa26e86d74d311fe447ce2e24dede875987",
+  "releaseCount": 78,
   "releases": [
+    {
+      "version": "0.0.92",
+      "title": "Release 0.0.92",
+      "summary": "Add thatched wood storage and shared path dirt floors (#111)",
+      "commit": "995b2fa26e86d74d311fe447ce2e24dede875987"
+    },
+    {
+      "version": "0.0.91",
+      "title": "Release 0.0.91",
+      "summary": "Uncover men's heads during prayer and unify horse parking (#112)",
+      "commit": "64ecd48a186c5bd6c9d1521ee8a3e68f4674e2ac"
+    },
     {
       "version": "0.0.90",
       "title": "Release 0.0.90",

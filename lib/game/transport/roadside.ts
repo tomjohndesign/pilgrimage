@@ -6,6 +6,7 @@ export interface Point { x: number; z: number }
 import { STALL, stallPoint, stallObstacles, type StallObstacle } from "./stall"
 
 export interface StallRoute {
+  tree?: import("../trees/placement").TreePlacement
   entry: Point[]; exit: Point[]; park: Point; heading: number; side: 1 | -1; returnProgress: number
   frontage: Point; entranceProgress: number; obstacles: StallObstacle[]
 }
@@ -62,7 +63,7 @@ export function roadsideManeuver(start: Point, forward: Point, lateral: number, 
 
 /** Only leave a straight, clear stretch of the main road. The full maneuver and
  * the 3 × 2 stall must fit; an unsuitable verge means trying farther along. */
-export function roadsideStall(map: GameMap, from: Point, progress: number, direction: 1 | -1, wheelbase: number, scale = 1.5, puller: Puller = "horse"): StallRoute | null {
+export function roadsideStall(map: GameMap, from: Point, progress: number, direction: 1 | -1, wheelbase: number, scale = 1.5, puller: Puller = "horse", accept: (plan: StallRoute) => boolean = () => true): StallRoute | null {
   const road = map.road
   if (!road || progress < 0 || progress >= road.length - 1) return null
   const index = Math.floor(progress), a = road[index], b = road[index + 1]
@@ -90,9 +91,10 @@ export function roadsideStall(map: GameMap, from: Point, progress: number, direc
     if (suitable) {
       const axle = { x: plan.park.x - forward.x * wheelbase, z: plan.park.z - forward.z * wheelbase }
       const frontage = stallPoint(axle, plan.heading, side, scale, STALL.customer)
-      return { ...plan, returnProgress, frontage,
+      const candidate = { ...plan, returnProgress, frontage,
         entranceProgress: progress + direction * ((frontage.x - from.x) * forward.x + (frontage.z - from.z) * forward.z),
         obstacles: stallObstacles(axle, plan.heading, side, scale, puller) }
+      if (accept(candidate)) return candidate
     }
   }
   return null

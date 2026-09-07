@@ -59,7 +59,7 @@ export function Shrine({ map, relic }: { map: GameMap; relic: Relic }) {
   return (
     <group position={[layout.centreX, layout.baseY, layout.centreZ]}>
       <group rotation={[0, layout.rotation, 0]} onClick={event => selectElement({ kind: "building", id: hovel.id }, event)}>
-        <StructureModel parts={layout.parts} cutaway={selected || unitInterior === hovel.id} idColor={shrineId} ink={false} />
+        <StructureModel terrainFloors parts={layout.parts} cutaway={selected || unitInterior === hovel.id} idColor={shrineId} ink={false} />
         {[-1,1].map(side => <pointLight key={side} position={[side*.73,.8,layout.altarZ+.08]} color="#ffd184" intensity={.18} distance={1.8} decay={2} />)}
       </group>
       <group ref={relicGroup} position={[layout.offset.x,0,layout.offset.z]}><RelicDisplay color={relic.color} idColor={relicId} onClick={select} /></group>

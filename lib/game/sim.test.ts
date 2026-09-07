@@ -382,9 +382,12 @@ describe("stepSim", () => {
     for (const id of [4, 8]) { // donkey and horse
       const map = makeMap(), travelers = [makeTraveler(id, "vendor", { stamina: 100, hunger: 100, thirst: 100 })]
       const sim = createSim(travelers, map), vendor = sim.travelers.get(id)!
+      // Leave room for the animal's head through the return turn.
+      for (let x = 0; x < map.width; x++) map.tiles[3 * map.width + x] = "grass"
+      sim.trees = Array.from({ length: map.width }, (_, x) => ({ x: tileToWorldX(map, x), y: 0.2, z: tileToWorldZ(map, 8), species: "oak" as const }))
       vendor.timer = 0
       expect(runUntil(sim, travelers, map, () => vendor.activity === "openingShop", 60)).toBe(true)
-      expect(vendor.pasture).toBeDefined()
+      expect(vendor.pasture?.tether).toBeDefined()
       expect(Math.abs(worldToTileZ(map, vendor.z) - 4)).toBe(2)
       const originalProgress = vendor.progress, returnProgress = vendor.stallRoute!.returnProgress
       expect((returnProgress - originalProgress) * vendor.direction).toBeGreaterThan(0)
@@ -441,6 +444,8 @@ describe("stepSim", () => {
   it("walks customers along the path, up to the frontage, and back after the purchase", () => {
     const map = makeMap(), travelers = [makeTraveler(4, "vendor", { hunger: 100, thirst: 100, stamina: 100 }), makeTraveler(0, "peasant", { hunger: 100, thirst: 100, stamina: 100, gold: 20 }, 0.2)]
     const sim = createSim(travelers, map), vendor = sim.travelers.get(4)!, buyer = sim.travelers.get(0)!
+    for (let x = 0; x < map.width; x++) map.tiles[3 * map.width + x] = "grass"
+    sim.trees = Array.from({ length: map.width }, (_, x) => ({ x: tileToWorldX(map, x), y: 0.2, z: tileToWorldZ(map, 8), species: "oak" as const }))
     vendor.timer = 0
     expect(runUntil(sim, travelers, map, () => vendor.activity === "vending", 60)).toBe(true)
     vendor.timer = 999; buyer.hunger = 0
