@@ -1,3 +1,6 @@
+import { knightMounted, knightLoadout, knightTravelSpeed, type HorseRest } from "./knights"
+import { knightDesign } from "./knight/design"
+import { DEFAULT_WALK_SPEED, DEFAULT_WALK_CADENCE, personWalkStride } from "./base-person/gait"
 import { assignBuildingTask, buildingEntrance, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
 import { buildingEntry } from "./building-rotation"
 import { timberDestination, type FoodStock } from "./storage"
@@ -6,7 +9,6 @@ import { roadsideStall, routePoint, routeLength, type StallRoute } from "./trans
 import { roadLanePoint } from "./map/road-lane"
 import { cartOnRoute } from "./transport/follow"
 import { keeperRoutine } from "./transport/keeper"
-import { personWalkStride } from "./base-person/gait"
 import { populationDesign, travelerAppearance } from "./base-person/population"
 import { animalClearance } from "./transport/stall"
 import { BASE_CHARACTER_SCALE } from "./base-person/gait"
@@ -215,6 +217,8 @@ function minstrelWalkSeconds(id: number, cycle: number): number {
 export interface SimTraveler {
   musicCooldown?: number
   musicVisit?: { performerId: number; cycle: number; spot: WorldPoint }
+  /** Horse waits outside the shrine doorway until its rider returns. */
+  horseRest?: HorseRest & { progress: number; lane: number }
   workScale?: number
   workSlot?: number
   buildingTask?: BuildingTask
@@ -461,7 +465,23 @@ function shrineWorldPoint(map: GameMap, s: SimTraveler): WorldPoint {
     point.y += (road.y - start.y) * blend
     point.z += (road.z - start.z) * blend
   }
+  const horse = s.horseRest
+  if (s.activity === "fromRelic" && horse && s.branchProgress >= horse.progress && s.branchProgress < horse.progress + 1) {
+    // Rejoin the exact parking spot from the outbound lane before mounting.
+    const lanePoint = shrineWorldPoint(map, { ...s, horseRest: undefined, branchProgress: horse.progress })
+    const blend = 1 - (s.branchProgress - horse.progress)
+    point.x += (horse.x - lanePoint.x) * blend
+    point.y += (horse.y - lanePoint.y) * blend
+    point.z += (horse.z - lanePoint.z) * blend
+  }
   return point
+}
+
+/** Stop one approach tile before the exterior doorway. */
+function parkShrineHorse(map: GameMap, s: SimTraveler): NonNullable<SimTraveler["horseRest"]> {
+  const at = shrineWorldPoint(map, s)
+  const ahead = shrineWorldPoint(map, { ...s, branchProgress: s.branchProgress + 0.1 })
+  return { ...at, progress: s.branchProgress, lane: s.lane, heading: Math.atan2(ahead.x - at.x, ahead.z - at.z) }
 }
 
 /** Cross to the new left lane over a short walk, including when seeking food. */
@@ -914,7 +934,10 @@ export function stepSim(
       }
     }
 
-    const targetSpeed = t.pace * baseSpeed * (speedScales?.get(t.id) ?? 1) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+    const knightSpeed = t.type.id === "knight" ? (knightMounted(s.activity, s.horseRest)
+      ? knightTravelSpeed(characterScale, knightLoadout(t.id).squire)
+      : personWalkStride(knightDesign(travelerAppearance(map.seed ?? 0, t.id).variant)) * characterScale * DEFAULT_WALK_CADENCE) / DEFAULT_WALK_SPEED : undefined
+    const targetSpeed = t.pace * baseSpeed * (knightSpeed ?? speedScales?.get(t.id) ?? 1) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
     s.moveSpeed = camping || sheltered || s.activity === "working" || s.activity === "building" || s.activity === "browsing" || s.activity === "performing" || s.activity === "listening" || s.activity === "openingShop" || s.activity === "packingShop" || s.activity === "vending" ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed
@@ -929,13 +952,19 @@ export function stepSim(
       case "fromRelic": {
         const branch = s.shrineRoute ?? map.site!.branch
         const inbound = s.activity === "toRelic"
-        s.branchProgress = Math.max(0, Math.min(branch.length - 1,
+        const parkingProgress = s.horseRest?.progress ?? Math.max(0, map.site!.branch.length - 2)
+        const nextProgress = Math.max(0, Math.min(branch.length - 1,
           s.branchProgress + (inbound ? 1 : -1) * worldSpeed * dt))
+        const dismount = t.type.id === "knight" && inbound && !s.horseRest && nextProgress >= parkingProgress
+        const remount = !inbound && !!s.horseRest && nextProgress <= parkingProgress
+        s.branchProgress = dismount || remount ? parkingProgress : nextProgress
         stepLane(s, inbound ? 1 : -1, worldSpeed * dt)
         const at = shrineWorldPoint(map, s)
         s.x = at.x
         s.y = at.y
         s.z = at.z
+        if (dismount) s.horseRest = parkShrineHorse(map, s)
+        if (remount) { s.lane = s.horseRest!.lane; s.horseRest = undefined }
         if (inbound && s.branchProgress >= branch.length - 1) {
           const fee = admissionFee(map)
           if (s.gold >= fee) {
@@ -955,6 +984,7 @@ export function stepSim(
         } else if (!inbound && s.branchProgress <= 0) {
           s.lane = s.direction * s.laneOffset
           s.activity = "walking"
+          s.horseRest = undefined
           s.shrineRoute = null
           s.shrineSeat = undefined
           s.visitCooldown = 30
@@ -1212,6 +1242,7 @@ export function stepSim(
               s.branchEntryLane = s.lane
               s.lane = s.laneOffset
               const at = shrineWorldPoint(map, s)
+              if (t.type.id === "knight" && site.branch.length <= 2) s.horseRest = parkShrineHorse(map, s)
               s.x = at.x
               s.y = at.y
               s.z = at.z

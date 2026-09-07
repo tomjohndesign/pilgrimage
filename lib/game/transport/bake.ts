@@ -6,7 +6,7 @@ import { merchantGesture } from "./merchant-poses"
 import { COATS } from "./coats"
 import { populationDesign } from "../base-person/population"
 import { TRAVELER_TYPES } from "../travelers"
-import { CARGO, CART, SHOP, SHOP_SECONDS, CART_MODES, TRANSPORT, ANIMAL_COLUMNS, CART_COLUMNS, ANIMAL_PROFILES, HORSE_VARIANTS, pullingDesign } from "./assets"
+import { CARGO, CART, SHOP, SHOP_SECONDS, CART_MODES, TRANSPORT, ANIMAL_COLUMNS, ANIMAL_RIG_VERSION, CART_COLUMNS, ANIMAL_PROFILES, HORSE_VARIANTS, pullingDesign } from "./assets"
 import { createAnimalRig, createCartRig } from "./rig"
 import { spriteDepthBaker, SPRITE_DEPTH_ENCODING } from "../render/bake-depth"
 
@@ -131,7 +131,7 @@ export async function bakeTransport() {
     return { images, metadata: { ...TRANSPORT, depthEncoding: SPRITE_DEPTH_ENCODING, keeperClips: KEEPER_CLIPS, keeperColumns: KEEPER_COLUMNS, directions: BASE_PERSON.directions, camera: { ...BASE_PERSON.camera, viewSize: extent },
       safePadding, cartFrame: CART, shop: { ...SHOP, seconds: SHOP_SECONDS, frames: TRANSPORT.shopFrames }, coats: COATS, merchantSetupFrames: PERSON_CLIPS.gathering.frames, cargo: CARGO, modes: CART_MODES, cartColumns: CART_COLUMNS, animalColumns: ANIMAL_COLUMNS,
       wheelCycleRadians: Math.PI * 2,
-      animalProfiles: ANIMAL_PROFILES,
+      animalProfiles: ANIMAL_PROFILES, animalRigVersion: ANIMAL_RIG_VERSION,
       animalRows: { donkey: 8, horse: 16 }, horseVariants: { common: { rowOffset: 0 }, noble: { rowOffset: 8 } },
       animalClips: { idle: { start: 0, frames: 1 }, walk: { start: 1, frames: TRANSPORT.animalFrames }, lower: { start: 1 + TRANSPORT.animalFrames, frames: TRANSPORT.lowerFrames }, graze: { start: 1 + TRANSPORT.animalFrames + TRANSPORT.lowerFrames, frames: TRANSPORT.grazeFrames, fps: 4 } },
       puller: { templateVersion: BASE_PERSON.version, cellSize: BASE_PERSON.cellSize, anchor: BASE_PERSON.anchor,

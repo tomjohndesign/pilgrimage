@@ -17,13 +17,19 @@ import { usePopulationStore } from "@/lib/game/base-person/population-store"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { MerchantMapPreview } from "./merchant-map-preview"
 import { COATS, animalCoat } from "@/lib/game/transport/coats"
-import { CARGO, TRANSPORT, CART, SHOP, cartUrl, animalUrl, type Puller, type ShopState, cartColumn, type Cargo, type CartMode, type HorseVariant } from "@/lib/game/transport/assets"
-import transportMetadata from "@/public/textures/transport/v16/manifest.json"
+import { CARGO, TRANSPORT, CART, SHOP, animalStride, cartUrl, animalUrl, type Puller, type ShopState, cartColumn, type Cargo, type CartMode, type HorseVariant } from "@/lib/game/transport/assets"
+import { KNIGHT, knightDesign } from "@/lib/game/knight/design"
+import { knightTravelSpeed } from "@/lib/game/knights"
+import { personWalkStride } from "@/lib/game/base-person/gait"
+import { squireVisual } from "@/lib/game/knight/visual"
+import knightMetadata from "@/public/textures/knights/v7/manifest.json"
+import transportMetadata from "@/public/textures/transport/v19/manifest.json"
 
-const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse" } as const
+const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse", knight: "Knight" } as const
 type Subject = keyof typeof SUBJECTS
 declare global { interface Window {
   __minstrelBake?: typeof import("@/lib/game/minstrel/bake").bakeMinstrels
+  __knightBake?: typeof import("@/lib/game/knight/bake").bakeKnights
   __transportBake?: typeof import("@/lib/game/transport/bake").bakeTransport
   __choppingBlockBake?: typeof import("@/lib/game/base-person/bake").bakeChoppingBlock
   __rocketMonkBake?: typeof import("@/lib/game/rocket/bake").bakeRocketMonks
@@ -59,6 +65,35 @@ function download(url: string, name: string) {
   const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; anchor.click()
 }
 
+// Both actors use their actual atlas anchors and the game's following distance.
+function entourageLayout(mounted: boolean, row: number) {
+  const size = mounted ? KNIGHT.cellSize : knightMetadata.person.cellSize
+  const anchor = mounted ? KNIGHT.anchor : knightMetadata.person.anchor
+  const angle = -row * Math.PI / 4, gap = 0.75 * TRANSPORT.cellSize / TRANSPORT.scale
+  const x = Math.round(anchor[0] - Math.sin(angle) * gap - knightMetadata.squire.anchor[0])
+  const depth = -Math.cos(angle) * gap
+  const y = Math.round(anchor[1] + depth * Math.sin(BASE_PERSON.camera.pitch * Math.PI / 180) - knightMetadata.squire.anchor[1])
+  const left = Math.min(0, x), top = Math.min(0, y)
+  return { width: Math.max(size, x + knightMetadata.squire.cellSize) - left,
+    height: Math.max(size, y + knightMetadata.squire.cellSize) - top,
+    knight: { left: -left, top: -top }, squire: { left: x - left, top: y - top }, inFront: depth > 0 }
+}
+
+function KnightEntourage({ mounted, row, frame, visibleFrame, variant, walking, zoom = 1, offset = [0, 0], ...tile }: {
+  mounted: boolean; row: number; frame: number; variant: number; walking: boolean; zoom?: number; offset?: [number, number]
+  url: string; columns: number; visibleFrame: number; rows: number; cellSize: number; name: string
+}) {
+  const layout = entourageLayout(mounted, row), squire = squireVisual()
+  const stride = mounted ? animalStride("horse", 1, "noble") : personWalkStride(knightDesign(variant))
+  const phase = walking ? frame / (mounted ? KNIGHT.frames : knightMetadata.person.frameCounts.walk) * stride / squire.walkStride : 0
+  const clip = walking ? squire.walk : squire.idle
+  const position = (at: { left: number; top: number }) => ({ position: "absolute" as const, left: at.left * zoom, top: at.top * zoom })
+  return <div className="person-sprite knight-entourage" style={{ width: layout.width * zoom, height: layout.height * zoom, transform: `translate(${offset[0]}px, ${offset[1]}px)` }}>
+    <div style={position(layout.knight)}><Tile {...tile} row={variant * 8 + row} frame={visibleFrame} zoom={zoom} /></div>
+    <div style={{ ...position(layout.squire), zIndex: layout.inFront ? 1 : -1 }}><Tile url={clip.url} row={squire.rowOffset + row} frame={Math.floor(phase * clip.columns) % clip.columns} columns={clip.columns} rows={clip.rows} cellSize={knightMetadata.squire.cellSize} zoom={zoom} name={`Squire ${BASE_PERSON.directions[row]}, ${walking ? "following" : "waiting"}`} /></div>
+  </div>
+}
+
 /** Character proportions and editable animation poses.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0
  */
@@ -72,10 +107,14 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   const [coat, setCoat] = useState("")
   const [grazing, setGrazing] = useState(false)
   const [horseVariant, setHorseVariant] = useState<HorseVariant>("common")
+  const [mountedKnight, setMountedKnight] = useState(true)
+  const [knightVariant, setKnightVariant] = useState(0)
+  const [showSquire, setShowSquire] = useState(true)
+  const isKnight = subject === "knight"
   const isPerson = subject === "person"
   const onMap = subject === "cart" && view === "map"
   useEffect(() => { setView(subject === "cart" ? "map" : "character"); if (subject === "cart") setZoom(6) }, [subject])
-  const animalKind = subject === "cart" ? cartPuller === "hand" ? null : cartPuller : subject === "horse" || subject === "donkey" ? subject : null
+  const animalKind = isKnight ? "horse" : subject === "cart" ? cartPuller === "hand" ? null : cartPuller : subject === "horse" || subject === "donkey" ? subject : null
   useEffect(() => {
     const asset = new URLSearchParams(window.location.search).get("asset")
     if (asset && Object.hasOwn(SUBJECTS, asset)) setSubject(asset as Subject)
@@ -85,17 +124,20 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     const target = window as unknown as { __bakePersonPopulation?: (progress?: (done: number) => void) => Promise<unknown> }
     target.__bakePersonPopulation = async progress => (await import("@/lib/game/base-person/bake-population")).bakePopulation(undefined, progress)
     window.__minstrelBake = async () => (await import("@/lib/game/minstrel/bake")).bakeMinstrels()
+    window.__knightBake = async () => (await import("@/lib/game/knight/bake")).bakeKnights()
     window.__transportBake = async () => (await import("@/lib/game/transport/bake")).bakeTransport()
     window.__choppingBlockBake = bakeChoppingBlock
     window.__rocketMonkBake = async () => (await import("@/lib/game/rocket/bake")).bakeRocketMonks()
-    return () => { delete target.__bakePersonPopulation; delete window.__minstrelBake; delete window.__transportBake; delete window.__choppingBlockBake; delete window.__rocketMonkBake }
+    return () => { delete target.__bakePersonPopulation; delete window.__transportBake; delete window.__knightBake; delete window.__minstrelBake; delete window.__choppingBlockBake; delete window.__rocketMonkBake }
   }, [])
   const [bake, setBake] = useState<BasePersonBake | null>(null)
   const [error, setError] = useState("")
   const [row, setRow] = useState(1)
   const [frame, setFrame] = useState(0)
   const [clip, setClip] = useState<BaseClip>("walk")
-  const frameCount = isPerson ? PERSON_CLIPS[clip].frames : subject === "cart" ? shopState === "opening" || shopState === "packing" ? 48 : 120 : grazing ? TRANSPORT.grazeFrames : clip === "idle" ? 1 : transportMetadata.animalClips.walk.frames
+  const knightClip = mountedKnight ? clip === "idle" ? "idle" : "walk" : clip
+  const knightFrames = mountedKnight ? knightClip === "idle" ? 1 : knightMetadata.frames : knightMetadata.person.frameCounts[knightClip]
+  const frameCount = isKnight ? knightFrames : isPerson ? PERSON_CLIPS[clip].frames : subject === "cart" ? shopState === "opening" || shopState === "packing" ? 48 : 120 : grazing ? TRANSPORT.grazeFrames : clip === "idle" ? 1 : transportMetadata.animalClips.walk.frames
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("clip")
     if (requested && Object.keys(PERSON_CLIPS).includes(requested)) setClip(requested as BaseClip)
@@ -107,7 +149,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   const [onion, setOnion] = useState(false)
   const [sides, setSides] = useState(false)
   const [design, setDesign] = useState<PersonDesign>(DEFAULT_DESIGN)
-  const animationRate = isPerson ? actionPlaybackRate(clip, design) : subject === "cart" ? 12 / BASE_PERSON.defaultFps
+  const animationRate = isKnight ? mountedKnight ? knightTravelSpeed(1, showSquire) / animalStride("horse", 1, "noble") * knightMetadata.frames / BASE_PERSON.defaultFps : actionPlaybackRate(knightClip, knightDesign(knightVariant)) : isPerson ? actionPlaybackRate(clip, design) : subject === "cart" ? 12 / BASE_PERSON.defaultFps
     : grazing ? transportMetadata.animalClips.graze.fps / BASE_PERSON.defaultFps : transportMetadata.animalProfiles[subject === "donkey" ? "donkey" : horseVariant].cyclesPerSecond * transportMetadata.animalClips.walk.frames / BASE_PERSON.defaultFps
   const [busy, setBusy] = useState(true)
   const [dragging, setDragging] = useState(false)
@@ -178,6 +220,11 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     } catch (error) { setJsonMessage(error instanceof Error ? error.message : "Could not load JSON. Your edits have not changed.") }
   }
   const chooseCharacter = (id: string, initial: PersonDesign) => {
+    if (id.startsWith("knight/")) {
+      setKnightVariant(POPULATION_PROFILES.findIndex(profile => id === `knight/${profile.id}`) % KNIGHT.variants)
+      setSubject("knight"); setClip("walk"); setFrame(0)
+      return
+    }
     drafts.current[character] = design
     setCharacter(id); setDesign(drafts.current[id] ?? { ...initial }); setHistory([]); setFuture([]); setMessage("")
   }
@@ -233,24 +280,24 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   }, [design, clip, frame, sides, sheetMatchesDesign, isPerson])
   useEffect(() => {
     if (!active || !playing || frameCount === 1 || onMap) return
-    const timer = setInterval(() => setFrame((f) => subject === "cart" && shopState !== "opening" && shopState !== "packing" ? f + 1 : (f + 1) % frameCount), 1000 / (fps * animationRate))
+    const timer = setInterval(() => setFrame((f) => subject === "knight" || (subject === "cart" && shopState !== "opening" && shopState !== "packing") ? f + 1 : (f + 1) % frameCount), 1000 / (fps * animationRate))
     return () => clearInterval(timer)
   }, [active, playing, fps, frameCount, animationRate, subject, shopState, onMap])
 
   const live = isPerson && !sheetMatchesDesign && preview?.clip === clip && preview.sides === sides ? preview : null
-  const columns = isPerson ? live ? 1 : PERSON_CLIPS[clip].frames : subject === "cart" ? cartMode === "shop" ? transportMetadata.shop.frames : transportMetadata.cartColumns : transportMetadata.animalColumns
+  const columns = isKnight ? mountedKnight ? knightMetadata.frames + 1 : knightFrames : isPerson ? live ? 1 : PERSON_CLIPS[clip].frames : subject === "cart" ? cartMode === "shop" ? transportMetadata.shop.frames : transportMetadata.cartColumns : transportMetadata.animalColumns
   const step = frame % frameCount
-  const firstColumn = isPerson ? 0 : subject === "cart" ? cartColumn(cargo, cartMode, 0) : grazing ? transportMetadata.animalClips.graze.start : clip === "idle" ? transportMetadata.animalClips.idle.start : transportMetadata.animalClips.walk.start
+  const firstColumn = isKnight ? mountedKnight && knightClip === "walk" ? 1 : 0 : isPerson ? 0 : subject === "cart" ? cartColumn(cargo, cartMode, 0) : grazing ? transportMetadata.animalClips.graze.start : clip === "idle" ? transportMetadata.animalClips.idle.start : transportMetadata.animalClips.walk.start
   const visibleFrame = live ? 0 : subject === "cart" ? cartMode === "shop" ? Math.round((shopState === "opening" ? step / 47 : shopState === "packing" ? 1 - step / 47 : 1) * (TRANSPORT.shopFrames - 1)) : step % TRANSPORT.wheelFrames : firstColumn + step
-  const url = !isPerson ? subject === "cart" ? cartUrl(cargo, cartMode, 1, cartPuller === "hand") : animalUrl(subject, animalCoat(subject, coat).id) : live?.url ?? (bake ? clip === "walk" || clip === "idle" ? sides ? clip === "walk" ? bake.debugWalk : bake.debugIdle : bake[clip] : sides ? bake.actions[clip].debug : bake.actions[clip].url : "")
+  const url = isKnight ? `/textures/knights/${KNIGHT.version}/${mountedKnight ? `mounted-${animalCoat("horse", coat).id}` : `knight-${knightClip}`}.png` : !isPerson ? subject === "cart" ? cartUrl(cargo, cartMode, 1, cartPuller === "hand") : animalUrl(subject, animalCoat(subject, coat).id) : live?.url ?? (bake ? clip === "walk" || clip === "idle" ? sides ? clip === "walk" ? bake.debugWalk : bake.debugIdle : bake[clip] : sides ? bake.actions[clip].debug : bake.actions[clip].url : "")
   const shadowUrl = !isPerson || sides ? undefined : live?.shadowUrl ?? (clip === "walk" ? bake?.shadowWalk : clip === "idle" ? bake?.shadowIdle : bake?.actions[clip].shadow)
   const renderPalette = personRecipe(design).renderPalette
   const sockets = isPerson ? live?.sockets[row] ?? bake?.metadata.clips[clip][row * columns + visibleFrame]?.sockets : undefined
-  const pixels = isPerson ? BASE_PERSON.cellSize : subject === "cart" ? cartMode === "shop" ? SHOP.cellSize : CART.cellSize : transportMetadata.cellSize
+  const pixels = isKnight ? mountedKnight ? knightMetadata.cellSize : knightMetadata.person.cellSize : isPerson ? BASE_PERSON.cellSize : subject === "cart" ? cartMode === "shop" ? SHOP.cellSize : CART.cellSize : transportMetadata.cellSize
   const directionStep = subject === "cart" ? CART.directions / 8 : 1
-  const atlasRows = subject === "cart" ? CART.directions : subject === "horse" ? transportMetadata.animalRows.horse : 8
-  const rowOffset = subject === "horse" ? transportMetadata.horseVariants[horseVariant].rowOffset : 0
-  const clipLabel = subject === "cart" ? { travel: `Pulled by ${cartPuller}`, opening: "Opening shop", trading: "Open for business", packing: "Packing up" }[shopState] : !isPerson && grazing ? "Grazing" : PERSON_CLIPS[clip].label
+  const atlasRows = isKnight ? knightMetadata.variants * 8 : subject === "cart" ? CART.directions : subject === "horse" ? transportMetadata.animalRows.horse : 8
+  const rowOffset = isKnight ? knightVariant * 8 : subject === "horse" ? transportMetadata.horseVariants[horseVariant].rowOffset : 0
+  const clipLabel = isKnight ? mountedKnight ? knightClip === "idle" ? "Mounted · standing" : "Riding" : PERSON_CLIPS[knightClip].label : subject === "cart" ? { travel: `Pulled by ${cartPuller}`, opening: "Opening shop", trading: "Open for business", packing: "Packing up" }[shopState] : !isPerson && grazing ? "Grazing" : PERSON_CLIPS[clip].label
   const direction = BASE_PERSON.directions[row]
   const jsonDownload = () => {
     if (!bake) return
@@ -277,14 +324,14 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   const ready = !busy && !error && !!bake && sheetMatchesDesign
 
   return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Character playground"
-    version={isPerson ? `Base person · v${BASE_PERSON.version}` : `${SUBJECTS[subject]} · ${TRANSPORT.version}`}
+    version={isPerson ? `Base person · v${BASE_PERSON.version}` : `${SUBJECTS[subject]} · ${isKnight ? KNIGHT.version : TRANSPORT.version}`}
     controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(!controlsOpen)}
     roadHref={`/play?characters=base&baseSize=1.5&fps=${fps}`}
     status={onMap ? "Full merchant journey · game scale · 11 × 7 tiles" : !isPerson ? `${subject === "horse" ? transportMetadata.animalProfiles[horseVariant].label : SUBJECTS[subject]} · ${clipLabel}` : dragging ? "Live preview · release to finish sprite sheets." : busy ? "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}
     detail={onMap ? "8 camera angles · game scale" : `${subject === "cart" ? CART.directions : 8} directions · ${Number((fps * animationRate).toFixed(1))} fps`}>
     <div className="person-workspace">
       <aside className={`person-controls hud-well ${controlsOpen ? "is-open" : ""}`} aria-label="Character controls">
-        <div className="person-panel-heading"><label className="person-choice">Asset<select aria-label="Character asset" value={subject} onChange={e => { setSubject(e.target.value as Subject); setFrame(0); setClip("walk") }}>{Object.entries(SUBJECTS).filter(([id]) => id === "person" || id === "cart").map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><button className="hud-close person-controls-toggle" aria-label="Close character controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
+        <div className="person-panel-heading"><label className="person-choice">Asset<select aria-label="Character asset" value={subject} onChange={e => { setSubject(e.target.value as Subject); setFrame(0); setClip("walk") }}>{Object.entries(SUBJECTS).filter(([id]) => id === "person" || id === "cart" || id === "knight").map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><button className="hud-close person-controls-toggle" aria-label="Close character controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
         <div className="person-controls-scroll">
           {isPerson ? <>
           <Section {...section("Presets")}><div className="person-presets">{Object.entries(PERSON_PRESETS).map(([name, preset]) => <button key={name} className={button} onClick={() => chooseCharacter(`preset/${name}`, preset)}>{name}</button>)}</div></Section>
@@ -353,13 +400,19 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
             </div>
           </Section>
           </> : <>
+            {isKnight && <Section {...section("Knight")}>
+              <label className="person-choice">Pose<select aria-label="Knight pose" value={mountedKnight ? "mounted" : "foot"} onChange={e => { setMountedKnight(e.target.value === "mounted"); setFrame(0); setClip("walk") }}><option value="mounted">Mounted</option><option value="foot">On foot</option></select></label>
+              <label className="person-choice">Build<select aria-label="Knight build" value={knightVariant} onChange={e => { setKnightVariant(Number(e.target.value)); setFrame(0) }}>{["Regular", "Tall", "Broad"].map((label, variant) => <option key={label} value={variant}>{label}</option>)}</select></label>
+              <label className="person-check"><input type="checkbox" checked={showSquire} onChange={e => setShowSquire(e.target.checked)} />Following squire</label>
+              <p className="person-hint">Mail armour and a nasal helmet, riding a noble horse. Knights dismount outside the shrine; the squire carries a shield, rolled cloak and supplies, and waits with the horse.</p>
+            </Section>}
             {subject === "horse" && <Section {...section("Horse")}>
               <label className="person-choice">Variant<select aria-label="Horse variant" value={horseVariant} onChange={e => { setHorseVariant(e.target.value as HorseVariant); setFrame(0) }}><option value="common">Common horse</option><option value="noble">Noble horse</option></select></label>
               <p className="person-hint">{horseVariant === "noble" ? "Deep chest, strong haunches and a proud carriage. A powerful, deliberate walk." : "Lean, worn and lower-headed, with a measured, weary walk."}</p>
             </Section>}
             {subject === "donkey" && <p className="person-hint">A slightly stooped head and a slow, weighty plod.</p>}
-            {animalKind && <Section {...section("Coat")}><label className="person-choice">Natural coat<select aria-label="Animal coat" value={animalCoat(animalKind, coat).id} onChange={e => setCoat(e.target.value)}>{COATS[animalKind].map(value => <option key={value.id} value={value.id}>{value.label}</option>)}</select></label>
-              {subject !== "cart" && <label className="person-check"><input type="checkbox" checked={grazing} onChange={e => { setGrazing(e.target.checked); setFrame(0) }} />Grazing</label>}
+            {animalKind && (!isKnight || mountedKnight) && <Section {...section("Coat")}><label className="person-choice">Natural coat<select aria-label="Animal coat" value={animalCoat(animalKind, coat).id} onChange={e => setCoat(e.target.value)}>{COATS[animalKind].map(value => <option key={value.id} value={value.id}>{value.label}</option>)}</select></label>
+              {subject !== "cart" && !isKnight && <label className="person-check"><input type="checkbox" checked={grazing} onChange={e => { setGrazing(e.target.checked); setFrame(0) }} />Grazing</label>}
             </Section>}
             {subject === "cart" && <Section {...section("Cart")}>
               <label className="person-choice">Offering<select aria-label="Offering" value={cargo} onChange={e => { setCargo(e.target.value as Cargo); setFrame(0) }}>{CARGO.map(value => <option key={value}>{value}</option>)}</select></label>
@@ -371,8 +424,8 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
             {!onMap && <Section {...section("Animation")}><Tuner label="Timing" labelClassName="w-28" value={fps} min={1} max={24} display={`${(fps * animationRate).toFixed(1)} fps`} onChange={setFps} /></Section>}
             <Section {...section("Files")}><div className="person-file-actions">
               <a className={button} href={url} download>Download sprite sheet</a>
-              <a className={button} href={`/textures/transport/${TRANSPORT.version}/manifest.json`} download>Download sheet metadata</a>
-            </div><p className="person-hint">{pixels} × {pixels} px cell · {subject === "cart" ? CART.directions : 8} directions<br />{transportMetadata.safePadding} px safe margin</p></Section>
+              <a className={button} href={isKnight ? `/textures/knights/${KNIGHT.version}/manifest.json` : `/textures/transport/${TRANSPORT.version}/manifest.json`} download>Download sheet metadata</a>
+            </div><p className="person-hint">{pixels} × {pixels} px cell · {subject === "cart" ? CART.directions : 8} directions<br />{isKnight ? mountedKnight ? knightMetadata.safePadding : 4 : transportMetadata.safePadding} px safe margin</p></Section>
           </>}
         </div>
         {isPerson && <footer className="person-panel-footer">
@@ -384,7 +437,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
       <div className="person-preview" aria-label="Character preview">
         <div className="person-preview-toolbar hud-well">
           <div className="person-playback"><button className="hud-pause" aria-label={playing ? "Pause" : "Play"} disabled={frameCount === 1 || view === "sheet"} onClick={() => setPlaying(!playing)}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
-            <label style={subject === "cart" ? { display: "none" } : undefined}>Clip<select aria-label="Animation clip" value={clip} onChange={e => { setClip(e.target.value as BaseClip); setFrame(0) }}>{Object.entries(PERSON_CLIPS).filter(([id]) => isPerson || id === "walk" || id === "idle").map(([id, entry]) => <option key={id} value={id}>{entry.label}</option>)}</select></label>
+            <label style={subject === "cart" ? { display: "none" } : undefined}>Clip<select aria-label="Animation clip" value={isKnight ? knightClip : clip} onChange={e => { setClip(e.target.value as BaseClip); setFrame(0) }}>{Object.entries(PERSON_CLIPS).filter(([id]) => isPerson || (isKnight && !mountedKnight) || id === "walk" || id === "idle").map(([id, entry]) => <option key={id} value={id}>{entry.label}</option>)}</select></label>
             <label>{onMap ? "View" : "Zoom"}<select aria-label={onMap ? "Map framing" : "Pixel inspection zoom"} value={zoom} onChange={e => setZoom(Number(e.target.value))}>{(onMap ? [4, 6, 8] : ASSET_ZOOMS).map(n => <option key={n} value={n}>{onMap ? ({ 4: "Wide", 6: "Map", 8: "Close" } as Record<number, string>)[n] : `${n}×`}</option>)}</select></label>
           </div>
           <div className="person-view-buttons" aria-label="Preview modes">{isPerson && <><button className={button} disabled={!draftsReady} onClick={() => void copyJson()}>Copy edits as JSON</button><button className={button} aria-pressed={showRig} onClick={() => { setShowRig(!showRig); setView("character"); setPlaying(false) }}>Show rig</button></>}{subject === "cart" && <button className={button} aria-pressed={onMap} onClick={() => { setView("map"); if (zoom < 4) setZoom(6) }}>Small map</button>}{([['character', 'Character'], ['native', 'Native size'], ['sheet', 'Sprite sheet']] as const).map(([mode, label]) => <button key={mode} className={button} aria-pressed={view === mode} onClick={() => setView(mode)}>{label}</button>)}</div>
@@ -417,8 +470,8 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={url} width={pixels * columns} height={pixels * atlasRows} alt={`${SUBJECTS[subject]} ${clipLabel}: ${subject === "cart" ? CART.directions : 8} directions${subject === "horse" ? ", common and noble variants" : ""} and ${columns} frames`} />
           </div> : view === "native" ? <div className="person-native" aria-label="Native size lineup">
-            {BASE_PERSON.directions.map((d, i) => <div key={d}><Tile url={url} shadowUrl={shadowUrl} row={rowOffset + i * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} name={`${d}, native ${SUBJECTS[subject]}`} /><span>{d}</span></div>)}
-          </div> : <div className="person-sprite" style={{ width: pixels * fittedZoom, height: pixels * fittedZoom, transform: `translate(${previewOffset[0]}px, ${previewOffset[1]}px)` }}>
+            {BASE_PERSON.directions.map((d, i) => <div key={d}>{isKnight && showSquire ? <KnightEntourage mounted={mountedKnight} row={i} frame={frame} variant={knightVariant} walking={knightClip === "walk"} url={url} visibleFrame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} name={`${d}, native Knight`} /> : <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + i * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} name={`${d}, native ${SUBJECTS[subject]}`} />}<span>{d}</span></div>)}
+          </div> : isKnight && showSquire ? <KnightEntourage mounted={mountedKnight} row={row} frame={frame} variant={knightVariant} walking={knightClip === "walk"} url={url} visibleFrame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={fittedZoom} offset={previewOffset} name={`Knight ${direction}, frame ${step + 1}`} /> : <div className="person-sprite" style={{ width: pixels * fittedZoom, height: pixels * fittedZoom, transform: `translate(${previewOffset[0]}px, ${previewOffset[1]}px)` }}>
             {isPerson && onion && !live && columns > 1 && <div className="absolute inset-0 opacity-25"><Tile url={url} row={row} frame={(visibleFrame + columns - 1) % columns} columns={columns} zoom={fittedZoom} name="Previous frame ghost" /></div>}
             <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + row * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={fittedZoom} name={`${SUBJECTS[subject]} ${direction}, frame ${step + 1}`} />
             {isPerson && showRig && <RigOverlay joints={inspected} selected={selectedJoint} row={row} offset={currentOffset} onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} onChange={changeJoint} onDrag={rigDragging} />}

@@ -117,7 +117,8 @@ Bake the base, every population profile/calling,
 and the Monk preset. Inspect the latest main branch before allocating versions.
 Published bakes are immutable; use new paths and update all active imports only
 after the exports exist. The current exports are base v31, population v23,
-monks v30 (brown hair) / v31 (grey hair), rockets v8, transport v16 and minstrel v2.
+monks v30 (brown hair) / v31 (grey hair), rockets v8, transport v19, knights v7
+and minstrel v2.
 For a subsequent change choose unused versions:
 
 ```sh

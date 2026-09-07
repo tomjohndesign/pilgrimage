@@ -8,6 +8,8 @@ import { rocketMonkVisual, rocketFlightClip } from "../rocket/assets"
 import { pullingVisual } from "../transport/visual"
 import { TRANSPORT } from "../transport/assets"
 import { TRAVELER_TYPES } from "../travelers"
+import { KNIGHT } from "../knight/design"
+import { knightVisual, squireVisual } from "../knight/visual"
 import { MINSTREL_PLAYING } from "../minstrel/assets"
 
 describe("active sprite depth assets", () => {
@@ -30,9 +32,12 @@ describe("active sprite depth assets", () => {
     }
     for (const age of [30, 80]) { visual(monkVisual(age)); visual(rocketMonkVisual(age)); clip(rocketFlightClip(age)) }
     for (let variant = 0; variant < 6; variant++) visual(pullingVisual(variant))
-    const directory = `/textures/transport/${TRANSPORT.version}`
-    for (const file of await readdir(`public${directory}`)) {
-      if (file.endsWith(".png") && !file.startsWith("depth-")) pairs.set(`${directory}/${file}`, `${directory}/depth-${file}`)
+    for (let variant = 0; variant < KNIGHT.variants; variant++) visual(knightVisual(variant))
+    visual(squireVisual())
+    for (const directory of [`/textures/transport/${TRANSPORT.version}`, `/textures/knights/${KNIGHT.version}`]) {
+      for (const file of await readdir(`public${directory}`)) {
+        if (file.endsWith(".png") && !file.startsWith("depth-")) pairs.set(`${directory}/${file}`, `${directory}/depth-${file}`)
+      }
     }
     expect(pairs.size).toBeGreaterThan(200)
     for (const [color, depth] of pairs) {
