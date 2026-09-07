@@ -1,4 +1,4 @@
-import { findRoadShortcut, retireBypassedRoad, exploresRoadShortcut, type WalkingShortcut } from "./walking-shortcuts"
+import { takeRoadShortcut, retireBypassedRoad, exploresRoadShortcut, type WalkingShortcut } from "./walking-shortcuts"
 import { createFootpaths, HEAVY_PATH_WEAR, recordWalkingPath, regrowFootpaths, type Footpaths } from "./footpaths"
 import { knightMounted, knightLoadout, knightTravelSpeed, type HorseRest } from "./knights"
 import { knightDesign } from "./knight/design"
@@ -1341,8 +1341,9 @@ export function stepSim(
           const check = Math.floor(s.progress) * 2 + (direction === 1 ? 1 : 0)
           if (s.shortcutCheck !== check) {
             s.shortcutCheck = check
-            s.roadShortcut = findRoadShortcut(map, s.progress, direction,
-              p => roadWorldPoint(map, p, s.lane), exploresRoadShortcut(explorerRanks.get(s.id)!, s.cycle, map.seed ?? 0, roadWalkers.length)) ?? undefined
+            s.roadShortcut = takeRoadShortcut(map, s.progress, direction, s.lane,
+              (p, lane) => roadWorldPoint(map, p, lane),
+              exploresRoadShortcut(explorerRanks.get(s.id)!, s.cycle, map.seed ?? 0, roadWalkers.length), sim.time) ?? undefined
             if (s.roadShortcut) { stepRoadShortcut(s, map, worldSpeed * dt); break }
           }
         }

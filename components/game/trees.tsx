@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react"
+import { Suspense, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { BASE_CHARACTER_SCALE } from "@/lib/game/base-person/gait"
 import { useFrame } from "@react-three/fiber"
@@ -22,6 +22,7 @@ import {
   OUTLINE_ID_LAYER_MASK,
   treeObjectId,
 } from "@/lib/game/render/outline"
+import { blockKey } from "@/lib/game/render/blocks"
 import { placeTrees, type TreePlacement } from "@/lib/game/trees/placement"
 import {
   generateTree,
@@ -47,9 +48,9 @@ import { TREE_IMPACT_DURATION, treeImpactAngle, treeImpacts } from "@/lib/game/t
  * Cost model, since the forest can be many thousand trees: each species owns a
  * trunk geometry and a crown geometry, both tiny (a 6-sided cylinder, an
  * 80-face icosphere or a 7-sided cone), and every tree is a few instances of
- * those. That is 2 draw calls per species for colour plus 2 for the outline ID
- * pass, so ~24 draw calls for the whole forest however big the map. No
- * per-tree geometry, no textures, no transparency.
+ * those. No per-tree geometry, no textures, no transparency. Instances are
+ * split into world-space blocks (see lib/game/render/blocks) so the camera only
+ * pays for the forest it can see.
  */
 
 export type { TreePlacement }
@@ -94,7 +95,9 @@ export function Trees({ map, placements: supplied, ents = false, characterScale 
   useEffect(() => {
     if (selection?.kind === "tree" && (!selected || !visible)) useCameraStore.getState().select(null)
   }, [selection, selected, visible])
-  const selectTree = (id: number, event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "tree", id }, event)
+  // `time` ticks several times a second, so this component re-renders often.
+  // A stable handler is what lets the memoised blocks below skip that entirely.
+  const selectTree = useCallback((id: number, event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "tree", id }, event), [])
   const seed = deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes)
   return (
     <group>
@@ -140,40 +143,64 @@ export function TreeField({
   const species = useTreeTuningStore((s) => s.species)
   const variance = useTreeTuningStore((s) => s.variance)
 
+  // One trunk and one crown geometry per species, shared by all of its blocks:
+  // the blocks differ only in which instances they carry.
+  const geometries = useMemo(() => new Map(TREE_SPECIES_ORDER.map((id) => [id, {
+    trunk: makeTrunkGeometry(species[id].trunk.taper),
+    crown: makeCrownGeometry(species[id].crown.shape),
+  }])), [species])
+  useEffect(() => () => {
+    for (const { trunk, crown } of geometries.values()) { trunk.dispose(); crown.dispose() }
+  }, [geometries])
+
   const grown = useMemo(() => {
     const rng = makeRng(seed)
-    const grouped = new Map<TreeSpeciesId, GrownTree[]>()
+    const grouped = new Map<string, { id: TreeSpeciesId; block: number; trees: GrownTree[] }>()
     // Trees take the ID block between the buildings and the relic. On huge maps
     // IDs wrap rather than overflow: two trees sharing an ID only lose the
     // outline between themselves, and they are far apart.
     placements.forEach((placement, index) => {
       const shape = placement.shape ?? generateTree(species[placement.species], rng, variance)
       const objectId = treeObjectId(idBase, index)
-      let list = grouped.get(placement.species)
-      if (!list) grouped.set(placement.species, (list = []))
-      list.push({ index, placement, shape, objectId, ent: entMap ? createEnt(placement, entMap.seed ?? 0, index) : undefined })
+      // Blocks are keyed off world position, so a species' batches stay put as
+      // trees are felled and the same tree always lands in the same one.
+      const block = blockKey(placement.x, placement.z)
+      const key = `${placement.species}:${block}`
+      let group = grouped.get(key)
+      if (!group) grouped.set(key, (group = { id: placement.species, block, trees: [] }))
+      group.trees.push({ index, placement, shape, objectId, ent: entMap ? createEnt(placement, entMap.seed ?? 0, index) : undefined })
     })
-    return TREE_SPECIES_ORDER.filter((id) => grouped.has(id)).map((id) => ({
-      def: species[id],
-      trees: grouped.get(id)!,
-    }))
-  }, [placements, seed, idBase, species, variance, entMap])
+    // Species order first, so blocks sharing a geometry and material render
+    // together; block order is stable, so React keys never reshuffle.
+    return [...grouped]
+      .sort(([, a], [, b]) => TREE_SPECIES_ORDER.indexOf(a.id) - TREE_SPECIES_ORDER.indexOf(b.id) || a.block - b.block)
+      .map(([key, group]) => ({ key, def: species[group.id], geometry: geometries.get(group.id)!, trees: group.trees }))
+  }, [placements, seed, idBase, species, variance, entMap, geometries])
   const batches = useMemo(() => grown.map((batch) => ({
     ...batch, trees: hidden ? batch.trees.filter((tree) => !hidden.has(tree.index)) : batch.trees,
   })), [grown, hidden])
 
   return (
     <group>
-      {batches.map(({ def, trees }) => (
-        <SpeciesBatch key={def.id} def={def} trees={trees} entMap={entMap} onSelect={onSelect} />
+      {batches.map(({ key, def, geometry, trees }) => (
+        <SpeciesBatch key={key} def={def} geometry={geometry} trees={trees} entMap={entMap} onSelect={onSelect} />
       ))}
     </group>
   )
 }
 
-/** Every tree of one species: trunks in one instanced mesh, crowns in another. */
-function SpeciesBatch({ def, trees, entMap, onSelect }: {
+/**
+ * Every tree of one species standing in one world block: trunks in one
+ * instanced mesh, crowns in another. Blocks are what the frustum culls.
+ *
+ * Memoised: a map holds hundreds of blocks, and the tree tuning and placements
+ * behind them change far more rarely than the store ticks that re-render the
+ * field above.
+ */
+const SpeciesBatch = memo(function SpeciesBatch({ def, geometry, trees, entMap, onSelect }: {
   def: TreeSpeciesDef
+  /** Owned by TreeField and shared with this species' other blocks. */
+  geometry: { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry }
   trees: GrownTree[]
   entMap?: GameMap
   onSelect?: (index: number, event: { delta: number; stopPropagation: () => void }) => void
@@ -186,10 +213,7 @@ function SpeciesBatch({ def, trees, entMap, onSelect }: {
     event.stopPropagation()
     onSelect(index, event)
   }
-  const trunkGeometry = useMemo(() => makeTrunkGeometry(def.trunk.taper), [def.trunk.taper])
-  const crownGeometry = useMemo(() => makeCrownGeometry(def.crown.shape), [def.crown.shape])
-  useEffect(() => () => trunkGeometry.dispose(), [trunkGeometry])
-  useEffect(() => () => crownGeometry.dispose(), [crownGeometry])
+  const { trunk: trunkGeometry, crown: crownGeometry } = geometry
 
   const trunkCount = trees.length
   const crownCount = useMemo(
@@ -486,4 +510,4 @@ function SpeciesBatch({ def, trees, entMap, onSelect }: {
       )}
     </group>
   )
-}
+})
