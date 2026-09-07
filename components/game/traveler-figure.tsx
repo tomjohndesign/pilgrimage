@@ -1,6 +1,7 @@
 "use client"
 
 import { AnimalTether } from "./animal-tether"
+import { HEAVY_PATH_WEAR, recordCartPath, recordWalkingPath } from "@/lib/game/footpaths"
 import * as THREE from "three"
 import type { GameMap } from "@/lib/game/map/types"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
@@ -72,6 +73,9 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
       else if (!previous || data.motionReset || Math.hypot(freePose.x - roadPose.x, freePose.z - roadPose.z) < 0.02) followingRoad.current = true
       cartPose.current = parking ? parking.pose : roadPose && (data.cartManeuver || followingRoad.current) ? roadPose : freePose
       const pose = cartPose.current!
+      if (map?.footpaths && previous && !paused && !data.motionReset && !deployed && !onFoot) {
+        recordCartPath(map.footpaths, map, previous, pose, characterScale)
+      }
       if (cart.current) {
         cart.current.position.copy(parent.worldToLocal(point.set(pose.x, map ? walkingSurface(map, pose.x, pose.z).height : y, pose.z)))
         const distance = previous && !paused && !data.motionReset && !deployed
@@ -95,6 +99,9 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
     const before = lastDriver.current, reset = data.motionReset || !before || before.deployed !== deployed
     const distance = !reset && !paused ? Math.hypot(point.x - before.x, point.z - before.z) : 0
     lastDriver.current = { x: point.x, z: point.z, deployed }
+    if (vendor && map?.footpaths && before && !reset && !paused && !riding && !working) {
+      recordWalkingPath(map.footpaths, map, before, { x: point.x, z: point.z })
+    }
     group.userData = { ...data, motionReset: reset, distance, heading: praying ? data.heading : deployed ? keeperHeading : data.heading, activity: praying ? "praying" : deployed ? undefined : data.activity, moving: !praying && (deployed ? keeper?.moving === true : data.moving) }
     const pullingNow = vendor && !animal && characterModel === "base" && !deployed && !praying && !onFoot
     group.visible = !riding && !working && !keeperAction && !pullingNow
@@ -109,6 +116,7 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
       setup.current.position.copy(group.position)
     }
     if (beast.current) {
+      const beforeAnimal = lastAnimal.current
       const pasture = data.pasture, priorHeading = beast.current.userData.heading
       const last = lastAnimal.current
       const travel = data.animalHeading !== undefined ? { heading: data.animalHeading, reversing: data.reversing === true }
@@ -126,6 +134,9 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
         beast.current.userData = { ...data, tether: onFoot ? parking.tree : undefined, heading: parking.pose.heading, hitched: true, moving: !onFoot && data.moving, distance: onFoot ? 0 : data.distance, grazing: false }
         lastAnimal.current = null
       } else { beast.current.position.set(0, 0, 0); lastAnimal.current = { ...hitch } }
+      if (animal && map?.footpaths && beforeAnimal && lastAnimal.current && !paused && !data.motionReset) {
+        recordWalkingPath(map.footpaths, map, beforeAnimal, lastAnimal.current, HEAVY_PATH_WEAR)
+      }
     }
   }, -2)
   const variant = appearance?.variant ?? 0

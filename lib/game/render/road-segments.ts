@@ -1,16 +1,24 @@
 import { diagonalRoadBend, isRoadTerrain, roadWear, sampleRoadBend, TRAFFIC_FOR_BARE_ROAD } from "../map/road"
 import { tileAt, type GameMap } from "../map/types"
+import { contactAppearance } from "./path-appearance"
 
-/** Tile-local endpoints, source (0 main, 1 branch, 2 local traffic, 3 cart wheel rut), and optional local compaction. */
+/** Tile-local endpoints, source (0 main, 1 branch, 2 corridor, 3 cart corner, 4 actual foot/wheel contact), and optional compaction. */
 export type RoadSegment = readonly [number, number, number, number, number, number?]
-export interface TraveledRoad { ax: number; az: number; bx: number; bz: number; wear: number }
+export interface TraveledRoad { ax: number; az: number; bx: number; bz: number; wear: number; contact?: boolean }
 
 /** Local compaction uses the same rut profile as the game, independently of global traffic. */
 export function roadSegmentWear(segment: RoadSegment, traffic: number, relicTraffic: number, tier: number): [number, number, number, number] {
+  if (segment[4] === 4) {
+    const depth = Math.min(1, Math.max(0, segment[5] ?? 0))
+    // One physical contact, at its actual lane or wheel position. Repeated
+    // passage widens it; the opposing lane receives no wear until it is used.
+    // Contact texels carry compaction in Y so the shader can keep early wear grassy.
+    return [.42 - .1 * depth, depth, 4, contactAppearance(depth).opacity]
+  }
   const local = segment[4] === 2
   const depth = Math.min(1, Math.max(0, segment[5] ?? 0))
   const wear = roadWear(local ? depth * TRAFFIC_FOR_BARE_ROAD : segment[4] === 1 ? relicTraffic : traffic, tier)
-  return [wear.edge, wear.inner, segment[4], local ? Math.min(1, depth / .2) : 1]
+  return [wear.edge, wear.inner, segment[4], local ? Math.min(1, depth / .2) : segment[5] ?? 1]
 }
 
 /** Includes the widest worn verge and its noise/antialiasing fringe. */
@@ -22,13 +30,15 @@ export function traveledRoadSegments(map: GameMap, roads: readonly TraveledRoad[
   for (const building of map.buildings) for (let z = building.z; z < building.z + building.d; z++) for (let x = building.x; x < building.x + building.w; x++) occupied.add(z * map.width + x)
   for (const road of roads) {
     if (!Number.isFinite(road.wear) || road.wear <= .001) continue
+    if (road.contact && contactAppearance(road.wear).opacity === 0) continue
     const { ax, az, bx, bz, wear } = road
-    for (let z = Math.max(0, Math.floor(Math.min(az, bz) - ROAD_REACH)); z <= Math.min(map.depth - 1, Math.floor(Math.max(az, bz) + ROAD_REACH)); z++) {
-      for (let x = Math.max(0, Math.floor(Math.min(ax, bx) - ROAD_REACH)); x <= Math.min(map.width - 1, Math.floor(Math.max(ax, bx) + ROAD_REACH)); x++) {
+    const reach = road.contact ? .4 : ROAD_REACH
+    for (let z = Math.max(0, Math.floor(Math.min(az, bz) - reach)); z <= Math.min(map.depth - 1, Math.floor(Math.max(az, bz) + reach)); z++) {
+      for (let x = Math.max(0, Math.floor(Math.min(ax, bx) - reach)); x <= Math.min(map.width - 1, Math.floor(Math.max(ax, bx) + reach)); x++) {
         const i = z * map.width + x, terrain = map.tiles[i]
         if (occupied.has(i) || !(isRoadTerrain(terrain) || ["grass", "clearing", "dirt", "sand"].includes(terrain))) continue
         const segments = bins.get(i) ?? []
-        segments.push([ax - x, az - z, bx - x, bz - z, 2, wear]); bins.set(i, segments)
+        segments.push([ax - x, az - z, bx - x, bz - z, road.contact ? 4 : 2, wear]); bins.set(i, segments)
       }
     }
   }

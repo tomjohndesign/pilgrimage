@@ -38,7 +38,7 @@ import { RenownSaturation } from "./renown-saturation"
 import { vendorSpeedScale } from "@/lib/game/transport/assets"
 import { Shrine } from "./shrine"
 import type { RoadLook } from "@/lib/game/map/road"
-import { TerrainTiles } from "./terrain-tiles"
+import { WalkingTerrain } from "./walking-terrain"
 import { TileCursor } from "./tile-cursor"
 import { Travelers } from "./travelers"
 import { Trees } from "./trees"
@@ -139,7 +139,7 @@ export function GameCanvas({
       <CameraLight />
 
       <RenownSaturation map={map}>
-        <TerrainTiles
+        <WalkingTerrain
           map={map}
           roadTier={roadTier}
           traffic={travelers.length}

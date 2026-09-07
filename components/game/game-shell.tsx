@@ -4,6 +4,7 @@ import { DEFAULT_ELEVATION, type ElevationSettings } from "@/lib/game/map/elevat
 import dynamic from "next/dynamic"
 import { useEffect, useMemo, useState } from "react"
 
+import { createFootpaths } from "@/lib/game/footpaths"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { CHARACTER_PIXELS_PER_UNIT } from "@/lib/game/render/pixel-scale"
@@ -11,7 +12,7 @@ import { BASE_CHARACTER_SCALE, DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE } from "@
 import { BASE_PERSON } from "@/lib/game/base-person/pose"
 import { DEFAULT_MOVEMENT } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
-import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER } from "@/lib/game/map/road"
+import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER, ROAD_TIERS } from "@/lib/game/map/road"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
@@ -265,7 +266,10 @@ export function GameShell({
   )
   const monks = useMemo(() => (seed === null ? [] : generateMonks(seed)), [seed])
   const economy = useSettlement(baseMap, monks, relic)
-  const map = economy.map
+  const footpaths = useMemo(() => createFootpaths(baseMap ?? undefined), [baseMap])
+  useEffect(() => { footpaths.paved = ROAD_TIERS[settings.road]?.paved ?? false }, [footpaths, settings.road])
+  // Keep one live map for the canvas and HUD readers, including roadside preaching.
+  const map = useMemo(() => economy.map ? { ...economy.map, footpaths } : null, [economy.map, footpaths])
   const renown = economy.renown
   const [evangelism, setEvangelism] = useState(0)
   useEffect(() => {

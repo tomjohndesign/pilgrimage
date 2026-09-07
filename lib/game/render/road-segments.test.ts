@@ -1,6 +1,27 @@
 import { describe, expect, it } from "vitest"
 import { parseAsciiMap } from "../map/prototype-map"
-import { diagonalRoadSegments, distanceToRoadSegments } from "./road-segments"
+import { diagonalRoadSegments, distanceToRoadSegments, roadSegmentWear } from "./road-segments"
+
+describe("individual foot and wheel tracks", () => {
+  it("fades inherited roads and cart corners without fading a newly walked shortcut", () => {
+    for (const source of [0, 1, 3]) {
+      expect(roadSegmentWear([0, 0, 1, 0, source, .25], 100, 100, 0)[3]).toBe(.25)
+      expect(roadSegmentWear([0, 0, 1, 0, source, 0], 100, 100, 0)[3]).toBe(0)
+    }
+    expect(roadSegmentWear([0, 0, 1, 0, 4, .45], 0, 0, 0)[3]).toBe(1)
+  })
+  it("keeps one contact narrower than the gap between opposing walking lanes", () => {
+    for (const depth of [.08, .2, .6, 1]) {
+      const [edge, compaction, , opacity] = roadSegmentWear([0, 0, 1, 0, 4, depth], 100, 100, 0)
+      expect(.5 - edge).toBeLessThan(.2)
+      expect(compaction).toBe(depth) // The shader shades early compaction as grass.
+      expect(opacity).toBeGreaterThan(0)
+    }
+    expect(roadSegmentWear([0, 0, 1, 0, 4, 0], 100, 100, 0)[3]).toBe(0)
+    // Existing two-track corridors retain the median between their lanes.
+    expect(roadSegmentWear([0, 0, 1, 0, 2, .04], 100, 100, 0)[1]).toBeLessThan(.5)
+  })
+})
 
 const rows = [".........", "===......", "..==.....", "...==....", "....===..", "........."]
 

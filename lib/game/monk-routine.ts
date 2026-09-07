@@ -1,3 +1,4 @@
+import { SHORTCUT_EXPLORERS } from "./walking-shortcuts"
 import type { MonkActivity } from "./monks"
 import type { monkWander, WanderSpot } from "./monk-wander"
 
@@ -27,7 +28,7 @@ export function stepMonkRoutine(s: MonkRoutine, grounds: Grounds, rng: () => num
   if (!s.route.length) {
     const pray = s.destination === "grounds" && s.outings === 0 && s.prayerSpot
     const goal = pray || grounds.spots[Math.floor(rng() * grounds.spots.length)]
-    s.route = grounds.route(s, goal)
+    s.route = grounds.route(s, goal, rng() < SHORTCUT_EXPLORERS)
     if (!s.route.length) { s.pause = 2; return }
     s.destination = pray ? "prayer" : "grounds"
     s.activity = "walking"

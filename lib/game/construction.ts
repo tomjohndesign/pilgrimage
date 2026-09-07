@@ -1,3 +1,4 @@
+import { smoothWalkingRoute, SHORTCUT_EXPLORERS } from "./walking-shortcuts"
 import { buildingEntry, buildingYaw, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
 import { MALLET_CONTACT_REACH } from "./base-person/building"
 import { BASE_CHARACTER_SCALE, PERSON_SPRITE_SCALE } from "./base-person/gait"
@@ -49,7 +50,9 @@ export function workerRoute(map: GameMap, actor: WanderSpot, goal: TilePos): Wan
   // new site before treating it as an obstacle on subsequent trips.
   const obstacles = map.buildings.filter(b => isComplete(b) || !(start.x >= b.x && start.x < b.x + b.w && start.z >= b.z && start.z < b.z + b.d))
   const route = settlementRoute(map, obstacles, start, goal, false, true)
-  return route?.map(p => ({ x: tileToWorldX(map, p.x), y: surfaceHeight(map, p.x, p.z), z: tileToWorldZ(map, p.z) })) ?? null
+  if (!route) return null
+  const journey = Math.abs(Math.sin(actor.x * 12.9898 + actor.z * 78.233 + goal.x * 37.719 + goal.z))
+  return smoothWalkingRoute(map, route.map(p => ({ x: tileToWorldX(map, p.x), y: surfaceHeight(map, p.x, p.z), z: tileToWorldZ(map, p.z) })), journey < SHORTCUT_EXPLORERS)
 }
 
 /** The mallet's forward reach, converted through the actual sprite's bake camera. */

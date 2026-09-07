@@ -67,6 +67,8 @@ export interface FoundingSite {
 }
 
 export interface GameMap {
+  /** Live walking traffic, shared by navigation and terrain; scoped to the running game. */
+  footpaths?: import("../footpaths").Footpaths
   elevation?: import("./elevation").ElevationInfo
   width: number
   depth: number
