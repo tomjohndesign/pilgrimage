@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "995b2fa26e86d74d311fe447ce2e24dede875987",
-  "releaseCount": 78,
+  "lastProcessedCommit": "0b205202034830ecca9586bf8df7593979727f9e",
+  "releaseCount": 80,
   "releases": [
+    {
+      "version": "0.0.94",
+      "title": "Release 0.0.94",
+      "summary": "Keep hitched animals facing away from their carts (#110)",
+      "commit": "0b205202034830ecca9586bf8df7593979727f9e"
+    },
+    {
+      "version": "0.0.93",
+      "title": "Release 0.0.93",
+      "summary": "Expand character population slider for playtesting (#113)",
+      "commit": "f2050b5d6997d4a577d44f3a994e0093e7546da2"
+    },
     {
       "version": "0.0.92",
       "title": "Release 0.0.92",
