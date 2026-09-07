@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "a247f1aaab7274a204564819792f25a6f6dd4a85",
-  "releaseCount": 84,
+  "lastProcessedCommit": "c3048523715360deafdae02a13cacd7428323227",
+  "releaseCount": 85,
   "releases": [
+    {
+      "version": "0.0.99",
+      "title": "Release 0.0.99",
+      "summary": "Make the rig editor responsive: progress while baking, true drag targets, bone drags, key resets (#119)",
+      "commit": "c3048523715360deafdae02a13cacd7428323227"
+    },
     {
       "version": "0.0.98",
       "title": "Release 0.0.98",
