@@ -7,7 +7,12 @@ import ts from "typescript"
 
 // Real GPU depth testing: unit tests cannot catch interpolation/quantization seams.
 test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned outlines", async () => {
+  const metadata = JSON.parse(await readFile(new URL("../public/textures/characters/base/base-person-v31.json", import.meta.url), "utf8"))
+  const poseClips = Object.fromEntries(Object.entries(metadata.clips).map(([clip, frames]) => [clip, frames.length / metadata.directions.length]))
   const shader = ts.transpileModule(await readFile(new URL("../lib/game/render/sprite-depth.ts", import.meta.url), "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.ESNext },
+  }).outputText
+  const baker = ts.transpileModule(await readFile(new URL("../lib/game/render/bake-depth.ts", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.ESNext },
   }).outputText
   const outlineSource = await readFile(new URL("../components/game/outline-pass.tsx", import.meta.url), "utf8")
@@ -17,10 +22,20 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     if (name === "shader.js") {
       response.setHeader("Content-Type", "text/javascript")
       response.end(shader)
+    } else if (name === "baker.js") {
+      response.setHeader("Content-Type", "text/javascript")
+      response.end(baker)
+    } else if (/^(pose|depth)-[A-Za-z]+\.png$/.test(name)) {
+      const [, kind, clip] = name.match(/^(pose|depth)-([A-Za-z]+)\.png$/)
+      const asset = clip === "walk" || clip === "idle"
+        ? metadata.images[kind === "pose" ? clip : clip === "walk" ? "depthWalk" : "depthIdle"]
+        : metadata.images.actions[clip][kind === "pose" ? "url" : "depth"]
+      response.setHeader("Content-Type", "image/png")
+      response.end(await readFile(new URL(`../public${asset}`, import.meta.url)))
     } else if (["three.module.js", "three.core.js"].includes(name)) {
       response.setHeader("Content-Type", "text/javascript")
       response.end(await readFile(new URL(`../node_modules/three/build/${name}`, import.meta.url)))
-    } else response.end("<!doctype html><canvas></canvas>")
+    } else response.end('<!doctype html><script type="importmap">{"imports":{"three":"/three.module.js"}}</script><canvas></canvas>')
   })
   await new Promise(resolve => server.listen(0, "127.0.0.1", resolve))
   let browser
@@ -31,7 +46,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     page.on("pageerror", error => errors.push(error.message))
     page.on("console", message => { if (message.type() === "error") errors.push(message.text()) })
     await page.goto(`http://127.0.0.1:${server.address().port}`)
-    const result = await page.evaluate(async (outlineFragment) => {
+    const result = await page.evaluate(async ({ outlineFragment, poseClips }) => {
       const THREE = await import("/three.module.js")
       const { applySpriteDepth } = await import("/shader.js")
       const gl = new THREE.WebGLRenderer({ canvas: document.querySelector("canvas"), antialias: false })
@@ -39,11 +54,16 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       const viewport = new THREE.Vector4()
       const worldTexel = { value: 0 }
       const groundPlane = { value: new THREE.Vector4() }
+      const poseDepth = { map: { value: null }, enabled: { value: false } }
       const scene = new THREE.Scene()
       const camera = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, 0.1, 400)
       const makeSprite = (color, order) => {
         const material = new THREE.SpriteMaterial({ color, transparent: false, toneMapped: false })
-        material.onBeforeCompile = shader => applySpriteDepth(shader, viewport, worldTexel, groundPlane)
+        material.onBeforeCompile = shader => {
+          applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth)
+          // Keep the atlas alpha, using flat IDs for exact pixel comparisons.
+          shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\ndiffuseColor.rgb = diffuse;")
+        }
         material.onBeforeRender = renderer => renderer.getCurrentViewport(viewport)
         const sprite = new THREE.Sprite(material)
         sprite.center.set(0.5, 0.2421875)
@@ -124,12 +144,28 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       copyScene.add(copyMesh)
       const copyCamera = new THREE.Camera()
       let floorCompared = 0, floorClipped = 0
+      let supportCompared = 0, supportClipped = 0
+      const sleeping = await new THREE.TextureLoader().loadAsync("/pose-sleeping.png")
+      const sleepingDepth = await new THREE.TextureLoader().loadAsync("/depth-sleeping.png")
+      sleeping.minFilter = sleeping.magFilter = THREE.NearestFilter
+      sleepingDepth.minFilter = sleepingDepth.magFilter = THREE.NearestFilter
+      sleeping.repeat.set(1 / 16, 1 / 8)
+      front.material.alphaTest = .5
       back.visible = false
       // Building paving clears terrain by at most 0.003 world units; characters
       // still stand at terrain height and must keep their complete foot silhouette.
-      for (const floorLift of [0, 0.003]) for (const [dx, dz] of [[0, 0], [0.3, 0], [-0.3, 0], [0.2, 0.25], [-0.2, -0.25]]) {
-        floor.position.y = floorLift
-        groundPlane.value.set(-dx, 1, -dz, 0)
+      // Real sleeping silhouettes on furniture must clear the same sampled
+      // depth as their ID pass. Test every baked facing, plus the old ground cases.
+      const contacts = [{ height: 0, row: -1 }, ...[.009, .0975, .4].flatMap(height =>
+        Array.from({ length: 8 }, (_, row) => ({ height, row })))]
+      for (const { height, row } of contacts) {
+      front.material.map = row < 0 ? null : sleeping
+      poseDepth.map.value = sleepingDepth; poseDepth.enabled.value = row >= 0
+      front.material.needsUpdate = true
+      sleeping.offset.set(0, (7 - row) / 8)
+      for (const floorLift of [0, 0.003]) for (const [dx, dz] of (row < 0 ? [[0, 0], [0.3, 0], [-0.3, 0], [0.2, 0.25], [-0.2, -0.25]] : [[0, 0]])) {
+        floor.position.y = height + floorLift
+        groundPlane.value.set(-dx, 1, -dz, -height)
         floor.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(-dx, 1, -dz).normalize())
       for (const resolution of [30, 60, 120]) {
         const ground = new THREE.WebGLRenderTarget(resolution, resolution, {
@@ -141,7 +177,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
           camera.updateProjectionMatrix()
           worldTexel.value = 2.4 / zoom / resolution
           for (const shift of [0, 0.003, 0.013, 0.025]) {
-            front.position.set(shift, (dx + dz) * shift, shift)
+            front.position.set(shift, height + (dx + dz) * shift, shift)
             const expected = new Uint8Array(480 * 480 * 4), actual = expected.slice()
             gl.autoClear = true
             gl.setRenderTarget(output)
@@ -158,6 +194,10 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
               if (expected[i] < 200) continue
               floorCompared++
               if (actual[i] < 200) floorClipped++
+              if (row >= 0) {
+                supportCompared++
+                if (actual[i] < 200) supportClipped++
+              }
             }
           }
         }
@@ -165,9 +205,104 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         ground.dispose()
       }
       }
+      }
+      sleeping.dispose()
+      sleepingDepth.dispose()
       output.dispose()
       floor.geometry.dispose()
       floor.material.dispose()
+      // A surface passing THROUGH a pose must split it by the geometry depth,
+      // not the upright billboard's height. Compare against the decoded atlas
+      // independently on the CPU, including animation, direction and world scale.
+      const poseTarget = new THREE.WebGLRenderTarget(256, 256)
+      const wall = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.MeshBasicMaterial({ color: 0x0000ff, toneMapped: false }))
+      scene.add(wall)
+      gl.autoClear = true; camera.zoom = 1; camera.updateProjectionMatrix()
+      camera.position.set(0, 2 + 10 / Math.sqrt(3), 10 * Math.sqrt(2 / 3)); camera.lookAt(0, 2, 0); camera.updateMatrixWorld(true)
+      wall.quaternion.copy(camera.quaternion)
+      front.position.set(0, 2, 0); front.center.set(.5, 1 - 48.5 / 64)
+      groundPlane.value.set(0, 0, 0, 0); worldTexel.value = 0; poseDepth.enabled.value = true
+      const toward = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 2)
+      let poseCompared = 0, poseMismatches = 0, poseVisible = 0, poseHidden = 0
+      for (const [clip, columns] of Object.entries(poseClips)) {
+        const color = await new THREE.TextureLoader().loadAsync(`/pose-${clip}.png`)
+        const depth = await new THREE.TextureLoader().loadAsync(`/depth-${clip}.png`)
+        color.minFilter = color.magFilter = depth.minFilter = depth.magFilter = THREE.NearestFilter
+        color.generateMipmaps = depth.generateMipmaps = false
+        const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d")
+        canvas.width = depth.image.width; canvas.height = depth.image.height
+        ctx.drawImage(depth.image, 0, 0)
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+        front.material.map = color; front.material.needsUpdate = true; poseDepth.map.value = depth
+        for (const scale of [.8, 1.4]) for (const row of [0, 1, 2, 4, 7]) for (const frame of [...new Set([0, Math.floor(columns / 2)])]) {
+          front.scale.set(scale, scale, 1)
+          color.repeat.set(1 / columns, 1 / 8); color.offset.set(frame / columns, (7 - row) / 8)
+          wall.visible = false
+          gl.setRenderTarget(poseTarget); gl.render(scene, camera)
+          const mask = new Uint8Array(256 * 256 * 4), actual = mask.slice()
+          gl.readRenderTargetPixels(poseTarget, 0, 0, 256, 256, mask)
+          wall.visible = true
+          for (const cut of [-.12, .05, .2]) {
+            wall.position.copy(front.position).addScaledVector(toward, cut * scale)
+            gl.render(scene, camera); gl.readRenderTargetPixels(poseTarget, 0, 0, 256, 256, actual)
+            for (let y = 0; y < 256; y++) for (let x = 0; x < 256; x++) {
+              const i = (y * 256 + x) * 4
+              if (mask[i + 1] < 200) continue
+              const u = ((x + .5) / 256 * 2.4 - 1.2) / scale + front.center.x
+              const v = ((y + .5) / 256 * 2.4 - 1.2) / scale + front.center.y
+              // Exact texel-boundary ties can round either way in GPU float precision.
+              if (Math.abs(u * 64 - Math.round(u * 64)) < 1e-5 || Math.abs(v * 64 - Math.round(v * 64)) < 1e-5) continue
+              const px = Math.floor(u * 64), py = 63 - Math.floor(v * 64)
+              if (px < 0 || px >= 64 || py < 0 || py >= 64) continue
+              const at = ((row * 64 + py) * canvas.width + frame * 64 + px) * 4
+              const offset = ((data[at] * 256 + data[at + 1]) / 65535 - .5) * 2
+              // Ignore values within the intentional .005-world-unit depth bias.
+              if (Math.abs((offset - cut) * scale) < .008) continue
+              const visible = offset > cut
+              if (visible) poseVisible++; else poseHidden++
+              poseCompared++
+              if ((actual[i + 1] > 200) !== visible) poseMismatches++
+            }
+          }
+        }
+        color.dispose(); depth.dispose()
+      }
+      scene.remove(wall); wall.geometry.dispose(); wall.material.dispose(); poseTarget.dispose()
+      // Independently verify the baker against ray/mesh intersections, including
+      // local garment-style clipping. This catches wrong depth units or anchors.
+      const { spriteDepthBaker } = await import("/baker.js")
+      const bakeGL = new THREE.WebGLRenderer({ alpha: true, antialias: false })
+      bakeGL.setSize(64, 64); bakeGL.setClearColor(0, 0); bakeGL.localClippingEnabled = true
+      const bake = spriteDepthBaker(bakeGL), model = new THREE.Scene()
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -.4)
+      const box = new THREE.Mesh(new THREE.BoxGeometry(.9, 1.3, .7),
+        new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.DoubleSide, clippingPlanes: [plane] }))
+      box.position.set(.2, .7, -.1); model.add(box)
+      const bakeCamera = new THREE.OrthographicCamera(-2, 2, 2, -2, .1, 30)
+      bakeCamera.position.set(0, 10 / Math.sqrt(3), 10 * Math.sqrt(2 / 3)); bakeCamera.lookAt(0, 0, 0); bakeCamera.updateMatrixWorld(true)
+      const canvas = document.createElement("canvas"); canvas.width = canvas.height = 64
+      const context = canvas.getContext("2d"), ray = new THREE.Raycaster(), ndc = new THREE.Vector2()
+      let bakeCompared = 0, bakeError = 0
+      for (const rotation of [0, .8, 1.6]) {
+        box.rotation.y = rotation; bakeGL.render(model, bakeCamera)
+        context.clearRect(0, 0, 64, 64); context.drawImage(bakeGL.domElement, 0, 0)
+        const source = context.getImageData(0, 0, 64, 64).data
+        const rendered = bake.render(model, bakeCamera, 64, 4, source, source)
+        const depth = rendered.getContext("2d").getImageData(0, 0, 64, 64).data
+        for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+          const i = (y * 64 + x) * 4
+          if (source[i + 3] < 128) continue
+          ndc.set((x + .5) / 64 * 2 - 1, 1 - (y + .5) / 64 * 2); ray.setFromCamera(ndc, bakeCamera)
+          const hit = ray.intersectObject(box).find(hit => plane.distanceToPoint(hit.point) >= 0)
+          if (!hit) throw new Error("Rendered depth has no matching visible mesh surface")
+          // Grazing faces amplify subpixel raster-vertex rounding at the silhouette.
+          if (Math.abs(hit.face.normal.clone().transformDirection(box.matrixWorld).dot(toward)) < .2) continue
+          const expected = hit.point.applyMatrix4(bakeCamera.matrixWorldInverse).z + 10
+          const actual = ((depth[i] * 256 + depth[i + 1]) / 65535 - .5) * 8
+          bakeCompared++; bakeError = Math.max(bakeError, Math.abs(actual - expected))
+        }
+      }
+      bake.dispose(); box.geometry.dispose(); box.material.dispose(); bakeGL.dispose()
       // Exercise the actual outline compositor with display-resolution IDs.
       // A figure crosses a wall (or tree) in front of it; its right half is
       // hidden. The edge must touch the visible figure and stay off the wall.
@@ -249,15 +384,20 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       copyMesh.geometry.dispose()
       copyMaterial.dispose()
       gl.dispose()
-      return { cases, compared, mismatches, occlusionFailures, floorCompared, floorClipped,
+      return { cases, compared, mismatches, occlusionFailures, floorCompared, floorClipped, supportCompared, supportClipped, poseCompared, poseMismatches, poseVisible, poseHidden, bakeCompared, bakeError,
         outlineCompared, outlineMismatches, selectionMismatches }
-    }, outlineFragment)
+    }, { outlineFragment, poseClips })
     assert.deepEqual(errors, [], "WebGL shaders should compile without errors")
     assert.ok(result.compared > 10000, "must compare visible overlapping pixels")
     assert.equal(result.mismatches, 0, JSON.stringify(result))
     assert.equal(result.occlusionFailures, 0, "scenery must retain depth occlusion")
     assert.ok(result.floorCompared > 10000, "must compare feet against enlarged terrain depth")
     assert.equal(result.floorClipped, 0, "the enlarged floor must not erase sprite pixels")
+    assert.ok(result.supportCompared > 10000, "must compare sleeping silhouettes on raised furniture in every direction")
+    assert.equal(result.supportClipped, 0, "furniture depth must not slice supported sleeping sprites")
+    assert.ok(result.poseVisible > 10000 && result.poseHidden > 10000, "must test both sides of surfaces intersecting actual poses")
+    assert.equal(result.poseMismatches, 0, `pose depth must match the atlas through scenery intersections: ${JSON.stringify(result)}`)
+    assert.ok(result.bakeCompared > 500 && result.bakeError < 4 / 64 / 16, `baked depth must match clipped rig geometry: ${JSON.stringify(result)}`)
     assert.ok(result.outlineCompared > 10000, "must compare outlines at multiple zooms and sprite offsets")
     assert.equal(result.outlineMismatches, 0, "overlap outlines must touch the visible sprite and respect foreground occlusion")
     assert.equal(result.selectionMismatches, 0, "selected silhouettes and borders must track the actual character pixels")

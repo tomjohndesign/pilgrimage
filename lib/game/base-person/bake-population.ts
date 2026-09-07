@@ -4,6 +4,7 @@ import { bakeBasePerson } from "./bake"
 import { ACTION_CLIPS, BASE_PERSON, PERSON_CLIPS, WALK_CLIP_STRIDES } from "./pose"
 import { DEFAULT_DESIGN, personRecipe, type PersonDesign } from "./design"
 import { POPULATION_PROFILES, populationDesign, type PopulationPack } from "./population"
+import { SPRITE_DEPTH_ENCODING } from "../render/bake-depth"
 
 /** Runs once per edited foundation, never once per traveler or frame. */
 export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
@@ -29,6 +30,7 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
   for (const [typeIndex, { type, grey }] of types.entries()) {
     const walk = canvas(PERSON_CLIPS.walk.frames), idle = canvas(1)
     const actions = Object.fromEntries(ACTION_CLIPS.map(clip => [clip, canvas(PERSON_CLIPS[clip].frames)]))
+    const depths = Object.fromEntries(Object.entries(PERSON_CLIPS).map(([clip, { frames }]) => [clip, canvas(frames)]))
     const designs: PersonDesign[] = []
     for (let variant = 0; variant < count; variant++) {
       // Let the map keep drawing and allow a newer edit to cancel this pack.
@@ -40,7 +42,9 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
       catch (error) { throw new Error(`${type.id}, profile ${variant + 1}: ${error instanceof Error ? error.message : error}`) }
       designs.push(design)
       await draw(walk, bake.walk, variant); await draw(idle, bake.idle, variant)
+      await draw(depths.walk, bake.depthWalk, variant); await draw(depths.idle, bake.depthIdle, variant)
       for (const clip of ACTION_CLIPS) await draw(actions[clip], bake.actions[clip].url, variant)
+      for (const clip of ACTION_CLIPS) await draw(depths[clip], bake.actions[clip].depth, variant)
       if (typeIndex === 0) {
         for (const clip of ACTION_CLIPS) await draw(shadowActions[clip], bake.actions[clip].shadow, variant)
         await draw(shadowWalk, bake.shadowWalk, variant); await draw(shadowIdle, bake.shadowIdle, variant)
@@ -50,7 +54,8 @@ export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
     }
     const destination = grey ? greyCallings : callings
     destination[type.id as TravelerTypeId] = { walk: walk.toDataURL("image/png"), idle: idle.toDataURL("image/png"), actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, actions[clip].toDataURL("image/png")])) as NonNullable<PopulationPack["callings"][TravelerTypeId]["actions"]>, designs }
+    destination[type.id as TravelerTypeId]!.depths = Object.fromEntries(Object.entries(depths).map(([clip, canvas]) => [clip, canvas.toDataURL("image/png")])) as NonNullable<PopulationPack["callings"][TravelerTypeId]["depths"]>
   }
-  return { walkStrides: WALK_CLIP_STRIDES, frameCounts: Object.fromEntries(Object.entries(PERSON_CLIPS).map(([clip, definition]) => [clip, definition.frames])), templateVersion: BASE_PERSON.version, cellSize: size, anchor: BASE_PERSON.anchor,
+  return { depthEncoding: SPRITE_DEPTH_ENCODING, walkStrides: WALK_CLIP_STRIDES, frameCounts: Object.fromEntries(Object.entries(PERSON_CLIPS).map(([clip, definition]) => [clip, definition.frames])), templateVersion: BASE_PERSON.version, cellSize: size, anchor: BASE_PERSON.anchor,
     rows: count * 8, callings, greyCallings, shadows: { walk: shadowWalk.toDataURL("image/png"), idle: shadowIdle.toDataURL("image/png"), actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, shadowActions[clip].toDataURL("image/png")])) as NonNullable<PopulationPack["shadows"]["actions"]> }, strideRatios }
 }
