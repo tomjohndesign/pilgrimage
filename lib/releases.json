@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "cf58ed133f3e22ff6a02635d9c803cbb4c1e0e96",
-  "releaseCount": 63,
+  "lastProcessedCommit": "e7a4d1c73e4339a7f26fdddf88513305a053209c",
+  "releaseCount": 65,
   "releases": [
+    {
+      "version": "0.0.79",
+      "title": "Release 0.0.79",
+      "summary": "Make relic processions rarer and bless passersby on the road (#97)",
+      "commit": "e7a4d1c73e4339a7f26fdddf88513305a053209c"
+    },
+    {
+      "version": "0.0.78",
+      "title": "Release 0.0.78",
+      "summary": "Add 5% evangelism chance to completed crosses (#98)",
+      "commit": "c402c213f427dd4aef0e41d8bdeea9d6c95f33a4"
+    },
     {
       "version": "0.0.77",
       "title": "Release 0.0.77",
