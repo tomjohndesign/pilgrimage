@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
 import { foundingRoadStrength, foundingRoadTraffic } from "@/lib/game/footpaths"
 import { dirtFloorMask, DIRT_FLOOR_GLSL } from "@/lib/game/building-art/dirt-floor"
 import { GROUND_SURFACE_GLSL, ROAD_UV_SCALE, GRASS_UV_SCALE } from "@/lib/game/render/ground-surface"
@@ -422,6 +423,13 @@ function makeTileMaterial({
             float line = (1.0 - smoothstep(halfLine - 0.5 * px, halfLine + 0.5 * px, abs(d - edge))) * roadEdgeLine * (1.0 - shore);
 
             vec3 top = mix(landTop, road, cover) * (1.0 - 0.75 * line * roadOpacity * segmentOpacity);
+            // Layer broad earth stains with pixel-sized grit on building plots and aprons.
+            vec2 earthCell = floor(world / ${CHARACTER_PIXEL_SIZE.toFixed(8)}) * ${CHARACTER_PIXEL_SIZE.toFixed(8)};
+            float earthMottle = tileNoise(world * 3.1);
+            float earthGrit = tileNoise(earthCell * 37.0);
+            vec3 earthTint = mix(vec3(.80,.77,.68), vec3(1.07,1.00,.87), earthMottle);
+            earthTint = mix(earthTint, vec3(.74,.79,.59), smoothstep(.72,.9,tileNoise(world*1.7))*.28);
+            top *= mix(vec3(1.0), earthTint * mix(.93,1.06,earthGrit), floorBare * (1.0-shore));
             vec3 surface = mix(${ROAD_SIDE_COLOR} * roadColor, top, vGridTop);
             diffuseColor.rgb *= surface;
           #else

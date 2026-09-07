@@ -1,4 +1,5 @@
 import { buildingParts, type BuildingPart, type Vec3 } from "./geometry"
+import { earlyBuildingParts } from "./early-geometry"
 import { DEFAULT_RECIPE, earlyBuildingRecipe } from "./style"
 import { shrineAltarZ, shrineKneelers, KNEELER_PAD_TOP } from "../shrine-layout"
 import { EARLY_MATERIALS as palette } from "./materials"
@@ -122,13 +123,13 @@ export function shrineStructureParts(width: number, depth: number): BuildingPart
   }
 
   // The two lower roof slopes stop at the timber nave, leaving the middle open.
-  const roofX = width / 2 - .05
-  const lower = buildingParts({ ...earlyBuildingRecipe("monk-shelter"), width, depth, wallHeight: eave, roofRise: .65 })
+  const roofX = width / 2
+  const lower = earlyBuildingParts({ ...earlyBuildingRecipe("monk-shelter"), width, depth, wallHeight: eave, roofRise: .65, roofForm: "gable" })
     .filter(p => p.name.startsWith("thatch-"))
     .map(p => ({ ...p, name: `lower-${p.name}`, vertices: p.vertices!.map((v, i) => i % 3 === 0
       ? (v < 0 || v === 0 && p.name.includes("--1") ? -1 : 1) * (naveX + Math.abs(v) / roofX * (roofX - naveX))
       : i % 3 === 1 ? eave + (v - eave) * (naveBase - eave) / .65 : v) }))
-  const raised = buildingParts({ ...earlyBuildingRecipe("monk-shelter"), width: naveWidth, depth, wallHeight: naveEave, roofRise: upperRise })
+  const raised = earlyBuildingParts({ ...earlyBuildingRecipe("monk-shelter"), width: naveWidth, depth, wallHeight: naveEave, roofRise: upperRise, roofForm: "gable" })
     .filter(p => p.layer === "roof" && !p.name.startsWith("shelter-cross-"))
     .map(p => ({ ...p, name: `raised-nave-${p.name}` }))
   box("roof-cross-upright", "roof", [0, naveEave + upperRise + .21, wallZ], [.07, .5, .065], palette.paleWood)

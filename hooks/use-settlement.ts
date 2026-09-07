@@ -10,12 +10,14 @@ import { collectIncome, createSettlement, purchaseStructure, creditTimber, credi
 
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { useBalanceStore } from "@/lib/game/balance-store"
+import { BUILDING_PREVIEW, buildingPreviewBalance, buildingPreviewSettlement } from "@/lib/game/building-preview"
 
 /** A generated world owns one economy. Cosmetic settings keep it; regeneration resets it. */
 export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Relic | null) {
   const paused = useSimulationStore((s) => s.paused)
   const simulationSpeed = useSimulationStore((s) => s.speed)
-  const balance = useBalanceStore((s) => s.balance)
+  const savedBalance = useBalanceStore((s) => s.balance)
+  const balance = useMemo(() => BUILDING_PREVIEW ? buildingPreviewBalance(savedBalance) : savedBalance, [savedBalance])
   const ready = useBalanceStore((s) => s.ready)
   const world = ready ? baseMap : null
   const simulation = useBuildStore((s) => s.simulation)
@@ -30,12 +32,12 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   balanceRef.current = balance
   const [session, setSession] = useState(() => ({
     world,
-    settlement: createSettlement(balance),
+    settlement: BUILDING_PREVIEW && world ? buildingPreviewSettlement(world, balance) : createSettlement(balance),
     buildType: null as string | null,
     message: "",
   }))
   if (session.world !== world) {
-    setSession({ world, settlement: createSettlement(balance), buildType: null, message: "" })
+    setSession({ world, settlement: BUILDING_PREVIEW && world ? buildingPreviewSettlement(world, balance) : createSettlement(balance), buildType: null, message: "" })
   }
 
   // Workers own live progress. Publish only stage/completion changes to React.
@@ -131,11 +133,15 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
         visits,
         rotation,
       )
+      if (BUILDING_PREVIEW && !result.error) {
+        result.settlement = { ...result.settlement, structures: result.settlement.structures.map(building =>
+          building.construction ? { ...building, construction: { ...building.construction, work: building.construction.required } } : building) }
+      }
       return {
         ...current,
         settlement: result.settlement,
         buildType: result.error ? current.buildType : null,
-        message: result.error ?? "Construction planned. Idle residents will build it.",
+        message: result.error ?? (BUILDING_PREVIEW ? "Building placed." : "Construction planned. Idle residents will build it."),
       }
     })
   }

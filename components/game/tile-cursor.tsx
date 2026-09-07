@@ -72,7 +72,7 @@ export function TileCursor({
         </mesh>
         <group rotation={[0, buildingYaw(rotation), 0]}>
           <StructureModel parts={parts} ghostColor={color} />
-          <PlacementEntrances type={build.id} w={build.w} d={build.d} />
+          <PlacementEntrances type={build.id} w={build.w} d={build.d} color={color} />
         </group>
       </group>
     )

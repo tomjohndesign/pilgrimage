@@ -3,7 +3,45 @@ import { EARLY_MATERIALS as palette } from "./materials"
 
 /** Local attachment points shared by the stone chimney and its reusable effects. */
 export function shelterHearth(width: number, depth: number, height: number, rise: number) {
-  return { x: width / 2 - .36, z: -depth / 2 + .36, chimneyTop: height + rise + .32 }
+  const scale = Math.min(1, width / 1.5, depth / 1.5)
+  return { x: width / 2 - .36 * scale, z: -depth / 2 + .36 * scale,
+    chimneyTop: Math.max(.78, height + rise + .32), scale }
+}
+
+/** Chimneys identify domestic hearths and the tavern’s cooking fire. */
+export function hasDomesticHearth(variant: string | undefined): boolean {
+  return variant === "shelter" || variant === "monk-shelter" || variant === "shepherd-hut" || variant === "tavern"
+}
+
+/** One fireplace kit for homes and shelters, with a compact footprint in small huts. */
+export function hearthParts(width: number, depth: number, height: number, rise: number): BuildingPart[] {
+  const parts: BuildingPart[] = []
+  const { x, z, chimneyTop, scale } = shelterHearth(width,depth,height,rise)
+  // Remove the chimney as one wall, including its differently shaped rim stones.
+  const chimneySide: [number, number] = Math.abs(x) > Math.abs(z) ? [Math.sign(x),0] : [0,Math.sign(z)]
+  const box = (name: string, position: Vec3, size: Vec3, color: string, rotation?: Vec3, layer: BuildingPart["layer"] = "interior") =>
+    parts.push({ name, position: [x + (position[0]-x)*scale, position[1], z + (position[2]-z)*scale],
+      size: [size[0]*scale,size[1],size[2]*scale], color, rotation, layer,
+      cutawaySide: layer === "wall" ? chimneySide : undefined, outline: false })
+  box("hearth-slab", [x,.035,z], [.57,.07,.57], palette.stone)
+  box("hearth-back", [x,.29,z-.22], [.55,.51,.12], "#78796c")
+  box("hearth-side", [x+.22,.24,z], [.12,.41,.46], "#858477")
+  box("hearth-soot", [x,.22,z-.151], [.31,.28,.015], "#3d3b32")
+  for(const sign of [-1,1]) box(`hearth-log-${sign}`, [x,.105,z], [.32,.07,.07], palette.darkWood, [0,sign*.5,0])
+  box("hearth-embers", [x,.13,z], [.21,.035,.18], "#dc773b")
+  box("chimney-hood", [x,.58,z], [.49,.18,.44], "#89897a",undefined,"wall")
+  const courses=Math.ceil((chimneyTop-.67)/.13)
+  for(let i=0;i<courses;i++) {
+    const y=.67+(i+.5)*(chimneyTop-.67)/courses
+    box(`chimney-course-${i}`, [x,y,z], [i%2?.29:.32,(chimneyTop-.67)/courses-.008,.29], i%3?"#969587":"#7e8176",undefined,"wall")
+  }
+  // Open rim, so the smoke actually leaves a dark chimney mouth.
+  for(const sign of [-1,1]) {
+    box(`chimney-rim-x-${sign}`, [x+sign*.16,chimneyTop,z], [.07,.08,.39], palette.stone,undefined,"wall")
+    box(`chimney-rim-z-${sign}`, [x,chimneyTop,z+sign*.16], [.25,.08,.07], palette.stone,undefined,"wall")
+  }
+  box("chimney-mouth", [x,chimneyTop-.04,z], [.25,.015,.25], "#393b35",undefined,"wall")
+  return parts
 }
 
 /** Work and domestic props use the same faceted timber palette as the shell. */
@@ -14,12 +52,6 @@ export function furnishingParts(kind: "workshop" | "shelter", width: number, dep
   const leg = (name: string, x: number, z: number, h: number) => box(name, [x,h/2,z], [.045,h,.045])
   const metal = "#777e78"
   if (kind === "workshop") {
-    // Sleeping space hugs the left wall, clear of the workbench and live timber.
-    for (let bed = 0; bed < 2; bed++) {
-      const x = -width*.34, z = (bed-.5)*depth*.42
-      box(`straw-bed-${bed}`, [x,.035,z], [.38,.065,depth*.34], palette.strawDark)
-      for (let i=0;i<22;i++) box(`bed-straw-${bed}-${i}`, [x+Math.sin(i*8.3)*.16,.073,z+Math.cos(i*3.7)*depth*.14], [.025,.018,.11], i%3 ? palette.straw : palette.paleWood, [0,i*.9,0])
-    }
     // Split planks, long saw and chisels at the back of the workbench.
     for (let i=0;i<5;i++) box(`lumber-plank-${i}`, [width*.32,.045+i*.046,-depth*.08], [.12,.04,depth*.59], i%2 ? palette.paleWood : palette.wood, [0,.035*(i%2),0])
     box("long-saw-blade", [0,.62,-depth*.36], [width*.52,.09,.022], metal)
@@ -50,25 +82,7 @@ export function furnishingParts(kind: "workshop" | "shelter", width: number, dep
     for(let i=0;i<55;i++) box(`sawdust-${i}`, [width*.15+Math.sin(i*7.13)*width*.21,.008,depth*.04+Math.cos(i*4.71)*depth*.3], [.025+(i%3)*.012,.012,.025], i%3 ? "#bca273" : palette.paleWood, [0,i*.7,0])
     for(let i=0;i<7;i++) box(`wood-offcut-${i}`, [width*.31+Math.sin(i*4)*.18,.025,depth*.3+Math.cos(i*7)*.19], [.07,.035,.13], palette.paleWood, [0,i,0])
   } else {
-    const { x, z, chimneyTop } = shelterHearth(width,depth,height,rise)
-    box("hearth-slab", [x,.035,z], [.57,.07,.57], palette.stone)
-    box("hearth-back", [x,.29,z-.22], [.55,.51,.12], "#78796c")
-    box("hearth-side", [x+.22,.24,z], [.12,.41,.46], "#858477")
-    box("hearth-soot", [x,.22,z-.151], [.31,.28,.015], "#3d3b32")
-    for(const sign of [-1,1]) box(`hearth-log-${sign}`, [x,.105,z], [.32,.07,.07], palette.darkWood, [0,sign*.5,0])
-    box("hearth-embers", [x,.13,z], [.21,.035,.18], "#dc773b")
-    box("chimney-hood", [x,.58,z], [.49,.18,.44], "#89897a",undefined,"wall")
-    const courses=Math.ceil((chimneyTop-.67)/.13)
-    for(let i=0;i<courses;i++) {
-      const y=.67+(i+.5)*(chimneyTop-.67)/courses
-      box(`chimney-course-${i}`, [x,y,z], [i%2?.29:.32,(chimneyTop-.67)/courses-.008,.29], i%3?"#969587":"#7e8176",undefined,"wall")
-    }
-    // Open rim, so the smoke actually leaves a dark chimney mouth.
-    for(const sign of [-1,1]) {
-      box(`chimney-rim-x-${sign}`, [x+sign*.16,chimneyTop,z], [.07,.08,.39], palette.stone,undefined,"wall")
-      box(`chimney-rim-z-${sign}`, [x,chimneyTop,z+sign*.16], [.25,.08,.07], palette.stone,undefined,"wall")
-    }
-    box("chimney-mouth", [x,chimneyTop-.04,z], [.25,.015,.25], "#393b35",undefined,"wall")
+    parts.push(...hearthParts(width,depth,height,rise))
     const tx=width*.13, tz=depth*.24
     for(const a of [-1,1]) for(const b of [-1,1]) leg(`home-table-leg-${a}-${b}`,tx+a*.24,tz+b*.15,.35)
     box("home-table-top", [tx,.37,tz], [.64,.055,.43], palette.paleWood)

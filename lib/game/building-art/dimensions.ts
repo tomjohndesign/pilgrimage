@@ -1,3 +1,5 @@
+import { BASE_CHARACTER_SCALE, PERSON_SPRITE_SCALE } from "../base-person/gait"
+import { BASE_PERSON } from "../base-person/pose"
 import { yawForView } from "../render/iso"
 import { PERSON_WIDTH } from "../world-scale"
 import type { BuildingRecipe } from "./style"
@@ -10,6 +12,35 @@ export const BUILDING_BASE_HEIGHT = 0.08
 export const BUILDING_EAVE_OFFSET = 0.04
 export const HOVEL_WALL_HEIGHT = 0.9
 export const HOVEL_ROOF_RISE = 0.825
+/** A roof changes pitch after at most two tiles of horizontal run. */
+export const MAX_ROOF_RUN = 2
+export function roofRun(depth: number): number {
+  return depth <= MAX_ROOF_RUN ? depth : depth / (2 * Math.ceil(depth / (2 * MAX_ROOF_RUN)))
+}
+/** Long roofs join back-to-back slopes; short open awnings keep their high front. */
+export function roofProfile(depth: number, rise: number, awning = false) {
+  const run = roofRun(depth), folded = depth > MAX_ROOF_RUN
+  const breaks = folded ? Array.from({length: Math.round(depth/run)+1}, (_,i)=>-depth/2+i*run) : [-depth/2,depth/2]
+  const height = (z: number) => {
+    if (!folded) return rise * (awning ? (z+depth/2)/depth : (depth/2-z)/depth)
+    const along = Math.max(0,Math.min(depth,depth/2-z)), phase = along % (2*run)
+    return rise * (phase <= run ? phase/run : 2-phase/run)
+  }
+  return {breaks, height, folded}
+}
+/** Actual default sprite stature plus headroom, in the same world units as the shell. */
+export const BUILDING_DOOR_HEIGHT = (BASE_PERSON.body.headCenter + BASE_PERSON.body.headHeight)
+  * PERSON_SPRITE_SCALE * BASE_CHARACTER_SCALE / BASE_PERSON.camera.viewSize + .08
+
+/** Open fronts sit beneath the high edge of an awning that drains to the rear. */
+export function hasFrontAwning(variant: string | undefined): boolean {
+  return ["shelter", "monk-shelter", "workshop", "market", "guard-post", "storehouse", "wood-shelter"].includes(variant ?? "")
+}
+
+/** A gentle shared pitch, measured over the roof's downhill span. */
+export function singlePlaneRoofRise(span: number): number {
+  return roofRun(span) * .32
+}
 
 export function buildingDimensions(recipe: Pick<BuildingRecipe, "width" | "depth" | "wallHeight" | "roofRise" | "variant">) {
   // Width/depth are the occupied tiles. Only the small roof overhang insets walls.

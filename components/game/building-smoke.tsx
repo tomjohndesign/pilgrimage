@@ -5,6 +5,7 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
 import { shelterHearth } from "@/lib/game/building-art/furnishings"
+import { singlePlaneRoofRise } from "@/lib/game/building-art/dimensions"
 
 /** Reusable billboard smoke emitter, positioned at any building's chimney mouth. */
 export function BuildingSmoke({ position, phase = 0 }: { position: [number, number, number]; phase?: number }) {
@@ -41,9 +42,9 @@ export function BuildingSmoke({ position, phase = 0 }: { position: [number, numb
 }
 
 /** Hearth light stays visible in cutaway; chimney smoke follows the intact shell. */
-export function ShelterFire({ width, depth, height, cutaway = false }: { width: number; depth: number; height: number; cutaway?: boolean }) {
+export function ShelterFire({ width, depth, height, buildType, cutaway = false }: { width: number; depth: number; height: number; buildType?: string; cutaway?: boolean }) {
   const light=useRef<THREE.PointLight>(null), flames=useRef<THREE.Group>(null)
-  const {x,z,chimneyTop}=shelterHearth(width,depth,height,.55)
+  const {x,z,chimneyTop,scale}=shelterHearth(width,depth,height,singlePlaneRoofRise(depth))
   useFrame(({clock})=>{
     const flicker=.8+Math.sin(clock.elapsedTime*9)*.12+Math.sin(clock.elapsedTime*17)*.08
     if(light.current) light.current.intensity=.65*flicker
@@ -51,7 +52,7 @@ export function ShelterFire({ width, depth, height, cutaway = false }: { width: 
   })
   return <group>
     {!cutaway && <BuildingSmoke position={[x,chimneyTop+.025,z]} phase={width*.17+depth*.11} />}
-    <group ref={flames} name="hearth-fire" position={[x,.14,z]}>
+    <group ref={flames} name="hearth-fire" position={[x,.14,z]} scale={[scale,1,scale]}>
       {[-1,0,1].map((side)=><mesh key={side} position={[side*.06,.065,0]} raycast={()=>{}}>
         <coneGeometry args={[.055,side===0?.22:.13,4]} />
         <meshBasicMaterial color={side===0?"#ffd477":"#e69746"} toneMapped={false} />

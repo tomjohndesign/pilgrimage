@@ -32,6 +32,7 @@ import {
 } from "@/lib/game/map/generate-map"
 
 import { useSettlement } from "@/hooks/use-settlement"
+import { BUILDING_PREVIEW } from "@/lib/game/building-preview"
 
 import { GameHud } from "./game-hud"
 import { CheatBar } from "./cheat-bar"
@@ -296,6 +297,7 @@ export function GameShell({
     useBuildStore.getState().reset()
     const camera = useCameraStore.getState()
     camera.setMapSize(map.width, map.depth)
+    if (BUILDING_PREVIEW) camera.zoomBy(24 / camera.viewSize)
     camera.select(null)
     const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
     if (hovel) {

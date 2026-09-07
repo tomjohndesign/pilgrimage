@@ -1,5 +1,5 @@
 import { buildingEntrance, constructionWork, isComplete } from "./construction"
-import { rotatedFootprint, buildingEntry, type BuildingRotation } from "./building-rotation"
+import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
 import { groundHeight, levelBuildingGround } from "./map/elevation"
 import { placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
 import { settlementRoute } from "./settlement-route"
@@ -178,6 +178,9 @@ export function buildTileError(map: GameMap, x: number, z: number, influence: Bu
   const terrain = tileAt(map, x, z)
   if (!terrain) return "The whole structure must fit on the map."
   if (buildingAt(map, x, z)) return "Another structure occupies this space."
+  if(map.site?.door.x===x && map.site.door.z===z) return "Keep the shrine approach clear."
+  if(map.buildings.some(b => buildingApproaches(map,b).some(p=>p.x===x && p.z===z)))
+    return "Keep access to existing buildings clear: reserve the entrance path tile."
   if (!TERRAIN[terrain].buildable || terrain === "hills")
     return "Choose flat, open ground; keep woods, water and paths clear."
   if (map.elevation?.cliffs[z * map.width + x]) return "Choose level ground away from cliffs."
@@ -215,12 +218,22 @@ export function placementError(
   }
   // Reserve construction frontage and preserve access to every existing building.
   if (map.site) {
-    const candidate = { ...def, ...footprint, rotation, ...at, id: "construction-preview", construction: { work: 0, required: 1 } }
+    const candidate = { buildType: def.id, ...def, ...footprint, rotation, ...at, id: "construction-preview", construction: { work: 0, required: 1 } }
+    const approaches=buildingApproaches(map,candidate)
+    for(const approach of approaches) {
+      const terrain=tileAt(map,approach.x,approach.z)
+      if(!terrain || !TERRAIN[terrain].passable || buildingAt(map,approach.x,approach.z)
+        || (map.water?.depth[approach.z*map.width+approach.x] ?? 0)>0)
+        return "Keep access clear with a path tile outside the entrance."
+      if(Math.abs(groundHeight(map,approach.x,approach.z)-groundHeight(map,at.x,at.z))>.2)
+        return "The entrance path needs level ground."
+    }
     const occupied = [...map.buildings, candidate]
-    if (!settlementRoute(map, occupied, map.site.door, buildingEntrance(candidate)))
+    if ((approaches.length ? approaches : [buildingEntrance(candidate)]).some(entry=>!settlementRoute(map, occupied, map.site!.door, entry)))
       return "Keep access to the construction entrance clear."
     for (const camp of map.buildings.filter(b => b.buildType)) {
-      if (!settlementRoute(map, occupied, map.site.door, buildingEntry(camp)))
+      const entries=buildingApproaches(map,camp)
+      if ((entries.length ? entries : [buildingEntry(camp)]).some(entry=>!settlementRoute(map, occupied, map.site!.door, entry)))
         return "Keep access to existing buildings clear."
     }
   }
