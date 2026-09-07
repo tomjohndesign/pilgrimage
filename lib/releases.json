@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "331102de627b2010e43398b2f778056df3def0e0",
-  "releaseCount": 88,
+  "lastProcessedCommit": "2118086a373ce9a0dcfc18f49accecd605508ea4",
+  "releaseCount": 89,
   "releases": [
+    {
+      "version": "0.0.103",
+      "title": "Release 0.0.103",
+      "summary": "Give buildings folded thatch roofs, entrance tiles and distinct silhouettes (#122)",
+      "commit": "2118086a373ce9a0dcfc18f49accecd605508ea4"
+    },
     {
       "version": "0.0.102",
       "title": "Release 0.0.102",
