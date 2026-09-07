@@ -3,7 +3,7 @@ import { personWalkStride } from "./gait"
 import { actionPlaybackRate } from "./activity"
 import { ACTION_CLIPS, type ActionClip } from "./pose"
 import type { SpriteClip } from "../character-assets"
-import manifest from "../../../public/textures/characters/population/v25/manifest.json"
+import manifest from "../../../public/textures/characters/population/v26/manifest.json"
 import type { TravelerTypeId } from "../travelers"
 import { validatePersonDesign } from "./design"
 import type { PopulationPack } from "./population"
@@ -29,6 +29,7 @@ export function populationVisual(type: TravelerTypeId, variant: number, custom: 
     fps: 18, scale: 0.74 * pack.cellSize / 48,
     rowOffset: variant * 8,
     strideRatio: pack.strideRatios[variant],
+    reservedTones: pack.reservedTones === true,
     walkStride: personWalkStride(calling.designs[variant], 0.74 * pack.cellSize / 48),
     design: calling.designs[variant],
   }

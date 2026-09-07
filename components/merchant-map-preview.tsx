@@ -18,11 +18,16 @@ import { CameraLight } from "./game/camera-light"
 import { OutlinePass } from "./game/outline-pass"
 import { TravelerFigure } from "./game/traveler-figure"
 import { populationDesign } from "@/lib/game/base-person/population"
+import { rollComplexion } from "@/lib/game/base-person/complexion"
+import { makeRng } from "@/lib/game/rng"
 import { BASE_CHARACTER_SCALE, DEFAULT_WALK_CADENCE, personWalkStride } from "@/lib/game/base-person/gait"
 import { TRAVELER_TYPES } from "@/lib/game/travelers"
 import { CAM_FAR, CAM_NEAR, cameraOffset } from "@/lib/game/render/iso"
 import { merchantDemo, type MerchantDemoFrame, type MerchantDemo } from "@/lib/game/transport/demo"
 import type { Cargo, HorseVariant, Puller } from "@/lib/game/transport/assets"
+
+/** The demo cast is fixed, but drawn from the same colouring tables as the road. */
+const DEMO_COMPLEXIONS = [7, 21, 34].map(seed => rollComplexion(makeRng(seed)))
 
 const PASSER_SPEED = personWalkStride(populationDesign(TRAVELER_TYPES.pilgrim, 1)) * BASE_CHARACTER_SCALE * DEFAULT_WALK_CADENCE
 const CAMERA = { manual: true, near: CAM_NEAR, far: CAM_FAR, position: [20, 20, 20] as [number, number, number] }
@@ -96,9 +101,9 @@ function DemoActors({ demo, clock, seek, playing, rate, onProgress, ...options }
     if (report.current > 0.1 || reset) { report.current = 0; onProgress(frame) }
   }, -3)
   return <PixelCharacters>
-    <group ref={merchant}><TravelerFigure map={demo.map} {...options} type={TRAVELER_TYPES.vendor} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 0, scale: 1, bodyType: "Male" }} /></group>
-    <group ref={customer}><TravelerFigure map={demo.map} type={TRAVELER_TYPES.peasant} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 3, scale: 1, bodyType: "Female" }} /></group>
-    <group ref={passer}><TravelerFigure map={demo.map} type={TRAVELER_TYPES.pilgrim} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 1, scale: 1, bodyType: "Male" }} /></group>
+    <group ref={merchant}><TravelerFigure map={demo.map} {...options} type={TRAVELER_TYPES.vendor} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 0, scale: 1, bodyType: "Male", complexion: DEMO_COMPLEXIONS[0] }} /></group>
+    <group ref={customer}><TravelerFigure map={demo.map} type={TRAVELER_TYPES.peasant} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 3, scale: 1, bodyType: "Female", complexion: DEMO_COMPLEXIONS[1] }} /></group>
+    <group ref={passer}><TravelerFigure map={demo.map} type={TRAVELER_TYPES.pilgrim} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 1, scale: 1, bodyType: "Male", complexion: DEMO_COMPLEXIONS[2] }} /></group>
   </PixelCharacters>
 }
 

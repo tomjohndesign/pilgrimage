@@ -1,4 +1,5 @@
 import { rollCharacterAge } from "./character-age"
+import { rollComplexion, type Complexion } from "./base-person/complexion"
 import { deriveSeed, makeRng, SEED_STREAM } from "./rng"
 
 /**
@@ -23,6 +24,9 @@ export interface Monk {
   name: string
   /** Office within the brotherhood; the first monk is always the relic's keeper. */
   duty: string
+  /** Skin and hair colouring, as varied as the travelers on the road. The HUD's
+   * settler entries borrow this shape for a list and carry none. */
+  complexion?: Complexion
   attributes: MonkAttributes
 }
 
@@ -90,6 +94,8 @@ export function generateMonks(seed: number, count = MONK_COUNT): Monk[] {
     id: i,
     name: `Brother ${name}`,
     duty: duties[i],
+    // Its own stream per brother, so colouring left names, ages and skills alone.
+    complexion: rollComplexion(makeRng(deriveSeed(deriveSeed(seed, SEED_STREAM.monks), i + 104729))),
     attributes: {
       age: rollCharacterAge(rng, true),
       piety: roll(rng, PIETY),

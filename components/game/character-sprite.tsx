@@ -26,17 +26,21 @@ import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { useCharacterAssetStore } from "@/lib/game/character-asset-store"
 import type { TravelerTypeId } from "@/lib/game/travelers"
 import { applySpriteDepth, configureSpriteDepthTexture, spriteRenderOrder, type SpritePoseDepth } from "@/lib/game/render/sprite-depth"
+import { applyComplexionSwap, complexionUniforms } from "@/lib/game/render/complexion-swap"
+import { complexionSwap, type Complexion } from "@/lib/game/base-person/complexion"
 import { OUTLINE_ID_LAYER_MASK, SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import type { FigureClickHandler } from "./traveler-figure"
 
-export function CharacterSprite({ map, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, age = 18, visualOverride, attachment, flightClip, name = "traveler" }: {
+export function CharacterSprite({ map, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, complexion = appearance?.complexion, age = 18, visualOverride, attachment, flightClip, name = "traveler" }: {
   attachment?: { content: ReactNode; clips: Partial<Record<"hoisting" | "procession", FrameRegistration[]>>; cellSize: number; anchor: number[]; restPosition?: [number, number, number] }
-  flightClip?: SpriteClip & { fps: number }
+  flightClip?: SpriteClip & { fps: number; reservedTones?: boolean }
   map?: GameMap
   visualOverride?: ReturnType<typeof populationVisual>
   name?: "traveler" | "monk"
   type: TravelerTypeId
   appearance?: TravelerAppearance
+  /** Individual skin and hair colouring; travelers carry their own in `appearance`. */
+  complexion?: Complexion
   age?: number
   selected?: boolean
   onClick?: FigureClickHandler
@@ -52,7 +56,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   const population = usePopulationStore(s => s.pack)
   const varied = characterModel === "base" && !!appearance
   const visual = useMemo(() => visualOverride ?? (varied ? populationVisual(type, appearance.variant, population, age) :
-    { ...characterVisual(asset, characterModel, custom), rowOffset: 0, strideRatio: 1 }),
+    { ...characterVisual(asset, characterModel, custom), rowOffset: 0, strideRatio: 1, reservedTones: false }),
     [visualOverride, asset, characterModel, custom, varied, appearance?.variant, population, type, age])
   const individualScale = characterScale * (varied ? appearance.scale : 1)
   const size = visual.scale * individualScale
@@ -104,13 +108,23 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   const groundPlane = useMemo(() => ({ value: new THREE.Vector4() }), [])
   const groundAt = useMemo(() => map ? (x: number, z: number) => walkingSurface(map, x, z).height : undefined, [map])
   const viewport = useMemo(() => new THREE.Vector4(), [])
+  // Only artwork baked with reserved skin and hair entries may be recoloured;
+  // older atlases share those colours with props and would bleed. One material
+  // covers every clip a character can play, so they all have to qualify.
+  const recolourable = visual.reservedTones && (playingClip?.reservedTones ?? true) && (flightClip?.reservedTones ?? true)
+  const swap = useMemo(() => complexionSwap(recolourable ? visual.design : undefined, complexion),
+    [recolourable, visual.design, complexion?.skin, complexion?.hair])
   const material = useMemo(() => {
     const material = new THREE.SpriteMaterial({ map: textures[1], alphaTest: 0.5, transparent: false, toneMapped: false })
-    material.onBeforeCompile = (shader) => applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth)
+    const uniforms = complexionUniforms(swap)
+    material.onBeforeCompile = (shader) => {
+      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth)
+      applyComplexionSwap(shader, uniforms)
+    }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "person-depth-v5"
+    material.customProgramCacheKey = () => "person-complexion-v1"
     return material
-  }, [textures, viewport, worldTexel, groundPlane, poseDepth])
+  }, [textures, viewport, worldTexel, groundPlane, poseDepth, swap])
   useEffect(() => () => material.dispose(), [material])
   const center = useMemo(() => new THREE.Vector2(...visual.center), [visual])
   const sprite = useRef<THREE.Sprite>(null)

@@ -1,4 +1,4 @@
-import manifest from "../../../public/textures/characters/rockets/v11/manifest.json"
+import manifest from "../../../public/textures/characters/rockets/v12/manifest.json"
 import { GREY_HAIR_AGE } from "../character-age"
 import { monkVisual } from "../base-person/monk-assets"
 import { ACTION_CLIPS } from "../base-person/pose"
@@ -11,7 +11,7 @@ function equippedVisual(age: number) {
   return {
     visual: { ...base, walk: { ...base.walk, ...clip("walk") }, idle: clip("idle"),
       actions: Object.fromEntries(ACTION_CLIPS.map(name => [name, { ...base.actions[name], ...clip(name) }])) },
-    flight: { ...clip("flying"), fps: manifest.flightFps },
+    flight: { ...clip("flying"), fps: manifest.flightFps, reservedTones: (manifest as { reservedTones?: boolean }).reservedTones === true },
   }
 }
 const brown = equippedVisual(30), grey = equippedVisual(80)

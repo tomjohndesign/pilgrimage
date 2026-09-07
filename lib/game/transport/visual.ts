@@ -1,4 +1,4 @@
-import manifest from "../../../public/textures/transport/v21/manifest.json"
+import manifest from "../../../public/textures/transport/v22/manifest.json"
 import { populationVisual } from "../base-person/population-assets"
 import { personWalkStride } from "../base-person/gait"
 import { validatePersonDesign } from "../base-person/design"
@@ -13,6 +13,8 @@ export function pullingVisual(variant: number) {
     idle: { url: `/textures/transport/${manifest.version}/puller-idle.png`, depth: `/textures/transport/${manifest.version}/depth-puller-idle.png`, columns: asset.idleFrames, rows: asset.rows, stillFrame: 0 },
     center: [asset.anchor[0] / asset.cellSize, 1 - asset.anchor[1] / asset.cellSize] as [number, number],
     fps: 18, scale, rowOffset: variant * manifest.directions.length, strideRatio: 1,
+    // Locomotion comes from the transport atlas; it carries reserved tones from the same bake.
+    reservedTones: (manifest.puller as { reservedTones?: boolean }).reservedTones === true,
     walkStride: personWalkStride(design, scale, asset.camera.viewSize), design,
   }
 }

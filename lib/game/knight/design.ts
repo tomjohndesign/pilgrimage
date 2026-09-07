@@ -1,7 +1,7 @@
 import { populationDesign } from "../base-person/population"
 import { TRAVELER_TYPES } from "../travelers"
 
-export const KNIGHT = { version: "v9", variants: 3, cellSize: 128, anchor: [64, 90] as const, frames: 20 } as const
+export const KNIGHT = { version: "v10", variants: 3, cellSize: 128, anchor: [64, 90] as const, frames: 20 } as const
 /** c.1066 Anglo-Norman equipment: mail, nasal helmet, leather belt and scabbard.
  * Reference: https://www.bayeuxmuseum.com/en/the-bayeux-tapestry/discover-the-bayeux-tapestry/what-is-the-bayeux-tapestry-about/
  * Three body builds reuse the shared leg proportions and distance-driven gait.
