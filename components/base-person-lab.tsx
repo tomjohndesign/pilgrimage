@@ -22,6 +22,7 @@ import transportMetadata from "@/public/textures/transport/v14/manifest.json"
 const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse" } as const
 type Subject = keyof typeof SUBJECTS
 declare global { interface Window {
+  __minstrelBake?: typeof import("@/lib/game/minstrel/bake").bakeMinstrels
   __transportBake?: typeof import("@/lib/game/transport/bake").bakeTransport
   __choppingBlockBake?: typeof import("@/lib/game/base-person/bake").bakeChoppingBlock
   __rocketMonkBake?: typeof import("@/lib/game/rocket/bake").bakeRocketMonks
@@ -80,10 +81,11 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     if (process.env.NODE_ENV !== "development") return
     const target = window as unknown as { __bakePersonPopulation?: (progress?: (done: number) => void) => Promise<unknown> }
     target.__bakePersonPopulation = async progress => (await import("@/lib/game/base-person/bake-population")).bakePopulation(undefined, progress)
+    window.__minstrelBake = async () => (await import("@/lib/game/minstrel/bake")).bakeMinstrels()
     window.__transportBake = async () => (await import("@/lib/game/transport/bake")).bakeTransport()
     window.__choppingBlockBake = bakeChoppingBlock
     window.__rocketMonkBake = async () => (await import("@/lib/game/rocket/bake")).bakeRocketMonks()
-    return () => { delete target.__bakePersonPopulation; delete window.__transportBake; delete window.__choppingBlockBake; delete window.__rocketMonkBake }
+    return () => { delete target.__bakePersonPopulation; delete window.__minstrelBake; delete window.__transportBake; delete window.__choppingBlockBake; delete window.__rocketMonkBake }
   }, [])
   const [bake, setBake] = useState<BasePersonBake | null>(null)
   const [error, setError] = useState("")
