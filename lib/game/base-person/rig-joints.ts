@@ -16,3 +16,8 @@ export const RIG_BONES: [RigJoint, RigJoint][] = [
   ["pelvis", "leftHip"], ["leftHip", "leftKnee"], ["leftKnee", "leftFoot"],
   ["pelvis", "rightHip"], ["rightHip", "rightKnee"], ["rightKnee", "rightFoot"], ["staffTip", "staffTop"],
 ]
+/** Bones whose first joint already carries the second through the hierarchy: a bone drag moves only that joint. */
+export const RIG_CARRIED_BONES: [RigJoint, RigJoint][] = [
+  ["pelvis", "chest"], ["chest", "head"], ["chest", "leftShoulder"], ["chest", "rightShoulder"],
+  ["pelvis", "leftHip"], ["pelvis", "rightHip"], ["leftShoulder", "leftElbow"], ["rightShoulder", "rightElbow"],
+]

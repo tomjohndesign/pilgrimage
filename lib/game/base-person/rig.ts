@@ -3,8 +3,8 @@ import { preachingMotion } from "./preaching"
 import { buildingMotion, MALLET_HEAD_HEIGHT } from "./building"
 import * as THREE from "three"
 import { createWoodLogGeometry, WOOD_LOG } from "../wood-log"
-import { editedLeg } from "./edited-leg"
-import { poseOffset } from "./pose-edits"
+import { editedLeg, reachablePelvisShift } from "./edited-leg"
+import { poseOffset, type EditableJoint, type PoseEdits } from "./pose-edits"
 import type { RigJoints } from "./rig-joints"
 import { staffMotion } from "./staff-motion"
 import { createRoadAccessories } from "./road-accessories"
@@ -530,7 +530,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
   // Solve both arm bones to a hand target in the upper body's coordinates.
   const reach = (limb: typeof limbs[number], target: Point3, palm = false, pole?: THREE.Vector3) => {
     const start = limb.shoulder.position.clone(), end = new THREE.Vector3(...target)
-    end.y -= chest.position.y
+    end.sub(chest.position)
     const axis = end.clone().sub(start)
     const lowerLength = b.forearmLength + (palm ? 0.04 * recipe.design.hands : 0)
     const distance = Math.max(Math.abs(b.upperArmLength - lowerLength) + 0.001, Math.min(axis.length(), b.upperArmLength + lowerLength - 0.001))
@@ -567,6 +567,8 @@ export function createBasePersonRig(recipe = personRecipe()) {
     joints(): RigJoints {
       root.updateMatrixWorld(true)
       const point = (object: THREE.Object3D, local = new THREE.Vector3()) => root.worldToLocal(object.localToWorld(local)).toArray() as Point3
+      const segmentEnds = (object: THREE.Object3D): [Point3, Point3] => [point(object, new THREE.Vector3(0, -0.5, 0)), point(object, new THREE.Vector3(0, 0.5, 0))]
+      const span = (a: Point3, b: Point3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
       const result: RigJoints = { pelvis: point(body), head: point(head) }
       const shoulders = limbs.map(limb => point(limb.shoulder))
       result.chest = shoulders[0].map((v, i) => (v + shoulders[1][i]) / 2) as Point3
@@ -575,9 +577,14 @@ export function createBasePersonRig(recipe = personRecipe()) {
         result[`${side}Shoulder`] = point(limb.shoulder)
         result[`${side}Elbow`] = point(limb.elbow)
         result[`${side}Hand`] = point(side === "left" ? sockets.leftHand : sockets.rightHand)
-        result[`${side}Hip`] = point(limb.thigh, new THREE.Vector3(0, 0.5, 0))
-        result[`${side}Knee`] = point(limb.thigh, new THREE.Vector3(0, -0.5, 0))
-        result[`${side}Foot`] = point(limb.shin, new THREE.Vector3(0, -0.5, 0))
+        // Leg segments are unit cylinders stretched between two joints. Seated and mounted poses aim them the
+        // opposite way from bone(), so read the ends geometrically: the hip is the thigh end nearest the pelvis,
+        // the knee the other end, and the ankle the shin end away from the knee.
+        const thighEnds = segmentEnds(limb.thigh), shinEnds = segmentEnds(limb.shin)
+        const hipEnd = Number(span(thighEnds[1], result.pelvis!) < span(thighEnds[0], result.pelvis!))
+        result[`${side}Hip`] = thighEnds[hipEnd]
+        result[`${side}Knee`] = thighEnds[1 - hipEnd]
+        result[`${side}Foot`] = shinEnds[Number(span(shinEnds[1], result[`${side}Knee`]!) > span(shinEnds[0], result[`${side}Knee`]!))]
       }
       const staff = root.getObjectByName("walking-staff")
       if (staff?.visible && staff.children[0]) {
@@ -620,7 +627,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
 
       })
     },
-    pose(phase: number, clip: BaseClip = "walk") {
+    pose(phase: number, clip: BaseClip = "walk", edits: PoseEdits | undefined = recipe.design.poseEdits) {
       for (const part of headPivot.children) {
         if (part.name.startsWith("head-covering")) part.visible = !uncoverHead(recipe.design.bodyType, clip)
       }
@@ -650,9 +657,19 @@ export function createBasePersonRig(recipe = personRecipe()) {
       const shaftGrip = splitting ? THREE.MathUtils.clamp(axeHeadHeight - (heldGrip.y - (0.10 * chopping.axeScale + 0.035)) / chopping.axeScale, 0, 0.50) * split.parked : 0
       poseRoot.rotation.set(sleep ? -Math.PI / 2 : 0, sleep && female ? Math.PI / 2 : 0, 0)
       poseRoot.position.set(0, sleep ? female ? b.shoulderOffset + 0.06 : b.torsoTop * 0.78 : 0, sleep ? (b.headCenter + b.headHeight) / 2 + 0.03 : 0)
-      body.position.y = b.hipHeight + drop
+      body.position.set(0, b.hipHeight + drop, 0)
       body.rotation.x = gather ? 0.18 + gathering.reach * 0.3 : felling ? 0.10 : splitting ? split.lean : praying ? 0.12 + wave * 0.025 : sleep ? wave * 0.008 : chair ? 0.015 : seated ? 0.008 * wave : 0
       body.rotation.y = felling ? swing.twist : splitting ? split.twist : motion.hipYaw
+      // Authored offsets for the skeleton's own joints: the pelvis carries everything, the chest carries head and arms.
+      const rootOffset = (joint: EditableJoint) => new THREE.Vector3(...poseOffset(edits, clip, joint, phase))
+      const pelvisOffset = new THREE.Vector3(...reachablePelvisShift(phase, clip, b, rootOffset("pelvis").toArray() as Point3, poseRoot.quaternion.clone().invert()))
+      body.position.add(pelvisOffset.clone().applyQuaternion(poseRoot.quaternion.clone().invert()))
+      chest.position.set(0, waist - b.hipHeight, 0)
+      const chestOffset = rootOffset("chest")
+      if (chestOffset.lengthSq() > 0) {
+        root.updateMatrixWorld(true)
+        chest.position.add(body.worldToLocal(root.localToWorld(chestOffset)).sub(body.worldToLocal(root.localToWorld(new THREE.Vector3()))))
+      }
       if (chair) headPivot.rotation.x = .16 + wave * .004
       if (splitting) headPivot.rotation.x = -body.rotation.x * 0.65
       headPivot.rotation.y = felling ? -swing.twist * 0.55 : splitting ? -split.twist * 0.6 : -motion.chestYaw
@@ -723,12 +740,17 @@ export function createBasePersonRig(recipe = personRecipe()) {
         geometry.computeVertexNormals()
       }
       for (const limb of limbs) {
-        const leg = editedLeg(limb.side, phase, clip, b, recipe.design.poseEdits, poseRoot.quaternion.clone().invert())
+        const leg = editedLeg(limb.side, phase, clip, b, edits, poseRoot.quaternion.clone().invert(), pelvisOffset.toArray() as Point3)
         bone(limb.thigh, leg.hip, leg.knee)
         bone(limb.shin, leg.knee, leg.ankle)
         limb.foot.position.set(leg.ankle[0], leg.ankle[1] - b.ankleHeight + b.footHeight / 2, leg.ankle[2] + b.footLength * 0.22)
         limb.foot.rotation.y = chop ? (limb.side === "left" ? 1 : -1) * 0.22 : 0
-        limb.shoulder.position.y = b.shoulderHeight - waist - (limb.rear ? 0.045 : 0)
+        limb.shoulder.position.set((limb.side === "left" ? 1 : -1) * b.shoulderOffset, b.shoulderHeight - waist - (limb.rear ? 0.045 : 0), 0)
+        const shoulderOffset = rootOffset(limb.side === "left" ? "leftShoulder" : "rightShoulder")
+        if (shoulderOffset.lengthSq() > 0) {
+          root.updateMatrixWorld(true)
+          limb.shoulder.position.add(chest.worldToLocal(root.localToWorld(shoulderOffset)).sub(chest.worldToLocal(root.localToWorld(new THREE.Vector3()))))
+        }
         const seamStart = limb.seamStart.clone()
         seamStart.y -= waist
         const seamVector = limb.shoulder.position.clone().sub(seamStart)
@@ -747,10 +769,10 @@ export function createBasePersonRig(recipe = personRecipe()) {
         limb.hand.scale.set(chop ? 0.065 : 0.043, chop ? 0.055 : 0.06, chop ? 0.060 : 0.04).multiplyScalar(recipe.design.hands)
         limb.hand.quaternion.identity()
         if (recipe.design.walkingStick && (clip === "walk" || clip === "idle") && limb.side === "right") {
-          const { grip } = staffMotion(phase, b, clip === "walk", recipe.design.poseEdits)
+          const { grip } = staffMotion(phase, b, clip === "walk", edits)
           root.updateMatrixWorld(true)
           const target = chest.worldToLocal(root.localToWorld(new THREE.Vector3(...grip)))
-          target.y += chest.position.y
+          target.add(chest.position)
           reach(limb, target.toArray() as Point3, true)
           root.updateMatrixWorld(true)
 
@@ -801,15 +823,15 @@ export function createBasePersonRig(recipe = personRecipe()) {
         else if (seated) reach(limb, [sign * 0.21, 0.02, 0.30])
         else if (sleep) reach(limb, bundled ? [-sign * 0.035, 0.08, 0.23 + sign * 0.02] :
           female ? [sign * 0.055, 0.42, 0.25] : [sign * 0.09, 0.22, 0.24])
-        const handOffset = poseOffset(recipe.design.poseEdits, clip, limb.side === "left" ? "leftHand" : "rightHand", phase)
-        const elbowOffset = poseOffset(recipe.design.poseEdits, clip, limb.side === "left" ? "leftElbow" : "rightElbow", phase)
+        const handOffset = poseOffset(edits, clip, limb.side === "left" ? "leftHand" : "rightHand", phase)
+        const elbowOffset = poseOffset(edits, clip, limb.side === "left" ? "leftElbow" : "rightElbow", phase)
         if ([...handOffset, ...elbowOffset].some(v => v !== 0)) {
           root.updateMatrixWorld(true)
           const handSocket = limb.side === "left" ? sockets.leftHand : sockets.rightHand
           const hand = root.worldToLocal(handSocket.getWorldPosition(new THREE.Vector3())).add(new THREE.Vector3(...handOffset))
           const elbow = root.worldToLocal(limb.elbow.getWorldPosition(new THREE.Vector3())).add(new THREE.Vector3(...elbowOffset))
           const target = chest.worldToLocal(root.localToWorld(hand))
-          target.y += chest.position.y
+          target.add(chest.position)
           const pole = chest.worldToLocal(root.localToWorld(elbow))
           reach(limb, target.toArray() as Point3, true, pole)
         }
@@ -824,12 +846,12 @@ export function createBasePersonRig(recipe = personRecipe()) {
         }
       }
       root.updateMatrixWorld(true)
-      const headOffset = new THREE.Vector3(...poseOffset(recipe.design.poseEdits, clip, "head", phase))
+      const headOffset = new THREE.Vector3(...poseOffset(edits, clip, "head", phase))
       const parent = headPivot.parent!
       const zero = parent.worldToLocal(root.localToWorld(new THREE.Vector3()))
       headPivot.position.add(parent.worldToLocal(root.localToWorld(headOffset)).sub(zero))
       root.updateMatrixWorld(true)
-      roadAccessories.pose(clip, phase)
+      roadAccessories.pose(clip, phase, edits)
       if (building) {
         const desired = root.getWorldQuaternion(new THREE.Quaternion()).multiply(
           new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), hammer.pitch))
