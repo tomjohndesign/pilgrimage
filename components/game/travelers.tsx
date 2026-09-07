@@ -191,7 +191,9 @@ export function Travelers({
       group.userData.activity = s.praying ? "praying" : s.activity
       group.userData.routineActivity = s.activity
       group.userData.shrineParking = s.shrineParking
-      group.userData.cartProgress = s.convoy && s.activity === "walking" && !s.track && !s.shrineParking ? s.progress : undefined
+      // Walking around a building leaves the cart route; the cart trails the
+      // puller's own hitch until they are back on the road.
+      group.userData.cartProgress = s.convoy && s.activity === "walking" && !s.track && !s.shrineParking && !s.roadShortcut ? s.progress : undefined
       group.userData.cartDirection = s.direction
       group.userData.cartManeuver = false
       group.userData.cartPose = s.shrineParking?.pose

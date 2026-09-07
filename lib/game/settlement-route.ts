@@ -54,3 +54,14 @@ export function settlementRoute(
   }
   return null
 }
+
+/**
+ * The walk from the road to the shrine door. The track is ordinary ground —
+ * a footprint may stand on it — so the approach is routed around whatever is
+ * built there, falling back to the original branch when nothing is.
+ */
+export function shrineApproach(map: GameMap): TilePos[] {
+  const site = map.site
+  if (!site) return []
+  return settlementRoute(map, map.buildings, site.branch[0], site.door) ?? site.branch
+}

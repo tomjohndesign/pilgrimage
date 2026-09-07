@@ -1,4 +1,4 @@
-import { findRoadShortcut, retireBypassedRoad, exploresRoadShortcut, type WalkingShortcut } from "./walking-shortcuts"
+import { blockedRoad, findRoadDiversion, findRoadShortcut, retireBypassedRoad, exploresRoadShortcut, type WalkingShortcut } from "./walking-shortcuts"
 import { createFootpaths, HEAVY_PATH_WEAR, recordWalkingPath, regrowFootpaths, type Footpaths } from "./footpaths"
 import { knightMounted, knightLoadout, knightTravelSpeed, type HorseRest } from "./knights"
 import { knightDesign } from "./knight/design"
@@ -226,6 +226,8 @@ function minstrelWalkSeconds(id: number, cycle: number): number {
 export interface SimTraveler {
   roadShortcut?: WalkingShortcut
   shortcutCheck?: number
+  /** Half-tile gate on looking ahead for a footprint blocking the road. */
+  diversionCheck?: number
   musicCooldown?: number
   musicVisit?: { performerId: number; cycle: number; spot: WorldPoint }
   /** Horse waits on a reserved verge beside a tree until its rider returns. */
@@ -448,13 +450,18 @@ function roadWorldPoint(map: GameMap, p: number, lane: number): WorldPoint {
   return routeWorldPoint(map, map.road!, p, lane)
 }
 
-/** A cut spends real walking distance while retaining the road's logical progress. */
+/** A cut spends real walking distance while retaining the road's logical progress.
+ * A straight chord and a detour bent around a footprint are walked the same way. */
 function stepRoadShortcut(s: SimTraveler, map: GameMap, distance: number): void {
   const cut = s.roadShortcut!
   cut.distance = Math.min(cut.length, cut.distance + Math.max(0, distance))
   const t = cut.distance / cut.length
-  s.x = cut.from.x + (cut.to.x - cut.from.x) * t
-  s.z = cut.from.z + (cut.to.z - cut.from.z) * t
+  const at = cut.via?.length ? routePoint([cut.from, ...cut.via, cut.to], cut.distance) : {
+    x: cut.from.x + (cut.to.x - cut.from.x) * t,
+    z: cut.from.z + (cut.to.z - cut.from.z) * t,
+  }
+  s.x = at.x
+  s.z = at.z
   s.y = walkingSurface(map, s.x, s.z).height
   s.progress = cut.start + (cut.end - cut.start) * t
   if (cut.distance >= cut.length) {
@@ -1335,6 +1342,17 @@ export function stepSim(
               s.z = at.z
               break
             }
+          }
+        }
+        // A footprint standing on the road turns everyone off it, carts and
+        // riders included; the road is only theirs as far as the next wall.
+        if (dt > 0 && !s.track) {
+          const diversionCheck = Math.floor(s.progress) * 2 + (direction === 1 ? 1 : 0)
+          if (s.diversionCheck !== diversionCheck) {
+            s.diversionCheck = diversionCheck
+            s.roadShortcut = findRoadDiversion(map, blockedRoad(map), { x: s.x, z: s.z }, s.progress, direction,
+              p => roadWorldPoint(map, p, s.lane)) ?? undefined
+            if (s.roadShortcut) { stepRoadShortcut(s, map, worldSpeed * dt); break }
           }
         }
         if (dt > 0 && s.activity === "walking" && !needsParking && map.footpaths) {

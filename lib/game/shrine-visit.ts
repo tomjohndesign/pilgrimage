@@ -1,7 +1,7 @@
 import { shrineLayout, shrineSeats } from "./shrine-layout"
 import { buildingStepAllowed, shrineGates } from "./building-navigation"
 import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
-import { settlementRoute } from "./settlement-route"
+import { settlementRoute, shrineApproach } from "./settlement-route"
 
 export const DEFAULT_ADMISSION_FEE = 2
 
@@ -15,6 +15,7 @@ export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, o
   const shrine = map.buildings.find(b => b.id === site?.hovelId)
   if (!site || !shrine) return null
   const gate = shrineGates(shrine, site.door)[0]
+  const branch = shrineApproach(map)
   if (!buildingStepAllowed(map,map.buildings,gate.outside,gate.inside,true)) return null
   const seats=shrineSeats(shrine,site.door),layout=shrineLayout(shrine,site.door)
   for(let i=0;i<seats.length;i++) {
@@ -26,7 +27,7 @@ export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, o
     const inside=toAisle && buildingStepAllowed(map,map.buildings,aisle,seat.tile,true,seat.id)
       ? [...toAisle,seat.tile] : settlementRoute(map,map.buildings,gate.inside,seat.tile,false,true,seat.id)
     const approach=settlementRoute(map,map.buildings,site.door,gate.outside)
-    if(inside && approach) return {seat:seat.id,route:[...site.branch,...approach.slice(1),...inside]}
+    if(inside && approach) return {seat:seat.id,route:[...branch,...approach.slice(1),...inside]}
   }
   return null
 }

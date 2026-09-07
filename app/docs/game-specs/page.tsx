@@ -71,10 +71,18 @@ export default function GameSpecsPage() {
             Zero-renown structures do not extend it. Woods and water block connections between areas.
           </li>
           <li>
-            Flat buildable terrain is allowed: grass, dirt and dry sand. Hills, forest-floor
-            clearings, woods, water, roads, tracks and bridges are blocked.
+            Flat buildable terrain is allowed: grass, dirt, dry sand, the road and the shrine
+            track. Any tile a path has already worn counts as open ground too, whatever lies
+            beneath it. Hills, untrodden forest-floor clearings, woods, water and bridges are
+            blocked, as are the dark-forest tracks, which the old growth leaves no way around.
           </li>
-          <li>Existing structures, the hovel door and the shrine approach must stay clear.</li>
+          <li>Existing structures, the hovel door and every building’s entrance tile must stay clear.</li>
+          <li>
+            A footprint may stand on a path. Travelers walk around it and wear their own way
+            past, so a placement is refused only where it leaves no way around: where the road
+            would be sealed, where the road is covered at the edge of the map (travelers arrive
+            and leave there), or where the shrine door could no longer be reached from the road.
+          </li>
           <li>While placing, green marks available ground, red marks blocked ground and a gold
             edge marks the influence boundary. The cursor checks the complete footprint, access,
             supplies and unlocks. Unmarked land is outside influence.</li>
