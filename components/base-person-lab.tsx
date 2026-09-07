@@ -10,7 +10,7 @@ import "./game/game-hud.css"
 import "./base-person-lab.css"
 import { actionPlaybackRate } from "@/lib/game/base-person/activity"
 import { BASE_PERSON, PERSON_CLIPS, SOCKET_NAMES, type BaseClip } from "@/lib/game/base-person/pose"
-import { bakeChoppingBlock, cachedPersonBake, renderPersonPreview, type BasePersonBake, type PersonPreview } from "@/lib/game/base-person/bake"
+import { bakeChoppingBlock, bakePersonProgressively, personFrameRenderer, personSessionKey, renderPersonPreview, type BakeProgress, type BasePersonBake, type PersonPreview, type PersonSession } from "@/lib/game/base-person/bake"
 
 import { DEFAULT_DESIGN, DESIGN_CONTROLS, HAIR_STYLES, HAT_STYLES, TUNIC_STYLES, PERSON_PRESETS, personRecipe, withBodyType, validatePersonDesign, type DesignKey, type PersonDesign } from "@/lib/game/base-person/design"
 import { usePopulationStore } from "@/lib/game/base-person/population-store"
@@ -39,7 +39,7 @@ import { characterEditsJson, parseCharacterEdits, restoreCharacterDesign } from 
 import { CharacterAnimationDock } from "./character-rig-editor"
 import { RigOverlay, RigInspector } from "./person-rig-editor"
 import { inspectRig } from "@/lib/game/base-person/rig-inspection"
-import { poseOffset, setPoseKey, type EditableJoint, type PoseEdits } from "@/lib/game/base-person/pose-edits"
+import { clearFrameKeys, poseOffset, setPoseKey, type EditableJoint, type PoseEdits } from "@/lib/game/base-person/pose-edits"
 import type { RigJoint } from "@/lib/game/base-person/rig-joints"
 import { staffMotion } from "@/lib/game/base-person/staff-motion"
 import type { Point3 } from "@/lib/game/base-person/pose"
@@ -169,6 +169,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   const [history, setHistory] = useState<PoseEdits[]>([])
   const [future, setFuture] = useState<PoseEdits[]>([])
   const dragSnapshot = useRef<PoseEdits | null>(null)
+  const latestEdits = useRef<PoseEdits | undefined>(undefined); latestEdits.current = design.poseEdits
   useEffect(() => {
     try {
       const stored = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? "null")
@@ -185,9 +186,10 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   useEffect(() => {
     if (!draftsReady) return
     drafts.current[character] = design
+    if (dragging) return // Every draft is serialised here; wait for the pointer to settle.
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify({ templateVersion: BASE_PERSON.version, character, drafts: drafts.current })) }
     catch { setMessage("Browser storage is unavailable. Copy edits as JSON to keep a backup.") }
-  }, [design, character, draftsReady])
+  }, [design, character, draftsReady, dragging])
   const jsonDialog = useRef<HTMLDialogElement>(null)
   const jsonArea = useRef<HTMLTextAreaElement>(null)
   const [jsonText, setJsonText] = useState("")
@@ -228,56 +230,75 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     drafts.current[character] = design
     setCharacter(id); setDesign(drafts.current[id] ?? { ...initial }); setHistory([]); setFuture([]); setMessage("")
   }
-  const inspected = useMemo(() => isPerson && showRig ? inspectRig(design, clip, frame % PERSON_CLIPS[clip].frames, row) : {}, [isPerson, showRig, design, clip, frame, row])
+  // One render session per design serves both the rig handles and the live preview, so a drag keeps its rig and compiled shaders.
+  const session = useRef<{ key: string; session: PersonSession } | null>(null)
+  const previewSession = (design: PersonDesign) => {
+    const key = personSessionKey(design)
+    if (session.current?.key !== key) { session.current?.session.dispose(); session.current = { key, session: personFrameRenderer(design) } }
+    return session.current.session
+  }
+  useEffect(() => () => { session.current?.session.dispose(); session.current = null }, [])
+  const inspected = useMemo(() => isPerson && showRig ? inspectRig(design, clip, frame % PERSON_CLIPS[clip].frames, row, previewSession(design).rig) : {}, [isPerson, showRig, design, clip, frame, row]) // eslint-disable-line react-hooks/exhaustive-deps
   const editFrame = (joint: EditableJoint) => joint === "staffTip" && clip === "walk" && staffMotion(frame / PERSON_CLIPS.walk.frames, personRecipe(design).body).planted ? 0 : frame % PERSON_CLIPS[clip].frames
   const currentOffset = (joint: EditableJoint) => poseOffset(design.poseEdits, clip, joint, editFrame(joint) / PERSON_CLIPS[clip].frames)
   const selectedKey = design.poseEdits?.[clip]?.[selectedJoint as EditableJoint]?.find(k => k.frame === editFrame(selectedJoint as EditableJoint))
+  const frameKeyed = (step: number) => Object.values(design.poseEdits?.[clip] ?? {}).some(keys => keys?.some(key => key.frame === step))
   const radius = selectedKey?.radius ?? Math.min(3, Math.max(1, Math.floor(PERSON_CLIPS[clip].frames / 2)))
   const commitPose = (edits: PoseEdits) => {
     if (JSON.stringify(edits) === JSON.stringify(design.poseEdits ?? {})) return
     if (!dragSnapshot.current) { setHistory(h => [...h.slice(-49), design.poseEdits ?? {}]); setFuture([]) }
+    latestEdits.current = edits
     setDesign(d => ({ ...d, poseEdits: edits })); setMessage("")
   }
-  const changeJoint = (joint: EditableJoint, offset: Point3, blend = radius) => {
+  const changeJoints = (changes: [EditableJoint, Point3][], blend = radius) => {
     setPlaying(false)
-    const at = editFrame(joint)
-    if (joint === "staffTip" && (clip === "idle" || (clip === "walk" && staffMotion(frame / PERSON_CLIPS.walk.frames, personRecipe(design).body).planted))) offset = [offset[0], 0, offset[2]]
-    commitPose(setPoseKey(design.poseEdits, clip, joint, { frame: at, offset, radius: blend }, at))
+    let edits: PoseEdits = design.poseEdits ?? {}
+    for (let [joint, offset] of changes) {
+      const at = editFrame(joint)
+      if (joint === "staffTip" && (clip === "idle" || (clip === "walk" && staffMotion(frame / PERSON_CLIPS.walk.frames, personRecipe(design).body).planted))) offset = [offset[0], 0, offset[2]]
+      edits = setPoseKey(edits, clip, joint, { frame: at, offset, radius: blend }, at)
+    }
+    commitPose(edits)
   }
+  const changeJoint = (joint: EditableJoint, offset: Point3, blend = radius) => changeJoints([[joint, offset]], blend)
   const rigDragging = (active: boolean) => {
     setDragging(active); setPlaying(false)
     if (active) dragSnapshot.current = structuredClone(design.poseEdits ?? {})
     else if (dragSnapshot.current) {
       const before = dragSnapshot.current; dragSnapshot.current = null
-      if (JSON.stringify(before) !== JSON.stringify(design.poseEdits ?? {})) { setHistory(h => [...h.slice(-49), before]); setFuture([]) }
+      // The release may commit its final coalesced move in this same event, ahead of the next render.
+      if (JSON.stringify(before) !== JSON.stringify(latestEdits.current ?? {})) { setHistory(h => [...h.slice(-49), before]); setFuture([]) }
     }
   }
+  const [bakeProgress, setBakeProgress] = useState<BakeProgress | null>(null)
   useEffect(() => {
     setBusy(true)
     const target = window as unknown as { __basePersonBake?: BasePersonBake }
     delete target.__basePersonBake
-    if (dragging || !isPerson) { if (!isPerson) setBusy(false); return }
+    if (dragging || !isPerson) { if (!isPerson) { setBusy(false); setBakeProgress(null) } return }
+    let job: ReturnType<typeof bakePersonProgressively> | undefined
+    // Sheets bake between browser tasks, one row at a time, so the stage can show progress and stay responsive.
     const timer = setTimeout(() => {
-      try {
-        const result = cachedPersonBake(design)
-        setBake(result); setError("")
-        target.__basePersonBake = result
-      } catch (e) { setError(e instanceof Error ? e.message : "The base sprite could not render.") }
-      setBusy(false)
+      job = bakePersonProgressively(design, setBakeProgress)
+      job.promise.then(result => {
+        if (!result) return // Superseded by a newer design.
+        setBake(result); setError(""); target.__basePersonBake = result
+        setBusy(false); setBakeProgress(null)
+      }, e => { setError(e instanceof Error ? e.message : "The base sprite could not render."); setBusy(false); setBakeProgress(null) })
     }, 180)
-    return () => { clearTimeout(timer); delete target.__basePersonBake }
+    return () => { clearTimeout(timer); job?.cancel(); delete target.__basePersonBake }
   }, [design, dragging, isPerson])
   useEffect(() => {
     if (sheetMatchesDesign || !isPerson) return
-    // Coalesce inputs into a paint, without waiting for the user to stop dragging.
+    // Coalesce inputs into a paint, without waiting for the user to stop dragging; a drag refreshes only the facing on screen.
     const request = requestAnimationFrame(() => {
       try {
-        setPreview(renderPersonPreview(design, clip, frame % PERSON_CLIPS[clip].frames, sides))
+        setPreview(renderPersonPreview(design, clip, frame % PERSON_CLIPS[clip].frames, sides, dragging ? [row] : undefined, previewSession(design)))
         setError("")
       } catch (e) { setError(e instanceof Error ? e.message : "The preview could not render.") }
     })
     return () => cancelAnimationFrame(request)
-  }, [design, clip, frame, sides, sheetMatchesDesign, isPerson])
+  }, [design, clip, frame, sides, sheetMatchesDesign, isPerson, dragging, row])
   useEffect(() => {
     if (!active || !playing || frameCount === 1 || onMap) return
     const timer = setInterval(() => setFrame((f) => subject === "knight" || (subject === "cart" && shopState !== "opening" && shopState !== "packing") ? f + 1 : (f + 1) % frameCount), 1000 / (fps * animationRate))
@@ -289,8 +310,11 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   const step = frame % frameCount
   const firstColumn = isKnight ? mountedKnight && knightClip === "walk" ? 1 : 0 : isPerson ? 0 : subject === "cart" ? cartColumn(cargo, cartMode, 0) : grazing ? transportMetadata.animalClips.graze.start : clip === "idle" ? transportMetadata.animalClips.idle.start : transportMetadata.animalClips.walk.start
   const visibleFrame = live ? 0 : subject === "cart" ? cartMode === "shop" ? Math.round((shopState === "opening" ? step / 47 : shopState === "packing" ? 1 - step / 47 : 1) * (TRANSPORT.shopFrames - 1)) : step % TRANSPORT.wheelFrames : firstColumn + step
-  const url = isKnight ? `/textures/knights/${KNIGHT.version}/${mountedKnight ? `mounted-${animalCoat("horse", coat).id}` : `knight-${knightClip}`}.png` : !isPerson ? subject === "cart" ? cartUrl(cargo, cartMode, 1, cartPuller === "hand") : animalUrl(subject, animalCoat(subject, coat).id) : live?.url ?? (bake ? clip === "walk" || clip === "idle" ? sides ? clip === "walk" ? bake.debugWalk : bake.debugIdle : bake[clip] : sides ? bake.actions[clip].debug : bake.actions[clip].url : "")
-  const shadowUrl = !isPerson || sides ? undefined : live?.shadowUrl ?? (clip === "walk" ? bake?.shadowWalk : clip === "idle" ? bake?.shadowIdle : bake?.actions[clip].shadow)
+  const bakedSheet = bake ? clip === "walk" || clip === "idle" ? sides ? clip === "walk" ? bake.debugWalk : bake.debugIdle : bake[clip] : sides ? bake.actions[clip].debug : bake.actions[clip].url : ""
+  const bakedShadow = sides ? undefined : clip === "walk" ? bake?.shadowWalk : clip === "idle" ? bake?.shadowIdle : bake?.actions[clip].shadow
+  const url = isKnight ? `/textures/knights/${KNIGHT.version}/${mountedKnight ? `mounted-${animalCoat("horse", coat).id}` : `knight-${knightClip}`}.png` : !isPerson ? subject === "cart" ? cartUrl(cargo, cartMode, 1, cartPuller === "hand") : animalUrl(subject, animalCoat(subject, coat).id) : live?.url ?? bakedSheet
+  const shadowUrl = !isPerson || sides ? undefined : live?.shadowUrl ?? bakedShadow
+  const partialLive = !!live && live.rows.length < BASE_PERSON.directions.length
   const renderPalette = personRecipe(design).renderPalette
   const sockets = isPerson ? live?.sockets[row] ?? bake?.metadata.clips[clip][row * columns + visibleFrame]?.sockets : undefined
   const pixels = isKnight ? mountedKnight ? knightMetadata.cellSize : knightMetadata.person.cellSize : isPerson ? BASE_PERSON.cellSize : subject === "cart" ? cartMode === "shop" ? SHOP.cellSize : CART.cellSize : transportMetadata.cellSize
@@ -327,7 +351,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     version={isPerson ? `Base person · v${BASE_PERSON.version}` : `${SUBJECTS[subject]} · ${isKnight ? KNIGHT.version : TRANSPORT.version}`}
     controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(!controlsOpen)}
     roadHref={`/play?characters=base&baseSize=1.5&fps=${fps}`}
-    status={onMap ? "Merchant journey and turning simulations · game scale" : !isPerson ? `${subject === "horse" ? transportMetadata.animalProfiles[horseVariant].label : SUBJECTS[subject]} · ${clipLabel}` : dragging ? "Live preview · release to finish sprite sheets." : busy ? "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}
+    status={onMap ? "Merchant journey and turning simulations · game scale" : !isPerson ? `${subject === "horse" ? transportMetadata.animalProfiles[horseVariant].label : SUBJECTS[subject]} · ${clipLabel}` : dragging ? "Live preview · release to finish sprite sheets." : busy ? bakeProgress ? `Updating sprite sheets · ${Math.round(bakeProgress.done / bakeProgress.total * 100)}%` : "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}
     detail={onMap ? "8 camera angles · game scale" : `${subject === "cart" ? CART.directions : 8} directions · ${Number((fps * animationRate).toFixed(1))} fps`}>
     <div className="person-workspace">
       <aside className={`person-controls hud-well ${controlsOpen ? "is-open" : ""}`} aria-label="Character controls">
@@ -474,7 +498,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
           </div> : isKnight && showSquire ? <KnightEntourage mounted={mountedKnight} row={row} frame={frame} variant={knightVariant} walking={knightClip === "walk"} url={url} visibleFrame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={fittedZoom} offset={previewOffset} name={`Knight ${direction}, frame ${step + 1}`} /> : <div className="person-sprite" style={{ width: pixels * fittedZoom, height: pixels * fittedZoom, transform: `translate(${previewOffset[0]}px, ${previewOffset[1]}px)` }}>
             {isPerson && onion && !live && columns > 1 && <div className="absolute inset-0 opacity-25"><Tile url={url} row={row} frame={(visibleFrame + columns - 1) % columns} columns={columns} zoom={fittedZoom} name="Previous frame ghost" /></div>}
             <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + row * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={fittedZoom} name={`${SUBJECTS[subject]} ${direction}, frame ${step + 1}`} />
-            {isPerson && showRig && <RigOverlay joints={inspected} selected={selectedJoint} row={row} offset={currentOffset} onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} onChange={changeJoint} onDrag={rigDragging} />}
+            {isPerson && showRig && <RigOverlay joints={inspected} selected={selectedJoint} row={row} offset={currentOffset} onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} onChange={changeJoints} onDrag={rigDragging} />}
             {isPerson && guides && <svg aria-label="Origin and attachment guides" className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${pixels} ${pixels}`}>
               <path d={`M${BASE_PERSON.anchor[0]} 0V${pixels} M0 ${BASE_PERSON.anchor[1]}H${pixels}`} stroke="#d9d5a7" strokeWidth="0.15" strokeDasharray="1 1" />
               {SOCKET_NAMES.map(name => {
@@ -484,20 +508,25 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
             </svg>}
           </div>}
           {isPerson && (error || storeError) && <p role="alert" className="person-stage-error">{error || storeError} Adjust the pose or undo to recover.</p>}
+          {isPerson && !dragging && bakeProgress && <div className="person-stage-progress hud-well" role="status" aria-live="polite"><span>Updating sprite sheets · {Math.round(bakeProgress.done / bakeProgress.total * 100)}%</span><i style={{ width: `${bakeProgress.done / bakeProgress.total * 100}%` }} /></div>}
           <div className="person-stage-caption" style={onMap ? { display: "none" } : undefined}>{view === "native" ? "Actual pixels · 1×" : view === "sheet" ? `${SUBJECTS[subject]} atlas · ${columns * atlasRows} poses` : `${direction} · ${fittedZoom}×${view === "character" ? " · Drag left / right to turn · Shift-drag to pan · Scroll to zoom" : ""}`}</div>
         </div>
-        {isPerson && showRig && <RigInspector joints={inspected} selected={selectedJoint} offset={currentOffset(selectedJoint as EditableJoint)} frame={frame} radius={radius} maxRadius={Math.max(1, Math.floor(PERSON_CLIPS[clip].frames / 2))} keyed={!!selectedKey}
+        {isPerson && showRig && <RigInspector joints={inspected} selected={selectedJoint} offset={currentOffset(selectedJoint as EditableJoint)} frame={frame} radius={radius} maxRadius={Math.max(1, Math.floor(PERSON_CLIPS[clip].frames / 2))} keyed={!!selectedKey} frameKeyed={frameKeyed(frame % PERSON_CLIPS[clip].frames)}
           onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} onChange={offset => changeJoint(selectedJoint as EditableJoint, offset)} onRadius={blend => changeJoint(selectedJoint as EditableJoint, currentOffset(selectedJoint as EditableJoint), blend)}
           onReset={() => commitPose(setPoseKey(design.poseEdits, clip, selectedJoint as EditableJoint, null, editFrame(selectedJoint as EditableJoint)))}
+          onResetKey={() => changeJoint(selectedJoint as EditableJoint, [0, 0, 0])}
+          onResetFrame={() => { const step = frame % PERSON_CLIPS[clip].frames; commitPose(step === 0 ? clearFrameKeys(design.poseEdits, clip, 0) : clearFrameKeys(setPoseKey(design.poseEdits, clip, "staffTip", null, editFrame("staffTip")), clip, step)) }}
           onResetClip={() => { const edits = { ...design.poseEdits }; delete edits[clip]; commitPose(edits) }}
           canUndo={history.length > 0} canRedo={future.length > 0}
           onUndo={() => { const previous = history.at(-1); if (previous) { setFuture(f => [...f, design.poseEdits ?? {}]); setHistory(h => h.slice(0, -1)); setDesign(d => ({ ...d, poseEdits: previous })) } }}
           onRedo={() => { const next = future.at(-1); if (next) { setHistory(h => [...h, design.poseEdits ?? {}]); setFuture(f => f.slice(0, -1)); setDesign(d => ({ ...d, poseEdits: next })) } }} />}
         </div>
         <CharacterAnimationDock directions={BASE_PERSON.directions} row={row} onDirection={next => { setRow(next); if (!onMap) setView("character") }}
-          renderDirection={index => (!isPerson || bake) && <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + index * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={BASE_PERSON.cellSize / pixels} name={`${BASE_PERSON.directions[index]} direction`} />}
+          renderDirection={index => (!isPerson || bake) && (partialLive
+            ? <Tile url={bakedSheet} shadowUrl={bakedShadow} row={index} frame={step} columns={PERSON_CLIPS[clip].frames} name={`${BASE_PERSON.directions[index]} direction`} />
+            : <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + index * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={BASE_PERSON.cellSize / pixels} name={`${BASE_PERSON.directions[index]} direction`} />)}
           frameCount={frameCount} maxFrames={isPerson ? frameCount : 24} frame={step} clipLabel={clipLabel} showFrames={!onMap}
-          keyed={step => isPerson && Object.values(design.poseEdits?.[clip] ?? {}).some(keys => keys?.some(key => key.frame === step))}
+          keyed={step => isPerson && frameKeyed(step)}
           onFrame={next => { setFrame(next); setPlaying(false); setView("character") }} />
       </div>
     </div>

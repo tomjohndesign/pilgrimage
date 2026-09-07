@@ -1,6 +1,6 @@
 import { PERSON_CLIPS, type BaseClip, type Point3 } from "./pose"
 
-export const EDITABLE_JOINTS = ["head", "leftHand", "rightHand", "leftElbow", "rightElbow", "leftKnee", "rightKnee", "leftFoot", "rightFoot", "staffTip"] as const
+export const EDITABLE_JOINTS = ["head", "chest", "pelvis", "leftShoulder", "rightShoulder", "leftHand", "rightHand", "leftElbow", "rightElbow", "leftHip", "rightHip", "leftKnee", "rightKnee", "leftFoot", "rightFoot", "staffTip"] as const
 export type EditableJoint = typeof EDITABLE_JOINTS[number]
 export interface PoseKey { frame: number; offset: Point3; radius: number }
 export type PoseEdits = Partial<Record<BaseClip, Partial<Record<EditableJoint, PoseKey[]>>>>
@@ -57,4 +57,11 @@ export function setPoseKey(edits: PoseEdits | undefined, clip: BaseClip, joint: 
   if (key) keys.push(key)
   result[clip] = { ...result[clip], [joint]: keys.sort((a, b) => a.frame - b.frame) }
   return validatePoseEdits(result)
+}
+
+/** Return one frame to the generated pose for every joint by dropping its keys there. */
+export function clearFrameKeys(edits: PoseEdits | undefined, clip: BaseClip, frame: number): PoseEdits {
+  let result = edits ?? {}
+  for (const joint of Object.keys(result[clip] ?? {}) as EditableJoint[]) result = setPoseKey(result, clip, joint, null, frame)
+  return result
 }
