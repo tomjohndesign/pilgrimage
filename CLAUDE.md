@@ -30,6 +30,8 @@
   character family after rig changes, using fresh asset versions. Keep action
   frame counts and timing from the selected asset's metadata.
 
+- **Every animated character exposes an editable rig.** People, animals (including birds), outfits and future character families must show a **Show rig** option in the shared asset playground. Use the global `CharacterAnimationDock`, `CharacterRigInspector` and `JointOverlay` components: the same bottom direction previews, numbered keyframe timeline, key markers and pose controls for every family; never build a separate rigging UI for a new species. Expose frame scrubbing, pose keys and editable gait/action timing, with saved per-character settings and portable import/export. The preview and game must use those settings through the same rig; retain fixed bone lengths and planted-foot contacts when editing.
+
 - **Property panels are opt-in development tools.** For a branch that needs the
   World tuning sidebar, set `NEXT_PUBLIC_PROPERTY_PANELS=1` in that workspace's
   gitignored `.env.local` and restart `npm run dev` (or run

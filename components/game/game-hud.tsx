@@ -33,6 +33,7 @@ import { DEFAULT_TRAFFIC, type Traveler } from "@/lib/game/travelers"
 import type { PixelationProps } from "@/components/pixel-canvas"
 
 import type { MapSettings } from "./game-shell"
+import { AnimalInspector } from "./animal-inspector"
 import { ResourceInspector } from "./resource-inspector"
 import { Minimap } from "./minimap"
 import { SettlementPanel } from "./settlement-panel"
@@ -1020,6 +1021,7 @@ export function GameHud({
             </>}
           </Panel>
           )}
+          {selection?.kind === "animal" && <AnimalInspector id={selection.id} />}
           {selectedTraveler && <TravelerPanel traveler={selectedTraveler} />}
           {selectedMonk && <MonkPanel monk={selectedMonk} />}
           {selectedRelic && relic && <RelicPanel relic={relic} />}

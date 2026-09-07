@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowUpRight, Check, Pause, Play, RotateCcw, X } from "lucide-react"
+import { ASSET_ZOOMS, useAssetPreviewStore, usePreviewWheel } from "./asset-preview-controls"
 import { AssetEditorFrame, type AssetEditorNavigation } from "./asset-editor-frame"
 import { Section, Tuner } from "@/components/game/property-controls"
 import "./game/game-hud.css"
@@ -28,6 +29,7 @@ declare global { interface Window {
 } }
 
 import { characterEditsJson, parseCharacterEdits, restoreCharacterDesign } from "@/lib/game/base-person/share-edits"
+import { CharacterAnimationDock } from "./character-rig-editor"
 import { RigOverlay, RigInspector } from "./person-rig-editor"
 import { inspectRig } from "@/lib/game/base-person/rig-inspection"
 import { poseOffset, setPoseKey, type EditableJoint, type PoseEdits } from "@/lib/game/base-person/pose-edits"
@@ -38,6 +40,7 @@ import { populationDesign, POPULATION_PROFILES } from "@/lib/game/base-person/po
 import { TRAVELER_TYPES } from "@/lib/game/travelers"
 
 const ROAD_DESIGNS = Object.values(TRAVELER_TYPES).flatMap(type => POPULATION_PROFILES.map((profile, variant) => ({ id: `${type.id}/${profile.id}`, label: `${type.label} · ${profile.id.replaceAll("-", " ")}`, design: populationDesign(type, variant) })))
+
 const DRAFT_KEY = "pilgrimage-rig-editor-v1"
 const button = "hud-action"
 
@@ -97,7 +100,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   }, [])
   const [playing, setPlaying] = useState(true)
   const [fps, setFps] = useState(BASE_PERSON.defaultFps)
-  const [zoom, setZoom] = useState(6)
+  const { zoom, setZoom } = useAssetPreviewStore()
   const [guides, setGuides] = useState(false)
   const [onion, setOnion] = useState(false)
   const [sides, setSides] = useState(false)
@@ -255,18 +258,12 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
   const [controlsOpen, setControlsOpen] = useState(false)
-  const [stageSize, setStageSize] = useState({ width: 640, height: 640 })
   const stageRef = useRef<HTMLDivElement>(null)
-  const viewDrag = useRef<{ pointer: number; x: number; row: number } | null>(null)
+  const [previewOffset, setPreviewOffset] = useState<[number, number]>([0, 0])
+  const viewDrag = useRef<{ pointer: number; x: number; y: number; row: number; pan: boolean; offset: [number, number] } | null>(null)
   const [scrubbingViews, setScrubbingViews] = useState(false)
-  useEffect(() => {
-    const stage = stageRef.current
-    if (!stage) return
-    const observer = new ResizeObserver(([entry]) => setStageSize({ width: entry.contentRect.width, height: entry.contentRect.height }))
-    observer.observe(stage)
-    return () => observer.disconnect()
-  }, [])
-  const fittedZoom = Math.min(zoom, Math.max(1, Math.floor(Math.min(stageSize.width - 32, stageSize.height - 32) / pixels)))
+  usePreviewWheel(stageRef, view === "character")
+  const fittedZoom = zoom
   const section = (title: string, defaultOpen = true) => ({ title, open: openSections[title] ?? defaultOpen,
     onToggle: () => setOpenSections(s => ({ ...s, [title]: !(s[title] ?? defaultOpen) })) })
   const controls = (keys: DesignKey[]) => keys.map(key => {
@@ -285,7 +282,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     detail={onMap ? "8 camera angles · game scale" : `${subject === "cart" ? CART.directions : 8} directions · ${Number((fps * animationRate).toFixed(1))} fps`}>
     <div className="person-workspace">
       <aside className={`person-controls hud-well ${controlsOpen ? "is-open" : ""}`} aria-label="Character controls">
-        <div className="person-panel-heading"><label className="person-choice">Asset<select aria-label="Character asset" value={subject} onChange={e => { setSubject(e.target.value as Subject); setFrame(0); setClip("walk") }}>{Object.entries(SUBJECTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><button className="hud-close person-controls-toggle" aria-label="Close character controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
+        <div className="person-panel-heading"><label className="person-choice">Asset<select aria-label="Character asset" value={subject} onChange={e => { setSubject(e.target.value as Subject); setFrame(0); setClip("walk") }}>{Object.entries(SUBJECTS).filter(([id]) => id === "person" || id === "cart").map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><button className="hud-close person-controls-toggle" aria-label="Close character controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
         <div className="person-controls-scroll">
           {isPerson ? <>
           <Section {...section("Presets")}><div className="person-presets">{Object.entries(PERSON_PRESETS).map(([name, preset]) => <button key={name} className={button} onClick={() => chooseCharacter(`preset/${name}`, preset)}>{name}</button>)}</div></Section>
@@ -386,7 +383,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
         <div className="person-preview-toolbar hud-well">
           <div className="person-playback"><button className="hud-pause" aria-label={playing ? "Pause" : "Play"} disabled={frameCount === 1 || view === "sheet"} onClick={() => setPlaying(!playing)}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
             <label style={subject === "cart" ? { display: "none" } : undefined}>Clip<select aria-label="Animation clip" value={clip} onChange={e => { setClip(e.target.value as BaseClip); setFrame(0) }}>{Object.entries(PERSON_CLIPS).filter(([id]) => isPerson || id === "walk" || id === "idle").map(([id, entry]) => <option key={id} value={id}>{entry.label}</option>)}</select></label>
-            <label>{onMap ? "View" : "Zoom"}<select aria-label={onMap ? "Map framing" : "Pixel inspection zoom"} value={zoom} onChange={e => setZoom(Number(e.target.value))}>{(onMap ? [4, 6, 8] : [1, 2, 4, 6, 8]).map(n => <option key={n} value={n}>{onMap ? ({ 4: "Wide", 6: "Map", 8: "Close" } as Record<number, string>)[n] : `${n}×`}</option>)}</select></label>
+            <label>{onMap ? "View" : "Zoom"}<select aria-label={onMap ? "Map framing" : "Pixel inspection zoom"} value={zoom} onChange={e => setZoom(Number(e.target.value))}>{(onMap ? [4, 6, 8] : ASSET_ZOOMS).map(n => <option key={n} value={n}>{onMap ? ({ 4: "Wide", 6: "Map", 8: "Close" } as Record<number, string>)[n] : `${n}×`}</option>)}</select></label>
           </div>
           <div className="person-view-buttons" aria-label="Preview modes">{isPerson && <><button className={button} disabled={!draftsReady} onClick={() => void copyJson()}>Copy edits as JSON</button><button className={button} aria-pressed={showRig} onClick={() => { setShowRig(!showRig); setView("character"); setPlaying(false) }}>Show rig</button></>}{subject === "cart" && <button className={button} aria-pressed={onMap} onClick={() => { setView("map"); if (zoom < 4) setZoom(6) }}>Small map</button>}{([['character', 'Character'], ['native', 'Native size'], ['sheet', 'Sprite sheet']] as const).map(([mode, label]) => <button key={mode} className={button} aria-pressed={view === mode} onClick={() => setView(mode)}>{label}</button>)}</div>
         </div>
@@ -395,12 +392,13 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
             if (view !== "character" || event.button !== 0 || !event.isPrimary ||
               (event.target as Element).closest('[role="button"], button, input, select, a')) return
             event.preventDefault()
-            viewDrag.current = { pointer: event.pointerId, x: event.clientX, row }
+            viewDrag.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, row, pan: event.shiftKey, offset: previewOffset }
             event.currentTarget.setPointerCapture(event.pointerId); setScrubbingViews(true)
           }}
           onPointerMove={event => {
             const start = viewDrag.current
             if (!start || start.pointer !== event.pointerId) return
+            if (start.pan) { setPreviewOffset([start.offset[0] + event.clientX - start.x, start.offset[1] + event.clientY - start.y]); return }
             const steps = Math.trunc((event.clientX - start.x) / 48)
             const count = BASE_PERSON.directions.length
             setRow(((start.row + steps) % count + count) % count)
@@ -418,7 +416,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
             <img src={url} width={pixels * columns} height={pixels * atlasRows} alt={`${SUBJECTS[subject]} ${clipLabel}: ${subject === "cart" ? CART.directions : 8} directions${subject === "horse" ? ", common and noble variants" : ""} and ${columns} frames`} />
           </div> : view === "native" ? <div className="person-native" aria-label="Native size lineup">
             {BASE_PERSON.directions.map((d, i) => <div key={d}><Tile url={url} shadowUrl={shadowUrl} row={rowOffset + i * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} name={`${d}, native ${SUBJECTS[subject]}`} /><span>{d}</span></div>)}
-          </div> : <div className="person-sprite" style={{ width: pixels * fittedZoom, height: pixels * fittedZoom }}>
+          </div> : <div className="person-sprite" style={{ width: pixels * fittedZoom, height: pixels * fittedZoom, transform: `translate(${previewOffset[0]}px, ${previewOffset[1]}px)` }}>
             {isPerson && onion && !live && columns > 1 && <div className="absolute inset-0 opacity-25"><Tile url={url} row={row} frame={(visibleFrame + columns - 1) % columns} columns={columns} zoom={fittedZoom} name="Previous frame ghost" /></div>}
             <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + row * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={fittedZoom} name={`${SUBJECTS[subject]} ${direction}, frame ${step + 1}`} />
             {isPerson && showRig && <RigOverlay joints={inspected} selected={selectedJoint} row={row} offset={currentOffset} onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} onChange={changeJoint} onDrag={rigDragging} />}
@@ -431,7 +429,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
             </svg>}
           </div>}
           {isPerson && (error || storeError) && <p role="alert" className="person-stage-error">{error || storeError} Adjust the pose or undo to recover.</p>}
-          <div className="person-stage-caption" style={onMap ? { display: "none" } : undefined}>{view === "native" ? "Actual pixels · 1×" : view === "sheet" ? `${SUBJECTS[subject]} atlas · ${columns * atlasRows} poses` : `${direction} · ${fittedZoom}×${(fittedZoom) < zoom ? " · fitted to view" : ""}${view === "character" ? " · Drag left / right to turn" : ""}`}</div>
+          <div className="person-stage-caption" style={onMap ? { display: "none" } : undefined}>{view === "native" ? "Actual pixels · 1×" : view === "sheet" ? `${SUBJECTS[subject]} atlas · ${columns * atlasRows} poses` : `${direction} · ${fittedZoom}×${view === "character" ? " · Drag left / right to turn · Shift-drag to pan · Scroll to zoom" : ""}`}</div>
         </div>
         {isPerson && showRig && <RigInspector joints={inspected} selected={selectedJoint} offset={currentOffset(selectedJoint as EditableJoint)} frame={frame} radius={radius} maxRadius={Math.max(1, Math.floor(PERSON_CLIPS[clip].frames / 2))} keyed={!!selectedKey}
           onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} onChange={offset => changeJoint(selectedJoint as EditableJoint, offset)} onRadius={blend => changeJoint(selectedJoint as EditableJoint, currentOffset(selectedJoint as EditableJoint), blend)}
@@ -441,12 +439,11 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
           onUndo={() => { const previous = history.at(-1); if (previous) { setFuture(f => [...f, design.poseEdits ?? {}]); setHistory(h => h.slice(0, -1)); setDesign(d => ({ ...d, poseEdits: previous })) } }}
           onRedo={() => { const next = future.at(-1); if (next) { setHistory(h => [...h, design.poseEdits ?? {}]); setFuture(f => f.slice(0, -1)); setDesign(d => ({ ...d, poseEdits: next })) } }} />}
         </div>
-        <div className="person-animation-dock hud-well">
-          <div className="person-direction-strip" aria-label="Character directions">{BASE_PERSON.directions.map((d, i) => <button key={d} aria-label={`Face ${d}`} aria-pressed={row === i} onClick={() => { setRow(i); if (!onMap) setView("character") }} className="hud-building-tile person-direction">
-            {(!isPerson || bake) && <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + i * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={BASE_PERSON.cellSize / pixels} name={`${d} direction`} />}<span>{d}</span>
-          </button>)}</div>
-          {!onMap && <div className="person-steps"><span>{clipLabel}</span><div>{Array.from({ length: (isPerson ? frameCount : Math.min(frameCount, 24)) }, (_, i) => Math.floor(i * frameCount / (isPerson ? frameCount : Math.min(frameCount, 24)))).map((f) => <button key={f} className="hud-pause" data-keyed={isPerson && Object.values(design.poseEdits?.[clip] ?? {}).some(keys => keys?.some(key => key.frame === f))} aria-label={`Inspect step ${f + 1}`} aria-pressed={step === f} onClick={() => { setFrame(f); setPlaying(false); setView("character") }}>{f + 1}</button>)}</div><span className="person-step-count">{frameCount === 1 ? "Still" : `${step + 1} / ${frameCount}`}</span></div>}
-        </div>
+        <CharacterAnimationDock directions={BASE_PERSON.directions} row={row} onDirection={next => { setRow(next); if (!onMap) setView("character") }}
+          renderDirection={index => (!isPerson || bake) && <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + index * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={BASE_PERSON.cellSize / pixels} name={`${BASE_PERSON.directions[index]} direction`} />}
+          frameCount={frameCount} maxFrames={isPerson ? frameCount : 24} frame={step} clipLabel={clipLabel} showFrames={!onMap}
+          keyed={step => isPerson && Object.values(design.poseEdits?.[clip] ?? {}).some(keys => keys?.some(key => key.frame === step))}
+          onFrame={next => { setFrame(next); setPlaying(false); setView("character") }} />
       </div>
     </div>
     <dialog ref={jsonDialog} className="person-json-dialog" aria-labelledby="person-json-title">

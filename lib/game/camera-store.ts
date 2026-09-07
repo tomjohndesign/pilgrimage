@@ -15,6 +15,7 @@ export interface HoveredTile {
 /** One thing selected at a time, whatever kind it is. */
 export type Selection =
   | { kind: "traveler"; id: number }
+  | { kind: "animal"; id: number }
   | { kind: "monk"; id: number }
   | { kind: "relic" }
   | { kind: "building"; id: string }

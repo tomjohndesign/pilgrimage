@@ -39,15 +39,15 @@ export interface LegPose {
 }
 
 /** A foot target, shared by IK, the atlas baker and runtime contact locking. */
-export function walkFoot(side: BodySide, phase: number, b = BASE_PERSON.body) {
+export function walkFoot(side: BodySide, phase: number, b = BASE_PERSON.body, stance = WALK_STANCE_FRACTION) {
   const p = ((phase + (side === "right" ? 0.5 : 0)) % 1 + 1) % 1
-  const planted = p < WALK_STANCE_FRACTION
-  const u = Math.max(0, (p - WALK_STANCE_FRACTION) / (1 - WALK_STANCE_FRACTION))
+  const planted = p < stance
+  const u = Math.max(0, (p - stance) / (1 - stance))
   const eased = u * u * (3 - 2 * u)
   // Match the backwards ground velocity at both ends of swing. The foot
   // lifts before passing the supporting leg and settles gently at contact.
-  const tangent = 2 * b.stride / WALK_STANCE_FRACTION * (1 - WALK_STANCE_FRACTION)
-  const z = planted ? b.stride * (1 - 2 * p / WALK_STANCE_FRACTION)
+  const tangent = 2 * b.stride / stance * (1 - stance)
+  const z = planted ? b.stride * (1 - 2 * p / stance)
     : b.stride * (2 * eased - 1) - tangent * u * (1 - u) * (1 - 2 * u)
   return { ankle: [(side === "left" ? 1 : -1) * b.legOffset,
     b.ankleHeight + (planted ? 0 : b.footLift * Math.sin(u * Math.PI) ** 2), z] as Point3, planted }

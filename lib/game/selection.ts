@@ -2,7 +2,7 @@ import { useBuildStore } from "./build-store"
 import { isSelected, useCameraStore, type Selection } from "./camera-store"
 import {
   buildingObjectId, pileObjectId, RELIC_OBJECT_ID, residentObjectId,
-  travelerObjectId, treeObjectId,
+  travelerObjectId, treeObjectId, wildlifeObjectId,
 } from "./render/outline"
 
 export const SELECTION_COLOR = "#e4bb58"
@@ -27,6 +27,7 @@ export function selectionObjectId(selection: Selection | null, objects: {
   piles: readonly { id: string }[]
 }): number {
   if (!selection) return 0
+  if (selection.kind === "animal") return wildlifeObjectId(selection.id)
   if (selection.kind === "relic") return RELIC_OBJECT_ID
   if (selection.kind === "tree") return treeObjectId(objects.buildings.length, selection.id)
   const list = selection.kind === "building" ? objects.buildings

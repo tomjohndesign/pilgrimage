@@ -42,6 +42,7 @@ import { TerrainTiles } from "./terrain-tiles"
 import { TileCursor } from "./tile-cursor"
 import { Travelers } from "./travelers"
 import { Trees } from "./trees"
+import { Wildlife } from "./wildlife"
 
 const BACKGROUND = "#14100a"
 
@@ -149,6 +150,7 @@ export function GameCanvas({
         <Bridges map={map} roadTier={roadTier} />
         <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} />
         <Environment map={map} />
+        <Wildlife map={map} trees={trees} characterScale={characterScale} />
         <Buildings map={map} />
         <Shrine map={map} relic={relic} />
         <PixelCharacters>

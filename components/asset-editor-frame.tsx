@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowUpRight, SlidersHorizontal } from "lucide-react"
 import "./game/game-hud.css"
 import "./base-person-lab.css"
 
-export type AssetEditorMode = "characters" | "buildings"
+export type AssetEditorMode = "characters" | "animals" | "buildings"
 export interface AssetEditorNavigation { mode: AssetEditorMode; onModeChange: (mode: AssetEditorMode) => void }
 
 /** Shared character-playground frame, controls drawer and asset switch.
@@ -21,7 +21,7 @@ export function AssetEditorFrame({ mode, onModeChange, version, controlsOpen, on
     <header className="person-header">
       <div className="person-title"><Link href="/assets" className="hud-action" aria-label="Back to assets"><ArrowLeft size={14} /><span className="asset-back-label">Assets</span></Link><h1>Asset playground</h1><span className="person-version">{version}</span></div>
       <div className="person-view-buttons asset-mode-toggle" role="group" aria-label="Asset type">
-        {(["characters", "buildings"] as const).map(value => <button key={value} className="hud-action" aria-pressed={mode === value} onClick={() => onModeChange(value)}>{value === "characters" ? "Characters" : "Buildings"}</button>)}
+        {(["characters", "animals", "buildings"] as const).map(value => <button key={value} className="hud-action" aria-pressed={mode === value} onClick={() => onModeChange(value)}>{value === "characters" ? "Characters" : value === "animals" ? "Animals" : "Buildings"}</button>)}
       </div>
       <nav aria-label="Editor navigation"><button className="hud-action person-controls-toggle" aria-label="Controls" aria-expanded={controlsOpen} onClick={onControlsToggle}><SlidersHorizontal size={14} /><span className="asset-controls-label">Controls</span></button><Link className="hud-action" aria-label="On the road" href={roadHref}><span className="person-road-label">On the road</span><ArrowUpRight size={14} /></Link></nav>
     </header>

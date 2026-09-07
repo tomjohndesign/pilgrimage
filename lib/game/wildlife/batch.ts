@@ -1,0 +1,43 @@
+import * as THREE from "three"
+import { encodeObjectId, wildlifeObjectId } from "../render/outline"
+
+/** Connected animated hides are packed into one bounded buffer per species.
+ * Both colour and selection passes consume the identical deformed vertices. */
+export function wildlifeGeometry(parts: THREE.Mesh[], ids: number[]) {
+  const vertices = parts.reduce((sum, part) => sum + part.geometry.attributes.position.count, 0)
+  const indices = parts.reduce((sum, part) => sum + (part.geometry.index?.count ?? part.geometry.attributes.position.count), 0)
+  const geometry = new THREE.BufferGeometry(), idGeometry = new THREE.BufferGeometry()
+  const position = new THREE.BufferAttribute(new Float32Array(vertices * ids.length * 3), 3).setUsage(THREE.DynamicDrawUsage)
+  const normal = new THREE.BufferAttribute(new Float32Array(vertices * ids.length * 3), 3).setUsage(THREE.DynamicDrawUsage)
+  const color = new Float32Array(vertices * ids.length * 3), idColor = new Float32Array(color.length), index: number[] = []
+  let offset = 0
+  for (const id of ids) for (const part of parts) {
+    const source = part.geometry, count = source.attributes.position.count, tint = encodeObjectId(wildlifeObjectId(id))
+    for (let i = 0; i < count; i++) {
+      color.set([source.attributes.color.getX(i), source.attributes.color.getY(i), source.attributes.color.getZ(i)], (offset + i) * 3)
+      idColor.set(tint, (offset + i) * 3)
+    }
+    for (let i = 0; i < (source.index?.count ?? count); i++) index.push(offset + (source.index?.getX(i) ?? i))
+    offset += count
+  }
+  geometry.setIndex(index); geometry.setAttribute("position", position); geometry.setAttribute("normal", normal); geometry.setAttribute("color", new THREE.BufferAttribute(color, 3))
+  idGeometry.setIndex(geometry.index); idGeometry.setAttribute("position", position); idGeometry.setAttribute("color", new THREE.BufferAttribute(idColor, 3))
+  const matrix = new THREE.Matrix4(), normalMatrix = new THREE.Matrix3(), point = new THREE.Vector3()
+  return { geometry, idGeometry, trianglesPerAnimal: indices / 3,
+    write(animal: number, root: THREE.Matrix4, concealed = false) {
+      let offset = animal * vertices
+      for (const part of parts) {
+        matrix.multiplyMatrices(root, part.matrixWorld); normalMatrix.getNormalMatrix(matrix)
+        const source = part.geometry
+        for (let i = 0; i < source.attributes.position.count; i++, offset++) {
+          point.fromBufferAttribute(source.attributes.position, i).applyMatrix4(matrix)
+          position.setXYZ(offset, concealed ? 0 : point.x, concealed ? -1000 : point.y, concealed ? 0 : point.z)
+          point.fromBufferAttribute(source.attributes.normal, i).applyNormalMatrix(normalMatrix)
+          normal.setXYZ(offset, point.x, point.y, point.z)
+        }
+      }
+    },
+    finish() { position.needsUpdate = true; normal.needsUpdate = true; geometry.computeBoundingSphere(); idGeometry.boundingSphere = geometry.boundingSphere },
+    dispose() { geometry.dispose(); idGeometry.dispose() },
+  }
+}
