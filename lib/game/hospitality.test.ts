@@ -451,6 +451,39 @@ describe("shrine hospitality", () => {
 })
 
 describe("woodcutter huts", () => {
+  it.each(["hunger", "thirst", "stamina"] as const)("keeps a settled builder assigned through completion with depleted %s", need => {
+    for (const atWork of [false, true]) {
+      const { map, camp, traveler } = fixture()
+      const t = traveler(0), sim = createSim([t], map), actor = sim.travelers.get(0)!
+      const site = { ...camp, id: "construction-site", x: 5, z: 6, construction: { work: 0, required: 96 } }
+      map.buildings.push(camp, site)
+      sim.buildings = [camp]
+      actor.employer = camp.id
+      actor.activity = "idle"
+      actor.x = tileToWorldX(map, camp.x); actor.z = tileToWorldZ(map, camp.z + camp.d)
+      stepSim(sim, [t], map, 1.5, 0.1)
+      expect(actor.activity).toBe("toBuild")
+      if (atWork) {
+        run(sim, [t], map, 60, () => actor.activity === "building")
+        expect(actor.activity).toBe("building")
+      }
+      const task = actor.buildingTask
+      actor[need] = 0
+      for (let i = 0; i < 1500 && site.construction.work < site.construction.required; i++) {
+        stepSim(sim, [t], map, 1.5, 0.1)
+        expect(actor.buildingTask).toBe(task)
+        expect(["toBuild", "building"]).toContain(actor.activity)
+      }
+      expect(site.construction.work).toBe(site.construction.required)
+      run(sim, [t], map, 60, () => actor.activity === "idle")
+      expect(actor.activity).toBe("idle")
+      expect(actor.buildingTask).toBeUndefined()
+      const depleted = actor[need]
+      stepSim(sim, [t], map, 1.5, 0.1)
+      expect(actor[need]).toBeGreaterThan(depleted)
+    }
+  })
+
   it("sends an idle settled worker to build, then returns them to camp", () => {
     const { map, camp, traveler } = fixture()
     const t = traveler(0), sim = createSim([t], map), actor = sim.travelers.get(0)!

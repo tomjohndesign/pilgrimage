@@ -9,13 +9,12 @@ export const MONK_WAKE_AT = 95
 export interface MonkNeeds { workSlot: number; stamina: number; buildingTask?: BuildingTask; jobSearch: number }
 export function createMonkNeeds(index: number): MonkNeeds { return { workSlot: index, stamina: 100 - index * 6, jobSearch: 0 } }
 
-/** Rest takes precedence over new work. Prayer and explicit player orders can finish. */
+/** Finish assigned construction before resting; tired monks cannot take new work. */
 export function stepMonkWork(s: MonkRoutine & MonkNeeds, map: GameMap, speed: number, dt: number): boolean {
   if (dt <= 0) return !!s.buildingTask
   if (s.activity !== "sleeping") s.stamina = Math.max(0, s.stamina - dt * (s.activity === "building" ? 0.8 : 0.25))
   s.jobSearch = Math.max(0, s.jobSearch - dt)
-  if (s.stamina <= MONK_TIRED_AT && s.buildingTask?.purpose !== "rest" && s.jobSearch === 0) {
-    s.buildingTask = undefined
+  if (s.stamina <= MONK_TIRED_AT && !s.buildingTask && s.jobSearch === 0) {
     if (assignBuildingTask(s, map, "rest")) { s.route = []; s.pause = 0 }
     else s.jobSearch = 3
   }
