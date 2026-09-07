@@ -55,10 +55,13 @@ export const ANIMAL_PROFILES = {
   noble: { label: "Noble horse", cyclesPerSecond: 0.98, stride: 0.36, lift: 0.09, legHeight: 1.23, legSpread: 0.29, legZ: 0.78,
     sway: 0.025, bob: 0.018, pitch: 0.018, roll: 0.022, neckNod: 0.075, headNod: 0.06, walkNeckLean: 0.12, spineFlex: 0.025 },
 } as const
+export type QuadrupedProfile = { [K in Exclude<keyof typeof ANIMAL_PROFILES.donkey, "walkNeckLean" | "spineFlex">]: K extends "label" ? string : number } & { twist?: number; walkNeckLean?: number; spineFlex?: number }
+export function quadrupedBody(p: QuadrupedProfile) {
+  return { ...BASE_PERSON.body, ankleHeight: 0.07, legOffset: p.legSpread, stride: p.stride, footLift: p.lift, footLength: 0.19 }
+}
 export function animalProfile(kind: Animal, variant: HorseVariant = "common") { return ANIMAL_PROFILES[kind === "donkey" ? "donkey" : variant] }
 export function animalBody(kind: Animal, variant: HorseVariant = "common") {
-  const p = animalProfile(kind, variant)
-  return { ...BASE_PERSON.body, ankleHeight: 0.07, legOffset: p.legSpread, stride: p.stride, footLift: p.lift, footLength: 0.19 }
+  return quadrupedBody(animalProfile(kind, variant))
 }
 export function animalStride(kind: Animal, scale: number, variant: HorseVariant = "common") {
   return 2 * animalBody(kind, variant).stride / WALK_STANCE_FRACTION * RIG_TO_WORLD * scale

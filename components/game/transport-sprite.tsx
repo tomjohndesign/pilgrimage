@@ -14,6 +14,8 @@ import { BASE_PERSON, WALK_STANCE_FRACTION } from "@/lib/game/base-person/pose"
 import { animalCoat } from "@/lib/game/transport/coats"
 import { TRANSPORT, CART, SHOP, cartUrl, animalUrl, type Puller, RIG_TO_WORLD, cartColumn, animalStride, type Animal, type Cargo, type HorseVariant } from "@/lib/game/transport/assets"
 import { KEEPER_CLIPS, KEEPER_COLUMNS } from "@/lib/game/transport/keeper"
+import { useAnimalRigStore } from "@/lib/game/wildlife/rig-store"
+import { createEditedAnimalFrame } from "@/lib/game/transport/edited-frame"
 import { animalLeg } from "@/lib/game/transport/animal-pose"
 import { KNIGHT } from "@/lib/game/knight/design"
 import manifest from "@/public/textures/transport/v19/manifest.json"
@@ -26,6 +28,10 @@ export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0,
   selected?: boolean; outlineColor?: [number, number, number]; onClick?: FigureClickHandler; position?: [number, number, number]
 }) {
   const animal = kind === "donkey" || kind === "horse"
+  const edits = useAnimalRigStore(state => state.designs[kind])
+  const hasEdits = animal && !!edits && Object.keys(edits.clips).length > 0
+  const edited = useMemo(() => hasEdits && (kind === "donkey" || kind === "horse") ? createEditedAnimalFrame(kind, horseVariant, coat, knight ? { kind: knight, variant } : undefined) : null, [hasEdits, kind, horseVariant, coat, knight, variant])
+  useEffect(() => () => edited?.dispose(), [edited])
   const [renderOrder] = useState(spriteRenderOrder)
   const urls = knight ? Array(2).fill(`/textures/knights/${KNIGHT.version}/${knight}-${animalCoat("horse", coat).id}.png`) : kind === "cart" ? [cartUrl(cargo, puller), cartUrl(cargo, "shop", 1, puller === "hand"), cartUrl(cargo, "shop", -1, puller === "hand")]
     : kind === "merchant" ? [`/textures/transport/${TRANSPORT.version}/merchant-setup.png`, `/textures/transport/${TRANSPORT.version}/merchant-selling.png`] : [animalUrl(kind, animalCoat(kind, coat).id), animalUrl(kind, animalCoat(kind, coat).id, true)]
@@ -84,9 +90,16 @@ export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0,
       : data.grazing && !knight ? grazingTime.current < 0.75 ? lower.start + Math.min(lower.frames - 1, Math.floor(grazingTime.current / 0.75 * lower.frames))
         : graze.start + Math.floor((grazingTime.current - 0.75) * graze.fps) % graze.frames : manifest.animalClips.idle.start
     const textureIndex = keeperClip ? 1 : kind === "cart" && shop ? data.shopSide < 0 ? 2 : 1 : animal && data.hitched ? 1 : 0
-    const active = maps[textureIndex]
+    let active: THREE.Texture = maps[textureIndex]
     poseDepth.map.value = depths[textureIndex]
     active.repeat.set(1 / columns, 1 / rows); active.offset.set(column / columns, (rows - 1 - rowOffset - row) / rows)
+    if (edited && edits) {
+      const grazeAmount = data.grazing ? Math.min(1, grazingTime.current / 0.75) : 0
+      const idlePhase = grazingTime.current * 0.8 * (edits.clips.graze?.cadence ?? 1)
+      edited.draw(moving ? phase.current : idlePhase % 1, moving, grazeAmount, row, edits, !!data.hitched)
+      active = edited.texture
+      poseDepth.map.value = edited.depthTexture
+    }
     for (const material of materials) material.map = active
     const cell = knight ? KNIGHT.cellSize : kind === "merchant" ? manifest.puller.cellSize : kind === "cart" ? shop ? SHOP.cellSize : CART.cellSize : manifest.cellSize
     const anchor = knight ? KNIGHT.anchor : kind === "merchant" ? manifest.puller.anchor : kind === "cart" ? shop ? SHOP.anchor : CART.anchor : manifest.anchor
@@ -97,7 +110,7 @@ export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0,
     } })
     group.position.set(...position)
     if (animal && moving) {
-      const displayed = Math.floor(phase.current * walk.frames) / walk.frames
+      const displayed = edited ? phase.current : Math.floor(phase.current * walk.frames) / walk.frames
       const side = displayed >= WALK_STANCE_FRACTION - 0.5 && displayed < WALK_STANCE_FRACTION ? "left" : "right"
       const foot = animalLeg(kind, side, false, displayed, true, horseVariant).ankle
       const angle = -row * Math.PI / 4, scale = RIG_TO_WORLD * characterScale

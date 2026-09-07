@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { useBuildStore } from "./build-store"
 import { useCameraStore, type Selection } from "./camera-store"
 import { selectElement, selectionObjectId } from "./selection"
-import { buildingObjectId, pileObjectId, RELIC_OBJECT_ID, residentObjectId, travelerObjectId, treeObjectId } from "./render/outline"
+import { buildingObjectId, pileObjectId, RELIC_OBJECT_ID, residentObjectId, travelerObjectId, treeObjectId, wildlifeObjectId } from "./render/outline"
 
 const objects = {
   buildings: [{ id: "hovel" }, { id: "workshop-1" }],
@@ -13,7 +13,7 @@ const objects = {
 const selections: Selection[] = [
   { kind: "tree", id: 6 }, { kind: "building", id: "workshop-1" },
   { kind: "traveler", id: 9 }, { kind: "monk", id: 18 },
-  { kind: "pile", id: "pile-b" }, { kind: "relic" },
+  { kind: "pile", id: "pile-b" }, { kind: "relic" }, { kind: "animal", id: 12 },
 ]
 
 afterEach(() => {
@@ -47,7 +47,7 @@ describe("shared selection", () => {
     const ids = selections.map((selection) => selectionObjectId(selection, objects))
     expect(ids).toEqual([
       treeObjectId(2, 6), buildingObjectId(1), travelerObjectId(1),
-      residentObjectId(1), pileObjectId(1), RELIC_OBJECT_ID,
+      residentObjectId(1), pileObjectId(1), RELIC_OBJECT_ID, wildlifeObjectId(12),
     ])
     expect(new Set(ids).size).toBe(ids.length)
     expect(selectionObjectId({ kind: "pile", id: "pile-b" }, { ...objects, piles: [objects.piles[1]] })).toBe(pileObjectId(0))
