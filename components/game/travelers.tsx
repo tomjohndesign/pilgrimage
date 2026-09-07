@@ -92,7 +92,10 @@ export function Travelers({
       if (!sim.travelers.has(id)) sim.travelers.set(id, traveler)
     }
     for (const id of sim.travelers.keys()) {
-      if (!fresh.travelers.has(id)) sim.travelers.delete(id)
+      if (!fresh.travelers.has(id)) {
+        sim.travelers.get(id)!.buildingTask = undefined
+        sim.travelers.delete(id)
+      }
     }
   }, [sim, travelers, map, relic])
 
@@ -102,6 +105,7 @@ export function Travelers({
   useEffect(() => {
     simRegistry.current = sim
     return () => {
+      for (const traveler of sim.travelers.values()) traveler.buildingTask = undefined
       if (simRegistry.current === sim) simRegistry.current = null
     }
   }, [sim])
