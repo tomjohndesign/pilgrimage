@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest"
-import { convoyClear, convoyPoint, shrineParking } from "./navigation"
+import { convoyClear, convoyPoint, shrineParking, parkingClear, parkingTree, convoyBounds, stallParking } from "./navigation"
 import { cartOffset } from "./assets"
-import { cartOnRoute, followCart } from "./follow"
+import { alignCart, cartOnRoute, followCart } from "./follow"
 import { createSim, stepSim } from "../sim"
 import { generateTravelers, TRAVELER_TYPES } from "../travelers"
 import { DEFAULT_ELEVATION } from "../map/elevation"
 import { shrineSeats } from "../shrine-layout"
 import { buildingStepAllowed } from "../building-navigation"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "../map/types"
+
+function trees(map: GameMap) {
+  return [1, -1].map(side => ({ x: tileToWorldX(map, 10 + side * 3), y: 0.2, z: tileToWorldZ(map, 1), species: "oak" as const }))
+}
 
 function fixture(): GameMap {
   const width = 30, depth = 18
@@ -20,11 +24,44 @@ function fixture(): GameMap {
 describe("merchant shrine parking", () => {
   it.each(["hand", "donkey", "horse"] as const)("finds grass for the whole %s convoy in both directions", puller => {
     for (const direction of [1, -1] as const) {
-      const map = fixture(), plan = shrineParking(map, 10, direction, -cartOffset(puller) * 1.5, puller, 1.5)
+      const map = fixture(), plan = shrineParking(map, 10, direction, -cartOffset(puller) * 1.5, puller, 1.5, [], { trees: trees(map) })
       expect(plan).not.toBeNull()
       expect(convoyClear(map, plan!.parked, puller, 1.5, true)).toBe(true)
       expect((plan!.returnProgress - 10) * direction).toBeGreaterThan(0)
     }
+  })
+  it("requires a standing tree for animal parking, but allows handcarts without one", () => {
+    const map = fixture()
+    expect(shrineParking(map, 10, 1, 0, "horse", 1.5)).toBeNull()
+    expect(shrineParking(map, 10, 1, -cartOffset("hand") * 1.5, "hand", 1.5)).not.toBeNull()
+    expect(shrineParking(map, 10, 1, 0, "horse", 1.5, [], { trees: trees(map).map(tree => ({ ...tree, walking: true })) })).toBeNull()
+  })
+  it("shares occupied space between a knight and a merchant", () => {
+    const map = fixture(), context = { trees: trees(map) }
+    const merchant = shrineParking(map, 10, 1, -cartOffset("horse") * 1.5, "horse", 1.5, [], context)!
+    expect(merchant).not.toBeNull()
+    const occupied = { ...context, obstacles: convoyBounds(merchant.parked, "horse", 1.5) }
+    expect(parkingClear(map, merchant.parked, "horse", 1.5, occupied, true)).toBe(false)
+    const knight = shrineParking(map, 10, 1, 0, "horse", 1.5, [merchant.parked], occupied)
+    if (knight) expect(parkingClear(map, knight.parked, "horse", 1.5, occupied, true)).toBe(true)
+  })
+  it("rejects a person, cart, or trunk occupying the parked horse's footprint", () => {
+    const map = fixture(), pose = alignCart({ x: tileToWorldX(map, 15), z: tileToWorldZ(map, 2) }, Math.PI / 2, 0)
+    expect(parkingClear(map, pose, "horse", 1.5, { trees: [] }, true)).toBe(true)
+    expect(parkingClear(map, pose, "horse", 1.5, { trees: [], people: [pose.hitch] }, true)).toBe(false)
+    expect(parkingClear(map, pose, "horse", 1.5, { trees: [{ ...pose.hitch, y: 0.2, species: "oak" }] }, true)).toBe(false)
+    expect(parkingClear(map, pose, "horse", 1.5, { trees: [], obstacles: convoyBounds(alignCart(pose.hitch, 0, 1), "hand", 1.5) }, true)).toBe(false)
+  })
+  it("never stretches a tie across the path", () => {
+    const map = fixture(), pose = alignCart({ x: tileToWorldX(map, 15), z: tileToWorldZ(map, 3) }, Math.PI / 2, 0)
+    expect(parkingTree(map, pose, [{ x: pose.x, z: tileToWorldZ(map, 5), y: 0.2, species: "oak" }])).toBeUndefined()
+  })
+  it("tries the other market verge when the first has no tree", () => {
+    const map = fixture(), from = convoyPoint(map, 10), context = { trees: trees(map) }
+    const pitch = stallParking(map, from, 10, 1, -cartOffset("horse") * 1.5, 1.5, "horse", context)
+    expect(pitch).not.toBeNull()
+    expect(pitch!.tree).toBeDefined()
+    expect(pitch!.park.z).toBeLessThan(from.z)
   })
   it("declines parking when the verge is water or buildings", () => {
     const map = fixture(); map.tiles = map.tiles.map(t => t === "grass" ? "water" : t)
@@ -37,6 +74,7 @@ describe("merchant shrine parking", () => {
     // Guarantee devotion so this exercises parking and reserved-seat access,
     // independently of main's probabilistic shrine-attraction balance.
     const sim = createSim([t], map, [], { sanctity: 100, spectacle: 100, doubt: 0 }), s = sim.travelers.get(id)!
+    sim.trees = trees(map)
     sim.shrineRenown = sim.balance.rules.drawCap
     s.timer = 10000
     let parked: unknown, sawVisit = false, sawReturn = false

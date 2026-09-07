@@ -1,3 +1,4 @@
+import { uncoverHead } from "./head-covering"
 import { preachingMotion } from "./preaching"
 import { buildingMotion, MALLET_HEAD_HEIGHT } from "./building"
 import * as THREE from "three"
@@ -620,6 +621,9 @@ export function createBasePersonRig(recipe = personRecipe()) {
       })
     },
     pose(phase: number, clip: BaseClip = "walk") {
+      for (const part of headPivot.children) {
+        if (part.name.startsWith("head-covering")) part.visible = !uncoverHead(recipe.design.bodyType, clip)
+      }
       const wave = Math.sin(phase * Math.PI * 2)
       const swing = woodcuttingMotion(phase, chopping)
       const split = splittingMotion(phase)

@@ -1,5 +1,6 @@
 "use client"
 
+import { AnimalTether } from "./animal-tether"
 import * as THREE from "three"
 import { useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
@@ -43,7 +44,7 @@ export function KnightFigure({ map, appearance, coat, squire = false, characterS
     const outside = rest.current ?? point
     // Horse parking is in world coordinates, independent of the knight's turns indoors.
     horse.current.position.copy(parent.worldToLocal(vector.set(outside.x, map ? walkingSurface(map, outside.x, outside.z).height : outside.y, outside.z)))
-    horse.current.userData = { ...data, heading: outside.heading, activity: "idle", moving: false, distance: 0, motionReset: reset || switched, hitched: false, grazing: false }
+    horse.current.userData = { ...data, tether: rest.current?.tree, heading: outside.heading, activity: "idle", moving: false, distance: 0, motionReset: reset || switched, hitched: false, grazing: false }
     if (attendant.current) {
       const following = followKnight(trail.current, outside, 0.75 * characterScale, reset)
       const before = lastSquire.current
@@ -61,6 +62,7 @@ export function KnightFigure({ map, appearance, coat, squire = false, characterS
     <group ref={person} visible={false}><CharacterSprite {...props} type="knight" appearance={appearance} visualOverride={visual} characterFps={characterFps} walkTuning={walkTuning} /></group>
     <group ref={mount}><TransportSprite {...props} kind="horse" knight="mounted" horseVariant="noble" coat={coat} variant={variant} /></group>
     <group ref={horse} visible={false}><TransportSprite {...props} kind="horse" knight="saddled" horseVariant="noble" coat={coat} /></group>
+    <AnimalTether animal={horse} kind="horse" horseVariant="noble" characterScale={characterScale} selected={selected} outlineColor={outlineColor} onClick={onClick} />
     {squire && <group ref={attendant} name="squire"><CharacterSprite {...props} type="merchant" visualOverride={attendantVisual} characterFps={characterFps} walkTuning={walkTuning} /></group>}
   </>
 }
