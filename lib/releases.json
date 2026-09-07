@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "197064bbba95c051e426d22b3e17c8fcb18a572d",
-  "releaseCount": 68,
+  "lastProcessedCommit": "b80af2f1cd3174999aa00d72948b7be0a84eb88c",
+  "releaseCount": 69,
   "releases": [
+    {
+      "version": "0.0.83",
+      "title": "Release 0.0.83",
+      "summary": "Fix character and scenery overlaps with per-pose sprite depth (#102)",
+      "commit": "b80af2f1cd3174999aa00d72948b7be0a84eb88c"
+    },
     {
       "version": "0.0.82",
       "title": "Release 0.0.82",
