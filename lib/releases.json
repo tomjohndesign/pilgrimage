@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "980ddb93c9a5f5fe0eb1eb81cd002f7083463352",
-  "releaseCount": 75,
+  "lastProcessedCommit": "0c9e1e0dd879c86420914432c5d31126fc4ecac1",
+  "releaseCount": 76,
   "releases": [
+    {
+      "version": "0.0.90",
+      "title": "Release 0.0.90",
+      "summary": "Limit tree bird flocks to the first three chops (#109)",
+      "commit": "0c9e1e0dd879c86420914432c5d31126fc4ecac1"
+    },
     {
       "version": "0.0.89",
       "title": "Release 0.0.89",
