@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "f7afb864fc0f52e703e540e919c33f7832634fc6",
-  "releaseCount": 90,
+  "lastProcessedCommit": "0e864e611b7a9b468c57292f2c7d7929f2fc994d",
+  "releaseCount": 91,
   "releases": [
+    {
+      "version": "0.0.105",
+      "title": "Release 0.0.105",
+      "summary": "Stand the shrine's road junction in a clearing (#124)",
+      "commit": "0e864e611b7a9b468c57292f2c7d7929f2fc994d"
+    },
     {
       "version": "0.0.104",
       "title": "Release 0.0.104",
