@@ -2,6 +2,7 @@ import { groundHeight } from "../map/elevation"
 import { bridgeLayout } from "../map/bridges"
 import { computeForestShade } from "../map/forest-field"
 import { type TerrainId } from "../map/terrain"
+import { signpostPlacement } from "../map/signpost"
 import { worldToTileX, worldToTileZ, type GameMap } from "../map/types"
 import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
 import { ELEMENT_RADIUS, ENVIRONMENT_KINDS, type EnvironmentKind, type EnvironmentPlacement } from "./elements"
@@ -49,6 +50,9 @@ export function placeEnvironment(map: GameMap): EnvironmentPlacement[] {
     }
   }
   if (map.site) blocked.add(map.site.door.z * map.width + map.site.door.x)
+  // The signpost has the corner of its fork to itself; no boulder shares it.
+  const signpost = signpostPlacement(map)
+  if (signpost) blocked.add(signpost.tile.z * map.width + signpost.tile.x)
 
   const onLand = (px: number, pz: number, radius: number, kind: EnvironmentKind) => {
     const kindIndex = ENVIRONMENT_KINDS.indexOf(kind)
