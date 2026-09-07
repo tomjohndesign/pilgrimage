@@ -159,6 +159,13 @@ export function Travelers({
       if (s.activity === "visiting" && !!s.shrineSeat) {
         group.rotation.y = kneelingHeading
       }
+      if (s.activity === "performing" && s.walkFrom) {
+        group.rotation.y = Math.atan2(s.walkFrom.x - s.x, s.walkFrom.z - s.z)
+      }
+      if (s.activity === "listening" && s.musicVisit) {
+        const performer = sim.travelers.get(s.musicVisit.performerId)
+        if (performer) group.rotation.y = Math.atan2(performer.x - s.x, performer.z - s.z)
+      }
       if (s.activity === "building") group.rotation.y = s.buildingTask?.heading ?? Math.PI
       group.userData.workTree = workTree
       if (!playback.paused && !moving && workTree && (s.activity === "working" || s.activity === "gathering")) {
