@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "22ae86fc4f4171835c49da43835e570f940d5610",
-  "releaseCount": 82,
+  "lastProcessedCommit": "e78200b126faec4e31ee37052dce59451dd2755b",
+  "releaseCount": 83,
   "releases": [
+    {
+      "version": "0.0.97",
+      "title": "Release 0.0.97",
+      "summary": "Keep builders assigned until construction is complete (#116)",
+      "commit": "e78200b126faec4e31ee37052dce59451dd2755b"
+    },
     {
       "version": "0.0.96",
       "title": "Release 0.0.96",
