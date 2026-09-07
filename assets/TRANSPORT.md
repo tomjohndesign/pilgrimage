@@ -29,7 +29,11 @@ While selling, the keeper waves to nearby travelers, presents the wares, walks
 along the display and returns to a ground mat for a seated rest. The routine
 repeats; packing waits until the keeper returns to the starting position.
 
-Animal convoys use a fitted breast collar, girth and traces. The unhitched animal
+Animal convoys use a fitted breast collar, girth and traces. The wooden leaders
+(shafts) and long traces are baked into the hitched horse/donkey sprite, so they
+follow the animal's heading as the cart turns independently. Unhitched sheets
+omit them; hand-cart handles and parked shop stubs remain on the cart.
+The unhitched animal
 wanders over connected adjacent grass/clearing tiles (at most two cardinal tile
 steps from the hitch), pausing to graze. Dirt is traversable, but grazing occurs
 on grass/clearing. Roads, tracks, bridges, water, woods and buildings block the
@@ -40,9 +44,10 @@ road and tries again.
 
 ## Editable source
 
-- `lib/game/transport/rig.ts`: rough cart, wheels, shafts and deployed display.
+- `lib/game/transport/rig.ts`: rough cart, wheels, hand-cart handles and deployed display.
 - `animal-rig.ts`, `animal-pose.ts`, `geometry.ts`: authored ribcage, pelvis,
-  scapula, neck, muzzle and limb cross sections; no sphere animal bodies.
+  scapula, neck, muzzle, limb cross sections and hitched draught shafts;
+  no sphere animal bodies.
 - `coats.ts`: independent natural coat palettes with matching mane, tail, lower
   legs, muzzle and primitive markings. Coats do not change the build or gait.
 - `pasture.ts`: bounded roaming and recall.
@@ -57,9 +62,9 @@ Hooves use the shared `walkFoot()` stance targets with equine elbow/stifle,
 carpus/hock and fetlock chains. Planted hoof displacement determines travel
 speed, independent of frame rate and scale. Human walking geometry is unchanged.
 
-## Current sheets: v11
+## Current sheets: v17
 
-`public/textures/transport/v11/manifest.json` records all dimensions, anchors,
+`public/textures/transport/v17/manifest.json` records all dimensions, anchors,
 clips, timing, profiles, coats and variants. Every frame has binary alpha and at
 least four transparent pixels around its silhouette. Larger cells add padding
 at the same native pixel density as people.
@@ -78,6 +83,10 @@ at the same native pixel density as people.
   cells, 48 rows, 20 walk frames / one idle frame. Only the arms change for shafts.
 - `merchant-setup.png`: 24 basket-unloading poses, 64px cells, 48 rows. Opening
   and packing select forward/reverse frames from the simulation's action progress.
+- `cart-{cargo}-driver.png`: six outfit columns × sixteen directions in 160px
+  cells, registered to the cart axle. The shared person rig and ink pass render
+  the seated body against depth-only seat/cargo geometry. The cart material
+  merges these pixels before alpha and depth testing, including selection.
 - `merchant-selling.png`: 12 wave, 12 presenting and eight seated frames in
   64px cells, with the same six outfits and eight directions as the setup sheet.
 
@@ -91,8 +100,50 @@ Loaded merchants target 120 steps/minute before individual pace variation, cappe
 by the draught animal's natural speed. Hand-pulled merchants travel 30% slower
 than that target. Keeper wandering also uses actual stride distance. The
 small-map preview starts at 1×.
-The cart axle follows a fixed-length drawbar through turns, with wheel rotation
-based on axle travel. Sixteen cart directions give intermediate turning poses.
+The chassis, cargo, cover and wheel track are 20% narrower (`CART_WIDTH_SCALE`).
+Wheel diameter and harness attachment positions are preserved.
+Animal-drawn merchants use a dedicated driving pose on a broad front bench
+with a backrest. Knees stay below the hips and boots hang over the front; both
+hands hold reins that follow the animated bridle through turns. Driver and cart
+share one sprite anchor, scale and turning frame; there is no separate seated
+body depth plane. Rein sockets use that same displayed cart heading.
+Hand carts retain the shared walking/pulling rig. Shrine visitors first pull
+off onto a grass clearing near the road junction, leave the hitched convoy
+parked, and walk through a shrine gate alone. They return before rejoining
+the road. Arrival and departure check the complete convoy against terrain,
+buildings and elevation; unavailable parking means continuing along the road.
+`transport/route.ts` rounds cart turns independently of the painted paths and
+pedestrian lanes. The radius is 1.5 tiles where the verge permits it; tight
+spaces and bridge decks constrain the curve. Supported bridge elbows add a
+compact concave deck on the inside, moving the railing onto its edge.
+The hitch turn uses 1.5× the path shoulder’s radius (0.675 tiles). The inside
+edge is the swept outline of the actual cart, shafts and animal in both travel
+directions, with a small clearance margin. It follows the trailing wheels as
+they straighten, ending where the existing deck supports them. Geometry, rails,
+walking heights and clearance use this same outline; short spans still expose
+unsupported turns in the preview.
+The same partial-tile footprint supplies walking height and convoy clearance;
+water underneath remains water. Suspended spans keep their hanging decks. Carts advance by physical route
+distance. Axles trail freely on land; bridge crossings use the support assist
+described below. Roads and tracks share access again;
+there are no foot-only bridge restrictions or waiting states.
+`render/cart-wear.ts` samples both wheel centres from the default horse cart's
+trailing axle, using the rig's wheel spacing. The canonical road direction gives
+one readable pair of feathered dirt ruts with a grassy median inside corners.
+It uses the existing terrain texture and leaves the road outline and walking
+lanes intact; bridge decks, water, woods and building footprints are excluded.
+
+On ordinary ground, the cart axle trails a fixed-length drawbar with rolling
+wheel motion. `bridge-guide.ts` deliberately relaxes that physics near bridges:
+the axle follows the deck route a cart-length behind the puller, keeping both
+wheel centres supported. The body turns with the axle's own travel, independently
+of the puller, so it does not slide sideways through tight bends. The effective
+hitch gap shortens through bends; fixed wheel sprites do not swivel. The assist blends
+in/out on the adjoining ground and holds the corrected pose when paused.
+It is shared by live carts and the turning simulations. Bridge clearance allows
+body/shaft overhang over water only while the puller and both wheel centres
+have support; woods and buildings still collide. Wheel rotation uses axle
+travel. Sixteen cart directions give intermediate turning poses.
 
 `roadside.ts` supplies the same maneuver to the simulation and preview: a rounded
 45° pull-off, a short parallel stretch to straighten the cart, and a 45° exit
@@ -137,3 +188,35 @@ realistic palette metadata, all animal limb lengths/contacts, loop closure,
 solid wheels, pasture barriers, recall and the simulation's shop lifecycle.
 Inspect the assembled sprites beside a person in the playground and in `/play`,
 including rotated cameras, selection, terrain height, pauses and shop transitions.
+
+## Turning simulations and reversing
+
+In `/assets/characters?asset=cart`, select **Small map** and use **Scenario** to
+choose the merchant journey, left/right T-junction turns, an S-bend, a bridge
+bend, or backward walking. Edge cases add a one-tile hairpin, short chicane,
+wooded corner, short bridge corner, turn after a bridge ramp, backing around
+a bend, and staggered bridge landings. Closely spaced landings use compact
+half-tile corner inserts; long swept inserts are reserved for isolated elbows.
+Compact bridge hitch turns are capped at 0.2 tiles, so the puller reaches the
+landing before turning. The support assist keeps carts on the short and
+staggered bridge decks, including their sloped approaches.
+Two opposing walkers exercise the outermost walking lanes alongside the cart.
+Bridge walkers follow tangent deck entrances and sample the actual ramp height;
+ground walking paths retain their existing curves. **First edge contact** seeks to the first failing clearance frame;
+**Full route clear** indicates no contacts in the selected run. Constrained
+fixtures deliberately expose contacts for refining geometry and steering.
+The turn radius slider spans 0.4–3 tiles and only
+changes the selected simulation; the live default is `DEFAULT_CART_TURN_RADIUS`.
+Horse/donkey/hand cart selection, camera rotation, pause, speed, stage buttons
+and the timeline work in every scenario. Gold shows the hitch trail and blue
+the axle trail. The clearance readout flags frames where the convoy touches
+terrain edges so tight bridge geometry can be refined visibly.
+
+`turning-demo.ts` uses the runtime radius planner, rig-derived speed and trailer
+solver. Seeking restores the recorded cart pose exactly. A passing pedestrian
+uses the original walking lane, independent of the cart's radius.
+`animal-travel.ts` preserves facing for backward travel, including pasture
+recall. The existing distance-driven animal and wheel clips run backward for
+these steps; geometry and baked stride lengths are unchanged.
+
+Bridge approach ramps have open sides; raised decks retain their guards.

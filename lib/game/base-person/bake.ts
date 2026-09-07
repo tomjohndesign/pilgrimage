@@ -41,9 +41,11 @@ export interface BasePersonBake {
 let bakeRenderer: THREE.WebGLRenderer | undefined
 
 /** Shared camera, ink and registration for both live previews and exported sheets. */
-export function personFrameRenderer(design: PersonDesign, extraPalette: string[] = []) {
+export function personFrameRenderer(design: PersonDesign, extraPalette: string[] = [], framing?: {
+  cellSize: number; anchor: readonly [number, number]; viewSize: number; occluder?: THREE.Object3D
+}) {
   const recipe = personRecipe(design)
-  const size = recipe.cellSize
+  const size = framing?.cellSize ?? recipe.cellSize
   // One small renderer per page, reused while adjusting parameters.
   const renderer = bakeRenderer ??= new THREE.WebGLRenderer({ alpha: true, antialias: false, preserveDrawingBuffer: true })
   renderer.localClippingEnabled = true
@@ -54,11 +56,13 @@ export function personFrameRenderer(design: PersonDesign, extraPalette: string[]
   const scene = new THREE.Scene()
   const rig = createBasePersonRig(recipe)
   scene.add(rig.root)
+  if (framing?.occluder) scene.add(framing.occluder)
   scene.add(new THREE.AmbientLight(0xffffff, 1.1))
   const light = new THREE.DirectionalLight(0xffffff, 1.8)
   light.position.set(-3, 7, 5)
   scene.add(light)
-  const camera = personCamera(recipe)
+  const camera = personCamera(framing ? { ...recipe, cellSize: size, anchor: [...framing.anchor],
+    camera: { ...recipe.camera, viewSize: framing.viewSize } } : recipe)
   const position = new THREE.Vector3()
   const palette = [...recipe.renderPalette, ...extraPalette].map((hex) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)))
   const canvas = document.createElement("canvas")
@@ -96,7 +100,7 @@ export function personFrameRenderer(design: PersonDesign, extraPalette: string[]
         rig.sockets[name].getWorldPosition(position).project(camera)
         sockets[name] = { x: (position.x + 1) * size / 2, y: (1 - position.y) * size / 2, depth: position.z }
       }
-      return { canvas, padding, sockets, shadow: debug ? null : personCastShadow(canvas, recipe.anchor, recipe.design.shadow) }
+      return { canvas, padding, sockets, shadow: debug ? null : personCastShadow(canvas, framing ? [...framing.anchor] : recipe.anchor, recipe.design.shadow) }
     },
     dispose() { rig.dispose(); renderer.renderLists.dispose() },
   }

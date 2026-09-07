@@ -18,7 +18,7 @@ import { useBuildStore } from "@/lib/game/build-store"
 import type { Relic } from "@/lib/game/relic"
 import type { TreePlacement } from "@/lib/game/trees/placement"
 import { tileAt, worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
-import { createSim, roadCartPose, simRegistry, stepSim } from "@/lib/game/sim"
+import { createSim, simRegistry, stepSim } from "@/lib/game/sim"
 import { relicHeading } from "@/lib/game/shrine-visit"
 import type { Traveler } from "@/lib/game/travelers"
 import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/game/motion"
@@ -34,7 +34,7 @@ import { WoodLog } from "./wood-log"
 import { PixelCharacters } from "@/components/pixel-canvas"
 import { TravelerFigure } from "./traveler-figure"
 import { AdmissionEffects } from "./admission-effects"
-import { cartLoadout, cartOffset, SHOP_SECONDS } from "@/lib/game/transport/assets"
+import { cartLoadout, SHOP_SECONDS } from "@/lib/game/transport/assets"
 
 /**
  * People on the road: directional walking sprites driven by the simulation in
@@ -170,9 +170,13 @@ export function Travelers({
       }
       group.userData.activity = s.praying ? "praying" : s.activity
       group.userData.routineActivity = s.activity
-      group.userData.cartPose = travelers[i].type.id === "vendor" && !s.track &&
-        ["walking", "seeking", "fleeing"].includes(s.activity)
-        ? roadCartPose(map, s, -cartOffset(cartLoadout(s.id).puller) * characterScale) : undefined
+      group.userData.shrineParking = s.shrineParking
+      group.userData.cartProgress = s.convoy && s.activity === "walking" && !s.track && !s.shrineParking ? s.progress : undefined
+      group.userData.cartDirection = s.direction
+      group.userData.cartManeuver = false
+      group.userData.cartPose = s.shrineParking?.pose
+      group.userData.animalHeading = undefined
+      group.userData.reversing = false
       group.userData.keeperTime = s.keeperTime ?? 0
       group.userData.keeperAudience = s.activity === "vending" && travelers.some(other => {
         const person = sim.travelers.get(other.id)

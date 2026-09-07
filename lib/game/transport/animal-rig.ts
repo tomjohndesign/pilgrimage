@@ -1,6 +1,7 @@
+import { animalHead, bitLocal } from "./bridle"
 import { animalCoat } from "./coats"
 import * as THREE from "three"
-import { animalProfile, type Animal, type HorseVariant } from "./assets"
+import { animalProfile, cartOffset, CART_WIDTH_SCALE, RIG_TO_WORLD, type Animal, type HorseVariant } from "./assets"
 import { animalLeg, animalMotion, spinePoint } from "./animal-pose"
 import { model, loft, type CrossSection, type Point } from "./geometry"
 
@@ -59,6 +60,17 @@ export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", 
     { at: [sign * 0.27, h + 0.31, 0.42], width: 0.035, top: 0.015 },
   ], dark, "shoulder-cross")
   if (hitched) {
+    // Preserve the straight convoy's original attachment positions, but bake
+    // the leaders with the animal. They remain rigid through its gait and turn
+    // with its sprite rather than swinging sideways with the trailing cart.
+    const shafts = new THREE.Group(); shafts.name = "draught-shafts"
+    shafts.position.z = cartOffset(kind) / RIG_TO_WORLD
+    shafts.scale.x = CART_WIDTH_SCALE; m.root.add(shafts)
+    const hitch = -shafts.position.z
+    for (const sign of [-1, 1]) {
+      m.bar([sign * 0.65, 0.6, 0.5], [sign * 0.48 / CART_WIDTH_SCALE, 0.61, hitch + 0.2], 0.045, "#65513b", shafts).name = "draught-shaft"
+      m.bar([sign * 0.54, 0.72, 0.75], [sign * 0.44 / CART_WIDTH_SCALE, 0.97, hitch + 0.64], 0.027, "#493727", shafts).name = "draught-trace"
+    }
     const strap = (a: Point, b: Point, radius = 0.035) => {
       const mesh = m.bar(a, b, radius, "#453525")
       mesh.updateMatrix(); mesh.geometry.applyMatrix4(mesh.matrix)
@@ -78,8 +90,7 @@ export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", 
   }
 
   const neck = new THREE.Group(); neck.name = "articulated-neck"; m.root.add(neck)
-  const neckOrigin: Point = [0, h + 0.18, 0.58]
-  const poll: Point = noble ? [0, 1.02, 0.4] : donkey ? [0, 0.39, 0.64] : [0, 0.58, 0.75]
+  const { neckOrigin, poll, faceLength, faceForward, restPitch } = animalHead(kind, variant)
   const neckShape: CrossSection[] = [
     { at: [0, -0.13, 0.01], width: breadth * 0.71, top: noble ? 0.35 : 0.24, bottom: 0.25 },
     { at: [0, poll[1] * 0.35, poll[2] * 0.33], width: noble ? 0.28 : donkey ? 0.185 : 0.18, top: noble ? 0.34 : 0.20, bottom: 0.20 },
@@ -88,7 +99,6 @@ export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", 
   ]
   m.mesh(loft(neckShape), coat, [0, 0, 0], neck)
   const head = new THREE.Group(); head.name = "articulated-head"; head.position.set(...poll); neck.add(head)
-  const faceLength = donkey ? 0.88 : 1, faceForward = noble ? 0.86 : 1
   const headShape: CrossSection[] = [
     { at: [0, 0.04, -0.04], width: 0.095, top: 0.10, bottom: 0.08 },
     { at: [0, -0.08, 0.09], width: donkey ? 0.16 : 0.18, top: 0.15, bottom: 0.13 },
@@ -114,6 +124,15 @@ export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", 
       { at: [0, earHeight, 0.02], width: 0.008, top: 0.009 },
     ]), coat, [0, 0, 0], ear)
     m.mesh(loft([{ at: [0, 0.055, 0.04], width: 0.023, top: 0.009 }, { at: [0, earHeight * 0.7, 0.043], width: 0.024, top: 0.008 }, { at: [0, earHeight * 0.92, 0.025], width: 0.005, top: 0.005 }]), dark, [0, 0, 0], ear)
+  }
+  if (hitched) {
+    for (const sign of [-1, 1]) {
+      const bit = bitLocal(kind, variant, sign)
+      const ring = m.mesh(new THREE.TorusGeometry(0.035, 0.012, 4, 8), "#a99a75", bit, head)
+      ring.name = sign === 1 ? "left-bit" : "right-bit"; ring.rotation.y = Math.PI / 2
+      m.bar([sign * 0.12, 0.03, 0], bit, 0.018, "#493727", head)
+    }
+    m.bar(bitLocal(kind, variant, -1), bitLocal(kind, variant, 1), 0.023, "#493727", head)
   }
   // A continuous crest with an uneven hanging edge; the common horse's mane is sparse.
   for (let i = 0; i < (donkey ? 7 : 9); i++) {
@@ -149,7 +168,7 @@ export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", 
       positions.needsUpdate = true; geometry.computeVertexNormals(); geometry.computeBoundingSphere()
     }
     neck.position.set(...spinePoint(neckOrigin, kind, phase, moving, variant)); neck.rotation.set(motion.pitch + motion.neck, 0, motion.roll)
-    head.rotation.x = (donkey ? 0.16 : noble ? -0.05 : 0.10) + motion.head
+    head.rotation.x = restPitch + motion.head
     if (grazing > 0) {
       // Rotate from the shoulder, keeping the poll attached. Solve nose height
       // so the grazing mouth reaches grass instead of passing through it.

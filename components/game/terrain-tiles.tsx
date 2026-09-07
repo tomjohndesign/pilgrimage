@@ -33,6 +33,7 @@ import {
 } from "@/lib/game/map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
+import { cartCornerWear } from "@/lib/game/render/cart-wear"
 import { diagonalRoadSegments } from "@/lib/game/render/road-segments"
 import { ROAD_SHAPE_GLSL } from "@/lib/game/render/road-shape"
 import { DEFAULT_TRAFFIC } from "@/lib/game/travelers"
@@ -645,7 +646,11 @@ export function TerrainTiles({
   ].map((tile) => tile.z * map.width + tile.x)), [bridges, map.width])
   const tier = ROAD_TIERS[clampRoadTier(roadTier)]
   const shoulders = useMemo(() => junctionShoulders(map, coveredLand), [map, coveredLand])
-  const diagonalSegments = useMemo(() => diagonalRoadSegments(map, coveredLand), [map, coveredLand])
+  const diagonalSegments = useMemo(() => {
+    const segments = diagonalRoadSegments(map, coveredLand)
+    for (const [index, wear] of cartCornerWear(map, coveredLand)) segments.set(index, [...(segments.get(index) ?? []), ...wear])
+    return segments
+  }, [map, coveredLand])
   const segmentData = useMemo(() => {
     const count = [...diagonalSegments.values()].reduce((sum, segments) => sum + segments.length * 2, 0)
     const width = Math.min(1024, Math.max(1, count))
@@ -656,7 +661,7 @@ export function TerrainTiles({
     for (const [index, segments] of diagonalSegments) {
       ranges.set(index, [offset, segments.length])
       for (const segment of segments) {
-        const wear = roadWear(segment[4] ? relicTraffic : traffic, tier.tier)
+        const wear = roadWear(segment[4] === 1 ? relicTraffic : traffic, tier.tier)
         data.set(segment.slice(0, 4), offset * 4)
         data.set([wear.edge, wear.inner, segment[4], 0], (offset + 1) * 4)
         offset += 2

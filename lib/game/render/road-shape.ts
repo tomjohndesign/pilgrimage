@@ -1,3 +1,5 @@
+import { ROAD_CORNER_SHOULDER_RADIUS } from "../map/road"
+
 /**
  * Road coverage in tile-local XZ. Opposite entrances share a straight track;
  * adjacent entrances share a radius-0.5 arc tangent to both tile boundaries.
@@ -32,7 +34,7 @@ export const ROAD_SHAPE_GLSL = /* glsl */ `
     vec2 inset = q + edge;
     // A concave circular curb, tangent to both verges. Limit the footprint
     // to this corner so it cannot spread into another lane or grass median.
-    float radius = 0.45;
+    float radius = ${ROAD_CORNER_SHOULDER_RADIUS.toFixed(2)};
     float depth = min(radius - max(inset.x, inset.y), length(inset - radius) - radius);
     depth = min(depth, 0.48 - max(abs(q.x), abs(q.y)));
     return vec2(smoothstep(-0.06, 0.12, depth + roughness), depth + edge);
@@ -55,6 +57,7 @@ export const ROAD_SHAPE_GLSL = /* glsl */ `
 
   vec2 diagonalRoadShape(vec2 p, vec2 range, float edgeNoise, float targetEdge, float roughness) {
     vec2 distanceToTrack = vec2(100.0);
+    float cartDistance = 100.0;
     vec2 mainWear = vec2(0.0);
     vec2 trackWear = vec2(0.0);
     for (int segment = 0; segment < int(range.y); segment++) {
@@ -64,7 +67,9 @@ export const ROAD_SHAPE_GLSL = /* glsl */ `
       vec2 along = endpoints.zw - endpoints.xy;
       float t = clamp(dot(p - endpoints.xy, along) / max(dot(along, along), 0.000001), 0.0, 1.0);
       float distance = length(p - endpoints.xy - along * t);
-      if (wear.z < 0.5) {
+      if (wear.z > 1.5) {
+        cartDistance = min(cartDistance, distance);
+      } else if (wear.z < 0.5) {
         distanceToTrack.x = min(distanceToTrack.x, distance);
         mainWear = wear.xy;
       } else {
@@ -78,7 +83,10 @@ export const ROAD_SHAPE_GLSL = /* glsl */ `
     vec2 track = roadStrip(distanceToTrack.y, trackWear.x + edgeNoise, trackWear.y, roughness);
     // Express both boundaries relative to the receiving tile's edge value,
     // so its outline follows the source wear too, including on grass tiles.
-    return vec2(max(main.x, track.x),
+    // Cart shortcuts fade into the sward and inherit its texture grain.
+    // They do not move the main road boundary or add a dark outline.
+    float cartWear = 0.68 * (1.0 - smoothstep(0.045, 0.12, cartDistance + roughness * 0.2));
+    return vec2(max(max(main.x, track.x), cartWear),
       max(main.y - mainWear.x - edgeNoise, track.y - trackWear.x - edgeNoise) + targetEdge);
   }
 

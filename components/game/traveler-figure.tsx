@@ -7,6 +7,7 @@ import { Suspense, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import type { TravelerTypeDef } from "@/lib/game/travelers"
 import { CharacterSprite } from "./character-sprite"
+import { CartReins } from "./cart-reins"
 import { TransportSprite } from "./transport-sprite"
 import type { TravelerAppearance } from "@/lib/game/base-person/population"
 import { pullingVisual } from "@/lib/game/transport/visual"
@@ -15,6 +16,8 @@ import { personWalkStride } from "@/lib/game/base-person/gait"
 import { keeperRoutine } from "@/lib/game/transport/keeper"
 import { populationDesign } from "@/lib/game/base-person/population"
 import { STALL, stallPoint } from "@/lib/game/transport/stall"
+import { animalTravel } from "@/lib/game/transport/animal-travel"
+import { roadCartPose } from "@/lib/game/transport/bridge-guide"
 import { alignCart, followCart, type CartPose } from "@/lib/game/transport/follow"
 import type { WalkTuning } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
@@ -46,8 +49,10 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
     const group = driver.current, parent = group?.parent
     if (!group || !parent) return
     const data = parent.userData, paused = data.playbackRate === 0
+    const parking = data.shrineParking, onFoot = parking?.walking === true
     const praying = data.activity === "praying", routineActivity = data.routineActivity ?? data.activity
     const deployed = vendor && (routineActivity === undefined ? awning : ["openingShop", "vending", "packingShop"].includes(routineActivity))
+    const riding = animal && !onFoot && !deployed
     const working = deployed && !praying && routineActivity !== "vending" && (data.shopProgress ?? 0) > 0
     parent.getWorldPosition(point)
     const heading = data.heading ?? Math.atan2(parent.matrixWorld.elements[8], parent.matrixWorld.elements[10])
@@ -55,18 +60,21 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
     const previous = cartPose.current
     if (vendor) {
       const roadPose = data.cartPose as CartPose | undefined
-      const freePose = !previous || data.motionReset ? alignCart(hitch, heading, wheelbase)
+      const freePose = map && typeof data.cartProgress === "number" && !deployed && !parking
+        ? roadCartPose(map,data.cartProgress,data.cartDirection ?? 1,wheelbase,characterScale,data.motionReset?undefined:previous??undefined)
+        : !previous || data.motionReset ? alignCart(hitch, heading, wheelbase)
         : deployed ? alignCart(hitch, data.shopHeading ?? heading, wheelbase) : paused ? { ...previous, distance: 0 } : followCart(previous, hitch, wheelbase)
       // Let the axle finish returning from a roadside stop before guiding it
       // along the road again; switching immediately would snap it off the verge.
       if (!roadPose) followingRoad.current = false
       else if (!previous || data.motionReset || Math.hypot(freePose.x - roadPose.x, freePose.z - roadPose.z) < 0.02) followingRoad.current = true
-      cartPose.current = roadPose && followingRoad.current ? roadPose : freePose
+      cartPose.current = parking ? parking.pose : roadPose && (data.cartManeuver || followingRoad.current) ? roadPose : freePose
       const pose = cartPose.current!
       if (cart.current) {
         cart.current.position.copy(parent.worldToLocal(point.set(pose.x, map ? walkingSurface(map, pose.x, pose.z).height : y, pose.z)))
-        const distance = previous && !paused && !data.motionReset && !deployed ? Math.hypot(pose.x - previous.x, pose.z - previous.z) : 0
-        cart.current.userData = { ...data, activity: routineActivity, playbackRate: praying ? 0 : data.playbackRate, heading: deployed ? data.shopHeading ?? pose.heading : pose.heading, distance, moving: data.moving && !deployed }
+        const distance = previous && !paused && !data.motionReset && !deployed
+          ? pose === freePose ? pose.distance : Math.hypot(pose.x - previous.x, pose.z - previous.z) : 0
+        cart.current.userData = { ...data, bridgeGuided: pose.bridgeGuided === true, activity: routineActivity, riding, playbackRate: praying ? 0 : data.playbackRate, heading: deployed ? data.shopHeading ?? pose.heading : pose.heading, distance: onFoot ? 0 : distance, moving: data.moving && !deployed && !onFoot }
       }
     }
     const side = data.shopSide ?? 1
@@ -74,7 +82,7 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
       personWalkStride(populationDesign(type, appearance?.variant ?? 0)) * characterScale, data.keeperAudience !== false) : null
     const keeperAction = !praying && keeper && keeper.pose !== "walk" && keeper.pose !== "idle"
     const keeperHeading = (data.shopHeading ?? heading) + (keeper?.moving ? Math.atan2(Math.sin(keeper.heading) * side, Math.cos(keeper.heading)) : -side * Math.PI / 2)
-    group.position.set(animal ? 0.43 * characterScale : 0, 0, animal ? 0.22 * characterScale : 0)
+    group.position.set(0, 0, 0)
     if (deployed && cartPose.current) {
       const pose = cartPose.current, location = stallPoint(pose, data.shopHeading ?? pose.heading, side, characterScale, keeper ?? STALL.merchant)
       group.position.copy(parent.worldToLocal(point.set(location.x, map ? walkingSurface(map, location.x, location.z).height : y, location.z)))
@@ -86,8 +94,8 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
     const distance = !reset && !paused ? Math.hypot(point.x - before.x, point.z - before.z) : 0
     lastDriver.current = { x: point.x, z: point.z, deployed }
     group.userData = { ...data, motionReset: reset, distance, heading: praying ? data.heading : deployed ? keeperHeading : data.heading, activity: praying ? "praying" : deployed ? undefined : data.activity, moving: !praying && (deployed ? keeper?.moving === true : data.moving) }
-    const pullingNow = vendor && !animal && characterModel === "base" && !deployed && !praying
-    group.visible = !working && !keeperAction && !pullingNow
+    const pullingNow = vendor && !animal && characterModel === "base" && !deployed && !praying && !onFoot
+    group.visible = !riding && !working && !keeperAction && !pullingNow
     if (pullingDriver.current) {
       pullingDriver.current.visible = pullingNow
       pullingDriver.current.position.copy(group.position)
@@ -100,21 +108,29 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
     }
     if (beast.current) {
       const pasture = data.pasture, priorHeading = beast.current.userData.heading
-      beast.current.userData = { ...data, grazing: false, hitched: !deployed }
+      const last = lastAnimal.current
+      const travel = data.animalHeading !== undefined ? { heading: data.animalHeading, reversing: data.reversing === true }
+        : last && !data.motionReset ? animalTravel(priorHeading ?? heading, hitch.x - last.x, hitch.z - last.z) : { heading, reversing: false }
+      beast.current.userData = { ...data, ...travel, grazing: false, hitched: !deployed }
       if (deployed && pasture) {
         beast.current.position.copy(parent.worldToLocal(point.set(pasture.x, data.pastureY ?? y, pasture.z)))
         const previous = lastAnimal.current, distance = previous && !data.motionReset && !paused ? Math.hypot(pasture.x - previous.x, pasture.z - previous.z) : 0
-        beast.current.userData = { ...data, heading: pasture.moving && !praying ? pasture.heading : priorHeading ?? data.heading, hitched: false,
+        beast.current.userData = { ...data, heading: pasture.moving && !praying ? pasture.heading : priorHeading ?? data.heading, reversing: pasture.reversing, hitched: false,
           moving: pasture.moving && !praying, distance, grazing: data.pastureGrass && !pasture.returning && !pasture.moving }
         lastAnimal.current = { x: pasture.x, z: pasture.z }
-      } else { beast.current.position.set(0, 0, 0); lastAnimal.current = null }
+      } else if (parking) {
+        const hitch = parking.pose.hitch
+        beast.current.position.copy(parent.worldToLocal(point.set(hitch.x, map ? walkingSurface(map, hitch.x, hitch.z).height : y, hitch.z)))
+        beast.current.userData = { ...data, heading: parking.pose.heading, hitched: true, moving: !onFoot && data.moving, distance: onFoot ? 0 : data.distance, grazing: false }
+        lastAnimal.current = null
+      } else { beast.current.position.set(0, 0, 0); lastAnimal.current = { ...hitch } }
     }
   }, -2)
   const variant = appearance?.variant ?? 0
   const pulling = useMemo(() => pullingVisual(variant), [variant])
   const color = outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] as [number, number, number] : undefined)
   return <Suspense fallback={null}>
-    <group ref={driver} position={animal ? [0.43 * characterScale, 0, 0.22 * characterScale] : [0, 0, 0]}>
+    <group ref={driver} position={[0, 0, 0]}>
       <CharacterSprite map={map} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
         characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning}
         />
@@ -124,10 +140,11 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
         characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} visualOverride={pulling} />
     </group>}
     {vendor && <>
-      <group ref={cart}><TransportSprite map={map} kind="cart" cargo={cargo} puller={puller} awning={awning} characterScale={characterScale}
+      <group ref={cart}><TransportSprite map={map} kind="cart" variant={variant} cargo={cargo} puller={puller} awning={awning} characterScale={characterScale}
         selected={selected} outlineColor={color} onClick={onClick} /></group>
       <group ref={setup} visible={false}><TransportSprite map={map} kind="merchant" variant={variant} characterScale={characterScale * (appearance?.scale ?? 1)} selected={selected} outlineColor={color} onClick={onClick} /></group>
     </>}
     {animal && <group ref={beast}><TransportSprite map={map} kind={puller as "donkey" | "horse"} coat={coat} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} /></group>}
+    {animal && <CartReins cart={cart} animal={beast} kind={puller as "horse" | "donkey"} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} />}
   </Suspense>
 }
