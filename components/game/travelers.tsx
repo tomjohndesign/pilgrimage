@@ -10,10 +10,11 @@ import * as THREE from "three"
 import { travelerAppearance } from "@/lib/game/base-person/population"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { useSimulationStore } from "@/lib/game/simulation-store"
-import { selectElement } from "@/lib/game/selection"
+import { markPerson, selectElement } from "@/lib/game/selection"
 import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
 import { useBalanceStore } from "@/lib/game/balance-store"
-import { woodcutterHuts } from "@/lib/game/settlement"
+import { setFootpathObstacles } from "@/lib/game/footpaths"
+import { jobBuildings } from "@/lib/game/settlement"
 import { useBuildStore } from "@/lib/game/build-store"
 import type { Relic } from "@/lib/game/relic"
 import type { TreePlacement } from "@/lib/game/trees/placement"
@@ -46,6 +47,24 @@ import { cartLoadout, SHOP_SECONDS } from "@/lib/game/transport/assets"
  * traveler-figure.tsx so the character gallery can draw the same one.
  */
 
+
+/**
+ * Radius of the sphere a figure is culled by, in tiles. Generous: a sprite is
+ * anchored at the feet and stands well above that, and a mounted knight or a
+ * merchant's cart reaches further still.
+ */
+const FIGURE_RADIUS = 3
+
+/**
+ * Stop (or resume) recomposing a figure's local matrices every pass.
+ *
+ * Three.js walks the whole graph once per `render`, and this scene is rendered
+ * several times a frame, so a culled figure otherwise still pays for a matrix
+ * compose per node per pass. Only run on the frames where visibility flips.
+ */
+function setSubtreeMatrixAutoUpdate(root: THREE.Object3D, enabled: boolean): void {
+  root.traverse((object) => { object.matrixAutoUpdate = enabled })
+}
 
 export function Travelers({
   map,
@@ -86,6 +105,7 @@ export function Travelers({
   const obstacleSource = useRef<{ trees: TreePlacement[]; felled: number } | null>(null)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
   const logRefs = useRef<Array<THREE.Group | null>>([])
+  const cull = useMemo(() => ({ frustum: new THREE.Frustum(), viewProjection: new THREE.Matrix4(), view: new THREE.Matrix4(), bounds: new THREE.Sphere(undefined, FIGURE_RADIUS) }), [])
 
   const sim = useMemo(() => createSim([], map, [], relic.stats), [map.road, relic])
   useEffect(() => {
@@ -101,7 +121,7 @@ export function Travelers({
     }
   }, [sim, travelers, map, relic])
 
-  const camps = useMemo(() => woodcutterHuts(map), [map])
+  const camps = useMemo(() => jobBuildings(map), [map])
 
   // Publish the running sim so the HUD's traveler panel can poll live stats.
   useEffect(() => {
@@ -124,7 +144,7 @@ export function Travelers({
     return () => { unsubscribe(); stopCharacterSound() }
   }, [travelers])
 
-  useFrame((_, delta) => {
+  useFrame(({ camera }, delta) => {
     // A background tab hands us a huge delta; clamp so nobody teleports.
     const build = useBuildStore.getState()
     sim.procession = processionRegistry.current
@@ -133,7 +153,7 @@ export function Travelers({
     sim.balance = useBalanceStore.getState().balance
     sim.trees = trees
     if (map.footpaths && (obstacleSource.current?.trees !== trees || obstacleSource.current.felled !== sim.felled.size)) {
-      map.footpaths.obstacles = trees.flatMap((tree, index) => sim.felled.has(index) ? [] : [{ x: tree.x, z: tree.z, radius: Math.max(.18, (tree.footprint ?? .3) * .5) }])
+      setFootpathObstacles(map.footpaths, trees.flatMap((tree, index) => sim.felled.has(index) ? [] : [{ x: tree.x, z: tree.z, radius: Math.max(.18, (tree.footprint ?? .3) * .5) }]))
       obstacleSource.current = { trees, felled: sim.felled.size }
     }
     const playback = useSimulationStore.getState()
@@ -149,10 +169,32 @@ export function Travelers({
       resourceElapsed.current = 0
     }
 
+    // Everyone keeps walking in the simulation above, but a figure the camera
+    // cannot see is not worth posing: the block below is the expensive half,
+    // and clearing `visible` also drops the whole subtree from the renderer's
+    // traversal in each of the frame's passes.
+    const { frustum, viewProjection, view, bounds } = cull
+    camera.updateMatrixWorld()
+    frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, view.copy(camera.matrixWorld).invert()))
+    const selected = useCameraStore.getState().selection
     for (let i = 0; i < travelers.length; i++) {
       const group = groupRefs.current[i]
       const s = sim.travelers.get(travelers[i].id)
       if (!group || !s) continue
+
+      bounds.center.set(s.x, s.y, s.z)
+      // The selected figure stays live wherever it wanders, so its outline and
+      // highlight never depend on where the camera happens to be pointing.
+      const onScreen = frustum.intersectsSphere(bounds)
+        || (selected?.kind === "traveler" && selected.id === travelers[i].id)
+      if (group.visible !== onScreen) {
+        group.visible = onScreen
+        setSubtreeMatrixAutoUpdate(group, onScreen)
+        const logs = logRefs.current[i]
+        if (logs && !onScreen) { logs.visible = false; setSubtreeMatrixAutoUpdate(logs, false) }
+        else if (logs) setSubtreeMatrixAutoUpdate(logs, true)
+      }
+      if (!onScreen) continue
 
       const dx = s.x - group.position.x
       const dz = s.z - group.position.z
@@ -245,6 +287,7 @@ export function Travelers({
             <group
               key={traveler.id}
               ref={(node) => {
+                markPerson(node)
                 groupRefs.current[index] = node
               }}
             >

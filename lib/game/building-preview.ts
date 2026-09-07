@@ -53,7 +53,7 @@ export function buildingPreviewSettlement(world: GameMap, balance: GameBalance) 
   const at = candidates.find(at => !map.buildings.some(b => at.x < b.x+b.w+1 && at.x+pair.w+1 > b.x
     && at.z < b.z+b.d+1 && at.z+pair.d+1 > b.z) && placementError(map,pair,at,balance) === null)
   if(at) {
-    const module = { buildType: "shepherd-hut", w: 2, d: 2, height: .70, color: "#8c7658", roofColor: "#a59164" }
+    const module = { buildType: "house", w: 2, d: 2, height: .70, color: "#8c7658", roofColor: "#a59164" }
     settlement = { ...settlement, elevation: levelBuildingGround(map,{...at,w:4,d:2}),
       structures: [...settlement.structures,
         { ...module,...at,id:"preview-roofline-left",label:"Joined roof · left module",rotation:0 },

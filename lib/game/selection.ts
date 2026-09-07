@@ -40,3 +40,39 @@ export function selectionObjectId(selection: Selection | null, objects: {
     : selection.kind === "traveler" ? travelerObjectId(index)
       : selection.kind === "monk" ? residentObjectId(index) : pileObjectId(index)
 }
+
+/** Marks a rendered subtree as a person, for `prioritizePeople`. */
+const PERSON_PICK = "person"
+
+interface PickObject {
+  userData?: Record<string, unknown>
+  parent?: PickObject | null
+}
+
+/** Tag a character's root group so every hit inside it counts as that person. */
+export function markPerson(object: { userData: Record<string, unknown> } | null | undefined) {
+  if (object) object.userData[PERSON_PICK] = true
+}
+
+/** True when the object, or anything it hangs from, stands for a person. */
+function isPersonPick(object: PickObject | null | undefined): boolean {
+  for (let node = object ?? null; node; node = node.parent ?? null) {
+    if (node.userData?.[PERSON_PICK] === true) return true
+  }
+  return false
+}
+
+/**
+ * Re-order raycast hits so people come first. A walker is small next to the
+ * trees and buildings around them, so the nearest hit under the pointer is
+ * usually the scenery standing in front — clicking a pilgrim on a forest path
+ * would pick the crown that hides them. Distance order is kept within each
+ * group, so the nearest person still wins, and scenery is only demoted, never
+ * dropped: with no tool active the person's handler stops the event, and in
+ * build mode nothing stops it and the ground still takes the click.
+ */
+export function prioritizePeople<T extends { object: PickObject }>(hits: readonly T[]): T[] {
+  const people = hits.filter((hit) => isPersonPick(hit.object))
+  if (people.length === 0 || people.length === hits.length) return hits as T[]
+  return [...people, ...hits.filter((hit) => !isPersonPick(hit.object))]
+}

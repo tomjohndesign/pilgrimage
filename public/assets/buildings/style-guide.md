@@ -16,7 +16,7 @@ Construction context: [West Stow Anglo-Saxon village](https://www.weststow.org/a
 | --- | --- | --- |
 | Relic enclosure | 3×3 | No roof; low timber walls and an open gate on every side; rough flags, stone table, planks and scattered belongings |
 | Monks’ shelter | 3×2 | Open front, thatched gable, woven windbreaks, straw bedding and blankets |
-| Shepherd’s hut | 2×2 | Compact earthen/wattle hut with a plank door and steep thatch |
+| House | 2×2 | Compact earthen/wattle hut with an open doorway, steep thatch, a hearth and two straw beds |
 | Raised store | 1×1 | Timber legs, plank floor and walls, grain sack, small thatched gable |
 | Wood shelter | 2×1 | Open lean-to with stacked wood and woven screens |
 

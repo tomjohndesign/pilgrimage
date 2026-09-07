@@ -1,7 +1,55 @@
 {
-  "lastProcessedCommit": "2118086a373ce9a0dcfc18f49accecd605508ea4",
-  "releaseCount": 89,
+  "lastProcessedCommit": "c1dc64c16c09555f28ea66a5404fa50fb0c53641",
+  "releaseCount": 97,
   "releases": [
+    {
+      "version": "0.0.111",
+      "title": "Release 0.0.111",
+      "summary": "Trace people and road verges through the trees that hide them (#130)",
+      "commit": "c1dc64c16c09555f28ea66a5404fa50fb0c53641"
+    },
+    {
+      "version": "0.0.110",
+      "title": "Release 0.0.110",
+      "summary": "Leave doorways open instead of hanging a plank door (#129)",
+      "commit": "dd9ea8c3bbba270f37fd9c298ec0ad138c366fb9"
+    },
+    {
+      "version": "0.0.109",
+      "title": "Release 0.0.109",
+      "summary": "Cull scenery and characters off camera; resolve road shortcuts once per stretch (#128)",
+      "commit": "8648bcfa2eaa11a048f2bdaef014e9b33c1a4b7b"
+    },
+    {
+      "version": "0.0.108",
+      "title": "Release 0.0.108",
+      "summary": "Keep the earth floor under the building, not in front of the door (#127)",
+      "commit": "7879e1dbb973fccc07103c84b51ba0f01d38fd77"
+    },
+    {
+      "version": "0.0.107",
+      "title": "Release 0.0.107",
+      "summary": "Rename the shepherd's hut to house and give it, the tavern and a new sheep pen real work (#126)",
+      "commit": "c8059770a331df36190b73458b6906e34f4c3780"
+    },
+    {
+      "version": "0.0.106",
+      "title": "Release 0.0.106",
+      "summary": "Halve the stamina drain and camp before the legs give out (#125)",
+      "commit": "a3df4c22d6663f95693382529d8f5f324f910117"
+    },
+    {
+      "version": "0.0.105",
+      "title": "Release 0.0.105",
+      "summary": "Stand the shrine's road junction in a clearing (#124)",
+      "commit": "0e864e611b7a9b468c57292f2c7d7929f2fc994d"
+    },
+    {
+      "version": "0.0.104",
+      "title": "Release 0.0.104",
+      "summary": "Mark the shrine's fork with a wayside signpost (#123)",
+      "commit": "f7afb864fc0f52e703e540e919c33f7832634fc6"
+    },
     {
       "version": "0.0.103",
       "title": "Release 0.0.103",

@@ -144,6 +144,11 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     const pitch = Math.max(0.01, Math.abs(camera.matrixWorld.elements[9] / camera.matrixWorld.elements[5]))
     const parent = poseRoot.current?.parent
     if (!parent) return
+    // The figure's owner clears `visible` once the camera leaves it behind
+    // (see travelers.tsx). Advancing a walk cycle nobody can watch is the
+    // single biggest per-character cost at high traffic; it resumes from the
+    // walker's live distance the frame it comes back into view.
+    if (!parent.visible) return
     // Road groups publish heading alongside position; avoid walking the scene
     // ancestry again for every sprite. Standalone previews use world facing.
     let heading = typeof parent.userData.heading === "number" ? parent.userData.heading :

@@ -1,7 +1,7 @@
 import { buildingEntrance, constructionWork, isComplete } from "./construction"
 import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
 import { groundHeight, levelBuildingGround } from "./map/elevation"
-import { placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
+import { buildingKind, placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
 import { settlementRoute, shrineApproach } from "./settlement-route"
 import { getBuildInfluence, type BuildInfluence } from "./build-influence"
 import type { SimState } from "./sim"
@@ -33,6 +33,8 @@ export interface Settlement {
   spentWood: number
   shrineAdmission: number
   collectedAdmission: number
+  /** Counter takings already credited; sales never credit the same coin twice. */
+  collectedTrade: number
   /** Only player-built additions. The founding hovel stays on the base map. */
   structures: BuildingDef[]
 }
@@ -45,6 +47,17 @@ export function createSettlement(balance: GameBalance = DEFAULT_BALANCE): Settle
     spentWood: 0,
     shrineAdmission: DEFAULT_ADMISSION_FEE,
     collectedAdmission: 0,
+    collectedTrade: 0,
+  }
+}
+
+/** Tavern and stall takings are earned in the simulation and credited once. */
+export function creditTrade(settlement: Settlement, receipts: number): Settlement {
+  if (receipts <= settlement.collectedTrade) return settlement
+  return {
+    ...settlement,
+    collectedTrade: receipts,
+    resources: { ...settlement.resources, gold: settlement.resources.gold + receipts - settlement.collectedTrade },
   }
 }
 
@@ -288,6 +301,14 @@ export function placementError(
 export function woodcutterHuts(map: GameMap): PlacedBuilding[] {
   return map.buildings.filter((b) => b.buildType === "workshop" && isComplete(b))
     .map((b) => ({ ...b, kind: "workshop" }))
+}
+
+/** Every completed structure with work in it: huts, taverns, folds and stalls. */
+export function jobBuildings(map: GameMap): PlacedBuilding[] {
+  return map.buildings.flatMap((b) => {
+    const kind = isComplete(b) ? buildingKind(b.buildType) : null
+    return kind ? [{ ...b, kind }] : []
+  })
 }
 
 export function creditTimber(settlement: Settlement, deliveredWood: number): Settlement {

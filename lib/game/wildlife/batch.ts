@@ -37,7 +37,19 @@ export function wildlifeGeometry(parts: THREE.Mesh[], ids: number[]) {
         }
       }
     },
-    finish() { position.needsUpdate = true; normal.needsUpdate = true; geometry.computeBoundingSphere(); idGeometry.boundingSphere = geometry.boundingSphere },
+    /**
+     * Publish the frame's vertices. `bounds` covers the animals actually
+     * written; without it the sphere is measured from the buffer, which walks
+     * every vertex of every animal in the species and costs more than posing
+     * the visible ones. Nothing culls by these bounds — the meshes draw
+     * unconditionally — so they only need to enclose what can be clicked.
+     */
+    finish(bounds?: THREE.Sphere) {
+      position.needsUpdate = true; normal.needsUpdate = true
+      if (bounds) (geometry.boundingSphere ??= new THREE.Sphere()).copy(bounds)
+      else geometry.computeBoundingSphere()
+      idGeometry.boundingSphere = geometry.boundingSphere
+    },
     dispose() { geometry.dispose(); idGeometry.dispose() },
   }
 }

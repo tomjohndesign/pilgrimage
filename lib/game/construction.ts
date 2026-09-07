@@ -8,6 +8,7 @@ import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type BuildingDe
 import { settlementRoute } from "./settlement-route"
 import type { WanderSpot } from "./monk-wander"
 import { buildingSupports } from "./character-support"
+import { workPost } from "./work-posts"
 
 export interface Construction { work: number; required: number; cost?: { gold: number; wood: number } }
 /** Worker-seconds: small sites finish quickly; doubling the area quadruples the work. */
@@ -21,11 +22,21 @@ export function constructionStage(building: BuildingDef): number {
   return isComplete(building) ? 3 : Math.min(2, Math.floor(building.construction!.work / building.construction!.required * 3))
 }
 export function isMonkShelter(b: BuildingDef): boolean { return b.buildType === "shelter" || b.buildType === "monk-shelter" }
+/** Where a settled villager sleeps; monks keep to their own shelters. */
+export function isHouse(b: BuildingDef): boolean { return b.buildType === "house" }
+/**
+ * Buildings people walk into: sleeping places, the tavern's common room, and
+ * the open workplaces whose posts stand inside the footprint. Crossing the wall
+ * is still only allowed in a doorway, so none of these becomes a through-route.
+ */
+export function isEnterable(b: BuildingDef): boolean {
+  return isMonkShelter(b) || isHouse(b) || ["tavern", "market", "sheep-pen"].includes(b.buildType ?? "")
+}
 export function buildingEntrance(b: BuildingDef): TilePos { return buildingEntry(b) }
 
 export interface BuildingTask {
   buildingId: string
-  purpose: "build" | "rest"
+  purpose: "build" | "rest" | "work"
   slot: number
   heading: number
   route: WanderSpot[]
@@ -60,27 +71,39 @@ export function constructionStandOff(characterScale = BASE_CHARACTER_SCALE): num
   return MALLET_CONTACT_REACH * PERSON_SPRITE_SCALE * characterScale / BASE_PERSON.camera.viewSize
 }
 
+/** The stand a posted worker keeps, in the building's authored local frame. */
+function buildingWorkPost(building: BuildingDef, slot: number) {
+  const local = rotatedFootprint(building, building.rotation)
+  return workPost(building.buildType, slot, local.w, local.d)
+}
+
 /** Place work and rest positions in the same rotated local space as the building. */
 function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask["purpose"], slot: number, scale?: number) {
   const local = rotatedFootprint(building, building.rotation)
   const beds = purpose === "rest" ? buildingSupports(building).filter(s => s.clips.includes("sleeping")) : []
   const bed = beds[slot % beds.length]
   if (purpose === "rest" && !bed) return null
+  const post = purpose === "work" ? buildingWorkPost(building, slot) : null
+  if (purpose === "work" && !post) return null
   const x = purpose === "build" ? (slot % 4 - 1.5) * Math.min(0.45, (local.w - 0.5) / 3)
-    : bed.anchor.x
-  const z = purpose === "build" ? local.d / 2 - 0.055 + constructionStandOff(scale) : bed.anchor.z
+    : purpose === "work" ? post!.x : bed.anchor.x
+  const z = purpose === "build" ? local.d / 2 - 0.055 + constructionStandOff(scale)
+    : purpose === "work" ? post!.z : bed.anchor.z
   const offset = rotateBuildingPoint(x, z, building.rotation)
   const approach = rotateBuildingPoint(x, (local.d + 1) / 2, building.rotation)
   const cx = tileToWorldX(map, building.x) + (building.w - 1) / 2
   const cz = tileToWorldZ(map, building.z) + (building.d - 1) / 2
   const frontage = { x: worldToTileX(map, cx + approach.x), z: worldToTileZ(map, cz + approach.z) }
   return { destination: { x: cx + offset.x, z: cz + offset.z, y: surfaceHeight(map, frontage.x, frontage.z) }, frontage,
-    heading: (bed?.heading ?? Math.PI) + buildingYaw(building.rotation) }
+    heading: (bed?.heading ?? (purpose === "work" ? 0 : Math.PI)) + buildingYaw(building.rotation) }
 }
 
 /** Reserve a place before walking so en-route builders count toward the site's crew. */
 export function assignBuildingTask(actor: Worker, map: GameMap, purpose: BuildingTask["purpose"], focusedBuildingId?: string): boolean {
-  const candidates = map.buildings.filter(b => purpose === "build" ? !isComplete(b) : isMonkShelter(b) && isComplete(b))
+  // Only a named building can be rested or worked in: a settler's own house,
+  // or their employer. Unfocused rest is a brother looking for any shelter.
+  const candidates = map.buildings.filter(b => purpose === "build" ? !isComplete(b)
+    : isComplete(b) && (focusedBuildingId ? purpose === "work" || isEnterable(b) : isMonkShelter(b)))
     .filter(b => !focusedBuildingId || b.id === focusedBuildingId)
     .sort((a, b) => Math.hypot(tileToWorldX(map, a.x) - actor.x, tileToWorldZ(map, a.z) - actor.z) -
       Math.hypot(tileToWorldX(map, b.x) - actor.x, tileToWorldZ(map, b.z) - actor.z))
@@ -129,11 +152,11 @@ export function walkWorker(actor: WanderSpot, route: WanderSpot[], speed: number
 }
 
 /** Progress is paid in worker-seconds, only while standing at the site's entrance. */
-export function stepBuildingTask(actor: Worker, map: GameMap, speed: number, dt: number): "walking" | "building" | "sleeping" | null {
+export function stepBuildingTask(actor: Worker, map: GameMap, speed: number, dt: number): "walking" | "building" | "sleeping" | "posted" | null {
   const task = actor.buildingTask
   if (!task || dt <= 0) return null
   const building = map.buildings.find(b => b.id === task.buildingId)
-  if (!building || (task.purpose === "build" && isComplete(building)) || (task.purpose === "rest" && !isComplete(building))) {
+  if (!building || (task.purpose === "build" && isComplete(building)) || (task.purpose !== "build" && !isComplete(building))) {
     actor.buildingTask = undefined
     return null
   }
@@ -167,6 +190,7 @@ export function stepBuildingTask(actor: Worker, map: GameMap, speed: number, dt:
     return "walking"
   }
   if (task.purpose === "rest") return "sleeping"
+  if (task.purpose === "work") return "posted"
   const construction = building.construction!
   construction.work = Math.min(construction.required, construction.work + dt)
   return "building"

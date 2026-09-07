@@ -39,6 +39,13 @@ export function usePixelWorldTexel() {
   return useContext(PixelRenderContext)?.worldTexel ?? NATIVE_WORLD_TEXEL
 }
 
+const NO_CHARACTERS: ReadonlySet<THREE.Object3D> = new Set()
+
+/** The live character roots, so effects can prepare passes only when people are on screen. */
+export function usePixelCharacterRoots(): ReadonlySet<THREE.Object3D> {
+  return useContext(PixelRenderContext)?.characters ?? NO_CHARACTERS
+}
+
 /** Character roots keep their original layers for picking and the unpixelated view. */
 export function PixelCharacters({ children }: { children: ReactNode }) {
   const renderer = useContext(PixelRenderContext)
@@ -144,6 +151,13 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
         gl.setRenderTarget(target)
         gl.render(scene, cam)
       })
+      // Three.js walks the whole graph on every `render`, and this pass renders
+      // the scene up to four times (world colour and IDs, then characters).
+      // Nothing moves between those passes, so resolve the transforms once and
+      // let the renderer reuse them — with a large cast that repeated walk is
+      // otherwise the most expensive thing in the frame.
+      scene.matrixWorldAutoUpdate = false
+      scene.updateMatrixWorld()
       renderer.worldTexel.value = 0
       const cam = camera as THREE.OrthographicCamera
       const r = resources

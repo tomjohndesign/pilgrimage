@@ -6,7 +6,7 @@ export function entranceParts(type: string, wallHeight = .78): BuildingPart[] {
   const parts:BuildingPart[]=[]
   const box=(name:string,position:Vec3,size:Vec3,color:string,rotation?:Vec3)=>parts.push({name:`entry-${name}`,layer:"interior",position,size,color,rotation,outline:false})
   const x=-.38,z=-.38
-  if(["tavern","shelter","shepherd-hut","monk-shelter","hall","shrine"].includes(type)) {
+  if(["tavern","shelter","house","monk-shelter","hall","shrine"].includes(type)) {
     for(const a of [-1,1]) for(const b of [-1,1]) box(`chair-leg-${a}-${b}`,[x+a*.08,.12,z+b*.08],[.026,.24,.026],"#806b4c")
     box("chair-seat",[x,.25,z],[.22,.035,.22],"#9f875e")
     for(const side of [-1,1]) box(`chair-back-post-${side}`,[x+side*.085,.36,z-.085],[.028,.27,.028],"#806b4c")
@@ -14,6 +14,10 @@ export function entranceParts(type: string, wallHeight = .78): BuildingPart[] {
   } else if(type==="market" || type==="storehouse") {
     box("basket",[x,.10,z],[.20,.20,.22],"#967e58")
     for(let i=0;i<3;i++) box(`produce-${i}`,[x+(i-1)*.05,.215,z],[.055,.055,.09],type==="market" ? ["#98634f","#899157","#ac8657"][i] : "#b29a6e")
+  } else if(type==="sheep-pen") {
+    box("feed-basket",[x,.11,z],[.22,.22,.22],"#8c7250")
+    box("feed-hay",[x,.225,z],[.2,.05,.2],"#b7a367")
+    box("crook-staff",[x+.05,.36,z],[.026,.62,.026],"#7d6644")
   } else if(type==="workshop" || type==="wood-shelter") {
     box("wood-block",[x,.115,z],[.21,.23,.21],"#92744e")
     box("block-top",[x,.233,z],[.19,.012,.19],"#ad9165")
@@ -45,6 +49,9 @@ export function entranceParts(type: string, wallHeight = .78): BuildingPart[] {
   if(["shrine","hall","monk-shelter","enclosure"].includes(type)) {
     box("sign-cross-upright",[sx,.57,sz+.018],[.02,.14,.008],"#5d513c")
     box("sign-cross-arm",[sx,.595,sz+.018],[.105,.018,.008],"#5d513c")
+  } else if(type==="sheep-pen") {
+    box("sign-fleece",[sx,.57,sz+.018],[.11,.085,.008],"#7f7358")
+    box("sign-fleece-head",[sx+.055,.545,sz+.018],[.04,.04,.008],"#5d513c")
   } else if(type==="workshop" || type==="wood-shelter") {
     box("sign-axe-haft",[sx,.57,sz+.018],[.018,.13,.008],"#66523b")
     box("sign-axe-head",[sx+.025,.60,sz+.018],[.065,.045,.008],"#66523b")

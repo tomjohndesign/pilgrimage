@@ -28,7 +28,7 @@ export const VARIANTS = [
 
 export const recipeSchema = z.object({
   subject: z.string().trim().min(1).max(160),
-  variant: z.enum(["enclosure", "monk-shelter", "shepherd-hut", "storehouse", "wood-shelter", "tavern", "gable", "hipped", "porch"]),
+  variant: z.enum(["enclosure", "monk-shelter", "house", "storehouse", "wood-shelter", "tavern", "gable", "hipped", "porch"]),
   width: z.number().int().min(1).max(5),
   depth: z.number().int().min(1).max(5),
   wallHeight: z.number().min(0.25).max(1.4),
@@ -48,7 +48,7 @@ export const LEGACY_RECIPE: BuildingRecipe = {
 export const EARLY_BUILDINGS = [
   { id: "enclosure", name: "Relic enclosure", description: "Four open timber gates with plain crosses, low paling walls and a glowing relic on a rough stone table under the sky.", width: 3, depth: 3, wallHeight: 0.42, roofRise: 0 },
   { id: "monk-shelter", name: "Monks’ shelter", description: "An open-front thatched sleeping shelter with a rear-sloping awning, plain crosses, a stone chimney and fireplace, horizontal log windbreaks and straw bedrolls.", width: 3, depth: 2, wallHeight: 0.62, roofRise: singlePlaneRoofRise(2) },
-  { id: "shepherd-hut", name: "Shepherd’s hut", description: "A compact log-built hut with a low single-plane thatched roof, a deep arched brow over the low-eave doorway, and a stone chimney and fireplace.", width: 2, depth: 2, wallHeight: 0.70, roofRise: singlePlaneRoofRise(2) },
+  { id: "house", name: "House", description: "A compact log-built home with a low single-plane thatched roof, a deep arched brow over the low-eave doorway, a stone chimney and fireplace, and straw beds for its household.", width: 2, depth: 2, wallHeight: 0.70, roofRise: singlePlaneRoofRise(2) },
   { id: "tavern", name: "Tavern", description: "A broad timber-and-rubble alehouse with a back-to-back thatched roof, an arched entrance, stone hearth and chimney, wooden drinking tables, benches and an ale-cup sign.", width: 3, depth: 4, wallHeight: 0.78, roofRise: singlePlaneRoofRise(4) },
   { id: "storehouse", name: "Raised store", description: "An open-sided store on timber legs, with a plank entry ramp and sacks beneath a thatched roof held by two plain timber battens.", width: 1, depth: 1, wallHeight: 0.55, roofRise: singlePlaneRoofRise(1) },
   { id: "wood-shelter", name: "Wood shelter", description: "An open lean-to with a low thatched roof over split wood and spare poles.", width: 2, depth: 1, wallHeight: 0.62, roofRise: singlePlaneRoofRise(1) },

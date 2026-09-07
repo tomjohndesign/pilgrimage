@@ -16,7 +16,7 @@ export function buildingWeathering(width: number,depth: number,height: number,va
     }
     box(`moss-${patch}`,[side*(w-.10),.006,cz],[.13,.009,.10],patch%2 ? "#777b4c" : "#898359")
   }
-  if(["tavern","shepherd-hut","hall","monk-shelter"].includes(variant)) {
+  if(["tavern","house","hall","monk-shelter","sheep-pen"].includes(variant)) {
     // An uneven spray up one side, with a few reddish leaves rather than a green blanket.
     for(let leaf=0;leaf<15;leaf++) {
       const t=leaf/15,y=.06+t*Math.min(.75,height*.95),z=-d+.19+Math.sin(t*8)*.065+(random()-.5)*.08,x=-w+.045
@@ -25,7 +25,7 @@ export function buildingWeathering(width: number,depth: number,height: number,va
       parts[parts.length-1].cutawaySide=[-1,0]
     }
   }
-  if(["tavern","shepherd-hut","hall","market"].includes(variant) && width>=2 && depth>=2) {
+  if(["tavern","house","hall","market"].includes(variant) && width>=2 && depth>=2) {
     const x=w-.29,z=d-.35
     // Eight broad staves, a swollen middle and wooden hoops.
     const rings=[[.02,.115],[.08,.14],[.27,.14],[.34,.115]]

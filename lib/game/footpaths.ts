@@ -15,12 +15,93 @@ export const FOUNDING_ROAD_WEAR = .6
 
 interface Footpath { from: number; to: number; wear: number }
 interface ContactTrack extends TraveledRoad { low: number; high: number }
-export interface Footpaths { rerouted: Set<number>; obstacles?: readonly (TilePos & { radius: number })[]; paved?: boolean; founding: Map<number, number>; edges: Map<string, Footpath>; contacts: Map<string, ContactTrack>; revision: number; elapsed: number }
+/** Something a walker must go around: in the game, every standing tree. */
+export type FootpathObstacle = TilePos & { radius: number }
+/** Obstacles bucketed on a coarse world grid; see {@link indexObstacles}. */
+export interface ObstacleIndex { source: readonly FootpathObstacle[]; reach: number; cells: Map<number, FootpathObstacle[]> }
+/** One stretch of road's answer to "is there a way across here?"; see lib/game/walking-shortcuts. */
+export interface RoadCut { end: number | null; at: number; ground: number; buildings: number }
+export interface Footpaths { rerouted: Set<number>; obstacles?: readonly FootpathObstacle[]; obstacleIndex?: ObstacleIndex; paved?: boolean; founding: Map<number, number>; edges: Map<string, Footpath>; contacts: Map<string, ContactTrack>; cuts?: Map<number, RoadCut>; ground: number; revision: number; elapsed: number }
 export const createFootpaths = (map?: GameMap): Footpaths => ({
   rerouted: new Set(),
   founding: new Map(map?.tiles.flatMap((terrain, index) => isRoadTerrain(terrain) ? [[index, FOUNDING_ROAD_WEAR] as const] : []) ?? []),
-  edges: new Map(), contacts: new Map(), revision: 0, elapsed: 0,
+  edges: new Map(), contacts: new Map(), ground: 0, revision: 0, elapsed: 0,
 })
+
+/**
+ * Announce that the ground itself changed — something built, paved, cleared or
+ * felled — as opposed to the gradual wear that `revision` tracks.
+ *
+ * Route answers cached against the ground are dropped the moment this moves, so
+ * a path laid across the map takes effect on the walkers' next step rather than
+ * whenever a refresh happens to come round.
+ */
+export function markGroundChanged(paths: Footpaths): void {
+  paths.ground++
+}
+
+/** Edge of one obstacle bucket, in tiles. A few trees deep at forest density. */
+const OBSTACLE_CELL = 4
+/** Packs signed cell coordinates into one integer key; maps are far smaller. */
+const cellKey = (cx: number, cz: number) => (cx + 4096) * 8192 + (cz + 4096)
+
+/**
+ * Bucket obstacles by world position, and hand the result to
+ * {@link setFootpathObstacles}.
+ *
+ * The obstacle list is every standing tree — tens of thousands on a large map —
+ * and route costing tests short segments against it many times per simulation
+ * step. Scanning the whole list per segment made walking the road the most
+ * expensive thing in the game once traffic grew; buckets cut it to the handful
+ * that could possibly be in the way.
+ */
+export function indexObstacles(obstacles: readonly FootpathObstacle[]): ObstacleIndex {
+  const index: ObstacleIndex = { source: obstacles, reach: 0, cells: new Map() }
+  for (const obstacle of obstacles) {
+    index.reach = Math.max(index.reach, obstacle.radius)
+    const key = cellKey(Math.floor(obstacle.x / OBSTACLE_CELL), Math.floor(obstacle.z / OBSTACLE_CELL))
+    const cell = index.cells.get(key)
+    if (cell) cell.push(obstacle)
+    else index.cells.set(key, [obstacle])
+  }
+  return index
+}
+
+/** Publish a new obstacle list along with its index, so the two cannot drift. */
+export function setFootpathObstacles(paths: Footpaths, obstacles: readonly FootpathObstacle[]): void {
+  paths.obstacles = obstacles
+  paths.obstacleIndex = indexObstacles(obstacles)
+  markGroundChanged(paths)
+}
+
+/**
+ * Obstacles that could reach into the world-space box, collected into `into`.
+ *
+ * Over-inclusive by design — callers still do their own precise distance test.
+ * Falls back to the plain list whenever there is no index for it, so code and
+ * tests that assign `obstacles` directly stay correct, just slower.
+ */
+export function obstaclesNear(paths: Footpaths | undefined, minX: number, minZ: number, maxX: number, maxZ: number, slack: number, into: FootpathObstacle[]): FootpathObstacle[] {
+  into.length = 0
+  const obstacles = paths?.obstacles
+  if (!obstacles?.length) return into
+  const index = paths!.obstacleIndex
+  if (index?.source !== obstacles) {
+    for (const obstacle of obstacles) {
+      const pad = obstacle.radius + slack
+      if (obstacle.x >= minX - pad && obstacle.x <= maxX + pad && obstacle.z >= minZ - pad && obstacle.z <= maxZ + pad) into.push(obstacle)
+    }
+    return into
+  }
+  const pad = index.reach + slack
+  const fromX = Math.floor((minX - pad) / OBSTACLE_CELL), toX = Math.floor((maxX + pad) / OBSTACLE_CELL)
+  const fromZ = Math.floor((minZ - pad) / OBSTACLE_CELL), toZ = Math.floor((maxZ + pad) / OBSTACLE_CELL)
+  for (let cx = fromX; cx <= toX; cx++) for (let cz = fromZ; cz <= toZ; cz++) {
+    const cell = index.cells.get(cellKey(cx, cz))
+    if (cell) for (const obstacle of cell) into.push(obstacle)
+  }
+  return into
+}
 
 /** Compaction shared by original road tiles and their rendered shoulders. */
 function foundingCompaction(map: GameMap, index: number): number {

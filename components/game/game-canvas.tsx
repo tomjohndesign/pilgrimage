@@ -34,6 +34,7 @@ import { Buildings } from "./buildings"
 import { BuildInfluenceOverlay } from "./build-influence-overlay"
 import { CameraLight } from "./camera-light"
 import { CameraRig } from "./camera-rig"
+import { PersonPicking } from "./character-selection"
 import { DebugHandle } from "./debug-handle"
 import { Environment } from "./environment"
 import { Monks } from "./monks"
@@ -41,6 +42,7 @@ import { OutlinePass } from "./outline-pass"
 import { RenownSaturation } from "./renown-saturation"
 import { vendorSpeedScale } from "@/lib/game/transport/assets"
 import { Shrine } from "./shrine"
+import { Signpost } from "./signpost"
 import type { RoadLook } from "@/lib/game/map/road"
 import { WalkingTerrain } from "./walking-terrain"
 import { TileCursor } from "./tile-cursor"
@@ -160,6 +162,7 @@ export function GameCanvas({
         <Wildlife map={map} trees={trees} characterScale={characterScale} />
         <Buildings map={map} characterScale={characterScale} />
         <Shrine map={map} relic={relic} />
+        <Signpost map={map} />
         <PixelCharacters>
           <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
         </PixelCharacters>
@@ -170,6 +173,7 @@ export function GameCanvas({
       <BuildInfluenceOverlay map={map} buildMode={!!buildType} />
 
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
+      <PersonPicking />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
       <DebugHandle characterScale={characterScale} map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} movement={movement} />
     </PixelCanvas>

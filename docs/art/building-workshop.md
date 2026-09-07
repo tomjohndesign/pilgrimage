@@ -12,7 +12,7 @@ The construction baseline is informed by [West Stow’s reconstructed Anglo-Saxo
 | --- | --- | --- |
 | Relic enclosure | 3×3 | Roofless; low rough timber walls, four open gates, rough flagstones, stone table, loose planks and scattered belongings |
 | Monks’ shelter | 3×2 | Open front, thatched gable, woven windbreaks, straw beds and rolled blankets |
-| Shepherd’s hut | 2×2 | Low earthen and wattle walls, plank door, steep thatched roof, bedding |
+| House | 2×2 | Low earthen and wattle walls, open doorway, steep thatched roof, a hearth and two straw beds |
 | Raised store | 1×1 | Open timber posts, raised plank floor and entry ramp, grain sack, small thatched gable |
 | Wood shelter | 2×1 | Open lean-to, woven windbreaks, stacked firewood |
 
@@ -22,7 +22,9 @@ Every width and depth is an integer from **1 to 5 tiles**. Dimensions describe t
 
 The live starting shrine uses a **3×5 footprint**, one entrance facing the founding track, four kneelers beside a central aisle, and a stone altar towards the rear. Its rough stone lower courses rise to the window sills, with uneven plaster above and arched openings in the raised timber section. Two lower thatched slopes meet the raised central roof, with a front cross and a larger rear cross on a small steeple. Candle stands flank the rear altar. Selecting any building removes the roof and near walls while retaining the walls opposite the camera. The relic, visitor headings and monks’ procession pickup share the same altar position; all shrine traffic crosses the single entrance. The approach to this door and its connection to the founding monk shelter are paved. Visitors reserve separate kneelers, enter by the aisle, kneel facing the altar, and retrace their route when leaving. The workshop’s roofless enclosure remains a separate study.
 
-Live settlement buildings share geometry with construction previews and menu thumbnails. The woodcutter’s hut has a plain plank lean-to, floor straw beds, lumber, axes, chisels, a long saw, a hand-cranked sharpening stone, offcuts and sawdust. The pilgrim shelter has bedding, hanging clothes, a table, a chest and a corner hearth. `BuildingSmoke` is a reusable pixel-scale sprite emitter placed at the chimney mouth; the fire remains visible in cutaway. Storehouses have open sides and an entry ramp; their food and timber still reflect live inventories.
+The **sheep pen** is a settlement type rather than a playground preset: half a house — one tile of log walls with an open doorway, a lintel and a hearth — beside an open railed fold with a water trough and spare hurdles. The fold carries no roof and none of the woodcutter’s timber bays or firewood. Its reserved approach is the hut door; the fold’s gate stands open beside it. The flock itself is still to come.
+
+Live settlement buildings share geometry with construction previews and menu thumbnails. The woodcutter’s hut has a plain plank lean-to, floor straw beds, lumber, axes, chisels, a long saw, a hand-cranked sharpening stone, offcuts and sawdust. Bench seats — the tavern’s tables, the hall bench, the pilgrim shelter’s bench and the guard post’s watch seat — carry a `sitting` contact, so a character standing on one is drawn seated on the artwork, exactly as bedding carries `sleeping`. The pilgrim shelter has bedding, hanging clothes, a table, a chest and a corner hearth. `BuildingSmoke` is a reusable pixel-scale sprite emitter placed at the chimney mouth; the fire remains visible in cutaway. Storehouses have open sides and an entry ramp; their food and timber still reflect live inventories.
 
 ## Recipes and inspection
 

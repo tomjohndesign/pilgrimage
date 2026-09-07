@@ -36,7 +36,7 @@ import {
   type TerrainId,
 } from "@/lib/game/map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
-import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
+import { OUTLINE_ID_LAYER_MASK, ROAD_EDGE_LAYER_MASK } from "@/lib/game/render/outline"
 import { diagonalRoadSegments, roadSegmentWear, type RoadSegment } from "@/lib/game/render/road-segments"
 import { ROAD_SHAPE_GLSL } from "@/lib/game/render/road-shape"
 import { DEFAULT_TRAFFIC } from "@/lib/game/travelers"
@@ -142,6 +142,12 @@ interface TileMaterialOptions {
    */
   gridOrigin?: { x: number; z: number }
   road?: RoadSurface
+  /**
+   * Draw nothing but the road's edge line, as coverage in the red channel.
+   * The outline pass renders this over the terrain's own depth, then traces
+   * the line back faintly wherever a tree stands in front of it.
+   */
+  edgeOnly?: boolean
 }
 
 /**
@@ -204,6 +210,7 @@ function makeTileMaterial({
   cliffTexture,
   gridOrigin,
   road,
+  edgeOnly = false,
 }: TileMaterialOptions): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial()
   material.onBeforeCompile = (shader) => {
@@ -421,6 +428,7 @@ function makeTileMaterial({
             float px = max(fwidth(d), 0.00001);
             float halfLine = 0.5 * roadEdgeWidth * roadPixelRatio * px;
             float line = (1.0 - smoothstep(halfLine - 0.5 * px, halfLine + 0.5 * px, abs(d - edge))) * roadEdgeLine * (1.0 - shore);
+            ${edgeOnly ? "diffuseColor.a = line * roadOpacity * segmentOpacity * vGridTop;" : ""}
 
             vec3 top = mix(landTop, road, cover) * (1.0 - 0.75 * line * roadOpacity * segmentOpacity);
             // Layer broad earth stains with pixel-sized grit on building plots and aprons.
@@ -459,15 +467,29 @@ function makeTileMaterial({
           #endif
         }`,
       )
+    // Nothing but the line: no lighting, no surface, no colour conversion —
+    // just its coverage, for the outline pass to lay over the trees.
+    if (edgeOnly) {
+      shader.fragmentShader = shader.fragmentShader
+        .replace("#include <opaque_fragment>", "gl_FragColor = vec4(diffuseColor.a, 0.0, 0.0, 1.0);")
+    }
   }
   material.defines = {
     ...(road ? { USE_ROAD_MAP: "" } : {}),
     ...(gridOrigin ? { USE_GRID: "" } : {}),
   }
+  if (edgeOnly) {
+    material.toneMapped = false
+    // The line sits on the same tile tops the terrain's depth copy draws, so
+    // pull it a touch forward; a hill in front is still far nearer and wins.
+    material.polygonOffset = true
+    material.polygonOffsetFactor = -1
+    material.polygonOffsetUnits = -1
+  }
   // The grid origin is baked into the shader source, so it has to be part of
   // the program key or two maps of different sizes would share one program.
   const gridKey = gridOrigin ? `${gridOrigin.x.toFixed(3)}:${gridOrigin.z.toFixed(3)}` : "nogrid"
-  material.customProgramCacheKey = () => `tiles-${road ? "road" : "ground"}-${gridKey}-dirt-floors`
+  material.customProgramCacheKey = () => `tiles-${road ? "road" : "ground"}-${gridKey}-dirt-floors${edgeOnly ? "-edge" : ""}`
   return material
 }
 
@@ -649,6 +671,7 @@ export function TerrainTiles({
 }) {
   const groundMeshRef = useRef<THREE.InstancedMesh>(null)
   const roadMeshRef = useRef<THREE.InstancedMesh>(null)
+  const edgeMeshRef = useRef<THREE.InstancedMesh>(null)
   const idMeshRef = useRef<THREE.InstancedMesh>(null)
   const count = map.width * map.depth
 
@@ -767,6 +790,19 @@ export function TerrainTiles({
     [grass, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentData, floorTexture],
   )
   useEffect(() => () => roadMaterial.dispose(), [roadMaterial])
+  // The same road surface reduced to its edge line, for the outline pass.
+  const edgeMaterial = useMemo(
+    () =>
+      makeTileMaterial({
+        grassTexture: grass,
+        cliffTexture: dirt,
+        gridOrigin,
+        road: { texture: roadTexture, edgeWear: tier.edgeWear, look: lookUniforms, segments: segmentData.texture, floors: floorTexture, trail: trailTexture, isDirt: tier.tier === 0 },
+        edgeOnly: true,
+      }),
+    [grass, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentData, floorTexture],
+  )
+  useEffect(() => () => edgeMaterial.dispose(), [edgeMaterial])
 
   const floor = useMemo(() => (map.elevation?.height.reduce((a, b) => Math.min(a, b), SLAB_TOP) ?? SLAB_TOP) - 0.02, [map.elevation])
   const idGeometry = useMemo(() => makeTileGeometry(count), [count])
@@ -786,8 +822,9 @@ export function TerrainTiles({
   useLayoutEffect(() => {
     const groundMesh = groundMeshRef.current
     const roadMesh = roadMeshRef.current
+    const edgeMesh = edgeMeshRef.current
     const idMesh = idMeshRef.current
-    if (!groundMesh || !roadMesh || !idMesh) {
+    if (!groundMesh || !roadMesh || !edgeMesh || !idMesh) {
       return
     }
 
@@ -912,6 +949,9 @@ export function TerrainTiles({
             target.corners.setXYZW(i, corners[0], corners[1], corners[2], corners[3])
             target.mesh.setMatrixAt(i, matrix)
             target.mesh.setColorAt(i, color)
+            // The edge copy shares the road geometry and its instance data;
+            // only the transform lives on the mesh.
+            edgeMesh.setMatrixAt(i, matrix)
             target.overlay.setXYZW(i, tint.r, tint.g, tint.b, shoulderOnly ? TERRAIN.path.shadeBlend : def.shadeBlend)
             // -1 is a diagonal entrance, 0 an ordinary entrance, 1 open land.
             target.open.setXYZW(i, edge.open[0] - edge.diagonal[0], edge.open[1] - edge.diagonal[1],
@@ -976,9 +1016,11 @@ export function TerrainTiles({
       target.shorePaint.needsUpdate = true
     }
     attr(idGeometry, "aCorners").needsUpdate = true
+    edgeMesh.instanceMatrix.needsUpdate = true
     idMesh.instanceMatrix.needsUpdate = true
     // Recompute bounds after map edits for correct culling and picking.
     for (const target of [...roadTargets, ...groundTargets]) target.mesh.computeBoundingSphere()
+    edgeMesh.computeBoundingSphere()
     idMesh.computeBoundingSphere()
   }, [
     map,
@@ -1039,6 +1081,24 @@ export function TerrainTiles({
       </instancedMesh>
 
       {/*
+        The road's edge line alone (see ROAD_EDGE_LAYER). It shares the road
+        geometry, so the ragged line lands exactly where the visible one does;
+        the terrain's ID copy below joins this pass to supply the depth, so a
+        hill hides the verge behind it just as it does on screen.
+      */}
+      <instancedMesh
+        key={`edge-${tier.id}`}
+        visible={roadCount > 0}
+        frustumCulled={false}
+        ref={edgeMeshRef}
+        args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, roadCount]}
+        layers-mask={ROAD_EDGE_LAYER_MASK}
+      >
+        <primitive object={roadGeometry} attach="geometry" />
+        <primitive object={edgeMaterial} attach="material" />
+      </instancedMesh>
+
+      {/*
         Terrain in the outline pass: ID 0 (black), depth only. It takes no
         outline itself, but its depth stops hidden object seams — say two
         buildings overlapping *behind* a hill — from drawing lines through it.
@@ -1051,7 +1111,7 @@ export function TerrainTiles({
         frustumCulled={false}
         ref={idMeshRef}
         args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, count]}
-        layers-mask={OUTLINE_ID_LAYER_MASK}
+        layers-mask={OUTLINE_ID_LAYER_MASK | ROAD_EDGE_LAYER_MASK}
       >
         <primitive object={idGeometry} attach="geometry" />
         <primitive object={idMaterial} attach="material" />
