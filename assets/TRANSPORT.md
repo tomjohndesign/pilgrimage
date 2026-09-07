@@ -62,12 +62,13 @@ carpus/hock and fetlock chains. Supporting forelegs straighten below the elbow;
 swinging hooves fold and open before landing. Planted hoof displacement determines travel
 speed, independent of frame rate and scale. Human walking geometry is unchanged.
 
-## Current sheets: v18
+## Current sheets: v19
 
-`public/textures/transport/v18/manifest.json` records all dimensions, anchors,
+`public/textures/transport/v19/manifest.json` records all dimensions, anchors,
 clips, timing, profiles, coats and variants. Every frame has binary alpha and at
 least four transparent pixels around its silhouette. Larger cells add padding
-at the same native pixel density as people.
+at the same native pixel density as people. Each color sheet has a matching
+`depth-` sheet using the shared per-pose geometry-depth encoding.
 
 - `cart-{cargo}-{hand|donkey|horse}.png`: 24 wheel frames × sixteen directions,
   160px cells. One complete revolution, advanced by actual traveled distance.

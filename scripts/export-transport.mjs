@@ -1,5 +1,6 @@
 import { chromium } from "playwright"
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import { freezeAssetUpdates } from "./asset-browser.mjs"
 
 const args = process.argv.slice(2), index = args.indexOf("--url")
 const origin = index < 0 ? "http://localhost:3000" : args[index + 1]
@@ -10,7 +11,9 @@ const knights = args.includes("--knights")
 const browser = await chromium.launch({ headless: true, args: ["--use-angle=metal"] })
 try {
   const page = await browser.newPage()
-  await page.goto(new URL("/assets/characters?asset=cart&bake=transport", origin).href)
+  await freezeAssetUpdates(page)
+  // Avoid previewing assets that are being exported for the first time.
+  await page.goto(new URL("/assets/characters", origin).href, { waitUntil: "domcontentloaded", timeout: 120_000 })
   await page.waitForFunction(knights => knights ? window.__knightBake : window.__transportBake, knights, { timeout: 120_000 })
   const bake = await page.evaluate(knights => knights ? window.__knightBake() : window.__transportBake(), knights)
   const directory = output ?? `public/textures/${knights ? "knights" : "transport"}/${bake.metadata.version}`

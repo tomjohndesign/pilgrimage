@@ -22,6 +22,13 @@ function fixture(direction: 1 | -1) {
 }
 
 describe("mounted knight journeys", () => {
+  it("keeps the mount with its rider throughout roadside music visits", () => {
+    for (const activity of ["toListen", "listening", "fromListening"]) {
+      expect(knightMounted(activity)).toBe(true)
+      expect(knightMounted(activity, { x: 0, y: 0, z: 0, heading: 0 })).toBe(false)
+    }
+  })
+
   it.each([1, -1] as const)("dismounts outside, prays on foot and returns to the same horse (direction %i)", direction => {
     const { map, t, sim, s } = fixture(direction)
     for (let i = 0; i < 3000 && !s.horseRest; i++) stepSim(sim, [t], map, DEFAULT_WALK_SPEED, 0.1)

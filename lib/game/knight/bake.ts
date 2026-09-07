@@ -6,18 +6,24 @@ import { createBasePersonRig } from "../base-person/rig"
 import { createAnimalRig } from "../transport/animal-rig"
 import { COATS } from "../transport/coats"
 import { TRANSPORT, ANIMAL_RIG_VERSION, animalProfile } from "../transport/assets"
+import { spriteDepthBaker, SPRITE_DEPTH_ENCODING } from "../render/bake-depth"
 import { KNIGHT, knightDesign, squireDesign } from "./design"
 import { createRidingTack, equipKnight, seatKnight } from "./rig"
 import { equipSquire, SQUIRE_PALETTE } from "./squire-rig"
 
 function sheet(width: number, height: number) {
   const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height
-  return { canvas, ctx: canvas.getContext("2d", { willReadFrequently: true })! }
+  const depth = document.createElement("canvas"); depth.width = width; depth.height = height
+  return { canvas, ctx: canvas.getContext("2d", { willReadFrequently: true })!, depth, depthCtx: depth.getContext("2d")! }
 }
 
 /** A separate immutable outfit family; the shared template and published packs stay intact. */
 export async function bakeKnights() {
   const images: Record<string, string> = {}, designs = Array.from({ length: KNIGHT.variants }, (_, i) => knightDesign(i))
+  const save = (name: string, target: ReturnType<typeof sheet>) => {
+    images[name] = target.canvas.toDataURL()
+    images[`depth-${name}`] = target.depth.toDataURL()
+  }
   let safePadding: number = KNIGHT.cellSize
   const clips = Object.keys(PERSON_CLIPS) as BaseClip[]
   for (const clip of clips) {
@@ -30,10 +36,11 @@ export async function bakeKnights() {
         for (let row = 0; row < 8; row++) for (let f = 0; f < frames; f++) {
           const rendered = session.render(clip, f / frames, row, false, rig => { gear ??= equipKnight(rig, variant) })
           target.ctx.drawImage(rendered.canvas, f * size, (variant * 8 + row) * size)
+          target.depthCtx.drawImage(rendered.depth!, f * size, (variant * 8 + row) * size)
         }
       } finally { gear?.dispose(); session.dispose() }
     }
-    images[`knight-${clip}`] = target.canvas.toDataURL()
+    save(`knight-${clip}`, target)
   }
   for (const clip of ["walk", "idle"] as const) {
     const session = personFrameRenderer(squireDesign(), SQUIRE_PALETTE)
@@ -43,12 +50,14 @@ export async function bakeKnights() {
       for (let row = 0; row < 8; row++) for (let f = 0; f < frames; f++) {
         const rendered = session.render(clip, f / frames, row, false, rig => { gear ??= equipSquire(rig); gear.pose() })
         target.ctx.drawImage(rendered.canvas, f * size, row * size)
+        target.depthCtx.drawImage(rendered.depth!, f * size, row * size)
       }
-      images[`squire-${clip}`] = target.canvas.toDataURL()
+      save(`squire-${clip}`, target)
     } finally { gear?.dispose(); session.dispose() }
   }
   const size = KNIGHT.cellSize, extent = TRANSPORT.viewSize
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, preserveDrawingBuffer: true })
+  const depthBaker = spriteDepthBaker(renderer)
   renderer.localClippingEnabled = true
   renderer.setSize(size, size, false); renderer.setPixelRatio(1); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.setClearColor(0, 0)
   const scene = new THREE.Scene(); scene.add(new THREE.AmbientLight(0xffffff, 1.1))
@@ -88,13 +97,14 @@ export async function bakeKnights() {
             safePadding = Math.min(safePadding, x, y, size - 1 - x, size - 1 - y)
           }
           frame.ctx.putImageData(data, 0, 0); target.ctx.drawImage(frame.canvas, f * size, (variant * 8 + row) * size)
+          target.depthCtx.drawImage(depthBaker.render(scene, camera, size, extent, data.data, data.data), f * size, (variant * 8 + row) * size)
         }
         scene.remove(horse.root); gear.dispose(); rider.dispose(); tack.dispose(); horse.dispose()
       }
-      images[`${mounted ? "mounted" : "saddled"}-${coat.id}`] = target.canvas.toDataURL()
+      save(`${mounted ? "mounted" : "saddled"}-${coat.id}`, target)
     }
     if (safePadding < 4) throw new Error(`Knight mount exceeds safe frame: ${safePadding}px`)
-    return { images, metadata: { ...KNIGHT, templateVersion: BASE_PERSON.version, safePadding, designs,
+    return { images, metadata: { ...KNIGHT, depthEncoding: SPRITE_DEPTH_ENCODING, templateVersion: BASE_PERSON.version, safePadding, designs,
       animalRigVersion: ANIMAL_RIG_VERSION, horseProfile: animalProfile("horse", "noble"),
       camera: { ...BASE_PERSON.camera, viewSize: extent }, scale: TRANSPORT.scale,
       person: { cellSize: BASE_PERSON.cellSize, anchor: BASE_PERSON.anchor, rows: designs.length * 8, frameCounts: Object.fromEntries(clips.map(clip => [clip, PERSON_CLIPS[clip].frames])) },
@@ -103,5 +113,5 @@ export async function bakeKnights() {
         equipment: "wooden kite shield with painted leather face, rolled wool cloak and leather supply satchel" },
       equipment: "c.1066 mail hauberk and open coif, conical nasal helmet, leather belt and sheathed sword; wooden saddle, short bordered wool saddlecloth, leather tack and iron stirrups",
       reference: "https://www.bayeuxmuseum.com/en/the-bayeux-tapestry/discover-the-bayeux-tapestry/what-is-the-bayeux-tapestry-about/" } }
-  } finally { renderer.dispose() }
+  } finally { depthBaker.dispose(); renderer.dispose() }
 }

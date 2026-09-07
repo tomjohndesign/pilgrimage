@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "d3fc878a7b5a9b0d2ed15fa6e8ec12605512aa96",
-  "releaseCount": 67,
+  "lastProcessedCommit": "b80af2f1cd3174999aa00d72948b7be0a84eb88c",
+  "releaseCount": 69,
   "releases": [
+    {
+      "version": "0.0.83",
+      "title": "Release 0.0.83",
+      "summary": "Fix character and scenery overlaps with per-pose sprite depth (#102)",
+      "commit": "b80af2f1cd3174999aa00d72948b7be0a84eb88c"
+    },
+    {
+      "version": "0.0.82",
+      "title": "Release 0.0.82",
+      "summary": "Keep merchant stalls open all day and add roadside minstrel performances (#101)",
+      "commit": "197064bbba95c051e426d22b3e17c8fcb18a572d"
+    },
     {
       "version": "0.0.81",
       "title": "Release 0.0.81",

@@ -54,6 +54,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
   function bedding(x: number,z: number,index: number, length: number) {
     box(`straw-bed-${index}`,"base",[x,floor+.035,z],[.32,.07,length],palette.strawDark,undefined,false)
     box(`wool-cover-${index}`,"base",[x,floor+.08,z+.06],[.28,.035,length*.65],index%2?"#817864":"#716e57",undefined,false)
+    parts[parts.length - 1].support = { clips: ["sleeping"], anchorOffset: [0, -.06], heading: 0 }
     box(`rolled-blanket-${index}`,"base",[x,floor+.1,z-length*.32],[.3,.11,.12],"#a3987a",undefined,false)
   }
   function bench(name: string, x: number, z: number, length: number, top = .3) {

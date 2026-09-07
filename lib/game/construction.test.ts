@@ -11,6 +11,7 @@ import { settlementRoute } from "./settlement-route"
 import { makeRng } from "./rng"
 import { woodcutterHuts } from "./settlement"
 import { rotatedFootprint, rotateBuildingPoint, type BuildingRotation } from "./building-rotation"
+import { characterSupport } from "./character-support"
 
 function fixture(): GameMap {
   return { width: 18, depth: 18, tiles: Array(324).fill("grass"),
@@ -218,8 +219,10 @@ describe("monk fatigue and rest", () => {
       if (!stepMonkWork(monk, map, 1, 0.1)) stepMonkRoutine(monk, grounds, rng, 1, 0.1)
       if (monk.activity === "sleeping") {
         slept = true
-        expect(monk.x).toBe(tileToWorldX(map, 7))
-        expect(monk.z).toBeCloseTo(tileToWorldZ(map, 4) + 0.5 - 0.16)
+        const bed = characterSupport(map, monk.x, monk.z, "sleeping")
+        expect(bed).toBeDefined()
+        expect(monk.x).toBeCloseTo(bed!.anchor.x)
+        expect(monk.z).toBeCloseTo(bed!.anchor.z)
       }
       if (slept && monk.stamina >= MONK_WAKE_AT) woke = true
       if (woke && monk.activity === "building") built = true
