@@ -144,9 +144,10 @@ export function hospitalityNeedThreshold(shrineRenown: number, balance: GameBala
  * The chance, 0–1, that this traveler turns down the branch when they reach
  * the junction. Early visitors are exceptionally pious or desperate for food
  * or water. Renown broadens those motives, but never creates a motive by itself.
- * The sim rolls it (see sim.ts); the HUD's forecast rounds it.
+ * Evangelism gives those who decline one independent second chance. The sim
+ * rolls each decision separately (see sim.ts); the HUD rounds their combined chance.
  */
-export function visitChance(who: TravelerAttributes, stats: RelicStats, shrineRenown = 0, balance: GameBalance = DEFAULT_BALANCE): number {
+export function visitChance(who: TravelerAttributes, stats: RelicStats, shrineRenown = 0, balance: GameBalance = DEFAULT_BALANCE, evangelism = 0): number {
   const draw = relicDraw(who, stats, shrineRenown, balance)
   const r = balance.rules
   const reputation = reputationModifier(shrineRenown, balance)
@@ -158,7 +159,8 @@ export function visitChance(who: TravelerAttributes, stats: RelicStats, shrineRe
   const threshold = hospitalityNeedThreshold(shrineRenown, balance)
   const hospitalityReach = Math.min(1, r.hospitalityBaseChance + r.hospitalityRenownBonus * reputation)
   const hospitality = Math.max(0, Math.min(1, (threshold - need) / threshold)) * hospitalityReach
-  return Math.max(devotion, hospitality)
+  const ordinary = Math.max(devotion, hospitality)
+  return ordinary + (1 - ordinary) * Math.max(0, Math.min(1, evangelism))
 }
 
 /** Would this traveler, more likely than not, leave the road for the relic? */

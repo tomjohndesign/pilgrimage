@@ -29,6 +29,17 @@ describe("relic draw", () => {
   const holy = { sanctity: 95, spectacle: 40, doubt: 15 }
   const dubious = { sanctity: 30, spectacle: 95, doubt: 90 }
 
+  it("forecasts an independent evangelism roll only for travelers who would decline", () => {
+    const traveler = { ...who(0, 100), hunger: 100, thirst: 100 }
+    const obscure = { sanctity: 0, spectacle: 0, doubt: 100 }
+    expect(visitChance(traveler, obscure, 0, DEFAULT_BALANCE, 0.05)).toBeCloseTo(0.05)
+    const balance = structuredClone(DEFAULT_BALANCE)
+    for (const [ordinary, expected] of [[0.2, 0.24], [0.5, 0.525], [1, 1]]) {
+      balance.rules.hospitalityBaseChance = ordinary
+      expect(visitChance({ ...traveler, hunger: 0 }, obscure, 0, balance, 0.05)).toBeCloseTo(expected)
+    }
+  })
+
   it.each(["hunger", "thirst"] as const)("requires a reputation for reliable hospitality when %s is empty", (need) => {
     const traveler = { ...who(0, 100), hunger: 100, thirst: 100, stamina: 100, [need]: 0 }
     const obscure = { sanctity: 0, spectacle: 0, doubt: 100 }

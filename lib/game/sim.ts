@@ -14,7 +14,7 @@ import { cartOffset, SHOP_SECONDS, cartLoadout } from "./transport/assets"
 import { createPasture, stepPasture, type PastureAnimal } from "./transport/pasture"
 import { LINEAR_MOVEMENT, easeSpeed, paceVariation, type MovementTuning } from "./motion"
 import { DEFAULT_BALANCE, type GameBalance } from "./balance"
-import { buildingAt } from "./settlement"
+import { buildingAt, settlementEvangelism } from "./settlement"
 import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
 import { BUILDING_KINDS, buildingCentre, type PlacedBuilding } from "./buildings"
 import { generateRelic, hospitalityNeedThreshold, visitChance, type RelicStats } from "./relic"
@@ -45,7 +45,7 @@ import type { Traveler } from "./travelers"
  *
  * The loop per traveler:
  *  - Walking wears them down: stamina, hunger, and thirst all fall.
- *  - At the shrine junction, faith, hospitality and available work draw visitors
+ *  - At the shrine junction, faith, hospitality and evangelism draw visitors
  *    down the branch. The brothers restore their needs and bestow piety before
  *    they return to the road; each visit spreads the shrine's renown.
  *  - Jobless visitors may settle into a woodcutter hut slot, walk to a reserved
@@ -1107,7 +1107,10 @@ export function stepSim(
             const chance = visitChance({ ...t.attributes, piety: s.piety,
               hunger: s.hunger, thirst: s.thirst, stamina: s.stamina }, sim.relic, renown, sim.balance)
             s.visitCooldown = 5
-            const wantsVisit = nextRoll(s) < chance && s.gold >= admissionFee(map)
+            const ordinaryVisit = nextRoll(s) < chance
+            const evangelism = ordinaryVisit ? 0 : settlementEvangelism(map)
+            const persuaded = evangelism > 0 && nextRoll(s) < evangelism
+            const wantsVisit = (ordinaryVisit || persuaded) && s.gold >= admissionFee(map)
             const occupiedSeats = new Set([...sim.travelers.values()].flatMap(other =>
               other.shrineSeat && ["toRelic","visiting","fromRelic"].includes(other.activity) ? [other.shrineSeat] : []))
             const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats) : null
