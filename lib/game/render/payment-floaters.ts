@@ -3,9 +3,9 @@ import { CHARACTER_PIXEL_SIZE } from "./pixel-scale"
 import { paymentLabel } from "./payment-label"
 
 export const PAYMENT_LIFETIME = 2
-export interface FloatingPayment { x: number; y: number; z: number; amount: number; resource?: "gold" | "wood"; row?: number }
+export interface FloatingPayment { x: number; y: number; z: number; amount: number; resource?: "gold" | "wood" | "cross"; row?: number }
 
-/** Shared sprite pool, rise and fade for income receipts and construction costs. */
+/** Shared sprite pool, rise and fade for income, piety gains and construction costs. */
 export function createPaymentFloaters(root: THREE.Group, name: string, size = 32) {
   const floaters = Array.from({ length: size }, () => {
     const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false, depthWrite: false, toneMapped: false }))

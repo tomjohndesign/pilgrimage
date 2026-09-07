@@ -28,7 +28,7 @@ import { CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
-import { MONK_ACTIVITY_LABELS, monkStaminaRegistry, monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
+import { MONK_ACTIVITY_LABELS, monkStaminaRegistry, monkRegistry, monkPositionRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { relicTitle, type Relic } from "@/lib/game/relic"
 import { DEFAULT_TRAFFIC, type Traveler } from "@/lib/game/travelers"
 import type { PixelationProps } from "@/components/pixel-canvas"
@@ -502,23 +502,23 @@ function ConstructionStatus({ building }: { building: BuildingDef }) {
   </div>
 }
 
-/** The scene writes monk activities at frame rate; sample on the HUD's own schedule. */
-function useMonkActivity(monkId: number): MonkActivity | null {
-  const [activity, setActivity] = useState<MonkActivity | null>(null)
+/** Sample the brothers' live activity and piety on the HUD's own schedule. */
+function useMonkLiveState(monkId: number) {
+  const [live, setLive] = useState<{ activity: MonkActivity | null; piety?: number }>({ activity: null })
   useEffect(() => {
-    const read = () => setActivity(monkRegistry.current?.get(monkId) ?? null)
+    const read = () => setLive({ activity: monkRegistry.current?.get(monkId) ?? null, piety: monkPositionRegistry.current?.get(monkId)?.piety })
     read()
     const timer = setInterval(read, 250)
     return () => clearInterval(timer)
   }, [monkId])
-  return activity
+  return live
 }
 
 /** One of the brothers: name, office, and what he brought with him. */
 function MonkPanel({ monk }: { monk: Monk }) {
   const balance = useBalanceStore((s) => s.balance)
   const a = monk.attributes
-  const activity = useMonkActivity(monk.id)
+  const { activity, piety } = useMonkLiveState(monk.id)
   const [stamina, setStamina] = useState(100)
   useEffect(() => {
     const read = () => setStamina(monkStaminaRegistry.current?.get(monk.id) ?? 100)
@@ -552,7 +552,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
       </div>
 
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
-        <StatBar label="Piety" value={a.piety} />
+        <StatBar label="Piety" value={piety ?? a.piety} />
         <StatBar label="Stamina" value={stamina} />
         <div className="mt-1 text-[11px] text-ink-light">Contributes +{individualRenown(monk, balance)} shrine renown</div>
       </div>
@@ -563,7 +563,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
           onClick={() => carryingRelic ? procession.returnRelic() : procession.request(monk.id)}>
           {carryingRelic ? "Return relic" : "Carry relic in procession"}
         </button>
-        <p className="mt-1 text-[11px] italic text-ink-light">Nearby folk kneel and pray. The relic returns to its table after the procession.</p>
+        <p className="mt-1 text-[11px] italic text-ink-light">The procession follows the path to the main road. Nearby folk gain up to 5 piety once per procession, marked by a cross.</p>
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">

@@ -6,28 +6,42 @@ import * as THREE from "three"
 import { createAdmissionAudio } from "@/lib/game/admission-audio"
 import { createPaymentFloaters } from "@/lib/game/render/payment-floaters"
 import { useSimulationStore } from "@/lib/game/simulation-store"
+import type { RelicProcession } from "@/lib/game/relic-procession"
 import type { SimState } from "@/lib/game/sim"
 
-/** A receipt appears at its payer, rises and fades; historical receipts stay silent. */
 export function AdmissionEffects({ sim, characterScale }: { sim: SimState; characterScale: number }) {
+  return <FloatingEffects source={sim} characterScale={characterScale} />
+}
+
+export function PietyEffects({ procession, characterScale }: { procession: RelicProcession; characterScale: number }) {
+  return <FloatingEffects source={procession} characterScale={characterScale} />
+}
+
+/** Stat gains share the same pixel lettering, rise and fade; only payments chime. */
+function FloatingEffects({ source, characterScale }: { source: SimState | RelicProcession; characterScale: number }) {
+  const piety = "blessings" in source
   const group = useRef<THREE.Group>(null)
-  const state = useRef<{ seen: number; floaters: ReturnType<typeof createPaymentFloaters>; audio: ReturnType<typeof createAdmissionAudio> } | null>(null)
+  const state = useRef<{ seen: number; floaters: ReturnType<typeof createPaymentFloaters>; audio: ReturnType<typeof createAdmissionAudio> | null } | null>(null)
 
   useEffect(() => {
     const root = group.current!
-    const audio = createAdmissionAudio()
-    const floaters = createPaymentFloaters(root, "admission-payment")
-    state.current = { seen: sim.admissionSequence, floaters, audio }
-    window.addEventListener("pointerdown", audio.unlock)
-    window.addEventListener("keydown", audio.unlock)
+    const audio = piety ? null : createAdmissionAudio()
+    const floaters = createPaymentFloaters(root, piety ? "piety-gain" : "admission-payment")
+    state.current = { seen: "blessings" in source ? source.blessingSequence : source.admissionSequence, floaters, audio }
+    if (audio) {
+      window.addEventListener("pointerdown", audio.unlock)
+      window.addEventListener("keydown", audio.unlock)
+    }
     return () => {
-      window.removeEventListener("pointerdown", audio.unlock)
-      window.removeEventListener("keydown", audio.unlock)
-      audio.dispose()
+      if (audio) {
+        window.removeEventListener("pointerdown", audio.unlock)
+        window.removeEventListener("keydown", audio.unlock)
+        audio.dispose()
+      }
       floaters.dispose()
       state.current = null
     }
-  }, [sim])
+  }, [source, piety])
 
   useFrame((_, delta) => {
     const live = state.current
@@ -35,13 +49,13 @@ export function AdmissionEffects({ sim, characterScale }: { sim: SimState; chara
     const playback = useSimulationStore.getState()
     const dt = playback.paused ? 0 : Math.min(delta, 0.1) * playback.speed
     live.floaters.step(dt)
-    for (const payment of sim.admissionPayments) {
+    for (const payment of ("blessings" in source ? source.blessings : source.admissionPayments)) {
       if (payment.id <= live.seen) continue
       live.seen = payment.id
-      live.floaters.show(payment, characterScale)
-      live.audio.play()
+      live.floaters.show(piety ? { ...payment, resource: "cross" } : payment, characterScale)
+      live.audio?.play()
     }
   }, -2)
 
-  return <group ref={group} name="admission-effects" />
+  return <group ref={group} name={piety ? "piety-effects" : "admission-effects"} />
 }
