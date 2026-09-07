@@ -10,7 +10,7 @@ import * as THREE from "three"
 import { travelerAppearance } from "@/lib/game/base-person/population"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { useSimulationStore } from "@/lib/game/simulation-store"
-import { selectElement } from "@/lib/game/selection"
+import { markPerson, selectElement } from "@/lib/game/selection"
 import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { setFootpathObstacles } from "@/lib/game/footpaths"
@@ -285,6 +285,7 @@ export function Travelers({
             <group
               key={traveler.id}
               ref={(node) => {
+                markPerson(node)
                 groupRefs.current[index] = node
               }}
             >

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { useBuildStore } from "./build-store"
 import { useCameraStore, type Selection } from "./camera-store"
-import { selectElement, selectionObjectId } from "./selection"
+import { markPerson, prioritizePeople, selectElement, selectionObjectId } from "./selection"
 import { buildingObjectId, pileObjectId, RELIC_OBJECT_ID, residentObjectId, travelerObjectId, treeObjectId, wildlifeObjectId } from "./render/outline"
 
 const objects = {
@@ -51,6 +51,27 @@ describe("shared selection", () => {
     ])
     expect(new Set(ids).size).toBe(ids.length)
     expect(selectionObjectId({ kind: "pile", id: "pile-b" }, { ...objects, piles: [objects.piles[1]] })).toBe(pileObjectId(0))
+  })
+
+  it("picks the person before the scenery standing in front of them", () => {
+    const person = { userData: {} as Record<string, unknown>, parent: null }
+    markPerson(person)
+    const walker = { object: { userData: {}, parent: person }, distance: 9 }
+    const hat = { object: { userData: {}, parent: person }, distance: 10 }
+    const crown = { object: { userData: {}, parent: null }, distance: 4 }
+    const trunk = { object: { userData: {}, parent: null }, distance: 6 }
+    expect(prioritizePeople([crown, walker, trunk, hat])).toEqual([walker, hat, crown, trunk])
+  })
+
+  it("leaves hits alone when people are not involved", () => {
+    const crown = { object: { userData: {}, parent: null }, distance: 4 }
+    const trunk = { object: { userData: {}, parent: null }, distance: 6 }
+    const hits = [crown, trunk]
+    expect(prioritizePeople(hits)).toBe(hits)
+    const person = { userData: {} as Record<string, unknown>, parent: null }
+    markPerson(person)
+    const people = [{ object: { userData: {}, parent: person }, distance: 1 }]
+    expect(prioritizePeople(people)).toBe(people)
   })
 
   it("clears the effect when a selected identity is gone", () => {

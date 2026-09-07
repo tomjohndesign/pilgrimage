@@ -1,14 +1,29 @@
 "use client"
 
-import { useLayoutEffect, useMemo, useRef } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { createPortal, useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 import { PixelCharacters } from "@/components/pixel-canvas"
 import { surfaceHeight } from "@/lib/game/map/bridges"
 import { worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
-import { SELECTION_COLOR } from "@/lib/game/selection"
+import { prioritizePeople, SELECTION_COLOR } from "@/lib/game/selection"
 import { SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import type { FigureClickHandler } from "./traveler-figure"
+
+/**
+ * Clicks pick the person under the pointer before the scenery in front of them,
+ * so a walker stays reachable through the crowns and walls that hide them.
+ * Mounted once per scene; every monk and traveler group marks itself with
+ * `markPerson`.
+ */
+export function PersonPicking() {
+  const setEvents = useThree((s) => s.setEvents)
+  useEffect(() => {
+    setEvents({ filter: prioritizePeople })
+    return () => setEvents({ filter: undefined })
+  }, [setEvents])
+  return null
+}
 
 /** A generous click volume shared by monks and travelers, without visible geometry. */
 export function CharacterHitTarget({ onClick }: { onClick: FigureClickHandler }) {

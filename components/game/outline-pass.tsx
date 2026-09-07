@@ -3,21 +3,37 @@
 import { useEffect, useMemo } from "react"
 import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
-import { usePixelScene } from "@/components/pixel-canvas"
-import { CHARACTER_ID_LAYER } from "@/lib/game/render/pixel-characters"
+import { usePixelCharacterRoots, usePixelScene } from "@/components/pixel-canvas"
+import { CHARACTER_COLOR_LAYER, CHARACTER_ID_LAYER } from "@/lib/game/render/pixel-characters"
 
 import { useCameraStore } from "@/lib/game/camera-store"
 import { useBuildStore } from "@/lib/game/build-store"
 import { SELECTION_OUTLINE_COLOR, SELECTION_OUTLINE_OPACITY, SELECTION_FILL, SELECTION_FILL_OPACITY, selectionObjectId } from "@/lib/game/selection"
 import {
   OUTLINE_ID_LAYER,
+  ROAD_EDGE_LAYER,
   SELECTED_CHARACTER_LAYER,
   MAX_OBJECT_ID,
+  RELIC_OBJECT_ID,
   type OutlineMode,
 } from "@/lib/game/render/outline"
 
 /** Warm near-black, so lines read as ink rather than dead pixels. */
 const OUTLINE_COLOR = "#120b05"
+
+/**
+ * How much of a person shows through the tree hiding them. Half strength keeps
+ * the trunk or crown in front readable while the walker behind stays followable
+ * — the same masking the selected character already gets behind any occluder.
+ */
+const CHARACTER_MASK_OPACITY = 0.5
+
+/**
+ * How strongly the road's edge line comes back through the canopy. Much
+ * fainter than the line on the open road — enough to follow where the road
+ * runs under the trees, never enough to read as a line drawn on them.
+ */
+const ROAD_EDGE_MASK_OPACITY = 0.5
 
 const MODE_INT: Record<OutlineMode, number> = { off: 0, overlap: 1, silhouette: 2 }
 
@@ -47,6 +63,15 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform sampler2D tDepth;
   uniform sampler2D tCharacter;
   uniform sampler2D tCharacterDepth;
+  uniform sampler2D tMasked;
+  uniform sampler2D tMaskedDepth;
+  uniform sampler2D tRoadEdge;
+  uniform bool uRoadEdges;
+  uniform float uRoadEdgeOpacity;
+  uniform bool uMaskCharacters;
+  uniform float uMaskOpacity;
+  uniform float uTreeIdMin;
+  uniform float uTreeIdMax;
   uniform bool uCharacterSelected;
   uniform bool uCharacterPass;
   uniform float uCharacterIdMin;
@@ -121,6 +146,27 @@ const FRAGMENT_SHADER = /* glsl */ `
         finishColor(); return;
       }
     }
+    // Trees give way to the people walking behind them: where an unoccluded
+    // character sits behind a trunk or a crown, the figure returns at half
+    // strength. Only trees relent — terrain writes ID 0 and buildings own
+    // their own ID block, so hills and walls still hide whoever is behind.
+    if (uMaskCharacters && idC >= uTreeIdMin && idC <= uTreeIdMax) {
+      vec4 masked = texture2D(tMasked, pixelUv);
+      if (masked.a > 0.5 && texture2D(tMaskedDepth, pixelUv).x > dC + 1.0e-5) {
+        gl_FragColor = vec4(masked.rgb, uMaskOpacity);
+        finishColor(); return;
+      }
+    }
+    // The road keeps its verge through the wood: the edge line, drawn over the
+    // terrain's own depth, comes back in ink wherever a tree stands in front of
+    // it, so a road's course still reads under the canopy.
+    if (uRoadEdges && idC >= uTreeIdMin && idC <= uTreeIdMax) {
+      float verge = texture2D(tRoadEdge, pixelUv).r;
+      if (verge > 0.004) {
+        gl_FragColor = vec4(uColor, verge * uRoadEdgeOpacity);
+        finishColor(); return;
+      }
+    }
     if (!uCharacterSelected && uSelectedId > 0.5 && abs(idC - uSelectedId) < 0.5) {
       gl_FragColor = vec4(uSelectionFill, uSelectionOpacity);
       finishColor(); return;
@@ -153,6 +199,7 @@ const FRAGMENT_SHADER = /* glsl */ `
 
 export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof selectionObjectId>[1], "piles"> }) {
   const { gl, scene } = useThree()
+  const characterRoots = usePixelCharacterRoots()
 
   // ID + depth buffer at drawing-buffer resolution. Nearest filtering is load-
   // bearing: interpolated ID colours would decode as phantom objects.
@@ -176,6 +223,23 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
   const displayTarget = useMemo(() => new THREE.WebGLRenderTarget(1, 1, {
     minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
     generateMipmaps: false, depthTexture: new THREE.DepthTexture(1, 1),
+  }), [])
+
+  // The road's edge line over the terrain's depth alone: no trees, no
+  // buildings, so what a crown hides is still in the buffer. Coverage lands in
+  // the red channel, so the terrain's black ID copy reads as "no line here".
+  const roadEdgeTarget = useMemo(() => new THREE.WebGLRenderTarget(1, 1, {
+    minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false,
+  }), [])
+
+  // Every character drawn on its own, free of the world's depth, so the
+  // composite can put the hidden part of a walker back over the trees.
+  const maskTarget = useMemo(() => new THREE.WebGLRenderTarget(1, 1, {
+    minFilter: THREE.NearestFilter,
+    magFilter: THREE.NearestFilter,
+    type: THREE.HalfFloatType,
+    generateMipmaps: false,
+    depthTexture: new THREE.DepthTexture(1, 1),
   }), [])
 
   // Copy encoded world IDs without colour conversion, using exactly the same
@@ -214,10 +278,13 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
       characterTarget.dispose()
       displayTarget.depthTexture?.dispose()
       displayTarget.dispose()
+      maskTarget.depthTexture?.dispose()
+      maskTarget.dispose()
+      roadEdgeTarget.dispose()
       worldIds.geometry.dispose()
       worldIds.material.dispose()
     },
-    [target, characterTarget, displayTarget, worldIds],
+    [target, characterTarget, displayTarget, maskTarget, roadEdgeTarget, worldIds],
   )
 
   const pass = useMemo(() => {
@@ -226,6 +293,16 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
       tDepth: { value: null as THREE.Texture | null },
       tCharacter: { value: characterTarget.texture },
       tCharacterDepth: { value: characterTarget.depthTexture },
+      tMasked: { value: maskTarget.texture },
+      tMaskedDepth: { value: maskTarget.depthTexture },
+      tRoadEdge: { value: roadEdgeTarget.texture },
+      uRoadEdges: { value: false },
+      uRoadEdgeOpacity: { value: ROAD_EDGE_MASK_OPACITY },
+      uMaskCharacters: { value: false },
+      uMaskOpacity: { value: CHARACTER_MASK_OPACITY },
+      // Trees own the ID block between the buildings and the relic.
+      uTreeIdMin: { value: 1 },
+      uTreeIdMax: { value: RELIC_OBJECT_ID - 1 },
       uCharacterSelected: { value: false },
       uCharacterPass: { value: false },
       uCharacterIdMin: { value: MAX_OBJECT_ID - 0x2000 + 1 },
@@ -258,7 +335,7 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
     quadScene.add(mesh)
     const quadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
     return { uniforms, geometry, material, quadScene, quadCamera }
-  }, [characterTarget])
+  }, [characterTarget, maskTarget, roadEdgeTarget])
 
   useEffect(
     () => () => {
@@ -279,8 +356,14 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
     const characterPass = stage.phase === "characters"
     const selectionInOtherPass = (stage.phase === "world" && selectingCharacter) || (characterPass && !selectingCharacter)
     const selectedId = selectionInOtherPass ? 0 : requestedId
+    // Masking people through trees reads the same world IDs and depth, so both
+    // passes prepare them whenever anyone is on the map, outlines off or not.
+    const maskCharacters = characterRoots.size > 0
+    // Trees hide the roads under them in the same pass they are drawn in.
+    const roadEdgePass = !characterPass
     // The world ID/depth is also needed when only a character is selected.
-    const needsOutline = mode !== "off" || requestedId !== 0
+    const needsOutline = mode !== "off" || requestedId !== 0 || maskCharacters || roadEdgePass
+    const maskPass = characterPass && maskCharacters
     const characterSelected = selectedId !== 0 && selectingCharacter
     const ids = characterPass ? displayTarget : target
     const background = scene.background
@@ -314,6 +397,22 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
           gl.clear()
           gl.render(scene, camera)
         }
+        if (roadEdgePass) {
+          roadEdgeTarget.setSize(ids.width, ids.height)
+          gl.setClearColor(0x000000, 0)
+          camera.layers.set(ROAD_EDGE_LAYER)
+          gl.setRenderTarget(roadEdgeTarget)
+          gl.clear()
+          gl.render(scene, camera)
+        }
+        if (maskPass) {
+          maskTarget.setSize(ids.width, ids.height)
+          gl.setClearColor(0x000000, 0)
+          camera.layers.set(CHARACTER_COLOR_LAYER)
+          gl.setRenderTarget(maskTarget)
+          gl.clear()
+          gl.render(scene, camera)
+        }
       }
       camera.layers.mask = mask
       gl.setClearColor(prevClearColor, clearAlpha)
@@ -336,6 +435,9 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
         pass.uniforms.uSelectedId.value = selectedId
         pass.uniforms.uCharacterSelected.value = characterSelected
         pass.uniforms.uCharacterPass.value = characterPass
+        pass.uniforms.uMaskCharacters.value = maskPass
+        pass.uniforms.uRoadEdges.value = roadEdgePass
+        pass.uniforms.uTreeIdMin.value = (objects?.buildings.length ?? 0) + 1
         gl.render(pass.quadScene, pass.quadCamera)
       }
     } finally {
