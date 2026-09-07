@@ -1,4 +1,4 @@
-import manifest from "../../../public/textures/characters/rockets/v8/manifest.json"
+import manifest from "../../../public/textures/characters/rockets/v9/manifest.json"
 import { GREY_HAIR_AGE } from "../character-age"
 import { monkVisual } from "../base-person/monk-assets"
 import { ACTION_CLIPS } from "../base-person/pose"

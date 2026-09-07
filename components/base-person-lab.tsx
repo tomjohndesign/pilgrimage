@@ -135,7 +135,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   const [row, setRow] = useState(1)
   const [frame, setFrame] = useState(0)
   const [clip, setClip] = useState<BaseClip>("walk")
-  const knightClip = mountedKnight ? clip === "idle" ? "idle" : "walk" : clip
+  const knightClip = mountedKnight ? clip === "idle" ? "idle" : "walk" : clip === "preaching" ? "idle" : clip
   const knightFrames = mountedKnight ? knightClip === "idle" ? 1 : knightMetadata.frames : knightMetadata.person.frameCounts[knightClip]
   const frameCount = isKnight ? knightFrames : isPerson ? PERSON_CLIPS[clip].frames : subject === "cart" ? shopState === "opening" || shopState === "packing" ? 48 : 120 : grazing ? TRANSPORT.grazeFrames : clip === "idle" ? 1 : transportMetadata.animalClips.walk.frames
   useEffect(() => {
@@ -437,7 +437,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
       <div className="person-preview" aria-label="Character preview">
         <div className="person-preview-toolbar hud-well">
           <div className="person-playback"><button className="hud-pause" aria-label={playing ? "Pause" : "Play"} disabled={frameCount === 1 || view === "sheet"} onClick={() => setPlaying(!playing)}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
-            <label style={subject === "cart" ? { display: "none" } : undefined}>Clip<select aria-label="Animation clip" value={isKnight ? knightClip : clip} onChange={e => { setClip(e.target.value as BaseClip); setFrame(0) }}>{Object.entries(PERSON_CLIPS).filter(([id]) => isPerson || (isKnight && !mountedKnight) || id === "walk" || id === "idle").map(([id, entry]) => <option key={id} value={id}>{entry.label}</option>)}</select></label>
+            <label style={subject === "cart" ? { display: "none" } : undefined}>Clip<select aria-label="Animation clip" value={isKnight ? knightClip : clip} onChange={e => { setClip(e.target.value as BaseClip); setFrame(0) }}>{Object.entries(PERSON_CLIPS).filter(([id]) => isPerson || (isKnight && !mountedKnight && id in knightMetadata.person.frameCounts) || id === "walk" || id === "idle").map(([id, entry]) => <option key={id} value={id}>{entry.label}</option>)}</select></label>
             <label>{onMap ? "View" : "Zoom"}<select aria-label={onMap ? "Map framing" : "Pixel inspection zoom"} value={zoom} onChange={e => setZoom(Number(e.target.value))}>{(onMap ? [4, 6, 8] : ASSET_ZOOMS).map(n => <option key={n} value={n}>{onMap ? ({ 4: "Wide", 6: "Map", 8: "Close" } as Record<number, string>)[n] : `${n}×`}</option>)}</select></label>
           </div>
           <div className="person-view-buttons" aria-label="Preview modes">{isPerson && <><button className={button} disabled={!draftsReady} onClick={() => void copyJson()}>Copy edits as JSON</button><button className={button} aria-pressed={showRig} onClick={() => { setShowRig(!showRig); setView("character"); setPlaying(false) }}>Show rig</button></>}{subject === "cart" && <button className={button} aria-pressed={onMap} onClick={() => { setView("map"); if (zoom < 4) setZoom(6) }}>Small map</button>}{([['character', 'Character'], ['native', 'Native size'], ['sheet', 'Sprite sheet']] as const).map(([mode, label]) => <button key={mode} className={button} aria-pressed={view === mode} onClick={() => setView(mode)}>{label}</button>)}</div>

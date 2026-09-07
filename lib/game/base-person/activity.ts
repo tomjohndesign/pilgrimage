@@ -12,8 +12,7 @@ export function activityClip(activity: Activity | MonkActivity | undefined, movi
   if (carrying > 0) return "carrying"
   if (moving) return "walk"
   switch (activity) {
-    // Roadside sermons keep the brother standing and facing passing travelers.
-    case "preaching": return "idle"
+    case "preaching": return "preaching"
     case "building": return "building"
     case "sleeping":
     case "camping": return "sleeping"
@@ -33,6 +32,7 @@ export function activityClip(activity: Activity | MonkActivity | undefined, movi
 /** Keep editor playback and in-game action timing on the same clock. */
 export function actionPlaybackRate(clip: BaseClip, design?: Pick<PersonDesign, "bodyType" | "walkStyle">): number {
   if (clip === "woodcutting" || clip === "treeFelling") return woodcuttingProfile(design).playbackRate * PERSON_CLIPS[clip].frames / BASE_PERSON.defaultFps * (clip === "woodcutting" ? 0.5 : 1)
+  if (clip === "preaching") return PERSON_CLIPS.preaching.frames / (4 * BASE_PERSON.defaultFps)
   if (clip === "building") return 0.75 * PERSON_CLIPS.building.frames / BASE_PERSON.defaultFps
   if (clip === "gathering") return (design?.walkStyle === "Devotional" ? 0.3 : 0.65) * PERSON_CLIPS[clip].frames / BASE_PERSON.defaultFps
   return 1

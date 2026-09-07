@@ -94,6 +94,8 @@ publishes `walkStrides` so runtime distance timing stays tied to the rig. The
 right-hand staff plants and lifts with the left foot: the arm extends forward
 at planting and bends as the body passes the grounded tip. Rig pose phases are
 measured in strides. Construction uses a standing, planted wooden-mallet action with 24 poses.
+Preaching uses a planted standing stance and a 24-frame, four-second gesture loop;
+its sheets ship for both monk hair colors and rocket-equipped monks.
 Other activities have their own frame counts and playback
 rates; read metadata rather than assuming every clip has eight or twenty columns.
 Keep the editor, baker, renderer, texture gallery and asset checkers consistent.
@@ -117,7 +119,7 @@ Bake the base, every population profile/calling,
 and the Monk preset. Inspect the latest main branch before allocating versions.
 Published bakes are immutable; use new paths and update all active imports only
 after the exports exist. The current exports are base v31, population v23,
-monks v30 (brown hair) / v31 (grey hair), rockets v8, transport v19, knights v7
+monks v32 (brown hair) / v33 (grey hair), rockets v9, transport v19, knights v7
 and minstrel v2.
 For a subsequent change choose unused versions:
 
@@ -146,8 +148,8 @@ designs must be baked through the same current rig, not mapped onto stale sheets
   discrete poses. Verify no accumulated offset over repeated cycles, correct
   resets, and anchored height on slopes.
 - Run `npm test` and `npm run typecheck`, the base and population asset checkers,
-  and `node scripts/check-base-person.mjs v30 --monk` for the current monk bake.
-  Also check `node scripts/check-base-person.mjs v31 --monk` for grey-haired monks.
+  and `node scripts/check-base-person.mjs v32 --monk` for the current monk bake.
+  Also check `node scripts/check-base-person.mjs v33 --monk` for grey-haired monks.
   Check per-clip dimensions, matching shadows,
   palette, binary body alpha, safe margins and attachment registration.
 - Inspect side and diagonal views in the editor and on real road tiles. Check

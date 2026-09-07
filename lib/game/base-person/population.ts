@@ -45,15 +45,15 @@ export function populationDesign(type: Pick<TravelerTypeDef, "id" | "color">, va
 
 export interface PopulationPack {
   walkStrides?: number
-  actionFrames?: Record<ActionClip, number>
+  actionFrames?: Partial<Record<ActionClip, number>>
   frameCounts?: Partial<Record<import("./pose").BaseClip, number>>
   templateVersion: number
   depthEncoding?: string
   cellSize: number
   anchor: number[]
   rows: number
-  callings: Record<TravelerTypeId, { walk: string; idle: string; designs: PersonDesign[]; actions?: Record<ActionClip, string>; depths?: Record<import("./pose").BaseClip, string> }>
+  callings: Record<TravelerTypeId, { walk: string; idle: string; designs: PersonDesign[]; actions?: Partial<Record<ActionClip, string>>; depths?: Partial<Record<import("./pose").BaseClip, string>> }>
   greyCallings?: Partial<PopulationPack["callings"]>
-  shadows: { walk: string; idle: string; actions?: Record<ActionClip, string> }
+  shadows: { walk: string; idle: string; actions?: Partial<Record<ActionClip, string>> }
   strideRatios: number[]
 }
