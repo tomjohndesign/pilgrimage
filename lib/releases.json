@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "b80af2f1cd3174999aa00d72948b7be0a84eb88c",
-  "releaseCount": 69,
+  "lastProcessedCommit": "83c5895823c904181523ef6faaa807ae8d3f13f4",
+  "releaseCount": 70,
   "releases": [
+    {
+      "version": "0.0.84",
+      "title": "Release 0.0.84",
+      "summary": "Add map wildlife and shared animal rig playground (#104)",
+      "commit": "83c5895823c904181523ef6faaa807ae8d3f13f4"
+    },
     {
       "version": "0.0.83",
       "title": "Release 0.0.83",
