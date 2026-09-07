@@ -2,6 +2,7 @@ import { earlyBuildingParts } from "./early-geometry"
 import { BUILDING_STYLE, isEarlyBuilding, type BuildingRecipe } from "./style"
 import { BUILDING_DETAIL_SCALE, BUILDING_FLOOR_TOP } from "./dimensions"
 import { HOVEL_DOOR_HEIGHT, HOVEL_DOOR_WIDTH } from "../world-scale"
+import type { BaseClip } from "../base-person/pose"
 
 export type Vec3 = [number, number, number]
 export interface BuildingPart {
@@ -14,6 +15,8 @@ export interface BuildingPart {
   color: string
   cutawaySide?: [number, number]
   outline?: boolean
+  /** Usable top face. Navigation and sprites share the authored furniture contact. */
+  support?: { clips: BaseClip[]; anchorOffset?: [number, number]; heading?: number }
 }
 
 /** Deterministic, tile-bounded construction; shared by the hovel and workshop. */
