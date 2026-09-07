@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "560f4e8390a1e7e15621534b00e1410730a6815a",
-  "releaseCount": 62,
+  "lastProcessedCommit": "cf58ed133f3e22ff6a02635d9c803cbb4c1e0e96",
+  "releaseCount": 63,
   "releases": [
+    {
+      "version": "0.0.77",
+      "title": "Release 0.0.77",
+      "summary": "Replace traveler hats and guitar with medieval caps and lute (#96)",
+      "commit": "cf58ed133f3e22ff6a02635d9c803cbb4c1e0e96"
+    },
     {
       "version": "0.0.76",
       "title": "Release 0.0.76",
