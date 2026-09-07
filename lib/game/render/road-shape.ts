@@ -53,10 +53,12 @@ export const ROAD_SHAPE_GLSL = /* glsl */ `
     return texture2D(roadSegments, uv);
   }
 
-  vec2 diagonalRoadShape(vec2 p, vec2 range, float edgeNoise, float targetEdge, float roughness) {
+  vec2 diagonalRoadShape(vec2 p, vec2 range, float edgeNoise, float targetEdge, float roughness, out float segmentOpacity) {
     vec2 distanceToTrack = vec2(100.0);
     vec2 mainWear = vec2(0.0);
     vec2 trackWear = vec2(0.0);
+    float localDistance = 100.0;
+    vec4 localWear = vec4(0.0);
     for (int segment = 0; segment < int(range.y); segment++) {
       float index = range.x + float(segment) * 2.0;
       vec4 endpoints = roadSegmentTexel(index);
@@ -64,7 +66,14 @@ export const ROAD_SHAPE_GLSL = /* glsl */ `
       vec2 along = endpoints.zw - endpoints.xy;
       float t = clamp(dot(p - endpoints.xy, along) / max(dot(along, along), 0.000001), 0.0, 1.0);
       float distance = length(p - endpoints.xy - along * t);
-      if (wear.z < 0.5) {
+      if (wear.z > 1.5) {
+        // Nearest centreline first: overlapping end caps must not paint rings
+        // across a continuing rut's grassy median. Keep that segment's wear.
+        if (distance < localDistance - 0.00001 || (abs(distance - localDistance) < 0.00001 && wear.y > localWear.y)) {
+          localDistance = distance;
+          localWear = wear;
+        }
+      } else if (wear.z < 0.5) {
         distanceToTrack.x = min(distanceToTrack.x, distance);
         mainWear = wear.xy;
       } else {
@@ -76,10 +85,15 @@ export const ROAD_SHAPE_GLSL = /* glsl */ `
     // not draw rings through the median. Overflow keeps its source traffic.
     vec2 main = roadStrip(distanceToTrack.x, mainWear.x + edgeNoise, mainWear.y, roughness);
     vec2 track = roadStrip(distanceToTrack.y, trackWear.x + edgeNoise, trackWear.y, roughness);
+    vec2 local = roadStrip(localDistance, localWear.x + edgeNoise, localWear.y, roughness);
+    // Very light footsteps remain translucent and fully abandoned segments disappear.
+    local.x *= localWear.w;
     // Express both boundaries relative to the receiving tile's edge value,
     // so its outline follows the source wear too, including on grass tiles.
-    return vec2(max(main.x, track.x),
-      max(main.y - mainWear.x - edgeNoise, track.y - trackWear.x - edgeNoise) + targetEdge);
+    segmentOpacity = localDistance < 99.0 ? localWear.w : 1.0;
+    float localBoundary = mix(-100.0, local.y - localWear.x - edgeNoise, step(0.001, localWear.w));
+    return vec2(max(max(main.x, track.x), local.x),
+      max(max(main.y - mainWear.x - edgeNoise, track.y - trackWear.x - edgeNoise), localBoundary) + targetEdge);
   }
 
   vec2 roadShape(vec2 p, vec4 connected, vec4 diagonal, vec4 filledCorners, float edge, float inner, float roughness) {

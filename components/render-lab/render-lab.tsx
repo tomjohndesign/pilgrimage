@@ -5,25 +5,10 @@ import { useEffect, useRef, useState, type MutableRefObject } from "react"
 import { CAMERAS, CHARACTERS, comparisonQuery, DEFAULT_METHODS, DEFAULT_SETTINGS, METHODS, MOTIONS, readMethods, readSettings, type LabSettings, type Method } from "@/lib/render-lab/settings"
 import { LabRenderer } from "./renderer"
 
+import { labButton as button, labInput as input, LabSelect as Select, LabSlider as Slider } from "@/components/lab-controls"
+
 type Draw = (settings: LabSettings, time: number) => void
-const button = "border border-rule bg-parchment-dark px-3 py-2 font-display text-[10px] uppercase tracking-[1.5px] text-ink hover:border-gold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold disabled:opacity-40"
-const input = "w-full border border-rule bg-parchment px-2 py-2 text-sm text-ink focus-visible:outline-2 focus-visible:outline-gold"
 const SAVE_KEY = "pilgrimage-rendering-choice-v1"
-
-function Select({ label, value, options, onChange }: { label: string; value: string; options: Record<string, string>; onChange: (value: string) => void }) {
-  return <label className="flex min-w-0 flex-col gap-1 text-xs text-ink-light">
-    {label}<select aria-label={label} className={input} value={value} onChange={event => onChange(event.target.value)}>
-      {Object.entries(options).map(([key, text]) => <option key={key} value={key}>{text}</option>)}
-    </select>
-  </label>
-}
-
-function Slider({ label, value, min, max, step, suffix = "", onChange }: { label: string; value: number; min: number; max: number; step: number; suffix?: string; onChange: (value: number) => void }) {
-  return <label className="flex flex-col gap-2 text-xs text-ink-light">
-    <span className="flex justify-between gap-3">{label}<span className="tabular-nums text-ink">{Number(value.toFixed(2))}{suffix}</span></span>
-    <input aria-label={label} type="range" className="w-full accent-gold" min={min} max={max} step={step} value={value} onChange={event => onChange(Number(event.target.value))} />
-  </label>
-}
 
 function RenderPane({ index, method, character, frames, focus }: { index: number; method: Method; character: LabSettings["character"]; frames: MutableRefObject<Map<number, Draw>>; focus: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null)
