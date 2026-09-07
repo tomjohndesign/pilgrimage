@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "0b205202034830ecca9586bf8df7593979727f9e",
-  "releaseCount": 80,
+  "lastProcessedCommit": "ea7dfa11b1b5bfe984622c733682e4dd45725a17",
+  "releaseCount": 81,
   "releases": [
+    {
+      "version": "0.0.95",
+      "title": "Release 0.0.95",
+      "summary": "Let animal herds roam loosely and rabbits enter ground-level holes (#114)",
+      "commit": "ea7dfa11b1b5bfe984622c733682e4dd45725a17"
+    },
     {
       "version": "0.0.94",
       "title": "Release 0.0.94",
