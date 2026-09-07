@@ -58,7 +58,7 @@ import type { Traveler } from "./travelers"
  *    they return to the road; each visit spreads the shrine's renown.
  *  - Jobless visitors may settle into a woodcutter hut slot, walk to a reserved
  *    tree, fell it and haul logs home. Camps provide rest when needs run low.
- *  - Stamina at 0 → leave the road for the nearest open ground (grass, dirt,
+ *  - Stamina below 20 → leave the road for the nearest open ground (grass, dirt,
  *    or a forest-floor clearing — never solid woods or the road itself) and
  *    camp until rested. A roadside stall is
  *    the favourite pitch for anyone; pilgrims will otherwise join an existing
@@ -172,6 +172,8 @@ export function formatGameTime(time: number): string {
 // is a few hours' rest — watchable at the default day length.
 
 export const CAMP_STAMINA_REGEN = 60
+/** Tired travelers start looking for a pitch here, rather than walking to zero. */
+export const CAMP_STAMINA_THRESHOLD = 20
 /** Resting slows the need for food and drink but doesn't stop it. */
 const CAMP_NEED_FACTOR = 0.5
 
@@ -1160,7 +1162,7 @@ export function stepSim(
         const ahead = map.site ? s.direction * (map.site.junction - s.progress) : -1
         const shelter = !!map.site && s.gold >= admissionFee(map) && !s.track && s.activity !== "fleeing" && s.visitCooldown <= 0 &&
           Math.min(s.hunger, s.thirst) < hospitalityNeedThreshold(renown, sim.balance) && ahead >= 0 && ahead <= 12
-        if (s.stamina <= 0 && !shelter) {
+        if (s.stamina <= CAMP_STAMINA_THRESHOLD && !shelter) {
           startCamping(sim, s, t, map)
           break
         }

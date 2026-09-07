@@ -431,8 +431,8 @@ export const RULE_FIELDS = [
   },
   {
     key: "staminaDecay", group: "Traveler needs", label: "Stamina drain per game hour",
-    description: "Energy lost per game hour. Default: exhausted after about 24 hours. Camping restores stamina and tending a parked stall holds it steady; drinking does not restore energy.",
-    default: 4.2, min: 0, max: 50, step: 0.1,
+    description: "Energy lost per game hour. Default: a full bar lasts about 48 hours, with travelers looking for lodging once it falls below 20. Camping restores stamina and tending a parked stall holds it steady; drinking does not restore energy.",
+    default: 2.1, min: 0, max: 50, step: 0.1,
   },
 ] as const
 export type RuleKey = (typeof RULE_FIELDS)[number]["key"]
