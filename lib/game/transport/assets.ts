@@ -14,8 +14,10 @@ export type CartMode = typeof CART_MODES[number]
 export type Animal = "donkey" | "horse"
 export const HORSE_VARIANTS = ["common", "noble"] as const
 export type HorseVariant = typeof HORSE_VARIANTS[number]
+/** Shared by loose, harnessed and ridden animals; recorded in every affected bake. */
+export const ANIMAL_RIG_VERSION = 1
 export const TRANSPORT = {
-  version: "v14", cellSize: 128, anchor: [64, 78] as const,
+  version: "v18", cellSize: 128, anchor: [64, 78] as const,
   viewSize: BASE_PERSON.camera.viewSize * 2,
   scale: 0.74 * 128 / 48,
   wheelRadius: 0.46, wheelFrames: 24, animalFrames: 20, grazeFrames: 12, lowerFrames: 6, shopFrames: 12,
@@ -47,11 +49,11 @@ export function cartLoadout(id: number): { cargo: Cargo; puller: Puller; coat?: 
 /** Four distinct footfalls per cycle; cadence changes never alter planted-foot travel. */
 export const ANIMAL_PROFILES = {
   donkey: { label: "Donkey", cyclesPerSecond: 0.82, stride: 0.23, lift: 0.06, legHeight: 0.87, legSpread: 0.22, legZ: 0.62,
-    sway: 0.025, bob: 0.025, pitch: 0.02, roll: 0.035, neckNod: 0.065, headNod: 0.08 },
+    sway: 0.020, bob: 0.013, pitch: 0.016, roll: 0.024, neckNod: 0.065, headNod: 0.06, walkNeckLean: 0.055, spineFlex: 0.018 },
   common: { label: "Common horse", cyclesPerSecond: 0.95, stride: 0.28, lift: 0.08, legHeight: 1.08, legSpread: 0.235, legZ: 0.75,
-    sway: 0.035, bob: 0.03, pitch: 0.025, roll: 0.035, neckNod: 0.095, headNod: 0.08 },
-  noble: { label: "Noble horse", cyclesPerSecond: 1.12, stride: 0.36, lift: 0.145, legHeight: 1.23, legSpread: 0.29, legZ: 0.78,
-    sway: 0.025, bob: 0.037, pitch: 0.028, roll: 0.026, neckNod: 0.075, headNod: 0.06 },
+    sway: 0.025, bob: 0.016, pitch: 0.018, roll: 0.022, neckNod: 0.075, headNod: 0.06, walkNeckLean: 0.08, spineFlex: 0.022 },
+  noble: { label: "Noble horse", cyclesPerSecond: 0.98, stride: 0.36, lift: 0.09, legHeight: 1.23, legSpread: 0.29, legZ: 0.78,
+    sway: 0.025, bob: 0.018, pitch: 0.018, roll: 0.022, neckNod: 0.075, headNod: 0.06, walkNeckLean: 0.12, spineFlex: 0.025 },
 } as const
 export function animalProfile(kind: Animal, variant: HorseVariant = "common") { return ANIMAL_PROFILES[kind === "donkey" ? "donkey" : variant] }
 export function animalBody(kind: Animal, variant: HorseVariant = "common") {

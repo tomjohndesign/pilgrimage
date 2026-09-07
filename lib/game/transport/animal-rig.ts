@@ -174,8 +174,10 @@ export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", 
       segment(p.hip, p.upperJoint, [0.12 * muscle, (rear ? 0.16 : 0.125) * muscle, 0.075 * muscle], coat)
       segment(p.upperJoint, p.knee, [0.08 * muscle, 0.09 * muscle, 0.045], coat)
       segment(p.knee, p.ankle, [0.053, 0.046, 0.038], points)
-      m.mesh(loft([{ at: [p.ankle[0], p.ankle[1] - 0.035, p.ankle[2] - 0.055], width: 0.073, top: 0.035, bottom: 0.035 },
-        { at: [p.ankle[0], p.ankle[1] - 0.035, p.ankle[2] + 0.105], width: 0.078, top: 0.025, bottom: 0.035 }], 8), "#3d3a32", [0, 0, 0], legs)
+      const hoof = m.mesh(loft([{ at: [0, -0.035, -0.055], width: 0.073, top: 0.035, bottom: 0.035 },
+        { at: [0, -0.035, 0.105], width: 0.078, top: 0.025, bottom: 0.035 }], 8), "#3d3a32", p.ankle, legs)
+      hoof.name = `${side}-${rear ? "hind" : "fore"}-hoof`
+      hoof.rotation.x = p.hoofPitch
     }
   } }
 }

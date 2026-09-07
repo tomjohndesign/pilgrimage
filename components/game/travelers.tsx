@@ -34,6 +34,7 @@ import { WoodLog } from "./wood-log"
 import { PixelCharacters } from "@/components/pixel-canvas"
 import { TravelerFigure } from "./traveler-figure"
 import { AdmissionEffects } from "./admission-effects"
+import { knightLoadout } from "@/lib/game/knights"
 import { cartLoadout, cartOffset, SHOP_SECONDS } from "@/lib/game/transport/assets"
 
 /**
@@ -188,6 +189,7 @@ export function Travelers({
       group.userData.shopHeading = s.stallRoute?.heading
       group.userData.shopSide = s.stallRoute?.side ?? 1
       group.userData.shopProgress = s.activity === "openingShop" ? 1 - s.timer / SHOP_SECONDS : s.activity === "packingShop" ? s.timer / SHOP_SECONDS : s.activity === "vending" ? 1 : 0
+      group.userData.horseRest = s.horseRest
       group.userData.pasture = s.pasture
       const pastureTerrain = s.pasture ? tileAt(map, worldToTileX(map, s.pasture.x), worldToTileZ(map, s.pasture.z)) : null
       group.userData.pastureY = s.pasture ? walkingSurface(map, s.pasture.x, s.pasture.z).height : s.y
@@ -229,7 +231,7 @@ export function Travelers({
                 groupRefs.current[index] = node
               }}
             >
-              <TravelerFigure map={map} age={traveler.attributes.age} {...cartLoadout(traveler.id)} appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
+              <TravelerFigure map={map} age={traveler.attributes.age} {...(traveler.type.id === "knight" ? knightLoadout(traveler.id) : cartLoadout(traveler.id))} appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
                 characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
               <CharacterHitTarget onClick={select} />
               {selected && <CharacterSelectionShadow map={map} />}

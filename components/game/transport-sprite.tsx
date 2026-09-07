@@ -15,20 +15,22 @@ import { animalCoat } from "@/lib/game/transport/coats"
 import { TRANSPORT, CART, SHOP, cartUrl, animalUrl, type Puller, RIG_TO_WORLD, cartColumn, animalStride, type Animal, type Cargo, type HorseVariant } from "@/lib/game/transport/assets"
 import { KEEPER_CLIPS, KEEPER_COLUMNS } from "@/lib/game/transport/keeper"
 import { animalLeg } from "@/lib/game/transport/animal-pose"
-import manifest from "@/public/textures/transport/v14/manifest.json"
+import { KNIGHT } from "@/lib/game/knight/design"
+import manifest from "@/public/textures/transport/v18/manifest.json"
 import type { FigureClickHandler } from "./traveler-figure"
 
-export function TransportSprite({ map: terrain, kind, coat, variant = 0, horseVariant = "common", cargo = "produce", puller = "hand", awning = false, characterScale = 1,
+export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0, horseVariant = "common", cargo = "produce", puller = "hand", awning = false, characterScale = 1,
   selected = false, outlineColor, onClick, position = [0, 0, 0] }: {
+  knight?: "mounted" | "saddled"
   map?: GameMap; kind: "cart" | "merchant" | Animal; coat?: string; variant?: number; horseVariant?: HorseVariant; cargo?: Cargo; puller?: Puller; awning?: boolean; characterScale?: number
   selected?: boolean; outlineColor?: [number, number, number]; onClick?: FigureClickHandler; position?: [number, number, number]
 }) {
   const animal = kind === "donkey" || kind === "horse"
-  const sources = useLoader(THREE.TextureLoader, kind === "cart" ? [cartUrl(cargo, puller), cartUrl(cargo, "shop", 1, puller === "hand"), cartUrl(cargo, "shop", -1, puller === "hand")]
+  const sources = useLoader(THREE.TextureLoader, knight ? Array(2).fill(`/textures/knights/${KNIGHT.version}/${knight}-${animalCoat("horse", coat).id}.png`) : kind === "cart" ? [cartUrl(cargo, puller), cartUrl(cargo, "shop", 1, puller === "hand"), cartUrl(cargo, "shop", -1, puller === "hand")]
     : kind === "merchant" ? [`/textures/transport/${TRANSPORT.version}/merchant-setup.png`, `/textures/transport/${TRANSPORT.version}/merchant-selling.png`] : [animalUrl(kind, animalCoat(kind, coat).id), animalUrl(kind, animalCoat(kind, coat).id, true)])
-  const rows = kind === "cart" ? CART.directions : kind === "merchant" ? manifest.puller.rows : kind === "horse" ? manifest.animalRows.horse : 8
-  const rowOffset = kind === "merchant" ? variant * 8 : kind === "horse" ? manifest.horseVariants[horseVariant].rowOffset : 0
-  const walk = manifest.animalClips.walk
+  const rows = knight ? knight === "mounted" ? KNIGHT.variants * 8 : 8 : kind === "cart" ? CART.directions : kind === "merchant" ? manifest.puller.rows : kind === "horse" ? manifest.animalRows.horse : 8
+  const rowOffset = knight ? knight === "mounted" ? (variant % KNIGHT.variants) * 8 : 0 : kind === "merchant" ? variant * 8 : kind === "horse" ? manifest.horseVariants[horseVariant].rowOffset : 0
+  const walk = knight ? { start: 1, frames: KNIGHT.frames } : manifest.animalClips.walk
   const maps = useMemo(() => sources.map(source => {
     const map = source.clone(); map.magFilter = map.minFilter = THREE.NearestFilter
     map.colorSpace = THREE.SRGBColorSpace; map.generateMipmaps = false; map.needsUpdate = true
@@ -70,18 +72,18 @@ export function TransportSprite({ map: terrain, kind, coat, variant = 0, horseVa
     else grazingTime.current = 0
     const graze = manifest.animalClips.graze, lower = manifest.animalClips.lower
     const keeperClip = kind === "merchant" ? KEEPER_CLIPS[data.keeperPose as keyof typeof KEEPER_CLIPS] : undefined
-    const columns = kind === "merchant" ? keeperClip ? KEEPER_COLUMNS : manifest.merchantSetupFrames : kind === "cart" ? shop ? manifest.shop.frames : manifest.cartColumns : manifest.animalColumns
+    const columns = knight ? KNIGHT.frames + 1 : kind === "merchant" ? keeperClip ? KEEPER_COLUMNS : manifest.merchantSetupFrames : kind === "cart" ? shop ? manifest.shop.frames : manifest.cartColumns : manifest.animalColumns
     const progress = Math.max(0, Math.min(1, data.shopProgress ?? 1))
     const column = kind === "merchant" ? keeperClip ? keeperClip.start + Math.min(keeperClip.frames - 1, Math.floor((data.keeperPhase ?? 0) * keeperClip.frames)) : Math.min(columns - 1, Math.floor(progress * columns))
       : kind === "cart" ? shop ? Math.round(progress * (columns - 1)) : cartColumn(cargo, puller, phase.current)
       : moving ? walk.start + Math.floor(phase.current * walk.frames)
-      : data.grazing ? grazingTime.current < 0.75 ? lower.start + Math.min(lower.frames - 1, Math.floor(grazingTime.current / 0.75 * lower.frames))
+      : data.grazing && !knight ? grazingTime.current < 0.75 ? lower.start + Math.min(lower.frames - 1, Math.floor(grazingTime.current / 0.75 * lower.frames))
         : graze.start + Math.floor((grazingTime.current - 0.75) * graze.fps) % graze.frames : manifest.animalClips.idle.start
     const active = maps[keeperClip ? 1 : kind === "cart" && shop ? data.shopSide < 0 ? 2 : 1 : animal && data.hitched ? 1 : 0]
     active.repeat.set(1 / columns, 1 / rows); active.offset.set(column / columns, (rows - 1 - rowOffset - row) / rows)
     for (const material of materials) material.map = active
-    const cell = kind === "merchant" ? manifest.puller.cellSize : kind === "cart" ? shop ? SHOP.cellSize : CART.cellSize : manifest.cellSize
-    const anchor = kind === "merchant" ? manifest.puller.anchor : kind === "cart" ? shop ? SHOP.anchor : CART.anchor : manifest.anchor
+    const cell = knight ? KNIGHT.cellSize : kind === "merchant" ? manifest.puller.cellSize : kind === "cart" ? shop ? SHOP.cellSize : CART.cellSize : manifest.cellSize
+    const anchor = knight ? KNIGHT.anchor : kind === "merchant" ? manifest.puller.anchor : kind === "cart" ? shop ? SHOP.anchor : CART.anchor : manifest.anchor
     group.children.forEach(child => { if (child instanceof THREE.Sprite) {
       Object.assign(child.userData, { walkPhase: phase.current, walkStride: stride, distance, heading, row, moving, hitched: data.hitched, keeperPose: data.keeperPose, column })
       child.center.set(anchor[0] / cell, 1 - anchor[1] / cell)
