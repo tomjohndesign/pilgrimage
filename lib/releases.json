@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "22f4c7a861d118ac9653bf4b7f5438a6add102ab",
-  "releaseCount": 87,
+  "lastProcessedCommit": "331102de627b2010e43398b2f778056df3def0e0",
+  "releaseCount": 88,
   "releases": [
+    {
+      "version": "0.0.102",
+      "title": "Release 0.0.102",
+      "summary": "Add a World panel toggle to draw the forest with the pixel foliage sprites (#121)",
+      "commit": "331102de627b2010e43398b2f778056df3def0e0"
+    },
     {
       "version": "0.0.101",
       "title": "Release 0.0.101",
