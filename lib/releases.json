@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "d3fc878a7b5a9b0d2ed15fa6e8ec12605512aa96",
-  "releaseCount": 67,
+  "lastProcessedCommit": "197064bbba95c051e426d22b3e17c8fcb18a572d",
+  "releaseCount": 68,
   "releases": [
+    {
+      "version": "0.0.82",
+      "title": "Release 0.0.82",
+      "summary": "Keep merchant stalls open all day and add roadside minstrel performances (#101)",
+      "commit": "197064bbba95c051e426d22b3e17c8fcb18a572d"
+    },
     {
       "version": "0.0.81",
       "title": "Release 0.0.81",
