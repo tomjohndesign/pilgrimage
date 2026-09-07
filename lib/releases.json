@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "2118086a373ce9a0dcfc18f49accecd605508ea4",
-  "releaseCount": 89,
+  "lastProcessedCommit": "f7afb864fc0f52e703e540e919c33f7832634fc6",
+  "releaseCount": 90,
   "releases": [
+    {
+      "version": "0.0.104",
+      "title": "Release 0.0.104",
+      "summary": "Mark the shrine's fork with a wayside signpost (#123)",
+      "commit": "f7afb864fc0f52e703e540e919c33f7832634fc6"
+    },
     {
       "version": "0.0.103",
       "title": "Release 0.0.103",
