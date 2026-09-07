@@ -1,4 +1,5 @@
 import type { ActionClip } from "./pose"
+import { rollComplexion, type Complexion } from "./complexion"
 import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
 import type { TravelerTypeDef, TravelerTypeId } from "../travelers"
 import { DEFAULT_DESIGN, DESIGN_CONTROLS, validatePersonDesign, type DesignKey, type PersonDesign } from "./design"
@@ -13,7 +14,7 @@ export const POPULATION_PROFILES = [
   { id: "female-broad", bodyType: "Female", hair: "Bun", deltas: { build: 0.15, torsoHeight: -0.05, legs: -0.05, sleeves: 0.1, hem: 0.15, feet: 0.05, elbowBend: 4 } },
 ] as const
 
-export interface TravelerAppearance { variant: number; scale: number; bodyType: PersonDesign["bodyType"] }
+export interface TravelerAppearance { variant: number; scale: number; bodyType: PersonDesign["bodyType"]; complexion: Complexion }
 
 /** Independent of crowd order/count and the simulation's random stream. Pairs mix both bodies. */
 export function travelerAppearance(seed: number, id: number): TravelerAppearance {
@@ -21,8 +22,9 @@ export function travelerAppearance(seed: number, id: number): TravelerAppearance
   const pair = makeRng(deriveSeed(root, Math.floor(id / 2)))()
   const female = ((id & 1) ^ (pair < 0.5 ? 0 : 1)) === 1
   const random = makeRng(deriveSeed(root, id + 104729))
+  // The body draw stays first, so colouring joined without reshuffling any seed's cast.
   return { variant: (female ? 3 : 0) + Math.floor(random() * 3),
-    scale: 1, bodyType: female ? "Female" : "Male" }
+    scale: 1, bodyType: female ? "Female" : "Male", complexion: rollComplexion(random) }
 }
 
 export function populationDesign(type: Pick<TravelerTypeDef, "id" | "color">, variant: number, base: PersonDesign = DEFAULT_DESIGN): PersonDesign {
@@ -44,6 +46,9 @@ export function populationDesign(type: Pick<TravelerTypeDef, "id" | "color">, va
 }
 
 export interface PopulationPack {
+  /** Set by bakes whose palette reserves the skin and hair steps for the body,
+   * so a complexion can be recoloured without touching props or cloth. */
+  reservedTones?: boolean
   walkStrides?: number
   actionFrames?: Partial<Record<ActionClip, number>>
   frameCounts?: Partial<Record<import("./pose").BaseClip, number>>

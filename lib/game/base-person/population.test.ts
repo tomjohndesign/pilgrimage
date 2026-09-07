@@ -61,6 +61,12 @@ describe("road character population", () => {
     }
   })
 
+  it("ships a pack whose palette reserves the skin and hair steps for the body", () => {
+    // Without it the road recolour is off: props share those colours in older bakes.
+    expect(DEFAULT_POPULATION.reservedTones).toBe(true)
+    expect(populationVisual("peasant", 0, null).reservedTones).toBe(true)
+  })
+
   it("registers every calling and body in matching walk, idle and shadow rows", () => {
     for (const type of Object.values(TRAVELER_TYPES)) for (let variant = 0; variant < 6; variant++) {
       const visual = populationVisual(type.id, variant, null)

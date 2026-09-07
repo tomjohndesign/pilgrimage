@@ -11,7 +11,7 @@ import { createRoadAccessories } from "./road-accessories"
 import { gatheringMotion } from "./gathering"
 import { woodcuttingMotion, woodcuttingProfile } from "./woodcutting"
 import { splittingMotion, splittingTool } from "./splitting"
-import { personRecipe } from "./design"
+import { PALETTE_TONES, personRecipe, type PaletteTone } from "./design"
 import { armAngle, legPose, pelvisHeight, walkBody, SOCKET_NAMES, type BaseClip, type BodySide, type Point3, type SocketName } from "./pose"
 
 /** One authored body; all directions, poses and future outfits reuse this rig. */
@@ -21,8 +21,11 @@ export function createBasePersonRig(recipe = personRecipe()) {
   const geometries: THREE.BufferGeometry[] = []
   const ropeTails: THREE.BufferGeometry[] = []
   const materials: THREE.Material[] = []
-  const material = (color: string) => {
+  // The tone marks skin and hair for the bake's reserved palette entries; every
+  // other material stays shared, so props can never take a body colour.
+  const material = (color: string, tone: PaletteTone = PALETTE_TONES.shared) => {
     const m = new THREE.MeshLambertMaterial({ color, flatShading: true })
+    m.userData.tone = tone
     materials.push(m)
     return m
   }
@@ -31,10 +34,10 @@ export function createBasePersonRig(recipe = personRecipe()) {
   const longGarment = female || robe
   const sleeveColor = female && !robe ? recipe.design.shirtColor : recipe.palette.tunic
   const palette = recipe.palette
-  const skin = material(palette.skin), tunic = material(palette.tunic)
+  const skin = material(palette.skin, PALETTE_TONES.skin), tunic = material(palette.tunic)
   const accent = material(recipe.design.accentColor)
   const playful = recipe.design.tunicStyle === "Particolour"
-  const beltMaterial = material(palette.belt), hair = material(recipe.design.hairColor)
+  const beltMaterial = material(palette.belt), hair = material(recipe.design.hairColor, PALETTE_TONES.hair)
   const undershirt = material(recipe.design.shirtColor), covering = material(recipe.design.coveringColor)
   const leftDebug = material("#329bc2"), rightDebug = material("#db7540")
   const tracked: Array<{ mesh: THREE.Mesh; normal: THREE.Material | THREE.Material[]; side: BodySide }> = []
@@ -57,10 +60,10 @@ export function createBasePersonRig(recipe = personRecipe()) {
   }
   const b = recipe.body
   const hemPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), b.tunicHem + 0.012)
-  const legCloth = material(female ? palette.skin : recipe.design.trouserColor)
+  const legCloth = material(female ? palette.skin : recipe.design.trouserColor, female ? PALETTE_TONES.skin : PALETTE_TONES.shared)
   legCloth.clippingPlanes = [hemPlane]
   const leather = material("#785637"), soleMaterial = material("#503b2b")
-  const footSkin = material(palette.skin)
+  const footSkin = material(palette.skin, PALETTE_TONES.skin)
   if (longGarment) for (const m of [leather, soleMaterial, footSkin]) m.clippingPlanes = [hemPlane]
   const leftLegDebug = material("#329bc2"), rightLegDebug = material("#db7540")
   leftLegDebug.clippingPlanes = rightLegDebug.clippingPlanes = [hemPlane]
@@ -250,7 +253,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
 
   const limbs = (Object.keys({ left: 0, right: 0 }) as BodySide[]).map((side) => {
     const sign = side === "left" ? 1 : -1
-    const armSkin = material(palette.skin), armColor = playful && side === "right" ? recipe.design.accentColor : sleeveColor, armTunic = material(armColor)
+    const armSkin = material(palette.skin, PALETTE_TONES.skin), armColor = playful && side === "right" ? recipe.design.accentColor : sleeveColor, armTunic = material(armColor)
     const shoulder = new THREE.Group()
     shoulder.position.set(sign * b.shoulderOffset, b.shoulderHeight, 0)
     shoulder.name = `${side}-shoulder`
@@ -618,9 +621,10 @@ export function createBasePersonRig(recipe = personRecipe()) {
       root.traverse((object) => {
         if (!(object instanceof THREE.Mesh)) return
         const id = object.userData.inkPart ?? (baseParts.get(object.material as THREE.Material) ?? 1)
-        const key = `${id}:${object.userData.clipAboveHem ? "clipped" : "full"}`
+        const tone = (object.material as THREE.Material).userData?.tone ?? PALETTE_TONES.shared
+        const key = `${id}:${tone}:${object.userData.clipAboveHem ? "clipped" : "full"}`
         if (!masks.has(key)) masks.set(key, new THREE.MeshBasicMaterial({
-          color: new THREE.Color().setRGB(id / 255, 0, 0, THREE.SRGBColorSpace), toneMapped: false,
+          color: new THREE.Color().setRGB(id / 255, tone / 255, 0, THREE.SRGBColorSpace), toneMapped: false,
           clippingPlanes: object.userData.clipAboveHem ? [hemPlane] : null,
         }))
         masked.push({ mesh: object, material: object.material }); object.material = masks.get(key)!

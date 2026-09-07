@@ -174,7 +174,7 @@ export async function bakeTransport() {
       animalProfiles: ANIMAL_PROFILES, animalRigVersion: ANIMAL_RIG_VERSION,
       animalRows: { donkey: 8, horse: 16 }, horseVariants: { common: { rowOffset: 0 }, noble: { rowOffset: 8 } },
       animalClips: { idle: { start: 0, frames: 1 }, walk: { start: 1, frames: TRANSPORT.animalFrames }, lower: { start: 1 + TRANSPORT.animalFrames, frames: TRANSPORT.lowerFrames }, graze: { start: 1 + TRANSPORT.animalFrames + TRANSPORT.lowerFrames, frames: TRANSPORT.grazeFrames, fps: 4 } },
-      puller: { templateVersion: BASE_PERSON.version, cellSize: BASE_PERSON.cellSize, anchor: BASE_PERSON.anchor,
+      puller: { reservedTones: true, templateVersion: BASE_PERSON.version, cellSize: BASE_PERSON.cellSize, anchor: BASE_PERSON.anchor,
         frames: PERSON_CLIPS.walk.frames, strides: WALK_CLIP_STRIDES, idleFrames: 1, rows: 48, camera: BASE_PERSON.camera, designs } } }
   } finally { depthBaker.dispose(); renderer.dispose() }
 }

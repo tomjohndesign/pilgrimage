@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import sharp from "sharp"
 import * as THREE from "three"
-import manifest from "../../../public/textures/knights/v9/manifest.json"
+import manifest from "../../../public/textures/knights/v10/manifest.json"
 import { BASE_PERSON, PERSON_CLIPS } from "../base-person/pose"
 import { personRecipe } from "../base-person/design"
 import { personWalkStride } from "../base-person/gait"

@@ -104,7 +104,7 @@ export async function bakeKnights() {
       save(`${mounted ? "mounted" : "saddled"}-${coat.id}`, target)
     }
     if (safePadding < 4) throw new Error(`Knight mount exceeds safe frame: ${safePadding}px`)
-    return { images, metadata: { ...KNIGHT, depthEncoding: SPRITE_DEPTH_ENCODING, templateVersion: BASE_PERSON.version, safePadding, designs,
+    return { images, metadata: { ...KNIGHT, reservedTones: true, depthEncoding: SPRITE_DEPTH_ENCODING, templateVersion: BASE_PERSON.version, safePadding, designs,
       animalRigVersion: ANIMAL_RIG_VERSION, horseProfile: animalProfile("horse", "noble"),
       camera: { ...BASE_PERSON.camera, viewSize: extent }, scale: TRANSPORT.scale,
       person: { cellSize: BASE_PERSON.cellSize, anchor: BASE_PERSON.anchor, rows: designs.length * 8, frameCounts: Object.fromEntries(clips.map(clip => [clip, PERSON_CLIPS[clip].frames])) },

@@ -1,6 +1,6 @@
-import greyManifest from "../../../public/textures/characters/monks/v35/manifest.json"
+import greyManifest from "../../../public/textures/characters/monks/v37/manifest.json"
 import { GREY_HAIR_AGE } from "../character-age"
-import manifest from "../../../public/textures/characters/monks/v34/manifest.json"
+import manifest from "../../../public/textures/characters/monks/v36/manifest.json"
 import { DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE, personWalkStride, walkSpeedScale } from "./gait"
 import { actionPlaybackRate } from "./activity"
 import { ACTION_CLIPS, BASE_PERSON } from "./pose"
@@ -21,6 +21,7 @@ function visualForMonk(manifest: typeof greyManifest): ReturnType<typeof populat
     fps: BASE_PERSON.defaultFps,
     scale: 0.74 * manifest.cellSize / 48,
     rowOffset: 0,
+    reservedTones: (manifest as { reservedTones?: boolean }).reservedTones === true,
     strideRatio: personRecipe(validatePersonDesign(manifest.design)).body.stride / personRecipe().body.stride,
     design: validatePersonDesign(manifest.design),
     walkStride: personWalkStride(validatePersonDesign(manifest.design), 0.74 * manifest.cellSize / 48, manifest.camera.viewSize),

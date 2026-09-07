@@ -27,6 +27,8 @@ export interface BasePersonBake {
   actions: Record<ActionClip, { url: string; shadow: string; debug: string; depth: string }>
   metadata: {
     template: string
+    /** The palette reserved its skin and hair steps, so a complexion can be recoloured. */
+    reservedTones: boolean
     depthEncoding: typeof SPRITE_DEPTH_ENCODING
     version: number
     cellSize: number
@@ -69,6 +71,8 @@ export function personFrameRenderer(design: PersonDesign, extraPalette: string[]
   const depthBaker = spriteDepthBaker(renderer)
   const position = new THREE.Vector3()
   const palette = [...recipe.renderPalette, ...extraPalette].map((hex) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)))
+  // Props passed in by other bakes are shared; only the body owns a reserved tone.
+  const paletteTones = [...recipe.paletteTones, ...extraPalette.map(() => 0)]
   const canvas = document.createElement("canvas")
   canvas.width = size; canvas.height = size
   const context = canvas.getContext("2d", { willReadFrequently: true })!
@@ -97,7 +101,7 @@ export function personFrameRenderer(design: PersonDesign, extraPalette: string[]
         maskContext.drawImage(renderer.domElement, 0, 0)
         rig.inkMask(false)
         const colors = context.getImageData(0, 0, size, size)
-        const inked = inkPersonFrame(colors.data, maskContext.getImageData(0, 0, size, size).data, size, palette, recipe.design.ink)
+        const inked = inkPersonFrame(colors.data, maskContext.getImageData(0, 0, size, size).data, size, palette, recipe.design.ink, paletteTones)
         depth = depthBaker.render(scene, camera, size, framing?.viewSize ?? recipe.camera.viewSize, colors.data, inked.pixels)
         if (inked.padding < 4) throw new Error(`${clip}, ${recipe.directions[row]}, frame ${Math.round(phase * PERSON_CLIPS[clip].frames) + 1}: this design exceeds the four-pixel safe frame. Reduce the proportions.`)
         padding = inked.padding
@@ -250,7 +254,7 @@ export function* bakePersonSteps(design: PersonDesign = DEFAULT_DESIGN, diagnost
     shadowWalk: results.walk.shadow, shadowIdle: results.idle.shadow,
     depthWalk: results.walk.depth, depthIdle: results.idle.depth,
     metadata: {
-      template: recipe.id, depthEncoding: SPRITE_DEPTH_ENCODING, version: recipe.version, cellSize: size,
+      template: recipe.id, reservedTones: true, depthEncoding: SPRITE_DEPTH_ENCODING, version: recipe.version, cellSize: size,
       nominalHeightPixels: recipe.nominalHeightPixels, renderPalette: recipe.renderPalette,
       anchor: recipe.anchor, directions: recipe.directions,
       frameCount: PERSON_CLIPS.walk.frames, walkStrides: WALK_CLIP_STRIDES, camera: recipe.camera,

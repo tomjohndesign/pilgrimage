@@ -288,6 +288,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
           >
             <Suspense fallback={null}>
               <CharacterSprite map={map} name="monk" type="friar" characterModel="base" characterScale={characterScale}
+                complexion={monk.complexion}
                 visualOverride={equipped ? rocketMonkVisual(monk.attributes.age) : monkVisual(monk.attributes.age)}
                 flightClip={equipped ? rocketFlightClip(monk.attributes.age) : undefined} attachment={{ ...monkRelicAttachment(monk.attributes.age),
                   restPosition: world.centre ? [world.centre.x, walkingSurface(map, world.centre.x, world.centre.z).height + RELIC_DISPLAY_HEIGHT - .12, world.centre.z] : undefined,
