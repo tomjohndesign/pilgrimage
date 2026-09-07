@@ -1,10 +1,11 @@
-import { BRIDGE_RISE, bridgeLayout, ropeDeckHeight } from "./bridges"
+import { BRIDGE_RISE, bridgeLayout, bridgeCornerAt, ropeDeckHeight } from "./bridges"
 import { groundHeight } from "./elevation"
 import { TILE_HEIGHT } from "./terrain"
 import type { GameMap } from "./types"
 
 /** Height and grade of the rendered triangle/deck, sampled in centred world coordinates. */
 export function walkingSurface(map: GameMap, wx: number, wz: number) {
+  if (bridgeCornerAt(map, wx, wz)) return { height: TILE_HEIGHT + BRIDGE_RISE, dx: 0, dz: 0 }
   const x = wx + map.width / 2 - 0.5, z = wz + map.depth / 2 - 0.5
   const tx = Math.max(0, Math.min(map.width - 1, Math.floor(x + 0.5)))
   const tz = Math.max(0, Math.min(map.depth - 1, Math.floor(z + 0.5)))

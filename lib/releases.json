@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "7b8781e2295a2ce7f8b0b13b5b56cc7df0fe4888",
-  "releaseCount": 72,
+  "lastProcessedCommit": "9689da0b2e4cf7eb3f925c49558c45377ec86243",
+  "releaseCount": 73,
   "releases": [
+    {
+      "version": "0.0.87",
+      "title": "Release 0.0.87",
+      "summary": "Keep merchant carts supported through turns and park outside shrines (#103)",
+      "commit": "9689da0b2e4cf7eb3f925c49558c45377ec86243"
+    },
     {
       "version": "0.0.86",
       "title": "Release 0.0.86",

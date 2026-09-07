@@ -1,7 +1,7 @@
 import { diagonalRoadBend, isRoadTerrain, roadWear, sampleRoadBend, TRAFFIC_FOR_BARE_ROAD } from "../map/road"
 import { tileAt, type GameMap } from "../map/types"
 
-/** Tile-local endpoints, source (0 main, 1 branch, 2 local traffic), and optional local compaction. */
+/** Tile-local endpoints, source (0 main, 1 branch, 2 local traffic, 3 cart wheel rut), and optional local compaction. */
 export type RoadSegment = readonly [number, number, number, number, number, number?]
 export interface TraveledRoad { ax: number; az: number; bx: number; bz: number; wear: number }
 
@@ -9,7 +9,7 @@ export interface TraveledRoad { ax: number; az: number; bx: number; bz: number; 
 export function roadSegmentWear(segment: RoadSegment, traffic: number, relicTraffic: number, tier: number): [number, number, number, number] {
   const local = segment[4] === 2
   const depth = Math.min(1, Math.max(0, segment[5] ?? 0))
-  const wear = roadWear(local ? depth * TRAFFIC_FOR_BARE_ROAD : segment[4] ? relicTraffic : traffic, tier)
+  const wear = roadWear(local ? depth * TRAFFIC_FOR_BARE_ROAD : segment[4] === 1 ? relicTraffic : traffic, tier)
   return [wear.edge, wear.inner, segment[4], local ? Math.min(1, depth / .2) : 1]
 }
 

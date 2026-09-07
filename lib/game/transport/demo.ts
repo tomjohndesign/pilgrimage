@@ -17,17 +17,23 @@ export const MERCHANT_DEMO_MAP: GameMap = {
   road: Array.from({ length: 11 }, (_, x) => ({ x, z: 5 })),
 }
 export const DEMO_STAGES = ["Arriving", "Opening", "Selling", "Closing", "Continuing"] as const
-export type DemoStage = typeof DEMO_STAGES[number]
+type MerchantStage = typeof DEMO_STAGES[number]
+export type DemoStage = MerchantStage | "Approach" | "Turning" | "Exit" | "Backing"
 export interface DemoPerson { x: number; z: number; heading: number; moving: boolean }
 export interface MerchantDemoFrame {
   time: number; stage: DemoStage; activity: Activity; merchant: DemoPerson; customer: DemoPerson
+  reversing?: boolean
+  clearance?: boolean
   keeperTime: number; cartPose: CartPose; shopProgress: number; pasture?: PastureAnimal; sales: number
+}
+export interface MerchantDemo {
+  map: GameMap; stages: readonly DemoStage[]; frames: MerchantDemoFrame[]; starts: Partial<Record<DemoStage, number>>; duration: number; step: number; turning: boolean
 }
 const STEP = 1 / 30
 /** A repeatable, scrubbable staging of the complete journey, using the runtime
  * rig speeds, action durations and pasture solver. It never touches the live game.
  */
-export function merchantDemo(puller: Puller, variant: HorseVariant = "common") {
+export function merchantDemo(puller: Puller, variant: HorseVariant = "common"): MerchantDemo & { starts: Record<MerchantStage, number> } {
   const wheelbase = -cartOffset(puller) * BASE_CHARACTER_SCALE
   const speed = merchantWalkSpeed(puller, BASE_CHARACTER_SCALE, personWalkStride(pullingDesign(0)) * BASE_CHARACTER_SCALE, variant)
   const maneuver = roadsideManeuver({ x: -4, z: 2 }, { x: 1, z: 0 }, 0, 1, wheelbase)
@@ -42,9 +48,9 @@ export function merchantDemo(puller: Puller, variant: HorseVariant = "common") {
   const customerArrival = [{ x: -2, z: 2 }, { x: frontage.x, z: 2 }, frontage]
   const customerExit = [frontage, { x: frontage.x, z: 2 }, { x: 3, z: 2 }]
   const approachSeconds = routeLength(customerArrival) / customerSpeed, sellSeconds = Math.max(26, approachSeconds + 5 + routeLength(customerExit) / customerSpeed)
-  const frames: MerchantDemoFrame[] = [], starts = {} as Record<DemoStage, number>
-  const pasture = puller === "hand" ? undefined : createPasture(park, stallObstacles(parkedAxle, maneuver.heading, 1, BASE_CHARACTER_SCALE), animalClearance(puller, BASE_CHARACTER_SCALE))
-  let stage: DemoStage = "Arriving", elapsed = 0, time = 0
+  const frames: MerchantDemoFrame[] = [], starts = {} as Record<MerchantStage, number>
+  const pasture = puller === "hand" ? undefined : createPasture(park, stallObstacles(parkedAxle, maneuver.heading, 1, BASE_CHARACTER_SCALE), animalClearance(puller, BASE_CHARACTER_SCALE), maneuver.heading)
+  let stage: MerchantStage = "Arriving", elapsed = 0, time = 0
   while (time < 240) {
     starts[stage] ??= time
     let merchant: DemoPerson = { ...park, heading: maneuver.heading, moving: false }
@@ -67,7 +73,7 @@ export function merchantDemo(puller: Puller, variant: HorseVariant = "common") {
     else cartPose = alignCart(park, maneuver.heading, wheelbase)
     frames.push({ keeperTime: stage === "Selling" ? elapsed : 0, cartPose: { ...cartPose, hitch: { ...cartPose.hitch } }, time, stage, activity: stage === "Opening" ? "openingShop" : stage === "Selling" ? "vending" : stage === "Closing" ? "packingShop" : "walking", merchant, customer, shopProgress: progress, sales,
       pasture: pasture && stage !== "Arriving" && stage !== "Continuing" ? { ...pasture, home: { ...pasture.home }, route: pasture.route.map(p => ({ ...p })) } : undefined })
-    let next: DemoStage = stage
+    let next: MerchantStage = stage
     if (stage === "Arriving" && elapsed >= arrive) next = "Opening"
     if (stage === "Opening" && elapsed >= SHOP_SECONDS) next = "Selling"
     if (stage === "Selling" && elapsed >= sellSeconds && keeperRoutine(elapsed, puller, BASE_CHARACTER_SCALE, personWalkStride(pullingDesign(0)) * BASE_CHARACTER_SCALE).atHome) next = "Closing"
@@ -75,5 +81,5 @@ export function merchantDemo(puller: Puller, variant: HorseVariant = "common") {
     if (stage === "Continuing" && elapsed >= routeLength(departure) / speed + 1) break
     elapsed = next === stage ? elapsed + STEP : 0; stage = next; time += STEP
   }
-  return { frames, starts, duration: time, step: STEP }
+  return { frames, starts, duration: time, step: STEP, map: MERCHANT_DEMO_MAP, stages: DEMO_STAGES, turning: false }
 }

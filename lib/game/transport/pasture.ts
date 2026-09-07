@@ -1,11 +1,12 @@
 import { tileAt, tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap, type TilePos } from "../map/types"
+import { animalTravel } from "./animal-travel"
 import { buildingAt } from "../settlement"
 
 import { pastureSegmentClear, type StallObstacle } from "./stall"
 
 export interface PastureAnimal {
   obstacles: StallObstacle[]; clearance: number
-  x: number; z: number; heading: number; moving: boolean; distance: number; rest: number; visits: number
+  x: number; z: number; heading: number; reversing: boolean; moving: boolean; distance: number; rest: number; visits: number
   home: { x: number; z: number }; route: Array<{ x: number; z: number }>; returning: boolean; ready: boolean
 }
 const key = (t: TilePos) => `${t.x},${t.z}`
@@ -40,8 +41,8 @@ export function pastureRoutes(map: GameMap, home: { x: number; z: number }, from
   }
   return routes
 }
-export function createPasture(home: { x: number; z: number }, obstacles: StallObstacle[] = [], clearance = 0): PastureAnimal {
-  return { obstacles, clearance, x: home.x, z: home.z, home: { x: home.x, z: home.z }, heading: 0, moving: false, distance: 0, rest: 0.6, visits: 0, route: [], returning: false, ready: false }
+export function createPasture(home: { x: number; z: number }, obstacles: StallObstacle[] = [], clearance = 0, heading = 0): PastureAnimal {
+  return { obstacles, clearance, x: home.x, z: home.z, home: { x: home.x, z: home.z }, heading, reversing: false, moving: false, distance: 0, rest: 0.6, visits: 0, route: [], returning: false, ready: false }
 }
 export function stepPasture(map: GameMap, animal: PastureAnimal, dt: number, speed: number, recall: boolean) {
   animal.distance = 0; animal.moving = false
@@ -73,7 +74,8 @@ export function stepPasture(map: GameMap, animal: PastureAnimal, dt: number, spe
       animal.route = []; animal.returning = false; animal.ready = false; return
     }
     const step = Math.min(distance, remaining)
-    animal.heading = Math.atan2(dx, dz); animal.x += dx / distance * step; animal.z += dz / distance * step
+    Object.assign(animal, animalTravel(animal.heading, dx, dz))
+    animal.x += dx / distance * step; animal.z += dz / distance * step
     animal.distance += step; remaining -= step
     if (step === distance) { animal.x = target.x; animal.z = target.z; animal.route.shift() }
   }

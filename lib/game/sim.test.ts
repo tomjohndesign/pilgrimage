@@ -518,7 +518,7 @@ describe("left-hand walking lanes", () => {
     const s = sim.travelers.get(0)!
     for (let i = 0; i <= 28; i++) {
       // Ground at 7 and 13, half-rise ramps at 8 and 12, full deck at 9–11.
-      const rise = Math.max(0, Math.min(s.progress - 7, 13 - s.progress, 2)) * BRIDGE_RISE / 2
+      const rise = Math.max(0, Math.min(s.progress - 7.5, 12.5 - s.progress, 1)) * BRIDGE_RISE
       expect(s.y).toBeCloseTo(TILE_HEIGHT + rise)
       expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) - direction * s.laneOffset)
       if (i < 28) stepSim(sim, [t], map, 1, 0.25, movement)

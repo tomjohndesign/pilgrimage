@@ -3,6 +3,9 @@ import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
 import type { TerrainId } from "./terrain"
 import { tileAt, type GameMap } from "./types"
 
+/** Inside-corner shoulder shared by paths and their bridge decks, in tiles. */
+export const ROAD_CORNER_SHOULDER_RADIUS = 0.45
+
 /**
  * Road development tiers. The road is one terrain id ("path") on the map; how
  * built-up it looks is a separate, world-wide tier — early game it's a trodden

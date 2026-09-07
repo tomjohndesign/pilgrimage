@@ -17,11 +17,16 @@ export type HorseVariant = typeof HORSE_VARIANTS[number]
 /** Shared by loose, harnessed and ridden animals; recorded in every affected bake. */
 export const ANIMAL_RIG_VERSION = 1
 export const TRANSPORT = {
-  version: "v19", cellSize: 128, anchor: [64, 78] as const,
+  version: "v20", cellSize: 128, anchor: [64, 78] as const,
   viewSize: BASE_PERSON.camera.viewSize * 2,
   scale: 0.74 * 128 / 48,
   wheelRadius: 0.46, wheelFrames: 24, animalFrames: 20, grazeFrames: 12, lowerFrames: 6, shopFrames: 12,
 } as const
+export const DRIVER_SEAT = { x: 0, y: 0.73, z: 1.24 } as const
+/** Narrower chassis and wheel track; wheel diameter and drawbar length stay fixed. */
+export const CART_WIDTH_SCALE = 0.8
+/** Wheel centre offset in the source rig, before chassis width scaling. */
+export const CART_WHEEL_X = 0.92
 export const CART_COLUMNS = TRANSPORT.wheelFrames
 export const ANIMAL_COLUMNS = TRANSPORT.animalFrames + TRANSPORT.grazeFrames + TRANSPORT.lowerFrames + 1
 export const RIG_TO_WORLD = TRANSPORT.scale / TRANSPORT.viewSize

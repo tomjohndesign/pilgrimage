@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { TRANSPORT, type Cargo, type CartMode } from "./assets"
+import { TRANSPORT, CART_WIDTH_SCALE, CART_WHEEL_X, type Cargo, type CartMode } from "./assets"
 import { stallLayout, KEEPER_SEAT } from "./stall"
 import { model } from "./geometry"
 export { createAnimalRig } from "./animal-rig"
@@ -31,7 +31,7 @@ export function createCartRig(cargo: Cargo, mode: CartMode, compact = false) {
     const plank = m.box([0, 0.76 + i * 0.17, z], [1.55 - i * 0.02, 0.15, 0.1], boards[i]); plank.rotation.z = (i - 1) * 0.012
   }
   m.bar([-0.94, 0.46, 0], [0.94, 0.46, 0], 0.08, edge)
-  const wheels = [-0.92, 0.92].map(x => {
+  const wheels = [-CART_WHEEL_X, CART_WHEEL_X].map(x => {
     const wheel = new THREE.Group(); wheel.position.set(x, TRANSPORT.wheelRadius, 0); m.root.add(wheel)
     wheel.name = "solid-wood-wheel"
     const disc = m.mesh(new THREE.CylinderGeometry(TRANSPORT.wheelRadius, TRANSPORT.wheelRadius, 0.17, 40), "#514331", [0, 0, 0], wheel); disc.rotation.z = Math.PI / 2
@@ -50,14 +50,21 @@ export function createCartRig(cargo: Cargo, mode: CartMode, compact = false) {
     return wheel
   })
   const animal = mode === "donkey" || mode === "horse"
-  const tip = mode === "horse" ? 3.3 : mode === "donkey" ? 3.15 : mode === "shop" ? 0.95 : 2.18
-  for (const sign of [-1, 1]) {
-    m.bar([sign * 0.65, 0.6, 0.5], [sign * (animal ? 0.48 : 0.295), 0.61, tip], 0.045, wood)
+  const tip = mode === "shop" ? 0.95 : 2.18
+  // Draught shafts and traces belong to the hitched animal's sprite so they
+  // keep its heading when the cart body turns independently on a tight bridge.
+  if (!animal) for (const sign of [-1, 1]) {
+    m.bar([sign * 0.65, 0.6, 0.5], [sign * 0.295 / CART_WIDTH_SCALE, 0.61, tip], 0.045, wood).name = "cart-handle"
   }
-  // Traces join the animal's separately baked fitted harness to the cart.
   if (animal) {
-    const z = mode === "horse" ? 3.1 : 2.95
-    for (const sign of [-1, 1]) m.bar([sign * 0.54, 0.72, 0.75], [sign * 0.44, 0.97, z + 0.64], 0.027, "#493727")
+    const bench = m.box([0, 1.20, 1.05], [1.6, 0.18, 0.90], "#766149")
+    bench.name = "driver-bench"
+    for (const x of [-0.62, 0.62]) {
+      m.box([x, 0.9, 1.05], [0.14, 0.6, 0.14], edge)
+      m.bar([x, 0.7, 1.15], [x, 0.91, 1.85], 0.04, edge)
+    }
+    m.box([0, 0.89, 1.72], [1.4, 0.10, 0.40], wood).name = "driver-footboard"
+    m.box([0, 1.48, 0.64], [1.58, 0.25, 0.10], wood).name = "driver-backrest"
   }
   for (let i = 0; i < itemCount; i++) {
     const start = m.root.children.length
@@ -98,6 +105,13 @@ export function createCartRig(cargo: Cargo, mode: CartMode, compact = false) {
     for (const x of [-0.55, 0.55]) m.bar([x, 0.05, 0.74], [x, 0.65, 0.74], 0.045, edge)
   }
   const cover = m.root.children.slice(roofStart)
+  // Resize source geometry only. The driver and ground display retain their
+  // proportions, and hand-cart grips stay at the same attachment points.
+  const chassis = new THREE.Group()
+  chassis.name = "cart-chassis"
+  for (const part of [...m.root.children]) chassis.add(part)
+  chassis.scale.x = CART_WIDTH_SCALE
+  m.root.add(chassis)
   const displayStart = m.root.children.length
   if (mode === "shop") {
     m.box([layout.display.x, 0.035, layout.display.z], [layout.display.width, 0.055, layout.display.length], "#7f7156")

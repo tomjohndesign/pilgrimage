@@ -1,4 +1,4 @@
-import { RIG_TO_WORLD, type Puller } from "./assets"
+import { RIG_TO_WORLD, CART_WIDTH_SCALE, type Puller } from "./assets"
 import type { Point } from "./roadside"
 
 /** Authored rig coordinates. The long display runs along the cart, facing the
@@ -25,7 +25,7 @@ export function stallObstacles(axle: Point, heading: number, side: number, scale
   const layout = stallLayout(puller)
   const unit = RIG_TO_WORLD * scale
   return [
-    { ...axle, heading, halfWidth: 1.06 * unit, halfLength: 1.02 * unit },
+    { ...axle, heading, halfWidth: 1.06 * CART_WIDTH_SCALE * unit, halfLength: 1.02 * unit },
     { ...stallPoint(axle, heading, side, scale, layout.display), heading, halfWidth: layout.display.width / 2 * unit, halfLength: layout.display.length / 2 * unit },
     { ...stallPoint(axle, heading, side, scale, layout.sign), heading, halfWidth: 0.42 * unit, halfLength: 0.15 * unit },
   ]

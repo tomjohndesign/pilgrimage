@@ -45,9 +45,11 @@ export interface BasePersonBake {
 let bakeRenderer: THREE.WebGLRenderer | undefined
 
 /** Shared camera, ink and registration for both live previews and exported sheets. */
-export function personFrameRenderer(design: PersonDesign, extraPalette: string[] = []) {
+export function personFrameRenderer(design: PersonDesign, extraPalette: string[] = [], framing?: {
+  cellSize: number; anchor: readonly [number, number]; viewSize: number; occluder?: THREE.Object3D
+}) {
   const recipe = personRecipe(design)
-  const size = recipe.cellSize
+  const size = framing?.cellSize ?? recipe.cellSize
   // One small renderer per page, reused while adjusting parameters.
   const renderer = bakeRenderer ??= new THREE.WebGLRenderer({ alpha: true, antialias: false, preserveDrawingBuffer: true })
   renderer.localClippingEnabled = true
@@ -58,11 +60,13 @@ export function personFrameRenderer(design: PersonDesign, extraPalette: string[]
   const scene = new THREE.Scene()
   const rig = createBasePersonRig(recipe)
   scene.add(rig.root)
+  if (framing?.occluder) scene.add(framing.occluder)
   scene.add(new THREE.AmbientLight(0xffffff, 1.1))
   const light = new THREE.DirectionalLight(0xffffff, 1.8)
   light.position.set(-3, 7, 5)
   scene.add(light)
-  const camera = personCamera(recipe)
+  const camera = personCamera(framing ? { ...recipe, cellSize: size, anchor: [...framing.anchor],
+    camera: { ...recipe.camera, viewSize: framing.viewSize } } : recipe)
   const depthBaker = spriteDepthBaker(renderer)
   const position = new THREE.Vector3()
   const palette = [...recipe.renderPalette, ...extraPalette].map((hex) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16)))
@@ -92,7 +96,7 @@ export function personFrameRenderer(design: PersonDesign, extraPalette: string[]
         rig.inkMask(false)
         const colors = context.getImageData(0, 0, size, size)
         const inked = inkPersonFrame(colors.data, maskContext.getImageData(0, 0, size, size).data, size, palette, recipe.design.ink)
-        depth = depthBaker.render(scene, camera, size, recipe.camera.viewSize, colors.data, inked.pixels)
+        depth = depthBaker.render(scene, camera, size, framing?.viewSize ?? recipe.camera.viewSize, colors.data, inked.pixels)
         if (inked.padding < 4) throw new Error(`${clip}, ${recipe.directions[row]}, frame ${Math.round(phase * PERSON_CLIPS[clip].frames) + 1}: this design exceeds the four-pixel safe frame. Reduce the proportions.`)
         padding = inked.padding
         colors.data.set(inked.pixels)
@@ -103,7 +107,7 @@ export function personFrameRenderer(design: PersonDesign, extraPalette: string[]
         rig.sockets[name].getWorldPosition(position).project(camera)
         sockets[name] = { x: (position.x + 1) * size / 2, y: (1 - position.y) * size / 2, depth: position.z }
       }
-      return { canvas, depth, padding, sockets, shadow: debug ? null : personCastShadow(canvas, recipe.anchor, recipe.design.shadow) }
+      return { canvas, depth, padding, sockets, shadow: debug ? null : personCastShadow(canvas, framing ? [...framing.anchor] : recipe.anchor, recipe.design.shadow) }
     },
     dispose() { depthBaker.dispose(); rig.dispose(); renderer.renderLists.dispose() },
   }

@@ -178,7 +178,8 @@ export function finishElevation(e: ElevationInfo, width: number, depth: number, 
 }
 
 /**
- * Cut and fill a purchased footprint at the height shown by its placement ghost.
+ * Cut and fill any building footprint at its current ground-centre height
+ * (the placement ghost's height for purchases).
  * Pin every corner, including the perimeter: averaging tile heights alone would
  * let the surrounding slope poke back through the floor. Unoccupied dry tiles
  * sharing those corners meet the pad; existing foundations and water stay put.

@@ -842,7 +842,8 @@ describe("settlement route heights", () => {
       s.workProgress = 1
       s.y = TILE_HEIGHT
       stepSim(sim, [t], map, 1, 0.5)
-      expect(s.y).toBeCloseTo(TILE_HEIGHT + BRIDGE_RISE * 0.75)
+      // z=5.5 is the top edge of the ramp, already at full deck height.
+      expect(s.y).toBeCloseTo(TILE_HEIGHT + BRIDGE_RISE)
       const lane = activity === "toRelic" ? s.laneOffset : activity === "fromRelic" ? -s.laneOffset : 0
       expect(s.x).toBeCloseTo(tileToWorldX(map, 10) + lane)
       expect(s.z).toBeCloseTo(tileToWorldZ(map, 5.5))
