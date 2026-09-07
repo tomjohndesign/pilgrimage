@@ -39,6 +39,13 @@ export function usePixelWorldTexel() {
   return useContext(PixelRenderContext)?.worldTexel ?? NATIVE_WORLD_TEXEL
 }
 
+const NO_CHARACTERS: ReadonlySet<THREE.Object3D> = new Set()
+
+/** The live character roots, so effects can prepare passes only when people are on screen. */
+export function usePixelCharacterRoots(): ReadonlySet<THREE.Object3D> {
+  return useContext(PixelRenderContext)?.characters ?? NO_CHARACTERS
+}
+
 /** Character roots keep their original layers for picking and the unpixelated view. */
 export function PixelCharacters({ children }: { children: ReactNode }) {
   const renderer = useContext(PixelRenderContext)

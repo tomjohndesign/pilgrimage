@@ -17,6 +17,15 @@ export const OUTLINE_ID_LAYER_MASK = 1 << OUTLINE_ID_LAYER
 export const SELECTED_CHARACTER_LAYER = 2
 
 /**
+ * The road's edge line on its own, over the terrain's depth: the outline pass
+ * traces it faintly back over the trees standing in front of it, so a road
+ * still reads where the canopy hides it. Layers 3 and 4 belong to the
+ * character passes (see render/pixel-characters).
+ */
+export const ROAD_EDGE_LAYER = 5
+export const ROAD_EDGE_LAYER_MASK = 1 << ROAD_EDGE_LAYER
+
+/**
  * Rendering modes, in the order the O key cycles through them:
  *  - overlap:    outline only where an object overlaps a different object.
  *  - silhouette: outline the whole silhouette, terrain boundaries included.

@@ -34,6 +34,7 @@ import { Buildings } from "./buildings"
 import { BuildInfluenceOverlay } from "./build-influence-overlay"
 import { CameraLight } from "./camera-light"
 import { CameraRig } from "./camera-rig"
+import { PersonPicking } from "./character-selection"
 import { DebugHandle } from "./debug-handle"
 import { Environment } from "./environment"
 import { Monks } from "./monks"
@@ -170,6 +171,7 @@ export function GameCanvas({
       <BuildInfluenceOverlay map={map} buildMode={!!buildType} />
 
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
+      <PersonPicking />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
       <DebugHandle characterScale={characterScale} map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} movement={movement} />
     </PixelCanvas>

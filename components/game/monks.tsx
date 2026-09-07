@@ -21,7 +21,7 @@ import * as THREE from "three"
 
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
-import { selectElement } from "@/lib/game/selection"
+import { markPerson, selectElement } from "@/lib/game/selection"
 import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
 import type { GameMap } from "@/lib/game/map/types"
 import { monkStaminaRegistry, monkRegistry, monkPositionRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
@@ -283,6 +283,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
           <group
             key={monk.id}
             ref={(node) => {
+              markPerson(node)
               groupRefs.current[index] = node
             }}
           >
