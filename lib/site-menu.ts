@@ -18,6 +18,7 @@ export const SITE_MENU: SiteMenuItem[] = [
     children: [
       { label: "Textures", description: "Every texture, in place", href: "/assets/textures" },
       { label: "Playground", description: "Characters & procedural buildings", href: "/assets/characters" },
+      { label: "Path playgrounds", description: "Traffic, regrowth & settlement paths", href: "/assets/paths" },
       { label: "Pixel workshop", description: "Compare rendering methods in motion", href: "/assets/rendering" },
     ],
   },

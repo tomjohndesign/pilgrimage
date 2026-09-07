@@ -33,7 +33,7 @@ import {
 } from "@/lib/game/map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
-import { diagonalRoadSegments } from "@/lib/game/render/road-segments"
+import { diagonalRoadSegments, roadSegmentWear, type RoadSegment } from "@/lib/game/render/road-segments"
 import { ROAD_SHAPE_GLSL } from "@/lib/game/render/road-shape"
 import { DEFAULT_TRAFFIC } from "@/lib/game/travelers"
 import { useTerrainTexture } from "./use-terrain-texture"
@@ -409,8 +409,9 @@ function makeTileMaterial({
             if (vGrass > 0.5) shape = vec2(0.0, -1.0);
             shape = max(shape, roadShoulders(vTileLocal, vRoadShoulders,
               edge, (tuft - 0.5) * 0.2 * roadEdgeWear));
+            float segmentOpacity;
             shape = max(shape, diagonalRoadShape(vTileLocal, vRoadSegments,
-              edge - vEdge, edge, (tuft - 0.5) * 0.2 * roadEdgeWear));
+              edge - vEdge, edge, (tuft - 0.5) * 0.2 * roadEdgeWear, segmentOpacity));
             float bare = shape.x;
             float d = shape.y;
             float cover = bare * roadTex.a * roadOpacity * (1.0 - shore);
@@ -422,7 +423,7 @@ function makeTileMaterial({
             float halfLine = 0.5 * roadEdgeWidth * roadPixelRatio * px;
             float line = (1.0 - smoothstep(halfLine - 0.5 * px, halfLine + 0.5 * px, abs(d - edge))) * roadEdgeLine * (1.0 - shore);
 
-            vec3 top = mix(landTop, road, cover) * (1.0 - 0.75 * line * roadOpacity);
+            vec3 top = mix(landTop, road, cover) * (1.0 - 0.75 * line * roadOpacity * segmentOpacity);
             vec3 surface = mix(${ROAD_SIDE_COLOR} * roadColor, top, vGridTop);
             diffuseColor.rgb *= surface;
           #else
@@ -621,6 +622,7 @@ export function TerrainTiles({
   relicTraffic = traffic,
   look = DEFAULT_ROAD_LOOK,
   showGrid = false,
+  traveledRoads,
 }: {
   map: GameMap
   /** Road development tier — index into ROAD_TIERS. */
@@ -633,6 +635,8 @@ export function TerrainTiles({
   look?: RoadLook
   /** Draw the global tile lattice over the ground. Off by default. */
   showGrid?: boolean
+  /** Optional snapshot of actual traveled segments and their individual compaction. */
+  traveledRoads?: ReadonlyMap<number, readonly RoadSegment[]>
 }) {
   const groundMeshRef = useRef<THREE.InstancedMesh>(null)
   const roadMeshRef = useRef<THREE.InstancedMesh>(null)
@@ -645,7 +649,9 @@ export function TerrainTiles({
   ].map((tile) => tile.z * map.width + tile.x)), [bridges, map.width])
   const tier = ROAD_TIERS[clampRoadTier(roadTier)]
   const shoulders = useMemo(() => junctionShoulders(map, coveredLand), [map, coveredLand])
-  const diagonalSegments = useMemo(() => diagonalRoadSegments(map, coveredLand), [map, coveredLand])
+  const diagonalSegments = useMemo(() => traveledRoads
+    ? new Map([...traveledRoads].filter(([index]) => !coveredLand.has(index)))
+    : diagonalRoadSegments(map, coveredLand), [map, coveredLand, traveledRoads])
   const segmentData = useMemo(() => {
     const count = [...diagonalSegments.values()].reduce((sum, segments) => sum + segments.length * 2, 0)
     const width = Math.min(1024, Math.max(1, count))
@@ -656,9 +662,8 @@ export function TerrainTiles({
     for (const [index, segments] of diagonalSegments) {
       ranges.set(index, [offset, segments.length])
       for (const segment of segments) {
-        const wear = roadWear(segment[4] ? relicTraffic : traffic, tier.tier)
-        data.set(segment.slice(0, 4), offset * 4)
-        data.set([wear.edge, wear.inner, segment[4], 0], (offset + 1) * 4)
+        data.set([segment[0], segment[1], segment[2], segment[3]], offset * 4)
+        data.set(roadSegmentWear(segment, traffic, relicTraffic, tier.tier), (offset + 1) * 4)
         offset += 2
       }
     }
