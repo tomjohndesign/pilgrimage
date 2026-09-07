@@ -179,11 +179,11 @@ describe("stepSim", () => {
     const s = sim.travelers.get(0)!
     const hour = GAME_DAY_SECONDS / 24
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([77, 74, 75.8])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([77, 74, 77.9])
 
     Object.assign(sim.balance.rules, { hungerDecay: 2, thirstDecay: 6, staminaDecay: 0 })
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([75, 68, 75.8])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([75, 68, 77.9])
 
     s.activity = "camping"
     s.stamina = 0
@@ -206,7 +206,8 @@ describe("stepSim", () => {
         s.activity = "walking"
       }
     }
-    expect(depleted).toEqual({ hunger: 0, thirst: 1, stamina: 1 })
+    // Legs never bottom out: walkers pitch camp once stamina falls below 20.
+    expect(depleted).toEqual({ hunger: 0, thirst: 1, stamina: 0 })
     expect(sim.time).toBeCloseTo(1.25)
   })
 
@@ -745,7 +746,8 @@ describe("tracks through the dark forest", () => {
     const map = makeTrackMap()
     let took = 0
     for (let id = 0; id < 12; id++) {
-      const travelers = [makeTraveler(id, "pilgrim", { stamina: 20, hunger: 100, thirst: 100 }, beforeMouth)]
+      // Weary but still above the stamina at which they would stop and camp.
+      const travelers = [makeTraveler(id, "pilgrim", { stamina: 24, hunger: 100, thirst: 100 }, beforeMouth)]
       const sim = createSim(travelers, map)
       const s = sim.travelers.get(id)!
       if (runUntil(sim, travelers, map, () => s.track !== null, 8)) took++
