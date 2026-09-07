@@ -15,7 +15,7 @@ import { animalCoat } from "@/lib/game/transport/coats"
 import { TRANSPORT, CART, SHOP, cartUrl, animalUrl, type Puller, RIG_TO_WORLD, cartColumn, animalStride, type Animal, type Cargo, type HorseVariant } from "@/lib/game/transport/assets"
 import { KEEPER_CLIPS, KEEPER_COLUMNS } from "@/lib/game/transport/keeper"
 import { animalLeg } from "@/lib/game/transport/animal-pose"
-import manifest from "@/public/textures/transport/v13/manifest.json"
+import manifest from "@/public/textures/transport/v14/manifest.json"
 import type { FigureClickHandler } from "./traveler-figure"
 
 export function TransportSprite({ map: terrain, kind, coat, variant = 0, horseVariant = "common", cargo = "produce", puller = "hand", awning = false, characterScale = 1,
