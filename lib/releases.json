@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "c8059770a331df36190b73458b6906e34f4c3780",
-  "releaseCount": 93,
+  "lastProcessedCommit": "7879e1dbb973fccc07103c84b51ba0f01d38fd77",
+  "releaseCount": 94,
   "releases": [
+    {
+      "version": "0.0.108",
+      "title": "Release 0.0.108",
+      "summary": "Keep the earth floor under the building, not in front of the door (#127)",
+      "commit": "7879e1dbb973fccc07103c84b51ba0f01d38fd77"
+    },
     {
       "version": "0.0.107",
       "title": "Release 0.0.107",
