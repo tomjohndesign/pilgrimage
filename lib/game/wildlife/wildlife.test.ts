@@ -1,6 +1,6 @@
 import * as THREE from "three"
 import { wildlifeGeometry } from "./batch"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { animalBoneLengths, animalLeg } from "../transport/animal-pose"
 import { RIG_TO_WORLD } from "../transport/assets"
 import { WALK_STANCE_FRACTION } from "../base-person/pose"
@@ -96,14 +96,42 @@ describe("birds", () => {
     }
     expect(landed).toBe(true)
   })
-  it("occasionally reveals a bounded flock from an otherwise unoccupied crown", () => {
+  it.each([0, 1, 2, 3])("reveals at most one hidden flock on an early chop (chosen chop %i)", birdChop => {
     const { map, trees } = fixture(), world = createWildlife(map, trees)
-    const tree = trees.find((_, i) => !world.animals.some(a => !a.concealed && a.perch === i))!
+    // Keep ambient birds out of this hidden-flock scenario.
+    for (const animal of world.animals) if (isBird(animal.kind)) animal.reserve = true
+    const tree = trees[0]
+    world.rng = vi.fn(() => 0.1).mockReturnValueOnce(birdChop ? 0.1 : 0.9)
+    if (birdChop) vi.mocked(world.rng).mockReturnValueOnce((birdChop - 0.5) / 3)
     const count = world.animals.length
-    for (let hit = 0; hit < 20; hit++) startleWildlife(world, tree, map, new Set())
-    expect(world.animals.filter(a => a.transient && !a.concealed).length).toBeGreaterThan(0)
+    for (let hit = 1; hit <= 20; hit++) {
+      startleWildlife(world, tree, map, new Set())
+      const flying = world.animals.filter(a => a.transient && !a.concealed)
+      expect(flying.length).toBe(hit === birdChop ? 2 : 0)
+      // Make the pool available again, as after landing and returning to cover.
+      for (const animal of flying) {
+        animal.flight = null; animal.concealed = true; animal.reserve = true
+      }
+    }
     expect(world.animals.length).toBe(count)
     expect(world.animals.filter(a => a.transient).length).toBe(6)
+  })
+  it("does not flush returning birds again or startle late arrivals after the third chop", () => {
+    const { map, trees } = fixture(), world = createWildlife(map, trees)
+    const bird = world.animals.find(a => a.kind === "sparrow" && !a.reserve)!, index = bird.perch!, tree = trees[index]
+    startleWildlife(world, tree, map, new Set())
+    expect(bird.flight).not.toBeNull()
+    Object.assign(bird, { flight: null, perch: index, x: tree.x, z: tree.z })
+    startleWildlife(world, tree, map, new Set())
+    expect(bird.flight).toBeNull()
+
+    const otherIndex = trees.findIndex(t => Math.abs(t.z - tree.z) > 7), otherTree = trees[otherIndex]
+    for (const animal of world.animals) if (isBird(animal.kind)) animal.reserve = true
+    world.rng = () => 0.9
+    for (let hit = 0; hit < 3; hit++) startleWildlife(world, otherTree, map, new Set())
+    Object.assign(bird, { reserve: false, flight: null, perch: otherIndex, x: otherTree.x, z: otherTree.z })
+    startleWildlife(world, otherTree, map, new Set())
+    expect(bird.flight).toBeNull()
   })
   it("abandons felled perches and remains airborne when there are no trees", () => {
     const { map, trees } = fixture(), world = createWildlife(map, trees)

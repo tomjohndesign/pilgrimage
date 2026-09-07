@@ -25,6 +25,7 @@ export interface WildlifeWorld {
   burrows: RabbitBurrow[]
   animals: WildlifeAnimal[]; habitat: ReturnType<typeof wildlifeHabitat>; trees: readonly TreePlacement[]
   rng: () => number; canopy: number
+  treeDisturbances: Map<number, { chops: number; birdChop: number; flushed: boolean }>
 }
 
 export function treePerch(tree: TreePlacement, id = 0, sheltered = false) {
@@ -37,7 +38,7 @@ export function treePerch(tree: TreePlacement, id = 0, sheltered = false) {
 }
 export function createWildlife(map: GameMap, trees: readonly TreePlacement[], scale = 1): WildlifeWorld {
   const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.wildlife))
-  const world: WildlifeWorld = { animals: [], burrows: [], habitat: wildlifeHabitat(map, trees), trees, rng,
+  const world: WildlifeWorld = { animals: [], burrows: [], habitat: wildlifeHabitat(map, trees), trees, rng, treeDisturbances: new Map(),
     canopy: trees.reduce((height, tree) => Math.max(height, treePerch(tree).y), 2) + 0.8 }
   let group = 0
   const candidates = new Map<WildlifeKind, Point[]>()
@@ -135,24 +136,34 @@ export function launchBird(world: WildlifeWorld, animal: WildlifeAnimal, map: Ga
 export function startleWildlife(world: WildlifeWorld, tree: TreePlacement, map: GameMap, felled: ReadonlySet<number>) {
   const index = world.trees.indexOf(tree)
   if (index < 0 || felled.has(index)) return
+  let disturbance = world.treeDisturbances.get(index)
+  if (!disturbance) {
+    // Decide once per tree: only some crowns hide a flock, leaving on chop 1–3.
+    disturbance = { chops: 0, birdChop: world.rng() < 0.35 ? 1 + Math.floor(world.rng() * 3) : 0, flushed: false }
+    world.treeDisturbances.set(index, disturbance)
+  }
+  disturbance.chops++
+  const canFlush = disturbance.chops <= 3 && !disturbance.flushed
   let flushed = false
   for (const animal of world.animals) {
     if (animal.reserve || animal.burrowState === "inside") continue
     const near = Math.hypot(animal.x - tree.x, animal.z - tree.z) < 3.5
     if (isBird(animal.kind)) {
-      if (!animal.flight && (animal.perch === index || near)) {
+      if (canFlush && !animal.flight && (animal.perch === index || near)) {
         flushed = true; animal.frightened = 5; launchBird(world, animal, map, felled, index)
       }
     } else if (near && !isDomestic(animal.kind)) { animal.frightened = 6; animal.rest = 0; animal.target = null }
   }
-  if (!flushed && world.rng() < 0.55) {
+  if (canFlush && !flushed && disturbance.chops === disturbance.birdChop) {
     const flock = world.animals.filter(a => a.transient && a.concealed).slice(0, 2 + Math.floor(world.rng() * 2))
     for (const animal of flock) {
+      flushed = true
       Object.assign(animal, treePerch(tree, animal.id))
       animal.concealed = false; animal.reserve = false; animal.frightened = 5
       launchBird(world, animal, map, felled, index)
     }
   }
+  disturbance.flushed ||= flushed
 }
 
 export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, scale = 1, felled: ReadonlySet<number> = new Set(), people: readonly Point[] = [], edits: Record<string, AnimalRigEdits> = {}) {
