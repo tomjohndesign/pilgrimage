@@ -16,7 +16,7 @@ export const BUILDING_STYLE = {
     "Plain wooden crosses mark religious buildings: gatepost crosses on the relic enclosure and roof crosses on the monks’ shelter. Keep utility huts unadorned.",
     "A clear entrance and a useful silhouette before surface detail.",
     "Long straw bundles follow the roof pitch, overlapping in thick courses with visible seams and ragged cut ends. Horizontal round logs and pale plastered masonry distinguish enclosed buildings.",
-    "One orthographic camera, consistent scale, light from the upper left.",
+    "One orthographic camera, consistent scale, and the shared southeast light: elevated, below and right of the isometric view (see assets/LIGHTING.md).",
   ],
 } as const
 
