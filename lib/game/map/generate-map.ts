@@ -1,7 +1,7 @@
 import { beachAccess } from "./beaches"
 import { taperRiverBanks, gradeBridgeApproaches } from "./river-banks"
 import { bridgeLayout } from "./bridges"
-import { generateElevation, finishElevation, elevationStep, type ElevationInfo, type ElevationSettings } from "./elevation"
+import { generateElevation, finishElevation, levelBuildingGround, elevationStep, type ElevationInfo, type ElevationSettings } from "./elevation"
 import { drainWater } from "./hydrology"
 import { makeRng } from "../rng"
 import { computeDarkShade, computeForestShade } from "./forest-field"
@@ -854,8 +854,11 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     water: waterInfo,
   }
   finishElevation(elevation, width, depth, kind, waterInfo.surface!)
+  // Corner averaging can pull surrounding slopes back through founding floors.
+  // Pin every footprint with the same cut-and-fill used for player purchases.
+  for (const building of map.buildings) map.elevation = levelBuildingGround(map, building)
   // Bridge grading and founding can raise a formerly low beach; classify sand last.
-  const sandy = beachAccess(elevation, width, depth, kind, waterInfo)
+  const sandy = beachAccess(map.elevation!, width, depth, kind, waterInfo)
   for (let i = 0; i < tiles.length; i++) if (tiles[i] === "sand" && !sandy[i]) tiles[i] = "grass"
   return map
 }
