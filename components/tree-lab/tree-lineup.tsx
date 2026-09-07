@@ -2,7 +2,7 @@
 
 import { Suspense, useMemo } from "react"
 
-import { FoliageField, type FoliagePlacement } from "./foliage-field"
+import { FoliageField, type FoliagePlacement } from "@/components/game/foliage-field"
 import { FOLIAGE_SPECIES, isFoliageSpecies, type FoliageAtlas } from "@/lib/game/trees/foliage/design"
 import { PixelCharacters } from "@/components/pixel-canvas"
 import { CharacterSprite } from "@/components/game/character-sprite"

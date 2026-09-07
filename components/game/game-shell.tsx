@@ -12,6 +12,7 @@ import { BASE_CHARACTER_SCALE, DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE } from "@
 import { BASE_PERSON } from "@/lib/game/base-person/pose"
 import { DEFAULT_MOVEMENT } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
+import { DEFAULT_TREE_MODEL, type TreeModel } from "@/lib/game/trees/render-model"
 import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER, ROAD_TIERS } from "@/lib/game/map/road"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
 import { generateMonks } from "@/lib/game/monks"
@@ -77,6 +78,8 @@ export interface MapSettings {
   pathEase: number
   acceleration: number
   characterModel: CharacterModel
+  /** Parametric trees, or the baked pixel foliage sprites from the tree playground. */
+  treeModel: TreeModel
   /** Uniform sprite-size multipliers, independently tuned for each model. */
   baseSize: number
   draftSize: number
@@ -118,6 +121,7 @@ export const DEFAULT_SETTINGS: MapSettings = {
   pathEase: DEFAULT_MOVEMENT.pathEase,
   acceleration: DEFAULT_MOVEMENT.acceleration,
   characterModel: "base",
+  treeModel: DEFAULT_TREE_MODEL,
   baseSize: BASE_CHARACTER_SCALE,
   draftSize: 1,
   road: DEFAULT_ROAD_TIER,
@@ -191,6 +195,7 @@ export function GameShell({
       easing: String(settings.pathEase),
       acceleration: String(settings.acceleration),
       characters: settings.characterModel,
+      trees: settings.treeModel,
       baseSize: String(settings.baseSize),
       draftSize: String(settings.draftSize),
       road: String(settings.road),
@@ -322,6 +327,7 @@ export function GameShell({
           movement={movement}
           walkTuning={walkTuning}
           characterModel={settings.characterModel}
+          treeModel={settings.treeModel}
           characterScale={settings.characterModel === "base" ? settings.baseSize : settings.draftSize}
           roadTier={settings.road}
           relicTraffic={relicTraffic}

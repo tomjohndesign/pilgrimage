@@ -11,13 +11,20 @@ import type { TreePlacement } from "@/lib/game/trees/placement"
 import { configureSpriteDepthTexture } from "@/lib/game/render/sprite-depth"
 import { encodeObjectId, OUTLINE_ID_LAYER_MASK, treeObjectId } from "@/lib/game/render/outline"
 import { makeRng } from "@/lib/game/rng"
+import { useBuildStore } from "@/lib/game/build-store"
 
 export interface FoliagePlacement extends TreePlacement { foliageVariant?: number }
 
-/** Prototype forest: two draws for any tree count, sharing one color/depth atlas. */
-export function FoliageField({ atlas, placements, seed = 1, onSelect }: {
-  atlas: FoliageAtlas; placements: FoliagePlacement[]; seed?: number
-  onSelect?: (index: number) => void
+/**
+ * Baked pixel foliage: two draws for any tree count, sharing one color/depth
+ * atlas. The game and the tree playground both draw through here; `idBase` is
+ * how many outline IDs the buildings already took, and `hidden` lists felled
+ * trees whose remains are drawn separately.
+ */
+export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, onSelect }: {
+  atlas: FoliageAtlas; placements: FoliagePlacement[]; seed?: number; idBase?: number
+  hidden?: ReadonlySet<number>
+  onSelect?: (index: number, event: { delta: number; stopPropagation: () => void }) => void
 }) {
   const sources = useLoader(THREE.TextureLoader, [atlas.color, atlas.depth])
   const color = useMemo(() => {
@@ -29,12 +36,15 @@ export function FoliageField({ atlas, placements, seed = 1, onSelect }: {
   const depth = useMemo(() => configureSpriteDepthTexture(sources[1].clone()), [sources])
   const worldTexel = usePixelWorldTexel(), view = useMemo(() => ({ value: 0 }), [])
   const materials = useMemo(() => [false, true].map(ids => foliageMaterial(color, depth, view, worldTexel, ids)), [color, depth, view, worldTexel])
-  const entries = useMemo(() => placements.flatMap((tree, index) => isFoliageSpecies(tree.species) ? [{ tree, index }] : []), [placements])
+  const entries = useMemo(() => placements.flatMap((tree, index) =>
+    isFoliageSpecies(tree.species) && !hidden?.has(index) ? [{ tree, index }] : []), [placements, hidden])
   const data = useMemo(() => {
+    // Frames draw from the placement order, so felling a tree never reshuffles its neighbours.
     const rng = makeRng(seed), frames: number[] = [], ids: number[] = [], matrices: THREE.Matrix4[] = []
+    const rolls = placements.map(() => [Math.floor(rng() * FOLIAGE_FRAME.directions), Math.floor(rng() * FOLIAGE_FRAME.variants)])
     entries.forEach(({ tree, index }) => {
-      frames.push(Math.floor(rng() * FOLIAGE_FRAME.directions), FOLIAGE_SPECIES.indexOf(tree.species as typeof FOLIAGE_SPECIES[number]) * FOLIAGE_FRAME.variants + (tree.foliageVariant ?? Math.floor(rng() * FOLIAGE_FRAME.variants)))
-      ids.push(...encodeObjectId(treeObjectId(0, index)))
+      frames.push(rolls[index][0], FOLIAGE_SPECIES.indexOf(tree.species as typeof FOLIAGE_SPECIES[number]) * FOLIAGE_FRAME.variants + (tree.foliageVariant ?? rolls[index][1]))
+      ids.push(...encodeObjectId(treeObjectId(idBase, index)))
       // Variation is baked at native density; don't stretch individual texels.
       matrices.push(new THREE.Matrix4().makeTranslation(tree.x, tree.y, tree.z))
     })
@@ -43,7 +53,7 @@ export function FoliageField({ atlas, placements, seed = 1, onSelect }: {
     geometry.setAttribute("foliageFrame", new THREE.InstancedBufferAttribute(new Float32Array(frames), 2))
     geometry.setAttribute("foliageId", new THREE.InstancedBufferAttribute(new Float32Array(ids), 3))
     return { geometry, matrices }
-  }, [entries, seed])
+  }, [placements, entries, seed, idBase])
   const body = useRef<THREE.InstancedMesh>(null), idMesh = useRef<THREE.InstancedMesh>(null)
   const camera = useRef<THREE.Camera>(undefined)
   const raycast = useMemo(() => foliageRaycast(data.geometry, color, depth, view, () => camera.current), [data, color, depth, view])
@@ -72,7 +82,10 @@ export function FoliageField({ atlas, placements, seed = 1, onSelect }: {
   if (!entries.length) return null
   return <group name="foliage-prototype">
     <instancedMesh key={`body-${entries.length}`} ref={body} args={[data.geometry, materials[0], entries.length]} frustumCulled={false} raycast={raycast}
-      onClick={event => { if (event.delta <= 6 && event.instanceId !== undefined) { event.stopPropagation(); onSelect?.(entries[event.instanceId].index) } }} />
+      onClick={event => {
+        if (!onSelect || event.delta > 6 || event.instanceId === undefined || useBuildStore.getState().tool) return
+        event.stopPropagation(); onSelect(entries[event.instanceId].index, event)
+      }} />
     <instancedMesh key={`ids-${entries.length}`} ref={idMesh} args={[data.geometry, materials[1], entries.length]} frustumCulled={false} layers-mask={OUTLINE_ID_LAYER_MASK} />
   </group>
 }
