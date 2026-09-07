@@ -1,5 +1,6 @@
 "use client"
 
+import { EntranceDetails } from "./entrance-details"
 import { ConstructionProgress } from "./construction-progress"
 import { ConstructionCostEffects, type ConstructionCostHandle } from "./construction-cost-effects"
 import { PixelCharacters } from "@/components/pixel-canvas"
@@ -22,6 +23,7 @@ import { useBuildStore } from "@/lib/game/build-store"
 import { workshopPileOffset } from "@/lib/game/workshop-layout"
 import { pileOffset } from "@/lib/game/trees/timber"
 import { ShelterFire } from "./building-smoke"
+import { hasDomesticHearth } from "@/lib/game/building-art/furnishings"
 import { WoodPile } from "./wood-pile"
 import { tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } from "@/lib/game/map/types"
 import {
@@ -51,6 +53,7 @@ export function Buildings({ map, characterScale = 1.5 }: { map: GameMap; charact
 
   return (
     <group>
+      <EntranceDetails map={map} idColors={idColors} onSelect={selectSite} />
       <PixelCharacters><ConstructionCostEffects ref={costs} map={map} characterScale={characterScale} /></PixelCharacters>
       {buildings.map((building, index) => {
         // The hovel has its own geometry (see shrine.tsx); its ID slot stays reserved.
@@ -89,7 +92,7 @@ export function Buildings({ map, characterScale = 1.5 }: { map: GameMap; charact
           <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
             <StructureModel terrainFloors parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} />
             {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
-            {isComplete(building) && building.buildType === "shelter" && <ShelterFire width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
+            {isComplete(building) && hasDomesticHearth(building.buildType) && <ShelterFire buildType={building.buildType} width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
           </group>
         )
       })}

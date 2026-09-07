@@ -1,4 +1,4 @@
-import type { BuildingDef, TilePos } from "./map/types"
+import type { BuildingDef, GameMap, TilePos } from "./map/types"
 
 /** Clockwise quarter turns viewed from above; absent on older structures. */
 export type BuildingRotation = 0 | 1 | 2 | 3
@@ -25,9 +25,30 @@ export function rotateBuildingPoint(x: number, z: number, rotation = 0): TilePos
   }
 }
 
-/** Keep the building's front-left arrival tile attached to its entrance side. */
-export function buildingEntry(building: Pick<BuildingDef, "x" | "z" | "w" | "d" | "rotation">, inside = false): TilePos {
+/** Centre a doorway on a whole tile, including even-width building fronts. */
+export function buildingDoorOffset(width: number, type?: string): number {
+  return (type === "workshop" ? 0 : Math.floor((width-1)/2))-(width-1)/2
+}
+
+/** Keep an integer arrival tile aligned with the door or the workshop's open court. */
+export function buildingEntry(building: Pick<BuildingDef, "x" | "z" | "w" | "d" | "rotation" | "buildType">, inside = false, end: 1 | -1 = 1): TilePos {
   const local = rotatedFootprint(building, building.rotation)
-  const offset = rotateBuildingPoint(-(local.w - 1) / 2, (local.d - 1) / 2 + (inside ? 0 : 1), building.rotation)
+  const doorX = building.buildType ? buildingDoorOffset(local.w,building.buildType) : -(local.w-1)/2
+  const offset = rotateBuildingPoint(doorX, end * ((local.d - 1) / 2 + (inside ? 0 : 1)), building.rotation)
   return { x: building.x + (building.w - 1) / 2 + offset.x, z: building.z + (building.d - 1) / 2 + offset.z }
+}
+
+/** Reserved, walkable frontage; decorative scenery has no doorway to protect. */
+export function buildingApproach(map: Pick<GameMap,"site">,building: BuildingDef): TilePos | null {
+  if(building.id === map.site?.hovelId) return map.site.door
+  if(["garden","cross","lumberCamp"].includes(building.buildType ?? "")) return null
+  return buildingEntry(building)
+}
+
+/** Every doorway owns a clear approach; taverns also open onto a rear service path. */
+export function buildingApproaches(map: Pick<GameMap,"site">, building: BuildingDef): TilePos[] {
+  const front=buildingApproach(map,building)
+  if(!front) return []
+  return building.buildType === "tavern" && building.id !== map.site?.hovelId
+    ? [front,buildingEntry(building,false,-1)] : [front]
 }

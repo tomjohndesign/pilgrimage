@@ -1,4 +1,4 @@
-import { rotatedFootprint, buildingEntry, type BuildingRotation } from "./building-rotation"
+import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
 import { settlementRoute } from "./settlement-route"
 import { isWoods, TERRAIN } from "./map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } from "./map/types"
@@ -125,6 +125,7 @@ export function placementProblem(
     }
   }
   if (existing.some((b) => footprintsOverlap(b, footprint))) return "occupied"
+  if(existing.some(b => buildingApproaches(map,b).some(p=>p.x>=x && p.x<x+footprint.w && p.z>=z && p.z<z+footprint.d))) return "access"
   if (map.site) {
     const planned = { ...def, ...footprint, rotation, id: "workshop-preview" }
     const entrance = buildingEntry(planned)

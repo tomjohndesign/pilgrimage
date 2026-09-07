@@ -6,6 +6,7 @@ import { PROTOTYPE_BUILDINGS } from "../map/prototype-map"
 import { structureParts, visibleStructureParts } from "./structure"
 import type { BuildingPart } from "./geometry"
 import { workshopLayout, workshopPileOffset } from "../workshop-layout"
+import { roofProfile, singlePlaneRoofRise, hasFrontAwning } from "./dimensions"
 import { WOOD_LOG, woodLogScale } from "../wood-log"
 
 function bounds(part: BuildingPart) {
@@ -71,18 +72,41 @@ describe("settlement construction", () => {
     expect(store.some(p => p.name === "grain-sack" || p.name.startsWith("firewood-"))).toBe(false)
   })
 
-  it("shelters the hut's beds, bench and two timber bays while leaving the work yard open", () => {
+  it("keeps a gentle pitch across houses and toward the rear of open awnings", () => {
+    // The market stall carries a level cloth canopy and the timber yard is open to the sky.
+    for (const def of catalogue.filter(b => b.category === "buildings" && b.id !== "market" && b.id !== "lumberCamp")) {
+      for (const [w, d] of [[2, 2], [3, 2], [3, 4]]) {
+        const parts = structureParts({ ...def, w, d })
+        expect(parts.some(p => /ridge-pole|rafter-left|rafter-right|woven-gable/.test(p.name))).toBe(false)
+        const bundles = parts.filter(p => p.name.startsWith("thatch-bundle-"))
+        expect(bundles.length).toBeGreaterThan(0)
+        for (const part of bundles) {
+          const [ax, ay, az, bx, by, bz, cx, cy, cz] = part.vertices!
+          const profile=roofProfile(d,singlePlaneRoofRise(d),hasFrontAwning(def.id))
+          expect(ay-profile.height(az),part.name).toBeCloseTo(by-profile.height(bz))
+          expect(ay-profile.height(az),part.name).toBeCloseTo(cy-profile.height(cz))
+          expect(by,part.name).toBeLessThan(ay)
+
+        }
+      }
+    }
+  })
+
+  it("shelters the hut's bench and two timber bays without beds, leaving the work yard open", () => {
     const hut = catalogue.find(b => b.id === "workshop")!
     expect([hut.w, hut.d]).toEqual([3, 2])
     const parts = partsFor("workshop")
     expect(parts.find(p => p.name === "floor")?.surface).toBe("trail")
+    expect(parts.some(p => /bed|blanket|wool-cover/.test(p.name))).toBe(false)
     expect(parts.some(p => p.name.startsWith("roof-plank-"))).toBe(false)
     const roof = parts.filter(p => p.name.startsWith("thatch-bundle-")).map(bounds)
     const covered = (x: number, z: number) => roof.some(b => x >= b.min.x && x <= b.max.x && z >= b.min.z && z <= b.max.z)
-    for (const part of parts.filter(p => p.name.startsWith("straw-bed-") || p.name === "workbench-seat")) {
+    for (const part of parts.filter(p => p.name === "workbench-seat")) {
       expect(covered(part.position[0], part.position[2]), part.name).toBe(true)
     }
     expect(covered(-.4, .5)).toBe(false)
+    expect(covered(-hut.w/2+.2, .5)).toBe(false)
+    expect(parts.some(p => /-(side)$/.test(p.name) && p.layer === "roof")).toBe(false)
     const layout = workshopLayout(hut.w, hut.d)
     expect(layout.bayWidth * layout.bayDepth * 2).toBe(2)
     const scale = woodLogScale(), radius = WOOD_LOG.radius * scale
@@ -157,8 +181,10 @@ it("builds solid shrine walls around open arched windows and a single doorway", 
     expect(walls.some(b => b.intersectsBox(window))).toBe(false)
   }
   expect(parts.filter(p => /^side-wall-.*-arch-\d+$/.test(p.name))).toHaveLength(6)
-  expect(parts.filter(p => /^upper-timber-.*-arch-\d+$/.test(p.name))).toHaveLength(6)
-  expect(parts.some(p => p.name.startsWith("upper-timber-") && p.size && p.color === "#756044")).toBe(true)
+  expect(parts.filter(p=>/^upper-timber-.*-arch-\d+$/.test(p.name))).toHaveLength(6)
+  expect(parts.some(p=>p.name === "steeple-cross-upright")).toBe(true)
+  expect(Math.max(...parts.filter(p=>p.name.startsWith("raised-nave-thatch-")).map(p=>bounds(p).max.y))).toBeGreaterThan(2)
+
 })
 
 

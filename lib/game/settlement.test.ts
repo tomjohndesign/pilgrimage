@@ -1,4 +1,5 @@
-import { rotatedFootprint, type BuildingRotation } from "./building-rotation"
+import { settlementRoute } from "./settlement-route"
+import { buildingApproaches, buildingEntry, rotatedFootprint, type BuildingRotation } from "./building-rotation"
 import { getBuildInfluence } from "./build-influence"
 import { DEFAULT_ELEVATION, finishElevation, generateElevation, groundHeight } from "./map/elevation"
 import { describe, expect, it } from "vitest"
@@ -114,15 +115,15 @@ describe("build and buy", () => {
   it("checks the turned footprint rather than the catalogue dimensions", () => {
     const map = testMap(), at = { x: 10, z: 14 }
     const def = BUILD_CATALOG.find(item => item.id === "hall")!
-    map.tiles[at.z * map.width + at.x + 2] = "water"
+    map.tiles[(at.z + 2) * map.width + at.x] = "water"
     expect(placementError(map, def, at)).toBeTruthy()
     expect(placementError(map, def, at, undefined, 1)).toBeNull()
   })
 
-  it("offers only buildings with working roles", () => {
+  it("offers the whole building kit except the relic enclosure", () => {
     expect(BUILD_CATALOG.filter(b => b.category === "buildings").map(b => b.id))
-      .toEqual(["shelter", "workshop", "hall", "storehouse"])
-    for (const type of ["lumberCamp", "monk-shelter", "shepherd-hut", "wood-shelter"])
+      .toEqual(["shelter", "workshop", "hall", "storehouse", "monk-shelter", "shepherd-hut", "wood-shelter", "lumberCamp", "market", "guard-post", "tavern"])
+    for (const type of ["enclosure", "gable", "hovel"])
       expect(purchaseStructure(createSettlement(), testMap(), monks, [relic], type, { x: 10, z: 14 }).error).toBe("Unknown structure.")
   })
 
@@ -376,4 +377,30 @@ describe("shrine renown and income", () => {
     expect(after.structures).toBe(built.structures)
     expect(createSettlement()).toEqual(before)
   })
+})
+
+it.each([0,1,2,3] as BuildingRotation[])("reserves a walkable entrance tile and releases it on removal (rotation %i)", rotation => {
+  const map=testMap(),def=BUILD_CATALOG.find(b=>b.id==="hall")!
+  const building={...def,...rotatedFootprint(def,rotation),x:8,z:8,rotation,id:"hall",buildType:"hall"}
+  map.buildings.push(building)
+  const entry=buildingEntry(building)
+  const marker=BUILD_CATALOG.find(b=>b.id==="cross")!
+  expect(placementError(map,marker,entry)).toMatch(/entrance path tile/)
+  expect(settlementRoute(map,map.buildings,map.site!.door,entry)).not.toBeNull()
+  map.buildings.pop()
+  expect(placementError(map,marker,entry)).toBeNull()
+})
+
+it.each([0,1,2,3] as BuildingRotation[])("reserves both tavern approaches and releases both on removal (rotation %i)", rotation => {
+  const map=testMap(),def=BUILD_CATALOG.find(b=>b.id==="hall")!
+  const building={...def,...rotatedFootprint({w:3,d:4},rotation),x:8,z:8,rotation,id:"tavern",buildType:"tavern"}
+  map.buildings.push(building)
+  const entries=buildingApproaches(map,building),marker=BUILD_CATALOG.find(b=>b.id==="cross")!
+  expect(entries).toHaveLength(2)
+  for(const entry of entries) {
+    expect(placementError(map,marker,entry)).toMatch(/entrance path tile/)
+    expect(settlementRoute(map,map.buildings,map.site!.door,entry)).not.toBeNull()
+  }
+  map.buildings.pop()
+  for(const entry of entries) expect(placementError(map,marker,entry)).toBeNull()
 })

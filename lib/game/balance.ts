@@ -2,6 +2,7 @@ import { STOREHOUSE_FOOD_CAPACITY } from "./storage"
 
 /** Pure balance data, shared by gameplay, the tuning page and the specification. */
 export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "storehouse"
+  | "monk-shelter" | "shepherd-hut" | "tavern" | "wood-shelter" | "market" | "guard-post" | "lumberCamp"
 
 export interface Resources {
   gold: number
@@ -38,7 +39,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     income: { gold: 3, wood: 0 },
     w: 2,
     d: 2,
-    height: 0.7,
+    height: 0.62,
     color: "#b99a72",
     roofColor: "#855642",
   },
@@ -53,7 +54,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     income: { gold: 0, wood: 0 },
     w: 3,
     d: 2,
-    height: 0.85,
+    height: 0.68,
     color: "#8c7658",
     roofColor: "#4e5e45",
   },
@@ -97,9 +98,9 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     renown: 18,
     requiredRenown: 40,
     income: { gold: 8, wood: 0 },
-    w: 3,
-    d: 2,
-    height: 1.3,
+    w: 2,
+    d: 3,
+    height: 0.78,
     color: "#c6b998",
     roofColor: "#78504b",
   },
@@ -107,8 +108,57 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     id: "storehouse", label: "Storehouse", category: "buildings",
     description: "Covered storage for harvested timber, grain, vegetables, fruit and fish.",
     cost: { gold: 60, wood: 45 }, renown: 0, requiredRenown: 0,
-    income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.85,
+    income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.62,
     color: "#7a5a3a", roofColor: "#54402c",
+  },
+  {
+    id: "monk-shelter", label: "Monks’ shelter", category: "buildings",
+    description: "An open-front sleeping shelter with a hearth. Tired monks rest here until their stamina recovers.",
+    cost: { gold: 50, wood: 40 }, renown: 2, requiredRenown: 0,
+    income: { gold: 0, wood: 0 }, w: 3, d: 2, height: 0.62,
+    color: "#8c7658", roofColor: "#a59164",
+  },
+  {
+    id: "shepherd-hut", label: "Shepherd’s hut", category: "buildings",
+    description: "A compact log hut with a low thatched roof and a hearth for a herder’s household.",
+    cost: { gold: 40, wood: 30 }, renown: 1, requiredRenown: 0,
+    income: { gold: 1, wood: 0 }, w: 2, d: 2, height: 0.70,
+    color: "#8c7658", roofColor: "#a59164",
+  },
+  {
+    id: "wood-shelter", label: "Wood shelter", category: "buildings",
+    description: "An open lean-to that keeps split wood and spare poles dry.",
+    cost: { gold: 20, wood: 20 }, renown: 0, requiredRenown: 0,
+    income: { gold: 0, wood: 1 }, w: 2, d: 1, height: 0.62,
+    color: "#8c7658", roofColor: "#a59164",
+  },
+  {
+    id: "lumberCamp", label: "Timber yard", category: "buildings",
+    description: "An open yard for stacking felled timber. No doorway, so it reserves no entrance tile.",
+    cost: { gold: 40, wood: 30 }, renown: 0, requiredRenown: 0,
+    income: { gold: 0, wood: 2 }, w: 2, d: 2, height: 0.65,
+    color: "#8c7658", roofColor: "#a59164",
+  },
+  {
+    id: "market", label: "Market stall", category: "buildings",
+    description: "A cloth-canopied stall that trades with passing merchants.",
+    cost: { gold: 50, wood: 30 }, renown: 3, requiredRenown: 10,
+    income: { gold: 4, wood: 0 }, w: 2, d: 2, height: 0.65,
+    color: "#8c7658", roofColor: "#a59164",
+  },
+  {
+    id: "guard-post", label: "Guard post", category: "buildings",
+    description: "A sheltered watch post that reassures travelers on the approach.",
+    cost: { gold: 70, wood: 50 }, renown: 4, requiredRenown: 15,
+    income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.65,
+    color: "#8c7658", roofColor: "#a59164",
+  },
+  {
+    id: "tavern", label: "Tavern", category: "buildings",
+    description: "A broad alehouse with a hearth, drinking tables and a hanging sign. Its front and back doors each keep a clear path tile.",
+    cost: { gold: 150, wood: 110 }, renown: 12, requiredRenown: 25,
+    income: { gold: 10, wood: 0 }, w: 3, d: 4, height: 0.78,
+    color: "#8c7658", roofColor: "#a59164",
   },
 ]
 
@@ -573,7 +623,7 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
         ...(preset.version !== BALANCE_VERSION && rules.thirstDecay === 25 ? { thirstDecay: DEFAULT_BALANCE.rules.thirstDecay } : {}),
       },
       buildings: {
-        storehouse: DEFAULT_BALANCE.buildings.storehouse,
+        ...DEFAULT_BALANCE.buildings,
         ...buildings,
         // The hut now earns wood through deliveries; retire its old passive payment.
         ...(preset.version === 1 && record(buildings.workshop) ? {
