@@ -1,13 +1,13 @@
 import * as THREE from "three"
+import { softenTreeLighting } from "@/lib/game/trees/lighting"
+import { addSurfaceLighting } from "@/lib/game/render/lighting"
 import { makeRng } from "@/lib/game/rng"
 import { generateTree, TREE_SPECIES, type TreeSpeciesId } from "@/lib/game/trees/species"
 import { lightOffsetForYaw } from "@/lib/game/render/iso"
 
 export function litScene() {
   const scene = new THREE.Scene()
-  scene.add(new THREE.AmbientLight(0xffffff, 0.5), new THREE.HemisphereLight("#bcd0f0", "#3a2a16", 0.45))
-  const sun = new THREE.DirectionalLight(0xffffff, 2.7)
-  scene.add(sun)
+  const sun = addSurfaceLighting(scene)
   return { scene, sun }
 }
 
@@ -57,10 +57,12 @@ export function createWorld() {
     const body = prop(x, z)
     body.scale.setScalar(scale)
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(shape.trunkRadius * def.trunk.taper, shape.trunkRadius, shape.trunkHeight, 6), new THREE.MeshLambertMaterial({ color: def.trunk.color }))
+    trunk.material.onBeforeCompile = softenTreeLighting
     trunk.position.y = shape.trunkHeight / 2
     body.add(trunk)
     for (const part of shape.crown) {
       const mesh = new THREE.Mesh(def.crown.shape === "cone" ? new THREE.ConeGeometry(1, 2, 7) : new THREE.IcosahedronGeometry(1, 1), new THREE.MeshLambertMaterial({ color: new THREE.Color(def.crown.color).multiplyScalar(shape.crownShade), flatShading: true }))
+      mesh.material.onBeforeCompile = softenTreeLighting
       mesh.position.set(part.x, part.y, part.z)
       mesh.scale.set(part.rx, part.ry, part.rz)
       mesh.rotation.y = part.yaw

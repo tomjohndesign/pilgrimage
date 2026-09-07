@@ -36,7 +36,8 @@ export function configureSpriteDepthTexture(texture: THREE.Texture) {
  * Like the game's cameras, this depth model is orthographic.
  */
 export function applySpriteDepth(shader: Parameters<THREE.Material["onBeforeCompile"]>[0], viewport: THREE.Vector4, worldTexel = { value: 0 },
-  groundPlane = { value: { x: 0, y: 0, z: 0, w: 0 } }, pose?: SpritePoseDepth) {
+  groundPlane = { value: { x: 0, y: 0, z: 0, w: 0 } }, pose?: SpritePoseDepth,
+  instance?: { anchor: string; size: string; ground: string }) {
   shader.uniforms.spriteWorldTexel = worldTexel
   shader.uniforms.spriteViewport = { value: viewport }
   shader.uniforms.spriteGroundPlane = groundPlane
@@ -45,20 +46,21 @@ export function applySpriteDepth(shader: Parameters<THREE.Material["onBeforeComp
   shader.vertexShader = "flat varying vec2 vSpritePoseDepth;\n" + shader.vertexShader
   shader.vertexShader = "flat varying vec4 vSpritePlanes;\nflat varying float vSpriteGroundX;\nuniform float spriteWorldTexel;\nuniform vec4 spriteGroundPlane;\n" + shader.vertexShader.replace(
     "#include <fog_vertex>", `#include <fog_vertex>
-    vec4 anchor = projectionMatrix * modelViewMatrix[3];
+    vec4 anchor = projectionMatrix * ${instance ? `viewMatrix * ${instance.anchor}` : "modelViewMatrix[3]"};
     float anchorY = anchor.y * 0.5 + 0.5;
     float depthScale = abs(projectionMatrix[2][2]) * 0.5;
     float anchorDepth = anchor.z * 0.5 + 0.5 - 0.005 * depthScale;
-    vSpritePoseDepth = vec2(anchorDepth, length(modelMatrix[0].xyz) * depthScale);
+    vSpritePoseDepth = vec2(anchorDepth, ${instance?.size ?? "length(modelMatrix[0].xyz)"} * depthScale);
     float pitch = max(0.01, abs(viewMatrix[1][2] / viewMatrix[1][1]));
     // Project the actual ground normal into camera space. Both screen axes
     // matter on a diagonal hillside; a horizontal toe plane cuts into it.
-    vec3 normal = spriteGroundPlane.y > 0.0 ? spriteGroundPlane.xyz : vec3(0.0, 1.0, 0.0);
+    vec4 ground = ${instance?.ground ?? "spriteGroundPlane"};
+    vec3 normal = ground.y > 0.0 ? ground.xyz : vec3(0.0, 1.0, 0.0);
     vec3 viewNormal = mat3(viewMatrix) * normal;
     float toward = max(0.05, viewNormal.z);
     vec2 grade = viewNormal.xy / toward;
-    float planeOffset = spriteGroundPlane.y > 0.0
-      ? dot(spriteGroundPlane, modelMatrix[3]) / toward : 0.0;
+    float planeOffset = ground.y > 0.0
+      ? dot(ground, ${instance?.anchor ?? "modelMatrix[3]"}) / toward : 0.0;
     vec2 slopes = vec2(pitch, -grade.y) * (2.0 / projectionMatrix[1][1]) * depthScale;
     vSpriteGroundX = -grade.x * (2.0 / projectionMatrix[0][0]) * depthScale;
     float clearance = 0.5 * spriteWorldTexel * (abs(grade.x) + abs(grade.y)) * depthScale;

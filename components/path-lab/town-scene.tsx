@@ -1,5 +1,7 @@
 "use client"
 
+import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
+
 import { Suspense, useEffect, useMemo, useRef, type MutableRefObject } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
@@ -97,8 +99,8 @@ export function TownScene({ town, live, view, focus, selected, labels, onSelect,
   const trees = useMemo(() => Array.from(town.world.blocked).flatMap((blocked, i) => blocked === 1 ? [{ x: tileToWorldX(town.map, i % WIDTH), y: .2, z: tileToWorldZ(town.map, Math.floor(i / WIDTH)), species: "oak" as const, scale: .8 }] : []), [town])
   return <PixelCanvas orthographic camera={{ manual: true, position: [80, 80, 80], near: .1, far: 400 }}>
     <color attach="background" args={["#14100a"]} />
-    <ambientLight intensity={.5} /><hemisphereLight args={["#bcd0f0", "#3a2a16", .45]} />
-    <directionalLight intensity={2.7} position={lightOffsetForYaw(yawForView(view))} />
+    <ambientLight intensity={SURFACE_LIGHT.ambient} /><hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
+    <directionalLight intensity={SURFACE_LIGHT.sun} position={lightOffsetForYaw(yawForView(view))} />
     <Camera town={town} view={view} focus={focus} selected={selected} labels={labels} />
     <TerrainTiles map={town.map} traffic={0} traveledRoads={roads} />
     <TreeField placements={trees} seed={42} />

@@ -302,11 +302,16 @@ describe("outline ids", () => {
 })
 
 describe("camera-relative light", () => {
-  it("reproduces the original fixed sun in view 0", () => {
-    const [x, y, z] = lightOffsetForYaw(yawForView(0))
-    expect(x).toBeCloseTo(26, 10)
-    expect(y).toBe(LIGHT_HEIGHT)
-    expect(z).toBeCloseTo(18, 10)
+  it("projects the source southeast at every camera yaw, including rotation tweens", () => {
+    for (let yaw = 0; yaw < Math.PI * 2; yaw += Math.PI / 16) {
+      const [x, y, z] = lightOffsetForYaw(yaw)
+      const right = x * Math.cos(yaw) - z * Math.sin(yaw)
+      const toward = x * Math.sin(yaw) + z * Math.cos(yaw)
+      const up = y * Math.cos(ISO_PITCH) - toward * Math.sin(ISO_PITCH)
+      expect(right).toBeGreaterThan(0)
+      expect(up).toBeLessThan(0)
+      expect(y).toBeGreaterThan(0)
+    }
   })
 
   it("holds the sun at the same yaw relative to the camera in every view", () => {

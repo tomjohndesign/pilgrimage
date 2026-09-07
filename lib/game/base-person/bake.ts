@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { addSurfaceLighting } from "../render/lighting"
 import { personCamera } from "./camera"
 import { BASE_PERSON, PERSON_CLIPS, WALK_CLIP_STRIDES, ACTION_CLIPS, SOCKET_NAMES, type BaseClip, type ActionClip, type SocketName } from "./pose"
 import { DEFAULT_DESIGN, personRecipe, type PersonDesign } from "./design"
@@ -61,10 +62,7 @@ export function personFrameRenderer(design: PersonDesign, extraPalette: string[]
   const rig = createBasePersonRig(recipe)
   scene.add(rig.root)
   if (framing?.occluder) scene.add(framing.occluder)
-  scene.add(new THREE.AmbientLight(0xffffff, 1.1))
-  const light = new THREE.DirectionalLight(0xffffff, 1.8)
-  light.position.set(-3, 7, 5)
-  scene.add(light)
+  addSurfaceLighting(scene)
   const camera = personCamera(framing ? { ...recipe, cellSize: size, anchor: [...framing.anchor],
     camera: { ...recipe.camera, viewSize: framing.viewSize } } : recipe)
   const depthBaker = spriteDepthBaker(renderer)

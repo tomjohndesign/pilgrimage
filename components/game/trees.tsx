@@ -5,6 +5,7 @@ import { useSimulationStore } from "@/lib/game/simulation-store"
 import { BASE_CHARACTER_SCALE } from "@/lib/game/base-person/gait"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
+import { softenTreeLighting } from "@/lib/game/trees/lighting"
 
 import { useCameraStore } from "@/lib/game/camera-store"
 import { selectElement } from "@/lib/game/selection"
@@ -434,11 +435,11 @@ function SpeciesBatch({ def, trees, entMap, onSelect }: {
     <group>
       <instancedMesh key={`trunk-${trunkCount}`} ref={refs.trunk} args={instancedArgs(trunkCount)} onClick={select(false)} frustumCulled={!movingTrees.length}>
         <primitive object={trunkGeometry} attach="geometry" />
-        <meshLambertMaterial flatShading />
+        <meshLambertMaterial onBeforeCompile={softenTreeLighting} flatShading />
       </instancedMesh>
       <instancedMesh key={`crown-${crownCount}`} ref={refs.crown} args={instancedArgs(crownCount)} onClick={select(true)} frustumCulled={!movingTrees.length}>
         <primitive object={crownGeometry} attach="geometry" />
-        <meshLambertMaterial flatShading />
+        <meshLambertMaterial onBeforeCompile={softenTreeLighting} flatShading />
       </instancedMesh>
 
       {/* ID silhouettes for the outline pass; trunk and crown share the tree's ID. */}
@@ -466,7 +467,7 @@ function SpeciesBatch({ def, trees, entMap, onSelect }: {
         <>
           <instancedMesh name="ent-legs" userData={{ ents: movingTrees.map((moving) => moving.ent) }} key={`legs-${movingTrees.length}`} ref={legsRef} args={instancedArgs(movingTrees.length * 2)} frustumCulled={false}>
             <boxGeometry args={[1, 1, 1]} />
-            <meshLambertMaterial color={def.trunk.color} flatShading />
+            <meshLambertMaterial onBeforeCompile={softenTreeLighting} color={def.trunk.color} flatShading />
           </instancedMesh>
           <instancedMesh key={`leg-ids-${movingTrees.length}`} ref={legIdsRef} args={instancedArgs(movingTrees.length * 2)} layers-mask={OUTLINE_ID_LAYER_MASK} frustumCulled={false}>
             <boxGeometry args={[1, 1, 1]} />

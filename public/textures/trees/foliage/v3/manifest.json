@@ -1,0 +1,43 @@
+{
+  "frame": {
+    "cellSize": 192,
+    "extent": 4.4399999999999995,
+    "anchor": [
+      96,
+      171
+    ],
+    "directions": 8,
+    "variants": 3,
+    "rows": 9
+  },
+  "color": "/textures/trees/foliage/v3/color.png",
+  "depth": "/textures/trees/foliage/v3/depth.png",
+  "designs": {
+    "oak": {
+      "height": 2.65,
+      "spread": 1,
+      "density": 1,
+      "leafSize": 1
+    },
+    "birch": {
+      "height": 2.95,
+      "spread": 0.72,
+      "density": 1.15,
+      "leafSize": 1.05
+    },
+    "scotsPine": {
+      "height": 3.15,
+      "spread": 0.95,
+      "density": 1,
+      "leafSize": 1
+    }
+  },
+  "safePadding": 18,
+  "version": "v3",
+  "depthEncoding": "view-offset-rg16-v1",
+  "species": [
+    "oak",
+    "birch",
+    "scotsPine"
+  ]
+}
