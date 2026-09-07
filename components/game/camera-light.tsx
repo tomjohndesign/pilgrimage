@@ -1,5 +1,7 @@
 "use client"
 
+import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
+
 import { useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
@@ -25,5 +27,5 @@ export function CameraLight() {
     light.position.set(x, y, z)
   })
 
-  return <directionalLight ref={lightRef} position={lightOffsetForYaw(0)} intensity={2.7} />
+  return <directionalLight ref={lightRef} position={lightOffsetForYaw(0)} intensity={SURFACE_LIGHT.sun} />
 }

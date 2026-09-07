@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { addSurfaceLighting } from "../render/lighting"
 import { BASE_PERSON, PERSON_CLIPS, type BaseClip } from "../base-person/pose"
 import { personFrameRenderer } from "../base-person/bake"
 import { personRecipe } from "../base-person/design"
@@ -60,8 +61,7 @@ export async function bakeKnights() {
   const depthBaker = spriteDepthBaker(renderer)
   renderer.localClippingEnabled = true
   renderer.setSize(size, size, false); renderer.setPixelRatio(1); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.setClearColor(0, 0)
-  const scene = new THREE.Scene(); scene.add(new THREE.AmbientLight(0xffffff, 1.1))
-  const light = new THREE.DirectionalLight(0xffffff, 1.8); light.position.set(-3, 7, 5); scene.add(light)
+  const scene = new THREE.Scene(); addSurfaceLighting(scene)
   const pitch = BASE_PERSON.camera.pitch * Math.PI / 180
   const y = (KNIGHT.anchor[1] - size / 2) / size * extent / Math.cos(pitch)
   const camera = new THREE.OrthographicCamera(-extent / 2, extent / 2, extent / 2, -extent / 2, 0.1, 30)

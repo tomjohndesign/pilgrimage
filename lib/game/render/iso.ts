@@ -123,12 +123,13 @@ export function clampViewSize(viewSize: number, maxViewSize: number = MAX_VIEW_S
  * repositions it each frame from the camera's tweened yaw, which makes the
  * shading swing smoothly — not snap — while a rotation tween plays.
  *
- * The relative yaw and distances are chosen so view 0 reproduces the original
- * fixed sun at (26, 40, 18) exactly.
+ * Southeast means screen right and toward the viewer. The elevated source
+ * projects below/right at the isometric pitch, independently of actor heading.
+ * Sprite bakers use yaw zero with this same source before rotating each pose.
  */
-export const LIGHT_RELATIVE_YAW = Math.atan2(26, 18) - ISO_YAW_BASE
-export const LIGHT_HORIZONTAL_DISTANCE = Math.hypot(26, 18)
-export const LIGHT_HEIGHT = 40
+export const LIGHT_RELATIVE_YAW = Math.atan2(32, 48)
+export const LIGHT_HORIZONTAL_DISTANCE = Math.hypot(32, 48)
+export const LIGHT_HEIGHT = 24
 
 /** Sun position (relative to its target at the origin) for a camera yaw. */
 export function lightOffsetForYaw(yaw: number): [number, number, number] {

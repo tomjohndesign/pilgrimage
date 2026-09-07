@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type RefObject } from "react"
 import * as THREE from "three"
+import { addSurfaceLighting } from "@/lib/game/render/lighting"
 import { personCamera } from "@/lib/game/base-person/camera"
 import { BASE_PERSON } from "@/lib/game/base-person/pose"
 import { createAnimalRig } from "@/lib/game/transport/animal-rig"
@@ -43,8 +44,7 @@ export function AnimalPreview({ subject, lineup, motion, playing, row, zoom, rat
     renderer.setPixelRatio(1); renderer.setSize(BASE_PERSON.cellSize, BASE_PERSON.cellSize); renderer.localClippingEnabled = true
     renderer.setClearColor(0, 0)
     const scene = new THREE.Scene(), camera = personCamera()
-    scene.add(new THREE.AmbientLight("#ffffff", 1.1))
-    const light = new THREE.DirectionalLight("#ffffff", 1.8); light.position.set(-3, 7, 5); scene.add(light)
+    addSurfaceLighting(scene)
     const hole = createBurrowRig(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
     const actors = (lineup ? SUBJECTS : [subject]).map(kind => {
       const equine = kind === "donkey" || kind === "horse"

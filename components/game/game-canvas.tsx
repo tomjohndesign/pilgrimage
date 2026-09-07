@@ -1,5 +1,7 @@
 "use client"
 
+import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
+
 import { useEffect, useMemo } from "react"
 import { travelerAppearance } from "@/lib/game/base-person/population"
 import { populationVisual } from "@/lib/game/base-person/population-assets"
@@ -134,8 +136,8 @@ export function GameCanvas({
         chained to the camera's yaw (see CameraLight) so the dark faces stay on
         the same side of the screen in every view.
       */}
-      <ambientLight intensity={0.5} />
-      <hemisphereLight args={["#bcd0f0", "#3a2a16", 0.45]} />
+      <ambientLight intensity={SURFACE_LIGHT.ambient} />
+      <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
       <CameraLight />
 
       <RenownSaturation map={map}>

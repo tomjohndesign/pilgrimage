@@ -1,5 +1,7 @@
 "use client"
 
+import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
+
 import { useEffect } from "react"
 import { useThree } from "@react-three/fiber"
 import type * as THREE from "three"
@@ -41,9 +43,9 @@ export function PreviewCanvas({
     >
       <color attach="background" args={["#14100a"]} />
 
-      <ambientLight intensity={0.5} />
-      <hemisphereLight args={["#bcd0f0", "#3a2a16", 0.45]} />
-      <directionalLight position={lightOffsetForYaw(yaw)} intensity={2.7} />
+      <ambientLight intensity={SURFACE_LIGHT.ambient} />
+      <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
+      <directionalLight position={lightOffsetForYaw(yaw)} intensity={SURFACE_LIGHT.sun} />
 
       {/* Re-aim when the view changes; the camera prop is only read at mount. */}
       <CameraAim view={view} zoom={zoom} />

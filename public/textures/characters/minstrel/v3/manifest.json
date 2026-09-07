@@ -1,0 +1,14 @@
+{
+  "version": 3,
+  "depthEncoding": "view-offset-rg16-v1",
+  "templateVersion": 31,
+  "frames": 16,
+  "rows": 48,
+  "fps": 16,
+  "cellSize": 64,
+  "anchor": [
+    32,
+    48.5
+  ],
+  "safePadding": 11
+}

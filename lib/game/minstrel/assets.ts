@@ -1,5 +1,5 @@
 import type { SpriteClip } from "../character-assets"
-import manifest from "../../../public/textures/characters/minstrel/v2/manifest.json"
+import manifest from "../../../public/textures/characters/minstrel/v3/manifest.json"
 
 export const MINSTREL_PLAYING: SpriteClip & { fps: number } = {
   url: `/textures/characters/minstrel/v${manifest.version}/playing.png`,

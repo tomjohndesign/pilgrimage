@@ -33,7 +33,8 @@ try {
     }
   }
   const recipe = readFileSync("assets/recipes/base-person.json")
-  const metadata = { ...bake.metadata, version, recipe: "assets/recipes/base-person.json",
+  // Lighting-only rebakes advance the asset path without changing the walking rig.
+  const metadata = { ...bake.metadata, templateVersion: bake.metadata.version, version, recipe: "assets/recipes/base-person.json",
     recipeSha256: createHash("sha256").update(recipe).digest("hex"),
     images: { actions, walk: `/${prefix.replace(/^public\//, "")}-walk.png`, idle: `/${prefix.replace(/^public\//, "")}-idle.png`, shadowWalk: `/${prefix.replace(/^public\//, "")}-shadow-walk.png`, shadowIdle: `/${prefix.replace(/^public\//, "")}-shadow-idle.png`, depthWalk: `/${prefix.replace(/^public\//, "")}-depth-walk.png`, depthIdle: `/${prefix.replace(/^public\//, "")}-depth-idle.png` },
   }

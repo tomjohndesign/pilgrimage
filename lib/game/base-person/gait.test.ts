@@ -15,7 +15,7 @@ describe("walking at the rendered person's scale", () => {
     const manifests = [base.walk.url.replace("-walk.png", ".json"), MONK_VISUAL.walk.url.replace("walk.png", "manifest.json"), monkVisual(40).walk.url.replace("walk.png", "manifest.json")]
     for (const url of manifests) {
       const metadata = JSON.parse(readFileSync(`${process.cwd()}/public${url}`, "utf8"))
-      expect(Number(String(metadata.version).replace(/^v/, ""))).toBe(BASE_PERSON.version)
+      expect(metadata.templateVersion ?? Number(String(metadata.version).replace(/^v/, ""))).toBe(BASE_PERSON.version)
       expect(metadata.frameCount).toBe(PERSON_CLIPS.walk.frames)
       for (const clip of ["carrying", "procession", "hoisting"] as const) {
         expect(metadata.clips[clip].length / metadata.directions.length).toBe(PERSON_CLIPS[clip].frames)

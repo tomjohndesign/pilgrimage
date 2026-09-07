@@ -1,5 +1,7 @@
 "use client"
 
+import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
+
 import { PixelCanvas, PixelCharacters, type PixelationProps } from "@/components/pixel-canvas"
 
 import { parseAsciiMap } from "@/lib/game/map/prototype-map"
@@ -51,9 +53,9 @@ export function CharacterPreview({ type, characterModel = "callings", ...pixelat
       <color attach="background" args={["#14100a"]} />
 
       {/* Same lighting rig as the game, frozen at view 0. */}
-      <ambientLight intensity={0.5} />
-      <hemisphereLight args={["#bcd0f0", "#3a2a16", 0.45]} />
-      <directionalLight position={lightOffsetForYaw(PREVIEW_YAW)} intensity={2.7} />
+      <ambientLight intensity={SURFACE_LIGHT.ambient} />
+      <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
+      <directionalLight position={lightOffsetForYaw(PREVIEW_YAW)} intensity={SURFACE_LIGHT.sun} />
 
       <group position={[0, -roadTop - 0.3, 0]}>
         <TerrainTiles map={ROAD_MAP} />

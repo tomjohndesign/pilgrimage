@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { addSurfaceLighting } from "../render/lighting"
 import { spriteDepthBaker } from "../render/bake-depth"
 import { configureSpriteDepthTexture } from "../render/sprite-depth"
 import { KNIGHT, knightDesign } from "../knight/design"
@@ -18,8 +19,7 @@ function frameScene() {
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, preserveDrawingBuffer: true })
   renderer.localClippingEnabled = true
   renderer.setPixelRatio(1); renderer.setSize(TRANSPORT.cellSize, TRANSPORT.cellSize); renderer.setClearColor(0, 0)
-  const scene = new THREE.Scene(), light = new THREE.DirectionalLight("#ffffff", 1.8)
-  scene.add(new THREE.AmbientLight("#ffffff", 1.1)); light.position.set(-3, 7, 5); scene.add(light)
+  const scene = new THREE.Scene(); addSurfaceLighting(scene)
   const pitch = BASE_PERSON.camera.pitch * Math.PI / 180, extent = TRANSPORT.viewSize
   const target = ((TRANSPORT.anchor[1] - TRANSPORT.cellSize / 2) / TRANSPORT.cellSize * extent) / Math.cos(pitch)
   const camera = new THREE.OrthographicCamera(-extent / 2, extent / 2, extent / 2, -extent / 2, 0.1, 30)

@@ -2,6 +2,7 @@
 
 import { Suspense } from "react"
 import * as THREE from "three"
+import { softenTreeLighting } from "@/lib/game/trees/lighting"
 import { selectElement } from "@/lib/game/selection"
 import { encodeObjectId, OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 import type { TreePlacement } from "@/lib/game/trees/placement"
@@ -29,11 +30,11 @@ export function TreeRemains({ id, objectId, tree, resource, time, characterScale
         </mesh>
         <mesh>
           <cylinderGeometry args={[radius * resource.trunkTaper, radius, length, 7]} />
-          <meshLambertMaterial color={TREE_SPECIES[tree.species].trunk.color} />
+          <meshLambertMaterial onBeforeCompile={softenTreeLighting} color={TREE_SPECIES[tree.species].trunk.color} />
         </mesh>
         {[-1, 1].map((end) => <mesh key={end} position={[0, end * (length / 2 + 0.003), 0]}>
           <cylinderGeometry args={[radius * (end === 1 ? resource.trunkTaper : 1) * 0.94, radius * (end === 1 ? resource.trunkTaper : 1) * 0.94, 0.008, 7]} />
-          <meshLambertMaterial color="#cfac78" />
+          <meshLambertMaterial onBeforeCompile={softenTreeLighting} color="#cfac78" />
         </mesh>)}
       </group>}
     </group>
