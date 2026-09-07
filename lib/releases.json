@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "a3df4c22d6663f95693382529d8f5f324f910117",
-  "releaseCount": 92,
+  "lastProcessedCommit": "c8059770a331df36190b73458b6906e34f4c3780",
+  "releaseCount": 93,
   "releases": [
+    {
+      "version": "0.0.107",
+      "title": "Release 0.0.107",
+      "summary": "Rename the shepherd's hut to house and give it, the tavern and a new sheep pen real work (#126)",
+      "commit": "c8059770a331df36190b73458b6906e34f4c3780"
+    },
     {
       "version": "0.0.106",
       "title": "Release 0.0.106",
