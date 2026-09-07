@@ -18,6 +18,7 @@ import {
   purchaseStructure,
   relicRenown,
   settlementIncome,
+  settlementEvangelism,
   settlementRenown,
   STARTING_RESOURCES,
 } from "./settlement"
@@ -58,6 +59,22 @@ const shelter = BUILD_CATALOG.find((item) => item.id === "shelter")!
 const garden = BUILD_CATALOG.find((item) => item.id === "garden")!
 
 describe("build and buy", () => {
+  it("activates evangelism only after construction and never stacks extra crosses", () => {
+    const map = testMap()
+    expect(settlementEvangelism(map)).toBe(0)
+    const purchase = purchaseStructure(createSettlement(), map, monks, [relic], "cross", { x: 10, z: 14 })
+    expect(purchase.error).toBeNull()
+    expect(purchase.settlement.resources).toEqual({ gold: STARTING_RESOURCES.gold - 60, wood: STARTING_RESOURCES.wood - 45 })
+    const cross = purchase.settlement.structures[0]
+    map.buildings.push(cross)
+    expect(settlementEvangelism(map)).toBe(0)
+    cross.construction!.work = cross.construction!.required
+    expect(settlementEvangelism(map)).toBe(0.05)
+    map.buildings.push({ ...cross, id: "extra-cross", x: 12 })
+    expect(settlementEvangelism(map)).toBe(0.05)
+    map.buildings = map.buildings.filter(b => b.buildType !== "cross")
+    expect(settlementEvangelism(map)).toBe(0)
+  })
   it.each([0, 1, 2, 3] as BuildingRotation[])("buys and reserves a rectangular building at rotation %i", rotation => {
     const map = testMap(), at = { x: 10, z: 14 }
     const def = BUILD_CATALOG.find(item => item.id === "hall")!

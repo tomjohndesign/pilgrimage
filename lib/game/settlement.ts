@@ -11,7 +11,7 @@ import { tileAt, type BuildingDef, type GameMap, type TilePos } from "./map/type
 import type { Monk } from "./monks"
 import type { Relic } from "./relic"
 
-import { DEFAULT_BALANCE, buildCatalog, type GameBalance } from "./balance"
+import { BUILD_CATALOG, DEFAULT_BALANCE, buildCatalog, type GameBalance } from "./balance"
 import type { BuildDefinition, Resources } from "./balance"
 export { BUILD_CATALOG, type BuildDefinition, type Resources } from "./balance"
 
@@ -76,6 +76,17 @@ export function individualRenown(monk: Monk, balance: GameBalance = DEFAULT_BALA
     Math.round(monk.attributes.piety / r.pietyDivisor) +
       monk.attributes.skills.length * r.skillRenown,
   )
+}
+
+/** One second chance per junction encounter, regardless of how many crosses are built. */
+export function settlementEvangelism(map: GameMap): number {
+  let chance = 0
+  for (const building of map.buildings) {
+    if (!isComplete(building)) continue
+    const def = BUILD_CATALOG.find(item => item.id === building.buildType)
+    chance = Math.max(chance, def?.evangelism ?? 0)
+  }
+  return chance
 }
 
 /** Renown belongs to the whole establishment; contributions remain inspectable. */
