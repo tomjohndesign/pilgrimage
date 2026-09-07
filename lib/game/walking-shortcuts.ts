@@ -1,4 +1,4 @@
-import { FOOTPATH_ESTABLISHED_AT, footpathRouteCost } from "./footpaths"
+import { FOOTPATH_ESTABLISHED_AT, footpathRouteCost, obstaclesNear, type FootpathObstacle } from "./footpaths"
 import { elevationStep } from "./map/elevation"
 import { tileAt, worldToTileX, worldToTileZ, type GameMap, type TilePos } from "./map/types"
 
@@ -15,6 +15,10 @@ export interface WalkingShortcut { from: TilePos; to: TilePos; start: number; en
 
 const length = (a: TilePos, b: TilePos) => Math.hypot(b.x - a.x, b.z - a.z)
 
+/** Scratch for the obstacles beside one segment. Costing never nests, and the
+ * list never escapes the call, so one buffer serves every caller. */
+const NEARBY: FootpathObstacle[] = []
+
 /** World-space segment cost, including body clearance and both sides of diagonal corners. */
 export function shortcutCost(map: GameMap, from: TilePos, to: TilePos, exploring = false): number {
   const distance = length(from, to)
@@ -27,9 +31,8 @@ export function shortcutCost(map: GameMap, from: TilePos, to: TilePos, exploring
     return !!terrain && ["grass", "clearing", "dirt", "sand", "path", "track"].includes(terrain)
       && !map.buildings.some(b => p.x >= b.x && p.x < b.x + b.w && p.z >= b.z && p.z < b.z + b.d)
   }
-  const obstacles = (map.footpaths?.obstacles ?? []).filter(p =>
-    p.x >= Math.min(from.x, to.x) - p.radius - .15 && p.x <= Math.max(from.x, to.x) + p.radius + .15 &&
-    p.z >= Math.min(from.z, to.z) - p.radius - .15 && p.z <= Math.max(from.z, to.z) + p.radius + .15)
+  const obstacles = obstaclesNear(map.footpaths,
+    Math.min(from.x, to.x), Math.min(from.z, to.z), Math.max(from.x, to.x), Math.max(from.z, to.z), .15, NEARBY)
   let previous = tile(from), cost = 0
   if (!open(previous)) return Infinity
   for (let step = 0; step <= steps; step++) {
@@ -133,4 +136,75 @@ export function retireBypassedRoad(map: GameMap, cut: WalkingShortcut): void {
     const p = map.road[i], index = p.z * map.width + p.x
     if (paths.founding.has(index)) paths.rerouted.add(index)
   }
+}
+
+/**
+ * How long the road's answer for one stretch stands, in simulation seconds.
+ *
+ * Only path wear ages an answer, and wear moves slowly. Anything structural —
+ * a building, a felled tree, a path the player lays down — bumps the ground
+ * revision instead and invalidates the stretch on the walkers' next step.
+ */
+export const SHORTCUT_REFRESH = 3
+
+/**
+ * Where the road offers a way across, if anywhere, for traffic heading this way
+ * from this stretch. Resolved once for the road and reused by everyone on it.
+ *
+ * Resolving a cut is a lookahead scan that costs every candidate chord against
+ * the terrain, the obstacles and the current wear. That is a fact about the
+ * ground, not about the walker, and it barely differs between two people
+ * standing on the same stretch — but with each of them resolving it privately
+ * the work scaled with the population, and a busy road spent most of a frame
+ * re-deriving the same answer hundreds of times.
+ */
+function roadCut(map: GameMap, progress: number, direction: 1 | -1, exploring: boolean,
+  pointAt: (p: number, lane: number) => TilePos, now: number): number | null {
+  const paths = map.footpaths!
+  const cuts = paths.cuts ??= new Map()
+  const key = (Math.floor(progress) * 2 + (direction === 1 ? 1 : 0)) * 2 + (exploring ? 1 : 0)
+  const cached = cuts.get(key)
+  if (cached && cached.ground === paths.ground && cached.buildings === map.buildings.length
+    && now - cached.at < SHORTCUT_REFRESH && now >= cached.at) return cached.end
+  // Resolved on the road's own centre line: what is published is the line, and
+  // each walker offers its own lane against it below.
+  const cut = findRoadShortcut(map, progress, direction, p => pointAt(p, 0), exploring)
+  cuts.set(key, { end: cut?.end ?? null, at: now, ground: paths.ground, buildings: map.buildings.length })
+  return cut?.end ?? null
+}
+
+/**
+ * The walker's half of the decision: given the road's answer, is this cut worth
+ * taking from where I am, in my lane?
+ *
+ * The published stretch was measured from the centre line and from wherever the
+ * road was asked, so this confirms the chord this walker would actually walk —
+ * one cost evaluation, against the lookahead scan it replaces.
+ */
+export function takeRoadShortcut(map: GameMap, progress: number, direction: 1 | -1, lane: number,
+  pointAt: (p: number, lane: number) => TilePos, exploring: boolean, now: number): WalkingShortcut | null {
+  if (!map.footpaths || !map.road) return null
+  const end = roadCut(map, progress, direction, exploring, pointAt, now)
+  if (end === null) return null
+  // A stretch is resolved once per road tile, so a walker part way through that
+  // tile can be handed a rejoin point it has already passed. Nobody doubles back.
+  if (direction * (end - progress) <= 0) return null
+  const from = pointAt(progress, lane), to = pointAt(end, lane)
+  const direct = length(from, to)
+  if (!(direct > 0)) return null
+  // Walking the road between the same two points has to be enough longer to be
+  // worth leaving it for, measured from this walker's position rather than the
+  // one the stretch happened to be resolved at.
+  let walked = 0, previous = from
+  for (let step = 1; step <= SHORTCUT_LOOKAHEAD * 4; step++) {
+    const p = progress + direction * step * .5
+    const reached = direction > 0 ? p >= end : p <= end
+    const next = pointAt(reached ? end : p, lane)
+    walked += length(previous, next)
+    previous = next
+    if (reached) break
+  }
+  if (direct > walked * .8 || walked - direct <= .6) return null
+  if (!Number.isFinite(shortcutCost(map, from, to, exploring))) return null
+  return { from, to, start: progress, end, length: direct, distance: 0 }
 }

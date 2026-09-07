@@ -23,6 +23,14 @@ import { wildlifeRegistry } from "@/lib/game/wildlife/registry"
 import { createWildlifeRig } from "@/lib/game/wildlife/rig"
 import { isBird, type WildlifeKind } from "@/lib/game/wildlife/species"
 
+/**
+ * Radius of the sphere an animal is culled by, in tiles. Comfortably larger
+ * than the biggest body, so a hawk's wingspan is never clipped out of the view
+ * it is still visible in, and wide enough that a fast pan or a bolting deer
+ * never reveals a stale pose.
+ */
+const SKIN_RADIUS = 4
+
 /** Ambient fauna share the world's pixel grid and depth/overlap pass. Connected hides share
  * bounded vertex buffers per species for both colour and selection passes. */
 export function Wildlife({ map, trees, characterScale }: { map: GameMap; trees: readonly TreePlacement[]; characterScale: number }) {
@@ -62,12 +70,37 @@ export function WildlifeBatch({ kind, animals, map, scale, grazing }: { kind: Wi
   const batch = useMemo(() => wildlifeGeometry(rig.parts, animals.map(animal => animal.id)), [rig, animals])
   const material = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true }), [])
   const idMaterial = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }), [])
-  const scratch = useMemo(() => ({ root: new THREE.Object3D() }), [])
+  const scratch = useMemo(() => ({ root: new THREE.Object3D(), frustum: new THREE.Frustum(), viewProjection: new THREE.Matrix4(), view: new THREE.Matrix4(), bounds: new THREE.Sphere(), drawn: new THREE.Box3(), sphere: new THREE.Sphere() }), [])
+  // Whether each animal's vertices are currently parked out of sight, so a
+  // culled one is hidden exactly once rather than every frame.
+  const parked = useMemo(() => new Array<boolean>(animals.length).fill(false), [batch, animals])
   useEffect(() => () => { rig.dispose(); batch.dispose(); material.dispose(); idMaterial.dispose() }, [rig, batch, material, idMaterial])
-  useFrame(() => {
-    const { root } = scratch, size = RIG_TO_WORLD * scale
+  useFrame(({ camera }) => {
+    const { root, frustum, viewProjection, view, bounds, drawn, sphere } = scratch, size = RIG_TO_WORLD * scale
+    drawn.makeEmpty()
+    // Posing an animal deforms its hide and rewrites every one of its vertices
+    // on the CPU, so only animals the camera can see are worth skinning. The
+    // margin keeps ones just out of frame current, so none walks into view
+    // holding a stale pose.
+    camera.updateMatrixWorld()
+    frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, view.copy(camera.matrixWorld).invert()))
+    bounds.radius = SKIN_RADIUS
+    let wrote = false
     for (let i = 0; i < animals.length; i++) {
       const animal = animals[i], bird = isBird(kind)
+      bounds.center.set(animal.x, animal.y, animal.z)
+      if (animal.concealed || !frustum.intersectsSphere(bounds)) {
+        // The batch keeps whatever vertices it was last handed, which would
+        // otherwise freeze the animal where it left the frame.
+        if (!parked[i]) {
+          root.position.set(animal.x, animal.y, animal.z); root.scale.setScalar(size); root.updateMatrix()
+          batch.write(i, root.matrix, true)
+          parked[i] = true
+          wrote = true
+        }
+        continue
+      }
+      parked[i] = false
       const graze = grazing ?? animal.grazing
       const flight = animal.flight, wingBlend = flight ? easeWing(Math.min(flight.elapsed / 0.35, (flight.duration - flight.elapsed) / 0.45)) : 0
       const glide = bird && flight ? birdGlide(kind as "hawk" | "sparrow", flight.elapsed, flight.duration) : 0
@@ -83,9 +116,19 @@ export function WildlifeBatch({ kind, animals, map, scale, grazing }: { kind: Wi
         root.rotation.z = Math.atan(surface.dx * c - surface.dz * s)
       } else if (animal.flight) root.rotation.z = Math.sin(animal.flight.elapsed / animal.flight.duration * Math.PI * 2) * (kind === "hawk" ? 0.2 : 0.08)
       root.scale.setScalar(size); root.updateMatrix()
-      batch.write(i, root.matrix, animal.concealed)
+      batch.write(i, root.matrix)
+      drawn.expandByPoint(root.position)
+      wrote = true
     }
-    batch.finish()
+    // Bounds enclose the animals actually drawn, grown by a body's reach.
+    // Parked ones sit far below the world, and leaving them outside is what
+    // stops a hidden animal being picked by a click.
+    if (!wrote) return
+    if (drawn.isEmpty()) batch.finish()
+    else {
+      drawn.getBoundingSphere(sphere).radius += SKIN_RADIUS
+      batch.finish(sphere)
+    }
   })
   return <group name={`wildlife-${kind}`}>
     <mesh geometry={batch.geometry} material={material} frustumCulled={false} onClick={event => {

@@ -144,6 +144,13 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
         gl.setRenderTarget(target)
         gl.render(scene, cam)
       })
+      // Three.js walks the whole graph on every `render`, and this pass renders
+      // the scene up to four times (world colour and IDs, then characters).
+      // Nothing moves between those passes, so resolve the transforms once and
+      // let the renderer reuse them — with a large cast that repeated walk is
+      // otherwise the most expensive thing in the frame.
+      scene.matrixWorldAutoUpdate = false
+      scene.updateMatrixWorld()
       renderer.worldTexel.value = 0
       const cam = camera as THREE.OrthographicCamera
       const r = resources
