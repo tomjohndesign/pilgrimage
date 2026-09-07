@@ -1,6 +1,10 @@
 import * as THREE from "three"
 import { spriteDepthBaker } from "../render/bake-depth"
 import { configureSpriteDepthTexture } from "../render/sprite-depth"
+import { KNIGHT, knightDesign } from "../knight/design"
+import { createRidingTack, equipKnight, seatKnight } from "../knight/rig"
+import { createBasePersonRig } from "../base-person/rig"
+import { personRecipe } from "../base-person/design"
 import { BASE_PERSON } from "../base-person/pose"
 import { animalCoat } from "./coats"
 import { createAnimalRig } from "./animal-rig"
@@ -12,6 +16,7 @@ let shared: ReturnType<typeof frameScene> | null = null
 let users = 0
 function frameScene() {
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, preserveDrawingBuffer: true })
+  renderer.localClippingEnabled = true
   renderer.setPixelRatio(1); renderer.setSize(TRANSPORT.cellSize, TRANSPORT.cellSize); renderer.setClearColor(0, 0)
   const scene = new THREE.Scene(), light = new THREE.DirectionalLight("#ffffff", 1.8)
   scene.add(new THREE.AmbientLight("#ffffff", 1.1)); light.position.set(-3, 7, 5); scene.add(light)
@@ -21,17 +26,34 @@ function frameScene() {
   camera.position.set(0, target + 10 * Math.sin(pitch), 10 * Math.cos(pitch)); camera.lookAt(0, target, 0)
   return { renderer, scene, camera, depth: spriteDepthBaker(renderer) }
 }
-export function createEditedAnimalFrame(kind: Animal, variant: HorseVariant, coat?: string) {
+export function createEditedAnimalFrame(kind: Animal, variant: HorseVariant, coat?: string, knight?: { kind: "mounted" | "saddled"; variant: number }) {
   const render = shared ??= frameScene(); users++
   const free = createAnimalRig(kind, variant, animalCoat(kind, coat).id), hitched = createAnimalRig(kind, variant, animalCoat(kind, coat).id, true)
+  const tack = knight ? createRidingTack(free.root) : null
+  const rider = knight?.kind === "mounted" ? createBasePersonRig(personRecipe(knightDesign(knight.variant))) : null
+  const gear = rider ? equipKnight(rider, knight!.variant) : null
+  if (rider) free.root.add(rider.root)
   const canvas = document.createElement("canvas"); canvas.width = canvas.height = TRANSPORT.cellSize
   const context = canvas.getContext("2d")!, texture = new THREE.CanvasTexture(canvas)
   texture.minFilter = texture.magFilter = THREE.NearestFilter; texture.colorSpace = THREE.SRGBColorSpace; texture.generateMipmaps = false
   const depthCanvas = document.createElement("canvas"); depthCanvas.width = depthCanvas.height = TRANSPORT.cellSize
   const depthContext = depthCanvas.getContext("2d")!, depthTexture = configureSpriteDepthTexture(new THREE.CanvasTexture(depthCanvas))
   return { texture, depthTexture, draw(phase: number, moving: boolean, grazing: number, row: number, edits: AnimalRigEdits, harness: boolean) {
-    const rig = harness ? hitched : free
-    rig.pose(phase, moving, grazing, edits); rig.root.rotation.y = -row * Math.PI / 4
+    const rig = harness && !knight ? hitched : free
+    rig.root.rotation.y = 0
+    rig.pose(phase, moving, knight ? 0 : grazing, edits)
+    if (tack) {
+      let hands: [number, number, number][] | undefined
+      if (rider) {
+        seatKnight(rider, knight!.variant, phase, moving)
+        hands = ["leftHand", "rightHand"].map(name => rig.root.worldToLocal(rider.sockets[name as "leftHand" | "rightHand"].getWorldPosition(new THREE.Vector3())).toArray())
+      }
+      tack.pose(phase, moving, hands)
+    }
+    rig.root.rotation.y = -row * Math.PI / 4
+    const pitch = BASE_PERSON.camera.pitch * Math.PI / 180, anchor = knight ? KNIGHT.anchor : TRANSPORT.anchor
+    const target = (anchor[1] - TRANSPORT.cellSize / 2) / TRANSPORT.cellSize * TRANSPORT.viewSize / Math.cos(pitch)
+    render.camera.position.set(0, target + 10 * Math.sin(pitch), 10 * Math.cos(pitch)); render.camera.lookAt(0, target, 0)
     render.scene.add(rig.root)
     try {
       render.renderer.render(render.scene, render.camera)
@@ -41,7 +63,7 @@ export function createEditedAnimalFrame(kind: Animal, variant: HorseVariant, coa
       texture.needsUpdate = true; depthTexture.needsUpdate = true
     } finally { render.scene.remove(rig.root) }
   }, dispose() {
-    texture.dispose(); depthTexture.dispose(); free.dispose(); hitched.dispose(); users--
+    texture.dispose(); depthTexture.dispose(); gear?.dispose(); rider?.dispose(); tack?.dispose(); free.dispose(); hitched.dispose(); users--
     if (!users && shared === render) { render.depth.dispose(); render.renderer.dispose(); render.renderer.forceContextLoss(); shared = null }
   } }
 }

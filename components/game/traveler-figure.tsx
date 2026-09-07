@@ -8,6 +8,7 @@ import { useFrame } from "@react-three/fiber"
 import type { TravelerTypeDef } from "@/lib/game/travelers"
 import { CharacterSprite } from "./character-sprite"
 import { CartReins } from "./cart-reins"
+import { KnightFigure } from "./knight-figure"
 import { TransportSprite } from "./transport-sprite"
 import type { TravelerAppearance } from "@/lib/game/base-person/population"
 import { pullingVisual } from "@/lib/game/transport/visual"
@@ -29,13 +30,13 @@ export type FigureClickHandler = (event: { delta: number; stopPropagation: () =>
 /** The person, cart and draught animal share one selection in game and previews. */
 export function TravelerFigure({ map, age, type, onClick, idColor, selected = false, awning = false, outlineColor,
   characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance,
-  cargo = "produce", puller = "hand", horseVariant = "common", coat,
+  squire = false, cargo = "produce", puller = "hand", horseVariant = "common", coat,
 }: {
   map?: GameMap; age?: number
   type: TravelerTypeDef; appearance?: TravelerAppearance; selected?: boolean; idColor?: THREE.Color
   onClick?: FigureClickHandler; awning?: boolean; outlineColor?: [number, number, number]
   characterModel?: CharacterModel; characterScale?: number; characterFps?: number; walkTuning?: WalkTuning
-  cargo?: Cargo; puller?: Puller; horseVariant?: HorseVariant; coat?: string
+  squire?: boolean; cargo?: Cargo; puller?: Puller; horseVariant?: HorseVariant; coat?: string
 }) {
   const vendor = type.id === "vendor", animal = vendor && puller !== "hand"
   const driver = useRef<THREE.Group>(null), setup = useRef<THREE.Group>(null), beast = useRef<THREE.Group>(null)
@@ -129,6 +130,8 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
   const variant = appearance?.variant ?? 0
   const pulling = useMemo(() => pullingVisual(variant), [variant])
   const color = outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] as [number, number, number] : undefined)
+  if (type.id === "knight") return <Suspense fallback={null}><KnightFigure map={map} appearance={appearance} coat={coat} squire={squire}
+    selected={selected} outlineColor={color} onClick={onClick} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} /></Suspense>
   return <Suspense fallback={null}>
     <group ref={driver} position={[0, 0, 0]}>
       <CharacterSprite map={map} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}

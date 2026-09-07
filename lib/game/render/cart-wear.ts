@@ -14,7 +14,7 @@ export function cartWheelContacts(pose: CartPose) {
 }
 
 /** Paired wheel ruts on the inside of ordinary corners, sampled from the
- * trailing axle of a horse cart. Kind 2 is wear only, without a road edge.
+ * trailing axle of a horse cart. Kind 3 is wear only, without a road edge.
  * This adds surface colour; it never edits tiles or pedestrian routes. */
 export function cartCornerWear(map: GameMap, excluded: ReadonlySet<number> = new Set()): Map<number, RoadSegment[]> {
   const bins = new Map<number, RoadSegment[]>(), fullRoute = cartRoute(map), road = map.road ?? []
@@ -35,7 +35,7 @@ export function cartCornerWear(map: GameMap, excluded: ReadonlySet<number> = new
         const index = z * map.width + x, terrain = tileAt(map, x, z)
         if (blocked.has(index) || layout.rise[index] || !["grass", "clearing", "dirt", "path", "track"].includes(terrain ?? "")) continue
         const segments = bins.get(index) ?? []
-        segments.push([ax - x, az - z, bx - x, bz - z, 2]); bins.set(index, segments)
+        segments.push([ax - x, az - z, bx - x, bz - z, 3]); bins.set(index, segments)
       }
     }
   }

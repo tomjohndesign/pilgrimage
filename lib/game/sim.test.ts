@@ -1,3 +1,5 @@
+import { DEFAULT_WALK_SPEED, BASE_CHARACTER_SCALE } from "./base-person/gait"
+import { knightLoadout, knightTravelSpeed } from "./knights"
 import { describe, expect, it } from "vitest"
 import { DEFAULT_BALANCE } from "./balance"
 import { SIMULATION_SPEEDS } from "./simulation-store"
@@ -96,6 +98,11 @@ function makeTraveler(
     direction: 1,
     pace: 1,
   }
+}
+
+/** These lane/nerve comparisons hold distance fixed across mounted and walking actors. */
+function unitRoadSpeed(t: Traveler) {
+  return t.type.id === "knight" ? DEFAULT_WALK_SPEED / knightTravelSpeed(BASE_CHARACTER_SCALE, knightLoadout(t.id).squire) : 1
 }
 
 it("scales distance traveled with each character's rendered stride", () => {
@@ -563,7 +570,7 @@ describe("left-hand walking lanes", () => {
     const s = sim.travelers.get(0)!
     for (let i = 0; i < 550; i++) {
       const before = { x: s.x, z: s.z }
-      stepSim(sim, [t], map, 1, 0.01)
+      stepSim(sim, [t], map, unitRoadSpeed(t), 0.01)
       expect(Math.hypot(s.x - before.x, s.z - before.z)).toBeLessThan(0.02)
       expect(tileAt(map, worldToTileX(map, s.x), worldToTileZ(map, s.z))).toBe("path")
     }
@@ -576,10 +583,10 @@ describe("left-hand walking lanes", () => {
     const s = sim.travelers.get(0)!
     const startZ = s.z
     s.direction = -1
-    stepSim(sim, [t], map, 1, 0.1)
+    stepSim(sim, [t], map, unitRoadSpeed(t), 0.1)
     expect(s.z - startZ).toBeGreaterThan(0)
     expect(s.z - startZ).toBeLessThan(0.1)
-    for (let i = 0; i < 10; i++) stepSim(sim, [t], map, 1, 0.1)
+    for (let i = 0; i < 10; i++) stepSim(sim, [t], map, unitRoadSpeed(t), 0.1)
     expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) + s.laneOffset)
   })
 
@@ -653,7 +660,7 @@ describe("danger on the road", () => {
       for (let id = 0; id < 12; id++) {
         const travelers = [makeTraveler(id, type, { hunger: 100, thirst: 100, stamina: 100 }, 0.1)]
         const sim = createSim(travelers, map)
-        for (let i = 0; i < 300; i++) stepSim(sim, travelers, map, 1, 0.1)
+        for (let i = 0; i < 300; i++) stepSim(sim, travelers, map, unitRoadSpeed(travelers[0]), 0.1)
         fled += sim.travelers.get(id)!.fled
       }
       return fled

@@ -1,10 +1,39 @@
-import { diagonalRoadBend, isRoadTerrain, sampleRoadBend } from "../map/road"
+import { diagonalRoadBend, isRoadTerrain, roadWear, sampleRoadBend, TRAFFIC_FOR_BARE_ROAD } from "../map/road"
 import { tileAt, type GameMap } from "../map/types"
 
-export type RoadSegment = readonly [number, number, number, number, number]
+/** Tile-local endpoints, source (0 main, 1 branch, 2 local traffic, 3 cart wheel rut), and optional local compaction. */
+export type RoadSegment = readonly [number, number, number, number, number, number?]
+export interface TraveledRoad { ax: number; az: number; bx: number; bz: number; wear: number }
+
+/** Local compaction uses the same rut profile as the game, independently of global traffic. */
+export function roadSegmentWear(segment: RoadSegment, traffic: number, relicTraffic: number, tier: number): [number, number, number, number] {
+  const local = segment[4] === 2
+  const depth = Math.min(1, Math.max(0, segment[5] ?? 0))
+  const wear = roadWear(local ? depth * TRAFFIC_FOR_BARE_ROAD : segment[4] === 1 ? relicTraffic : traffic, tier)
+  return [wear.edge, wear.inner, segment[4], local ? Math.min(1, depth / .2) : 1]
+}
 
 /** Includes the widest worn verge and its noise/antialiasing fringe. */
 const ROAD_REACH = 0.85
+
+/** Actual crossings, including diagonals, overflow onto open ground but never under buildings or woods. */
+export function traveledRoadSegments(map: GameMap, roads: readonly TraveledRoad[]): Map<number, RoadSegment[]> {
+  const bins = new Map<number, RoadSegment[]>(), occupied = new Set<number>()
+  for (const building of map.buildings) for (let z = building.z; z < building.z + building.d; z++) for (let x = building.x; x < building.x + building.w; x++) occupied.add(z * map.width + x)
+  for (const road of roads) {
+    if (!Number.isFinite(road.wear) || road.wear <= .001) continue
+    const { ax, az, bx, bz, wear } = road
+    for (let z = Math.max(0, Math.floor(Math.min(az, bz) - ROAD_REACH)); z <= Math.min(map.depth - 1, Math.floor(Math.max(az, bz) + ROAD_REACH)); z++) {
+      for (let x = Math.max(0, Math.floor(Math.min(ax, bx) - ROAD_REACH)); x <= Math.min(map.width - 1, Math.floor(Math.max(ax, bx) + ROAD_REACH)); x++) {
+        const i = z * map.width + x, terrain = map.tiles[i]
+        if (occupied.has(i) || !(isRoadTerrain(terrain) || ["grass", "clearing", "dirt", "sand"].includes(terrain))) continue
+        const segments = bins.get(i) ?? []
+        segments.push([ax - x, az - z, bx - x, bz - z, 2, wear]); bins.set(i, segments)
+      }
+    }
+  }
+  return bins
+}
 
 /**
  * Bin diagonal centrelines into every available tile touched by their width.

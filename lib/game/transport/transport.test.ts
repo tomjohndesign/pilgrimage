@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import sharp from "sharp"
 import * as THREE from "three"
-import manifest from "../../../public/textures/transport/v18/manifest.json"
+import manifest from "../../../public/textures/transport/v20/manifest.json"
 import { BASE_PERSON, PERSON_CLIPS, WALK_CLIP_STRIDES, legPose } from "../base-person/pose"
 import { personRecipe } from "../base-person/design"
 import { personWalkStride } from "../base-person/gait"
@@ -11,7 +11,7 @@ import { pullingVisual } from "./visual"
 import { populationVisual } from "../base-person/population-assets"
 import { DRIVER_CLIP } from "./driver"
 import { COATS } from "./coats"
-import { CARGO, CART, CART_WIDTH_SCALE, SHOP, CART_MODES, TRANSPORT, CART_COLUMNS, ANIMAL_COLUMNS, ANIMAL_PROFILES, cartColumn, cartLoadout, animalBody, animalStride, animalProfile, animalWalkSpeed, vendorSpeedScale, RIG_TO_WORLD, pullingDesign } from "./assets"
+import { CARGO, CART, CART_WIDTH_SCALE, SHOP, CART_MODES, TRANSPORT, CART_COLUMNS, ANIMAL_COLUMNS, ANIMAL_PROFILES, ANIMAL_RIG_VERSION, cartColumn, cartLoadout, animalBody, animalStride, animalProfile, animalWalkSpeed, vendorSpeedScale, RIG_TO_WORLD, pullingDesign } from "./assets"
 import { animalLeg, animalBoneLengths, animalMotion } from "./animal-pose"
 import { createAnimalRig, createCartRig } from "./rig"
 import { DEFAULT_WALK_SPEED } from "../base-person/gait"
@@ -40,6 +40,7 @@ describe("transport sheet contract", () => {
     expect(manifest.anchor).toEqual(TRANSPORT.anchor)
     expect(manifest.camera.viewSize).toBe(TRANSPORT.viewSize)
     expect(manifest.animalProfiles).toEqual(ANIMAL_PROFILES)
+    expect(manifest.animalRigVersion).toBe(ANIMAL_RIG_VERSION)
     expect(manifest.horseVariants).toEqual({ common: { rowOffset: 0 }, noble: { rowOffset: 8 } })
     expect(TRANSPORT.scale / TRANSPORT.cellSize).toBeCloseTo(0.74 / 48, 12)
     expect(TRANSPORT.viewSize / TRANSPORT.cellSize).toBeCloseTo(BASE_PERSON.camera.viewSize / BASE_PERSON.cellSize, 12)
@@ -89,6 +90,48 @@ describe("transport sheet contract", () => {
 })
 
 describe("transport ground contacts", () => {
+  it("walks with four separate footfalls and two or three supporting hooves", () => {
+    // Lateral walk sequence: left fore, right hind, right fore, left hind.
+    // https://horses.extension.org/horse-walk/
+    const legs = [["left", false], ["right", true], ["right", false], ["left", true]] as const
+    for (const [kind, variant] of [["donkey", "common"], ["horse", "common"], ["horse", "noble"]] as const) {
+      for (let beat = 0; beat < 4; beat++) {
+        const phase = beat / 4
+        const landing = legs.filter(([side, rear]) => !animalLeg(kind, side, rear, phase - 0.001, true, variant).planted && animalLeg(kind, side, rear, phase + 0.001, true, variant).planted)
+        expect(landing).toEqual([legs[beat]])
+      }
+      for (let f = 0; f < 100; f++) {
+        const supports = legs.filter(([side, rear]) => animalLeg(kind, side, rear, f / 100, true, variant).planted).length
+        expect(supports).toBeGreaterThanOrEqual(2)
+        expect(supports).toBeLessThanOrEqual(3)
+      }
+    }
+  })
+
+  it("folds swinging hooves without penetrating the ground or tipping planted soles", () => {
+    for (const [kind, variant] of [["donkey", "common"], ["horse", "common"], ["horse", "noble"]] as const) {
+      const rig = createAnimalRig(kind, variant)
+      try {
+        for (let f = 0; f <= 40; f++) {
+          const phase = f / 40
+          rig.pose(phase, true); rig.root.updateMatrixWorld(true)
+          for (const rear of [false, true]) for (const side of ["left", "right"] as const) {
+            const pose = animalLeg(kind, side, rear, phase, true, variant)
+            const hoof = rig.root.getObjectByName(`${side}-${rear ? "hind" : "fore"}-hoof`) as THREE.Mesh
+            const positions = hoof.geometry.attributes.position
+            let floor = Infinity
+            for (let i = 0; i < positions.count; i++) floor = Math.min(floor, new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(hoof.matrixWorld).y)
+            expect(floor).toBeGreaterThanOrEqual(-1e-7)
+            if (pose.planted) {
+              expect(hoof.rotation.x).toBe(0)
+              expect(floor).toBeCloseTo(0, 7)
+            } else expect(hoof.rotation.x).toBeGreaterThan(0)
+          }
+        }
+      } finally { rig.dispose() }
+    }
+  })
+
   it("preserves every bone length, planted hoof and loop closure across all three animal profiles", () => {
     const length = (a: number[], b: number[]) => Math.hypot(...a.map((x, i) => x - b[i]))
     for (const [kind, variant] of [["donkey", "common"], ["horse", "common"], ["horse", "noble"]] as const) for (const rear of [false, true]) for (const side of ["left", "right"] as const) {
@@ -98,7 +141,14 @@ describe("transport ground contacts", () => {
         expect(length(p.hip, p.upperJoint)).toBeCloseTo(bones.upper, 10)
         expect(length(p.upperJoint, p.knee)).toBeCloseTo(bones.middle, 10)
         expect(length(p.knee, p.ankle)).toBeCloseTo(bones.cannon, 10)
-        if (p.planted) expect(p.ankle[1]).toBe(body.ankleHeight)
+        if (p.planted) {
+          expect(p.ankle[1]).toBe(body.ankleHeight)
+          if (!rear) {
+            const upper = new THREE.Vector3(...p.upperJoint).sub(new THREE.Vector3(...p.knee)).normalize()
+            const lower = new THREE.Vector3(...p.ankle).sub(new THREE.Vector3(...p.knee)).normalize()
+            expect(upper.angleTo(lower) * 180 / Math.PI).toBeGreaterThan(168)
+          }
+        }
       }
       const first = animalLeg(kind, side, rear, 0, true, variant), last = animalLeg(kind, side, rear, 1, true, variant)
       for (const joint of ["hip", "upperJoint", "knee", "ankle"] as const) first[joint].forEach((v, i) => expect(v).toBeCloseTo(last[joint][i], 10))
@@ -121,8 +171,8 @@ describe("transport ground contacts", () => {
   })
 
   it("moves the shaped trunk, neck and head as well as the legs, and closes the cycle", () => {
-    for (const [kind, variant] of [["donkey", "common"], ["horse", "common"], ["horse", "noble"]] as const) {
-      const rig = createAnimalRig(kind, variant)
+    for (const [kind, variant] of [["donkey", "common"], ["horse", "common"], ["horse", "noble"]] as const) for (const hitched of [false, true]) {
+      const rig = createAnimalRig(kind, variant, undefined, hitched)
       try {
         let spheres = 0
         rig.root.traverse(o => { if (o instanceof THREE.Mesh && o.geometry.type === "SphereGeometry") spheres++ })

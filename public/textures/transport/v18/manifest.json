@@ -13,17 +13,6 @@
   "grazeFrames": 12,
   "lowerFrames": 6,
   "shopFrames": 12,
-  "depthEncoding": "view-offset-rg16-v1",
-  "cartWidthScale": 0.8,
-  "driverClip": {
-    "variants": 6,
-    "directions": 16,
-    "cellSize": 160,
-    "anchor": [
-      80,
-      94
-    ]
-  },
   "keeperClips": {
     "wave": {
       "start": 0,
@@ -53,7 +42,7 @@
     "pitch": 35.264389682754654,
     "viewSize": 6.933333333333334
   },
-  "safePadding": 16,
+  "safePadding": 11,
   "cartFrame": {
     "directions": 16,
     "cellSize": 160,
@@ -200,12 +189,14 @@
       "legHeight": 0.87,
       "legSpread": 0.22,
       "legZ": 0.62,
-      "sway": 0.025,
-      "bob": 0.025,
-      "pitch": 0.02,
-      "roll": 0.035,
+      "sway": 0.02,
+      "bob": 0.013,
+      "pitch": 0.016,
+      "roll": 0.024,
       "neckNod": 0.065,
-      "headNod": 0.08
+      "headNod": 0.06,
+      "walkNeckLean": 0.055,
+      "spineFlex": 0.018
     },
     "common": {
       "label": "Common horse",
@@ -215,29 +206,34 @@
       "legHeight": 1.08,
       "legSpread": 0.235,
       "legZ": 0.75,
-      "sway": 0.035,
-      "bob": 0.03,
-      "pitch": 0.025,
-      "roll": 0.035,
-      "neckNod": 0.095,
-      "headNod": 0.08
+      "sway": 0.025,
+      "bob": 0.016,
+      "pitch": 0.018,
+      "roll": 0.022,
+      "neckNod": 0.075,
+      "headNod": 0.06,
+      "walkNeckLean": 0.08,
+      "spineFlex": 0.022
     },
     "noble": {
       "label": "Noble horse",
-      "cyclesPerSecond": 1.12,
+      "cyclesPerSecond": 0.98,
       "stride": 0.36,
-      "lift": 0.145,
+      "lift": 0.09,
       "legHeight": 1.23,
       "legSpread": 0.29,
       "legZ": 0.78,
       "sway": 0.025,
-      "bob": 0.037,
-      "pitch": 0.028,
-      "roll": 0.026,
+      "bob": 0.018,
+      "pitch": 0.018,
+      "roll": 0.022,
       "neckNod": 0.075,
-      "headNod": 0.06
+      "headNod": 0.06,
+      "walkNeckLean": 0.12,
+      "spineFlex": 0.025
     }
   },
+  "animalRigVersion": 1,
   "animalRows": {
     "donkey": 8,
     "horse": 16
@@ -270,7 +266,7 @@
     }
   },
   "puller": {
-    "templateVersion": 31,
+    "templateVersion": 29,
     "cellSize": 64,
     "anchor": [
       32,

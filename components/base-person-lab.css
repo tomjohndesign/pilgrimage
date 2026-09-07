@@ -54,6 +54,7 @@
 .person-playback select { height: 28px; }
 .person-stage { position: relative; min-width: 0; min-height: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #5c6545; background-color: #66734e; background-image: linear-gradient(#ffffff03 1px, transparent 1px), linear-gradient(90deg, #ffffff03 1px, transparent 1px), radial-gradient(ellipse at center, #9ba67655, #33412733); background-size: 32px 32px, 32px 32px, 100% 100%; overflow: hidden; }
 .person-sprite { position: relative; flex-shrink: 0; }
+.knight-entourage { isolation: isolate; }
 .person-stage-caption { position: absolute; bottom: 12px; left: 14px; color: #eee6c8; font-size: 11px; letter-spacing: .08em; text-shadow: 0 1px 2px #000; pointer-events: none; }
 .person-stage-message { padding: 20px; background: #211e16; border: 1px solid #8c784c; max-width: 85%; }
 .person-native { display: flex; flex-wrap: wrap; justify-content: center; padding: 24px; }
