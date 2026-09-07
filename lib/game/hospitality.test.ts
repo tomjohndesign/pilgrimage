@@ -1,5 +1,5 @@
 import { shrineSeats } from "./shrine-layout"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it } from "vitest"
 import { BUILD_CATALOG, DEFAULT_BALANCE } from "./balance"
 import { createSettlement, purchaseStructure, woodcutterHuts, creditTimber, creditAdmission, syncTimberSpending, settlementRenown } from "./settlement"
 import { buildingStepAllowed, containsTile, shrineGates } from "./building-navigation"
@@ -13,6 +13,10 @@ import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } 
 import { generateRelic, visitChance } from "./relic"
 import { createSim, stepSim, GAME_DAY_SECONDS, type SimState } from "./sim"
 import { DEFAULT_MOVEMENT, LINEAR_MOVEMENT } from "./motion"
+import { preachingRegistry, stepMonkEvangelism, type EvangelizingMonk } from "./monk-evangelism"
+import { createMonkRoutine } from "./monk-routine"
+import { monkWander } from "./monk-wander"
+import { createMonkNeeds } from "./monk-work"
 import { generateMonks } from "./monks"
 import { generateTravelers, TRAVELER_TYPES, type Traveler } from "./travelers"
 import { treeResource, treeStage, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, type WoodPile } from "./trees/timber"
@@ -118,6 +122,51 @@ describe("cross evangelism", () => {
     stepSim(sim, [t], map, 1.5, 0.2)
     expect(sim.travelers.get(0)!.activity).toBe("walking")
     expect(sim.travelers.get(0)!.rolls).toBe(1)
+  })
+})
+
+describe("monk evangelism at the junction", () => {
+  afterEach(() => { preachingRegistry.current = null })
+  function preacher(map: GameMap) {
+    const monk: EvangelizingMonk = { ...createMonkRoutine(monkWander(map), 0, () => .5), ...createMonkNeeds(0) }
+    for (let i = 0; i < 300 && monk.activity !== "preaching"; i++) stepMonkEvangelism(monk, map, true, 2, .1)
+    expect(monk.activity).toBe("preaching")
+    preachingRegistry.current = { road: map.road, monks: [monk] }
+    return monk
+  }
+
+  it("persuades about 5% of uninterested travelers in both directions, once per pass", () => {
+    const { map, traveler } = fixture()
+    preacher(map)
+    let persuaded = 0
+    for (let id = 0; id < 1000; id++) {
+      const t = traveler(id, id % 2 === 0 ? 1 : -1), sim = createSim([t], map, [], obscure)
+      stepSim(sim, [t], map, 1.5, .2)
+      const s = sim.travelers.get(id)!
+      expect(s.rolls).toBe(2)
+      if (s.activity === "toRelic") persuaded++
+      else {
+        s.progress = map.site!.junction
+        stepSim(sim, [t], map, 1.5, .01)
+        expect(s.rolls).toBe(2)
+      }
+    }
+    expect(persuaded).toBeGreaterThan(30)
+    expect(persuaded).toBeLessThan(70)
+  })
+
+  it.each(["open", "unaffordable", "blocked", "recalled"])("respects shrine access and recall: %s", access => {
+    const { map, traveler } = fixture(), monk = preacher(map), t = traveler(15)
+    if (access === "unaffordable") map.buildings[0].admissionFee = 3
+    if (access === "blocked") {
+      const gate = shrineGates(map.buildings[0], map.site!.door)[0]
+      map.buildings.push({ ...BUILD_CATALOG.find(b => b.id === "cross")!, id: "obstacle", ...gate.outside })
+    }
+    if (access === "recalled") stepMonkEvangelism(monk, map, false, 2, .1)
+    const sim = createSim([t], map, [], obscure)
+    stepSim(sim, [t], map, 1.5, .2)
+    expect(sim.travelers.get(t.id)!.activity).toBe(access === "open" ? "toRelic" : "walking")
+    expect(sim.travelers.get(t.id)!.rolls).toBe(access === "recalled" ? 1 : 2)
   })
 })
 
