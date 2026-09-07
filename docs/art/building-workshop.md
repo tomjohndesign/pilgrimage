@@ -12,7 +12,7 @@ The construction baseline is informed by [West Stow’s reconstructed Anglo-Saxo
 | --- | --- | --- |
 | Relic enclosure | 3×3 | Roofless; low rough timber walls, four open gates, rough flagstones, stone table, loose planks and scattered belongings |
 | Monks’ shelter | 3×2 | Open front, thatched gable, woven windbreaks, straw beds and rolled blankets |
-| Shepherd’s hut | 2×2 | Low earthen and wattle walls, plank door, steep thatched roof, bedding |
+| Shepherd’s hut | 2×2 | Low earthen and wattle walls, open doorway, steep thatched roof, bedding |
 | Raised store | 1×1 | Open timber posts, raised plank floor and entry ramp, grain sack, small thatched gable |
 | Wood shelter | 2×1 | Open lean-to, woven windbreaks, stacked firewood |
 

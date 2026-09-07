@@ -327,13 +327,11 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     } else closedWall("rear",[-x,0,-z],[x,0,-z])
     for(const a of [-x,x]) closedWall(`side-${a}`,[a,0,-z],[a,0,z])
     if(left>0) {closedWall("front-left",[-x,0,z],[doorX-door/2,0,z]);closedWall("front-right",[doorX+door/2,0,z],[x,0,z])}
-    // Door headroom extends into the roof end while the surrounding walls stay low.
+    // Doorways are open holes, never a hung leaf; headroom extends into the roof end while the surrounding walls stay low.
     const doorHeight = Math.max(BUILDING_DOOR_HEIGHT,h*.9)
     for(const end of variant === "tavern" ? [1,-1] : [1]) {
       const first=parts.length,prefix=end===1 ? "" : "back-"
       box(`${prefix}doorway-shadow`,"wall",[doorX,floor+doorHeight/2,end*(z-.035)],[door,doorHeight,.025],"#3f392c",undefined,false)
-      for(let i=0;i<4;i++) box(`${prefix}door-board-${i}`,"wall",[doorX-door*.38+i*door*.24,floor+doorHeight*.48,end*(z+.013)],[door*.22,doorHeight*.96,.025],i%2?palette.wood:palette.paleWood,undefined,false)
-      for(const y of [.2,.7]) box(`${prefix}door-rail-${y}`,"wall",[doorX,floor+doorHeight*y,end*(z+.04)],[door,.04,.03],palette.darkWood,undefined,false)
       for(const part of parts.slice(first)) part.cutawaySide=[0,end]
     }
     if(variant === "tavern") {
