@@ -9,10 +9,12 @@ import { populationDesign } from "../base-person/population"
 import { TRAVELER_TYPES } from "../travelers"
 import { CARGO, CART, CART_WIDTH_SCALE, SHOP, SHOP_SECONDS, CART_MODES, TRANSPORT, ANIMAL_COLUMNS, CART_COLUMNS, ANIMAL_PROFILES, HORSE_VARIANTS, pullingDesign } from "./assets"
 import { createAnimalRig, createCartRig } from "./rig"
+import { spriteDepthBaker, SPRITE_DEPTH_ENCODING } from "../render/bake-depth"
 
 function canvas(width: number, height: number) {
   const canvas = document.createElement("canvas"); canvas.width = width; canvas.height = height
-  return { canvas, ctx: canvas.getContext("2d", { willReadFrequently: true })! }
+  const depth = document.createElement("canvas"); depth.width = width; depth.height = height
+  return { canvas, ctx: canvas.getContext("2d", { willReadFrequently: true })!, depth, depthCtx: depth.getContext("2d")! }
 }
 async function decode(url: string) { const image = new Image(); image.src = url; await image.decode(); return image }
 
@@ -21,6 +23,7 @@ export async function bakeTransport() {
   let size: number = TRANSPORT.cellSize
   const extent = TRANSPORT.viewSize, anchor = TRANSPORT.anchor
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, preserveDrawingBuffer: true })
+  const depthBaker = spriteDepthBaker(renderer)
   renderer.setSize(size, size, false); renderer.setPixelRatio(1); renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.setClearColor(0, 0)
   const scene = new THREE.Scene()
   scene.add(new THREE.AmbientLight(0xffffff, 1.1))
@@ -54,8 +57,13 @@ export async function bakeTransport() {
       safePadding = Math.min(safePadding, x, y, size - 1 - x, size - 1 - y)
     }
     frame.ctx.putImageData(data, 0, 0); target.ctx.drawImage(frame.canvas, col * size, targetRow * size)
+    target.depthCtx.drawImage(depthBaker.render(scene, camera, size, camera.right - camera.left, data.data, data.data), col * size, targetRow * size)
   }
   const images: Record<string, string> = {}
+  const save = (name: string, sheet: ReturnType<typeof canvas>) => {
+    images[name] = sheet.canvas.toDataURL()
+    images[`depth-${name}`] = sheet.depth.toDataURL()
+  }
   try {
     for (const cargo of CARGO) for (const mode of CART_MODES) for (const side of mode === "shop" ? [1, -1] : [1]) for (const compact of mode === "shop" ? [false, true] : [false]) {
       configure(mode === "shop" ? SHOP.cellSize : CART.cellSize, mode === "shop" ? SHOP.anchor : CART.anchor)
@@ -67,7 +75,7 @@ export async function bakeTransport() {
         render(rig.root, row, sheet, f, row, CART.directions)
       }
       scene.remove(rig.root); rig.dispose()
-      images[`cart-${cargo}-${mode}${compact ? "-small" : ""}${side < 0 ? "-mirrored" : ""}`] = sheet.canvas.toDataURL()
+      save(`cart-${cargo}-${mode}${compact ? "-small" : ""}${side < 0 ? "-mirrored" : ""}`, sheet)
     }
     configure(TRANSPORT.cellSize, TRANSPORT.anchor)
     for (const kind of ["donkey", "horse"] as const) for (const coat of COATS[kind]) for (const hitched of [false, true]) {
@@ -84,7 +92,7 @@ export async function bakeTransport() {
         }
         scene.remove(rig.root); rig.dispose()
       }
-      images[`${kind}-${coat.id}${hitched ? "-hitched" : ""}`] = sheet.canvas.toDataURL()
+      save(`${kind}-${coat.id}${hitched ? "-hitched" : ""}`, sheet)
     }
     if (safePadding < 4) throw new Error(`Transport exceeds its safe frame (${safePadding}px).`)
     // A new carrying pose uses the unmodified population rig, camera and foot contacts.
@@ -95,16 +103,18 @@ export async function bakeTransport() {
       for (const [variant, design] of designs.entries()) for (let f = 0; f < frames; f++) {
         const preview = renderPersonPreview(design, clip, f, false)
         sheet.ctx.drawImage(await decode(preview.url), f * BASE_PERSON.cellSize, variant * 8 * BASE_PERSON.cellSize)
+        sheet.depthCtx.drawImage(await decode(preview.depthUrl), f * BASE_PERSON.cellSize, variant * 8 * BASE_PERSON.cellSize)
       }
-      images[`puller-${clip}`] = sheet.canvas.toDataURL()
+      save(`puller-${clip}`, sheet)
     }
     // A basket-unloading action reuses the person's existing reaching/kneeling rig.
     const setup = canvas(BASE_PERSON.cellSize * PERSON_CLIPS.gathering.frames, BASE_PERSON.cellSize * 8 * designs.length)
     for (let variant = 0; variant < designs.length; variant++) for (let f = 0; f < PERSON_CLIPS.gathering.frames; f++) {
       const preview = renderPersonPreview(populationDesign(TRAVELER_TYPES.vendor, variant), "gathering", f, false)
       setup.ctx.drawImage(await decode(preview.url), f * BASE_PERSON.cellSize, variant * 8 * BASE_PERSON.cellSize)
+      setup.depthCtx.drawImage(await decode(preview.depthUrl), f * BASE_PERSON.cellSize, variant * 8 * BASE_PERSON.cellSize)
     }
-    images["merchant-setup"] = setup.canvas.toDataURL()
+    save("merchant-setup", setup)
     const selling = canvas(BASE_PERSON.cellSize * KEEPER_COLUMNS, BASE_PERSON.cellSize * 48)
     for (let variant = 0; variant < designs.length; variant++) {
       const session = personFrameRenderer(populationDesign(TRAVELER_TYPES.vendor, variant))
@@ -114,10 +124,11 @@ export async function bakeTransport() {
           const result = session.render(name === "sit" ? "sitting" : "idle", phase, row, false,
             name === "sit" ? undefined : rig => merchantGesture(rig.root, name as "wave" | "offer", phase))
           selling.ctx.drawImage(result.canvas, (clip.start + frame) * BASE_PERSON.cellSize, (variant * 8 + row) * BASE_PERSON.cellSize)
+          selling.depthCtx.drawImage(result.depth!, (clip.start + frame) * BASE_PERSON.cellSize, (variant * 8 + row) * BASE_PERSON.cellSize)
         }
       } finally { session.dispose() }
     }
-    images["merchant-selling"] = selling.canvas.toDataURL()
+    save("merchant-selling", selling)
     // The driver uses the cart's exact cell, axle anchor and sixteen headings.
     // Depth-only cart geometry cuts out body parts hidden by the bench/cargo.
     // Runtime combines these pixels inside the cart material, so the person
@@ -147,6 +158,7 @@ export async function bakeTransport() {
                 rig.root.position.set(...driverPoint([0, 0, 0], angle))
               })
               driving.ctx.drawImage(frame.canvas, variant * CART.cellSize, row * CART.cellSize)
+              driving.depthCtx.drawImage(frame.depth!, variant * CART.cellSize, row * CART.cellSize)
             }
           } finally { session.dispose() }
         }
@@ -154,9 +166,9 @@ export async function bakeTransport() {
         originals.forEach(({ mesh, material }) => { mesh.material = material })
         depth.dispose(); occluder.dispose()
       }
-      images[`cart-${cargo}-driver`] = driving.canvas.toDataURL()
+      save(`cart-${cargo}-driver`, driving)
     }
-    return { images, metadata: { ...TRANSPORT, cartWidthScale: CART_WIDTH_SCALE, driverClip: DRIVER_CLIP, keeperClips: KEEPER_CLIPS, keeperColumns: KEEPER_COLUMNS, directions: BASE_PERSON.directions, camera: { ...BASE_PERSON.camera, viewSize: extent },
+    return { images, metadata: { ...TRANSPORT, depthEncoding: SPRITE_DEPTH_ENCODING, cartWidthScale: CART_WIDTH_SCALE, driverClip: DRIVER_CLIP, keeperClips: KEEPER_CLIPS, keeperColumns: KEEPER_COLUMNS, directions: BASE_PERSON.directions, camera: { ...BASE_PERSON.camera, viewSize: extent },
       safePadding, cartFrame: CART, shop: { ...SHOP, seconds: SHOP_SECONDS, frames: TRANSPORT.shopFrames }, coats: COATS, merchantSetupFrames: PERSON_CLIPS.gathering.frames, cargo: CARGO, modes: CART_MODES, cartColumns: CART_COLUMNS, animalColumns: ANIMAL_COLUMNS,
       wheelCycleRadians: Math.PI * 2,
       animalProfiles: ANIMAL_PROFILES,
@@ -164,5 +176,5 @@ export async function bakeTransport() {
       animalClips: { idle: { start: 0, frames: 1 }, walk: { start: 1, frames: TRANSPORT.animalFrames }, lower: { start: 1 + TRANSPORT.animalFrames, frames: TRANSPORT.lowerFrames }, graze: { start: 1 + TRANSPORT.animalFrames + TRANSPORT.lowerFrames, frames: TRANSPORT.grazeFrames, fps: 4 } },
       puller: { templateVersion: BASE_PERSON.version, cellSize: BASE_PERSON.cellSize, anchor: BASE_PERSON.anchor,
         frames: PERSON_CLIPS.walk.frames, strides: WALK_CLIP_STRIDES, idleFrames: 1, rows: 48, camera: BASE_PERSON.camera, designs } } }
-  } finally { renderer.dispose() }
+  } finally { depthBaker.dispose(); renderer.dispose() }
 }

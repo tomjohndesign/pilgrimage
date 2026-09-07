@@ -5,6 +5,8 @@ import { cartOnRoute, followCart } from "./follow"
 import { createSim, stepSim } from "../sim"
 import { generateTravelers, TRAVELER_TYPES } from "../travelers"
 import { DEFAULT_ELEVATION } from "../map/elevation"
+import { shrineSeats } from "../shrine-layout"
+import { buildingStepAllowed } from "../building-navigation"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "../map/types"
 
 function fixture(): GameMap {
@@ -12,7 +14,7 @@ function fixture(): GameMap {
   return { width, depth, tiles: Array.from({ length: width * depth }, (_, i) => Math.floor(i / width) === 4 ? "path" : "grass"),
     road: Array.from({ length: width }, (_, x) => ({ x, z: 4 })),
     buildings: [{ id: "shrine", label: "Shrine", x: 12, z: 10, w: 3, d: 3, height: 1, color: "#888", roofColor: "#888" }],
-    site: { hovelId: "shrine", junction: 10, branch: Array.from({ length: 6 }, (_, i) => ({ x: 10, z: 4 + i })), door: { x: 10, z: 9 } } }
+    site: { hovelId: "shrine", junction: 10, branch: [...Array.from({ length: 8 }, (_, i) => ({ x: 10, z: 4 + i })), { x: 11, z: 11 }], door: { x: 11, z: 11 } } }
 }
 
 describe("merchant shrine parking", () => {
@@ -31,8 +33,11 @@ describe("merchant shrine parking", () => {
   it.each([0, 4, 8])("parks, visits alone, recovers its convoy and continues (vendor %s)", id => {
     const map = fixture(), t = generateTravelers(1, 1)[0]
     t.id = id; t.type = TRAVELER_TYPES.vendor; t.offset = 9.9 / 29; t.direction = 1; t.pace = 1
-    t.attributes.piety = 100; t.attributes.hunger = 0; t.attributes.gold = 100
-    const sim = createSim([t], map), s = sim.travelers.get(id)!
+    t.attributes.piety = 100; t.attributes.hunger = 100; t.attributes.thirst = 100; t.attributes.stamina = 100; t.attributes.gold = 100
+    // Guarantee devotion so this exercises parking and reserved-seat access,
+    // independently of main's probabilistic shrine-attraction balance.
+    const sim = createSim([t], map, [], { sanctity: 100, spectacle: 100, doubt: 0 }), s = sim.travelers.get(id)!
+    sim.shrineRenown = sim.balance.rules.drawCap
     s.timer = 10000
     let parked: unknown, sawVisit = false, sawReturn = false
     for (let i = 0; i < 4000; i++) {
@@ -44,6 +49,10 @@ describe("merchant shrine parking", () => {
       }
       if (s.activity === "visiting") {
         sawVisit = true
+        const seat = shrineSeats(map.buildings[0], map.site!.door).find(seat => seat.id === s.shrineSeat)
+        expect(seat).toBeDefined()
+        expect(s.shrineRoute!.at(-1)).toEqual(seat!.tile)
+        for (let j=1;j<s.shrineRoute!.length;j++) expect(buildingStepAllowed(map,map.buildings,s.shrineRoute![j-1],s.shrineRoute![j],true,j===s.shrineRoute!.length-1?s.shrineSeat:undefined)).toBe(true)
         expect(s.x).toBeGreaterThanOrEqual(tileToWorldX(map, 12))
         expect(s.z).toBeGreaterThanOrEqual(tileToWorldZ(map, 10))
       }
@@ -51,6 +60,7 @@ describe("merchant shrine parking", () => {
       if (sawReturn && s.activity === "walking") break
     }
     expect({ sawVisit, sawReturn, visits: s.visits, parked: !!s.shrineParking }).toEqual({ sawVisit: true, sawReturn: true, visits: 1, parked: false })
+    expect(s.shrineSeat).toBeUndefined()
   })
 })
 

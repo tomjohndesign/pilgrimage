@@ -1,8 +1,10 @@
 "use client"
 
+import { MINSTREL_PLAYING } from "@/lib/game/minstrel/assets"
 import type { FrameRegistration } from "@/lib/game/base-person/bake"
 import type { GameMap } from "@/lib/game/map/types"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
+import { characterSupport } from "@/lib/game/character-support"
 import { personRecipe } from "@/lib/game/base-person/design"
 import { BASE_PERSON } from "@/lib/game/base-person/pose"
 import { walkContact, plantFoot, type FootPlant, DEFAULT_WALK_STRIDE } from "@/lib/game/base-person/gait"
@@ -23,11 +25,9 @@ import { advanceWalkPhase, walkClipFrame, type WalkTuning } from "@/lib/game/mot
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { useCharacterAssetStore } from "@/lib/game/character-asset-store"
 import type { TravelerTypeId } from "@/lib/game/travelers"
-import { applySpriteDepth } from "@/lib/game/render/sprite-depth"
+import { applySpriteDepth, configureSpriteDepthTexture, spriteRenderOrder, type SpritePoseDepth } from "@/lib/game/render/sprite-depth"
 import { OUTLINE_ID_LAYER_MASK, SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import type { FigureClickHandler } from "./traveler-figure"
-
-let nextSpriteOrder = 1
 
 export function CharacterSprite({ map, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, age = 18, visualOverride, attachment, flightClip, name = "traveler" }: {
   attachment?: { content: ReactNode; clips: Partial<Record<"hoisting" | "procession", FrameRegistration[]>>; cellSize: number; anchor: number[]; restPosition?: [number, number, number] }
@@ -46,7 +46,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   characterFps?: number
   walkTuning?: WalkTuning
 }) {
-  const [renderOrder] = useState(() => nextSpriteOrder++)
+  const [renderOrder] = useState(spriteRenderOrder)
   const asset = useCharacterAssetStore((s) => s.assets[type])
   const custom = usePersonDesignStore((s) => s.atlas)
   const population = usePopulationStore(s => s.pack)
@@ -67,21 +67,27 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   const origin = useMemo(() => new THREE.Vector3(), [])
   const contact = useMemo(() => new THREE.Vector3(), [])
   const corrected = useMemo(() => new THREE.Vector3(), [])
+  const playingClip = varied && type === "minstrel" ? MINSTREL_PLAYING : undefined
   const textureEntries = useMemo(() => [
     { clip: visual.walk, url: visual.walk.url }, { clip: visual.idle, url: visual.idle.url },
     ...ACTION_CLIPS.flatMap(name => {
       const clip = visual.actions[name]
       return clip ? [{ clip, url: clip.url }] : []
     }),
+    ...(playingClip ? [{ clip: playingClip, url: playingClip.url }] : []),
     ...(flightClip ? [{ clip: flightClip, url: flightClip.url }] : []),
-  ], [visual, flightClip])
+  ], [visual, flightClip, playingClip])
   const actionIndices = useMemo(() => {
     let index = 2
     return Object.fromEntries(ACTION_CLIPS.flatMap(name => visual.actions[name] ? [[name, index++]] : []))
   }, [visual])
-  const sources = useLoader(THREE.TextureLoader, textureEntries.map(entry => entry.url))
+  const depthEntries = textureEntries.flatMap(({ clip }, index) => (clip as SpriteClip).depth ? [{ index, url: (clip as SpriteClip).depth! }] : [])
+  const sources = useLoader(THREE.TextureLoader, [...textureEntries.map(entry => entry.url), ...depthEntries.map(entry => entry.url)])
+  const depthTextures = useMemo(() => new Map(depthEntries.map((entry, index) =>
+    [entry.index, configureSpriteDepthTexture(sources[textureEntries.length + index])])), [sources, textureEntries])
+  const poseDepth = useMemo<SpritePoseDepth>(() => ({ map: { value: null }, enabled: { value: false } }), [])
   // Each traveler owns UV state; the loader still shares the decoded image.
-  const textures = useMemo(() => sources.map((source, index) => {
+  const textures = useMemo(() => sources.slice(0, textureEntries.length).map((source, index) => {
     const map = source.clone()
     map.colorSpace = THREE.SRGBColorSpace
     map.magFilter = THREE.NearestFilter
@@ -100,11 +106,11 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   const viewport = useMemo(() => new THREE.Vector4(), [])
   const material = useMemo(() => {
     const material = new THREE.SpriteMaterial({ map: textures[1], alphaTest: 0.5, transparent: false, toneMapped: false })
-    material.onBeforeCompile = (shader) => applySpriteDepth(shader, viewport, worldTexel, groundPlane)
+    material.onBeforeCompile = (shader) => applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth)
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "person-depth-v4"
+    material.customProgramCacheKey = () => "person-depth-v5"
     return material
-  }, [textures, viewport, worldTexel, groundPlane])
+  }, [textures, viewport, worldTexel, groundPlane, poseDepth])
   useEffect(() => () => material.dispose(), [material])
   const center = useMemo(() => new THREE.Vector2(...visual.center), [visual])
   const sprite = useRef<THREE.Sprite>(null)
@@ -123,15 +129,15 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     // Embedding IDs in shader source compiled a new program for every person.
     const id = new THREE.Vector3(...outlineColor)
     material.onBeforeCompile = (shader) => {
-      applySpriteDepth(shader, viewport, worldTexel, groundPlane)
+      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth)
       shader.uniforms.travelerId = { value: id }
       shader.fragmentShader = "uniform vec3 travelerId;\n" + shader.fragmentShader.replace("#include <map_fragment>",
         "#include <map_fragment>\ndiffuseColor.rgb = travelerId;")
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "traveler-id-v6"
+    material.customProgramCacheKey = () => "traveler-id-v7"
     return material
-  }, [textures, viewport, worldTexel, groundPlane, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [textures, viewport, worldTexel, groundPlane, poseDepth, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => outlineMaterial?.dispose(), [outlineMaterial])
 
   useFrame(({ camera }, delta) => {
@@ -145,6 +151,8 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     const yaw = Math.atan2(camera.matrixWorld.elements[8], camera.matrixWorld.elements[10])
     const moving = parent.userData.moving === true
     const flight = parent.userData.activity === "flying" ? flightClip : undefined
+    const playing = parent.userData.activity === "performing" ? playingClip : undefined
+    const special = flight ?? playing
     const requested = activityClip(parent.userData.activity, moving, parent.userData.carrying)
     const actionIndex = actionIndices[requested]
     const action = requested !== "walk" && requested !== "idle" ? visual.actions[requested] : undefined
@@ -163,7 +171,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     }
     if (parent.userData.motionReset) footPlant.current = null
     const dt = Math.min(delta, 0.1) * (parent.userData.playbackRate ?? 1)
-    const clipKey = flight ? "flying" : requested
+    const clipKey = flight ? "flying" : playing ? "performing" : requested
     if (clipKey !== lastClip.current) { actionClock.current = 0; lastClip.current = clipKey }
     const previousActionTime = actionClock.current
     if ((requested !== "carrying" && requested !== "procession") || moving) actionClock.current += dt
@@ -173,9 +181,12 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
         visual.walk.columns, fps, stride, walkTuning?.sync !== false, visual.walk.strides ?? 1)
     }
     if (sprite.current) Object.assign(sprite.current.userData, { walkPhase: clock.current, walkStride: visual.walkStride * individualScale, distance: parent.userData.distance ?? 0 })
-    const clip: SpriteClip = flight ?? action ?? (moving ? visual.walk : visual.idle)
-    const texture = textures[flight ? textures.length - 1 : actionIndex ?? (moving ? 0 : 1)]
-    let frame = flight ? Math.floor(actionClock.current * flight.fps) % flight.columns : action ? (requested === "carrying" || requested === "procession") ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) :
+    const clip: SpriteClip = special ?? action ?? (moving ? visual.walk : visual.idle)
+    const textureIndex = flight ? textures.length - 1 : playing ? textures.length - 1 - (flightClip ? 1 : 0) : actionIndex ?? (moving ? 0 : 1)
+    const texture = textures[textureIndex]
+    poseDepth.map.value = depthTextures.get(textureIndex) ?? null
+    poseDepth.enabled.value = poseDepth.map.value !== null
+    let frame = special ? Math.floor(actionClock.current * special.fps) % special.columns : action ? (requested === "carrying" || requested === "procession") ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) :
       Math.floor(actionClock.current * fps * (action.playbackRate ?? 1)) % clip.columns : moving ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) : clip.stillFrame
     if (requested === "hoisting") {
       const progress = parent.userData.actionProgress ?? actionClock.current
@@ -188,9 +199,11 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
         strikeTree(parent.userData.workTree, heading)
       }
     }
-    if (sprite.current) sprite.current.userData.clip = flight ? "flying" : action ? requested : moving ? "walk" : "idle"
+    if (sprite.current) sprite.current.userData.clip = flight ? "flying" : playing ? "performing" : action ? requested : moving ? "walk" : "idle"
     const direction = spriteRow(heading, yaw)
     const row = visual.rowOffset + direction
+    parent.getWorldPosition(origin)
+    const support = map && !moving && !flight ? characterSupport(map, origin.x, origin.z, requested) : undefined
     if (poseRoot.current) {
       if (workTarget && workPoint) {
         footPlant.current = null
@@ -218,7 +231,10 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
         poseRoot.current.position.copy(parent.worldToLocal(corrected))
       } else {
         footPlant.current = null
-        poseRoot.current.position.set(0, 0, 0)
+        if (support) {
+          corrected.set(origin.x, Math.max(origin.y, support.height), origin.z)
+          poseRoot.current.position.copy(parent.worldToLocal(corrected))
+        } else poseRoot.current.position.set(0, 0, 0)
       }
     }
     if (attachmentRoot.current && poseRoot.current && attachment) {
@@ -246,7 +262,10 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     if (map && parent.userData.activity !== "flying" && poseRoot.current) {
       poseRoot.current.getWorldPosition(corrected)
       const surface = walkingSurface(map, corrected.x, corrected.z)
-      groundPlane.value.set(-surface.dx, 1, -surface.dz,
+      // The same authored top lifts the pose and clears enlarged scenery depth
+      // in both body and ID passes. Furniture is level even on graded terrain.
+      if (support && support.height >= surface.height) groundPlane.value.set(0, 1, 0, -support.height)
+      else groundPlane.value.set(-surface.dx, 1, -surface.dz,
         surface.dx * corrected.x + surface.dz * corrected.z - surface.height)
     } else groundPlane.value.set(0, 0, 0, 0)
     const previous = lastFrame.current

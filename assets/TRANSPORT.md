@@ -62,9 +62,9 @@ Hooves use the shared `walkFoot()` stance targets with equine elbow/stifle,
 carpus/hock and fetlock chains. Planted hoof displacement determines travel
 speed, independent of frame rate and scale. Human walking geometry is unchanged.
 
-## Current sheets: v17
+## Current sheets: v18
 
-`public/textures/transport/v17/manifest.json` records all dimensions, anchors,
+`public/textures/transport/v18/manifest.json` records all dimensions, anchors,
 clips, timing, profiles, coats and variants. Every frame has binary alpha and at
 least four transparent pixels around its silhouette. Larger cells add padding
 at the same native pixel density as people.
@@ -87,6 +87,8 @@ at the same native pixel density as people.
   cells, registered to the cart axle. The shared person rig and ink pass render
   the seated body against depth-only seat/cargo geometry. The cart material
   merges these pixels before alpha and depth testing, including selection.
+  Matching `depth-` sheets carry the current per-pose geometry depth; composed
+  driver pixels sample their own depth with the same cart anchor and cell extent.
 - `merchant-selling.png`: 12 wave, 12 presenting and eight seated frames in
   64px cells, with the same six outfits and eight directions as the setup sheet.
 

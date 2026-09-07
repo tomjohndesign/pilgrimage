@@ -161,9 +161,9 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
   },
 }
 
-/** Needs everyone shares regardless of calling; refill/decay comes later. */
-const HUNGER: StatRange = { min: 20, max: 80 }
-const THIRST: StatRange = { min: 20, max: 80 }
+/** Passing travelers start supplied for their own journey. */
+const HUNGER: StatRange = { min: 80, max: 100 }
+const THIRST: StatRange = { min: 80, max: 100 }
 const STAMINA: StatRange = { min: 40, max: 100 }
 
 const FIRST_NAMES = {
@@ -194,7 +194,7 @@ export interface TravelerAttributes {
   gold: number
   /** Social standing, 0–100. */
   status: number
-  /** Needs, 0–100 — higher means more in need. */
+  /** Fullness and hydration, 0–100 — lower means more in need. */
   hunger: number
   thirst: number
   /** Devotion, 0–100. */

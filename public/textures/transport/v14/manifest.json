@@ -13,15 +13,6 @@
   "grazeFrames": 12,
   "lowerFrames": 6,
   "shopFrames": 12,
-  "driverClip": {
-    "variants": 6,
-    "directions": 16,
-    "cellSize": 160,
-    "anchor": [
-      80,
-      94
-    ]
-  },
   "keeperClips": {
     "wave": {
       "start": 0,
@@ -268,7 +259,7 @@
     }
   },
   "puller": {
-    "templateVersion": 26,
+    "templateVersion": 29,
     "cellSize": 64,
     "anchor": [
       32,
@@ -284,11 +275,11 @@
     },
     "designs": [
       {
-        "hat": "Travel hat",
+        "hat": "Wool cap",
         "tunicStyle": "Plain",
         "satchel": true,
         "walkingStick": false,
-        "guitar": false,
+        "lute": false,
         "accentColor": "#d6b57b",
         "bodyType": "Male",
         "garment": "Everyday",
@@ -331,7 +322,7 @@
         "tunicStyle": "Plain",
         "satchel": false,
         "walkingStick": false,
-        "guitar": false,
+        "lute": false,
         "accentColor": "#d6b57b",
         "bodyType": "Male",
         "garment": "Everyday",
@@ -374,7 +365,7 @@
         "tunicStyle": "Plain",
         "satchel": true,
         "walkingStick": false,
-        "guitar": false,
+        "lute": false,
         "accentColor": "#d6b57b",
         "bodyType": "Male",
         "garment": "Everyday",
@@ -417,7 +408,7 @@
         "tunicStyle": "Plain",
         "satchel": true,
         "walkingStick": false,
-        "guitar": false,
+        "lute": false,
         "accentColor": "#d6b57b",
         "bodyType": "Female",
         "garment": "Everyday",
@@ -456,11 +447,11 @@
         "beard": false
       },
       {
-        "hat": "Travel hat",
+        "hat": "Wool cap",
         "tunicStyle": "Plain",
         "satchel": false,
         "walkingStick": false,
-        "guitar": false,
+        "lute": false,
         "accentColor": "#d6b57b",
         "bodyType": "Female",
         "garment": "Everyday",
@@ -503,7 +494,7 @@
         "tunicStyle": "Plain",
         "satchel": true,
         "walkingStick": false,
-        "guitar": false,
+        "lute": false,
         "accentColor": "#d6b57b",
         "bodyType": "Female",
         "garment": "Everyday",

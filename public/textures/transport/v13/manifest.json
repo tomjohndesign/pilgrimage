@@ -13,11 +13,6 @@
   "grazeFrames": 12,
   "lowerFrames": 6,
   "shopFrames": 12,
-  "driverClip": {
-    "frames": 1,
-    "directions": 8,
-    "rows": 48
-  },
   "keeperClips": {
     "wave": {
       "start": 0,
@@ -264,7 +259,7 @@
     }
   },
   "puller": {
-    "templateVersion": 26,
+    "templateVersion": 28,
     "cellSize": 64,
     "anchor": [
       32,

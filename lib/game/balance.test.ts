@@ -56,8 +56,9 @@ describe("balance presets", () => {
   it("migrates earlier version 1 presets without losing edits", () => {
     const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
     delete old.balance.rules.visitRenown
-    delete old.balance.buildings.lumberCamp
-    for (const id of ["monk-shelter", "shepherd-hut", "storehouse", "wood-shelter"]) delete old.balance.buildings[id]
+    for (const key of ["hospitalityBaseChance", "hungerDecay", "thirstDecay", "staminaDecay"])
+      delete old.balance.rules[key]
+    delete old.balance.buildings.storehouse
     old.balance.rules.startingGold = 321
     old.balance.buildings.shelter.goldCost = 17
     const result = importBalance(JSON.stringify(old))
@@ -65,11 +66,35 @@ describe("balance presets", () => {
     expect(result.balance?.rules.startingGold).toBe(321)
     expect(result.balance?.buildings.shelter.goldCost).toBe(17)
     expect(result.balance?.rules.visitRenown).toBe(0.5)
-    expect(result.balance?.buildings.lumberCamp).toEqual(DEFAULT_BALANCE.buildings.lumberCamp)
-    for (const id of ["monk-shelter", "shepherd-hut", "storehouse", "wood-shelter"] as const)
-      expect(result.balance?.buildings[id]).toEqual(DEFAULT_BALANCE.buildings[id])
-    old.balance.buildings.lumberCamp = { goldCost: -1 }
+    for (const key of ["hospitalityBaseChance", "hungerDecay", "thirstDecay", "staminaDecay"] as const)
+      expect(result.balance?.rules[key]).toBe(DEFAULT_BALANCE.rules[key])
+    expect(result.balance?.buildings.storehouse).toEqual(DEFAULT_BALANCE.buildings.storehouse)
+    old.balance.buildings.storehouse = { goldCost: -1 }
     expect(importBalance(JSON.stringify(old)).balance).toBeNull()
+  })
+  it("retires the lodge’s passive wood income when importing an old preset", () => {
+    const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
+    old.version = 1
+    old.balance.buildings.workshop.woodIncome = 8
+    old.balance.buildings.workshop.goldCost = 71
+    const result = importBalance(JSON.stringify(old))
+    expect(result.error).toBeNull()
+    expect(result.balance?.buildings.workshop.woodIncome).toBe(0)
+    expect(result.balance?.buildings.workshop.goldCost).toBe(71)
+  })
+  it.each([1, 2])("updates old default need rates and adds attraction controls in version %i", (version) => {
+    const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
+    old.version = version
+    old.balance.rules.hungerDecay = 12.5
+    old.balance.rules.thirstDecay = 25
+    for (const key of ["earlyVisitPiety", "hospitalityNeedThreshold", "hospitalityRenownBonus"])
+      delete old.balance.rules[key]
+    const result = importBalance(JSON.stringify(old))
+    expect(result.error).toBeNull()
+    expect(result.balance?.rules).toEqual(DEFAULT_BALANCE.rules)
+    old.balance.rules.hungerDecay = 8
+    old.balance.rules.thirstDecay = 10
+    expect(importBalance(JSON.stringify(old)).balance?.rules).toMatchObject({ hungerDecay: 8, thirstDecay: 10 })
   })
   it.each([NaN, Infinity, -1, 1.5, 100001, "200", null])(
     "rejects invalid starting supplies: %s",
@@ -80,8 +105,21 @@ describe("balance presets", () => {
   )
   it("rejects missing fields, unknown versions and malformed JSON", () => {
     expect(validateBalance({ rules: {}, buildings: {} }).balance).toBeNull()
-    expect(importBalance('{"version":2}').error).toMatch(/version/)
+    expect(importBalance('{"version":99}').error).toMatch(/version/)
     expect(importBalance("oops").error).toMatch(/JSON/)
+  })
+  it("preserves custom needs and hospitality settings and rejects invalid values", () => {
+    const balance = fresh()
+    balance.rules.hospitalityBaseChance = 0.35
+    balance.rules.hungerDecay = 0
+    balance.rules.thirstDecay = 2.5
+    balance.rules.staminaDecay = 7
+    expect(importBalance(exportBalance(balance)).balance).toEqual(balance)
+    balance.rules.hospitalityBaseChance = 1.1
+    expect(importBalance(exportBalance(balance)).balance).toBeNull()
+    balance.rules.hospitalityBaseChance = 0.35
+    balance.rules.thirstDecay = -1
+    expect(importBalance(exportBalance(balance)).balance).toBeNull()
   })
   it("rejects zero divisors, sub-second timers and unordered tiers", () => {
     for (const key of ["pietyDivisor", "relicDivisor", "drawCap", "incomeSeconds"] as const) {
@@ -132,6 +170,7 @@ describe("tuned gameplay", () => {
       x: 22,
       z: 18,
     }).settlement
+    existing.structures[0].construction!.work = existing.structures[0].construction!.required
     const before = structuredClone(existing)
     const balance = fresh()
     balance.buildings.shelter.renown = 50

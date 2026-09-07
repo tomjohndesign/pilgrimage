@@ -14,7 +14,8 @@ export function WoodPile({ pile, objectId }: { pile: Pile; objectId: number }) {
   const logs = useRef<THREE.InstancedMesh>(null)
   const ids = useRef<THREE.InstancedMesh>(null)
   const geometry = useWoodLogGeometry()
-  const count = pileLogCount(pile.wood)
+  // A full stack represents overflow too, so abundant harvest stays under the roof.
+  const count = Math.min(24, pileLogCount(pile.wood))
   useLayoutEffect(() => {
     if (!logs.current || !ids.current) return
     const rotation = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2)

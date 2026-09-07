@@ -3,6 +3,7 @@
 import Link from "next/link"
 import type { useSettlement } from "@/hooks/use-settlement"
 import { useCameraStore } from "@/lib/game/camera-store"
+import { isComplete } from "@/lib/game/construction"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
@@ -79,7 +80,7 @@ export function SettlementPanel({
         ))}
       </div>
       <p className="mb-2 text-[11px] text-ink-light">
-        {economy.visits} visits · {economy.residents.length - monks.length} settlers · {Math.max(0, map.buildings.filter((b) => b.buildType === "lumberCamp").length * 3 - (economy.residents.length - monks.length))} open jobs
+        {economy.visits} visits · {economy.residents.length - monks.length} settlers · {Math.max(0, map.buildings.filter((b) => b.buildType === "workshop" && isComplete(b)).length * 3 - (economy.residents.length - monks.length))} open jobs
       </p>
       <details>
         <summary className="cursor-pointer text-xs">

@@ -1,11 +1,68 @@
 import { describe, expect, it } from "vitest"
-import { DEFAULT_ELEVATION, elevationSettings, elevationStep, finishElevation, generateElevation, groundHeight } from "./elevation"
+import { DEFAULT_ELEVATION, elevationSettings, elevationStep, finishElevation, generateElevation, groundHeight, levelBuildingGround } from "./elevation"
 import { drainWater } from "./hydrology"
 import { generateMap } from "./generate-map"
 import { routeBlind } from "./route"
-import type { GameMap } from "./types"
+import { tileToWorldX, tileToWorldZ, type GameMap } from "./types"
+import { walkingSurface } from "./walking-surface"
 
 describe("topography", () => {
+  it.each([{ x: 2, z: 2, w: 2, d: 2 }, { x: 0, z: 0, w: 1, d: 1 }, { x: 5, z: 4, w: 3, d: 4 }])(
+    "levels the entire building pad and joins its dry perimeter at $x,$z", (building) => {
+      const width = 8, depth = 8, water = new Uint8Array(width * depth)
+      const elevation = generateElevation(1, width, depth, water)
+      elevation.height = elevation.height.map((_, i) => (i % width) * 0.04 + Math.floor(i / width) * 0.03)
+      finishElevation(elevation, width, depth, water, [])
+      const map: GameMap = { width, depth, tiles: Array(64).fill("grass"), buildings: [], elevation }
+      const before = structuredClone(map)
+      const foundation = groundHeight(map, building.x + (building.w - 1) / 2, building.z + (building.d - 1) / 2)
+      const graded = { ...map, elevation: levelBuildingGround(map, building)! }
+      expect(map).toEqual(before)
+      for (let z = building.z; z < building.z + building.d; z++) for (let x = building.x; x < building.x + building.w; x++) {
+        const i = z * width + x
+        for (const corner of graded.elevation.corners.slice(i * 4, i * 4 + 4)) expect(corner + 0.2).toBeCloseTo(foundation)
+        expect(graded.elevation.height[i] + 0.2).toBeCloseTo(foundation)
+        for (const dx of [-0.49, 0, 0.49]) for (const dz of [-0.49, 0, 0.49]) {
+          expect(walkingSurface(graded, tileToWorldX(map, x) + dx, tileToWorldZ(map, z) + dz)).toEqual({ height: foundation, dx: 0, dz: 0 })
+        }
+      }
+      // Every dry neighbour still shares its edge, including all four pad boundaries.
+      const c = graded.elevation.corners
+      for (let z = 0; z < depth; z++) for (let x = 0; x < width; x++) {
+        const i = z * width + x
+        if (x + 1 < width) { expect(c[i * 4 + 1]).toBe(c[(i + 1) * 4]); expect(c[i * 4 + 3]).toBe(c[(i + 1) * 4 + 2]) }
+        if (z + 1 < depth) { expect(c[i * 4 + 2]).toBe(c[(i + width) * 4]); expect(c[i * 4 + 3]).toBe(c[(i + width) * 4 + 1]) }
+      }
+      expect(graded.elevation.cliffs.every((mask) => mask === 0)).toBe(true)
+      expect(graded.elevation.slope[building.z * width + building.x]).not.toBe(elevation.slope[building.z * width + building.x])
+    },
+  )
+
+  it("preserves water, distant terrain, and an existing foundation beside a later purchase", () => {
+    const width = 8, depth = 8, water = new Uint8Array(64)
+    water[3 * width + 4] = 1
+    const elevation = generateElevation(1, width, depth, water)
+    elevation.height = elevation.height.map((_, i) => i % width * 0.04)
+    elevation.height[3 * width + 4] = -0.5
+    const surface = Array(64).fill(-0.1)
+    finishElevation(elevation, width, depth, water, surface)
+    const map: GameMap = { width, depth, tiles: Array(64).fill("grass"), buildings: [], elevation, water: { depth: Array.from(water), surface, flow: {} } }
+    map.tiles[3 * width + 4] = "water"
+    // A bridge can extend over dry banks; its land footings must stay dry.
+    map.tiles[63] = "bridge"
+    surface[63] = -2
+    const first = { x: 1, z: 2, w: 2, d: 2, id: "first", label: "First", height: 1, color: "", roofColor: "" }
+    const firstMap = { ...map, elevation: levelBuildingGround(map, first)!, buildings: [first] }
+    const next = levelBuildingGround(firstMap, { x: 3, z: 2, w: 1, d: 2 })!
+    for (const i of [0, 18, 17, 25, 26, 28, 63]) {
+      expect(next.corners.slice(i * 4, i * 4 + 4)).toEqual(firstMap.elevation.corners.slice(i * 4, i * 4 + 4))
+      expect(next.height[i]).toBe(firstMap.elevation.height[i])
+    }
+    expect(next.cliffs[63]).toBe(elevation.cliffs[63])
+    expect(map.water!.surface).toEqual(surface)
+    expect(levelBuildingGround({ ...map, elevation: undefined }, first)).toBeUndefined()
+  })
+
   it("clamps invalid settings and enforces the +4 ceiling", () => {
     expect(elevationSettings({ maxHeight: 99, scale: NaN, slopeCost: -9 })).toMatchObject({ maxHeight: 4, scale: DEFAULT_ELEVATION.scale, slopeCost: 0 })
   })

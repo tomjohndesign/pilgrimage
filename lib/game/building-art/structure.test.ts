@@ -1,8 +1,9 @@
+import { shrineStructureParts } from "./shrine-geometry"
 import { describe, expect, it } from "vitest"
 import { Box3, BoxGeometry, BufferGeometry, Euler, Float32BufferAttribute, Matrix4, Quaternion, Vector3 } from "three"
 import { BUILD_CATALOG } from "../balance"
 import { PROTOTYPE_BUILDINGS } from "../map/prototype-map"
-import { structureParts } from "./structure"
+import { structureParts, visibleStructureParts } from "./structure"
 import type { BuildingPart } from "./geometry"
 
 function bounds(part: BuildingPart) {
@@ -54,20 +55,43 @@ describe("settlement construction", () => {
     expect(workshop.some(part => part.name === "workbench-seat")).toBe(true)
     expect(workshop.some(part => part.name === "axe-head")).toBe(true)
     expect(hall.some(part => part.name === "doorway-shadow")).toBe(true)
-    for (const parts of [shelter, workshop, hall]) expect(parts.some(part => part.name.startsWith("thatch-bundle-"))).toBe(true)
+    for (const parts of [shelter, hall]) expect(parts.some(part => part.name.startsWith("thatch-bundle-"))).toBe(true)
     expect(hall.filter(part => part.name.startsWith("shelter-cross-upright-"))).toHaveLength(2)
     for (const parts of [shelter, workshop]) expect(parts.some(part => part.name.includes("cross-"))).toBe(false)
   })
 
-  it("keeps scenery roofless and the lumber yard clear for live timber stacks", () => {
-    expect(partsFor("garden").some(part => part.name.startsWith("herb-"))).toBe(true)
-    expect(partsFor("cross").some(part => part.name === "cross-footing")).toBe(true)
-    for (const id of ["garden", "cross", "lumberCamp"]) expect(partsFor(id).some(part => part.layer === "roof")).toBe(false)
-    const yard = partsFor("lumberCamp")
-    expect(yard.some(part => part.name.startsWith("firewood-"))).toBe(false)
-    // Beyond the ground surface, the existing storage area and front entrance stay open.
-    const storage = new Box3(new Vector3(-.8, .12, -.7), new Vector3(.8, 1.5, 1))
-    expect(yard.some(part => bounds(part).intersectsBox(storage))).toBe(false)
+  it("keeps scenery roofless and provides a covered store with room for live stocks", () => {
+    for (const id of ["garden", "cross"]) expect(partsFor(id).some(part => part.layer === "roof")).toBe(false)
+    const store = partsFor("storehouse")
+    expect(store.some(p => p.layer === "roof")).toBe(true)
+    expect(store.some(p => /^(rear-|side-|front-|door-|woven-gable)/.test(p.name))).toBe(false)
+    expect(store.some(p => p.name === "entry-ramp")).toBe(true)
+    expect(store.some(p => p.name === "grain-sack" || p.name.startsWith("firewood-"))).toBe(false)
+  })
+
+  it("reveals furnished interiors when selected and restores the complete shell on deselection", () => {
+    for (const def of catalogue.filter(b => b.category === "buildings")) {
+      const parts = structureParts(def), inside = visibleStructureParts(parts, true)
+      expect(inside.some(p => p.layer === "roof")).toBe(false)
+      if (parts.some(p => p.layer === "wall")) expect(inside.some(p => p.layer === "wall")).toBe(true)
+      expect(inside.some(p => p.name === "floor")).toBe(true)
+      expect(visibleStructureParts(parts, false)).toBe(parts)
+    }
+    const workshop = visibleStructureParts(partsFor("workshop"), true)
+    expect(workshop.some(p => p.name === "workbench-seat")).toBe(true)
+    expect(workshop.some(p => p.name === "axe-head")).toBe(true)
+  })
+
+  it("covers the 3×5 shrine with one entrance, benches and an altar towards the rear", () => {
+    const parts = shrineStructureParts(3, 5)
+    expect(new Set(parts.map(p => p.name)).size).toBe(parts.length)
+    expect(parts.some(p => p.layer === "roof")).toBe(true)
+    expect(parts.filter(p => p.name === "entrance-arch-0")).toHaveLength(1)
+    expect(bounds(parts.find(p => p.name === "relic-table")!).getCenter(new Vector3()).z).toBeCloseTo(-1.4)
+    expect(parts.filter(p => p.name.startsWith("kneeler-") && p.name.endsWith("-pad"))).toHaveLength(4)
+    const inside = visibleStructureParts(parts, true)
+    expect(inside.some(p => p.name === "relic-table")).toBe(true)
+    expect(inside.some(p => p.layer === "roof")).toBe(false)
   })
 
   it("gives untyped legacy map buildings the shared hut construction", () => {
@@ -75,4 +99,47 @@ describe("settlement construction", () => {
     expect(legacy.some(part => part.name === "doorway-shadow")).toBe(true)
     expect(legacy.some(part => part.name.startsWith("thatch-bundle-"))).toBe(true)
   })
+})
+
+it("keeps shrine furniture and both roof levels inside the 3×5 footprint", () => {
+  const parts = shrineStructureParts(3, 5)
+  for (const part of parts) {
+    const b = bounds(part)
+    expect(b.min.x, part.name).toBeGreaterThanOrEqual(-1.501)
+    expect(b.max.x, part.name).toBeLessThanOrEqual(1.501)
+    expect(b.min.z, part.name).toBeGreaterThanOrEqual(-2.501)
+    expect(b.max.z, part.name).toBeLessThanOrEqual(2.501)
+  }
+  const aisle = new Box3(new Vector3(-.3,.1,-.5),new Vector3(.3,.7,2.5))
+  expect(parts.filter(p => p.layer === "interior").some(p => bounds(p).intersectsBox(aisle))).toBe(false)
+  expect(parts.some(p => p.name === "roof-cross-upright")).toBe(true)
+  expect(parts.some(p => p.name.startsWith("raised-nave-thatch-bundle-"))).toBe(true)
+})
+
+
+it("builds solid shrine walls around open arched windows and a single doorway", () => {
+  const parts = shrineStructureParts(3, 5), walls = parts.filter(p => p.layer === "wall").map(bounds)
+  const doorway = new Box3(new Vector3(-.24,.05,2.29),new Vector3(.24,.8,2.46))
+  expect(walls.some(b => b.intersectsBox(doorway))).toBe(false)
+  for (const side of [-1,1]) for (const z of [-1.5,0,1.5]) {
+    const window = new Box3(new Vector3(side*1.37-.08,.44,z-.12),new Vector3(side*1.37+.08,.69,z+.12))
+    expect(walls.some(b => b.intersectsBox(window))).toBe(false)
+  }
+  expect(parts.filter(p => /^side-wall-.*-arch-\d+$/.test(p.name))).toHaveLength(6)
+  expect(parts.filter(p => /^upper-timber-.*-arch-\d+$/.test(p.name))).toHaveLength(6)
+  expect(parts.some(p => p.name.startsWith("upper-timber-") && p.size && p.color === "#756044")).toBe(true)
+})
+
+
+it("shows only far walls in every camera quadrant, including a rotated shrine", () => {
+  const walls: BuildingPart[] = [[1,0],[-1,0],[0,1],[0,-1]].map(([x,z])=>({name:`wall-${x}-${z}`,layer:"wall",position:[x,0,z],size:[.1,1,.1],color:"tan",cutawaySide:[x,z]}))
+  for(const x of [-1,1]) for(const z of [-1,1]) {
+    const visible=visibleStructureParts(walls,true,[x,z])
+    expect(visible).toHaveLength(2)
+    expect(visible.every(p=>p.cutawaySide![0]*x+p.cutawaySide![1]*z<0)).toBe(true)
+    const shrine=visibleStructureParts(shrineStructureParts(3,5),true,[x,z])
+    expect(shrine.some(p=>p.layer === "roof")).toBe(false)
+    expect(shrine.some(p=>p.name.startsWith(`side-wall-${-x}-`))).toBe(true)
+    expect(shrine.some(p=>p.name.startsWith(`side-wall-${x}-`))).toBe(false)
+  }
 })

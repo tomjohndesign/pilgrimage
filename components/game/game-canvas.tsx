@@ -34,6 +34,7 @@ import { DebugHandle } from "./debug-handle"
 import { Environment } from "./environment"
 import { Monks } from "./monks"
 import { OutlinePass } from "./outline-pass"
+import { RenownSaturation } from "./renown-saturation"
 import { vendorSpeedScale } from "@/lib/game/transport/assets"
 import { Shrine } from "./shrine"
 import type { RoadLook } from "@/lib/game/map/road"
@@ -136,26 +137,28 @@ export function GameCanvas({
       <hemisphereLight args={["#bcd0f0", "#3a2a16", 0.45]} />
       <CameraLight />
 
-      <TerrainTiles
-        map={map}
-        roadTier={roadTier}
-        traffic={travelers.length}
-        relicTraffic={relicTraffic}
-        look={roadLook}
-        showGrid={showGrid}
-      />
-      <Bridges map={map} roadTier={roadTier} />
-      <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} />
-      <Environment map={map} />
-      <Buildings map={map} />
-      <Shrine map={map} relic={relic} />
-      <PixelCharacters>
-        <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
-      </PixelCharacters>
-      <Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
-        characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
+      <RenownSaturation map={map}>
+        <TerrainTiles
+          map={map}
+          roadTier={roadTier}
+          traffic={travelers.length}
+          relicTraffic={relicTraffic}
+          look={roadLook}
+          showGrid={showGrid}
+        />
+        <Bridges map={map} roadTier={roadTier} />
+        <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} />
+        <Environment map={map} />
+        <Buildings map={map} characterScale={characterScale} />
+        <Shrine map={map} relic={relic} />
+        <PixelCharacters>
+          <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
+        </PixelCharacters>
+        <Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
+          characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
+      </RenownSaturation>
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
-      {buildType && <BuildInfluenceOverlay map={map} />}
+      <BuildInfluenceOverlay map={map} buildMode={!!buildType} />
 
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />

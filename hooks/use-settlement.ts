@@ -1,5 +1,6 @@
 "use client"
 
+import { constructionStage } from "@/lib/game/construction"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { GameMap, TilePos } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
@@ -37,13 +38,30 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     setSession({ world, settlement: createSettlement(balance), buildType: null, message: "" })
   }
 
+  // Workers own live progress. Publish only stage/completion changes to React.
+  useEffect(() => {
+    const structures = session.settlement.structures
+    const stages = structures.map(constructionStage)
+    const timer = setInterval(() => {
+      setSession(current => {
+        if (current.world !== world || current.settlement.structures !== structures) return current
+        const next = structures.map(constructionStage)
+        if (next.every((stage, i) => stage === stages[i])) return current
+        const completed = structures.find((_, i) => next[i] === 3 && stages[i] !== 3)
+        return { ...current, message: completed ? `${completed.label} completed.` : current.message,
+          settlement: { ...current.settlement, structures: [...structures] } }
+      })
+    }, 250)
+    return () => clearInterval(timer)
+  }, [world, session.settlement.structures])
+
   const map = useMemo(
     () =>
       world
-        ? { ...world, buildings: [...world.buildings.map(b => b.id === world.site?.hovelId
+        ? { ...world, elevation: session.settlement.elevation ?? world.elevation, buildings: [...world.buildings.map(b => b.id === world.site?.hovelId
           ? { ...b, admissionFee: session.settlement.shrineAdmission } : b), ...session.settlement.structures] }
         : null,
-    [world, session.settlement.structures, session.settlement.shrineAdmission],
+    [world, session.settlement.elevation, session.settlement.structures, session.settlement.shrineAdmission],
   )
 
   useEffect(() => {
@@ -99,6 +117,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     setSession(current => ({ ...current, settlement: { ...current.settlement, shrineAdmission: fee } }))
   }, [])
   const place = (at: TilePos) => {
+    const rotation = useBuildStore.getState().rotation
     setSession((current) => {
       if (!baseMap || !relic || current.world !== baseMap || !current.buildType) return current
       const result = purchaseStructure(
@@ -110,12 +129,13 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
         at,
         balanceRef.current,
         visits,
+        rotation,
       )
       return {
         ...current,
         settlement: result.settlement,
         buildType: result.error ? current.buildType : null,
-        message: result.error ?? "Built.",
+        message: result.error ?? "Construction planned. Idle residents will build it.",
       }
     })
   }

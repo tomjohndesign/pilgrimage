@@ -1,8 +1,14 @@
 "use client"
 
+import { PietyEffects } from "./admission-effects"
+import { PixelCharacters } from "@/components/pixel-canvas"
+import { createMonkNeeds, stepMonkWork, type MonkNeeds } from "@/lib/game/monk-work"
+import { preachingRegistry, preachingSpots, stepMonkEvangelism, type PreachingTask } from "@/lib/game/monk-evangelism"
+import { useMonkEvangelismStore } from "@/lib/game/monk-evangelism-store"
+import { workerRoute } from "@/lib/game/construction"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
-import { createRelicProcession, nearProcession, processionGrounds, processionRegistry, startProcession, stepProcession } from "@/lib/game/relic-procession"
+import { blessByProcession, createRelicProcession, nearProcession, processionGrounds, processionRegistry, startAltarProcession, startProcession, stepProcession } from "@/lib/game/relic-procession"
 import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
 import type { Relic } from "@/lib/game/relic"
 import { RelicDisplay, RELIC_DISPLAY_HEIGHT } from "./relic-display"
@@ -18,7 +24,7 @@ import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { selectElement } from "@/lib/game/selection"
 import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
 import type { GameMap } from "@/lib/game/map/types"
-import { monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
+import { monkStaminaRegistry, monkRegistry, monkPositionRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { createMonkFlight, monkGroundTime, recallMonkFlight, stepMonkFlight, type MonkFlight } from "@/lib/game/monk-flight"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { encodeObjectId, residentObjectId, RELIC_OBJECT_ID } from "@/lib/game/render/outline"
@@ -28,14 +34,17 @@ import { rocketMonkVisual, rocketFlightClip } from "@/lib/game/rocket/assets"
 
 /**
  * The brothers follow grid routes and enter the shrine to pray. Players can
- * send one to carry the relic, drawing nearby monks and travelers into prayer.
+ * send one to carry the relic; brothers occasionally take it down to the road after praying behind the altar.
  * Blaster Pastor sends them
  * on occasional cruises across the map; they return to their life at the shrine
  * between trips. Toggling it off recalls them and stows their packs on landing.
  */
 
-interface MonkState extends MonkRoutine {
+interface MonkState extends MonkRoutine, MonkNeeds {
+  preachingTask?: PreachingTask
+  workScale?: number
   flight?: MonkFlight
+  piety: number
   flightWait: number
 }
 
@@ -53,37 +62,77 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       const spot = spots[Math.floor(rng() * spots.length)]
       return spot
     }
-    const states: MonkState[] = (spots.length ? monks : []).map((_, index) => ({
-      ...createMonkRoutine(wander, index, rng), flightWait: index * 8,
+    const states: MonkState[] = (spots.length ? monks : []).map((monk, index) => ({
+      ...createMonkRoutine(wander, index, rng), ...createMonkNeeds(index), piety: monk.attributes.piety, flightWait: index * 8,
     }))
     const activities = new Map<number, MonkActivity>()
-    return { spots, centre, rng, flightRng, pick, states, activities, wander,
+    return { stamina: new Map<number, number>(), spots, centre, rng, flightRng, pick, states, activities, wander,
       procession: createRelicProcession(), grounds: processionGrounds(map, wander) }
-  }, [map, monks])
+  }, [map.road, monks])
+  const navigation = useMemo(() => monkWander(map), [map])
+  world.pick = () => navigation.spots[Math.floor(world.rng() * navigation.spots.length)]
+  world.wander = navigation
+  world.spots = navigation.spots
+  world.centre = navigation.centre
+  world.grounds = useMemo(() => processionGrounds(map, navigation), [map, navigation])
+  useEffect(() => {
+    for (const state of world.states) {
+      if (state.buildingTask || state.flight || state.preachingTask) continue
+      if (map.site) { state.route = workerRoute(map, state, map.site.door) ?? []; state.destination = "home" }
+    }
+  }, [map, world])
+
+  useEffect(() => {
+    useMonkEvangelismStore.setState({ available: preachingSpots(map).length > 0 })
+  }, [map])
 
   // Publish activities so the HUD's monk panel can poll them.
   useEffect(() => {
+    const preachers = { road: map.road, monks: world.states }
+    preachingRegistry.current = preachers
+    useMonkEvangelismStore.setState({ assigned: new Set() })
     monkRegistry.current = world.activities
+    monkStaminaRegistry.current = world.stamina
+    const positions = new Map(monks.map((m, i) => [m.id, world.states[i]]))
+    monkPositionRegistry.current = positions
     processionRegistry.current = world.procession
     useRelicProcessionStore.setState({ available: !!world.grounds, monkId: null, stage: "idle", returnRequested: false })
     return () => {
+      for (const state of world.states) state.buildingTask = undefined
+      if (preachingRegistry.current === preachers) {
+        preachingRegistry.current = null
+        useMonkEvangelismStore.setState({ available: false, assigned: new Set() })
+      }
+      if (monkPositionRegistry.current === positions) monkPositionRegistry.current = null
       if (monkRegistry.current === world.activities) monkRegistry.current = null
+      if (monkStaminaRegistry.current === world.stamina) monkStaminaRegistry.current = null
       if (processionRegistry.current === world.procession) {
         processionRegistry.current = null
         useRelicProcessionStore.setState({ available: false, monkId: null, stage: "idle", returnRequested: false })
       }
     }
-  }, [world])
+  }, [world, monks])
 
   useFrame((_, delta) => {
     const playback = useSimulationStore.getState()
     const dt = playback.paused ? 0 : Math.min(delta, 0.1) * playback.speed
+    world.procession.cooldown = Math.max(0, world.procession.cooldown - dt)
     const controls = useRelicProcessionStore.getState()
     if (!playback.paused && controls.monkId !== null && world.procession.stage === "idle" && world.grounds) {
       const index = monks.findIndex(m => m.id === controls.monkId)
       const actor = world.states[index]
-      if (!actor || actor.flight || !startProcession(world.procession, controls.monkId, actor, world.grounds)) {
+      if (actor) actor.buildingTask = undefined
+      if (!actor || actor.flight || actor.preachingTask || useMonkEvangelismStore.getState().assigned.has(controls.monkId) || !startProcession(world.procession, controls.monkId, actor, world.grounds)) {
         useRelicProcessionStore.setState({ monkId: null, returnRequested: false })
+      }
+    }
+    if (!playback.paused && world.procession.stage === "idle" && world.grounds) {
+      const index = world.states.findIndex((s, index) => !s.flight && !s.processionConsidered &&
+        !s.preachingTask && !useMonkEvangelismStore.getState().assigned.has(monks[index].id) &&
+        s.activity === "praying" && s.destination === "prayer" &&
+        Math.hypot(s.x - world.grounds!.altar.x, s.z - world.grounds!.altar.z) < .01)
+      if (index >= 0 && startAltarProcession(world.procession, monks[index].id, world.states[index], world.grounds, world.rng)) {
+        useRelicProcessionStore.setState({ monkId: monks[index].id, stage: "lifting", returnRequested: false })
       }
     }
     // Advance the carrier first so every worshipper sees the same position this tick.
@@ -107,6 +156,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
     const airborne = new Set<number>()
     for (let i = 0; i < world.states.length; i++) {
       const s = world.states[i]
+      s.workScale = characterScale
       const group = groupRefs.current[i]
       if (!group) continue
       group.userData.initialized = true
@@ -131,9 +181,11 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         group.position.set(s.x, s.y, s.z)
         continue
       }
-      const praying = !s.flight && nearProcession(world.procession, s, group.userData.activity === "praying")
+      const evangelismRequested = useMonkEvangelismStore.getState().assigned.has(monks[i].id)
+      const praying = !evangelismRequested && !s.preachingTask && !s.flight && s.buildingTask?.purpose !== "rest" && nearProcession(world.procession, s, group.userData.activity === "praying")
       group.userData.moving = false
       if (praying && world.procession.position) {
+        blessByProcession(world.procession, `monk:${monks[i].id}`, s)
         group.userData.activity = "praying"
         world.activities.set(monks[i].id, "praying")
         group.rotation.y = Math.atan2(world.procession.position.x - s.x, world.procession.position.z - s.z)
@@ -143,7 +195,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
 
       if (flying) {
         s.flightWait -= dt
-        if (!s.flight && s.flightWait <= 0 && s.destination === "grounds" && s.activity === "resting") {
+        if (!evangelismRequested && !s.preachingTask && !s.flight && s.flightWait <= 0 && s.destination === "grounds" && s.activity === "resting" && !s.buildingTask && s.stamina > 25) {
           s.flight = createMonkFlight(s, world.pick(), map, world.flightRng)
         }
       }
@@ -182,10 +234,18 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       }
       group.rotation.x = 0
 
-      stepMonkRoutine(s, world.wander, world.rng, monkWalkSpeed(characterScale), dt)
+      const evangelizing = stepMonkEvangelism(s, map, evangelismRequested, monkWalkSpeed(characterScale), dt,
+        world.states.filter(other => other !== s && other.preachingTask).map(other => other.preachingTask!.tile))
+      if (evangelismRequested && !evangelizing) useMonkEvangelismStore.getState().recall(monks[i].id)
+      if (!evangelizing && !stepMonkWork(s, map, monkWalkSpeed(characterScale), dt))
+        stepMonkRoutine(s, world.wander, world.rng, monkWalkSpeed(characterScale), dt)
+      world.stamina.set(monks[i].id, s.stamina)
+      if (s.buildingTask && (s.activity === "building" || s.activity === "sleeping")) group.rotation.y = s.buildingTask.heading
       group.userData.activity = s.activity
       world.activities.set(monks[i].id, s.activity)
-      if (s.activity === "praying" && world.centre) {
+      if (s.activity === "preaching" && s.preachingTask) {
+        group.rotation.y = s.preachingTask.heading
+      } else if (s.activity === "praying" && world.centre) {
         group.rotation.y = Math.atan2(world.centre.x - s.x, world.centre.z - s.z)
       } else if (Math.hypot(s.x - previousX, s.z - previousZ) > 0) {
         group.rotation.y = Math.atan2(s.x - previousX, s.z - previousZ)
@@ -203,6 +263,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
 
   return (
     <group>
+      <PixelCharacters><PietyEffects procession={world.procession} characterScale={characterScale} /></PixelCharacters>
       {monks.map((monk, index) => {
         const id = new THREE.Color(...encodeObjectId(residentObjectId(index)))
         const selected = isSelected(selection, { kind: "monk", id: monk.id })

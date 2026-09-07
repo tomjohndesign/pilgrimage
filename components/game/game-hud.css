@@ -77,6 +77,10 @@
 .hud-bottom-actions { width: fit-content; max-width: 100%; background: #241f16ed; pointer-events: auto; display: flex; align-items: center; gap: var(--hud-control-gap); height: var(--hud-bar-height); border: 1px solid #8c784c; box-shadow: inset 0 0 0 2px #17140e; padding: 3px; }
 .hud-action { display: flex; gap: 7px; align-items: center; justify-content: center; padding: 4px var(--hud-space); height: 28px; font-family: var(--font-cinzel), serif; font-size: 11px; letter-spacing: .04em; white-space: nowrap; pointer-events: auto; cursor: pointer; text-shadow: 0 1px 2px #000; }
 .hud-build-tray { position: relative; display: flex; align-items: flex-start; gap: var(--hud-space); padding: var(--hud-space); pointer-events: auto; }
+.hud-build-content { flex: 1; min-width: 0; }
+.hud-build-rotation { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: var(--hud-space); font-size: 12px; color: #d3c097; }
+.hud-build-rotation kbd { font: inherit; }
+.hud-entry-key { color: #ffe5a0; }
 .hud-building-tiles { overflow-x: auto; display: flex; min-width: 0; align-items: center; gap: var(--hud-space); }
 .hud-building-tile { position: relative; width: 60px; height: 56px; flex-shrink: 0; padding: 2px; cursor: pointer; }
 .hud-building-tile img { width: 54px; height: 49px; object-fit: contain; }

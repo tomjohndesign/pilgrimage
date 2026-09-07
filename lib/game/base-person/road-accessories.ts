@@ -12,8 +12,8 @@ export function createRoadAccessories(recipe: PersonRecipe, sockets: Record<Sock
     materials.push(result)
     return result
   }
-  const wood = material("#785637"), dark = material("#503b2b"), gold = material(design.accentColor)
-  const cloth = material(design.tunicColor), pale = material("#d6b57b")
+  const wood = material("#785637"), dark = material("#503b2b")
+  const cloth = material(design.tunicColor), wool = material(design.coveringColor), pale = material("#d6b57b")
   const mesh = (parent: THREE.Object3D, geometry: THREE.BufferGeometry, mat: THREE.Material,
     x = 0, y = 0, z = 0) => {
     geometries.push(geometry)
@@ -28,45 +28,58 @@ export function createRoadAccessories(recipe: PersonRecipe, sockets: Record<Sock
   const strap = (parent: THREE.Object3D, points: number[][]) => mesh(parent,
     new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(...p))), 16, 0.025, 4, false), dark)
   const hat = group("road-hat", "head")
-  if (design.hat === "Travel hat" || design.hat === "Minstrel hat") {
-    const minstrel = design.hat === "Minstrel hat"
-    const brim = mesh(hat, new THREE.CylinderGeometry(b.headWidth * 1.65, b.headWidth * 1.65, 0.035, 10), minstrel ? cloth : pale, 0, -0.10)
-    brim.scale.z = 0.87
-    const crown = mesh(hat, new THREE.CylinderGeometry(minstrel ? 0.02 : b.headWidth * 0.72, b.headWidth * 1.07, minstrel ? 0.23 : 0.17, 8), minstrel ? cloth : pale, minstrel ? -0.055 : 0, 0.005)
-    crown.rotation.z = minstrel ? 0.4 : 0
-    mesh(hat, new THREE.CylinderGeometry(b.headWidth * 1.07, b.headWidth * 1.1, 0.04, 10), minstrel ? gold : dark, 0, -0.055).scale.z = 0.94
-    if (minstrel) {
-      const feather = mesh(hat, new THREE.SphereGeometry(1, 6, 4), gold, b.headWidth * 0.9, 0.15, -0.015)
-      feather.name = "hat-feather"; feather.scale.set(0.045, 0.18, 0.022); feather.rotation.z = -0.5
-    }
+  if (design.hat === "Wool cap" || design.hat === "Cloth cap") {
+    // Close-fitting cloth crown with a folded hem: no projecting brim, band or feather.
+    const cap = mesh(hat, new THREE.LatheGeometry([
+      new THREE.Vector2(b.headWidth * 1.16, -0.16),
+      new THREE.Vector2(b.headWidth * 1.20, -0.12),
+      new THREE.Vector2(b.headWidth * 1.14, -0.08),
+      new THREE.Vector2(b.headWidth * 1.03, 0.015),
+      new THREE.Vector2(b.headWidth * 0.66, 0.085),
+      new THREE.Vector2(0, 0.11),
+    ], 12), design.hat === "Cloth cap" ? cloth : wool)
+    cap.name = "cloth-cap"; cap.scale.z = b.headDepth / b.headWidth * 1.04
   }
   const satchel = group("road-satchel", "leftHip")
   if (design.satchel) {
-    mesh(satchel, new THREE.BoxGeometry(0.21, 0.25, 0.16), wood, 0.10, 0.01, 0.025)
+    const pouch = mesh(satchel, new THREE.SphereGeometry(1, 8, 6), wood, 0.10, 0.01, 0.025)
+    pouch.scale.set(0.13, 0.16, 0.09)
     mesh(satchel, new THREE.BoxGeometry(0.23, 0.10, 0.025), dark, 0.10, 0.10, 0.115)
-    mesh(satchel, new THREE.BoxGeometry(0.035, 0.055, 0.025), pale, 0.10, 0.075, 0.135)
+    strap(satchel, [[0.10, 0.11, 0.135], [0.10, 0.045, 0.14], [0.13, 0.015, 0.13]])
     const rise = b.torsoShoulderHeight - b.hipHeight
     strap(satchel, [[0.1, 0.13, 0.07], [-b.torsoBottom * 0.6, rise * 0.5, b.torsoTop * 0.82],
       [-b.torsoBottom - b.torsoTop * 0.65, rise, 0], [-b.torsoBottom * 0.6, rise * 0.5, -b.torsoTop * 0.83], [0.1, 0.13, -0.05]])
   }
-  const guitar = group("road-guitar", "back")
-  if (design.guitar) {
-    guitar.position.set(0.04, -0.20, -0.12); guitar.rotation.z = -0.50
-    // An hourglass soundbox, separate neck, sound hole and bridge read at native pixels.
+  const lute = group("road-lute", "back")
+  if (design.lute) {
+    lute.position.set(0.04, -0.20, -0.12); lute.rotation.z = -0.50
+    // Short-necked lute: one pear-shaped soundboard, a deep bowl and swept-back pegbox.
+    // Reference: https://www.metmuseum.org/essays/the-lute
     const outline = new THREE.Shape()
     outline.moveTo(0, -0.29)
-    outline.bezierCurveTo(-0.28, -0.29, -0.25, -0.04, -0.14, 0.015)
-    outline.bezierCurveTo(-0.25, 0.22, -0.09, 0.26, 0, 0.23)
-    outline.bezierCurveTo(0.09, 0.26, 0.25, 0.22, 0.14, 0.015)
-    outline.bezierCurveTo(0.25, -0.04, 0.28, -0.29, 0, -0.29)
-    mesh(guitar, new THREE.ExtrudeGeometry(outline, { depth: 0.10, bevelEnabled: false, curveSegments: 4 }), wood)
-    mesh(guitar, new THREE.ShapeGeometry(outline, 4), pale, 0, 0, -0.005).rotation.y = Math.PI
-    mesh(guitar, new THREE.CylinderGeometry(0.065, 0.065, 0.012, 10), dark, 0, 0.03, -0.018).rotation.x = Math.PI / 2
-    mesh(guitar, new THREE.BoxGeometry(0.075, 0.48, 0.055), dark, 0, 0.42, 0.02)
-    mesh(guitar, new THREE.BoxGeometry(0.115, 0.12, 0.07), wood, 0, 0.70, 0.02)
-    mesh(guitar, new THREE.BoxGeometry(0.14, 0.035, 0.015), dark, 0, -0.15, -0.022)
-    mesh(guitar, new THREE.BoxGeometry(0.018, 0.72, 0.01), pale, 0, 0.22, -0.03)
-    for (const x of [-0.075, 0.075]) for (const y of [0.67, 0.73]) mesh(guitar, new THREE.BoxGeometry(0.045, 0.025, 0.035), pale, x, y, 0.02)
+    outline.bezierCurveTo(-0.33, -0.29, -0.32, -0.02, -0.20, 0.15)
+    outline.bezierCurveTo(-0.14, 0.24, -0.065, 0.29, -0.045, 0.31)
+    outline.lineTo(0.045, 0.31)
+    outline.bezierCurveTo(0.065, 0.29, 0.14, 0.24, 0.20, 0.15)
+    outline.bezierCurveTo(0.32, -0.02, 0.33, -0.29, 0, -0.29)
+    const bowl = mesh(lute, new THREE.LatheGeometry([
+      new THREE.Vector2(0, -0.29), new THREE.Vector2(0.18, -0.25),
+      new THREE.Vector2(0.265, -0.12), new THREE.Vector2(0.265, -0.015),
+      new THREE.Vector2(0.20, 0.15), new THREE.Vector2(0.10, 0.26),
+      new THREE.Vector2(0.045, 0.31), new THREE.Vector2(0, 0.31),
+    ], 12, -Math.PI / 2, Math.PI), wood)
+    bowl.name = "lute-bowl"; bowl.scale.z = 0.8
+    mesh(lute, new THREE.ShapeGeometry(outline, 6), pale, 0, 0, -0.005).rotation.y = Math.PI
+    mesh(lute, new THREE.CylinderGeometry(0.065, 0.065, 0.012, 10), dark, 0, 0.03, -0.018).rotation.x = Math.PI / 2
+    mesh(lute, new THREE.BoxGeometry(0.085, 0.27, 0.055), dark, 0, 0.425, 0.02)
+    const pegbox = new THREE.Group(); pegbox.name = "lute-pegbox"
+    pegbox.position.set(0, 0.56, 0.02); pegbox.rotation.x = 1.15; lute.add(pegbox)
+    mesh(pegbox, new THREE.BoxGeometry(0.10, 0.18, 0.055), wood, 0, 0.075)
+    mesh(lute, new THREE.BoxGeometry(0.14, 0.035, 0.015), dark, 0, -0.15, -0.022)
+    mesh(lute, new THREE.BoxGeometry(0.018, 0.70, 0.01), pale, 0, 0.20, -0.03)
+    for (const x of [-0.065, 0.065]) for (const y of [0.035, 0.08, 0.125])
+      mesh(pegbox, new THREE.CylinderGeometry(0.018, 0.018, 0.05, 6), dark, x, y).rotation.z = Math.PI / 2
+    strap(lute, [[-0.08, 0.22, 0.06], [-0.25, 0.32, 0.27], [-0.39, 0.03, 0.30], [-0.20, -0.20, 0.10]])
   }
   const staff = group("walking-staff", "rightHand")
   if (design.walkingStick) {
@@ -81,7 +94,7 @@ export function createRoadAccessories(recipe: PersonRecipe, sockets: Record<Sock
       const road = clip === "walk" || clip === "idle"
       hat.visible = clip !== "sleeping"
       satchel.visible = road && design.satchel
-      guitar.visible = road && design.guitar
+      lute.visible = road && design.lute
       staff.visible = road && design.walkingStick
       if (staff.visible) {
         const { tip, planted } = staffMotion(phase, b, clip === "walk", design.poseEdits)

@@ -1,13 +1,12 @@
+import { rotatedFootprint, type BuildingRotation } from "./building-rotation"
 import { getBuildInfluence } from "./build-influence"
-import { DEFAULT_ELEVATION } from "./map/elevation"
+import { DEFAULT_ELEVATION, finishElevation, generateElevation, groundHeight } from "./map/elevation"
 import { describe, expect, it } from "vitest"
 import { generateMap } from "./map/generate-map"
 import type { GameMap } from "./map/types"
 import { generateMonks } from "./monks"
 import { generateRelic, relicDraw } from "./relic"
 import { generateTravelers } from "./travelers"
-import { EARLY_BUILDINGS, earlyBuildingRecipe } from "./building-art/style"
-import { buildingParts } from "./building-art/geometry"
 import { structureParts } from "./building-art/structure"
 import {
   BUILD_CATALOG,
@@ -19,6 +18,7 @@ import {
   purchaseStructure,
   relicRenown,
   settlementIncome,
+  settlementEvangelism,
   settlementRenown,
   STARTING_RESOURCES,
 } from "./settlement"
@@ -59,27 +59,126 @@ const shelter = BUILD_CATALOG.find((item) => item.id === "shelter")!
 const garden = BUILD_CATALOG.find((item) => item.id === "garden")!
 
 describe("build and buy", () => {
-  it.each(EARLY_BUILDINGS.filter((preset) => preset.id !== "enclosure"))(
-    "buys $name with its playground geometry and reserves its full footprint", (preset) => {
-      const def = BUILD_CATALOG.find((item) => item.id === preset.id)!
-      const at = { x: 10, z: 14 }, map = testMap()
-      const before = { ...createSettlement(), resources: { ...def.cost } }
-      const result = purchaseStructure(before, map, monks, [relic], def.id, at)
-      expect(result.error).toBeNull()
-      expect(result.settlement.resources).toEqual({ gold: 0, wood: 0 })
-      const placed = result.settlement.structures[0]
-      expect([placed.w, placed.d]).toEqual([preset.width, preset.depth])
-      expect(structureParts(placed)).toEqual(buildingParts(earlyBuildingRecipe(preset.id)))
-      expect(structureParts({ ...def, buildType: def.id })).toEqual(structureParts(placed))
-      const farCorner = { x: at.x + def.w - 1, z: at.z + def.d - 1 }
-      const occupied = { ...map, buildings: [...map.buildings, placed] }
-      expect(placementError(occupied, def, farCorner)).toMatch(/occupies/)
-      map.tiles[farCorner.z * map.width + farCorner.x] = "water"
-      const rejected = purchaseStructure(before, map, monks, [relic], def.id, at)
-      expect(rejected.error).toBeTruthy()
-      expect(rejected.settlement).toBe(before)
-    },
-  )
+  it("activates evangelism only after construction and never stacks extra crosses", () => {
+    const map = testMap()
+    expect(settlementEvangelism(map)).toBe(0)
+    const purchase = purchaseStructure(createSettlement(), map, monks, [relic], "cross", { x: 10, z: 14 })
+    expect(purchase.error).toBeNull()
+    expect(purchase.settlement.resources).toEqual({ gold: STARTING_RESOURCES.gold - 60, wood: STARTING_RESOURCES.wood - 45 })
+    const cross = purchase.settlement.structures[0]
+    map.buildings.push(cross)
+    expect(settlementEvangelism(map)).toBe(0)
+    cross.construction!.work = cross.construction!.required
+    expect(settlementEvangelism(map)).toBe(0.05)
+    map.buildings.push({ ...cross, id: "extra-cross", x: 12 })
+    expect(settlementEvangelism(map)).toBe(0.05)
+    map.buildings = map.buildings.filter(b => b.buildType !== "cross")
+    expect(settlementEvangelism(map)).toBe(0)
+  })
+  it.each([0, 1, 2, 3] as BuildingRotation[])("buys and reserves a rectangular building at rotation %i", rotation => {
+    const map = testMap(), at = { x: 10, z: 14 }
+    const def = BUILD_CATALOG.find(item => item.id === "hall")!
+    const water = new Uint8Array(map.tiles.length)
+    map.elevation = generateElevation(1, map.width, map.depth, water)
+    map.elevation.height = map.elevation.height.map((_, i) => (i % map.width) * 0.025)
+    finishElevation(map.elevation, map.width, map.depth, water, [])
+    const footprint = rotatedFootprint(def, rotation)
+    const previewHeight = groundHeight(map, at.x + (footprint.w - 1) / 2, at.z + (footprint.d - 1) / 2)
+    const before = { ...createSettlement(), resources: { ...def.cost } }
+    const result = purchaseStructure(before, map, monks, [relic], def.id, at, undefined, 10000, rotation)
+    expect(result.error).toBeNull()
+    const placed = result.settlement.structures[0]
+    expect(placed).toMatchObject({ ...at, ...footprint, rotation })
+    const placedMap = { ...map, elevation: result.settlement.elevation }
+    for (let z = at.z; z < at.z + footprint.d; z++) for (let x = at.x; x < at.x + footprint.w; x++) {
+      for (const dx of [-0.49, 0.49]) for (const dz of [-0.49, 0.49]) {
+        expect(groundHeight(placedMap, x + dx, z + dz)).toBeCloseTo(previewHeight)
+      }
+    }
+    const occupied = { ...map, buildings: [...map.buildings, placed] }
+    expect(placementError(occupied, garden, { x: at.x + placed.w - 1, z: at.z + placed.d - 1 })).toMatch(/occupies/)
+    map.tiles[(at.z + placed.d - 1) * map.width + at.x + placed.w - 1] = "water"
+    const failed = purchaseStructure(before, map, monks, [relic], def.id, at, undefined, 10000, rotation)
+    expect(failed.error).toBeTruthy()
+    expect(failed.settlement).toBe(before)
+  })
+
+  it.each(["workshop", "storehouse"])("preserves the entrance of an already rotated %s", buildType => {
+    const map = testMap()
+    map.buildings.push({ ...map.buildings[0], id: `${buildType}-0`, buildType, x: 10, z: 14, rotation: 1 })
+    const cross = BUILD_CATALOG.find(item => item.id === "cross")!
+    expect(placementError(map, cross, { x: 9, z: 14 })).toMatch(/access to existing buildings/)
+    expect(placementError(map, cross, { x: 10, z: 16 })).toBeNull()
+  })
+
+  it("checks the turned footprint rather than the catalogue dimensions", () => {
+    const map = testMap(), at = { x: 10, z: 14 }
+    const def = BUILD_CATALOG.find(item => item.id === "hall")!
+    map.tiles[at.z * map.width + at.x + 2] = "water"
+    expect(placementError(map, def, at)).toBeTruthy()
+    expect(placementError(map, def, at, undefined, 1)).toBeNull()
+  })
+
+  it("offers only buildings with working roles", () => {
+    expect(BUILD_CATALOG.filter(b => b.category === "buildings").map(b => b.id))
+      .toEqual(["shelter", "workshop", "hall", "storehouse"])
+    for (const type of ["lumberCamp", "monk-shelter", "shepherd-hut", "wood-shelter"])
+      expect(purchaseStructure(createSettlement(), testMap(), monks, [relic], type, { x: 10, z: 14 }).error).toBe("Unknown structure.")
+  })
+
+  it("buys a roofed storehouse away from woods using its full footprint", () => {
+    const map = testMap(), def = BUILD_CATALOG.find(b => b.id === "storehouse")!
+    const result = purchaseStructure(createSettlement(), map, monks, [relic], def.id, { x: 10, z: 14 })
+    expect(result.error).toBeNull()
+    const placed = result.settlement.structures[0]
+    expect([placed.w, placed.d]).toEqual([2, 2])
+    expect(structureParts(placed)).toEqual(structureParts({ ...def, buildType: def.id }))
+    expect(structureParts(placed).some(p => p.layer === "roof")).toBe(true)
+    expect(placementError({ ...map, buildings: [...map.buildings, placed] }, def, { x: 11, z: 15 })).toMatch(/occupies/)
+  })
+
+  it("keeps storehouse entrances reachable when placing stores and later additions", () => {
+    const map = testMap()
+    map.tiles[16 * map.width + 10] = "water"
+    expect(purchaseStructure(createSettlement(), map, monks, [relic], "storehouse", { x: 10, z: 14 }).error).toMatch(/access/)
+    map.tiles[16 * map.width + 10] = "grass"
+    const placed = purchaseStructure(createSettlement(), map, monks, [relic], "storehouse", { x: 10, z: 14 })
+    expect(placed.error).toBeNull()
+    const blocked = purchaseStructure(placed.settlement, map, monks, [relic], "cross", { x: 10, z: 16 })
+    expect(blocked.error).toMatch(/access/)
+    expect(blocked.settlement).toBe(placed.settlement)
+  })
+
+  it("grades successful purchases cumulatively without editing terrain on rejected purchases", () => {
+    const map = testMap(), water = new Uint8Array(map.tiles.length)
+    map.elevation = generateElevation(1, map.width, map.depth, water)
+    map.elevation.height = map.elevation.height.map((_, i) => (i % map.width) * 0.025)
+    finishElevation(map.elevation, map.width, map.depth, water, [])
+    const original = structuredClone(map.elevation)
+    const before = { ...createSettlement(), resources: { gold: 1000, wood: 1000 } }
+    const at = { x: 11, z: 14 }
+    const previewHeight = groundHeight(map, at.x + (shelter.w - 1) / 2, at.z + (shelter.d - 1) / 2)
+    const first = purchaseStructure(before, map, monks, [relic], shelter.id, at)
+    expect(first.error).toBeNull()
+    const firstElevation = structuredClone(first.settlement.elevation!)
+    const second = purchaseStructure(first.settlement, map, monks, [relic], shelter.id, { x: 9, z: 14 })
+    expect(second.error).toBeNull()
+    expect(second.settlement.elevation).not.toBe(first.settlement.elevation)
+    for (const settlement of [first.settlement, second.settlement]) {
+      const placedMap = { ...map, elevation: settlement.elevation }
+      for (let z = at.z; z < at.z + shelter.d; z++) for (let x = at.x; x < at.x + shelter.w; x++) {
+        for (const dx of [-0.49, 0.49]) for (const dz of [-0.49, 0.49]) {
+          expect(groundHeight(placedMap, x + dx, z + dz)).toBeCloseTo(previewHeight)
+        }
+      }
+    }
+    const rejected = purchaseStructure(second.settlement, map, monks, [relic], shelter.id, at)
+    expect(rejected.error).toMatch(/occupies/)
+    expect(rejected.settlement).toBe(second.settlement)
+    expect(map.elevation).toEqual(original)
+    expect(first.settlement.elevation).toEqual(firstElevation)
+    expect(before.elevation).toBeUndefined()
+  })
 
   it("keeps influence feedback and footprint checks aware of cliffs and uneven ground", () => {
     const map = testMap(), i = 14 * map.width + 11
@@ -109,6 +208,7 @@ describe("build and buy", () => {
       z: 14,
       w: 2,
       d: 2,
+      construction: { work: 0, required: 96, cost: { gold: 45, wood: 35 } },
     })
     expect(before.resources).toEqual(STARTING_RESOURCES)
     expect(before.structures).toHaveLength(0)
@@ -225,6 +325,7 @@ describe("shrine renown and income", () => {
       x: 18,
       z: 14,
     }).settlement
+    for (const b of second.structures) b.construction!.work = b.construction!.required
     const relics = [relic, generateRelic(42)]
     const total = settlementRenown(
       { ...map, buildings: [...map.buildings, ...second.structures] },
@@ -245,6 +346,7 @@ describe("shrine renown and income", () => {
       x: 18,
       z: 14,
     }).settlement
+    for (const b of purchase.structures) b.construction!.work = b.construction!.required
     const after = settlementRenown(
       { ...map, buildings: [...map.buildings, ...purchase.structures] },
       monks,
@@ -259,14 +361,18 @@ describe("shrine renown and income", () => {
 
   it("replenishes both supplies and applies income from purchased buildings", () => {
     const before = createSettlement()
-    const built = purchaseStructure(before, testMap(), monks, [relic], "workshop", {
+    const map = testMap()
+    map.tiles[12 * map.width + 10] = "forest"
+    const purchase = purchaseStructure(before, map, monks, [relic], "workshop", {
       x: 11,
       z: 14,
-    }).settlement
-    expect(settlementIncome(built, 4)).toEqual({ gold: 4, wood: 16 })
+    })
+    expect(purchase.error).toBeNull()
+    const built = purchase.settlement
+    expect(settlementIncome(built, 4)).toEqual({ gold: 4, wood: 8 })
     const after = collectIncome(built, 4)
     expect(after.resources.gold).toBe(built.resources.gold + 4)
-    expect(after.resources.wood).toBe(built.resources.wood + 16)
+    expect(after.resources.wood).toBe(built.resources.wood + 8)
     expect(after.structures).toBe(built.structures)
     expect(createSettlement()).toEqual(before)
   })

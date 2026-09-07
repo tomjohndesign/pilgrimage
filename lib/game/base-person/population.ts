@@ -29,10 +29,10 @@ export function populationDesign(type: Pick<TravelerTypeDef, "id" | "color">, va
   const profile = POPULATION_PROFILES[variant]
   const minstrel = type.id === "minstrel"
   const design: PersonDesign = { ...base, footwear: type.id === "peasant" ? "Sandals" as const : "Boots" as const, bodyType: profile.bodyType, tunicColor: type.color,
-    hat: minstrel ? "Minstrel hat" : base.hat !== "None" ? base.hat : variant === 0 || variant === 4 ? "Travel hat" : variant === 3 ? "Coif" : "None",
+    hat: minstrel ? "Cloth cap" : base.hat !== "None" ? base.hat : variant === 0 || variant === 4 ? "Wool cap" : variant === 3 ? "Coif" : "None",
     satchel: base.satchel || (!minstrel && variant % 3 !== 1),
     walkingStick: base.walkingStick || (type.id === "peasant" && profile.bodyType === "Male"),
-    guitar: base.guitar || minstrel, tunicStyle: minstrel ? "Particolour" : base.tunicStyle,
+    lute: base.lute || minstrel, tunicStyle: base.tunicStyle,
     hairStyle: profile.hair, beard: profile.bodyType === "Male" && (base.beard || variant === 2) }
   for (const [key, delta] of Object.entries(profile.deltas) as [DesignKey, number][]) {
     const range = DESIGN_CONTROLS[key]
@@ -48,10 +48,11 @@ export interface PopulationPack {
   actionFrames?: Record<ActionClip, number>
   frameCounts?: Partial<Record<import("./pose").BaseClip, number>>
   templateVersion: number
+  depthEncoding?: string
   cellSize: number
   anchor: number[]
   rows: number
-  callings: Record<TravelerTypeId, { walk: string; idle: string; designs: PersonDesign[]; actions?: Record<ActionClip, string> }>
+  callings: Record<TravelerTypeId, { walk: string; idle: string; designs: PersonDesign[]; actions?: Record<ActionClip, string>; depths?: Record<import("./pose").BaseClip, string> }>
   greyCallings?: Partial<PopulationPack["callings"]>
   shadows: { walk: string; idle: string; actions?: Record<ActionClip, string> }
   strideRatios: number[]

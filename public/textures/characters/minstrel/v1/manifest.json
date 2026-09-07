@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "templateVersion": 29,
+  "frames": 16,
+  "rows": 48,
+  "fps": 16,
+  "cellSize": 64,
+  "anchor": [
+    32,
+    48.5
+  ],
+  "safePadding": 11
+}
