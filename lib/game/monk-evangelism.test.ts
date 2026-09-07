@@ -39,7 +39,7 @@ describe("roadside preaching", () => {
     expect(map.site!.branch).not.toContainEqual(tile)
     expect(map.road!.some(p => Math.abs(p.x - tile.x) + Math.abs(p.z - tile.z) === 1)).toBe(true)
     expect(monk.preachingTask!.heading).toBe(Math.atan2(0, 1))
-    expect(activityClip(monk.activity, false)).toBe("idle")
+    expect(activityClip(monk.activity, false)).toBe("preaching")
     expect(roadsideEvangelism(map)).toBeCloseTo(MONK_EVANGELISM)
     const before = { x: monk.x, z: monk.z }
     stepMonkEvangelism(monk, map, true, 2, 1)

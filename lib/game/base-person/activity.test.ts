@@ -3,7 +3,7 @@ import { activityClip } from "./activity"
 
 describe("simulation sprite poses", () => {
   it.each([
-    ["praying", "praying"], ["hoisting", "hoisting"], ["procession", "procession"], ["vigil", "praying"], ["resting", "praying"], ["walking", "idle"], ["flying", "idle"],
+    ["preaching", "preaching"], ["praying", "praying"], ["hoisting", "hoisting"], ["procession", "procession"], ["vigil", "praying"], ["resting", "praying"], ["walking", "idle"], ["flying", "idle"],
     ["camping", "sleeping"], ["idle", "sitting"], ["visiting", "praying"],
     ["working", "treeFelling"], ["gathering", "woodcutting"], ["vending", "idle"],
   ] as const)("shows %s as %s", (activity, clip) => {
@@ -15,7 +15,7 @@ describe("simulation sprite poses", () => {
     expect(activityClip("fromRelic", true, 0)).toBe("walk")
   })
   it("walks between destinations and holds loads through stops", () => {
-    for (const activity of ["toCamp", "toWork", "toRelic", "fromCamp", "fleeing"] as const) {
+    for (const activity of ["toEvangelize", "toCamp", "toWork", "toRelic", "fromCamp", "fleeing"] as const) {
       expect(activityClip(activity, true)).toBe("walk")
     }
     expect(activityClip("praying", false, 5)).toBe("praying")

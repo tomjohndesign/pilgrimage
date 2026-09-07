@@ -1,3 +1,4 @@
+import { preachingMotion } from "./preaching"
 import { buildingMotion, MALLET_HEAD_HEIGHT } from "./building"
 import * as THREE from "three"
 import { createWoodLogGeometry, WOOD_LOG } from "../wood-log"
@@ -627,6 +628,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       const splitAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(splitRotation)
       const gathering = gatheringMotion(phase)
       const building = clip === "building", hammer = buildingMotion(phase)
+      const sermon = clip === "preaching" ? preachingMotion(phase, b) : undefined
       const motion = walkBody(phase, clip)
       const devotional = recipe.design.walkStyle === "Devotional" && clip === "walk"
       headPivot.rotation.x = devotional ? 0.42 : 0
@@ -650,6 +652,11 @@ export function createBasePersonRig(recipe = personRecipe()) {
       if (chair) headPivot.rotation.x = .16 + wave * .004
       if (splitting) headPivot.rotation.x = -body.rotation.x * 0.65
       headPivot.rotation.y = felling ? -swing.twist * 0.55 : splitting ? -split.twist * 0.6 : -motion.chestYaw
+      if (sermon) {
+        chest.rotation.y = sermon.turn
+        headPivot.rotation.x = sermon.nod
+        headPivot.rotation.y = -sermon.turn * 0.5
+      }
       basket.visible = gather
       picked.visible = gather && gathering.holding
       contents.visible = gather && gathering.deposited
@@ -745,6 +752,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
 
         }
         else if (devotional) reach(limb, [sign * 0.018, waist - b.hipHeight + 0.045 + sign * 0.015, 0.30])
+        else if (sermon) reach(limb, sermon[limb.side], true)
         else if (building) {
           const target = new THREE.Vector3(sign * b.shoulderOffset,
             b.shoulderHeight + (limb.side === "right" ? hammer.gripY : -0.25), limb.side === "right" ? hammer.gripZ : 0.27)

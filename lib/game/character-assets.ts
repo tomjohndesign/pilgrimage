@@ -27,8 +27,8 @@ export function characterVisual(asset: CharacterAsset, model: CharacterModel, cu
     walk: { strides: "walkStrides" in metadata ? Number(metadata.walkStrides) : 1, url: custom?.walk ?? baseMetadata.images.walk, depth: custom?.depthWalk ?? baseMetadata.images.depthWalk, columns: metadata.frameCount, rows: metadata.directions.length, stillFrame: 0 } satisfies SpriteClip,
     idle: { url: custom?.idle ?? baseMetadata.images.idle, depth: custom?.depthIdle ?? baseMetadata.images.depthIdle, columns: 1, rows: metadata.directions.length, stillFrame: 0 } satisfies SpriteClip,
     actions: Object.fromEntries(ACTION_CLIPS.flatMap(clip => {
-      const action = custom?.actions?.[clip] ?? baseMetadata.images.actions[clip]
-      return action ? [[clip, { url: action.url, depth: action.depth, shadow: action.shadow, playbackRate: actionPlaybackRate(clip, validatePersonDesign(metadata.design)), columns: metadata.clips[clip].length / metadata.directions.length, rows: metadata.directions.length, stillFrame: 0 }]] : []
+      const action = custom?.actions?.[clip] ?? (clip in baseMetadata.images.actions ? baseMetadata.images.actions[clip as keyof typeof baseMetadata.images.actions] : undefined)
+      return action ? [[clip, { url: action.url, depth: action.depth, shadow: action.shadow, playbackRate: actionPlaybackRate(clip, validatePersonDesign(metadata.design)), columns: (metadata.clips as BasePersonBake["metadata"]["clips"])[clip].length / metadata.directions.length, rows: metadata.directions.length, stillFrame: 0 }]] : []
     })) as Partial<Record<ActionClip, SpriteClip & { shadow: string }>>,
     shadow: { walk: custom?.shadowWalk ?? baseMetadata.images.shadowWalk, idle: custom?.shadowIdle ?? baseMetadata.images.shadowIdle },
     center: [metadata.anchor[0] / metadata.cellSize, 1 - metadata.anchor[1] / metadata.cellSize] as [number, number],

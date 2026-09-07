@@ -46,7 +46,7 @@ describe("road character population", () => {
       expect(old.scale).toBe(young.scale)
       expect(old.walk.url).toContain(`${type}-grey-walk.png`)
       expect(old.idle.url).toContain(`${type}-grey-idle.png`)
-      for (const clip of ACTION_CLIPS) {
+      for (const clip of ACTION_CLIPS.filter(clip => clip !== "preaching")) {
         expect(old.actions[clip]?.url).toContain(`${type}-grey-${clip}.png`)
         expect(old.actions[clip]?.columns).toBe(young.actions[clip]?.columns)
       }
@@ -68,7 +68,7 @@ describe("road character population", () => {
       expect(visual.rowOffset).toBe(variant * 8)
       expect(visual.walk.rows).toBe(48)
       expect(visual.idle.rows).toBe(48)
-      for (const clip of ACTION_CLIPS) {
+      for (const clip of ACTION_CLIPS.filter(clip => clip !== "preaching")) {
         expect(visual.actions[clip]?.url).toContain(`${type.id}-${clip}.png`)
         expect(visual.actions[clip]?.shadow).toContain(`shadow-${clip}.png`)
         expect(visual.actions[clip]?.rows).toBe(visual.walk.rows)

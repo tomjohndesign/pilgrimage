@@ -12,7 +12,7 @@ export function knightVisual(variant: number) {
   return { ...base, design, scale, rowOffset: row * 8, walkStride: personWalkStride(design, scale),
     center: [manifest.person.anchor[0] / manifest.person.cellSize, 1 - manifest.person.anchor[1] / manifest.person.cellSize] as [number, number],
     walk: { ...clip("walk"), strides: 1 }, idle: clip("idle"),
-    actions: Object.fromEntries(ACTION_CLIPS.map(name => [name, { ...clip(name), shadow: base.shadow.actions![name], playbackRate: actionPlaybackRate(name, design) }])),
+    actions: Object.fromEntries(ACTION_CLIPS.filter((name): name is typeof name & keyof typeof manifest.person.frameCounts => name in manifest.person.frameCounts).map(name => [name, { ...clip(name), shadow: base.shadow.actions![name], playbackRate: actionPlaybackRate(name, design) }])),
   }
 }
 

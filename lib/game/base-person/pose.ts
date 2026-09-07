@@ -17,6 +17,7 @@ export const PERSON_CLIPS = {
   sitting: { label: "Sitting", frames: 8 },
   seatedPrayer: { label: "Seated prayer", frames: 8 },
   praying: { label: "Praying", frames: 8 },
+  preaching: { label: "Preaching", frames: 24 },
   treeFelling: { label: "Chopping · standing tree", frames: 24 },
   woodcutting: { label: "Chopping · fallen wood", frames: SPLITTING_FRAMES },
   building: { label: "Building · wooden mallet", frames: BUILDING_FRAMES },
@@ -26,7 +27,7 @@ export const PERSON_CLIPS = {
   procession: { label: "Carrying overhead", frames: 20 },
 } as const
 export type BaseClip = keyof typeof PERSON_CLIPS
-export const ACTION_CLIPS = ["sleeping", "sitting", "seatedPrayer", "praying", "treeFelling", "woodcutting", "building", "gathering", "carrying", "hoisting", "procession"] as const
+export const ACTION_CLIPS = ["sleeping", "sitting", "seatedPrayer", "praying", "treeFelling", "woodcutting", "building", "gathering", "carrying", "hoisting", "procession", "preaching"] as const
 export type ActionClip = typeof ACTION_CLIPS[number]
 
 export function choppingHipDrop(clip: BaseClip, phase = 0, hipHeight = BASE_PERSON.body.hipHeight) {
