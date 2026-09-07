@@ -23,7 +23,7 @@ import { knightTravelSpeed } from "@/lib/game/knights"
 import { personWalkStride } from "@/lib/game/base-person/gait"
 import { squireVisual } from "@/lib/game/knight/visual"
 import knightMetadata from "@/public/textures/knights/v7/manifest.json"
-import transportMetadata from "@/public/textures/transport/v19/manifest.json"
+import transportMetadata from "@/public/textures/transport/v20/manifest.json"
 
 const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse", knight: "Knight" } as const
 type Subject = keyof typeof SUBJECTS
@@ -327,7 +327,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     version={isPerson ? `Base person · v${BASE_PERSON.version}` : `${SUBJECTS[subject]} · ${isKnight ? KNIGHT.version : TRANSPORT.version}`}
     controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(!controlsOpen)}
     roadHref={`/play?characters=base&baseSize=1.5&fps=${fps}`}
-    status={onMap ? "Full merchant journey · game scale · 11 × 7 tiles" : !isPerson ? `${subject === "horse" ? transportMetadata.animalProfiles[horseVariant].label : SUBJECTS[subject]} · ${clipLabel}` : dragging ? "Live preview · release to finish sprite sheets." : busy ? "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}
+    status={onMap ? "Merchant journey and turning simulations · game scale" : !isPerson ? `${subject === "horse" ? transportMetadata.animalProfiles[horseVariant].label : SUBJECTS[subject]} · ${clipLabel}` : dragging ? "Live preview · release to finish sprite sheets." : busy ? "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}
     detail={onMap ? "8 camera angles · game scale" : `${subject === "cart" ? CART.directions : 8} directions · ${Number((fps * animationRate).toFixed(1))} fps`}>
     <div className="person-workspace">
       <aside className={`person-controls hud-well ${controlsOpen ? "is-open" : ""}`} aria-label="Character controls">
@@ -419,7 +419,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
               <label className="person-choice">Puller<select aria-label="Cart puller" value={cartPuller} onChange={e => { setCartPuller(e.target.value as Puller); setFrame(0) }}><option value="hand">Person</option><option value="donkey">Donkey</option><option value="horse">Horse</option></select></label>
               {cartPuller === "horse" && <label className="person-choice">Horse<select aria-label="Cart horse variant" value={horseVariant} onChange={e => setHorseVariant(e.target.value as HorseVariant)}><option value="common">Common</option><option value="noble">Noble</option></select></label>}
               <label className="person-choice" style={onMap ? { display: "none" } : undefined}>Setup<select aria-label="Cart setup" value={shopState} onChange={e => { setShopState(e.target.value as ShopState); setFrame(0) }}><option value="travel">Travelling</option><option value="opening">Opening shop</option><option value="trading">Open for business</option><option value="packing">Packing up</option></select></label>
-              <p className="person-hint">The map runs the whole journey at the game’s default scale. A customer visits the stall; the animal grazes beside the road and returns before departure.</p>
+              <p className="person-hint">Choose a merchant journey or turning scenario below the map. Compare turn radii, pause and scrub the motion, or follow the hitch and axle trails at game scale.</p>
             </Section>}
             {!onMap && <Section {...section("Animation")}><Tuner label="Timing" labelClassName="w-28" value={fps} min={1} max={24} display={`${(fps * animationRate).toFixed(1)} fps`} onChange={setFps} /></Section>}
             <Section {...section("Files")}><div className="person-file-actions">

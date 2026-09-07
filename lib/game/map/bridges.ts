@@ -1,7 +1,9 @@
+import { cartCornerEnvelope } from "../transport/corner-envelope"
 import { groundHeight } from "./elevation"
 import { isRoadTerrain } from "./road"
 import { TILE_HEIGHT } from "./terrain"
 import { tileAt, type GameMap, type TilePos } from "./types"
+import { BRIDGE_CORNER_RADIUS, BRIDGE_DECK_HALF_WIDTH, insideBridgeCorner, type BridgeCorner } from "./bridge-corners"
 
 /**
  * Where the bridges are and how their approaches rise to meet them. Pure data
@@ -59,6 +61,7 @@ export interface BridgeConnector extends TilePos {
 }
 
 export interface BridgeLayout {
+  corners: BridgeCorner[]
   ropeAt: Map<number, BridgeSpan>
   spans: BridgeSpan[]
   ramps: BridgeRamp[]
@@ -268,9 +271,34 @@ export function bridgeLayout(map: GameMap): BridgeLayout {
 
   const ropeAt = new Map<number, BridgeSpan>()
   for (const span of spans) if (span.ropeSag !== undefined) for (const p of span.tiles) ropeAt.set(p.z * map.width + p.x, span)
-  const layout = { spans, ramps, connectors, rise, ropeAt }
+  const corners: BridgeCorner[] = []
+  for (const tile of connectors) for (const sx of [-1, 1] as const) for (const sz of [-1, 1] as const) {
+    if (!tile.open[sx === 1 ? 0 : 1] || !tile.open[sz === 1 ? 2 : 3]) continue
+    const levelArm = (dx: number, dz: number) => {
+      const x = tile.x + dx, z = tile.z + dz, index = z * map.width + x
+      return tileAt(map, x, z) !== null && Math.abs(rise[index] - BRIDGE_RISE) < 1e-5 && !ropeAt.has(index)
+    }
+    if (levelArm(sx, 0) && levelArm(0, sz)) {
+      let available = 0
+      while (available < 6 && levelArm(sx*(available+1), 0) && levelArm(0, sz*(available+1))) available++
+      // A swept elbow only applies after a straight approach. On staggered
+      // landings its mirrored tail overlaps the next turn, creating a wide
+      // scalloped platform. Keep those inserts local to each half-tile arm.
+      const isolated = available >= 2 && tile.open.filter(Boolean).length === 2 &&
+        !connectors.some(other => other !== tile && Math.abs(other.x-tile.x)+Math.abs(other.z-tile.z) <= 2)
+      const envelope = isolated ? cartCornerEnvelope(BRIDGE_CORNER_RADIUS, BRIDGE_DECK_HALF_WIDTH, available) : undefined
+      corners.push({ x: tile.x, z: tile.z, sx, sz, radius: isolated ? BRIDGE_CORNER_RADIUS : Math.min(BRIDGE_CORNER_RADIUS, 0.5), kind: tile.kind, envelope })
+    }
+  }
+  const layout = { spans, ramps, connectors, rise, ropeAt, corners }
   layoutCache.set(map, layout)
   return layout
+}
+
+/** Added deck is a partial tile; do not turn the water underneath into land. */
+export function bridgeCornerAt(map: GameMap, wx: number, wz: number) {
+  const x = wx + (map.width - 1) / 2, z = wz + (map.depth - 1) / 2
+  return bridgeLayout(map).corners.find(corner => insideBridgeCorner(corner, x, z))
 }
 
 /**

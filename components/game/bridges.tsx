@@ -4,6 +4,7 @@ import { useLayoutEffect, useMemo, useRef } from "react"
 import * as THREE from "three"
 
 import { BRIDGE_RISE, bridgeLayout, ropeDeckHeight, type BridgeSpan, type BridgeRamp, type BridgeConnector } from "@/lib/game/map/bridges"
+import { BRIDGE_DECK_HALF_WIDTH, bridgeCornerReach, bridgeCornerEdge, insideBridgeCorner, type BridgeCorner } from "@/lib/game/map/bridge-corners"
 import { clampRoadTier } from "@/lib/game/map/road"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -315,20 +316,8 @@ function bridgeApproach(map: GameMap, ramp: BridgeRamp, tier: number, rng: () =>
         PLANK_LENGTH, PLANK_THICKNESS, width, color))
     }
   }
-  for (const side of [-1, 1]) {
-    const across = side * (width / 2 - (timber ? POST_RADIUS : PARAPET_WIDTH / 2))
-    const railHeight = timber ? RAIL_SIZE : PARAPET_HEIGHT
-    const railY = timber ? POST_HEIGHT - RAIL_SIZE / 2 : PARAPET_HEIGHT / 2
-    out.boxes.push(sloped(0, across, surface(0) + railY, 1, railHeight,
-      timber ? RAIL_SIZE : PARAPET_WIDTH, color.set(timber ? POST_COLOR : (STONE[tier] ?? STONE[3]).slab)))
-    if (timber) {
-      for (const along of [-0.5, 0.5]) {
-        const top = surface(along) + POST_HEIGHT
-        out.posts.push(place(along, across, (TILE_HEIGHT + top) / 2,
-          POST_RADIUS, top - TILE_HEIGHT, POST_RADIUS, color))
-      }
-    }
-  }
+  // Keep the sloped approaches open; the raised spans retain their guards.
+
 }
 
 function buildPieces(map: GameMap, tier: number): Pieces {
@@ -346,7 +335,68 @@ function buildPieces(map: GameMap, tier: number): Pieces {
     const rope = layout.ropeAt.has((ramp.z + ramp.dz) * map.width + ramp.x + ramp.dx)
     bridgeApproach(map, rope ? { ...ramp, kind: "track" } : ramp, tier, rng, out)
   }
+  // Remove the former inside rail where the new deck joins the two arms.
+  // Keep the submerged part of its piles as supports under the added planks.
+  const interior = (x: number, z: number) => layout.corners.some(c => insideBridgeCorner(c, x + (map.width-1)/2, z + (map.depth-1)/2, 0.09))
+  if (layout.corners.length) {
+    out.boxes = out.boxes.flatMap(piece => {
+      if (piece.y - piece.sy/2 < DECK_TOP + 0.01 || piece.rotZ !== 0) return [piece]
+      const alongX = piece.sx >= piece.sz, length = alongX ? piece.sx : piece.sz
+      const dx = alongX ? Math.cos(piece.rotY) : Math.sin(piece.rotY), dz = alongX ? -Math.sin(piece.rotY) : Math.cos(piece.rotY)
+      const count = Math.max(1, Math.ceil(length/0.04)), kept: Piece[] = []
+      let start = -1
+      for (let i=0;i<=count;i++) {
+        const along = ((i+0.5)/count-0.5)*length
+        const remove = i===count || interior(piece.x+dx*along,piece.z+dz*along)
+        if (!remove && start<0) start=i
+        if (remove && start>=0) {
+          const offset=((start+i)/2/count-0.5)*length, span=(i-start)/count*length
+          kept.push({...piece,x:piece.x+dx*offset,z:piece.z+dz*offset,...(alongX?{sx:span}:{sz:span})});start=-1
+        }
+      }
+      return kept
+    })
+    out.posts = out.posts.map(piece => {
+      if (!interior(piece.x,piece.z)) return piece
+      const bottom=piece.y-piece.sy/2,top=DECK_TOP-PLANK_THICKNESS
+      return {...piece,y:(bottom+top)/2,sy:Math.max(0.01,top-bottom)}
+    })
+    for (const corner of layout.corners) cornerDeck(map,corner,tier,rng,out)
+  }
   return out
+}
+
+/** A curved infill made from the same short planks, rails and driven piles as
+ * the adjoining decks. Small box slices retain the shared pixel/outline pass. */
+function cornerDeck(map: GameMap, corner: BridgeCorner, tier: number, rng: () => number, out: Pieces) {
+  const timber=corner.kind==="track"||tier<=LAST_TIMBER_TIER, color=new THREE.Color()
+  const half=BRIDGE_DECK_HALF_WIDTH,r=(corner.envelope?.reach ?? (BRIDGE_DECK_HALF_WIDTH+corner.radius))-BRIDGE_DECK_HALF_WIDTH,step=0.025,count=Math.ceil(r/step)
+  const thickness=timber?PLANK_THICKNESS:SLAB_THICKNESS
+  const piece=(x:number,z:number,y:number,sx:number,sy:number,sz:number,hex:string):Piece=>{
+    color.set(hex)
+    return {x:tileToWorldX(map,x),z:tileToWorldZ(map,z),y,sx,sy,sz,rotY:0,rotZ:0,r:color.r,g:color.g,b:color.b}
+  }
+  let plank=PLANK_COLOR
+  for(let i=0;i<count;i++){
+    const v=half+(i+0.5)*r/count,reach=bridgeCornerReach(corner,half+i*r/count)
+    if(i%4===0){color.set(PLANK_COLOR).multiplyScalar(1+(rng()-0.5)*WOOD_GRAIN);plank=`#${color.getHexString()}`}
+    const p=piece(corner.x+corner.sx*(half+reach/2),corner.z+corner.sz*v,DECK_TOP-thickness/2,reach+0.01,thickness,r/count,
+      timber?plank:(STONE[tier]??STONE[3]).slab)
+    out.silhouettes.push({...p})
+    out.boxes.push({...p,sz:timber&&i%4===0?p.sz-0.015:p.sz})
+  }
+  const railSteps=Math.max(1,Math.ceil((corner.envelope?.edge.at(-1)?.distance ?? r*Math.PI/2)/0.15)),inset=timber?POST_RADIUS:PARAPET_WIDTH/2
+  for(let i=0;i<railSteps;i++){
+    const a=bridgeCornerEdge(corner,i/railSteps,inset),b=bridgeCornerEdge(corner,(i+1)/railSteps,inset)
+    const dx=b.x-a.x,dz=b.z-a.z,height=timber?RAIL_SIZE:PARAPET_HEIGHT
+    const rail=piece((a.x+b.x)/2,(a.z+b.z)/2,DECK_TOP+(timber?POST_HEIGHT-height/2:height/2),Math.hypot(dx,dz)+0.01,height,timber?RAIL_SIZE:PARAPET_WIDTH,
+      timber?POST_COLOR:(STONE[tier]??STONE[3]).slab)
+    rail.rotY=Math.atan2(-dz,dx);out.boxes.push(rail)
+    if(i%4===0||i===railSteps-1){
+      const p=i===railSteps-1?b:a,top=DECK_TOP+(timber?POST_HEIGHT:0)
+      out.posts.push(piece(p.x,p.z,(PILE_BASE+top)/2,timber?POST_RADIUS:0.12,top-PILE_BASE,timber?POST_RADIUS:0.12,timber?POST_COLOR:(STONE[tier]??STONE[3]).pier))
+    }
+  }
 }
 
 /** One instanced mesh of unit boxes or posts, placed from a piece list. */

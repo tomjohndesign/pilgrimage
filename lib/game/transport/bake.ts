@@ -2,11 +2,12 @@ import * as THREE from "three"
 import { BASE_PERSON, PERSON_CLIPS, WALK_CLIP_STRIDES } from "../base-person/pose"
 import { personFrameRenderer, renderPersonPreview } from "../base-person/bake"
 import { KEEPER_CLIPS, KEEPER_COLUMNS } from "./keeper"
+import { poseDriver, DRIVER_CLIP, driverPoint } from "./driver"
 import { merchantGesture } from "./merchant-poses"
 import { COATS } from "./coats"
 import { populationDesign } from "../base-person/population"
 import { TRAVELER_TYPES } from "../travelers"
-import { CARGO, CART, SHOP, SHOP_SECONDS, CART_MODES, TRANSPORT, ANIMAL_COLUMNS, ANIMAL_RIG_VERSION, CART_COLUMNS, ANIMAL_PROFILES, HORSE_VARIANTS, pullingDesign } from "./assets"
+import { CARGO, CART, CART_WIDTH_SCALE, SHOP, SHOP_SECONDS, CART_MODES, TRANSPORT, ANIMAL_COLUMNS, ANIMAL_RIG_VERSION, CART_COLUMNS, ANIMAL_PROFILES, HORSE_VARIANTS, pullingDesign } from "./assets"
 import { createAnimalRig, createCartRig } from "./rig"
 import { spriteDepthBaker, SPRITE_DEPTH_ENCODING } from "../render/bake-depth"
 
@@ -128,7 +129,46 @@ export async function bakeTransport() {
       } finally { session.dispose() }
     }
     save("merchant-selling", selling)
-    return { images, metadata: { ...TRANSPORT, depthEncoding: SPRITE_DEPTH_ENCODING, keeperClips: KEEPER_CLIPS, keeperColumns: KEEPER_COLUMNS, directions: BASE_PERSON.directions, camera: { ...BASE_PERSON.camera, viewSize: extent },
+    // The driver uses the cart's exact cell, axle anchor and sixteen headings.
+    // Depth-only cart geometry cuts out body parts hidden by the bench/cargo.
+    // Runtime combines these pixels inside the cart material, so the person
+    // and seat cannot drift or compete as two independent depth planes.
+    for (const cargo of CARGO) {
+      const driving = canvas(CART.cellSize * DRIVER_CLIP.variants, CART.cellSize * CART.directions)
+      const occluder = createCartRig(cargo, "horse")
+      const depth = new THREE.MeshBasicMaterial({ colorWrite: false })
+      const originals: Array<{ mesh: THREE.Mesh; material: THREE.Material | THREE.Material[] }> = []
+      occluder.root.traverse(object => {
+        if (!(object instanceof THREE.Mesh)) return
+        originals.push({ mesh: object, material: object.material })
+        object.material = depth; object.renderOrder = -1
+      })
+      try {
+        for (let variant = 0; variant < DRIVER_CLIP.variants; variant++) {
+          const design = populationDesign(TRAVELER_TYPES.vendor, variant)
+          const session = personFrameRenderer(design, [], { cellSize: CART.cellSize, anchor: CART.anchor,
+            viewSize: TRANSPORT.viewSize * CART.cellSize / TRANSPORT.cellSize, occluder: occluder.root })
+          try {
+            for (let row = 0; row < CART.directions; row++) {
+              const angle = -row * Math.PI * 2 / CART.directions
+              occluder.root.rotation.y = angle
+              const frame = session.render("idle", 0, row / 2, false, rig => {
+                rig.root.position.set(0, 0, 0)
+                poseDriver(rig, design)
+                rig.root.position.set(...driverPoint([0, 0, 0], angle))
+              })
+              driving.ctx.drawImage(frame.canvas, variant * CART.cellSize, row * CART.cellSize)
+              driving.depthCtx.drawImage(frame.depth!, variant * CART.cellSize, row * CART.cellSize)
+            }
+          } finally { session.dispose() }
+        }
+      } finally {
+        originals.forEach(({ mesh, material }) => { mesh.material = material })
+        depth.dispose(); occluder.dispose()
+      }
+      save(`cart-${cargo}-driver`, driving)
+    }
+    return { images, metadata: { ...TRANSPORT, depthEncoding: SPRITE_DEPTH_ENCODING, cartWidthScale: CART_WIDTH_SCALE, driverClip: DRIVER_CLIP, keeperClips: KEEPER_CLIPS, keeperColumns: KEEPER_COLUMNS, directions: BASE_PERSON.directions, camera: { ...BASE_PERSON.camera, viewSize: extent },
       safePadding, cartFrame: CART, shop: { ...SHOP, seconds: SHOP_SECONDS, frames: TRANSPORT.shopFrames }, coats: COATS, merchantSetupFrames: PERSON_CLIPS.gathering.frames, cargo: CARGO, modes: CART_MODES, cartColumns: CART_COLUMNS, animalColumns: ANIMAL_COLUMNS,
       wheelCycleRadians: Math.PI * 2,
       animalProfiles: ANIMAL_PROFILES, animalRigVersion: ANIMAL_RIG_VERSION,

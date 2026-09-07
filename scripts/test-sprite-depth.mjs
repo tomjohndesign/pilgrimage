@@ -15,6 +15,13 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
   const baker = ts.transpileModule(await readFile(new URL("../lib/game/render/bake-depth.ts", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.ESNext },
   }).outputText
+  const driverShader = ts.transpileModule(await readFile(new URL("../lib/game/transport/driver-layer.ts", import.meta.url), "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.ESNext },
+  }).outputText
+  const transportSource = await readFile(new URL("../lib/game/transport/assets.ts", import.meta.url), "utf8")
+  const transportVersion = transportSource.match(/version: "(v\d+)"/)[1]
+  const transportFiles = { "cart.png": "cart-produce-horse.png", "cart-depth.png": "depth-cart-produce-horse.png",
+    "driver.png": "cart-produce-driver.png", "driver-depth.png": "depth-cart-produce-driver.png" }
   const outlineSource = await readFile(new URL("../components/game/outline-pass.tsx", import.meta.url), "utf8")
   const outlineFragment = outlineSource.match(/const FRAGMENT_SHADER = \/\* glsl \*\/ `([\s\S]*?)`/)[1]
   const server = createServer(async (request, response) => {
@@ -25,6 +32,11 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     } else if (name === "baker.js") {
       response.setHeader("Content-Type", "text/javascript")
       response.end(baker)
+    } else if (name === "driver.js") {
+      response.setHeader("Content-Type", "text/javascript"); response.end(driverShader)
+    } else if (transportFiles[name]) {
+      response.setHeader("Content-Type", "image/png")
+      response.end(await readFile(new URL(`../public/textures/transport/${transportVersion}/${transportFiles[name]}`, import.meta.url)))
     } else if (/^(pose|depth)-[A-Za-z]+\.png$/.test(name)) {
       const [, kind, clip] = name.match(/^(pose|depth)-([A-Za-z]+)\.png$/)
       const asset = clip === "walk" || clip === "idle"
@@ -49,6 +61,19 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     const result = await page.evaluate(async ({ outlineFragment, poseClips }) => {
       const THREE = await import("/three.module.js")
       const { applySpriteDepth } = await import("/shader.js")
+      const { applyDriverLayer } = await import("/driver.js")
+      const driverColor = await new THREE.TextureLoader().loadAsync("/driver.png")
+      const driverDepth = await new THREE.TextureLoader().loadAsync("/driver-depth.png")
+      for (const texture of [driverColor, driverDepth]) {
+        texture.minFilter = texture.magFilter = THREE.NearestFilter; texture.generateMipmaps = false
+      }
+      const driverFrame = { value: new THREE.Vector4() }, driverVisible = { value: 0 }
+      const pixelsOf = texture => {
+        const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d")
+        canvas.width = texture.image.width; canvas.height = texture.image.height; ctx.drawImage(texture.image, 0, 0)
+        return ctx.getImageData(0, 0, canvas.width, canvas.height).data
+      }
+      const driverPixels = pixelsOf(driverColor), driverDepthPixels = pixelsOf(driverDepth)
       const gl = new THREE.WebGLRenderer({ canvas: document.querySelector("canvas"), antialias: false })
       gl.setSize(384, 384)
       const viewport = new THREE.Vector4()
@@ -61,6 +86,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         const material = new THREE.SpriteMaterial({ color, transparent: false, toneMapped: false })
         material.onBeforeCompile = shader => {
           applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth)
+          applyDriverLayer(shader, driverColor, driverFrame, driverVisible, driverDepth)
           // Keep the atlas alpha, using flat IDs for exact pixel comparisons.
           shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\ndiffuseColor.rgb = diffuse;")
         }
@@ -224,9 +250,13 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       groundPlane.value.set(0, 0, 0, 0); worldTexel.value = 0; poseDepth.enabled.value = true
       const toward = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 2)
       let poseCompared = 0, poseMismatches = 0, poseVisible = 0, poseHidden = 0
-      for (const [clip, columns] of Object.entries(poseClips)) {
-        const color = await new THREE.TextureLoader().loadAsync(`/pose-${clip}.png`)
-        const depth = await new THREE.TextureLoader().loadAsync(`/depth-${clip}.png`)
+      let driverCompared = 0
+      for (const [clip, columns] of Object.entries({ ...poseClips, cart: 24 })) {
+        const cart = clip === "cart", cell = cart ? 160 : 64, rows = cart ? 16 : 8
+        driverVisible.value = cart ? 1 : 0
+        front.center.set(.5, 1 - (cart ? 94 / 160 : 48.5 / 64))
+        const color = await new THREE.TextureLoader().loadAsync(cart ? "/cart.png" : `/pose-${clip}.png`)
+        const depth = await new THREE.TextureLoader().loadAsync(cart ? "/cart-depth.png" : `/depth-${clip}.png`)
         color.minFilter = color.magFilter = depth.minFilter = depth.magFilter = THREE.NearestFilter
         color.generateMipmaps = depth.generateMipmaps = false
         const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d")
@@ -234,9 +264,10 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         ctx.drawImage(depth.image, 0, 0)
         const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data
         front.material.map = color; front.material.needsUpdate = true; poseDepth.map.value = depth
-        for (const scale of [.8, 1.4]) for (const row of [0, 1, 2, 4, 7]) for (const frame of [...new Set([0, Math.floor(columns / 2)])]) {
+        for (const scale of [.8, 1.4]) for (const row of (cart ? [0, 1, 2, 4, 7, 11, 15] : [0, 1, 2, 4, 7])) for (const frame of [...new Set([0, Math.floor(columns / 2)])]) {
           front.scale.set(scale, scale, 1)
-          color.repeat.set(1 / columns, 1 / 8); color.offset.set(frame / columns, (7 - row) / 8)
+          color.repeat.set(1 / columns, 1 / rows); color.offset.set(frame / columns, (rows - 1 - row) / rows)
+          driverFrame.value.set(0, (rows - 1 - row) / rows, 1 / 6, 1 / rows)
           wall.visible = false
           gl.setRenderTarget(poseTarget); gl.render(scene, camera)
           const mask = new Uint8Array(256 * 256 * 4), actual = mask.slice()
@@ -251,11 +282,15 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
               const u = ((x + .5) / 256 * 2.4 - 1.2) / scale + front.center.x
               const v = ((y + .5) / 256 * 2.4 - 1.2) / scale + front.center.y
               // Exact texel-boundary ties can round either way in GPU float precision.
-              if (Math.abs(u * 64 - Math.round(u * 64)) < 1e-5 || Math.abs(v * 64 - Math.round(v * 64)) < 1e-5) continue
-              const px = Math.floor(u * 64), py = 63 - Math.floor(v * 64)
-              if (px < 0 || px >= 64 || py < 0 || py >= 64) continue
-              const at = ((row * 64 + py) * canvas.width + frame * 64 + px) * 4
-              const offset = ((data[at] * 256 + data[at + 1]) / 65535 - .5) * 2
+              if (Math.abs(u * cell - Math.round(u * cell)) < 1e-5 || Math.abs(v * cell - Math.round(v * cell)) < 1e-5) continue
+              const px = Math.floor(u * cell), py = cell - 1 - Math.floor(v * cell)
+              if (px < 0 || px >= cell || py < 0 || py >= cell) continue
+              const at = ((row * cell + py) * canvas.width + frame * cell + px) * 4
+              const driverAt = ((row * cell + py) * driverColor.image.width + px) * 4
+              const isDriver = cart && driverPixels[driverAt + 3] >= 128
+              const packed = isDriver ? driverDepthPixels[driverAt] * 256 + driverDepthPixels[driverAt + 1] : data[at] * 256 + data[at + 1]
+              if (isDriver) driverCompared++
+              const offset = (packed / 65535 - .5) * 2
               // Ignore values within the intentional .005-world-unit depth bias.
               if (Math.abs((offset - cut) * scale) < .008) continue
               const visible = offset > cut
@@ -267,6 +302,8 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         }
         color.dispose(); depth.dispose()
       }
+      if (driverCompared < 100) throw new Error("Driver depth occlusion was not exercised")
+      driverVisible.value = 0; driverColor.dispose(); driverDepth.dispose()
       scene.remove(wall); wall.geometry.dispose(); wall.material.dispose(); poseTarget.dispose()
       // Independently verify the baker against ray/mesh intersections, including
       // local garment-style clipping. This catches wrong depth units or anchors.

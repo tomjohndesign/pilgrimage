@@ -85,14 +85,14 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
       burrows: () => scene.getObjectByName("wildlife")?.userData.burrows ?? [],
       wildlife: () => scene.getObjectByName("wildlife")?.userData.animals ?? [],
       transportSprites: () => {
-        const sprites: Array<{ kind: string; position: number[]; sheet: string; columns: number; rows: number; visible: boolean; heading: number; grazing: boolean }> = []
+        const sprites: Array<{ kind: string; bridgeGuided: boolean; position: number[]; sheet: string; columns: number; rows: number; visible: boolean; heading: number; grazing: boolean; reversing: boolean; phase: number }> = []
         scene.traverse(object => {
           if (!(object instanceof THREE.Sprite) || !["cart", "horse", "donkey", "merchant"].includes(object.name)) return
           const map = object.material.map, data = object.parent?.parent?.userData
           let visible = true; object.traverseAncestors(parent => { visible &&= parent.visible })
-          sprites.push({ kind: object.name, position: object.getWorldPosition(new THREE.Vector3()).toArray(), sheet: (map?.image as HTMLImageElement)?.src ?? "",
+          sprites.push({ kind: object.name, bridgeGuided: data?.bridgeGuided === true, position: object.getWorldPosition(new THREE.Vector3()).toArray(), sheet: (map?.image as HTMLImageElement)?.src ?? "",
             columns: 1 / (map?.repeat.x ?? 1), rows: 1 / (map?.repeat.y ?? 1), visible,
-            heading: data?.heading ?? 0, grazing: data?.grazing === true })
+            heading: data?.heading ?? 0, grazing: data?.grazing === true, reversing: object.userData.reversing === true, phase: object.userData.walkPhase ?? 0 })
         })
         return sprites
       },

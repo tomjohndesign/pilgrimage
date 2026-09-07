@@ -151,6 +151,10 @@
   .asset-building-four .person-stage-caption { left:6px; bottom:6px; font-size:9px; letter-spacing:0; }
 }
 @media (max-width:390px) { .asset-controls-label { display:none; } }
+.merchant-turn-options { flex-wrap: wrap; justify-content: center; }
+.merchant-turn-options output { min-width: 52px; }
+.merchant-turn-options input[type="range"] { width: 90px; }
+.merchant-turn-options input[type="checkbox"] { min-width: auto; }
 
 .animal-lineup { display: grid; gap: 12px; }
 .animal-lineup-label { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); font-size: 11px; }
