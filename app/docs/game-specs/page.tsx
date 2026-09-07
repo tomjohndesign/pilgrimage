@@ -51,9 +51,12 @@ export default function GameSpecsPage() {
         </p>
         <p className="mt-3">
           Scheduled income models offerings and gathered timber without debiting travelers or requiring
-          jobs. Lumber camps also hire up to three jobless visitors each; their workers fell nearby
-          trees and carry logs home. Each delivered unit enters the shared treasury once, in addition
-          to scheduled income. Construction uses available stacked timber first, then other treasury wood. There are no wages, upkeep, refunds or demolition yet.
+          jobs. Woodcutter’s huts hire up to three jobless visitors each; their workers fell nearby
+          trees and carry logs home. A tavern hires two behind its counter and a sheep pen two in its
+          fold; both work at a fixed post inside the building. A market stall takes no settler — a
+          passing vendor settles into it and keeps it for good. Each delivered unit enters the shared
+          treasury once, in addition to scheduled income, as do the counters’ takings.
+          Construction uses available stacked timber first, then other treasury wood. There are no wages, upkeep, refunds or demolition yet.
         </p>
 
         <h2 className={heading}>Construction</h2>
@@ -195,9 +198,11 @@ export default function GameSpecsPage() {
           piety before willingness is calculated.
         </p>
         <p className="mt-3">
-          Hospitality requires fullness or hydration below {r.hospitalityNeedThreshold} + (60 −{" "}
+          Hospitality requires an open counter — a tavern with someone serving, or a market stall a
+          vendor has settled into — and fullness or hydration below {r.hospitalityNeedThreshold} + (60 −{" "}
           {r.hospitalityNeedThreshold}) × q. Its chance grows from zero at that threshold to a maximum
           of {r.hospitalityBaseChance} + {r.hospitalityRenownBonus} × q at an empty meter, capped at 100%.
+          With no counter open, hunger and thirst draw nobody in: the shrine itself keeps no table.
           Tiredness and job vacancies alone do not attract visitors. Travelers roll the higher of faith
           and hospitality chances when crossing the junction; they do not turn back to seek the shrine.
           If that roll fails, a completed carved cross grants one independent 5% Evangelism roll.
@@ -209,6 +214,18 @@ export default function GameSpecsPage() {
         <p className="mt-3">
           Passing travelers start with 80–100 fullness and hydration. These lose {r.hungerDecay} and{" "}
           {r.thirstDecay} points per game hour respectively; camping halves both rates.
+        </p>
+        <p className="mt-3">
+          Food and drink are bought, never given. A counter charges 2 gold for a meal and 3 for a
+          cup, and only serves what the customer can pay for; the takings go to the treasury.
+          Tavern customers pay at the counter and then take a table. Kneeling at the relic restores
+          stamina alone.
+        </p>
+        <p className="mt-3">
+          Settlers who take work move into a house, two to a house. They come home to sleep, and the
+          household’s own hearth restores them slowly and for nothing; the counter is the quick
+          answer and the only one open to a traveler off the road. A settler with no house camps
+          beside their work once their legs give out.
         </p>
 
         <h2 className={heading}>Tuning while playing</h2>

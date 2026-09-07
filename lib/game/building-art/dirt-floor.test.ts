@@ -17,20 +17,21 @@ describe("shared path dirt for building floors", () => {
     expect(structureParts({...hut,buildType:"enclosure"}).find(p=>p.name === "floor")?.surface).toBeUndefined()
   })
 
-  it.each([0,1,2,3] as BuildingRotation[])("covers the rotated footprint, its entrance tile and their worn borders (%i)", rotation => {
+  it.each([0,1,2,3] as BuildingRotation[])("covers the rotated footprint and its worn border, but not the entrance tile (%i)", rotation => {
     const building={...hut,...rotatedFootprint(hut,rotation),rotation}, map=mapWith([building])
     const {data,tiles}=dirtFloorMask(map), entry=buildingApproach(map,building)!
     for (let z=0;z<map.depth;z++) for (let x=0;x<map.width;x++) {
       const inside=x>=building.x && x<building.x+building.w && z>=building.z && z<building.z+building.d
-      expect(data[(z*map.width+x)*4+1] === 255).toBe(inside || x===entry.x && z===entry.z)
+      expect(data[(z*map.width+x)*4+1] === 255).toBe(inside)
       if (tiles.has(z*map.width+x)) {
-        expect(x).toBeGreaterThanOrEqual(Math.min(building.x,entry.x)-1)
-        expect(x).toBeLessThanOrEqual(Math.max(building.x+building.w,entry.x+1))
-        expect(z).toBeGreaterThanOrEqual(Math.min(building.z,entry.z)-1)
-        expect(z).toBeLessThanOrEqual(Math.max(building.z+building.d,entry.z+1))
+        expect(x).toBeGreaterThanOrEqual(building.x-1)
+        expect(x).toBeLessThanOrEqual(building.x+building.w)
+        expect(z).toBeGreaterThanOrEqual(building.z-1)
+        expect(z).toBeLessThanOrEqual(building.z+building.d)
       }
     }
-    const west=(building.z*map.width+Math.min(building.x,entry.x)-1)*4
+    expect(data[(entry.z*map.width+entry.x)*4+1]).toBe(0)
+    const west=(building.z*map.width+building.x-1)*4
     expect(data[west] & 1<<FLOOR_NEIGHBOURS.findIndex(([x,z])=>x===1 && z===0)).not.toBe(0)
   })
 
@@ -47,7 +48,7 @@ describe("shared path dirt for building floors", () => {
     for(const b of map.buildings) {
       expect(mask.data[(b.z*map.width+b.x)*4+1]).toBe(0)
       const entry=buildingApproach(map,b)!
-      expect(mask.data[(entry.z*map.width+entry.x)*4+2]).toBe(255)
+      expect(mask.data[(entry.z*map.width+entry.x)*4+1]).toBe(0)
     }
     map.buildings.push({...hut,z:7})
     map.tiles[6*map.width+3]="water"
@@ -55,11 +56,8 @@ describe("shared path dirt for building floors", () => {
   })
 })
 
-it.each([0,1,2,3] as BuildingRotation[])("paints both tavern approaches at rotation %i",rotation=>{
+it.each([0,1,2,3] as BuildingRotation[])("keeps both tavern approaches clear of dirt at rotation %i",rotation=>{
   const tavern={...hut,buildType:"tavern",...rotatedFootprint({w:3,d:4},rotation),rotation}
   const map=mapWith([tavern]),mask=dirtFloorMask(map)
-  for(const entry of buildingApproaches(map,tavern)) {
-    expect(mask.data[(entry.z*map.width+entry.x)*4+1]).toBe(255)
-    expect(mask.data[(entry.z*map.width+entry.x)*4+2]).toBe(255)
-  }
+  for(const entry of buildingApproaches(map,tavern)) expect(mask.data[(entry.z*map.width+entry.x)*4+1]).toBe(0)
 })

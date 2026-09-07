@@ -1,7 +1,7 @@
 import { elevationStep } from "./elevation"
 import { describe, expect, it } from "vitest"
 
-import { DEFAULT_RELIC_DISTANCE, generateMap, HOVEL_ID, MIN_MAP_SIZE, relicDistanceBand } from "./generate-map"
+import { DEFAULT_RELIC_DISTANCE, generateMap, HOVEL_ID, JUNCTION_CLEARING_RADIUS, MIN_MAP_SIZE, relicDistanceBand } from "./generate-map"
 import { isWoods, TERRAIN } from "./terrain"
 import { MAX_RIVER_WIDTH } from "./water"
 import { tileAt, type GameMap } from "./types"
@@ -270,6 +270,25 @@ describe("generateMap", () => {
             ["track", "bridge"],
             `seed ${seed} branch is track past the junction`,
           ).toContain(terrain)
+        }
+      }
+    }
+  }, SWEEP_TIMEOUT)
+
+  it("stands the fork to the shrine in a clearing", () => {
+    for (const seed of SEEDS) {
+      const map = mapFor(seed)
+      const junction = map.road![map.site!.junction]
+      // The rim is ragged, so only the guaranteed inner zone is asserted.
+      const clear = JUNCTION_CLEARING_RADIUS - 1
+      for (let dz = -clear; dz <= clear; dz++) {
+        for (let dx = -clear; dx <= clear; dx++) {
+          if (Math.hypot(dx, dz) > clear) continue
+          const terrain = tileAt(map, junction.x + dx, junction.z + dz)
+          expect(
+            terrain !== null && isWoods(terrain),
+            `seed ${seed} woods at the junction (${dx}, ${dz})`,
+          ).toBe(false)
         }
       }
     }

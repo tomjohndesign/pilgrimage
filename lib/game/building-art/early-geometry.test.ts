@@ -71,7 +71,7 @@ describe("early medieval building kit", () => {
     expect(enclosure.filter(p=>p.name.startsWith("gate-cross-upright-"))).toHaveLength(4)
     const shelter=buildingParts(earlyBuildingRecipe("monk-shelter"))
     expect(shelter.filter(p=>p.name.startsWith("shelter-cross-upright-"))).toHaveLength(2)
-    for(const type of ["shepherd-hut","storehouse","wood-shelter","tavern"] as const) {
+    for(const type of ["house","storehouse","wood-shelter","tavern"] as const) {
       expect(buildingParts(earlyBuildingRecipe(type)).some(p=>p.name.includes("cross-"))).toBe(false)
     }
   })
@@ -91,7 +91,7 @@ describe("early medieval building kit", () => {
   })
 
   it("gives homes and the tavern a fireplace clear of beds and a chimney above the roof in every footprint", () => {
-    for(const variant of ["monk-shelter", "shepherd-hut", "tavern"] as const) {
+    for(const variant of ["monk-shelter", "house", "tavern"] as const) {
       for(let width=1;width<=5;width++) for(let depth=1;depth<=5;depth++) {
         const parts = buildingParts({...earlyBuildingRecipe(variant),width,depth})
         const hearth = bounds(parts.find(p => p.name === "hearth-slab")!)
@@ -115,7 +115,7 @@ describe("early medieval building kit", () => {
   })
 
   it("cuts away entire chimneys without floating rim stones, keeping the fireplace visible", () => {
-    for(const variant of ["monk-shelter", "shepherd-hut", "tavern"] as const) {
+    for(const variant of ["monk-shelter", "house", "tavern"] as const) {
       const parts = buildingParts(earlyBuildingRecipe(variant))
       const chimneyCount = parts.filter(p => p.name.startsWith("chimney-")).length
       for(const x of [-1,1]) for(const z of [-1,1]) {
@@ -128,7 +128,7 @@ describe("early medieval building kit", () => {
 })
 
 it("keeps the full door below its arched roof and opens side and rear windows", () => {
-  const parts=buildingParts(earlyBuildingRecipe("shepherd-hut"))
+  const parts=buildingParts(earlyBuildingRecipe("house"))
   const door=bounds(parts.find(p=>p.name==="doorway-shadow")!)
   const brows=parts.filter(p=>p.name.startsWith("door-arch-thatch-")).map(bounds)
   expect(brows.length).toBeGreaterThan(10)

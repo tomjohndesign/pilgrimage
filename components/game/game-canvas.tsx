@@ -41,6 +41,7 @@ import { OutlinePass } from "./outline-pass"
 import { RenownSaturation } from "./renown-saturation"
 import { vendorSpeedScale } from "@/lib/game/transport/assets"
 import { Shrine } from "./shrine"
+import { Signpost } from "./signpost"
 import type { RoadLook } from "@/lib/game/map/road"
 import { WalkingTerrain } from "./walking-terrain"
 import { TileCursor } from "./tile-cursor"
@@ -160,6 +161,7 @@ export function GameCanvas({
         <Wildlife map={map} trees={trees} characterScale={characterScale} />
         <Buildings map={map} characterScale={characterScale} />
         <Shrine map={map} relic={relic} />
+        <Signpost map={map} />
         <PixelCharacters>
           <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
         </PixelCharacters>

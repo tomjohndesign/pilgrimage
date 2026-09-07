@@ -7,7 +7,7 @@ import { drainWater } from "./hydrology"
 import { makeRng } from "../rng"
 import { computeDarkShade, computeForestShade } from "./forest-field"
 import { MinHeap, routeBlind, ROUTE_DIRS } from "./route"
-import { TERRAIN, type TerrainId } from "./terrain"
+import { isWoods, TERRAIN, type TerrainId } from "./terrain"
 import type { BuildingDef, FoundingSite, GameMap, Shortcut, TilePos } from "./types"
 import { generateWater, WATER_KIND_LAKE, WATER_KIND_RIVER } from "./water"
 
@@ -237,6 +237,18 @@ const SITE_SCORE_JITTER = 6
 
 /** Grid-step cost added to tiles the branch must avoid (the road, the hovel). */
 const BRANCH_AVOID_COST = 100
+
+/**
+ * Exclusion zone around the fork to the shrine, in tiles. No trunk stands
+ * within this of the junction, so the way in is read from the road as an
+ * opening in the woods rather than found by walking into the treeline. Wide
+ * enough that the fork and both approaches along the road sit in the open,
+ * tight enough that it reads as a clearing and not a second glade.
+ */
+export const JUNCTION_CLEARING_RADIUS = 3
+
+/** Chance a tile on the exclusion zone's outer ring keeps its trees, ragging the rim. */
+const JUNCTION_CLEARING_RAGGED = 0.45
 
 export function generateMap(options: GenerateMapOptions): GameMap {
   const {
@@ -926,6 +938,10 @@ function landDistanceField(
  * not a tangle. Siting and forking both measure distance around water rather
  * than across it, so the hovel lands on the same bank as its junction and the
  * track stays dry; it will bridge only when no dry way exists at all.
+ *
+ * Wherever the fork lands, it is left standing in a clearing: the woods inside
+ * an exclusion zone around the junction are felled to forest floor once the
+ * fork is final.
  */
 function foundSite(
   tiles: TerrainId[],
@@ -1168,6 +1184,8 @@ function foundSite(
     if (r >= 0) junction = r
   }
 
+  clearJunction(tiles, width, depth, road[junction], rng)
+
   // Connect the shelter to the chosen shrine entrance, around the wall when
   // the approach is on the far side of the longer shrine.
   const shelterPath = [{ x: shelter.x, z: shelter.z + shelter.d }]
@@ -1197,6 +1215,39 @@ function foundSite(
   }
 
   return { hovel, shelter, site: { junction, branch, door, hovelId: HOVEL_ID } }
+}
+
+/**
+ * Fell the exclusion zone around the fork to the shrine, so the junction
+ * always stands in a clearing.
+ *
+ * Woods within JUNCTION_CLEARING_RADIUS of the junction become forest floor:
+ * passable and open, with no trees drawn on it, but not buildable — an opening
+ * in the trees where the track leaves the road, not a glade to settle in. Old
+ * growth is felled with the rest; a fork that has to be found by feel in the
+ * dark is worse than a nick in a dark forest's edge. The outer ring keeps some
+ * of its trees on a seeded roll, so the zone never draws a disc on the ground.
+ */
+function clearJunction(
+  tiles: TerrainId[],
+  width: number,
+  depth: number,
+  junction: TilePos,
+  rng: () => number,
+): void {
+  const r = JUNCTION_CLEARING_RADIUS
+  for (let dz = -r; dz <= r; dz++) {
+    for (let dx = -r; dx <= r; dx++) {
+      const x = junction.x + dx
+      const z = junction.z + dz
+      if (x < 0 || z < 0 || x >= width || z >= depth) continue
+      const distance = Math.hypot(dx, dz)
+      if (distance > r) continue
+      if (distance > r - 1 && rng() < JUNCTION_CLEARING_RAGGED) continue
+      const i = z * width + x
+      if (isWoods(tiles[i])) tiles[i] = "clearing"
+    }
+  }
 }
 
 /**

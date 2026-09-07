@@ -2,7 +2,8 @@ import { STOREHOUSE_FOOD_CAPACITY } from "./storage"
 
 /** Pure balance data, shared by gameplay, the tuning page and the specification. */
 export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "storehouse"
-  | "monk-shelter" | "shepherd-hut" | "tavern" | "wood-shelter" | "market" | "guard-post" | "lumberCamp"
+  | "monk-shelter" | "house" | "tavern" | "wood-shelter" | "market" | "guard-post" | "lumberCamp"
+  | "sheep-pen"
 
 export interface Resources {
   gold: number
@@ -119,8 +120,8 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     color: "#8c7658", roofColor: "#a59164",
   },
   {
-    id: "shepherd-hut", label: "Shepherd’s hut", category: "buildings",
-    description: "A compact log hut with a low thatched roof and a hearth for a herder’s household.",
+    id: "house", label: "House", category: "buildings",
+    description: "A log hut with a hearth and two straw beds. Settlers who take work here move in, and come home to sleep when they tire.",
     cost: { gold: 40, wood: 30 }, renown: 1, requiredRenown: 0,
     income: { gold: 1, wood: 0 }, w: 2, d: 2, height: 0.70,
     color: "#8c7658", roofColor: "#a59164",
@@ -141,7 +142,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "market", label: "Market stall", category: "buildings",
-    description: "A cloth-canopied stall that trades with passing merchants.",
+    description: "A cloth-canopied stall. A passing vendor will settle and keep it, selling food and wares to the settlement and to travelers.",
     cost: { gold: 50, wood: 30 }, renown: 3, requiredRenown: 10,
     income: { gold: 4, wood: 0 }, w: 2, d: 2, height: 0.65,
     color: "#8c7658", roofColor: "#a59164",
@@ -155,9 +156,16 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "tavern", label: "Tavern", category: "buildings",
-    description: "A broad alehouse with a hearth, drinking tables and a hanging sign. Its front and back doors each keep a clear path tile.",
+    description: "Two jobs behind the counter. Travelers and settlers buy food and drink here for gold, then sit at the tables. Its front and back doors each keep a clear path tile.",
     cost: { gold: 150, wood: 110 }, renown: 12, requiredRenown: 25,
-    income: { gold: 10, wood: 0 }, w: 3, d: 4, height: 0.78,
+    income: { gold: 0, wood: 0 }, w: 3, d: 4, height: 0.78,
+    color: "#8c7658", roofColor: "#a59164",
+  },
+  {
+    id: "sheep-pen", label: "Sheep pen", category: "buildings",
+    description: "Two herding jobs. A half hut with a door and a hearth beside an open railed pen; the flock itself is still to come.",
+    cost: { gold: 55, wood: 45 }, renown: 2, requiredRenown: 5,
+    income: { gold: 0, wood: 0 }, w: 3, d: 2, height: 0.70,
     color: "#8c7658", roofColor: "#a59164",
   },
 ]
@@ -431,8 +439,8 @@ export const RULE_FIELDS = [
   },
   {
     key: "staminaDecay", group: "Traveler needs", label: "Stamina drain per game hour",
-    description: "Energy lost per game hour. Default: exhausted after about 24 hours. Camping restores stamina and tending a parked stall holds it steady; drinking does not restore energy.",
-    default: 4.2, min: 0, max: 50, step: 0.1,
+    description: "Energy lost per game hour. Default: a full bar lasts about 48 hours, with travelers looking for lodging once it falls below 20. Camping restores stamina and tending a parked stall holds it steady; drinking does not restore energy.",
+    default: 2.1, min: 0, max: 50, step: 0.1,
   },
 ] as const
 export type RuleKey = (typeof RULE_FIELDS)[number]["key"]
@@ -531,7 +539,12 @@ export function buildingIncomeLabel(def: BuildDefinition, balance: GameBalance):
   ].filter(Boolean)
   return parts.length
     ? `${parts.join(" · ")} / ${balance.rules.incomeSeconds}s`
-    : def.id === "workshop" ? "3 woodcutting jobs" : def.id === "storehouse" ? `Timber storage · ${STOREHOUSE_FOOD_CAPACITY} food capacity` : "No resource income"
+    : def.id === "workshop" ? "3 woodcutting jobs"
+    : def.id === "tavern" ? "2 jobs · food & drink for gold"
+    : def.id === "sheep-pen" ? "2 herding jobs"
+    : def.id === "house" ? "Homes 2 settlers"
+    : def.id === "market" ? "Draws a vendor to keep it"
+    : def.id === "storehouse" ? `Timber storage · ${STOREHOUSE_FOOD_CAPACITY} food capacity` : "No resource income"
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -593,17 +606,18 @@ export function validateBalance(
   }
   return { balance: clean, error: null }
 }
-export const BALANCE_VERSION = 3
+export const BALANCE_VERSION = 4
 export function exportBalance(balance: GameBalance): string {
   return JSON.stringify({ version: BALANCE_VERSION, balance }, null, 2)
 }
 export function importBalance(json: string): ReturnType<typeof validateBalance> {
   try {
     const preset = record(JSON.parse(json))
-    if (preset?.version !== 1 && preset?.version !== 2 && preset?.version !== BALANCE_VERSION)
-      return { balance: null, error: "Unsupported preset version. Expected version 1, 2 or 3." }
+    const version = preset?.version
+    if (version !== 1 && version !== 2 && version !== 3 && version !== BALANCE_VERSION)
+      return { balance: null, error: "Unsupported preset version. Expected version 1, 2, 3 or 4." }
     // Add defaults for new structures while retaining all authored settings.
-    const saved = record(preset.balance)
+    const saved = record(preset?.balance)
     const rules = record(saved?.rules)
     const buildings = record(saved?.buildings)
     return validateBalance(saved && rules && buildings ? {
@@ -619,18 +633,24 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
         hospitalityRenownBonus: DEFAULT_BALANCE.rules.hospitalityRenownBonus,
         ...rules,
         // Adopt slower defaults in old saves without overwriting custom rates.
-        ...(preset.version !== BALANCE_VERSION && rules.hungerDecay === 12.5 ? { hungerDecay: DEFAULT_BALANCE.rules.hungerDecay } : {}),
-        ...(preset.version !== BALANCE_VERSION && rules.thirstDecay === 25 ? { thirstDecay: DEFAULT_BALANCE.rules.thirstDecay } : {}),
+        ...(version !== BALANCE_VERSION && rules.hungerDecay === 12.5 ? { hungerDecay: DEFAULT_BALANCE.rules.hungerDecay } : {}),
+        ...(version !== BALANCE_VERSION && rules.thirstDecay === 25 ? { thirstDecay: DEFAULT_BALANCE.rules.thirstDecay } : {}),
       },
       buildings: {
         ...DEFAULT_BALANCE.buildings,
+        // The shepherd’s hut became the house; keep its authored tuning.
+        ...(record(buildings["shepherd-hut"]) ? { house: buildings["shepherd-hut"] } : {}),
         ...buildings,
         // The hut now earns wood through deliveries; retire its old passive payment.
-        ...(preset.version === 1 && record(buildings.workshop) ? {
+        ...(version === 1 && record(buildings.workshop) ? {
           workshop: { ...record(buildings.workshop), woodIncome: 0 },
         } : {}),
+        // The tavern now earns at the counter; retire its old passive payment.
+        ...(version !== BALANCE_VERSION && record(buildings.tavern)?.goldIncome === 10 ? {
+          tavern: { ...record(buildings.tavern), goldIncome: 0 },
+        } : {}),
       },
-    } : preset.balance)
+    } : preset?.balance)
   } catch {
     return { balance: null, error: "This file is not valid JSON." }
   }

@@ -24,7 +24,8 @@ describe("authored character supports", () => {
     it.each([0, 1, 2, 3] as BuildingRotation[])(`${type} routes every rest slot onto its rendered bed at rotation %s`, rotation => {
       const map = fixture(type), building = map.buildings[0]
       Object.assign(building, { rotation, ...rotatedFootprint({ w: 3, d: 2 }, rotation) })
-      const beds = buildingSupports(building)
+      // A pilgrim shelter also has a sittable bench; only bedding takes rest slots.
+      const beds = buildingSupports(building).filter(support => support.clips.includes("sleeping"))
       expect(beds).toHaveLength(type === "shelter" ? 2 : 4)
       for (let slot = 0; slot < beds.length * 2; slot++) {
         const actor: Worker = { x: 0, y: 0, z: 2, workSlot: slot }
@@ -59,7 +60,7 @@ describe("authored character supports", () => {
     building.w = 2
     expect(buildingSupports(building)).toHaveLength(3)
     building.buildType = "shelter"
-    expect(buildingSupports(building)).toHaveLength(2)
+    expect(buildingSupports(building)).toHaveLength(3)
   })
 
   it.each([{ x: 6, z: 8 }, { x: 4, z: 6 }, { x: 8, z: 6 }, { x: 6, z: 4 }])("supports prayer using shrine geometry with door %j", door => {

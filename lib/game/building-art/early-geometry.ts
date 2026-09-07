@@ -4,7 +4,7 @@ import type { BuildingRecipe } from "./style"
 import { furnishingParts, hearthParts, shelterHearth, hasDomesticHearth } from "./furnishings"
 import { hasDirtFloor } from "./dirt-floor"
 import { buildingDoorOffset } from "../building-rotation"
-import { workshopLayout } from "../workshop-layout"
+import { workshopLayout, sheepPenLayout } from "../workshop-layout"
 import { BUILDING_FLOOR_TOP, BUILDING_DOOR_HEIGHT, roofProfile, hasFrontAwning } from "./dimensions"
 import { thatchSurface } from "./thatch"
 import { marketCanopyParts } from "./cloth"
@@ -13,9 +13,13 @@ import { buildingWeathering } from "./weathering"
 /** The relic rests on the same slab in the game and in the workshop. */
 export const RELIC_TABLE_TOP = 0.44
 
-export type SettlementBuildingType = "shelter" | "workshop" | "hall" | "garden" | "cross" | "lumberCamp" | "market" | "guard-post"
+/** A house sleeps this many settlers; the beds themselves decide the residency. */
+export const HOUSE_BEDS = 2
+
+export type SettlementBuildingType = "shelter" | "workshop" | "hall" | "garden" | "cross" | "lumberCamp" | "market" | "guard-post" | "sheep-pen"
 type ConstructionRecipe = Omit<BuildingRecipe, "variant"> & {
-  variant: BuildingRecipe["variant"] | SettlementBuildingType
+  /** "signpost" is scenery the generator places, not anything the player builds. */
+  variant: BuildingRecipe["variant"] | SettlementBuildingType | "signpost"
   /** The shrine's raised nave retains its bespoke gabled construction. */
   roofForm?: "single-plane" | "gable"
 }
@@ -28,7 +32,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
   const w = width / 2, d = depth / 2, rampStart = depth / 2 - Math.min(.65, depth * .43)
   const lean = recipe.roofForm !== "gable", eave = floor + h
   const awning = lean && hasFrontAwning(variant)
-  const closed = lean && (variant === "shepherd-hut" || variant === "hall" || variant === "tavern")
+  const closed = lean && (variant === "house" || variant === "hall" || variant === "tavern")
   const profile = roofProfile(depth,rise,awning)
   const roofY = (_x: number, z = 0) => eave + (variant === "market" ? .48 : profile.height(z))
   function roofRectangle(name: string, left: number, right: number, back: number, front: number) {
@@ -68,6 +72,39 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     const vertices: number[] = []
     for(let i=0;i<8;i++) { const a=ring[i],b=ring[(i+1)%8]; vertices.push(x,y+thickness,z,x+a[0],y+thickness,z+a[1],x+b[0],y+thickness,z+b[1], x+a[0],y,z+a[1],x+b[0],y,z+b[1],x+b[0],y+thickness,z+b[1], x+a[0],y,z+a[1],x+b[0],y+thickness,z+b[1],x+a[0],y+thickness,z+a[1]) }
     face(name,"base",vertices,color)
+  }
+  // A wayside marker, not a building: no floor slab and no tile-square footing.
+  // The board points along local +X; the map turns it onto the shrine's bearing.
+  if (variant === "signpost") {
+    const board = { back: -.055, tip: .4, nose: .12, low: h - .31, high: h - .12, half: .024 }
+    const packing = [[-.085,-.055,.11,.1],[.075,.05,.1,.085],[.015,-.09,.085,.08],[-.06,.075,.08,.075]]
+    packing.forEach(([x,z,sx,sz],i) => flag(`signpost-stone-${i}`,x,z,sx,sz,-.012,.035+random()*.018,palette.stone))
+    pole("signpost-post",[0,0,0],[0,h,0],.056)
+    // Riven board: a five-sided profile in X/Y extruded through its thickness,
+    // so the far end comes to a real point rather than a sawn-off plank end.
+    const profile = [[board.back,board.low],[board.tip-board.nose,board.low],[board.tip,(board.low+board.high)/2],[board.tip-board.nose,board.high],[board.back,board.high]]
+    const vertices: number[] = []
+    for (let i=1;i<profile.length-1;i++) {
+      const a=profile[0],b=profile[i],c=profile[i+1]
+      vertices.push(a[0],a[1],board.half,b[0],b[1],board.half,c[0],c[1],board.half,
+        a[0],a[1],-board.half,c[0],c[1],-board.half,b[0],b[1],-board.half)
+    }
+    for (let i=0;i<profile.length;i++) {
+      const a=profile[i],b=profile[(i+1)%profile.length]
+      vertices.push(a[0],a[1],-board.half,b[0],b[1],-board.half,b[0],b[1],board.half,
+        a[0],a[1],-board.half,b[0],b[1],board.half,a[0],a[1],board.half)
+    }
+    face("signpost-board","wall",vertices,palette.paleWood,true)
+    box("signpost-peg","wall",[0,(board.low+board.high)/2,board.half+.013],[.03,.03,.026],palette.darkWood,undefined,false)
+    // The cross says whose road this is; the board says which way along it. Its
+    // arms lie across the board, so whichever of the two the camera foreshortens
+    // the other stands broadside and the marker never reads as a bare stake.
+    const head = "#a58c66"
+    box("signpost-cross-upright","wall",[0,h+.11,0],[.052,.24,.06],head)
+    box("signpost-cross-arm","wall",[0,h+.155,0],[.052,.058,.26],head)
+    box("signpost-cross-peg","wall",[.031,h+.155,0],[.022,.03,.03],palette.darkWood,undefined,false)
+    for (const side of [-1,1]) pole(`signpost-grain-${side}`,[side*.014,.1,.044],[side*.011,h-.05,.038],.004,"wall",palette.darkWood)
+    return parts
   }
   // Bury slab thickness below the walking plane; inset the store platform for its ramp.
   box("floor","base",[0,(variant === "storehouse" ? floor : BUILDING_FLOOR_TOP)-.025,variant === "storehouse" ? (rampStart-d+.02)/2 : 0],[width-.04,.05,variant === "storehouse" ? rampStart+d-.02 : depth-.04],variant === "enclosure" ? "#686857" : "#817052",undefined,false)
@@ -133,7 +170,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       for(const [i,point] of [left,right].entries()) pole(`window-${suffix}-jamb-${i}`,[point[0]+normal[0],sill,point[2]+normal[2]],[point[0]+normal[0],head,point[2]+normal[2]],.022)
       for(const y of [sill,head]) pole(`window-${suffix}-rail-${y}`,[left[0]+normal[0],y,left[2]+normal[2]],[right[0]+normal[0],y,right[2]+normal[2]],.024,"wall",palette.paleWood)
     }
-    if(variant === "shepherd-hut") {panel(name,a,b,false);return}
+    if(variant === "house") {panel(name,a,b,false);return}
     if(a[2]<0 && b[2]>0) {
       const middle:Vec3=[a[0],0,0]
       panel(`${name}-rear`,a,middle,false)
@@ -146,9 +183,11 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     parts[parts.length - 1].support = { clips: ["sleeping"], anchorOffset: [0, -.06], heading: 0 }
     box(`rolled-blanket-${index}`,"base",[x,floor+.1,z-length*.32],[.3,.11,.12],"#a3987a",undefined,false)
   }
-  function bench(name: string, x: number, z: number, length: number, top = .3) {
+  /** `facing` is the heading a seated person takes; omit it for a counter nobody sits on. */
+  function bench(name: string, x: number, z: number, length: number, top = .3, facing?: number) {
     for (const end of [-1, 1]) pole(`${name}-leg-${end}`, [x+end*length*.35,floor,z], [x+end*length*.35,floor+top,z], .035, "interior")
     box(`${name}-seat`, "interior", [x,floor+top,z], [length,.045,.18], palette.paleWood, undefined, false)
+    if (facing !== undefined) parts[parts.length-1].support = { clips: ["sitting"], heading: facing }
   }
   if (variant === "garden") {
     // Two herb beds leave a narrow flagstone walk between them.
@@ -262,6 +301,69 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     return parts
   }
 
+  if (variant === "sheep-pen") {
+    // Half a house — a door and a hearth — beside an open railed fold. No roof
+    // over the pen, and none of the woodcutter's timber bays or firewood.
+    const { coreWidth, coreX, penLeft } = sheepPenLayout(width)
+    const hearth = hearthParts(coreWidth,depth,h,rise)
+    for (const part of hearth) { part.position[0] += coreX; part.position[2] += depth*.06 }
+    parts.push(...hearth)
+    const cx=w-.13, cz=d-.13, coreRight=penLeft
+    logWall("hut-rear",[-cx,0,-cz],[coreRight,0,-cz],h)
+    logWall("hut-side",[-cx,0,-cz],[-cx,0,cz],h)
+    logWall("hut-divider",[coreRight,0,-cz],[coreRight,0,cz],h)
+    const door=Math.min(.44,coreWidth*.62), doorHeight=Math.max(BUILDING_DOOR_HEIGHT,h*.9)
+    logWall("hut-front-left",[-cx,0,cz],[doorX-door/2,0,cz],h)
+    logWall("hut-front-right",[doorX+door/2,0,cz],[coreRight,0,cz],h)
+    const first=parts.length
+    box("doorway-shadow","wall",[doorX,floor+doorHeight/2,cz-.035],[door,doorHeight,.025],"#3f392c",undefined,false)
+    for(let i=0;i<4;i++) box(`door-board-${i}`,"wall",[doorX-door*.38+i*door*.24,floor+doorHeight*.48,cz+.013],[door*.22,doorHeight*.96,.025],i%2?palette.wood:palette.paleWood,undefined,false)
+    for(const y of [.2,.7]) box(`door-rail-${y}`,"wall",[doorX,floor+doorHeight*y,cz+.04],[door,.04,.03],palette.darkWood,undefined,false)
+    pole("door-lintel",[doorX-door/2-.05,floor+doorHeight+.03,cz+.045],[doorX+door/2+.05,floor+doorHeight+.03,cz+.045],.04)
+    for(const part of parts.slice(first)) part.cutawaySide=[0,1]
+    // The hut keeps its own thatch; the fold stays open to the sky.
+    roofRectangle("hut",-w,penLeft,-d,d)
+    // Close the wedge between the low walls and the sloping roof above them.
+    face("hut-rear-infill","roof",[-cx,eave,-cz,coreRight,eave,-cz,coreRight,roofY(coreRight,-cz),-cz,
+      -cx,eave,-cz,coreRight,roofY(coreRight,-cz),-cz,-cx,roofY(-cx,-cz),-cz],palette.wood)
+    for(const px of [-cx,coreRight]) face(`hut-side-infill-${px}`,"roof",
+      [px,eave,-cz,px,eave,cz,px,roofY(px,cz),cz,px,eave,-cz,px,roofY(px,cz),cz,px,roofY(px,-cz),-cz],"#b3aa8e")
+    for(const side of [-cx,coreRight]) {
+      const breaks=[-cz,...profile.breaks.filter(v=>v>-cz && v<cz),cz]
+      for(let i=0;i<breaks.length-1;i++) pole(`hut-eave-${side}-${i}`,[side,roofY(side,breaks[i]),breaks[i]],[side,roofY(side,breaks[i+1]),breaks[i+1]],.03,"roof")
+      for(const b of [-cz,cz]) pole(`hut-post-${side}-${b}`,[side,0,b],[side,roofY(side,b)+.21,b],.045)
+    }
+    for(const b of [-cz,cz]) pole(`hut-rafter-${b}`,[-w+.03,roofY(-w,b),b],[penLeft-.03,roofY(penLeft,b),b],.03,"roof")
+    // Hurdle fence: stakes and two rails around the fold, with a gate beside the door.
+    const railTop=Math.min(.62,h*.85), gate=Math.min(.62,depth*.42)
+    const runs: Array<[Vec3, Vec3, string]> = [
+      [[penLeft,0,-cz],[cx,0,-cz],"back"],
+      [[cx,0,-cz],[cx,0,cz],"far"],
+      [[cx,0,cz],[penLeft+gate,0,cz],"front"],
+    ]
+    for(const [a,b,name] of runs) {
+      const length=Math.hypot(b[0]-a[0],b[2]-a[2]), stakes=Math.max(2,Math.round(length/.45))
+      for(let i=0;i<=stakes;i++) {
+        const px=a[0]+(b[0]-a[0])*i/stakes, pz=a[2]+(b[2]-a[2])*i/stakes
+        pole(`pen-stake-${name}-${i}`,[px,0,pz],[px,railTop+.06,pz],i%stakes===0 ? .045 : .028)
+      }
+      for(const y of [railTop*.45,railTop]) pole(`pen-rail-${name}-${y}`,[a[0],y,a[2]],[b[0],y,b[2]],.026,"wall",palette.paleWood)
+    }
+    // A hung gate leaf, swung open into the fold.
+    const hinge=penLeft+gate
+    pole("pen-gatepost",[hinge,0,cz],[hinge,railTop+.12,cz],.048)
+    for(const y of [railTop*.45,railTop]) pole(`pen-gate-bar-${y}`,[hinge,y,cz],[hinge+.06,y,cz-gate*.8],.024,"wall",palette.paleWood)
+    pole("pen-gate-brace",[hinge,railTop*.35,cz],[hinge+.06,railTop,cz-gate*.8],.022,"wall",palette.wood)
+    // A water trough and a bundle of hurdle rods: the fold reads as ready for a flock.
+    const tx=(penLeft+cx)/2+.18, tz=-depth*.22
+    for(const end of [-1,1]) box(`trough-end-${end}`,"interior",[tx+end*.24,.11,tz],[.05,.22,.26],palette.wood,undefined,false)
+    box("trough-side","interior",[tx,.11,tz],[.48,.16,.26],palette.paleWood,undefined,false)
+    box("trough-water","interior",[tx,.185,tz],[.4,.02,.19],"#6d7a72",undefined,false)
+    for(let i=0;i<5;i++) pole(`spare-hurdle-${i}`,[cx-.12,.045+i*.05,cz-.55],[cx-.12+(i%2?.05:-.04),.05+i*.05,cz-.15],.03,"base",i%2?palette.paleWood:palette.wood)
+    parts.push(...buildingWeathering(width,depth,h,variant,recipe.seed))
+    return parts
+  }
+
   if (hasDomesticHearth(variant) && variant !== "shelter") parts.push(...hearthParts(width,depth,h,rise))
 
   const x=w-.13,z=d-.13
@@ -285,7 +387,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       const breaks=[-z,...(lean ? profile.breaks.filter(v=>v>-z && v<z) : []),z]
       for(let i=0;i<breaks.length-1;i++) pole(`store-side-beam-${side}-${i}`,[side*x,lean?roofY(side*x,breaks[i]):eave,breaks[i]],[side*x,lean?roofY(side*x,breaks[i+1]):eave,breaks[i+1]],.04)
     }
-  } else if(variant === "shepherd-hut" || variant === "hall" || variant === "tavern") {
+  } else if(variant === "house" || variant === "hall" || variant === "tavern") {
     const door=Math.min(.44,width*.5), left=(width-.26-door)/2
     if(variant === "tavern") {
       closedWall("rear-left",[-x,0,-z],[doorX-door/2,0,-z])
@@ -308,7 +410,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
         const tx=-width*.23,tz=side*depth*.22,tableW=width*.32,tableD=depth*.15
         for(const a of [-1,1]) for(const b of [-1,1]) pole(`tavern-table-${side}-leg-${a}-${b}`,[tx+a*tableW*.35,0,tz+b*tableD*.32],[tx+a*tableW*.35,.37,tz+b*tableD*.32],.025,"interior")
         box(`tavern-table-${side}-top`,"interior",[tx,.39,tz],[tableW,.045,tableD],palette.paleWood,undefined,false)
-        for(const b of [-1,1]) bench(`tavern-bench-${side}-${b}`,tx,tz+b*depth*.11,tableW,.23)
+        for(const b of [-1,1]) bench(`tavern-bench-${side}-${b}`,tx,tz+b*depth*.11,tableW,.23,b>0 ? Math.PI : 0)
         for(const a of [-1,1]) {
           const mx=tx+a*tableW*.23
           box(`tavern-cup-${side}-${a}`,"interior",[mx,.445,tz],[.045,.065,.045],"#ad9166",undefined,false)
@@ -319,9 +421,15 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       box("tavern-serving-counter", "interior",[counterX,.23,counterZ],[counterW,.46,depth*.14],palette.wood,undefined,false)
       box("tavern-counter-top", "interior",[counterX,.475,counterZ],[counterW+.035,.035,depth*.15],palette.paleWood,undefined,false)
     }
-    if(variant === "shepherd-hut") bedding(-width*.2,-depth*.15,0,Math.min(.7,depth*.6))
+    if(variant === "house") {
+      // One bed per resident, laid left of the hearth and clear of the door.
+      const hearth = shelterHearth(width,depth,h,rise)
+      const bedLeft = -w+.24, bedRight = hearth.x-.285*hearth.scale-.24
+      const beds = Math.max(1,Math.min(HOUSE_BEDS,Math.floor((bedRight-bedLeft)/.42)+1))
+      for(let i=0;i<beds;i++) bedding(beds === 1 ? (bedLeft+bedRight)/2 : bedLeft+(bedRight-bedLeft)*i/(beds-1),-depth*.15,i,Math.min(.7,depth*.6))
+    }
     if(variant === "hall") {
-      bench("hall-bench",0,-depth*.25,width*.65)
+      bench("hall-bench",0,-depth*.25,width*.65,.3,0)
       // A pegged lintel and sheltered threshold distinguish the gathering hall.
       pole("hall-lintel",[doorX-.30,floor+doorHeight+.03,z+.045],[doorX+.30,floor+doorHeight+.03,z+.045],.045)
       flag("hall-threshold",doorX,z-.04,Math.min(.62,width*.6),.2,-.023,.025,palette.stone)
@@ -338,7 +446,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       if (variant === "shelter") {
         // Leave the rear-right hearth and front table clear of bedding.
         for(let i=0;i<2;i++) bedding(-width*.3,-depth*.18+i*depth*.35,i,Math.min(.58,depth*.28))
-        bench("pilgrim-bench",width*.1,depth*.43,width*.4,.23)
+        bench("pilgrim-bench",width*.1,depth*.43,width*.4,.23,Math.PI)
         parts.push(...furnishingParts("shelter",width,depth,h,rise))
       } else {
         const beds=Math.max(1,Math.floor((width-.3)/.55))
@@ -351,7 +459,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       bench("stall-counter",0,depth*.23,width*.72,.38)
       for (let i=0;i<3;i++) box(`market-sack-${i}`,"base",[(i-1)*width*.2,floor+.15,-depth*.16],[width*.16,.3,depth*.25],[palette.strawDark,"#8b8067",palette.earth][i],undefined,false)
     } else if (variant === "guard-post") {
-      bench("watch-seat",0,-depth*.16,width*.6,.24)
+      bench("watch-seat",0,-depth*.16,width*.6,.24,0)
       pole("watch-staff",[x-.08,floor,-z+.06],[x-.08,eave+.1,-z+.06],.02)
     } else {
       for(let row=0;row<3;row++) for(let i=0;i<Math.max(2,Math.floor(width/.14)-3-row);i++) {
@@ -429,7 +537,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       rearInfill()
     } else {
     rearInfill()
-    for(const side of [-1,1]) face(`roof-side-infill-${side}`,"roof",[side*x,eave,-z,side*x,eave,z,side*x,roofY(side*x,z),z,side*x,eave,-z,side*x,roofY(side*x,z),z,side*x,roofY(side*x,-z),-z],variant !== "shepherd-hut" ? "#b3aa8e" : palette.wood)
+    for(const side of [-1,1]) face(`roof-side-infill-${side}`,"roof",[side*x,eave,-z,side*x,eave,z,side*x,roofY(side*x,z),z,side*x,eave,-z,side*x,roofY(side*x,z),z,side*x,roofY(side*x,-z),-z],variant !== "house" ? "#b3aa8e" : palette.wood)
     const rows=Math.floor((roofY(0,-z)-eave)/.11)
     for(let row=0;row<rows;row++) {
       if(row%3!==1 || variant === "tavern") continue
@@ -466,7 +574,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       const points=[...new Set([left,doorX-door/2,doorX+door/2,right,...Array.from({length:9},(_,i)=>left+(i+1)*2*browHalf/10)])].sort((a,b)=>a-b)
       for(let i=0;i<points.length-1;i++) {
         const a=points[i],b=points[i+1],base=a>=doorX-door/2 && b<=doorX+door/2 ? head : eave
-        face(`door-arch-infill-${i}`,"roof",[a,base,z,b,base,z,b,endBrowY(b,z)-.065,z,a,base,z,b,endBrowY(b,z)-.065,z,a,endBrowY(a,z)-.065,z],variant !== "shepherd-hut" ? "#b3aa8e" : palette.wood)
+        face(`door-arch-infill-${i}`,"roof",[a,base,z,b,base,z,b,endBrowY(b,z)-.065,z,a,base,z,b,endBrowY(b,z)-.065,z,a,endBrowY(a,z)-.065,z],variant !== "house" ? "#b3aa8e" : palette.wood)
       }
       if(end===-1) for(const part of parts.slice(first)) {
         part.name=`back-${part.name}`
@@ -487,7 +595,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       }
     }
     pole("ridge-pole",[0,eave+rise+.045,-roofZ+.04],[0,eave+rise+.045,roofZ-.04],.045,"roof",palette.darkWood)
-    if(variant === "shepherd-hut" || variant === "hall" || variant === "tavern") for(const s of [-1,1]) {
+    if(variant === "house" || variant === "hall" || variant === "tavern") for(const s of [-1,1]) {
       face(`woven-gable-${s}`,"roof",[-x,eave,s*z,x,eave,s*z,0,eave+rise-.045,s*z],palette.wattle)
       pole(`gable-post-${s}`,[0,eave,s*z],[0,eave+rise,s*z],.029,"roof")
     }

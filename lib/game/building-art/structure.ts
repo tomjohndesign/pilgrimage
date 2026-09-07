@@ -8,7 +8,7 @@ import { singlePlaneRoofRise } from "./dimensions"
 export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor">
 
 const SETTLEMENT_TYPES: readonly SettlementBuildingType[] = [
-  "shelter", "workshop", "hall", "garden", "cross", "lumberCamp", "market", "guard-post",
+  "shelter", "workshop", "hall", "garden", "cross", "lumberCamp", "market", "guard-post", "sheep-pen",
 ]
 
 function isSettlementType(type: string | undefined): type is SettlementBuildingType {
@@ -40,7 +40,7 @@ export function structureParts(building: StructureAppearance): BuildingPart[] {
   }
 
   if (isSettlementType(building.buildType)) return earlyBuildingParts({
-    ...earlyBuildingRecipe("shepherd-hut"),
+    ...earlyBuildingRecipe("house"),
     variant: building.buildType,
     width: building.w,
     depth: building.d,
@@ -50,7 +50,7 @@ export function structureParts(building: StructureAppearance): BuildingPart[] {
 
   // Untyped, older map structures also receive real construction at their footprint.
   return buildingParts({
-    ...earlyBuildingRecipe("shepherd-hut"),
+    ...earlyBuildingRecipe("house"),
     width: building.w,
     depth: building.d,
     wallHeight: Math.max(0.25, Math.min(1.4, building.height)),
@@ -66,6 +66,17 @@ export function visibleStructureParts(parts: BuildingPart[], cutaway: boolean, c
     const side = wallSide(p)
     return side[0] * camera[0] + side[1] * camera[1] < -0.001
   }) : parts
+}
+
+/** Head of the post, where the cross is stepped on above the pointing board. */
+export const SIGNPOST_HEIGHT = 0.78
+
+/** The wayside marker at the shrine's fork; its board points along local +X. */
+export function signpostParts(seed = 0): BuildingPart[] {
+  return earlyBuildingParts({
+    ...earlyBuildingRecipe("shepherd-hut"),
+    variant: "signpost", width: 1, depth: 1, wallHeight: SIGNPOST_HEIGHT, roofRise: 0, seed,
+  })
 }
 
 export { shrineStructureParts } from "./shrine-geometry"

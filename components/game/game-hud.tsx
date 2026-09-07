@@ -1,6 +1,8 @@
 "use client"
 
-import { isComplete, isMonkShelter } from "@/lib/game/construction"
+import { isComplete, isHouse, isMonkShelter } from "@/lib/game/construction"
+import { BUILDING_KINDS, buildingKind } from "@/lib/game/buildings"
+import { HOUSE_BEDS } from "@/lib/game/building-art/early-geometry"
 import { FOOD_TYPES, FOOD_LABELS, STOREHOUSE_FOOD_CAPACITY, emptyFoodStock, storedFood } from "@/lib/game/storage"
 
 import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/elevation"
@@ -288,9 +290,10 @@ function useLiveStats(travelerId: number): SimTraveler | null {
 }
 
 /** Who the player clicked on the road: name, calling, and what drives them. */
-function TravelerPanel({ traveler }: { traveler: Traveler }) {
+function TravelerPanel({ traveler, map }: { traveler: Traveler; map: GameMap | null }) {
   const a = traveler.attributes
   const live = useLiveStats(traveler.id)
+  const named = (id: string | null | undefined) => map?.buildings.find(b => b.id === id)?.label
   return (
     <Panel>
       <div className="flex items-baseline justify-between gap-4">
@@ -320,6 +323,12 @@ function TravelerPanel({ traveler }: { traveler: Traveler }) {
             {live.praying ? "Kneeling in prayer before the relic" : ACTIVITY_LABELS[live.activity]}
             {live.employer && " · Settler"}
             {live.track && " · on the dark track"}
+          </div>
+        )}
+        {live?.employer && (
+          <div className="text-[11px] text-ink-light">
+            Works at {named(live.employer) ?? "a settlement building"}
+            {live.home ? ` · lives at ${named(live.home) ?? "a house"}` : " · no house yet"}
           </div>
         )}
         {live && live.fled > 0 && (
@@ -734,6 +743,12 @@ export function GameHud({
   const foodStores = useBuildStore(s => s.foodStores)
   const foodStock = foodStores.get(selectedBuilding?.id ?? "") ?? emptyFoodStock()
   const storedWood = piles.reduce((sum, pile) => sum + (pile.campId === selectedBuilding?.id ? pile.wood : 0), 0)
+  // Live occupancy of the selected workplace or house, read from the running sim.
+  const selectedKind = buildingKind(selectedBuilding?.buildType)
+  const household = selectedBuilding && isHouse(selectedBuilding)
+    ? [...(simRegistry.current?.travelers.values() ?? [])].filter(s => s.home === selectedBuilding.id).length : 0
+  const staff = selectedBuilding && selectedKind
+    ? [...(simRegistry.current?.travelers.values() ?? [])].filter(s => s.employer === selectedBuilding.id).length : 0
   const selectedRelic = selection?.kind === "relic"
 
   return (
@@ -1069,6 +1084,13 @@ export function GameHud({
             <p className="mt-1 font-display text-xs text-ink">{selectedBuilding.label}</p>
             <ConstructionStatus building={selectedBuilding} />
             {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">Tired monks sleep here until their stamina recovers.</p>}
+            {isHouse(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
+              Home to {household} of {HOUSE_BEDS} settlers. They come back here to sleep and eat.
+            </p>}
+            {selectedKind && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
+              {staff} of {BUILDING_KINDS[selectedKind].jobs} {BUILDING_KINDS[selectedKind].vendorKept ? "kept by a settled vendor" : "jobs taken"}
+              {selectedBuilding.buildType === "tavern" && staff === 0 ? " · nobody is serving yet" : ""}
+            </p>}
             {selectedBuilding.id === map?.site?.hovelId && (
               <div className="mt-3 flex flex-col gap-1.5">
                 <label htmlFor="shrine-admission" className="text-[11px] text-ink-light">Admission · gold per visitor</label>
@@ -1096,7 +1118,7 @@ export function GameHud({
           </Panel>
           )}
           {selection?.kind === "animal" && <AnimalInspector id={selection.id} />}
-          {selectedTraveler && <TravelerPanel traveler={selectedTraveler} />}
+          {selectedTraveler && <TravelerPanel traveler={selectedTraveler} map={map} />}
           {selectedMonk && <MonkPanel monk={selectedMonk} />}
           {selectedRelic && relic && <RelicPanel relic={relic} />}
         </div>}

@@ -25,7 +25,9 @@ export function stepMonkWork(s: MonkRoutine & MonkNeeds, map: GameMap, speed: nu
   if (s.buildingTask) {
     const state = stepBuildingTask(s, map, speed, dt)
     if (state) {
-      s.activity = state === "walking" ? s.buildingTask!.purpose === "rest" ? "toShelter" : "toBuild" : state
+      // Brothers only build and sleep; a posted work state cannot reach them.
+      s.activity = state === "walking" ? s.buildingTask!.purpose === "rest" ? "toShelter" : "toBuild"
+        : state === "posted" ? "resting" : state
       if (state === "sleeping") {
         s.stamina = Math.min(100, s.stamina + dt * 4)
         if (s.stamina >= MONK_WAKE_AT) { s.buildingTask = undefined; s.activity = "resting"; s.pause = 1; s.destination = "home" }
