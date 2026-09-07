@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "0e864e611b7a9b468c57292f2c7d7929f2fc994d",
-  "releaseCount": 91,
+  "lastProcessedCommit": "a3df4c22d6663f95693382529d8f5f324f910117",
+  "releaseCount": 92,
   "releases": [
+    {
+      "version": "0.0.106",
+      "title": "Release 0.0.106",
+      "summary": "Halve the stamina drain and camp before the legs give out (#125)",
+      "commit": "a3df4c22d6663f95693382529d8f5f324f910117"
+    },
     {
       "version": "0.0.105",
       "title": "Release 0.0.105",
