@@ -32,7 +32,7 @@ import { MONK_TIRED_AT } from "@/lib/game/monk-work"
 import { useMonkEvangelismStore } from "@/lib/game/monk-evangelism-store"
 import { MONK_ACTIVITY_LABELS, monkStaminaRegistry, monkRegistry, monkPositionRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { relicTitle, type Relic } from "@/lib/game/relic"
-import { DEFAULT_TRAFFIC, type Traveler } from "@/lib/game/travelers"
+import { DEFAULT_TRAFFIC, MAX_TRAFFIC, type Traveler } from "@/lib/game/travelers"
 import type { PixelationProps } from "@/components/pixel-canvas"
 
 import type { MapSettings } from "./game-shell"
@@ -115,7 +115,7 @@ function TrafficDensity({ value, travelerCount, onChange }: {
         value={value}
         display={`${Math.round((value / DEFAULT_TRAFFIC) * 100)}%`}
         min={0}
-        max={60}
+        max={MAX_TRAFFIC}
         onChange={onChange}
       />
       <p className="text-[11px] italic text-ink-light">
@@ -750,11 +750,11 @@ export function GameHud({
         <HudClock />
         </div>
       </header>
-      <HudHelp content={<><div className="hud-help-title">Traffic density</div><p>{travelers.length} folk across the map.</p></>}>
+      <HudHelp content={<><div className="hud-help-title">Character population</div><p>{travelers.length} travelers across the map at {Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}% traffic density. Increase for playtesting, up to 20× the normal population.</p></>}>
         <section className="hud-traffic" aria-label="Traffic">
-          <label htmlFor="traffic-density">Traffic</label>
-          <input id="traffic-density" type="range" aria-label="Traffic density" min={0} max={60} step={1} value={settings.traffic} onChange={(event) => set({ traffic: Number(event.target.value) })} />
-          <output htmlFor="traffic-density">{Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}%</output>
+          <label htmlFor="traffic-density">Characters</label>
+          <input id="traffic-density" type="range" aria-label="Traffic density" aria-valuetext={`${travelers.length} travelers, ${Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}% traffic density`} min={0} max={MAX_TRAFFIC} step={1} value={settings.traffic} onChange={(event) => set({ traffic: Number(event.target.value) })} />
+          <output htmlFor="traffic-density">{travelers.length}</output>
         </section>
       </HudHelp>
 

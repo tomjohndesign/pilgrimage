@@ -266,6 +266,9 @@ function rollAttributes(rng: () => number, type: TravelerTypeDef): TravelerAttri
 /** Travelers per 128 × 128 tiles; also the count on the reference map. */
 export const DEFAULT_TRAFFIC = 12
 
+/** Upper end of the playtesting slider, in travelers per 128 × 128 tiles. */
+export const MAX_TRAFFIC = DEFAULT_TRAFFIC * 20
+
 /** Convert the traffic density into a whole crowd using the generated map's area. */
 export function travelerCountForMap(
   map: Pick<GameMap, "width" | "depth">,
