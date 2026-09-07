@@ -7,6 +7,20 @@ import { tileToWorldX, tileToWorldZ, type GameMap } from "./types"
 import { walkingSurface } from "./walking-surface"
 
 describe("topography", () => {
+  it.each([1, 42, 7919])("keeps every founding building's floor clear of terrain for seed %i", seed => {
+    const map = generateMap({ seed })
+    for (const building of map.buildings) {
+      const foundation = groundHeight(map, building.x + (building.w - 1) / 2, building.z + (building.d - 1) / 2)
+      for (let z = building.z; z < building.z + building.d; z++) for (let x = building.x; x < building.x + building.w; x++) {
+        const i = z * map.width + x
+        for (const corner of map.elevation!.corners.slice(i * 4, i * 4 + 4)) {
+          expect(corner + 0.2, `${building.id} at ${x},${z}`).toBeCloseTo(foundation, 10)
+        }
+        expect(walkingSurface(map, tileToWorldX(map, x), tileToWorldZ(map, z))).toEqual({ height: foundation, dx: 0, dz: 0 })
+      }
+    }
+  })
+
   it.each([{ x: 2, z: 2, w: 2, d: 2 }, { x: 0, z: 0, w: 1, d: 1 }, { x: 5, z: 4, w: 3, d: 4 }])(
     "levels the entire building pad and joins its dry perimeter at $x,$z", (building) => {
       const width = 8, depth = 8, water = new Uint8Array(width * depth)
