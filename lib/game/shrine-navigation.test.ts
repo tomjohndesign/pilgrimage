@@ -64,3 +64,30 @@ describe("walking around shrine kneelers", () => {
     }
   })
 })
+
+describe("a footprint on the shrine track", () => {
+  /** Shrine at the end of a five-tile track leading down from the road. */
+  function approachMap(): GameMap {
+    const map: GameMap = { width: 15, depth: 15, tiles: Array(225).fill("grass"),
+      buildings: [{ id: "shrine", x: 4, z: 9, w: 3, d: 3, height: 2, label: "Shrine", color: "", roofColor: "" }],
+      site: { hovelId: "shrine", door: { x: 5, z: 8 },
+        branch: [{ x: 5, z: 4 }, { x: 5, z: 5 }, { x: 5, z: 6 }, { x: 5, z: 7 }, { x: 5, z: 8 }], junction: 5 },
+      road: Array.from({ length: 15 }, (_, x) => ({ x, z: 4 })) }
+    for (const p of map.road!) map.tiles[p.z * 15 + p.x] = "path"
+    for (const p of map.site!.branch.slice(1)) map.tiles[p.z * 15 + p.x] = "track"
+    return map
+  }
+
+  it("bends the visit route around it instead of walking the old track", () => {
+    const map = approachMap()
+    const straight = shrineVisitPlan(map, 0, 0)!.route
+    expect(straight.slice(0, 5)).toEqual(map.site!.branch)
+    const hut = { id: "hut", label: "Hut", x: 5, z: 6, w: 1, d: 1, height: 1, color: "", roofColor: "" }
+    const blocked = { ...map, buildings: [...map.buildings, hut] }
+    const route = shrineVisitPlan(blocked, 0, 0)!.route
+    expect(route.some(p => p.x === hut.x && p.z === hut.z)).toBe(false)
+    expect(route[0]).toEqual(map.site!.branch[0])
+    expect(route.some(p => p.x === map.site!.door.x && p.z === map.site!.door.z)).toBe(true)
+    expect(route.length).toBeGreaterThan(straight.length)
+  })
+})

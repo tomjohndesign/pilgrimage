@@ -2,6 +2,7 @@ import { walkingSurface } from "./map/walking-surface"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "./map/types"
 import { monkWander, type WanderSpot } from "./monk-wander"
 import type { MonkRoutine } from "./monk-routine"
+import { shrineApproach } from "./settlement-route"
 import { shrineLayout } from "./shrine-layout"
 import { BASE_PERSON, PERSON_CLIPS } from "./base-person/pose"
 
@@ -69,7 +70,7 @@ export function processionGrounds(map: GameMap, wander = monkWander(map)) {
   const altar = wander.prayerSpots.find(spot =>
     (spot.x - centre.x) * -Math.sin(rotation) + (spot.z - centre.z) * -Math.cos(rotation) > 0.5)
   if (!altar) return null
-  const branch = [...map.site.branch].reverse().map(tile => {
+  const branch = [...shrineApproach(map)].reverse().map(tile => {
     const x = tileToWorldX(map, tile.x), z = tileToWorldZ(map, tile.z)
     return { x, z, y: walkingSurface(map, x, z).height }
   })

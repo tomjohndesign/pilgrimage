@@ -764,11 +764,12 @@ describe("woodcutter huts", () => {
     expect(sim.wood).toBe(0)
   })
 
-  it("rejects water, roads, occupied footprints, remote woods and disconnected entrances", () => {
+  it("rejects water, off-map footprints, occupied ground, remote woods and disconnected entrances", () => {
     const { map, camp } = fixture()
     expect(placementProblem(map, map.buildings, "workshop", 13, 8)).toBeNull()
     expect(placementProblem(map, [...map.buildings, camp], "workshop", 14, 8)).toBe("occupied")
-    expect(placementProblem(map, map.buildings, "workshop", 10, 4)).toBe("terrain")
+    // The road and its track are ordinary ground; walkers go around a footprint.
+    expect(placementProblem(map, map.buildings, "workshop", 10, 4)).toBeNull()
     expect(placementProblem(map, map.buildings, "workshop", 29, 17)).toBe("terrain")
     expect(placementProblem(map, map.buildings, "workshop", 0, 0)).toBe("noWoods")
     map.tiles[8 * map.width + 13] = "water"

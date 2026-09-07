@@ -4,7 +4,8 @@ import { getBuildInfluence } from "./build-influence"
 import { DEFAULT_ELEVATION, finishElevation, generateElevation, groundHeight } from "./map/elevation"
 import { describe, expect, it } from "vitest"
 import { generateMap } from "./map/generate-map"
-import type { GameMap } from "./map/types"
+import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
+import { createFootpaths, recordWalkingPath } from "./footpaths"
 import { generateMonks } from "./monks"
 import { generateRelic, relicDraw } from "./relic"
 import { generateTravelers } from "./travelers"
@@ -17,6 +18,7 @@ import {
   individualRenown,
   placementError,
   purchaseStructure,
+  roadBlockError,
   relicRenown,
   settlementIncome,
   settlementEvangelism,
@@ -57,6 +59,37 @@ function testMap(): GameMap {
 const monks = generateMonks(12345)
 const relic = generateRelic(12345)
 const shelter = BUILD_CATALOG.find((item) => item.id === "shelter")!
+const cross = BUILD_CATALOG.find((item) => item.id === "cross")!
+
+/** A shrine off a through road, as the generator lays one out: road, track, door. */
+function trackMap(): GameMap {
+  const width = 24, depth = 24
+  const map: GameMap = {
+    width, depth, tiles: new Array(width * depth).fill("grass"), buildings: [],
+    road: Array.from({ length: width }, (_, x) => ({ x, z: 4 })),
+    site: { junction: 10, branch: Array.from({ length: 5 }, (_, i) => ({ x: 10, z: 4 + i })),
+      door: { x: 10, z: 8 }, hovelId: "hovel" },
+  }
+  for (const p of map.road!) map.tiles[p.z * width + p.x] = "path"
+  for (const p of map.site!.branch.slice(1)) map.tiles[p.z * width + p.x] = "track"
+  map.buildings.push({ id: "hovel", label: "Shrine", x: 9, z: 9, w: 3, d: 3, height: 1, color: "tan", roofColor: "brown" })
+  map.footpaths = createFootpaths(map)
+  return map
+}
+
+/** Walk a straight line often enough to establish a path along it. */
+function wearPath(map: GameMap, from: TilePos, to: TilePos, passes = 20) {
+  const a = { x: tileToWorldX(map, from.x), z: tileToWorldZ(map, from.z) }
+  const b = { x: tileToWorldX(map, to.x), z: tileToWorldZ(map, to.z) }
+  for (let pass = 0; pass < passes; pass++) {
+    let before = a
+    for (let step = 1; step <= 60; step++) {
+      const after = { x: a.x + (b.x - a.x) * step / 60, z: a.z + (b.z - a.z) * step / 60 }
+      recordWalkingPath(map.footpaths!, map, before, after)
+      before = after
+    }
+  }
+}
 const garden = BUILD_CATALOG.find((item) => item.id === "garden")!
 
 describe("build and buy", () => {
@@ -252,7 +285,7 @@ describe("build and buy", () => {
     expect(second.settlement).toBe(first)
   })
 
-  it.each(["forest", "darkwood", "water", "path", "track", "bridge", "clearing", "hills"] as const)(
+  it.each(["forest", "darkwood", "water", "bridge", "clearing", "hills"] as const)(
     "checks the far corner of the footprint for %s",
     (terrain) => {
       const map = testMap()
@@ -263,6 +296,62 @@ describe("build and buy", () => {
       expect(result.settlement).toBe(before)
     },
   )
+
+  it("builds over the road while a way around it remains", () => {
+    const map = testMap()
+    const road = Array.from({ length: 30 }, (_, z) => ({ x: 11, z }))
+    for (const p of road) map.tiles[p.z * map.width + p.x] = "path"
+    map.road = road
+    expect(placementError(map, shelter, { x: 10, z: 12 })).toBeNull()
+  })
+
+  it("refuses a footprint that pens the road in with nowhere to go around", () => {
+    // A road down a gorge: water either side leaves no ground to step onto.
+    const map = testMap()
+    map.road = Array.from({ length: 30 }, (_, z) => ({ x: 11, z }))
+    for (let z = 0; z < 30; z++) {
+      map.tiles[z * map.width + 11] = "path"
+      for (const x of [10, 12]) map.tiles[z * map.width + x] = "water"
+    }
+    const across = { ...shelter, id: "dam", buildType: "shelter", label: "Dam", w: 1, d: 2, x: 11, z: 12, rotation: 0 as const }
+    expect(roadBlockError(map, [...map.buildings, across])).toMatch(/way around the road/)
+  })
+
+  it("keeps the road's map edges clear for arrivals and departures", () => {
+    const map = testMap()
+    map.road = Array.from({ length: 30 }, (_, z) => ({ x: 11, z }))
+    const across = { ...shelter, id: "gate", buildType: "shelter", label: "Gate", x: 10, z: 0, rotation: 0 as const }
+    expect(roadBlockError(map, [...map.buildings, across])).toMatch(/leaves the map/)
+    expect(roadBlockError(map, [...map.buildings, { ...across, z: 12 }])).toBeNull()
+  })
+
+  it("builds on ground a path has worn, but not on the untrodden forest floor beside it", () => {
+    const map = testMap()
+    for (let z = 11; z < 17; z++) for (let x = 9; x < 14; x++) map.tiles[z * map.width + x] = "clearing"
+    map.footpaths = createFootpaths(map)
+    expect(placementError(map, cross, { x: 11, z: 14 })).toMatch(/worn path/)
+    wearPath(map, { x: 11, z: 11 }, { x: 11, z: 16 })
+    expect(placementError(map, cross, { x: 11, z: 14 })).toBeNull()
+    expect(placementError(map, cross, { x: 13, z: 14 })).toMatch(/worn path/)
+  })
+
+  it("builds on the shrine track while the door can still be reached", () => {
+    const map = trackMap()
+    expect(placementError(map, cross, { x: 10, z: 6 })).toBeNull()
+    // Penned between water, the track is the only way in, so it must stay open.
+    const gorge = { ...map, water: { depth: new Array(24 * 24).fill(0) as number[], flow: {} } }
+    for (let z = 5; z <= 8; z++) for (const x of [9, 11]) {
+      gorge.tiles[z * 24 + x] = "water"
+      gorge.water.depth[z * 24 + x] = 2
+    }
+    expect(placementError(gorge, cross, { x: 10, z: 6 })).toMatch(/to the shrine door/)
+  })
+
+  it("keeps the dark forest tracks clear, where the old growth allows no detour", () => {
+    const map = trackMap()
+    map.shortcuts = [{ entry: 2, exit: 6, tiles: [{ x: 2, z: 4 }, { x: 3, z: 5 }, { x: 4, z: 5 }, { x: 6, z: 4 }] }]
+    expect(placementError(map, cross, { x: 3, z: 5 })).toMatch(/forest track/)
+  })
 
   it("keeps the approach clear even if its terrain is open", () => {
     expect(placementError(testMap(), shelter, { x: 13, z: 16 })).toMatch(/approach/)

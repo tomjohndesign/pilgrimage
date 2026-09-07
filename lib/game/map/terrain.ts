@@ -44,7 +44,10 @@ export interface TerrainDef {
    * grassland; worked surfaces like the road mostly hold their own colour.
    */
   shadeBlend: number
-  /** Can buildings be placed here without clearing first? */
+  /**
+   * Can buildings be placed here without clearing first? The road counts: a
+   * settlement is free to grow across it, and its traffic finds a way around.
+   */
   buildable: boolean
   /** Can player-controlled units walk here? Forest proper is solid trees. */
   passable: boolean
@@ -75,7 +78,7 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
     color: "#c9ab7a",
     jitter: 0.08,
     shadeBlend: 0.15,
-    buildable: false,
+    buildable: true,
     passable: true,
   },
   // The branch off the road to the relic. Its own terrain so the main road
@@ -87,7 +90,7 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
     color: "#ad9468",
     jitter: 0.1,
     shadeBlend: 0.2,
-    buildable: false,
+    buildable: true,
     passable: true,
   },
   forest: {

@@ -1,6 +1,7 @@
 import { FOOTPATH_ESTABLISHED_AT, footpathRouteCost, obstaclesNear, type FootpathObstacle } from "./footpaths"
 import { elevationStep } from "./map/elevation"
-import { tileAt, worldToTileX, worldToTileZ, type GameMap, type TilePos } from "./map/types"
+import { settlementRoute } from "./settlement-route"
+import { tileAt, tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type BuildingDef, type GameMap, type TilePos } from "./map/types"
 
 /** Some journeys try new ground; ordinary walkers require an economical, worn route. */
 export const SHORTCUT_EXPLORERS = 1 / 8
@@ -11,7 +12,11 @@ export function exploresRoadShortcut(ordinal: number, cycle: number, seed: numbe
   const cohort = Math.floor(ordinal / 8), size = Math.min(8, population - cohort * 8)
   return size > 0 && ordinal % 8 === ((seed + cohort * 5 + cycle * 3) % size + size) % size
 }
-export interface WalkingShortcut { from: TilePos; to: TilePos; start: number; end: number; distance: number; length: number }
+export interface WalkingShortcut {
+  from: TilePos; to: TilePos; start: number; end: number; distance: number; length: number
+  /** Intermediate world points on a forced detour; a plain cut runs straight. */
+  via?: TilePos[]
+}
 
 const length = (a: TilePos, b: TilePos) => Math.hypot(b.x - a.x, b.z - a.z)
 
@@ -130,6 +135,9 @@ export function findRoadShortcut(map: GameMap, progress: number, direction: 1 | 
 /** Called after a walker finishes a cut; planning a route never retires the road. */
 export function retireBypassedRoad(map: GameMap, cut: WalkingShortcut): void {
   const paths = map.footpaths
+  // Walking around a building is forced, not chosen: the road it steps around
+  // is still the road, and comes back the moment the footprint goes.
+  if (cut.via) return
   if (!paths || !map.road || cut.distance < cut.length || !establishedShortcut(map, cut.from, cut.to)
     || shortcutCost(map, cut.from, cut.to) > cut.length * 1.35) return
   for (let i = Math.ceil(Math.min(cut.start, cut.end)); i <= Math.floor(Math.max(cut.start, cut.end)); i++) {
@@ -207,4 +215,87 @@ export function takeRoadShortcut(map: GameMap, progress: number, direction: 1 | 
   if (direct > walked * .8 || walked - direct <= .6) return null
   if (!Number.isFinite(shortcutCost(map, from, to, exploring))) return null
   return { from, to, start: progress, end, length: direct, distance: 0 }
+}
+
+/**
+ * A footprint may be laid straight across the road: the settlement grows over
+ * it and the traffic has to find its own way past. The obstruction is a fact
+ * about the ground, so it is resolved once for the road and shared by everyone
+ * walking it, until the buildings change.
+ */
+const roadObstructions = new WeakMap<GameMap, { buildings: readonly BuildingDef[]; count: number; blocked: Uint8Array }>()
+export function blockedRoad(map: GameMap): Uint8Array {
+  const road = map.road ?? []
+  const cached = roadObstructions.get(map)
+  if (cached && cached.buildings === map.buildings && cached.count === map.buildings.length) return cached.blocked
+  const blocked = new Uint8Array(road.length)
+  for (let i = 0; i < road.length; i++) {
+    const p = road[i]
+    blocked[i] = map.buildings.some(b => p.x >= b.x && p.x < b.x + b.w && p.z >= b.z && p.z < b.z + b.d) ? 1 : 0
+  }
+  roadObstructions.set(map, { buildings: map.buildings, count: map.buildings.length, blocked })
+  return blocked
+}
+
+/** The run of road a single obstruction covers, and where to rejoin beyond it. */
+function roadObstruction(blocked: Uint8Array, from: number, direction: 1 | -1): { first: number; last: number; rejoin: number } | null {
+  if (!blocked[from]) return null
+  let first = from, last = from
+  while (first - 1 >= 0 && blocked[first - 1]) first--
+  while (last + 1 < blocked.length && blocked[last + 1]) last++
+  const beyond = direction === 1 ? last + 1 : first - 1
+  if (beyond < 0 || beyond >= blocked.length) return null
+  // Rejoin a tile further out where there is road to spare, so the walk back
+  // on meets the lane at an angle instead of scraping the corner.
+  const margin = beyond + direction
+  return { first, last, rejoin: margin >= 0 && margin < blocked.length && !blocked[margin] ? margin : beyond }
+}
+
+/** How far ahead a walker notices a footprint standing in their way. */
+export const DIVERSION_LOOKAHEAD = 3
+
+/**
+ * Plan a way around a building laid across the road, rejoining it beyond. The
+ * detour is a real walked route — the ground it crosses wears like any other,
+ * so repeated traffic makes the new way for itself.
+ */
+export function findRoadDiversion(
+  map: GameMap,
+  blocked: Uint8Array,
+  from: TilePos,
+  progress: number,
+  direction: 1 | -1,
+  pointAt: (p: number) => TilePos,
+): WalkingShortcut | null {
+  const road = map.road
+  if (!road || road.length < 3) return null
+  let obstruction: ReturnType<typeof roadObstruction> = null
+  for (let step = 0; step <= DIVERSION_LOOKAHEAD; step++) {
+    const index = Math.round(progress + direction * step)
+    if (index < 0 || index >= road.length) return null
+    obstruction = roadObstruction(blocked, index, direction)
+    if (obstruction) break
+  }
+  if (!obstruction) return null
+  const { rejoin } = obstruction
+  // Already past it, or the walker stands on the blocked ground themselves.
+  if (direction * (rejoin - progress) <= 0) return null
+  const start = { x: worldToTileX(map, from.x), z: worldToTileZ(map, from.z) }
+  const goal = road[rejoin]
+  // A footprint may be laid over someone already standing on the road. Let
+  // them step out of that site before it counts as a wall.
+  const buildings = map.buildings.filter(b =>
+    !(start.x >= b.x && start.x < b.x + b.w && start.z >= b.z && start.z < b.z + b.d))
+  const route = settlementRoute(map, buildings, start, goal)
+  if (!route) return null
+  const to = pointAt(rejoin)
+  const points = smoothWalkingRoute(map, [
+    { x: from.x, z: from.z },
+    ...route.slice(1, -1).map(p => ({ x: tileToWorldX(map, p.x), z: tileToWorldZ(map, p.z) })),
+    { x: to.x, z: to.z },
+  ])
+  const walked = points.slice(1).reduce((sum, p, i) => sum + length(points[i], p), 0)
+  if (!(walked > 0)) return null
+  return { from: points[0], to: points[points.length - 1], via: points.slice(1, -1),
+    start: progress, end: rejoin, length: walked, distance: 0 }
 }

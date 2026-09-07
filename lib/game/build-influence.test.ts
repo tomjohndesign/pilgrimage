@@ -27,7 +27,9 @@ describe("construction influence", () => {
     const map = world()
     expect(placementError(map, shelter, { x: 11, z: 36 })).toBeNull()
     expect(placementError(map, shelter, { x: 35, z: 39 })).toMatch(/influence/)
-    expect(placementError(map, shelter, { x: 9, z: 35 })).toMatch(/approach/)
+    // The approach track is walkable ground: a footprint may stand astride it
+    // while the shrine door can still be reached around the outside.
+    expect(placementError(map, shelter, { x: 9, z: 35 })).toBeNull()
   })
 
   it("keeps the approach as a starting area even when the shrine has no renown", () => {

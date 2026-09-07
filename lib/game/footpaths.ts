@@ -240,6 +240,24 @@ export function regrowFootpaths(paths: Footpaths, days: number): void {
   }
 }
 
+/**
+ * Ground traffic has already made its own: an original road tile, or a tile
+ * with an established worn crossing. Building over it is allowed wherever the
+ * ground is otherwise sound — the walkers simply wear a new way round.
+ */
+export function establishedFootpath(map: GameMap, x: number, z: number): boolean {
+  const paths = map.footpaths
+  if (!paths || x < 0 || z < 0 || x >= map.width || z >= map.depth) return false
+  const here = z * map.width + x
+  if (paths.founding.has(here)) return true
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    if ((!dx && !dz) || x + dx < 0 || z + dz < 0 || x + dx >= map.width || z + dz >= map.depth) continue
+    const edge = paths.edges.get(edgeKey(here, (z + dz) * map.width + x + dx))
+    if ((edge?.wear ?? 0) >= FOOTPATH_ESTABLISHED_AT) return true
+  }
+  return false
+}
+
 /** Worn corridors gradually approach the cost of an existing road; obstacles still govern access. */
 export function footpathRouteCost(map: GameMap, from: TilePos, to: TilePos): number {
   const a = { x: Math.round(from.x), z: Math.round(from.z) }, b = { x: Math.round(to.x), z: Math.round(to.z) }

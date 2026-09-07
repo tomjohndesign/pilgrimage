@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { createFootpaths, recordWalkingPath, regrowFootpaths } from "./footpaths"
-import { findRoadShortcut, retireBypassedRoad, exploresRoadShortcut, shortcutCost, smoothWalkingRoute } from "./walking-shortcuts"
-import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
+import { blockedRoad, findRoadDiversion, findRoadShortcut, retireBypassedRoad, exploresRoadShortcut, shortcutCost, smoothWalkingRoute } from "./walking-shortcuts"
+import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap, type TilePos } from "./map/types"
 import { DEFAULT_ELEVATION } from "./map/elevation"
 import { createSim, stepSim } from "./sim"
 import { generateTravelers, TRAVELER_TYPES } from "./travelers"
@@ -135,5 +135,57 @@ describe("traffic gradually cuts off detours", () => {
     map.elevation = { settings: DEFAULT_ELEVATION, height: Array(192).fill(0), corners: [], cliffs: [], slope: [] }
     map.elevation.height[6 * map.width + 4] = 3
     expect(shortcutCost(map, a, b, true)).toBe(Infinity)
+  })
+})
+
+describe("a footprint laid across the road", () => {
+  const hut = { id: "hut", label: "Hut", x: 7, z: 6, w: 2, d: 1, height: .6, color: "", roofColor: "" }
+
+  it("sends walkers around the obstruction and back onto the road beyond it", () => {
+    const map = fixture()
+    expect(findRoadDiversion(map, blockedRoad(map), pointAt(map, 10), 10, 1, p => pointAt(map, p))).toBeNull()
+    map.buildings = [hut]
+    const diversion = findRoadDiversion(map, blockedRoad(map), pointAt(map, 9), 9, 1, p => pointAt(map, p))!
+    expect(diversion).not.toBeNull()
+    expect(diversion.end).toBe(12)
+    const points = [diversion.from, ...diversion.via!, diversion.to]
+    expect(points.length).toBeGreaterThan(2)
+    for (const p of points) {
+      const x = worldToTileX(map, p.x), z = worldToTileZ(map, p.z)
+      expect(x >= hut.x && x < hut.x + hut.w && z === hut.z, `(${x}, ${z}) clears the hut`).toBe(false)
+    }
+    // Walking around costs more ground than the road it replaces.
+    expect(diversion.length).toBeGreaterThan(Math.abs(diversion.end - diversion.start))
+    // The way back is the same detour in reverse.
+    map.buildings = [hut]
+    const back = findRoadDiversion(map, blockedRoad(map), pointAt(map, 12), 12, -1, p => pointAt(map, p))!
+    expect(back.end).toBe(8)
+  })
+
+  it("never retires the road it only steps around", () => {
+    const map = fixture()
+    map.buildings = [hut]
+    const diversion = findRoadDiversion(map, blockedRoad(map), pointAt(map, 9), 9, 1, p => pointAt(map, p))!
+    retireBypassedRoad(map, { ...diversion, distance: diversion.length })
+    expect(map.footpaths!.rerouted.size).toBe(0)
+  })
+
+  it("walks travelers around it in the sim, wearing a new way past", () => {
+    const map = fixture()
+    map.buildings = [hut]
+    const travelers = generateTravelers(7, 8).map(t => ({ ...t, type: TRAVELER_TYPES.peasant, direction: 1 as const,
+      pace: 1, offset: 1 / (map.road!.length - 1), attributes: { ...t.attributes, hunger: 100, thirst: 100, stamina: 100, jobless: false } }))
+    const sim = createSim(travelers, map)
+    const diverted = new Set<number>()
+    for (let frame = 0; frame < 400; frame++) {
+      stepSim(sim, travelers, map, 1, .1)
+      for (const [id, s] of sim.travelers) {
+        if (s.roadShortcut?.via) diverted.add(id)
+        const x = worldToTileX(map, s.x), z = worldToTileZ(map, s.z)
+        expect(x >= hut.x && x < hut.x + hut.w && z === hut.z, `traveler ${id} walks through the hut`).toBe(false)
+      }
+    }
+    expect(diverted.size).toBeGreaterThan(0)
+    expect([...map.footpaths!.edges.values()].some(e => e.wear > 0)).toBe(true)
   })
 })
