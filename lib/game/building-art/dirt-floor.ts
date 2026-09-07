@@ -1,4 +1,3 @@
-import { buildingApproaches } from "../building-rotation"
 import type { GameMap } from "../map/types"
 import { TILE_HEIGHT } from "../map/terrain"
 
@@ -14,12 +13,8 @@ export const FLOOR_NEIGHBOURS = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[
 /** One texture lookup identifies the union of adjacent dirt plots, without internal seams. */
 export function dirtFloorMask(map: GameMap) {
   const occupied = new Uint8Array(map.width * map.depth)
-  const entries = new Set<number>()
   for (const building of map.buildings) {
-    for(const entry of buildingApproaches(map,building)) if(entry.x>=0 && entry.z>=0 && entry.x<map.width && entry.z<map.depth) {
-      occupied[entry.z*map.width+entry.x]=1
-      entries.add(entry.z*map.width+entry.x)
-    }
+    // The floor stops at the walls: no worn approach in front of the door.
     if (building.id === map.site?.hovelId || !hasDirtFloor(building.buildType)) continue
     for (let z=building.z;z<building.z+building.d;z++) for (let x=building.x;x<building.x+building.w;x++) {
       if (x>=0 && z>=0 && x<map.width && z<map.depth) occupied[z*map.width+x]=1
@@ -39,7 +34,6 @@ export function dirtFloorMask(map: GameMap) {
     })
     data[index*4]=neighbours
     data[index*4+1]=occupied[index] ? 255 : 0
-    data[index*4+2]=entries.has(index) ? 255 : 0
     if (occupied[index] || neighbours) tiles.add(index)
   }
   return { data, tiles }

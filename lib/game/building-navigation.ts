@@ -1,5 +1,5 @@
 import { buildingEntry } from "./building-rotation"
-import { isComplete, isMonkShelter } from "./construction"
+import { isComplete, isEnterable } from "./construction"
 import { shrineLayout, shrineKneelers } from "./shrine-layout"
 import type { BuildingDef, GameMap, TilePos } from "./map/types"
 
@@ -56,11 +56,15 @@ export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDe
   for (const building of buildings) {
     const a = containsTile(building, from), b = containsTile(building, to)
     if (!a && !b) continue
-    if (enterShrine && isMonkShelter(building) && isComplete(building)) {
+    if (enterShrine && isEnterable(building) && isComplete(building)) {
       if (a && b) continue
       const inside = a ? from : to, outside = a ? to : from
-      const entry = buildingEntry(building), inward = buildingEntry(building, true)
-      if (inside.x === inward.x && inside.z === inward.z && outside.x === entry.x && outside.z === entry.z) continue
+      // Cross the wall only in a doorway; the tavern also keeps a back door.
+      const doors = building.buildType === "tavern" ? ([1, -1] as const) : ([1] as const)
+      if (doors.some(end => {
+        const entry = buildingEntry(building, false, end), inward = buildingEntry(building, true, end)
+        return inside.x === inward.x && inside.z === inward.z && outside.x === entry.x && outside.z === entry.z
+      })) continue
       return false
     }
     if (!enterShrine || building.id !== map.site?.hovelId) return false

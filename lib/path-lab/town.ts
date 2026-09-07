@@ -9,10 +9,10 @@ export const TOWN_SETTINGS = { ...DEFAULT_PATH_SETTINGS, traffic: 0 }
 export interface TownSite extends BuildingDef { purpose: string; workplace?: boolean }
 const site = (id: string, label: string, x: number, z: number, buildType: string, purpose: string, workplace = false): TownSite => ({ id, label, x, z, w: 2, d: 2, height: .85, color: "#ad9672", roofColor: "#786140", rotation: 0, buildType, purpose, workplace })
 export const TOWN_SITES: TownSite[] = [
-  site("home-0", "Willow cottage", 5, 5, "shepherd-hut", "Home to Ada, Oswin and Edith"),
-  site("home-1", "Ash cottage", 5, 11, "shepherd-hut", "Home to Leof, Wulf and Alys"),
-  site("home-2", "Orchard cottage", 11, 3, "shepherd-hut", "Home to Eda, Cuth and Hild"),
-  site("home-3", "Roadside cottage", 11, 12, "shepherd-hut", "Home to Alden, Maud and Godric"),
+  site("home-0", "Willow cottage", 5, 5, "house", "Home to Ada, Oswin and Edith"),
+  site("home-1", "Ash cottage", 5, 11, "house", "Home to Leof, Wulf and Alys"),
+  site("home-2", "Orchard cottage", 11, 3, "house", "Home to Eda, Cuth and Hild"),
+  site("home-3", "Roadside cottage", 11, 12, "house", "Home to Alden, Maud and Godric"),
   site("timber", "Wood yard", 24, 4, "workshop", "Woodworkers carry fuel to the bakehouse", true),
   site("granary", "Granary", 26, 11, "storehouse", "Porters carry grain to the bakehouse and market", true),
   site("bakehouse", "Bakehouse", 20, 11, "hall", "Bakers collect grain, bake and carry bread to market", true),

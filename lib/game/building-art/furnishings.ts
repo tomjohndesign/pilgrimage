@@ -10,7 +10,7 @@ export function shelterHearth(width: number, depth: number, height: number, rise
 
 /** Chimneys identify domestic hearths and the tavern’s cooking fire. */
 export function hasDomesticHearth(variant: string | undefined): boolean {
-  return variant === "shelter" || variant === "monk-shelter" || variant === "shepherd-hut" || variant === "tavern"
+  return variant === "shelter" || variant === "monk-shelter" || variant === "house" || variant === "tavern"
 }
 
 /** One fireplace kit for homes and shelters, with a compact footprint in small huts. */
