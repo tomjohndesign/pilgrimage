@@ -1,3 +1,5 @@
+import type { BaseClip } from "../base-person/pose"
+import { uncoverHead } from "../base-person/head-covering"
 import * as THREE from "three"
 import type { createBasePersonRig } from "../base-person/rig"
 
@@ -40,7 +42,8 @@ export function createRocketRig(person: ReturnType<typeof createBasePersonRig>) 
     mesh(crown, new THREE.ConeGeometry(0.038, 0.15, 4), core, [x, 0.07, 0.035])
   }
   return {
-    pose(phase: number, flying: boolean) {
+    pose(phase: number, flying: boolean, clip: BaseClip = "idle") {
+      head.visible = !uncoverHead("Male", clip)
       jets.visible = flying
       jets.scale.y = 0.85 + 0.15 * Math.sin(phase * Math.PI * 2)
       crown.scale.y = 0.9 + 0.1 * Math.sin(phase * Math.PI * 2)

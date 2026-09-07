@@ -7,6 +7,7 @@ import { personWalkStride, DEFAULT_WALK_CADENCE } from "./base-person/gait"
 import { travelerAppearance } from "./base-person/population"
 import { TRAVELER_TYPES, type Traveler } from "./travelers"
 import { animalWalkSpeed } from "./transport/assets"
+import { tileAt, worldToTileX, worldToTileZ, tileToWorldX, tileToWorldZ } from "./map/types"
 import type { GameMap } from "./map/types"
 
 function fixture(direction: 1 | -1) {
@@ -18,6 +19,7 @@ function fixture(direction: 1 | -1) {
   const t: Traveler = { id: 0, type: TRAVELER_TYPES.knight, name: "Knight", pace: 1, direction, offset: (14 - direction * 0.03) / 29,
     attributes: { gold: 100, piety: 100, hunger: 100, thirst: 100, stamina: 100, status: 100, jobless: false, skills: [], age: 30 } }
   const sim = createSim([t], map); sim.shrineRenown = 10000
+  sim.trees = [1, -1].map(side => ({ x: tileToWorldX(map, 14 + side * 2), y: 0.2, z: tileToWorldZ(map, 17), species: "oak" as const }))
   return { map, t, sim, s: sim.travelers.get(0)! }
 }
 
@@ -34,7 +36,9 @@ describe("mounted knight journeys", () => {
     for (let i = 0; i < 3000 && !s.horseRest; i++) stepSim(sim, [t], map, DEFAULT_WALK_SPEED, 0.1)
     expect(s.activity).toBe("toRelic")
     expect(s.horseRest).toBeDefined()
-    expect(s.branchProgress).toBe(map.site!.branch.length - 2)
+    expect(s.branchProgress).toBe(0)
+    expect(s.horseRest?.tree).toBeDefined()
+    expect(tileAt(map, worldToTileX(map, s.horseRest!.x), worldToTileZ(map, s.horseRest!.z))).toBe("grass")
     const horse = { ...s.horseRest! }
     expect(horse.x).toBeCloseTo(s.x); expect(horse.z).toBeCloseTo(s.z)
     let prayed = false, walkedOut = false
@@ -49,7 +53,7 @@ describe("mounted knight journeys", () => {
       if (s.activity === "fromRelic") walkedOut = true
       stepSim(sim, [t], map, DEFAULT_WALK_SPEED, 0.1)
     }
-    expect({ prayed, walkedOut, visits: s.visits, activity: s.activity }).toEqual({ prayed: true, walkedOut: true, visits: 1, activity: "fromRelic" })
+    expect({ prayed, walkedOut, visits: s.visits, activity: s.activity }).toEqual({ prayed: true, walkedOut: true, visits: 1, activity: "fromParking" })
     expect(s.horseRest).toBeUndefined(); expect(knightMounted(s.activity)).toBe(true)
     expect(s.x).toBeCloseTo(horse.x); expect(s.z).toBeCloseTo(horse.z)
     for (let i = 0; i < 1000 && s.activity !== "walking"; i++) stepSim(sim, [t], map, DEFAULT_WALK_SPEED, 0.1)
@@ -67,14 +71,13 @@ describe("mounted knight journeys", () => {
     expect(knightMounted(s.activity, s.horseRest)).toBe(false)
   })
 
-  it("rides a long approach until reaching the exterior doorway", () => {
+  it("continues on the road when there is no standing tree to tie to", () => {
     const { map, t, sim, s } = fixture(1)
-    for (let i = 0; i < 3000 && s.activity !== "toRelic"; i++) stepSim(sim, [t], map, DEFAULT_WALK_SPEED, 0.1)
+    sim.trees = []
+    for (let i = 0; i < 200; i++) stepSim(sim, [t], map, DEFAULT_WALK_SPEED, 0.1)
     expect(s.horseRest).toBeUndefined()
-    expect(knightMounted(s.activity)).toBe(true)
-    stepSim(sim, [t], map, DEFAULT_WALK_SPEED, 0.1)
-    expect(s.branchProgress).toBeGreaterThan(0)
-    expect(s.horseRest).toBeUndefined()
+    expect(s.shrineParking).toBeUndefined()
+    expect(s.visits).toBe(0)
   })
 
   it("uses the horse's stride on the road and the knight's own legs after dismounting", () => {
@@ -96,7 +99,7 @@ describe("mounted knight journeys", () => {
     expect(s.horseRest).toBeDefined()
     s.gold = -1
     for (let i = 0; i < 10000 && s.horseRest; i++) stepSim(sim, [t], map, DEFAULT_WALK_SPEED, 0.1)
-    expect(s.horseRest).toBeUndefined(); expect(s.activity).toBe("fromRelic"); expect(s.visits).toBe(0)
+    expect(s.horseRest).toBeUndefined(); expect(s.activity).toBe("fromParking"); expect(s.visits).toBe(0)
   })
 })
 

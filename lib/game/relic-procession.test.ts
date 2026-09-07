@@ -250,6 +250,19 @@ describe("relic procession", () => {
     expect(s.activity).toBe("hauling")
   })
 
+  it("keeps riders waiting upright and reserves prayer poses for people on foot", () => {
+    const { map, p } = fixture()
+    const travelers = generateTravelers(1, 2).map((t, i) => ({ ...t, id: i === 0 ? 8 : 9, type: i === 0 ? TRAVELER_TYPES.vendor : TRAVELER_TYPES.knight }))
+    const sim = createSim(travelers, map); sim.procession = p
+    for (const s of sim.travelers.values()) {
+      Object.assign(p, { stage: "carrying", position: { x: s.x, y: s.y, z: s.z } })
+      const progress = s.progress
+      stepSim(sim, travelers, map, 0.4, 0.1)
+      expect(s.praying).toBe(false)
+      expect(s.progress).toBe(progress)
+    }
+  })
+
   it("pauses a merchant's shop routine and resumes at the same point after prayer", () => {
     const { map, p } = fixture()
     const travelers = generateTravelers(1, 1).map(t => ({ ...t, type: TRAVELER_TYPES.vendor }))

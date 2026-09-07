@@ -1,3 +1,5 @@
+import { uncoverHead } from "../base-person/head-covering"
+import type { BaseClip } from "../base-person/pose"
 import * as THREE from "three"
 import { createBasePersonRig } from "../base-person/rig"
 import { personRecipe } from "../base-person/design"
@@ -35,7 +37,7 @@ export function equipKnight(rig: ReturnType<typeof createBasePersonRig>, variant
     const part = rig.root.getObjectByName(name) as THREE.Mesh<THREE.BufferGeometry, THREE.MeshLambertMaterial>
     if (part) { part.material.map = mail; part.material.needsUpdate = true }
   }
-  return { dispose() { m.root.add(helmet, sword); m.dispose(); mail.dispose() } }
+  return { pose(clip: BaseClip) { helmet.visible = !uncoverHead(recipe.design.bodyType, clip) }, dispose() { m.root.add(helmet, sword); m.dispose(); mail.dispose() } }
 }
 
 /** Raised wooden saddle bows, wool pad, girth, bridle, reins and iron stirrups. */

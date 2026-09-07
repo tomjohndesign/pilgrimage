@@ -1,5 +1,6 @@
 "use client"
 
+import { AnimalTether } from "./animal-tether"
 import * as THREE from "three"
 import type { GameMap } from "@/lib/game/map/types"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
@@ -116,13 +117,13 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
       if (deployed && pasture) {
         beast.current.position.copy(parent.worldToLocal(point.set(pasture.x, data.pastureY ?? y, pasture.z)))
         const previous = lastAnimal.current, distance = previous && !data.motionReset && !paused ? Math.hypot(pasture.x - previous.x, pasture.z - previous.z) : 0
-        beast.current.userData = { ...data, heading: pasture.moving && !praying ? pasture.heading : priorHeading ?? data.heading, reversing: pasture.reversing, hitched: false,
-          moving: pasture.moving && !praying, distance, grazing: data.pastureGrass && !pasture.returning && !pasture.moving }
+        beast.current.userData = { ...data, tether: pasture.returning ? undefined : pasture.tether, heading: pasture.moving && !praying ? pasture.heading : priorHeading ?? data.heading, reversing: pasture.reversing, hitched: false,
+          moving: pasture.moving && !praying, distance, grazing: !pasture.tether && data.pastureGrass && !pasture.returning && !pasture.moving }
         lastAnimal.current = { x: pasture.x, z: pasture.z }
       } else if (parking) {
         const hitch = parking.pose.hitch
         beast.current.position.copy(parent.worldToLocal(point.set(hitch.x, map ? walkingSurface(map, hitch.x, hitch.z).height : y, hitch.z)))
-        beast.current.userData = { ...data, heading: parking.pose.heading, hitched: true, moving: !onFoot && data.moving, distance: onFoot ? 0 : data.distance, grazing: false }
+        beast.current.userData = { ...data, tether: onFoot ? parking.tree : undefined, heading: parking.pose.heading, hitched: true, moving: !onFoot && data.moving, distance: onFoot ? 0 : data.distance, grazing: false }
         lastAnimal.current = null
       } else { beast.current.position.set(0, 0, 0); lastAnimal.current = { ...hitch } }
     }
@@ -148,6 +149,7 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
       <group ref={setup} visible={false}><TransportSprite map={map} kind="merchant" variant={variant} characterScale={characterScale * (appearance?.scale ?? 1)} selected={selected} outlineColor={color} onClick={onClick} /></group>
     </>}
     {animal && <group ref={beast}><TransportSprite map={map} kind={puller as "donkey" | "horse"} coat={coat} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} /></group>}
+    {animal && <AnimalTether animal={beast} kind={puller as "horse" | "donkey"} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} />}
     {animal && <CartReins cart={cart} animal={beast} kind={puller as "horse" | "donkey"} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} />}
   </Suspense>
 }

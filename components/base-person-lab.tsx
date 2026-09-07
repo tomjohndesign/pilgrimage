@@ -22,7 +22,7 @@ import { KNIGHT, knightDesign } from "@/lib/game/knight/design"
 import { knightTravelSpeed } from "@/lib/game/knights"
 import { personWalkStride } from "@/lib/game/base-person/gait"
 import { squireVisual } from "@/lib/game/knight/visual"
-import knightMetadata from "@/public/textures/knights/v7/manifest.json"
+import knightMetadata from "@/public/textures/knights/v8/manifest.json"
 import transportMetadata from "@/public/textures/transport/v20/manifest.json"
 
 const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse", knight: "Knight" } as const

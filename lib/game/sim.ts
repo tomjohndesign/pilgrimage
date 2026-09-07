@@ -5,12 +5,12 @@ import { assignBuildingTask, buildingEntrance, stepBuildingTask, walkWorker, wor
 import { buildingEntry } from "./building-rotation"
 import { timberDestination, type FoodStock } from "./storage"
 import { blessByProcession, nearProcession, type RelicProcession } from "./relic-procession"
-import { roadsideStall, routePoint, routeLength, type StallRoute } from "./transport/roadside"
+import { routePoint, routeLength, type StallRoute } from "./transport/roadside"
 import { advanceCartProgress } from "./transport/route"
 import { roadLanePoint } from "./map/road-lane"
 import { walkingSurface } from "./map/walking-surface"
-import { convoyPoint, shrineParking, type ShrineParking } from "./transport/navigation"
-import { followCart } from "./transport/follow"
+import { convoyPoint, convoyBounds, stallParking, shrineParking, type ParkingContext, type ShrineParking } from "./transport/navigation"
+import { alignCart, followCart } from "./transport/follow"
 import { keeperRoutine } from "./transport/keeper"
 import { populationDesign, travelerAppearance } from "./base-person/population"
 import { animalClearance } from "./transport/stall"
@@ -224,7 +224,7 @@ function minstrelWalkSeconds(id: number, cycle: number): number {
 export interface SimTraveler {
   musicCooldown?: number
   musicVisit?: { performerId: number; cycle: number; spot: WorldPoint }
-  /** Horse waits outside the shrine doorway until its rider returns. */
+  /** Horse waits on a reserved verge beside a tree until its rider returns. */
   horseRest?: HorseRest & { progress: number; lane: number }
   workScale?: number
   workSlot?: number
@@ -480,23 +480,21 @@ function shrineWorldPoint(map: GameMap, s: SimTraveler): WorldPoint {
     point.y += (road.y - start.y) * blend
     point.z += (road.z - start.z) * blend
   }
-  const horse = s.horseRest
-  if (s.activity === "fromRelic" && horse && s.branchProgress >= horse.progress && s.branchProgress < horse.progress + 1) {
-    // Rejoin the exact parking spot from the outbound lane before mounting.
-    const lanePoint = shrineWorldPoint(map, { ...s, horseRest: undefined, branchProgress: horse.progress })
-    const blend = 1 - (s.branchProgress - horse.progress)
-    point.x += (horse.x - lanePoint.x) * blend
-    point.y += (horse.y - lanePoint.y) * blend
-    point.z += (horse.z - lanePoint.z) * blend
-  }
   return point
 }
 
-/** Stop one approach tile before the exterior doorway. */
-function parkShrineHorse(map: GameMap, s: SimTraveler): NonNullable<SimTraveler["horseRest"]> {
-  const at = shrineWorldPoint(map, s)
-  const ahead = shrineWorldPoint(map, { ...s, branchProgress: s.branchProgress + 0.1 })
-  return { ...at, progress: s.branchProgress, lane: s.lane, heading: Math.atan2(ahead.x - at.x, ahead.z - at.z) }
+/** Nearby live obstacles and reservations are shared by shrine and market parking. */
+function parkingContext(sim: SimState, s: SimTraveler, scale: number): ParkingContext {
+  const nearby = (p: { x: number; z: number }) => Math.hypot(p.x - s.x, p.z - s.z) < 16 + scale * 4
+  return {
+    trees: sim.trees.filter((tree, index) => nearby(tree) && !sim.felled.has(index) && !tree.walking),
+    obstacles: [...sim.travelers.values()].flatMap(other => other.id === s.id ? [] : [
+      ...(other.stallRoute?.obstacles ?? []),
+      ...(other.stallRoute && cartLoadout(other.id).puller !== "hand" ? convoyBounds(alignCart(other.stallRoute.park, other.stallRoute.heading, 0), cartLoadout(other.id).puller, scale) : []),
+      ...(other.shrineParking ? convoyBounds(other.shrineParking.parked, other.convoy ? cartLoadout(other.id).puller : "horse", scale) : []),
+    ]).filter(nearby),
+    people: [...sim.travelers.values()].filter(other => other.id !== s.id && nearby(other)),
+  }
 }
 
 /** Cross to the new left lane over a short walk, including when seeking food. */
@@ -921,8 +919,13 @@ export function stepSim(
     const s = sim.travelers.get(t.id)
     if (!s) continue
     s.convoyScale = characterScale
-    s.praying = nearProcession(sim.procession, s, s.praying)
-    if (s.praying) {
+    // Riders wait for a passing procession; prayer poses begin once on foot.
+    const riding = t.type.id === "knight" ? knightMounted(s.activity, s.horseRest) :
+      t.type.id === "vendor" && cartLoadout(s.id).puller !== "hand" && !s.shrineParking?.walking &&
+      !["openingShop", "vending", "packingShop"].includes(s.activity)
+    const processionNearby = nearProcession(sim.procession, s, s.praying)
+    s.praying = !riding && processionNearby
+    if (processionNearby) {
       if (dt > 0 && sim.procession) blessByProcession(sim.procession, `traveler:${s.id}`, s)
       s.moveSpeed = 0; continue
     }
@@ -930,7 +933,7 @@ export function stepSim(
     s.musicCooldown = Math.max(0, (s.musicCooldown ?? 0) - dt)
     const camping = s.activity === "camping"
     const sheltered = s.activity === "visiting" || s.activity === "idle"
-    const isVendor = t.type.id === "vendor"
+    const isVendor = t.type.id === "vendor", needsParking = isVendor || t.type.id === "knight"
 
     // --- Needs march on ------------------------------------------------------
     const needFactor = camping ? CAMP_NEED_FACTOR : 1
@@ -974,7 +977,7 @@ export function stepSim(
       case "fromParking": {
         const parking = s.shrineParking!, inbound = s.activity === "toParking"
         const route = inbound ? parking.entry : parking.exit, length = routeLength(route)
-        const wheelbase = -cartOffset(cartLoadout(s.id).puller) * characterScale
+        const wheelbase = isVendor ? -cartOffset(cartLoadout(s.id).puller) * characterScale : 0
         parking.distance = Math.min(length, parking.distance + worldSpeed * dt)
         const point = routePoint(route, parking.distance)
         parking.pose = followCart(parking.pose, point, wheelbase)
@@ -982,6 +985,7 @@ export function stepSim(
         if (parking.distance >= length) {
           if (inbound) {
             parking.pose = parking.parked; parking.walking = true
+            if (t.type.id === "knight") s.horseRest = { ...parking.parked.hitch, y: s.y, heading: parking.parked.heading, tree: parking.tree, progress: 0, lane: s.lane }
             s.activity = "toRelic"; s.branchProgress = 0
           } else {
             s.progress = parking.returnProgress; s.shrineParking = undefined; s.shrineRoute = null
@@ -994,19 +998,13 @@ export function stepSim(
       case "fromRelic": {
         const branch = s.shrineRoute ?? map.site!.branch
         const inbound = s.activity === "toRelic"
-        const parkingProgress = s.horseRest?.progress ?? Math.max(0, map.site!.branch.length - 2)
-        const nextProgress = Math.max(0, Math.min(branch.length - 1,
+        s.branchProgress = Math.max(0, Math.min(branch.length - 1,
           s.branchProgress + (inbound ? 1 : -1) * worldSpeed * dt))
-        const dismount = t.type.id === "knight" && inbound && !s.horseRest && nextProgress >= parkingProgress
-        const remount = !inbound && !!s.horseRest && nextProgress <= parkingProgress
-        s.branchProgress = dismount || remount ? parkingProgress : nextProgress
         stepLane(s, inbound ? 1 : -1, worldSpeed * dt)
         const at = shrineWorldPoint(map, s)
         s.x = at.x
         s.y = at.y
         s.z = at.z
-        if (dismount) s.horseRest = parkShrineHorse(map, s)
-        if (remount) { s.lane = s.horseRest!.lane; s.horseRest = undefined }
         if (inbound && s.branchProgress >= branch.length - 1) {
           const fee = admissionFee(map)
           if (s.gold >= fee) {
@@ -1145,7 +1143,8 @@ export function stepSim(
         if (isVendor && !shelter && !s.track) {
           s.timer -= dt
           if (s.timer <= 0) {
-            const pitch = roadsideStall(map, s, s.progress, s.direction, -cartOffset(cartLoadout(s.id).puller) * characterScale, characterScale, cartLoadout(s.id).puller)
+            const puller = cartLoadout(s.id).puller
+            const pitch = stallParking(map, s, s.progress, s.direction, -cartOffset(puller) * characterScale, characterScale, puller, parkingContext(sim, s, characterScale))
             if (pitch) {
               s.stallRoute = pitch
               s.spot = { ...pitch.park, y: surfaceHeight(map, worldToTileX(map, pitch.park.x), worldToTileZ(map, pitch.park.z)) }
@@ -1267,8 +1266,8 @@ export function stepSim(
           const crossingTile = Math.floor(s.progress) !== Math.floor(s.progress + direction * worldSpeed * haste * dt)
           // A wooded junction may have no verge. Convoys look for a clearing
           // on their approach, so the walking visitor can cover the last stretch.
-          if (distance <= worldSpeed * haste * dt || (isVendor && distance <= 12 && crossingTile)) {
-            const parkingProgress = isVendor ? s.progress : site.junction
+          if (distance <= worldSpeed * haste * dt || (needsParking && distance <= 12 && crossingTile)) {
+            const parkingProgress = needsParking ? s.progress : site.junction
             const chance = visitChance({ ...t.attributes, piety: s.piety,
               hunger: s.hunger, thirst: s.thirst, stamina: s.stamina }, sim.relic, renown, sim.balance)
             s.visitCooldown = 5
@@ -1281,10 +1280,10 @@ export function stepSim(
             const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats) : null
             let visitRoute = visit?.route ?? null
             let parking: ShrineParking | null = null
-            if (visitRoute && isVendor) {
-              const puller = cartLoadout(s.id).puller
-              parking = shrineParking(map, parkingProgress, direction, -cartOffset(puller) * characterScale, puller, characterScale,
-                [...sim.travelers.values()].flatMap(other => other.shrineParking ? [other.shrineParking.parked] : []))
+            if (visitRoute && needsParking) {
+              const puller = isVendor ? cartLoadout(s.id).puller : "horse"
+              parking = shrineParking(map, parkingProgress, direction, isVendor ? -cartOffset(puller) * characterScale : 0, puller, characterScale,
+                [...sim.travelers.values()].flatMap(other => other.shrineParking ? [other.shrineParking.parked] : []), parkingContext(sim, s, characterScale))
               const footRoute = parking ? settlementRoute(map, map.buildings,
                 { x: worldToTileX(map, parking.parked.hitch.x), z: worldToTileZ(map, parking.parked.hitch.z) }, visitRoute.at(-1)!, false, true, visit!.seat) : null
               visitRoute = footRoute
@@ -1302,7 +1301,6 @@ export function stepSim(
               s.branchEntryLane = s.lane
               s.lane = s.laneOffset
               const at = parking ? { ...parking.entry[0], y: s.y } : shrineWorldPoint(map, s)
-              if (t.type.id === "knight" && site.branch.length <= 2) s.horseRest = parkShrineHorse(map, s)
               s.x = at.x
               s.y = at.y
               s.z = at.z
@@ -1409,7 +1407,10 @@ export function stepSim(
         if (stepStallWalk(map, s, false, worldSpeed * dt)) {
           s.activity = "openingShop"
           s.timer = SHOP_SECONDS
-          if (cartLoadout(s.id).puller !== "hand") s.pasture = createPasture(s, s.stallRoute?.obstacles, animalClearance(cartLoadout(s.id).puller, characterScale), s.stallRoute?.heading ?? 0)
+          if (cartLoadout(s.id).puller !== "hand") {
+            s.pasture = createPasture(s, s.stallRoute?.obstacles, animalClearance(cartLoadout(s.id).puller, characterScale), s.stallRoute?.heading ?? 0)
+            s.pasture.tether = s.stallRoute?.tree
+          }
 
         }
         break

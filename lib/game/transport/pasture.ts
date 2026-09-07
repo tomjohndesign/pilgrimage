@@ -5,6 +5,7 @@ import { buildingAt } from "../settlement"
 import { pastureSegmentClear, type StallObstacle } from "./stall"
 
 export interface PastureAnimal {
+  tether?: import("../trees/placement").TreePlacement
   obstacles: StallObstacle[]; clearance: number
   x: number; z: number; heading: number; reversing: boolean; moving: boolean; distance: number; rest: number; visits: number
   home: { x: number; z: number }; route: Array<{ x: number; z: number }>; returning: boolean; ready: boolean
@@ -46,6 +47,10 @@ export function createPasture(home: { x: number; z: number }, obstacles: StallOb
 }
 export function stepPasture(map: GameMap, animal: PastureAnimal, dt: number, speed: number, recall: boolean) {
   animal.distance = 0; animal.moving = false
+  if (animal.tether) {
+    animal.returning = recall; animal.ready = recall
+    return
+  }
   const blocked = [...animal.obstacles, ...buildingObstacles(map)]
   const hx = worldToTileX(map, animal.home.x), hz = worldToTileZ(map, animal.home.z)
   const centre = (tile: TilePos) => tile.x === hx && tile.z === hz ? animal.home : ({ x: tileToWorldX(map, tile.x), z: tileToWorldZ(map, tile.z) })
