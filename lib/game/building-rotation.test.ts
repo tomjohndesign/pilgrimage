@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { Vector3 } from "three"
-import { buildingYaw, buildingEntry, rotateBuildingPoint, type BuildingRotation } from "./building-rotation"
+import { buildingYaw, buildingEntry, rotatedFootprint, rotateBuildingPoint, type BuildingRotation } from "./building-rotation"
 import { useBuildStore } from "./build-store"
-import { placementProblem } from "./buildings"
+import { BUILDING_KINDS, placementProblem } from "./buildings"
 import type { GameMap } from "./map/types"
 
 afterEach(() => useBuildStore.getState().reset())
@@ -28,17 +28,17 @@ describe("building rotation", () => {
   })
 
   it.each([0, 1, 2, 3] as BuildingRotation[])("keeps rendered and navigable entrances aligned at rotation %i", rotation => {
-    const point = rotateBuildingPoint(-0.5, 1.5, rotation)
-    const rendered = new Vector3(-0.5, 0, 1.5).applyAxisAngle(new Vector3(0, 1, 0), buildingYaw(rotation))
+    const point = rotateBuildingPoint(-1, 1.5, rotation)
+    const rendered = new Vector3(-1, 0, 1.5).applyAxisAngle(new Vector3(0, 1, 0), buildingYaw(rotation))
     expect(rendered.x).toBeCloseTo(point.x)
     expect(rendered.z).toBeCloseTo(point.z)
-    const camp = { x: 5, z: 5, w: 2, d: 2, rotation }
+    const camp = { x: 5, z: 5, ...rotatedFootprint(BUILDING_KINDS.workshop, rotation), rotation }
     const outside = buildingEntry(camp), inside = buildingEntry(camp, true)
     expect(Math.abs(outside.x - inside.x) + Math.abs(outside.z - inside.z)).toBe(1)
     expect(inside.x).toBeGreaterThanOrEqual(5)
-    expect(inside.x).toBeLessThan(7)
+    expect(inside.x).toBeLessThan(camp.x + camp.w)
     expect(inside.z).toBeGreaterThanOrEqual(5)
-    expect(inside.z).toBeLessThan(7)
+    expect(inside.z).toBeLessThan(camp.z + camp.d)
     const map: GameMap = {
       width: 12, depth: 12, tiles: Array(144).fill("grass"), buildings: [],
       site: { hovelId: "hovel", junction: 0, branch: [], door: { x: 2, z: 2 } },

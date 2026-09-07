@@ -135,7 +135,7 @@ function IllustratedBuilding({ image, recipe, view, registrations, onStatus }: {
 }
 
 function Site({ recipe, grid }: { recipe: BuildingRecipe; grid: boolean }) {
-  const map = useMemo(() => buildingPreviewMap(recipe), [recipe.width, recipe.depth])
+  const map = useMemo(() => buildingPreviewMap(recipe), [recipe.width, recipe.depth, recipe.variant])
   const trees = useMemo(() => [
     { x: -recipe.width / 2 - 3.5, z: -recipe.depth / 2 - 3, y: TILE_HEIGHT, species: "oak" as const, scale: 0.7 },
     { x: recipe.width / 2 + 3, z: -recipe.depth / 2 - 3.5, y: TILE_HEIGHT, species: "birch" as const, scale: 0.8 },
@@ -171,7 +171,7 @@ export function ProceduralMapScene({ recipe, grid, zoom, cutaway, onGuideReady, 
         <directionalLight name="workshop-sun" position={lightOffsetForYaw(yawForView(recipe.view))} intensity={2.7} />
         <Suspense fallback={null}>
           <Site recipe={recipe} grid={grid} />
-          <group position={[0, TILE_HEIGHT, 0]}><BuildingModel recipe={recipe} cutaway={cutaway} />{recipe.variant === "enclosure" && <RelicDisplay />}</group>
+          <group position={[0, TILE_HEIGHT, 0]}><BuildingModel terrainFloors recipe={recipe} cutaway={cutaway} />{recipe.variant === "enclosure" && <RelicDisplay />}</group>
           {onGuideReady && <GuideCapture recipe={recipe} onReady={onGuideReady} />}
         </Suspense>
       </Canvas>
@@ -199,7 +199,7 @@ export function MapComparison({ recipe, imageRecipe, image, registrations, label
           <directionalLight name="workshop-sun" position={lightOffsetForYaw(yawForView(recipe.view))} intensity={2.7} />
           <Suspense fallback={null}>
             <Site recipe={recipe} grid={grid} />
-            {kind === "procedural" ? <><group position={[0, TILE_HEIGHT, 0]}><BuildingModel recipe={recipe} />{recipe.variant === "enclosure" && <RelicDisplay />}</group><GuideCapture recipe={recipe} onReady={onGuideReady} /></> : <IllustratedBuilding image={image} recipe={imageRecipe} view={recipe.view} registrations={registrations} onStatus={setStatus} />}
+            {kind === "procedural" ? <><group position={[0, TILE_HEIGHT, 0]}><BuildingModel terrainFloors recipe={recipe} />{recipe.variant === "enclosure" && <RelicDisplay />}</group><GuideCapture recipe={recipe} onReady={onGuideReady} /></> : <IllustratedBuilding image={image} recipe={imageRecipe} view={recipe.view} registrations={registrations} onStatus={setStatus} />}
           </Suspense>
         </Canvas>
         {kind === "illustrated" && status && <p className={styles.mapStatus}>{status}</p>}

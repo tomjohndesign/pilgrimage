@@ -19,7 +19,7 @@ export function buildingPreviewMap(recipe: BuildingRecipe): GameMap {
   })
   return {
     width, depth, tiles, seed: 7919,
-    buildings: [{ id: "workshop", label: recipe.subject, x: 6, z: 6, w: recipe.width, d: recipe.depth, height: recipe.wallHeight, color: "#e7d8b9", roofColor: "#c4a05f" }],
+    buildings: [{ id: "workshop", buildType: recipe.variant, label: recipe.subject, x: 6, z: 6, w: recipe.width, d: recipe.depth, height: recipe.wallHeight, color: "#e7d8b9", roofColor: "#c4a05f" }],
     road: Array.from({ length: width }, (_, x) => ({ x, z: roadZ })),
   }
 }

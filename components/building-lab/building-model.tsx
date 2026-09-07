@@ -9,14 +9,19 @@ import { visibleStructureParts } from "@/lib/game/building-art/structure"
 import { wallSide } from "@/lib/game/building-art/cutaway"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 
-function Part({ part, idColor, onClick, ghostColor, ink = true }: { part: BuildingPart; idColor?: THREE.Color; onClick?: (event: ThreeEvent<MouseEvent>) => void; ghostColor?: string; ink?: boolean }) {
-  const geometry = useMemo(() => {
-    if (part.size) return new THREE.BoxGeometry(...part.size)
-    const result = new THREE.BufferGeometry()
-    result.setAttribute("position", new THREE.Float32BufferAttribute(part.vertices!, 3))
-    result.computeVertexNormals()
-    return result
-  }, [part])
+import { useTerrainTexture } from "@/components/game/use-terrain-texture"
+import { buildingPartGeometry, BUILDING_DIRT_TEXTURE, configureBuildingDirt, dirtFloorMaterial } from "@/lib/game/building-art/part-geometry"
+
+function DirtMaterial({ part }: { part: BuildingPart }) {
+  const trail = useTerrainTexture(BUILDING_DIRT_TEXTURE, "#a49372")
+  const grass = useTerrainTexture("/textures/grass.png", "#94a158")
+  const material = useMemo(() => dirtFloorMaterial(part, configureBuildingDirt(trail), configureBuildingDirt(grass)), [part, trail, grass])
+  useEffect(() => () => material.dispose(), [material])
+  return <primitive object={material} attach="material" />
+}
+
+function Part({ part, idColor, onClick, ghostColor, ink = true, terrainFloors = false }: { part: BuildingPart; idColor?: THREE.Color; onClick?: (event: ThreeEvent<MouseEvent>) => void; ghostColor?: string; ink?: boolean; terrainFloors?: boolean }) {
+  const geometry = useMemo(() => buildingPartGeometry(part, !terrainFloors), [part, terrainFloors])
   const edges = useMemo(() => new THREE.EdgesGeometry(geometry, 25), [geometry])
   useEffect(() => () => { geometry.dispose(); edges.dispose() }, [geometry, edges])
   if (ghostColor) return <group position={part.position} rotation={part.rotation}>
@@ -27,14 +32,17 @@ function Part({ part, idColor, onClick, ghostColor, ink = true }: { part: Buildi
       <lineBasicMaterial color={ghostColor} transparent opacity={0.8} depthWrite={false} />
     </lineSegments>}
   </group>
+  if (terrainFloors && part.surface === "trail") return <mesh geometry={geometry} position={part.position} rotation={part.rotation} onClick={onClick}>
+    <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+  </mesh>
   return <group position={part.position} rotation={part.rotation}>
     <mesh name={part.name} geometry={geometry} onClick={onClick}>
-      <meshLambertMaterial color={part.color} side={THREE.DoubleSide} />
+      {part.surface === "trail" ? <DirtMaterial part={part} /> : <meshLambertMaterial color={part.color} side={THREE.DoubleSide} />}
     </mesh>
     {ink && part.outline !== false && !part.name.startsWith("reed-") && !part.name.startsWith("thatch-grain-") && !part.name.startsWith("thatch-highlight-") && <lineSegments geometry={edges} raycast={() => {}}>
       <lineBasicMaterial color={BUILDING_STYLE.palette.ink} transparent opacity={0.65} />
     </lineSegments>}
-    {idColor && <mesh geometry={geometry} layers-mask={OUTLINE_ID_LAYER_MASK}>
+    {idColor && part.surface !== "trail" && <mesh geometry={geometry} layers-mask={OUTLINE_ID_LAYER_MASK}>
       <meshBasicMaterial color={idColor} toneMapped={false} side={THREE.DoubleSide} />
     </mesh>}
   </group>
@@ -44,7 +52,7 @@ function Part({ part, idColor, onClick, ghostColor, ink = true }: { part: Buildi
 export function batchDetails(parts: BuildingPart[]): BuildingPart[] {
   const visible: BuildingPart[] = [], groups = new Map<string, BuildingPart>()
   for (const part of parts) {
-    if (part.outline !== false) { visible.push(part); continue }
+    if (part.outline !== false || part.surface) { visible.push(part); continue }
     const side = part.layer === "wall" ? wallSide(part) : undefined
     const key = `${part.layer}:${part.color}:${side?.join(",") ?? ""}`
     let batch = groups.get(key)
@@ -59,16 +67,16 @@ export function batchDetails(parts: BuildingPart[]): BuildingPart[] {
 }
 
 /** Shared procedural building; cutting away the shell exposes the relic inside. */
-export function BuildingModel({ recipe, cutaway = false, idColor, onClick, ink = true }: {
-  recipe: BuildingRecipe; cutaway?: boolean; idColor?: THREE.Color; onClick?: (event: ThreeEvent<MouseEvent>) => void; ink?: boolean
+export function BuildingModel({ recipe, cutaway = false, idColor, onClick, ink = true, terrainFloors = false }: {
+  recipe: BuildingRecipe; terrainFloors?: boolean; cutaway?: boolean; idColor?: THREE.Color; onClick?: (event: ThreeEvent<MouseEvent>) => void; ink?: boolean
 }) {
   const parts = useMemo(() => buildingParts(recipe), [recipe])
-  return <StructureModel parts={parts} cutaway={cutaway} idColor={idColor} onClick={onClick} ink={ink} />
+  return <StructureModel terrainFloors={terrainFloors} parts={parts} cutaway={cutaway} idColor={idColor} onClick={onClick} ink={ink} />
 }
 
 /** Ghosts retain every surface, with frame lines only on structural parts. */
-export function StructureModel({ parts, idColor, ghostColor, ink = true, cutaway = false, onClick }: {
-  parts: BuildingPart[]; onClick?: (event: ThreeEvent<MouseEvent>) => void; idColor?: THREE.Color; ghostColor?: string; ink?: boolean; cutaway?: boolean
+export function StructureModel({ parts, idColor, ghostColor, ink = true, cutaway = false, onClick, terrainFloors = false }: {
+  parts: BuildingPart[]; onClick?: (event: ThreeEvent<MouseEvent>) => void; idColor?: THREE.Color; ghostColor?: string; ink?: boolean; cutaway?: boolean; terrainFloors?: boolean
 }) {
   const rendered = useMemo(() => batchDetails(parts), [parts])
   const root = useRef<THREE.Group>(null)
@@ -83,5 +91,5 @@ export function StructureModel({ parts, idColor, ghostColor, ink = true, cutaway
     const key=next.join(",")
     if(key !== last.current) { last.current=key;setDirection(next) }
   })
-  return <group ref={root}>{visibleStructureParts(rendered, cutaway, direction).map((part) => <Part key={part.name} part={part} idColor={idColor} ghostColor={ghostColor} onClick={onClick} ink={ink} />)}</group>
+  return <group ref={root}>{visibleStructureParts(rendered, cutaway, direction).map((part) => <Part key={part.name} part={part} terrainFloors={terrainFloors} idColor={idColor} ghostColor={ghostColor} onClick={onClick} ink={ink} />)}</group>
 }
