@@ -13,6 +13,16 @@
   repository's existing test setup and application workflows. Do not create
   new test environments, standalone demo apps, or parallel testing setups.
 
+- **Generated assets must fit the late Dark Ages to early Middle Ages.**
+  Apply this to characters, clothing, accessories, instruments, tools,
+  buildings, vehicles, and other authored or generated artwork. Check materials,
+  construction, and silhouettes against the intended period and region; broad
+  medieval or fantasy references do not establish era accuracy. If a requested
+  asset or feature is clearly far outside this timeframe, explain the mismatch
+  and ask the user whether they want an intentional exception before creating
+  or implementing it. An exception already explicitly approved by the user
+  remains authorized and does not need to be confirmed again.
+
 - **Pixels must be uniform throughout the app.** Use the character's apparent
   pixel size as the reference for trees, scenery, edges, selection outlines,
   shadows, and effects, regardless of whether artwork is procedural, generated,

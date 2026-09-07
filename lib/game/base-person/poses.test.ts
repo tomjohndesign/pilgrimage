@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
-import { ACTION_CLIPS, legPose, type Point3 } from "./pose"
+import { ACTION_CLIPS, legPose, pelvisHeight, type Point3 } from "./pose"
 import { createBasePersonRig } from "./rig"
 import { PERSON_PRESETS, personRecipe } from "./design"
 import { POPULATION_PROFILES, populationDesign } from "./population"
@@ -19,6 +19,31 @@ describe("activity rig", () => {
       }
     }
   })
+  it("sits with horizontal thighs, vertical shins and quiet prayer hands", () => {
+    for (let profile = 0; profile < POPULATION_PROFILES.length; profile++) {
+      const recipe = personRecipe(populationDesign(TRAVELER_TYPES.peasant, profile))
+      for (const side of ["left", "right"] as const) {
+        const leg = legPose(side, 0, "seatedPrayer", recipe.body)
+        expect(leg.hip[1]).toBe(pelvisHeight(0, "seatedPrayer", recipe.body))
+        expect(leg.knee[1]).toBe(leg.hip[1])
+        expect(leg.knee[2]).toBe(leg.ankle[2])
+        expect(leg.ankle[1]).toBe(recipe.body.ankleHeight)
+      }
+      const rig = createBasePersonRig(recipe)
+      try {
+        rig.pose(0, "seatedPrayer")
+        const head = rig.sockets.head.getWorldPosition(new THREE.Vector3())
+        const left = rig.sockets.leftHand.getWorldPosition(new THREE.Vector3())
+        const right = rig.sockets.rightHand.getWorldPosition(new THREE.Vector3())
+        expect(left.distanceTo(right)).toBeLessThan(.15)
+        for (let frame = 1; frame < 8; frame++) {
+          rig.pose(frame / 8, "seatedPrayer")
+          expect(rig.sockets.head.getWorldPosition(new THREE.Vector3()).distanceTo(head)).toBeLessThan(.005)
+        }
+      } finally { rig.dispose() }
+    }
+  })
+
   it("loops cyclic actions and restores the neutral body, clothing and attachments", () => {
     for (const profile of [0, 3]) {
       const rig = createBasePersonRig(personRecipe(populationDesign(TRAVELER_TYPES.peasant, profile)))

@@ -1,5 +1,6 @@
 import { chromium } from "playwright"
 import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import { freezeAssetUpdates } from "./asset-browser.mjs"
 
 const args = process.argv.slice(2), index = args.indexOf("--url")
 const origin = index < 0 ? "http://localhost:3000" : args[index + 1]
@@ -9,7 +10,9 @@ if (outputIndex >= 0 && !output) throw new Error("--out requires a new output di
 const browser = await chromium.launch({ headless: true, args: ["--use-angle=metal"] })
 try {
   const page = await browser.newPage()
-  await page.goto(new URL("/assets/characters?asset=cart&bake=transport", origin).href)
+  await freezeAssetUpdates(page)
+  // The export hook is shared by the editor. Avoid previewing not-yet-published carts.
+  await page.goto(new URL("/assets/characters", origin).href, { waitUntil: "domcontentloaded", timeout: 120_000 })
   await page.waitForFunction(() => window.__transportBake, undefined, { timeout: 120_000 })
   const bake = await page.evaluate(() => window.__transportBake())
   const directory = output ?? `public/textures/transport/${bake.metadata.version}`

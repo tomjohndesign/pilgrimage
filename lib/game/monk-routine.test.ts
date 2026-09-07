@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildingStepAllowed, containsTile, shrineGates } from "./building-navigation"
+import { shrineFurnitureClear, buildingStepAllowed, containsTile, shrineGates } from "./building-navigation"
 import { activityClip } from "./base-person/activity"
 import { monkWander } from "./monk-wander"
 import { createMonkRoutine, stepMonkRoutine } from "./monk-routine"
@@ -50,8 +50,9 @@ describe("grid routes through shrine doors", () => {
         stepMonkRoutine(monk, grounds, rng, 1, 0.1)
         const to = { x: worldToTileX(map, monk.x), z: worldToTileZ(map, monk.z) }
         const tx = monk.x + map.width / 2 - 0.5, tz = monk.z + map.depth / 2 - 0.5
-        expect(Math.min(Math.abs(tx - Math.round(tx)), Math.abs(tz - Math.round(tz)))).toBeLessThan(1e-8)
-        if (from.x !== to.x || from.z !== to.z) expect(buildingStepAllowed(map, map.buildings, from, to, true)).toBe(true)
+        expect(Math.min(Math.abs(tx * 2 - Math.round(tx * 2)), Math.abs(tz * 2 - Math.round(tz * 2)))).toBeLessThan(1e-8)
+        if (containsTile(map.buildings[0], from) !== containsTile(map.buildings[0], to)) expect(buildingStepAllowed(map, map.buildings, from, to, true)).toBe(true)
+        expect(shrineFurnitureClear(map.buildings[0], map.site!.door, { x: tx, z: tz }, { x: tx, z: tz })).toBe(true)
         if (containsTile(shrine, from) && !containsTile(shrine, to)) exits++
         if (monk.activity === "praying") {
           expect(containsTile(shrine, to)).toBe(true)
@@ -72,4 +73,25 @@ describe("grid routes through shrine doors", () => {
     stepMonkRoutine(monk, grounds, rng, 1, 0)
     expect(monk).toEqual(before)
   })
+})
+
+it.each([false, true])("routes a 3×5 shrine through its only entrance and around the rear altar (north=%s)", (north) => {
+  const map = shrineMap(), shrine = map.buildings[0]
+  shrine.d = 5
+  map.site!.door = { x: 5, z: north ? 3 : 9 }
+  const gates = shrineGates(shrine, map.site!.door)
+  expect(gates).toHaveLength(1)
+  const grounds = monkWander(map)
+  expect(grounds.prayerSpots).toHaveLength(4)
+  const door = grounds.spots.find(p => worldToTileX(map,p.x) === 5 && worldToTileZ(map,p.z) === map.site!.door.z)!
+  expect(worldToTileZ(map,grounds.centre!.z)).toBe(north ? 7 : 5)
+  for (const prayer of grounds.prayerSpots) {
+    const route = grounds.route(door,prayer)
+    expect(route.length).toBeGreaterThan(1)
+    for (let i=1;i<route.length;i++) {
+      const tile = (p: typeof prayer) => ({x:p.x+map.width/2-.5,z:p.z+map.depth/2-.5})
+      expect(buildingStepAllowed(map,map.buildings,tile(route[i-1]),tile(route[i]),true)).toBe(true)
+    }
+  }
+  expect(settlementRoute(map,map.buildings,map.site!.door,{x:5,z:north?7:5},false,true)).toBeNull()
 })

@@ -19,7 +19,7 @@ import type { Relic } from "@/lib/game/relic"
 import type { TreePlacement } from "@/lib/game/trees/placement"
 import { tileAt, worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
 import { createSim, roadCartPose, simRegistry, stepSim } from "@/lib/game/sim"
-import { relicHeading } from "@/lib/game/shrine-visit"
+import { shrineLayout } from "@/lib/game/shrine-layout"
 import type { Traveler } from "@/lib/game/travelers"
 import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
@@ -77,6 +77,8 @@ export function Travelers({
   walkTuning?: WalkTuning
   movement?: MovementTuning
 }) {
+  const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
+  const kneelingHeading = shrine ? shrineLayout(shrine,map.site?.door).rotation + Math.PI : Math.PI
   const appearances = useMemo(() => travelers.map(t => travelerAppearance(map.seed ?? 0, t.id)), [travelers, map.seed])
   const selection = useCameraStore((s) => s.selection)
   const resourceElapsed = useRef(0)
@@ -90,7 +92,10 @@ export function Travelers({
       if (!sim.travelers.has(id)) sim.travelers.set(id, traveler)
     }
     for (const id of sim.travelers.keys()) {
-      if (!fresh.travelers.has(id)) sim.travelers.delete(id)
+      if (!fresh.travelers.has(id)) {
+        sim.travelers.get(id)!.buildingTask = undefined
+        sim.travelers.delete(id)
+      }
     }
   }, [sim, travelers, map, relic])
 
@@ -100,6 +105,7 @@ export function Travelers({
   useEffect(() => {
     simRegistry.current = sim
     return () => {
+      for (const traveler of sim.travelers.values()) traveler.buildingTask = undefined
       if (simRegistry.current === sim) simRegistry.current = null
     }
   }, [sim])
@@ -154,9 +160,17 @@ export function Travelers({
         group.rotation.y += turn * blend
       }
       const workTree = s.tree === null ? undefined : trees[s.tree]
-      if (s.activity === "visiting" && !s.praying) {
-        group.rotation.y = relicHeading(map, s) ?? group.rotation.y
+      if (s.activity === "visiting" && !!s.shrineSeat) {
+        group.rotation.y = kneelingHeading
       }
+      if (s.activity === "performing" && s.walkFrom) {
+        group.rotation.y = Math.atan2(s.walkFrom.x - s.x, s.walkFrom.z - s.z)
+      }
+      if (s.activity === "listening" && s.musicVisit) {
+        const performer = sim.travelers.get(s.musicVisit.performerId)
+        if (performer) group.rotation.y = Math.atan2(performer.x - s.x, performer.z - s.z)
+      }
+      if (s.activity === "building") group.rotation.y = s.buildingTask?.heading ?? Math.PI
       group.userData.workTree = workTree
       if (!playback.paused && !moving && workTree && (s.activity === "working" || s.activity === "gathering")) {
         group.rotation.y = Math.atan2(workTree.x - s.x, workTree.z - s.z)
@@ -165,7 +179,7 @@ export function Travelers({
       group.userData.motionReset = group.userData.initialized !== true || distance >= 2
       group.userData.distance = playback.paused ? 0 : moved
       group.userData.moving = moving
-      if (!playback.paused && s.praying && sim.procession?.position) {
+      if (!playback.paused && s.praying && !s.shrineSeat && sim.procession?.position) {
         group.rotation.y = Math.atan2(sim.procession.position.x - s.x, sim.procession.position.z - s.z)
       }
       group.userData.activity = s.praying ? "praying" : s.activity

@@ -129,6 +129,16 @@ The development editor supplies the shared baker. This exports the project defau
 
 ## Future outfits
 
+Keep road accessories grounded in medieval materials and silhouettes: simple
+wool or cloth caps, linen coverings, leather pouches with thong fastenings,
+wooden staffs, and short-necked lutes. Avoid modern hatbands, feathered costume
+hats and guitar-shaped instruments. The lute uses a pear-shaped soundboard,
+rounded bowl and bent pegbox; see [the Met's instrument reference](https://www.metmuseum.org/essays/the-lute).
+Follow the late Dark Ages to early Middle Ages rule in [CLAUDE.md](../CLAUDE.md).
+Check new equipment against its intended date and region before adding it to
+the shared rig. If a request is clearly far outside that timeframe, explain
+the mismatch and ask the user whether it should be an intentional exception.
+
 Reuse the body and animation. Change colours/materials and attach equipment to
 the named nodes before baking, so the renderer handles front/back occlusion.
 For example, a left-hip bag attaches to `leftHip` and follows that side in every

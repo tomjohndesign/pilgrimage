@@ -12,7 +12,7 @@ export const BUILDING_STYLE = {
   principles: [
     "Slightly irregular ink contours; broad, quiet colour washes.",
     "Early medieval rural construction: earthfast roundwood posts, wattle, muted earthen daub and lapped thatch.",
-    "Small single-storey structures; no decorative half-timber grids, glazed windows, chimneys or dressed-stone trim.",
+    "Small single-storey structures; no decorative half-timber grids, glazed windows or dressed-stone trim; rough stone chimneys belong on domestic hearths.",
     "Plain wooden crosses mark religious buildings: gatepost crosses on the relic enclosure and gable crosses on the monks’ shelter. Keep utility huts unadorned.",
     "A clear entrance and a useful silhouette before surface detail.",
     "Sparse hatching follows the material: down the straw, along the grain.",
@@ -49,7 +49,7 @@ export const EARLY_BUILDINGS = [
   { id: "enclosure", name: "Relic enclosure", description: "Four open timber gates with plain crosses, low paling walls and a glowing relic on a rough stone table under the sky.", width: 3, depth: 3, wallHeight: 0.42, roofRise: 0 },
   { id: "monk-shelter", name: "Monks’ shelter", description: "An open-front thatched sleeping shelter with plain gable crosses, woven screens and straw bedrolls.", width: 3, depth: 2, wallHeight: 0.8, roofRise: 0.65 },
   { id: "shepherd-hut", name: "Shepherd’s hut", description: "A compact hut with a low thatched gable, wattle and earthen infill.", width: 2, depth: 2, wallHeight: 0.65, roofRise: 0.85 },
-  { id: "storehouse", name: "Raised store", description: "A tiny plank store lifted on timber legs, with sacks beneath a steep thatched roof.", width: 1, depth: 1, wallHeight: 0.55, roofRise: 0.45 },
+  { id: "storehouse", name: "Raised store", description: "An open-sided store on timber legs, with a plank entry ramp and sacks beneath a thatched roof.", width: 1, depth: 1, wallHeight: 0.55, roofRise: 0.45 },
   { id: "wood-shelter", name: "Wood shelter", description: "An open lean-to with a low thatched roof over split wood and spare poles.", width: 2, depth: 1, wallHeight: 0.65, roofRise: 0.3 },
 ] as const
 export type EarlyBuildingType = typeof EARLY_BUILDINGS[number]["id"]

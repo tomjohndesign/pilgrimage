@@ -81,13 +81,20 @@ Reset the contact at support changes, turns/view changes, stopping or teleports.
 Do not smooth away the correction or cap distance-driven poses at an unrelated
 animation FPS: either change reintroduces foot sliding.
 
+Every current rigged sprite also supplies a depth atlas for each color clip.
+Follow [DEPTH.md](DEPTH.md) for the bake format, runtime sampling, furniture
+contacts and checks. Color and depth must use the same frame, direction, body
+variant, anchor and pixel grid. Do not substitute the upright legacy depth model
+for a rigged character, action, animal or cart.
+
 ## Export all affected characters
 
 Walking and carrying each use 20 poses over one full stride. Walk metadata
 publishes `walkStrides` so runtime distance timing stays tied to the rig. The
 right-hand staff plants and lifts with the left foot: the arm extends forward
 at planting and bends as the body passes the grounded tip. Rig pose phases are
-measured in strides. Other activities have their own frame counts and playback
+measured in strides. Construction uses a standing, planted wooden-mallet action with 24 poses.
+Other activities have their own frame counts and playback
 rates; read metadata rather than assuming every clip has eight or twenty columns.
 Keep the editor, baker, renderer, texture gallery and asset checkers consistent.
 
@@ -109,8 +116,9 @@ release or package version. Tests require every active family to match it.
 Bake the base, every population profile/calling,
 and the Monk preset. Inspect the latest main branch before allocating versions.
 Published bakes are immutable; use new paths and update all active imports only
-after the exports exist. The current exports are base v26, population v18 and
-monks v20 (brown hair) / v21 (grey hair). For a subsequent change choose unused versions:
+after the exports exist. The current exports are base v31, population v23,
+monks v30 (brown hair) / v31 (grey hair), rockets v8, transport v16 and minstrel v2.
+For a subsequent change choose unused versions:
 
 ```sh
 npm run assets:base -- vNEXT --url http://localhost:3219
@@ -137,8 +145,8 @@ designs must be baked through the same current rig, not mapped onto stale sheets
   discrete poses. Verify no accumulated offset over repeated cycles, correct
   resets, and anchored height on slopes.
 - Run `npm test` and `npm run typecheck`, the base and population asset checkers,
-  and `node scripts/check-base-person.mjs v20 --monk` for the current monk bake.
-  Also check `node scripts/check-base-person.mjs v21 --monk` for grey-haired monks.
+  and `node scripts/check-base-person.mjs v30 --monk` for the current monk bake.
+  Also check `node scripts/check-base-person.mjs v31 --monk` for grey-haired monks.
   Check per-clip dimensions, matching shadows,
   palette, binary body alpha, safe margins and attachment registration.
 - Inspect side and diagonal views in the editor and on real road tiles. Check

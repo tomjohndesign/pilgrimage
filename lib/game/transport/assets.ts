@@ -15,7 +15,7 @@ export type Animal = "donkey" | "horse"
 export const HORSE_VARIANTS = ["common", "noble"] as const
 export type HorseVariant = typeof HORSE_VARIANTS[number]
 export const TRANSPORT = {
-  version: "v11", cellSize: 128, anchor: [64, 78] as const,
+  version: "v16", cellSize: 128, anchor: [64, 78] as const,
   viewSize: BASE_PERSON.camera.viewSize * 2,
   scale: 0.74 * 128 / 48,
   wheelRadius: 0.46, wheelFrames: 24, animalFrames: 20, grazeFrames: 12, lowerFrames: 6, shopFrames: 12,

@@ -15,6 +15,8 @@ export interface BuildDefinition {
   description: string
   cost: Resources
   renown: number
+  /** Second-chance probability for passersby; only the strongest completed source applies. */
+  evangelism?: number
   requiredRenown: number
   income: Resources
   w: number
@@ -74,9 +76,10 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     id: "cross",
     label: "Carved cross",
     category: "scenery",
-    description: "A landmark of the brotherhood’s devotion.",
-    cost: { gold: 15, wood: 20 },
+    description: "Evangelism: 5%. Once complete, gives travelers who would otherwise pass one extra chance to visit the relic. Additional crosses do not stack this chance.",
+    cost: { gold: 60, wood: 45 },
     renown: 2,
+    evangelism: 0.05,
     requiredRenown: 0,
     income: { gold: 0, wood: 0 },
     w: 1,

@@ -2,6 +2,7 @@ import { personFrameRenderer } from "../base-person/bake"
 import { BASE_PERSON, PERSON_CLIPS, type BaseClip } from "../base-person/pose"
 import { monkVisual } from "../base-person/monk-assets"
 import { createRocketRig, ROCKET_PALETTE } from "./rig"
+import { SPRITE_DEPTH_ENCODING } from "../render/bake-depth"
 
 /** New equipment uses the shipped monks' designs, poses, camera, ink and scale. */
 export async function bakeRocketMonks() {
@@ -16,6 +17,9 @@ export async function bakeRocketMonks() {
         const canvas = document.createElement("canvas")
         canvas.width = BASE_PERSON.cellSize * frames; canvas.height = BASE_PERSON.cellSize * 8
         const ctx = canvas.getContext("2d")!
+        const depth = document.createElement("canvas")
+        depth.width = canvas.width; depth.height = canvas.height
+        const depthContext = depth.getContext("2d")!
         for (let row = 0; row < 8; row++) for (let frame = 0; frame < frames; frame++) {
           const phase = frame / frames
           const result = session.render(name === "flying" ? "idle" : name as BaseClip, phase, row, false, rig => {
@@ -24,12 +28,14 @@ export async function bakeRocketMonks() {
           })
           safePadding = Math.min(safePadding, result.padding)
           ctx.drawImage(result.canvas, frame * BASE_PERSON.cellSize, row * BASE_PERSON.cellSize)
+          depthContext.drawImage(result.depth!, frame * BASE_PERSON.cellSize, row * BASE_PERSON.cellSize)
         }
         images[`${hair}-${name}`] = canvas.toDataURL()
+        images[`depth-${hair}-${name}`] = depth.toDataURL()
         await new Promise(resolve => setTimeout(resolve, 0))
       }
     } finally { gear?.dispose(); session.dispose() }
   }
-  return { images, metadata: { version: 3, templateVersion: BASE_PERSON.version, cellSize: BASE_PERSON.cellSize,
+  return { images, metadata: { version: 8, depthEncoding: SPRITE_DEPTH_ENCODING, templateVersion: BASE_PERSON.version, cellSize: BASE_PERSON.cellSize,
     anchor: BASE_PERSON.anchor, camera: BASE_PERSON.camera, directions: BASE_PERSON.directions, frameCounts, flightFps: 12, safePadding } }
 }

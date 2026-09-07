@@ -27,13 +27,13 @@ export const DESIGN_CONTROLS = {
 } as const
 export type DesignKey = keyof typeof DESIGN_CONTROLS
 export const HAIR_STYLES = ["Bald", "Cropped", "Bob", "Long", "Tonsure", "Wavy", "Ponytail", "Braids", "Bun"] as const
-export const HAT_STYLES = ["None", "Coif", "Travel hat", "Minstrel hat"] as const
+export const HAT_STYLES = ["None", "Coif", "Wool cap", "Cloth cap"] as const
 export const TUNIC_STYLES = ["Plain", "Particolour"] as const
 export type PersonDesign = Record<DesignKey, number> & {
   poseEdits?: PoseEdits
   hat: typeof HAT_STYLES[number]
   tunicStyle: typeof TUNIC_STYLES[number]
-  satchel: boolean; walkingStick: boolean; guitar: boolean
+  satchel: boolean; walkingStick: boolean; lute: boolean
   accentColor: string
   bodyType: "Male" | "Female"
   garment: "Everyday" | "Robe"
@@ -45,7 +45,7 @@ export type PersonDesign = Record<DesignKey, number> & {
   hairStyle: typeof HAIR_STYLES[number]; beard: boolean
 }
 export const DEFAULT_DESIGN: PersonDesign = {
-  hat: "None", tunicStyle: "Plain", satchel: false, walkingStick: false, guitar: false, accentColor: "#d6b57b",
+  hat: "None", tunicStyle: "Plain", satchel: false, walkingStick: false, lute: false, accentColor: "#d6b57b",
   bodyType: "Male", garment: "Everyday", footwear: "Boots", beltStyle: "Leather", walkStyle: "Natural", head: 1.2, build: 1, torsoHeight: 1, shoulderHeight: 1, neckHeight: 0.65, tunicLength: 1,
   legs: 0.9, feet: 1, footWidth: 0.95, footHeight: 0.7, hem: 1, sleeves: 1, stride: 0.8, ink: 0.6,
   armSpacing: 1, upperArm: 1, forearm: 1, armAngle: 3, elbowBend: 10, armSwing: 0.75, hands: 1,
@@ -58,14 +58,23 @@ export const PERSON_PRESETS: Record<string, PersonDesign> = {
   Monk: { ...DEFAULT_DESIGN, garment: "Robe", beltStyle: "Rope", tunicLength: 1.4, tunicColor: "#6b4932",
     trouserColor: "#6b4932", hairStyle: "Tonsure", sleeves: 1.15, hem: 1.1,
     feet: 0.75, footWidth: 0.7, stride: 0.75, armSwing: 0, walkStyle: "Devotional" },
-  Minstrel: { ...DEFAULT_DESIGN, tunicColor: "#7b4969", accentColor: "#d6b57b", tunicStyle: "Particolour", hat: "Minstrel hat", guitar: true, hairStyle: "Wavy", hem: 1.15, tunicLength: 1.15 },
-  Traveler: { ...DEFAULT_DESIGN, hat: "Travel hat", satchel: true, walkingStick: true, hairStyle: "Ponytail" },
+  Minstrel: { ...DEFAULT_DESIGN, tunicColor: "#7b4969", accentColor: "#d6b57b", tunicStyle: "Plain", hat: "Cloth cap", lute: true, hairStyle: "Wavy", hem: 1.15, tunicLength: 1.15 },
+  Traveler: { ...DEFAULT_DESIGN, hat: "Wool cap", satchel: true, walkingStick: true, hairStyle: "Ponytail" },
   Stout: { ...DEFAULT_DESIGN, build: 1.2, tunicColor: "#866044", hairStyle: "Cropped", beard: true },
   Lanky: { ...DEFAULT_DESIGN, build: 0.85, legs: 1.15, head: 1, feet: 1.1, tunicColor: "#657b50", hairStyle: "Bob" },
 }
 const legacyDefaults: Partial<Record<DesignKey, number>> = { armSpacing: 1, upperArm: 1, forearm: 1, armAngle: 3, elbowBend: 10, armSwing: 0.75, hands: 1, sleeves: 1, torsoHeight: 1, footWidth: 1, footHeight: 1, tunicLength: 1, shoulderHeight: 1, neckHeight: 1, shadow: 0.16 }
 export function validatePersonDesign(input: unknown): PersonDesign {
   if (!input || typeof input !== "object") throw new Error("Expected person parameters.")
+  // Old editor downloads and saved road designs keep their equipment selections.
+  const saved = input as Record<string, unknown>
+  const normalized = { ...saved,
+    ...(saved.hat === "Travel hat" ? { hat: "Wool cap" } : saved.hat === "Minstrel hat" ? { hat: "Cloth cap" } : {}),
+    ...(!("lute" in saved) && "guitar" in saved ? { lute: saved.guitar } : {}),
+  }
+  return validateCurrentPersonDesign(normalized)
+}
+function validateCurrentPersonDesign(input: Record<string, unknown>): PersonDesign {
   const result = { ...DEFAULT_DESIGN }
   if ("bodyType" in input) {
     if (input.bodyType !== "Male" && input.bodyType !== "Female") throw new Error("Invalid body type.")
@@ -93,7 +102,7 @@ export function validatePersonDesign(input: unknown): PersonDesign {
     if (!HAIR_STYLES.includes((input as PersonDesign).hairStyle)) throw new Error("Invalid hair style.")
     result.hairStyle = (input as PersonDesign).hairStyle
   }
-  for (const key of ["satchel", "walkingStick", "guitar"] as const) {
+  for (const key of ["satchel", "walkingStick", "lute"] as const) {
     if (key in input) {
       if (typeof (input as PersonDesign)[key] !== "boolean") throw new Error(`Invalid ${key} option.`)
       result[key] = (input as PersonDesign)[key]

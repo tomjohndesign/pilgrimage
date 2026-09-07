@@ -43,10 +43,24 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
       /** Live traveler sim state (stats, activities), for e2e assertions. */
       sim: () => (simRegistry.current ? [...simRegistry.current.travelers.values()] : []),
       time: () => simRegistry.current?.time ?? null,
+      constructionBars: () => {
+        const bars: Array<{ visible: boolean }> = []
+        scene.traverse(object => { if (object.name === "construction-progress") bars.push({ visible: object.visible }) })
+        return bars
+      },
+      constructionCosts: () => scene.getObjectByName("construction-cost-effects")?.children.flatMap(object =>
+        object instanceof THREE.Sprite && object.visible ? [{ resource: object.userData.resource, amount: object.userData.amount,
+          position: object.position.toArray(), opacity: object.material.opacity }] : []) ?? [],
       /** Admission receipts and their live floating amounts for payment smoke tests. */
       payments: () => ({
         receipts: simRegistry.current?.admissionPayments ?? [],
         effects: scene.getObjectByName("admission-effects")?.children.flatMap(object =>
+          object instanceof THREE.Sprite && object.visible
+            ? [{ amount: object.userData.amount, position: object.position.toArray(), opacity: object.material.opacity }] : []) ?? [],
+      }),
+      piety: () => ({
+        blessings: processionRegistry.current?.blessings ?? [],
+        effects: scene.getObjectByName("piety-effects")?.children.flatMap(object =>
           object instanceof THREE.Sprite && object.visible
             ? [{ amount: object.userData.amount, position: object.position.toArray(), opacity: object.material.opacity }] : []) ?? [],
       }),

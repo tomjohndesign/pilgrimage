@@ -32,9 +32,15 @@ const PIETY = { min: 75, max: 100 }
 const SKILL_COUNT = { min: 1, max: 3 }
 
 /** What a brother is up to, for the HUD; set by the scene's ambient loop. */
-export type MonkActivity = "vigil" | "walking" | "resting" | "flying" | "collecting" | "procession" | "returningRelic" | "praying" | "hoisting"
+export type MonkActivity = "toEvangelize" | "preaching" | "toBuild" | "building" | "toShelter" | "sleeping" | "vigil" | "walking" | "resting" | "flying" | "collecting" | "procession" | "returningRelic" | "praying" | "hoisting"
 
 export const MONK_ACTIVITY_LABELS: Record<MonkActivity, string> = {
+  toEvangelize: "Going to preach beside the main road",
+  preaching: "Preaching to passing travelers",
+  toBuild: "Going to a construction site",
+  building: "Building a structure",
+  toShelter: "Tired — going to the monk shelter",
+  sleeping: "Sleeping at the shelter",
   collecting: "Going to collect the relic",
   procession: "Carrying the relic in procession",
   returningRelic: "Returning the relic to its table",
@@ -51,6 +57,8 @@ export const MONK_ACTIVITY_LABELS: Record<MonkActivity, string> = {
  * current activity here at frame rate and the monk panel polls it.
  */
 export const monkRegistry: { current: Map<number, MonkActivity> | null } = { current: null }
+
+export const monkStaminaRegistry: { current: Map<number, number> | null } = { current: null }
 
 const NAMES = [
   "Anselm", "Bede", "Cuthbert", "Dunstan", "Eadmer", "Felix", "Gildas", "Hugh",
@@ -89,3 +97,6 @@ export function generateMonks(seed: number, count = MONK_COUNT): Monk[] {
     },
   }))
 }
+
+/** Live ground/flight coordinates for following the selected monk into interiors. */
+export const monkPositionRegistry: { current: Map<number, { x: number; y: number; z: number; piety?: number }> | null } = { current: null }

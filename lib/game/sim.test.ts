@@ -358,6 +358,12 @@ describe("stepSim", () => {
     expect(s.x).toBe(parkedX)
     expect(s.z).toBe(parkedZ)
 
+    expect(s.timer).toBeGreaterThanOrEqual(GAME_DAY_SECONDS - 0.5)
+    for (let elapsed = 0; elapsed < GAME_DAY_SECONDS - 1; elapsed += 0.25) {
+      stepSim(sim, travelers, map, 1, 0.25)
+      expect(s.activity).toBe("vending")
+      expect([s.x, s.z]).toEqual([parkedX, parkedZ])
+    }
     expect(runUntil(sim, travelers, map, () => s.activity === "walking", GAME_DAY_SECONDS / 3)).toBe(true)
     expect(s.spot).toBeNull()
     expect(
@@ -790,5 +796,88 @@ describe("off-road grid walking", () => {
     stepSim(sim, [traveler], map, 1, 0.1)
     expect(s.spot).not.toBeNull()
     expect(worldToTileZ(map, s.spot!.z)).toBeGreaterThan(4)
+  })
+})
+
+describe("roadside music", () => {
+  function performance() {
+    const map = makeMap(), travelers = [makeTraveler(0, "minstrel", { hunger: 100, thirst: 100, stamina: 100 })]
+    const sim = createSim(travelers, map), minstrel = sim.travelers.get(0)!
+    minstrel.timer = 0
+    expect(runUntil(sim, travelers, map, () => minstrel.activity === "performing", 20)).toBe(true)
+    return { map, travelers, sim, minstrel }
+  }
+
+  it("periodically leaves the road to play, then rejoins at its original lane", () => {
+    const { map, travelers, sim, minstrel } = performance()
+    expect(tileAt(map, worldToTileX(map, minstrel.x), worldToTileZ(map, minstrel.z))).toBe("grass")
+    const position = [minstrel.x, minstrel.z], progress = minstrel.progress
+    for (let i = 0; i < 100; i++) stepSim(sim, travelers, map, 1, 0.1)
+    expect(minstrel.activity).toBe("performing")
+    expect([minstrel.x, minstrel.z]).toEqual(position)
+    expect(runUntil(sim, travelers, map, () => minstrel.activity === "walking", 110)).toBe(true)
+    expect(minstrel.progress).toBe(progress)
+    expect(minstrel.spot).toBeNull()
+    expect(minstrel.timer).toBeGreaterThan(GAME_DAY_SECONDS / 12)
+    expect(minstrel.cycle).toBe(1)
+  })
+
+  it("gathers a spaced audience that stands, listens, and leaves when the music ends", () => {
+    const { map, travelers, sim, minstrel } = performance()
+    const audience = Array.from({ length: 16 }, (_, i) => makeTraveler(i + 1, "peasant", { hunger: 100, thirst: 100, stamina: 100 }))
+    const people = createSim(audience, map)
+    for (const [id, person] of people.travelers) sim.travelers.set(id, person)
+    travelers.push(...audience)
+    expect(runUntil(sim, travelers, map, () => [...sim.travelers.values()].filter(s => s.activity === "listening").length >= 3, 15)).toBe(true)
+    const listeners = [...sim.travelers.values()].filter(s => s.activity === "listening")
+    expect(new Set(listeners.map(s => `${s.x},${s.z}`)).size).toBe(listeners.length)
+    const positions = listeners.map(s => [s.x, s.z])
+    stepSim(sim, travelers, map, 1, 0.1)
+    expect(listeners.map(s => [s.x, s.z])).toEqual(positions)
+    for (const s of listeners) expect(tileAt(map, worldToTileX(map, s.x), worldToTileZ(map, s.z))).toBe("grass")
+    minstrel.timer = 0
+    expect(runUntil(sim, travelers, map, () => listeners.every(s => s.activity === "walking"), 20)).toBe(true)
+    for (const s of listeners) {
+      expect(s.musicVisit).toBeUndefined()
+      expect(s.musicCooldown).toBeGreaterThan(0)
+    }
+  })
+
+  it("abandons an approach if the performer leaves", () => {
+    const { map, travelers, sim, minstrel } = performance()
+    const audience = Array.from({ length: 8 }, (_, i) => makeTraveler(i + 1, "pilgrim"))
+    for (const [id, s] of createSim(audience, map).travelers) sim.travelers.set(id, s)
+    travelers.push(...audience)
+    stepSim(sim, travelers, map, 1, 0.1)
+    const approaching = [...sim.travelers.values()].find(s => s.activity === "toListen")!
+    expect(approaching).toBeDefined()
+    minstrel.timer = 0
+    stepSim(sim, travelers, map, 1, 0.1)
+    expect(approaching.activity).toBe("fromListening")
+    expect(runUntil(sim, travelers, map, () => approaching.activity === "walking", 20)).toBe(true)
+  })
+
+  it("lets hungry listeners leave before a performance finishes", () => {
+    const { map, travelers, sim, minstrel } = performance()
+    const audience = Array.from({ length: 8 }, (_, i) => makeTraveler(i + 1, "peasant"))
+    for (const [id, s] of createSim(audience, map).travelers) sim.travelers.set(id, s)
+    travelers.push(...audience)
+    expect(runUntil(sim, travelers, map, () => [...sim.travelers.values()].some(s => s.activity === "listening"), 15)).toBe(true)
+    const listener = [...sim.travelers.values()].find(s => s.activity === "listening")!
+    listener.thirst = 5
+    stepSim(sim, travelers, map, 1, 0.1)
+    expect(listener.activity).toBe("fromListening")
+    expect(minstrel.activity).toBe("performing")
+  })
+
+  it("keeps minstrels moving when no safe roadside pitch exists", () => {
+    const map = makeDarkMap(), travelers = [makeTraveler(0, "minstrel")]
+    const sim = createSim(travelers, map), s = sim.travelers.get(0)!
+    sim.danger.fill(0); s.timer = 0
+    const before = s.progress
+    stepSim(sim, travelers, map, 1, 0.1)
+    expect(s.activity).toBe("walking")
+    expect(s.progress).toBeGreaterThan(before)
+    expect(s.spot).toBeNull()
   })
 })

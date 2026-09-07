@@ -4,12 +4,14 @@ import { actionPlaybackRate } from "./base-person/activity"
 import { ACTION_CLIPS, type ActionClip } from "./base-person/pose"
 import type { BasePersonBake } from "./base-person/bake"
 import type { TravelerTypeId } from "./travelers"
-import baseMetadata from "../../public/textures/characters/base/base-person-v26.json"
+import baseMetadata from "../../public/textures/characters/base/base-person-v31.json"
 
 export type CharacterModel = "base" | "callings"
 
 export interface SpriteClip {
   url: string
+  /** Camera-relative RG16 geometry depth in the same frame/pixel grid. */
+  depth?: string
   columns: number
   rows: number
   stillFrame: number
@@ -22,11 +24,11 @@ export interface SpriteClip {
 export function characterVisual(asset: CharacterAsset, model: CharacterModel, custom?: BasePersonBake | null) {
   const metadata = custom?.metadata ?? baseMetadata
   if (model === "base") return {
-    walk: { strides: "walkStrides" in metadata ? Number(metadata.walkStrides) : 1, url: custom?.walk ?? baseMetadata.images.walk, columns: metadata.frameCount, rows: metadata.directions.length, stillFrame: 0 } satisfies SpriteClip,
-    idle: { url: custom?.idle ?? baseMetadata.images.idle, columns: 1, rows: metadata.directions.length, stillFrame: 0 } satisfies SpriteClip,
+    walk: { strides: "walkStrides" in metadata ? Number(metadata.walkStrides) : 1, url: custom?.walk ?? baseMetadata.images.walk, depth: custom?.depthWalk ?? baseMetadata.images.depthWalk, columns: metadata.frameCount, rows: metadata.directions.length, stillFrame: 0 } satisfies SpriteClip,
+    idle: { url: custom?.idle ?? baseMetadata.images.idle, depth: custom?.depthIdle ?? baseMetadata.images.depthIdle, columns: 1, rows: metadata.directions.length, stillFrame: 0 } satisfies SpriteClip,
     actions: Object.fromEntries(ACTION_CLIPS.flatMap(clip => {
       const action = custom?.actions?.[clip] ?? baseMetadata.images.actions[clip]
-      return action ? [[clip, { url: action.url, shadow: action.shadow, playbackRate: actionPlaybackRate(clip, validatePersonDesign(metadata.design)), columns: metadata.clips[clip].length / metadata.directions.length, rows: metadata.directions.length, stillFrame: 0 }]] : []
+      return action ? [[clip, { url: action.url, depth: action.depth, shadow: action.shadow, playbackRate: actionPlaybackRate(clip, validatePersonDesign(metadata.design)), columns: metadata.clips[clip].length / metadata.directions.length, rows: metadata.directions.length, stillFrame: 0 }]] : []
     })) as Partial<Record<ActionClip, SpriteClip & { shadow: string }>>,
     shadow: { walk: custom?.shadowWalk ?? baseMetadata.images.shadowWalk, idle: custom?.shadowIdle ?? baseMetadata.images.shadowIdle },
     center: [metadata.anchor[0] / metadata.cellSize, 1 - metadata.anchor[1] / metadata.cellSize] as [number, number],

@@ -1,5 +1,6 @@
 "use client"
 
+import { isComplete, isMonkShelter } from "@/lib/game/construction"
 import { FOOD_TYPES, FOOD_LABELS, STOREHOUSE_FOOD_CAPACITY, emptyFoodStock, storedFood } from "@/lib/game/storage"
 
 import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/elevation"
@@ -20,14 +21,16 @@ import {
 import { clampRoadTier, ROAD_TIERS } from "@/lib/game/map/road"
 import { MIN_MAP_SIZE } from "@/lib/game/map/generate-map"
 import { TERRAIN } from "@/lib/game/map/terrain"
-import { tileAt, type GameMap } from "@/lib/game/map/types"
+import { tileAt, type BuildingDef, type GameMap } from "@/lib/game/map/types"
 import { nerve } from "@/lib/game/route-choice"
 import { parseSeed } from "@/lib/game/rng"
 import { CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
-import { MONK_ACTIVITY_LABELS, monkRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
+import { MONK_TIRED_AT } from "@/lib/game/monk-work"
+import { useMonkEvangelismStore } from "@/lib/game/monk-evangelism-store"
+import { MONK_ACTIVITY_LABELS, monkStaminaRegistry, monkRegistry, monkPositionRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { relicTitle, type Relic } from "@/lib/game/relic"
 import { DEFAULT_TRAFFIC, type Traveler } from "@/lib/game/travelers"
 import type { PixelationProps } from "@/components/pixel-canvas"
@@ -487,25 +490,49 @@ function RelicPanel({ relic }: { relic: Relic }) {
   )
 }
 
-/** The scene writes monk activities at frame rate; sample on the HUD's own schedule. */
-function useMonkActivity(monkId: number): MonkActivity | null {
-  const [activity, setActivity] = useState<MonkActivity | null>(null)
+function ConstructionStatus({ building }: { building: BuildingDef }) {
+  const read = () => building.construction ? Math.round(100 * building.construction.work / building.construction.required) : 100
+  const [progress, setProgress] = useState(read)
   useEffect(() => {
-    const read = () => setActivity(monkRegistry.current?.get(monkId) ?? null)
+    setProgress(read())
+    const timer = setInterval(() => setProgress(read()), 250)
+    return () => clearInterval(timer)
+  }, [building])
+  if (progress >= 100) return null
+  return <div className="mt-2">
+    <StatBar label="Construction" value={progress} />
+    <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">Idle residents build this site. Benefits begin when construction finishes.</p>
+  </div>
+}
+
+/** Sample the brothers' live activity and piety on the HUD's own schedule. */
+function useMonkLiveState(monkId: number) {
+  const [live, setLive] = useState<{ activity: MonkActivity | null; piety?: number }>({ activity: null })
+  useEffect(() => {
+    const read = () => setLive({ activity: monkRegistry.current?.get(monkId) ?? null, piety: monkPositionRegistry.current?.get(monkId)?.piety })
     read()
     const timer = setInterval(read, 250)
     return () => clearInterval(timer)
   }, [monkId])
-  return activity
+  return live
 }
 
 /** One of the brothers: name, office, and what he brought with him. */
 function MonkPanel({ monk }: { monk: Monk }) {
   const balance = useBalanceStore((s) => s.balance)
   const a = monk.attributes
-  const activity = useMonkActivity(monk.id)
+  const { activity, piety } = useMonkLiveState(monk.id)
+  const [stamina, setStamina] = useState(100)
+  useEffect(() => {
+    const read = () => setStamina(monkStaminaRegistry.current?.get(monk.id) ?? 100)
+    read()
+    const timer = setInterval(read, 250)
+    return () => clearInterval(timer)
+  }, [monk.id])
   const procession = useRelicProcessionStore()
   const carryingRelic = procession.monkId === monk.id
+  const evangelism = useMonkEvangelismStore()
+  const evangelizing = evangelism.assigned.has(monk.id)
   return (
     <Panel>
       <div className="flex items-baseline justify-between gap-4">
@@ -530,17 +557,27 @@ function MonkPanel({ monk }: { monk: Monk }) {
       </div>
 
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
-        <StatBar label="Piety" value={a.piety} />
+        <StatBar label="Piety" value={piety ?? a.piety} />
+        <StatBar label="Stamina" value={Math.round(stamina)} />
         <div className="mt-1 text-[11px] text-ink-light">Contributes +{individualRenown(monk, balance)} shrine renown</div>
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
-        <button type="button" className="hud-action" disabled={!procession.available || activity === "flying" ||
+        <button type="button" className="hud-action"
+          disabled={!evangelizing && (!evangelism.available || carryingRelic || activity === "flying" || stamina <= MONK_TIRED_AT)}
+          onClick={() => evangelizing ? evangelism.recall(monk.id) : evangelism.request(monk.id)}>
+          {evangelizing ? "Recall from preaching" : "Evangelize on the main road"}
+        </button>
+        <p className="mt-1 text-[11px] italic text-ink-light">Preach beside the junction until recalled or tired. Gives passing travelers a 5% extra chance to visit the relic, independent of a cross. Extra preachers do not stack.</p>
+      </div>
+
+      <div className="mt-2 border-t border-rule pt-2">
+        <button type="button" className="hud-action" disabled={!procession.available || evangelizing || activity === "toEvangelize" || activity === "preaching" || activity === "flying" ||
           (procession.monkId !== null && !carryingRelic) || (carryingRelic && (procession.returnRequested || procession.stage === "lowering" || procession.stage === "returning"))}
           onClick={() => carryingRelic ? procession.returnRelic() : procession.request(monk.id)}>
           {carryingRelic ? "Return relic" : "Carry relic in procession"}
         </button>
-        <p className="mt-1 text-[11px] italic text-ink-light">Nearby folk kneel and pray. The relic returns to its table after the procession.</p>
+        <p className="mt-1 text-[11px] italic text-ink-light">The procession follows the path to the main road. Nearby folk gain up to 5 piety once per procession, marked by a cross.</p>
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
@@ -995,6 +1032,8 @@ export function GameHud({
             <Panel>
             <div className="flex items-center justify-between gap-4"><Label>{selectedDefinition?.category === "scenery" ? "Scenery" : "Building"}</Label><button type="button" aria-label="Dismiss building" onClick={() => useCameraStore.getState().select(null)} className="pointer-events-auto text-xs text-ink-light">✕</button></div>
             <p className="mt-1 font-display text-xs text-ink">{selectedBuilding.label}</p>
+            <ConstructionStatus building={selectedBuilding} />
+            {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">Tired monks sleep here until their stamina recovers.</p>}
             {selectedBuilding.id === map?.site?.hovelId && (
               <div className="mt-3 flex flex-col gap-1.5">
                 <label htmlFor="shrine-admission" className="text-[11px] text-ink-light">Admission · gold per visitor</label>
@@ -1014,7 +1053,7 @@ export function GameHud({
               {FOOD_TYPES.map(type => <p key={type}>{FOOD_LABELS[type]} · {foodStock[type]}</p>)}
               <p className="mt-1 italic">Food supplies start empty; food gathering is still to come.</p>
             </div>}
-            {selectedDefinition && <>
+            {selectedDefinition && isComplete(selectedBuilding) && <>
               <p className="mt-2 text-[11px] text-ink-light">Contributes +{selectedDefinition.renown} shrine renown</p>
               <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">{selectedDefinition.description}</p>
               <p className="mt-1 text-[11px] text-ink-light">{buildingIncomeLabel(selectedDefinition, economy.balance)}</p>

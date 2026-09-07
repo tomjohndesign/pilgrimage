@@ -200,7 +200,10 @@ export default function GameSpecsPage() {
           of {r.hospitalityBaseChance} + {r.hospitalityRenownBonus} × q at an empty meter, capped at 100%.
           Tiredness and job vacancies alone do not attract visitors. Travelers roll the higher of faith
           and hospitality chances when crossing the junction; they do not turn back to seek the shrine.
-          The HUD forecasts that same chance, while actual visits require affordable admission and a clear route.
+          If that roll fails, a completed carved cross grants one independent 5% Evangelism roll.
+          Additional crosses do not stack this chance. For an ordinary visit chance p, the combined
+          chance is p + (1 − p) × 0.05. The HUD forecasts the combined chance, while actual visits
+          require affordable admission and a clear route.
           Higher renown does not increase the road’s traveler count or spawn new archetypes.
         </p>
         <p className="mt-3">

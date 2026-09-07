@@ -9,15 +9,28 @@ import { TRAVELER_TYPES } from "../travelers"
 describe("road outfits", () => {
   it("migrates saved designs and rejects malformed accessory options", () => {
     const { hat: _hat, tunicStyle: _style, satchel: _satchel, walkingStick: _stick,
-      guitar: _guitar, accentColor: _accent, ...legacy } = DEFAULT_DESIGN
+      lute: _lute, accentColor: _accent, ...legacy } = DEFAULT_DESIGN
     expect(validatePersonDesign(legacy)).toEqual(DEFAULT_DESIGN)
     expect(validatePersonDesign({ ...legacy, bodyType: "Female" }).hat).toBe("Coif")
-    expect(withBodyType(PERSON_PRESETS.Minstrel, "Female").hat).toBe("Minstrel hat")
-    for (const change of [{ hat: "Unknown" }, { tunicStyle: "Unknown" }, { guitar: 1 },
+    expect(withBodyType(PERSON_PRESETS.Minstrel, "Female").hat).toBe("Cloth cap")
+    for (const change of [{ hat: "Unknown" }, { tunicStyle: "Unknown" }, { lute: 1 },
       { walkingStick: "yes" }, { satchel: null }, { accentColor: "gold" }]) {
       expect(() => validatePersonDesign({ ...DEFAULT_DESIGN, ...change })).toThrow()
     }
     for (const hairStyle of HAIR_STYLES) expect(validatePersonDesign({ ...legacy, hairStyle }).hairStyle).toBe(hairStyle)
+  })
+
+  it("migrates the old hats and guitar in saved designs to caps and a lute", () => {
+    const { lute: _lute, ...legacy } = PERSON_PRESETS.Minstrel
+    for (const [oldHat, hat] of [["Travel hat", "Wool cap"], ["Minstrel hat", "Cloth cap"]]) {
+      const migrated = validatePersonDesign({ ...legacy, hat: oldHat, guitar: true })
+      expect(migrated.hat).toBe(hat)
+      expect(migrated.lute).toBe(true)
+      expect(migrated).not.toHaveProperty("guitar")
+    }
+    expect(validatePersonDesign({ ...legacy, guitar: false }).lute).toBe(false)
+    expect(validatePersonDesign({ ...legacy, guitar: true, lute: false }).lute).toBe(false)
+    expect(() => validatePersonDesign({ ...legacy, guitar: "yes" })).toThrow()
   })
 
   it("gives male peasants staffs and all minstrels their outfit across both bodies", () => {
@@ -25,9 +38,9 @@ describe("road outfits", () => {
       const peasant = populationDesign(TRAVELER_TYPES.peasant, variant)
       expect(peasant.walkingStick).toBe(variant < 3)
       const minstrel = populationDesign(TRAVELER_TYPES.minstrel, variant)
-      expect(minstrel.guitar).toBe(true)
-      expect(minstrel.hat).toBe("Minstrel hat")
-      expect(minstrel.tunicStyle).toBe("Particolour")
+      expect(minstrel.lute).toBe(true)
+      expect(minstrel.hat).toBe("Cloth cap")
+      expect(minstrel.tunicStyle).toBe("Plain")
     }
     const crowd = Array.from({ length: 6 }, (_, i) => populationDesign(TRAVELER_TYPES.peasant, i))
     expect(new Set(crowd.map(p => p.hairStyle)).size).toBeGreaterThan(4)
@@ -38,10 +51,10 @@ describe("road outfits", () => {
   it("keeps equipment attached through every facing without changing the walking legs", () => {
     const design = { ...PERSON_PRESETS.Minstrel, walkingStick: true, satchel: true }
     const rig = createBasePersonRig(personRecipe(design))
-    const plain = createBasePersonRig(personRecipe({ ...design, walkingStick: false, satchel: false, guitar: false }))
+    const plain = createBasePersonRig(personRecipe({ ...design, walkingStick: false, satchel: false, lute: false }))
     const staff = rig.root.getObjectByName("walking-staff")!
     expect(staff.parent).toBe(rig.sockets.rightHand)
-    expect(rig.root.getObjectByName("road-guitar")!.parent).toBe(rig.sockets.back)
+    expect(rig.root.getObjectByName("road-lute")!.parent).toBe(rig.sockets.back)
     expect(rig.root.getObjectByName("road-satchel")!.parent).toBe(rig.sockets.leftHip)
     expect(rig.root.getObjectByName("road-hat")!.parent).toBe(rig.sockets.head)
     for (let row = 0; row < 8; row++) for (let frame = 0; frame < 20; frame++) {
@@ -58,9 +71,9 @@ describe("road outfits", () => {
       expect(hand.y - rig.sockets.rightHand.getWorldPosition(new THREE.Vector3()).y).toBeCloseTo(0.026)
       expect(staff.visible).toBe(true)
     }
-    for (const clip of ["sleeping", "sitting", "carrying", "praying", "woodcutting", "gathering"] as const) {
+    for (const clip of ["sleeping", "sitting", "seatedPrayer", "building", "carrying", "praying", "woodcutting", "gathering"] as const) {
       rig.pose(0.3, clip)
-      for (const name of ["walking-staff", "road-guitar", "road-satchel"]) expect(rig.root.getObjectByName(name)!.visible).toBe(false)
+      for (const name of ["walking-staff", "road-lute", "road-satchel"]) expect(rig.root.getObjectByName(name)!.visible).toBe(false)
     }
     rig.pose(0, "idle"); expect(staff.visible).toBe(true)
     expect(rig.root.getObjectByName("road-hat")!.visible).toBe(true)

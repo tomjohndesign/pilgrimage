@@ -1,3 +1,4 @@
+import { buildingEntrance, constructionWork, isComplete } from "./construction"
 import { rotatedFootprint, buildingEntry, type BuildingRotation } from "./building-rotation"
 import { groundHeight, levelBuildingGround } from "./map/elevation"
 import { placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
@@ -10,7 +11,7 @@ import { tileAt, type BuildingDef, type GameMap, type TilePos } from "./map/type
 import type { Monk } from "./monks"
 import type { Relic } from "./relic"
 
-import { DEFAULT_BALANCE, buildCatalog, type GameBalance } from "./balance"
+import { BUILD_CATALOG, DEFAULT_BALANCE, buildCatalog, type GameBalance } from "./balance"
 import type { BuildDefinition, Resources } from "./balance"
 export { BUILD_CATALOG, type BuildDefinition, type Resources } from "./balance"
 
@@ -77,6 +78,17 @@ export function individualRenown(monk: Monk, balance: GameBalance = DEFAULT_BALA
   )
 }
 
+/** One second chance per junction encounter, regardless of how many crosses are built. */
+export function settlementEvangelism(map: GameMap): number {
+  let chance = 0
+  for (const building of map.buildings) {
+    if (!isComplete(building)) continue
+    const def = BUILD_CATALOG.find(item => item.id === building.buildType)
+    chance = Math.max(chance, def?.evangelism ?? 0)
+  }
+  return chance
+}
+
 /** Renown belongs to the whole establishment; contributions remain inspectable. */
 export function settlementRenown(
   map: GameMap,
@@ -88,6 +100,7 @@ export function settlementRenown(
   let buildings = 0
   let scenery = 0
   for (const building of map.buildings) {
+    if (!isComplete(building)) continue
     if (building.id === map.site?.hovelId) buildings += balance.rules.hovelRenown
     const def = buildCatalog(balance).find((item) => item.id === building.buildType)
     if (def?.category === "buildings") buildings += def.renown
@@ -127,6 +140,7 @@ export function settlementIncome(
     wood: residentCount * balance.rules.residentWood,
   }
   for (const building of settlement.structures) {
+    if (!isComplete(building)) continue
     const def = buildCatalog(balance).find((item) => item.id === building.buildType)
     if (def) {
       income.gold += def.income.gold
@@ -199,20 +213,22 @@ export function placementError(
     const problem = placementProblem(map, map.buildings, "workshop", at.x, at.z, rotation)
     if (problem) return PLACEMENT_PROBLEM_LABELS[problem]
   }
-  // Every addition must preserve access to jobs and storage.
+  // Reserve construction frontage and preserve access to every existing building.
   if (map.site) {
-    const candidate = { ...def, ...footprint, rotation, ...at, id: def.id === "workshop" ? "workshop-preview" : "preview" }
+    const candidate = { ...def, ...footprint, rotation, ...at, id: "construction-preview", construction: { work: 0, required: 1 } }
     const occupied = [...map.buildings, candidate]
-    for (const camp of [...woodcutterHuts(map), ...map.buildings.filter(b => b.buildType === "storehouse"), ...(def.id === "storehouse" ? [candidate] : [])]) {
+    if (!settlementRoute(map, occupied, map.site.door, buildingEntrance(candidate)))
+      return "Keep access to the construction entrance clear."
+    for (const camp of map.buildings.filter(b => b.buildType)) {
       if (!settlementRoute(map, occupied, map.site.door, buildingEntry(camp)))
-        return "Keep access to woodcutter huts and storehouses clear."
+        return "Keep access to existing buildings clear."
     }
   }
   return null
 }
 
 export function woodcutterHuts(map: GameMap): PlacedBuilding[] {
-  return map.buildings.filter((b) => b.buildType === "workshop")
+  return map.buildings.filter((b) => b.buildType === "workshop" && isComplete(b))
     .map((b) => ({ ...b, kind: "workshop" }))
 }
 
@@ -268,6 +284,7 @@ export function purchaseStructure(
     height: def.height,
     color: def.color,
     roofColor: def.roofColor,
+    construction: { work: 0, required: constructionWork(def.w, def.d), cost: { ...def.cost } },
   }
   return {
     settlement: {

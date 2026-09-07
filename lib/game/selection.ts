@@ -13,10 +13,11 @@ export const SELECTION_FILL_OPACITY = 0.06
 
 /** All world selections share drag rejection, build-tool priority, and toggle behavior. */
 export function selectElement(candidate: Selection, event: { delta: number; stopPropagation: () => void }) {
-  if (event.delta > 6 || useBuildStore.getState().tool) return
+  if (event.delta > 6 || useBuildStore.getState().tool) return false
   event.stopPropagation()
   const camera = useCameraStore.getState()
   camera.select(isSelected(camera.selection, candidate) ? null : candidate)
+  return true
 }
 
 /** Resolve inspector identities to the same IDs used by the visible geometry. */
