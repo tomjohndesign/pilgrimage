@@ -74,7 +74,7 @@ export const SIGNPOST_HEIGHT = 0.78
 /** The wayside marker at the shrine's fork; its board points along local +X. */
 export function signpostParts(seed = 0): BuildingPart[] {
   return earlyBuildingParts({
-    ...earlyBuildingRecipe("shepherd-hut"),
+    ...earlyBuildingRecipe("house"),
     variant: "signpost", width: 1, depth: 1, wallHeight: SIGNPOST_HEIGHT, roofRise: 0, seed,
   })
 }
