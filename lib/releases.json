@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "e7a4d1c73e4339a7f26fdddf88513305a053209c",
-  "releaseCount": 65,
+  "lastProcessedCommit": "f9e83010afba2c172e69a12a9204be9fcfc21b17",
+  "releaseCount": 66,
   "releases": [
+    {
+      "version": "0.0.80",
+      "title": "Release 0.0.80",
+      "summary": "Add monk roadside evangelism task (#99)",
+      "commit": "f9e83010afba2c172e69a12a9204be9fcfc21b17"
+    },
     {
       "version": "0.0.79",
       "title": "Release 0.0.79",
