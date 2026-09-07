@@ -787,6 +787,15 @@ export function GameHud({
           <HudButton id="bug-report-button" onClick={openBugReport}>Report a bug</HudButton>
         </div>
         {reportError && <p role="alert" className="mb-4 text-sm text-red">{reportError}</p>}
+        <div className="mb-4">
+          <Chooser
+            label="Trees"
+            value={settings.treeModel === "sprites" ? 1 : 0}
+            options={["Procedural", "Pixel foliage"]}
+            onChange={(index) => set({ treeModel: index === 1 ? "sprites" : "procedural" })}
+          />
+          <p className="pt-1 text-[11px] italic text-ink-light">Pixel foliage draws the baked tree sprites from the playground; trees stand one to a tile.</p>
+        </div>
         {SHOW_PROPERTY_PANELS && <>
         <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />

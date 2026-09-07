@@ -2,6 +2,7 @@ import { DEFAULT_ELEVATION, ELEVATION_CONTROLS, elevationSettings, type Elevatio
 import type { Metadata } from "next"
 
 import { GameShell, type MapSettings } from "@/components/game/game-shell"
+import { isTreeModel } from "@/lib/game/trees/render-model"
 
 export const metadata: Metadata = {
   title: "Pilgrimage — Prototype",
@@ -31,6 +32,7 @@ export default async function PlayPage({
   if (params.characters === "base" || params.characters === "callings") {
     initialSettings.characterModel = params.characters
   }
+  if (isTreeModel(params.trees)) initialSettings.treeModel = params.trees
   for (const key of ["baseSize", "draftSize"] as const) {
     const scale = parseFloatParam(params[key])
     if (scale !== undefined) initialSettings[key] = Math.min(4, Math.max(0.5, scale))

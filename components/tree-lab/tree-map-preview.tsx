@@ -10,8 +10,9 @@ import { CameraRig } from "@/components/game/camera-rig"
 import { Environment } from "@/components/game/environment"
 import { OutlinePass } from "@/components/game/outline-pass"
 import { TerrainTiles } from "@/components/game/terrain-tiles"
-import { FoliageField } from "./foliage-field"
+import { FoliageField } from "@/components/game/foliage-field"
 import type { FoliageAtlas } from "@/lib/game/trees/foliage/design"
+import { foliageSpacing } from "@/lib/game/trees/foliage/spacing"
 import { TREE_SPECIES } from "@/lib/game/trees/species"
 import { placeTrees } from "@/lib/game/trees/placement"
 import { Trees } from "@/components/game/trees"
@@ -30,10 +31,7 @@ export function TreeMapPreview({ seed, size, atlas, ...pixelation }: { seed: num
   const map = useMemo(() => generateMap({ seed, width: size, depth: size }), [seed, size])
 
   const prototype = !!atlas
-  const placements = useMemo(() => placeTrees(map, prototype ? Object.fromEntries(Object.entries(TREE_SPECIES).map(([id, def]) => [id, {
-    ...def, habitat: { ...def.habitat, weight: def.habitat.weight,
-      footprint: id === "oak" || id === "beech" ? 0.85 : id === "hawthorn" || id === "holly" ? 0.45 : 0.6, perTile: 1 },
-  }])) as typeof TREE_SPECIES : TREE_SPECIES), [map, prototype])
+  const placements = useMemo(() => placeTrees(map, prototype ? foliageSpacing(TREE_SPECIES) : TREE_SPECIES), [map, prototype])
   useEffect(() => {
     if (!prototype) return
     const { outlineMode, selection } = useCameraStore.getState()

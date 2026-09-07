@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { BASE_CHARACTER_SCALE } from "@/lib/game/base-person/gait"
 import { useFrame } from "@react-three/fiber"
@@ -10,6 +10,9 @@ import { softenTreeLighting } from "@/lib/game/trees/lighting"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { selectElement } from "@/lib/game/selection"
 import { TreeRemains } from "./tree-remains"
+import { FoliageField } from "./foliage-field"
+import { DEFAULT_FOLIAGE_ATLAS } from "@/lib/game/trees/foliage/assets"
+import { DEFAULT_TREE_MODEL, type TreeModel } from "@/lib/game/trees/render-model"
 import { useBuildStore } from "@/lib/game/build-store"
 import { simRegistry } from "@/lib/game/sim"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
@@ -73,8 +76,10 @@ function makeCrownGeometry(shape: TreeSpeciesDef["crown"]["shape"]): THREE.Buffe
     : new THREE.IcosahedronGeometry(1, BLOB_DETAIL)
 }
 
-export function Trees({ map, placements: supplied, ents = false, characterScale = BASE_CHARACTER_SCALE }: {
+export function Trees({ map, placements: supplied, ents = false, characterScale = BASE_CHARACTER_SCALE, model = DEFAULT_TREE_MODEL }: {
   map: GameMap; placements?: TreePlacement[]; ents?: boolean; characterScale?: number
+  /** Sprites draw the baked pixel foliage in place of the parametric trees; Ents stay rooted. */
+  model?: TreeModel
 }) {
   const selection = useCameraStore((s) => s.selection)
   const resources = useBuildStore((s) => s.treeResources)
@@ -90,10 +95,14 @@ export function Trees({ map, placements: supplied, ents = false, characterScale 
     if (selection?.kind === "tree" && (!selected || !visible)) useCameraStore.getState().select(null)
   }, [selection, selected, visible])
   const selectTree = (id: number, event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "tree", id }, event)
+  const seed = deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes)
   return (
     <group>
-      <TreeField placements={placements} hidden={felled} onSelect={selectTree} entMap={ents ? map : undefined}
-        seed={deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes)} idBase={map.buildings.length} />
+      {model === "sprites"
+        ? <Suspense fallback={null}>
+            <FoliageField atlas={DEFAULT_FOLIAGE_ATLAS} placements={placements} hidden={felled} onSelect={selectTree} seed={seed} idBase={map.buildings.length} />
+          </Suspense>
+        : <TreeField placements={placements} hidden={felled} onSelect={selectTree} entMap={ents ? map : undefined} seed={seed} idBase={map.buildings.length} />}
       {Array.from(resources, ([id, resource]) => resource.health <= 0 && placements[id]
         ? <TreeRemains key={id} id={id} objectId={treeObjectId(map.buildings.length, id)} tree={placements[id]} resource={resource} time={time} characterScale={characterScale} /> : null)}
     </group>
