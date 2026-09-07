@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "2aec0f2125b8c2104b0613e63bc575e5503dbe97",
-  "releaseCount": 74,
+  "lastProcessedCommit": "980ddb93c9a5f5fe0eb1eb81cd002f7083463352",
+  "releaseCount": 75,
   "releases": [
+    {
+      "version": "0.0.89",
+      "title": "Release 0.0.89",
+      "summary": "Add a preaching animation for roadside monks (#108)",
+      "commit": "980ddb93c9a5f5fe0eb1eb81cd002f7083463352"
+    },
     {
       "version": "0.0.88",
       "title": "Release 0.0.88",
