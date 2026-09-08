@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "ab3372f67ffd6d693257d459260ac677fa477404",
-  "releaseCount": 119,
+  "lastProcessedCommit": "1d41171f9a76b63b8cc71dd7ac8283fc5270807d",
+  "releaseCount": 120,
   "releases": [
+    {
+      "version": "0.0.134",
+      "title": "Release 0.0.134",
+      "summary": "Add mobile pinch zoom, panning, and responsive game menus (#154)",
+      "commit": "1d41171f9a76b63b8cc71dd7ac8283fc5270807d"
+    },
     {
       "version": "0.0.133",
       "title": "Release 0.0.133",
