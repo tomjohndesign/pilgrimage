@@ -6,6 +6,7 @@ import * as THREE from "three"
 
 import { groundHeight } from "@/lib/game/map/elevation"
 import { surfaceHeight, ropeHeightAt } from "@/lib/game/map/bridges"
+import { CameraGesture } from "@/lib/game/camera-gesture"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { worldToTileX, worldToTileZ, type GameMap, type TilePos } from "@/lib/game/map/types"
@@ -45,12 +46,10 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     const canvas = gl.domElement
     const { pan, setHovered } = useCameraStore.getState()
 
-    let dragPointerId: number | null = null
-    let lastX = 0
-    let lastY = 0
-    let startX = 0
-    let startY = 0
-    let dragged = false
+    const gesture = new CameraGesture()
+    const point = (event: PointerEvent) => ({ x: event.clientX, y: event.clientY })
+    const previousTouchAction = canvas.style.touchAction
+    canvas.style.touchAction = "none"
 
     const updateHover = (event: PointerEvent) => {
       const rect = canvas.getBoundingClientRect()
@@ -89,62 +88,78 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     }
 
     const onPointerDown = (event: PointerEvent) => {
-      if (dragPointerId !== null) return
-      dragPointerId = event.pointerId
-      lastX = startX = event.clientX
-      lastY = startY = event.clientY
-      dragged = false
+      gesture.start(event.pointerId, point(event))
       canvas.setPointerCapture(event.pointerId)
+      if (gesture.pinching) setHovered(null)
     }
 
     const onPointerMove = (event: PointerEvent) => {
-      if (event.pointerId === dragPointerId) {
-        if (Math.hypot(event.clientX - startX, event.clientY - startY) > 6) dragged = true
-        const dx = event.clientX - lastX
-        const dy = event.clientY - lastY
-        lastX = event.clientX
-        lastY = event.clientY
-        if (dx !== 0 || dy !== 0) {
-          canvas.style.cursor = "grabbing"
-          const scale = worldPerPixel(displayViewSize.current, canvas.clientHeight)
-          const delta = panDelta(displayYaw.current, dx, dy, scale)
-          pan(delta.dx, delta.dz)
-        }
-        // A drag cannot place a building. Repeated terrain ray marches here
-        // compete with rendering on high-rate mice/trackpads; restore the
-        // cursor's tile when the drag ends.
-        if (dragged) {
-          // A committed drag is camera input. Avoid Fiber's per-object pointer
-          // handler filtering and hover raycasts until release.
-          event.stopPropagation()
-          if (useCameraStore.getState().hovered) setHovered(null)
-        } else updateHover(event)
+      const movement = gesture.move(event.pointerId, point(event))
+      if (!movement) {
+        if (event.pointerType !== "touch") updateHover(event)
         return
       }
-      updateHover(event)
+      if (gesture.dragged) {
+        canvas.style.cursor = "grabbing"
+        const rect = canvas.getBoundingClientRect()
+        const oldScale = worldPerPixel(displayViewSize.current, rect.height)
+        if (gesture.pinching) {
+          // Touch follows the fingers directly, including during a wheel tween.
+          useCameraStore.setState({ viewSize: displayViewSize.current })
+          useCameraStore.getState().zoomBy(movement.zoom)
+          displayViewSize.current = useCameraStore.getState().viewSize
+        }
+        const newScale = worldPerPixel(displayViewSize.current, rect.height)
+        const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2
+        // Preserve the ground point under the moving pinch midpoint, even when
+        // zoom reaches its limits. A one-finger drag is the same transform.
+        const dx = (movement.after.x - cx) * newScale - (movement.before.x - cx) * oldScale
+        const dy = (movement.after.y - cy) * newScale - (movement.before.y - cy) * oldScale
+        const delta = panDelta(displayYaw.current, dx, dy, 1)
+        pan(delta.dx, delta.dz)
+        event.stopPropagation()
+        setHovered(null)
+      } else updateHover(event)
     }
 
     const endDrag = (event: PointerEvent) => {
-      if (event.pointerId !== dragPointerId) return
+      if (!gesture.has(event.pointerId)) return
+      const tap = gesture.end(event.pointerId, point(event), event.type !== "pointerup")
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
-      dragPointerId = null
-      canvas.style.cursor = "grab"
-      updateHover(event)
-      if (event.type === "pointerup" && event.button === 0 && !dragged && Math.hypot(event.clientX - startX, event.clientY - startY) <= 6) {
+      canvas.style.cursor = gesture.active ? "grabbing" : "grab"
+      if (tap && event.button === 0) {
+        updateHover(event)
         const tile = useCameraStore.getState().hovered
         if (tile) placeRef.current?.(tile)
-      }
+      } else if (!gesture.active && event.pointerType !== "touch" && event.type === "pointerup") {
+        updateHover(event)
+      } else setHovered(null)
     }
 
+    // Fiber's click distance alone cannot distinguish a pinch from a tap.
+    const onClick = (event: MouseEvent) => {
+      if (gesture.dragged) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+      }
+    }
+    const onBlur = () => {
+      gesture.clear()
+      setHovered(null)
+      canvas.style.cursor = "grab"
+    }
     const onPointerLeave = () => {
-      if (dragPointerId === null) setHovered(null)
+      if (!gesture.active) setHovered(null)
     }
 
     // Suppress the context menu so right-drag panning stays available later.
     const onContextMenu = (event: Event) => event.preventDefault()
 
     canvas.style.cursor = "grab"
-    canvas.addEventListener("pointerdown", onPointerDown)
+    canvas.addEventListener("pointerdown", onPointerDown, true)
+    canvas.addEventListener("click", onClick, true)
+    canvas.addEventListener("lostpointercapture", endDrag)
+    window.addEventListener("blur", onBlur)
     canvas.addEventListener("pointermove", onPointerMove, true)
     canvas.addEventListener("pointerup", endDrag)
     canvas.addEventListener("pointercancel", endDrag)
@@ -152,7 +167,11 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     canvas.addEventListener("contextmenu", onContextMenu)
 
     return () => {
-      canvas.removeEventListener("pointerdown", onPointerDown)
+      canvas.style.touchAction = previousTouchAction
+      canvas.removeEventListener("pointerdown", onPointerDown, true)
+      canvas.removeEventListener("click", onClick, true)
+      canvas.removeEventListener("lostpointercapture", endDrag)
+      window.removeEventListener("blur", onBlur)
       canvas.removeEventListener("pointermove", onPointerMove, true)
       canvas.removeEventListener("pointerup", endDrag)
       canvas.removeEventListener("pointercancel", endDrag)
