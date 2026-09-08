@@ -16,6 +16,7 @@ import type { CharacterModel } from "@/lib/game/character-assets"
 import { DEFAULT_TREE_MODEL, type TreeModel } from "@/lib/game/trees/render-model"
 import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER, ROAD_TIERS } from "@/lib/game/map/road"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
+import { loadDefaultMapSize, saveDefaultMapSize } from "@/lib/game/map-size-storage"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import { generateRelic, visitChance } from "@/lib/game/relic"
@@ -162,6 +163,9 @@ export function GameShell({
   const [seed, setSeed] = useState<number | null>(initialSeed ?? null)
   const [blasterPastor, setBlasterPastor] = useState(false)
   const [lastMarch, setLastMarch] = useState(false)
+  const [defaultMapSize, setDefaultMapSize] = useState(DEFAULT_MAP_WIDTH)
+  const [mapSizeReady, setMapSizeReady] = useState(false)
+  const [mapSizeSaved, setMapSizeSaved] = useState(true)
   const [settings, setSettings] = useState<MapSettings>({
     ...DEFAULT_SETTINGS,
     ...initialSettings,
@@ -174,6 +178,14 @@ export function GameShell({
   }
 
   useEffect(() => {
+    // Resolve the browser preference before generating terrain or writing the URL.
+    const size = loadDefaultMapSize()
+    setDefaultMapSize(size)
+    if (initialSettings?.size === undefined) setSettings(current => ({ ...current, size }))
+    setMapSizeReady(true)
+  }, [initialSettings?.size])
+
+  useEffect(() => {
     // A seed the player saved takes precedence over a random roll, but never
     // over one named in the URL (that arrives via initialSeed).
     if (seed === null) setSeed(loadSavedSeed() ?? randomSeed())
@@ -181,7 +193,7 @@ export function GameShell({
 
   // Keep seed and tuning in the URL so any map can be bookmarked and revisited.
   useEffect(() => {
-    if (seed === null) return
+    if (seed === null || !mapSizeReady) return
     const query = new URLSearchParams({
       seed: String(seed),
       size: String(settings.size),
@@ -216,11 +228,11 @@ export function GameShell({
     query.set("buildingVisibility", settings.buildingVisibility)
     for (const [key, value] of Object.entries(settings.elevation)) query.set(`e_${key}`, String(value))
     window.history.replaceState(null, "", `?${query}`)
-  }, [seed, settings])
+  }, [seed, settings, mapSizeReady])
 
   const baseMap = useMemo(
     () =>
-      seed === null
+      seed === null || !mapSizeReady
         ? null
         : generateMap({
             seed,
@@ -239,6 +251,7 @@ export function GameShell({
           }),
     [
       seed,
+      mapSizeReady,
       settings.elevation,
       settings.size,
       settings.coverage,
@@ -368,7 +381,16 @@ export function GameShell({
         onSettingsChange={setSettings}
         pixelation={pixelationSettings}
         onPixelationChange={(patch) => setPixelationOverrides((current) => ({ ...current, ...patch }))}
-        onReroll={() => setSeed(randomSeed())}
+        defaultMapSize={defaultMapSize}
+        mapSizeSaved={mapSizeSaved}
+        onDefaultMapSizeChange={size => {
+          setDefaultMapSize(size)
+          setMapSizeSaved(saveDefaultMapSize(size))
+        }}
+        onNewMap={size => {
+          setSettings(current => ({ ...current, size }))
+          setSeed(randomSeed())
+        }}
         onSeedChange={setSeed}
       />
       <CheatBar blasterPastor={blasterPastor} onBlasterPastor={() => setBlasterPastor(active => !active)} onLastMarch={() => setLastMarch(true)} />
