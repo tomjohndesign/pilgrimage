@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "6e8a9013a85b092ce9323ce43d46bcf64c676f87",
-  "releaseCount": 106,
+  "lastProcessedCommit": "0b8cf8e8aad5e4027a35d3f43f19702638e35697",
+  "releaseCount": 107,
   "releases": [
+    {
+      "version": "0.0.121",
+      "title": "Release 0.0.121",
+      "summary": "Add sprite terrain and diagonal ground, water, and cliff transitions (#140)",
+      "commit": "0b8cf8e8aad5e4027a35d3f43f19702638e35697"
+    },
     {
       "version": "0.0.120",
       "title": "Release 0.0.120",
