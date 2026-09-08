@@ -1,5 +1,7 @@
 "use client"
 
+import { isWorldVisible } from "@/lib/game/render/visibility"
+
 import { useEffect, useMemo, useRef, type RefObject } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
@@ -24,7 +26,7 @@ export function CartReins({ cart, animal, kind, horseVariant, characterScale, se
     const group = root.current, wagon = cart.current, beast = animal.current
     if (!group || !body.current || !wagon || !beast) return
     group.visible = wagon.visible && wagon.userData.riding === true
-    if (!group.visible) return
+    if (!isWorldVisible(group)) return
     const sprite = beast.getObjectByName(kind) as THREE.Sprite | undefined
     const data = sprite?.userData ?? beast.userData, unit = RIG_TO_WORLD * characterScale
     const yaw = Math.atan2(camera.matrixWorld.elements[8], camera.matrixWorld.elements[10])

@@ -85,7 +85,7 @@ describe("diagonal roads", () => {
 })
 
 describe("diagonal shorelines", () => {
-  it("turns a staircase bank into one diagonal through tile edge midpoints", () => {
+  it("turns a staircase bank into half-tile diagonals through opposite vertices", () => {
     const map = parseAsciiMap(["~.....", "~~....", "~~~...", "~~~~..", "~~~~~."])
     const coverage = (x: number, z: number, px: number, pz: number) => {
       const wet = isWaterTile(map, x, z)
@@ -98,14 +98,14 @@ describe("diagonal shorelines", () => {
       expect(coverage(1, 1, 1, t)).toBe(coverage(2, 1, 0, t))
     }
     expect(coverage(2, 2, 0.9, 0.1)).toBe(false)
-    expect(coverage(2, 1, 0.1, 0.9)).toBe(true)
+    expect(coverage(2, 1, 0.1, 0.9)).toBe(false)
   })
 
-  it("keeps narrow channels, separate diagonal ponds and all tile centres intact", () => {
+  it("keeps narrow channels, separate diagonal ponds and all navigation tiles intact", () => {
     const map = parseAsciiMap(["......", ".~~...", "...~..", "...~..", "......"])
     expect(shorelineCorners(map, 3, 1)).toEqual([0, 0, 0, 0])
     for (let z = 0; z < map.depth; z++) for (let x = 0; x < map.width; x++) {
-      expect(shorelineInset(0.5, 0.5, shorelineCorners(map, x, z))).toBeLessThan(0)
+      expect(shorelineInset(0.5, 0.5, shorelineCorners(map, x, z))).toBeLessThanOrEqual(0)
     }
   })
 

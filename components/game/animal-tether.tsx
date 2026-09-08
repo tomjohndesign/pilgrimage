@@ -1,5 +1,7 @@
 "use client"
 
+import { isWorldVisible } from "@/lib/game/render/visibility"
+
 import { useEffect, useMemo, useRef, type RefObject } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
@@ -24,7 +26,7 @@ export function AnimalTether({ animal, kind, horseVariant, characterScale, selec
     const group = root.current, beast = animal.current, tree = beast?.userData.tether as TreePlacement | undefined
     if (!group || !body.current || !beast) return
     group.visible = beast.visible && !!tree && !tree.walking
-    if (!group.visible || !tree) return
+    if (!isWorldVisible(group) || !tree) return
     const sprite = beast.getObjectByName(kind) as THREE.Sprite | undefined
     const data = sprite?.userData ?? beast.userData, unit = RIG_TO_WORLD * characterScale
     const yaw = Math.atan2(camera.matrixWorld.elements[8], camera.matrixWorld.elements[10])

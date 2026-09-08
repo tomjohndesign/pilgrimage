@@ -4,34 +4,144 @@ import { useEffect } from "react"
 import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { benchmarkCity, cityBenchmarkStats } from "@/lib/game/city-benchmark"
 import { processionRegistry } from "@/lib/game/relic-procession"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
+import { placeEnvironment } from "@/lib/game/environment/placement"
+import { cliffCorner } from "@/lib/game/map/cliff-corners"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { surfaceHeight } from "@/lib/game/map/bridges"
-import type { OutlineMode } from "@/lib/game/render/outline"
+import { SELECTED_CHARACTER_LAYER, type OutlineMode } from "@/lib/game/render/outline"
 import type { Traveler } from "@/lib/game/travelers"
 import { simRegistry, stepSim } from "@/lib/game/sim"
 import type { MovementTuning } from "@/lib/game/motion"
 import { strikeTree } from "@/lib/game/trees/impact"
 import type { EntState } from "@/lib/game/trees/ents"
 
+import { characterOcclusionRequest, type CharacterOcclusionSample } from "@/lib/game/render/character-occlusion"
+import { buildingBatchControl } from "./building-batches"
+import { characterBatchControl } from "./character-batches"
+import { staticBatchControl } from "./static-batches"
 import { outlineFrameRef } from "./outline-pass"
+import { frameProfile } from "@/lib/game/render/frame-profile"
+import { sceneryDetailStatus } from "@/lib/game/render/scenery-detail"
+import { batchedSourceRoots } from "@/lib/game/render/batch-source-visibility"
+import { BENCHMARK_SIMULATION_SPEEDS, useSimulationStore } from "@/lib/game/simulation-store"
 
 /**
  * Exposes a small handle on `window` so the scene can be driven deterministically
  * from Playwright or the console — set a camera pose, screenshot, compare.
  * (The world seed itself comes from the URL: /play?seed=….)
- * Development only; it is never mounted in a production build.
+ * Development only, unless a local benchmark build explicitly enables it.
  */
 export function DebugHandle({ map, travelers, speed, movement, speedScales, characterScale }: { map: GameMap; travelers: Traveler[]; speed: number; movement: MovementTuning; speedScales?: ReadonlyMap<number, number>; characterScale?: number }) {
   const { gl, camera, scene } = useThree()
 
   useEffect(() => {
-    if (process.env.NODE_ENV === "production") return
+    if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_GAME_BENCHMARK !== "1") return
 
+    let motionSubjects: Array<{ unit: THREE.Object3D; sprite: THREE.Sprite }> = []
     const handle = {
       map,
+      benchmarkTarget: benchmarkCity(map)?.centre,
+      cityStats: () => cityBenchmarkStats(simRegistry.current, map),
+      inventory: () => {
+        let scenerySprites = 0
+        scene.traverse(object => {
+          if (object instanceof THREE.InstancedMesh && object.layers.isEnabled(0)
+            && object.parent?.parent?.name === "environment-sprites") scenerySprites += object.count
+        })
+        const images = [...new Set(performance.getEntriesByType("resource").map(entry => new URL(entry.name).pathname)
+          .filter(path => /\/textures\/.*\.(png|webp|jpg)$/.test(path)))]
+        return { characters: simRegistry.current?.travelers.size ?? 0, buildings: map.buildings.length,
+          cityBuildings: benchmarkCity(map)?.buildings, scenerySprites, images: images.length, imagePaths: images }
+      },
+      motionSamples: () => {
+        if (!motionSubjects.length) scene.traverseVisible(unit => {
+          if (unit.name !== "traveler-unit" || motionSubjects.length >= 32) return
+          const sprite = unit.getObjectByName("traveler")
+          if (sprite instanceof THREE.Sprite) motionSubjects.push({ unit, sprite })
+        })
+        return motionSubjects.filter(({ unit }) => unit.visible).map(({ unit, sprite }) => {
+          const state = simRegistry.current?.travelers.get(unit.userData.travelerId)
+          return { id: unit.userData.travelerId, x: state?.x, z: state?.z, activity: state?.activity,
+            moving: unit.userData.moving, spriteX: sprite.matrixWorld.elements[12], spriteZ: sprite.matrixWorld.elements[14],
+            phase: sprite.userData.walkPhase, clip: sprite.userData.clip, distance: unit.userData.distance,
+            poseDetail: sprite.userData.walkDetail, displayedFrame: sprite.userData.displayedFrame }
+        })
+      },
+      characterOcclusion: () => new Promise<CharacterOcclusionSample>(resolve => {
+        if (characterOcclusionRequest.current) throw new Error("Occlusion sample already pending")
+        characterOcclusionRequest.current = resolve
+      }),
+      distantEffects: () => {
+        const counts = { smoke: 0, fires: 0, pointLights: 0, floaters: 0, cutaways: 0 }
+        scene.traverseVisible(object => {
+          if (object.name === "building-smoke") counts.smoke++
+          if (object.name === "hearth-fire") counts.fires++
+          if (object instanceof THREE.PointLight) counts.pointLights++
+          if (["admission-effects", "piety-effects", "construction-cost-effects"].includes(object.name)) counts.floaters++
+          if (object.userData.cutaway) counts.cutaways++
+        })
+        return counts
+      },
+      profileFrames: frameProfile.capture,
+      setBuildingBatching: (enabled: boolean) => { buildingBatchControl.enabled = enabled },
+      setBatching: (enabled: boolean) => { characterBatchControl.enabled = enabled },
+      setSceneryBatching: (enabled: boolean) => { staticBatchControl.enabled = enabled },
+      setPaused: (paused: boolean) => useSimulationStore.setState({ paused }),
+      setSpeed: (label: number) => {
+        const speed = BENCHMARK_SIMULATION_SPEEDS.find(speed => speed.label === label)
+        if (!speed) throw new Error(`Unknown playback speed: ${label}`)
+        useSimulationStore.setState({ speed: speed.rate })
+      },
+      playback: () => useSimulationStore.getState(),
+      selectTraveler: (id: number) => useCameraStore.getState().select({ kind: "traveler", id }),
+      selectionVisuals: () => {
+        let shadows = 0, sprites = 0, reducedWalking = 0
+        scene.traverseVisible(object => {
+          if (object.name === "character-selection-shadow") shadows++
+          if (object instanceof THREE.Sprite && object.layers.isEnabled(SELECTED_CHARACTER_LAYER)) {
+            sprites++
+            if (object.userData.walkDetail > 0) reducedWalking++
+          }
+        })
+        return { shadows, sprites, reducedWalking }
+      },
+      cameraAlignment: () => {
+        let error = 0
+        scene.traverseVisible(object => {
+          const view = object.name === "character-atlas-batch" ? object.userData.viewMatrix as THREE.Matrix4 : undefined
+          if (view) for (let i = 0; i < 16; i++) error = Math.max(error, Math.abs(view.elements[i] - camera.matrixWorldInverse.elements[i]))
+        })
+        return error
+      },
+      sceneStats: () => {
+        let objects = 0, visible = 0, sprites = 0, units = 0
+        const loaded = new Set<THREE.Object3D>()
+        scene.traverse(object => {
+          objects++
+          if (object.name === "traveler-unit") units++
+          if (object instanceof THREE.Sprite) for (let node = object.parent; node; node = node.parent) {
+            if (node.name === "traveler-unit") { loaded.add(node); break }
+          }
+        })
+        scene.traverseVisible(object => { visible++; if (object instanceof THREE.Sprite) sprites++ })
+        const figures = scene.getObjectByName("travelers")?.userData
+        const foliage = scene.getObjectByName("foliage-prototype")?.children[0] as THREE.InstancedMesh | undefined
+        return { objects, visible, sprites, units, prunedCharacterRoots: [...batchedSourceRoots(scene)].length, treeRenderer: foliage ? "sprites" : "procedural",
+          totalTrees: foliage?.userData.totalTrees, visibleTrees: foliage?.count, loadedUnits: loaded.size, requestedUnits: figures?.requestedUnits,
+          pendingUnits: figures?.pendingUnits, missingVisibleUnits: figures?.missingVisibleUnits }
+      },
+      sceneryDetail: () => scene.getObjectByName("scenery-batches")?.userData.sceneryDetail,
+      sceneryDetailStatus: () => ({ ...sceneryDetailStatus(scene), presentationFade: scene.userData.sceneryFadeActive === true }),
+      /** Inspect scenery footprints and focus the camera on rarer outcrops. */
+      environment: () => placeEnvironment(map),
+      cliffCorners: () => map.tiles.flatMap((_, i) => {
+        const x = i % map.width, z = Math.floor(i / map.width), cut = cliffCorner(map, x, z)
+        return cut ? [{ ...cut, x: tileToWorldX(map, x), z: tileToWorldZ(map, z), water: map.tiles[cut.donor] === "water" }] : []
+      }),
       camera: () => useCameraStore.getState(),
       /** Jump straight to a pose. The rig still tweens toward it over a few frames. */
       setView: (viewIndex: number) =>
@@ -65,11 +175,27 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
             ? [{ amount: object.userData.amount, position: object.position.toArray(), opacity: object.material.opacity }] : []) ?? [],
       }),
       setTerrainVisible: (visible: boolean) => { const terrain = scene.getObjectByName("terrain"); if (terrain) terrain.visible = visible },
+      setHearthLightsVisible: (visible: boolean) => { const lights = scene.getObjectByName("hearth-light-pool"); if (lights) lights.visible = visible },
       renderInfo: () => ({
+        calls: gl.info.render.calls,
+        triangles: gl.info.render.triangles,
         programs: gl.info.programs?.length ?? 0,
         spritePrograms: gl.info.programs?.filter((p) => p.cacheKey.includes("traveler-id")).length ?? 0,
         textures: gl.info.memory.textures,
       }),
+      /** Visible geometry by kind, including each instance and both ID/color meshes. */
+      geometryStats: () => {
+        const totals = new Map<string, { meshes: number; triangles: number }>()
+        const frustum = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse))
+        scene.traverseVisible(object => {
+          if (!(object instanceof THREE.Mesh) || (object.frustumCulled && !frustum.intersectsObject(object))) return
+          const key = object.name || object.geometry.name || object.geometry.type, total = totals.get(key) ?? { meshes: 0, triangles: 0 }
+          total.meshes++
+          total.triangles += Math.min(object.geometry.drawRange.count, object.geometry.index?.count ?? object.geometry.getAttribute("position").count) / 3 * (object instanceof THREE.InstancedMesh ? object.count : 1)
+          totals.set(key, total)
+        })
+        return Object.fromEntries([...totals].sort(([, a], [, b]) => b.triangles - a.triangles))
+      },
       /** Sprite layout and active clip for comparing road character models. */
       travelerSprites: () => {
         const sprites: Array<{ model: string; calling: string; variant: number | null; bodyType: string; appearanceScale: number; position: number[]; phase: number; sync: boolean; fps: number; sheet: string; repeat: number[]; offset: number[]; center: number[]; scale: number[] }> = []

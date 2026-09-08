@@ -1,3 +1,4 @@
+import { buildingSpatialQuery } from "./building-spatial"
 import { FOOTPATH_ESTABLISHED_AT, footpathRouteCost, obstaclesNear, type FootpathObstacle } from "./footpaths"
 import { elevationStep } from "./map/elevation"
 import { settlementRoute } from "./settlement-route"
@@ -25,7 +26,7 @@ const length = (a: TilePos, b: TilePos) => Math.hypot(b.x - a.x, b.z - a.z)
 const NEARBY: FootpathObstacle[] = []
 
 /** World-space segment cost, including body clearance and both sides of diagonal corners. */
-export function shortcutCost(map: GameMap, from: TilePos, to: TilePos, exploring = false): number {
+export function shortcutCost(map: GameMap, from: TilePos, to: TilePos, exploring = false, nearby = buildingSpatialQuery(map.buildings), routeCost = footpathRouteCost): number {
   const distance = length(from, to)
   if (distance < 1e-8) return 0
   const dx = (to.x - from.x) / distance, dz = (to.z - from.z) / distance
@@ -34,7 +35,7 @@ export function shortcutCost(map: GameMap, from: TilePos, to: TilePos, exploring
   const open = (p: TilePos) => {
     const terrain = tileAt(map, p.x, p.z)
     return !!terrain && ["grass", "clearing", "dirt", "sand", "path", "track"].includes(terrain)
-      && !map.buildings.some(b => p.x >= b.x && p.x < b.x + b.w && p.z >= b.z && p.z < b.z + b.d)
+      && !nearby(p).some(b => p.x >= b.x && p.x < b.x + b.w && p.z >= b.z && p.z < b.z + b.d)
   }
   const obstacles = obstaclesNear(map.footpaths,
     Math.min(from.x, to.x), Math.min(from.z, to.z), Math.max(from.x, to.x), Math.max(from.z, to.z), .15, NEARBY)
@@ -58,7 +59,7 @@ export function shortcutCost(map: GameMap, from: TilePos, to: TilePos, exploring
       // This lets a worn diagonal attract the next walker before they enter it.
       const behind = tile({ x: p.x - dx * .51, z: p.z - dz * .51 })
       const ahead = tile({ x: p.x + dx * .51, z: p.z + dz * .51 })
-      const base = Math.min(footpathRouteCost(map, previous, next), footpathRouteCost(map, behind, next), footpathRouteCost(map, next, ahead))
+      const base = Math.min(routeCost(map, previous, next), routeCost(map, behind, next), routeCost(map, next, ahead))
       cost += (1 + (base - 1) * (exploring ? .1 : 1)) * distance / steps
     }
     previous = next
@@ -69,16 +70,34 @@ export function shortcutCost(map: GameMap, from: TilePos, to: TilePos, exploring
 /** Keep useful paths, but replace a local detour when a safe chord saves enough walking. */
 export function smoothWalkingRoute<T extends TilePos>(map: GameMap, route: T[], exploring = false): T[] {
   if (!map.footpaths || route.length < 3) return route
+  const nearby = buildingSpatialQuery(map.buildings)
+  // Every lookahead revisits the same short edges. Ground and wear cannot
+  // change during this synchronous operation, so sample each fact once.
+  const edgeCosts = new Float64Array(route.length).fill(NaN)
+  const edgeLengths = new Float64Array(route.length)
+  const costs = new Map<number, number>(), size = map.width * map.depth
+  const routeCost: typeof footpathRouteCost = (map, from, to) => {
+    if (from.x < 0 || from.z < 0 || to.x < 0 || to.z < 0 || from.x >= map.width || to.x >= map.width || from.z >= map.depth || to.z >= map.depth)
+      return footpathRouteCost(map, from, to)
+    const key = (from.z * map.width + from.x) * size + to.z * map.width + to.x
+    let cost = costs.get(key)
+    if (cost === undefined) { cost = footpathRouteCost(map, from, to); costs.set(key, cost) }
+    return cost
+  }
   const result = [route[0]]
   for (let from = 0; from < route.length - 1;) {
     let best = from + 1, walked = 0, cost = 0, saving = .25
     for (let to = from + 1; to < Math.min(route.length, from + SHORTCUT_LOOKAHEAD + 1); to++) {
-      walked += length(route[to - 1], route[to])
-      cost += shortcutCost(map, route[to - 1], route[to], exploring)
+      if (Number.isNaN(edgeCosts[to])) {
+        edgeLengths[to] = length(route[to - 1], route[to])
+        edgeCosts[to] = shortcutCost(map, route[to - 1], route[to], exploring, nearby, routeCost)
+      }
+      walked += edgeLengths[to]
+      cost += edgeCosts[to]
       if (!Number.isFinite(cost)) break // Preserve gates, interiors and bridge approaches.
       const direct = length(route[from], route[to])
       if (direct > walked * .92 || walked - direct <= saving) continue
-      if (shortcutCost(map, route[from], route[to], exploring) > cost * .98) continue
+      if (shortcutCost(map, route[from], route[to], exploring, nearby, routeCost) > cost * .98) continue
       best = to; saving = walked - direct
     }
     result.push(route[best]); from = best

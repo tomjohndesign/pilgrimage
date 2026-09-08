@@ -4,6 +4,7 @@ import { DEFAULT_ELEVATION, type ElevationSettings } from "@/lib/game/map/elevat
 import dynamic from "next/dynamic"
 import { useEffect, useMemo, useState } from "react"
 
+import { createBenchmarkCity, benchmarkCity as cityFixture } from "@/lib/game/city-benchmark"
 import { createFootpaths } from "@/lib/game/footpaths"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
@@ -148,8 +149,10 @@ export function GameShell({
   initialSeed,
   initialSettings,
   pixelation,
+  benchmarkCity = false,
 }: {
   initialSeed?: number
+  benchmarkCity?: boolean
   initialSettings?: Partial<MapSettings>
   /** Tune the world pixel renderer without changing map or simulation settings. */
   pixelation?: PixelationProps
@@ -210,10 +213,11 @@ export function GameShell({
       ponds: String(settings.ponds),
     })
     for (const [key, value] of Object.entries(settings.elevation)) query.set(`e_${key}`, String(value))
+    if (benchmarkCity) query.set("benchmark", "city")
     window.history.replaceState(null, "", `?${query}`)
-  }, [seed, settings])
+  }, [seed, settings, benchmarkCity])
 
-  const baseMap = useMemo(
+  const generatedMap = useMemo(
     () =>
       seed === null
         ? null
@@ -247,6 +251,8 @@ export function GameShell({
       settings.ponds,
     ],
   )
+
+  const baseMap = useMemo(() => generatedMap && benchmarkCity ? createBenchmarkCity(generatedMap) : generatedMap, [generatedMap, benchmarkCity])
 
   const movement = useMemo(() => ({ variation: settings.paceVariation, pathEase: settings.pathEase, acceleration: settings.acceleration }),
     [settings.paceVariation, settings.pathEase, settings.acceleration])
@@ -300,7 +306,11 @@ export function GameShell({
     if (BUILDING_PREVIEW) camera.zoomBy(24 / camera.viewSize)
     camera.select(null)
     const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
-    if (hovel) {
+    const city = cityFixture(map)
+    if (city) {
+      camera.panTo(tileToWorldX(map, city.centre.x), tileToWorldZ(map, city.centre.z))
+      camera.zoomBy(36 / camera.viewSize)
+    } else if (hovel) {
       camera.panTo(
         tileToWorldX(map, hovel.x) + (hovel.w - 1) / 2,
         tileToWorldZ(map, hovel.z) + (hovel.d - 1) / 2,

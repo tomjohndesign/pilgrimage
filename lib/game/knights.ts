@@ -1,7 +1,19 @@
 import { animalWalkSpeed } from "./transport/assets"
 import { COATS } from "./transport/coats"
 import { DEFAULT_WALK_CADENCE, personWalkStride } from "./base-person/gait"
-import { squireDesign } from "./knight/design"
+import { KNIGHT, knightDesign, squireDesign } from "./knight/design"
+
+let squireStride: number | undefined
+const knightStrides = new Map<number, number>()
+
+/** Authored rigs are immutable; derive each stride once, rather than cloning
+ * the complete person recipe for every knight on every simulation tick. */
+export function knightWalkStride(variant: number) {
+  const key = variant % KNIGHT.variants
+  let stride = knightStrides.get(key)
+  if (stride === undefined) { stride = personWalkStride(knightDesign(key)); knightStrides.set(key, stride) }
+  return stride
+}
 
 export interface HorseRest { x: number; y: number; z: number; heading: number; tree?: import("./trees/placement").TreePlacement }
 
@@ -18,7 +30,7 @@ export function knightMounted(activity: string, horse?: HorseRest) {
 /** A walking attendant limits the horse's cadence, retaining both authored strides. */
 export function knightTravelSpeed(scale: number, squire: boolean) {
   const horse = animalWalkSpeed("horse", scale, "noble")
-  return squire ? Math.min(horse, personWalkStride(squireDesign()) * scale * DEFAULT_WALK_CADENCE) : horse
+  return squire ? Math.min(horse, (squireStride ??= personWalkStride(squireDesign())) * scale * DEFAULT_WALK_CADENCE) : horse
 }
 
 export interface TrailPoint { x: number; z: number; heading: number }

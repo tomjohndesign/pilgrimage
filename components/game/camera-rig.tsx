@@ -110,8 +110,15 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
           const delta = panDelta(displayYaw.current, dx, dy, scale)
           pan(delta.dx, delta.dz)
         }
-        // Panning moves the world under a stationary cursor, so re-pick.
-        updateHover(event)
+        // A drag cannot place a building. Repeated terrain ray marches here
+        // compete with rendering on high-rate mice/trackpads; restore the
+        // cursor's tile when the drag ends.
+        if (dragged) {
+          // A committed drag is camera input. Avoid Fiber's per-object pointer
+          // handler filtering and hover raycasts until release.
+          event.stopPropagation()
+          if (useCameraStore.getState().hovered) setHovered(null)
+        } else updateHover(event)
         return
       }
       updateHover(event)
@@ -122,8 +129,8 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
       dragPointerId = null
       canvas.style.cursor = "grab"
+      updateHover(event)
       if (event.type === "pointerup" && event.button === 0 && !dragged && Math.hypot(event.clientX - startX, event.clientY - startY) <= 6) {
-        updateHover(event)
         const tile = useCameraStore.getState().hovered
         if (tile) placeRef.current?.(tile)
       }
@@ -138,7 +145,7 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
 
     canvas.style.cursor = "grab"
     canvas.addEventListener("pointerdown", onPointerDown)
-    canvas.addEventListener("pointermove", onPointerMove)
+    canvas.addEventListener("pointermove", onPointerMove, true)
     canvas.addEventListener("pointerup", endDrag)
     canvas.addEventListener("pointercancel", endDrag)
     canvas.addEventListener("pointerleave", onPointerLeave)
@@ -146,7 +153,7 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
 
     return () => {
       canvas.removeEventListener("pointerdown", onPointerDown)
-      canvas.removeEventListener("pointermove", onPointerMove)
+      canvas.removeEventListener("pointermove", onPointerMove, true)
       canvas.removeEventListener("pointerup", endDrag)
       canvas.removeEventListener("pointercancel", endDrag)
       canvas.removeEventListener("pointerleave", onPointerLeave)
@@ -161,13 +168,16 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
 
     const onWheel = (event: WheelEvent) => {
       event.preventDefault()
+      // Zoom owns wheel input. Fiber otherwise raycasts every clickable tree
+      // and figure for each wheel event, although none handles scrolling.
+      event.stopPropagation()
       // Normalise line-mode deltas so a mouse wheel and a trackpad feel similar.
       const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY
       zoomBy(Math.exp(delta * 0.0015))
     }
 
-    canvas.addEventListener("wheel", onWheel, { passive: false })
-    return () => canvas.removeEventListener("wheel", onWheel)
+    canvas.addEventListener("wheel", onWheel, { passive: false, capture: true })
+    return () => canvas.removeEventListener("wheel", onWheel, true)
   }, [gl])
 
   // --- Keyboard: pan, rotate, zoom, reset -------------------------------------
@@ -238,7 +248,7 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
   // These canvases use a manual camera because this rig owns the frustum.
   // --- Per-frame: tween and drive the camera ----------------------------------
   useFrame((_, delta) => {
-    const { targetX, targetZ, viewIndex, viewSize, pan } = useCameraStore.getState()
+    const { viewIndex, viewSize, pan } = useCameraStore.getState()
     // A background tab can hand us a huge delta; clamp so tweens don't overshoot.
     const dt = Math.min(delta, 0.1)
 
@@ -284,10 +294,14 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     cam.far = CAM_FAR
 
     const [ox, oy, oz] = cameraOffset(displayYaw.current)
+    const { targetX, targetZ } = useCameraStore.getState()
     cam.position.set(targetX + ox, oy, targetZ + oz)
     cam.lookAt(targetX, 0, targetZ)
     cam.updateProjectionMatrix()
-  }, -2)
+    // Culling, sprite poses, and their batch view anchors must all observe the
+    // same transform that the final world and character passes will render.
+    cam.updateMatrixWorld()
+  }, -4)
 
   return null
 }

@@ -9,7 +9,8 @@ import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 import { PixelCanvas as Canvas, PixelCharacters } from "@/components/pixel-canvas"
 import { TerrainTiles } from "@/components/game/terrain-tiles"
-import { TreeField } from "@/components/game/trees"
+import { FoliageField } from "@/components/game/foliage-field"
+import { DEFAULT_FOLIAGE_ATLAS } from "@/lib/game/trees/foliage/assets"
 import { TravelerFigure } from "@/components/game/traveler-figure"
 import { BASE_CHARACTER_SCALE } from "@/lib/game/base-person/gait"
 import { TRAVELER_TYPES } from "@/lib/game/travelers"
@@ -149,7 +150,7 @@ function Site({ recipe, grid }: { recipe: BuildingRecipe; grid: boolean }) {
       <TravelerFigure characterModel="base" characterScale={BASE_CHARACTER_SCALE} type={TRAVELER_TYPES.pilgrim} />
     </group>
     </PixelCharacters><group name="workshop-surroundings">
-      <TreeField placements={trees} seed={7919} />
+      <FoliageField atlas={DEFAULT_FOLIAGE_ATLAS} placements={trees} seed={7919} />
       <PixelCharacters><group position={[1.5, TILE_HEIGHT, recipe.depth / 2 + 1.8]}><TravelerFigure characterModel="base" characterScale={BASE_CHARACTER_SCALE} type={TRAVELER_TYPES.pilgrim} /></group>
       <group position={[-3, TILE_HEIGHT, recipe.depth / 2 + 2.5]} rotation={[0, Math.PI / 2, 0]}><TravelerFigure characterModel="base" characterScale={BASE_CHARACTER_SCALE} type={TRAVELER_TYPES.vendor} /></group></PixelCharacters>
     </group>

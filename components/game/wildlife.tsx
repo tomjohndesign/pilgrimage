@@ -8,6 +8,8 @@ import { walkingSurface } from "@/lib/game/map/walking-surface"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { simRegistry } from "@/lib/game/sim"
+import { SpatialPoints } from "@/lib/game/spatial-points"
+import { frameProfile } from "@/lib/game/render/frame-profile"
 import { onTreeStrike } from "@/lib/game/trees/impact"
 import type { TreePlacement } from "@/lib/game/trees/placement"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
@@ -51,13 +53,18 @@ export function Wildlife({ map, trees, characterScale }: { map: GameMap; trees: 
     const felled = useBuildStore.getState().felled
     for (const tree of strikes.current) startleWildlife(world, tree, map, felled)
     strikes.current.length = 0
-    const people = [...(simRegistry.current?.travelers.values() ?? [])]
     // Fixed simulation steps keep flock timings reproducible across display frame rates.
     accumulator.current += Math.min(delta, 0.1) * playback.speed
+    if (accumulator.current < 1 / 30) return
+    const started = frameProfile.start()
+    const people = [...(simRegistry.current?.travelers.values() ?? [])]
+    const nearbyPeople = new SpatialPoints(people)
+    const nearbyAnimals = new SpatialPoints(world.animals.filter(animal => !isBird(animal.kind)))
     while (accumulator.current >= 1 / 30) {
-      stepWildlife(world, map, 1 / 30, characterScale, felled, people, useAnimalRigStore.getState().designs)
+      stepWildlife(world, map, 1 / 30, characterScale, felled, people, useAnimalRigStore.getState().designs, nearbyPeople, nearbyAnimals)
       accumulator.current -= 1 / 30
     }
+    frameProfile.end("wildlife", started)
   }, -1)
   return <group name="wildlife" userData={{ animals: world.animals, burrows: world.burrows }}>
     {world.burrows.map(burrow => <RabbitHole key={burrow.id} burrow={burrow} map={map} scale={characterScale} />)}
