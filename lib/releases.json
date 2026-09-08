@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "eeffaa95149c1cec858430f3becda346b9f71cba",
-  "releaseCount": 105,
+  "lastProcessedCommit": "6e8a9013a85b092ce9323ce43d46bcf64c676f87",
+  "releaseCount": 106,
   "releases": [
+    {
+      "version": "0.0.120",
+      "title": "Release 0.0.120",
+      "summary": "Add minstrel tips and roadside beggars receiving alms (#139)",
+      "commit": "6e8a9013a85b092ce9323ce43d46bcf64c676f87"
+    },
     {
       "version": "0.0.119",
       "title": "Release 0.0.119",
