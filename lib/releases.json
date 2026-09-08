@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "83b806c30046070efd429b6cb032b68e2d064a88",
-  "releaseCount": 101,
+  "lastProcessedCommit": "742ca347b7c3c8659ae5bcbf36449cf41a163d0f",
+  "releaseCount": 102,
   "releases": [
+    {
+      "version": "0.0.116",
+      "title": "Release 0.0.116",
+      "summary": "Make shepherds gather sheep and lead them back to their pen (#135)",
+      "commit": "742ca347b7c3c8659ae5bcbf36449cf41a163d0f"
+    },
     {
       "version": "0.0.115",
       "title": "Release 0.0.115",
