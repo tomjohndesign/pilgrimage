@@ -6,10 +6,10 @@ export const SIMULATION_SPEEDS = [
   { label: 1, rate: 2 },
   { label: 2, rate: 4 },
   { label: 3, rate: 6 },
+  { label: 6, rate: 12 },
 ] as const
 
-/** Keep historical overload rates available to the opt-in benchmark handle.
- * The player controls stop at the smoother 3× setting. */
+/** Keep intermediate comparison rates available to the opt-in benchmark handle. */
 export const BENCHMARK_SIMULATION_SPEEDS = [
   ...SIMULATION_SPEEDS,
   { label: 4, rate: 8 },

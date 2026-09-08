@@ -1,8 +1,7 @@
 # Largest-map performance evaluation
 
 The benchmark exercises the real `/play` scene on the largest 512 × 512 map.
-It covers 1,408, 2,000, 3,840 and 6,000 travelers, the original five playback speeds,
-and a candidate 4× setting,
+It covers 1,408, 2,000, 3,840 and 6,000 travelers, playback speeds through 6×,
 pointer dragging, wheel zooming and camera rotation. Sprite trees are the
 normal renderer and the benchmark default. Procedural trees remain available
 only in an explicitly enabled benchmark build for historical comparisons.
@@ -38,7 +37,7 @@ running alongside it. Pause other open game tabs for meaningful comparisons.
 On macOS, prefix commands with `caffeinate -di` to prevent host sleep.
 
 ```sh
-BENCH_URL=http://localhost:3101 BENCH_SCENARIO=city BENCH_TERRAIN=sprites BENCH_COUNT=3840 BENCH_ZOOMS=36,80,140 BENCH_OCCLUSION=1 BENCH_SPEEDS=0.5,1,2,3,5 BENCH_PROFILE=0 BENCH_CITY_SMOKE=1 BENCH_OUTPUT=.context/city npm run bench:game
+BENCH_URL=http://localhost:3101 BENCH_SCENARIO=city BENCH_TERRAIN=sprites BENCH_COUNT=3840 BENCH_ZOOMS=36,70,140 BENCH_OCCLUSION=1 BENCH_SPEEDS=0.5,1,2,3,6 BENCH_PROFILE=0 BENCH_CITY_SMOKE=1 BENCH_OUTPUT=.context/city npm run bench:game
 BENCH_URL=http://localhost:3101 BENCH_SCENARIO=city BENCH_TERRAIN=sprites BENCH_COUNT=1408 BENCH_WARMUP=120000 BENCH_SECONDS=25 BENCH_SPEEDS=1,5 BENCH_MOTION_TRACE=1 BENCH_PROFILE=0 BENCH_OUTPUT=.context/city-soak npm run bench:game
 BENCH_URL=http://localhost:3101 BENCH_SCENARIO=city BENCH_TERRAIN=sprites BENCH_COUNT=3840 BENCH_SPEEDS=1,5 BENCH_MOTION=1 BENCH_ROTATE=0 BENCH_ZOOM_MOTION=1 BENCH_INPUT=1 BENCH_PROFILE=0 BENCH_OUTPUT=.context/city-motion npm run bench:game
 BENCH_URL=http://localhost:3101 BENCH_TERRAIN=sprites BENCH_TARGET=water BENCH_COUNT=3840 BENCH_SPEEDS=1,5 BENCH_ZOOM_MOTION=1 BENCH_INPUT=1 BENCH_PROFILE=0 BENCH_OUTPUT=.context/water npm run bench:game
@@ -267,8 +266,9 @@ measurements (`.context/city-rate-3x`, `-4x`, `-5x`):
 | 4× | 50.1 | 33.4 | 3 |
 | 5× | 36.3 | 50.1 | 11 |
 
-The player controls now stop at 3×. The opt-in benchmark handle retains 4× and
-5× for stress comparisons; normal playback remains 1×. Displayed multipliers
+These comparisons initially motivated a 3× cap. The requested final controls
+are 0.5×, 1×, 2×, 3× and 6×; the benchmark also retains 4× and 5×. Normal
+playback remains 1×. Displayed multipliers
 remain honest: UI 3× uses internal rate 6, three times the normal rate 2.
 Characters keep their stable individual starting phases. Increasing playback
 never queues all skipped atlas frames for later rendering. Host desktop/browser
@@ -350,6 +350,51 @@ The browser benchmark records every detail transition and fails if one occurs
 while zooming. Selection smoke tests additionally exercise five wheel changes,
 verify the final layer set, and save the next 500 ms of frame intervals to
 `detail-settle.json`, exposing a delayed hitch separately from the gesture.
+
+## Final detail behavior and main integration
+
+Integrated `origin/main` at `7b587c9` (0.0.125), including building back-edge
+outlines, the new grass/water art, diagonal roads and river cliffs, resident job
+outfits and cart parking. Main's visibility controls remain functional; hiding
+characters or wildlife leaves their simulation mounted. Procedural trees are
+only available in the explicitly enabled benchmark build.
+
+Detail is selected using display pixels per world unit. Desktop reduces detail
+15% earlier than the original thresholds; coarse-pointer mobile viewports use
+60% earlier thresholds. Hysteresis avoids repeated switches near a boundary:
+
+| Profile | Enter middle | Enter distant | Restore close | Restore middle |
+|---|---:|---:|---:|---:|
+| Desktop | <18.4 | <10.35 | ≥21.85 | ≥12.65 |
+| Mobile | <25.6 | <14.4 | ≥30.4 | ≥17.6 |
+
+Layer changes wait until zoom input and easing have settled, including 180 ms
+of quiet time. A 240 ms transition blends one saved world image into the new
+world render. Characters remain live and use current depth. New camera movement
+cancels the saved image. The transition uses one GPU texture copy and one extra
+presentation sample, rather than rendering both complete scenes each frame.
+This avoids simultaneous layer switching during the gesture; it does not
+eliminate the rendering cost of retaining close detail through a long zoom.
+
+At middle and distant detail, building surfaces use authored flat colors instead
+of camera-dependent Lambert shading. Shadow maps were already disabled; the new
+change removes the changing dark building faces. Local lights, interiors,
+cutaways, smoke, fire, money/admission effects, progress/inventory decorations,
+piety glow and relic lighting are omitted where applicable. Path border shading
+and terrain rim strips are hidden. Bridges retain their full deck and ramp
+silhouette, main piers and piles, while dropping individual planks, railings,
+stringers and hanging ties; distant cylindrical posts use three sides.
+
+Ordinary character/tree overlap ink and distant tree masks are disabled.
+Selection remains available. Distant character poses use fewer existing atlas
+frames with the same distance-driven rig and displayed-frame ground contact.
+Speed changes select the current pose directly; skipped poses are never queued.
+
+`BENCH_MOBILE=1` runs the actual game in a 412 × 915 coarse-pointer Chromium
+viewport with DPR 1. This verifies mobile detail selection on the desktop GPU;
+it is not a physical-phone performance measurement. `BENCH_DETAIL_SMOKE=1`
+checks five wheel transitions, actual presentation fading and hidden terrain/
+bridge details. `BENCH_SMOKE=1` also includes those checks.
 
 ## Terrain sprite comparison
 

@@ -1,3 +1,7 @@
+import { cartLoadout, cartOffset } from "./transport/assets"
+import { alignCart } from "./transport/follow"
+import { cartPath } from "./transport/building-parking"
+import { routeLength } from "./transport/roadside"
 import { BUILD_CATALOG } from "./balance"
 import { buildingEntrance, workerRoute } from "./construction"
 import { finishElevation } from "./map/elevation"
@@ -10,6 +14,7 @@ import type { SimState } from "./sim"
 // identity so settlement publications retain it without changing saved maps.
 interface City {
   centre: TilePos
+  streets: TilePos[]
   destinations: TilePos[]
   neighbours: number[][]
   buildings: number
@@ -40,7 +45,7 @@ export function createBenchmarkCity(source: GameMap): GameMap {
   map.buildings = map.buildings.filter(b => b.x + b.w <= left || b.x >= right || b.z + b.d <= top || b.z >= bottom)
   if (!map.buildings.some(b => b.id === map.site?.hovelId)) map.site = undefined
   const kinds = ["house", "house", "house", "shelter", "tavern", "market", "workshop", "storehouse", "hall", "guard-post"]
-  const destinations: TilePos[] = []
+  const destinations: TilePos[] = [], streets: TilePos[] = []
   for (let z = 0; z < rows; z++) for (let x = 0; x < columns; x++) {
     const i = z * columns + x, def = BUILD_CATALOG.find(b => b.id === kinds[i % kinds.length])!
     const building = { ...def, buildType: def.id, id: `city-${i}`, x: left + x * block + 3, z: top + z * block + 2, rotation: 0 as const }
@@ -49,6 +54,7 @@ export function createBenchmarkCity(source: GameMap): GameMap {
     // Connect each door to the next east/west street, including the deep tavern.
     for (let dz = entrance.z; dz <= top + (z + 1) * block; dz++) map.tiles[dz * map.width + entrance.x] = "path"
     destinations.push(entrance)
+    streets.push({ x: left + x * block + .5, z: top + z * block + .5 })
   }
   const roadZ = top + rows / 2 * block
   map.road = Array.from({ length: map.width }, (_, x) => ({ x, z: roadZ }))
@@ -64,7 +70,7 @@ export function createBenchmarkCity(source: GameMap): GameMap {
   }
   const neighbours = destinations.map((a, i) => destinations.flatMap((b, j) =>
     i !== j && Math.abs(a.x - b.x) + Math.abs(a.z - b.z) <= 40 ? [j] : []))
-  cities.set(map.road, { centre: { x: left + columns * block / 2, z: roadZ }, destinations, neighbours, buildings: destinations.length })
+  cities.set(map.road, { centre: { x: left + columns * block / 2, z: roadZ }, streets, destinations, neighbours, buildings: destinations.length })
   return map
 }
 
@@ -80,15 +86,39 @@ export function routeBenchmarkCity(sim: SimState, map: GameMap) {
     let person = state.people.get(actor.id)
     if (!person) {
       const rng = makeRng((map.seed ?? 0) ^ Math.imul(actor.id + 1, 0x45d9f3b))
-      const destination = Math.floor(rng() * city.destinations.length), start = city.destinations[destination]
+      const destination = Math.floor(rng() * city.destinations.length), start = (actor.convoy ? city.streets : city.destinations)[destination]
       person = { rng, destination, trips: 0 }; state.people.set(actor.id, person)
       actor.x = tileToWorldX(map, start.x); actor.z = tileToWorldZ(map, start.z); actor.y = surfaceHeight(map, start.x, start.z)
       actor.activity = "fromBuild"; actor.constructionReturn = []
       actor.roadShortcut = undefined
+      if (actor.convoy) actor.cartPose = alignCart(actor, Math.PI / 2,
+        -cartOffset(cartLoadout(actor.id).puller) * actor.convoyScale)
     }
-    if (actor.constructionReturn?.length) continue
+    if (actor.constructionReturn?.length || actor.roadShortcut) continue
     if (person.trips) state.completed++
-    const options = city.neighbours[person.destination]
+    let options = city.neighbours[person.destination]
+    if (actor.convoy) {
+      // A wagon needs a swept route between street junctions. Pedestrian doors
+      // are not parking bays, and teleported carts must begin at their real hitch.
+      const start = city.streets[person.destination]
+      options = options.filter(i => Math.abs(city.streets[i].x - start.x) + Math.abs(city.streets[i].z - start.z) === 8)
+      const first = Math.floor(person.rng() * options.length)
+      let assigned = false
+      for (let attempt = 0; attempt < options.length; attempt++) {
+        const destination = options[(first + attempt) % options.length], target = city.streets[destination]
+        const goal = { x: tileToWorldX(map, target.x), z: tileToWorldZ(map, target.z) }
+        const route = cartPath(map, actor.cartPose!, goal, cartLoadout(actor.id).puller, actor.convoyScale, { trees: [] })
+        if (!route) continue
+        actor.activity = "fromBuild"
+        actor.roadShortcut = { from: route.entry[0], to: goal, via: route.entry.slice(1, -1),
+          start: actor.progress, end: actor.progress, distance: 0, length: routeLength(route.entry) }
+        person.destination = destination; person.trips++
+        state.assigned++; state.destinations.add(destination); assigned = true
+        break
+      }
+      if (!assigned) state.failed++
+      continue
+    }
     const destination = options[Math.floor(person.rng() * options.length)]
     const route = workerRoute(map, actor, city.destinations[destination])
     if (!route?.length) { state.failed++; continue }
@@ -103,5 +133,5 @@ export function cityBenchmarkStats(sim: SimState | null, map: GameMap) {
   if (!city) return null
   return { buildings: city.buildings, assigned: state?.assigned ?? 0, completed: state?.completed ?? 0,
     failed: state?.failed ?? 0, uniqueDestinations: state?.destinations.size ?? 0,
-    active: sim ? [...sim.travelers.values()].filter(s => s.constructionReturn?.length).length : 0 }
+    active: sim ? [...sim.travelers.values()].filter(s => s.constructionReturn?.length || s.roadShortcut).length : 0 }
 }

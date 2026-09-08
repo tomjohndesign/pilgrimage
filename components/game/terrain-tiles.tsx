@@ -81,7 +81,6 @@ const GRID_HALF_WIDTH = 0.025
 const GRID_DARKEN = 0.8
 
 /**
-
  * Which ground wears the grass texture, and how strongly the tile's own colour
  * is laid over the sward first. Clear land *is* the sward — its colour is the
  * texture's average, so there is nothing to lay over. The forest floor is the
