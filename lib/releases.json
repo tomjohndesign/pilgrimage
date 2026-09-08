@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "296e06855c9fd657fe9406398d2f7da41f96a8af",
-  "releaseCount": 103,
+  "lastProcessedCommit": "bec6f958a4a77753ce9aded3674254b1ec35c85f",
+  "releaseCount": 104,
   "releases": [
+    {
+      "version": "0.0.118",
+      "title": "Release 0.0.118",
+      "summary": "Add enclave job sprites and a staffed building demo (#136)",
+      "commit": "bec6f958a4a77753ce9aded3674254b1ec35c85f"
+    },
     {
       "version": "0.0.117",
       "title": "Release 0.0.117",
