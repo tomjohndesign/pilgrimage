@@ -2,6 +2,7 @@ import { buildingSpatialQuery } from "../building-spatial"
 import { withTerrainCornerQueries } from "../map/cliff-corners"
 import { SpatialPoints } from "../spatial-points"
 import { treeSpatialIndex } from "../trees/spatial"
+import { stepFoldSheep, type SheepFold } from "../herding"
 import { BURROW_SECONDS, burrowApproach, burrowMotion } from "./burrow-motion"
 import { RIG_TO_WORLD } from "../transport/assets"
 import { walkingSurface } from "../map/walking-surface"
@@ -16,6 +17,7 @@ import { chooseGait, restDuration } from "./behavior"
 import { isBird, isDomestic, type WildlifeKind } from "./species"
 
 export interface WildlifeAnimal extends Point {
+  fold?: SheepFold
   id: number; kind: WildlifeKind; group: number; leader: number
   y: number; heading: number; phase: number; age: number; rest: number
   grazing: number; gait: WildlifeGait; speed: number; drive: number
@@ -190,6 +192,7 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
   for (const animal of world.animals) {
     if (animal.reserve) continue
     animal.distance = 0; animal.age += dt; animal.frightened = Math.max(0, animal.frightened - dt)
+    if (stepFoldSheep(animal, map, dt, scale, edits[animal.kind])) continue
     if (isBird(animal.kind)) {
       if (!animal.flight) {
         if (animal.perch !== null && !felled.has(animal.perch) && !world.trees[animal.perch].walking) {
@@ -248,7 +251,8 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
       continue
     }
     animal.actionAge += dt * (edits[animal.kind]?.clips[animal.action]?.cadence ?? 1); animal.outsideTime += dt
-    const leader = world.animals[animal.leader], domestic = isDomestic(animal.kind)
+    const originalLeader = world.animals[animal.leader]
+    const leader = originalLeader.fold?.route.length || originalLeader.fold?.arrived ? animal : originalLeader, domestic = isDomestic(animal.kind)
     const threat = domestic ? undefined : nearbyPeople.firstWithin(animal.x, animal.z, 2.5)
     if (threat) { animal.frightened = 3; animal.rest = 0 }
     if (burrow && animal.burrowState === "outside" && (animal.outsideTime > 35 || animal.frightened > 0)
@@ -281,7 +285,7 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
       animal.moving = false; animal.speed = 0; animal.drive = approach(animal.drive, 0, 3); continue
     }
     if (follower && animal.regrouping && animal.target && Math.hypot(animal.target.x - leader.x, animal.target.z - leader.z) > 3.5 * scale) animal.target = null
-    if (herd && animal.leader === animal.id && world.animals.some(a => a.leader === animal.id && a.roamTime <= 0 && Math.hypot(a.x - animal.x, a.z - animal.z) > 6 * scale)) {
+    if (herd && animal.leader === animal.id && world.animals.some(a => !a.fold?.arrived && !a.fold?.route.length && a.leader === animal.id && a.roamTime <= 0 && Math.hypot(a.x - animal.x, a.z - animal.z) > 6 * scale)) {
       animal.moving = false; animal.speed = 0; animal.drive = approach(animal.drive, 0, 3); continue
     }
     if (!animal.target) {

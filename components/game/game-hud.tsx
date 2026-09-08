@@ -21,7 +21,6 @@ import {
   dangerLabel,
 } from "@/lib/game/map/danger"
 import { clampRoadTier, ROAD_TIERS } from "@/lib/game/map/road"
-import { MIN_MAP_SIZE } from "@/lib/game/map/generate-map"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileAt, type BuildingDef, type GameMap } from "@/lib/game/map/types"
 import { nerve } from "@/lib/game/route-choice"
@@ -50,9 +49,12 @@ import { useBalanceStore } from "@/lib/game/balance-store"
 import { MusicPlayer } from "./music-player"
 import { HudButton } from "./hud-button"
 import { BugReportDialog } from "./bug-report-dialog"
+import { MapSizeControl } from "./map-size-control"
+import { NewMapDialog } from "./new-map-dialog"
 import { browserDiagnostics, diagnosticsSchema, type BugReportDiagnostics } from "@/lib/bug-report"
 import { useBugReportRuntime } from "@/hooks/use-bug-report-runtime"
 import { useSimulationStore } from "@/lib/game/simulation-store"
+import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES } from "@/lib/game/scene-visibility"
 import { Section, Tuner } from "./property-controls"
 import { BuildControls, HudClock, HudHelp, HudResources } from "./hud-controls"
 
@@ -119,15 +121,17 @@ function Chooser({
   value,
   options,
   onChange,
+  labelClassName = "w-16",
 }: {
   label: string
   value: number
   options: string[]
   onChange: (index: number) => void
+  labelClassName?: string
 }) {
   return (
     <div className="flex items-center">
-      <span className="w-16 shrink-0 text-[13px] font-medium text-ink-light">{label}</span>
+      <span className={`${labelClassName} shrink-0 text-[13px] font-medium text-ink-light`}>{label}</span>
       <div className="relative h-8 flex-1 rounded-[6px] bg-parchment-dark">
         <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 truncate font-display text-[11px] font-black text-ink-light">
           {options[value]}
@@ -607,7 +611,10 @@ export function GameHud({
   economy,
   pixelation,
   onPixelationChange,
-  onReroll,
+  defaultMapSize,
+  mapSizeSaved,
+  onDefaultMapSizeChange,
+  onNewMap,
   onSeedChange,
   cheats,
 }: {
@@ -624,7 +631,10 @@ export function GameHud({
   onSettingsChange: (settings: MapSettings) => void
   pixelation: Required<PixelationProps>
   onPixelationChange: (patch: PixelationProps) => void
-  onReroll: () => void
+  defaultMapSize: number
+  mapSizeSaved: boolean
+  onDefaultMapSizeChange: (size: number) => void
+  onNewMap: (size: number) => void
   onSeedChange: (seed: number) => void
 }) {
   const readRuntime = useBugReportRuntime()
@@ -798,22 +808,30 @@ export function GameHud({
       {panel === "world" && <aside id="world-settings" className="hud-world hud-well" aria-label="World settings">
         <div className="hud-world-heading"><span>World</span><button type="button" aria-label="Close world settings" onClick={() => setPanel(null)}><X size={16} /></button></div>
         <div className="mb-4 flex flex-wrap gap-2">
-          <HudButton onClick={onReroll}>✦ New Map</HudButton>
+          <NewMapDialog defaultSize={defaultMapSize} onCreate={onNewMap} />
           <HudButton id="bug-report-button" onClick={openBugReport}>Report a bug</HudButton>
         </div>
         {reportError && <p role="alert" className="mb-4 text-sm text-red">{reportError}</p>}
+        <div className="mb-4 space-y-1">
+          <MapSizeControl label="Default size" value={defaultMapSize} onChange={onDefaultMapSizeChange} />
+          <p className="text-[11px] italic text-ink-light">Used for new maps and visits without a map size in the link. Your current map stays the same.</p>
+          {!mapSizeSaved && <p role="status" className="text-[11px] text-red">Could not save this preference. It will apply for this session only.</p>}
+        </div>
+        <Section {...section("Visibility")}>
+          {VISIBILITY_TOGGLES.map(([key, label]) => (
+            <Chooser key={key} label={label} labelClassName="w-24" value={settings[key] ? 1 : 0}
+              options={["Hidden", "Shown"]} onChange={(index) => set({ [key]: index === 1 })} />
+          ))}
+          <Chooser label="Buildings" labelClassName="w-24" value={["auto", "interiors", "hidden"].indexOf(settings.buildingVisibility)}
+            options={["Automatic interiors", "Show all interiors", "Hidden"]}
+            onChange={(index) => set({ buildingVisibility: (["auto", "interiors", "hidden"] as const)[index] })} />
+          <p className="py-1 text-[11px] italic text-ink-light">Automatic interiors open when you select a building or someone inside. Scenery includes rocks, plants and the signpost. Hidden objects keep working.</p>
+          <HudButton onClick={() => set(DEFAULT_SCENE_VISIBILITY)}>Reset visibility</HudButton>
+        </Section>
         {SHOW_PROPERTY_PANELS && <>
         <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />
-          <Tuner
-            label="Size"
-            value={settings.size}
-            display={String(settings.size)}
-            min={MIN_MAP_SIZE}
-            max={512}
-            step={32}
-            onChange={(size) => set({ size })}
-          />
+          <MapSizeControl label="Size" value={settings.size} onChange={(size) => set({ size })} />
         </Section>
 
         <Section {...section("Pixelation")}>

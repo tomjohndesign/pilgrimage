@@ -1,5 +1,6 @@
 "use client"
 
+import { DEFAULT_SCENE_VISIBILITY, type SceneVisibility } from "@/lib/game/scene-visibility"
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 
 import { useEffect, useMemo } from "react"
@@ -74,6 +75,7 @@ export function GameCanvas({
   relicTraffic,
   roadLook,
   showGrid = false,
+  visibility = DEFAULT_SCENE_VISIBILITY,
   buildType,
   shrineRenown,
   baseRenown,
@@ -111,12 +113,22 @@ export function GameCanvas({
   roadLook?: RoadLook
   /** Draw the global tile lattice over the ground. Off by default. */
   showGrid?: boolean
+  visibility?: SceneVisibility
 } & PixelationProps) {
+  const selection = useCameraStore(s => s.selection)
+  useEffect(() => {
+    if (!selection) return
+    const hidden = selection.kind === "tree" ? !visibility.showTrees
+      : selection.kind === "traveler" || selection.kind === "monk" ? !visibility.showCharacters
+        : selection.kind === "animal" ? !visibility.showWildlife
+          : visibility.buildingVisibility === "hidden"
+    if (hidden) useCameraStore.getState().select(null)
+  }, [selection, visibility.showTrees, visibility.showCharacters, visibility.showWildlife, visibility.buildingVisibility])
   const population = usePopulationStore(s => s.pack)
   const assets = useCharacterAssetStore(s => s.assets)
   const speedScales = useMemo(() => new Map(travelers.map(traveler => {
     const appearance = travelerAppearance(map.seed ?? 0, traveler.id)
-    const visual = characterModel === "base" ? populationVisual(traveler.type.id, appearance.variant, population, traveler.attributes.age)
+    const visual = characterModel === "base" || traveler.type.id === "beggar" ? populationVisual(traveler.type.id, appearance.variant, population, traveler.attributes.age)
       : characterVisual(assets[traveler.type.id], "callings")
     const scale = characterScale * (characterModel === "base" ? appearance.scale : 1)
     const personSpeedScale = walkSpeedScale(visual.walkStride, scale)
@@ -155,27 +167,34 @@ export function GameCanvas({
       <HearthLights><RenownSaturation map={map}>
         <PixelWorld>
           <StaticBatches />
-          <WalkingTerrain
-            map={map}
-            roadTier={roadTier}
-            traffic={travelers.length}
-            relicTraffic={relicTraffic}
-            look={roadLook}
-            showGrid={showGrid}
-          />
+          <WalkingTerrain map={map} roadTier={roadTier} traffic={travelers.length}
+            relicTraffic={relicTraffic} look={roadLook} showGrid={showGrid} />
           <Bridges map={map} roadTier={roadTier} />
-          <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} model={treeModel} />
-          <Environment map={map} />
+          {/* Keep simulation components mounted when their visual layer is hidden. */}
+          <group name="visibility-trees" visible={visibility.showTrees}>
+            <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} model={treeModel} />
+          </group>
+          <group name="visibility-scenery" visible={visibility.showScenery}>
+            <Environment map={map} />
+            <Signpost map={map} />
+          </group>
         </PixelWorld>
-        <Wildlife map={map} trees={trees} characterScale={characterScale} />
-        <BuildingBatches><Buildings map={map} characterScale={characterScale} />
-        <Shrine map={map} relic={relic} /></BuildingBatches>
-        <Signpost map={map} />
-        <PixelCharacters>
-          <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
-        </PixelCharacters>
-        <CharacterBatches><Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
-          characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} /></CharacterBatches>
+        <group name="visibility-wildlife" visible={visibility.showWildlife}>
+          <Wildlife map={map} trees={trees} characterScale={characterScale} />
+        </group>
+        <group name="visibility-buildings" visible={visibility.buildingVisibility !== "hidden"}>
+          <BuildingBatches>
+            <Buildings map={map} characterScale={characterScale} showInteriors={visibility.buildingVisibility === "interiors"} />
+            <Shrine map={map} relic={relic} showInteriors={visibility.buildingVisibility === "interiors"} />
+          </BuildingBatches>
+        </group>
+        <group name="visibility-characters" visible={visibility.showCharacters}>
+          <PixelCharacters>
+            <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
+          </PixelCharacters>
+          <CharacterBatches><Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
+            characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} /></CharacterBatches>
+        </group>
       </RenownSaturation></HearthLights>
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
       <BuildInfluenceOverlay map={map} buildMode={!!buildType} />

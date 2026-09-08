@@ -1,5 +1,6 @@
 "use client"
 
+import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES, type SceneVisibility } from "@/lib/game/scene-visibility"
 import { DEFAULT_ELEVATION, type ElevationSettings } from "@/lib/game/map/elevation"
 import dynamic from "next/dynamic"
 import { useEffect, useMemo, useState } from "react"
@@ -16,6 +17,7 @@ import type { CharacterModel } from "@/lib/game/character-assets"
 import { DEFAULT_TREE_MODEL, type TreeModel } from "@/lib/game/trees/render-model"
 import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER, ROAD_TIERS } from "@/lib/game/map/road"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
+import { loadDefaultMapSize, saveDefaultMapSize } from "@/lib/game/map-size-storage"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import { generateRelic, visitChance } from "@/lib/game/relic"
@@ -33,7 +35,8 @@ import {
 } from "@/lib/game/map/generate-map"
 
 import { useSettlement } from "@/hooks/use-settlement"
-import { BUILDING_PREVIEW } from "@/lib/game/building-preview"
+import { previewResidents } from "@/lib/game/jobs/preview"
+import { BUILDING_PREVIEW, JOB_PREVIEW } from "@/lib/game/building-preview"
 
 import { GameHud } from "./game-hud"
 import { CheatBar } from "./cheat-bar"
@@ -55,7 +58,7 @@ const GameCanvas = dynamic(() => import("./game-canvas").then((m) => m.GameCanva
 })
 
 /** Map tuning knobs, in HUD units (coverage is a percentage for URL cleanliness). */
-export interface MapSettings {
+export interface MapSettings extends SceneVisibility {
   elevation: ElevationSettings
   /** Map edge length in tiles; maps are square. */
   size: number
@@ -107,6 +110,7 @@ export interface MapSettings {
 export const WATER_COUNT_AUTO = -1
 
 export const DEFAULT_SETTINGS: MapSettings = {
+  ...DEFAULT_SCENE_VISIBILITY,
   elevation: DEFAULT_ELEVATION,
   size: DEFAULT_MAP_WIDTH,
   coverage: Math.round(DEFAULT_FOREST_COVERAGE * 100),
@@ -162,6 +166,9 @@ export function GameShell({
   const [seed, setSeed] = useState<number | null>(initialSeed ?? null)
   const [blasterPastor, setBlasterPastor] = useState(false)
   const [lastMarch, setLastMarch] = useState(false)
+  const [defaultMapSize, setDefaultMapSize] = useState(DEFAULT_MAP_WIDTH)
+  const [mapSizeReady, setMapSizeReady] = useState(false)
+  const [mapSizeSaved, setMapSizeSaved] = useState(true)
   const [settings, setSettings] = useState<MapSettings>({
     ...DEFAULT_SETTINGS,
     ...initialSettings,
@@ -174,6 +181,14 @@ export function GameShell({
   }
 
   useEffect(() => {
+    // Resolve the browser preference before generating terrain or writing the URL.
+    const size = loadDefaultMapSize()
+    setDefaultMapSize(size)
+    if (initialSettings?.size === undefined) setSettings(current => ({ ...current, size }))
+    setMapSizeReady(true)
+  }, [initialSettings?.size])
+
+  useEffect(() => {
     // A seed the player saved takes precedence over a random roll, but never
     // over one named in the URL (that arrives via initialSeed).
     if (seed === null) setSeed(loadSavedSeed() ?? randomSeed())
@@ -181,7 +196,7 @@ export function GameShell({
 
   // Keep seed and tuning in the URL so any map can be bookmarked and revisited.
   useEffect(() => {
-    if (seed === null) return
+    if (seed === null || !mapSizeReady) return
     const query = new URLSearchParams({
       seed: String(seed),
       size: String(settings.size),
@@ -212,14 +227,16 @@ export function GameShell({
       lakes: String(settings.lakes),
       ponds: String(settings.ponds),
     })
+    for (const [key] of VISIBILITY_TOGGLES) query.set(key, settings[key] ? "1" : "0")
+    query.set("buildingVisibility", settings.buildingVisibility)
     for (const [key, value] of Object.entries(settings.elevation)) query.set(`e_${key}`, String(value))
     if (benchmarkCity) query.set("benchmark", "city")
     window.history.replaceState(null, "", `?${query}`)
-  }, [seed, settings, benchmarkCity])
+  }, [seed, settings, benchmarkCity, mapSizeReady])
 
   const generatedMap = useMemo(
     () =>
-      seed === null
+      seed === null || !mapSizeReady
         ? null
         : generateMap({
             seed,
@@ -238,6 +255,7 @@ export function GameShell({
           }),
     [
       seed,
+      mapSizeReady,
       settings.elevation,
       settings.size,
       settings.coverage,
@@ -260,7 +278,7 @@ export function GameShell({
 
   // Identities live outside the canvas so the HUD can name whoever is selected.
   const travelerCount = baseMap ? travelerCountForMap(baseMap, settings.traffic) : 0
-  const travelers = useMemo(
+  const roadTravelers = useMemo(
     () => (seed === null ? [] : generateTravelers(seed, travelerCount)),
     [seed, travelerCount],
   )
@@ -282,6 +300,8 @@ export function GameShell({
   useEffect(() => { footpaths.paved = ROAD_TIERS[settings.road]?.paved ?? false }, [footpaths, settings.road])
   // Keep one live map for the canvas and HUD readers, including roadside preaching.
   const map = useMemo(() => economy.map ? { ...economy.map, footpaths } : null, [economy.map, footpaths])
+  const travelers = useMemo(() => JOB_PREVIEW && map ? [...roadTravelers, ...previewResidents(map).map(resident => resident.traveler)] : roadTravelers,
+    [roadTravelers, map])
   const renown = economy.renown
   const [evangelism, setEvangelism] = useState(0)
   useEffect(() => {
@@ -340,6 +360,7 @@ export function GameShell({
           walkTuning={walkTuning}
           characterModel={settings.characterModel}
           treeModel={settings.treeModel}
+          visibility={settings}
           characterScale={settings.characterModel === "base" ? settings.baseSize : settings.draftSize}
           roadTier={settings.road}
           relicTraffic={relicTraffic}
@@ -370,7 +391,16 @@ export function GameShell({
         onSettingsChange={setSettings}
         pixelation={pixelationSettings}
         onPixelationChange={(patch) => setPixelationOverrides((current) => ({ ...current, ...patch }))}
-        onReroll={() => setSeed(randomSeed())}
+        defaultMapSize={defaultMapSize}
+        mapSizeSaved={mapSizeSaved}
+        onDefaultMapSizeChange={size => {
+          setDefaultMapSize(size)
+          setMapSizeSaved(saveDefaultMapSize(size))
+        }}
+        onNewMap={size => {
+          setSettings(current => ({ ...current, size }))
+          setSeed(randomSeed())
+        }}
         onSeedChange={setSeed}
       />
       <CheatBar blasterPastor={blasterPastor} onBlasterPastor={() => setBlasterPastor(active => !active)} onLastMarch={() => setLastMarch(true)} />

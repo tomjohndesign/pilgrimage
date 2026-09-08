@@ -6,6 +6,8 @@ import * as THREE from "three"
 
 import { sceneryDetail } from "@/lib/game/render/scenery-detail"
 
+import { isWorldVisible } from "@/lib/game/render/visibility"
+
 const MAX_HEARTH_LIGHTS = 16
 const HearthContext = createContext<{ register: (light: THREE.PointLight) => () => void } | null>(null)
 
@@ -32,6 +34,7 @@ export function HearthLights({ children }: { children: ReactNode }) {
     frustum.setFromProjectionMatrix(matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse))
     candidates.length = 0
     for (const source of sources) {
+      if (source.parent && !isWorldVisible(source.parent)) continue
       source.getWorldPosition(point)
       sphere.center.copy(point); sphere.radius = source.distance
       if (!frustum.intersectsSphere(sphere)) continue

@@ -172,7 +172,7 @@ export function retireBypassedRoad(map: GameMap, cut: WalkingShortcut): void {
  * a building, a felled tree, a path the player lays down — bumps the ground
  * revision instead and invalidates the stretch on the walkers' next step.
  */
-export const SHORTCUT_REFRESH = 3
+export const SHORTCUT_REFRESH_SECONDS = 3
 
 /**
  * Where the road offers a way across, if anywhere, for traffic heading this way
@@ -186,17 +186,17 @@ export const SHORTCUT_REFRESH = 3
  * re-deriving the same answer hundreds of times.
  */
 function roadCut(map: GameMap, progress: number, direction: 1 | -1, exploring: boolean,
-  pointAt: (p: number, lane: number) => TilePos, now: number): number | null {
+  pointAt: (p: number, lane: number) => TilePos, nowSeconds: number): number | null {
   const paths = map.footpaths!
   const cuts = paths.cuts ??= new Map()
   const key = (Math.floor(progress) * 2 + (direction === 1 ? 1 : 0)) * 2 + (exploring ? 1 : 0)
   const cached = cuts.get(key)
   if (cached && cached.ground === paths.ground && cached.buildings === map.buildings.length
-    && now - cached.at < SHORTCUT_REFRESH && now >= cached.at) return cached.end
+    && nowSeconds - cached.atSeconds < SHORTCUT_REFRESH_SECONDS && nowSeconds >= cached.atSeconds) return cached.end
   // Resolved on the road's own centre line: what is published is the line, and
   // each walker offers its own lane against it below.
   const cut = findRoadShortcut(map, progress, direction, p => pointAt(p, 0), exploring)
-  cuts.set(key, { end: cut?.end ?? null, at: now, ground: paths.ground, buildings: map.buildings.length })
+  cuts.set(key, { end: cut?.end ?? null, atSeconds: nowSeconds, ground: paths.ground, buildings: map.buildings.length })
   return cut?.end ?? null
 }
 
@@ -209,9 +209,9 @@ function roadCut(map: GameMap, progress: number, direction: 1 | -1, exploring: b
  * one cost evaluation, against the lookahead scan it replaces.
  */
 export function takeRoadShortcut(map: GameMap, progress: number, direction: 1 | -1, lane: number,
-  pointAt: (p: number, lane: number) => TilePos, exploring: boolean, now: number): WalkingShortcut | null {
+  pointAt: (p: number, lane: number) => TilePos, exploring: boolean, nowSeconds: number): WalkingShortcut | null {
   if (!map.footpaths || !map.road) return null
-  const end = roadCut(map, progress, direction, exploring, pointAt, now)
+  const end = roadCut(map, progress, direction, exploring, pointAt, nowSeconds)
   if (end === null) return null
   // A stretch is resolved once per road tile, so a walker part way through that
   // tile can be handed a rejoin point it has already passed. Nobody doubles back.

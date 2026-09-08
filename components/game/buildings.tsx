@@ -34,7 +34,7 @@ import {
 } from "@/lib/game/render/outline"
 
 /** Built structures share their geometry with the menu and placement preview. */
-export function Buildings({ map, characterScale = 1.5 }: { map: GameMap; characterScale?: number }) {
+export function Buildings({ map, characterScale = 1.5, showInteriors = false }: { map: GameMap; characterScale?: number; showInteriors?: boolean }) {
   // Authored colors live on the merged vertices. Share the otherwise identical
   // surface material so adjacent buildings reuse lighting and shader uniforms.
   const surfaceMaterial = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), [])
@@ -70,7 +70,7 @@ export function Buildings({ map, characterScale = 1.5 }: { map: GameMap; charact
 
         const local = rotatedFootprint(building, building.rotation)
         const cutaway = models[index].some(p => p.layer === "roof") && (
-          unitInterior === building.id || isSelected(selection, { kind: "building", id: building.id }) ||
+          showInteriors || unitInterior === building.id || isSelected(selection, { kind: "building", id: building.id }) ||
           (selection?.kind === "pile" && piles.some(p => p.id === selection.id && p.campId === building.id)))
         if (building.buildType === "storehouse" || building.buildType === "workshop") {
           return (

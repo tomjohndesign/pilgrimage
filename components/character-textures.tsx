@@ -1,3 +1,6 @@
+import { JOB_POPULATION } from "@/lib/game/jobs/assets"
+import { SETTLEMENT_JOBS, type SettlementJob } from "@/lib/game/jobs/design"
+import type { PopulationPack } from "@/lib/game/base-person/population"
 import Link from "next/link"
 import { DEFAULT_POPULATION } from "@/lib/game/base-person/population-assets"
 import { POPULATION_PROFILES } from "@/lib/game/base-person/population"
@@ -7,20 +10,18 @@ import { TRAVELER_TYPES } from "@/lib/game/travelers"
 export function CharacterTextures() {
   return <section id="characters" className="mt-20 w-full max-w-6xl scroll-mt-8">
     <header className="mb-8 text-center"><h2 className="font-display text-2xl tracking-[5px] text-parchment">CHARACTER SPRITES</h2>
-      <p className="mt-3 text-sm text-[#b9ad92]">Seven callings · mixed bodies · eight directions and {DEFAULT_POPULATION.frameCounts?.walk ?? 8} walking frames.</p>
+      <p className="mt-3 text-sm text-[#b9ad92]">{Object.keys(TRAVELER_TYPES).length} callings · mixed bodies · eight directions and {DEFAULT_POPULATION.frameCounts?.walk ?? 8} walking frames.</p>
       <Link href="/assets/characters" className="mt-4 inline-block font-display text-xs text-gold underline underline-offset-4">Open the sprite playground →</Link>
     </header>
     <div className="mb-8" aria-label="Current road character sprites">
       <h3 className="mb-3 font-display text-lg text-parchment">On the road</h3>
       <p className="mb-5 text-sm text-[#b9ad92]">Three male and three female profiles per calling, with individual size variation on the map.</p>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{Object.values(TRAVELER_TYPES).map(type => {
-        const atlas = DEFAULT_POPULATION.callings[type.id]
-        return <article key={type.id} className="border border-rule bg-parchment p-4 text-ink">
-          <h4 className="font-display text-sm"><span className="mr-2 inline-block h-2 w-2" style={{ background: type.color }} />{type.label}</h4>
-          <div className="my-3 grid grid-cols-3 justify-items-center bg-[#62724d]">{POPULATION_PROFILES.map((profile, i) => <span key={profile.id} role="img" aria-label={`${type.label}, ${profile.id}`} style={{ width: 64, height: 64, imageRendering: "pixelated", backgroundImage: `url(${atlas.walk})`, backgroundSize: `${(DEFAULT_POPULATION.frameCounts?.walk ?? 8) * 64}px ${DEFAULT_POPULATION.rows * 64}px`, backgroundPosition: `0px ${-i * 8 * 64}px` }} />)}</div>
-          <div className="flex gap-4 text-xs underline underline-offset-4"><a href={atlas.walk} download>Walk sheet</a><a href={atlas.idle} download>Idle sheet</a></div>
-        </article>
-      })}</div>
+      <OutfitCards types={Object.values(TRAVELER_TYPES)} pack={DEFAULT_POPULATION} />
+    </div>
+    <div className="mb-8" aria-label="Settlement job sprites">
+      <h3 className="mb-3 font-display text-lg text-parchment">In the enclave</h3>
+      <p className="mb-5 text-sm text-[#b9ad92]">Residents change into their work clothes when they take a job. Every job has three male and three female profiles.</p>
+      <OutfitCards types={(Object.keys(SETTLEMENT_JOBS) as SettlementJob[]).map(id => ({ id, ...SETTLEMENT_JOBS[id] }))} pack={JOB_POPULATION} />
     </div>
     <article className="mb-8 border border-rule bg-parchment p-5 text-ink">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -33,7 +34,7 @@ export function CharacterTextures() {
       </div>
     </article>
     <p className="mb-5 text-center text-sm text-[#b9ad92]">Earlier image-generated drafts · retained for comparison</p>
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{Object.values(TRAVELER_TYPES).map((type) => {
+    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{Object.values(TRAVELER_TYPES).filter(type => type.id !== "beggar").map((type) => {
       const asset = CHARACTER_ASSETS[type.id]
       return <article key={type.id} className="border border-rule bg-parchment p-4 text-ink">
         <h3 className="font-display text-base">{type.label}</h3>
@@ -50,4 +51,15 @@ export function CharacterTextures() {
       </article>
     })}</div>
   </section>
+}
+
+function OutfitCards<Calling extends string>({ types, pack }: { types: { id: Calling; label: string; color: string }[]; pack: PopulationPack<Calling> }) {
+  return <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{types.map(type => {
+        const atlas = pack.callings[type.id]
+        return <article key={type.id} className="border border-rule bg-parchment p-4 text-ink">
+          <h4 className="font-display text-sm"><span className="mr-2 inline-block h-2 w-2" style={{ background: type.color }} />{type.label}</h4>
+          <div className="my-3 grid grid-cols-3 justify-items-center bg-[#62724d]">{POPULATION_PROFILES.map((profile, i) => <span key={profile.id} role="img" aria-label={`${type.label}, ${profile.id}`} style={{ width: 64, height: 64, imageRendering: "pixelated", backgroundImage: `url(${atlas.walk})`, backgroundSize: `${(pack.frameCounts?.walk ?? 8) * 64}px ${pack.rows * 64}px`, backgroundPosition: `0px ${-i * 8 * 64}px` }} />)}</div>
+          <div className="flex gap-4 text-xs underline underline-offset-4"><a href={atlas.walk} download>Walk sheet</a><a href={atlas.idle} download>Idle sheet</a></div>
+        </article>
+      })}</div>
 }

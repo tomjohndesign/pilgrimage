@@ -24,7 +24,7 @@ template for new walking characters.
 - Hips pivot gently against the chest on each stride. Solve legs from those
   rotated hips while keeping foot targets fixed; head bob and elbow flexion
   follow the same distance-driven cycle. Footwear retains the shared sole
-  envelope: sandals for peasants, ankle boots for other callings and monks.
+  envelope: sandals for peasants and beggars, ankle boots for other callings and monks.
 - Robes, skirts, belts, hands and attachment sockets must follow the pelvis.
   Update the garment clipping plane with it. A long garment is not a reason to
   skip the underlying leg solver or hide invalid knees.
@@ -118,9 +118,9 @@ release or package version. Tests require every active family to match it.
 Bake the base, every population profile/calling,
 and the Monk preset. Inspect the latest main branch before allocating versions.
 Published bakes are immutable; use new paths and update all active imports only
-after the exports exist. The current exports are base v32, population v25,
-monks v34 (brown hair) / v35 (grey hair), rockets v11, transport v21, knights v9
-and minstrel v3. These color sheets share the [southeast surface lighting](LIGHTING.md).
+after the exports exist. The current exports are base v33, population v29,
+monks v38 (brown hair) / v39 (grey hair), rockets v13, transport v23, knights v11,
+minstrel v5 and settlement jobs v2. These color sheets share the [southeast surface lighting](LIGHTING.md).
 For a subsequent change choose unused versions:
 
 ```sh
@@ -148,8 +148,8 @@ designs must be baked through the same current rig, not mapped onto stale sheets
   discrete poses. Verify no accumulated offset over repeated cycles, correct
   resets, and anchored height on slopes.
 - Run `npm test` and `npm run typecheck`, the base and population asset checkers,
-  and `node scripts/check-base-person.mjs v34 --monk` for the current monk bake.
-  Also check `node scripts/check-base-person.mjs v35 --monk` for grey-haired monks.
+  and `node scripts/check-base-person.mjs v38 --monk` for the current monk bake.
+  Also check `node scripts/check-base-person.mjs v39 --monk` for grey-haired monks.
   Check per-clip dimensions, matching shadows,
   palette, binary body alpha, safe margins and attachment registration.
 - Inspect side and diagonal views in the editor and on real road tiles. Check
@@ -159,3 +159,24 @@ designs must be baked through the same current rig, not mapped onto stale sheets
 
 Passing the stride arithmetic alone is insufficient: inspect the actual
 rendered feet against the ground and the knees beneath each garment.
+
+## Settlement job equipment and demo
+
+The job outfits use `handTool` on the shared person rig: shepherd crooks follow
+the planted staff motion; woodcutters hold the axe in both hands during idle
+and walking, then use the existing work actions. Tools are stowed for actions
+that need free hands. Every job/body preset remains editable in the shared lab.
+
+Bake a new immutable job pack with
+`npm run assets:population -- vNEXT --jobs --url http://localhost:3219` and check it
+with `node scripts/check-population.mjs vNEXT --jobs`. Update the import in
+`lib/game/jobs/assets.ts` after exporting.
+
+For a local staffed building demo, set `NEXT_PUBLIC_BUILDING_PREVIEW=1` and
+`NEXT_PUBLIC_JOB_PREVIEW=1` in the workspace's gitignored `.env.local`, start the
+dev server, and open `/play?seed=42`. The preview includes every building, a
+second market stall so both keeper genders can be inspected, and homes for the
+workers. Its nine workers start at their workplaces and use the normal
+simulation. These flags are disabled in production.
+
+New callings can reuse unchanged sheets with `npm run assets:population -- vNEXT --only beggar --from v29 --url http://localhost:3219`. The exporter checks layout and template compatibility; geometry or pose changes affecting existing callings still require a full export. Beggar clothing uses the shared Ragged tunic option and all six body profiles.

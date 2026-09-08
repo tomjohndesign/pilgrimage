@@ -13,6 +13,7 @@ import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
 import { terrainCorner, type CliffCorner } from "@/lib/game/map/cliff-corners"
 import { waterDepthCorners } from "@/lib/game/map/water-depth-corners"
 import { groundCornerTiles, groundPaintCode } from "@/lib/game/map/ground-transitions"
+import { DEEP_WOOD_TINT, OPEN_MEADOW_TINT, DARK_WOOD_DARKEN } from "@/lib/game/render/ground-palette"
 import { GROUND_TRANSITIONS_GLSL } from "@/lib/game/render/ground-transitions"
 import { groundGrowthField } from "@/lib/game/environment/ground-growth"
 import { foundingRoadStrength, foundingRoadTraffic } from "@/lib/game/footpaths"
@@ -80,25 +81,7 @@ const GRID_HALF_WIDTH = 0.025
 const GRID_DARKEN = 0.8
 
 /**
- * Anchor tints for the forest-shade gradient. Every tile's colour is pulled
- * (by its terrain's `shadeBlend`) toward a point on the ramp between these two,
- * chosen by how deep in the woods it sits — so the ground darkens under the
- * forest cluster and brightens continuously toward open meadow, instead of
- * snapping between two flat greens at the tree line.
- */
-const DEEP_WOOD_TINT = new THREE.Color("#36452a")
-const OPEN_MEADOW_TINT = new THREE.Color("#94a158")
 
-/**
- * The ground darkens by this much more under the heart of a dark forest.
- * Unlike the forest-shade tint this ignores `shadeBlend`: it is the canopy's
- * shadow, and it falls on the track cut through the old growth just as it
- * falls on the forest floor — a bright ribbon through the dark would lie
- * about how dark it is in there.
- */
-const DARK_WOOD_DARKEN = 0.4
-
-/**
  * Which ground wears the grass texture, and how strongly the tile's own colour
  * is laid over the sward first. Clear land *is* the sward — its colour is the
  * texture's average, so there is nothing to lay over. The forest floor is the
@@ -201,6 +184,7 @@ interface TileMaterialOptions {
  * Ground tiles carry `aShoreCorners` and `aShorePaint` for triangular banks
  * and shallows. With `gridOrigin` set, the global grid lattice is drawn on top.
  */
+
 
 function makeTileMaterial({
   grassTexture,
@@ -952,7 +936,6 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
     [grass, ground, sand, palette, waterPalette, growth, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentUniforms, floorTexture],
   )
   useEffect(() => () => edgeMaterial.dispose(), [edgeMaterial])
-
   const idGeometry = useMemo(() => makeTileGeometry(geometryCount), [geometryCount])
   const idMaterial = useMemo(() => {
     const material = new THREE.MeshBasicMaterial({ color: "black", toneMapped: false })

@@ -22,7 +22,7 @@ export type FootpathObstacle = TilePos & { radius: number }
 /** Obstacles bucketed on a coarse world grid; see {@link indexObstacles}. */
 export interface ObstacleIndex { source: readonly FootpathObstacle[]; reach: number; cells: Map<number, FootpathObstacle[]> }
 /** One stretch of road's answer to "is there a way across here?"; see lib/game/walking-shortcuts. */
-export interface RoadCut { end: number | null; at: number; ground: number; buildings: number }
+export interface RoadCut { end: number | null; atSeconds: number; ground: number; buildings: number }
 export interface Footpaths { rerouted: Set<number>; obstacles?: readonly FootpathObstacle[]; obstacleIndex?: ObstacleIndex; paved?: boolean; founding: Map<number, number>; edges: Map<string, Footpath>; contacts: Map<number | string, ContactTrack>; cuts?: Map<number, RoadCut>; ground: number; revision: number; elapsed: number }
 export const createFootpaths = (map?: GameMap): Footpaths => ({
   rerouted: new Set(),

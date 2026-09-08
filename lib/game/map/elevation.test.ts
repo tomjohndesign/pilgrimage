@@ -120,6 +120,24 @@ describe("topography", () => {
     expect(e.cliffs).toEqual([1, 2])
   })
 
+  it.each([0, 0.8])("keeps a diagonal river bank continuous with waterfall relief %s", (waterfallDrop) => {
+    // Reported seed: the northeast bank alternated between intact ground and
+    // deep, straight trenches whenever the river centerline took a grid turn.
+    const map = generateMap({ seed: 1995993239, elevation: { waterfallDrop } })
+    const e = map.elevation!, water = map.water!, w = map.width
+    // The river beside the affected bank is an ordinary flowing reach.
+    for (const [x, z] of [[28, 12], [30, 15], [32, 20], [33, 25]]) {
+      expect(water.motion![z * w + x]).toBe("flow")
+    }
+    for (let z = 8; z < 27; z++) for (let x = 35; x < 47; x++) {
+      const i = z * w + x
+      expect(water.depth[i]).toBe(0)
+      for (const n of [i + 1, i + w]) {
+        expect(Number.isFinite(elevationStep(e, i, n)), `bank at ${x},${z} → ${n}`).toBe(true)
+      }
+    }
+  })
+
   it("routes around a cliff and prefers a flat detour over a climb", () => {
     const water = new Uint8Array(25)
     const e = generateElevation(1, 5, 5, water)

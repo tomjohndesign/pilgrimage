@@ -26,7 +26,7 @@ import { useAnimalRigStore } from "@/lib/game/wildlife/rig-store"
 import { createEditedAnimalFrame } from "@/lib/game/transport/edited-frame"
 import { animalLeg } from "@/lib/game/transport/animal-pose"
 import { KNIGHT } from "@/lib/game/knight/design"
-import manifest from "@/public/textures/transport/v22/manifest.json"
+import manifest from "@/public/textures/transport/v23/manifest.json"
 import type { FigureClickHandler } from "./traveler-figure"
 
 export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0, horseVariant = "common", cargo = "produce", puller = "hand", awning = false, characterScale = 1,

@@ -1,5 +1,4 @@
 import { OUTLINE_THICKNESS_PX } from "../render/outline"
-import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
 import type { TerrainId } from "./terrain"
 import { tileAt, type GameMap } from "./types"
 
@@ -268,24 +267,6 @@ export function roadEdge(map: GameMap, x: number, z: number): RoadEdge {
   return { open, filledCorners, diagonal: roadDiagonals(map, x, z) }
 }
 
-/** Most suitable stretches straighten, with some ordinary bends for variety. */
-export const DIAGONAL_ROAD_SHARE = 0.9
-/** Choose a style over a stretch of land, rather than independently at every bend. */
-const ROAD_STYLE_REGION = 8
-
-function prefersDiagonalRoad(map: GameMap, x: number, z: number, nx: number, nz: number): boolean {
-  // Hand-authored fixtures express their shape directly. Generated worlds
-  // choose a repeatable mix, shared by the renderer and traveler movement.
-  if (map.seed === undefined) return true
-  // Use the shared entrance's midpoint, so both tiles make the same choice
-  // even when that entrance crosses a style-region boundary.
-  const rx = Math.floor((x + nx + 1) / (2 * ROAD_STYLE_REGION))
-  const rz = Math.floor((z + nz + 1) / (2 * ROAD_STYLE_REGION))
-  const region = Math.imul(rx, 73856093) ^ Math.imul(rz, 19349663)
-  const seed = deriveSeed(deriveSeed(map.seed, SEED_STREAM.roadShape), region)
-  return makeRng(seed)() < DIAGONAL_ROAD_SHARE
-}
-
 /** Encode the two perpendicular entrances of an ordinary bend. */
 function roadBendSides(map: GameMap, x: number, z: number): number {
   if (!isRoadTerrain(tileAt(map, x, z))) return 0
@@ -297,7 +278,7 @@ function roadBendSides(map: GameMap, x: number, z: number): number {
   return count === 2 && (sides & 3) !== 0 && (sides & 12) !== 0 ? sides : 0
 }
 
-/** Only selected simple alternating bends straighten; junctions, plazas and bridges keep their entrances. */
+/** Alternating bends use the grid's 45-degree diagonal; junctions, plazas and bridges keep their entrances. */
 export function roadDiagonals(map: GameMap, x: number, z: number): SideFlags {
   const sides = roadBendSides(map, x, z)
   const diagonal: SideFlags = [0, 0, 0, 0]
@@ -306,7 +287,7 @@ export function roadDiagonals(map: GameMap, x: number, z: number): SideFlags {
     const [dx, dz] = EDGE_DIRS[side]
     const neighbour = roadBendSides(map, x + dx, z + dz)
     const other = 31 - Math.clz32(sides ^ (1 << side))
-    if ((neighbour & (1 << (side ^ 1))) && (neighbour & (1 << (other ^ 1))) && prefersDiagonalRoad(map, x, z, x + dx, z + dz)) diagonal[side] = 1
+    if ((neighbour & (1 << (side ^ 1))) && (neighbour & (1 << (other ^ 1)))) diagonal[side] = 1
   }
   return diagonal
 }

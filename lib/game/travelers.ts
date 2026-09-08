@@ -22,6 +22,7 @@ export type TravelerTypeId =
   | "knight"
   | "minstrel"
   | "vendor"
+  | "beggar"
 
 /** Inclusive integer range for attribute rolls. */
 export interface StatRange {
@@ -77,7 +78,7 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     id: "pilgrim",
     label: "Pilgrim",
     color: "#8a7f9e",
-    weight: 16.5,
+    weight: 18,
     paceMin: 0.8,
     paceMax: 1.1,
     gold: { min: 5, max: 40 },
@@ -133,7 +134,7 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     id: "minstrel",
     label: "Minstrel",
     color: "#3f7d6c",
-    weight: 5.5,
+    weight: 1.5,
     paceMin: 0.9,
     paceMax: 1.2,
     gold: { min: 5, max: 30 },
@@ -142,6 +143,20 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     joblessChance: 0.35,
     skillCount: { min: 1, max: 2 },
     skills: ["song", "lute", "juggling", "gossip"],
+  },
+  beggar: {
+    id: "beggar",
+    label: "Beggar",
+    color: "#786c58",
+    weight: 2.5,
+    paceMin: 0.4,
+    paceMax: 0.6,
+    gold: { min: 0, max: 3 },
+    status: { min: 0, max: 10 },
+    piety: { min: 25, max: 85 },
+    joblessChance: 0.8,
+    skillCount: { min: 0, max: 1 },
+    skills: ["labour", "mending", "herb lore"],
   },
   // Walks the road selling food and wine to the others (see lib/game/sim.ts).
   // Deliberately scarce — the generator still guarantees one per real crowd.

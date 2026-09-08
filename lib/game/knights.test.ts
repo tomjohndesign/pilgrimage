@@ -25,7 +25,7 @@ function fixture(direction: 1 | -1) {
 
 describe("mounted knight journeys", () => {
   it("keeps the mount with its rider throughout roadside music visits", () => {
-    for (const activity of ["toListen", "listening", "fromListening"]) {
+    for (const activity of ["toListen", "listening", "fromListening", "toAlms", "givingAlms", "fromAlms"]) {
       expect(knightMounted(activity)).toBe(true)
       expect(knightMounted(activity, { x: 0, y: 0, z: 0, heading: 0 })).toBe(false)
     }

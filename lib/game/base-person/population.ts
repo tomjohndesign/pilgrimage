@@ -41,11 +41,15 @@ export function populationDesign(type: Pick<TravelerTypeDef, "id" | "color">, va
     design[key] = Math.min(range.max, Math.max(range.min, Math.round((base[key] + delta) / range.step) * range.step))
     design[key] = Number(design[key].toFixed(3))
   }
+  if (type.id === "beggar") Object.assign(design, {
+    tunicStyle: "Ragged", accentColor: "#a49476", shirtColor: "#958a74", trouserColor: "#635a4b",
+    beltStyle: "Rope", footwear: "Sandals", hat: "None", satchel: false, lute: false,
+  })
   if (minstrel) { design.hem = 1.2; design.tunicLength = 1.15 }
   return validatePersonDesign(design)
 }
 
-export interface PopulationPack {
+export interface PopulationPack<Calling extends string = TravelerTypeId> {
   /** Set by bakes whose palette reserves the skin and hair steps for the body,
    * so a complexion can be recoloured without touching props or cloth. */
   reservedTones?: boolean
@@ -57,8 +61,8 @@ export interface PopulationPack {
   cellSize: number
   anchor: number[]
   rows: number
-  callings: Record<TravelerTypeId, { walk: string; idle: string; designs: PersonDesign[]; actions?: Partial<Record<ActionClip, string>>; depths?: Partial<Record<import("./pose").BaseClip, string>> }>
-  greyCallings?: Partial<PopulationPack["callings"]>
+  callings: Record<Calling, { walk: string; idle: string; designs: PersonDesign[]; actions?: Partial<Record<ActionClip, string>>; depths?: Partial<Record<import("./pose").BaseClip, string>> }>
+  greyCallings?: Partial<PopulationPack<Calling>["callings"]>
   shadows: { walk: string; idle: string; actions?: Partial<Record<ActionClip, string>> }
   strideRatios: number[]
 }

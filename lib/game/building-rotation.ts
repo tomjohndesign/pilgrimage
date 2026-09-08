@@ -1,3 +1,4 @@
+import { sheepPenLayout } from "./workshop-layout"
 import type { BuildingDef, GameMap, TilePos } from "./map/types"
 
 /** Clockwise quarter turns viewed from above; absent on older structures. */
@@ -39,6 +40,15 @@ export function buildingEntry(building: Pick<BuildingDef, "x" | "z" | "w" | "d" 
   return { x: building.x + (building.w - 1) / 2 + offset.x, z: building.z + (building.d - 1) / 2 + offset.z }
 }
 
+/** The open fold has its own gate beside the hut's separate doorway. */
+export function buildingFoldEntry(building: BuildingDef, inside = false): TilePos {
+  const { w, d } = rotatedFootprint(building, building.rotation)
+  const gateX = sheepPenLayout(w).penLeft + Math.min(.62, d * .42) / 2
+  const tileX = Math.round(gateX + (w - 1) / 2) - (w - 1) / 2
+  const offset = rotateBuildingPoint(tileX, (d - 1) / 2 + (inside ? 0 : 1), building.rotation)
+  return { x: building.x + (building.w - 1) / 2 + offset.x, z: building.z + (building.d - 1) / 2 + offset.z }
+}
+
 /** Reserved, walkable frontage; decorative scenery has no doorway to protect. */
 export function buildingApproach(map: Pick<GameMap,"site">,building: BuildingDef): TilePos | null {
   if(building.id === map.site?.hovelId) return map.site.door
@@ -51,5 +61,5 @@ export function buildingApproaches(map: Pick<GameMap,"site">, building: Building
   const front=buildingApproach(map,building)
   if(!front) return []
   return building.buildType === "tavern" && building.id !== map.site?.hovelId
-    ? [front,buildingEntry(building,false,-1)] : [front]
+    ? [front,buildingEntry(building,false,-1)] : building.buildType === "sheep-pen" ? [front, buildingFoldEntry(building)] : [front]
 }

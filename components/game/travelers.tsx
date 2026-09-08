@@ -1,6 +1,10 @@
 "use client"
 
 import { withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
+import { JOB_PREVIEW } from "@/lib/game/building-preview"
+import { previewResidents, placePreviewResident } from "@/lib/game/jobs/preview"
+import { settlementJob, type SettlementJob } from "@/lib/game/jobs/design"
+import { wildlifeRegistry } from "@/lib/game/wildlife/registry"
 
 import { processionRegistry } from "@/lib/game/relic-procession"
 import { frameProfile } from "@/lib/game/render/frame-profile"
@@ -24,7 +28,7 @@ import { useBuildStore } from "@/lib/game/build-store"
 import type { Relic } from "@/lib/game/relic"
 import type { TreePlacement } from "@/lib/game/trees/placement"
 import { tileAt, worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
-import { createSim, simRegistry, stepSim } from "@/lib/game/sim"
+import { GAME_DAY_SECONDS, createSim, simRegistry, stepSim } from "@/lib/game/sim"
 import { shrineLayout } from "@/lib/game/shrine-layout"
 import type { Traveler } from "@/lib/game/travelers"
 import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/game/motion"
@@ -107,6 +111,9 @@ export const Travelers = memo(function Travelers({
   const kneelingHeading = shrine ? shrineLayout(shrine,map.site?.door).rotation + Math.PI : Math.PI
   const appearances = useMemo(() => travelers.map(t => travelerAppearance(map.seed ?? 0, t.id)), [travelers, map.seed])
   const selection = useCameraStore((s) => s.selection)
+  const [jobs, setJobs] = useState<ReadonlyMap<number, SettlementJob>>(() => new Map(JOB_PREVIEW ? previewResidents(map).map(resident =>
+    [resident.traveler.id, settlementJob(resident.building.id, [resident.building])!] as const) : []))
+  const currentJobs = useRef(jobs)
   const resourceElapsed = useRef(0)
   const preparedParents = useMemo(() => new Set<THREE.Object3D>(), [])
   const obstacleSource = useRef<{ trees: TreePlacement[]; felled: number } | null>(null)
@@ -122,8 +129,13 @@ export const Travelers = memo(function Travelers({
   const sim = useMemo(() => createSim([], map, [], relic.stats), [map.road, relic])
   useEffect(() => {
     const fresh = createSim(travelers, map, [], relic.stats)
+    const residents = JOB_PREVIEW ? new Map(previewResidents(map).map(resident => [resident.traveler.id, resident])) : new Map()
     for (const [id, traveler] of fresh.travelers) {
-      if (!sim.travelers.has(id)) sim.travelers.set(id, traveler)
+      if (!sim.travelers.has(id)) {
+        const resident = residents.get(id)
+        if (resident) placePreviewResident(traveler, map, resident)
+        sim.travelers.set(id, traveler)
+      }
     }
     for (const id of sim.travelers.keys()) {
       if (!fresh.travelers.has(id)) {
@@ -160,6 +172,7 @@ export const Travelers = memo(function Travelers({
     const started = frameProfile.start()
     // A background tab hands us a huge delta; clamp so nobody teleports.
     const build = useBuildStore.getState()
+    sim.wildlife = wildlifeRegistry.current
     sim.procession = processionRegistry.current
     sim.buildings = camps
     sim.shrineRenown = shrineRenown
@@ -177,6 +190,15 @@ export const Travelers = memo(function Travelers({
         routeBenchmarkCity(sim, map)
         stepSim(sim, travelers, map, speed, dt, movement, speedScales, characterScale)
       }
+    }
+    const nextJobs = new Map<number, SettlementJob>()
+    for (const [id, traveler] of sim.travelers) {
+      const job = settlementJob(traveler.employer, camps)
+      if (job) nextJobs.set(id, job)
+    }
+    if (nextJobs.size !== currentJobs.current.size || [...nextJobs].some(([id, job]) => currentJobs.current.get(id) !== job)) {
+      currentJobs.current = nextJobs
+      setJobs(nextJobs)
     }
     resourceElapsed.current += delta
     if (build.resourceRevision !== sim.resourceRevision || resourceElapsed.current >= 0.25) {
@@ -207,7 +229,14 @@ export const Travelers = memo(function Travelers({
       // The selected figure stays live wherever it wanders, so its outline and
       // highlight never depend on where the camera happens to be pointing.
       bounds.radius = FIGURE_RADIUS + 32
-      if (frustum.intersectsSphere(bounds) || (selected?.kind === "traveler" && selected.id === travelers[i].id)) {
+      const personNearby = frustum.intersectsSphere(bounds)
+      bounds.radius = FIGURE_RADIUS
+      const personOnScreen = frustum.intersectsSphere(bounds)
+      const parking = s.marketParking ?? s.shrineParking
+      if (parking) bounds.center.set(parking.pose.x, walkingSurface(map, parking.pose.x, parking.pose.z).height, parking.pose.z)
+      const parkedOnScreen = !!parking && frustum.intersectsSphere(bounds)
+      bounds.radius = FIGURE_RADIUS + 32
+      if (personNearby || (!!parking && frustum.intersectsSphere(bounds)) || (selected?.kind === "traveler" && selected.id === travelers[i].id)) {
         nextMounted.push(i)
         if (!group) {
           pendingUnits++
@@ -217,7 +246,7 @@ export const Travelers = memo(function Travelers({
         }
       }
       bounds.radius = FIGURE_RADIUS
-      const onScreen = frustum.intersectsSphere(bounds)
+      const onScreen = personOnScreen || parkedOnScreen
         || (selected?.kind === "traveler" && selected.id === travelers[i].id)
       if (!group) { if (onScreen) missingVisibleUnits++; continue }
       const wasVisible = group.visible
@@ -245,7 +274,7 @@ export const Travelers = memo(function Travelers({
       if (s.activity === "visiting" && !!s.shrineSeat) {
         group.rotation.y = kneelingHeading
       }
-      if (s.activity === "performing" && s.walkFrom) {
+      if ((s.activity === "performing" || s.activity === "begging") && s.walkFrom) {
         group.rotation.y = Math.atan2(s.walkFrom.x - s.x, s.walkFrom.z - s.z)
       }
       if (s.activity === "listening" && s.musicVisit) {
@@ -253,6 +282,11 @@ export const Travelers = memo(function Travelers({
         if (performer) group.rotation.y = Math.atan2(performer.x - s.x, performer.z - s.z)
       }
       if (s.activity === "building") group.rotation.y = s.buildingTask?.heading ?? Math.PI
+      if (s.activity === "givingAlms" && s.almsVisit) {
+        const beggar = sim.travelers.get(s.almsVisit.beggarId)
+        if (beggar) group.rotation.y = Math.atan2(beggar.x - s.x, beggar.z - s.z)
+      }
+      group.userData.donated = (s.donationUntil ?? 0) > sim.time * GAME_DAY_SECONDS
       group.userData.workTree = workTree
       if (!playback.paused && !moving && workTree && (s.activity === "working" || s.activity === "gathering")) {
         group.rotation.y = Math.atan2(workTree.x - s.x, workTree.z - s.z)
@@ -267,13 +301,13 @@ export const Travelers = memo(function Travelers({
       }
       group.userData.activity = s.praying ? "praying" : s.activity
       group.userData.routineActivity = s.activity
-      group.userData.shrineParking = s.shrineParking
-      // Walking around a building leaves the cart route; the cart trails the
-      // puller's own hitch until they are back on the road.
+      group.userData.transportParking = s.marketParking ?? s.shrineParking
+      // Render the same collision-checked pose used by the simulation; a
+      // settled keeper leaves that pose in the market's rear yard.
       group.userData.cartProgress = s.convoy && s.activity === "walking" && !s.track && !s.shrineParking && !s.roadShortcut ? s.progress : undefined
       group.userData.cartDirection = s.direction
-      group.userData.cartManeuver = false
-      group.userData.cartPose = s.shrineParking?.pose
+      group.userData.cartManeuver = !!s.cartPose
+      group.userData.cartPose = s.marketParking?.pose ?? s.shrineParking?.pose ?? s.cartPose
       group.userData.animalHeading = undefined
       group.userData.reversing = false
       group.userData.keeperTime = s.keeperTime ?? 0
@@ -336,7 +370,7 @@ export const Travelers = memo(function Travelers({
       <PixelCharacters>
         <AdmissionEffects sim={sim} characterScale={characterScale} />
         {mounted.map(index => travelers[index] && <TravelerUnit key={travelers[index].id} index={index}
-          traveler={travelers[index]} map={map} appearance={appearances[index]} groups={groupRefs}
+          traveler={travelers[index]} map={map} appearance={appearances[index]} job={jobs.get(travelers[index].id)} groups={groupRefs}
           selected={isSelected(selection, { kind: "traveler", id: travelers[index].id })}
           characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />)}
       </PixelCharacters>
@@ -348,9 +382,9 @@ export const Travelers = memo(function Travelers({
 })
 
 /** Stable neighbors do not rebuild rigs or materials as another figure enters view. */
-const TravelerUnit = memo(function TravelerUnit({ index, traveler, map, appearance, groups, selected, ...figure }: {
+const TravelerUnit = memo(function TravelerUnit({ index, traveler, map, appearance, groups, selected, job, ...figure }: {
   index: number; traveler: Traveler; map: GameMap; appearance: ReturnType<typeof travelerAppearance>
-  groups: RefObject<Array<THREE.Group | null>>; selected: boolean
+  groups: RefObject<Array<THREE.Group | null>>; selected: boolean; job?: SettlementJob
   characterModel: CharacterModel; characterScale: number; characterFps?: number; walkTuning?: WalkTuning
 }) {
   const idColor = useMemo(() => new THREE.Color(...encodeObjectId(travelerObjectId(index))), [index])
@@ -358,8 +392,8 @@ const TravelerUnit = memo(function TravelerUnit({ index, traveler, map, appearan
     selectElement({ kind: "traveler", id: traveler.id }, event), [traveler.id])
   const register = useCallback((node: THREE.Group | null) => { markPerson(node); if (node) node.userData.travelerId = traveler.id; groups.current[index] = node }, [groups, index, traveler.id])
   return <group name="traveler-unit" visible={false} ref={register}>
-    {traveler.type.id === "vendor" || traveler.type.id === "knight" ?
-      <TravelerFigure {...figure} map={map} age={traveler.attributes.age}
+    {job || traveler.type.id === "vendor" || traveler.type.id === "knight" ?
+      <TravelerFigure {...figure} map={map} job={job} age={traveler.attributes.age}
         {...(traveler.type.id === "knight" ? knightLoadout(traveler.id) : cartLoadout(traveler.id))}
         appearance={appearance} selected={selected} type={traveler.type} onClick={select} idColor={idColor} /> :
       <Suspense fallback={null}><CharacterSprite {...figure} map={map} age={traveler.attributes.age}

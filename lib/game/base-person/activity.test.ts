@@ -4,7 +4,7 @@ import { activityClip } from "./activity"
 describe("simulation sprite poses", () => {
   it.each([
     ["preaching", "preaching"], ["praying", "praying"], ["hoisting", "hoisting"], ["procession", "procession"], ["vigil", "praying"], ["resting", "praying"], ["walking", "idle"], ["flying", "idle"],
-    ["camping", "sleeping"], ["idle", "sitting"], ["visiting", "praying"],
+    ["begging", "sitting"], ["givingAlms", "idle"], ["camping", "sleeping"], ["idle", "sitting"], ["visiting", "praying"],
     ["working", "treeFelling"], ["gathering", "woodcutting"], ["vending", "idle"],
   ] as const)("shows %s as %s", (activity, clip) => {
     expect(activityClip(activity, false)).toBe(clip)

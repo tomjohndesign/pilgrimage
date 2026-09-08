@@ -1,3 +1,4 @@
+import { settlementJob, SETTLEMENT_JOBS } from "./jobs/design"
 import type { FoodStock } from "./storage"
 import { create } from "zustand"
 import { normalizeBuildingRotation, type BuildingRotation } from "./building-rotation"
@@ -56,10 +57,11 @@ export const useBuildStore = create<BuildState>((set) => ({
   syncResources: (sim, travelers = []) => set((s) => {
     const settlers = travelers.flatMap((t) => {
       const live = sim.travelers.get(t.id)
+      const job = settlementJob(live?.employer, sim.buildings)
       return live?.employer ? [{
         id: t.id,
         name: t.name,
-        duty: "Lumber worker",
+        duty: job ? SETTLEMENT_JOBS[job].label : "Resident",
         attributes: { age: t.attributes.age, piety: live.piety, skills: t.attributes.skills },
       }] : []
     })

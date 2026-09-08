@@ -129,6 +129,27 @@ export function createBasePersonRig(recipe = personRecipe()) {
     }
     geometry.computeVertexNormals()
   }
+  if (recipe.design.tunicStyle === "Ragged") {
+    torso.material = [tunic, accent]
+    const geometry = torso.geometry, positions = geometry.getAttribute("position"), indices = geometry.index!
+    geometry.clearGroups()
+    for (let i = 0; i < indices.count; i += 3) {
+      const vertices = [indices.getX(i), indices.getX(i + 1), indices.getX(i + 2)]
+      const x = vertices.reduce((sum, v) => sum + positions.getX(v), 0) / 3
+      const y = vertices.reduce((sum, v) => sum + positions.getY(v), 0) / 3
+      const z = vertices.reduce((sum, v) => sum + positions.getZ(v), 0) / 3
+      // Broad mismatched cloth repairs, readable at the shared sprite pixel size.
+      const patch = (x < -0.06 && y < waist && z > 0) || (x > 0.08 && y > waist && y < b.chestHeight && z < 0)
+      geometry.addGroup(i, 3, patch ? 1 : 0)
+    }
+    for (let i = 0; i < positions.count; i++) {
+      if (positions.getY(i) <= b.tunicHemUpper + 0.001) {
+        const angle = Math.atan2(positions.getX(i), positions.getZ(i))
+        positions.setY(i, positions.getY(i) + 0.035 * (1 + Math.cos(angle * 5)) + 0.025 * (1 + Math.sin(angle * 3)))
+      }
+    }
+    geometry.computeVertexNormals()
+  }
   torso.scale.z = 0.72
   if (recipe.design.beltStyle === "Rope") {
     const rope = (name: string, points: THREE.Vector3[], closed = false) => {
@@ -654,6 +675,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       const chair = clip === "seatedPrayer"
       const seated = clip === "sitting" || chair, praying = clip === "praying"
       const felling = clip === "treeFelling", splitting = clip === "woodcutting"
+      const carryAxe = recipe.design.handTool === "Carried axe" && (clip === "walk" || clip === "idle")
       const sleep = clip === "sleeping", chop = felling || splitting, gather = clip === "gathering"
       const drop = pelvisHeight(phase, clip, b) - b.hipHeight
       // Slide the resting grip up the shaft as the hips lower, keeping the blade above the ground.
@@ -687,7 +709,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       contents.visible = gather && gathering.deposited
       pillow.visible = snores.visible = sleep
       snores.position.set(0.08, 0.55 + phase % 1 * 0.1, pillow.position.z)
-      axe.visible = chop
+      axe.visible = chop || carryAxe
       mallet.visible = building
       // The persistent world stump supports the logs; body atlases never paint a second block.
       block.visible = false
@@ -769,8 +791,8 @@ export function createBasePersonRig(recipe = personRecipe()) {
           (limb.side === "left" ? 0 : Math.PI) - 0.35)) * 0.14 * recipe.design.armSwing : 0
         limb.elbow.rotation.set(-THREE.MathUtils.degToRad(recipe.design.elbowBend) - elbowSwing, 0, 0)
         const sign = limb.side === "left" ? 1 : -1
-        limb.hand.position.set(0, -b.forearmLength - (chop ? 0.04 : 0.025) * recipe.design.hands, 0)
-        limb.hand.scale.set(chop ? 0.065 : 0.043, chop ? 0.055 : 0.06, chop ? 0.060 : 0.04).multiplyScalar(recipe.design.hands)
+        limb.hand.position.set(0, -b.forearmLength - ((chop || carryAxe) ? 0.04 : 0.025) * recipe.design.hands, 0)
+        limb.hand.scale.set((chop || carryAxe) ? 0.065 : 0.043, (chop || carryAxe) ? 0.055 : 0.06, (chop || carryAxe) ? 0.060 : 0.04).multiplyScalar(recipe.design.hands)
         limb.hand.quaternion.identity()
         if (recipe.design.walkingStick && (clip === "walk" || clip === "idle") && limb.side === "right") {
           const { grip } = staffMotion(phase, b, clip === "walk", edits)
@@ -780,6 +802,10 @@ export function createBasePersonRig(recipe = personRecipe()) {
           reach(limb, target.toArray() as Point3, true)
           root.updateMatrixWorld(true)
 
+        }
+        else if (carryAxe) {
+          const grip = sign * .16 * chopping.axeScale
+          reach(limb, [grip * .94, .26 + grip * .342, .34], true)
         }
         else if (devotional) reach(limb, [sign * 0.018, waist - b.hipHeight + 0.045 + sign * 0.015, 0.30])
         else if (sermon) reach(limb, sermon[limb.side], true)
@@ -861,6 +887,14 @@ export function createBasePersonRig(recipe = personRecipe()) {
           new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), hammer.pitch))
         mallet.quaternion.copy(sockets.rightHand.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(desired))
         mallet.updateMatrixWorld(true)
+      }
+      if (carryAxe) {
+        const right = sockets.rightHand.getWorldPosition(new THREE.Vector3())
+        const left = sockets.leftHand.getWorldPosition(new THREE.Vector3())
+        const desired = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), left.sub(right).normalize())
+        axe.quaternion.copy(sockets.rightHand.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(desired))
+        axe.position.set(0, 0, 0)
+        axe.updateMatrixWorld(true)
       }
       if (chop) {
         const toolRotation = felling

@@ -7,6 +7,7 @@ import { isWorldVisible } from "@/lib/game/render/visibility"
 import { sceneryDetail } from "@/lib/game/render/scenery-detail"
 import { characterPalette } from "@/lib/game/render/character-batch"
 
+import { RoadsideSignals } from "./roadside-signals"
 import { MINSTREL_PLAYING } from "@/lib/game/minstrel/assets"
 import type { FrameRegistration } from "@/lib/game/base-person/bake"
 import type { GameMap } from "@/lib/game/map/types"
@@ -61,8 +62,8 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   const asset = useCharacterAssetStore((s) => s.assets[type])
   const custom = usePersonDesignStore((s) => s.atlas)
   const population = usePopulationStore(s => s.pack)
-  const varied = characterModel === "base" && !!appearance
-  const visual = useMemo(() => visualOverride ?? (varied ? populationVisual(type, appearance.variant, population, age) :
+  const varied = (characterModel === "base" || type === "beggar") && !!appearance
+  const visual = useMemo(() => visualOverride ?? (varied || type === "beggar" ? populationVisual(type, appearance?.variant ?? 0, population, age) :
     { ...characterVisual(asset, characterModel, custom), rowOffset: 0, strideRatio: 1, reservedTones: false }),
     [visualOverride, asset, characterModel, custom, varied, appearance?.variant, population, type, age])
   const individualScale = characterScale * (varied ? appearance.scale : 1)
@@ -81,7 +82,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   const parentInverse = useMemo(() => new THREE.Matrix4(), [])
   const contact = useMemo(() => new THREE.Vector3(), [])
   const corrected = useMemo(() => new THREE.Vector3(), [])
-  const playingClip = varied && type === "minstrel" ? MINSTREL_PLAYING : undefined
+  const playingClip = !visualOverride && varied && type === "minstrel" ? MINSTREL_PLAYING : undefined
   const textureEntries = useMemo(() => [
     { clip: visual.walk, url: visual.walk.url }, { clip: visual.idle, url: visual.idle.url },
     ...ACTION_CLIPS.flatMap(name => {
@@ -335,6 +336,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   // Equal-depth overlaps must choose the same traveler in the color and ID passes.
   return (
     <group ref={poseRoot}>
+      {(type === "minstrel" || type === "beggar") && !visualOverride && <RoadsideSignals type={type} size={size} pixelSize={size / 64} />}
       <sprite renderOrder={renderOrder} ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name={name} material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync !== false }} />
       {attachment && <group ref={attachmentRoot} visible={false}>{attachment.content}</group>}
       {outlineMaterial && <sprite ref={idSprite} renderOrder={renderOrder} layers-mask={OUTLINE_ID_LAYER_MASK} material={outlineMaterial}

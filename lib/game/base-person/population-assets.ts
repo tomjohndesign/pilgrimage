@@ -3,7 +3,7 @@ import { personWalkStride } from "./gait"
 import { actionPlaybackRate } from "./activity"
 import { ACTION_CLIPS, type ActionClip } from "./pose"
 import type { SpriteClip } from "../character-assets"
-import manifest from "../../../public/textures/characters/population/v26/manifest.json"
+import manifest from "../../../public/textures/characters/population/v29/manifest.json"
 import type { TravelerTypeId } from "../travelers"
 import { validatePersonDesign } from "./design"
 import type { PopulationPack } from "./population"
@@ -17,6 +17,10 @@ export const DEFAULT_POPULATION: PopulationPack = { ...manifest, callings: Objec
 export function populationVisual(type: TravelerTypeId, variant: number, custom: PopulationPack | null, age = 18) {
   const pack = custom ?? DEFAULT_POPULATION
   const calling = (age >= GREY_HAIR_AGE ? pack.greyCallings?.[type] : undefined) ?? pack.callings[type]
+  return outfitVisual(pack, calling, variant)
+}
+
+export function outfitVisual<Calling extends string>(pack: PopulationPack<Calling>, calling: PopulationPack<Calling>["callings"][Calling], variant: number) {
   return {
     walk: { strides: pack.walkStrides ?? 1, url: calling.walk, depth: calling.depths?.walk, columns: pack.frameCounts?.walk ?? 8, rows: pack.rows, stillFrame: 0 },
     idle: { url: calling.idle, depth: calling.depths?.idle, columns: 1, rows: pack.rows, stillFrame: 0 },

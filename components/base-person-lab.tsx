@@ -12,7 +12,7 @@ import { actionPlaybackRate } from "@/lib/game/base-person/activity"
 import { BASE_PERSON, PERSON_CLIPS, SOCKET_NAMES, type BaseClip } from "@/lib/game/base-person/pose"
 import { bakeChoppingBlock, bakePersonProgressively, personFrameRenderer, personSessionKey, renderPersonPreview, type BakeProgress, type BasePersonBake, type PersonPreview, type PersonSession } from "@/lib/game/base-person/bake"
 
-import { DEFAULT_DESIGN, DESIGN_CONTROLS, HAIR_STYLES, HAT_STYLES, TUNIC_STYLES, PERSON_PRESETS, personRecipe, withBodyType, validatePersonDesign, type DesignKey, type PersonDesign } from "@/lib/game/base-person/design"
+import { DEFAULT_DESIGN, DESIGN_CONTROLS, HAIR_STYLES, HAT_STYLES, HAND_TOOLS, TUNIC_STYLES, PERSON_PRESETS, personRecipe, withBodyType, validatePersonDesign, type DesignKey, type PersonDesign } from "@/lib/game/base-person/design"
 import { usePopulationStore } from "@/lib/game/base-person/population-store"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { MerchantMapPreview } from "./merchant-map-preview"
@@ -22,12 +22,13 @@ import { KNIGHT, knightDesign } from "@/lib/game/knight/design"
 import { knightTravelSpeed } from "@/lib/game/knights"
 import { personWalkStride } from "@/lib/game/base-person/gait"
 import { squireVisual } from "@/lib/game/knight/visual"
-import knightMetadata from "@/public/textures/knights/v10/manifest.json"
-import transportMetadata from "@/public/textures/transport/v22/manifest.json"
+import knightMetadata from "@/public/textures/knights/v11/manifest.json"
+import transportMetadata from "@/public/textures/transport/v23/manifest.json"
 
 const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse", knight: "Knight" } as const
 type Subject = keyof typeof SUBJECTS
 declare global { interface Window {
+  __jobBake?: typeof import("@/lib/game/jobs/bake").bakeJobs
   __minstrelBake?: typeof import("@/lib/game/minstrel/bake").bakeMinstrels
   __knightBake?: typeof import("@/lib/game/knight/bake").bakeKnights
   __transportBake?: typeof import("@/lib/game/transport/bake").bakeTransport
@@ -45,6 +46,10 @@ import { staffMotion } from "@/lib/game/base-person/staff-motion"
 import type { Point3 } from "@/lib/game/base-person/pose"
 import { populationDesign, POPULATION_PROFILES } from "@/lib/game/base-person/population"
 import { TRAVELER_TYPES } from "@/lib/game/travelers"
+
+import { SETTLEMENT_JOBS, jobDesign, type SettlementJob } from "@/lib/game/jobs/design"
+
+const JOB_DESIGNS = (Object.keys(SETTLEMENT_JOBS) as SettlementJob[]).flatMap(job => POPULATION_PROFILES.map((profile, variant) => ({ id: `job/${job}/${profile.id}`, label: `${SETTLEMENT_JOBS[job].label} · ${profile.id.replaceAll("-", " ")}`, design: jobDesign(job, variant) })))
 
 const ROAD_DESIGNS = Object.values(TRAVELER_TYPES).flatMap(type => POPULATION_PROFILES.map((profile, variant) => ({ id: `${type.id}/${profile.id}`, label: `${type.label} · ${profile.id.replaceAll("-", " ")}`, design: populationDesign(type, variant) })))
 
@@ -121,14 +126,15 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   }, [])
   useEffect(() => {
     if (process.env.NODE_ENV !== "development") return
-    const target = window as unknown as { __bakePersonPopulation?: (progress?: (done: number) => void) => Promise<unknown> }
-    target.__bakePersonPopulation = async progress => (await import("@/lib/game/base-person/bake-population")).bakePopulation(undefined, progress)
+    const target = window as unknown as { __bakePersonPopulation?: (progress?: (done: number) => void, only?: import("@/lib/game/travelers").TravelerTypeId) => Promise<unknown> }
+    target.__bakePersonPopulation = async (progress, only) => (await import("@/lib/game/base-person/bake-population")).bakePopulation(undefined, progress, undefined, only)
+    window.__jobBake = async progress => (await import("@/lib/game/jobs/bake")).bakeJobs(progress)
     window.__minstrelBake = async () => (await import("@/lib/game/minstrel/bake")).bakeMinstrels()
     window.__knightBake = async () => (await import("@/lib/game/knight/bake")).bakeKnights()
     window.__transportBake = async () => (await import("@/lib/game/transport/bake")).bakeTransport()
     window.__choppingBlockBake = bakeChoppingBlock
     window.__rocketMonkBake = async () => (await import("@/lib/game/rocket/bake")).bakeRocketMonks()
-    return () => { delete target.__bakePersonPopulation; delete window.__transportBake; delete window.__knightBake; delete window.__minstrelBake; delete window.__choppingBlockBake; delete window.__rocketMonkBake }
+    return () => { delete target.__bakePersonPopulation; delete window.__jobBake; delete window.__transportBake; delete window.__knightBake; delete window.__minstrelBake; delete window.__choppingBlockBake; delete window.__rocketMonkBake }
   }, [])
   const [bake, setBake] = useState<BasePersonBake | null>(null)
   const [error, setError] = useState("")
@@ -209,7 +215,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   const loadJson = () => {
     try {
       const imported = parseCharacterEdits(jsonText, character)
-      const available = new Set([...Object.keys(PERSON_PRESETS).map(name => `preset/${name}`), ...ROAD_DESIGNS.map(entry => entry.id)])
+      const available = new Set([...Object.keys(PERSON_PRESETS).map(name => `preset/${name}`), ...ROAD_DESIGNS.map(entry => entry.id), ...JOB_DESIGNS.map(entry => entry.id)])
       if (Object.keys(imported.drafts).some(id => !available.has(id))) throw new Error("These edits include an unknown character.")
       const merged = { ...drafts.current, [character]: design, ...imported.drafts }
       // Keep a recoverable copy of the pre-import drafts before replacing keys.
@@ -359,7 +365,8 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
         <div className="person-controls-scroll">
           {isPerson ? <>
           <Section {...section("Presets")}><div className="person-presets">{Object.entries(PERSON_PRESETS).map(([name, preset]) => <button key={name} className={button} onClick={() => chooseCharacter(`preset/${name}`, preset)}>{name}</button>)}</div></Section>
-          <Section {...section("Road characters")}><label className="person-choice">Character<select aria-label="Road character" value={character.startsWith("preset/") ? "" : character} onChange={e => { const entry = ROAD_DESIGNS.find(d => d.id === e.target.value); if (entry) chooseCharacter(entry.id, entry.design) }}><option value="" disabled>Choose calling / body</option>{ROAD_DESIGNS.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select></label></Section>
+          <Section {...section("Road characters")}><label className="person-choice">Character<select aria-label="Road character" value={ROAD_DESIGNS.some(entry => entry.id === character) ? character : ""} onChange={e => { const entry = ROAD_DESIGNS.find(d => d.id === e.target.value); if (entry) chooseCharacter(entry.id, entry.design) }}><option value="" disabled>Choose calling / body</option>{ROAD_DESIGNS.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select></label></Section>
+          <Section {...section("Settlement jobs")}><label className="person-choice">Job<select aria-label="Settlement job character" value={character.startsWith("job/") ? character : ""} onChange={e => { const entry = JOB_DESIGNS.find(d => d.id === e.target.value); if (entry) chooseCharacter(entry.id, entry.design) }}><option value="" disabled>Choose job / body</option>{JOB_DESIGNS.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select></label></Section>
           <Section {...section("Body")}>
             <label className="person-choice">Body type<select aria-label="Body type" value={design.bodyType} onChange={event => { const bodyType = event.currentTarget.value as PersonDesign["bodyType"]; setDesign(d => withBodyType(d, bodyType)); setMessage("") }}><option>Male</option><option>Female</option></select></label>
             {controls(["head", "build", "torsoHeight", "neckHeight", "legs"])}
@@ -379,6 +386,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
           </Section>
           <Section {...section("Road accessories")}>
             <label className="person-choice">Hat<select aria-label="Hat" value={design.hat} onChange={event => { const hat = event.currentTarget.value as PersonDesign["hat"]; setDesign(d => ({ ...d, hat })); setMessage("") }}>{HAT_STYLES.map(style => <option key={style}>{style}</option>)}</select></label>
+            <label className="person-choice">Hand tool<select aria-label="Hand tool" value={design.handTool} onChange={event => { const handTool = event.target.value as PersonDesign["handTool"]; setDesign(d => validatePersonDesign({ ...d, handTool })) }}>{HAND_TOOLS.map(tool => <option key={tool}>{tool}</option>)}</select></label>
             {([["satchel", "Satchel"], ["walkingStick", "Walking staff"], ["lute", "Lute"]] as const).map(([key, label]) => <label key={key} className="person-check"><input aria-label={label} type="checkbox" checked={design[key]} onChange={event => { const value = event.currentTarget.checked; setDesign(d => ({ ...d, [key]: value })); setMessage("") }} />{label}</label>)}
             <p className="person-hint">Road equipment is worn while walking or idle. Other activities free the hands and set bags and instruments aside.</p>
           </Section>

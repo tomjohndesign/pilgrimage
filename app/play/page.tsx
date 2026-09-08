@@ -3,6 +3,7 @@ import type { Metadata } from "next"
 
 import { GameShell, type MapSettings } from "@/components/game/game-shell"
 import { treeModelForGame } from "@/lib/game/trees/render-model"
+import { parseSceneVisibility } from "@/lib/game/scene-visibility"
 
 export const metadata: Metadata = {
   title: "Pilgrimage — Prototype",
@@ -28,7 +29,7 @@ export default async function PlayPage({
 }) {
   const params = await searchParams
 
-  const initialSettings: Partial<MapSettings> = {}
+  const initialSettings: Partial<MapSettings> = parseSceneVisibility(params)
   if (params.characters === "base" || params.characters === "callings") {
     initialSettings.characterModel = params.characters
   }

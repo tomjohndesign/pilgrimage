@@ -74,6 +74,19 @@ describe("shared selection", () => {
     expect(prioritizePeople(people)).toBe(people)
   })
 
+  it("ignores hidden scenery and characters, including visible children of hidden layers", () => {
+    const hiddenLayer = { visible: false, parent: null }
+    const person = { visible: true, userData: {} as Record<string, unknown>, parent: hiddenLayer }
+    markPerson(person)
+    const walker = { object: { visible: true, parent: person } }
+    const roof = { object: { visible: false, parent: null } }
+    const tree = { object: { visible: true, parent: hiddenLayer } }
+    const ground = { object: { visible: true, parent: null } }
+    expect(prioritizePeople([walker, roof, tree, ground])).toEqual([ground])
+    hiddenLayer.visible = true
+    expect(prioritizePeople([ground, tree, walker])).toEqual([walker, ground, tree])
+  })
+
   it("clears the effect when a selected identity is gone", () => {
     expect(selectionObjectId(null, objects)).toBe(0)
     expect(selectionObjectId({ kind: "building", id: "gone" }, objects)).toBe(0)

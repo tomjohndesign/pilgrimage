@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { createPortal, useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
+import { isObjectVisible } from "@/lib/game/scene-visibility"
 import { PixelCharacters } from "@/components/pixel-canvas"
 import { surfaceHeight } from "@/lib/game/map/bridges"
 import { worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
@@ -61,6 +62,7 @@ export function CharacterSelectionShadow({ map, flying = false }: { map: GameMap
   }, [scene, flying])
   useFrame(() => {
     if (!anchor.current || !shadow.current) return
+    shadow.current.visible = isObjectVisible(anchor.current)
     anchor.current.getWorldPosition(position)
     const y = flying ? surfaceHeight(map, worldToTileX(map, position.x), worldToTileZ(map, position.z)) : position.y
     shadow.current.position.set(position.x, y + 0.035, position.z)

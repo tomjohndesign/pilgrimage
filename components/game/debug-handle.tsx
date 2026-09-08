@@ -208,6 +208,18 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         })
         return sprites
       },
+      roadsideSignals: () => {
+        const signals: Array<{ activity: string; visible: boolean; marks: number; positions: number[][] }> = []
+        scene.traverse(object => {
+          if (object.name !== "roadside-signals") return
+          let visible = object.visible
+          object.traverseAncestors(parent => { visible &&= parent.visible })
+          signals.push({ activity: object.parent?.parent?.userData.activity, visible,
+            marks: object.children.filter(child => child.visible).length,
+            positions: object.children.map(child => child.position.toArray()) })
+        })
+        return signals
+      },
       burrows: () => scene.getObjectByName("wildlife")?.userData.burrows ?? [],
       wildlife: () => scene.getObjectByName("wildlife")?.userData.animals ?? [],
       transportSprites: () => {
