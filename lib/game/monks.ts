@@ -9,6 +9,8 @@ import { deriveSeed, makeRng, SEED_STREAM } from "./rng"
  */
 
 export const MONK_COUNT = 4
+export const MONK_VISIT_CHANCE = 0.6
+export const MONK_JOIN_CHANCE = 0.35
 
 export interface MonkAttributes {
   /** Years. */
@@ -28,6 +30,10 @@ export interface Monk {
    * settler entries borrow this shape for a list and carry none. */
   complexion?: Complexion
   attributes: MonkAttributes
+  home?: string
+  bedSlot?: number
+  /** The visitor enters the shared monk routine from this position. */
+  arrival?: { x: number; y: number; z: number; stamina: number }
 }
 
 const DUTIES = ["Keeper of the Relic", "Cellarer", "Chanter", "Almoner", "Infirmarian", "Gardener"]

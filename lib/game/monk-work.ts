@@ -6,7 +6,7 @@ import { buildingAt } from "./settlement"
 
 export const MONK_TIRED_AT = 25
 export const MONK_WAKE_AT = 95
-export interface MonkNeeds { workSlot: number; stamina: number; buildingTask?: BuildingTask; jobSearch: number }
+export interface MonkNeeds { home?: string; bedSlot?: number; workSlot: number; stamina: number; buildingTask?: BuildingTask; jobSearch: number }
 export function createMonkNeeds(index: number): MonkNeeds { return { workSlot: index, stamina: 100 - index * 6, jobSearch: 0 } }
 
 /** Finish assigned construction before resting; tired monks cannot take new work. */
@@ -15,7 +15,11 @@ export function stepMonkWork(s: MonkRoutine & MonkNeeds, map: GameMap, speed: nu
   if (s.activity !== "sleeping") s.stamina = Math.max(0, s.stamina - dt * (s.activity === "building" ? 0.8 : 0.25))
   s.jobSearch = Math.max(0, s.jobSearch - dt)
   if (s.stamina <= MONK_TIRED_AT && !s.buildingTask && s.jobSearch === 0) {
-    if (assignBuildingTask(s, map, "rest")) { s.route = []; s.pause = 0 }
+    const workSlot = s.workSlot
+    s.workSlot = s.bedSlot ?? workSlot
+    const assigned = assignBuildingTask(s, map, "rest", s.home)
+    s.workSlot = workSlot
+    if (assigned) { s.route = []; s.pause = 0 }
     else s.jobSearch = 3
   }
   if (!s.buildingTask && s.stamina > MONK_TIRED_AT && s.jobSearch === 0 && s.activity !== "praying") {
