@@ -5,6 +5,8 @@ import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 import { usePixelCharacterRoots, usePixelScene } from "@/components/pixel-canvas"
 import { CHARACTER_COLOR_LAYER, CHARACTER_ID_LAYER } from "@/lib/game/render/pixel-characters"
+import { characterOcclusionRequest, sampleCharacterOcclusion } from "@/lib/game/render/character-occlusion"
+import { sceneryCloseOpacity, sceneryDetail, treeEdgeOpacity } from "@/lib/game/render/scenery-detail"
 
 import { useCameraStore } from "@/lib/game/camera-store"
 import { useBuildStore } from "@/lib/game/build-store"
@@ -55,8 +57,8 @@ const VERTEX_SHADER = /* glsl */ `
  * Edge detection over the ID buffer. A pixel is outlined when a *nearer*
  * neighbour belongs to a different object — so the line lands on the occluded
  * side of the boundary, haloing the foreground shape from outside rather than
- * eating into it. Overlap mode additionally requires the outlined pixel itself
- * to be an object, so no line ever lands on terrain or the void.
+ * eating into it. Overlap mode also traces buildings against the terrain
+ * behind them; other scenery keeps only its object-overlap edges.
  */
 const FRAGMENT_SHADER = /* glsl */ `
   uniform sampler2D tId;
@@ -72,6 +74,8 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform float uMaskOpacity;
   uniform float uTreeIdMin;
   uniform float uTreeIdMax;
+  uniform float uTreeEdgeOpacity;
+  uniform float uCharacterEdgeOpacity;
   uniform bool uCharacterSelected;
   uniform bool uCharacterPass;
   uniform float uCharacterIdMin;
@@ -102,6 +106,13 @@ const FRAGMENT_SHADER = /* glsl */ `
     float idN = idAt(uv);
     if (idN < 0.5) return false;            // only objects cast a halo
     if (abs(idN - idC) < 0.5) return false; // same object, no boundary
+    // Buildings occupy IDs 1 through uTreeIdMin - 1, including player-built
+    // structures. Let their back edges read against terrain in overlap mode.
+    if (uMode == 1 && idC < 0.5 && idN >= uTreeIdMin) return false;
+    // Distant trees neither receive nor cast ordinary overlap ink. Selection
+    // uses its own neighbour test and remains visible at every distance.
+    if (uTreeEdgeOpacity <= 0.0 && ((idC >= uTreeIdMin && idC <= uTreeIdMax)
+      || (idN >= uTreeIdMin && idN <= uTreeIdMax))) return false;
     // Scenery-only edges already exist in the enlarged world image.
     if (uCharacterPass && idC < uCharacterIdMin && idN < uCharacterIdMin) return false;
     float dN = texture2D(tDepth, uv).x;
@@ -185,20 +196,23 @@ const FRAGMENT_SHADER = /* glsl */ `
       }
     }
     if (uMode == 0) discard;
-    if (uMode == 1 && idC < 0.5) discard; // overlap halos land only on objects
+    if (idC >= uTreeIdMin && idC <= uTreeIdMax && uTreeEdgeOpacity <= 0.0) discard;
     bool edge =
       occludedBy(pixelUv + vec2(uTexel.x, 0.0), idC, dC) ||
       occludedBy(pixelUv - vec2(uTexel.x, 0.0), idC, dC) ||
       occludedBy(pixelUv + vec2(0.0, uTexel.y), idC, dC) ||
       occludedBy(pixelUv - vec2(0.0, uTexel.y), idC, dC);
     if (!edge) discard;
-    gl_FragColor = vec4(uColor, 1.0);
+    // At a wide view the dense canopy should read as a forest. Keep tree IDs
+    // and depth for selection/occlusion, but fade the fine overlap ink.
+    float opacity = idC >= uTreeIdMin && idC <= uTreeIdMax ? uTreeEdgeOpacity : 1.0;
+    gl_FragColor = vec4(uColor, opacity * (uCharacterPass ? uCharacterEdgeOpacity : 1.0));
     finishColor();
   }
 `
 
 export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof selectionObjectId>[1], "piles"> }) {
-  const { gl, scene } = useThree()
+  const { gl, scene, camera: displayCamera, size } = useThree()
   const characterRoots = usePixelCharacterRoots()
 
   // ID + depth buffer at drawing-buffer resolution. Nearest filtering is load-
@@ -303,6 +317,8 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
       // Trees own the ID block between the buildings and the relic.
       uTreeIdMin: { value: 1 },
       uTreeIdMax: { value: RELIC_OBJECT_ID - 1 },
+      uTreeEdgeOpacity: { value: 1 },
+      uCharacterEdgeOpacity: { value: 1 },
       uCharacterSelected: { value: false },
       uCharacterPass: { value: false },
       uCharacterIdMin: { value: MAX_OBJECT_ID - 0x2000 + 1 },
@@ -349,22 +365,28 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
   const bufferSize = useMemo(() => new THREE.Vector2(), [])
 
   const frameRef = usePixelScene((camera, destination, stage) => {
-    const { outlineMode: mode, selection } = useCameraStore.getState()
+    const { outlineMode, selection } = useCameraStore.getState()
     const requestedId = objects
       ? selectionObjectId(selection, { ...objects, piles: useBuildStore.getState().piles }) : 0
     const selectingCharacter = requestedId !== 0 && (selection?.kind === "monk" || selection?.kind === "traveler")
     const characterPass = stage.phase === "characters"
+    const distant = sceneryDetail(scene) > 0
+    const closeOpacity = sceneryCloseOpacity(scene)
+    const mode = characterPass && closeOpacity === 0 ? "off" : outlineMode
     const selectionInOtherPass = (stage.phase === "world" && selectingCharacter) || (characterPass && !selectingCharacter)
     const selectedId = selectionInOtherPass ? 0 : requestedId
-    // Masking people through trees reads the same world IDs and depth, so both
-    // passes prepare them whenever anyone is on the map, outlines off or not.
-    const maskCharacters = characterRoots.size > 0
+    // Wide views use ordinary depth occlusion. Dropping the see-through masks
+    // removes the extra character colour and road-edge scene renders entirely.
+    const maskCharacters = closeOpacity > 0 && characterRoots.size > 0
     // Trees hide the roads under them in the same pass they are drawn in.
-    const roadEdgePass = !characterPass
-    // The world ID/depth is also needed when only a character is selected.
-    const needsOutline = mode !== "off" || requestedId !== 0 || maskCharacters || roadEdgePass
+    const roadEdgePass = !characterPass && !distant
     const maskPass = characterPass && maskCharacters
     const characterSelected = selectedId !== 0 && selectingCharacter
+    const needsOutline = mode !== "off" || selectedId !== 0 || maskPass || roadEdgePass
+    // Selection and one-shot diagnostics still need the matching world depth.
+    // With no distant selection the character stage draws only its real colour.
+    const needsIds = needsOutline || !!characterOcclusionRequest.current
+      || (stage.phase === "world" && (maskCharacters || selectingCharacter))
     const ids = characterPass ? displayTarget : target
     const background = scene.background
     const mask = camera.layers.mask
@@ -374,7 +396,7 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
     const clearAlpha = gl.getClearAlpha()
     try {
       gl.autoClear = false
-      if (needsOutline) {
+      if (needsIds) {
         if (destination) bufferSize.set(destination.width, destination.height)
         else gl.getDrawingBufferSize(bufferSize)
         ids.setSize(Math.max(1, bufferSize.x), Math.max(1, bufferSize.y))
@@ -414,6 +436,11 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
           gl.render(scene, camera)
         }
       }
+      if (characterPass && characterOcclusionRequest.current) {
+        const resolve = characterOcclusionRequest.current
+        characterOcclusionRequest.current = null
+        resolve(sampleCharacterOcclusion(gl, scene, camera, ids))
+      }
       camera.layers.mask = mask
       gl.setClearColor(prevClearColor, clearAlpha)
       scene.background = background
@@ -438,6 +465,9 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
         pass.uniforms.uMaskCharacters.value = maskPass
         pass.uniforms.uRoadEdges.value = roadEdgePass
         pass.uniforms.uTreeIdMin.value = (objects?.buildings.length ?? 0) + 1
+        pass.uniforms.uTreeEdgeOpacity.value = distant ? 0 : treeEdgeOpacity(displayCamera, size.height)
+        pass.uniforms.uCharacterEdgeOpacity.value = closeOpacity
+        pass.uniforms.uMaskOpacity.value = CHARACTER_MASK_OPACITY * closeOpacity
         gl.render(pass.quadScene, pass.quadCamera)
       }
     } finally {

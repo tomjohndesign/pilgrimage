@@ -53,7 +53,7 @@
     "pitch": 35.264389682754654,
     "viewSize": 6.933333333333334
   },
-  "safePadding": 16,
+  "safePadding": 25,
   "cartFrame": {
     "directions": 16,
     "cellSize": 160,
@@ -278,7 +278,7 @@
   },
   "puller": {
     "reservedTones": true,
-    "templateVersion": 33,
+    "templateVersion": 32,
     "cellSize": 64,
     "anchor": [
       32,

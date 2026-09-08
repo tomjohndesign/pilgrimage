@@ -57,4 +57,21 @@ describe("initial roads through open land", () => {
     const map = fixture(); map.tiles[detour[3]] = "bridge"
     expect(straightenRoad(map, detour)).toContain(detour[3])
   })
+
+  it.each([false, true])("joins nearby perpendicular crossings without a deck U-turn (reversed: %s)", (reversed) => {
+    const map = fixture()
+    const route = [[2, 2], [2, 3], [2, 4], [2, 5], [3, 5], [4, 5], [5, 5], [6, 5], [7, 5]]
+      .map(([x, z]) => index(x, z))
+    const crossings = [index(2, 3), index(2, 4), index(4, 5), index(5, 5)]
+    for (const i of crossings) map.tiles[i] = "water"
+    if (reversed) route.reverse()
+    const line = straightenRoad(map, route)
+    expect(new Set(line).size).toBe(line.length)
+    expect(line[0]).toBe(route[0]); expect(line.at(-1)).toBe(route.at(-1))
+    for (const i of crossings) expect(line).toContain(i)
+    for (let i = 1; i < line.length; i++) {
+      expect(Math.abs(line[i] % 12 - line[i - 1] % 12)
+        + Math.abs(Math.floor(line[i] / 12) - Math.floor(line[i - 1] / 12))).toBe(1)
+    }
+  })
 })

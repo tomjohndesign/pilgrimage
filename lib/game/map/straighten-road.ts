@@ -45,6 +45,11 @@ export function straightenRoad(map: GameMap, original: readonly number[]): numbe
         if (!approachOpen(route[join])) break
         const line = straightTiles(landing, route[join], map.width)
         if (line.includes(i) || !line.every(approachOpen) || !Number.isFinite(climb([i, ...line]))) continue
+        // Closely spaced crossings can align toward the same landing. Do not
+        // splice through retained road: that creates a loop and a U-turn on
+        // the deck, which has no continuous walking lane.
+        const retained = new Set([...route.slice(0, bank + 1), ...route.slice(join + 1)])
+        if (line.some((tile) => retained.has(tile))) continue
         // Keep the crossing and its ramp while reconnecting to the dry road.
         route.splice(bank + 1, join - bank, ...line)
         pinned.add(i); pinned.add(landing)
@@ -67,6 +72,10 @@ export function straightenRoad(map: GameMap, original: readonly number[]): numbe
       // Also regularize equal-length Manhattan paths: otherwise reducing random
       // routing costs still leaves arbitrary side-to-side steps in an empty glade.
       if (line.length > old.length || line.every((p, i) => p === old[i])) continue
+      // A shortcut must not double back through an already emitted tile or a
+      // later pinned approach, even when the straight line itself is clear.
+      const retained = new Set([...result.slice(0, -1), ...route.slice(to + 1)])
+      if (line.some((tile) => retained.has(tile))) continue
       best = to; replacement = line
     }
     result.push(...replacement.slice(1)); from = best

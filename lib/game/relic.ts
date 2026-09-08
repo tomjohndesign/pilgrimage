@@ -1,3 +1,4 @@
+import { MONK_VISIT_CHANCE } from "./monks"
 import { DEFAULT_BALANCE, type GameBalance } from "./balance"
 import { deriveSeed, makeRng, SEED_STREAM } from "./rng"
 import type { StatRange, Traveler, TravelerAttributes } from "./travelers"
@@ -147,7 +148,7 @@ export function hospitalityNeedThreshold(shrineRenown: number, balance: GameBala
  * Evangelism gives those who decline one independent second chance. The sim
  * rolls each decision separately (see sim.ts); the HUD rounds their combined chance.
  */
-export function visitChance(who: TravelerAttributes, stats: RelicStats, shrineRenown = 0, balance: GameBalance = DEFAULT_BALANCE, evangelism = 0): number {
+export function visitChance(who: TravelerAttributes, stats: RelicStats, shrineRenown = 0, balance: GameBalance = DEFAULT_BALANCE, evangelism = 0, calling?: Traveler["type"]["id"]): number {
   const draw = relicDraw(who, stats, shrineRenown, balance)
   const r = balance.rules
   const reputation = reputationModifier(shrineRenown, balance)
@@ -159,13 +160,14 @@ export function visitChance(who: TravelerAttributes, stats: RelicStats, shrineRe
   const threshold = hospitalityNeedThreshold(shrineRenown, balance)
   const hospitalityReach = Math.min(1, r.hospitalityBaseChance + r.hospitalityRenownBonus * reputation)
   const hospitality = Math.max(0, Math.min(1, (threshold - need) / threshold)) * hospitalityReach
-  const ordinary = Math.max(devotion, hospitality)
+  // Traveling brothers seek the enclave even before its relic is well known.
+  const ordinary = Math.max(devotion, hospitality, calling === "friar" ? MONK_VISIT_CHANCE : 0)
   return ordinary + (1 - ordinary) * Math.max(0, Math.min(1, evangelism))
 }
 
 /** Would this traveler, more likely than not, leave the road for the relic? */
 export function turnsAside(traveler: Traveler, relic: Relic, shrineRenown = 0, balance: GameBalance = DEFAULT_BALANCE): boolean {
-  return visitChance(traveler.attributes, relic.stats, shrineRenown, balance) >= 0.5
+  return visitChance(traveler.attributes, relic.stats, shrineRenown, balance, 0, traveler.type.id) >= 0.5
 }
 
 /**

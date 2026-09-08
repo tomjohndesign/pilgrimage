@@ -29,6 +29,13 @@ describe("travelerCountForMap", () => {
 })
 
 describe("generateTravelers", () => {
+  it("includes a monk and a vendor in normal road crowds", () => {
+    for (const seed of [0, 1, 42, 12345]) for (const count of [6, 12, 30]) {
+      const travelers = generateTravelers(seed, count)
+      expect(travelers.some(t => t.type.id === "friar" && t.type.label === "Monk")).toBe(true)
+      expect(travelers.some(t => t.type.id === "vendor")).toBe(true)
+    }
+  })
   it("starts passing travelers supplied for their own journey", () => {
     for (const seed of [1, 42, 12345]) {
       for (const { attributes } of generateTravelers(seed, 100)) {
@@ -45,6 +52,10 @@ describe("generateTravelers", () => {
     const callings = { Male: new Set<string>(), Female: new Set<string>() }
     for (const seed of [0, 7, 12345, 31337]) {
       for (const traveler of generateTravelers(seed, 500)) {
+        if (traveler.type.id === "friar") {
+          expect(traveler.name).toMatch(/^Brother /)
+          continue
+        }
         const { variant } = travelerAppearance(seed, traveler.id)
         const { bodyType } = POPULATION_PROFILES[variant]
         expect(women.has(traveler.name.split(" ")[0]), traveler.name).toBe(bodyType === "Female")
@@ -52,7 +63,7 @@ describe("generateTravelers", () => {
       }
     }
     for (const seen of Object.values(callings)) {
-      expect([...seen].sort()).toEqual(Object.keys(TRAVELER_TYPES).sort())
+      expect([...seen].sort()).toEqual(Object.keys(TRAVELER_TYPES).filter(id => id !== "friar").sort())
     }
   })
 
@@ -142,4 +153,16 @@ describe("generateTravelers", () => {
     const kinds = new Set(travelers.map((t) => t.type.id))
     expect(kinds.size).toBeGreaterThanOrEqual(4)
   })
+})
+
+it("keeps minstrels scarce and beggars slower than the other road walkers", () => {
+  const crowd = generateTravelers(42, 10000)
+  const minstrels = crowd.filter(t => t.type.id === "minstrel").length
+  expect(minstrels / crowd.length).toBeGreaterThan(0.01)
+  expect(minstrels / crowd.length).toBeLessThan(0.025)
+  expect(crowd.some(t => t.type.id === "beggar")).toBe(true)
+  expect(Object.values(TRAVELER_TYPES).reduce((sum, t) => sum + t.weight, 0)).toBe(100)
+  for (const type of Object.values(TRAVELER_TYPES).filter(t => t.id !== "beggar")) {
+    expect(TRAVELER_TYPES.beggar.paceMax).toBeLessThan(type.paceMin)
+  }
 })

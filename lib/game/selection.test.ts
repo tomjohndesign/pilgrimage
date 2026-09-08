@@ -94,4 +94,15 @@ describe("shared selection", () => {
     expect(selectionObjectId({ kind: "monk", id: -1 }, objects)).toBe(0)
     expect(selectionObjectId({ kind: "pile", id: "gone" }, objects)).toBe(0)
   })
+
+  it("picks a batched building through its source mesh while respecting hidden layers", () => {
+    const layer = { visible: true, parent: null }
+    const roof = { object: { visible: false, userData: { batchedPickTarget: true }, parent: layer } }
+    expect(prioritizePeople([roof])).toEqual([roof])
+    layer.visible = false
+    expect(prioritizePeople([roof])).toEqual([])
+    layer.visible = true
+    roof.object.userData.batchedPickTarget = false
+    expect(prioritizePeople([roof])).toEqual([])
+  })
 })

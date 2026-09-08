@@ -10,7 +10,8 @@ import { useCharacterAssetStore, validateCharacterAssets, type AssetTable } from
 import { playCharacterSound, stopCharacterSound } from "@/lib/game/character-audio"
 
 const CharacterPreview = dynamic(() => import("./character-preview").then((m) => m.CharacterPreview), { ssr: false })
-const TYPES = Object.values(TRAVELER_TYPES)
+// Archived four-frame drafts; new callings live in the shared rig playground.
+const TYPES = Object.values(TRAVELER_TYPES).filter(type => type.id !== "beggar")
 const button = "inline-flex items-center justify-center gap-2 border border-rule px-3 py-2 text-xs text-ink transition hover:bg-parchment-dark focus-visible:outline-2 focus-visible:outline-gold disabled:opacity-40"
 const label = "font-display text-[10px] uppercase tracking-[2px] text-ink-light"
 

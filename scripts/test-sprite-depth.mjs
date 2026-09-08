@@ -24,16 +24,38 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     "driver.png": "cart-produce-driver.png", "driver-depth.png": "depth-cart-produce-driver.png" }
   const outlineSource = await readFile(new URL("../components/game/outline-pass.tsx", import.meta.url), "utf8")
   const outlineFragment = outlineSource.match(/const FRAGMENT_SHADER = \/\* glsl \*\/ `([\s\S]*?)`/)[1]
+  const pixelSource = await readFile(new URL("../components/pixel-canvas.tsx", import.meta.url), "utf8")
+  const presentationFragment = pixelSource.match(/fragmentShader: \/\* glsl \*\/ `([\s\S]*?)`/)[1]
   const foliageManifest = JSON.parse(await readFile(new URL("../public/textures/trees/foliage/v5/manifest.json", import.meta.url), "utf8"))
   const foliageModules = {}
-  for (const name of ["material", "raycast"]) {
+  for (const name of ["material", "raycast", "crop"]) {
     foliageModules[name] = ts.transpileModule(await readFile(new URL(`../lib/game/trees/foliage/${name}.ts`, import.meta.url), "utf8"), {
       compilerOptions: { module: ts.ModuleKind.ESNext },
     }).outputText.replace('"../../render/sprite-depth"', '"/shader.js"').replace('"./design"', '"/foliage-design.js"')
   }
+  const batchModules = {}
+  for (const name of ["building-batch", "road-segment-texture", "terrain-elevation", "terrain-hidden-faces", "character-batch", "sprite-texture", "static-instances", "scenery-detail", "flat-geometry", "complexion-swap", "outline"]) {
+    batchModules[name] = ts.transpileModule(await readFile(new URL(`../lib/game/render/${name}.ts`, import.meta.url), "utf8"), {
+      compilerOptions: { module: ts.ModuleKind.ESNext },
+    }).outputText.replaceAll('"./sprite-depth"', '"/shader.js"')
+      .replaceAll('"./sprite-texture"', '"/batch-sprite-texture.js"')
+      .replaceAll('"./complexion-swap"', '"/batch-complexion-swap.js"')
+      .replaceAll('"./scenery-detail"', '"/batch-scenery-detail.js"')
+      .replaceAll('"./flat-geometry"', '"/batch-flat-geometry.js"')
+      .replaceAll('"./outline"', '"/batch-outline.js"')
+      .replaceAll('"../base-person/complexion"', '"/complexion-slots.js"')
+  }
+  const designSource = await readFile(new URL("../lib/game/base-person/design.ts", import.meta.url), "utf8")
+  const slots = ["SKIN_SHADES", "HAIR_SHADES"].reduce((sum, name) =>
+    sum + JSON.parse(designSource.match(new RegExp(`export const ${name} = (\\[[^\\]]+\\])`))[1]).length, 0)
+  const complexionSlots = `export const COMPLEXION_SLOTS = ${slots}`
   const server = createServer(async (request, response) => {
     const name = request.url.slice(1)
-    if (name === "foliage-design.js") {
+    if (name === "complexion-slots.js") {
+      response.setHeader("Content-Type", "text/javascript"); response.end(complexionSlots)
+    } else if (name.startsWith("batch-") && name.endsWith(".js")) {
+      response.setHeader("Content-Type", "text/javascript"); response.end(batchModules[name.slice(6, -3)])
+    } else if (name === "foliage-design.js") {
       response.setHeader("Content-Type", "text/javascript"); response.end(`export const FOLIAGE_FRAME = ${JSON.stringify(foliageManifest.frame)}`)
     } else if (name.startsWith("foliage-") && name.endsWith(".js")) {
       response.setHeader("Content-Type", "text/javascript"); response.end(foliageModules[name.slice(8, -3)])
@@ -72,7 +94,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     page.on("pageerror", error => errors.push(error.message))
     page.on("console", message => { if (message.type() === "error") errors.push(message.text()) })
     await page.goto(`http://127.0.0.1:${server.address().port}`)
-    const result = await page.evaluate(async ({ outlineFragment, poseClips }) => {
+    const result = await page.evaluate(async ({ outlineFragment, presentationFragment, poseClips }) => {
       const THREE = await import("/three.module.js")
       const { applySpriteDepth } = await import("/shader.js")
       const { applyDriverLayer } = await import("/driver.js")
@@ -380,7 +402,9 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
           tCharacter: { value: character }, tCharacterDepth: { value: characterDepth },
           uCharacterPass: { value: true }, uCharacterSelected: { value: false },
           uCharacterIdMin: { value: 0xffe000 }, uTexel: { value: new THREE.Vector2() },
-          uMode: { value: 1 }, uColor: { value: new THREE.Color(1, 0, 0) },
+          uTreeIdMin: { value: 2 }, uTreeIdMax: { value: 2 },
+          uCharacterEdgeOpacity: { value: 1 },
+          uTreeEdgeOpacity: { value: 1 }, uMode: { value: 1 }, uColor: { value: new THREE.Color(1, 0, 0) },
           uSelectedId: { value: 0 }, uSelectionFill: { value: new THREE.Color(0, 1, 0) },
           uSelectionOpacity: { value: 0.06 }, uSelectionColor: { value: new THREE.Color(0, 0, 1) },
           uSelectionOutlineOpacity: { value: 0.65 },
@@ -392,10 +416,10 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       let outlineCompared = 0, outlineMismatches = 0, selectionMismatches = 0
       // Fractional texel widths represent zoom and DPR; shifts cover the phase
       // difference between scenery pixels and moving display-resolution sprites.
-      for (const width of [1, 2.25, 4, 5.75]) for (const shift of [0, 1, 3]) {
+      for (const width of [1, 2.25, 4, 5.75]) for (const shift of [0, 1, 3]) for (const wallId of [1, 2]) for (const groundId of [0, 3]) {
         const left = 25 + shift, bottom = 23 + shift, top = 70 + shift, wall = 49
         const figureAt = (x, y) => x >= left && x < 65 + shift && y >= bottom && y < top
-        const idAt = (x, y) => x >= wall ? 2 : figureAt(x, y) ? characterId : 1
+        const idAt = (x, y) => x >= wall ? wallId : figureAt(x, y) ? characterId : groundId
         const depthAt = (x, y) => x >= wall ? 0.2 : figureAt(x, y) ? 0.4 : 0.8
         for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
           const i = (y * size + x) * 4, id = idAt(x, y)
@@ -407,28 +431,66 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         for (const texture of [ids, depths, character, characterDepth]) texture.needsUpdate = true
         outlineMaterial.uniforms.uTexel.value.set(width / size, width / size)
         const pixels = new Uint8Array(size * size * 4)
-        for (const selected of [false, true]) {
-          outlineMaterial.uniforms.uCharacterSelected.value = selected
-          outlineMaterial.uniforms.uSelectedId.value = selected ? characterId : 0
+        for (const detail of ["close", "distant characters", "distant trees"]) for (const selected of ["none", "character", "tree"]) {
+          const characterPass = detail !== "distant trees", ordinaryEdges = detail !== "distant characters"
+          outlineMaterial.uniforms.uCharacterPass.value = characterPass
+          outlineMaterial.uniforms.uMode.value = ordinaryEdges ? 1 : 0
+          outlineMaterial.uniforms.uTreeEdgeOpacity.value = detail === "close" ? 1 : 0
+          outlineMaterial.uniforms.uCharacterSelected.value = selected === "character"
+          outlineMaterial.uniforms.uSelectedId.value = selected === "character" ? characterId : selected === "tree" ? 2 : 0
           gl.setRenderTarget(outlineTarget)
           gl.render(copyScene, copyCamera)
           gl.readRenderTargetPixels(outlineTarget, 0, 0, size, size, pixels)
           for (let y = 8; y < size - 8; y++) for (let x = 8; x < size - 8; x++) {
             const neighbors = [[x + width, y], [x - width, y], [x, y + width], [x, y - width]]
               .map(([nx, ny]) => [Math.floor(nx + 0.5), Math.floor(ny + 0.5)])
-            const edge = neighbors.some(([nx, ny]) => idAt(nx, ny) !== idAt(x, y)
-              && (idAt(x, y) === characterId || idAt(nx, ny) === characterId)
+            const edge = ordinaryEdges && neighbors.some(([nx, ny]) => idAt(nx, ny) !== idAt(x, y)
+              && (idAt(x, y) !== 0 || idAt(nx, ny) < 2)
+              && (!characterPass || idAt(x, y) === characterId || idAt(nx, ny) === characterId)
+              && (detail === "close" || (idAt(x, y) !== 2 && idAt(nx, ny) !== 2))
               && depthAt(nx, ny) < depthAt(x, y))
-            const selection = selected && (figureAt(x, y) || neighbors.some(([nx, ny]) => figureAt(nx, ny)))
+            const selection = selected === "character"
+              ? figureAt(x, y) || neighbors.some(([nx, ny]) => figureAt(nx, ny))
+              : selected === "tree" && (idAt(x, y) === 2 || neighbors.some(([nx, ny]) => idAt(nx, ny) === 2 && depthAt(nx, ny) < depthAt(x, y)))
             const drawn = pixels[(y * size + x) * 4 + 3] > 0
             if (drawn !== (edge || selection)) {
-              if (selected) selectionMismatches++
+              if (selected !== "none") selectionMismatches++
               else outlineMismatches++
             }
             outlineCompared++
           }
         }
       }
+      // Exercise the actual world presentation shader and GPU snapshot copy.
+      // The old world image must survive overwriting its source, across target
+      // growth, and blend continuously without drawing the old scene again.
+      const currentWorld = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType })
+      const previousWorld = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthBuffer: false })
+      const fadeOutput = new THREE.WebGLRenderTarget(1, 1)
+      const fadeMaterial = new THREE.ShaderMaterial({ vertexShader: copyMaterial.vertexShader, fragmentShader: presentationFragment,
+        uniforms: { tScene: { value: currentWorld.texture }, tDepth: { value: depths }, tPrevious: { value: previousWorld.texture },
+          uScale: { value: new THREE.Vector2(1, 1) }, uOffset: { value: new THREE.Vector2() },
+          uPreviousScale: { value: new THREE.Vector2(1, 1) }, uPreviousOffset: { value: new THREE.Vector2() }, uDetailFade: { value: 1 } } })
+      copyMesh.material = fadeMaterial
+      let fadeCompared = 0, fadeMismatches = 0
+      for (const size of [32, 64]) {
+        for (const target of [currentWorld, previousWorld, fadeOutput]) target.setSize(size, size)
+        gl.setRenderTarget(currentWorld); gl.setClearColor(new THREE.Color(1, 0, 0), 1); gl.clear()
+        gl.initRenderTarget(previousWorld); gl.copyTextureToTexture(currentWorld.texture, previousWorld.texture)
+        gl.setRenderTarget(currentWorld); gl.setClearColor(new THREE.Color(0, 0, 1), 1); gl.clear()
+        for (const fade of [0, .25, .5, .75, 1]) {
+          fadeMaterial.uniforms.uDetailFade.value = fade
+          gl.setRenderTarget(fadeOutput); gl.render(copyScene, copyCamera)
+          const data = new Uint8Array(size * size * 4)
+          gl.readRenderTargetPixels(fadeOutput, 0, 0, size, size, data)
+          for (let i = 0; i < data.length; i += 4) {
+            fadeCompared++
+            if (Math.abs(data[i] - 255 * (1 - fade)) > 1 || data[i + 1] !== 0 || Math.abs(data[i + 2] - 255 * fade) > 1) fadeMismatches++
+          }
+        }
+      }
+      for (const target of [currentWorld, previousWorld, fadeOutput]) target.dispose()
+      fadeMaterial.dispose()
       for (const texture of [ids, depths, character, characterDepth]) texture.dispose()
       outlineTarget.dispose()
       outlineMaterial.dispose()
@@ -436,12 +498,13 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       copyMaterial.dispose()
       gl.dispose()
       return { cases, compared, mismatches, occlusionFailures, floorCompared, floorClipped, supportCompared, supportClipped, poseCompared, poseMismatches, poseVisible, poseHidden, bakeCompared, bakeError,
-        outlineCompared, outlineMismatches, selectionMismatches }
-    }, { outlineFragment, poseClips })
+        outlineCompared, outlineMismatches, selectionMismatches, fadeCompared, fadeMismatches }
+    }, { outlineFragment, presentationFragment, poseClips })
     const foliage = await page.evaluate(async () => {
       const THREE = await import("/three.module.js")
       const { foliageMaterial } = await import("/foliage-material.js")
       const { foliageRaycast } = await import("/foliage-raycast.js")
+      const { foliageCropTexture } = await import("/foliage-crop.js")
       const { FOLIAGE_FRAME: frame } = await import("/foliage-design.js")
       const [color, depth] = await Promise.all(["color", "depth"].map(kind => new THREE.TextureLoader().loadAsync(`/foliage-${kind}.png`)))
       for (const texture of [color, depth]) { texture.minFilter = texture.magFilter = THREE.NearestFilter; texture.generateMipmaps = false }
@@ -463,6 +526,9 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         mesh.raycast = foliageRaycast(geometry, color, depth, view, () => camera)
         mesh.frustumCulled = false; scene.add(mesh); return mesh
       })
+      const crop = foliageCropTexture(color)
+      const originals = trees.map(tree => tree.material)
+      const cropped = trees.map(() => foliageMaterial(color, depth, view, { value: 0 }, true, undefined, crop))
       const copyScene = new THREE.Scene(), copyCamera = new THREE.Camera()
       const copy = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
         uniforms: { map: { value: target.depthTexture } },
@@ -477,10 +543,20 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         return { pixels, z }
       }
       const pickExamples = []
-      let overlap = 0, mismatches = 0, picked = 0, pickMismatches = 0, holes = 0
+      let overlap = 0, mismatches = 0, picked = 0, pickMismatches = 0, holes = 0, cropCompared = 0, cropMismatches = 0, cropDepthMismatches = 0
       const ray = new THREE.Raycaster()
       for (let direction = 0; direction < 8; direction++) {
         view.value = direction
+        trees.forEach((tree, i) => { tree.visible = true; tree.material = originals[i] })
+        const uncropped = capture()
+        trees.forEach((tree, i) => { tree.material = cropped[i] })
+        const trimmed = capture()
+        for (let i = 0; i < trimmed.pixels.length; i += 4) {
+          if (!trimmed.pixels[i + 3] && !uncropped.pixels[i + 3]) continue
+          cropCompared++
+          if ([0, 1, 2, 3].some(channel => trimmed.pixels[i + channel] !== uncropped.pixels[i + channel])) cropMismatches++
+          else if (Math.abs(trimmed.z[i] - uncropped.z[i]) > 1e-6) cropDepthMismatches++
+        }
         trees[1].visible = false; const a = capture()
         trees[0].visible = false; trees[1].visible = true; const b = capture()
         trees[0].visible = true; const both = capture()
@@ -511,9 +587,421 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         }
       }
       trees.forEach(tree => { tree.geometry.dispose(); tree.material.dispose(); tree.dispose() })
+      originals.forEach(material => material.dispose()); crop.dispose()
       copy.geometry.dispose(); copy.material.dispose(); color.dispose(); depth.dispose(); target.dispose(); ztarget.dispose(); gl.dispose()
-      return { overlap, mismatches, picked, holes, pickMismatches, pickExamples }
+      return { overlap, mismatches, picked, holes, pickMismatches, pickExamples, cropCompared, cropMismatches, cropDepthMismatches }
     })
+    const batched = await page.evaluate(async columns => {
+      const THREE = await import("/three.module.js")
+      const { CharacterBatch, characterPalette } = await import("/batch-character-batch.js")
+      const { applyComplexionSwap, complexionUniforms } = await import("/batch-complexion-swap.js")
+      const { applySpriteDepth } = await import("/shader.js")
+      const color = await new THREE.TextureLoader().loadAsync("/pose-walk.png")
+      const depth = await new THREE.TextureLoader().loadAsync("/depth-walk.png")
+      for (const texture of [color, depth]) { texture.minFilter = texture.magFilter = THREE.NearestFilter; texture.generateMipmaps = false }
+      color.colorSpace = THREE.SRGBColorSpace
+      const sampleCanvas = document.createElement("canvas")
+      sampleCanvas.width = color.image.width; sampleCanvas.height = color.image.height
+      const ctx = sampleCanvas.getContext("2d"); ctx.drawImage(color.image, 0, 0)
+      const pixels = ctx.getImageData(0, 0, sampleCanvas.width, sampleCanvas.height).data
+      let source
+      for (let i = 0; i < pixels.length; i += 4) if (pixels[i + 3] && pixels[i] > 80) {
+        source = `#${[pixels[i], pixels[i + 1], pixels[i + 2]].map(v => v.toString(16).padStart(2, "0")).join("")}`; break
+      }
+      const gl = new THREE.WebGLRenderer({ antialias: false })
+      gl.setClearColor(0, 0)
+      const scene = new THREE.Scene(), originals = new THREE.Group()
+      scene.add(originals)
+      const camera = new THREE.OrthographicCamera(-1.5, 1.5, 1.5, -1.5, .1, 100)
+      const viewport = new THREE.Vector4(), worldTexel = { value: .04 }
+      const entries = Array.from({ length: 20 }, (_, i) => {
+        const map = color.clone(), ground = { value: new THREE.Vector4(.05, 1, -.1, 0) }
+        const pose = { map: { value: depth }, enabled: { value: true } }
+        const complexion = complexionUniforms({ from: [source], to: [i % 2 ? "#ab562a" : "#ecd3a0"] })
+        const id = new THREE.Vector3((i + 1) / 255, (i * 11 + 1) / 255, .2)
+        const sprites = [false, true].map(ids => {
+          const material = new THREE.SpriteMaterial({ map, alphaTest: .5, transparent: false, toneMapped: false })
+          material.onBeforeCompile = shader => {
+            applySpriteDepth(shader, viewport, worldTexel, ground, pose)
+            if (ids) {
+              shader.uniforms.testId = { value: id }
+              shader.fragmentShader = "uniform vec3 testId;\n" + shader.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\ndiffuseColor.rgb = testId;")
+            } else applyComplexionSwap(shader, complexion)
+          }
+          material.customProgramCacheKey = () => ids ? "test-batch-id" : "test-batch-color"
+          material.onBeforeRender = renderer => renderer.getCurrentViewport(viewport)
+          const sprite = new THREE.Sprite(material)
+          sprite.layers.set(ids ? 1 : 0); sprite.renderOrder = i + 1
+          sprite.center.set(.5, .2421875); sprite.scale.setScalar(.71 + i * .035)
+          sprite.position.set((i % 5 - 2) * .22, .02, (Math.floor(i / 5) - 1.5) * .24)
+          originals.add(sprite); return sprite
+        })
+        return { sprite: sprites[0], ids: sprites[1], complexion, ground, depth: pose, id }
+      })
+      let batch = new CharacterBatch(entries[0], worldTexel, 1)
+      scene.add(batch.root)
+      let compared = 0, mismatches = 0, visible = 0
+      const examples = [], byLayer = [0, 0]
+      for (const recolor of [true, false]) {
+        if (!recolor) {
+          scene.remove(batch.root); batch.dispose()
+          for (const entry of entries) {
+            delete entry.complexion
+            const material = entry.sprite.material
+            material.onBeforeCompile = shader => applySpriteDepth(shader, viewport, worldTexel, entry.ground, entry.depth)
+            material.customProgramCacheKey = () => "test-batch-uncolored"
+            material.needsUpdate = true
+          }
+          batch = new CharacterBatch(entries[0], worldTexel, 1); scene.add(batch.root)
+        }
+        for (const size of [192, 384]) {
+          gl.setSize(size, size)
+          const target = new THREE.WebGLRenderTarget(size, size)
+          const capture = () => {
+            gl.setRenderTarget(target); gl.render(scene, camera)
+            const result = new Uint8Array(size * size * 4)
+            gl.readRenderTargetPixels(target, 0, 0, size, size, result); return result
+          }
+          for (let direction = 0; direction < 8; direction++) {
+            const yaw = direction * Math.PI / 4
+            camera.position.set(Math.sin(yaw) * 20, 14, Math.cos(yaw) * 20); camera.lookAt(0, .3, 0); camera.updateMatrixWorld()
+            for (let frame = 0; frame < 3; frame++) {
+              entries.forEach((entry, i) => {
+                const map = entry.sprite.material.map
+                map.repeat.set(1 / columns, 1 / 8); map.offset.set(((i + frame) % columns) / columns, direction / 8)
+                if (entry.complexion && frame === 2) entry.complexion.complexionTo.value[0].setRGB(.22 + i * .002, .4, .25)
+                entry.palette = entry.complexion && frame > 0 ? characterPalette(entry.complexion) : undefined
+              })
+              originals.visible = true; originals.updateWorldMatrix(true, true); batch.write(entries, camera, true)
+              for (const layer of [0, 1]) {
+                camera.layers.set(layer)
+                originals.visible = true; batch.root.visible = false; const reference = capture()
+                originals.visible = false; batch.root.visible = true; const actual = capture()
+                for (let i = 0; i < actual.length; i += 4) {
+                  if (reference[i + 3]) visible++
+                  if (!reference[i + 3] && !actual[i + 3]) continue
+                  compared++
+                  if ([0, 1, 2, 3].some(c => Math.abs(reference[i + c] - actual[i + c]) > 1)) {
+                    mismatches++; byLayer[layer]++
+                    if (examples.length < 12) examples.push({ size, direction, frame, layer, at: i / 4, reference: [...reference.slice(i, i + 4)], actual: [...actual.slice(i, i + 4)] })
+                  }
+                }
+              }
+            }
+          }
+          target.dispose()
+        }
+      }
+      batch.write(entries.slice(0, 2), camera); batch.write([], camera); batch.dispose()
+      originals.children.forEach(sprite => { sprite.material.map.dispose(); sprite.material.dispose() })
+      color.dispose(); depth.dispose(); gl.dispose()
+      return { compared, visible, mismatches, byLayer, examples }
+    }, poseClips.walk)
+    const buildings = await page.evaluate(async () => {
+      const THREE = await import("/three.module.js")
+      const { mergedBuildingBlock, buildingSurfaceMaterial } = await import("/batch-building-batch.js")
+      const gl = new THREE.WebGLRenderer({ antialias: false })
+      gl.setSize(256, 256); gl.setClearColor(0, 0)
+      const scene = new THREE.Scene(), originals = new THREE.Group(), merged = new THREE.Group()
+      scene.add(originals, merged, new THREE.AmbientLight(0xffffff, .7))
+      const light = new THREE.DirectionalLight(0xffffff, 1.4); light.position.set(3, 5, 2); scene.add(light)
+      const camera = new THREE.OrthographicCamera(-2, 2, 2, -2, .1, 100)
+      const target = new THREE.WebGLRenderTarget(256, 256)
+      const bodyMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })
+      const flatMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide })
+      const shading = { value: 1 }, batchMaterial = buildingSurfaceMaterial(shading)
+      const idMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, toneMapped: false })
+      const sources = Array.from({ length: 8 }, (_, i) => {
+        const full = new THREE.BoxGeometry(.7, .4 + i * .08, .9).toNonIndexed()
+        const colors = new Float32Array(full.getAttribute("position").count * 3)
+        for (let j = 0; j < colors.length; j += 3) { colors[j] = .3 + i * .04; colors[j + 1] = .45; colors[j + 2] = .12 }
+        full.setAttribute("color", new THREE.BufferAttribute(colors, 3))
+        const levels = [full, ...[24, 18].map(count => {
+          const geometry = new THREE.BufferGeometry()
+          for (const [name, attribute] of Object.entries(full.attributes)) geometry.setAttribute(name, attribute)
+          geometry.setIndex(Array.from({ length: count }, (_, j) => j)); return geometry
+        })]
+        const body = new THREE.Mesh(full, bodyMaterial)
+        const idColor = new THREE.Color((i + 1) / 255, .2, .4)
+        const ids = new THREE.Mesh(full, new THREE.MeshBasicMaterial({ color: idColor, toneMapped: false, side: THREE.DoubleSide }))
+        // Real buildings have disjoint footprints; their screen projections overlap.
+        body.position.set((i % 4 - 1.5) * .82, .35 + i * .01, (Math.floor(i / 4) - .5) * 1.1)
+        body.rotation.y = (i % 4) * Math.PI / 2
+        ids.position.copy(body.position); ids.rotation.copy(body.rotation); ids.layers.set(1)
+        originals.add(body, ids); body.updateWorldMatrix(true, false)
+        return { body, ids, levels }
+      })
+      let compared = 0, mismatches = 0
+      // Removing a selected building from a cell must retain every neighbour.
+      for (const selected of [-1, 3]) {
+        const active = sources.filter((_, i) => i !== selected)
+        const block = mergedBuildingBlock(active)
+        const body = new THREE.Mesh(block.body[0], batchMaterial), ids = new THREE.Mesh(block.ids[0], idMaterial)
+        ids.layers.set(1); merged.add(body, ids)
+        for (const source of sources) source.body.visible = source.ids.visible = source !== sources[selected]
+        for (const level of [0, 1, 2]) {
+          shading.value = level === 0 ? 1 : 0
+          for (const source of sources) source.body.material = level === 0 ? bodyMaterial : flatMaterial
+          for (const source of sources) source.body.geometry = source.ids.geometry = source.levels[level]
+          body.geometry = block.body[level]; ids.geometry = block.ids[level]
+          for (let view = 0; view < 4; view++) {
+            const angle = .31 + view * Math.PI / 2
+            camera.position.set(Math.sin(angle) * 12, 9, Math.cos(angle) * 12); camera.lookAt(0, .3, 0); camera.updateMatrixWorld()
+            for (const layer of [0, 1]) {
+              camera.layers.set(layer)
+              const capture = batch => {
+                originals.visible = !batch; merged.visible = batch
+                gl.setRenderTarget(target); gl.render(scene, camera)
+                const data = new Uint8Array(256 * 256 * 4)
+                gl.readRenderTargetPixels(target, 0, 0, 256, 256, data); return data
+              }
+              const reference = capture(false), actual = capture(true)
+              for (let i = 0; i < actual.length; i += 4) {
+                compared++
+                if ([0, 1, 2, 3].some(c => Math.abs(actual[i + c] - reference[i + c]) > 1)) mismatches++
+              }
+            }
+          }
+        }
+        merged.remove(body, ids); block.dispose()
+      }
+      target.dispose(); bodyMaterial.dispose(); flatMaterial.dispose(); batchMaterial.dispose(); idMaterial.dispose()
+      for (const source of sources) { source.ids.material.dispose(); for (const level of source.levels) level.dispose() }
+      gl.dispose()
+      return { compared, mismatches }
+    })
+    assert.equal(buildings.mismatches, 0, `building cells must preserve surfaces and IDs at every LOD: ${JSON.stringify(buildings)}`)
+
+    const scenery = await page.evaluate(async () => {
+      const THREE = await import("/three.module.js")
+      const { StaticInstanceBatch } = await import("/batch-static-instances.js")
+      const { indexFlatGeometry } = await import("/batch-flat-geometry.js")
+      const gl = new THREE.WebGLRenderer({ antialias: false })
+      gl.setSize(192, 192); gl.setClearColor(0, 0)
+      const scene = new THREE.Scene(), originals = new THREE.Group()
+      scene.add(originals, new THREE.AmbientLight(0xffffff, 1.5))
+      const sun = new THREE.DirectionalLight(0xffffff, 2); sun.position.set(3, 7, 2); scene.add(sun)
+      const camera = new THREE.OrthographicCamera(-4, 4, 4, -4, .1, 100)
+      const target = new THREE.WebGLRenderTarget(192, 192)
+      const geometry = new THREE.IcosahedronGeometry(1, 1)
+      const material = new THREE.MeshLambertMaterial({ flatShading: true })
+      const sources = Array.from({ length: 5 }, (_, block) => {
+        const source = new THREE.InstancedMesh(geometry, material, 100)
+        for (let i = 0; i < 100; i++) {
+          const matrix = new THREE.Matrix4().compose(new THREE.Vector3((i % 5 - 2) * .7, block * .3, (Math.floor(i / 5) - 2) * .7 + block * .25),
+            new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), i * .5), new THREE.Vector3(.22, .5, .28))
+          source.setMatrixAt(i, matrix); source.setColorAt(i, new THREE.Color().setHSL((i + block * 20) / 100, .6, .5))
+        }
+        originals.add(source); return source
+      })
+      const batch = new StaticInstanceBatch(); scene.add(batch.root)
+      const indexed = indexFlatGeometry(geometry.clone())
+      const capture = () => {
+        gl.setRenderTarget(target); gl.render(scene, camera)
+        const pixels = new Uint8Array(192 * 192 * 4)
+        gl.readRenderTargetPixels(target, 0, 0, 192, 192, pixels); return pixels
+      }
+      let compared = 0, mismatches = 0
+      for (let direction = 0; direction < 8; direction++) {
+        if (direction === 4) {
+          // Change a late source to verify batched buffer offsets.
+          const source = sources.at(-1), matrix = new THREE.Matrix4()
+          source.getMatrixAt(0, matrix); matrix.elements[12] += .5; source.setMatrixAt(0, matrix)
+          source.setColorAt(0, new THREE.Color("red"))
+          source.instanceMatrix.needsUpdate = source.instanceColor.needsUpdate = true
+        }
+        camera.position.set(Math.sin(direction * Math.PI / 4) * 20, 15, Math.cos(direction * Math.PI / 4) * 20)
+        camera.lookAt(0, .5, 0); camera.updateMatrixWorld()
+        for (const count of [5, 2, 4]) {
+          const active = sources.slice(0, count)
+          sources.forEach(source => { source.visible = active.includes(source) })
+          batch.write(active)
+          if (direction === 0 && count === 5) {
+            sources.at(-1).setColorAt(0, new THREE.Color("cyan"))
+            sources.at(-1).instanceColor.needsUpdate = true
+            batch.write(active) // Changes before the first draw must also reach the GPU.
+          }
+          batch.mesh.geometry.setIndex(indexed.index)
+          batch.mesh.geometry.setAttribute("position", indexed.getAttribute("position"))
+          batch.mesh.geometry.setAttribute("normal", indexed.getAttribute("normal"))
+          originals.visible = true; batch.root.visible = false; const reference = capture()
+          originals.visible = false; batch.root.visible = true; const actual = capture()
+          for (let i = 0; i < actual.length; i += 4) {
+            if (!reference[i + 3] && !actual[i + 3]) continue
+            compared++
+            if ([0, 1, 2, 3].some(c => Math.abs(reference[i + c] - actual[i + c]) > 1)) mismatches++
+          }
+        }
+      }
+      batch.dispose(); sources.forEach(source => source.dispose()); geometry.dispose(); indexed.dispose(); material.dispose(); target.dispose(); gl.dispose()
+      return { compared, mismatches }
+    })
+    const terrain = await page.evaluate(async () => {
+      const THREE = await import("/three.module.js")
+      const { elevationShader } = await import("/batch-terrain-elevation.js")
+      const { terrainHiddenFaces, compactTerrainFaces } = await import("/batch-terrain-hidden-faces.js")
+      const gl = new THREE.WebGLRenderer(), scene = new THREE.Scene()
+      const width = 5, heights = Array.from({ length: 25 }, (_, i) => i > 7 && i < 19 ? .6 : 0)
+      const corners = heights.flatMap((h, i) => [0, 1, 2, 3].map(c => h + (i % width + c % 2) * .03))
+      const masks = terrainHiddenFaces({ width, depth: width, elevation: { corners } }, new Map([[12, true]]))
+      const geometry = new THREE.BoxGeometry(1, 1, 1), count = 26
+      const originalIndex = [...geometry.index.array]
+      const surface = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4)
+      const vertexCorners = new THREE.InstancedBufferAttribute(new Float32Array([...corners, 0, 0, 0, 0]), 4)
+      const cuts = new Float32Array(count); cuts[12] = 1; cuts[25] = -1
+      geometry.setAttribute("aCorners", vertexCorners); geometry.setAttribute("aSurface", surface)
+      geometry.setAttribute("aCut", new THREE.InstancedBufferAttribute(cuts, 1))
+      const material = new THREE.MeshBasicMaterial({ toneMapped: false })
+      material.onBeforeCompile = shader => elevationShader(shader)
+      const mesh = new THREE.InstancedMesh(geometry, material, count), matrix = new THREE.Matrix4(), tint = new THREE.Color()
+      for (let i = 0; i < count; i++) {
+        const tile = i === 25 ? 12 : i, h = i === 25 ? 0 : heights[i]
+        const size = h + 1.2
+        matrix.makeScale(1, size, 1); matrix.setPosition(tile % width - 2, -1 + size / 2, Math.floor(tile / width) - 2)
+        mesh.setMatrixAt(i, matrix); mesh.setColorAt(i, tint.setHSL(i / count, .5, .4))
+      }
+      scene.add(mesh)
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(5.2, .2, 5.2), new THREE.MeshBasicMaterial({ color: 0x473122 }))
+      slab.position.y = -1.1; scene.add(slab)
+      const camera = new THREE.OrthographicCamera(-4, 4, 4, -4, .1, 100)
+      let compared = 0, seams = 0, mismatches = 0, depthMismatches = 0, compactMismatches = 0; const differences = []
+      const point = new THREE.Vector3()
+      for (const size of [137, 256]) {
+        const target = new THREE.WebGLRenderTarget(size, size, { depthTexture: new THREE.DepthTexture(size, size) })
+        const ztarget = new THREE.WebGLRenderTarget(size, size, { type: THREE.FloatType })
+        const copyScene = new THREE.Scene(), copyCamera = new THREE.Camera()
+        const copy = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+          uniforms: { map: { value: target.depthTexture } },
+          vertexShader: "varying vec2 v; void main(){v=uv;gl_Position=vec4(position,1.0);}",
+          fragmentShader: "uniform sampler2D map; varying vec2 v; void main(){gl_FragColor=vec4(texture2D(map,v).r,0.0,0.0,1.0);}",
+        })); copyScene.add(copy)
+        const beforeZ = new Float32Array(size * size * 4), afterZ = beforeZ.slice()
+        const capture = (pixels, depth) => {
+          gl.setRenderTarget(target); gl.render(scene, camera); gl.readRenderTargetPixels(target, 0, 0, size, size, pixels)
+          gl.setRenderTarget(ztarget); gl.render(copyScene, copyCamera); gl.readRenderTargetPixels(ztarget, 0, 0, size, size, depth)
+        }
+        gl.setSize(size, size); gl.setRenderTarget(target)
+        const before = new Uint8Array(size * size * 4), after = before.slice()
+        for (let view = 0; view < 8; view++) for (const offset of [0, .021]) {
+          const yaw = view * Math.PI / 4
+          camera.position.set(Math.sin(yaw) * 20 + offset, 14, Math.cos(yaw) * 20 + offset)
+          camera.lookAt(offset, 0, offset); camera.updateMatrixWorld()
+          surface.array.fill(0); surface.needsUpdate = true
+          capture(before, beforeZ)
+          masks.forEach((mask, i) => surface.setY(i, mask * 2)); surface.needsUpdate = true
+          capture(after, afterZ)
+          for (let i = 0; i < before.length; i += 4) {
+            if (!before[i + 3]) continue
+            compared++
+            if (Math.abs(beforeZ[i] - afterZ[i]) > 1e-6) depthMismatches++
+            if ([0, 1, 2, 3].every(c => before[i + c] === after[i + c])) continue
+            const x = i / 4 % size, y = Math.floor(i / 4 / size)
+            point.set((x + .5) / size * 2 - 1, (y + .5) / size * 2 - 1, beforeZ[i] * 2 - 1).unproject(camera)
+            // Coincident faces can win a different colour tie along the exact
+            // shared tile edge (within 1/64 screen pixel of rasterizer rounding).
+            // Depth and all surface-interior colours stay exact.
+            const seam = Math.min(Math.abs(point.x + .5 - Math.round(point.x + .5)), Math.abs(point.z + .5 - Math.round(point.z + .5))) < (8 / size) / 64
+            if (seam) seams++
+            else { mismatches++; if (differences.length < 12) differences.push({ size, view, offset, x, y, point: point.toArray() }) }
+          }
+          // Compare actual submissions against the same shader-masked boxes,
+          // including a completely enclosed batch that needs only two top triangles.
+          for (const uniformMask of [false, true]) {
+            if (uniformMask) for (let i = 0; i < count; i++) surface.setY(i, 30)
+            surface.needsUpdate = true
+            capture(before, beforeZ)
+            compactTerrainFaces(geometry, count)
+            if (uniformMask && geometry.drawRange.count !== 6) throw new Error("Enclosed terrain must submit only its top")
+            capture(after, afterZ)
+            for (let i = 0; i < before.length; i++) if (before[i] !== after[i] || Math.abs(beforeZ[i] - afterZ[i]) > 1e-6) compactMismatches++
+            geometry.index.array.set(originalIndex); geometry.index.needsUpdate = true; geometry.setDrawRange(0, 36)
+          }
+        }
+        target.dispose(); ztarget.dispose(); copy.geometry.dispose(); copy.material.dispose()
+      }
+      geometry.dispose(); material.dispose(); slab.geometry.dispose(); slab.material.dispose(); gl.dispose()
+      return { compared, seams, mismatches, depthMismatches, compactMismatches, differences, hiddenFaces: [...masks].reduce((n, mask) => n + mask.toString(2).replaceAll("0", "").length, 0) }
+    })
+    assert.equal(terrain.compactMismatches, 0, `compacted terrain must preserve every pixel and depth: ${JSON.stringify(terrain)}`)
+    assert.ok(terrain.compared > 10000 && terrain.hiddenFaces > 20, JSON.stringify(terrain))
+    assert.ok(terrain.seams / terrain.compared < .001, JSON.stringify(terrain))
+    assert.equal(terrain.depthMismatches, 0, `buried walls must retain terrain depth: ${JSON.stringify(terrain)}`)
+    assert.equal(terrain.mismatches, 0, `buried tile walls must not change visible terrain pixels: ${JSON.stringify(terrain)}`)
+    const roads = await page.evaluate(async () => {
+      const THREE = await import("/three.module.js")
+      const { RoadSegmentTexture } = await import("/batch-road-segment-texture.js")
+      const storage = new RoadSegmentTexture(), gl = new THREE.WebGLRenderer()
+      const scene = new THREE.Scene(), camera = new THREE.Camera()
+      const target = new THREE.WebGLRenderTarget(64, 1, { depthBuffer: false })
+      const uniforms = { records: { value: null }, dimensions: { value: new THREE.Vector2() }, count: { value: 1 } }
+      const material = new THREE.ShaderMaterial({ uniforms,
+        vertexShader: "void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }",
+        fragmentShader: `uniform sampler2D records; uniform vec2 dimensions; uniform float count;
+          void main() { float i = floor((gl_FragCoord.x - .5) / 63.0 * (count - 1.0));
+            gl_FragColor = texture2D(records, (vec2(mod(i, dimensions.x), floor(i / dimensions.x)) + .5) / dimensions); }` })
+      const geometry = new THREE.PlaneGeometry(2, 2)
+      scene.add(new THREE.Mesh(geometry, material))
+      gl.setRenderTarget(target); gl.clear()
+      const context = gl.getContext(), original = context.texStorage2D
+      let allocations = 0, expectedAllocations = 0, capacity = 0, mismatches = 0, compared = 0
+      context.texStorage2D = function (...args) { allocations++; return original.apply(this, args) }
+      for (const [revision, count] of [80, 72, 81, 160, 79, 2048, 1800, 2049].entries()) {
+        const data = new Float32Array(count * 4)
+        for (let i = 0; i < data.length; i++) data[i] = ((i * 13 + revision * 37) % 256) / 255
+        if (count > capacity) { expectedAllocations++; capacity = 2 ** Math.ceil(Math.log2(count)) }
+        const texture = storage.update(data)
+        uniforms.records.value = texture; uniforms.dimensions.value.set(texture.image.width, texture.image.height); uniforms.count.value = count
+        gl.render(scene, camera)
+        const pixels = new Uint8Array(64 * 4)
+        gl.readRenderTargetPixels(target, 0, 0, 64, 1, pixels)
+        for (let x = 0; x < 64; x++) for (let c = 0; c < 4; c++) {
+          const index = Math.floor(x / 63 * (count - 1)), expected = Math.round(data[index * 4 + c] * 255)
+          if (Math.abs(pixels[x * 4 + c] - expected) > 1) mismatches++
+          compared++
+        }
+      }
+      storage.dispose(); target.dispose(); geometry.dispose(); material.dispose(); gl.dispose()
+      return { compared, mismatches, allocations, expectedAllocations }
+    })
+    assert.equal(roads.mismatches, 0, `road updates must reach the GPU across reuse and growth: ${JSON.stringify(roads)}`)
+    assert.equal(roads.allocations, roads.expectedAllocations, `ordinary road wear must reuse GPU storage: ${JSON.stringify(roads)}`)
+    const uploads = await page.evaluate(async () => {
+      const THREE = await import("/three.module.js")
+      const { spriteTextureView } = await import("/batch-sprite-texture.js")
+      const atlas = await new THREE.TextureLoader().loadAsync("/pose-walk.png")
+      const gl = new THREE.WebGLRenderer(), scene = new THREE.Scene()
+      gl.setSize(64, 64)
+      const camera = new THREE.OrthographicCamera(-2, 2, 2, -2, .1, 100)
+      camera.position.z = 10
+      const add = i => {
+        const texture = spriteTextureView(atlas)
+        texture.repeat.set(1 / 20, 1 / 8); texture.offset.x = i / 20
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }))
+        scene.add(sprite)
+      }
+      add(0); gl.render(scene, camera)
+      const context = gl.getContext(), original = context.texSubImage2D, originalImage = context.texImage2D
+      let calls = 0
+      context.texSubImage2D = function (...args) { calls++; return original.apply(this, args) }
+      context.texImage2D = function (...args) { calls++; return originalImage.apply(this, args) }
+      const version = atlas.source.version
+      for (let i = 1; i < 20; i++) { add(i); gl.render(scene, camera) }
+      const cloned = calls, preserved = atlas.source.version === version
+      atlas.needsUpdate = true; add(0); gl.render(scene, camera)
+      const changed = calls - cloned
+      scene.children.forEach(sprite => { sprite.material.map.dispose(); sprite.material.dispose() })
+      atlas.dispose(); gl.dispose()
+      return { cloned, changed, preserved }
+    })
+    assert.equal(uploads.cloned, 0, `new figures must reuse resident atlas images: ${JSON.stringify(uploads)}`)
+    assert.ok(uploads.preserved && uploads.changed > 0, `real atlas changes must still upload: ${JSON.stringify(uploads)}`)
+    assert.ok(scenery.compared > 10000, JSON.stringify(scenery))
+    assert.equal(scenery.mismatches, 0, `visible scenery batches must preserve lighting and overlap pixels: ${JSON.stringify(scenery)}`)
+    assert.ok(batched.visible > 10000, JSON.stringify(batched))
+    assert.equal(batched.mismatches, 0, `batched color and ID pixels must match individual sprites: ${JSON.stringify(batched)}`)
+    assert.ok(foliage.cropCompared > 1000, JSON.stringify(foliage))
+    assert.equal(foliage.cropMismatches, 0, `cropping transparent foliage padding must retain visible pixels: ${JSON.stringify(foliage)}`)
+    assert.equal(foliage.cropDepthMismatches, 0, `cropping foliage must retain depth: ${JSON.stringify(foliage)}`)
     assert.ok(foliage.overlap > 1000 && foliage.picked > 1000 && foliage.holes > 1000, JSON.stringify(foliage))
     assert.equal(foliage.mismatches, 0, `instanced tree depth must match solo surfaces: ${JSON.stringify(foliage)}`)
     assert.equal(foliage.pickMismatches, 0, `picking must follow visible foliage and leaf holes: ${JSON.stringify(foliage)}`)
@@ -531,6 +1019,8 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     assert.ok(result.outlineCompared > 10000, "must compare outlines at multiple zooms and sprite offsets")
     assert.equal(result.outlineMismatches, 0, "overlap outlines must touch the visible sprite and respect foreground occlusion")
     assert.equal(result.selectionMismatches, 0, "selected silhouettes and borders must track the actual character pixels")
+    assert.ok(result.fadeCompared > 10000, "must test the real snapshot and presentation fade across buffer sizes")
+    assert.equal(result.fadeMismatches, 0, "detail fades must blend the preserved world snapshot with the current image")
   } finally {
     await browser?.close()
     await new Promise(resolve => server.close(resolve))

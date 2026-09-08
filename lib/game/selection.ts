@@ -74,7 +74,10 @@ function isPersonPick(object: PickObject | null | undefined): boolean {
  * build mode nothing stops it and the ground still takes the click.
  */
 export function prioritizePeople<T extends { object: PickObject }>(hits: readonly T[]): T[] {
-  const visibleHits = hits.filter(hit => isObjectVisible(hit.object))
+  // Batched buildings keep their original surface as the exact picking mesh.
+  // Its own render visibility is off; user-hidden ancestors still reject hits.
+  const visibleHits = hits.filter(hit => hit.object.userData?.batchedPickTarget === true
+    ? isObjectVisible(hit.object.parent ?? {}) : isObjectVisible(hit.object))
   if (visibleHits.length !== hits.length) hits = visibleHits
   const people = hits.filter((hit) => isPersonPick(hit.object))
   if (people.length === 0 || people.length === hits.length) return hits as T[]

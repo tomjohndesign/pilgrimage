@@ -47,11 +47,18 @@ it("aligns at the approach and applies saved entry and exit timing in the world"
   expect(rabbit.shelter).toBeCloseTo(1-.05/BURROW_SECONDS)
 })
 
-it("keeps the hole flat and fully conceals the rabbit below ground at the end of entry", () => {
+it("raises a low bank and fully conceals the rabbit below ground at the end of entry", () => {
   const hole = createBurrowRig(), rabbit = createWildlifeRig("rabbit")
   const bounds = new THREE.Box3().setFromObject(hole.root)
   expect(bounds.min.y).toBeGreaterThanOrEqual(0)
-  expect(bounds.max.y).toBeLessThan(.03)
+  expect(bounds.max.y).toBeGreaterThan(.5)
+  expect(bounds.max.y).toBeLessThan(1)
+  // The entrance must remain open below the roof, with a recessed tunnel back.
+  hole.root.updateMatrixWorld(true)
+  const ray = new THREE.Raycaster(new THREE.Vector3(0, .2, 1), new THREE.Vector3(0, 0, -1))
+  const hits = ray.intersectObject(hole.root, true)
+  expect(hits.length).toBeGreaterThan(0)
+  expect(hits[0].point.z).toBeLessThan(-.4)
   for (const entering of [true, false]) {
     const motion = burrowMotion(1, entering)
     rabbit.pose(motion.clipPhase, false, 0, 0, false, "walk", { clip: "burrow", burrow: { ...motion, concealed: true } })

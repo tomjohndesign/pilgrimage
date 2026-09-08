@@ -26,9 +26,19 @@ const ROAD_REACH = 0.85
 
 /** Actual crossings, including diagonals, overflow onto open ground but never under buildings or woods. */
 export function traveledRoadSegments(map: GameMap, roads: readonly TraveledRoad[]): Map<number, RoadSegment[]> {
+  const work = buildTraveledRoadSegments(map, roads)
+  let step = work.next()
+  while (!step.done) step = work.next()
+  return step.value
+}
+
+/** Yield between small batches so a growing path network never owns a frame. */
+export function* buildTraveledRoadSegments(map: GameMap, roads: readonly TraveledRoad[]): Generator<void, Map<number, RoadSegment[]>> {
   const bins = new Map<number, RoadSegment[]>(), occupied = new Set<number>()
   for (const building of map.buildings) for (let z = building.z; z < building.z + building.d; z++) for (let x = building.x; x < building.x + building.w; x++) occupied.add(z * map.width + x)
+  let processed = 0
   for (const road of roads) {
+    if (++processed % 64 === 0) yield
     if (!Number.isFinite(road.wear) || road.wear <= .001) continue
     if (road.contact && contactAppearance(road.wear).opacity === 0) continue
     const { ax, az, bx, bz, wear } = road

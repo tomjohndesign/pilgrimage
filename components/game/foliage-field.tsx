@@ -6,6 +6,8 @@ import * as THREE from "three"
 import { usePixelWorldTexel } from "@/components/pixel-canvas"
 import { FOLIAGE_FRAME, FOLIAGE_SPECIES, isFoliageSpecies, type FoliageAtlas } from "@/lib/game/trees/foliage/design"
 import { foliageRaycast } from "@/lib/game/trees/foliage/raycast"
+import { foliageCropTexture, foliageRowRadii } from "@/lib/game/trees/foliage/crop"
+import { FoliageInstances, type FoliageInstance } from "@/lib/game/trees/foliage/instances"
 import { foliageMaterial } from "@/lib/game/trees/foliage/material"
 import type { TreePlacement } from "@/lib/game/trees/placement"
 import { configureSpriteDepthTexture } from "@/lib/game/render/sprite-depth"
@@ -16,7 +18,7 @@ import { useBuildStore } from "@/lib/game/build-store"
 export interface FoliagePlacement extends TreePlacement { foliageVariant?: number }
 
 /**
- * Baked pixel foliage: two draws for any tree count, sharing one color/depth
+ * Baked pixel foliage: two draws for visible trees, sharing one color/depth
  * atlas. The game and the tree playground both draw through here; `idBase` is
  * how many outline IDs the buildings already took, and `hidden` lists felled
  * trees whose remains are drawn separately.
@@ -35,46 +37,52 @@ export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, 
   }, [sources])
   const depth = useMemo(() => configureSpriteDepthTexture(sources[1].clone()), [sources])
   const worldTexel = usePixelWorldTexel(), view = useMemo(() => ({ value: 0 }), [])
-  const materials = useMemo(() => [false, true].map(ids => foliageMaterial(color, depth, view, worldTexel, ids)), [color, depth, view, worldTexel])
+  const crop = useMemo(() => foliageCropTexture(color), [color])
+  const materials = useMemo(() => [false, true].map(ids =>
+    foliageMaterial(color, depth, view, worldTexel, ids, FOLIAGE_FRAME, crop)), [color, depth, view, worldTexel, crop])
   const entries = useMemo(() => placements.flatMap((tree, index) =>
     isFoliageSpecies(tree.species) && !hidden?.has(index) ? [{ tree, index }] : []), [placements, hidden])
   const data = useMemo(() => {
     // Frames draw from the placement order, so felling a tree never reshuffles its neighbours.
-    const rng = makeRng(seed), frames: number[] = [], ids: number[] = [], matrices: THREE.Matrix4[] = []
+    const rng = makeRng(seed), sources: FoliageInstance[] = []
     const rolls = placements.map(() => [Math.floor(rng() * FOLIAGE_FRAME.directions), Math.floor(rng() * FOLIAGE_FRAME.variants)])
-    entries.forEach(({ tree, index }) => {
-      frames.push(rolls[index][0], FOLIAGE_SPECIES.indexOf(tree.species as typeof FOLIAGE_SPECIES[number]) * FOLIAGE_FRAME.variants + (tree.foliageVariant ?? rolls[index][1]))
-      ids.push(...encodeObjectId(treeObjectId(idBase, index)))
-      // Variation is baked at native density; don't stretch individual texels.
-      matrices.push(new THREE.Matrix4().makeTranslation(tree.x, tree.y, tree.z))
-    })
+    entries.forEach(({ tree, index }) => sources.push({
+      x: tree.x, y: tree.y, z: tree.z, column: rolls[index][0],
+      row: FOLIAGE_SPECIES.indexOf(tree.species as typeof FOLIAGE_SPECIES[number]) * FOLIAGE_FRAME.variants + (tree.foliageVariant ?? rolls[index][1]),
+      id: encodeObjectId(treeObjectId(idBase, index)), brightness: tree.brightness ?? 1, tree: index,
+    }))
     const geometry = new THREE.PlaneGeometry(1, 1)
     geometry.translate(0, FOLIAGE_FRAME.anchor[1] / FOLIAGE_FRAME.cellSize - 0.5, 0)
-    geometry.setAttribute("foliageFrame", new THREE.InstancedBufferAttribute(new Float32Array(frames), 2))
-    geometry.setAttribute("foliageId", new THREE.InstancedBufferAttribute(new Float32Array(ids), 3))
-    return { geometry, matrices }
-  }, [placements, entries, seed, idBase])
+    geometry.setAttribute("foliageFrame", new THREE.InstancedBufferAttribute(new Float32Array(sources.length * 2), 2).setUsage(THREE.DynamicDrawUsage))
+    geometry.setAttribute("foliageId", new THREE.InstancedBufferAttribute(new Float32Array(sources.length * 3), 3).setUsage(THREE.DynamicDrawUsage))
+    return { geometry, instances: new FoliageInstances(sources, foliageRowRadii(crop.image.data as Float32Array)) }
+  }, [placements, entries, seed, idBase, crop])
   const body = useRef<THREE.InstancedMesh>(null), idMesh = useRef<THREE.InstancedMesh>(null)
   const camera = useRef<THREE.Camera>(undefined)
   const raycast = useMemo(() => foliageRaycast(data.geometry, color, depth, view, () => camera.current), [data, color, depth, view])
   useLayoutEffect(() => {
-    for (const mesh of [body.current, idMesh.current]) if (mesh) {
-      data.matrices.forEach((matrix, i) => {
-        mesh.setMatrixAt(i, matrix)
-        // Honor the existing feathered darkwood field, including brighter forest rims.
-        mesh.setColorAt(i, new THREE.Color().setScalar(entries[i].tree.brightness ?? 1))
-      })
-      mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor!.needsUpdate = true
-    }
+    const mesh = body.current, ids = idMesh.current
+    if (!mesh || !ids) return
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(entries.length * 3), 3).setUsage(THREE.DynamicDrawUsage)
+    ids.instanceMatrix = mesh.instanceMatrix; ids.instanceColor = mesh.instanceColor
+    mesh.count = ids.count = 0
   }, [data, entries])
   useFrame(({ camera: currentCamera }) => {
     const yaw = Math.atan2(currentCamera.matrixWorld.elements[8], currentCamera.matrixWorld.elements[10])
     view.value = ((Math.round(yaw / (Math.PI * 2 / FOLIAGE_FRAME.directions)) % FOLIAGE_FRAME.directions) + FOLIAGE_FRAME.directions) % FOLIAGE_FRAME.directions
     // Picking uses the same camera-facing bounds as the instanced color quads.
     camera.current = currentCamera
+    const mesh = body.current, ids = idMesh.current
+    if (mesh && ids) {
+      mesh.updateWorldMatrix(true, false)
+      data.instances.update(mesh, currentCamera)
+      ids.count = mesh.count
+      mesh.userData.totalTrees = entries.length
+    }
   })
   useEffect(() => () => data.geometry.dispose(), [data])
-  useEffect(() => () => { color.dispose(); depth.dispose(); materials.forEach(m => m.dispose()) }, [color, depth, materials])
+  useEffect(() => () => { color.dispose(); depth.dispose(); crop.dispose(); materials.forEach(m => m.dispose()) }, [color, depth, crop, materials])
   useEffect(() => () => {
     // Edited atlases are temporary; don't retain every slider position in the loader cache.
     if (atlas.color.startsWith("data:")) useLoader.clear(THREE.TextureLoader, [atlas.color, atlas.depth])
@@ -84,8 +92,8 @@ export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, 
     <instancedMesh key={`body-${entries.length}`} ref={body} args={[data.geometry, materials[0], entries.length]} frustumCulled={false} raycast={raycast}
       onClick={event => {
         if (!onSelect || event.delta > 6 || event.instanceId === undefined || useBuildStore.getState().tool) return
-        event.stopPropagation(); onSelect(entries[event.instanceId].index, event)
+        event.stopPropagation(); onSelect(data.instances.sources[data.instances.visible[event.instanceId]].tree, event)
       }} />
-    <instancedMesh key={`ids-${entries.length}`} ref={idMesh} args={[data.geometry, materials[1], entries.length]} frustumCulled={false} layers-mask={OUTLINE_ID_LAYER_MASK} />
+    <instancedMesh key={`ids-${entries.length}`} ref={idMesh} args={[data.geometry, materials[1], 0]} frustumCulled={false} layers-mask={OUTLINE_ID_LAYER_MASK} />
   </group>
 }

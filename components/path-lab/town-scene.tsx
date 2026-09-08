@@ -9,7 +9,8 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import { PixelCanvas, PixelCharacters } from "@/components/pixel-canvas"
 import { CharacterSprite } from "@/components/game/character-sprite"
 import { TerrainTiles } from "@/components/game/terrain-tiles"
-import { TreeField } from "@/components/game/trees"
+import { FoliageField } from "@/components/game/foliage-field"
+import { DEFAULT_FOLIAGE_ATLAS } from "@/lib/game/trees/foliage/assets"
 import { StructureModel } from "@/components/building-lab/building-model"
 import { structureParts } from "@/lib/game/building-art/structure"
 import { buildingYaw, rotatedFootprint } from "@/lib/game/building-rotation"
@@ -103,7 +104,7 @@ export function TownScene({ town, live, view, focus, selected, labels, onSelect,
     <directionalLight intensity={SURFACE_LIGHT.sun} position={lightOffsetForYaw(yawForView(view))} />
     <Camera town={town} view={view} focus={focus} selected={selected} labels={labels} />
     <TerrainTiles map={town.map} traffic={0} traveledRoads={roads} />
-    <TreeField placements={trees} seed={42} />
+    <Suspense fallback={null}><FoliageField atlas={DEFAULT_FOLIAGE_ATLAS} placements={trees} seed={42} /></Suspense>
     {TOWN_SITES.map((site, i) => <group key={site.id} position={[tileToWorldX(town.map, site.x) + .5, .2, tileToWorldZ(town.map, site.z) + .5]} rotation={[0, buildingYaw(site.rotation), 0]}>
       <StructureModel parts={buildings[i]} ink={false} />
     </group>)}

@@ -24,7 +24,7 @@ template for new walking characters.
 - Hips pivot gently against the chest on each stride. Solve legs from those
   rotated hips while keeping foot targets fixed; head bob and elbow flexion
   follow the same distance-driven cycle. Footwear retains the shared sole
-  envelope: sandals for peasants, ankle boots for other callings and monks.
+  envelope: sandals for peasants and beggars, ankle boots for other callings and monks.
 - Robes, skirts, belts, hands and attachment sockets must follow the pelvis.
   Update the garment clipping plane with it. A long garment is not a reason to
   skip the underlying leg solver or hide invalid knees.
@@ -118,8 +118,8 @@ release or package version. Tests require every active family to match it.
 Bake the base, every population profile/calling,
 and the Monk preset. Inspect the latest main branch before allocating versions.
 Published bakes are immutable; use new paths and update all active imports only
-after the exports exist. The current exports are base v34, population v28,
-monks v40 (brown hair) / v41 (grey hair), rockets v14, transport v24, knights v12,
+after the exports exist. The current exports are base v34, population v30,
+monks v40 (brown hair) / v41 (grey hair), rockets v14, transport v25, knights v12,
 minstrel v6 and settlement jobs v3. These color sheets share the [southeast surface lighting](LIGHTING.md).
 For a subsequent change choose unused versions:
 
@@ -178,3 +178,5 @@ dev server, and open `/play?seed=42`. The preview includes every building, a
 second market stall so both keeper genders can be inspected, and homes for the
 workers. Its nine workers start at their workplaces and use the normal
 simulation. These flags are disabled in production.
+
+New callings can reuse unchanged sheets with `npm run assets:population -- vNEXT --only beggar --from v30 --url http://localhost:3219`. The exporter checks layout and template compatibility; geometry or pose changes affecting existing callings still require a full export. Beggar clothing uses the shared Ragged tunic option and all six body profiles.

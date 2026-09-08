@@ -1,6 +1,11 @@
 "use client"
+import { useCharacterBatches } from "./character-batches"
+import { spriteTextureView } from "@/lib/game/render/sprite-texture"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
+import { isWorldVisible } from "@/lib/game/render/visibility"
+
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 import type { GameMap } from "@/lib/game/map/types"
@@ -21,7 +26,7 @@ import { useAnimalRigStore } from "@/lib/game/wildlife/rig-store"
 import { createEditedAnimalFrame } from "@/lib/game/transport/edited-frame"
 import { animalLeg } from "@/lib/game/transport/animal-pose"
 import { KNIGHT } from "@/lib/game/knight/design"
-import manifest from "@/public/textures/transport/v24/manifest.json"
+import manifest from "@/public/textures/transport/v25/manifest.json"
 import type { FigureClickHandler } from "./traveler-figure"
 
 export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0, horseVariant = "common", cargo = "produce", puller = "hand", awning = false, characterScale = 1,
@@ -45,8 +50,7 @@ export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0,
   const rowOffset = knight ? knight === "mounted" ? (variant % KNIGHT.variants) * 8 : 0 : kind === "merchant" ? variant * 8 : kind === "horse" ? manifest.horseVariants[horseVariant].rowOffset : 0
   const walk = knight ? { start: 1, frames: KNIGHT.frames } : manifest.animalClips.walk
   const maps = useMemo(() => sources.slice(0, urls.length).map(source => {
-    const map = source.clone(); map.magFilter = map.minFilter = THREE.NearestFilter
-    map.colorSpace = THREE.SRGBColorSpace; map.generateMipmaps = false; map.needsUpdate = true
+    const map = spriteTextureView(source)
     return map
   }), [sources, urls.length])
   const map = maps[0]
@@ -57,6 +61,7 @@ export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0,
   const groundAt = useMemo(() => terrain ? (x: number, z: number) => walkingSurface(terrain, x, z).height : undefined, [terrain])
   const materials = useMemo(() => [false, true].map(idPass => {
     const material = new THREE.SpriteMaterial({ map, alphaTest: 0.5, transparent: false, toneMapped: false })
+    if (idPass) material.userData.objectId = new THREE.Vector3(...(outlineColor ?? [0, 0, 0]))
     material.onBeforeCompile = shader => {
       applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth)
       if (kind === "cart") applyDriverLayer(shader, maps[3], driverFrame, driverVisible, depths[3])
@@ -71,11 +76,22 @@ export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0,
   }), [map, maps, kind, driverFrame, driverVisible, viewport, worldTexel, groundPlane, poseDepth, depths, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => { materials.forEach(m => m.dispose()) }, [materials])
   useEffect(() => () => maps.forEach(map => map.dispose()), [maps])
+  const body = useRef<THREE.Sprite>(null), ids = useRef<THREE.Sprite>(null)
+  const batchEntries = useCharacterBatches()
+  useLayoutEffect(() => {
+    // Carts have a separately composited driver's atlas; keep that shader intact.
+    // Edited animal frames also retain their live canvas rendering path.
+    if (!batchEntries || !body.current || !ids.current || !outlineColor || kind === "cart" || edited) return
+    const entry = { sprite: body.current, ids: ids.current, ground: groundPlane, depth: poseDepth,
+      id: new THREE.Vector3(...outlineColor) }
+    batchEntries.add(entry)
+    return () => { batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
+  }, [batchEntries, groundPlane, poseDepth, kind, edited, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   const root = useRef<THREE.Group>(null), phase = useRef(0), grazingTime = useRef(0), plant = useRef<FootPlant | null>(null)
   const vectors = useMemo(() => ({ facing: new THREE.Vector3(), origin: new THREE.Vector3(), foot: new THREE.Vector3(), corrected: new THREE.Vector3() }), [])
-  useFrame(({ camera }, delta) => {
+  useFrame(({ camera, clock }, delta) => withTerrainCornerQueries(terrain, () => {
     const group = root.current, parent = group?.parent
-    if (!group || !parent) return
+    if (!group || !parent || !isWorldVisible(parent)) return
     const data = parent.userData
     if (data.motionReset) plant.current = null
     const heading = typeof data.heading === "number" ? data.heading : (parent.getWorldDirection(vectors.facing), Math.atan2(vectors.facing.x, vectors.facing.z))
@@ -138,12 +154,12 @@ export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0,
       groundPlane.value.set(-surface.dx, 1, -surface.dz,
         surface.dx * vectors.corrected.x + surface.dz * vectors.corrected.z - surface.height)
     } else groundPlane.value.set(0, 0, 0, 0)
-  })
+  }, clock))
   const size = manifest.scale * characterScale
   const center = useMemo(() => new THREE.Vector2(manifest.anchor[0] / manifest.cellSize, 1 - manifest.anchor[1] / manifest.cellSize), [])
   return <group ref={root} position={position}>
-    <sprite name={kind} renderOrder={renderOrder} material={materials[0]} center={center} scale={[size, size, 1]} onClick={onClick}
+    <sprite ref={body} name={kind} renderOrder={renderOrder} material={materials[0]} center={center} scale={[size, size, 1]} onClick={onClick}
       layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} />
-    {outlineColor && <sprite renderOrder={renderOrder} material={materials[1]} center={center} scale={[size, size, 1]} layers-mask={OUTLINE_ID_LAYER_MASK} />}
+    {outlineColor && <sprite ref={ids} renderOrder={renderOrder} material={materials[1]} center={center} scale={[size, size, 1]} layers-mask={OUTLINE_ID_LAYER_MASK} />}
   </group>
 }

@@ -1,4 +1,9 @@
 import { wearySpeedScale } from "./traveler-weariness"
+import { housingBeds, vacantMonkBed } from "./housing"
+import { MONK_COUNT, MONK_JOIN_CHANCE, type Monk } from "./monks"
+import { monkWalkSpeed } from "./base-person/monk-assets"
+import { withTerrainCornerQueries } from "./map/cliff-corners"
+import { buildingSpatialQuery } from "./building-spatial"
 import { settlementJob, jobSpeedScale } from "./jobs/design"
 import { seekSheep, stepShepherd, releaseSheep, type HerdingTask } from "./herding"
 import type { WildlifeWorld } from "./wildlife/simulation"
@@ -6,8 +11,7 @@ import { cartPath, driveSegment, marketParking, type MarketParking } from "./tra
 import { roadCartPose } from "./transport/bridge-guide"
 import { blockedRoad, findRoadDiversion, takeRoadShortcut, retireBypassedRoad, exploresRoadShortcut, type WalkingShortcut } from "./walking-shortcuts"
 import { createFootpaths, HEAVY_PATH_WEAR, recordWalkingPath, regrowFootpaths, type Footpaths } from "./footpaths"
-import { knightMounted, knightLoadout, knightTravelSpeed, type HorseRest } from "./knights"
-import { knightDesign } from "./knight/design"
+import { knightMounted, knightLoadout, knightTravelSpeed, knightWalkStride, type HorseRest } from "./knights"
 import { DEFAULT_WALK_SPEED, DEFAULT_WALK_CADENCE, personWalkStride } from "./base-person/gait"
 import { assignBuildingTask, buildingEntrance, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
 import { buildingEntry } from "./building-rotation"
@@ -16,6 +20,8 @@ import { blessByProcession, nearProcession, type RelicProcession } from "./relic
 import { routePoint, routeLength, type StallRoute } from "./transport/roadside"
 import { advanceCartProgress } from "./transport/route"
 import { roadLanePoint } from "./map/road-lane"
+import { treeSpatialIndex } from "./trees/spatial"
+import { SpatialPoints } from "./spatial-points"
 import { walkingSurface } from "./map/walking-surface"
 import { convoyPoint, convoyBounds, convoyBuildingsClear, stallParking, shrineParking, type ParkingContext, type ShrineParking } from "./transport/navigation"
 import { alignCart, followCart, type CartPose } from "./transport/follow"
@@ -30,7 +36,6 @@ import { DEFAULT_BALANCE, type GameBalance } from "./balance"
 import { roadsideEvangelism } from "./monk-evangelism"
 import { buildingAt } from "./settlement"
 import { isComplete, isHouse } from "./construction"
-import { buildingSupports } from "./character-support"
 import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
 import { BUILDING_KINDS, buildingCentre, isPostedWork, type PlacedBuilding } from "./buildings"
 import { DRINK_PRICE, MEAL_PRICE, SERVING_THRESHOLD, servingHouses, tavernVisitPlan, type TavernPlan } from "./tavern"
@@ -112,6 +117,12 @@ export type Activity =
   | "building"
   | "walking"
   | "seeking"
+  | "toBegging"
+  | "begging"
+  | "fromBegging"
+  | "toAlms"
+  | "givingAlms"
+  | "fromAlms"
   | "toPerformance"
   | "performing"
   | "fromPerformance"
@@ -158,6 +169,12 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
   building: "Building a structure",
   walking: "On the road",
   seeking: "Seeking food & drink",
+  toBegging: "Finding a place to ask for alms",
+  begging: "Sitting beside the road, asking for alms",
+  fromBegging: "Moving to another place",
+  toAlms: "Approaching to give alms",
+  givingAlms: "Giving alms",
+  fromAlms: "Returning to the road",
   toPerformance: "Finding a place to play",
   performing: "Playing music beside the road",
   fromPerformance: "Continuing after a performance",
@@ -266,6 +283,10 @@ function roll(id: number, n: number): number {
   return (h >>> 0) / 4294967296
 }
 
+function beggarWalkSeconds(id: number, cycle: number): number {
+  return (0.5 + roll(id, cycle + 900)) * GAME_HOUR_SECONDS
+}
+
 function minstrelWalkSeconds(id: number, cycle: number): number {
   return (3 + ((id * 19 + cycle * 11) % 5)) * GAME_HOUR_SECONDS
 }
@@ -276,6 +297,9 @@ export interface SimTraveler {
   /** Road-tile gate on looking ahead for a footprint blocking the road. */
   diversionCheck?: number
   diversionBuildings?: GameMap["buildings"]
+  almsEncounters?: Record<number, number>
+  almsVisit?: { beggarId: number; cycle: number; spot: WorldPoint }
+  donationUntil?: number
   musicCooldown?: number
   musicVisit?: { performerId: number; cycle: number; spot: WorldPoint }
   /** Horse waits on a reserved verge beside a tree until its rider returns. */
@@ -389,6 +413,7 @@ export interface SimState {
   admissionPayments: AdmissionPayment[]
   seed: number
   travelers: Map<number, SimTraveler>
+  joinedMonks: Map<number, Monk>
   /** Game time in days since the sim began (fractional). */
   time: number
   /** Danger per tile, indexed like the map's tiles; what encounters roll against. */
@@ -489,8 +514,6 @@ function routeWorldPoint(
     }
     return laneVertex(map, route, i, lane)
   }
-  const a = vertex(i0)
-  const b = vertex(i0 + 1)
   const ay = surfaceHeight(map, route[i0].x, route[i0].z)
   const by = surfaceHeight(map, route[i0 + 1].x, route[i0 + 1].z)
   const curved = roadLanePoint(map, route, p, lane)
@@ -506,10 +529,14 @@ function routeWorldPoint(
       curved.z += (shared.z - own.z) * weight
     }
   }
-  const tx = curved?.x ?? a.x + (b.x - a.x) * frac
-  const tz = curved?.z ?? a.z + (b.z - a.z) * frac
+  let tx: number, tz: number
+  if (curved) { tx = curved.x; tz = curved.z }
+  else {
+    const a = vertex(i0), b = vertex(i0 + 1)
+    tx = a.x + (b.x - a.x) * frac; tz = a.z + (b.z - a.z) * frac
+  }
   const x = tileToWorldX(map, tx), z = tileToWorldZ(map, tz), bridges = bridgeLayout(map)
-  const nearBridge = [route[i0], route[i0+1]].some(p => bridges.rise[p.z*map.width+p.x] > 0)
+  const nearBridge = bridges.rise[route[i0].z * map.width + route[i0].x] > 0 || bridges.rise[route[i0 + 1].z * map.width + route[i0 + 1].x] > 0
   const point = { x, z, y: nearBridge ? walkingSurface(map,x,z).height : ay + (by-ay)*frac }
   return point
 }
@@ -612,16 +639,24 @@ function shrineWorldPoint(map: GameMap, s: SimTraveler): WorldPoint {
 /** Nearby live obstacles and reservations are shared by shrine and market parking. */
 function parkingContext(sim: SimState, s: SimTraveler, scale: number): ParkingContext {
   const nearby = (p: { x: number; z: number }) => Math.hypot(p.x - s.x, p.z - s.z) < 16 + scale * 4
-  return {
-    trees: sim.trees.filter((tree, index) => nearby(tree) && !sim.felled.has(index) && !tree.walking),
-    obstacles: [...sim.travelers.values()].flatMap(other => other.id === s.id ? [] : [
-      ...(other.stallRoute?.obstacles ?? []),
-      ...(other.stallRoute && cartLoadout(other.id).puller !== "hand" ? convoyBounds(alignCart(other.stallRoute.park, other.stallRoute.heading, 0), cartLoadout(other.id).puller, scale) : []),
-      ...(other.marketParking ? convoyBounds(other.marketParking.parked, cartLoadout(other.id).puller, scale) : []),
-      ...(other.shrineParking ? convoyBounds(other.shrineParking.parked, other.convoy ? cartLoadout(other.id).puller : "horse", scale) : []),
-    ]).filter(nearby),
-    people: [...sim.travelers.values()].filter(other => other.id !== s.id && nearby(other)),
+  const trees: Array<{ tree: TreePlacement; index: number }> = []
+  treeSpatialIndex(sim.trees).forEachWithin(s.x, s.z, 16 + scale * 4, (tree, index) => {
+    if (!sim.felled.has(index) && !tree.walking) trees.push({ tree, index })
+  })
+  const obstacles: StallRoute["obstacles"] = [], people: SimTraveler[] = []
+  const add = (items: NonNullable<ParkingContext["obstacles"]>) => { for (const obstacle of items) if (nearby(obstacle)) obstacles.push(obstacle) }
+  for (const other of sim.travelers.values()) {
+    if (other.id === s.id) continue
+    if (nearby(other)) people.push(other)
+    if (other.stallRoute) {
+      add(other.stallRoute.obstacles)
+      const puller = cartLoadout(other.id).puller
+      if (puller !== "hand") add(convoyBounds(alignCart(other.stallRoute.park, other.stallRoute.heading, 0), puller, scale))
+    }
+    if (other.shrineParking) add(convoyBounds(other.shrineParking.parked, other.convoy ? cartLoadout(other.id).puller : "horse", scale))
+    if (other.marketParking) add(convoyBounds(other.marketParking.parked, cartLoadout(other.id).puller, scale))
   }
+  return { trees: trees.sort((a, b) => a.index - b.index).map(entry => entry.tree), obstacles, people }
 }
 
 /** Cross to the new left lane over a short walk, including when seeking food. */
@@ -647,6 +682,7 @@ export function createSim(
     danger: computeDangerField(map, threats),
     relic: { ...relic },
     world: map,
+    joinedMonks: new Map(),
     shrineRenown: 0,
     balance: DEFAULT_BALANCE,
     visits: 0,
@@ -717,7 +753,7 @@ export function createSim(
       walkT: 0,
       offRoadRoute: null,
       targetId: null,
-      timer: t.type.id === "vendor" ? vendWalkSeconds(t.id, 0) : t.type.id === "minstrel" ? minstrelWalkSeconds(t.id, 0) : 0,
+      timer: t.type.id === "vendor" ? vendWalkSeconds(t.id, 0) : t.type.id === "minstrel" ? minstrelWalkSeconds(t.id, 0) : t.type.id === "beggar" ? beggarWalkSeconds(t.id, 0) : 0,
       cycle: 0,
     })
   }
@@ -770,7 +806,7 @@ function findNearbySpot(
 
 const STALL_ACTIVITIES: readonly Activity[] = ["toShop", "openingShop", "vending", "packingShop"]
 /** Activities that hold someone in place; their speed stays at zero. */
-const STILL_ACTIVITIES: readonly Activity[] = ["working", "building", "browsing", "performing", "listening",
+const STILL_ACTIVITIES: readonly Activity[] = ["working", "building", "browsing", "performing", "listening", "begging", "givingAlms",
   "openingShop", "packingShop", "vending", "idle", "posted", "sleeping", "buying", "sitting"]
 const CAMP_ACTIVITIES: readonly Activity[] = ["toCamp", "camping"]
 
@@ -800,21 +836,33 @@ function startOffRoadWalk(s: SimTraveler, activity: Activity): void {
 
 /** Reserve reachable open ground beside the road, keeping the performers and
  * their audience apart from each other, camps, and deployed stalls. */
-function musicSpot(sim: SimState, s: SimTraveler, map: GameMap, performer?: SimTraveler): WorldPoint | null {
+function roadsideSpot(sim: SimState, s: SimTraveler, map: GameMap, performer?: SimTraveler): WorldPoint | null {
   const anchor = performer ?? s
   const cx = worldToTileX(map, anchor.x), cz = worldToTileZ(map, anchor.z)
   const start = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
   const candidates: WorldPoint[] = []
+  // Every candidate is a tile center in this 5×5 neighborhood. Discard
+  // reservations that cannot reach any candidate before the per-seat checks.
+  const minX = tileToWorldX(map, cx - 2), maxX = tileToWorldX(map, cx + 2)
+  const minZ = tileToWorldZ(map, cz - 2), maxZ = tileToWorldZ(map, cz + 2)
+  const nearby = (point: { x: number; z: number }, radius: number) => point.x >= minX - radius && point.x <= maxX + radius && point.z >= minZ - radius && point.z <= maxZ + radius
+  const occupied: SimTraveler[] = []
+  for (const other of sim.travelers.values()) {
+    if (other.id !== s.id && ((other.spot && nearby(other.spot, .9)) ||
+      (other.musicVisit && nearby(other.musicVisit.spot, .9)) || other.stallRoute?.obstacles.some(point => nearby(point, 2)))) occupied.push(other)
+  }
+  const roads = performer ? [] : map.road!.filter(tile => Math.abs(tile.x - cx) <= 4 && Math.abs(tile.z - cz) <= 4)
   for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
     const x = cx + dx, z = cz + dz
     if (!["grass", "dirt", "clearing"].includes(tileAt(map, x, z) ?? "") || buildingAt(map, x, z)) continue
     const point = { x: tileToWorldX(map, x), y: surfaceHeight(map, x, z), z: tileToWorldZ(map, z) }
     const distance = Math.hypot(point.x - anchor.x, point.z - anchor.z)
     if (performer && (distance < 0.9 || distance > 2.3)) continue
-    if (!performer && !map.road!.some(tile => Math.hypot(tile.x - x, tile.z - z) <= 2)) continue
-    if (sim.trees.some((tree, index) => !sim.felled.has(index) && Math.hypot(tree.x - point.x, tree.z - point.z) < 0.8)) continue
-    if ([...sim.travelers.values()].some(other => other.id !== s.id && (
+    if (!performer && !roads.some(tile => (tile.x - x) ** 2 + (tile.z - z) ** 2 <= 4)) continue
+    if (treeSpatialIndex(sim.trees).firstWithin(point.x, point.z, .8, (_, index) => !sim.felled.has(index))) continue
+    if (occupied.some(other => (
       (other.spot && Math.hypot(other.spot.x - point.x, other.spot.z - point.z) < 0.9) ||
+      (other.almsVisit && Math.hypot(other.almsVisit.spot.x - point.x, other.almsVisit.spot.z - point.z) < 0.9) ||
       (other.musicVisit && Math.hypot(other.musicVisit.spot.x - point.x, other.musicVisit.spot.z - point.z) < 0.9) ||
       other.stallRoute?.obstacles.some(obstacle => Math.hypot(obstacle.x - point.x, obstacle.z - point.z) < 2)
     ))) continue
@@ -823,6 +871,17 @@ function musicSpot(sim: SimState, s: SimTraveler, map: GameMap, performer?: SimT
   candidates.sort((a, b) => Math.hypot(a.x - s.x, a.z - s.z) - Math.hypot(b.x - s.x, b.z - s.z))
   return candidates.find(point => settlementRoute(map, map.buildings, start,
     { x: worldToTileX(map, point.x), z: worldToTileZ(map, point.z) })) ?? null
+}
+
+function availableBeggar(sim: SimState, s: SimTraveler): SimTraveler | undefined {
+  const visit = s.almsVisit, beggar = visit && sim.travelers.get(visit.beggarId)
+  return beggar?.activity === "begging" && !beggar.praying && beggar.cycle === visit?.cycle ? beggar : undefined
+}
+
+function donate(sim: SimState, giver: SimTraveler, recipient: SimTraveler): void {
+  if (giver.gold < 1) return
+  pay(giver, recipient, 1)
+  recipient.donationUntil = sim.time * GAME_DAY_SECONDS + 1.5
 }
 
 function finishPerformance(s: SimTraveler): void {
@@ -978,9 +1037,7 @@ function findJob(sim: SimState, s: SimTraveler, map: GameMap): { building: Place
 }
 
 /** Sleeping places actually built into the house; the artwork sets the capacity. */
-function houseBeds(building: { id: string } & Parameters<typeof buildingSupports>[0]): number {
-  return buildingSupports(building).filter(support => support.clips.includes("sleeping")).length
-}
+const houseBeds = housingBeds
 
 /** A new settler moves into the nearest house that still has a bed to spare. */
 function findHome(sim: SimState, s: SimTraveler, map: GameMap): string | null {
@@ -1002,7 +1059,9 @@ function homeBedSlot(sim: SimState, s: SimTraveler): number {
 
 /** Counters able to serve right now: complete, and with a keeper at their post. */
 function openCounters(sim: SimState, map: GameMap) {
-  return servingHouses(map, building => staffOf(sim, building.id).some(worker => worker.activity === "posted"))
+  const staffed = new Set<string>()
+  for (const worker of sim.travelers.values()) if (worker.employer !== null && worker.activity === "posted") staffed.add(worker.employer)
+  return servingHouses(map, building => staffed.has(building.id))
 }
 
 /** Walk a pre-planned tile route, keeping the off-road walker's tile alignment. */
@@ -1141,7 +1200,26 @@ function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): 
   sim.visits++
   if (s.admissionPaid > 0) s.piety = Math.min(100, s.piety + 4 + sim.relic.sanctity / 25)
   s.admissionPaid = 0
-  const job = s.shrineParking ? undefined : findJob(sim, s, map)
+  if (t.type.id === "friar") {
+    const bed = vacantMonkBed(map, sim.joinedMonks.values())
+    if (bed && nextRoll(s) < MONK_JOIN_CHANCE) {
+      sim.joinedMonks.set(t.id, {
+        id: MONK_COUNT + t.id, name: t.name, duty: "Brother of the enclave",
+        complexion: travelerAppearance(map.seed ?? 0, t.id).complexion,
+        attributes: { age: t.attributes.age, piety: s.piety, skills: [...t.attributes.skills] },
+        home: bed.home, bedSlot: bed.slot,
+        arrival: { x: s.x, y: s.y, z: s.z, stamina: s.stamina },
+      })
+      s.shrineSeat = undefined
+      s.moveSpeed = 0
+      sim.travelers.delete(t.id)
+      return
+    }
+    s.activity = "fromRelic"
+    return
+  }
+  const home = findHome(sim, s, map)
+  const job = s.shrineParking || !home ? undefined : findJob(sim, s, map)
   if (job && nextRoll(s) < (t.attributes.skills.some((skill) => BUILDING_KINDS[job.building.kind].trades.includes(skill)) ? 0.9 : 0.65)) {
     const route = settlementRoute(map, [...map.buildings, ...sim.buildings],
       { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
@@ -1151,7 +1229,7 @@ function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): 
       s.jobSlot = job.slot
       s.shrineSeat = undefined
       s.jobless = false
-      s.home = findHome(sim, s, map)
+      s.home = home
       startWorkRoute(s, route, "hauling")
       return
     }
@@ -1159,6 +1237,9 @@ function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): 
   s.activity = "fromRelic"
 }
 
+// Reuse position snapshots instead of allocating several objects and Map entries
+// per traveler and simulation tick. Paths only read the scratch point.
+const tickPositions = new WeakMap<SimState, Float64Array>()
 /** Offer one shrine or meal visit before crossing its junction, including a diversion across it. */
 function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   counters: ReturnType<typeof openCounters>, direction: 1 | -1, parkingProgress: number,
@@ -1170,7 +1251,7 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   const served = counters.length > 0
   const chance = visitChance({ ...t.attributes, piety: s.piety,
     hunger: served ? s.hunger : 100, thirst: served ? s.thirst : 100, stamina: s.stamina },
-    sim.relic, renown, sim.balance)
+    sim.relic, renown, sim.balance, 0, t.type.id)
   s.visitCooldown = 5
   const ordinaryVisit = nextRoll(s) < chance
   const evangelism = ordinaryVisit ? 0 : roadsideEvangelism(map)
@@ -1226,6 +1307,7 @@ export function stepSim(
   speedScales?: ReadonlyMap<number, number>,
   characterScale = BASE_CHARACTER_SCALE,
 ): void {
+  return withTerrainCornerQueries(map, () => {
   if (!map.road || map.road.length < 2) return
   if (dt > 0) for (const animal of sim.wildlife?.animals ?? []) {
     const shepherd = animal.fold?.shepherd == null ? undefined : sim.travelers.get(animal.fold.shepherd)
@@ -1236,16 +1318,51 @@ export function stepSim(
   const length = map.road.length - 1
   sim.time += dt / GAME_DAY_SECONDS
   const hours = dt / GAME_HOUR_SECONDS
-  const previousPositions = dt > 0 ? new Map([...sim.travelers].map(([id, s]) => [id, { x: s.x, z: s.z, cycle: s.cycle }])) : null
+  let previousPositions = tickPositions.get(sim)
+  if (!previousPositions || previousPositions.length < travelers.length * 3) {
+    previousPositions = new Float64Array(travelers.length * 3)
+    tickPositions.set(sim, previousPositions)
+  }
+  if (dt > 0) for (let i = 0; i < travelers.length; i++) {
+    const state = sim.travelers.get(travelers[i].id)
+    previousPositions[i * 3] = state?.x ?? 0
+    previousPositions[i * 3 + 1] = state?.z ?? 0
+    previousPositions[i * 3 + 2] = state?.cycle ?? NaN
+  }
   regrowFootpaths(sim.footpaths, dt / GAME_DAY_SECONDS)
   // One reading of the settlement's open counters, shared by everyone this step.
   const counters = openCounters(sim, map)
-  const roadWalkers = travelers.filter(t => t.type.id !== "vendor" && t.type.id !== "knight")
-  const explorerRanks = new Map(roadWalkers.map((t, index) => [t.id, index]))
+  const roadWalkerCount = travelers.reduce((count, t) => count + (t.type.id !== "vendor" && t.type.id !== "knight" ? 1 : 0), 0)
+  let explorerRank = 0
+  // Inspect only potential performers and vendors inside each traveler's step.
+  // Keep live state references: someone can start/stop performing earlier in
+  // this same tick, and insertion order still decides equally near encounters.
+  const musicians = new SpatialPoints([...sim.travelers.values()]
+    .filter(s => s.activity === "toPerformance" || s.activity === "performing")
+    .map(state => {
+      // A performer is stationary; someone arriving this tick finishes at their
+      // reserved spot. Index that destination while retaining live activity.
+      const point = state.activity === "toPerformance" ? state.spot ?? state : state
+      return { x: point.x, z: point.z, state }
+    }))
+  const listeners = new Map<number, number>()
+  for (const state of sim.travelers.values()) if (state.musicVisit) {
+    const id = state.musicVisit.performerId
+    listeners.set(id, (listeners.get(id) ?? 0) + 1)
+  }
+  const vendors = travelers.filter(t => t.type.id === "vendor").flatMap(t => {
+    const state = sim.travelers.get(t.id)
+    return state ? [state] : []
+  })
+  const deployedStall = (state: SimTraveler) => state.stallRoute &&
+    (state.activity === "openingShop" || state.activity === "vending" || state.activity === "packingShop") ? state.stallRoute : undefined
+  let pastureObstacles: StallRoute["obstacles"] | undefined
 
   for (const t of travelers) {
+    const ordinal = t.type.id !== "vendor" && t.type.id !== "knight" ? explorerRank++ : -1
     const s = sim.travelers.get(t.id)
-    if (!s) continue
+    if (!s || sim.joinedMonks.has(t.id)) continue
+    const previousStall = deployedStall(s)
     if (s.herding && !["toSheep", "herding"].includes(s.activity)) releaseSheep(s, sim.wildlife)
     s.herdingRetry = Math.max(0, (s.herdingRetry ?? 0) - dt)
     s.convoyScale = characterScale
@@ -1274,7 +1391,7 @@ export function stepSim(
     s.thirst = Math.max(0, s.thirst - sim.balance.rules.thirstDecay * needFactor * hours)
     if (camping || abed) s.stamina = Math.min(100, s.stamina + CAMP_STAMINA_REGEN * hours)
     // Standing at a stall, a post or a performance neither drains nor restores the legs.
-    else if (!["vending", "performing", "listening", "posted", "sitting", "buying"].includes(s.activity)) {
+    else if (!["vending", "performing", "listening", "begging", "givingAlms", "posted", "sitting", "buying"].includes(s.activity)) {
       s.stamina = Math.max(0, s.stamina - sim.balance.rules.staminaDecay * hours)
     }
 
@@ -1294,10 +1411,10 @@ export function stepSim(
 
     const knightSpeed = t.type.id === "knight" ? (knightMounted(s.activity, s.horseRest)
       ? knightTravelSpeed(characterScale, knightLoadout(t.id).squire)
-      : personWalkStride(knightDesign(travelerAppearance(map.seed ?? 0, t.id).variant)) * characterScale * DEFAULT_WALK_CADENCE) / DEFAULT_WALK_SPEED : undefined
+      : knightWalkStride(travelerAppearance(map.seed ?? 0, t.id).variant) * characterScale * DEFAULT_WALK_CADENCE) / DEFAULT_WALK_SPEED : undefined
     const job = settlementJob(s.employer, sim.buildings)
     const residentSpeed = job ? jobSpeedScale(job, travelerAppearance(map.seed ?? 0, t.id).variant, characterScale) : undefined
-    const targetSpeed = t.pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (residentSpeed ?? knightSpeed ?? speedScales?.get(t.id) ?? 1) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+    const targetSpeed = t.pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
     s.moveSpeed = camping || sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed
@@ -1314,8 +1431,16 @@ export function stepSim(
     }
 
     if (s.pasture && (s.activity === "openingShop" || s.activity === "vending" || s.activity === "packingShop")) {
-      s.pasture.obstacles = [...sim.travelers.values()].flatMap(other =>
-        other.stallRoute && ["openingShop", "vending", "packingShop"].includes(other.activity) ? other.stallRoute.obstacles : [])
+      if (!s.pasture.tether) {
+        if (!pastureObstacles) {
+          pastureObstacles = []
+          for (const other of sim.travelers.values()) {
+            const stall = deployedStall(other)
+            if (stall) pastureObstacles.push(...stall.obstacles)
+          }
+        }
+        s.pasture.obstacles = pastureObstacles
+      }
       stepPasture(map, s.pasture, dt, Math.max(0.01, targetSpeed), s.activity === "packingShop")
     }
     switch (s.activity) {
@@ -1611,9 +1736,10 @@ export function stepSim(
         if (isVendor && !s.employer && !s.track && ahead >= 0 && ahead <= 6 && !s.shrineParking &&
           s.marketCheck !== Math.floor(s.progress)) {
           s.marketCheck = Math.floor(s.progress)
+          const home = findHome(sim, s, map)
           const puller = cartLoadout(s.id).puller
           const initial = s.cartPose ?? roadCartPose(map, s.progress, s.direction, -cartOffset(puller) * characterScale, characterScale)
-          for (const stall of sim.buildings.filter(b => BUILDING_KINDS[b.kind].vendorKept && isComplete(b) && staffOf(sim, b.id).length === 0)) {
+          for (const stall of sim.buildings.filter(b => home && BUILDING_KINDS[b.kind].vendorKept && isComplete(b) && staffOf(sim, b.id).length === 0)) {
             const parking = marketParking(map, stall, initial, puller, characterScale, parkingContext(sim, s, characterScale))
             if (!parking) continue
             // Reserve the walking job only after both the drive and the walk
@@ -1622,6 +1748,7 @@ export function stepSim(
             if (!assignBuildingTask(keeper, map, "work", stall.id)) continue
             s.buildingTask = keeper.buildingTask
             s.workSlot = 0
+            s.home = home
             s.employer = stall.id
             s.jobSlot = 0
             s.jobless = false
@@ -1650,26 +1777,51 @@ export function stepSim(
           }
         }
         if (s.activity === "walking" && !shelter && !s.track && !isVendor && Math.min(s.hunger, s.thirst, s.stamina) > 20) {
-          if (t.type.id === "minstrel") {
+          if (t.type.id === "beggar") {
             s.timer -= dt
             if (s.timer <= 0) {
-              const spot = musicSpot(sim, s, map)
+              const spot = roadsideSpot(sim, s, map)
+              if (spot) { s.spot = spot; startOffRoadWalk(s, "toBegging"); break }
+              s.timer = GAME_HOUR_SECONDS
+            }
+          } else if (t.type.id === "minstrel") {
+            s.timer -= dt
+            if (s.timer <= 0) {
+              const spot = roadsideSpot(sim, s, map)
               if (spot) { s.spot = spot; startOffRoadWalk(s, "toPerformance"); break }
               s.timer = GAME_HOUR_SECONDS
             }
           } else if (s.musicCooldown === 0) {
-            const performer = [...sim.travelers.values()].find(other => other.activity === "performing" && !other.praying &&
-              Math.hypot(other.x - s.x, other.z - s.z) < 4 &&
-              [...sim.travelers.values()].filter(listener => listener.musicVisit?.performerId === other.id).length < 6)
+            const performer = musicians.firstWithin(s.x, s.z, 4, ({ state }) =>
+              state.activity === "performing" && !state.praying && (listeners.get(state.id) ?? 0) < 6)?.state
             if (performer) {
               s.musicCooldown = 2 * GAME_HOUR_SECONDS
               if (nextRoll(s) < 0.65) {
-                const spot = musicSpot(sim, s, map, performer)
+                const spot = roadsideSpot(sim, s, map, performer)
                 if (spot) {
+                  if (s.musicVisit) listeners.set(s.musicVisit.performerId, (listeners.get(s.musicVisit.performerId) ?? 1) - 1)
                   s.musicVisit = { performerId: performer.id, cycle: performer.cycle, spot }
+                  listeners.set(performer.id, (listeners.get(performer.id) ?? 0) + 1)
                   startOffRoadWalk(s, "toListen")
                   break
                 }
+              }
+            }
+          }
+        }
+        if (s.activity === "walking" && !shelter && !s.track && !isVendor && t.type.id !== "beggar" && s.gold >= 1 &&
+          Math.min(s.hunger, s.thirst, s.stamina) > 20) {
+          const beggar = [...sim.travelers.values()].find(other => other.activity === "begging" && !other.praying &&
+            Math.hypot(other.x - s.x, other.z - s.z) < 3 && s.almsEncounters?.[other.id] !== other.cycle)
+          if (beggar) {
+            // One choice per pitch: standing nearby must not reroll generosity every frame.
+            ;(s.almsEncounters ??= {})[beggar.id] = beggar.cycle
+            if (nextRoll(s) < 0.05 + 0.85 * Math.max(0, Math.min(100, s.piety)) / 100) {
+              const spot = roadsideSpot(sim, s, map, beggar)
+              if (spot) {
+                s.almsVisit = { beggarId: beggar.id, cycle: beggar.cycle, spot }
+                startOffRoadWalk(s, "toAlms")
+                break
               }
             }
           }
@@ -1688,15 +1840,14 @@ export function stepSim(
           // and shrine visitors retain their old road progress while off-road;
           // chasing it leaves customers pacing at the enclave entrance forever.
           // Settled counters are reached through startTavernTrip instead.
-          const vendor = travelers
-            .filter((v) => v.type.id === "vendor")
-            .map((v) => sim.travelers.get(v.id))
-            .filter(
-              (v): v is SimTraveler =>
-                !!v && !v.employer && !v.track && !v.roadShortcut && !v.praying &&
-                (v.activity === "walking" || v.activity === "vending"),
-            )
-            .sort((a, b) => Math.abs(a.progress - s.progress) - Math.abs(b.progress - s.progress))[0]
+          let vendor: SimTraveler | undefined
+          let nearestDistance = Infinity
+          for (const candidate of vendors) {
+            if (candidate.employer || candidate.track || candidate.roadShortcut || candidate.praying ||
+              (candidate.activity !== "walking" && candidate.activity !== "vending")) continue
+            const distance = Math.abs(candidate.progress - s.progress)
+            if (distance < nearestDistance) { nearestDistance = distance; vendor = candidate }
+          }
 
           if (vendor) {
             s.targetId = vendor.id
@@ -1805,7 +1956,7 @@ export function stepSim(
             s.shortcutCheck = check
             s.roadShortcut = takeRoadShortcut(map, s.progress, direction, s.lane,
               (p, lane) => roadWorldPoint(map, p, lane),
-              exploresRoadShortcut(explorerRanks.get(s.id)!, s.cycle, map.seed ?? 0, roadWalkers.length), sim.time * GAME_DAY_SECONDS) ?? undefined
+              exploresRoadShortcut(ordinal, s.cycle, map.seed ?? 0, roadWalkerCount), sim.time * GAME_DAY_SECONDS) ?? undefined
             if (s.roadShortcut) { stepRoadShortcut(s, map, worldSpeed * dt); break }
           }
         }
@@ -1841,6 +1992,47 @@ export function stepSim(
         break
       }
 
+      case "toBegging": {
+        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, map)) {
+          s.activity = "begging"
+          s.timer = (6 + roll(s.id, s.cycle + 950) * 4) * GAME_HOUR_SECONDS
+        }
+        break
+      }
+      case "begging": {
+        s.timer -= dt
+        if (s.timer <= 0 || Math.min(s.hunger, s.thirst, s.stamina) <= 10) {
+          s.cycle++
+          startOffRoadWalk(s, "fromBegging")
+        }
+        break
+      }
+      case "toAlms": {
+        if (!availableBeggar(sim, s) || Math.min(s.hunger, s.thirst, s.stamina) <= 10) {
+          startOffRoadWalk(s, "fromAlms"); break
+        }
+        if (stepOffRoadWalk(s, s.almsVisit!.spot, worldSpeed, dt, map)) {
+          s.activity = "givingAlms"; s.timer = 1
+        }
+        break
+      }
+      case "givingAlms": {
+        s.timer -= dt
+        const beggar = availableBeggar(sim, s)
+        if (s.timer <= 0 || !beggar) {
+          if (beggar) donate(sim, s, beggar)
+          startOffRoadWalk(s, "fromAlms")
+        }
+        break
+      }
+      case "fromBegging":
+      case "fromAlms": {
+        if (stepOffRoadWalk(s, currentRoutePoint(map, s), worldSpeed, dt, map)) {
+          if (s.activity === "fromBegging") s.timer = beggarWalkSeconds(s.id, s.cycle)
+          s.activity = "walking"; s.spot = null; s.walkFrom = null; s.almsVisit = undefined
+        }
+        break
+      }
       case "toPerformance": {
         if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, map)) {
           s.activity = "performing"
@@ -1858,13 +2050,15 @@ export function stepSim(
           startOffRoadWalk(s, "fromListening"); break
         }
         if (stepOffRoadWalk(s, s.musicVisit!.spot, worldSpeed, dt, map)) {
-          s.activity = "listening"; s.timer = (0.5 + roll(s.id, s.rolls + 700)) * GAME_HOUR_SECONDS
+          s.activity = "listening"; s.timer = 1 + roll(s.id, s.rolls + 700)
         }
         break
       }
       case "listening": {
         s.timer -= dt
-        if (s.timer <= 0 || !availablePerformance(sim, s) || Math.min(s.hunger, s.thirst, s.stamina) <= 10) {
+        const performer = availablePerformance(sim, s)
+        if (s.timer <= 0 || !performer || Math.min(s.hunger, s.thirst, s.stamina) <= 10) {
+          if (s.timer <= 0 && performer && nextRoll(s) < 0.4) donate(sim, s, performer)
           startOffRoadWalk(s, "fromListening")
         }
         break
@@ -1873,6 +2067,7 @@ export function stepSim(
       case "fromListening": {
         if (stepOffRoadWalk(s, currentRoutePoint(map, s), worldSpeed, dt, map)) {
           if (s.activity === "fromPerformance") s.timer = minstrelWalkSeconds(s.id, s.cycle)
+          if (s.musicVisit) listeners.set(s.musicVisit.performerId, (listeners.get(s.musicVisit.performerId) ?? 1) - 1)
           s.activity = "walking"; s.spot = null; s.walkFrom = null; s.musicVisit = undefined
           s.musicCooldown = 2 * GAME_HOUR_SECONDS
         }
@@ -1980,12 +2175,19 @@ export function stepSim(
       }
     }
     finishConvoyMove(s, transportBefore, map, characterScale)
+    // Later animals in this tick must see a stall that just opened or packed up.
+    if (deployedStall(s) !== previousStall) pastureObstacles = undefined
   }
-
-  if (previousPositions) for (const traveler of travelers) {
-    const from = previousPositions.get(traveler.id), to = sim.travelers.get(traveler.id)
-    // Vendors' ground contacts are recorded from the rendered driver and axle,
-    // so a seated driver cannot leave an invented third track down the middle.
-    if (from && to && !to.convoy && to.cycle === from.cycle) recordWalkingPath(sim.footpaths, map, from, to, traveler.type.id === "knight" && knightMounted(to.activity, to.horseRest) ? HEAVY_PATH_WEAR : 1)
+  if (dt > 0) {
+    const from = { x: 0, z: 0 }
+    const nearbyBuildings = buildingSpatialQuery(map.buildings)
+    for (let i = 0; i < travelers.length; i++) {
+      const traveler = travelers[i], to = sim.travelers.get(traveler.id)
+      // Vendors record their rendered driver and axle contacts separately.
+      if (!to || to.convoy || to.cycle !== previousPositions[i * 3 + 2]) continue
+      from.x = previousPositions[i * 3]; from.z = previousPositions[i * 3 + 1]
+      recordWalkingPath(sim.footpaths, map, from, to, traveler.type.id === "knight" && knightMounted(to.activity, to.horseRest) ? HEAVY_PATH_WEAR : 1, nearbyBuildings)
+    }
   }
+  })
 }

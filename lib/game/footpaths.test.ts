@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { createFootpaths, FOOTPATH_HALF_LIFE, HEAVY_PATH_WEAR, FOUNDING_ROAD_WEAR, foundingRoadStrength, foundingRoadTraffic, FOOTPATH_WEAR, footpathRoadSegments, recordCartPath, recordWalkingPath, regrowFootpaths } from "./footpaths"
+import { buildFootpathRoadSegments, compactFootpathContacts, createFootpaths, FOOTPATH_HALF_LIFE, HEAVY_PATH_WEAR, FOUNDING_ROAD_WEAR, foundingRoadStrength, foundingRoadTraffic, FOOTPATH_WEAR, footpathRoadSegments, recordCartPath, recordWalkingPath, regrowFootpaths } from "./footpaths"
 import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 import { settlementRoute } from "./settlement-route"
 import { monkWander } from "./monk-wander"
@@ -21,6 +21,37 @@ function walk(map: GameMap, route: TilePos[], passes = 1, frames = 1) {
 }
 
 describe("walking paths in the game", () => {
+  it("can finish a city path snapshot over several frames while live contacts keep changing", () => {
+    const map: GameMap = { width: 64, depth: 64, tiles: Array(64 * 64).fill("grass"), buildings: [], footpaths: createFootpaths() }
+    for (let z = 3; z < 30; z += 2) walk(map, Array.from({ length: 40 }, (_, x) => ({ x: x + 2, z })), 16)
+    const paths = map.footpaths!, expected = footpathRoadSegments(map, paths)
+    const work = buildFootpathRoadSegments(map, paths)
+    let next = work.next(), yields = 0
+    expect(next.done).toBe(false)
+    // A sampled contact must not move or disappear from the in-flight snapshot
+    // when the next simulation tick changes its live record.
+    const first = paths.contacts.values().next().value!
+    first.wear = 0; first.ax = first.bx = 60
+    while (!next.done) { yields++; next = work.next() }
+    expect(yields).toBeGreaterThan(1)
+    expect(next.value).toEqual(expected)
+    // The subsequent snapshot observes the new ground contact.
+    expect(footpathRoadSegments(map, paths)).not.toEqual(expected)
+  })
+  it("compacts established collinear marks without joining different lanes or changing simulation contacts", () => {
+    const map = fixture(), paths = map.footpaths!
+    walk(map, Array.from({ length: 9 }, (_, i) => ({ x: i + 1, z: 3.25 })), 20)
+    walk(map, Array.from({ length: 9 }, (_, i) => ({ x: i + 1, z: 2.75 })), 20)
+    const before = structuredClone(paths.contacts)
+    const roads = compactFootpathContacts(paths.contacts)
+    expect(roads).toHaveLength(2)
+    expect(roads.map(r => r.bx - r.ax)).toEqual([8, 8])
+    expect(new Set(roads.map(r => r.az))).toEqual(new Set([3.75, 3.25]))
+    expect(paths.contacts).toEqual(before)
+    const first = [...paths.contacts.keys()][0]
+    paths.contacts.delete(first)
+    expect(compactFootpathContacts(paths.contacts).reduce((n, r) => n + r.bx - r.ax, 0)).toBe(15.5)
+  })
   it("lets an unused founding road fade and lose its routing advantage", () => {
     const map = fixture()
     for (let x = 1; x < 10; x++) map.tiles[3 * map.width + x] = "path"

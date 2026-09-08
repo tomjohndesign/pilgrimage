@@ -82,12 +82,12 @@ describe("walking body and clothing", () => {
     } finally { rig.dispose() }
   })
 
-  it("puts sandals on every peasant profile and boots on all other callings and monks", () => {
+  it("puts sandals on peasant and beggar profiles and boots on other callings and monks", () => {
     const { footwear: _, ...legacy } = DEFAULT_DESIGN
     expect(validatePersonDesign(legacy).footwear).toBe("Boots")
     expect(() => validatePersonDesign({ ...DEFAULT_DESIGN, footwear: "Bare" })).toThrow()
     for (const type of Object.values(TRAVELER_TYPES)) for (let variant = 0; variant < POPULATION_PROFILES.length; variant++) {
-      expect(populationDesign(type, variant).footwear).toBe(type.id === "peasant" ? "Sandals" : "Boots")
+      expect(populationDesign(type, variant).footwear).toBe(["peasant", "beggar"].includes(type.id) ? "Sandals" : "Boots")
     }
     for (const design of [populationDesign(TRAVELER_TYPES.peasant, 0), populationDesign(TRAVELER_TYPES.peasant, 3), DEFAULT_DESIGN, PERSON_PRESETS.Female, PERSON_PRESETS.Monk]) {
       const rig = createBasePersonRig(personRecipe(design))

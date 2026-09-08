@@ -1,5 +1,5 @@
 import { GREY_HAIR_COLOR, OLDER_TRAVELER_TYPES } from "../character-age"
-import { TRAVELER_TYPES } from "../travelers"
+import { TRAVELER_TYPES, type TravelerTypeId } from "../travelers"
 import { bakeBasePerson } from "./bake"
 import { ACTION_CLIPS, BASE_PERSON, PERSON_CLIPS, WALK_CLIP_STRIDES } from "./pose"
 import { DEFAULT_DESIGN, personRecipe, type PersonDesign } from "./design"
@@ -8,10 +8,10 @@ import { SPRITE_DEPTH_ENCODING } from "../render/bake-depth"
 
 /** Runs once per edited foundation, never once per traveler or frame. */
 export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
-  progress: (done: number) => void = () => {}, cancelled: () => boolean = () => false): Promise<PopulationPack> {
+  progress: (done: number) => void = () => {}, cancelled: () => boolean = () => false, only?: TravelerTypeId): Promise<PopulationPack> {
   const types = [...Object.values(TRAVELER_TYPES).map(type => ({ id: type.id, grey: false })),
     ...OLDER_TRAVELER_TYPES.map(id => ({ id, grey: true }))]
-  return bakeOutfits(types, (id, variant, grey) => populationDesign(TRAVELER_TYPES[id], variant,
+  return bakeOutfits(only ? types.filter(type => type.id === only) : types, (id, variant, grey) => populationDesign(TRAVELER_TYPES[id], variant,
     grey ? { ...base, hairColor: GREY_HAIR_COLOR } : base), base, progress, cancelled)
 }
 

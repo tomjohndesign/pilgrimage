@@ -29,10 +29,11 @@ While selling, the keeper waves to nearby travelers, presents the wares, walks
 along the display and returns to a ground mat for a seated rest. The routine
 repeats; packing waits until the keeper returns to the starting position.
 
-Animal convoys use a fitted breast collar, girth and traces. The wooden leaders
-(shafts) and long traces are baked into the hitched horse/donkey sprite, so they
-follow the animal's heading as the cart turns independently. Unhitched sheets
-omit them; hand-cart handles and parked shop stubs remain on the cart.
+Animal convoys use a fitted breast collar, girth and bridle. Straight side
+shafts and long traces are omitted. The driver-held reins follow each flank
+in native square pixels, using the animal sprite’s baked projection and depth
+so the near cord stays in front through turns. Hand-cart handles and parked
+shop stubs remain on the cart.
 The unhitched animal
 wanders over connected adjacent grass/clearing tiles (at most two cardinal tile
 steps from the hitch), pausing to graze. Dirt is traversable, but grazing occurs
@@ -46,7 +47,7 @@ road and tries again.
 
 - `lib/game/transport/rig.ts`: rough cart, wheels, hand-cart handles and deployed display.
 - `animal-rig.ts`, `animal-pose.ts`, `geometry.ts`: authored ribcage, pelvis,
-  scapula, neck, muzzle, limb cross sections and hitched draught shafts;
+  scapula, neck, muzzle, limb cross sections and fitted collars;
   no sphere animal bodies.
 - `coats.ts`: independent natural coat palettes with matching mane, tail, lower
   legs, muzzle and primitive markings. Coats do not change the build or gait.

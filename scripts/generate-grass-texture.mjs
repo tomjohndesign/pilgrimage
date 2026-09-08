@@ -1,110 +1,62 @@
-// Generates public/textures/grass.png — the sward that clear land wears, and
-// that creeps back over the road wherever the traffic is light. Deterministic,
-// so re-running never dirties the repo. Seamless in both axes: the renderer
-// maps it by world position across whole fields of tiles.
-//
-// The texture carries only the *fine* variation — blades, clumps, the odd
-// pale seed head. Anything broader (which patches are lusher, where the road
-// is grassy versus bare) is world-space noise in the tile shader, so it never
-// repeats with the texture.
-//
-//   node scripts/generate-grass-texture.mjs
-
-import { join, dirname } from "node:path"
+// Reuse the original environment plants as tile art at their native pixel size.
+// Refresh their source with: node scripts/export-environment.mjs vN --url ...
+import sharp from "sharp"
+import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-
-import { makeRng, makeLattice, noise2, lerp, clamp01, writePng } from "./texture-lib.mjs"
-
-const SIZE = 256
-const SEED = 483921
-
-const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "textures")
-
-/** Antialiased step: 0 below `edge - w`, 1 above `edge + w`. */
-const aa = (edge, w, t) => clamp01((t - edge + w) / (2 * w))
-
-// The clear-land tile colour (lib/game/map/terrain.ts). The texture averages
-// out to this so a textured field reads the same tone as the flat tile did.
-const BASE = [0x77, 0x86, 0x4b]
-// Deliberately quiet: a field of it is mostly flat colour with a faint
-// mottle. Anything louder turns a whole meadow into visual noise from the
-// game's camera height.
-const LIGHT = [127, 142, 81] // sunlit blade tips
-const DARK = [110, 126, 69] // shadow between clumps
-const DRY = [138, 140, 80] // the odd straw-yellow blade
-const SEED_HEAD = [150, 154, 100]
-
-const rng = makeRng(SEED)
-// Blade-scale mottle: three fine octaves. Nothing coarser than a 32-pixel
-// period, so a repeat of the texture has no feature big enough to spot.
-const blades = [32, 64, 128].map((period) => ({ period, lattice: makeLattice(period, rng) }))
-// Straw: sparse, slightly larger blotches of dried grass.
-const straw = { period: 24, lattice: makeLattice(24, makeRng(SEED ^ 0x5717)) }
-
-// Tufts: darker clumps, scattered; seed heads: single pale pixels.
-const tufts = []
-for (let i = 0; i < 70; i++) {
-  tufts.push([Math.floor(rng() * SIZE), Math.floor(rng() * SIZE), 1.5 + rng() * 2])
-}
-const heads = []
-for (let i = 0; i < 16; i++) heads.push([Math.floor(rng() * SIZE), Math.floor(rng() * SIZE)])
-
-const pixels = new Float64Array(SIZE * SIZE * 3)
-for (let y = 0; y < SIZE; y++) {
-  for (let x = 0; x < SIZE; x++) {
-    let fine = 0
-    let amp = 0.5
-    for (const { period, lattice } of blades) {
-      fine += amp * noise2(lattice, period, (x / SIZE) * period, (y / SIZE) * period)
-      amp *= 0.6
-    }
-    // fine sits in ~[0, 0.98]; centre it on the base tone.
-    const t = aa(0.5, 0.3, fine)
-    let r = lerp(DARK[0], LIGHT[0], t)
-    let g = lerp(DARK[1], LIGHT[1], t)
-    let b = lerp(DARK[2], LIGHT[2], t)
-
-    const dry = aa(0.74, 0.06, noise2(straw.lattice, straw.period, (x / SIZE) * 24, (y / SIZE) * 24))
-    r = lerp(r, DRY[0], dry * 0.3)
-    g = lerp(g, DRY[1], dry * 0.3)
-    b = lerp(b, DRY[2], dry * 0.3)
-
-    for (const [tx, ty, size] of tufts) {
-      const dx = Math.min(Math.abs(x - tx), SIZE - Math.abs(x - tx))
-      const dy = Math.min(Math.abs(y - ty), SIZE - Math.abs(y - ty))
-      const d2 = dx * dx + dy * dy
-      if (d2 > size * size) continue
-      const k = 0.3 * (1 - d2 / (size * size + 1))
-      r = lerp(r, DARK[0] * 0.9, k)
-      g = lerp(g, DARK[1] * 0.9, k)
-      b = lerp(b, DARK[2] * 0.9, k)
-    }
-    for (const [hx, hy] of heads) {
-      if (hx === x && hy === y) {
-        r = SEED_HEAD[0]
-        g = SEED_HEAD[1]
-        b = SEED_HEAD[2]
-      }
-    }
-
-    const i = (y * SIZE + x) * 3
-    pixels[i] = r
-    pixels[i + 1] = g
-    pixels[i + 2] = b
+import { spriteTile } from "./terrain-sprite-lib.mjs"
+import { makeRng } from "./texture-lib.mjs"
+const out = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "textures")
+const tile = spriteTile([119, 134, 75], 483921)
+const palette = { d: [88, 109, 52], l: [151, 165, 95], s: [130, 146, 79] }
+const tufts = [["..l...", "l.l.s.", "dldsd.", ".ddd.."], ["..l..", "l.d.s", ".ldd.", "..d.."], ["lls", ".dd"]]
+tile.scatter(11, .8, (x, y, pick) => tile.stamp(x, y, tufts[Math.floor(pick * tufts.length)], palette))
+tile.save("grass")
+const base = await sharp(join(out, "grass.png")).png().toBuffer()
+const topdown = join(out, "environment/v2/topdown.png")
+const upright = join(out, "environment/v2/color.png")
+for (const [name, kind, seed] of [["meadow", 1, 181], ["groundcover", 4, 182], ["flowers", 5, 183]]) {
+  const rng = makeRng(seed), layers = []
+  const centers = []
+  for (let attempt = 0; attempt < 100 && centers.length < 8; attempt++) {
+    const left = 4 + Math.floor(rng() * 85), top = 4 + Math.floor(rng() * 85)
+    if (centers.some(([x, y]) => Math.hypot(x - left, y - top) < 24)) continue
+    centers.push([left, top])
+    const variant = Math.floor(rng() * 3)
+    // Keep the upright grass/flower silhouettes readable as flat sprite motifs.
+    // Low creeping leaves use their actual overhead footprint.
+    const source = kind === 4 ? topdown : upright
+    const extract = kind === 4
+      ? { left: variant * 64 + 14, top: kind * 64 + 14, width: 36, height: 36 }
+      : { left: 14, top: (kind * 3 + variant) * 64 + 18, width: 36, height: 36 }
+    const input = await sharp(source).extract(extract).png().toBuffer()
+    layers.push({ input, left, top })
   }
+  const pixels = await sharp(base).composite(layers).png().toBuffer()
+  await sharp(pixels).toFile(join(out, `grass-${name}.png`))
 }
+console.log("wrote grass palette swatches from the original environment sprites")
 
-// Pull the average exactly onto the tile colour, channel by channel, so the
-// textured field and the flat colour it replaces agree from a distance.
-const mean = [0, 0, 0]
-for (let i = 0; i < pixels.length; i += 3) for (let c = 0; c < 3; c++) mean[c] += pixels[i + c]
-for (let c = 0; c < 3; c++) mean[c] /= SIZE * SIZE
-
-const out = new Uint8Array(SIZE * SIZE * 4)
-for (let p = 0; p < SIZE * SIZE; p++) {
-  for (let c = 0; c < 3; c++) {
-    out[p * 4 + c] = Math.round(clamp01((pixels[p * 3 + c] * (BASE[c] / mean[c])) / 255) * 255)
+// Independent transparent stamps for continuous world-space scattering. The
+// larger composite swatches above are gallery illustrations, never tiled in play.
+const stamps = []
+for (let row = 0; row < 4; row++) for (let column = 0; column < 12; column++) {
+  const variant = column % 3, view = Math.floor(column / 3) * 2
+  let input
+  if (row === 0) {
+    const pixels = Buffer.alloc(32 * 32 * 4)
+    const glyph = tufts[column % tufts.length]
+    glyph.forEach((line, y) => [...line].forEach((key, x) => {
+      if (palette[key]) pixels.set([...palette[key], 255], ((y + 14) * 32 + x + 13) * 4)
+    }))
+    input = await sharp(pixels, { raw: { width: 32, height: 32, channels: 4 } }).png().toBuffer()
+  } else {
+    const kind = [0, 1, 4, 5][row]
+    const extract = row === 2
+      ? { left: variant * 64 + 16, top: kind * 64 + 16, width: 32, height: 32 }
+      : { left: view * 64 + 16, top: (kind * 3 + variant) * 64 + 20, width: 32, height: 32 }
+    input = await sharp(row === 2 ? topdown : upright).extract(extract).png().toBuffer()
   }
-  out[p * 4 + 3] = 255
+  stamps.push({ input, left: column * 32, top: row * 32 })
 }
-writePng(join(OUT_DIR, "grass.png"), SIZE, out)
+await sharp({ create: { width: 384, height: 128, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+  .composite(stamps).png().toFile(join(out, "grass-sprites.png"))

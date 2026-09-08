@@ -22,6 +22,7 @@ export type TravelerTypeId =
   | "knight"
   | "minstrel"
   | "vendor"
+  | "beggar"
 
 /** Inclusive integer range for attribute rolls. */
 export interface StatRange {
@@ -77,7 +78,7 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     id: "pilgrim",
     label: "Pilgrim",
     color: "#8a7f9e",
-    weight: 16.5,
+    weight: 18,
     paceMin: 0.8,
     paceMax: 1.1,
     gold: { min: 5, max: 40 },
@@ -103,7 +104,8 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
   },
   friar: {
     id: "friar",
-    label: "Friar",
+    // Keep the legacy calling ID for saved art and sound settings.
+    label: "Monk",
     color: "#6d5638",
     weight: 5.5,
     paceMin: 0.75,
@@ -133,7 +135,7 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     id: "minstrel",
     label: "Minstrel",
     color: "#3f7d6c",
-    weight: 5.5,
+    weight: 1.5,
     paceMin: 0.9,
     paceMax: 1.2,
     gold: { min: 5, max: 30 },
@@ -142,6 +144,20 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     joblessChance: 0.35,
     skillCount: { min: 1, max: 2 },
     skills: ["song", "lute", "juggling", "gossip"],
+  },
+  beggar: {
+    id: "beggar",
+    label: "Beggar",
+    color: "#786c58",
+    weight: 2.5,
+    paceMin: 0.4,
+    paceMax: 0.6,
+    gold: { min: 0, max: 3 },
+    status: { min: 0, max: 10 },
+    piety: { min: 25, max: 85 },
+    joblessChance: 0.8,
+    skillCount: { min: 0, max: 1 },
+    skills: ["labour", "mending", "herb lore"],
   },
   // Walks the road selling food and wine to the others (see lib/game/sim.ts).
   // Deliberately scarce — the generator still guarantees one per real crowd.
@@ -283,6 +299,8 @@ export function generateTravelers(seed: number, count: number): Traveler[] {
   const travelers: Traveler[] = []
   for (let i = 0; i < count; i++) {
     let type = pickType(rng)
+    // A normal crowd includes a traveling brother, even on a quiet road.
+    if (i === count - 2 && count >= 6 && !travelers.some(t => t.type.id === "friar")) type = TRAVELER_TYPES.friar
     // Any real crowd includes someone selling to it: if the weighted rolls
     // produced no vendor, the last traveler becomes one. Deterministic, since
     // it's a pure function of the rolls before it.
@@ -291,10 +309,10 @@ export function generateTravelers(seed: number, count: number): Traveler[] {
     }
     // Match the body's seeded assignment used by the scene without consuming
     // another roll from the stream that determines attributes and movement.
-    const firstNames = FIRST_NAMES[travelerAppearance(seed, i).bodyType]
+    const firstNames = FIRST_NAMES[type.id === "friar" ? "Male" : travelerAppearance(seed, i).bodyType]
     travelers.push({
       id: i,
-      name: `${firstNames[Math.floor(rng() * firstNames.length)]} ${
+      name: `${type.id === "friar" ? "Brother " : ""}${firstNames[Math.floor(rng() * firstNames.length)]} ${
         BYNAMES[Math.floor(rng() * BYNAMES.length)]
       }`,
       type,

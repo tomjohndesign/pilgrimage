@@ -2,7 +2,7 @@ import { animalHead, bitLocal } from "./bridle"
 import { animalOffset, type AnimalRigEdits, type AnimalClip, type AnimalJoint } from "../wildlife/rig-edits"
 import { animalCoat } from "./coats"
 import * as THREE from "three"
-import { animalProfile, cartOffset, CART_WIDTH_SCALE, RIG_TO_WORLD, type Animal, type HorseVariant } from "./assets"
+import { animalProfile, type Animal, type HorseVariant } from "./assets"
 import { animalLeg, animalMotion, spinePoint } from "./animal-pose"
 import { model, loft, type CrossSection, type Point } from "./geometry"
 
@@ -61,17 +61,6 @@ export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", 
     { at: [sign * 0.27, h + 0.31, 0.42], width: 0.035, top: 0.015 },
   ], dark, "shoulder-cross")
   if (hitched) {
-    // Preserve the straight convoy's original attachment positions, but bake
-    // the leaders with the animal. They remain rigid through its gait and turn
-    // with its sprite rather than swinging sideways with the trailing cart.
-    const shafts = new THREE.Group(); shafts.name = "draught-shafts"
-    shafts.position.z = cartOffset(kind) / RIG_TO_WORLD
-    shafts.scale.x = CART_WIDTH_SCALE; m.root.add(shafts)
-    const hitch = -shafts.position.z
-    for (const sign of [-1, 1]) {
-      m.bar([sign * 0.65, 0.6, 0.5], [sign * 0.48 / CART_WIDTH_SCALE, 0.61, hitch + 0.2], 0.045, "#65513b", shafts).name = "draught-shaft"
-      m.bar([sign * 0.54, 0.72, 0.75], [sign * 0.44 / CART_WIDTH_SCALE, 0.97, hitch + 0.64], 0.027, "#493727", shafts).name = "draught-trace"
-    }
     const strap = (a: Point, b: Point, radius = 0.035) => {
       const mesh = m.bar(a, b, radius, "#453525")
       mesh.updateMatrix(); mesh.geometry.applyMatrix4(mesh.matrix)
@@ -83,7 +72,6 @@ export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", 
       strap([sign * breadth * 1.1, h + 0.3, 0], [sign * 0.13, h + 0.5, 0])
       strap([sign * breadth * 0.95, h - 0.08, 0.76], [sign * breadth * 1.12, h + 0.27, 0.55], 0.05)
       strap([sign * breadth * 1.12, h + 0.27, 0.55], [sign * 0.12, h + 0.52, 0.47], 0.04)
-      strap([sign * breadth * 1.13, h - 0.05, 0.64], [sign * breadth * 1.35, h - 0.22, -0.85], 0.028)
     }
     strap([-breadth * 0.95, h - 0.08, 0.76], [breadth * 0.95, h - 0.08, 0.76], 0.065)
     strap([-0.13, h + 0.5, 0], [0.13, h + 0.5, 0])

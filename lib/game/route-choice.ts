@@ -36,6 +36,7 @@ const BASE_NERVE: Record<TravelerTypeId, number> = {
   merchant: 0.3,
   vendor: 0.3,
   minstrel: 0.25,
+  beggar: 0.2,
   peasant: 0.3,
   knight: 0.85,
 }
@@ -64,6 +65,7 @@ export function trackChance({ type, piety, stamina }: RouteState): number {
     case "merchant":
     case "vendor":
     case "minstrel":
+    case "beggar":
     case "peasant":
       return 0
     case "knight":
