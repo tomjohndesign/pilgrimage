@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "fb4d7761c07d934837300c48145c06b75c1013da",
-  "releaseCount": 113,
+  "lastProcessedCommit": "b0f275c99ab4a2c123c3e2a644b5b5c59eecd11d",
+  "releaseCount": 114,
   "releases": [
+    {
+      "version": "0.0.128",
+      "title": "Release 0.0.128",
+      "summary": "Remove horse side bars and fix pixel rein clipping (#147)",
+      "commit": "b0f275c99ab4a2c123c3e2a644b5b5c59eecd11d"
+    },
     {
       "version": "0.0.127",
       "title": "Release 0.0.127",
