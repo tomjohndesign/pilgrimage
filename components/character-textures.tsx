@@ -10,7 +10,7 @@ import { TRAVELER_TYPES } from "@/lib/game/travelers"
 export function CharacterTextures() {
   return <section id="characters" className="mt-20 w-full max-w-6xl scroll-mt-8">
     <header className="mb-8 text-center"><h2 className="font-display text-2xl tracking-[5px] text-parchment">CHARACTER SPRITES</h2>
-      <p className="mt-3 text-sm text-[#b9ad92]">Seven callings · mixed bodies · eight directions and {DEFAULT_POPULATION.frameCounts?.walk ?? 8} walking frames.</p>
+      <p className="mt-3 text-sm text-[#b9ad92]">{Object.keys(TRAVELER_TYPES).length} callings · mixed bodies · eight directions and {DEFAULT_POPULATION.frameCounts?.walk ?? 8} walking frames.</p>
       <Link href="/assets/characters" className="mt-4 inline-block font-display text-xs text-gold underline underline-offset-4">Open the sprite playground →</Link>
     </header>
     <div className="mb-8" aria-label="Current road character sprites">
@@ -34,7 +34,7 @@ export function CharacterTextures() {
       </div>
     </article>
     <p className="mb-5 text-center text-sm text-[#b9ad92]">Earlier image-generated drafts · retained for comparison</p>
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{Object.values(TRAVELER_TYPES).map((type) => {
+    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{Object.values(TRAVELER_TYPES).filter(type => type.id !== "beggar").map((type) => {
       const asset = CHARACTER_ASSETS[type.id]
       return <article key={type.id} className="border border-rule bg-parchment p-4 text-ink">
         <h3 className="font-display text-base">{type.label}</h3>

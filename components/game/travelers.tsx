@@ -24,7 +24,7 @@ import { useBuildStore } from "@/lib/game/build-store"
 import type { Relic } from "@/lib/game/relic"
 import type { TreePlacement } from "@/lib/game/trees/placement"
 import { tileAt, worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
-import { createSim, simRegistry, stepSim } from "@/lib/game/sim"
+import { GAME_DAY_SECONDS, createSim, simRegistry, stepSim } from "@/lib/game/sim"
 import { shrineLayout } from "@/lib/game/shrine-layout"
 import type { Traveler } from "@/lib/game/travelers"
 import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/game/motion"
@@ -237,7 +237,7 @@ export function Travelers({
       if (s.activity === "visiting" && !!s.shrineSeat) {
         group.rotation.y = kneelingHeading
       }
-      if (s.activity === "performing" && s.walkFrom) {
+      if ((s.activity === "performing" || s.activity === "begging") && s.walkFrom) {
         group.rotation.y = Math.atan2(s.walkFrom.x - s.x, s.walkFrom.z - s.z)
       }
       if (s.activity === "listening" && s.musicVisit) {
@@ -245,6 +245,11 @@ export function Travelers({
         if (performer) group.rotation.y = Math.atan2(performer.x - s.x, performer.z - s.z)
       }
       if (s.activity === "building") group.rotation.y = s.buildingTask?.heading ?? Math.PI
+      if (s.activity === "givingAlms" && s.almsVisit) {
+        const beggar = sim.travelers.get(s.almsVisit.beggarId)
+        if (beggar) group.rotation.y = Math.atan2(beggar.x - s.x, beggar.z - s.z)
+      }
+      group.userData.donated = (s.donationUntil ?? 0) > sim.time * GAME_DAY_SECONDS
       group.userData.workTree = workTree
       if (!playback.paused && !moving && workTree && (s.activity === "working" || s.activity === "gathering")) {
         group.rotation.y = Math.atan2(workTree.x - s.x, workTree.z - s.z)
