@@ -1,5 +1,7 @@
 "use client"
 
+import { wildlifeRegistry } from "@/lib/game/wildlife/registry"
+
 import { processionRegistry } from "@/lib/game/relic-procession"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
@@ -147,6 +149,7 @@ export function Travelers({
   useFrame(({ camera }, delta) => {
     // A background tab hands us a huge delta; clamp so nobody teleports.
     const build = useBuildStore.getState()
+    sim.wildlife = wildlifeRegistry.current
     sim.procession = processionRegistry.current
     sim.buildings = camps
     sim.shrineRenown = shrineRenown

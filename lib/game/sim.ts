@@ -1,3 +1,5 @@
+import { seekSheep, stepShepherd, releaseSheep, type HerdingTask } from "./herding"
+import type { WildlifeWorld } from "./wildlife/simulation"
 import { blockedRoad, findRoadDiversion, takeRoadShortcut, retireBypassedRoad, exploresRoadShortcut, type WalkingShortcut } from "./walking-shortcuts"
 import { createFootpaths, HEAVY_PATH_WEAR, recordWalkingPath, regrowFootpaths, type Footpaths } from "./footpaths"
 import { knightMounted, knightLoadout, knightTravelSpeed, type HorseRest } from "./knights"
@@ -86,6 +88,8 @@ export type Activity =
   | "visiting"
   | "fromRelic"
   | "toWork"
+  | "toSheep"
+  | "herding"
   | "toPost"
   | "posted"
   | "toHome"
@@ -130,6 +134,8 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
   visiting: "Kneeling in the shrine",
   fromRelic: "Returning from the shrine",
   toWork: "Walking to work",
+  toSheep: "Going to gather a sheep",
+  herding: "Leading a sheep back to the pen",
   toPost: "Going to their post",
   posted: "At work",
   toHome: "Tired — going home",
@@ -293,6 +299,8 @@ export interface SimTraveler {
   jobless: boolean
   deliveryBuilding?: string | null
   employer: string | null
+  herding?: HerdingTask
+  herdingRetry?: number
   /** Which of the employer's work slots is theirs; posts are one per slot. */
   jobSlot: number
   /** The house they sleep in. Settlers move in when they take work. */
@@ -365,6 +373,7 @@ export interface SimTraveler {
 }
 
 export interface SimState {
+  wildlife?: WildlifeWorld | null
   footpaths: Footpaths
   procession?: RelicProcession | null
   admissionSequence: number
@@ -1103,6 +1112,12 @@ export function stepSim(
   characterScale = BASE_CHARACTER_SCALE,
 ): void {
   if (!map.road || map.road.length < 2) return
+  if (dt > 0) for (const animal of sim.wildlife?.animals ?? []) {
+    const shepherd = animal.fold?.shepherd == null ? undefined : sim.travelers.get(animal.fold.shepherd)
+    if (animal.fold && !animal.fold.arrived && (!shepherd || shepherd.herding?.animalId !== animal.id)) {
+      animal.fold = undefined; animal.target = null; animal.rest = 0
+    }
+  }
   const length = map.road.length - 1
   sim.time += dt / GAME_DAY_SECONDS
   const hours = dt / GAME_HOUR_SECONDS
@@ -1116,6 +1131,8 @@ export function stepSim(
   for (const t of travelers) {
     const s = sim.travelers.get(t.id)
     if (!s) continue
+    if (s.herding && !["toSheep", "herding"].includes(s.activity)) releaseSheep(s, sim.wildlife)
+    s.herdingRetry = Math.max(0, (s.herdingRetry ?? 0) - dt)
     s.convoyScale = characterScale
     // Riders wait for a passing procession; prayer poses begin once on foot.
     // A vendor who has taken over a stall has left the wagon for good.
@@ -1321,6 +1338,10 @@ export function stepSim(
         const hungry = Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD
         const workplace = sim.buildings.find(b => b.id === s.employer)
         if (workplace && isPostedWork(workplace.kind) && !hungry && s.stamina > SETTLER_TIRED_AT) {
+          if (workplace.kind === "sheep-pen" && dt > 0 && !s.herdingRetry) {
+            s.herdingRetry = 5
+            if (seekSheep(s, sim.wildlife, map, characterScale)) break
+          }
           s.workSlot = s.jobSlot
           if (assignBuildingTask(s, map, "work", workplace.id)) { s.activity = "toPost"; break }
         }
@@ -1368,6 +1389,16 @@ export function stepSim(
         }
         break
       }
+      case "toSheep":
+      case "herding": {
+        if (dt <= 0) break
+        if (s.stamina <= SETTLER_TIRED_AT || Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD) {
+          releaseSheep(s, sim.wildlife); s.activity = "idle"; s.timer = 0
+        } else if (!stepShepherd(s, sim.wildlife, map, targetSpeed, dt, characterScale)) {
+          s.activity = "idle"; s.timer = 0
+        }
+        break
+      }
       case "toPost":
       case "posted": {
         if (dt <= 0) break
@@ -1379,6 +1410,9 @@ export function stepSim(
           s.buildingTask = undefined
           s.activity = "idle"
           s.timer = 0
+        } else if (state === "posted" && !s.herdingRetry) {
+          s.herdingRetry = 5
+          seekSheep(s, sim.wildlife, map, characterScale)
         }
         break
       }
