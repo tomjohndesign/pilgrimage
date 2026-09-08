@@ -1,3 +1,5 @@
+import { buildingYaw, rotateBuildingPoint, rotatedFootprint } from "../building-rotation"
+import { marketLayout, marketYardContains } from "../market-layout"
 import type { TreePlacement } from "../trees/placement"
 import { pastureSegmentClear, type StallObstacle } from "./stall"
 import { cartGroundContacts, onBridgeDeck } from "./bridge-guide"
@@ -82,7 +84,8 @@ export function convoyClear(map: GameMap, pose: CartPose, puller: Puller, scale:
           continue
         }
         if (!(terrain === "grass" || terrain === "clearing" || (!grassOnly && (terrain === "dirt" || terrain === "path" || terrain === "track" || terrain === "bridge")))) return false
-        if (buildingAt(map, x, z) || (!layout.rise[z * map.width + x] && Math.abs(groundHeight(map, x, z) - height) >= 0.3)) return false
+        const building = buildingAt(map, x, z)
+        if ((building && !marketYardContains(building, { x, z })) || (!layout.rise[z * map.width + x] && Math.abs(groundHeight(map, x, z) - height) >= 0.3)) return false
       }
     }
   }
@@ -99,19 +102,35 @@ export interface ParkingContext {
   people?: readonly Point[]
 }
 
-function overlaps(a: StallObstacle, b: StallObstacle) {
+function overlaps(a: StallObstacle, b: StallObstacle, clearance = .12) {
   return [a.heading, b.heading].every(heading => [heading, heading + Math.PI / 2].every(axis => {
     const x = Math.cos(axis), z = -Math.sin(axis)
     const radius = (box: StallObstacle) => Math.abs(x * Math.cos(box.heading) - z * Math.sin(box.heading)) * box.halfWidth +
       Math.abs(x * Math.sin(box.heading) + z * Math.cos(box.heading)) * box.halfLength
-    return Math.abs((a.x - b.x) * x + (a.z - b.z) * z) < radius(a) + radius(b) + 0.12
+    return Math.abs((a.x - b.x) * x + (a.z - b.z) * z) < radius(a) + radius(b) + clearance
   }))
 }
 
+
+/** Physical structures always stop carts, even on pedestrian diversions or
+ * during a large simulation step. A market's reserved open yard is outside. */
+export function convoyBuildingsClear(map: GameMap, pose: CartPose, puller: Puller, scale: number, animalHeading = pose.heading): boolean {
+  const bounds = convoyBounds(pose, puller, scale, animalHeading)
+  return map.buildings.every(building => {
+    const size = rotatedFootprint(building, building.rotation)
+    const market = building.buildType === "market" ? marketLayout(size.w, size.d) : null
+    const offset = rotateBuildingPoint(0, market?.stallZ ?? 0, building.rotation)
+    const box = { x: tileToWorldX(map, building.x) + (building.w - 1) / 2 + offset.x,
+      z: tileToWorldZ(map, building.z) + (building.d - 1) / 2 + offset.z,
+      heading: buildingYaw(building.rotation), halfWidth: size.w / 2, halfLength: (market?.stallDepth ?? size.d) / 2 }
+    return bounds.every(body => !overlaps(body, box, 0))
+  })
+}
+
 /** Account for actual trunks, reserved transport, stalls and people as well as terrain. */
-export function parkingClear(map: GameMap, pose: CartPose, puller: Puller, scale: number, context: ParkingContext, grassOnly = false) {
-  if (!convoyClear(map, pose, puller, scale, grassOnly)) return false
-  const bounds = convoyBounds(pose, puller, scale)
+export function parkingClear(map: GameMap, pose: CartPose, puller: Puller, scale: number, context: ParkingContext, grassOnly = false, animalHeading = pose.heading) {
+  if (!convoyClear(map, pose, puller, scale, grassOnly, animalHeading)) return false
+  const bounds = convoyBounds(pose, puller, scale, animalHeading)
   return !(context.obstacles ?? []).some(obstacle => bounds.some(box => overlaps(box, obstacle))) &&
     context.trees.every(tree => pastureSegmentClear(tree, tree, bounds, (tree.shape?.trunkRadius ?? 0.18) * (tree.scale ?? 1) + 0.08)) &&
     (context.people ?? []).every(person => pastureSegmentClear(person, person, bounds, 0.2))

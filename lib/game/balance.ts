@@ -1,3 +1,4 @@
+import { MARKET_WIDTH, MARKET_DEPTH } from "./market-layout"
 import { STOREHOUSE_FOOD_CAPACITY } from "./storage"
 
 /** Pure balance data, shared by gameplay, the tuning page and the specification. */
@@ -142,9 +143,9 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "market", label: "Market stall", category: "buildings",
-    description: "A cloth-canopied stall. A passing vendor will settle and keep it, selling food and wares to the settlement and to travelers.",
+    description: "A cloth-canopied stall with a rear cart yard. A passing vendor parks their cart and animal here and settles to sell food and wares.",
     cost: { gold: 50, wood: 30 }, renown: 3, requiredRenown: 10,
-    income: { gold: 4, wood: 0 }, w: 2, d: 2, height: 0.65,
+    income: { gold: 4, wood: 0 }, w: MARKET_WIDTH, d: MARKET_DEPTH, height: 0.65,
     color: "#8c7658", roofColor: "#a59164",
   },
   {

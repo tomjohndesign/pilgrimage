@@ -1,3 +1,4 @@
+import { marketYardContains } from "./market-layout"
 import { buildingEntry } from "./building-rotation"
 import { isComplete, isEnterable } from "./construction"
 import { shrineLayout, shrineKneelers } from "./shrine-layout"
@@ -54,7 +55,7 @@ export function shrineFurnitureClear(building: BuildingDef, door: TilePos | unde
 /** Closed buildings block walking. Shrine visits cross walls only at a gate. */
 export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDef[], from: TilePos, to: TilePos, enterShrine = false, seat?: string): boolean {
   for (const building of buildings) {
-    const a = containsTile(building, from), b = containsTile(building, to)
+    const a = containsTile(building, from) && !marketYardContains(building, from), b = containsTile(building, to) && !marketYardContains(building, to)
     if (!a && !b) continue
     if (enterShrine && isEnterable(building) && isComplete(building)) {
       if (a && b) continue

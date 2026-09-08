@@ -52,7 +52,7 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
     const group = driver.current, parent = group?.parent
     if (!group || !parent) return
     const data = parent.userData, paused = data.playbackRate === 0
-    const parking = data.shrineParking, onFoot = parking?.walking === true
+    const parking = data.transportParking ?? data.shrineParking, onFoot = parking?.walking === true
     const praying = data.activity === "praying", routineActivity = data.routineActivity ?? data.activity
     const deployed = vendor && (routineActivity === undefined ? awning : ["openingShop", "vending", "packingShop"].includes(routineActivity))
     const riding = animal && !onFoot && !deployed
