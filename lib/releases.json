@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "bec6f958a4a77753ce9aded3674254b1ec35c85f",
-  "releaseCount": 104,
+  "lastProcessedCommit": "eeffaa95149c1cec858430f3becda346b9f71cba",
+  "releaseCount": 105,
   "releases": [
+    {
+      "version": "0.0.119",
+      "title": "Release 0.0.119",
+      "summary": "Add saved map size defaults and a new-map size dialog (#138)",
+      "commit": "eeffaa95149c1cec858430f3becda346b9f71cba"
+    },
     {
       "version": "0.0.118",
       "title": "Release 0.0.118",
