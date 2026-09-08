@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { convoyClear, convoyPoint, shrineParking, parkingClear, parkingTree, convoyBounds, stallParking } from "./navigation"
-import { cartOffset } from "./assets"
+import { cartLoadout, cartOffset } from "./assets"
 import { alignCart, cartOnRoute, followCart } from "./follow"
 import { createSim, stepSim } from "../sim"
 import { generateTravelers, TRAVELER_TYPES } from "../travelers"
@@ -22,6 +22,41 @@ function fixture(): GameMap {
 }
 
 describe("merchant shrine parking", () => {
+  it.each([0, 4, 8, "knight"] as const)("keeps parking and shrine access around a covered junction (%s)", loadout => {
+    for (const direction of [1, -1] as const) {
+      const map = fixture(), t = generateTravelers(1, 1)[0]
+      map.buildings.push({ id: "obstruction", label: "Cross", x: 10, z: 4, w: 1, d: 1, height: 1, color: "", roofColor: "" })
+      t.id = loadout === "knight" ? 0 : loadout
+      t.type = TRAVELER_TYPES[loadout === "knight" ? "knight" : "vendor"]
+      t.offset = (10 - direction * 4) / 29; t.direction = direction; t.pace = 1
+      Object.assign(t.attributes, { piety: 100, status: 0, hunger: 100, thirst: 100, stamina: 100, gold: 100 })
+      const sim = createSim([t], map, [], { sanctity: 100, spectacle: 100, doubt: 0 }), s = sim.travelers.get(t.id)!
+      // One tether tree leaves a full wagon's departure clear on either side.
+      sim.trees = [{ x: tileToWorldX(map, 10), y: .2, z: tileToWorldZ(map, 1), species: "oak" }]
+      const puller = loadout === "knight" ? "horse" : cartLoadout(loadout).puller
+      const wheelbase = loadout === "knight" ? 0 : -cartOffset(puller) * 1.5
+      expect(shrineParking(map, 10 - direction * 4, direction, wheelbase, puller, 1.5, [], { trees: sim.trees })).not.toBeNull()
+      sim.shrineRenown = sim.balance.rules.drawCap
+      s.timer = 10000
+      let sawVisit = false
+      for (let i = 0; i < 4000; i++) {
+        stepSim(sim, [t], map, 1, .1)
+        if (s.shrineParking) {
+          expect(convoyClear(map, s.shrineParking.parked, puller, 1.5, true)).toBe(true)
+        }
+        if (s.activity === "visiting") {
+          sawVisit = true
+          expect(s.shrineRoute!.some(p => p.x === 10 && p.z === 4)).toBe(false)
+          s.timer = 0; s.hunger = s.thirst = s.stamina = 100
+        }
+        if (sawVisit && s.activity === "walking") break
+      }
+      expect({ sawVisit, visits: s.visits, activity: s.activity }).toEqual({ sawVisit: true, visits: 1, activity: "walking" })
+      expect(s.shrineParking).toBeUndefined()
+      expect(s.shrineSeat).toBeUndefined()
+    }
+  })
+
   it.each(["hand", "donkey", "horse"] as const)("finds grass for the whole %s convoy in both directions", puller => {
     for (const direction of [1, -1] as const) {
       const map = fixture(), plan = shrineParking(map, 10, direction, -cartOffset(puller) * 1.5, puller, 1.5, [], { trees: trees(map) })

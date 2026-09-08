@@ -263,7 +263,7 @@ function minstrelWalkSeconds(id: number, cycle: number): number {
 export interface SimTraveler {
   roadShortcut?: WalkingShortcut
   shortcutCheck?: number
-  /** Half-tile gate on looking ahead for a footprint blocking the road. */
+  /** Road-tile gate on looking ahead for a footprint blocking the road. */
   diversionCheck?: number
   musicCooldown?: number
   musicVisit?: { performerId: number; cycle: number; spot: WorldPoint }
@@ -547,11 +547,15 @@ function shrineWorldPoint(map: GameMap, s: SimTraveler): WorldPoint {
   }
   // Leave the walking lane before reaching the grounds; cross gates centrally.
   const laneBlend = s.shrineRoute ? Math.max(0, Math.min(1, site.branch.length - 1 - s.branchProgress)) : 1
-  const point = routeWorldPoint(map, route, s.branchProgress, s.lane * laneBlend)
+  // A departure before a blocked junction uses a routed approach around walls.
+  // Keep that route centred; an offset lane can clip the inside of its bends.
+  const diverted = route[0].x !== site.branch[0].x || route[0].z !== site.branch[0].z
+  const lane = diverted ? 0 : s.lane * laneBlend
+  const point = routeWorldPoint(map, route, s.branchProgress, lane)
   if (s.branchProgress < 1) {
-    const start = routeWorldPoint(map, site.branch, 0, s.lane)
+    const start = routeWorldPoint(map, route, 0, lane)
     const roadLane = s.activity === "toRelic" ? s.branchEntryLane : s.direction * s.laneOffset
-    const road = roadWorldPoint(map, site.junction, roadLane)
+    const road = roadWorldPoint(map, s.progress, roadLane)
     const blend = 1 - s.branchProgress
     point.x += (road.x - start.x) * blend
     point.y += (road.y - start.y) * blend
@@ -997,6 +1001,15 @@ function workplaceReturn(sim: SimState, s: SimTraveler, map: GameMap): WorldPoin
   return { x: tileToWorldX(map, entry.x), y: surfaceHeight(map, entry.x, entry.z), z: tileToWorldZ(map, entry.z) }
 }
 
+/** Rest and meals return settlers to work and passing travelers to their journey. */
+function finishErrand(s: SimTraveler): void {
+  s.walkFrom = null
+  s.offRoadRoute = null
+  s.diversionCheck = undefined
+  s.activity = s.employer ? "idle" : "walking"
+  if (s.employer) s.timer = GAME_HOUR_SECONDS
+}
+
 /** Head back out of the door to the road, or to the work they left. */
 function leaveTavern(s: SimTraveler, map: GameMap, back: WorldPoint): void {
   const route = settlementRoute(map, map.buildings, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
@@ -1089,6 +1102,62 @@ function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): 
     }
   }
   s.activity = "fromRelic"
+}
+
+/** Offer one shrine or meal visit before crossing its junction, including a diversion across it. */
+function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
+  counters: ReturnType<typeof openCounters>, direction: 1 | -1, parkingProgress: number,
+  characterScale: number, from?: TilePos): boolean {
+  const isVendor = t.type.id === "vendor", needsParking = isVendor || t.type.id === "knight"
+  const renown = sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown
+  // Hunger and thirst only draw anyone in while a counter is open:
+  // the shrine itself keeps no table (see the tavern and the stall).
+  const served = counters.length > 0
+  const chance = visitChance({ ...t.attributes, piety: s.piety,
+    hunger: served ? s.hunger : 100, thirst: served ? s.thirst : 100, stamina: s.stamina },
+    sim.relic, renown, sim.balance)
+  s.visitCooldown = 5
+  const ordinaryVisit = nextRoll(s) < chance
+  const evangelism = ordinaryVisit ? 0 : roadsideEvangelism(map)
+  const persuaded = evangelism > 0 && nextRoll(s) < evangelism
+  // A traveler drawn by need heads for the counter, not the relic.
+  // Wagons and horses stay on the road; only walkers turn aside for a meal.
+  if ((ordinaryVisit || persuaded) && served && !needsParking &&
+    Math.min(s.hunger, s.thirst) < hospitalityNeedThreshold(renown, sim.balance) &&
+    startTavernTrip(sim, s, map, counters, null)) return true
+  const wantsVisit = (ordinaryVisit || persuaded) && s.gold >= admissionFee(map)
+  const occupiedSeats = new Set([...sim.travelers.values()].flatMap(other =>
+    other.shrineSeat && ["toParking","toRelic","visiting","fromRelic"].includes(other.activity) ? [other.shrineSeat] : []))
+  const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats, from) : null
+  let visitRoute = visit?.route ?? null
+  let parking: ShrineParking | null = null
+  if (visitRoute && needsParking) {
+    const puller = isVendor ? cartLoadout(s.id).puller : "horse"
+    parking = shrineParking(map, parkingProgress, direction, isVendor ? -cartOffset(puller) * characterScale : 0, puller, characterScale,
+      [...sim.travelers.values()].flatMap(other => other.shrineParking ? [other.shrineParking.parked] : []), parkingContext(sim, s, characterScale))
+    const footRoute = parking ? settlementRoute(map, map.buildings,
+      { x: worldToTileX(map, parking.parked.hitch.x), z: worldToTileZ(map, parking.parked.hitch.z) }, visitRoute.at(-1)!, false, true, visit!.seat) : null
+    visitRoute = footRoute
+  }
+  if (visitRoute) {
+    s.progress = parkingProgress
+    s.branchProgress = 0
+    s.shrineRoute = visitRoute
+    s.shrineSeat = visit!.seat
+    s.admissionPaid = 0
+    if (parking) s.direction = direction
+    s.shrineParking = parking ?? undefined
+    s.activity = parking ? "toParking" : "toRelic"
+    s.targetId = null
+    s.branchEntryLane = s.lane
+    s.lane = s.laneOffset
+    const at = parking ? { ...parking.entry[0], y: s.y } : shrineWorldPoint(map, s)
+    s.x = at.x
+    s.y = at.y
+    s.z = at.z
+    return true
+  }
+  return false
 }
 
 export function stepSim(
@@ -1234,7 +1303,7 @@ export function stepSim(
             s.shrineParking.walking = false; s.shrineParking.distance = 0
             s.activity = "fromParking"
           } else {
-            s.activity = "walking"; s.shrineRoute = null; s.visitCooldown = 30
+            s.activity = "walking"; s.shrineRoute = null; s.visitCooldown = 30; s.diversionCheck = undefined
           }
         }
         break
@@ -1411,12 +1480,9 @@ export function stepSim(
       case "fromTavern": {
         const back = s.tavernVisit?.returnTo ?? currentRoutePoint(map, s)
         if (stepOffRoadWalk(s, back, worldSpeed, dt, map)) {
-          const settled = !!s.employer
           s.tavernVisit = undefined
-          s.walkFrom = null
-          s.offRoadRoute = null
-          if (settled) { s.activity = "idle"; s.timer = GAME_HOUR_SECONDS }
-          else { s.activity = "walking"; s.visitCooldown = 30 }
+          finishErrand(s)
+          if (!s.employer) s.visitCooldown = 30
         }
         break
       }
@@ -1577,73 +1643,36 @@ export function stepSim(
           break
         }
 
+        // Plan before offering a visit: a diversion can cross the shrine's
+        // junction without ever standing on that now-covered road tile.
+        let diversion: WalkingShortcut | null = null
+        if (dt > 0) {
+          const check = Math.floor(s.progress) * 2 + (direction === 1 ? 1 : 0)
+          if (s.diversionCheck !== check) {
+            s.diversionCheck = check
+            diversion = findRoadDiversion(map, blockedRoad(map), { x: s.x, z: s.z }, s.progress, direction,
+              p => roadWorldPoint(map, p, s.lane))
+          }
+        }
         const site = map.site
         if (site && site.branch.length >= 2 && s.activity !== "fleeing" && s.visitCooldown <= 0) {
           const distance = ((direction * (site.junction - s.progress)) % length + length) % length
           const crossingTile = Math.floor(s.progress) !== Math.floor(s.progress + direction * worldSpeed * haste * dt)
-          // A wooded junction may have no verge. Convoys look for a clearing
-          // on their approach, so the walking visitor can cover the last stretch.
-          if (distance <= worldSpeed * haste * dt || (needsParking && distance <= 12 && crossingTile)) {
-            const parkingProgress = needsParking ? s.progress : site.junction
-            // Hunger and thirst only draw anyone in while a counter is open:
-            // the shrine itself keeps no table (see the tavern and the stall).
-            const served = counters.length > 0
-            const chance = visitChance({ ...t.attributes, piety: s.piety,
-              hunger: served ? s.hunger : 100, thirst: served ? s.thirst : 100, stamina: s.stamina },
-              sim.relic, renown, sim.balance)
-            s.visitCooldown = 5
-            const ordinaryVisit = nextRoll(s) < chance
-            const evangelism = ordinaryVisit ? 0 : roadsideEvangelism(map)
-            const persuaded = evangelism > 0 && nextRoll(s) < evangelism
-            // A traveler drawn by need heads for the counter, not the relic.
-            // Wagons and horses stay on the road; only walkers turn aside for a meal.
-            if ((ordinaryVisit || persuaded) && served && !needsParking &&
-              Math.min(s.hunger, s.thirst) < hospitalityNeedThreshold(renown, sim.balance) &&
-              startTavernTrip(sim, s, map, counters, null)) break
-            const wantsVisit = (ordinaryVisit || persuaded) && s.gold >= admissionFee(map)
-            const occupiedSeats = new Set([...sim.travelers.values()].flatMap(other =>
-              other.shrineSeat && ["toParking","toRelic","visiting","fromRelic"].includes(other.activity) ? [other.shrineSeat] : []))
-            const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats) : null
-            let visitRoute = visit?.route ?? null
-            let parking: ShrineParking | null = null
-            if (visitRoute && needsParking) {
-              const puller = isVendor ? cartLoadout(s.id).puller : "horse"
-              parking = shrineParking(map, parkingProgress, direction, isVendor ? -cartOffset(puller) * characterScale : 0, puller, characterScale,
-                [...sim.travelers.values()].flatMap(other => other.shrineParking ? [other.shrineParking.parked] : []), parkingContext(sim, s, characterScale))
-              const footRoute = parking ? settlementRoute(map, map.buildings,
-                { x: worldToTileX(map, parking.parked.hitch.x), z: worldToTileZ(map, parking.parked.hitch.z) }, visitRoute.at(-1)!, false, true, visit!.seat) : null
-              visitRoute = footRoute
-            }
-            if (visitRoute) {
-              s.progress = parkingProgress
-              s.branchProgress = 0
-              s.shrineRoute = visitRoute
-              s.shrineSeat = visit!.seat
-              s.admissionPaid = 0
-              if (parking) s.direction = direction
-              s.shrineParking = parking ?? undefined
-              s.activity = parking ? "toParking" : "toRelic"
-              s.targetId = null
-              s.branchEntryLane = s.lane
-              s.lane = s.laneOffset
-              const at = parking ? { ...parking.entry[0], y: s.y } : shrineWorldPoint(map, s)
-              s.x = at.x
-              s.y = at.y
-              s.z = at.z
-              break
-            }
+          const bypassesJunction = diversion !== null && direction * (site.junction - s.progress) >= 0
+            && direction * (site.junction - diversion.end) < 0
+          // Convoys seek a parking verge in advance. Pedestrians whose detour
+          // bypasses the turning leave from this clear road tile and return here.
+          if (distance <= worldSpeed * haste * dt || bypassesJunction || (needsParking && distance <= 12 && crossingTile)) {
+            const leaveHere = needsParking || bypassesJunction
+            const from = leaveHere ? { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) } : undefined
+            if (tryRoadVisit(sim, s, t, map, counters, direction, leaveHere ? s.progress : site.junction,
+              characterScale, from)) break
           }
         }
-        // A footprint standing on the road turns everyone off it, carts and
-        // riders included; the road is only theirs as far as the next wall.
-        if (dt > 0 && !s.track) {
-          const diversionCheck = Math.floor(s.progress) * 2 + (direction === 1 ? 1 : 0)
-          if (s.diversionCheck !== diversionCheck) {
-            s.diversionCheck = diversionCheck
-            s.roadShortcut = findRoadDiversion(map, blockedRoad(map), { x: s.x, z: s.z }, s.progress, direction,
-              p => roadWorldPoint(map, p, s.lane)) ?? undefined
-            if (s.roadShortcut) { stepRoadShortcut(s, map, worldSpeed * dt); break }
-          }
+        if (diversion) {
+          s.roadShortcut = diversion
+          stepRoadShortcut(s, map, worldSpeed * dt)
+          break
         }
         if (dt > 0 && s.activity === "walking" && !needsParking && map.footpaths) {
           const check = Math.floor(s.progress) * 2 + (direction === 1 ? 1 : 0)
@@ -1651,7 +1680,7 @@ export function stepSim(
             s.shortcutCheck = check
             s.roadShortcut = takeRoadShortcut(map, s.progress, direction, s.lane,
               (p, lane) => roadWorldPoint(map, p, lane),
-              exploresRoadShortcut(explorerRanks.get(s.id)!, s.cycle, map.seed ?? 0, roadWalkers.length), sim.time) ?? undefined
+              exploresRoadShortcut(explorerRanks.get(s.id)!, s.cycle, map.seed ?? 0, roadWalkers.length), sim.time * GAME_DAY_SECONDS) ?? undefined
             if (s.roadShortcut) { stepRoadShortcut(s, map, worldSpeed * dt); break }
           }
         }
@@ -1817,11 +1846,10 @@ export function stepSim(
       }
 
       case "fromCamp": {
-        const back = currentRoutePoint(map, s)
+        const back = workplaceReturn(sim, s, map) ?? currentRoutePoint(map, s)
         if (stepOffRoadWalk(s, back, worldSpeed, dt, map)) {
-          s.activity = "walking"
+          finishErrand(s)
           s.spot = null
-          s.walkFrom = null
         }
         break
       }
