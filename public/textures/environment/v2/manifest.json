@@ -1,0 +1,15 @@
+{
+  "frame": {
+    "cellSize": 64,
+    "extent": 1.4799999999999998,
+    "anchor": [
+      32,
+      43
+    ],
+    "directions": 8,
+    "variants": 3,
+    "rows": 18
+  },
+  "version": "v2",
+  "depthEncoding": "view-offset-rg16-v1"
+}

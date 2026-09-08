@@ -15,7 +15,7 @@
     "assets:import-texture": "node scripts/import-texture.mjs",
     "assets:sounds": "node scripts/generate-character-sounds.mjs",
     "assets:check": "node scripts/check-character-assets.mjs",
-    "assets:terrain": "node scripts/generate-grass-texture.mjs && node scripts/generate-dirt-texture.mjs && node scripts/generate-road-textures.mjs",
+    "assets:terrain": "node scripts/generate-grass-texture.mjs && node scripts/generate-dirt-texture.mjs && node scripts/generate-road-textures.mjs && node scripts/generate-ground-textures.mjs",
     "assets:base": "node scripts/export-base-person.mjs",
     "assets:check-base": "node scripts/check-base-person.mjs",
     "assets:population": "node scripts/export-population.mjs",

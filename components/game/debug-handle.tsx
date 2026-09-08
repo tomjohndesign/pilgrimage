@@ -7,6 +7,8 @@ import * as THREE from "three"
 import { processionRegistry } from "@/lib/game/relic-procession"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
+import { placeEnvironment } from "@/lib/game/environment/placement"
+import { cliffCorner } from "@/lib/game/map/cliff-corners"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { surfaceHeight } from "@/lib/game/map/bridges"
 import type { OutlineMode } from "@/lib/game/render/outline"
@@ -32,6 +34,12 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
 
     const handle = {
       map,
+      /** Inspect scenery footprints and focus the camera on rarer outcrops. */
+      environment: () => placeEnvironment(map),
+      cliffCorners: () => map.tiles.flatMap((_, i) => {
+        const x = i % map.width, z = Math.floor(i / map.width), cut = cliffCorner(map, x, z)
+        return cut ? [{ ...cut, x: tileToWorldX(map, x), z: tileToWorldZ(map, z), water: map.tiles[cut.donor] === "water" }] : []
+      }),
       camera: () => useCameraStore.getState(),
       /** Jump straight to a pose. The rig still tweens toward it over a few frames. */
       setView: (viewIndex: number) =>
