@@ -3,6 +3,8 @@
 import { JOB_PREVIEW } from "@/lib/game/building-preview"
 import { previewResidents, placePreviewResident } from "@/lib/game/jobs/preview"
 import { settlementJob, type SettlementJob } from "@/lib/game/jobs/design"
+import { wildlifeRegistry } from "@/lib/game/wildlife/registry"
+
 import { processionRegistry } from "@/lib/game/relic-procession"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
@@ -158,6 +160,7 @@ export function Travelers({
   useFrame(({ camera }, delta) => {
     // A background tab hands us a huge delta; clamp so nobody teleports.
     const build = useBuildStore.getState()
+    sim.wildlife = wildlifeRegistry.current
     sim.procession = processionRegistry.current
     sim.buildings = camps
     sim.shrineRenown = shrineRenown
@@ -205,7 +208,10 @@ export function Travelers({
       bounds.center.set(s.x, s.y, s.z)
       // The selected figure stays live wherever it wanders, so its outline and
       // highlight never depend on where the camera happens to be pointing.
-      const onScreen = frustum.intersectsSphere(bounds)
+      const personOnScreen = frustum.intersectsSphere(bounds)
+      const parking = s.marketParking ?? s.shrineParking
+      if (parking) bounds.center.set(parking.pose.x, walkingSurface(map, parking.pose.x, parking.pose.z).height, parking.pose.z)
+      const onScreen = personOnScreen || (!!parking && frustum.intersectsSphere(bounds))
         || (selected?.kind === "traveler" && selected.id === travelers[i].id)
       if (group.visible !== onScreen) {
         group.visible = onScreen
@@ -252,13 +258,13 @@ export function Travelers({
       }
       group.userData.activity = s.praying ? "praying" : s.activity
       group.userData.routineActivity = s.activity
-      group.userData.shrineParking = s.shrineParking
-      // Walking around a building leaves the cart route; the cart trails the
-      // puller's own hitch until they are back on the road.
+      group.userData.transportParking = s.marketParking ?? s.shrineParking
+      // Render the same collision-checked pose used by the simulation; a
+      // settled keeper leaves that pose in the market's rear yard.
       group.userData.cartProgress = s.convoy && s.activity === "walking" && !s.track && !s.shrineParking && !s.roadShortcut ? s.progress : undefined
       group.userData.cartDirection = s.direction
-      group.userData.cartManeuver = false
-      group.userData.cartPose = s.shrineParking?.pose
+      group.userData.cartManeuver = !!s.cartPose
+      group.userData.cartPose = s.marketParking?.pose ?? s.shrineParking?.pose ?? s.cartPose
       group.userData.animalHeading = undefined
       group.userData.reversing = false
       group.userData.keeperTime = s.keeperTime ?? 0

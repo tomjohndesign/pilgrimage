@@ -1,4 +1,6 @@
-import { buildingEntry } from "./building-rotation"
+import { sheepPenLayout } from "./workshop-layout"
+import { buildingEntry, buildingFoldEntry, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
+import { marketYardContains } from "./market-layout"
 import { isComplete, isEnterable } from "./construction"
 import { shrineLayout, shrineKneelers } from "./shrine-layout"
 import type { BuildingDef, GameMap, TilePos } from "./map/types"
@@ -54,9 +56,21 @@ export function shrineFurnitureClear(building: BuildingDef, door: TilePos | unde
 /** Closed buildings block walking. Shrine visits cross walls only at a gate. */
 export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDef[], from: TilePos, to: TilePos, enterShrine = false, seat?: string): boolean {
   for (const building of buildings) {
-    const a = containsTile(building, from), b = containsTile(building, to)
+    const a = containsTile(building, from) && !marketYardContains(building, from), b = containsTile(building, to) && !marketYardContains(building, to)
     if (!a && !b) continue
     if (enterShrine && isEnterable(building) && isComplete(building)) {
+      if (building.buildType === "sheep-pen") {
+        const local = rotatedFootprint(building, building.rotation)
+        const inHut = (p: TilePos) => rotateBuildingPoint(p.x - building.x - (building.w - 1) / 2,
+          p.z - building.z - (building.d - 1) / 2, -(building.rotation ?? 0)).x < sheepPenLayout(local.w).penLeft
+        if (a && b) { if (inHut(from) !== inHut(to)) return false; continue }
+        const inside = a ? from : to, outside = a ? to : from
+        if (!inHut(inside)) {
+          const entry = buildingFoldEntry(building), inward = buildingFoldEntry(building, true)
+          if (inside.x === inward.x && inside.z === inward.z && outside.x === entry.x && outside.z === entry.z) continue
+          return false
+        }
+      }
       if (a && b) continue
       const inside = a ? from : to, outside = a ? to : from
       // Cross the wall only in a doorway; the tavern also keeps a back door.

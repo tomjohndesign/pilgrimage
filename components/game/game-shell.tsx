@@ -1,5 +1,6 @@
 "use client"
 
+import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES, type SceneVisibility } from "@/lib/game/scene-visibility"
 import { DEFAULT_ELEVATION, type ElevationSettings } from "@/lib/game/map/elevation"
 import dynamic from "next/dynamic"
 import { useEffect, useMemo, useState } from "react"
@@ -55,7 +56,7 @@ const GameCanvas = dynamic(() => import("./game-canvas").then((m) => m.GameCanva
 })
 
 /** Map tuning knobs, in HUD units (coverage is a percentage for URL cleanliness). */
-export interface MapSettings {
+export interface MapSettings extends SceneVisibility {
   elevation: ElevationSettings
   /** Map edge length in tiles; maps are square. */
   size: number
@@ -107,6 +108,7 @@ export interface MapSettings {
 export const WATER_COUNT_AUTO = -1
 
 export const DEFAULT_SETTINGS: MapSettings = {
+  ...DEFAULT_SCENE_VISIBILITY,
   elevation: DEFAULT_ELEVATION,
   size: DEFAULT_MAP_WIDTH,
   coverage: Math.round(DEFAULT_FOREST_COVERAGE * 100),
@@ -210,6 +212,8 @@ export function GameShell({
       lakes: String(settings.lakes),
       ponds: String(settings.ponds),
     })
+    for (const [key] of VISIBILITY_TOGGLES) query.set(key, settings[key] ? "1" : "0")
+    query.set("buildingVisibility", settings.buildingVisibility)
     for (const [key, value] of Object.entries(settings.elevation)) query.set(`e_${key}`, String(value))
     window.history.replaceState(null, "", `?${query}`)
   }, [seed, settings])
@@ -333,6 +337,7 @@ export function GameShell({
           walkTuning={walkTuning}
           characterModel={settings.characterModel}
           treeModel={settings.treeModel}
+          visibility={settings}
           characterScale={settings.characterModel === "base" ? settings.baseSize : settings.draftSize}
           roadTier={settings.road}
           relicTraffic={relicTraffic}

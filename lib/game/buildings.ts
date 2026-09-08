@@ -1,3 +1,4 @@
+import { MARKET_WIDTH, MARKET_DEPTH } from "./market-layout"
 import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
 import { settlementRoute } from "./settlement-route"
 import { isWoods, TERRAIN } from "./map/terrain"
@@ -69,7 +70,7 @@ export const BUILDING_KINDS: Record<BuildingKind, BuildingKindDef> = {
   "sheep-pen": {
     id: "sheep-pen",
     label: "Sheep pen",
-    blurb: "Two herding jobs tending the fold.",
+    blurb: "Two shepherds gather sheep and lead them home to the fold.",
     w: 3,
     d: 2,
     height: 0.70,
@@ -82,9 +83,9 @@ export const BUILDING_KINDS: Record<BuildingKind, BuildingKindDef> = {
   market: {
     id: "market",
     label: "Market stall",
-    blurb: "A stall for one keeper, selling food and wares.",
-    w: 2,
-    d: 2,
+    blurb: "A stall for one keeper, with a rear yard for their cart and animal.",
+    w: MARKET_WIDTH,
+    d: MARKET_DEPTH,
     height: 0.65,
     color: "#8c7658",
     roofColor: "#a59164",

@@ -1,7 +1,31 @@
 {
-  "lastProcessedCommit": "c52b8b9a070462c8b166ccb4bd9690dce9f2754c",
-  "releaseCount": 99,
+  "lastProcessedCommit": "296e06855c9fd657fe9406398d2f7da41f96a8af",
+  "releaseCount": 103,
   "releases": [
+    {
+      "version": "0.0.117",
+      "title": "Release 0.0.117",
+      "summary": "Add scene visibility and building interior controls (#137)",
+      "commit": "296e06855c9fd657fe9406398d2f7da41f96a8af"
+    },
+    {
+      "version": "0.0.116",
+      "title": "Release 0.0.116",
+      "summary": "Make shepherds gather sheep and lead them back to their pen (#135)",
+      "commit": "742ca347b7c3c8659ae5bcbf36449cf41a163d0f"
+    },
+    {
+      "version": "0.0.115",
+      "title": "Release 0.0.115",
+      "summary": "Keep carts out of buildings and park vendors behind market stalls (#134)",
+      "commit": "83b806c30046070efd429b6cb032b68e2d064a88"
+    },
+    {
+      "version": "0.0.114",
+      "title": "Release 0.0.114",
+      "summary": "Fix shrine detours, worker rest returns, and shortcut cache timing (#133)",
+      "commit": "d483d7193bf516dbbb3f95f7d527ea67b0596beb"
+    },
     {
       "version": "0.0.113",
       "title": "Release 0.0.113",

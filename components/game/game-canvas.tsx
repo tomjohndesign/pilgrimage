@@ -1,5 +1,6 @@
 "use client"
 
+import { DEFAULT_SCENE_VISIBILITY, type SceneVisibility } from "@/lib/game/scene-visibility"
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 
 import { useEffect, useMemo } from "react"
@@ -70,6 +71,7 @@ export function GameCanvas({
   relicTraffic,
   roadLook,
   showGrid = false,
+  visibility = DEFAULT_SCENE_VISIBILITY,
   buildType,
   shrineRenown,
   baseRenown,
@@ -107,7 +109,17 @@ export function GameCanvas({
   roadLook?: RoadLook
   /** Draw the global tile lattice over the ground. Off by default. */
   showGrid?: boolean
+  visibility?: SceneVisibility
 } & PixelationProps) {
+  const selection = useCameraStore(s => s.selection)
+  useEffect(() => {
+    if (!selection) return
+    const hidden = selection.kind === "tree" ? !visibility.showTrees
+      : selection.kind === "traveler" || selection.kind === "monk" ? !visibility.showCharacters
+        : selection.kind === "animal" ? !visibility.showWildlife
+          : visibility.buildingVisibility === "hidden"
+    if (hidden) useCameraStore.getState().select(null)
+  }, [selection, visibility.showTrees, visibility.showCharacters, visibility.showWildlife, visibility.buildingVisibility])
   const population = usePopulationStore(s => s.pack)
   const assets = useCharacterAssetStore(s => s.assets)
   const speedScales = useMemo(() => new Map(travelers.map(traveler => {
@@ -157,17 +169,28 @@ export function GameCanvas({
           showGrid={showGrid}
         />
         <Bridges map={map} roadTier={roadTier} />
-        <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} model={treeModel} />
-        <Environment map={map} />
-        <Wildlife map={map} trees={trees} characterScale={characterScale} />
-        <Buildings map={map} characterScale={characterScale} />
-        <Shrine map={map} relic={relic} />
-        <Signpost map={map} />
-        <PixelCharacters>
-          <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
-        </PixelCharacters>
-        <Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
-          characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
+        {/* Keep simulation components mounted when their visual layer is hidden. */}
+        <group name="visibility-trees" visible={visibility.showTrees}>
+          <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} model={treeModel} />
+        </group>
+        <group name="visibility-scenery" visible={visibility.showScenery}>
+          <Environment map={map} />
+          <Signpost map={map} />
+        </group>
+        <group name="visibility-wildlife" visible={visibility.showWildlife}>
+          <Wildlife map={map} trees={trees} characterScale={characterScale} />
+        </group>
+        <group name="visibility-buildings" visible={visibility.buildingVisibility !== "hidden"}>
+          <Buildings map={map} characterScale={characterScale} showInteriors={visibility.buildingVisibility === "interiors"} />
+          <Shrine map={map} relic={relic} showInteriors={visibility.buildingVisibility === "interiors"} />
+        </group>
+        <group name="visibility-characters" visible={visibility.showCharacters}>
+          <PixelCharacters>
+            <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
+          </PixelCharacters>
+          <Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
+            characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
+        </group>
       </RenownSaturation>
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
       <BuildInfluenceOverlay map={map} buildMode={!!buildType} />
