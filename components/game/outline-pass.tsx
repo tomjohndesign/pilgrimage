@@ -55,8 +55,8 @@ const VERTEX_SHADER = /* glsl */ `
  * Edge detection over the ID buffer. A pixel is outlined when a *nearer*
  * neighbour belongs to a different object — so the line lands on the occluded
  * side of the boundary, haloing the foreground shape from outside rather than
- * eating into it. Overlap mode additionally requires the outlined pixel itself
- * to be an object, so no line ever lands on terrain or the void.
+ * eating into it. Overlap mode also traces buildings against the terrain
+ * behind them; other scenery keeps only its object-overlap edges.
  */
 const FRAGMENT_SHADER = /* glsl */ `
   uniform sampler2D tId;
@@ -102,6 +102,9 @@ const FRAGMENT_SHADER = /* glsl */ `
     float idN = idAt(uv);
     if (idN < 0.5) return false;            // only objects cast a halo
     if (abs(idN - idC) < 0.5) return false; // same object, no boundary
+    // Buildings occupy IDs 1 through uTreeIdMin - 1, including player-built
+    // structures. Let their back edges read against terrain in overlap mode.
+    if (uMode == 1 && idC < 0.5 && idN >= uTreeIdMin) return false;
     // Scenery-only edges already exist in the enlarged world image.
     if (uCharacterPass && idC < uCharacterIdMin && idN < uCharacterIdMin) return false;
     float dN = texture2D(tDepth, uv).x;
@@ -185,7 +188,6 @@ const FRAGMENT_SHADER = /* glsl */ `
       }
     }
     if (uMode == 0) discard;
-    if (uMode == 1 && idC < 0.5) discard; // overlap halos land only on objects
     bool edge =
       occludedBy(pixelUv + vec2(uTexel.x, 0.0), idC, dC) ||
       occludedBy(pixelUv - vec2(uTexel.x, 0.0), idC, dC) ||
