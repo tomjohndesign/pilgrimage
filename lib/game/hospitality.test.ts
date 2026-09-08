@@ -663,6 +663,7 @@ describe("woodcutter huts", () => {
     expect(blocked.settlement).toBe(before)
     bought.settlement.structures[0].construction!.work = bought.settlement.structures[0].construction!.required
     const builtMap = { ...map, buildings: [...map.buildings, ...bought.settlement.structures] }
+    addHouse(builtMap)
     const t = devout(traveler(0))
     t.attributes.jobless = true
     const sim = createEstablishedShrine([t], builtMap, holy)
@@ -937,6 +938,7 @@ describe("houses, counters and posts", () => {
     const def = BUILD_CATALOG.find(b => b.id === "market")!
     const stall = { ...def, id: "market-0", buildType: "market", label: def.label, x: 13, z: 6, rotation: 0 as const }
     map.buildings.push(stall)
+    addHouse(map, { x: 6, z: 12 })
     const vendor: Traveler = {
       id, name: "Vendor", type: TRAVELER_TYPES.vendor, direction: 1, pace: 1, offset: 8 / 29,
       attributes: { age: 30, gold: 60, piety: 0, status: 20, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: ["haggling"] },
@@ -1209,5 +1211,78 @@ describe("shrine visits beside a covered junction", () => {
     expect(s.progress).toBe(10)
     step()
     expect(s.rolls).toBe(1)
+  })
+})
+
+
+describe("traveling monks and housing limits", () => {
+  it("draws monks to an unknown enclave more often than other supplied travelers", () => {
+    const { traveler } = fixture()
+    const attributes = traveler(0).attributes
+    expect(visitChance(attributes, obscure, 0, DEFAULT_BALANCE, 0, "friar")).toBe(0.6)
+    expect(visitChance(attributes, obscure, 0, DEFAULT_BALANCE, 0, "peasant")).toBe(0)
+  })
+
+  it("admits some visiting monks to free shelter beds, preserving their identity and arrival", () => {
+    const { map, traveler } = fixture()
+    const shelter = BUILD_CATALOG.find(b => b.id === "monk-shelter")!
+    map.buildings.push({ ...shelter, id: "founding-shelter", buildType: "monk-shelter", x: 2, z: 12 },
+      { ...shelter, id: "extra-shelter", buildType: "monk-shelter", x: 6, z: 12 })
+    const people = Array.from({ length: 60 }, (_, id) => ({ ...traveler(id), name: `Brother ${id}`, type: TRAVELER_TYPES.friar }))
+    const sim = createSim(people, map)
+    const arrivals = new Map(sim.travelers)
+    // Complete a wave of visits on one tick; each successful recruit reserves a bed immediately.
+    for (const s of sim.travelers.values()) Object.assign(s, { activity: "visiting", timer: 0 })
+    stepSim(sim, people, map, 1.5, 0.1)
+    expect(sim.joinedMonks.size).toBe(4)
+    expect(sim.visits).toBe(people.length)
+    expect([...sim.travelers.values()].filter(s => s.activity === "fromRelic").length).toBe(56)
+    for (const [id, monk] of sim.joinedMonks) {
+      const visitor = arrivals.get(id)!
+      expect(sim.travelers.has(id)).toBe(false)
+      expect(monk).toMatchObject({ id: id + 4, name: people[id].name, home: "extra-shelter",
+        attributes: { age: people[id].attributes.age, piety: visitor.piety },
+        arrival: { x: visitor.x, y: visitor.y, z: visitor.z } })
+      expect(visitor.employer).toBeNull()
+    }
+    const visits = sim.visits
+    stepSim(sim, people, map, 1.5, 1)
+    expect(sim.visits).toBe(visits)
+    useBuildStore.getState().syncResources(sim, people)
+    expect(useBuildStore.getState().joinedMonks).toHaveLength(4)
+    expect(useBuildStore.getState().settlers).toHaveLength(0)
+    useBuildStore.getState().reset()
+    expect(useBuildStore.getState().joinedMonks).toEqual([])
+  })
+
+  it("turns monks back to the road when there is no completed shelter space", () => {
+    const { map, traveler } = fixture()
+    const shelter = BUILD_CATALOG.find(b => b.id === "monk-shelter")!
+    map.buildings.push({ ...shelter, id: "site", buildType: "monk-shelter", x: 2, z: 12,
+      construction: { work: 0, required: 100 } })
+    const people = Array.from({ length: 20 }, (_, id) => ({ ...traveler(id), type: TRAVELER_TYPES.friar }))
+    const sim = createSim(people, map)
+    for (const s of sim.travelers.values()) Object.assign(s, { activity: "visiting", timer: 0 })
+    stepSim(sim, people, map, 1.5, 0.1)
+    expect(sim.joinedMonks.size).toBe(0)
+    expect([...sim.travelers.values()].every(s => s.activity === "fromRelic")).toBe(true)
+  })
+
+  it("limits new workers to completed house beds even when more jobs are open", () => {
+    const { map, camp, trees, traveler } = fixture()
+    const people = Array.from({ length: 30 }, (_, id) => traveler(id))
+    const sim = createSim(people, map)
+    sim.buildings = [camp]; sim.trees = trees
+    const completeVisits = () => {
+      for (const s of sim.travelers.values()) if (!s.employer) Object.assign(s, { activity: "visiting", timer: 0, jobless: true })
+      stepSim(sim, people, map, 1.5, 0.1)
+    }
+    completeVisits()
+    expect([...sim.travelers.values()].filter(s => s.employer)).toHaveLength(0)
+    const house = addHouse(map)
+    completeVisits()
+    const workers = [...sim.travelers.values()].filter(s => s.employer)
+    expect(workers).toHaveLength(2)
+    expect(workers.every(s => s.home === house.id)).toBe(true)
   })
 })

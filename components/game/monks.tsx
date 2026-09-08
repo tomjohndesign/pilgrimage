@@ -1,5 +1,6 @@
 "use client"
 
+import { monkBeds } from "@/lib/game/housing"
 import { recordWalkingPath } from "@/lib/game/footpaths"
 import { PietyEffects } from "./admission-effects"
 import { PixelCharacters } from "@/components/pixel-canvas"
@@ -68,7 +69,19 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
     const activities = new Map<number, MonkActivity>()
     return { stamina: new Map<number, number>(), spots, centre, rng, flightRng, pick, states, activities, wander,
       procession: createRelicProcession(), grounds: processionGrounds(map, wander) }
-  }, [map.road, monks])
+  }, [map.road])
+  const beds = monkBeds(map)
+  for (let index = world.states.length; index < monks.length && world.spots.length; index++) {
+    const monk = monks[index]
+    world.states.push({ ...createMonkRoutine(world.wander, index, world.rng), ...createMonkNeeds(index),
+      ...monk.arrival, piety: monk.attributes.piety, flightWait: 8,
+      destination: "home", pause: 0 })
+  }
+  for (let index = 0; index < world.states.length; index++) {
+    const monk = monks[index], bed = monk.home ? { home: monk.home, slot: monk.bedSlot ?? 0 } : beds[index]
+    world.states[index].home = bed?.home
+    world.states[index].bedSlot = bed?.slot
+  }
   const navigation = useMemo(() => monkWander(map), [map])
   world.pick = () => navigation.spots[Math.floor(world.rng() * navigation.spots.length)]
   world.wander = navigation
@@ -113,6 +126,10 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         useRelicProcessionStore.setState({ available: false, monkId: null, stage: "idle", returnRequested: false })
       }
     }
+  }, [world])
+
+  useEffect(() => {
+    for (const [index, monk] of monks.entries()) monkPositionRegistry.current?.set(monk.id, world.states[index])
   }, [world, monks])
 
   useFrame((_, delta) => {

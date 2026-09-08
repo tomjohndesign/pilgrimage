@@ -29,6 +29,7 @@ interface BuildState {
   tradeGold: number
   visits: number
   settlers: Monk[]
+  joinedMonks: Monk[]
   syncResources: (sim: SimState, travelers?: readonly Traveler[]) => void
   setTool: (tool: string | null) => void
   setFelled: (felled: ReadonlySet<number>) => void
@@ -50,6 +51,7 @@ const emptyState = () => ({
   tradeGold: 0,
   visits: 0,
   settlers: [] as Monk[],
+  joinedMonks: [] as Monk[],
 })
 
 export const useBuildStore = create<BuildState>((set) => ({
@@ -67,6 +69,7 @@ export const useBuildStore = create<BuildState>((set) => ({
     })
     return {
       simulation: sim,
+      joinedMonks: s.simulation === sim && s.joinedMonks.length === sim.joinedMonks.size ? s.joinedMonks : [...sim.joinedMonks.values()],
       wood: sim.wood,
       shrineGold: sim.shrineGold,
       tradeGold: sim.tradeGold,

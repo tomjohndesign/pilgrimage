@@ -29,6 +29,13 @@ describe("travelerCountForMap", () => {
 })
 
 describe("generateTravelers", () => {
+  it("includes a monk and a vendor in normal road crowds", () => {
+    for (const seed of [0, 1, 42, 12345]) for (const count of [6, 12, 30]) {
+      const travelers = generateTravelers(seed, count)
+      expect(travelers.some(t => t.type.id === "friar" && t.type.label === "Monk")).toBe(true)
+      expect(travelers.some(t => t.type.id === "vendor")).toBe(true)
+    }
+  })
   it("starts passing travelers supplied for their own journey", () => {
     for (const seed of [1, 42, 12345]) {
       for (const { attributes } of generateTravelers(seed, 100)) {
@@ -45,6 +52,10 @@ describe("generateTravelers", () => {
     const callings = { Male: new Set<string>(), Female: new Set<string>() }
     for (const seed of [0, 7, 12345, 31337]) {
       for (const traveler of generateTravelers(seed, 500)) {
+        if (traveler.type.id === "friar") {
+          expect(traveler.name).toMatch(/^Brother /)
+          continue
+        }
         const { variant } = travelerAppearance(seed, traveler.id)
         const { bodyType } = POPULATION_PROFILES[variant]
         expect(women.has(traveler.name.split(" ")[0]), traveler.name).toBe(bodyType === "Female")
@@ -52,7 +63,7 @@ describe("generateTravelers", () => {
       }
     }
     for (const seen of Object.values(callings)) {
-      expect([...seen].sort()).toEqual(Object.keys(TRAVELER_TYPES).sort())
+      expect([...seen].sort()).toEqual(Object.keys(TRAVELER_TYPES).filter(id => id !== "friar").sort())
     }
   })
 

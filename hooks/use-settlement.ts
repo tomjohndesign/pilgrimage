@@ -1,5 +1,6 @@
 "use client"
 
+import { enclaveHousing } from "@/lib/game/housing"
 import { constructionStage } from "@/lib/game/construction"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { GameMap, TilePos } from "@/lib/game/map/types"
@@ -151,6 +152,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     map,
     renown,
     residents,
+    housing: map ? enclaveHousing(map, residents.length - monks.length, monks.length) : null,
     visits,
     balance,
     settlement: session.settlement,

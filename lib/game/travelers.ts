@@ -103,7 +103,8 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
   },
   friar: {
     id: "friar",
-    label: "Friar",
+    // Keep the legacy calling ID for saved art and sound settings.
+    label: "Monk",
     color: "#6d5638",
     weight: 5.5,
     paceMin: 0.75,
@@ -283,6 +284,8 @@ export function generateTravelers(seed: number, count: number): Traveler[] {
   const travelers: Traveler[] = []
   for (let i = 0; i < count; i++) {
     let type = pickType(rng)
+    // A normal crowd includes a traveling brother, even on a quiet road.
+    if (i === count - 2 && count >= 6 && !travelers.some(t => t.type.id === "friar")) type = TRAVELER_TYPES.friar
     // Any real crowd includes someone selling to it: if the weighted rolls
     // produced no vendor, the last traveler becomes one. Deterministic, since
     // it's a pure function of the rolls before it.
@@ -291,10 +294,10 @@ export function generateTravelers(seed: number, count: number): Traveler[] {
     }
     // Match the body's seeded assignment used by the scene without consuming
     // another roll from the stream that determines attributes and movement.
-    const firstNames = FIRST_NAMES[travelerAppearance(seed, i).bodyType]
+    const firstNames = FIRST_NAMES[type.id === "friar" ? "Male" : travelerAppearance(seed, i).bodyType]
     travelers.push({
       id: i,
-      name: `${firstNames[Math.floor(rng() * firstNames.length)]} ${
+      name: `${type.id === "friar" ? "Brother " : ""}${firstNames[Math.floor(rng() * firstNames.length)]} ${
         BYNAMES[Math.floor(rng() * BYNAMES.length)]
       }`,
       type,

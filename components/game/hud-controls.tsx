@@ -44,7 +44,15 @@ export function HudResources({ economy, settlers, open, onToggle }: {
   return <div className="hud-resources" aria-label="Settlement resources">
     <span title="Gold" aria-label={`${gold} gold`}><Coins aria-hidden size={21} />{gold}</span>
     <span title="Stored timber" aria-label={`${wood} timber`}><Image src="/game-icons/timber.svg" width={30} height={28} alt="" />{wood}</span>
-    <span title="Settlers" aria-label={`${settlers} settlers`}><Users aria-hidden size={21} />{settlers}</span>
+    <HudHelp content={<><div className="hud-help-title">Enclave housing</div>
+      <p>People: {settlers} / {economy.housing?.people.capacity ?? 0} · {economy.housing?.people.available ?? 0} spaces available in houses.</p>
+      <p>Monks: {economy.housing?.monks.occupied ?? 0} / {economy.housing?.monks.capacity ?? 0} · {economy.housing?.monks.available ?? 0} spaces available in shelters.</p>
+      <p>Complete houses and monk shelters to welcome more residents.</p></>}>
+      <button type="button" className="hud-resource-button" aria-label={`Enclave housing: ${economy.residents.length} residents, ${(economy.housing?.people.available ?? 0) + (economy.housing?.monks.available ?? 0)} spaces available`}
+        aria-expanded={open} aria-controls="settlement-details" onClick={onToggle}>
+        <Users aria-hidden size={21} />{economy.residents.length}/{(economy.housing?.people.capacity ?? 0) + (economy.housing?.monks.capacity ?? 0)}
+      </button>
+    </HudHelp>
     <span title="Pilgrim visits" aria-label={`${economy.visits} pilgrim visits`}><Footprints aria-hidden size={21} />{economy.visits}</span>
     <HudHelp content={<><div className="hud-help-title">Shrine renown</div><p>Open the treasury, income, and renown breakdown.</p></>}>
       <button type="button" className="hud-resource-button" aria-label="Settlement details" aria-expanded={open} aria-controls="settlement-details" onClick={onToggle}>

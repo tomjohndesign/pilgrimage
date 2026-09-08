@@ -120,7 +120,7 @@ export function Travelers({
     const fresh = createSim(travelers, map, [], relic.stats)
     const residents = JOB_PREVIEW ? new Map(previewResidents(map).map(resident => [resident.traveler.id, resident])) : new Map()
     for (const [id, traveler] of fresh.travelers) {
-      if (!sim.travelers.has(id)) {
+      if (!sim.travelers.has(id) && !sim.joinedMonks.has(id)) {
         const resident = residents.get(id)
         if (resident) placePreviewResident(traveler, map, resident)
         sim.travelers.set(id, traveler)
@@ -187,7 +187,7 @@ export function Travelers({
       setJobs(nextJobs)
     }
     resourceElapsed.current += delta
-    if (build.resourceRevision !== sim.resourceRevision || resourceElapsed.current >= 0.25) {
+    if (build.resourceRevision !== sim.resourceRevision || build.joinedMonks.length !== sim.joinedMonks.size || resourceElapsed.current >= 0.25) {
       build.syncResources(sim, travelers)
       resourceElapsed.current = 0
     }
@@ -203,8 +203,15 @@ export function Travelers({
     for (let i = 0; i < travelers.length; i++) {
       const group = groupRefs.current[i]
       const s = sim.travelers.get(travelers[i].id)
-      if (!group || !s) continue
+      if (!group) continue
+      const joined = sim.joinedMonks.get(travelers[i].id)
+      if (joined) {
+        group.visible = false
+        if (selected?.kind === "traveler" && selected.id === travelers[i].id) useCameraStore.getState().select({ kind: "monk", id: joined.id })
+        continue
+      }
 
+      if (!s) continue
       bounds.center.set(s.x, s.y, s.z)
       // The selected figure stays live wherever it wanders, so its outline and
       // highlight never depend on where the camera happens to be pointing.
