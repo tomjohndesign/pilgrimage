@@ -2,7 +2,7 @@ import { buildingEntrance, constructionWork, isComplete } from "./construction"
 import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
 import { groundHeight, levelBuildingGround } from "./map/elevation"
 import { buildingKind, placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
-import { settlementRoute, shrineApproach } from "./settlement-route"
+import { settlementRoute, shrineRoadHead } from "./settlement-route"
 import { getBuildInfluence, type BuildInfluence } from "./build-influence"
 import type { SimState } from "./sim"
 import { DEFAULT_ADMISSION_FEE } from "./shrine-visit"
@@ -209,20 +209,6 @@ export function buildTileError(map: GameMap, x: number, z: number, influence: Bu
   return null
 }
 
-/** The clear road tile nearest the shrine's junction; walkers turn off there. */
-function roadHead(map: GameMap, buildings: readonly BuildingDef[]): TilePos | null {
-  const road = map.road
-  const covered = (p: TilePos) => buildings.some(b => p.x >= b.x && p.x < b.x + b.w && p.z >= b.z && p.z < b.z + b.d)
-  if (!road) return map.site && !covered(map.site.branch[0]) ? map.site.branch[0] : null
-  for (let step = 0; step < road.length; step++) {
-    for (const index of step ? [map.site!.junction - step, map.site!.junction + step] : [map.site!.junction]) {
-      const tile = road[index]
-      if (tile && !covered(tile)) return tile
-    }
-  }
-  return null
-}
-
 /**
  * A settlement may grow over the road — travellers walk around a footprint and
  * wear their own way past it — so long as there is a way around to be found.
@@ -286,7 +272,7 @@ export function placementError(
     if (roadBlock) return roadBlock
     // The shrine's own track is buildable ground, but its door must stay
     // reachable — from the nearest stretch of road still clear to walk on.
-    const junction = roadHead(map, occupied)
+    const junction = shrineRoadHead(map, occupied)
     if (junction && !settlementRoute(map, occupied, junction, map.site.door))
       return "Leave a way through from the road to the shrine door."
     for (const camp of map.buildings.filter(b => b.buildType)) {

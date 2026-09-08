@@ -10,12 +10,13 @@ export function admissionFee(map: GameMap): number {
 }
 
 /** Reserve a kneeler before leaving the road; enter by the aisle and retrace it on exit. */
-export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, occupied: ReadonlySet<string> = new Set()) {
+export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, occupied: ReadonlySet<string> = new Set(), from?: TilePos) {
   const site = map.site
   const shrine = map.buildings.find(b => b.id === site?.hovelId)
   if (!site || !shrine) return null
   const gate = shrineGates(shrine, site.door)[0]
-  const branch = shrineApproach(map)
+  const branch = shrineApproach(map, from)
+  if (!branch.length) return null
   if (!buildingStepAllowed(map,map.buildings,gate.outside,gate.inside,true)) return null
   const seats=shrineSeats(shrine,site.door),layout=shrineLayout(shrine,site.door)
   for(let i=0;i<seats.length;i++) {

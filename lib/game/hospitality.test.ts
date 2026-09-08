@@ -1,7 +1,8 @@
 import { shrineSeats } from "./shrine-layout"
 import { afterEach, describe, expect, it } from "vitest"
 import { BUILD_CATALOG, DEFAULT_BALANCE } from "./balance"
-import { createSettlement, purchaseStructure, woodcutterHuts, jobBuildings, creditTimber, creditAdmission, syncTimberSpending, settlementRenown } from "./settlement"
+import { createSettlement, purchaseStructure, placementError, woodcutterHuts, jobBuildings, creditTimber, creditAdmission, syncTimberSpending, settlementRenown } from "./settlement"
+import { buildingEntry } from "./building-rotation"
 import { characterSupport } from "./character-support"
 import { HOUSE_BEDS } from "./building-art/early-geometry"
 import { MEAL_PRICE, servingHouses, tavernSeats } from "./tavern"
@@ -484,6 +485,27 @@ describe("shrine hospitality", () => {
 })
 
 describe("woodcutter huts", () => {
+  it("returns a homeless settler to their workplace after camping", () => {
+    const { map, camp, traveler } = fixture(), t = traveler(0)
+    map.buildings.push(camp)
+    const sim = createSim([t], map), s = sim.travelers.get(0)!
+    sim.buildings = jobBuildings(map)
+    const entry = buildingEntry(camp)
+    Object.assign(s, { employer: camp.id, home: null, activity: "idle", stamina: 0,
+      x: tileToWorldX(map, entry.x), z: tileToWorldZ(map, entry.z) })
+    run(sim, [t], map, 120, () => s.activity === "camping")
+    expect(s.activity).toBe("camping")
+    run(sim, [t], map, 120, () => s.activity === "fromCamp")
+    expect(s.activity).toBe("fromCamp")
+    run(sim, [t], map, 120, () => s.activity !== "fromCamp")
+    expect(s.activity).toBe("idle")
+    expect(s.employer).toBe(camp.id)
+    expect(s.x).toBeCloseTo(tileToWorldX(map, entry.x))
+    expect(s.z).toBeCloseTo(tileToWorldZ(map, entry.z))
+    expect(s.spot).toBeNull()
+    expect(s.offRoadRoute).toBeNull()
+  })
+
   it.each(["hunger", "thirst", "stamina"] as const)("keeps a settled builder assigned through completion with depleted %s", need => {
     for (const atWork of [false, true]) {
       const { map, camp, traveler } = fixture()
@@ -904,22 +926,27 @@ describe("houses, counters and posts", () => {
     expect(byHouse.size).toBe(2)
   }, 20000)
 
-  it("draws a passing vendor to keep an empty market stall for good", () => {
+  it.each([0, 4, 8])("parks vendor %s's transport before they keep an empty market stall", id => {
     const { map } = fixture()
     const def = BUILD_CATALOG.find(b => b.id === "market")!
-    const stall = { ...def, id: "market-0", buildType: "market", label: def.label, x: 13, z: 9, rotation: 0 as const }
+    const stall = { ...def, id: "market-0", buildType: "market", label: def.label, x: 13, z: 6, rotation: 0 as const }
     map.buildings.push(stall)
     const vendor: Traveler = {
-      id: 0, name: "Vendor", type: TRAVELER_TYPES.vendor, direction: 1, pace: 1, offset: 8 / 29,
+      id, name: "Vendor", type: TRAVELER_TYPES.vendor, direction: 1, pace: 1, offset: 8 / 29,
       attributes: { age: 30, gold: 60, piety: 0, status: 20, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: ["haggling"] },
     }
     const sim = createSim([vendor], map, [], obscure)
     sim.buildings = jobBuildings(map)
-    const s = sim.travelers.get(0)!
+    const s = sim.travelers.get(id)!
     run(sim, [vendor], map, 300, () => s.activity === "posted")
     expect(s.employer).toBe(stall.id)
     expect(s.activity).toBe("posted")
     expect(s.convoy).toBe(false)
+    expect(s.marketParking?.walking).toBe(true)
+    const parked = structuredClone(s.marketParking!.pose)
+    run(sim, [vendor], map, 30)
+    expect(s.marketParking!.pose).toEqual(parked)
+    expect(Math.hypot(s.x - parked.hitch.x, s.z - parked.hitch.z)).toBeGreaterThan(1)
     expect(containsTile(stall, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) })).toBe(true)
     // A kept stall is a counter: it serves food and drink like the tavern.
     expect(servingHouses(map, b => [...sim.travelers.values()].some(w => w.employer === b.id && w.activity === "posted")))
@@ -1095,4 +1122,86 @@ it("reserves separate kneelers, walks down the aisle, and frees seats after depa
   run(sim,people,map,20,()=>seated.every(s=>s.activity === "walking"))
   expect(seated.every(s=>s.shrineSeat === undefined)).toBe(true)
   expect(shrineVisitPlan(map,99,0,new Set([...sim.travelers.values()].flatMap(s=>s.shrineSeat?[s.shrineSeat]:[])))).not.toBeNull()
+})
+
+describe("shrine visits beside a covered junction", () => {
+  function obstructed(direction: 1 | -1, offset = 0) {
+    const { map, traveler } = fixture()
+    const cross = BUILD_CATALOG.find(b => b.id === "cross")!
+    const x = 10 + direction * offset
+    expect(placementError(map, cross, map.road![x])).toBeNull()
+    const obstacle = { ...cross, id: "road-cross", buildType: "cross", x, z: 4 }
+    map.buildings.push(obstacle)
+    const t = devout(traveler(0, direction))
+    t.offset = (10 - direction * 4) / 29
+    const sim = createEstablishedShrine([t], map, holy), s = sim.travelers.get(0)!
+    Object.assign(sim.balance.rules, { hungerDecay: 0, thirstDecay: 0, staminaDecay: 0 })
+    const step = () => {
+      const before = { x: s.x, z: s.z, activity: s.activity, branchProgress: s.branchProgress }
+      stepSim(sim, [t], map, 1.5, .1)
+      expect(containsTile(obstacle, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) })).toBe(false)
+      const movement = Math.hypot(s.x - before.x, s.z - before.z)
+      expect(movement, `${before.activity} at ${before.branchProgress} → ${s.activity} at ${s.branchProgress}`).toBeLessThan(.3)
+    }
+    return { map, t, sim, s, step }
+  }
+
+  it.each([1, -1] as const)("walks to the shrine and back around the obstruction (direction %i)", direction => {
+    const { sim, s, step } = obstructed(direction)
+    for (let i = 0; i < 300 && s.activity !== "toRelic"; i++) step()
+    expect(s.activity).toBe("toRelic")
+    const departure = { x: s.x, z: s.z, progress: s.progress }
+    expect((10 - departure.progress) * direction).toBeGreaterThan(0)
+    for (let i = 0; i < 2000 && s.activity !== "walking"; i++) step()
+    expect(s.activity).toBe("walking")
+    expect(sim.visits).toBe(1)
+    expect(s.progress).toBe(departure.progress)
+    expect(s.x).toBeCloseTo(departure.x)
+    expect(s.z).toBeCloseTo(departure.z)
+    for (let i = 0; i < 300 && direction * (s.progress - 10) < 3; i++) step()
+    expect(direction * (s.progress - 10)).toBeGreaterThanOrEqual(3)
+    expect(sim.visits).toBe(1)
+  })
+
+  it.each([1, -1] as const)("offers a declined visit only once while taking the diversion (direction %i)", direction => {
+    const { map, t, sim, s, step } = obstructed(direction)
+    t.attributes.piety = s.piety = 0
+    sim.relic = obscure
+    // Leave no completed cross granting an independent evangelism roll.
+    map.buildings.at(-1)!.construction = { work: 0, required: 1 }
+    for (let i = 0; i < 300 && direction * (s.progress - 10) < 3; i++) step()
+    expect(direction * (s.progress - 10)).toBeGreaterThanOrEqual(3)
+    expect(sim.visits).toBe(0)
+    expect(s.rolls).toBe(1)
+  })
+
+  it.each([1, -1] as const)("keeps the tavern accessible from the diversion departure (direction %i)", direction => {
+    const { map, t, sim, s, step } = obstructed(direction)
+    staffTavern(sim, map)
+    t.attributes.gold = s.gold = 20
+    t.attributes.hunger = s.hunger = 5
+    t.attributes.thirst = s.thirst = 5
+    for (let i = 0; i < 300 && s.activity !== "toTavern"; i++) step()
+    expect(s.activity).toBe("toTavern")
+    for (let i = 0; i < 2000 && s.activity !== "walking"; i++) step()
+    expect(s.activity).toBe("walking")
+    expect(sim.tradeGold).toBe(5)
+    expect(s.tavernVisit).toBeUndefined()
+    for (let i = 0; i < 300 && direction * (s.progress - 10) < 3; i++) step()
+    expect(direction * (s.progress - 10)).toBeGreaterThanOrEqual(3)
+  })
+
+  it.each([1, -1] as const)("offers a visit at arrival when the diversion ends exactly on the junction (direction %i)", direction => {
+    const { map, t, sim, s, step } = obstructed(direction, -2)
+    t.attributes.piety = s.piety = 0
+    sim.relic = obscure
+    map.buildings.at(-1)!.construction = { work: 0, required: 1 }
+    for (let i = 0; i < 300 && s.progress !== 10; i++) {
+      step()
+      expect(s.rolls).toBe(0)
+    }
+    expect(s.progress).toBe(10)
+    step()
+    expect(s.rolls).toBe(1)
+  })
 })
