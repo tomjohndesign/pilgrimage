@@ -472,6 +472,15 @@ try {
   }
   if (process.env.BENCH_ISOLATION === "1") {
     const results = []
+    const environment = await page.evaluate(() => {
+      const game = window.__pilgrimage, gl = document.querySelector("canvas[data-engine]")?.getContext("webgl2")
+      const ext = gl?.getExtension("WEBGL_debug_renderer_info")
+      return { inventory: game.inventory(), city: game.cityStats(),
+        gpu: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null }
+    })
+    await writeFile(`${output}/environment.json`, JSON.stringify({ ...environment, date: new Date().toISOString(),
+      hardware: { cpu: cpus()[0]?.model, cores: cpus().length, memory: totalmem(), load: loadavg() },
+      count, scenario, trees, seconds, mobile, gpuInstrumented: process.env.BENCH_GPU === "1" }, null, 2))
     const layers = { characters: "Characters", wildlife: "Wildlife", buildings: "Buildings", trees: "Trees", scenery: "Scenery" }
     const cases = [
       { label: "visible-running", hidden: [], paused: false },
@@ -482,6 +491,7 @@ try {
       { label: "trees-also-hidden-paused", hidden: ["characters", "wildlife", "buildings", "trees"], paused: true },
       { label: "named-layers-hidden-paused", hidden: Object.keys(layers), paused: true },
       { label: "named-layers-and-terrain-hidden-paused", hidden: Object.keys(layers), paused: true, terrain: false },
+      { label: "restored-running", hidden: [], paused: false },
     ]
     for (const viewSize of zooms) {
       await page.evaluate(viewSize => { window.__pilgrimage.setPaused(true); window.__pilgrimage.setZoom(viewSize) }, viewSize)
@@ -543,6 +553,8 @@ try {
           assert.equal(sample.layers[name], !condition.hidden.includes(name))
           if (condition.hidden.includes(name)) assert.equal(sample.submissions.draws[name]?.calls ?? 0, 0, `hidden ${name} must submit zero draws`)
         }
+        if (!condition.hidden.includes("characters")) assert.ok(sample.submissions.draws.characters?.calls > 0,
+          "shown characters must resume actual drawing")
         console.log("Isolation", { viewSize, label: condition.label, fps: result.fps, p95: result.p95, gpu,
           characterDraws: sample.submissions.draws.characters?.calls ?? 0 })
       }
