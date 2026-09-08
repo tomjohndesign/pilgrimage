@@ -3,6 +3,7 @@ import { buildingStepAllowed } from "./building-navigation"
 import { monkWander, type WanderSpot } from "./monk-wander"
 import { shrineLayout, shrineKneelers, shrineSeats } from "./shrine-layout"
 import { shrineVisitPlan } from "./shrine-visit"
+import { processionGrounds } from "./relic-procession"
 import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 
 function fixture(direction: number): GameMap {
@@ -89,5 +90,23 @@ describe("a footprint on the shrine track", () => {
     expect(route[0]).toEqual(map.site!.branch[0])
     expect(route.some(p => p.x === map.site!.door.x && p.z === map.site!.door.z)).toBe(true)
     expect(route.length).toBeGreaterThan(straight.length)
+  })
+
+  it("shares a clear road entry when the original junction is covered", () => {
+    const map = approachMap()
+    map.buildings.push({ id: "cross", label: "Cross", x: 5, z: 4, w: 1, d: 1, height: 1, color: "", roofColor: "" })
+    const plan = shrineVisitPlan(map, 0, 0)!
+    expect(plan.route[0]).toEqual({ x: 4, z: 4 })
+    expect(plan.route.some(p => p.x === 5 && p.z === 4)).toBe(false)
+    const procession = processionGrounds(map)!
+    expect(procession.branch.at(-1)).toMatchObject({ x: tileToWorldX(map, 4), z: tileToWorldZ(map, 4) })
+    const from = { x: 8, z: 4 }
+    expect(shrineVisitPlan(map, 0, 0, new Set(), from)!.route[0]).toEqual(from)
+  })
+
+  it("declines a visit when the approach is sealed instead of falling back through walls", () => {
+    const map = approachMap()
+    for (let x = 0; x < map.width; x++) map.tiles[6 * map.width + x] = "water"
+    expect(shrineVisitPlan(map, 0, 0)).toBeNull()
   })
 })

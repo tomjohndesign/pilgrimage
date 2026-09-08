@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import { createFootpaths, recordWalkingPath, regrowFootpaths } from "./footpaths"
-import { blockedRoad, findRoadDiversion, findRoadShortcut, retireBypassedRoad, exploresRoadShortcut, shortcutCost, smoothWalkingRoute } from "./walking-shortcuts"
+import { createFootpaths, markGroundChanged, recordWalkingPath, regrowFootpaths } from "./footpaths"
+import { blockedRoad, findRoadDiversion, findRoadShortcut, takeRoadShortcut, retireBypassedRoad, exploresRoadShortcut, shortcutCost, smoothWalkingRoute } from "./walking-shortcuts"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap, type TilePos } from "./map/types"
 import { DEFAULT_ELEVATION } from "./map/elevation"
 import { createSim, stepSim } from "./sim"
@@ -31,6 +31,39 @@ function walk(map: GameMap, a: TilePos, b: TilePos, passes: number) {
 }
 
 describe("traffic gradually cuts off detours", () => {
+  it("lets arriving walkers adopt new wear after three simulation seconds", () => {
+    const map = fixture()
+    const travelers = generateTravelers(7, 8).map(t => ({ ...t, type: TRAVELER_TYPES.peasant, direction: 1 as const,
+      pace: 1, offset: 1 / (map.road!.length - 1), attributes: { ...t.attributes, hunger: 100, thirst: 100, stamina: 100, jobless: false } }))
+    const sim = createSim(travelers, map)
+    // With seed 0, ordinal 0 explores and ordinal 1 follows established wear.
+    const follower = sim.travelers.get(travelers[1].id)!
+    stepSim(sim, travelers, map, 0, .1)
+    expect(follower.roadShortcut).toBeUndefined()
+    walk(map, pointAt(map, 1), pointAt(map, 10), 20)
+    expect(findRoadShortcut(map, 1, 1, p => pointAt(map, p), false)).not.toBeNull()
+    // Simulate a fresh arrival at this stretch while retaining the shared cache.
+    const arrival = () => {
+      Object.assign(follower, { progress: 1, ...pointAt(map, 1), shortcutCheck: undefined })
+      stepSim(sim, travelers, map, 0, .1)
+    }
+    stepSim(sim, [], map, 0, 1)
+    arrival()
+    expect(follower.roadShortcut).toBeUndefined()
+    stepSim(sim, [], map, 0, 3)
+    arrival()
+    expect(follower.roadShortcut).toBeDefined()
+  })
+
+  it("invalidates cached shortcuts immediately when the ground changes", () => {
+    const map = fixture()
+    const take = () => takeRoadShortcut(map, 1, 1, 0, p => pointAt(map, p), true, 1)
+    expect(take()).not.toBeNull()
+    map.tiles = map.tiles.map(terrain => terrain === "grass" ? "water" : terrain)
+    markGroundChanged(map.footpaths!)
+    expect(take()).toBeNull()
+  })
+
   it("keeps a pioneer in small pedestrian populations without rerolling at each bend", () => {
     for (const population of [3, 8, 20]) for (const seed of [1, 7, 42]) {
       const chosen = Array.from({ length: population }, (_, ordinal) => exploresRoadShortcut(ordinal, 0, seed, population))
