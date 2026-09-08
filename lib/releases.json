@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "c71abf0f75cebcc962d8d13712db969403071173",
-  "releaseCount": 110,
+  "lastProcessedCommit": "36ce80b0a9132772fe45e02fdebdd9a5a6f89ac4",
+  "releaseCount": 111,
   "releases": [
+    {
+      "version": "0.0.125",
+      "title": "Release 0.0.125",
+      "summary": "Add building back-edge borders for terrain contrast (#144)",
+      "commit": "36ce80b0a9132772fe45e02fdebdd9a5a6f89ac4"
+    },
     {
       "version": "0.0.124",
       "title": "Release 0.0.124",
