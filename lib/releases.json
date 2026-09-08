@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "eda5d9d057280a3b30b7683f9102a605e27c4f67",
-  "releaseCount": 109,
+  "lastProcessedCommit": "c71abf0f75cebcc962d8d13712db969403071173",
+  "releaseCount": 110,
   "releases": [
+    {
+      "version": "0.0.124",
+      "title": "Release 0.0.124",
+      "summary": "Fix parallel cliff bands along diagonal rivers (#143)",
+      "commit": "c71abf0f75cebcc962d8d13712db969403071173"
+    },
     {
       "version": "0.0.123",
       "title": "Release 0.0.123",
