@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "742ca347b7c3c8659ae5bcbf36449cf41a163d0f",
-  "releaseCount": 102,
+  "lastProcessedCommit": "296e06855c9fd657fe9406398d2f7da41f96a8af",
+  "releaseCount": 103,
   "releases": [
+    {
+      "version": "0.0.117",
+      "title": "Release 0.0.117",
+      "summary": "Add scene visibility and building interior controls (#137)",
+      "commit": "296e06855c9fd657fe9406398d2f7da41f96a8af"
+    },
     {
       "version": "0.0.116",
       "title": "Release 0.0.116",
