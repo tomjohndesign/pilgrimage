@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "fde53ee3731087af11679217de60692455737f4c",
-  "releaseCount": 116,
+  "lastProcessedCommit": "52d166a6261c4f4202c042f48a74265544978a39",
+  "releaseCount": 118,
   "releases": [
+    {
+      "version": "0.0.132",
+      "title": "Release 0.0.132",
+      "summary": "Add veiled relic visits and an economy funded by NPC activity (#150)",
+      "commit": "52d166a6261c4f4202c042f48a74265544978a39"
+    },
+    {
+      "version": "0.0.131",
+      "title": "Release 0.0.131",
+      "summary": "Improve forest canopy shadows, floor textures, and terrain edges (#151)",
+      "commit": "ecd283d2b0b8f57e95d965b82d4819e242c4a29c"
+    },
     {
       "version": "0.0.130",
       "title": "Release 0.0.130",
