@@ -14,6 +14,7 @@ export function foliageRaycast(geometry: THREE.BufferGeometry, color: THREE.Text
   const colors = read(color), depths = read(depth)
   const proxy = new THREE.Mesh(geometry), matrix = new THREE.Matrix4(), anchor = new THREE.Vector3(), scale = new THREE.Vector3()
   const axis = new THREE.Vector3(), rotation = new THREE.Quaternion(), hits: THREE.Intersection[] = []
+  const sphere = new THREE.Sphere()
   return function (this: THREE.InstancedMesh, raycaster, intersections) {
     const currentCamera = camera()
     if (!currentCamera) return
@@ -23,6 +24,10 @@ export function foliageRaycast(geometry: THREE.BufferGeometry, color: THREE.Text
       this.getMatrixAt(i, matrix); matrix.premultiply(this.matrixWorld)
       anchor.setFromMatrixPosition(matrix)
       const extent = FOLIAGE_FRAME.extent * axis.setFromMatrixColumn(matrix, 0).length()
+      // Most trees are far from the pointer. Reject their complete billboard
+      // before constructing and raycasting the camera-facing proxy.
+      sphere.center.copy(anchor); sphere.radius = extent * 1.1
+      if (!raycaster.ray.intersectsSphere(sphere)) continue
       proxy.matrixWorld.compose(anchor, rotation, scale.setScalar(extent))
       hits.length = 0
       proxy.raycast(raycaster, hits)

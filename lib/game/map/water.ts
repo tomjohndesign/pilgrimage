@@ -132,7 +132,7 @@ export interface WaterField {
   kind: Uint8Array
   /** Row-major: 0 on land, 1–3 on water (distance from shore, capped). */
   depth: Uint8Array
-  /** Flow direction per river-water tile index. Lake tiles never flow. */
+  /** Smoothed unit heading for river-bank shaping. Lake tiles have no heading. */
   flow: Map<number, readonly [number, number]>
   /**
    * Land tiles on the inside bank of river bends — point bars, where a real
@@ -702,15 +702,6 @@ function carveBand(world: RiverWorld, river: RiverRecord, riverIndex: number, fr
   let added = 0
   for (let i = from; i <= to; i++) {
     const cur = line[i]
-    const nxt = line[Math.min(i + 1, line.length - 1)]
-    const ref = i + 1 < line.length ? nxt : line[i - 1]
-    let dx = (nxt % width) - (cur % width)
-    let dz = Math.floor(nxt / width) - Math.floor(cur / width)
-    if (i + 1 >= line.length) {
-      dx = (cur % width) - (ref % width)
-      dz = Math.floor(cur / width) - Math.floor(ref / width)
-    }
-    if (dx === 0 && dz === 0) continue
     const [ux, uz] = headings[i]
     const nx = -uz
     const nz = ux
@@ -736,7 +727,10 @@ function carveBand(world: RiverWorld, river: RiverRecord, riverIndex: number, fr
         }
         if (kind[t] === WATER_KIND_RIVER) {
           if (owner[t] === -1) owner[t] = riverIndex
-          flow.set(t, reversed ? [-dx, -dz] : [dx, dz])
+          // Bank shaping needs the river's tangent, not the alternating grid
+          // steps of a diagonal centerline. Those steps repeatedly classified
+          // the same bank as opposite sides, carving long parallel trenches.
+          flow.set(t, reversed ? [-ux, -uz] : [ux, uz])
         }
       }
     }

@@ -538,6 +538,7 @@ export function buildingIncomeLabel(def: BuildDefinition, balance: GameBalance):
     : def.id === "tavern" ? "2 jobs · food & drink for gold"
     : def.id === "sheep-pen" ? "2 herding jobs"
     : def.id === "house" ? "Homes 2 settlers"
+    : def.id === "monk-shelter" || def.id === "shelter" ? "Adds monk housing when complete"
     : def.id === "market" ? "Draws a vendor to keep it"
     : def.id === "storehouse" ? `Timber storage · ${STOREHOUSE_FOOD_CAPACITY} food capacity` : "No resource income"
 }

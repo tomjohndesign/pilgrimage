@@ -4,7 +4,7 @@ import { actionPlaybackRate } from "./base-person/activity"
 import { ACTION_CLIPS, type ActionClip } from "./base-person/pose"
 import type { BasePersonBake } from "./base-person/bake"
 import type { TravelerTypeId } from "./travelers"
-import baseMetadata from "../../public/textures/characters/base/base-person-v33.json"
+import baseMetadata from "../../public/textures/characters/base/base-person-v34.json"
 
 export type CharacterModel = "base" | "callings"
 
@@ -57,6 +57,7 @@ export interface CharacterAsset {
 }
 
 const soundLabels: Record<TravelerTypeId, string> = {
+  beggar: "Soft steps & cloth",
   peasant: "Soft steps & cloth",
   pilgrim: "Staff tap & pilgrim bell",
   merchant: "A purse of coins",
@@ -68,8 +69,8 @@ const soundLabels: Record<TravelerTypeId, string> = {
 
 export const CHARACTER_ASSETS = Object.fromEntries(
   Object.entries(soundLabels).map(([id, soundLabel]) => [id, {
-    sheet: `/textures/characters/${id}-v1.png`,
-    sound: `/sounds/characters/${id}-select-v1.wav`,
+    sheet: id === "beggar" ? "/textures/characters/population/v29/beggar-walk.png" : `/textures/characters/${id}-v1.png`,
+    sound: `/sounds/characters/${id === "beggar" ? "peasant" : id}-select-v1.wav`,
     soundLabel, fps: 6, scale: 0.74, volume: 0.65,
   }]),
 ) as Record<TravelerTypeId, CharacterAsset>

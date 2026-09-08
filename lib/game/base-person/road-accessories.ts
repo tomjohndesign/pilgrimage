@@ -104,13 +104,13 @@ export function createRoadAccessories(recipe: PersonRecipe, sockets: Record<Sock
   }
   return {
     pose(clip: BaseClip, phase: number, edits: PoseEdits | undefined = design.poseEdits) {
-      const road = clip === "walk" || clip === "idle"
+      const road = clip === "walk" || clip === "wearyWalk" || clip === "idle"
       hat.visible = clip !== "sleeping" && !uncoverHead(design.bodyType, clip)
       satchel.visible = road && design.satchel
       lute.visible = road && design.lute
       staff.visible = road && design.walkingStick
       if (staff.visible) {
-        const { tip, planted } = staffMotion(phase, b, clip === "walk", edits)
+        const { tip, planted } = staffMotion(phase, b, clip === "walk" || clip === "wearyWalk", edits, clip)
         const grip = root.worldToLocal(sockets.rightHand.getWorldPosition(new THREE.Vector3()))
         const axis = grip.clone().sub(new THREE.Vector3(...tip))
         const gripDistance = axis.length()

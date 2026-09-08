@@ -1,5 +1,5 @@
 import type { PersonRecipe } from "./design"
-import { WALK_STANCE_FRACTION, walkFoot, type Point3 } from "./pose"
+import { WALK_STANCE_FRACTION, walkFoot, type BaseClip, type Point3 } from "./pose"
 import { poseOffset, type PoseEdits } from "./pose-edits"
 
 export const STAFF_STRIDES = 1
@@ -11,7 +11,7 @@ export function staffDimensions(b: PersonRecipe["body"]) {
 }
 
 /** The right-hand staff plants and lifts with the opposite (left) foot. */
-export function staffMotion(phase: number, b: PersonRecipe["body"], walking = true, edits?: PoseEdits) {
+export function staffMotion(phase: number, b: PersonRecipe["body"], walking = true, edits?: PoseEdits, clip: BaseClip = walking ? "walk" : "idle") {
   const p = ((phase % 1) + 1) % 1
   const foot = walkFoot("left", p, b)
   const planted = !walking || foot.planted
@@ -20,7 +20,6 @@ export function staffMotion(phase: number, b: PersonRecipe["body"], walking = tr
   const handZ = !walking ? 0.16 : planted ? reach + (0.10 - reach) * smooth(p / WALK_STANCE_FRACTION) : 0.10 + (reach - 0.10) * smooth(swing)
   const tip: Point3 = [-b.shoulderOffset - 0.09, 0.025 + (walking ? foot.ankle[1] - b.ankleHeight : 0), walking ? foot.ankle[2] + 0.10 : 0.16]
   const grip: Point3 = [tip[0], b.shoulderHeight - b.upperArmLength * 0.65 + (walking ? Math.sin(Math.PI * swing) ** 2 * 0.055 : -0.08), handZ]
-  const clip = walking ? "walk" : "idle"
   const contactOffset = poseOffset(edits, clip, "staffTip", 0)
   const edited = poseOffset(edits, clip, "staffTip", p)
   const weight = walking && !planted ? Math.sin(swing * Math.PI) ** 2 : 0

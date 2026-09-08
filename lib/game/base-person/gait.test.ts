@@ -2,7 +2,7 @@ import { POPULATION_PROFILES } from "./population"
 import { SETTLEMENT_JOBS, jobDesign, type SettlementJob } from "../jobs/design"
 import { describe, expect, it } from "vitest"
 import { readFileSync } from "node:fs"
-import { BASE_CHARACTER_SCALE, DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE, PERSON_SPRITE_SCALE, personWalkStride, walkSpeedScale, walkContact, plantFoot, type FootPlant } from "./gait"
+import { BASE_CHARACTER_SCALE, DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE, PERSON_SPRITE_SCALE, personWalkStride, walkSpeedScale, walkContact, reducedWalkFrame, crossedWalkSupport, plantFoot, type FootPlant, type FootPlantResult } from "./gait"
 import { BASE_PERSON, legPose, PERSON_CLIPS, WALK_CLIP_STRIDES, WALK_FRAMES_PER_STRIDE } from "./pose"
 import { DEFAULT_DESIGN, PERSON_PRESETS, personRecipe } from "./design"
 import { DEFAULT_POPULATION, populationVisual } from "./population-assets"
@@ -11,7 +11,7 @@ import { MONK_VISUAL, monkVisual, monkWalkSpeed, MONK_WALK_TUNING } from "./monk
 
 const WALKING_DESIGNS = [
   ...(Object.keys(SETTLEMENT_JOBS) as SettlementJob[]).flatMap(job => POPULATION_PROFILES.map((_, variant) => jobDesign(job, variant))),
-  ...DEFAULT_POPULATION.callings.peasant.designs, ...Object.values(PERSON_PRESETS),
+  ...DEFAULT_POPULATION.callings.peasant.designs, ...DEFAULT_POPULATION.callings.beggar.designs, ...Object.values(PERSON_PRESETS),
 ]
 
 describe("walking at the rendered person's scale", () => {
@@ -22,7 +22,7 @@ describe("walking at the rendered person's scale", () => {
       const metadata = JSON.parse(readFileSync(`${process.cwd()}/public${url}`, "utf8"))
       expect(metadata.templateVersion ?? Number(String(metadata.version).replace(/^v/, ""))).toBe(BASE_PERSON.version)
       expect(metadata.frameCount).toBe(PERSON_CLIPS.walk.frames)
-      for (const clip of ["carrying", "procession", "hoisting"] as const) {
+      for (const clip of ["wearyWalk", "carrying", "procession", "hoisting"] as const) {
         expect(metadata.clips[clip].length / metadata.directions.length).toBe(PERSON_CLIPS[clip].frames)
       }
     }
@@ -44,7 +44,7 @@ describe("walking at the rendered person's scale", () => {
   it("preserves both leg lengths and forward knee bend for every preset and body profile", () => {
     for (const design of WALKING_DESIGNS) {
       const body = personRecipe(design).body
-      for (const clip of ["walk", "carrying", "procession"] as const) for (const side of ["left", "right"] as const) {
+      for (const clip of ["walk", "wearyWalk", "carrying", "procession"] as const) for (const side of ["left", "right"] as const) {
         for (let tick = 0; tick < 120; tick++) {
           const leg = legPose(side, tick / 120, clip, body)
           const distance = (a: number[], b: number[]) => Math.hypot(...a.map((value, i) => value - b[i]))
@@ -103,11 +103,82 @@ describe("walking at the rendered person's scale", () => {
     expect(teleported.offset.z).toBeCloseTo(0)
   })
 
+  it("releases skipped support cycles at high speed without breaking a stance at the atlas seam", () => {
+    expect(crossedWalkSupport(.65, 1, 20)).toBe(true)
+    expect(crossedWalkSupport(.05, .6, 20)).toBe(true)
+    expect(crossedWalkSupport(.95, .1, 20)).toBe(false)
+    expect(crossedWalkSupport(.25, 0, 20)).toBe(false)
+    for (const design of WALKING_DESIGNS) for (const rate of [1, 2, 4, 6, 10]) {
+      const body = personRecipe(design).body, stride = personWalkStride(design) * BASE_CHARACTER_SCALE
+      const scale = PERSON_SPRITE_SCALE * BASE_CHARACTER_SCALE / BASE_PERSON.camera.viewSize
+      let phase = .65, z = 0, plant: FootPlant | null = null
+      for (let frame = 0; frame < 180; frame++) {
+        const delta = [1 / 60, 1 / 30, .1, 1 / 20][frame % 4], advance = delta * rate * 1.15
+        if (crossedWalkSupport(phase, advance, 20)) plant = null
+        phase = (phase + advance) % 1; z += advance * stride
+        const foot = walkContact(phase, 20, body)
+        const next = plantFoot(plant, foot.side, { x: 0, z }, { x: foot.x * scale, z: foot.z * scale })
+        // A held anchor must never cancel an entire stride of simulated travel.
+        expect(Math.abs(next.offset.z)).toBeLessThanOrEqual(stride / 20 + 1e-8)
+        plant = next.plant
+      }
+    }
+  })
+
   it("keeps the supporting foot at its planted height while the body climbs a slope", () => {
     const first = plantFoot(null, "left", { x: 0, y: 0.5, z: 0 }, { x: 0.1, z: 0.2 })
     const next = plantFoot(first.plant, "left", { x: 0, y: 0.52, z: 0.03 }, { x: 0.1, z: 0.2 })
     expect(0.52 + next.offset.y).toBeCloseTo(0.5)
     expect(0.03 + 0.2 + next.offset.z).toBeCloseTo(0.2)
+  })
+  it("reduces distant walk poses while preserving authored support changes and stride timing", () => {
+    for (const strides of [1, 3]) {
+      const frames = 20 * strides
+      for (const detail of [0, 1, 2] as const) {
+        const sequence = Array.from({ length: frames }, (_, frame) => reducedWalkFrame(frame, frames, strides, detail))
+        expect(new Set(sequence).size).toBe((detail === 0 ? 20 : detail === 1 ? 10 : 8) * strides)
+        for (let frame = 0; frame < frames; frame++) {
+          const full = walkContact(frame / 20, frames, BASE_PERSON.body, strides)
+          const coarse = walkContact(sequence[frame] / 20, frames, BASE_PERSON.body, strides)
+          expect(coarse.side).toBe(full.side)
+          expect(sequence[frame]).toBeLessThanOrEqual(frame)
+          expect(frame - sequence[frame]).toBeLessThan(detail === 2 ? 3 : detail === 1 ? 2 : 1)
+        }
+      }
+    }
+    // Legacy short sequences retain their real metadata and full pose set.
+    expect(reducedWalkFrame(3, 4, 1, 2)).toBe(3)
+    for (const design of WALKING_DESIGNS) for (const detail of [1, 2] as const) for (const rate of [2, 8, 10]) {
+      const body = personRecipe(design).body, stride = personWalkStride(design) * BASE_CHARACTER_SCALE
+      const scale = PERSON_SPRITE_SCALE * BASE_CHARACTER_SCALE / BASE_PERSON.camera.viewSize
+      let phase = .65, z = 0, plant: FootPlant | null = null
+      for (let tick = 0; tick < 120; tick++) {
+        const advance = [1 / 60, 1 / 30, .1][tick % 3] * rate * 1.15
+        if (crossedWalkSupport(phase, advance, 20)) plant = null
+        phase = (phase + advance) % 1; z += advance * stride
+        const frame = reducedWalkFrame(Math.floor(phase * 20), 20, 1, detail)
+        const foot = walkContact(frame / 20, 20, body)
+        const result = plantFoot(plant, foot.side, { x: 0, z }, { x: foot.x * scale, z: foot.z * scale })
+        expect(Math.abs(result.offset.z)).toBeLessThanOrEqual(stride * (detail === 1 ? 2 : 3) / 20 + 1e-8)
+        plant = result.plant
+      }
+    }
+  })
+
+  it("reuses contact storage without changing turns, slopes, stops or teleport resets", () => {
+    const output: FootPlantResult = { plant: { key: "", anchor: { x: 0, z: 0 }, origin: { x: 0, z: 0 } }, offset: { x: 0, y: 0, z: 0 } }
+    let expected: FootPlant | null = null, actual: FootPlant | null = null
+    const ground = (x: number, z: number) => .2 * x + .1 * z
+    for (let tick = 0; tick < 300; tick++) {
+      const origin = { x: Math.sin(tick / 40), y: .2, z: tick / 30 + (tick > 180 ? 10 : 0) }
+      const foot = { x: .04, z: .08 }, key = `${Math.floor(tick / 12) % 2}`
+      if (tick % 37 === 0) expected = actual = null
+      const reference = plantFoot(expected, key, origin, foot, ground)
+      const result = plantFoot(actual, key, origin, foot, ground, output)
+      expect(result).toBe(output)
+      expect(result).toEqual(reference)
+      expected = reference.plant; actual = result.plant
+    }
   })
   it("keeps planted feet fixed in world space across body designs, sizes and carrying poses", () => {
     const designs = [...WALKING_DESIGNS,
@@ -117,7 +188,7 @@ describe("walking at the rendered person's scale", () => {
       const body = personRecipe(design).body
       const stride = personWalkStride(design) * scale
       const rigToWorld = PERSON_SPRITE_SCALE * scale / BASE_PERSON.camera.viewSize
-      for (const clip of ["walk", "carrying", "procession"] as const) for (const side of ["left", "right"] as const) {
+      for (const clip of ["walk", "wearyWalk", "carrying", "procession"] as const) for (const side of ["left", "right"] as const) {
         let plantedZ: number | undefined
         for (let frame = 0; frame < 8; frame++) {
           const phase = frame / 8

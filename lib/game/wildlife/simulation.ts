@@ -1,3 +1,7 @@
+import { buildingSpatialQuery } from "../building-spatial"
+import { withTerrainCornerQueries } from "../map/cliff-corners"
+import { SpatialPoints } from "../spatial-points"
+import { treeSpatialIndex } from "../trees/spatial"
 import { stepFoldSheep, type SheepFold } from "../herding"
 import { BURROW_SECONDS, burrowApproach, burrowMotion } from "./burrow-motion"
 import { RIG_TO_WORLD } from "../transport/assets"
@@ -44,6 +48,7 @@ export function createWildlife(map: GameMap, trees: readonly TreePlacement[], sc
   const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.wildlife))
   const world: WildlifeWorld = { animals: [], burrows: [], habitat: wildlifeHabitat(map, trees), trees, rng, treeDisturbances: new Map(),
     canopy: trees.reduce((height, tree) => Math.max(height, treePerch(tree).y), 2) + 0.8 }
+  const nearbyBuildings = buildingSpatialQuery(map.buildings, Math.max(3, .2 * scale + .25))
   let group = 0
   const candidates = new Map<WildlifeKind, Point[]>()
   function add(kind: WildlifeKind, at: Point, leader: number, perch: number | null = null) {
@@ -63,7 +68,7 @@ export function createWildlife(map: GameMap, trees: readonly TreePlacement[], sc
       sites = []
       for (let z = 1; z < map.depth - 1; z++) for (let x = 1; x < map.width - 1; x++) {
         const at = { x: tileToWorldX(map, x), z: tileToWorldZ(map, z) }
-        if (habitatAllows(world.habitat, kind, at, map, 0.2 * scale)) sites.push(at)
+        if (habitatAllows(world.habitat, kind, at, map, 0.2 * scale, undefined, nearbyBuildings)) sites.push(at)
       }
       candidates.set(kind, sites)
     }
@@ -77,7 +82,7 @@ export function createWildlife(map: GameMap, trees: readonly TreePlacement[], sc
         const angle = rng() * Math.PI * 2, radius = social ? (0.9 + rng() * 2.2) * scale : 0.45 * scale + rng() * 1.1
         const at = { x: home.x + Math.sin(angle) * radius, z: home.z + Math.cos(angle) * radius }
         if (spots.some(p => Math.hypot(p.x - at.x, p.z - at.z) < (social ? 0.85 : 0.45) * scale)) continue
-        if (wildlifeSegmentClear(world.habitat, kind, home, at, map, 0.2 * scale)) spots.push(at)
+        if (wildlifeSegmentClear(world.habitat, kind, home, at, map, 0.2 * scale, nearbyBuildings)) spots.push(at)
       }
       if (spots.length !== count) continue
       const leader = world.animals.length
@@ -132,9 +137,13 @@ export function launchBird(world: WildlifeWorld, animal: WildlifeAnimal, map: Ga
     z: Math.max(-map.depth / 2 + 1, Math.min(map.depth / 2 - 1, animal.z + (world.rng() - 0.5) * 14)),
     y: world.canopy + (hawk ? 3 : 0.5),
   }
+  const midX = (animal.x + to.x) / 2, midZ = (animal.z + to.z) / 2
+  const reach = Math.hypot(to.x - animal.x, to.z - animal.z) / 2 + 1
+  let height = Math.max(animal.y, to.y)
+  treeSpatialIndex(world.trees).forEachWithin(midX, midZ, reach, tree => { height = Math.max(height, treePerch(tree).y) })
   animal.flight = { from: { x: animal.x, y: animal.y, z: animal.z }, to, elapsed: 0,
     duration: (hawk ? 14 : 3) + Math.hypot(to.x - animal.x, to.z - animal.z) / (hawk ? 1.2 : 2.2),
-    height: Math.max(animal.y, to.y, ...world.trees.filter(tree => Math.hypot(tree.x - (animal.x + to.x) / 2, tree.z - (animal.z + to.z) / 2) < Math.hypot(to.x - animal.x, to.z - animal.z) / 2 + 1).map(tree => treePerch(tree).y)) + (hawk ? 2 : 0.5), perch, sheltered }
+    height: height + (hawk ? 2 : 0.5), perch, sheltered }
   animal.perch = null; animal.rest = 0; animal.moving = true; animal.concealed = false; animal.reserve = false
 }
 
@@ -172,10 +181,14 @@ export function startleWildlife(world: WildlifeWorld, tree: TreePlacement, map: 
   disturbance.flushed ||= flushed
 }
 
-export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, scale = 1, felled: ReadonlySet<number> = new Set(), people: readonly Point[] = [], edits: Record<string, AnimalRigEdits> = {}) {
+export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, scale = 1, felled: ReadonlySet<number> = new Set(), people: readonly Point[] = [], edits: Record<string, AnimalRigEdits> = {}, peopleSnapshot?: SpatialPoints<Point>, animalSnapshot?: SpatialPoints<WildlifeAnimal>) {
+  return withTerrainCornerQueries(map, () => {
   if (dt <= 0) return
   dt = Math.min(dt, 0.1)
   const { rng, habitat } = world
+  const nearbyBuildings = buildingSpatialQuery(map.buildings, Math.max(3, .2 * scale + .25))
+  const nearbyPeople = peopleSnapshot ?? new SpatialPoints(people)
+  const nearbyAnimals = animalSnapshot ?? new SpatialPoints(world.animals.filter(animal => !isBird(animal.kind)))
   for (const animal of world.animals) {
     if (animal.reserve) continue
     animal.distance = 0; animal.age += dt; animal.frightened = Math.max(0, animal.frightened - dt)
@@ -215,12 +228,13 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
       }
       continue
     }
+    const beforeX = animal.x, beforeZ = animal.z
     const burrow = animal.burrow === null ? null : world.burrows[animal.burrow]
     if (burrow && (animal.burrowState === "inside" || animal.burrowState === "entering" || animal.burrowState === "emerging")) {
       animal.moving = false; animal.speed = 0; animal.drive = 0; animal.grazing = 0; animal.action = "burrow"
       if (animal.burrowState === "inside") {
         animal.rest -= dt
-        if (animal.rest <= 0 && !world.animals.some(other => other !== animal && other.burrow === animal.burrow && ["entering", "emerging"].includes(other.burrowState)) && !people.some(person => Math.hypot(person.x - burrow.x, person.z - burrow.z) < 3)) {
+        if (animal.rest <= 0 && !world.animals.some(other => other !== animal && other.burrow === animal.burrow && ["entering", "emerging"].includes(other.burrowState)) && !nearbyPeople.firstWithin(burrow.x, burrow.z, 3)) {
           animal.burrowState = "emerging"; animal.concealed = false; animal.heading = burrow.heading
         }
       } else {
@@ -229,6 +243,7 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
         const pose=burrowMotion(animal.shelter,entering),size=RIG_TO_WORLD*scale
         animal.x = burrow.x + Math.sin(burrow.heading) * pose.z * size
         animal.z = burrow.z + Math.cos(burrow.heading) * pose.z * size
+        nearbyAnimals.relocate(animal, beforeX, beforeZ)
         animal.heading = burrow.heading + pose.heading
         if (animal.shelter === 1) { animal.burrowState = "inside"; animal.concealed = true; animal.rest = 12 + rng() * 26 }
         if (animal.shelter === 0) { animal.burrowState = "outside"; animal.rest = 2 + rng() * 4; animal.outsideTime = 0; animal.action = "idle"; animal.actionAge = 0 }
@@ -238,11 +253,11 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
     animal.actionAge += dt * (edits[animal.kind]?.clips[animal.action]?.cadence ?? 1); animal.outsideTime += dt
     const originalLeader = world.animals[animal.leader]
     const leader = originalLeader.fold?.route.length || originalLeader.fold?.arrived ? animal : originalLeader, domestic = isDomestic(animal.kind)
-    const threat = domestic ? undefined : people.find(p => Math.hypot(p.x - animal.x, p.z - animal.z) < 2.5)
+    const threat = domestic ? undefined : nearbyPeople.firstWithin(animal.x, animal.z, 2.5)
     if (threat) { animal.frightened = 3; animal.rest = 0 }
     if (burrow && animal.burrowState === "outside" && (animal.outsideTime > 35 || animal.frightened > 0)
-      && wildlifeSegmentClear(habitat, animal.kind, animal, burrowApproach(burrow,scale), map, 0.2 * scale)
-      && wildlifeSegmentClear(habitat, animal.kind, burrowApproach(burrow,scale), burrow, map, 0.2 * scale)) {
+      && wildlifeSegmentClear(habitat, animal.kind, animal, burrowApproach(burrow,scale), map, 0.2 * scale, nearbyBuildings)
+      && wildlifeSegmentClear(habitat, animal.kind, burrowApproach(burrow,scale), burrow, map, 0.2 * scale, nearbyBuildings)) {
       animal.burrowState = "returning"; animal.target = burrowApproach(burrow,scale); animal.rest = 0
     }
     const separation = Math.hypot(animal.x - leader.x, animal.z - leader.z)
@@ -258,7 +273,7 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
       if (animal.regrouping && separation < 3 * scale) animal.regrouping = false
       if (animal.regrouping) animal.rest = 0
     }
-    if (!habitatAllows(habitat, animal.kind, animal, map, 0.2 * scale)) { animal.rest = 0; animal.target = null }
+    if (!habitatAllows(habitat, animal.kind, animal, map, 0.2 * scale, undefined, nearbyBuildings)) { animal.rest = 0; animal.target = null }
     animal.rest -= dt
     const settle = animal.rest > 1.6 && !animal.target && !animal.frightened
     const lieTarget = settle && animal.action === "lie" ? 1 : 0
@@ -291,11 +306,10 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
         if (follower && !exploring && !threat && Math.hypot(target.x - leader.x, target.z - leader.z) > 3.8 * scale) continue
         // Herds migrate through suitable habitat; only den-bound/solitary animals keep a fixed home range.
         if (!herd && Math.hypot(target.x - animal.home.x, target.z - animal.home.z) > (burrow ? 3 : 10)) continue
-        if (herd && world.animals.some(other => other !== animal && !other.concealed && !isBird(other.kind)
-          && Math.hypot(other.x - target.x, other.z - target.z) < 0.85 * scale)) continue
-        if (!domestic && people.some(p => Math.hypot(p.x - target.x, p.z - target.z) < 2.5)) continue
-        if (!habitatAllows(habitat, animal.kind, target, map, 0.2 * scale)) continue
-        if (!wildlifeSegmentClear(habitat, animal.kind, animal, target, map, 0.2 * scale)) continue
+        if (herd && nearbyAnimals.firstWithin(target.x, target.z, .85 * scale, other => other !== animal && !other.concealed)) continue
+        if (!domestic && nearbyPeople.firstWithin(target.x, target.z, 2.5)) continue
+        if (!habitatAllows(habitat, animal.kind, target, map, 0.2 * scale, undefined, nearbyBuildings)) continue
+        if (!wildlifeSegmentClear(habitat, animal.kind, animal, target, map, 0.2 * scale, nearbyBuildings)) continue
         animal.target = target; break
       }
       if (!animal.target) { animal.rest = 1; animal.moving = false; continue }
@@ -309,6 +323,7 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
         animal.moving=false;animal.speed=0;animal.drive=approach(animal.drive,0,3);animal.grazing=approach(animal.grazing,0,2)
         if(Math.abs(turn)>.01 || world.animals.some(other=>other!==animal&&other.burrow===animal.burrow&&["entering","emerging"].includes(other.burrowState)))continue
         animal.x=target.x;animal.z=target.z
+        nearbyAnimals.relocate(animal, beforeX, beforeZ)
       }
       animal.target = null; animal.moving = false; animal.speed = 0
       animal.rest = restDuration(animal.kind, rng()); animal.actionAge = 0
@@ -321,10 +336,10 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
     animal.drive = Math.min(1, animal.speed / maxSpeed)
     const step = Math.min(distance, animal.speed * dt)
     const next = { x: animal.x + dx / distance * step, z: animal.z + dz / distance * step }
-    if (!wildlifeSegmentClear(habitat, animal.kind, animal, next, map, 0.2 * scale)) { animal.target = null; animal.rest = 0.5; animal.moving = false; continue }
-    if (world.animals.some(other => other !== animal && !other.concealed && !isBird(other.kind) && !(burrow && other.burrow === animal.burrow)
-      && Math.hypot(other.x - next.x, other.z - next.z) < (herd ? 0.6 : 0.32) * scale
-      && Math.hypot(other.x - next.x, other.z - next.z) < Math.hypot(other.x - animal.x, other.z - animal.z))) {
+    if (!wildlifeSegmentClear(habitat, animal.kind, animal, next, map, 0.2 * scale, nearbyBuildings)) { animal.target = null; animal.rest = 0.5; animal.moving = false; continue }
+    if (nearbyAnimals.firstWithin(next.x, next.z, (herd ? .6 : .32) * scale,
+      other => other !== animal && !other.concealed && !(burrow && other.burrow === animal.burrow)
+        && Math.hypot(other.x - next.x, other.z - next.z) < Math.hypot(other.x - animal.x, other.z - animal.z))) {
       animal.target = null; animal.rest = 0.5; animal.moving = false; continue
     }
     const heading = Math.atan2(dx, dz), turn = Math.atan2(Math.sin(heading - animal.heading), Math.cos(heading - animal.heading))
@@ -332,7 +347,9 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
     // Face the next stretch before accelerating along it.
     if (Math.abs(turn) > 0.45) { animal.speed = 0; animal.drive = approach(animal.drive, 0, 3); animal.moving = false; continue }
     animal.x = next.x; animal.z = next.z; animal.y = walkingSurface(map, animal.x, animal.z).height
+    nearbyAnimals.relocate(animal, beforeX, beforeZ)
     animal.distance = step; animal.moving = true
     animal.phase = (animal.phase + step / (gaitStride(animal.kind, animal.gait, scale) * Math.max(0.05, animal.drive))) % 1
   }
+  })
 }

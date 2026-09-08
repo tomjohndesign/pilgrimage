@@ -82,6 +82,17 @@ export function SettlementPanel({
         {economy.visits} visits · {economy.residents.length - monks.length} settlers · {Math.max(0, jobBuildings(map)
           .reduce((jobs, b) => jobs + BUILDING_KINDS[b.kind].jobs, 0) - (economy.residents.length - monks.length))} open jobs
       </p>
+      <div className="my-3 grid grid-cols-2 gap-2" aria-label="Enclave housing">
+        {(["people", "monks"] as const).map(kind => {
+          const housing = economy.housing![kind]
+          return <div key={kind} className="rounded border border-rule bg-parchment-dark px-2 py-1.5">
+            <div className="text-[11px] capitalize text-ink-light">{kind}</div>
+            <div className="font-display text-lg tabular-nums">{housing.occupied} / {housing.capacity}</div>
+            <div className="text-[10px] text-ink-light">{housing.available} spaces available</div>
+          </div>
+        })}
+      </div>
+      <p className="mb-3 text-[11px] text-ink-light">Complete houses for settlers and shelters for monks. Visiting monks may join the brotherhood when a bed is free.</p>
       <details>
         <summary className="cursor-pointer text-xs">
           <span className="font-display">{renown.total} renown</span> · {tier.label}

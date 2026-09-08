@@ -189,7 +189,7 @@ describe("tuned gameplay", () => {
     expect(paid.resources.gold - existing.resources.gold).toBe(0)
     expect(paid.resources.wood - existing.resources.wood).toBe(0)
     expect(existing).toEqual(before)
-    expect(buildingIncomeLabel(buildCatalog(balance)[0], balance)).toBe("No resource income")
+    expect(buildingIncomeLabel(buildCatalog(balance).find(b => b.id === "shelter")!, balance)).toBe("Adds monk housing when complete")
   })
   it("applies the tuned influence radius across the full footprint", () => {
     const balance = fresh()

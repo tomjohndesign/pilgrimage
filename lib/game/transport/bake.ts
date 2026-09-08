@@ -97,8 +97,8 @@ export async function bakeTransport() {
     if (safePadding < 4) throw new Error(`Transport exceeds its safe frame (${safePadding}px).`)
     // A new carrying pose uses the unmodified population rig, camera and foot contacts.
     const designs = Array.from({ length: 6 }, (_, i) => pullingDesign(i))
-    for (const clip of ["idle", "walk"] as const) {
-      const frames = clip === "walk" ? PERSON_CLIPS.walk.frames : 1
+    for (const clip of ["idle", "walk", "wearyWalk"] as const) {
+      const frames = PERSON_CLIPS[clip].frames
       const sheet = canvas(BASE_PERSON.cellSize * frames, BASE_PERSON.cellSize * 8 * designs.length)
       for (const [variant, design] of designs.entries()) for (let f = 0; f < frames; f++) {
         const preview = renderPersonPreview(design, clip, f, false)

@@ -1,3 +1,4 @@
+import { buildingSpatialQuery } from "../building-spatial"
 import { buildingYaw, rotateBuildingPoint, rotatedFootprint } from "../building-rotation"
 import { marketLayout, marketYardContains } from "../market-layout"
 import type { TreePlacement } from "../trees/placement"
@@ -116,15 +117,19 @@ function overlaps(a: StallObstacle, b: StallObstacle, clearance = .12) {
  * during a large simulation step. A market's reserved open yard is outside. */
 export function convoyBuildingsClear(map: GameMap, pose: CartPose, puller: Puller, scale: number, animalHeading = pose.heading): boolean {
   const bounds = convoyBounds(pose, puller, scale, animalHeading)
-  return map.buildings.every(building => {
+  // Query a padded cell for each rigid body, then retain the exact oriented
+  // overlap test. A long cart can touch a building outside its hitch's cell.
+  const padding = Math.ceil(Math.max(0, ...bounds.map(body => Math.hypot(body.halfWidth, body.halfLength))))
+  const nearby = buildingSpatialQuery(map.buildings, padding)
+  return bounds.every(body => nearby({ x: body.x + (map.width - 1) / 2, z: body.z + (map.depth - 1) / 2 }).every(building => {
     const size = rotatedFootprint(building, building.rotation)
     const market = building.buildType === "market" ? marketLayout(size.w, size.d) : null
     const offset = rotateBuildingPoint(0, market?.stallZ ?? 0, building.rotation)
     const box = { x: tileToWorldX(map, building.x) + (building.w - 1) / 2 + offset.x,
       z: tileToWorldZ(map, building.z) + (building.d - 1) / 2 + offset.z,
       heading: buildingYaw(building.rotation), halfWidth: size.w / 2, halfLength: (market?.stallDepth ?? size.d) / 2 }
-    return bounds.every(body => !overlaps(body, box, 0))
-  })
+    return !overlaps(body, box, 0)
+  }))
 }
 
 /** Account for actual trunks, reserved transport, stalls and people as well as terrain. */

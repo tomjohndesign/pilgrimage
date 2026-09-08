@@ -5,6 +5,7 @@ import { addSurfaceLighting } from "@/lib/game/render/lighting"
 import Image from "next/image"
 import { useEffect, useState } from "react"
 import * as THREE from "three"
+import { GRASS_TEXTURE_URL } from "@/lib/game/render/ground-surface"
 import { BUILD_CATALOG, type BuildId } from "@/lib/game/balance"
 import { structureParts } from "@/lib/game/building-art/structure"
 import { batchDetails } from "@/components/building-lab/building-model"
@@ -21,7 +22,7 @@ async function buildThumbnails() {
     fallback.needsUpdate = true
     return fallback
   }))
-  const [dirt, grass] = await Promise.all([load(BUILDING_DIRT_TEXTURE, [164,147,114,255]), load("/textures/grass.png", [148,161,88,255])])
+  const [dirt, grass] = await Promise.all([load(BUILDING_DIRT_TEXTURE, [164,147,114,255]), load(GRASS_TEXTURE_URL, [148,161,88,255])])
   const images: Partial<Record<BuildId, string>> = {}
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false })
   renderer.setSize(54, 49)

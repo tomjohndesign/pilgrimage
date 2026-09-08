@@ -3,6 +3,7 @@
 import { simRegistry } from "@/lib/game/sim"
 import { shrineLayout, shrineStations } from "@/lib/game/shrine-layout"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
+import { monkBeds } from "@/lib/game/housing"
 import { recordWalkingPath } from "@/lib/game/footpaths"
 import { PietyEffects } from "./admission-effects"
 import { PixelCharacters } from "@/components/pixel-canvas"
@@ -25,7 +26,7 @@ import * as THREE from "three"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { markPerson, selectElement } from "@/lib/game/selection"
-import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
+import { CharacterHitTarget, CharacterSelectionOutline } from "./character-selection"
 import type { GameMap } from "@/lib/game/map/types"
 import { monkStaminaRegistry, monkRegistry, monkPositionRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { createMonkFlight, monkGroundTime, recallMonkFlight, stepMonkFlight, type MonkFlight } from "@/lib/game/monk-flight"
@@ -89,7 +90,25 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
     const activities = new Map<number, MonkActivity>()
     return { stamina: new Map<number, number>(), spots, centre, rng, flightRng, pick, states, activities, wander,
       procession: createRelicProcession(), grounds: processionGrounds(map, wander) }
-  }, [map.road, monks])
+  }, [map.road])
+  const beds = monkBeds(map)
+  for (let index = world.states.length; index < monks.length && world.spots.length; index++) {
+    const monk = monks[index]
+    const routine = createMonkRoutine(world.wander, index, world.rng)
+    if (keeperStation && routine.prayerSpot && world.centre) {
+      const lateral = (routine.prayerSpot.x - world.centre.x) * Math.cos(keeperStation.heading)
+        - (routine.prayerSpot.z - world.centre.z) * Math.sin(keeperStation.heading)
+      if (Math.abs(lateral) < .25) routine.prayerSpot = undefined
+    }
+    world.states.push({ ...routine, ...createMonkNeeds(index),
+      ...monk.arrival, piety: monk.attributes.piety, flightWait: 8,
+      destination: "home", pause: 0 })
+  }
+  for (let index = 0; index < world.states.length; index++) {
+    const monk = monks[index], bed = monk.home ? { home: monk.home, slot: monk.bedSlot ?? 0 } : beds[index]
+    world.states[index].home = bed?.home
+    world.states[index].bedSlot = bed?.slot
+  }
   const navigation = useMemo(() => monkWander(map), [map])
   world.pick = () => navigation.spots[Math.floor(world.rng() * navigation.spots.length)]
   world.wander = navigation
@@ -134,6 +153,10 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         useRelicProcessionStore.setState({ available: false, monkId: null, stage: "idle", returnRequested: false })
       }
     }
+  }, [world])
+
+  useEffect(() => {
+    for (const [index, monk] of monks.entries()) monkPositionRegistry.current?.set(monk.id, world.states[index])
   }, [world, monks])
 
   useFrame((_, delta) => {
@@ -337,7 +360,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
                 walkTuning={MONK_WALK_TUNING} />
             </Suspense>
             <CharacterHitTarget onClick={select} />
-            {selected && <CharacterSelectionShadow map={map} flying={airborneIds.has(monk.id)} />}
+            {selected && <CharacterSelectionOutline flying={airborneIds.has(monk.id)} />}
           </group>
         )
       })}

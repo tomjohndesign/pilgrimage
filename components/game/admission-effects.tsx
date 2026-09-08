@@ -4,7 +4,8 @@ import { useEffect, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 import { createAdmissionAudio } from "@/lib/game/admission-audio"
-import { createPaymentFloaters } from "@/lib/game/render/payment-floaters"
+import { sceneryDetail } from "@/lib/game/render/scenery-detail"
+import { createPaymentFloaters, PAYMENT_LIFETIME } from "@/lib/game/render/payment-floaters"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import type { RelicProcession } from "@/lib/game/relic-procession"
 import type { SimState } from "@/lib/game/sim"
@@ -43,9 +44,16 @@ function FloatingEffects({ source, characterScale }: { source: SimState | RelicP
     }
   }, [source, piety])
 
-  useFrame((_, delta) => {
+  useFrame(({ scene }, delta) => {
     const live = state.current
-    if (!live) return
+    if (!live || !group.current) return
+    if (sceneryDetail(scene) > 0) {
+      if (group.current.visible) live.floaters.step(PAYMENT_LIFETIME)
+      group.current.visible = false
+      live.seen = "blessings" in source ? source.blessingSequence : source.admissionSequence
+      return
+    }
+    group.current.visible = true
     const playback = useSimulationStore.getState()
     const dt = playback.paused ? 0 : Math.min(delta, 0.1) * playback.speed
     live.floaters.step(dt)

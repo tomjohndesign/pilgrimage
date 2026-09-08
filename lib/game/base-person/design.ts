@@ -29,7 +29,7 @@ export type DesignKey = keyof typeof DESIGN_CONTROLS
 export const HAIR_STYLES = ["Bald", "Cropped", "Bob", "Long", "Tonsure", "Wavy", "Ponytail", "Braids", "Bun"] as const
 export const HAT_STYLES = ["None", "Coif", "Wool cap", "Cloth cap"] as const
 export const HAND_TOOLS = ["None", "Shepherd crook", "Carried axe"] as const
-export const TUNIC_STYLES = ["Plain", "Particolour"] as const
+export const TUNIC_STYLES = ["Plain", "Particolour", "Ragged"] as const
 export type PersonDesign = Record<DesignKey, number> & {
   poseEdits?: PoseEdits
   handTool: typeof HAND_TOOLS[number]
@@ -61,6 +61,7 @@ export const PERSON_PRESETS: Record<string, PersonDesign> = {
     trouserColor: "#6b4932", hairStyle: "Tonsure", sleeves: 1.15, hem: 1.1,
     feet: 0.75, footWidth: 0.7, stride: 0.75, armSwing: 0, walkStyle: "Devotional" },
   Minstrel: { ...DEFAULT_DESIGN, tunicColor: "#7b4969", accentColor: "#d6b57b", tunicStyle: "Plain", hat: "Cloth cap", lute: true, hairStyle: "Wavy", hem: 1.15, tunicLength: 1.15 },
+  Beggar: { ...DEFAULT_DESIGN, tunicStyle: "Ragged", tunicColor: "#786c58", accentColor: "#a49476", shirtColor: "#958a74", trouserColor: "#635a4b", beltStyle: "Rope", footwear: "Sandals", hairStyle: "Wavy", beard: true },
   Traveler: { ...DEFAULT_DESIGN, hat: "Wool cap", satchel: true, walkingStick: true, hairStyle: "Ponytail" },
   Stout: { ...DEFAULT_DESIGN, build: 1.2, tunicColor: "#866044", hairStyle: "Cropped", beard: true },
   Lanky: { ...DEFAULT_DESIGN, build: 0.85, legs: 1.15, head: 1, feet: 1.1, tunicColor: "#657b50", hairStyle: "Bob" },

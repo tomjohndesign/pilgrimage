@@ -5,12 +5,12 @@ import type { Activity } from "../sim"
 import { BASE_PERSON, PERSON_CLIPS, type BaseClip } from "./pose"
 
 /** Visuals follow simulation state; freezing playback does not change the pose. */
-export function activityClip(activity: Activity | MonkActivity | undefined, moving: boolean, carrying = 0): BaseClip {
+export function activityClip(activity: Activity | MonkActivity | undefined, moving: boolean, carrying = 0, weary = false): BaseClip {
   if (activity === "praying") return "praying"
   if (activity === "hoisting") return "hoisting"
   if (activity === "procession") return "procession"
   if (carrying > 0) return "carrying"
-  if (moving) return "walk"
+  if (moving) return weary ? "wearyWalk" : "walk"
   switch (activity) {
     case "showingRelic":
     case "preaching": return "preaching"
@@ -18,6 +18,7 @@ export function activityClip(activity: Activity | MonkActivity | undefined, movi
     case "sleeping":
     case "camping": return "sleeping"
     case "idle":
+    case "begging":
     case "sitting":
       return "sitting"
     case "visiting": return "praying"

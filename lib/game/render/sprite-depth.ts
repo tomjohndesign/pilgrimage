@@ -37,7 +37,7 @@ export function configureSpriteDepthTexture(texture: THREE.Texture) {
  */
 export function applySpriteDepth(shader: Parameters<THREE.Material["onBeforeCompile"]>[0], viewport: THREE.Vector4, worldTexel = { value: 0 },
   groundPlane = { value: { x: 0, y: 0, z: 0, w: 0 } }, pose?: SpritePoseDepth,
-  instance?: { anchor: string; size: string; ground: string }) {
+  instance?: { anchor: string; size: string; ground: string; viewAnchor?: string }) {
   shader.uniforms.spriteWorldTexel = worldTexel
   shader.uniforms.spriteViewport = { value: viewport }
   shader.uniforms.spriteGroundPlane = groundPlane
@@ -46,7 +46,7 @@ export function applySpriteDepth(shader: Parameters<THREE.Material["onBeforeComp
   shader.vertexShader = "flat varying vec2 vSpritePoseDepth;\n" + shader.vertexShader
   shader.vertexShader = "flat varying vec4 vSpritePlanes;\nflat varying float vSpriteGroundX;\nuniform float spriteWorldTexel;\nuniform vec4 spriteGroundPlane;\n" + shader.vertexShader.replace(
     "#include <fog_vertex>", `#include <fog_vertex>
-    vec4 anchor = projectionMatrix * ${instance ? `viewMatrix * ${instance.anchor}` : "modelViewMatrix[3]"};
+    vec4 anchor = projectionMatrix * ${instance?.viewAnchor ?? (instance ? `viewMatrix * ${instance.anchor}` : "modelViewMatrix[3]")};
     float anchorY = anchor.y * 0.5 + 0.5;
     float depthScale = abs(projectionMatrix[2][2]) * 0.5;
     float anchorDepth = anchor.z * 0.5 + 0.5 - 0.005 * depthScale;

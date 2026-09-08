@@ -13,6 +13,7 @@ export const WALK_FRAMES_PER_STRIDE = 20
 export const PERSON_CLIPS = {
   idle: { label: "Idle", frames: 1 },
   walk: { label: "Walking", frames: WALK_FRAMES_PER_STRIDE * WALK_CLIP_STRIDES },
+  wearyWalk: { label: "Weary walking", frames: WALK_FRAMES_PER_STRIDE * WALK_CLIP_STRIDES },
   sleeping: { label: "Sleeping", frames: 16 },
   sitting: { label: "Sitting", frames: 8 },
   seatedPrayer: { label: "Seated prayer", frames: 8 },
@@ -27,7 +28,7 @@ export const PERSON_CLIPS = {
   procession: { label: "Carrying overhead", frames: 20 },
 } as const
 export type BaseClip = keyof typeof PERSON_CLIPS
-export const ACTION_CLIPS = ["sleeping", "sitting", "seatedPrayer", "praying", "treeFelling", "woodcutting", "building", "gathering", "carrying", "hoisting", "procession", "preaching"] as const
+export const ACTION_CLIPS = ["wearyWalk", "sleeping", "sitting", "seatedPrayer", "praying", "treeFelling", "woodcutting", "building", "gathering", "carrying", "hoisting", "procession", "preaching"] as const
 export type ActionClip = typeof ACTION_CLIPS[number]
 
 export function choppingHipDrop(clip: BaseClip, phase = 0, hipHeight = BASE_PERSON.body.hipHeight) {
@@ -59,7 +60,7 @@ export function walkFoot(side: BodySide, phase: number, b = BASE_PERSON.body, st
 
 /** Small opposing hip/chest turns, with one soft head bounce per footfall. */
 export function walkBody(phase: number, clip: BaseClip) {
-  const moving = clip === "walk" || clip === "carrying" || clip === "procession"
+  const moving = clip === "walk" || clip === "wearyWalk" || clip === "carrying" || clip === "procession"
   const cycle = ((phase % 1 + 1) % 1) * Math.PI * 2
   const hipYaw = moving ? -Math.cos(cycle) * 0.065 : 0
   return { hipYaw, chestYaw: -hipYaw * 0.75,
@@ -83,7 +84,7 @@ export function pelvisHeight(phase: number, clip: BaseClip, b = BASE_PERSON.body
   // Eight degrees of resting knee flexion: upright, without locking the joint.
   const reachSquared = b.thighLength ** 2 + b.shinLength ** 2
     + 2 * b.thighLength * b.shinLength * Math.cos(8 * Math.PI / 180)
-  if (clip !== "walk" && clip !== "carrying" && clip !== "procession") return b.ankleHeight + Math.sqrt(reachSquared)
+  if (clip !== "walk" && clip !== "wearyWalk" && clip !== "carrying" && clip !== "procession") return b.ankleHeight + Math.sqrt(reachSquared)
   // One pelvis for both legs. Its height follows the most extended leg and
   // falls slightly in double support; it never stretches either leg to reach.
   return Math.min(...(["left", "right"] as const).map(side => {
@@ -128,7 +129,7 @@ export function legPose(side: BodySide, phase: number, clip: BaseClip, b = BASE_
     const knee = hip.map((v, i) => v + axis[i] * along + bend[i] / bendLength * height) as Point3
     return { hip, knee, ankle, planted: true }
   }
-  const walking = clip === "walk" || clip === "carrying" || clip === "procession"
+  const walking = clip === "walk" || clip === "wearyWalk" || clip === "carrying" || clip === "procession"
   const x = (side === "left" ? 1 : -1) * b.legOffset
   const target = walkFoot(side, phase, b)
   const planted = !walking || target.planted
@@ -150,7 +151,7 @@ export function legPose(side: BodySide, phase: number, clip: BaseClip, b = BASE_
 }
 
 export function armAngle(side: BodySide, phase: number, clip: BaseClip) {
-  return clip !== "walk" ? 0 : Math.cos(phase * Math.PI * 2) * 0.36 * (side === "left" ? 1 : -1)
+  return (clip !== "walk" && clip !== "wearyWalk") ? 0 : Math.cos(phase * Math.PI * 2) * (clip === "wearyWalk" ? 0.12 : 0.36) * (side === "left" ? 1 : -1)
 }
 
 export function baseFrame(phase: number) {

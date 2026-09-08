@@ -2,7 +2,7 @@ import * as THREE from "three"
 import type { BuildingPart } from "./geometry"
 import { DEFAULT_ROAD_LOOK, ROAD_TIERS } from "../map/road"
 
-import { GROUND_SURFACE_GLSL, GRASS_UV_SCALE, ROAD_UV_SCALE } from "../render/ground-surface"
+import { GROUND_SURFACE_GLSL, ROAD_UV_SCALE } from "../render/ground-surface"
 import { DIRT_FLOOR_OVERLAP } from "./dirt-floor"
 
 export const BUILDING_DIRT_TEXTURE = ROAD_TIERS[0].textureUrl
@@ -10,7 +10,8 @@ export const BUILDING_DIRT_TEXTURE = ROAD_TIERS[0].textureUrl
 export function configureBuildingDirt(texture: THREE.Texture) {
   texture.colorSpace = THREE.SRGBColorSpace
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping
-  texture.anisotropy = 4
+  texture.magFilter = THREE.NearestFilter
+  texture.minFilter = THREE.NearestMipmapLinearFilter
   return texture
 }
 
@@ -32,6 +33,9 @@ export function dirtFloorMaterial(part: BuildingPart, trail: THREE.Texture, gras
   material.onBeforeCompile = shader => {
     shader.uniforms.trailMap = { value: trail }
     shader.uniforms.grassMap = { value: grass }
+    shader.uniforms.swardField = { value: null }
+    shader.uniforms.swardFieldSize = { value: new THREE.Vector2() }
+    shader.uniforms.swardFieldOrigin = { value: new THREE.Vector2() }
     shader.uniforms.floorHalfSize = { value: new THREE.Vector2(part.size![0]/2, part.size![2]/2) }
     shader.vertexShader = shader.vertexShader.replace("#include <common>", "varying vec2 vFloorLocal; varying vec2 vFloorWorld;\n#include <common>")
       .replace("#include <project_vertex>", `#include <project_vertex>
@@ -53,10 +57,10 @@ export function dirtFloorMaterial(part: BuildingPart, trail: THREE.Texture, gras
         float aa = max(fwidth(d), .001);
         diffuseColor.a *= 1.0-smoothstep(edge-aa*.5,edge+aa*.5,d);
         vec4 dirt = sampleTiled(trailMap, vFloorWorld * ${ROAD_UV_SCALE}, vFloorWorld);
-        vec3 sward = sampleTiled(grassMap, vFloorWorld * ${GRASS_UV_SCALE}, vFloorWorld).rgb;
+        vec3 sward = sampleSward(grassMap, vFloorWorld);
         diffuseColor.rgb *= mix(sward, roadSurfaceColor(dirt, ${DEFAULT_ROAD_LOOK.shade.toFixed(1)}, vec4(0.0), vec3(1.0)), dirt.a * ${DEFAULT_ROAD_LOOK.opacity.toFixed(1)});
       `)
   }
-  material.customProgramCacheKey = () => "building-trail-preview"
+  material.customProgramCacheKey = () => "building-trail-preview-growth-v2"
   return material
 }

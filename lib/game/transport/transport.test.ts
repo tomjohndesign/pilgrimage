@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import sharp from "sharp"
 import * as THREE from "three"
-import manifest from "../../../public/textures/transport/v23/manifest.json"
+import manifest from "../../../public/textures/transport/v25/manifest.json"
 import { BASE_PERSON, PERSON_CLIPS, WALK_CLIP_STRIDES, legPose } from "../base-person/pose"
 import { personRecipe } from "../base-person/design"
 import { personWalkStride } from "../base-person/gait"
@@ -20,7 +20,12 @@ describe("transport sheet contract", () => {
   it("retains sleeping and other activities while replacing pulling locomotion", () => {
     for (let variant = 0; variant < 6; variant++) {
       const visual = pullingVisual(variant), regular = populationVisual("vendor", variant, null)
-      expect(visual.actions).toEqual(regular.actions)
+      const { wearyWalk, ...rest } = visual.actions
+      const { wearyWalk: regularWeary, ...regularRest } = regular.actions
+      expect(rest).toEqual(regularRest)
+      expect(wearyWalk.url).toContain("/transport/")
+      expect(wearyWalk.url).not.toBe(regularWeary?.url)
+      expect(wearyWalk.columns).toBe(PERSON_CLIPS.wearyWalk.frames)
       expect(visual.actions.sleeping?.columns).toBeGreaterThan(1)
       expect(visual.walk.url).toContain("/transport/")
       expect(visual.walkStride).toBe(regular.walkStride)
@@ -51,7 +56,7 @@ describe("transport sheet contract", () => {
       ...CARGO.flatMap(cargo => CART_MODES.map(mode => [`cart-${cargo}-${mode}`, mode === "shop" ? TRANSPORT.shopFrames : CART_COLUMNS, CART.directions, mode === "shop" ? SHOP.cellSize : CART.cellSize] as [string, number, number, number])),
       ...CARGO.map(cargo => [`cart-${cargo}-shop-mirrored`, TRANSPORT.shopFrames, CART.directions, SHOP.cellSize] as [string, number, number, number]),
       ...(["horse", "donkey"] as const).flatMap(kind => COATS[kind].flatMap(coat => [false, true].map(hitched => [`${kind}-${coat.id}${hitched ? "-hitched" : ""}`, ANIMAL_COLUMNS, kind === "horse" ? 16 : 8, TRANSPORT.cellSize] as [string, number, number, number]))),
-      ["puller-walk", manifest.puller.frames, manifest.puller.rows, manifest.puller.cellSize], ["puller-idle", 1, manifest.puller.rows, manifest.puller.cellSize],
+      ["puller-walk", manifest.puller.frames, manifest.puller.rows, manifest.puller.cellSize], ["puller-wearyWalk", PERSON_CLIPS.wearyWalk.frames, manifest.puller.rows, manifest.puller.cellSize], ["puller-idle", 1, manifest.puller.rows, manifest.puller.cellSize],
       ["merchant-setup", manifest.merchantSetupFrames, manifest.puller.rows, manifest.puller.cellSize],
       ["merchant-selling", manifest.keeperColumns, manifest.puller.rows, manifest.puller.cellSize],
       ...CARGO.map(cargo => [`cart-${cargo}-driver`, DRIVER_CLIP.variants, CART.directions, CART.cellSize] as [string, number, number, number]),
@@ -232,27 +237,16 @@ it("has solid circular wheel faces, with no spoke openings", () => {
   } finally { rig.dispose() }
 })
 
-it("keeps draught leaders with the animal through independent cart turns, removing them when unhitched", () => {
+it("omits straight side leaders from draught animals and retains hand-cart handles", () => {
   for (const kind of ["horse", "donkey"] as const) {
-    const animal = createAnimalRig(kind, "common", undefined, true), loose = createAnimalRig(kind)
+    const animal = createAnimalRig(kind, "common", undefined, true)
     const cart = createCartRig("produce", kind)
     try {
-      animal.pose(0, false); loose.pose(0, false); cart.pose(0)
-      const shafts = animal.root.getObjectByName("draught-shafts")!
-      expect(shafts).toBeDefined()
-      expect(loose.root.getObjectByName("draught-shafts")).toBeUndefined()
-      // No duplicate leaders extending beyond the cart's front footboard.
+      expect(animal.root.getObjectByName("draught-shafts")).toBeUndefined()
+      expect(animal.root.getObjectByName("left-bit")).toBeDefined()
+      expect(animal.root.getObjectByName("right-bit")).toBeDefined()
       expect(new THREE.Box3().setFromObject(cart.root).max.z).toBeLessThan(2)
-      const rear = new THREE.Vector3(0, 0.6, 0.5)
-      const start = shafts.localToWorld(rear.clone())
-      cart.root.rotation.y = Math.PI / 2
-      animal.pose(0.3, true)
-      expect(shafts.localToWorld(rear.clone()).distanceTo(start)).toBeLessThan(1e-8)
-      animal.root.rotation.y = Math.PI / 2
-      const turned = shafts.localToWorld(rear.clone())
-      expect(turned.x).toBeCloseTo(start.z, 8)
-      expect(turned.z).toBeCloseTo(-start.x, 8)
-    } finally { animal.dispose(); loose.dispose(); cart.dispose() }
+    } finally { animal.dispose(); cart.dispose() }
   }
   const hand = createCartRig("produce", "hand")
   try { expect(new THREE.Box3().setFromObject(hand.root).max.z).toBeGreaterThan(2.18) }

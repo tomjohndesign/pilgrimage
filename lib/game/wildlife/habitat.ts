@@ -3,6 +3,7 @@ import { isWoods } from "../map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "../map/types"
 import type { TreePlacement } from "../trees/placement"
 import { isDomestic, type WildlifeKind } from "./species"
+import { buildingSpatialQuery } from "../building-spatial"
 
 export interface Point { x: number; z: number }
 /** Distance fields make habitat queries constant-time even on large maps. */
@@ -31,9 +32,13 @@ export function wildlifeHabitat(map: GameMap, trees: readonly TreePlacement[]) {
 }
 export type WildlifeHabitat = ReturnType<typeof wildlifeHabitat>
 
-export function buildingDistance(map: GameMap, point: Point) {
-  let distance = Infinity
-  for (const b of map.buildings) {
+/** Optional finite clearance queries only need nearby footprints. Keep the
+ * signed distance inside buildings so animals can retreat after construction. */
+export function buildingDistance(map: GameMap, point: Point, limit = Infinity,
+  nearby?: ReturnType<typeof buildingSpatialQuery>) {
+  let distance = limit
+  const buildings = nearby ? nearby({ x: point.x + map.width / 2 - .5, z: point.z + map.depth / 2 - .5 }) : map.buildings
+  for (const b of buildings) {
     const x = tileToWorldX(map, b.x) - 0.5, z = tileToWorldZ(map, b.z) - 0.5
     const dx = Math.max(x - point.x, point.x - x - b.w), dz = Math.max(z - point.z, point.z - z - b.d)
     const signed = dx <= 0 && dz <= 0 ? Math.max(dx, dz) : Math.hypot(Math.max(0, dx), Math.max(0, dz))
@@ -43,12 +48,13 @@ export function buildingDistance(map: GameMap, point: Point) {
 }
 
 /** Wild animals use quiet open ground; foxes and boars keep to the forest margin. */
-export function habitatAllows(habitat: WildlifeHabitat, kind: WildlifeKind, point: Point, map = habitat.map, clearance = 0.18, buildingBuffer = isDomestic(kind) ? clearance + 0.25 : 3) {
+export function habitatAllows(habitat: WildlifeHabitat, kind: WildlifeKind, point: Point, map = habitat.map, clearance = 0.18, buildingBuffer = isDomestic(kind) ? clearance + 0.25 : 3,
+  nearbyBuildings?: ReturnType<typeof buildingSpatialQuery>) {
   const tx = worldToTileX(map, point.x), tz = worldToTileZ(map, point.z)
   const tile = tileAt(map, tx, tz), i = tz * map.width + tx
   if (!tile || !["grass", "clearing", "dirt", "hills"].includes(tile)) return false
   if (Math.abs(point.x) > map.width / 2 - clearance || Math.abs(point.z) > map.depth / 2 - clearance) return false
-  if (buildingDistance(map, point) < buildingBuffer - 1e-6) return false
+  if (buildingDistance(map, point, buildingBuffer, nearbyBuildings) < buildingBuffer - 1e-6) return false
   if (!isDomestic(kind) && habitat.roads[i] < 3) return false
   if ((kind === "fox" || kind === "boar") && habitat.forest[i] > 3) return false
   if ((kind === "deer" || kind === "buck") && habitat.forest[i] < 1) return false
@@ -66,16 +72,18 @@ export function habitatAllows(habitat: WildlifeHabitat, kind: WildlifeKind, poin
 }
 
 /** Sample the entire segment so two valid endpoints cannot shortcut a river or cliff. */
-export function wildlifeSegmentClear(habitat: WildlifeHabitat, kind: WildlifeKind, from: Point, to: Point, map = habitat.map, clearance = 0.18) {
+export function wildlifeSegmentClear(habitat: WildlifeHabitat, kind: WildlifeKind, from: Point, to: Point, map = habitat.map, clearance = 0.18,
+  nearbyBuildings?: ReturnType<typeof buildingSpatialQuery>) {
   const steps = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.z - from.z) / 0.12))
   let lastHeight = walkingSurface(map, from.x, from.z).height
-  let buildingBuffer = Math.min(buildingDistance(map, from), isDomestic(kind) ? clearance + 0.25 : 3)
+  const limit = isDomestic(kind) ? clearance + 0.25 : 3
+  let buildingBuffer = buildingDistance(map, from, limit, nearbyBuildings)
   for (let i = 1; i <= steps; i++) {
     const point = { x: from.x + (to.x - from.x) * i / steps, z: from.z + (to.z - from.z) * i / steps }
     // Construction can overtake an animal's quiet buffer. Allow it to walk out,
     // monotonically increasing its distance, instead of trapping it there forever.
-    if (!habitatAllows(habitat, kind, point, map, clearance, buildingBuffer)) return false
-    buildingBuffer = Math.min(buildingDistance(map, point), isDomestic(kind) ? clearance + 0.25 : 3)
+    if (!habitatAllows(habitat, kind, point, map, clearance, buildingBuffer, nearbyBuildings)) return false
+    buildingBuffer = buildingDistance(map, point, limit, nearbyBuildings)
     const height = walkingSurface(map, point.x, point.z).height
     if (Math.abs(height - lastHeight) > 0.16) return false
     lastHeight = height

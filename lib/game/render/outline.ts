@@ -4,9 +4,9 @@
  *
  * Every outline-able object (buildings, trees) renders a flat ID colour into an
  * offscreen buffer on a dedicated layer; terrain renders ID 0 there, writing
- * depth only. A screen-space pass then draws an edge where two *different,
- * non-zero* IDs meet — so an outline appears exactly where one object overlaps
- * another on screen, and never where an object just sits against grass.
+ * depth only. A screen-space pass draws an edge where different non-zero IDs
+ * meet, and where a building stands in front of terrain, keeping its back
+ * edges readable against grass.
  */
 
 /** The three.js layer that ID-coloured silhouette meshes live on. */
@@ -27,7 +27,7 @@ export const ROAD_EDGE_LAYER_MASK = 1 << ROAD_EDGE_LAYER
 
 /**
  * Rendering modes, in the order the O key cycles through them:
- *  - overlap:    outline only where an object overlaps a different object.
+ *  - overlap:    object overlaps, plus building edges against terrain.
  *  - silhouette: outline the whole silhouette, terrain boundaries included.
  *  - off:        no outlines, lighting alone separates objects.
  */
@@ -37,7 +37,7 @@ export type OutlineMode = (typeof OUTLINE_MODES)[number]
 export const DEFAULT_OUTLINE_MODE: OutlineMode = "overlap"
 
 export const OUTLINE_MODE_LABELS: Record<OutlineMode, string> = {
-  overlap: "Overlap only",
+  overlap: "Overlap + buildings",
   silhouette: "Full silhouette",
   off: "Off",
 }

@@ -1,5 +1,6 @@
 "use client"
 
+import { sceneryDetail } from "@/lib/game/render/scenery-detail"
 import { useUnitInterior } from "./use-unit-interior"
 
 import { groundHeight } from "@/lib/game/map/elevation"
@@ -30,12 +31,15 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
   const unitInterior = useUnitInterior(map)
   const relicGroup = useRef<THREE.Group>(null)
   const veilGroup = useRef<THREE.Group>(null)
-  useFrame(() => {
+  const lights = useRef<THREE.Group>(null)
+  useFrame(({ scene }) => {
+    const near = sceneryDetail(scene) === 0
+    if (lights.current) lights.current.visible = near
     const sim = simRegistry.current
     const available = !processionRegistry.current || !relicIsCarried(processionRegistry.current)
     const showing = available && sim && sim.world.road === map.road && sim.shrineKeeperReady
       && [...sim.travelers.values()].some(s => s.activity === "visiting" && s.shrineSeat?.startsWith("queue-"))
-    if (relicGroup.current) relicGroup.current.visible = !!showing
+    if (relicGroup.current) relicGroup.current.visible = near && !!showing
     if (veilGroup.current) {
       veilGroup.current.scale.y = showing ? .16 : 1
       veilGroup.current.position.y = RELIC_TABLE_TOP * (1 - veilGroup.current.scale.y)
@@ -74,7 +78,7 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
       <group rotation={[0, layout.rotation, 0]} onClick={event => selectElement({ kind: "building", id: hovel.id }, event)}>
         <StructureModel terrainFloors parts={layout.parts} cutaway={showInteriors || selected || unitInterior === hovel.id} idColor={shrineId} ink={false} />
         <group ref={veilGroup}><StructureModel parts={layout.veil} cutaway idColor={shrineId} ink={false} /></group>
-        {[-1,1].map(side => <pointLight key={side} position={[side*.73,.8,layout.altarZ+.08]} color="#ffd184" intensity={.18} distance={1.8} decay={2} />)}
+        <group ref={lights} name="shrine-lights">{[-1,1].map(side => <pointLight key={side} position={[side*.73,.8,layout.altarZ+.08]} color="#ffd184" intensity={.18} distance={1.8} decay={2} />)}</group>
       </group>
       <group ref={relicGroup} position={[layout.offset.x,0,layout.offset.z]}><RelicDisplay groundGlow={false} color={relic.color} idColor={relicId} onClick={select} /></group>
 

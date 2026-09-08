@@ -1,5 +1,9 @@
 "use client"
 
+import { monkVisual, MONK_WALK_TUNING } from "@/lib/game/base-person/monk-assets"
+import { withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
+import { isWorldVisible } from "@/lib/game/render/visibility"
+
 import { jobVisual } from "@/lib/game/jobs/assets"
 import type { SettlementJob } from "@/lib/game/jobs/design"
 import { GREY_HAIR_AGE, GREY_HAIR_COLOR } from "@/lib/game/character-age"
@@ -51,10 +55,22 @@ export function TravelerFigure({ map, age, job, type, onClick, idColor, selected
   const followingRoad = useRef(false)
   const lastAnimal = useRef<{ x: number; z: number; hitched: boolean } | null>(null)
   const lastDriver = useRef<{ x: number; z: number; deployed: boolean } | null>(null)
-  useFrame(() => {
+  useFrame(({ clock }) => withTerrainCornerQueries(map, () => {
     const group = driver.current, parent = group?.parent
-    if (!group || !parent) return
+    if (!group || !parent || !isWorldVisible(parent)) return
     const data = parent.userData, paused = data.playbackRate === 0
+    if (!vendor) {
+      // Ordinary walkers already publish distance, heading and activity on
+      // their parent. Only adjust the height to the actual ground triangle.
+      group.position.set(0, 0, 0)
+      if (map) {
+        parent.getWorldPosition(point)
+        point.y = walkingSurface(map, point.x, point.z).height
+        group.position.copy(parent.worldToLocal(point))
+      }
+      group.userData = data; group.visible = true
+      return
+    }
     const parking = data.transportParking ?? data.shrineParking, onFoot = parking?.walking === true
     const praying = data.activity === "praying", routineActivity = data.routineActivity ?? data.activity
     const deployed = vendor && (routineActivity === undefined ? awning : ["openingShop", "vending", "packingShop"].includes(routineActivity))
@@ -141,7 +157,7 @@ export function TravelerFigure({ map, age, job, type, onClick, idColor, selected
         recordWalkingPath(map.footpaths, map, beforeAnimal, lastAnimal.current, HEAVY_PATH_WEAR)
       }
     }
-  }, -2)
+  }, clock), -2)
   const variant = appearance?.variant ?? 0
   const pulling = useMemo(() => pullingVisual(variant), [variant])
   const color = outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] as [number, number, number] : undefined)
@@ -150,6 +166,10 @@ export function TravelerFigure({ map, age, job, type, onClick, idColor, selected
     complexion={appearance && age !== undefined && age >= GREY_HAIR_AGE ? { ...appearance.complexion, hair: GREY_HAIR_COLOR } : appearance?.complexion}
     selected={selected} type={type.id} onClick={onClick} outlineColor={color} characterModel="base"
     characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} visualOverride={workVisual} /></Suspense>
+  if (type.id === "friar") return <Suspense fallback={null}><CharacterSprite map={map} age={age}
+    complexion={appearance?.complexion} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
+    characterModel="base" characterScale={characterScale} characterFps={characterFps}
+    walkTuning={MONK_WALK_TUNING} visualOverride={monkVisual(age ?? 18)} /></Suspense>
   if (type.id === "knight") return <Suspense fallback={null}><KnightFigure map={map} appearance={appearance} coat={coat} squire={squire}
     selected={selected} outlineColor={color} onClick={onClick} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} /></Suspense>
   return <Suspense fallback={null}>

@@ -1,5 +1,7 @@
 "use client"
 
+import { isWorldVisible } from "@/lib/game/render/visibility"
+
 import { AnimalTether } from "./animal-tether"
 import * as THREE from "three"
 import { useMemo, useRef } from "react"
@@ -28,7 +30,7 @@ export function KnightFigure({ map, appearance, coat, squire = false, characterS
   const attendantVisual = useMemo(() => squireVisual(), [])
   useFrame(() => {
     const parent = person.current?.parent
-    if (!parent || !person.current || !mount.current || !horse.current) return
+    if (!parent || !isWorldVisible(parent) || !person.current || !mount.current || !horse.current) return
     const data = parent.userData, paused = data.playbackRate === 0, reset = data.motionReset === true
     parent.getWorldPosition(vector)
     const point = { x: vector.x, y: vector.y, z: vector.z, heading: data.heading ?? parent.rotation.y }

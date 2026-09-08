@@ -5,6 +5,7 @@ import { DEFAULT_ELEVATION, type ElevationSettings } from "@/lib/game/map/elevat
 import dynamic from "next/dynamic"
 import { useEffect, useMemo, useState } from "react"
 
+import { createBenchmarkCity, benchmarkCity as cityFixture } from "@/lib/game/city-benchmark"
 import { createFootpaths } from "@/lib/game/footpaths"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
@@ -16,6 +17,7 @@ import type { CharacterModel } from "@/lib/game/character-assets"
 import { DEFAULT_TREE_MODEL, type TreeModel } from "@/lib/game/trees/render-model"
 import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER, ROAD_TIERS } from "@/lib/game/map/road"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
+import { loadDefaultMapSize, saveDefaultMapSize } from "@/lib/game/map-size-storage"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import { generateRelic, visitChance } from "@/lib/game/relic"
@@ -151,8 +153,10 @@ export function GameShell({
   initialSeed,
   initialSettings,
   pixelation,
+  benchmarkCity = false,
 }: {
   initialSeed?: number
+  benchmarkCity?: boolean
   initialSettings?: Partial<MapSettings>
   /** Tune the world pixel renderer without changing map or simulation settings. */
   pixelation?: PixelationProps
@@ -162,6 +166,9 @@ export function GameShell({
   const [seed, setSeed] = useState<number | null>(initialSeed ?? null)
   const [blasterPastor, setBlasterPastor] = useState(false)
   const [lastMarch, setLastMarch] = useState(false)
+  const [defaultMapSize, setDefaultMapSize] = useState(DEFAULT_MAP_WIDTH)
+  const [mapSizeReady, setMapSizeReady] = useState(false)
+  const [mapSizeSaved, setMapSizeSaved] = useState(true)
   const [settings, setSettings] = useState<MapSettings>({
     ...DEFAULT_SETTINGS,
     ...initialSettings,
@@ -174,6 +181,14 @@ export function GameShell({
   }
 
   useEffect(() => {
+    // Resolve the browser preference before generating terrain or writing the URL.
+    const size = loadDefaultMapSize()
+    setDefaultMapSize(size)
+    if (initialSettings?.size === undefined) setSettings(current => ({ ...current, size }))
+    setMapSizeReady(true)
+  }, [initialSettings?.size])
+
+  useEffect(() => {
     // A seed the player saved takes precedence over a random roll, but never
     // over one named in the URL (that arrives via initialSeed).
     if (seed === null) setSeed(loadSavedSeed() ?? randomSeed())
@@ -181,7 +196,7 @@ export function GameShell({
 
   // Keep seed and tuning in the URL so any map can be bookmarked and revisited.
   useEffect(() => {
-    if (seed === null) return
+    if (seed === null || !mapSizeReady) return
     const query = new URLSearchParams({
       seed: String(seed),
       size: String(settings.size),
@@ -215,12 +230,13 @@ export function GameShell({
     for (const [key] of VISIBILITY_TOGGLES) query.set(key, settings[key] ? "1" : "0")
     query.set("buildingVisibility", settings.buildingVisibility)
     for (const [key, value] of Object.entries(settings.elevation)) query.set(`e_${key}`, String(value))
+    if (benchmarkCity) query.set("benchmark", "city")
     window.history.replaceState(null, "", `?${query}`)
-  }, [seed, settings])
+  }, [seed, settings, benchmarkCity, mapSizeReady])
 
-  const baseMap = useMemo(
+  const generatedMap = useMemo(
     () =>
-      seed === null
+      seed === null || !mapSizeReady
         ? null
         : generateMap({
             seed,
@@ -239,6 +255,7 @@ export function GameShell({
           }),
     [
       seed,
+      mapSizeReady,
       settings.elevation,
       settings.size,
       settings.coverage,
@@ -252,6 +269,8 @@ export function GameShell({
       settings.ponds,
     ],
   )
+
+  const baseMap = useMemo(() => generatedMap && benchmarkCity ? createBenchmarkCity(generatedMap) : generatedMap, [generatedMap, benchmarkCity])
 
   const movement = useMemo(() => ({ variation: settings.paceVariation, pathEase: settings.pathEase, acceleration: settings.acceleration }),
     [settings.paceVariation, settings.pathEase, settings.acceleration])
@@ -275,7 +294,11 @@ export function GameShell({
     }),
     [settings.roadOpacity, settings.roadShade, settings.roadEdgeLine, settings.roadEdgeWidth],
   )
-  const monks = useMemo(() => (seed === null ? [] : generateMonks(seed)), [seed])
+  const founders = useMemo(() => (seed === null ? [] : generateMonks(seed)), [seed])
+  const joinedMonks = useBuildStore(s => s.joinedMonks)
+  const simulation = useBuildStore(s => s.simulation)
+  const monks = useMemo(() => [...founders, ...(simulation?.world.road === baseMap?.road ? joinedMonks : [])],
+    [founders, joinedMonks, simulation, baseMap?.road])
   const economy = useSettlement(baseMap, monks, relic)
   const footpaths = useMemo(() => createFootpaths(baseMap ?? undefined), [baseMap])
   useEffect(() => { footpaths.paved = ROAD_TIERS[settings.road]?.paved ?? false }, [footpaths, settings.road])
@@ -292,7 +315,7 @@ export function GameShell({
     return () => clearInterval(timer)
   }, [map])
   const relicTraffic = useMemo(
-    () => (relic ? Math.round(travelers.reduce((sum, t) => sum + visitChance(t.attributes, relic.stats, renown?.total ?? 0, economy.balance, evangelism), 0)) : 0),
+    () => (relic ? Math.round(travelers.reduce((sum, t) => sum + visitChance(t.attributes, relic.stats, renown?.total ?? 0, economy.balance, evangelism, t.type.id), 0)) : 0),
     [travelers, relic, renown, economy.balance, evangelism],
   )
 
@@ -307,7 +330,11 @@ export function GameShell({
     if (BUILDING_PREVIEW) camera.zoomBy(24 / camera.viewSize)
     camera.select(null)
     const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
-    if (hovel) {
+    const city = cityFixture(map)
+    if (city) {
+      camera.panTo(tileToWorldX(map, city.centre.x), tileToWorldZ(map, city.centre.z))
+      camera.zoomBy(36 / camera.viewSize)
+    } else if (hovel) {
       camera.panTo(
         tileToWorldX(map, hovel.x) + (hovel.w - 1) / 2,
         tileToWorldZ(map, hovel.z) + (hovel.d - 1) / 2,
@@ -368,7 +395,16 @@ export function GameShell({
         onSettingsChange={setSettings}
         pixelation={pixelationSettings}
         onPixelationChange={(patch) => setPixelationOverrides((current) => ({ ...current, ...patch }))}
-        onReroll={() => setSeed(randomSeed())}
+        defaultMapSize={defaultMapSize}
+        mapSizeSaved={mapSizeSaved}
+        onDefaultMapSizeChange={size => {
+          setDefaultMapSize(size)
+          setMapSizeSaved(saveDefaultMapSize(size))
+        }}
+        onNewMap={size => {
+          setSettings(current => ({ ...current, size }))
+          setSeed(randomSeed())
+        }}
         onSeedChange={setSeed}
       />
       <CheatBar blasterPastor={blasterPastor} onBlasterPastor={() => setBlasterPastor(active => !active)} onLastMarch={() => setLastMarch(true)} />

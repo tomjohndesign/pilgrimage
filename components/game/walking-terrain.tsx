@@ -1,29 +1,53 @@
 "use client"
 
-import { useMemo, useRef, useState, type ComponentProps } from "react"
+import { startTransition, useMemo, useState, type ComponentProps } from "react"
 import { useFrame } from "@react-three/fiber"
-import { footpathRoadSegments } from "@/lib/game/footpaths"
-import { diagonalRoadSegments } from "@/lib/game/render/road-segments"
+import { buildFootpathRoadSegments } from "@/lib/game/footpaths"
+import { diagonalRoadSegments, type RoadSegment } from "@/lib/game/render/road-segments"
+import { frameProfile } from "@/lib/game/render/frame-profile"
 import { TerrainTiles } from "./terrain-tiles"
 
-/** Sample mutable walking traffic twice a second without rerendering the character scene. */
-export function WalkingTerrain(props: ComponentProps<typeof TerrainTiles>) {
+type Props = ComponentProps<typeof TerrainTiles>
+type Roads = Map<number, readonly RoadSegment[]>
+
+function* snapshot(map: Props["map"], founding: Roads): Generator<void, Roads> {
+  const walked = map.footpaths ? yield* buildFootpathRoadSegments(map, map.footpaths) : new Map()
+  const roads = new Map(founding)
+  let processed = 0
+  for (const [index, segments] of walked) {
+    roads.set(index, [...(roads.get(index) ?? []), ...segments])
+    if (++processed % 128 === 0) yield
+  }
+  return roads
+}
+
+/** Road appearance follows live traffic in small slices. Walking and path
+ * decisions stay synchronous; publishing a visual snapshot can yield to input. */
+export function WalkingTerrain(props: Props) {
   const { map } = props
-  const [revision, setRevision] = useState(0)
-  const elapsed = useRef(0)
-  const foundingRoads = useMemo(() => diagonalRoadSegments(map), [map])
+  const founding = useMemo(() => diagonalRoadSegments(map), [map])
+  const [published, publish] = useState<{ map: Props["map"]; roads: Roads }>()
+  const work = useMemo(() => ({ elapsed: .5, revision: -1,
+    pending: null as Generator<void, Roads> | null }), [map, founding])
   useFrame((_, delta) => {
-    elapsed.current += delta
-    if (elapsed.current < .5) return
-    elapsed.current = 0
-    setRevision(map.footpaths?.revision ?? 0)
-  })
-  const traveledRoads = useMemo(() => {
-    const segments = new Map(foundingRoads)
-    if (map.footpaths) for (const [index, roads] of footpathRoadSegments(map, map.footpaths)) {
-      segments.set(index, [...(segments.get(index) ?? []), ...roads])
+    work.elapsed += delta
+    const revision = map.footpaths?.revision ?? 0
+    if (!work.pending && work.elapsed >= .5 && work.revision !== revision) {
+      work.elapsed = 0
+      work.revision = revision
+      work.pending = snapshot(map, founding)
     }
-    return segments
-  }, [map, foundingRoads, revision])
-  return <TerrainTiles {...props} traveledRoads={traveledRoads} regrowRoads />
+    if (!work.pending) return
+    const started = frameProfile.start(), deadline = performance.now() + 1
+    do {
+      const next = work.pending.next()
+      if (next.done) {
+        work.pending = null
+        startTransition(() => publish({ map, roads: next.value }))
+        break
+      }
+    } while (performance.now() < deadline)
+    frameProfile.end("footpathSlice", started)
+  })
+  return <TerrainTiles {...props} traveledRoads={published?.map === map ? published.roads : founding} regrowRoads />
 }

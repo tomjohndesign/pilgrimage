@@ -2,7 +2,7 @@
 
 import { isComplete, isHouse, isMonkShelter } from "@/lib/game/construction"
 import { BUILDING_KINDS, buildingKind } from "@/lib/game/buildings"
-import { HOUSE_BEDS } from "@/lib/game/building-art/early-geometry"
+import { housingBeds, monkBeds } from "@/lib/game/housing"
 import { FOOD_TYPES, FOOD_LABELS, STOREHOUSE_FOOD_CAPACITY, emptyFoodStock, storedFood } from "@/lib/game/storage"
 
 import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/elevation"
@@ -21,7 +21,6 @@ import {
   dangerLabel,
 } from "@/lib/game/map/danger"
 import { clampRoadTier, ROAD_TIERS } from "@/lib/game/map/road"
-import { MIN_MAP_SIZE } from "@/lib/game/map/generate-map"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileAt, type BuildingDef, type GameMap } from "@/lib/game/map/types"
 import { nerve } from "@/lib/game/route-choice"
@@ -50,6 +49,8 @@ import { useBalanceStore } from "@/lib/game/balance-store"
 import { MusicPlayer } from "./music-player"
 import { HudButton } from "./hud-button"
 import { BugReportDialog } from "./bug-report-dialog"
+import { MapSizeControl } from "./map-size-control"
+import { NewMapDialog } from "./new-map-dialog"
 import { browserDiagnostics, diagnosticsSchema, type BugReportDiagnostics } from "@/lib/bug-report"
 import { useBugReportRuntime } from "@/hooks/use-bug-report-runtime"
 import { useSimulationStore } from "@/lib/game/simulation-store"
@@ -610,7 +611,10 @@ export function GameHud({
   economy,
   pixelation,
   onPixelationChange,
-  onReroll,
+  defaultMapSize,
+  mapSizeSaved,
+  onDefaultMapSizeChange,
+  onNewMap,
   onSeedChange,
   cheats,
 }: {
@@ -627,7 +631,10 @@ export function GameHud({
   onSettingsChange: (settings: MapSettings) => void
   pixelation: Required<PixelationProps>
   onPixelationChange: (patch: PixelationProps) => void
-  onReroll: () => void
+  defaultMapSize: number
+  mapSizeSaved: boolean
+  onDefaultMapSizeChange: (size: number) => void
+  onNewMap: (size: number) => void
   onSeedChange: (seed: number) => void
 }) {
   const readRuntime = useBugReportRuntime()
@@ -750,6 +757,9 @@ export function GameHud({
   const selectedKind = buildingKind(selectedBuilding?.buildType)
   const household = selectedBuilding && isHouse(selectedBuilding)
     ? [...(simRegistry.current?.travelers.values() ?? [])].filter(s => s.home === selectedBuilding.id).length : 0
+  const beds = map && selectedBuilding && isMonkShelter(selectedBuilding) ? monkBeds(map) : []
+  const brothersAtHome = selectedBuilding ? monks.filter((monk, index) =>
+    (monk.home ?? beds[index]?.home) === selectedBuilding.id).length : 0
   const staff = selectedBuilding && selectedKind
     ? [...(simRegistry.current?.travelers.values() ?? [])].filter(s => s.employer === selectedBuilding.id).length : 0
   const selectedRelic = selection?.kind === "relic"
@@ -801,18 +811,14 @@ export function GameHud({
       {panel === "world" && <aside id="world-settings" className="hud-world hud-well" aria-label="World settings">
         <div className="hud-world-heading"><span>World</span><button type="button" aria-label="Close world settings" onClick={() => setPanel(null)}><X size={16} /></button></div>
         <div className="mb-4 flex flex-wrap gap-2">
-          <HudButton onClick={onReroll}>✦ New Map</HudButton>
+          <NewMapDialog defaultSize={defaultMapSize} onCreate={onNewMap} />
           <HudButton id="bug-report-button" onClick={openBugReport}>Report a bug</HudButton>
         </div>
         {reportError && <p role="alert" className="mb-4 text-sm text-red">{reportError}</p>}
-        <div className="mb-4">
-          <Chooser
-            label="Trees"
-            value={settings.treeModel === "sprites" ? 1 : 0}
-            options={["Procedural", "Pixel foliage"]}
-            onChange={(index) => set({ treeModel: index === 1 ? "sprites" : "procedural" })}
-          />
-          <p className="pt-1 text-[11px] italic text-ink-light">Pixel foliage draws the baked tree sprites from the playground; trees stand one to a tile.</p>
+        <div className="mb-4 space-y-1">
+          <MapSizeControl label="Default size" value={defaultMapSize} onChange={onDefaultMapSizeChange} />
+          <p className="text-[11px] italic text-ink-light">Used for new maps and visits without a map size in the link. Your current map stays the same.</p>
+          {!mapSizeSaved && <p role="status" className="text-[11px] text-red">Could not save this preference. It will apply for this session only.</p>}
         </div>
         <Section {...section("Visibility")}>
           {VISIBILITY_TOGGLES.map(([key, label]) => (
@@ -828,15 +834,7 @@ export function GameHud({
         {SHOW_PROPERTY_PANELS && <>
         <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />
-          <Tuner
-            label="Size"
-            value={settings.size}
-            display={String(settings.size)}
-            min={MIN_MAP_SIZE}
-            max={512}
-            step={32}
-            onChange={(size) => set({ size })}
-          />
+          <MapSizeControl label="Size" value={settings.size} onChange={(size) => set({ size })} />
         </Section>
 
         <Section {...section("Pixelation")}>
@@ -1097,9 +1095,9 @@ export function GameHud({
             <div className="flex items-center justify-between gap-4"><Label>{selectedDefinition?.category === "scenery" ? "Scenery" : "Building"}</Label><button type="button" aria-label="Dismiss building" onClick={() => useCameraStore.getState().select(null)} className="pointer-events-auto text-xs text-ink-light">✕</button></div>
             <p className="mt-1 font-display text-xs text-ink">{selectedBuilding.label}</p>
             <ConstructionStatus building={selectedBuilding} />
-            {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">Tired monks sleep here until their stamina recovers.</p>}
+            {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">{brothersAtHome} / {housingBeds(selectedBuilding)} monks · {Math.max(0, housingBeds(selectedBuilding) - brothersAtHome)} spaces available. Tired monks sleep here until their stamina recovers.</p>}
             {isHouse(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
-              Home to {household} of {HOUSE_BEDS} settlers. They come back here to sleep and eat.
+              {household} / {housingBeds(selectedBuilding)} settlers · {Math.max(0, housingBeds(selectedBuilding) - household)} spaces available. They come back here to sleep and eat.
             </p>}
             {selectedKind && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
               {staff} of {BUILDING_KINDS[selectedKind].jobs} {BUILDING_KINDS[selectedKind].vendorKept ? "kept by a settled vendor" : "jobs taken"}

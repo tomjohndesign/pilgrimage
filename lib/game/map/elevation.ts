@@ -1,3 +1,4 @@
+import { terrainCorner, cliffCornerHeight, cliffUpperHeight, inCliffCorner } from "./cliff-corners"
 import { makeRng } from "../rng"
 import { TILE_HEIGHT } from "./terrain"
 import type { BuildingDef, GameMap } from "./types"
@@ -231,6 +232,8 @@ export function groundHeight(map: GameMap, x: number, z: number): number {
   const tz = Math.max(0, Math.min(map.depth - 1, Math.floor(z + 0.5)))
   const i = (tz * map.width + tx) * 4, c = map.elevation.corners
   const u = Math.max(0, Math.min(1, x - tx + 0.5)), v = Math.max(0, Math.min(1, z - tz + 0.5))
+  const cut = terrainCorner(map, tx, tz)
+  if (cut) return TILE_HEIGHT + (inCliffCorner(cut, u, v) ? cliffCornerHeight(cut, u, v) : cliffUpperHeight(map, tx, tz, cut, u, v))
   return TILE_HEIGHT + (u + v <= 1
     ? c[i] + u * (c[i + 1] - c[i]) + v * (c[i + 2] - c[i])
     : c[i + 3] + (1 - u) * (c[i + 2] - c[i + 3]) + (1 - v) * (c[i + 1] - c[i + 3]))

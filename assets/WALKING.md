@@ -24,7 +24,7 @@ template for new walking characters.
 - Hips pivot gently against the chest on each stride. Solve legs from those
   rotated hips while keeping foot targets fixed; head bob and elbow flexion
   follow the same distance-driven cycle. Footwear retains the shared sole
-  envelope: sandals for peasants, ankle boots for other callings and monks.
+  envelope: sandals for peasants and beggars, ankle boots for other callings and monks.
 - Robes, skirts, belts, hands and attachment sockets must follow the pelvis.
   Update the garment clipping plane with it. A long garment is not a reason to
   skip the underlying leg solver or hide invalid knees.
@@ -89,7 +89,7 @@ for a rigged character, action, animal or cart.
 
 ## Export all affected characters
 
-Walking and carrying each use 20 poses over one full stride. Walk metadata
+Walking, weary walking and carrying each use 20 poses over one full stride. Walk metadata
 publishes `walkStrides` so runtime distance timing stays tied to the rig. The
 right-hand staff plants and lifts with the left foot: the arm extends forward
 at planting and bends as the body passes the grounded tip. Rig pose phases are
@@ -118,9 +118,9 @@ release or package version. Tests require every active family to match it.
 Bake the base, every population profile/calling,
 and the Monk preset. Inspect the latest main branch before allocating versions.
 Published bakes are immutable; use new paths and update all active imports only
-after the exports exist. The current exports are base v33, population v27,
-monks v38 (brown hair) / v39 (grey hair), rockets v13, transport v23, knights v11,
-minstrel v5 and settlement jobs v2. These color sheets share the [southeast surface lighting](LIGHTING.md).
+after the exports exist. The current exports are base v34, population v30,
+monks v40 (brown hair) / v41 (grey hair), rockets v14, transport v25, knights v12,
+minstrel v6 and settlement jobs v3. These color sheets share the [southeast surface lighting](LIGHTING.md).
 For a subsequent change choose unused versions:
 
 ```sh
@@ -148,8 +148,8 @@ designs must be baked through the same current rig, not mapped onto stale sheets
   discrete poses. Verify no accumulated offset over repeated cycles, correct
   resets, and anchored height on slopes.
 - Run `npm test` and `npm run typecheck`, the base and population asset checkers,
-  and `node scripts/check-base-person.mjs v38 --monk` for the current monk bake.
-  Also check `node scripts/check-base-person.mjs v39 --monk` for grey-haired monks.
+  and `node scripts/check-base-person.mjs v40 --monk` for the current monk bake.
+  Also check `node scripts/check-base-person.mjs v41 --monk` for grey-haired monks.
   Check per-clip dimensions, matching shadows,
   palette, binary body alpha, safe margins and attachment registration.
 - Inspect side and diagonal views in the editor and on real road tiles. Check
@@ -178,3 +178,5 @@ dev server, and open `/play?seed=42`. The preview includes every building, a
 second market stall so both keeper genders can be inspected, and homes for the
 workers. Its nine workers start at their workplaces and use the normal
 simulation. These flags are disabled in production.
+
+New callings can reuse unchanged sheets with `npm run assets:population -- vNEXT --only beggar --from v30 --url http://localhost:3219`. The exporter checks layout and template compatibility; geometry or pose changes affecting existing callings still require a full export. Beggar clothing uses the shared Ragged tunic option and all six body profiles.
