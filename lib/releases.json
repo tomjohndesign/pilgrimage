@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "36ce80b0a9132772fe45e02fdebdd9a5a6f89ac4",
-  "releaseCount": 111,
+  "lastProcessedCommit": "2cbaa4c1137dd33fce9fdceeaec33311e6126f28",
+  "releaseCount": 112,
   "releases": [
+    {
+      "version": "0.0.126",
+      "title": "Release 0.0.126",
+      "summary": "Remove ground glow from character selection (#145)",
+      "commit": "2cbaa4c1137dd33fce9fdceeaec33311e6126f28"
+    },
     {
       "version": "0.0.125",
       "title": "Release 0.0.125",

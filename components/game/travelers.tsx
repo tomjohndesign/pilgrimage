@@ -20,7 +20,7 @@ import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { routeBenchmarkCity } from "@/lib/game/city-benchmark"
 import { simulationFrameStep, useSimulationStore } from "@/lib/game/simulation-store"
 import { markPerson, selectElement } from "@/lib/game/selection"
-import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
+import { CharacterHitTarget, CharacterSelectionOutline } from "./character-selection"
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { setFootpathObstacles } from "@/lib/game/footpaths"
 import { jobBuildings } from "@/lib/game/settlement"
@@ -400,7 +400,7 @@ const TravelerUnit = memo(function TravelerUnit({ index, traveler, map, appearan
         appearance={appearance} selected={selected} type={traveler.type.id} onClick={select}
         outlineColor={[idColor.r, idColor.g, idColor.b]} /></Suspense>}
     <CharacterHitTarget onClick={select} />
-    {selected && <CharacterSelectionShadow map={map} />}
+    {selected && <CharacterSelectionOutline />}
   </group>
 })
 

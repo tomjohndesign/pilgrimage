@@ -21,14 +21,14 @@ describe("city stress fixture", () => {
     for (const [i, a] of map.buildings.entries()) for (const b of map.buildings.slice(i + 1))
       expect(a.x < b.x + b.w && a.x + a.w > b.x && a.z < b.z + b.d && a.z + a.d > b.z).toBe(false)
   })
-  it("routes real walkers around footprints and renews varied destinations at 5×", () => {
+  it("routes real walkers around footprints and renews varied destinations at 6×", () => {
     const map = fixture(), people = generateTravelers(12345, 120), sim = createSim(people, map)
     routeBenchmarkCity(sim, map)
     const moved = new Set<number>()
     for (let tick = 0; tick < 900; tick++) {
       routeBenchmarkCity(sim, map)
       const previous = [...sim.travelers.values()].map(s => ({ x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }))
-      stepSim(sim, people, map, DEFAULT_WALK_SPEED, 10 / 60)
+      stepSim(sim, people, map, DEFAULT_WALK_SPEED, 12 / 60)
       let i = 0
       for (const actor of sim.travelers.values()) {
         const next = { x: worldToTileX(map, actor.x), z: worldToTileZ(map, actor.z) }
