@@ -1,5 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises"
 import { cpus, totalmem, loadavg } from "node:os"
+import { execFile } from "node:child_process"
+import { promisify } from "node:util"
 import { chromium } from "playwright"
 import assert from "node:assert/strict"
 import { freezeAssetUpdates } from "./asset-browser.mjs"
@@ -26,9 +28,34 @@ const inputMotion = process.env.BENCH_INPUT === "1"
 const speeds = (process.env.BENCH_SPEEDS ?? process.env.BENCH_SPEED ?? "1").split(",").map(Number)
 const output = process.env.BENCH_OUTPUT ?? ".context/performance"
 await mkdir(output, { recursive: true })
+// Optional local orchestration guard. The supplied read-only Python helper
+// returns { active: number, sessions: [...] }; no Conductor database is required
+// by the game or by ordinary benchmark runs.
+const idleStatus = process.env.BENCH_IDLE_STATUS
+const readIdle = async () => {
+  if (!idleStatus) return
+  const { stdout } = await promisify(execFile)("python3", [idleStatus], { timeout: 5000 })
+  const status = JSON.parse(stdout)
+  assert.ok(Number.isInteger(status.active), "idle-status helper must report an active session count")
+  if (status.active) throw new Error(`Other sessions resumed: ${status.sessions.map(session => session.workspace).join(", ")}`)
+}
+await readIdle()
 // Use the full browser and hardware ANGLE; headless shell defaults to software
 // SwiftShader on macOS, which is not representative of the playable game.
 const browser = await chromium.launch({ channel: "chromium", headless: process.env.BENCH_HEADED !== "1", args: [...(process.platform === "darwin" ? ["--use-angle=metal"] : []), ...(process.env.BENCH_DEBUG_PORT ? [`--remote-debugging-port=${process.env.BENCH_DEBUG_PORT}`] : [])] })
+let ending = false, checkingIdle = false
+const idleWatch = idleStatus ? setInterval(async () => {
+  if (ending || checkingIdle) return
+  checkingIdle = true
+  try { await readIdle() } catch (error) {
+    if (!ending) {
+      ending = true; process.exitCode = 1
+      console.error("Discarding interrupted benchmark:", error.message)
+      await writeFile(`${output}/interrupted.json`, JSON.stringify({ reason: error.message, date: new Date().toISOString() }))
+      await browser.close()
+    }
+  } finally { checkingIdle = false }
+}, 5000) : undefined
 try {
   const page = await browser.newPage({ viewport: mobile ? { width: 412, height: 915 } : { width: 1440, height: 900 }, deviceScaleFactor: 1, isMobile: mobile, hasTouch: mobile })
   await page.addInitScript(() => performance.setResourceTimingBufferSize(10000))
@@ -602,5 +629,6 @@ try {
   }
   if (errors.length) process.exitCode = 1
 } finally {
+  ending = true; clearInterval(idleWatch)
   await browser.close()
 }

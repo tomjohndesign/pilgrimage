@@ -6,6 +6,72 @@ pointer dragging, wheel zooming and camera rotation. Sprite trees are the
 normal renderer and the benchmark default. Procedural trees remain available
 only in an explicitly enabled benchmark build for historical comparisons.
 
+## Hidden-layer investigation after PR #146
+
+The follow-up baseline includes main through `5cd7a1b` (0.0.129). Other local
+Conductor sessions were idle throughout the measurements. The 1,408-person
+city used sprite trees, a 1440 × 900 viewport, DPR 1, Apple M5/16 GiB and
+hardware ANGLE Metal. Each visibility condition ran for eight seconds after
+settling, with opt-in CPU and actual draw-submission counters. These short
+isolation samples are diagnostic; they are not a maximum-population result.
+
+The real World settings controls already prevented hidden characters from
+reaching GPU draws. Every hidden layer submitted zero draws, the full traveler
+population remained simulated, pause stopped simulation time, and restoring
+visibility resumed character draws. Resident geometry counts alone would
+have incorrectly suggested that hidden figures were still rendering.
+
+| Baseline condition, 1× | Close FPS / p95 ms | Wide FPS / p95 ms |
+|---|---:|---:|
+| All shown, running | 59.9 / 16.8 | 54.6 / 33.3 |
+| Characters hidden, running | 60.0 / 16.7 | 56.9 / 33.3 |
+| Characters hidden, paused | 60.0 / 16.7 | 57.1 / 33.3 |
+| Characters and wildlife hidden, paused | 60.0 / 16.7 | 57.0 / 33.3 |
+| Buildings also hidden, paused | 60.0 / 16.7 | 60.0 / 16.7 |
+
+At wide view, the baseline still spent 1.84 ms/frame preparing hidden traveler
+positions, 0.18 ms scanning character batches, and 2.75 ms in the interval
+containing wildlife visual preparation and other animation callbacks. An empty
+character scene pass also remained. The all-shown frame submitted approximately
+2.48 million terrain triangles, 843,000 building triangles, 473,000 wildlife
+triangles, and 4,000 character triangles across its render passes. Triangle
+counts describe submitted work, not a direct measure of GPU time.
+
+The follow-up changes:
+
+- Skip hidden travelers' visual positioning, culling and figure admission,
+  while retaining simulation/resource updates. Reset motion contacts on restore.
+- Skip hidden character batch scans, tree instance preparation and wildlife
+  skinning; keep their resident resources available for showing them again.
+- Check registered character roots' ancestors and drawable contents before
+  scheduling character color/ID/mask work. Empty batch capacity, hit volumes,
+  lights and ID-only objects do not require a character color pass.
+- Stop hidden building lights and floating visual effects. Consume hidden
+  receipt sequences so showing a layer does not replay old payments.
+- Submit wildlife indices only for visible animals, preserving stable source
+  vertices, picking and object IDs. Upload only changed animal vertex ranges
+  and reuse unchanged poses between simulation ticks and while paused.
+
+The full suite passes 159 files and 1,397 tests. GPU validation includes 524,288
+wildlife color/ID byte comparisons with no differences after reordering,
+partial uploads, hiding and restoration; culled animals submit zero triangles.
+Type checking and the benchmark-enabled production build pass.
+
+Reproduce the visibility comparison with:
+
+```sh
+BENCH_URL=http://localhost:3101 BENCH_SCENARIO=city BENCH_COUNT=1408 \
+BENCH_CHECKS_ONLY=1 BENCH_ISOLATION=1 BENCH_ASSERT_HIDDEN_IDLE=1 \
+BENCH_ZOOMS=36,140 BENCH_SECONDS=8 BENCH_OUTPUT=.context/visibility \
+node scripts/benchmark-game.mjs
+```
+
+The optional GPU timer-query run is separate from the FPS comparison. Its Metal
+elapsed-query values sometimes exceeded the measured interval between frames;
+do not interpret them as independently additive GPU busy time or derive an FPS
+ceiling from them. Actual hidden-layer submission counts and ordinary frame
+intervals provide the direct evidence above.
+
 ## Reproduce
 
 ```sh
