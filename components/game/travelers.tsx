@@ -8,6 +8,7 @@ import { wildlifeRegistry } from "@/lib/game/wildlife/registry"
 
 import { processionRegistry } from "@/lib/game/relic-procession"
 import { frameProfile } from "@/lib/game/render/frame-profile"
+import { isWorldVisible } from "@/lib/game/render/visibility"
 import { figureMounts } from "@/lib/game/render/figure-mounts"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
@@ -122,6 +123,7 @@ export const Travelers = memo(function Travelers({
   const [mounted, setMounted] = useState<number[]>([])
   const mountedRef = useRef<number[]>([])
   const root = useRef<THREE.Group>(null)
+  const visualStale = useRef(false)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
   const logRefs = useRef<Array<THREE.Group | null>>([])
   const cull = useMemo(() => ({ frustum: new THREE.Frustum(), viewProjection: new THREE.Matrix4(), view: new THREE.Matrix4(), bounds: new THREE.Sphere(undefined, FIGURE_RADIUS) }), [])
@@ -207,6 +209,10 @@ export const Travelers = memo(function Travelers({
     }
 
     frameProfile.end("simulation", started)
+    if (!isWorldVisible(root.current)) {
+      visualStale.current = true
+      return
+    }
     const poseStarted = frameProfile.start()
     // Everyone keeps walking in the simulation above, but a figure the camera
     // cannot see is not worth posing: the block below is the expensive half,
@@ -255,7 +261,7 @@ export const Travelers = memo(function Travelers({
       const onScreen = personOnScreen || parkedOnScreen
         || (selected?.kind === "traveler" && selected.id === travelers[i].id)
       if (!group) { if (onScreen) missingVisibleUnits++; continue }
-      const wasVisible = group.visible
+      const wasVisible = group.visible && !visualStale.current
       if (wasVisible !== onScreen) {
         group.visible = onScreen
         setSubtreeMatrixAutoUpdate(group, onScreen)
@@ -268,7 +274,7 @@ export const Travelers = memo(function Travelers({
       const dx = s.x - group.position.x
       const dz = s.z - group.position.z
       const distance = Math.hypot(dx, dz)
-      const moved = group.userData.initialized === true && distance < 2 ? distance : 0
+      const moved = !visualStale.current && group.userData.initialized === true && distance < 2 ? distance : 0
       const moving = playback.paused ? group.userData.moving === true : moved > 1e-6
       if (moving && !playback.paused) {
         const target = Math.atan2(dx, dz)
@@ -366,6 +372,7 @@ export const Travelers = memo(function Travelers({
       mountedRef.current = next
       setMounted(next)
     }
+    visualStale.current = false
     frameProfile.end("travelerPositions", poseStarted)
   }), -3)
 

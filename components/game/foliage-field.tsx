@@ -14,6 +14,7 @@ import { configureSpriteDepthTexture } from "@/lib/game/render/sprite-depth"
 import { encodeObjectId, OUTLINE_ID_LAYER_MASK, treeObjectId } from "@/lib/game/render/outline"
 import { makeRng } from "@/lib/game/rng"
 import { useBuildStore } from "@/lib/game/build-store"
+import { isWorldVisible } from "@/lib/game/render/visibility"
 
 export interface FoliagePlacement extends TreePlacement { foliageVariant?: number }
 
@@ -69,6 +70,7 @@ export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, 
     mesh.count = ids.count = 0
   }, [data, entries])
   useFrame(({ camera: currentCamera }) => {
+    if (!isWorldVisible(body.current?.parent)) return
     const yaw = Math.atan2(currentCamera.matrixWorld.elements[8], currentCamera.matrixWorld.elements[10])
     view.value = ((Math.round(yaw / (Math.PI * 2 / FOLIAGE_FRAME.directions)) % FOLIAGE_FRAME.directions) + FOLIAGE_FRAME.directions) % FOLIAGE_FRAME.directions
     // Picking uses the same camera-facing bounds as the instanced color quads.

@@ -42,6 +42,11 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
     frameProfile.end("animationAndWildlife", phaseStart.current)
     const started = frameProfile.start()
     if (!root.current) return
+    if (!isWorldVisible(root.current)) {
+      candidates.clear(); clearBatchSourceVisibility(scene)
+      frameProfile.end("characterBatches", started)
+      return
+    }
     for (const group of groups.values()) group.entries.length = 0
     candidates.clear()
     for (const entry of entries) {

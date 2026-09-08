@@ -4,6 +4,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 
 import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 import { sceneryDetail } from "@/lib/game/render/scenery-detail"
+import { isWorldVisible } from "@/lib/game/render/visibility"
 import { buildingCentre } from "@/lib/game/buildings"
 import { isComplete } from "@/lib/game/construction"
 import { groundHeight } from "@/lib/game/map/elevation"
@@ -25,7 +26,7 @@ export const ConstructionCostEffects = forwardRef<ConstructionCostHandle, { map:
   }, [])
 
   const show = useCallback((building: BuildingDef) => {
-    if (sceneryDetail(scene) > 0) return
+    if (sceneryDetail(scene) > 0 || !isWorldVisible(group.current?.parent)) return
     const cost = building.construction?.cost
     if (!cost || isComplete(building)) return
     const { x, z } = buildingCentre(map, building)
@@ -51,7 +52,7 @@ export const ConstructionCostEffects = forwardRef<ConstructionCostHandle, { map:
   // Click feedback keeps moving even when the simulation is paused.
   useFrame((_, delta) => {
     if (!group.current) return
-    const visible = sceneryDetail(scene) === 0
+    const visible = sceneryDetail(scene) === 0 && isWorldVisible(group.current.parent)
     if (!visible && group.current.visible) pool.current?.step(PAYMENT_LIFETIME)
     group.current.visible = visible
     if (visible) pool.current?.step(Math.min(delta, 0.1))

@@ -555,6 +555,12 @@ try {
         }
         if (!condition.hidden.includes("characters")) assert.ok(sample.submissions.draws.characters?.calls > 0,
           "shown characters must resume actual drawing")
+        if (process.env.BENCH_ASSERT_HIDDEN_IDLE === "1" && condition.hidden.includes("characters")) {
+          assert.equal(sample.timings.travelerPositions?.count ?? 0, 0, "hidden people must skip visual positioning")
+          if (viewSize > 36) assert.equal(sample.submissions.passes["scene-layer-8"] ?? 0, 0,
+            "an empty distant character stage must be omitted")
+        }
+        if (condition.label === "restored-running") await page.screenshot({ path: `${output}/restored-zoom${viewSize}.png` })
         console.log("Isolation", { viewSize, label: condition.label, fps: result.fps, p95: result.p95, gpu,
           characterDraws: sample.submissions.draws.characters?.calls ?? 0 })
       }

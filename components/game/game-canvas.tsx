@@ -164,7 +164,7 @@ export function GameCanvas({
       <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
       <CameraLight />
 
-      <HearthLights><RenownSaturation map={map}>
+      <HearthLights enabled={visibility.buildingVisibility !== "hidden"}><RenownSaturation map={map}>
         <PixelWorld>
           <StaticBatches />
           <WalkingTerrain map={map} roadTier={roadTier} traffic={travelers.length}

@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react"
 import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
-import { usePixelCharacterRoots, usePixelScene } from "@/components/pixel-canvas"
+import { usePixelScene } from "@/components/pixel-canvas"
 import { CHARACTER_COLOR_LAYER, CHARACTER_ID_LAYER } from "@/lib/game/render/pixel-characters"
 import { characterOcclusionRequest, sampleCharacterOcclusion } from "@/lib/game/render/character-occlusion"
 import { sceneryCloseOpacity, sceneryDetail, treeEdgeOpacity } from "@/lib/game/render/scenery-detail"
@@ -213,7 +213,6 @@ const FRAGMENT_SHADER = /* glsl */ `
 
 export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof selectionObjectId>[1], "piles"> }) {
   const { gl, scene, camera: displayCamera, size } = useThree()
-  const characterRoots = usePixelCharacterRoots()
 
   // ID + depth buffer at drawing-buffer resolution. Nearest filtering is load-
   // bearing: interpolated ID colours would decode as phantom objects.
@@ -377,7 +376,7 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
     const selectedId = selectionInOtherPass ? 0 : requestedId
     // Wide views use ordinary depth occlusion. Dropping the see-through masks
     // removes the extra character colour and road-edge scene renders entirely.
-    const maskCharacters = closeOpacity > 0 && characterRoots.size > 0
+    const maskCharacters = closeOpacity > 0 && stage.hasCharacters
     // Trees hide the roads under them in the same pass they are drawn in.
     const roadEdgePass = !characterPass && !distant
     const maskPass = characterPass && maskCharacters

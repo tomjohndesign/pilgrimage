@@ -5,6 +5,34 @@ import { batchSourceRoot, updateBatchSourceVisibility, batchedSourceRoots } from
 import { OUTLINE_ID_LAYER, SELECTED_CHARACTER_LAYER } from "./outline"
 
 describe("separate character rendering", () => {
+  it("omits hidden ancestor subtrees and resumes tagging on the first visible frame", () => {
+    const scene = new THREE.Scene(), visibility = new THREE.Group(), root = new THREE.Group(), sprite = new THREE.Sprite()
+    root.add(sprite); visibility.add(root); scene.add(visibility)
+    visibility.visible = false
+    expect(tagPixelCharacters([root], scene)).toBe(false)
+    expect(sprite.layers.isEnabled(CHARACTER_COLOR_LAYER)).toBe(false)
+    visibility.visible = true
+    expect(tagPixelCharacters([root], scene)).toBe(true)
+    expect(sprite.layers.isEnabled(CHARACTER_COLOR_LAYER)).toBe(true)
+    visibility.visible = false
+    expect(tagPixelCharacters([root], scene)).toBe(false)
+  })
+
+  it("skips an empty character pass despite resident hit volumes, lights, IDs and batch capacity", () => {
+    const scene = new THREE.Scene(), root = new THREE.Group()
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ visible: false }))
+    const batch = new THREE.InstancedMesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial(), 8)
+    const ids = new THREE.Sprite(); ids.layers.set(OUTLINE_ID_LAYER)
+    batch.count = 0
+    root.add(hit, batch, ids, new THREE.AmbientLight()); scene.add(root)
+    expect(tagPixelCharacters([root], scene)).toBe(false)
+    batch.count = 1
+    expect(tagPixelCharacters([root], scene)).toBe(true)
+    batch.geometry.setDrawRange(0, 0)
+    expect(tagPixelCharacters([root], scene)).toBe(false)
+    hit.geometry.dispose(); hit.material.dispose(); batch.geometry.dispose(); batch.material.dispose(); ids.material.dispose()
+  })
+
   it("includes sprites, carried geometry, and lights without changing picking or ID identity", () => {
     const scene = new THREE.Scene(), root = new THREE.Group()
     const sprite = new THREE.Sprite(), cart = new THREE.Mesh(), id = new THREE.Mesh(), world = new THREE.Mesh(), light = new THREE.AmbientLight()
