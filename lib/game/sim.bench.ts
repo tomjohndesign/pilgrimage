@@ -36,7 +36,7 @@ if (process.env.BENCH_SIM_PROFILE) {
 }
 
 describe("512 × 512, full population simulation", () => {
-  for (const count of process.env.BENCH_COUNT ? [Number(process.env.BENCH_COUNT)] : [2000, 3840, 6000]) {
+  for (const count of process.env.BENCH_COUNT ? [Number(process.env.BENCH_COUNT)] : [2000, 3840, 6000, 10000]) {
     const map = { ...terrain, footpaths: createFootpaths(terrain) }
     setFootpathObstacles(map.footpaths, trees.map(tree => ({ x: tree.x, z: tree.z, radius: Math.max(.18, (tree.footprint ?? .3) * .5) })))
     const travelers = generateTravelers(seed, count)

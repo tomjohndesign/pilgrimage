@@ -14,7 +14,7 @@ const target = process.env.BENCH_TARGET ?? "centre"
 assert.ok(["centre", "water"].includes(target), "BENCH_TARGET must be centre or water")
 const mobile = process.env.BENCH_MOBILE === "1"
 const checksOnly = process.env.BENCH_CHECKS_ONLY === "1"
-const count = Number(process.env.BENCH_COUNT ?? 3840)
+const count = Number(process.env.BENCH_COUNT ?? 10000)
 assert.ok(Number.isInteger(count / 16) && count > 0, "BENCH_COUNT must be a positive multiple of 16 on the 512-square map")
 const trees = process.env.BENCH_TREES ?? "sprites"
 assert.ok(["sprites", "procedural"].includes(trees), "BENCH_TREES must be sprites or procedural")
