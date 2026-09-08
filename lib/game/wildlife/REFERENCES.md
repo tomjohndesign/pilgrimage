@@ -21,6 +21,11 @@ in the game are authored animation choices, not measurements of wild animals.
 - [University of Michigan, European rabbit](https://animaldiversity.org/accounts/Oryctolagus_cuniculus/):
   burrowing rabbits use warrens. The game's rabbits approach a persistent opening,
   enter below its lip, remain underground and emerge from that same opening.
+- [University of Waikato Science Learning Hub, rabbit burrow photograph](https://www.sciencelearn.org.nz/images/1781-rabbit-burrow)
+  (checked 8 September 2026): a recessed entrance beneath a rooted, vegetated bank,
+  with exposed earth and scattered soil outside. `burrow.ts` simplifies those cues
+  into a low turf roof, irregular earthen lip and short scraped approach at the
+  shared character pixel scale; the dimensions are authored to fit the rabbit rig.
 - [Sheep locomotor study, 1999](https://journals.physiology.org/doi/full/10.1152/jappl.1999.87.5.1887):
   walking differs from diagonal trotting and suspended galloping. Sheep here use a
   slow walk with long support periods, remaining with their grazing flock.

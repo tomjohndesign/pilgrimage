@@ -3,7 +3,10 @@
 import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
-import type { GameMap } from "@/lib/game/map/types"
+import { worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
+import { computeForestShade, computeDarkShade } from "@/lib/game/map/forest-field"
+import { grassSurfaceColor } from "@/lib/game/render/ground-palette"
+import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useSimulationStore } from "@/lib/game/simulation-store"
@@ -59,8 +62,17 @@ export function Wildlife({ map, trees, characterScale }: { map: GameMap; trees: 
       accumulator.current -= 1 / 30
     }
   }, -1)
+  const burrowTurf = useMemo(() => {
+    const shade = computeForestShade(map), dark = computeDarkShade(map)
+    const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.tileJitter))
+    const grains = map.tiles.map(() => rng() - .5)
+    return world.burrows.map(burrow => {
+      const i = worldToTileZ(map, burrow.z) * map.width + worldToTileX(map, burrow.x)
+      return grassSurfaceColor(shade[i], dark[i], grains[i])
+    })
+  }, [map, world])
   return <group name="wildlife" userData={{ animals: world.animals, burrows: world.burrows }}>
-    {world.burrows.map(burrow => <RabbitHole key={burrow.id} burrow={burrow} map={map} scale={characterScale} />)}
+    {world.burrows.map(burrow => <RabbitHole key={burrow.id} burrow={burrow} map={map} scale={characterScale} turf={burrowTurf[burrow.id]} />)}
     {batches.map(([kind, animals]) => <WildlifeBatch key={kind} kind={kind} animals={animals} map={map} scale={characterScale} />)}
   </group>
 }
@@ -140,13 +152,18 @@ export function WildlifeBatch({ kind, animals, map, scale, grazing }: { kind: Wi
   </group>
 }
 
-function RabbitHole({ burrow, map, scale }: { burrow: import("@/lib/game/wildlife/simulation").RabbitBurrow; map: GameMap; scale: number }) {
-  const rig = useMemo(() => createBurrowRig(), [])
+function RabbitHole({ burrow, map, scale, turf }: { burrow: import("@/lib/game/wildlife/simulation").RabbitBurrow; map: GameMap; scale: number; turf: THREE.Color }) {
+  const rig = useMemo(() => createBurrowRig(turf), [turf])
   useEffect(() => () => rig.dispose(), [rig])
   const surface = walkingSurface(map, burrow.x, burrow.z)
   const c = Math.cos(burrow.heading), s = Math.sin(burrow.heading)
   const rotation = new THREE.Euler(-Math.atan(surface.dx * s + surface.dz * c), burrow.heading, Math.atan(surface.dx * c - surface.dz * s), "YXZ")
   return <group name="rabbit-burrow" position={[burrow.x, surface.height, burrow.z]} rotation={rotation} scale={RIG_TO_WORLD * scale}>
     <primitive object={rig.root} />
+    {/* Like terrain, the raised bank writes depth with ID zero so selection
+        outlines cannot show rabbits through the turf roof. */}
+    <mesh geometry={rig.geometry} layers-mask={OUTLINE_ID_LAYER_MASK} raycast={() => null}>
+      <meshBasicMaterial color="#000000" side={THREE.DoubleSide} toneMapped={false} />
+    </mesh>
   </group>
 }
