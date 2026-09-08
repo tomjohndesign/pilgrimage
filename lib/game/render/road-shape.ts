@@ -18,7 +18,10 @@ export const ROAD_SHAPE_GLSL = /* glsl */ `
     float d = 0.5 - distanceToTrack;
     float dn = d + roughness;
     float outer = smoothstep(edge - 0.06, edge + 0.12, dn);
-    float middle = smoothstep(inner - 0.06, inner + 0.04, dn);
+    // Once traffic has worn through the median, verge noise must not bring
+    // little green seams back through the middle of the dirt surface.
+    float middle = smoothstep(inner - 0.06, inner + 0.04, dn)
+      * (1.0 - smoothstep(0.5, 0.6, inner));
     return vec2(outer * (1.0 - middle), d);
   }
 
