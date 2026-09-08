@@ -143,3 +143,15 @@ describe("generateTravelers", () => {
     expect(kinds.size).toBeGreaterThanOrEqual(4)
   })
 })
+
+it("keeps minstrels scarce and beggars slower than the other road walkers", () => {
+  const crowd = generateTravelers(42, 10000)
+  const minstrels = crowd.filter(t => t.type.id === "minstrel").length
+  expect(minstrels / crowd.length).toBeGreaterThan(0.01)
+  expect(minstrels / crowd.length).toBeLessThan(0.025)
+  expect(crowd.some(t => t.type.id === "beggar")).toBe(true)
+  expect(Object.values(TRAVELER_TYPES).reduce((sum, t) => sum + t.weight, 0)).toBe(100)
+  for (const type of Object.values(TRAVELER_TYPES).filter(t => t.id !== "beggar")) {
+    expect(TRAVELER_TYPES.beggar.paceMax).toBeLessThan(type.paceMin)
+  }
+})

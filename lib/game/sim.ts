@@ -111,6 +111,12 @@ export type Activity =
   | "building"
   | "walking"
   | "seeking"
+  | "toBegging"
+  | "begging"
+  | "fromBegging"
+  | "toAlms"
+  | "givingAlms"
+  | "fromAlms"
   | "toPerformance"
   | "performing"
   | "fromPerformance"
@@ -157,6 +163,12 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
   building: "Building a structure",
   walking: "On the road",
   seeking: "Seeking food & drink",
+  toBegging: "Finding a place to ask for alms",
+  begging: "Sitting beside the road, asking for alms",
+  fromBegging: "Moving to another place",
+  toAlms: "Approaching to give alms",
+  givingAlms: "Giving alms",
+  fromAlms: "Returning to the road",
   toPerformance: "Finding a place to play",
   performing: "Playing music beside the road",
   fromPerformance: "Continuing after a performance",
@@ -265,6 +277,10 @@ function roll(id: number, n: number): number {
   return (h >>> 0) / 4294967296
 }
 
+function beggarWalkSeconds(id: number, cycle: number): number {
+  return (0.5 + roll(id, cycle + 900)) * GAME_HOUR_SECONDS
+}
+
 function minstrelWalkSeconds(id: number, cycle: number): number {
   return (3 + ((id * 19 + cycle * 11) % 5)) * GAME_HOUR_SECONDS
 }
@@ -275,6 +291,9 @@ export interface SimTraveler {
   /** Road-tile gate on looking ahead for a footprint blocking the road. */
   diversionCheck?: number
   diversionBuildings?: GameMap["buildings"]
+  almsEncounters?: Record<number, number>
+  almsVisit?: { beggarId: number; cycle: number; spot: WorldPoint }
+  donationUntil?: number
   musicCooldown?: number
   musicVisit?: { performerId: number; cycle: number; spot: WorldPoint }
   /** Horse waits on a reserved verge beside a tree until its rider returns. */
@@ -716,7 +735,7 @@ export function createSim(
       walkT: 0,
       offRoadRoute: null,
       targetId: null,
-      timer: t.type.id === "vendor" ? vendWalkSeconds(t.id, 0) : t.type.id === "minstrel" ? minstrelWalkSeconds(t.id, 0) : 0,
+      timer: t.type.id === "vendor" ? vendWalkSeconds(t.id, 0) : t.type.id === "minstrel" ? minstrelWalkSeconds(t.id, 0) : t.type.id === "beggar" ? beggarWalkSeconds(t.id, 0) : 0,
       cycle: 0,
     })
   }
@@ -769,7 +788,7 @@ function findNearbySpot(
 
 const STALL_ACTIVITIES: readonly Activity[] = ["toShop", "openingShop", "vending", "packingShop"]
 /** Activities that hold someone in place; their speed stays at zero. */
-const STILL_ACTIVITIES: readonly Activity[] = ["working", "building", "browsing", "performing", "listening",
+const STILL_ACTIVITIES: readonly Activity[] = ["working", "building", "browsing", "performing", "listening", "begging", "givingAlms",
   "openingShop", "packingShop", "vending", "idle", "posted", "sleeping", "buying", "sitting"]
 const CAMP_ACTIVITIES: readonly Activity[] = ["toCamp", "camping"]
 
@@ -799,7 +818,7 @@ function startOffRoadWalk(s: SimTraveler, activity: Activity): void {
 
 /** Reserve reachable open ground beside the road, keeping the performers and
  * their audience apart from each other, camps, and deployed stalls. */
-function musicSpot(sim: SimState, s: SimTraveler, map: GameMap, performer?: SimTraveler): WorldPoint | null {
+function roadsideSpot(sim: SimState, s: SimTraveler, map: GameMap, performer?: SimTraveler): WorldPoint | null {
   const anchor = performer ?? s
   const cx = worldToTileX(map, anchor.x), cz = worldToTileZ(map, anchor.z)
   const start = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
@@ -814,6 +833,7 @@ function musicSpot(sim: SimState, s: SimTraveler, map: GameMap, performer?: SimT
     if (sim.trees.some((tree, index) => !sim.felled.has(index) && Math.hypot(tree.x - point.x, tree.z - point.z) < 0.8)) continue
     if ([...sim.travelers.values()].some(other => other.id !== s.id && (
       (other.spot && Math.hypot(other.spot.x - point.x, other.spot.z - point.z) < 0.9) ||
+      (other.almsVisit && Math.hypot(other.almsVisit.spot.x - point.x, other.almsVisit.spot.z - point.z) < 0.9) ||
       (other.musicVisit && Math.hypot(other.musicVisit.spot.x - point.x, other.musicVisit.spot.z - point.z) < 0.9) ||
       other.stallRoute?.obstacles.some(obstacle => Math.hypot(obstacle.x - point.x, obstacle.z - point.z) < 2)
     ))) continue
@@ -822,6 +842,17 @@ function musicSpot(sim: SimState, s: SimTraveler, map: GameMap, performer?: SimT
   candidates.sort((a, b) => Math.hypot(a.x - s.x, a.z - s.z) - Math.hypot(b.x - s.x, b.z - s.z))
   return candidates.find(point => settlementRoute(map, map.buildings, start,
     { x: worldToTileX(map, point.x), z: worldToTileZ(map, point.z) })) ?? null
+}
+
+function availableBeggar(sim: SimState, s: SimTraveler): SimTraveler | undefined {
+  const visit = s.almsVisit, beggar = visit && sim.travelers.get(visit.beggarId)
+  return beggar?.activity === "begging" && !beggar.praying && beggar.cycle === visit?.cycle ? beggar : undefined
+}
+
+function donate(sim: SimState, giver: SimTraveler, recipient: SimTraveler): void {
+  if (giver.gold < 1) return
+  pay(giver, recipient, 1)
+  recipient.donationUntil = sim.time * GAME_DAY_SECONDS + 1.5
 }
 
 function finishPerformance(s: SimTraveler): void {
@@ -1273,7 +1304,7 @@ export function stepSim(
     s.thirst = Math.max(0, s.thirst - sim.balance.rules.thirstDecay * needFactor * hours)
     if (camping || abed) s.stamina = Math.min(100, s.stamina + CAMP_STAMINA_REGEN * hours)
     // Standing at a stall, a post or a performance neither drains nor restores the legs.
-    else if (!["vending", "performing", "listening", "posted", "sitting", "buying"].includes(s.activity)) {
+    else if (!["vending", "performing", "listening", "begging", "givingAlms", "posted", "sitting", "buying"].includes(s.activity)) {
       s.stamina = Math.max(0, s.stamina - sim.balance.rules.staminaDecay * hours)
     }
 
@@ -1649,10 +1680,17 @@ export function stepSim(
           }
         }
         if (s.activity === "walking" && !shelter && !s.track && !isVendor && Math.min(s.hunger, s.thirst, s.stamina) > 20) {
-          if (t.type.id === "minstrel") {
+          if (t.type.id === "beggar") {
             s.timer -= dt
             if (s.timer <= 0) {
-              const spot = musicSpot(sim, s, map)
+              const spot = roadsideSpot(sim, s, map)
+              if (spot) { s.spot = spot; startOffRoadWalk(s, "toBegging"); break }
+              s.timer = GAME_HOUR_SECONDS
+            }
+          } else if (t.type.id === "minstrel") {
+            s.timer -= dt
+            if (s.timer <= 0) {
+              const spot = roadsideSpot(sim, s, map)
               if (spot) { s.spot = spot; startOffRoadWalk(s, "toPerformance"); break }
               s.timer = GAME_HOUR_SECONDS
             }
@@ -1663,12 +1701,29 @@ export function stepSim(
             if (performer) {
               s.musicCooldown = 2 * GAME_HOUR_SECONDS
               if (nextRoll(s) < 0.65) {
-                const spot = musicSpot(sim, s, map, performer)
+                const spot = roadsideSpot(sim, s, map, performer)
                 if (spot) {
                   s.musicVisit = { performerId: performer.id, cycle: performer.cycle, spot }
                   startOffRoadWalk(s, "toListen")
                   break
                 }
+              }
+            }
+          }
+        }
+        if (s.activity === "walking" && !shelter && !s.track && !isVendor && t.type.id !== "beggar" && s.gold >= 1 &&
+          Math.min(s.hunger, s.thirst, s.stamina) > 20) {
+          const beggar = [...sim.travelers.values()].find(other => other.activity === "begging" && !other.praying &&
+            Math.hypot(other.x - s.x, other.z - s.z) < 3 && s.almsEncounters?.[other.id] !== other.cycle)
+          if (beggar) {
+            // One choice per pitch: standing nearby must not reroll generosity every frame.
+            ;(s.almsEncounters ??= {})[beggar.id] = beggar.cycle
+            if (nextRoll(s) < 0.05 + 0.85 * Math.max(0, Math.min(100, s.piety)) / 100) {
+              const spot = roadsideSpot(sim, s, map, beggar)
+              if (spot) {
+                s.almsVisit = { beggarId: beggar.id, cycle: beggar.cycle, spot }
+                startOffRoadWalk(s, "toAlms")
+                break
               }
             }
           }
@@ -1834,6 +1889,47 @@ export function stepSim(
         break
       }
 
+      case "toBegging": {
+        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, map)) {
+          s.activity = "begging"
+          s.timer = (6 + roll(s.id, s.cycle + 950) * 4) * GAME_HOUR_SECONDS
+        }
+        break
+      }
+      case "begging": {
+        s.timer -= dt
+        if (s.timer <= 0 || Math.min(s.hunger, s.thirst, s.stamina) <= 10) {
+          s.cycle++
+          startOffRoadWalk(s, "fromBegging")
+        }
+        break
+      }
+      case "toAlms": {
+        if (!availableBeggar(sim, s) || Math.min(s.hunger, s.thirst, s.stamina) <= 10) {
+          startOffRoadWalk(s, "fromAlms"); break
+        }
+        if (stepOffRoadWalk(s, s.almsVisit!.spot, worldSpeed, dt, map)) {
+          s.activity = "givingAlms"; s.timer = 1
+        }
+        break
+      }
+      case "givingAlms": {
+        s.timer -= dt
+        const beggar = availableBeggar(sim, s)
+        if (s.timer <= 0 || !beggar) {
+          if (beggar) donate(sim, s, beggar)
+          startOffRoadWalk(s, "fromAlms")
+        }
+        break
+      }
+      case "fromBegging":
+      case "fromAlms": {
+        if (stepOffRoadWalk(s, currentRoutePoint(map, s), worldSpeed, dt, map)) {
+          if (s.activity === "fromBegging") s.timer = beggarWalkSeconds(s.id, s.cycle)
+          s.activity = "walking"; s.spot = null; s.walkFrom = null; s.almsVisit = undefined
+        }
+        break
+      }
       case "toPerformance": {
         if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, map)) {
           s.activity = "performing"
@@ -1851,13 +1947,15 @@ export function stepSim(
           startOffRoadWalk(s, "fromListening"); break
         }
         if (stepOffRoadWalk(s, s.musicVisit!.spot, worldSpeed, dt, map)) {
-          s.activity = "listening"; s.timer = (0.5 + roll(s.id, s.rolls + 700)) * GAME_HOUR_SECONDS
+          s.activity = "listening"; s.timer = 1 + roll(s.id, s.rolls + 700)
         }
         break
       }
       case "listening": {
         s.timer -= dt
-        if (s.timer <= 0 || !availablePerformance(sim, s) || Math.min(s.hunger, s.thirst, s.stamina) <= 10) {
+        const performer = availablePerformance(sim, s)
+        if (s.timer <= 0 || !performer || Math.min(s.hunger, s.thirst, s.stamina) <= 10) {
+          if (s.timer <= 0 && performer && nextRoll(s) < 0.4) donate(sim, s, performer)
           startOffRoadWalk(s, "fromListening")
         }
         break

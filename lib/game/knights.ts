@@ -12,7 +12,7 @@ export function knightLoadout(id: number) {
 }
 
 export function knightMounted(activity: string, horse?: HorseRest) {
-  return !horse && ["toParking", "fromParking", "walking", "seeking", "fleeing", "toCamp", "fromCamp", "toShop", "fromShop", "toRelic", "fromRelic", "toListen", "listening", "fromListening"].includes(activity)
+  return !horse && ["toParking", "fromParking", "walking", "seeking", "fleeing", "toCamp", "fromCamp", "toShop", "fromShop", "toRelic", "fromRelic", "toListen", "listening", "fromListening", "toAlms", "givingAlms", "fromAlms"].includes(activity)
 }
 
 /** A walking attendant limits the horse's cadence, retaining both authored strides. */

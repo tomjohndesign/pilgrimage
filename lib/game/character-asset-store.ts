@@ -16,7 +16,7 @@ export function validateCharacterAssets(input: unknown): AssetTable {
   if (!value || typeof value !== "object") throw new Error("Expected a character settings object.")
   const output = {} as AssetTable
   for (const id of Object.keys(CHARACTER_ASSETS) as TravelerTypeId[]) {
-    const asset = value[id]
+    const asset = value[id] ?? (id === "beggar" ? CHARACTER_ASSETS.beggar : undefined)
     if (!asset || !safePath(asset.sheet, ".png") || !safePath(asset.sound, ".wav") ||
       typeof asset.soundLabel !== "string" || asset.soundLabel.length > 100 ||
       !Number.isFinite(asset.fps) || asset.fps < 1 || asset.fps > 16 ||

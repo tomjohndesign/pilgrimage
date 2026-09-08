@@ -129,6 +129,27 @@ export function createBasePersonRig(recipe = personRecipe()) {
     }
     geometry.computeVertexNormals()
   }
+  if (recipe.design.tunicStyle === "Ragged") {
+    torso.material = [tunic, accent]
+    const geometry = torso.geometry, positions = geometry.getAttribute("position"), indices = geometry.index!
+    geometry.clearGroups()
+    for (let i = 0; i < indices.count; i += 3) {
+      const vertices = [indices.getX(i), indices.getX(i + 1), indices.getX(i + 2)]
+      const x = vertices.reduce((sum, v) => sum + positions.getX(v), 0) / 3
+      const y = vertices.reduce((sum, v) => sum + positions.getY(v), 0) / 3
+      const z = vertices.reduce((sum, v) => sum + positions.getZ(v), 0) / 3
+      // Broad mismatched cloth repairs, readable at the shared sprite pixel size.
+      const patch = (x < -0.06 && y < waist && z > 0) || (x > 0.08 && y > waist && y < b.chestHeight && z < 0)
+      geometry.addGroup(i, 3, patch ? 1 : 0)
+    }
+    for (let i = 0; i < positions.count; i++) {
+      if (positions.getY(i) <= b.tunicHemUpper + 0.001) {
+        const angle = Math.atan2(positions.getX(i), positions.getZ(i))
+        positions.setY(i, positions.getY(i) + 0.035 * (1 + Math.cos(angle * 5)) + 0.025 * (1 + Math.sin(angle * 3)))
+      }
+    }
+    geometry.computeVertexNormals()
+  }
   torso.scale.z = 0.72
   if (recipe.design.beltStyle === "Rope") {
     const rope = (name: string, points: THREE.Vector3[], closed = false) => {
