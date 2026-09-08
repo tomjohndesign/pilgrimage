@@ -2,6 +2,7 @@ import { DEFAULT_ELEVATION, ELEVATION_CONTROLS, elevationSettings, type Elevatio
 import type { Metadata } from "next"
 
 import { GameShell, type MapSettings } from "@/components/game/game-shell"
+import { parseSceneVisibility } from "@/lib/game/scene-visibility"
 import { isTreeModel } from "@/lib/game/trees/render-model"
 
 export const metadata: Metadata = {
@@ -28,7 +29,7 @@ export default async function PlayPage({
 }) {
   const params = await searchParams
 
-  const initialSettings: Partial<MapSettings> = {}
+  const initialSettings: Partial<MapSettings> = parseSceneVisibility(params)
   if (params.characters === "base" || params.characters === "callings") {
     initialSettings.characterModel = params.characters
   }
