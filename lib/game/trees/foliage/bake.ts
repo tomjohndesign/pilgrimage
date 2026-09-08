@@ -24,8 +24,8 @@ export async function bakeFoliage(designs: FoliageDesigns, cancelled: () => bool
   const foliagePalette = colorsOf(FOLIAGE_PALETTE), barkPalette = colorsOf(BARK_PALETTE)
   let safePadding: number = size
   try {
-    for (const [speciesIndex, species] of FOLIAGE_SPECIES.entries()) for (let variant = 0; variant < variants; variant++) {
-      const model = createFoliageModel(species, variant, designs[species]); scene.add(model.root)
+    for (const oldGrowth of [false, true]) for (const [speciesIndex, species] of FOLIAGE_SPECIES.entries()) for (let variant = 0; variant < variants; variant++) {
+      const model = createFoliageModel(species, variant, designs[species], oldGrowth); scene.add(model.root)
       try {
         for (let view = 0; view < directions; view++) {
           if (cancelled()) throw new DOMException("Superseded foliage design", "AbortError")
@@ -46,14 +46,14 @@ export async function bakeFoliage(designs: FoliageDesigns, cancelled: () => bool
             const x = i / 4 % size, y = Math.floor(i / 4 / size)
             safePadding = Math.min(safePadding, x, y, size - x - 1, size - y - 1)
           }
-          const row = speciesIndex * variants + variant
+          const row = (oldGrowth ? FOLIAGE_SPECIES.length * variants : 0) + speciesIndex * variants + variant
           zctx.drawImage(depth.render(scene, camera, size, extent, pixels.data, pixels.data), view * size, row * size)
           fctx.putImageData(pixels, 0, 0); ctx.drawImage(frame, view * size, row * size)
           await new Promise(resolve => setTimeout(resolve, 0))
         }
       } finally { scene.remove(model.root); model.dispose() }
     }
-    if (safePadding < 4) throw new Error("Tree exceeds its frame. Reduce height or crown spread.")
+    if (safePadding < 4) throw new Error(`Tree exceeds its frame (${safePadding}px margin). Reduce height or crown spread.`)
     return { frame: FOLIAGE_FRAME, color: color.toDataURL(), depth: depths.toDataURL(), designs: structuredClone(designs), safePadding }
   } finally { depth.dispose(); renderer.dispose() }
 }

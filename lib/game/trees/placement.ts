@@ -49,6 +49,8 @@ export interface TreePlacement {
   scale?: number
   /** Brightness multiplier on bark and foliage; edge trees are lighter. Defaults to 1. */
   brightness?: number
+  /** Ancient branch-and-root silhouette, independent of the feathered shade. */
+  oldGrowth?: boolean
   /** Runtime Ent motion; moving trees cannot be claimed for felling. */
   walking?: boolean
 }
@@ -178,7 +180,7 @@ export function placeTrees(
           if (signpost && Math.hypot(px - signpost.x, pz - signpost.z) < SIGNPOST_CLEARANCE) continue
           if (!here) byTile[index] = here = []
           here.push(out.length)
-          out.push({ x: px, y: groundHeight(map, px + map.width / 2 - 0.5, pz + map.depth / 2 - 0.5), z: pz, species: id, scale, brightness })
+          out.push({ x: px, y: groundHeight(map, px + map.width / 2 - 0.5, pz + map.depth / 2 - 0.5), z: pz, species: id, scale, brightness, oldGrowth })
           break
         }
       }
