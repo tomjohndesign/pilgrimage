@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "2cbaa4c1137dd33fce9fdceeaec33311e6126f28",
-  "releaseCount": 112,
+  "lastProcessedCommit": "fb4d7761c07d934837300c48145c06b75c1013da",
+  "releaseCount": 113,
   "releases": [
+    {
+      "version": "0.0.127",
+      "title": "Release 0.0.127",
+      "summary": "Optimize large-map rendering, camera interaction, and 6x playback (#146)",
+      "commit": "fb4d7761c07d934837300c48145c06b75c1013da"
+    },
     {
       "version": "0.0.126",
       "title": "Release 0.0.126",
