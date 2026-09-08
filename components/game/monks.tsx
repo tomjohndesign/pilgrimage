@@ -23,7 +23,7 @@ import * as THREE from "three"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { markPerson, selectElement } from "@/lib/game/selection"
-import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
+import { CharacterHitTarget, CharacterSelectionOutline } from "./character-selection"
 import type { GameMap } from "@/lib/game/map/types"
 import { monkStaminaRegistry, monkRegistry, monkPositionRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
 import { createMonkFlight, monkGroundTime, recallMonkFlight, stepMonkFlight, type MonkFlight } from "@/lib/game/monk-flight"
@@ -317,7 +317,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
                 walkTuning={MONK_WALK_TUNING} />
             </Suspense>
             <CharacterHitTarget onClick={select} />
-            {selected && <CharacterSelectionShadow map={map} flying={airborneIds.has(monk.id)} />}
+            {selected && <CharacterSelectionOutline flying={airborneIds.has(monk.id)} />}
           </group>
         )
       })}

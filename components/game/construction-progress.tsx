@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 import type { BuildingDef } from "@/lib/game/map/types"
+import { sceneryDetail } from "@/lib/game/render/scenery-detail"
 import { rotatedFootprint } from "@/lib/game/building-rotation"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { structureParts } from "@/lib/game/building-art/structure"
@@ -28,9 +29,10 @@ export function ConstructionProgress({ building, characterScale }: { building: B
     }
     return Math.max(0.8, bounds.max.y) + 0.35
   }, [building])
-  useFrame(() => {
+  useFrame(({ scene }) => {
     const construction = building.construction
     if (!sprite.current || !construction) return
+    if (sceneryDetail(scene) > 0) { sprite.current.visible = false; previousWork.current = construction.work; return }
     const progress = Math.min(1, construction.work / construction.required)
     const active = construction.work > previousWork.current
     previousWork.current = construction.work

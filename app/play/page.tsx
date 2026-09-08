@@ -2,8 +2,8 @@ import { DEFAULT_ELEVATION, ELEVATION_CONTROLS, elevationSettings, type Elevatio
 import type { Metadata } from "next"
 
 import { GameShell, type MapSettings } from "@/components/game/game-shell"
+import { treeModelForGame } from "@/lib/game/trees/render-model"
 import { parseSceneVisibility } from "@/lib/game/scene-visibility"
-import { isTreeModel } from "@/lib/game/trees/render-model"
 
 export const metadata: Metadata = {
   title: "Pilgrimage — Prototype",
@@ -33,7 +33,7 @@ export default async function PlayPage({
   if (params.characters === "base" || params.characters === "callings") {
     initialSettings.characterModel = params.characters
   }
-  if (isTreeModel(params.trees)) initialSettings.treeModel = params.trees
+  initialSettings.treeModel = treeModelForGame(params.trees)
   for (const key of ["baseSize", "draftSize"] as const) {
     const scale = parseFloatParam(params[key])
     if (scale !== undefined) initialSettings[key] = Math.min(4, Math.max(0.5, scale))
@@ -89,5 +89,5 @@ export default async function PlayPage({
   if (lakes !== undefined) initialSettings.lakes = lakes
   if (ponds !== undefined) initialSettings.ponds = ponds
 
-  return <GameShell initialSeed={parseIntParam(params.seed)} initialSettings={initialSettings} />
+  return <GameShell benchmarkCity={process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && params.benchmark === "city"} initialSeed={parseIntParam(params.seed)} initialSettings={initialSettings} />
 }

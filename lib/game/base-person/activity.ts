@@ -17,6 +17,7 @@ export function activityClip(activity: Activity | MonkActivity | undefined, movi
     case "sleeping":
     case "camping": return "sleeping"
     case "idle":
+    case "begging":
     case "sitting":
       return "sitting"
     case "visiting": return "praying"

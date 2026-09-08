@@ -8,7 +8,7 @@
 import { ROAD_TIERS } from "../map/road"
 
 /** Keys for the in-game preview scenes in components/texture-preview.tsx. */
-export type TexturePreviewKind = "map-edge" | "road" | "grass"
+export type TexturePreviewKind = "map-edge" | "road" | "grass" | "ground" | "water" | "sand"
 
 export interface TextureEntry {
   id: string
@@ -26,7 +26,7 @@ export interface TextureEntry {
 
 const ROAD_TIER_NOTES: Record<string, string> = {
   trail:
-    "Road surface at tier 0 — the bare track pilgrims tread at the start. Transparent where tufts survive, so the grass beneath shows through.",
+    "Road surface at tier 0 — the bare track pilgrims tread at the start. Light ochre with sparse flecks; traffic shapes its grassy verges.",
   gravel: "Road surface at tier 1 — crushed stone packed into the trail.",
   cobble: "Road surface at tier 2 — rounded setts with earth joints.",
   flagstone: "Road surface at tier 3 — cut slabs laid in offset courses.",
@@ -49,6 +49,38 @@ export const TEXTURES: TextureEntry[] = [
       "Tops of clear-land tiles, under the forest floor, and under every road tile — showing through wherever the surface is thin, worn away, or reclaimed.",
     source: "Generated — node scripts/generate-grass-texture.mjs",
     preview: "grass",
+  },
+  ...[ ["meadow", "Meadow clumps"], ["groundcover", "Creeping leaves"], ["flowers", "Flowering meadow"] ].map(
+    ([id, label]): TextureEntry => ({
+      id: `grass-${id}`, label, url: `/textures/grass-${id}.png`,
+      appliedTo: "Plant palette swatch. In game, individual sprites form continuous colonies shaped by neighbouring terrain.",
+      source: "Generated — node scripts/generate-grass-texture.mjs (from the environment sprite bake)",
+      preview: "grass",
+    }),
+  ),
+  {
+    id: "ground",
+    label: "Earth & hills",
+    url: "/textures/ground.png",
+    appliedTo: "Sparse mineral flecks on earth and hills, with diagonal half-tiles where adjacent ground types meet.",
+    source: "Generated — node scripts/generate-ground-textures.mjs",
+    preview: "ground",
+  },
+  {
+    id: "sand",
+    label: "Sandy banks",
+    url: "/textures/sand.png",
+    appliedTo: "Warm grains and short wind combs, with crisp diagonal tiles split between grass and sand at corners.",
+    source: "Generated — node scripts/generate-ground-textures.mjs",
+    preview: "sand",
+  },
+  {
+    id: "water",
+    label: "Water ripples",
+    url: "/textures/water.png",
+    appliedTo: "Short pixel ripples over depth-coloured water, drifting and fading gently.",
+    source: "Generated — node scripts/generate-ground-textures.mjs",
+    preview: "water",
   },
   ...ROAD_TIERS.map(
     (tier): TextureEntry => ({

@@ -17,6 +17,8 @@ export interface BuildingPart {
   surface?: "trail"
   cutawaySide?: [number, number]
   outline?: boolean
+  /** Last scenery detail level retaining this surface (0 is the close view). */
+  maxSceneryDetail?: 0 | 1 | 2
   /** Usable top face. Navigation and sprites share the authored furniture contact. */
   support?: { clips: BaseClip[]; anchorOffset?: [number, number]; heading?: number }
 }

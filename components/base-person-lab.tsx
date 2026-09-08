@@ -23,7 +23,7 @@ import { knightTravelSpeed } from "@/lib/game/knights"
 import { personWalkStride } from "@/lib/game/base-person/gait"
 import { squireVisual } from "@/lib/game/knight/visual"
 import knightMetadata from "@/public/textures/knights/v11/manifest.json"
-import transportMetadata from "@/public/textures/transport/v23/manifest.json"
+import transportMetadata from "@/public/textures/transport/v24/manifest.json"
 
 const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse", knight: "Knight" } as const
 type Subject = keyof typeof SUBJECTS
@@ -126,8 +126,8 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   }, [])
   useEffect(() => {
     if (process.env.NODE_ENV !== "development") return
-    const target = window as unknown as { __bakePersonPopulation?: (progress?: (done: number) => void) => Promise<unknown> }
-    target.__bakePersonPopulation = async progress => (await import("@/lib/game/base-person/bake-population")).bakePopulation(undefined, progress)
+    const target = window as unknown as { __bakePersonPopulation?: (progress?: (done: number) => void, only?: import("@/lib/game/travelers").TravelerTypeId) => Promise<unknown> }
+    target.__bakePersonPopulation = async (progress, only) => (await import("@/lib/game/base-person/bake-population")).bakePopulation(undefined, progress, undefined, only)
     window.__jobBake = async progress => (await import("@/lib/game/jobs/bake")).bakeJobs(progress)
     window.__minstrelBake = async () => (await import("@/lib/game/minstrel/bake")).bakeMinstrels()
     window.__knightBake = async () => (await import("@/lib/game/knight/bake")).bakeKnights()

@@ -35,17 +35,62 @@ export function walkContact(phase: number, frames: number, body: typeof BASE_PER
   return { side, x: ankle[0], z: ankle[2] + body.footLength * 0.22 }
 }
 
+/** A subset of authored poses, still selected by distance. Always retain the
+ * first displayed pose of each support change so both feet keep their timing.
+ * Current 20-pose strides retain 10 poses at medium detail and 8 at far detail. */
+export function reducedWalkFrame(frame: number, frames: number, strides: number, detail: 0 | 1 | 2): number {
+  const perStride = frames / strides
+  if (!detail || !Number.isInteger(perStride) || perStride < 12) return frame
+  const cycle = Math.floor(frame / perStride), within = frame % perStride
+  const step = detail === 1 ? 2 : 3
+  let selected = Math.floor(within / step) * step
+  const first = Math.ceil((WALK_STANCE_FRACTION - .5) * perStride - 1e-9)
+  const second = Math.ceil(WALK_STANCE_FRACTION * perStride - 1e-9)
+  if (within >= first) selected = Math.max(selected, first)
+  if (within >= second) selected = Math.max(selected, second)
+  return cycle * perStride + selected
+}
+
+/** Detect support transfers crossed between rendered poses, including a whole
+ * stride that ends on the same foot. Wrapped atlas phase alone loses that event. */
+export function crossedWalkSupport(phase: number, advance: number, frames: number, strides = 1): boolean {
+  const perStride = frames / strides
+  const support = (at: number) => {
+    const displayed = Math.floor(at * perStride + 1e-9) / perStride
+    return Math.floor((displayed - (WALK_STANCE_FRACTION - .5)) * 2 + 1e-9)
+  }
+  return advance > 0 && support(phase) !== support(phase + advance)
+}
+
 type GroundPoint = { x: number; y?: number; z: number }
 export interface FootPlant {
   key: string
   anchor: GroundPoint
   origin: GroundPoint
 }
+export interface FootPlantResult {
+  plant: FootPlant
+  offset: { x: number; y: number; z: number }
+}
 
 /** Preserve the rig's support contact between atlas frames, including turns. */
 export function plantFoot(previous: FootPlant | null, key: string, origin: GroundPoint, foot: GroundPoint,
-  groundHeight?: (x: number, z: number) => number) {
+  groundHeight?: (x: number, z: number) => number, output?: FootPlantResult): FootPlantResult {
   const reset = !previous || previous.key !== key || Math.hypot(origin.x - previous.origin.x, origin.z - previous.origin.z) > 1
+  if (output) {
+    // The live renderer owns this storage. Read the old contact before updating
+    // it, allowing output.plant to also be the previous frame's plant.
+    const x = reset ? origin.x + foot.x : previous.anchor.x
+    const z = reset ? origin.z + foot.z : previous.anchor.z
+    const y = reset ? groundHeight ? groundHeight(x, z) : (origin.y ?? 0) + (foot.y ?? 0) : previous.anchor.y ?? 0
+    output.offset.x = x - origin.x - foot.x
+    output.offset.y = y - (origin.y ?? 0) - (foot.y ?? 0)
+    output.offset.z = z - origin.z - foot.z
+    output.plant.key = key
+    output.plant.anchor.x = x; output.plant.anchor.y = y; output.plant.anchor.z = z
+    output.plant.origin.x = origin.x; output.plant.origin.y = origin.y; output.plant.origin.z = origin.z
+    return output
+  }
   const anchor = reset ? { x: origin.x + foot.x, y: (origin.y ?? 0) + (foot.y ?? 0), z: origin.z + foot.z } : previous.anchor
   if (reset && groundHeight) anchor.y = groundHeight(anchor.x, anchor.z)
   return {

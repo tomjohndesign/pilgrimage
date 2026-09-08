@@ -2,24 +2,23 @@
 
 import { Suspense } from "react"
 
+import { DEFAULT_ELEVATION } from "@/lib/game/map/elevation"
 import { parseAsciiMap } from "@/lib/game/map/prototype-map"
 import type { TextureEntry } from "@/lib/game/render/textures"
 
 import { TerrainTiles } from "./game/terrain-tiles"
 import { PreviewCanvas } from "./preview-canvas"
 
-/**
- * A slice of world for the map-edge preview: grass, a road, a patch of bare
- * earth — enough terrain variety to show the dirt cliff under a real map top.
- */
+/** Raised ground meeting a lower pool exposes the diagonal cliff corner faces. */
 const MAP_EDGE_MAP = parseAsciiMap([
-  "......",
-  "......",
-  "======",
-  "..,,..",
-  "..,,..",
-  "......",
+  "......", "......", "..,,..", "..,~~~", "...~~~", "..~~~~",
 ])
+const edgeHeights = MAP_EDGE_MAP.tiles.map(t => t === "water" ? 0 : .9)
+MAP_EDGE_MAP.elevation = {
+  settings: { ...DEFAULT_ELEVATION }, height: edgeHeights,
+  corners: edgeHeights.flatMap(h => [h, h, h, h]),
+  slope: edgeHeights.map(() => 0), cliffs: edgeHeights.map(() => 0),
+}
 
 /**
  * For the road previews: the road runs past forest on one side and bare earth
@@ -48,6 +47,20 @@ const GRASS_MAP = parseAsciiMap([
   "......",
 ])
 
+const GROUND_MAP = parseAsciiMap([
+  "..^^..", "..^^..", ",,,,..", ",,,,%%", "...%%%", "...~~~",
+])
+const WATER_MAP = parseAsciiMap([
+  "......", "..%%..", ".%~~%.", "%~~~~%", "~~~~~~", "~~~~~~",
+])
+WATER_MAP.water = {
+  depth: ["000000", "000000", "001100", "012210", "122321", "123331"].flatMap(row => [...row].map(Number)),
+  flow: {},
+}
+const SAND_MAP = parseAsciiMap([
+  "......", "...%..", "..%%..", ".%%%%.", "%%%~~~", "~~~~~~",
+])
+
 /**
  * How each `TexturePreviewKind` looks in game. Rendered with the same
  * components, lights, and camera maths as /play — this is the item itself,
@@ -70,6 +83,14 @@ function PreviewScene({ entry }: { entry: TextureEntry }) {
           <Suspense fallback={null}>
             <TerrainTiles map={ROAD_MAP} roadTier={entry.roadTier} />
           </Suspense>
+        </group>
+      )
+    case "ground":
+    case "water":
+    case "sand":
+      return (
+        <group position={[0, 1.4, 0]}>
+          <TerrainTiles map={entry.preview === "water" ? WATER_MAP : entry.preview === "sand" ? SAND_MAP : GROUND_MAP} />
         </group>
       )
     case "grass":

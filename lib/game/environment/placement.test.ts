@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { bridgeLayout } from "../map/bridges"
+import { DEFAULT_ELEVATION } from "../map/elevation"
 import { generateMap } from "../map/generate-map"
 import { parseAsciiMap } from "../map/prototype-map"
 import { worldToTileX, worldToTileZ, type GameMap } from "../map/types"
-import { ELEMENT_RADIUS, ENVIRONMENT_KINDS, generateElement } from "./elements"
+import { BOULDER_SIZES, ELEMENT_RADIUS, ENVIRONMENT_KINDS, environmentRadius, generateElement } from "./elements"
 import { environmentSpacing, placeEnvironment } from "./placement"
 
 const meadow = (seed: number): GameMap => ({
@@ -30,7 +31,7 @@ describe("environment dressing", () => {
       const map = generateMap({ seed, width: 64, depth: 64 })
       const rise = bridgeLayout(map).rise
       for (const p of placeEnvironment(map)) {
-        const radius = ELEMENT_RADIUS * p.scale
+        const radius = environmentRadius(p)
         // Every intersected tile, not just the center: patches cross tile edges.
         for (let z = worldToTileZ(map, p.z - radius); z <= worldToTileZ(map, p.z + radius); z++) {
           for (let x = worldToTileX(map, p.x - radius); x <= worldToTileX(map, p.x + radius); x++) {
@@ -54,8 +55,8 @@ describe("environment dressing", () => {
         const a = placements[i]
         const b = placements[j]
         const distance = Math.hypot(a.x - b.x, a.z - b.z)
-        // All possible exclusion radii are below two tiles.
-        if (distance >= 2) continue
+        // Include the broad footprints of neighbouring multi-tile outcrops.
+        if (distance >= 4) continue
         expect(distance).toBeGreaterThanOrEqual(environmentSpacing(a, b))
       }
     }
@@ -78,7 +79,7 @@ describe("environment dressing", () => {
 
     const hills = { ...map, tiles: map.tiles.map(() => "hills" as const) }
     const boulders = placeEnvironment(hills).filter((p) => p.kind === "boulder")
-    const grouped = boulders.filter((a) => boulders.some((b) => a !== b && a.cluster === b.cluster))
+    const grouped = boulders.filter((a) => a.boulderSize || boulders.some((b) => a !== b && a.cluster === b.cluster))
     expect(grouped.length).toBeGreaterThan(boulders.length * 0.5)
     expect(grouped.length).toBeLessThan(boulders.length)
     expect(placements.filter((p) => p.kind === "wildflowers").length).toBeGreaterThan(10)
@@ -95,6 +96,36 @@ describe("environment dressing", () => {
         }
       }
     }
+    for (const boulderSize of BOULDER_SIZES) for (let seed = 0; seed < 100; seed++) {
+      for (const p of generateElement("boulder", seed, boulderSize)) {
+        expect(Math.hypot(p.x, p.z) + Math.max(p.rx, p.rz)).toBeLessThanOrEqual(environmentRadius({ boulderSize }))
+      }
+    }
+  })
+
+  it("scatters both large footprints while keeping small rocks far more common", () => {
+    const counts = { small: 0, "1x2": 0, "2x2": 0 }
+    for (const seed of [0, 1, 2, 3, 42, 99]) {
+      const map = meadow(seed)
+      map.tiles.fill("hills")
+      for (const p of placeEnvironment(map)) if (p.kind === "rocks" || p.kind === "boulder") {
+        counts[p.boulderSize ?? "small"]++
+      }
+    }
+    expect(counts["2x2"]).toBeGreaterThan(5)
+    expect(counts["1x2"]).toBeGreaterThan(counts["2x2"])
+    expect(counts.small).toBeGreaterThan((counts["1x2"] + counts["2x2"]) * 5)
+  })
+
+  it("keeps wide outcrops on one side of an elevated ledge", () => {
+    const map = meadow(42)
+    map.tiles.fill("hills")
+    const height = map.tiles.map((_, i) => i % map.width < map.width / 2 ? 0 : 1.2)
+    map.elevation = { settings: { ...DEFAULT_ELEVATION }, height,
+      corners: height.flatMap(h => [h, h, h, h]), slope: height.map(() => 0), cliffs: height.map(() => 0) }
+    const large = placeEnvironment(map).filter(p => p.boulderSize)
+    expect(large.length).toBeGreaterThan(0)
+    for (const p of large) expect(Math.abs(p.x)).toBeGreaterThan(environmentRadius(p))
   })
 
   it("handles maps without eligible land", () => {

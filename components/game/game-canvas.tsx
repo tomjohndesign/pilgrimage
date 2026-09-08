@@ -11,7 +11,7 @@ import { characterVisual } from "@/lib/game/character-assets"
 import { useCharacterAssetStore } from "@/lib/game/character-asset-store"
 import { usePopulationStore } from "@/lib/game/base-person/population-store"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
-import { PixelCanvas, PixelCharacters, type PixelationProps } from "@/components/pixel-canvas"
+import { PixelCanvas, PixelCharacters, PixelWorld, type PixelationProps } from "@/components/pixel-canvas"
 
 import { useCameraStore } from "@/lib/game/camera-store"
 import type { Resources } from "@/lib/game/settlement"
@@ -20,7 +20,7 @@ import { deriveSeed, SEED_STREAM } from "@/lib/game/rng"
 import { growTreePlacements } from "@/lib/game/trees/dimensions"
 import { placeTrees } from "@/lib/game/trees/placement"
 import { foliageSpacing } from "@/lib/game/trees/foliage/spacing"
-import { DEFAULT_TREE_MODEL, type TreeModel } from "@/lib/game/trees/render-model"
+import { DEFAULT_TREE_MODEL, treeModelForGame, type TreeModel } from "@/lib/game/trees/render-model"
 import { useTreeTuningStore } from "@/lib/game/trees/tree-tuning-store"
 import type { GameMap } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
@@ -31,6 +31,8 @@ import type { CharacterModel } from "@/lib/game/character-assets"
 import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 
 import { Bridges } from "./bridges"
+import { HearthLights } from "./hearth-lights"
+import { BuildingBatches } from "./building-batches"
 import { Buildings } from "./buildings"
 import { BuildInfluenceOverlay } from "./build-influence-overlay"
 import { CameraLight } from "./camera-light"
@@ -47,6 +49,8 @@ import { Signpost } from "./signpost"
 import type { RoadLook } from "@/lib/game/map/road"
 import { WalkingTerrain } from "./walking-terrain"
 import { TileCursor } from "./tile-cursor"
+import { CharacterBatches } from "./character-batches"
+import { StaticBatches } from "./static-batches"
 import { Travelers } from "./travelers"
 import { Trees } from "./trees"
 import { Wildlife } from "./wildlife"
@@ -63,7 +67,7 @@ export function GameCanvas({
   walkSpeed,
   characterModel = "callings",
   characterScale = 1,
-  treeModel = DEFAULT_TREE_MODEL,
+  treeModel: requestedTreeModel = DEFAULT_TREE_MODEL,
   characterFps,
   walkTuning,
   movement = LINEAR_MOVEMENT,
@@ -124,7 +128,7 @@ export function GameCanvas({
   const assets = useCharacterAssetStore(s => s.assets)
   const speedScales = useMemo(() => new Map(travelers.map(traveler => {
     const appearance = travelerAppearance(map.seed ?? 0, traveler.id)
-    const visual = characterModel === "base" ? populationVisual(traveler.type.id, appearance.variant, population, traveler.attributes.age)
+    const visual = characterModel === "base" || traveler.type.id === "beggar" ? populationVisual(traveler.type.id, appearance.variant, population, traveler.attributes.age)
       : characterVisual(assets[traveler.type.id], "callings")
     const scale = characterScale * (characterModel === "base" ? appearance.scale : 1)
     const personSpeedScale = walkSpeedScale(visual.walkStride, scale)
@@ -135,6 +139,7 @@ export function GameCanvas({
   useEffect(() => { void usePopulationStore.getState().prepare(foundation) }, [foundation])
   const species = useTreeTuningStore((s) => s.species)
   const variance = useTreeTuningStore((s) => s.variance)
+  const treeModel = treeModelForGame(requestedTreeModel)
   const trees = useMemo(() => growTreePlacements(placeTrees(map, treeModel === "sprites" ? foliageSpacing(species) : species),
     deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes), species, variance), [map.tiles, species, variance, treeModel])
   return (
@@ -159,39 +164,38 @@ export function GameCanvas({
       <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
       <CameraLight />
 
-      <RenownSaturation map={map}>
-        <WalkingTerrain
-          map={map}
-          roadTier={roadTier}
-          traffic={travelers.length}
-          relicTraffic={relicTraffic}
-          look={roadLook}
-          showGrid={showGrid}
-        />
-        <Bridges map={map} roadTier={roadTier} />
-        {/* Keep simulation components mounted when their visual layer is hidden. */}
-        <group name="visibility-trees" visible={visibility.showTrees}>
-          <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} model={treeModel} />
-        </group>
-        <group name="visibility-scenery" visible={visibility.showScenery}>
-          <Environment map={map} />
-          <Signpost map={map} />
-        </group>
+      <HearthLights><RenownSaturation map={map}>
+        <PixelWorld>
+          <StaticBatches />
+          <WalkingTerrain map={map} roadTier={roadTier} traffic={travelers.length}
+            relicTraffic={relicTraffic} look={roadLook} showGrid={showGrid} />
+          <Bridges map={map} roadTier={roadTier} />
+          {/* Keep simulation components mounted when their visual layer is hidden. */}
+          <group name="visibility-trees" visible={visibility.showTrees}>
+            <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} model={treeModel} />
+          </group>
+          <group name="visibility-scenery" visible={visibility.showScenery}>
+            <Environment map={map} />
+            <Signpost map={map} />
+          </group>
+        </PixelWorld>
         <group name="visibility-wildlife" visible={visibility.showWildlife}>
           <Wildlife map={map} trees={trees} characterScale={characterScale} />
         </group>
         <group name="visibility-buildings" visible={visibility.buildingVisibility !== "hidden"}>
-          <Buildings map={map} characterScale={characterScale} showInteriors={visibility.buildingVisibility === "interiors"} />
-          <Shrine map={map} relic={relic} showInteriors={visibility.buildingVisibility === "interiors"} />
+          <BuildingBatches>
+            <Buildings map={map} characterScale={characterScale} showInteriors={visibility.buildingVisibility === "interiors"} />
+            <Shrine map={map} relic={relic} showInteriors={visibility.buildingVisibility === "interiors"} />
+          </BuildingBatches>
         </group>
         <group name="visibility-characters" visible={visibility.showCharacters}>
           <PixelCharacters>
             <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
           </PixelCharacters>
-          <Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
-            characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
+          <CharacterBatches><Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
+            characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} /></CharacterBatches>
         </group>
-      </RenownSaturation>
+      </RenownSaturation></HearthLights>
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
       <BuildInfluenceOverlay map={map} buildMode={!!buildType} />
 

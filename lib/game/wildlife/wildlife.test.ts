@@ -1,4 +1,6 @@
 import * as THREE from "three"
+import { SpatialPoints } from "../spatial-points"
+import { buildingSpatialQuery } from "../building-spatial"
 import { wildlifeGeometry } from "./batch"
 import { describe, expect, it, vi } from "vitest"
 import { animalBoneLengths, animalLeg } from "../transport/animal-pose"
@@ -55,6 +57,9 @@ describe("wildlife habitats and social groups", () => {
     expect(habitatAllows(habitat, "deer", from, map)).toBe(false)
     expect(wildlifeSegmentClear(habitat, "deer", from, away, map)).toBe(true)
     expect(wildlifeSegmentClear(habitat, "deer", from, toward, map)).toBe(false)
+    const nearby = buildingSpatialQuery(map.buildings, 3)
+    expect(wildlifeSegmentClear(habitat, "deer", from, away, map, .18, nearby)).toBe(true)
+    expect(wildlifeSegmentClear(habitat, "deer", from, toward, map, .18, nearby)).toBe(false)
   })
   it("checks the whole route against water, paths and cliffs", () => {
     const { map, trees } = fixture(), habitat = wildlifeHabitat(map, trees)
@@ -262,4 +267,21 @@ describe("species behavior", () => {
     stepWildlife(world, map, 0.1)
     expect(bird.concealed).toBe(false); expect(bird.flight).not.toBeNull()
   })
+})
+
+
+it("preserves wildlife decisions while reusing live collision indexes at every playback speed", () => {
+  const { map, trees } = fixture()
+  for (const rate of [1, 2, 4, 6, 10]) {
+    const fresh = createWildlife(map, trees), shared = createWildlife(map, trees)
+    const people = [{ x: -10, z: 0 }], peopleIndex = new SpatialPoints(people)
+    for (let frame = 0; frame < 60; frame++) {
+      const animals = new SpatialPoints(shared.animals.filter(animal => !isBird(animal.kind)))
+      for (let tick = 0; tick < rate; tick++) {
+        stepWildlife(fresh, map, 1 / 30, 1, new Set(), people)
+        stepWildlife(shared, map, 1 / 30, 1, new Set(), people, {}, peopleIndex, animals)
+      }
+    }
+    expect(shared.animals).toEqual(fresh.animals)
+  }
 })

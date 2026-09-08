@@ -51,8 +51,7 @@ export function createCartRig(cargo: Cargo, mode: CartMode, compact = false) {
   })
   const animal = mode === "donkey" || mode === "horse"
   const tip = mode === "shop" ? 0.95 : 2.18
-  // Draught shafts and traces belong to the hitched animal's sprite so they
-  // keep its heading when the cart body turns independently on a tight bridge.
+  // Only hand carts and parked shops carry rigid handles.
   if (!animal) for (const sign of [-1, 1]) {
     m.bar([sign * 0.65, 0.6, 0.5], [sign * 0.295 / CART_WIDTH_SCALE, 0.61, tip], 0.045, wood).name = "cart-handle"
   }

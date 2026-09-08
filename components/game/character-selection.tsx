@@ -1,13 +1,9 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
-import { createPortal, useFrame, useThree } from "@react-three/fiber"
+import { useEffect, useLayoutEffect, useRef } from "react"
+import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
-import { isObjectVisible } from "@/lib/game/scene-visibility"
-import { PixelCharacters } from "@/components/pixel-canvas"
-import { surfaceHeight } from "@/lib/game/map/bridges"
-import { worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
-import { prioritizePeople, SELECTION_COLOR } from "@/lib/game/selection"
+import { prioritizePeople } from "@/lib/game/selection"
 import { SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import type { FigureClickHandler } from "./traveler-figure"
 
@@ -34,13 +30,10 @@ export function CharacterHitTarget({ onClick }: { onClick: FigureClickHandler })
   </mesh>
 }
 
-/** A soft ground glow that stays level during work, camping, and flight. */
-export function CharacterSelectionShadow({ map, flying = false }: { map: GameMap; flying?: boolean }) {
+/** Include the animated figure and carried items in the selection outline. */
+export function CharacterSelectionOutline({ flying = false }: { flying?: boolean }) {
   const anchor = useRef<THREE.Group>(null)
-  const shadow = useRef<THREE.Mesh>(null)
   const scene = useThree((s) => s.scene)
-  const position = useMemo(() => new THREE.Vector3(), [])
-  const uniforms = useMemo(() => ({ uColor: { value: new THREE.Color(SELECTION_COLOR) } }), [])
   useLayoutEffect(() => {
     const tagged: Array<{ object: THREE.Object3D; mask: number }> = []
     const include = (object: THREE.Object3D) => {
@@ -60,27 +53,5 @@ export function CharacterSelectionShadow({ map, flying = false }: { map: GameMap
       for (const { object, mask } of tagged) object.layers.mask = mask
     }
   }, [scene, flying])
-  useFrame(() => {
-    if (!anchor.current || !shadow.current) return
-    shadow.current.visible = isObjectVisible(anchor.current)
-    anchor.current.getWorldPosition(position)
-    const y = flying ? surfaceHeight(map, worldToTileX(map, position.x), worldToTileZ(map, position.z)) : position.y
-    shadow.current.position.set(position.x, y + 0.035, position.z)
-  })
-  return <>
-    <group ref={anchor} />
-    {createPortal(<PixelCharacters><mesh ref={shadow} name="character-selection-shadow" rotation={[-Math.PI / 2, 0, 0]} raycast={() => {}}>
-      <planeGeometry args={[1, 1]} />
-      <shaderMaterial transparent depthWrite={false} toneMapped={false} uniforms={uniforms}
-        vertexShader={`varying vec2 vUv;
-          void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`}
-        fragmentShader={`uniform vec3 uColor; varying vec2 vUv;
-          void main() {
-            float radius = length(vUv - 0.5) * 2.0;
-            float alpha = 0.3 * (1.0 - smoothstep(0.0, 1.0, radius));
-            gl_FragColor = vec4(uColor, alpha);
-            #include <colorspace_fragment>
-          }`} />
-    </mesh></PixelCharacters>, scene)}
-  </>
+  return <group ref={anchor} />
 }

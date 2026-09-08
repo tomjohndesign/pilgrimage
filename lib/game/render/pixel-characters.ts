@@ -6,19 +6,35 @@ export const CHARACTER_COLOR_LAYER = 3
 export const CHARACTER_ID_LAYER = 4
 
 export function tagPixelCharacters(roots: Iterable<THREE.Object3D>, scene: THREE.Scene) {
-  for (const root of roots) root.traverse(object => {
+  for (const root of roots) root.traverseVisible(object => {
     if (object.layers.isEnabled(0)) object.layers.enable(CHARACTER_COLOR_LAYER)
     if (object.layers.isEnabled(OUTLINE_ID_LAYER)) object.layers.enable(CHARACTER_ID_LAYER)
   })
-  scene.traverse(object => {
+  scene.traverseVisible(object => {
     if (object instanceof THREE.Light) object.layers.enable(CHARACTER_COLOR_LAYER)
   })
 }
 
-/** Hide whole character roots during world/ID passes, preserving animated visibility. */
-export function withoutPixelCharacters(roots: Iterable<THREE.Object3D>, render: () => void) {
-  const previous: Array<[THREE.Object3D, boolean]> = []
-  for (const root of roots) { previous.push([root, root.visible]); root.visible = false }
-  try { render() }
-  finally { for (const [root, visible] of previous) root.visible = visible }
+const visibilityBuffers: Array<{ roots: THREE.Object3D[]; visible: boolean[] }> = []
+let visibilityDepth = 0
+
+/** Hide whole character roots during world/ID passes, preserving animated visibility.
+ * Reuse storage at each nesting depth instead of allocating a pair per person
+ * per frame. Release object references on exit, including failed renders. */
+export function withoutPixelRoots(roots: Iterable<THREE.Object3D>, render: () => void) {
+  const depth = visibilityDepth++
+  const previous = visibilityBuffers[depth] ?? (visibilityBuffers[depth] = { roots: [], visible: [] })
+  try {
+    for (const root of roots) {
+      previous.roots.push(root); previous.visible.push(root.visible); root.visible = false
+    }
+    render()
+  } finally {
+    // Reverse order also restores correctly if an iterable repeats a root.
+    for (let i = previous.roots.length - 1; i >= 0; i--) previous.roots[i].visible = previous.visible[i]
+    previous.roots.length = previous.visible.length = 0
+    visibilityDepth--
+  }
 }
+
+export const withoutPixelCharacters = withoutPixelRoots

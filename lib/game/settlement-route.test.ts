@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
+import * as footpaths from "./footpaths"
 import { settlementRoute } from "./settlement-route"
 import { workerRoute } from "./construction"
 import { monkWander } from "./monk-wander"
@@ -17,6 +18,50 @@ function world(map: GameMap, p: TilePos) {
 }
 
 describe("characters prefer paths", () => {
+  it("rejects an isolated nearby destination without searching the largest map", () => {
+    const map: GameMap = { width: 512, depth: 512, tiles: Array(512 * 512).fill("grass"), buildings: [] }
+    const goal = { x: 258, z: 256 }, start = { x: 254, z: 256 }
+    for (let z = 255; z <= 257; z++) for (let x = 257; x <= 259; x++) {
+      if (x !== goal.x || z !== goal.z) map.tiles[z * map.width + x] = "water"
+    }
+    const costs = vi.spyOn(footpaths, "footpathRouteCost")
+    try {
+      expect(settlementRoute(map, [], start, goal)).toBeNull()
+      expect(costs.mock.calls.length).toBeLessThan(1200)
+      // Reusing the search storage must still see a newly opened approach.
+      map.tiles[256 * map.width + 257] = "grass"
+      expect(settlementRoute(map, [], start, goal)).toHaveLength(5)
+      expect(settlementRoute(map, [], goal, start)).toHaveLength(5)
+    } finally { costs.mockRestore() }
+  })
+
+  it("rejects a larger disconnected clearing before a map-wide search", () => {
+    const map: GameMap = { width: 512, depth: 512, tiles: Array(512 * 512).fill("grass"), buildings: [] }
+    for (let z = 240; z <= 274; z++) for (let x = 240; x <= 274; x++) {
+      if (x === 240 || x === 274 || z === 240 || z === 274) map.tiles[z * 512 + x] = "water"
+    }
+    const costs = vi.spyOn(footpaths, "footpathRouteCost")
+    try {
+      expect(settlementRoute(map, [], { x: 239, z: 257 }, { x: 257, z: 257 })).toBeNull()
+      expect(costs.mock.calls.length).toBeLessThan(1200)
+      map.tiles[257 * 512 + 240] = "grass"
+      expect(settlementRoute(map, [], { x: 239, z: 257 }, { x: 257, z: 257 })).toHaveLength(19)
+    } finally { costs.mockRestore() }
+  })
+
+  it("keeps reachable long detours, including leaving impassable starting ground", () => {
+    const map: GameMap = { width: 80, depth: 80, tiles: Array(80 * 80).fill("grass"), buildings: [] }
+    for (let z = 1; z < 80; z++) map.tiles[z * 80 + 40] = "water"
+    const start = { x: 39, z: 70 }, goal = { x: 41, z: 70 }
+    map.tiles[start.z * 80 + start.x] = "forest"
+    const route = settlementRoute(map, [], start, goal)!
+    expect(route).toHaveLength(143)
+    expect(route[0]).toEqual(start)
+    expect(route.at(-1)).toEqual(goal)
+    expect(route.slice(1).every(p => tileAt(map, p.x, p.z) === "grass")).toBe(true)
+    expect(settlementRoute(map, [], start, goal)).toEqual(route)
+  })
+
   it.each(["path", "track", "bridge"] as TerrainId[])("takes a modest %s detour instead of cutting across grass", surface => {
     const map = fixture(surface)
     const route = settlementRoute(map, [], start, goal)!

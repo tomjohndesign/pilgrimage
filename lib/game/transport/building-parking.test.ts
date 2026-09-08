@@ -62,6 +62,17 @@ describe("market cart yard", () => {
 })
 
 describe("cart building collisions", () => {
+  it("finds buildings beside a long convoy's axle and observes in-place footprint moves", () => {
+    const { map } = fixture()
+    map.buildings[0] = { ...map.buildings[0], buildType: "tavern", x: 13, z: 12, w: 2, d: 3 }
+    const pose = alignCart({ x: 8, z: 0 }, Math.PI / 2, 8)
+    expect(convoyBuildingsClear(map, pose, "horse", 1.5)).toBe(false)
+    map.buildings[0].z += 15
+    expect(convoyBuildingsClear(map, pose, "horse", 1.5)).toBe(true)
+    map.buildings[0].z -= 15
+    expect(convoyBuildingsClear(map, pose, "horse", 1.5)).toBe(false)
+  })
+
   it.each([1, -1] as const)("keeps the simulated horse and cart outside buildings while detouring in direction %s", direction => {
     const { map } = fixture()
     map.road = Array.from({ length: 30 }, (_, x) => ({ x, z: 4 }))

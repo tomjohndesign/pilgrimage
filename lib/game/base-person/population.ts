@@ -41,6 +41,10 @@ export function populationDesign(type: Pick<TravelerTypeDef, "id" | "color">, va
     design[key] = Math.min(range.max, Math.max(range.min, Math.round((base[key] + delta) / range.step) * range.step))
     design[key] = Number(design[key].toFixed(3))
   }
+  if (type.id === "beggar") Object.assign(design, {
+    tunicStyle: "Ragged", accentColor: "#a49476", shirtColor: "#958a74", trouserColor: "#635a4b",
+    beltStyle: "Rope", footwear: "Sandals", hat: "None", satchel: false, lute: false,
+  })
   if (minstrel) { design.hem = 1.2; design.tunicLength = 1.15 }
   return validatePersonDesign(design)
 }

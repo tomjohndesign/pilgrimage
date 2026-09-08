@@ -90,3 +90,15 @@ describe("road character population", () => {
     }
   })
 })
+
+it("dresses all beggar profiles in patched rags with the shared editable rig", () => {
+  for (let variant = 0; variant < 6; variant++) {
+    const design = populationDesign(TRAVELER_TYPES.beggar, variant)
+    expect(design.tunicStyle).toBe("Ragged")
+    expect(design.beltStyle).toBe("Rope")
+    expect(design.footwear).toBe("Sandals")
+    expect(design.hat).toBe("None")
+    expect(design.satchel).toBe(false)
+    expect(validatePersonDesign(design)).toEqual(design)
+  }
+})

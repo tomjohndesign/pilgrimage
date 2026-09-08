@@ -2,7 +2,7 @@ import { DEFAULT_WALK_SPEED, BASE_CHARACTER_SCALE } from "./base-person/gait"
 import { knightLoadout, knightTravelSpeed } from "./knights"
 import { describe, expect, it } from "vitest"
 import { DEFAULT_BALANCE } from "./balance"
-import { SIMULATION_SPEEDS } from "./simulation-store"
+import { SIMULATION_SPEEDS, simulationFrameStep } from "./simulation-store"
 
 import { DEFAULT_MOVEMENT, LINEAR_MOVEMENT } from "./motion"
 import { BRIDGE_RISE } from "./map/bridges"
@@ -143,6 +143,23 @@ describe("game time", () => {
     const start = sim.time
     for (let i = 0; i < 10; i++) stepSim(sim, travelers, map, 1, 0.1)
     expect(sim.time - start).toBeCloseTo(1 / GAME_DAY_SECONDS, 5)
+  })
+
+  it("keeps travel distance, needs and the clock consistent across playback speeds and frame rates", () => {
+    for (const { rate } of SIMULATION_SPEEDS) for (const fps of [15, 30, 60, 144]) {
+      const map = makeMap(), travelers = [makeTraveler(1, "peasant", { hunger: 100, thirst: 100, stamina: 100 }, .1)]
+      const sim = createSim(travelers, map), person = sim.travelers.get(1)!
+      sim.danger.fill(0)
+      const before = { progress: person.progress, time: sim.time, hunger: person.hunger }
+      for (let frame = 0; frame < fps; frame++) {
+        const { ticks, dt } = simulationFrameStep(1 / fps, rate)
+        for (let tick = 0; tick < ticks; tick++) stepSim(sim, travelers, map, .5, dt, LINEAR_MOVEMENT)
+      }
+      expect(person.progress - before.progress).toBeCloseTo(.5 * rate, 8)
+      expect(sim.time - before.time).toBeCloseTo(rate / GAME_DAY_SECONDS, 10)
+      expect(before.hunger - person.hunger).toBeCloseTo(DEFAULT_BALANCE.rules.hungerDecay * rate / 25, 8)
+      expect(person.activity).toBe("walking")
+    }
   })
 
   it("formats days and hours", () => {
@@ -855,13 +872,13 @@ describe("roadside music", () => {
     expect(minstrel.cycle).toBe(1)
   })
 
-  it("gathers a spaced audience that stands, listens, and leaves when the music ends", () => {
+  it("gathers a spaced audience that stands briefly, listens, and returns to the road", () => {
     const { map, travelers, sim, minstrel } = performance()
     const audience = Array.from({ length: 16 }, (_, i) => makeTraveler(i + 1, "peasant", { hunger: 100, thirst: 100, stamina: 100 }))
     const people = createSim(audience, map)
     for (const [id, person] of people.travelers) sim.travelers.set(id, person)
     travelers.push(...audience)
-    expect(runUntil(sim, travelers, map, () => [...sim.travelers.values()].filter(s => s.activity === "listening").length >= 3, 15)).toBe(true)
+    expect(runUntil(sim, travelers, map, () => [...sim.travelers.values()].filter(s => s.activity === "listening").length >= 1, 15)).toBe(true)
     const listeners = [...sim.travelers.values()].filter(s => s.activity === "listening")
     expect(new Set(listeners.map(s => `${s.x},${s.z}`)).size).toBe(listeners.length)
     const positions = listeners.map(s => [s.x, s.z])
@@ -890,6 +907,21 @@ describe("roadside music", () => {
     expect(runUntil(sim, travelers, map, () => approaching.activity === "walking", 20)).toBe(true)
   })
 
+  it("reserves at most six audience places among a thousand passersby, including a performance starting this tick", () => {
+    const { map, travelers, sim, minstrel } = performance()
+    minstrel.activity = "toPerformance"
+    minstrel.offRoadRoute = [{ x: minstrel.x, y: minstrel.y, z: minstrel.z }]
+    const audience = Array.from({ length: 1000 }, (_, i) => makeTraveler(i + 1, "peasant", { hunger: 100, thirst: 100, stamina: 100 }))
+    for (const [id, person] of createSim(audience, map).travelers) sim.travelers.set(id, person)
+    travelers.push(...audience)
+    stepSim(sim, travelers, map, 1, .1)
+    expect(minstrel.activity).toBe("performing")
+    const reserved = [...sim.travelers.values()].filter(person => person.musicVisit?.performerId === minstrel.id)
+    expect(reserved.length).toBeGreaterThan(0)
+    expect(reserved.length).toBeLessThanOrEqual(6)
+    expect(new Set(reserved.map(person => `${person.musicVisit!.spot.x},${person.musicVisit!.spot.z}`)).size).toBe(reserved.length)
+  })
+
   it("lets hungry listeners leave before a performance finishes", () => {
     const { map, travelers, sim, minstrel } = performance()
     const audience = Array.from({ length: 8 }, (_, i) => makeTraveler(i + 1, "peasant"))
@@ -912,5 +944,111 @@ describe("roadside music", () => {
     expect(s.activity).toBe("walking")
     expect(s.progress).toBeGreaterThan(before)
     expect(s.spot).toBeNull()
+  })
+})
+
+describe("roadside generosity", () => {
+  function roadside(type: "beggar" | "minstrel", id = 1, piety = 50) {
+    const map = makeMap()
+    const travelers = [makeTraveler(0, type, { hunger: 100, thirst: 100, stamina: 100 }),
+      makeTraveler(id, "pilgrim", { piety, gold: 10, hunger: 100, thirst: 100, stamina: 100 })]
+    const sim = createSim(travelers, map), host = sim.travelers.get(0)!, visitor = sim.travelers.get(id)!
+    host.activity = type === "beggar" ? "begging" : "performing"
+    host.z = tileToWorldZ(map, 5)
+    host.spot = { x: host.x, y: host.y, z: host.z }
+    host.timer = 500
+    sim.danger.fill(0)
+    return { map, travelers, sim, host, visitor }
+  }
+
+  it("tips only some performances, transfers real gold once, and lets listeners leave after a second", () => {
+    let tips = 0
+    for (let id = 1; id <= 50; id++) {
+      const { map, travelers, sim, host, visitor } = roadside("minstrel", id)
+      visitor.activity = "listening"; visitor.timer = 1
+      visitor.musicVisit = { performerId: host.id, cycle: host.cycle, spot: { x: visitor.x, y: visitor.y, z: visitor.z } }
+      const total = visitor.gold + host.gold
+      stepSim(sim, travelers, map, 1, 0.5)
+      expect(visitor.activity).toBe("listening")
+      stepSim(sim, travelers, map, 1, 0.5)
+      expect(visitor.activity).toBe("fromListening")
+      expect(visitor.gold + host.gold).toBe(total)
+      tips += 10 - visitor.gold
+      const paid = host.gold
+      stepSim(sim, travelers, map, 1, 0.1)
+      expect(host.gold).toBe(paid)
+    }
+    expect(tips).toBeGreaterThan(0)
+    expect(tips).toBeLessThan(50)
+  })
+
+  it("makes alms much more likely with higher live piety, with one choice per beggar pitch", () => {
+    const counts = [0, 0]
+    for (let id = 1; id <= 100; id++) for (const [index, piety] of [0, 100].entries()) {
+      const { map, travelers, sim, host, visitor } = roadside("beggar", id, piety)
+      stepSim(sim, travelers, map, 1, 0.1)
+      if (visitor.activity === "toAlms") counts[index]++
+      expect(visitor.almsEncounters?.[host.id]).toBe(host.cycle)
+      // Returning to the same pitch does not get a second decision or donation.
+      visitor.activity = "walking"; visitor.almsVisit = undefined
+      stepSim(sim, travelers, map, 1, 0.1)
+      expect(visitor.activity).toBe("walking")
+    }
+    expect(counts[1]).toBeGreaterThan(70)
+    expect(counts[0]).toBeLessThan(15)
+  })
+
+  it("approaches, pauses to give alms, and returns with exactly one less coin", () => {
+    const { map, travelers, sim, host, visitor } = roadside("beggar", 1, 100)
+    visitor.almsVisit = { beggarId: host.id, cycle: host.cycle, spot: { x: visitor.x, y: visitor.y, z: tileToWorldZ(map, 6) } }
+    visitor.activity = "toAlms"
+    visitor.walkFrom = { x: visitor.x, y: visitor.y, z: visitor.z }
+    visitor.walkT = 0
+    expect(runUntil(sim, travelers, map, () => visitor.activity === "givingAlms", 20)).toBe(true)
+    const total = host.gold + visitor.gold, before = host.gold
+    expect(runUntil(sim, travelers, map, () => visitor.activity === "fromAlms", 2)).toBe(true)
+    expect(host.gold).toBe(before + 1)
+    expect(host.gold + visitor.gold).toBe(total)
+    expect(runUntil(sim, travelers, map, () => visitor.activity === "walking", 20)).toBe(true)
+    expect(visitor.almsVisit).toBeUndefined()
+  })
+
+  it("does not create coins or pay someone who has left", () => {
+    for (const gone of [false, true]) {
+      const { map, travelers, sim, host, visitor } = roadside("beggar")
+      visitor.activity = "givingAlms"; visitor.timer = 0
+      visitor.gold = gone ? 10 : 0
+      visitor.almsVisit = { beggarId: host.id, cycle: host.cycle, spot: host.spot! }
+      if (gone) host.cycle++
+      const before = [host.gold, visitor.gold]
+      stepSim(sim, travelers, map, 1, 0.1)
+      expect([host.gold, visitor.gold]).toEqual(before)
+      expect(visitor.activity).toBe("fromAlms")
+    }
+  })
+
+  it("has beggars sit safely off the road for a long stay, then move on", () => {
+    const map = makeMap(), travelers = [makeTraveler(0, "beggar", { hunger: 100, thirst: 100, stamina: 100 })]
+    const sim = createSim(travelers, map), beggar = sim.travelers.get(0)!
+    beggar.timer = 0
+    expect(runUntil(sim, travelers, map, () => beggar.activity === "begging", 20)).toBe(true)
+    expect(tileAt(map, worldToTileX(map, beggar.x), worldToTileZ(map, beggar.z))).toBe("grass")
+    const position = [beggar.x, beggar.z]
+    for (let i = 0; i < 300; i++) stepSim(sim, travelers, map, 1, 0.1)
+    expect(beggar.activity).toBe("begging")
+    expect([beggar.x, beggar.z]).toEqual(position)
+    beggar.timer = 0
+    expect(runUntil(sim, travelers, map, () => beggar.activity === "walking", 20)).toBe(true)
+    expect(beggar.spot).toBeNull()
+    expect(beggar.cycle).toBe(1)
+  })
+
+  it("keeps a beggar walking when there is no safe verge", () => {
+    const map = makeDarkMap(), travelers = [makeTraveler(0, "beggar")]
+    const sim = createSim(travelers, map), beggar = sim.travelers.get(0)!
+    sim.danger.fill(0); beggar.timer = 0
+    stepSim(sim, travelers, map, 1, 0.1)
+    expect(beggar.activity).toBe("walking")
+    expect(beggar.spot).toBeNull()
   })
 })

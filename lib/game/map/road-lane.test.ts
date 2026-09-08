@@ -5,6 +5,7 @@ import { insideBridgeCorner } from "./bridge-corners"
 import { describe, expect, it } from "vitest"
 import { parseAsciiMap } from "./prototype-map"
 import { roadLanePoint } from "./road-lane"
+import { diagonalRoadBend } from "./road"
 import { type GameMap, type TilePos } from "./types"
 import { cartOnRoute, followCart } from "../transport/follow"
 import { cartOffset } from "../transport/assets"
@@ -131,4 +132,24 @@ describe("bridge walking lanes", () => {
       ;({map,route}=rotate(map,route))
     }
   })
+})
+
+
+it("refreshes shared road curves after any nearby terrain edit or seed change", () => {
+  const { map } = fixture(true), x = 3, z = 2
+  const initial = diagonalRoadBend(map, x, z)
+  expect(initial).not.toBeNull()
+  expect(diagonalRoadBend(map, x, z)).toBe(initial)
+  for (let index = 0; index < map.tiles.length; index++) {
+    const before = map.tiles[index]
+    for (const terrain of ["grass", "path", "bridge"] as const) {
+      map.tiles[index] = terrain
+      expect(diagonalRoadBend(map, x, z)).toEqual(diagonalRoadBend({ ...map, tiles: [...map.tiles] }, x, z))
+    }
+    map.tiles[index] = before
+  }
+  for (const seed of [0, 1, 2, 7, 42, 12345]) {
+    map.seed = seed
+    expect(diagonalRoadBend(map, x, z)).toEqual(diagonalRoadBend({ ...map }, x, z))
+  }
 })
