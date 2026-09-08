@@ -1,0 +1,26 @@
+{
+  "frame": {
+    "cellSize": 64,
+    "extent": 1.4799999999999998,
+    "anchor": [
+      32,
+      43
+    ],
+    "directions": 8,
+    "variants": 3,
+    "rows": 18
+  },
+  "boulders": {
+    "cellSize": 128,
+    "extent": 2.9599999999999995,
+    "anchor": [
+      64,
+      88
+    ],
+    "directions": 8,
+    "variants": 3,
+    "rows": 6
+  },
+  "version": "v3",
+  "depthEncoding": "view-offset-rg16-v1"
+}

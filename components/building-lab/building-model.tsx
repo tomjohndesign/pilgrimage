@@ -2,6 +2,7 @@
 
 import { useMemo, useEffect, useRef, useState } from "react"
 import * as THREE from "three"
+import { GRASS_TEXTURE_URL } from "@/lib/game/render/ground-surface"
 import { useFrame, type ThreeEvent } from "@react-three/fiber"
 import { buildingParts, type BuildingPart } from "@/lib/game/building-art/geometry"
 import { BUILDING_STYLE, type BuildingRecipe } from "@/lib/game/building-art/style"
@@ -14,7 +15,7 @@ import { buildingPartGeometry, BUILDING_DIRT_TEXTURE, configureBuildingDirt, dir
 
 function DirtMaterial({ part }: { part: BuildingPart }) {
   const trail = useTerrainTexture(BUILDING_DIRT_TEXTURE, "#a49372")
-  const grass = useTerrainTexture("/textures/grass.png", "#94a158")
+  const grass = useTerrainTexture(GRASS_TEXTURE_URL, "#94a158")
   const material = useMemo(() => dirtFloorMaterial(part, configureBuildingDirt(trail), configureBuildingDirt(grass)), [part, trail, grass])
   useEffect(() => () => material.dispose(), [material])
   return <primitive object={material} attach="material" />

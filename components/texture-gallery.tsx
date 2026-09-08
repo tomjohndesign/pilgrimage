@@ -38,7 +38,7 @@ export function TextureGallery() {
               <img
                 src={entry.url}
                 alt={`${entry.label} texture`}
-                className="aspect-square w-full border border-rule object-cover"
+                className="aspect-square w-full border border-rule bg-ink object-cover [image-rendering:pixelated]"
               />
             </div>
             <div>

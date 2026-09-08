@@ -3,6 +3,8 @@ import { makeRng } from "../rng"
 export const ENVIRONMENT_KINDS = ["bush", "grass", "rocks", "boulder", "groundcover", "wildflowers"] as const
 export type EnvironmentKind = (typeof ENVIRONMENT_KINDS)[number]
 export type PrimitiveKind = "foliage" | "stone" | "blade"
+export const BOULDER_SIZES = ["1x2", "2x2"] as const
+export type BoulderSize = (typeof BOULDER_SIZES)[number]
 
 export const ENVIRONMENT_LABELS: Record<EnvironmentKind, string> = {
   bush: "Low shrubs",
@@ -22,6 +24,8 @@ export interface EnvironmentPlacement {
   yaw: number
   brightness: number
   seed: number
+  /** Larger authored groupings retain native pixels instead of scaling a small sprite. */
+  boulderSize?: BoulderSize
   /** Shared by members of a landscape colony; absent on gallery specimens. */
   cluster?: number
 }
@@ -42,8 +46,12 @@ export interface EnvironmentPart {
 /** All parts fit inside this horizontal radius, including their rotation. */
 export const ELEMENT_RADIUS = 0.44
 
+export function environmentRadius(p: Pick<EnvironmentPlacement, "boulderSize">): number {
+  return p.boulderSize === "2x2" ? 1.4 : p.boulderSize === "1x2" ? 1.1 : ELEMENT_RADIUS
+}
+
 /** Small, asymmetric clusters built from the same faceted vocabulary as trees. */
-export function generateElement(kind: EnvironmentKind, seed: number): EnvironmentPart[] {
+export function generateElement(kind: EnvironmentKind, seed: number, boulderSize?: BoulderSize): EnvironmentPart[] {
   const rng = makeRng(seed)
   const parts: EnvironmentPart[] = []
   const add = (
@@ -51,14 +59,36 @@ export function generateElement(kind: EnvironmentKind, seed: number): Environmen
     rx: number, ry: number, rz: number, color: string,
   ) => parts.push({ primitive, x, y, z, rx, ry, rz, color, yaw: rng() * Math.PI * 2, shade: 0.9 + rng() * 0.18 })
 
-  if (kind === "bush") {
-    const colors = ["#647447", "#70804d", "#586a40"]
-    const color = colors[Math.floor(rng() * colors.length)]
-    add("foliage", 0, 0.19, 0, 0.23, 0.23 + rng() * 0.08, 0.22, color)
-    for (let i = 0; i < 3; i++) {
-      const angle = i * Math.PI * 2 / 3 + rng() * 0.5
-      add("foliage", Math.cos(angle) * 0.18, 0.12, Math.sin(angle) * 0.18,
-        0.15 + rng() * 0.035, 0.14 + rng() * 0.08, 0.16, color)
+  if (kind === "boulder" && boulderSize) {
+    // Connected outcrops: broad shoulders, an uneven crown, and smaller chips
+    // around the base. The two footprints are authored at their world size.
+    const stones = boulderSize === "1x2"
+      ? [[-.03, -.47, .43, .55], [.03, .24, .42, .72], [-.08, .70, .23, .25]]
+      : [[-.38, -.32, .53, .83], [.35, -.22, .49, .65], [.06, .41, .52, .58], [-.57, .47, .31, .33]]
+    const colors = ["#8b8977", "#999581", "#807f70", "#a29b85"]
+    for (const [x, z, radius, height] of stones) {
+      const h = height * (.9 + rng() * .16)
+      add("stone", x, h * .55, z, radius, h, radius * .87, colors[Math.floor(rng() * colors.length)])
+      if (rng() < .75) add("foliage", x - .04, h * 1.39, z, radius * .46, .028, radius * .35, "#777e56")
+    }
+    for (let i = 0; i < 5; i++) {
+      const x = (rng() - .5) * (boulderSize === "1x2" ? .65 : 1.6)
+      const z = (rng() - .5) * 1.65
+      const r = .07 + rng() * .055
+      add("stone", x, r * .35, z, r, r * .7, r * .8, "#99927c")
+    }
+  } else if (kind === "bush") {
+    // A low, irregular leaf canopy: the bake should read as a shrub rather
+    // than four rounded stones. Small clusters keep the native pixel scale.
+    add("foliage", 0, 0.16, 0, 0.23, 0.17, 0.22, "#53643b")
+    const colors = ["#647747", "#748650", "#81905b", "#596e40"]
+    for (let i = 0; i < 48; i++) {
+      const angle = rng() * Math.PI * 2
+      const radius = Math.sqrt(rng()) * .32
+      const height = .09 + Math.sqrt(1 - (radius / .34) ** 2) * .25 + rng() * .04
+      const leaf = .035 + rng() * .024
+      add("foliage", Math.cos(angle) * radius, height, Math.sin(angle) * radius,
+        leaf * 1.2, leaf * .65, leaf, colors[Math.floor(rng() * colors.length)])
     }
   } else if (kind === "grass" || kind === "wildflowers") {
     const colors = ["#687a42", "#80934f", "#93a25e", "#a49d67"]
@@ -79,7 +109,7 @@ export function generateElement(kind: EnvironmentKind, seed: number): Environmen
     }
     if (kind === "wildflowers") {
       // A few cream, butter-yellow or muted mauve blooms, carried above the grass.
-      const petals = ["#e5dfbe", "#cfb755", "#a391b5"][Math.floor(rng() * 3)]
+      const petals = ["#e5dfbe", "#cfb755", "#a391b5"][(seed >>> 0) % 3]
       for (let i = 0; i < 4; i++) {
         const angle = i * Math.PI / 2 + rng() * 0.8
         const radius = 0.1 + rng() * 0.17

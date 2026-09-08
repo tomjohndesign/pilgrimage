@@ -5,7 +5,7 @@ import { type TerrainId } from "../map/terrain"
 import { signpostPlacement } from "../map/signpost"
 import { worldToTileX, worldToTileZ, type GameMap } from "../map/types"
 import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
-import { ELEMENT_RADIUS, ENVIRONMENT_KINDS, type EnvironmentKind, type EnvironmentPlacement } from "./elements"
+import { environmentRadius, ENVIRONMENT_KINDS, type EnvironmentKind, type EnvironmentPlacement } from "./elements"
 
 /** Relative habitat weights, in ENVIRONMENT_KINDS order. */
 const HABITATS: Partial<Record<TerrainId, readonly number[]>> = {
@@ -21,7 +21,7 @@ const SOFT = new Set<EnvironmentKind>(["grass", "groundcover", "wildflowers"])
 
 /** Ground growth can interleave within a patch; solid stones and shrubs need room. */
 export function environmentSpacing(a: EnvironmentPlacement, b: EnvironmentPlacement): number {
-  const radii = ELEMENT_RADIUS * (a.scale + b.scale)
+  const radii = environmentRadius(a) + environmentRadius(b)
   if (a.cluster !== undefined && a.cluster === b.cluster) {
     return SOFT.has(a.kind) && SOFT.has(b.kind) ? radii * 0.48 : radii + 0.06
   }
@@ -111,28 +111,47 @@ export function placeEnvironment(map: GameMap): EnvironmentPlacement[] {
           else if (family === "boulder" && member > 2 && companion < 0.65) kind = "rocks"
           else if (family === "bush" && companion < 0.25) kind = "groundcover"
         }
-        const scale = kind === "boulder" ? 0.7 + rng() * 0.6 : 0.7 + rng() * 0.3
-        const radius = ELEMENT_RADIUS * scale
+        // Only a colony's first rock can become a large formation. Its smaller
+        // companions remain the overwhelming majority of stones in the world.
+        const sizeRoll = rng()
+        const boulderSize = member === 0 && (kind === "boulder" || kind === "rocks")
+          ? sizeRoll < .08 ? "2x2" : sizeRoll < .26 ? "1x2" : undefined : undefined
+        if (boulderSize) kind = "boulder"
+        const radius = environmentRadius({ boulderSize })
         for (let attempt = 0; attempt < 8; attempt++) {
           const angle = rng() * Math.PI * 2
-          const distance = member === 0 ? 0 : Math.sqrt(rng())
+          const distance = member === 0 && (!boulderSize || attempt === 0) ? 0 : Math.sqrt(rng())
           const u = Math.cos(angle) * distance * major
           const v = Math.sin(angle) * distance * minor
           const px = centerX + u * Math.cos(yaw) - v * Math.sin(yaw)
           const pz = centerZ + u * Math.sin(yaw) + v * Math.cos(yaw)
           if (!onLand(px, pz, radius, kind)) continue
+          const y = groundHeight(map, px + map.width / 2 - .5, pz + map.depth / 2 - .5)
+          if (boulderSize) {
+            // A wide sprite cannot conform to a cliff or steep slope. Sample
+            // its footprint densely so neither side floats over a lower tile.
+            let low = y, high = y
+            for (let oz = -radius; oz <= radius + .001; oz += radius / 3) {
+              for (let ox = -radius; ox <= radius + .001; ox += radius / 3) {
+                const h = groundHeight(map, px + ox + map.width / 2 - .5, pz + oz + map.depth / 2 - .5)
+                low = Math.min(low, h); high = Math.max(high, h)
+              }
+            }
+            if (high - low > .16) continue
+          }
           const x = worldToTileX(map, px)
           const z = worldToTileZ(map, pz)
           const placement: EnvironmentPlacement = {
-            x: px, y: groundHeight(map, px + map.width / 2 - 0.5, pz + map.depth / 2 - 0.5), z: pz, kind, scale, cluster,
+            x: px, y, z: pz, kind, scale: 1, cluster, boulderSize,
             yaw: rng() * Math.PI * 2,
             brightness: 1 - shade[z * map.width + x] * 0.25,
             seed: deriveSeed(deriveSeed(shapeSeed, cluster), member),
           }
           let crowded = false
-          // Largest solid pair plus inter-colony gap is < 2 world units.
-          for (let dz = -2; dz <= 2 && !crowded; dz++) {
-            for (let dx = -2; dx <= 2 && !crowded; dx++) {
+          // Include multi-tile outcrops in neighbouring colony cells.
+          const reach = Math.ceil(radius + 1.4 + .5)
+          for (let dz = -reach; dz <= reach && !crowded; dz++) {
+            for (let dx = -reach; dx <= reach && !crowded; dx++) {
               const nx = x + dx
               const nz = z + dz
               if (nx < 0 || nz < 0 || nx >= map.width || nz >= map.depth) continue
