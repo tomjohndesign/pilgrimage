@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "52d166a6261c4f4202c042f48a74265544978a39",
-  "releaseCount": 118,
+  "lastProcessedCommit": "ab3372f67ffd6d693257d459260ac677fa477404",
+  "releaseCount": 119,
   "releases": [
+    {
+      "version": "0.0.133",
+      "title": "Release 0.0.133",
+      "summary": "Add twisted dark forests with clearings and woodland approaches (#152)",
+      "commit": "ab3372f67ffd6d693257d459260ac677fa477404"
+    },
     {
       "version": "0.0.132",
       "title": "Release 0.0.132",
