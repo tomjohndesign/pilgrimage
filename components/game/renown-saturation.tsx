@@ -37,19 +37,22 @@ export function RenownSaturation({ map, children }: { map: GameMap; children: Re
   // New buildings and asynchronously loaded sprites can introduce materials at
   // any time. Only color-layer materials are patched; encoded outline IDs and
   // the cursor/territory overlays keep their original colors.
-  useFrame(() => root.current?.traverse(object => {
+  useFrame(() => root.current?.traverseVisible(object => {
     if (!object.layers.isEnabled(0)) return
     if (!(object instanceof THREE.Mesh || object instanceof THREE.Sprite)) return
     const materials: THREE.Material[] = Array.isArray(object.material) ? object.material : [object.material]
     for (const material of materials) {
-      if (patched.has(material)) continue
+      if (patched.has(material) || material.userData.renownSaturated) continue
+      material.userData.renownSaturated = true
       const compile = material.onBeforeCompile
       const cacheKey = material.customProgramCacheKey
       const originalKey = cacheKey.call(material)
       material.onBeforeCompile = function (shader, renderer) {
         compile.call(this, shader, renderer)
         Object.assign(shader.uniforms, uniforms)
-        const position = material instanceof THREE.SpriteMaterial
+        const position = material.userData.characterBatch
+          ? "vRenownWorld = (modelMatrix * instanceMatrix[3]).xz;"
+          : material instanceof THREE.SpriteMaterial
           // Sample at the feet so an upright figure enters the area as a whole.
           ? "vRenownWorld = modelMatrix[3].xz;"
           : `vec4 renownPosition = vec4(transformed, 1.0);
@@ -88,13 +91,14 @@ export function RenownSaturation({ map, children }: { map: GameMap; children: Re
         material.onBeforeCompile = compile
         material.customProgramCacheKey = cacheKey
         material.needsUpdate = true
+        delete material.userData.renownSaturated
         material.removeEventListener("dispose", restore)
         patched.delete(material)
       }
       material.addEventListener("dispose", restore)
       patched.set(material, restore)
     }
-  }))
+  }), .75)
 
   return <group ref={root}>{children}</group>
 }

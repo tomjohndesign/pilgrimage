@@ -2,7 +2,7 @@ import { DEFAULT_WALK_SPEED, BASE_CHARACTER_SCALE } from "./base-person/gait"
 import { knightLoadout, knightTravelSpeed } from "./knights"
 import { describe, expect, it } from "vitest"
 import { DEFAULT_BALANCE } from "./balance"
-import { SIMULATION_SPEEDS } from "./simulation-store"
+import { SIMULATION_SPEEDS, simulationFrameStep } from "./simulation-store"
 
 import { DEFAULT_MOVEMENT, LINEAR_MOVEMENT } from "./motion"
 import { BRIDGE_RISE } from "./map/bridges"
@@ -143,6 +143,23 @@ describe("game time", () => {
     const start = sim.time
     for (let i = 0; i < 10; i++) stepSim(sim, travelers, map, 1, 0.1)
     expect(sim.time - start).toBeCloseTo(1 / GAME_DAY_SECONDS, 5)
+  })
+
+  it("keeps travel distance, needs and the clock consistent across playback speeds and frame rates", () => {
+    for (const { rate } of SIMULATION_SPEEDS) for (const fps of [15, 30, 60, 144]) {
+      const map = makeMap(), travelers = [makeTraveler(1, "peasant", { hunger: 100, thirst: 100, stamina: 100 }, .1)]
+      const sim = createSim(travelers, map), person = sim.travelers.get(1)!
+      sim.danger.fill(0)
+      const before = { progress: person.progress, time: sim.time, hunger: person.hunger }
+      for (let frame = 0; frame < fps; frame++) {
+        const { ticks, dt } = simulationFrameStep(1 / fps, rate)
+        for (let tick = 0; tick < ticks; tick++) stepSim(sim, travelers, map, .5, dt, LINEAR_MOVEMENT)
+      }
+      expect(person.progress - before.progress).toBeCloseTo(.5 * rate, 8)
+      expect(sim.time - before.time).toBeCloseTo(rate / GAME_DAY_SECONDS, 10)
+      expect(before.hunger - person.hunger).toBeCloseTo(DEFAULT_BALANCE.rules.hungerDecay * rate / 25, 8)
+      expect(person.activity).toBe("walking")
+    }
   })
 
   it("formats days and hours", () => {
@@ -888,6 +905,21 @@ describe("roadside music", () => {
     stepSim(sim, travelers, map, 1, 0.1)
     expect(approaching.activity).toBe("fromListening")
     expect(runUntil(sim, travelers, map, () => approaching.activity === "walking", 20)).toBe(true)
+  })
+
+  it("reserves at most six audience places among a thousand passersby, including a performance starting this tick", () => {
+    const { map, travelers, sim, minstrel } = performance()
+    minstrel.activity = "toPerformance"
+    minstrel.offRoadRoute = [{ x: minstrel.x, y: minstrel.y, z: minstrel.z }]
+    const audience = Array.from({ length: 1000 }, (_, i) => makeTraveler(i + 1, "peasant", { hunger: 100, thirst: 100, stamina: 100 }))
+    for (const [id, person] of createSim(audience, map).travelers) sim.travelers.set(id, person)
+    travelers.push(...audience)
+    stepSim(sim, travelers, map, 1, .1)
+    expect(minstrel.activity).toBe("performing")
+    const reserved = [...sim.travelers.values()].filter(person => person.musicVisit?.performerId === minstrel.id)
+    expect(reserved.length).toBeGreaterThan(0)
+    expect(reserved.length).toBeLessThanOrEqual(6)
+    expect(new Set(reserved.map(person => `${person.musicVisit!.spot.x},${person.musicVisit!.spot.z}`)).size).toBe(reserved.length)
   })
 
   it("lets hungry listeners leave before a performance finishes", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { cliffCorner, cliffCornerHeight, cliffUpperHeight, inCliffCorner, terrainCorner } from "./cliff-corners"
+import { cliffCorner, cliffCornerHeight, cliffUpperHeight, inCliffCorner, terrainCorner, withTerrainCornerQueries } from "./cliff-corners"
 import { DEFAULT_ELEVATION, groundHeight } from "./elevation"
 import { parseAsciiMap } from "./prototype-map"
 import { TILE_HEIGHT } from "./terrain"
@@ -87,4 +87,39 @@ describe("diagonal cliff geometry", () => {
     shore.elevation!.corners[(1 * 5 + 2) * 4 + 2] = -.8
     expect(cliffCorner(shore, 2, 2)).toBeUndefined()
   })
+})
+
+
+describe("terrain query scopes", () => {
+  it("shares a read-only query batch and observes in-place edits in the next batch", () => {
+    const map = shelf(), samples = [[1.7, 1.7], [2.3, 2.3], [1.5, 2.5]]
+    const expected = samples.map(([x, z]) => groundHeight(map, x, z))
+    withTerrainCornerQueries(map, () => {
+      expect(samples.map(([x, z]) => groundHeight(map, x, z))).toEqual(expected)
+      const cut = terrainCorner(map, 2, 2)
+      withTerrainCornerQueries(map, () => expect(terrainCorner(map, 2, 2)).toBe(cut))
+    })
+    map.elevation!.corners.fill(0)
+    expect(withTerrainCornerQueries(map, () => groundHeight(map, 2.3, 2.3))).toBe(TILE_HEIGHT)
+    expect(terrainCorner(map, 2, 2)).toBeUndefined()
+  })
+  it("closes a batch after an exception so later queries see new terrain", () => {
+    const map = shelf()
+    expect(() => withTerrainCornerQueries(map, () => {
+      expect(terrainCorner(map, 2, 2)).toBeDefined()
+      throw new Error("cancel query")
+    })).toThrow("cancel query")
+    map.elevation!.corners.fill(0)
+    expect(terrainCorner(map, 2, 2)).toBeUndefined()
+  })
+})
+
+it("shares terrain between synchronous pose callbacks but refreshes at frame and canvas boundaries", () => {
+  const map = shelf(), frame = { elapsedTime: 1 }
+  const first = withTerrainCornerQueries(map, () => terrainCorner(map, 2, 2), frame)
+  expect(withTerrainCornerQueries(map, () => terrainCorner(map, 2, 2), frame)).toBe(first)
+  const otherCanvas = { elapsedTime: 1 }
+  expect(withTerrainCornerQueries(map, () => terrainCorner(map, 2, 2), otherCanvas)).not.toBe(first)
+  map.elevation!.corners.fill(0); frame.elapsedTime++
+  expect(withTerrainCornerQueries(map, () => terrainCorner(map, 2, 2), frame)).toBeUndefined()
 })

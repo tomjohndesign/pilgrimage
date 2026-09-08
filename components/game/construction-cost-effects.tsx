@@ -1,8 +1,9 @@
 "use client"
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react"
-import { useFrame } from "@react-three/fiber"
+import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
+import { sceneryDetail } from "@/lib/game/render/scenery-detail"
 import { buildingCentre } from "@/lib/game/buildings"
 import { isComplete } from "@/lib/game/construction"
 import { groundHeight } from "@/lib/game/map/elevation"
@@ -13,6 +14,7 @@ export interface ConstructionCostHandle { show: (building: BuildingDef) => void 
 
 /** Placement receipts and click-to-replay costs use the same rise/fade as income. */
 export const ConstructionCostEffects = forwardRef<ConstructionCostHandle, { map: GameMap; characterScale: number }>(function ConstructionCostEffects({ map, characterScale }, ref) {
+  const scene = useThree(state => state.scene)
   const group = useRef<THREE.Group>(null)
   const pool = useRef<ReturnType<typeof createPaymentFloaters> | null>(null)
   const seen = useRef({ world: map.road, ids: new Set(map.buildings.map(b => b.id)) })
@@ -23,6 +25,7 @@ export const ConstructionCostEffects = forwardRef<ConstructionCostHandle, { map:
   }, [])
 
   const show = useCallback((building: BuildingDef) => {
+    if (sceneryDetail(scene) > 0) return
     const cost = building.construction?.cost
     if (!cost || isComplete(building)) return
     const { x, z } = buildingCentre(map, building)
@@ -31,7 +34,7 @@ export const ConstructionCostEffects = forwardRef<ConstructionCostHandle, { map:
     for (const resource of ["gold", "wood"] as const) if (cost[resource] > 0) {
       pool.current?.show({ x, y, z, amount: cost[resource], resource, row: row++ }, characterScale)
     }
-  }, [map, characterScale])
+  }, [map, characterScale, scene])
   useImperativeHandle(ref, () => ({ show }), [show])
   useEffect(() => {
     // A regenerated world must not replay historical construction receipts.
@@ -46,6 +49,12 @@ export const ConstructionCostEffects = forwardRef<ConstructionCostHandle, { map:
     // Only newly placed structures emit; stage updates retain the same IDs.
   }, [map.buildings, map.road, show])
   // Click feedback keeps moving even when the simulation is paused.
-  useFrame((_, delta) => pool.current?.step(Math.min(delta, 0.1)), -2)
+  useFrame((_, delta) => {
+    if (!group.current) return
+    const visible = sceneryDetail(scene) === 0
+    if (!visible && group.current.visible) pool.current?.step(PAYMENT_LIFETIME)
+    group.current.visible = visible
+    if (visible) pool.current?.step(Math.min(delta, 0.1))
+  }, -2)
   return <group ref={group} name="construction-cost-effects" />
 })

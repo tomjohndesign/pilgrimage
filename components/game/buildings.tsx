@@ -1,5 +1,6 @@
 "use client"
 
+import { CloseScenery } from "./close-scenery"
 import { EntranceDetails } from "./entrance-details"
 import { ConstructionProgress } from "./construction-progress"
 import { ConstructionCostEffects, type ConstructionCostHandle } from "./construction-cost-effects"
@@ -13,7 +14,7 @@ import { isComplete } from "@/lib/game/construction"
 
 import { groundHeight } from "@/lib/game/map/elevation"
 
-import { useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import * as THREE from "three"
 
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
@@ -34,6 +35,10 @@ import {
 
 /** Built structures share their geometry with the menu and placement preview. */
 export function Buildings({ map, characterScale = 1.5, showInteriors = false }: { map: GameMap; characterScale?: number; showInteriors?: boolean }) {
+  // Authored colors live on the merged vertices. Share the otherwise identical
+  // surface material so adjacent buildings reuse lighting and shader uniforms.
+  const surfaceMaterial = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), [])
+  useEffect(() => () => surfaceMaterial.dispose(), [surfaceMaterial])
   const costs = useRef<ConstructionCostHandle>(null)
   const selectSite = (building: BuildingDef, event: Parameters<typeof selectElement>[1]) => {
     if (selectElement({ kind: "building", id: building.id }, event)) costs.current?.show(building)
@@ -70,9 +75,9 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
         if (building.buildType === "storehouse" || building.buildType === "workshop") {
           return (
             <group key={building.id} name={`storage-${building.id}`} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
-              <StructureModel terrainFloors parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} />
+              <StructureModel terrainFloors parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
               {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
-              {building.buildType === "storehouse" && FOOD_TYPES.map((type, slot) => {
+              <CloseScenery enabled={building.buildType === "storehouse"}>{building.buildType === "storehouse" && FOOD_TYPES.map((type, slot) => {
                 const amount = foodStores.get(building.id)?.[type] ?? 0
                 return amount > 0 && <mesh key={type} position={[(slot - 1.5) * local.w * 0.21, 0.43, -local.d * 0.33]}>
                   <boxGeometry args={[local.w * 0.14, 0.12, local.d * 0.12]} />
@@ -83,14 +88,14 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
                 const store = building.buildType === "storehouse"
                 const [x, z] = store ? pileOffset(pile.slot) : workshopPileOffset(pile.slot, local.w, local.d)
                 return <group key={pile.id} position={[x, store ? 0.35 : 0.08, store ? z * 0.5 - 0.1 : z]}><WoodPile pile={pile} objectId={pileObjectId(piles.indexOf(pile))} /></group>
-              })}
+              })}</CloseScenery>
             </group>
           )
         }
 
         return (
           <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
-            <StructureModel terrainFloors parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} />
+            <StructureModel terrainFloors parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
             {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
             {isComplete(building) && hasDomesticHearth(building.buildType) && <ShelterFire buildType={building.buildType} width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
           </group>

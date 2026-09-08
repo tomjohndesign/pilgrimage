@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef } from "react"
 import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber"
 import * as THREE from "three"
+import { sceneryDetail } from "@/lib/game/render/scenery-detail"
+import { isWorldVisible } from "@/lib/game/render/visibility"
 import { RELIC_TABLE_TOP } from "@/lib/game/building-art/early-geometry"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 
@@ -21,6 +23,7 @@ export function RelicDisplay({ color = "#ece2c8", idColor, onClick, height = REL
   height?: number; groundGlow?: boolean; trayWidth?: number
   color?: string; idColor?: THREE.Color; onClick?: (event: ThreeEvent<MouseEvent>) => void
 }) {
+  const effects = useRef<THREE.Group>(null)
   const core = useRef<THREE.MeshStandardMaterial>(null)
   const halo = useRef<THREE.SpriteMaterial>(null)
   const aura = useRef<THREE.Sprite>(null)
@@ -41,7 +44,13 @@ export function RelicDisplay({ color = "#ece2c8", idColor, onClick, height = REL
     return texture
   }, [])
   useEffect(() => () => glow.dispose(), [glow])
-  useFrame(({ clock }) => {
+  useFrame(({ clock, scene }) => {
+    if (!effects.current) return
+    effects.current.visible = sceneryDetail(scene) === 0
+    if (!effects.current.visible || !isWorldVisible(effects.current.parent)) {
+      if (core.current) core.current.emissiveIntensity = 1
+      return
+    }
     const pulse = (1 + Math.sin(clock.elapsedTime * Math.PI * 2 / PULSE_SECONDS)) / 2
     if (core.current) core.current.emissiveIntensity = .65 + pulse * 1.35
     if (halo.current) halo.current.opacity = .42 + pulse * .38
@@ -71,13 +80,13 @@ export function RelicDisplay({ color = "#ece2c8", idColor, onClick, height = REL
         <boxGeometry args={[SIZE, SIZE, SIZE]} /><meshBasicMaterial color={idColor} toneMapped={false} />
       </mesh>}
     </group>
-    <sprite name="relic-aura" ref={aura} position={[0, height, 0]} scale={.78} raycast={() => {}}>
+    <group ref={effects} name="relic-effects"><sprite name="relic-aura" ref={aura} position={[0, height, 0]} scale={.78} raycast={() => {}}>
       <spriteMaterial ref={halo} map={glow} color="#ffe3a0" transparent opacity={.6} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
     </sprite>
     {groundGlow && <mesh position={[0, .084, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => {}}>
       <planeGeometry args={[1.6, 1.6]} />
       <meshBasicMaterial ref={pool} map={glow} color="#e8c16c" transparent opacity={.2} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
     </mesh>}
-    <pointLight name="relic-light" ref={light} position={[0, height + .18, 0]} color="#ffd98a" intensity={2} distance={3} decay={2} />
+    <pointLight name="relic-light" ref={light} position={[0, height + .18, 0]} color="#ffd98a" intensity={2} distance={3} decay={2} /></group>
   </group>
 }

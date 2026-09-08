@@ -5,8 +5,53 @@ const CORNERS = [[1, 1], [1, -1], [-1, 1], [-1, -1]] as const
 const BANKS = new Set(["grass", "sand", "dirt", "hills", "forest", "darkwood", "clearing"])
 export interface CliffCorner { corner: number; donor: number; low: number; lower: [number, number, number, number] }
 
-/** Shoreline halves carry their donor's height too, moving small bank lips onto the diagonal. */
+interface QueryScope {
+  depth: number
+  frame?: { elapsedTime: number }
+  frameTime?: number
+  epoch: number
+  visited: Uint32Array
+  cuts: (CliffCorner | undefined)[]
+}
+const scopes = new WeakMap<GameMap, QueryScope>()
+
+/** Share cell geometry within a synchronous read-only terrain operation.
+ * A new scope always invalidates the previous results, so even in-place edits
+ * between simulation ticks are observed. Nested navigation reuses its caller.
+ * Pose callbacks may share their R3F clock: they run synchronously within one
+ * frame, with no terrain edits between them. Unscoped queries remain uncached;
+ * a different clock, time, ordinary scope or failed callback invalidates reuse. */
+export function withTerrainCornerQueries<T>(map: GameMap | undefined, read: () => T, frame?: { elapsedTime: number }): T {
+  if (!map) return read()
+  let scope = scopes.get(map)
+  if (!scope || scope.visited.length !== map.width * map.depth) {
+    scope = { depth: 0, epoch: 0, visited: new Uint32Array(map.width * map.depth), cuts: [] }
+    scopes.set(map, scope)
+  }
+  if (scope.depth++ === 0) {
+    if (!frame || scope.frame !== frame || scope.frameTime !== frame.elapsedTime) {
+      if (++scope.epoch >= 0xffffffff) { scope.visited.fill(0); scope.epoch = 1 }
+    }
+    scope.frame = frame; scope.frameTime = frame?.elapsedTime
+  }
+  try { return read() }
+  catch (error) { scope.frame = undefined; throw error }
+  finally { scope.depth-- }
+}
+
 export function terrainCorner(map: GameMap, x: number, z: number): CliffCorner | undefined {
+  const scope = scopes.get(map)
+  if (!scope?.depth || x < 0 || z < 0 || x >= map.width || z >= map.depth) return computeTerrainCorner(map, x, z)
+  const index = z * map.width + x
+  if (scope.visited[index] !== scope.epoch) {
+    scope.cuts[index] = computeTerrainCorner(map, x, z)
+    scope.visited[index] = scope.epoch
+  }
+  return scope.cuts[index]
+}
+
+/** Shoreline halves carry their donor's height too, moving small bank lips onto the diagonal. */
+function computeTerrainCorner(map: GameMap, x: number, z: number): CliffCorner | undefined {
   const cliff = cliffCorner(map, x, z)
   if (cliff) return cliff
   const corner = shorelineCorners(map, x, z).findIndex(Boolean)

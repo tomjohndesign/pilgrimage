@@ -1,9 +1,15 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
-import { useThree } from "@react-three/fiber"
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react"
+import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { RoadSegmentTexture } from "@/lib/game/render/road-segment-texture"
+import { sceneryDetail } from "@/lib/game/render/scenery-detail"
+import { elevationShader } from "@/lib/game/render/terrain-elevation"
+import { terrainHiddenFaces, compactTerrainFaces } from "@/lib/game/render/terrain-hidden-faces"
+import { TERRAIN_BLOCK, terrainBlocks, sameRoadSnapshot, type TerrainBlockBounds } from "@/lib/game/render/terrain-blocks"
+import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
 import { terrainCorner, type CliffCorner } from "@/lib/game/map/cliff-corners"
 import { waterDepthCorners } from "@/lib/game/map/water-depth-corners"
 import { groundCornerTiles, groundPaintCode } from "@/lib/game/map/ground-transitions"
@@ -15,6 +21,7 @@ import { dirtFloorMask, DIRT_FLOOR_GLSL } from "@/lib/game/building-art/dirt-flo
 import { GROUND_SURFACE_GLSL, ROAD_UV_SCALE, GRASS_TEXTURE_URL } from "@/lib/game/render/ground-surface"
 import { ElevationEdges } from "./elevation-edges"
 import { WaterMotion } from "./water-motion"
+import { StaticBlock } from "./static-block"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { SHORE_CORNERS, shorelineCorners } from "@/lib/game/map/shoreline"
 import { SHORELINE_SHAPE_GLSL } from "@/lib/game/render/shoreline-shape"
@@ -106,7 +113,7 @@ const EDGE_WAVER = 0.3
 interface RoadSurface {
   texture: THREE.Texture
   edgeWear: number
-  segments: THREE.DataTexture
+  segments: { texture: { value: THREE.DataTexture | null }; size: { value: THREE.Vector2 } }
   floors: THREE.DataTexture
   trail: THREE.Texture
   isDirt: boolean
@@ -176,37 +183,7 @@ interface TileMaterialOptions {
  * Ground tiles carry `aShoreCorners` and `aShorePaint` for triangular banks
  * and shallows. With `gridOrigin` set, the global grid lattice is drawn on top.
  */
-/** Deform the tile tops identically in the colour and outline depth passes. */
-function elevationShader(shader: { vertexShader: string }, cuts = true): void {
-  shader.vertexShader = shader.vertexShader
-    .replace("#include <common>", `attribute vec4 aCorners;
-${cuts ? "attribute float aCut;" : ""}
-#include <common>`)
-    .replace("#include <begin_vertex>", `#include <begin_vertex>
-      ${cuts ? `
-      if (abs(aCut) > .5) {
-        float corner = abs(aCut) - 1.0;
-        vec2 direction = vec2(corner < 2.0 ? 1.0 : -1.0, mod(corner, 2.0) < .5 ? 1.0 : -1.0) * sign(aCut);
-        if (position.x * direction.x > .49 && position.z * direction.y > .49) transformed.x = -direction.x * .5;
-      }` : ""}
-      float terrainTop = mix(mix(aCorners.x, aCorners.y, transformed.x + 0.5),
-        mix(aCorners.z, aCorners.w, transformed.x + 0.5), transformed.z + 0.5) + 0.2;
-      transformed.y = position.y < 0.0 ? -0.5 : (terrainTop - instanceMatrix[3].y) / instanceMatrix[1].y;
-    `)
-    .replace("#include <beginnormal_vertex>", `#include <beginnormal_vertex>
-      ${cuts ? `
-      if (abs(aCut) > .5 && abs(normal.x) > .5) {
-        float corner = abs(aCut) - 1.0;
-        vec2 direction = vec2(corner < 2.0 ? 1.0 : -1.0, mod(corner, 2.0) < .5 ? 1.0 : -1.0) * sign(aCut);
-        if (normal.x * direction.x > .5) objectNormal = normalize(vec3(direction.x, 0.0, direction.y));
-      }` : ""}
-      if (normal.y > 0.5) {
-        float gx = mix(aCorners.y - aCorners.x, aCorners.w - aCorners.z, position.z + 0.5);
-        float gz = mix(aCorners.z - aCorners.x, aCorners.w - aCorners.y, position.x + 0.5);
-        objectNormal = normalize(vec3(-gx, instanceMatrix[1].y, -gz));
-      }
-    `)
-}
+
 
 function makeTileMaterial({
   grassTexture,
@@ -241,8 +218,8 @@ function makeTileMaterial({
       shader.uniforms.dirtFloorMap = { value: road.floors }
       shader.uniforms.dirtFloorMapSize = { value: new THREE.Vector2(road.floors.image.width, road.floors.image.height) }
       shader.uniforms.waterShallow = { value: new THREE.Color(WATER_DEPTH_COLORS[0]) }
-      shader.uniforms.roadSegments = { value: road.segments }
-      shader.uniforms.roadSegmentTextureSize = { value: new THREE.Vector2(road.segments.image.width, road.segments.image.height) }
+      shader.uniforms.roadSegments = road.segments.texture
+      shader.uniforms.roadSegmentTextureSize = road.segments.size
       shader.uniforms.roadEdgeWear = { value: road.edgeWear }
       // Shared objects, so the look can be tuned live without a recompile.
       shader.uniforms.roadOpacity = road.look.opacity
@@ -258,7 +235,6 @@ function makeTileMaterial({
         varying vec2 vCliffUv;
         varying float vWater;
         varying float vGridTop;
-        attribute vec4 aSurface;
         attribute vec4 aOverlay;
         varying float vGrass;
         varying vec4 vOverlay;
@@ -295,7 +271,7 @@ function makeTileMaterial({
           #endif
           worldPos = modelMatrix * worldPos;
           vWorld = worldPos.xz;
-          vWater = aSurface.y;
+          vWater = mod(aSurface.y, 2.0);
           vCliffUv = vec2((abs(normal.x) > 0.5 ? worldPos.z : worldPos.x) / 4.0,
             1.0 - (terrainTop - worldPos.y) / ${SLAB_THICKNESS});
           vGridTop = step(0.5, normal.y);
@@ -497,7 +473,7 @@ function makeTileMaterial({
   // The grid origin is baked into the shader source, so it has to be part of
   // the program key or two maps of different sizes would share one program.
   const gridKey = gridOrigin ? `${gridOrigin.x.toFixed(3)}:${gridOrigin.z.toFixed(3)}` : "nogrid"
-  material.customProgramCacheKey = () => `tiles-${road ? "road" : "ground"}-${gridKey}-water-depth-cliff-half-tiles-v2${edgeOnly ? "-edge" : ""}`
+  material.customProgramCacheKey = () => `tiles-${road ? "road" : "ground"}-${gridKey}-water-depth-cliff-hidden-faces-v3${edgeOnly ? "-edge" : ""}`
   return material
 }
 
@@ -623,16 +599,7 @@ const AROUND: ReadonlyArray<readonly [number, number]> = [
   [-1, -1],
 ]
 
-export function TerrainTiles({
-  map,
-  roadTier = DEFAULT_ROAD_TIER,
-  traffic = DEFAULT_TRAFFIC,
-  relicTraffic = traffic,
-  look = DEFAULT_ROAD_LOOK,
-  showGrid = false,
-  traveledRoads,
-  regrowRoads = false,
-}: {
+type TerrainProps = {
   map: GameMap
   /** Road development tier — index into ROAD_TIERS. */
   roadTier?: number
@@ -648,12 +615,44 @@ export function TerrainTiles({
   traveledRoads?: ReadonlyMap<number, readonly RoadSegment[]>
   /** Live game roads lose their inherited surface when walkers stop using them. */
   regrowRoads?: boolean
-}) {
-  const groundMeshRef = useRef<THREE.InstancedMesh>(null)
-  const roadMeshRef = useRef<THREE.InstancedMesh>(null)
-  const edgeMeshRef = useRef<THREE.InstancedMesh>(null)
-  const idMeshRef = useRef<THREE.InstancedMesh>(null)
-  const count = map.width * map.depth
+}
+interface TerrainShared {
+  coveredLand: Set<number>
+  floors: ReturnType<typeof dirtFloorMask>
+  floorTexture: THREE.DataTexture
+  shoulders: ReturnType<typeof junctionShoulders>
+  shade: Float32Array
+  darkShade: Float32Array
+  grain: Float64Array
+  floor: number
+}
+interface TerrainSurfaces extends TerrainShared {
+  growth: { texture: THREE.DataTexture; origin: THREE.Vector2 }
+  palette: THREE.DataTexture
+  waterPalette: THREE.DataTexture
+  cuts: ReadonlyMap<number, CliffCorner>
+  hiddenFaces: Uint8Array
+}
+
+/** Static land is batched in spatial blocks. Each road snapshot only
+ * repaints the blocks it changes; offscreen blocks are rejected in every pass. */
+export function TerrainTiles(props: TerrainProps) {
+  const { map } = props
+  const tier = ROAD_TIERS[clampRoadTier(props.roadTier ?? DEFAULT_ROAD_TIER)]
+  const shared = useMemo<TerrainShared>(() => {
+    const bridges = bridgeLayout(map)
+    const coveredLand = new Set([...bridges.connectors, ...bridges.ramps].map(t => t.z * map.width + t.x))
+    const floors = dirtFloorMask(map)
+    const floorTexture = new THREE.DataTexture(floors.data, map.width, map.depth)
+    floorTexture.needsUpdate = true
+    const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.tileJitter))
+    return { coveredLand, floors, floorTexture, shoulders: junctionShoulders(map, coveredLand),
+      shade: computeForestShade(map), darkShade: computeDarkShade(map),
+      grain: Float64Array.from({ length: map.width * map.depth }, () => rng() - .5),
+      floor: (map.elevation?.height.reduce((a, b) => Math.min(a, b), SLAB_TOP) ?? SLAB_TOP) - .02 }
+  }, [map])
+  useEffect(() => () => shared.floorTexture.dispose(), [shared])
+  const { coveredLand } = shared
   const growth = useMemo(() => {
     const field = groundGrowthField(map)
     const texture = new THREE.DataTexture(field.data, field.width, field.height)
@@ -662,10 +661,6 @@ export function TerrainTiles({
   }, [map])
   useEffect(() => () => growth.texture.dispose(), [growth])
 
-  const bridges = useMemo(() => bridgeLayout(map), [map])
-  const coveredLand = useMemo(() => new Set([
-    ...bridges.connectors, ...bridges.ramps,
-  ].map((tile) => tile.z * map.width + tile.x)), [bridges, map.width])
   const palette = useMemo(() => {
     const data = new Float32Array(map.width * map.depth * 4)
     const shade = computeForestShade(map), dark = computeDarkShade(map)
@@ -719,46 +714,7 @@ export function TerrainTiles({
     return texture
   }, [map])
   useEffect(() => () => waterPalette.dispose(), [waterPalette])
-  const floors = useMemo(() => dirtFloorMask(map), [map])
-  const floorTexture = useMemo(() => {
-    const texture = new THREE.DataTexture(floors.data, map.width, map.depth)
-    texture.needsUpdate = true
-    return texture
-  }, [floors, map.width, map.depth])
-  useEffect(() => () => floorTexture.dispose(), [floorTexture])
-  const tier = ROAD_TIERS[clampRoadTier(roadTier)]
-  const shoulders = useMemo(() => junctionShoulders(map, coveredLand), [map, coveredLand])
-  const diagonalSegments = useMemo(() => {
-    const segments = traveledRoads
-      ? new Map([...traveledRoads].filter(([index]) => !coveredLand.has(index)))
-      : diagonalRoadSegments(map, coveredLand)
-    if (regrowRoads && !tier.paved) for (const [index, roads] of segments) {
-      const opacity = foundingRoadStrength(map, index)
-      segments.set(index, roads.map(s => s[4] < 2 || s[4] === 3 ? [s[0], s[1], s[2], s[3], s[4], opacity] : s))
-    }
-    return segments
-  }, [map, coveredLand, traveledRoads, regrowRoads, tier.paved])
-  const segmentData = useMemo(() => {
-    const count = [...diagonalSegments.values()].reduce((sum, segments) => sum + segments.length * 2, 0)
-    const width = Math.min(1024, Math.max(1, count))
-    const height = Math.max(1, Math.ceil(count / width))
-    const data = new Float32Array(width * height * 4)
-    const ranges = new Map<number, [number, number]>()
-    let offset = 0
-    for (const [index, segments] of diagonalSegments) {
-      ranges.set(index, [offset, segments.length])
-      for (const segment of segments) {
-        data.set([segment[0], segment[1], segment[2], segment[3]], offset * 4)
-        data.set(roadSegmentWear(segment, regrowRoads ? foundingRoadTraffic(map, index, traffic) : traffic, regrowRoads ? foundingRoadTraffic(map, index, relicTraffic) : relicTraffic, tier.tier), (offset + 1) * 4)
-        offset += 2
-      }
-    }
-    const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat, THREE.FloatType)
-    texture.needsUpdate = true
-    return { texture, ranges }
-  }, [diagonalSegments, traffic, relicTraffic, tier.tier, map, regrowRoads])
-  useEffect(() => () => segmentData.texture.dispose(), [segmentData])
-  const cliffCuts = useMemo(() => {
+  const cuts = useMemo(() => {
     const cuts = new Map<number, CliffCorner>()
     for (let z = 0; z < map.depth; z++) for (let x = 0; x < map.width; x++) {
       const cut = terrainCorner(map, x, z)
@@ -766,32 +722,43 @@ export function TerrainTiles({
     }
     return cuts
   }, [map, coveredLand])
-  const geometryCount = count + cliffCuts.size
-  const roadCount = useMemo(
-    () => map.tiles.reduce((n, t, i) => ((isRoadTerrain(t) || shoulders.has(i) || diagonalSegments.has(i) || floors.tiles.has(i)) && !coveredLand.has(i) && !cliffCuts.has(i) ? n + 1 : n), 0),
-    [map, coveredLand, shoulders, diagonalSegments, floors, cliffCuts],
-  )
-
-  // The look is uniforms shared with the material: tuned in place, no recompile.
-  const dpr = useThree((s) => s.viewport.dpr)
-  const lookUniforms = useMemo<RoadLookUniforms>(
-    () => ({
-      opacity: { value: DEFAULT_ROAD_LOOK.opacity },
-      shade: { value: DEFAULT_ROAD_LOOK.shade },
-      edgeLine: { value: DEFAULT_ROAD_LOOK.edgeLine },
-      edgeWidth: { value: DEFAULT_ROAD_LOOK.edgeWidth },
-      pixelRatio: { value: 1 },
-    }),
-    [],
-  )
-  useEffect(() => {
-    lookUniforms.opacity.value = look.opacity
-    lookUniforms.shade.value = look.shade
-    lookUniforms.edgeLine.value = look.edgeLine
-    lookUniforms.edgeWidth.value = look.edgeWidth
-    lookUniforms.pixelRatio.value = dpr
-  }, [lookUniforms, look, dpr])
-
+  const hiddenFaces = useMemo(() => terrainHiddenFaces(map, cuts), [map, cuts])
+  const surfaces = useMemo(() => ({ ...shared, growth, palette, waterPalette, cuts, hiddenFaces }), [shared, growth, palette, waterPalette, cuts, hiddenFaces])
+  const blocks = useMemo(() => terrainBlocks(map.width, map.depth), [map.width, map.depth])
+  const founding = useMemo(() => diagonalRoadSegments(map, shared.coveredLand), [map, shared])
+  const blockForTile = useMemo(() => {
+    const across = Math.ceil(map.width / TERRAIN_BLOCK)
+    return (tile: number) => blocks[Math.floor(Math.floor(tile / map.width) / TERRAIN_BLOCK) * across + Math.floor((tile % map.width) / TERRAIN_BLOCK)].id
+  }, [map.width, blocks])
+  const inheritedRoads = useMemo(() => {
+    const grouped = new Map<number, number[]>()
+    for (let tile = 0; tile < map.tiles.length; tile++) {
+      if (!isRoadTerrain(map.tiles[tile]) && !shared.shoulders.has(tile)) continue
+      const key = blockForTile(tile), list = grouped.get(key) ?? []
+      list.push(tile); grouped.set(key, list)
+    }
+    return grouped
+  }, [map, shared, blockForTile])
+  const previous = useRef(new Map<number, { roads: Map<number, readonly RoadSegment[]>; wear: number[] }>())
+  const snapshots = useMemo(() => {
+    const source = props.traveledRoads ?? founding
+    const grouped = new Map<number, Map<number, readonly RoadSegment[]>>()
+    for (const [tile, segments] of source) {
+      const key = blockForTile(tile), roads = grouped.get(key) ?? new Map<number, readonly RoadSegment[]>()
+      roads.set(tile, segments); grouped.set(key, roads)
+    }
+    const next = new Map<number, { roads: Map<number, readonly RoadSegment[]>; wear: number[] }>()
+    for (const block of blocks) {
+      const roads = grouped.get(block.id) ?? new Map<number, readonly RoadSegment[]>(), wear: number[] = []
+      for (const index of new Set([...(inheritedRoads.get(block.id) ?? []), ...roads.keys()])) {
+        wear.push(index, foundingRoadStrength(map, index), foundingRoadTraffic(map, index, props.traffic ?? DEFAULT_TRAFFIC))
+      }
+      const old = previous.current.get(block.id)
+      next.set(block.id, old && sameRoadSnapshot(old, { roads, wear }) ? old : { roads, wear })
+    }
+    previous.current = next
+    return next
+  }, [map, blocks, inheritedRoads, blockForTile, founding, props.traveledRoads, props.traffic])
   // Texture requests never suspend the terrain: colored surfaces are already
   // in place while each image loads, including when switching road tiers.
   const roadTexture = useTerrainTexture(tier.textureUrl, TERRAIN.path.color)
@@ -820,6 +787,109 @@ export function TerrainTiles({
     dirt.anisotropy = 4
   }, [dirt, map])
 
+  const textures = useMemo(() => ({ roadTexture, trailTexture, grass, ground, sand, dirt }), [roadTexture, trailTexture, grass, ground, sand, dirt])
+  const slabPosition: [number, number, number] = [0, shared.floor - SLAB_THICKNESS / 2, 0]
+  const slabArgs: [number, number, number] = [map.width + SLAB_EXPAND, SLAB_THICKNESS, map.depth + SLAB_EXPAND]
+  return <group name="terrain">
+    <WaterMotion map={map} />
+    <ElevationEdges map={map} />
+    <mesh position={slabPosition}><boxGeometry args={slabArgs} /><meshLambertMaterial map={dirt} /></mesh>
+    <mesh position={slabPosition} layers-mask={OUTLINE_ID_LAYER_MASK}><boxGeometry args={slabArgs} /><meshBasicMaterial color="black" toneMapped={false} /></mesh>
+    {blocks.map(bounds => <TerrainTileBlock key={bounds.id} {...props} bounds={bounds} shared={surfaces} textures={textures}
+      traveledRoads={snapshots.get(bounds.id)!.roads} wear={snapshots.get(bounds.id)!.wear} />)}
+  </group>
+}
+
+const TerrainTileBlock = memo(function TerrainTileBlock({
+  map, roadTier = DEFAULT_ROAD_TIER, traffic = DEFAULT_TRAFFIC, relicTraffic = traffic,
+  look = DEFAULT_ROAD_LOOK, showGrid = false, traveledRoads, regrowRoads = false, bounds, shared, textures, wear: wearSnapshot,
+}: TerrainProps & { bounds: TerrainBlockBounds; shared: TerrainSurfaces; textures: { roadTexture: THREE.Texture; trailTexture: THREE.Texture; grass: THREE.Texture; ground: THREE.Texture; sand: THREE.Texture; dirt: THREE.Texture }; wear: number[] }) {
+  const { roadTexture, trailTexture, grass, ground, sand, dirt } = textures
+  const groundMeshRef = useRef<THREE.InstancedMesh>(null)
+  const roadMeshRef = useRef<THREE.InstancedMesh>(null)
+  const edgeMeshRef = useRef<THREE.InstancedMesh>(null)
+  const idMeshRef = useRef<THREE.InstancedMesh>(null)
+  const count = (bounds.endX - bounds.x) * (bounds.endZ - bounds.z)
+
+  const { coveredLand, floors, floorTexture, shoulders, shade, darkShade, grain: grains, floor, growth, palette, waterPalette, cuts, hiddenFaces } = shared
+  const tier = ROAD_TIERS[clampRoadTier(roadTier)]
+  const diagonalSegments = useMemo(() => {
+    const segments = traveledRoads
+      ? new Map([...traveledRoads].filter(([index]) => !coveredLand.has(index)))
+      : diagonalRoadSegments(map, coveredLand)
+    if (regrowRoads && !tier.paved) for (const [index, roads] of segments) {
+      const opacity = foundingRoadStrength(map, index)
+      segments.set(index, roads.map(s => s[4] < 2 || s[4] === 3 ? [s[0], s[1], s[2], s[3], s[4], opacity] : s))
+    }
+    return segments
+  }, [map, coveredLand, traveledRoads, regrowRoads, tier.paved, wearSnapshot])
+  const segmentData = useMemo(() => {
+    const count = [...diagonalSegments.values()].reduce((sum, segments) => sum + segments.length * 2, 0)
+    const data = new Float32Array(Math.max(1, count) * 4)
+    const ranges = new Map<number, [number, number]>()
+    let offset = 0
+    for (const [index, segments] of diagonalSegments) {
+      ranges.set(index, [offset, segments.length])
+      for (const segment of segments) {
+        data.set([segment[0], segment[1], segment[2], segment[3]], offset * 4)
+        data.set(roadSegmentWear(segment, regrowRoads ? foundingRoadTraffic(map, index, traffic) : traffic, regrowRoads ? foundingRoadTraffic(map, index, relicTraffic) : relicTraffic, tier.tier), (offset + 1) * 4)
+        offset += 2
+      }
+    }
+    return { data, ranges }
+  }, [diagonalSegments, traffic, relicTraffic, tier.tier, map, regrowRoads])
+  const segmentTexture = useMemo(() => new RoadSegmentTexture(), [])
+  useEffect(() => () => segmentTexture.dispose(), [segmentTexture])
+  const cliffCuts = useMemo(() => {
+    const cuts = new Map<number, CliffCorner>()
+    for (let z = bounds.z; z < bounds.endZ; z++) for (let x = bounds.x; x < bounds.endX; x++) {
+      const cut = shared.cuts.get(z * map.width + x)
+      if (cut) cuts.set(z * map.width + x, cut)
+    }
+    return cuts
+  }, [map, shared.cuts, bounds])
+  const geometryCount = count + cliffCuts.size
+  const segmentUniforms = useMemo(() => ({ texture: { value: null as THREE.DataTexture | null }, size: { value: new THREE.Vector2() } }), [])
+  useLayoutEffect(() => {
+    const texture = segmentTexture.update(segmentData.data)
+    segmentUniforms.texture.value = texture
+    segmentUniforms.size.value.set(texture.image.width, texture.image.height)
+  }, [segmentData, segmentTexture, segmentUniforms])
+  const previousRoadTiles = useRef<number[]>([])
+  const roadTiles = useMemo(() => {
+    const tiles: number[] = []
+    for (let z = bounds.z; z < bounds.endZ; z++) for (let x = bounds.x; x < bounds.endX; x++) {
+      const i = z * map.width + x
+      if ((isRoadTerrain(map.tiles[i]) || shoulders.has(i) || diagonalSegments.has(i) || floors.tiles.has(i)) && !coveredLand.has(i) && !cliffCuts.has(i)) tiles.push(i)
+    }
+    const previous = previousRoadTiles.current
+    if (previous.length !== tiles.length || tiles.some((tile, i) => tile !== previous[i])) previousRoadTiles.current = tiles
+    return previousRoadTiles.current
+  }, [map, bounds, coveredLand, shoulders, diagonalSegments, floors, cliffCuts])
+  const roadCount = roadTiles.length
+  const roadTileSet = useMemo(() => new Set(roadTiles), [roadTiles])
+
+  // The look is uniforms shared with the material: tuned in place, no recompile.
+  const dpr = useThree((s) => s.viewport.dpr)
+  const lookUniforms = useMemo<RoadLookUniforms>(
+    () => ({
+      opacity: { value: DEFAULT_ROAD_LOOK.opacity },
+      shade: { value: DEFAULT_ROAD_LOOK.shade },
+      edgeLine: { value: DEFAULT_ROAD_LOOK.edgeLine },
+      edgeWidth: { value: DEFAULT_ROAD_LOOK.edgeWidth },
+      pixelRatio: { value: 1 },
+    }),
+    [],
+  )
+  useEffect(() => {
+    lookUniforms.opacity.value = look.opacity
+    lookUniforms.shade.value = look.shade
+    lookUniforms.edgeLine.value = look.edgeLine
+    lookUniforms.edgeWidth.value = look.edgeWidth
+    lookUniforms.pixelRatio.value = dpr
+  }, [lookUniforms, look, dpr])
+  useFrame(({ scene }) => { lookUniforms.edgeLine.value = sceneryDetail(scene) === 0 ? look.edgeLine : 0 })
+
   // Tile boundaries sit at integer offsets from -width/2, so the lattice
   // origin is that half-extent modulo one tile.
   const gridOrigin = useMemo(
@@ -842,9 +912,9 @@ export function TerrainTiles({
         growth,
         cliffTexture: dirt,
         gridOrigin,
-        road: { texture: roadTexture, edgeWear: tier.edgeWear, look: lookUniforms, segments: segmentData.texture, floors: floorTexture, trail: trailTexture, isDirt: tier.tier === 0 },
+        road: { texture: roadTexture, edgeWear: tier.edgeWear, look: lookUniforms, segments: segmentUniforms, floors: floorTexture, trail: trailTexture, isDirt: tier.tier === 0 },
       }),
-    [grass, ground, sand, palette, waterPalette, growth, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentData, floorTexture],
+    [grass, ground, sand, palette, waterPalette, growth, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentUniforms, floorTexture],
   )
   useEffect(() => () => roadMaterial.dispose(), [roadMaterial])
   // The same road surface reduced to its edge line, for the outline pass.
@@ -859,14 +929,12 @@ export function TerrainTiles({
         growth,
         cliffTexture: dirt,
         gridOrigin,
-        road: { texture: roadTexture, edgeWear: tier.edgeWear, look: lookUniforms, segments: segmentData.texture, floors: floorTexture, trail: trailTexture, isDirt: tier.tier === 0 },
+        road: { texture: roadTexture, edgeWear: tier.edgeWear, look: lookUniforms, segments: segmentUniforms, floors: floorTexture, trail: trailTexture, isDirt: tier.tier === 0 },
         edgeOnly: true,
       }),
-    [grass, ground, sand, palette, waterPalette, growth, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentData, floorTexture],
+    [grass, ground, sand, palette, waterPalette, growth, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentUniforms, floorTexture],
   )
   useEffect(() => () => edgeMaterial.dispose(), [edgeMaterial])
-
-  const floor = useMemo(() => (map.elevation?.height.reduce((a, b) => Math.min(a, b), SLAB_TOP) ?? SLAB_TOP) - 0.02, [map.elevation])
   const idGeometry = useMemo(() => makeTileGeometry(geometryCount), [geometryCount])
   const idMaterial = useMemo(() => {
     const material = new THREE.MeshBasicMaterial({ color: "black", toneMapped: false })
@@ -932,21 +1000,15 @@ export function TerrainTiles({
       }
     })
 
-    const roadWearBy = roadWear(traffic, tier.tier)
-    const trackWearBy = roadWear(relicTraffic, tier.tier)
     // Colour grain is a function of the map's own seed, one stream per consumer.
     // One draw per tile in scan order, whichever mesh the tile lands in, so the
     // grain never reshuffles when the road tier changes.
-    const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.tileJitter))
-    const grains = map.tiles.map(() => rng() - .5)
-    const shade = computeForestShade(map)
-    const darkShade = computeDarkShade(map)
     const shadeTint = (index: number, out: THREE.Color) =>
       out.copy(OPEN_MEADOW_TINT).lerp(DEEP_WOOD_TINT, shade[index])
 
-    let lowerId = count
-    for (let z = 0; z < map.depth; z++) {
-      for (let x = 0; x < map.width; x++) {
+    let localIndex = 0, lowerId = count
+    for (let z = bounds.z; z < bounds.endZ; z++) {
+      for (let x = bounds.x; x < bounds.endX; x++) {
         const index = z * map.width + x
         const cut = cliffCuts.get(index)
         const terrain = coveredLand.has(index) ? "grass" : map.tiles[index]
@@ -964,14 +1026,15 @@ export function TerrainTiles({
         position.set(tileToWorldX(map, x), floor + height / 2, tileToWorldZ(map, z))
         scale.set(1, height, 1)
         matrix.compose(position, quaternion, scale)
-        idMesh.setMatrixAt(index, matrix)
-        attr(idGeometry, "aCorners").setXYZW(index, corners[0], corners[1], corners[2], corners[3])
-        attr(idGeometry, "aCut").setX(index, cut ? cut.corner + 1 : 0)
+        idMesh.setMatrixAt(localIndex, matrix)
+        attr(idGeometry, "aCorners").setXYZW(localIndex, corners[0], corners[1], corners[2], corners[3])
+        attr(idGeometry, "aSurface").setY(localIndex, hiddenFaces[index] * 2)
+        attr(idGeometry, "aCut").setX(localIndex++, cut ? cut.corner + 1 : 0)
 
         // Where this tile sits on the forest-shade ramp.
         shadeTint(index, tint)
 
-        if (!cut && (isRoadTerrain(terrain) || shoulders.has(index) || diagonalSegments.has(index) || (floors.tiles.has(index) && !coveredLand.has(index)))) {
+        if (roadTileSet.has(index)) {
           const shoulderOnly = !isRoadTerrain(terrain)
           // The texture carries the road's colour; the instance carries the
           // weathering from whatever surrounds this stretch, plus the grain.
@@ -1006,13 +1069,12 @@ export function TerrainTiles({
           // The grain a land tile here would have had, from the same draw
           // (under the same canopy), and the rut edges for this road's own
           // traffic.
-          const wear = regrowRoads ? roadWear(foundingRoadTraffic(map, index, terrain === "track" ? relicTraffic : traffic), tier.tier) : terrain === "track" ? trackWearBy : roadWearBy
           const landJitter = (1 + grain * TERRAIN.grass.jitter) * canopy
 
           {
             const target = roadTargets[0]
             const i = target.next++
-            target.surface.setY(i, 0)
+            target.surface.setY(i, hiddenFaces[index] * 2)
             target.corners.setXYZW(i, corners[0], corners[1], corners[2], corners[3])
             target.mesh.setMatrixAt(i, matrix)
             target.mesh.setColorAt(i, color)
@@ -1023,15 +1085,12 @@ export function TerrainTiles({
             // -1 is a diagonal entrance, 0 an ordinary entrance, 1 open land.
             target.open.setXYZW(i, edge.open[0] - edge.diagonal[0], edge.open[1] - edge.diagonal[1],
               edge.open[2] - edge.diagonal[2], edge.open[3] - edge.diagonal[3])
-            const [segmentStart, segmentCount] = segmentData.ranges.get(index) ?? [0, 0]
-            target.surface.setZ(i, segmentStart)
-            target.surface.setW(i, segmentCount)
             target.roadCorners.setXYZW(i, ...edge.filledCorners)
             target.shoulders.setXYZW(i, ...(shoulders.get(index) ?? [0, 0, 0, 0]))
             const shoreCode = shoulderOnly ? shorelineCorners(map, x, z).reduce((code, flag, corner) => code + flag * 2 ** corner, 0) : 0
             target.surface.setX(i, shoulderOnly ? 1 + 2 * shoreCode : 0)
             target.landOverlay.setXYZW(i, landOverlay.x, landOverlay.y, landOverlay.z, landOverlay.w)
-            target.land.setXYZW(i, landJitter, wear.edge, wear.inner, regrowRoads && !tier.paved ? foundingRoadStrength(map, index) : 1)
+            target.land.setXYZW(i, landJitter, 0, 0, 0)
           }
           continue
         }
@@ -1041,7 +1100,7 @@ export function TerrainTiles({
         {
           const target = groundTargets[0]
           const i = target.next++
-          target.surface.setY(i, map.water?.depth[index] || terrain === "water" || terrain === "bridge" ? 1 : 0)
+          target.surface.setY(i, hiddenFaces[index] * 2 + (map.water?.depth[index] || terrain === "water" || terrain === "bridge" ? 1 : 0))
           target.corners.setXYZW(i, corners[0], corners[1], corners[2], corners[3])
           target.mesh.setMatrixAt(i, matrix)
           target.mesh.setColorAt(i, color)
@@ -1104,8 +1163,12 @@ export function TerrainTiles({
     }
     attr(idGeometry, "aCorners").needsUpdate = true
     attr(idGeometry, "aCut").needsUpdate = true
+    attr(idGeometry, "aSurface").needsUpdate = true
     edgeMesh.instanceMatrix.needsUpdate = true
     idMesh.instanceMatrix.needsUpdate = true
+    compactTerrainFaces(groundGeometry, groundMesh.count)
+    compactTerrainFaces(roadGeometry, roadMesh.count)
+    compactTerrainFaces(idGeometry, idMesh.count)
     // Recompute bounds after map edits for correct culling and picking.
     for (const target of [...roadTargets, ...groundTargets]) target.mesh.computeBoundingSphere()
     edgeMesh.computeBoundingSphere()
@@ -1113,8 +1176,6 @@ export function TerrainTiles({
   }, [
     map,
     tier,
-    traffic,
-    relicTraffic,
     roadGeometry,
     groundGeometry,
     cliffCuts,
@@ -1123,32 +1184,31 @@ export function TerrainTiles({
     floor,
     idGeometry,
     shoulders,
-    diagonalSegments,
-    segmentData,
-    regrowRoads,
-    floors,
+    roadTileSet,
+    floors, bounds, shared,
   ])
 
-  const slabPosition = useMemo<[number, number, number]>(
-    () => [0, floor - SLAB_THICKNESS / 2, 0],
-    [floor],
-  )
-  const slabArgs = useMemo<[number, number, number]>(
-    () => [map.width + SLAB_EXPAND, SLAB_THICKNESS, map.depth + SLAB_EXPAND],
-    [map],
-  )
+  // Wear changes frequently; land colors, terrain matrices and cliff bounds do
+  // not. Upload only the road attributes unless a path enters a new tile.
+  useLayoutEffect(() => {
+    const land = roadGeometry.getAttribute("aLand") as THREE.InstancedBufferAttribute
+    const surface = roadGeometry.getAttribute("aSurface") as THREE.InstancedBufferAttribute
+    const road = roadWear(traffic, tier.tier), track = roadWear(relicTraffic, tier.tier)
+    roadTiles.forEach((index, i) => {
+      const wear = regrowRoads ? roadWear(foundingRoadTraffic(map, index, map.tiles[index] === "track" ? relicTraffic : traffic), tier.tier)
+        : map.tiles[index] === "track" ? track : road
+      land.setY(i, wear.edge); land.setZ(i, wear.inner)
+      land.setW(i, regrowRoads && !tier.paved ? foundingRoadStrength(map, index) : 1)
+      const [start, count] = segmentData.ranges.get(index) ?? [0, 0]
+      surface.setZ(i, start); surface.setW(i, count)
+    })
+    land.needsUpdate = surface.needsUpdate = true
+  }, [map, roadGeometry, roadTiles, traffic, relicTraffic, tier, regrowRoads, segmentData, wearSnapshot, shared])
 
   return (
-    <group name="terrain">
-      <WaterMotion map={map} />
-      <ElevationEdges map={map} />
-      <mesh position={slabPosition}>
-        <boxGeometry args={slabArgs} />
-        <meshLambertMaterial map={dirt} />
-      </mesh>
-
+    <StaticBlock>
       <instancedMesh
-        frustumCulled={false}
+        frustumCulled
         ref={groundMeshRef}
         args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, geometryCount - roadCount]}
       >
@@ -1161,9 +1221,7 @@ export function TerrainTiles({
         key={tier.id}
         // Skip empty road batches, such as paths entirely covered by bridges.
         visible={roadCount > 0}
-        // The road runs the width of the map; the instance bounds it would
-        // be culled by are computed once and never worth it.
-        frustumCulled={false}
+        frustumCulled
         args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, roadCount]}
       >
         <primitive object={roadGeometry} attach="geometry" />
@@ -1179,7 +1237,7 @@ export function TerrainTiles({
       <instancedMesh
         key={`edge-${tier.id}`}
         visible={roadCount > 0}
-        frustumCulled={false}
+        frustumCulled
         ref={edgeMeshRef}
         args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, roadCount]}
         layers-mask={ROAD_EDGE_LAYER_MASK}
@@ -1193,12 +1251,8 @@ export function TerrainTiles({
         outline itself, but its depth stops hidden object seams — say two
         buildings overlapping *behind* a hill — from drawing lines through it.
       */}
-      <mesh position={slabPosition} layers-mask={OUTLINE_ID_LAYER_MASK}>
-        <boxGeometry args={slabArgs} />
-        <meshBasicMaterial color="black" toneMapped={false} />
-      </mesh>
       <instancedMesh
-        frustumCulled={false}
+        frustumCulled
         ref={idMeshRef}
         args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, geometryCount]}
         layers-mask={OUTLINE_ID_LAYER_MASK | ROAD_EDGE_LAYER_MASK}
@@ -1206,6 +1260,6 @@ export function TerrainTiles({
         <primitive object={idGeometry} attach="geometry" />
         <primitive object={idMaterial} attach="material" />
       </instancedMesh>
-    </group>
+    </StaticBlock>
   )
-}
+})

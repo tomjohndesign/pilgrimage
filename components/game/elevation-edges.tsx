@@ -1,7 +1,9 @@
 "use client"
 
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
+import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
+import { sceneryDetail } from "@/lib/game/render/scenery-detail"
 import { cliffCorner, terrainCorner, cliffUpperHeight } from "@/lib/game/map/cliff-corners"
 import { SHORE_CORNERS, shorelineCorners } from "@/lib/game/map/shoreline"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
@@ -10,6 +12,8 @@ import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 
 /** Narrow rims follow exposed upper edges, leaving continuous slopes unmarked. */
 export function ElevationEdges({ map }: { map: GameMap }) {
+  const mesh = useRef<THREE.Mesh>(null)
+  useFrame(({ scene }) => { if (mesh.current) mesh.current.visible = sceneryDetail(scene) === 0 })
   const width = map.elevation?.settings.edgeWidth ?? 0.045
   const geometry = useMemo(() => {
     const positions: number[] = []
@@ -66,7 +70,7 @@ export function ElevationEdges({ map }: { map: GameMap }) {
     return g
   }, [map, width])
   useEffect(() => () => geometry.dispose(), [geometry])
-  return <mesh name="elevation-rims" geometry={geometry} frustumCulled={false}>
+  return <mesh ref={mesh} name="elevation-rims" geometry={geometry} frustumCulled={false}>
     <meshBasicMaterial color="#342719" transparent opacity={map.elevation?.settings.edgeStrength ?? 0.7}
       depthWrite={false} side={THREE.DoubleSide} />
   </mesh>

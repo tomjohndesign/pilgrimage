@@ -817,15 +817,6 @@ export function GameHud({
           <p className="text-[11px] italic text-ink-light">Used for new maps and visits without a map size in the link. Your current map stays the same.</p>
           {!mapSizeSaved && <p role="status" className="text-[11px] text-red">Could not save this preference. It will apply for this session only.</p>}
         </div>
-        <div className="mb-4">
-          <Chooser
-            label="Trees"
-            value={settings.treeModel === "sprites" ? 1 : 0}
-            options={["Procedural", "Pixel foliage"]}
-            onChange={(index) => set({ treeModel: index === 1 ? "sprites" : "procedural" })}
-          />
-          <p className="pt-1 text-[11px] italic text-ink-light">Pixel foliage draws the baked tree sprites from the playground; trees stand one to a tile.</p>
-        </div>
         <Section {...section("Visibility")}>
           {VISIBILITY_TOGGLES.map(([key, label]) => (
             <Chooser key={key} label={label} labelClassName="w-24" value={settings[key] ? 1 : 0}

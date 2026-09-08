@@ -267,37 +267,67 @@ export function roadEdge(map: GameMap, x: number, z: number): RoadEdge {
   return { open, filledCorners, diagonal: roadDiagonals(map, x, z) }
 }
 
-/** Alternating bends always use the grid's 45-degree diagonal; junctions, plazas and bridges keep their entrances. */
-export function roadDiagonals(map: GameMap, x: number, z: number): SideFlags {
-  const bend = (bx: number, bz: number): number[] => {
-    if (!isRoadTerrain(tileAt(map, bx, bz))) return []
-    const sides = EDGE_DIRS.flatMap(([dx, dz], side) =>
-      roadContinues(tileAt(map, bx + dx, bz + dz)) ? [side] : [])
-    return sides.length === 2 && (sides[0] < 2) !== (sides[1] < 2) ? sides : []
-  }
-  const sides = bend(x, z)
-  const diagonal: SideFlags = [0, 0, 0, 0]
-  for (const side of sides) {
+/** Encode the two perpendicular entrances of an ordinary bend. */
+function roadBendSides(map: GameMap, x: number, z: number): number {
+  if (!isRoadTerrain(tileAt(map, x, z))) return 0
+  let sides = 0, count = 0
+  for (let side = 0; side < 4; side++) {
     const [dx, dz] = EDGE_DIRS[side]
-    const neighbour = bend(x + dx, z + dz)
-    const other = sides.find((s) => s !== side)!
-    if (neighbour.includes(side ^ 1) && neighbour.includes(other ^ 1)) {
-      diagonal[side] = 1
-    }
+    if (roadContinues(tileAt(map, x + dx, z + dz))) { sides |= 1 << side; count++ }
+  }
+  return count === 2 && (sides & 3) !== 0 && (sides & 12) !== 0 ? sides : 0
+}
+
+/** Alternating bends use the grid's 45-degree diagonal; junctions, plazas and bridges keep their entrances. */
+export function roadDiagonals(map: GameMap, x: number, z: number): SideFlags {
+  const sides = roadBendSides(map, x, z)
+  const diagonal: SideFlags = [0, 0, 0, 0]
+  for (let side = 0; side < 4; side++) {
+    if (!(sides & (1 << side))) continue
+    const [dx, dz] = EDGE_DIRS[side]
+    const neighbour = roadBendSides(map, x + dx, z + dz)
+    const other = 31 - Math.clz32(sides ^ (1 << side))
+    if ((neighbour & (1 << (side ^ 1))) && (neighbour & (1 << (other ^ 1)))) diagonal[side] = 1
   }
   return diagonal
 }
 
 export interface RoadBend {
-  a: { x: number; z: number }
-  b: { x: number; z: number }
-  controlA: { x: number; z: number }
-  controlB: { x: number; z: number }
-  straight: boolean
+  readonly a: Readonly<{ x: number; z: number }>
+  readonly b: Readonly<{ x: number; z: number }>
+  readonly controlA: Readonly<{ x: number; z: number }>
+  readonly controlB: Readonly<{ x: number; z: number }>
+  readonly straight: boolean
 }
+
+// A bend depends only on these thirteen local tiles and the authored seed.
+// Validate the compact signature on lookup, including in-place terrain edits;
+// movement and rendering can then share the curve without allocating it for
+// every person, frame, and lane sample.
+const bendNeighborhood = [[0, -2], [-1, -1], [0, -1], [1, -1], [-2, 0], [-1, 0], [0, 0], [1, 0], [2, 0], [-1, 1], [0, 1], [1, 1], [0, 2]] as const
+const bendCache = new WeakMap<GameMap, { seed: number | undefined; width: number; depth: number; tiles: Map<number, { signature: number; bend: RoadBend | null }> }>()
 
 /** A centreline with matching tangents at diagonal and ordinary entrances. Coordinates use tile edges. */
 export function diagonalRoadBend(map: GameMap, x: number, z: number): RoadBend | null {
+  if (!isRoadTerrain(tileAt(map, x, z))) return null
+  let cache = bendCache.get(map)
+  if (!cache || cache.seed !== map.seed || cache.width !== map.width || cache.depth !== map.depth) {
+    cache = { seed: map.seed, width: map.width, depth: map.depth, tiles: new Map() }
+    bendCache.set(map, cache)
+  }
+  let signature = 0
+  for (const [dx, dz] of bendNeighborhood) {
+    const terrain = tileAt(map, x + dx, z + dz)
+    signature = (signature << 2) | (isRoadTerrain(terrain) ? 2 : roadContinues(terrain) ? 1 : 0)
+  }
+  const key = z * map.width + x, previous = cache.tiles.get(key)
+  if (previous?.signature === signature) return previous.bend
+  const bend = createDiagonalRoadBend(map, x, z)
+  cache.tiles.set(key, { signature, bend })
+  return bend
+}
+
+function createDiagonalRoadBend(map: GameMap, x: number, z: number): RoadBend | null {
   const diagonal = roadDiagonals(map, x, z)
   if (!diagonal.some(Boolean)) return null
   const sx = roadContinues(tileAt(map, x + 1, z)) ? 1 : -1
