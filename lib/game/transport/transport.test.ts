@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import sharp from "sharp"
 import * as THREE from "three"
-import manifest from "../../../public/textures/transport/v23/manifest.json"
+import manifest from "../../../public/textures/transport/v24/manifest.json"
 import { BASE_PERSON, PERSON_CLIPS, WALK_CLIP_STRIDES, legPose } from "../base-person/pose"
 import { personRecipe } from "../base-person/design"
 import { personWalkStride } from "../base-person/gait"
@@ -232,27 +232,16 @@ it("has solid circular wheel faces, with no spoke openings", () => {
   } finally { rig.dispose() }
 })
 
-it("keeps draught leaders with the animal through independent cart turns, removing them when unhitched", () => {
+it("omits straight side leaders from draught animals and retains hand-cart handles", () => {
   for (const kind of ["horse", "donkey"] as const) {
-    const animal = createAnimalRig(kind, "common", undefined, true), loose = createAnimalRig(kind)
+    const animal = createAnimalRig(kind, "common", undefined, true)
     const cart = createCartRig("produce", kind)
     try {
-      animal.pose(0, false); loose.pose(0, false); cart.pose(0)
-      const shafts = animal.root.getObjectByName("draught-shafts")!
-      expect(shafts).toBeDefined()
-      expect(loose.root.getObjectByName("draught-shafts")).toBeUndefined()
-      // No duplicate leaders extending beyond the cart's front footboard.
+      expect(animal.root.getObjectByName("draught-shafts")).toBeUndefined()
+      expect(animal.root.getObjectByName("left-bit")).toBeDefined()
+      expect(animal.root.getObjectByName("right-bit")).toBeDefined()
       expect(new THREE.Box3().setFromObject(cart.root).max.z).toBeLessThan(2)
-      const rear = new THREE.Vector3(0, 0.6, 0.5)
-      const start = shafts.localToWorld(rear.clone())
-      cart.root.rotation.y = Math.PI / 2
-      animal.pose(0.3, true)
-      expect(shafts.localToWorld(rear.clone()).distanceTo(start)).toBeLessThan(1e-8)
-      animal.root.rotation.y = Math.PI / 2
-      const turned = shafts.localToWorld(rear.clone())
-      expect(turned.x).toBeCloseTo(start.z, 8)
-      expect(turned.z).toBeCloseTo(-start.x, 8)
-    } finally { animal.dispose(); loose.dispose(); cart.dispose() }
+    } finally { animal.dispose(); cart.dispose() }
   }
   const hand = createCartRig("produce", "hand")
   try { expect(new THREE.Box3().setFromObject(hand.root).max.z).toBeGreaterThan(2.18) }
