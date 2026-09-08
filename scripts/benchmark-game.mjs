@@ -470,6 +470,85 @@ try {
       "deselecting must restore the complete building geometry")
     console.log("City smoke passed: building picking, roof cutaway, selection through zoom, and complete roof restoration")
   }
+  if (process.env.BENCH_ISOLATION === "1") {
+    const results = []
+    const layers = { characters: "Characters", wildlife: "Wildlife", buildings: "Buildings", trees: "Trees", scenery: "Scenery" }
+    const cases = [
+      { label: "visible-running", hidden: [], paused: false },
+      { label: "characters-hidden-running", hidden: ["characters"], paused: false },
+      { label: "characters-hidden-paused", hidden: ["characters"], paused: true },
+      { label: "people-wildlife-hidden-paused", hidden: ["characters", "wildlife"], paused: true },
+      { label: "buildings-also-hidden-paused", hidden: ["characters", "wildlife", "buildings"], paused: true },
+      { label: "trees-also-hidden-paused", hidden: ["characters", "wildlife", "buildings", "trees"], paused: true },
+      { label: "named-layers-hidden-paused", hidden: Object.keys(layers), paused: true },
+      { label: "named-layers-and-terrain-hidden-paused", hidden: Object.keys(layers), paused: true, terrain: false },
+    ]
+    for (const viewSize of zooms) {
+      await page.evaluate(viewSize => { window.__pilgrimage.setPaused(true); window.__pilgrimage.setZoom(viewSize) }, viewSize)
+      await page.waitForTimeout(1500)
+      for (const condition of cases) {
+        // Exercise the player controls, not a separate debug visibility override.
+        await page.getByRole("button", { name: "World settings", exact: true }).click()
+        for (const [key, label] of Object.entries(layers)) {
+          await page.getByRole("combobox", { name: label, exact: true }).selectOption(
+            condition.hidden.includes(key) ? key === "buildings" ? "2" : "0" : key === "buildings" ? "0" : "1")
+        }
+        await page.getByRole("button", { name: "Close world settings", exact: true }).click()
+        await page.evaluate(({ paused, terrain, speed }) => {
+          const game = window.__pilgrimage
+          game.setTerrainVisible(terrain !== false); game.setSpeed(speed); game.setPaused(paused)
+        }, { ...condition, speed: speeds[0] })
+        await page.waitForTimeout(1000)
+        if (process.env.BENCH_GPU === "1") await page.evaluate(() => {
+          const probe = window.__benchmarkGPU
+          probe.reset?.(); probe.samples.length = 0; probe.disjoint = 0; probe.active = true
+        })
+        const sample = await page.evaluate(seconds => new Promise(resolve => {
+          const game = window.__pilgrimage, frames = [], longTasks = []
+          const observer = new PerformanceObserver(list => longTasks.push(...list.getEntries().map(e => e.duration)))
+          observer.observe({ type: "longtask" })
+          const timeBefore = game.time(), population = game.sim().length
+          const before = game.sceneStats()
+          let start, last
+          game.profileFrames(true); game.captureDraws(true)
+          const frame = now => {
+            start ??= now
+            if (last !== undefined) frames.push(now - last)
+            last = now
+            if (now - start < seconds * 1000) { requestAnimationFrame(frame); return }
+            const submissions = game.captureDraws(false), timings = game.profileFrames(false)
+            observer.disconnect()
+            resolve({ frames, longTasks, submissions, timings, timeBefore, timeAfter: game.time(), population,
+              retained: game.sim().length, layers: game.layerVisibility(), before, after: game.sceneStats(), render: game.renderInfo() })
+          }
+          requestAnimationFrame(frame)
+        }), seconds)
+        const gpu = process.env.BENCH_GPU === "1" ? await page.evaluate(() => {
+          const probe = window.__benchmarkGPU
+          probe.active = false
+          const sorted = [...probe.samples].sort((a, b) => a - b)
+          return { supported: probe.supported, count: sorted.length, disjoint: probe.disjoint,
+            meanMs: sorted.length ? sorted.reduce((a, b) => a + b, 0) / sorted.length : null,
+            p95Ms: sorted[Math.floor(sorted.length * .95)] ?? null }
+        }) : undefined
+        const frames = [...sample.frames].sort((a, b) => a - b)
+        const result = { ...condition, viewSize, speed: speeds[0], gpu, ...sample,
+          fps: sample.frames.length * 1000 / sample.frames.reduce((a, b) => a + b, 0), p95: frames[Math.floor(frames.length * .95)] }
+        results.push(result)
+        await writeFile(`${output}/isolation.json`, JSON.stringify(results, null, 2))
+        assert.equal(sample.population, count); assert.equal(sample.retained, count)
+        if (condition.paused) assert.equal(sample.timeAfter, sample.timeBefore)
+        else assert.ok(sample.timeAfter > sample.timeBefore, "hidden actors must keep simulating")
+        for (const name of Object.keys(layers)) {
+          assert.equal(sample.layers[name], !condition.hidden.includes(name))
+          if (condition.hidden.includes(name)) assert.equal(sample.submissions.draws[name]?.calls ?? 0, 0, `hidden ${name} must submit zero draws`)
+        }
+        console.log("Isolation", { viewSize, label: condition.label, fps: result.fps, p95: result.p95, gpu,
+          characterDraws: sample.submissions.draws.characters?.calls ?? 0 })
+      }
+    }
+    console.log("Visibility isolation passed: real controls, zero hidden-layer draws, and retained simulation")
+  }
   if (process.env.BENCH_DIAGNOSTICS === "1") {
     await page.evaluate(() => window.__pilgrimage.setPaused(true))
     const diagnostics = []

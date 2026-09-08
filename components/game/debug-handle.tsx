@@ -25,6 +25,7 @@ import { characterBatchControl } from "./character-batches"
 import { staticBatchControl } from "./static-batches"
 import { outlineFrameRef } from "./outline-pass"
 import { frameProfile } from "@/lib/game/render/frame-profile"
+import { createDrawProfile } from "@/lib/game/render/draw-profile"
 import { sceneryDetailStatus } from "@/lib/game/render/scenery-detail"
 import { batchedSourceRoots } from "@/lib/game/render/batch-source-visibility"
 import { BENCHMARK_SIMULATION_SPEEDS, useSimulationStore } from "@/lib/game/simulation-store"
@@ -41,11 +42,15 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
   useEffect(() => {
     if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_GAME_BENCHMARK !== "1") return
 
+    const drawProfile = createDrawProfile(gl, scene)
     let motionSubjects: Array<{ unit: THREE.Object3D; sprite: THREE.Sprite }> = []
     const handle = {
       map,
       benchmarkTarget: benchmarkCity(map)?.centre,
       cityStats: () => cityBenchmarkStats(simRegistry.current, map),
+      captureDraws: (enabled: boolean) => drawProfile.capture(enabled),
+      layerVisibility: () => Object.fromEntries(["characters", "wildlife", "trees", "scenery", "buildings"].map(name =>
+        [name, scene.getObjectByName(`visibility-${name}`)?.visible ?? false])),
       inventory: () => {
         let scenerySprites = 0
         scene.traverse(object => {
@@ -354,6 +359,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
 
     ;(window as unknown as Record<string, unknown>).__pilgrimage = handle
     return () => {
+      drawProfile.dispose()
       delete (window as unknown as Record<string, unknown>).__pilgrimage
     }
   }, [gl, camera, scene, map, travelers, speed, movement, speedScales, characterScale])
