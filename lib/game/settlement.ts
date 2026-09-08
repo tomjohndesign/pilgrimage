@@ -17,7 +17,6 @@ import type { BuildDefinition, Resources } from "./balance"
 export { BUILD_CATALOG, type BuildDefinition, type Resources } from "./balance"
 
 /** Default aliases for simulation fixtures and callers without browser tuning. */
-export const INCOME_INTERVAL_MS = DEFAULT_BALANCE.rules.incomeSeconds * 1000
 export const STARTING_RESOURCES = {
   gold: DEFAULT_BALANCE.rules.startingGold,
   wood: DEFAULT_BALANCE.rules.startingWood,
@@ -61,7 +60,7 @@ export function creditTrade(settlement: Settlement, receipts: number): Settlemen
   }
 }
 
-/** Admission is earned in the simulation and credited once, even after spending. */
+/** Donations are earned in the simulation and credited once, even after spending. */
 export function creditAdmission(settlement: Settlement, receipts: number): Settlement {
   if (receipts <= settlement.collectedAdmission) return settlement
   return {
@@ -143,40 +142,13 @@ export function renownTiers(balance: GameBalance = DEFAULT_BALANCE) {
 }
 export const RENOWN_TIERS = renownTiers()
 
-export function settlementIncome(
-  settlement: Settlement,
-  residentCount: number,
-  balance: GameBalance = DEFAULT_BALANCE,
-): Resources {
-  // The founding brothers collect offerings and gather timber, even without buildings.
-  const income = {
-    gold: residentCount * balance.rules.residentGold,
-    wood: residentCount * balance.rules.residentWood,
-  }
-  for (const building of settlement.structures) {
-    if (!isComplete(building)) continue
-    const def = buildCatalog(balance).find((item) => item.id === building.buildType)
-    if (def) {
-      income.gold += def.income.gold
-      income.wood += def.income.wood
-    }
-  }
-  return income
+/** Legacy callers cannot create resources: NPC receipts and deliveries own income. */
+export function settlementIncome(_settlement: Settlement, _residentCount: number, _balance: GameBalance = DEFAULT_BALANCE): Resources {
+  return { gold: 0, wood: 0 }
 }
 
-export function collectIncome(
-  settlement: Settlement,
-  residentCount: number,
-  balance: GameBalance = DEFAULT_BALANCE,
-): Settlement {
-  const income = settlementIncome(settlement, residentCount, balance)
-  return {
-    ...settlement,
-    resources: {
-      gold: settlement.resources.gold + income.gold,
-      wood: settlement.resources.wood + income.wood,
-    },
-  }
+export function collectIncome(settlement: Settlement, _residentCount: number, _balance: GameBalance = DEFAULT_BALANCE): Settlement {
+  return settlement
 }
 
 export function canAfford(resources: Resources, cost: Resources): boolean {

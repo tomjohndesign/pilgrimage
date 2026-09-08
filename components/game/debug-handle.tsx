@@ -162,7 +162,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
       constructionCosts: () => scene.getObjectByName("construction-cost-effects")?.children.flatMap(object =>
         object instanceof THREE.Sprite && object.visible ? [{ resource: object.userData.resource, amount: object.userData.amount,
           position: object.position.toArray(), opacity: object.material.opacity }] : []) ?? [],
-      /** Admission receipts and their live floating amounts for payment smoke tests. */
+      /** Donation receipts and their live floating amounts for payment smoke tests. */
       payments: () => ({
         receipts: simRegistry.current?.admissionPayments ?? [],
         effects: scene.getObjectByName("admission-effects")?.children.flatMap(object =>

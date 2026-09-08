@@ -34,11 +34,11 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     id: "shelter",
     label: "Pilgrim shelter",
     category: "buildings",
-    description: "Hospitality brings offerings.",
+    description: "A place for pilgrims to rest.",
     cost: { gold: 45, wood: 35 },
     renown: 0,
     requiredRenown: 0,
-    income: { gold: 3, wood: 0 },
+    income: { gold: 0, wood: 0 },
     w: 2,
     d: 2,
     height: 0.62,
@@ -99,7 +99,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     cost: { gold: 120, wood: 90 },
     renown: 18,
     requiredRenown: 40,
-    income: { gold: 8, wood: 0 },
+    income: { gold: 0, wood: 0 },
     w: 2,
     d: 3,
     height: 0.78,
@@ -124,28 +124,28 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     id: "house", label: "House", category: "buildings",
     description: "A log hut with a hearth and two straw beds. Settlers who take work here move in, and come home to sleep when they tire.",
     cost: { gold: 40, wood: 30 }, renown: 1, requiredRenown: 0,
-    income: { gold: 1, wood: 0 }, w: 2, d: 2, height: 0.70,
+    income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.70,
     color: "#8c7658", roofColor: "#a59164",
   },
   {
     id: "wood-shelter", label: "Wood shelter", category: "buildings",
     description: "An open lean-to that keeps split wood and spare poles dry.",
     cost: { gold: 20, wood: 20 }, renown: 0, requiredRenown: 0,
-    income: { gold: 0, wood: 1 }, w: 2, d: 1, height: 0.62,
+    income: { gold: 0, wood: 0 }, w: 2, d: 1, height: 0.62,
     color: "#8c7658", roofColor: "#a59164",
   },
   {
     id: "lumberCamp", label: "Timber yard", category: "buildings",
     description: "An open yard for stacking felled timber. No doorway, so it reserves no entrance tile.",
     cost: { gold: 40, wood: 30 }, renown: 0, requiredRenown: 0,
-    income: { gold: 0, wood: 2 }, w: 2, d: 2, height: 0.65,
+    income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.65,
     color: "#8c7658", roofColor: "#a59164",
   },
   {
     id: "market", label: "Market stall", category: "buildings",
     description: "A cloth-canopied stall with a rear cart yard. A passing vendor parks their cart and animal here and settles to sell food and wares.",
     cost: { gold: 50, wood: 30 }, renown: 3, requiredRenown: 10,
-    income: { gold: 4, wood: 0 }, w: MARKET_WIDTH, d: MARKET_DEPTH, height: 0.65,
+    income: { gold: 0, wood: 0 }, w: MARKET_WIDTH, d: MARKET_DEPTH, height: 0.65,
     color: "#8c7658", roofColor: "#a59164",
   },
   {
@@ -233,7 +233,7 @@ export const RULE_FIELDS = [
     group: "Resident income",
     label: "Gold per resident",
     description: "Offerings collected per resident per income payment.",
-    default: 1,
+    default: 0,
     min: 0,
     max: 1000,
     step: 1,
@@ -243,7 +243,7 @@ export const RULE_FIELDS = [
     group: "Resident income",
     label: "Wood per resident",
     description: "Timber gathered per resident per income payment.",
-    default: 2,
+    default: 0,
     min: 0,
     max: 1000,
     step: 1,
@@ -526,7 +526,7 @@ export function buildCatalog(balance: GameBalance = DEFAULT_BALANCE): BuildDefin
     return {
       ...def,
       cost: { gold: tuned.goldCost, wood: tuned.woodCost },
-      income: { gold: tuned.goldIncome, wood: tuned.woodIncome },
+      income: { gold: 0, wood: 0 },
       renown: tuned.renown,
       requiredRenown: tuned.requiredRenown,
     }
@@ -534,13 +534,7 @@ export function buildCatalog(balance: GameBalance = DEFAULT_BALANCE): BuildDefin
 }
 
 export function buildingIncomeLabel(def: BuildDefinition, balance: GameBalance): string {
-  const parts = [
-    def.income.gold ? `+${def.income.gold} gold` : "",
-    def.income.wood ? `+${def.income.wood} wood` : "",
-  ].filter(Boolean)
-  return parts.length
-    ? `${parts.join(" · ")} / ${balance.rules.incomeSeconds}s`
-    : def.id === "workshop" ? "3 woodcutting jobs"
+  return def.id === "workshop" ? "3 woodcutting jobs"
     : def.id === "tavern" ? "2 jobs · food & drink for gold"
     : def.id === "sheep-pen" ? "2 herding jobs"
     : def.id === "house" ? "Homes 2 settlers"

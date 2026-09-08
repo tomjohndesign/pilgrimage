@@ -5,7 +5,7 @@ import { alignCart, cartOnRoute, followCart } from "./follow"
 import { createSim, stepSim } from "../sim"
 import { generateTravelers, TRAVELER_TYPES } from "../travelers"
 import { DEFAULT_ELEVATION } from "../map/elevation"
-import { shrineSeats } from "../shrine-layout"
+import { shrineStations } from "../shrine-layout"
 import { buildingStepAllowed } from "../building-navigation"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "../map/types"
 
@@ -122,9 +122,8 @@ describe("merchant shrine parking", () => {
       }
       if (s.activity === "visiting") {
         sawVisit = true
-        const seat = shrineSeats(map.buildings[0], map.site!.door).find(seat => seat.id === s.shrineSeat)
-        expect(seat).toBeDefined()
-        expect(s.shrineRoute!.at(-1)).toEqual(seat!.tile)
+        expect(s.shrineSeat).toMatch(/^queue-/)
+        expect(s.shrineRoute!.at(-1)).toEqual(shrineStations(map.buildings[0], map.site!.door).viewing)
         for (let j=1;j<s.shrineRoute!.length;j++) expect(buildingStepAllowed(map,map.buildings,s.shrineRoute![j-1],s.shrineRoute![j],true,j===s.shrineRoute!.length-1?s.shrineSeat:undefined)).toBe(true)
         expect(s.x).toBeGreaterThanOrEqual(tileToWorldX(map, 12))
         expect(s.z).toBeGreaterThanOrEqual(tileToWorldZ(map, 10))

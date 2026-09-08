@@ -164,7 +164,7 @@ describe("tuned gameplay", () => {
     ).toMatch(/1000/)
     expect(bought.settlement.structures).toHaveLength(1)
   })
-  it("revalues existing structures and income without changing their treasury or footprint", () => {
+  it("revalues structures but ignores legacy passive-income tuning", () => {
     const world = map()
     const existing = purchaseStructure(createSettlement(), world, [], [], "shelter", {
       x: 22,
@@ -186,10 +186,10 @@ describe("tuned gameplay", () => {
     )
     expect(renown.buildings).toBe(55)
     const paid = collectIncome(existing, 4, balance)
-    expect(paid.resources.gold - existing.resources.gold).toBe(21)
-    expect(paid.resources.wood - existing.resources.wood).toBe(20)
+    expect(paid.resources.gold - existing.resources.gold).toBe(0)
+    expect(paid.resources.wood - existing.resources.wood).toBe(0)
     expect(existing).toEqual(before)
-    expect(buildingIncomeLabel(buildCatalog(balance)[0], balance)).toBe("+9 gold / 6s")
+    expect(buildingIncomeLabel(buildCatalog(balance).find(b => b.id === "shelter")!, balance)).toBe("Adds monk housing when complete")
   })
   it("applies the tuned influence radius across the full footprint", () => {
     const balance = fresh()
