@@ -1,5 +1,4 @@
 import { OUTLINE_THICKNESS_PX } from "../render/outline"
-import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
 import type { TerrainId } from "./terrain"
 import { tileAt, type GameMap } from "./types"
 
@@ -268,25 +267,7 @@ export function roadEdge(map: GameMap, x: number, z: number): RoadEdge {
   return { open, filledCorners, diagonal: roadDiagonals(map, x, z) }
 }
 
-/** Most suitable stretches straighten, with some ordinary bends for variety. */
-export const DIAGONAL_ROAD_SHARE = 0.9
-/** Choose a style over a stretch of land, rather than independently at every bend. */
-const ROAD_STYLE_REGION = 8
-
-function prefersDiagonalRoad(map: GameMap, x: number, z: number, nx: number, nz: number): boolean {
-  // Hand-authored fixtures express their shape directly. Generated worlds
-  // choose a repeatable mix, shared by the renderer and traveler movement.
-  if (map.seed === undefined) return true
-  // Use the shared entrance's midpoint, so both tiles make the same choice
-  // even when that entrance crosses a style-region boundary.
-  const rx = Math.floor((x + nx + 1) / (2 * ROAD_STYLE_REGION))
-  const rz = Math.floor((z + nz + 1) / (2 * ROAD_STYLE_REGION))
-  const region = Math.imul(rx, 73856093) ^ Math.imul(rz, 19349663)
-  const seed = deriveSeed(deriveSeed(map.seed, SEED_STREAM.roadShape), region)
-  return makeRng(seed)() < DIAGONAL_ROAD_SHARE
-}
-
-/** Only selected simple alternating bends straighten; junctions, plazas and bridges keep their entrances. */
+/** Alternating bends always use the grid's 45-degree diagonal; junctions, plazas and bridges keep their entrances. */
 export function roadDiagonals(map: GameMap, x: number, z: number): SideFlags {
   const bend = (bx: number, bz: number): number[] => {
     if (!isRoadTerrain(tileAt(map, bx, bz))) return []
@@ -300,7 +281,7 @@ export function roadDiagonals(map: GameMap, x: number, z: number): SideFlags {
     const [dx, dz] = EDGE_DIRS[side]
     const neighbour = bend(x + dx, z + dz)
     const other = sides.find((s) => s !== side)!
-    if (neighbour.includes(side ^ 1) && neighbour.includes(other ^ 1) && prefersDiagonalRoad(map, x, z, x + dx, z + dz)) {
+    if (neighbour.includes(side ^ 1) && neighbour.includes(other ^ 1)) {
       diagonal[side] = 1
     }
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { parseAsciiMap } from "./prototype-map"
-import { diagonalRoadPoint, roadDiagonals } from "./road"
+import { diagonalRoadBend, diagonalRoadPoint, roadDiagonals } from "./road"
 import { isWaterTile, shorelineCorners, shorelineInset } from "./shoreline"
 
 const staircase = parseAsciiMap([
@@ -13,23 +13,16 @@ const staircase = parseAsciiMap([
 ])
 
 describe("diagonal roads", () => {
-  it("prefers diagonals most of the time while retaining ordinary bends across seeded worlds", () => {
-    let diagonal = 0
+  it("straightens every seeded staircase instead of leaving random zigzag regions", () => {
     for (let seed = 0; seed < 1000; seed++) {
       const map = { ...staircase, seed }
-      const sides = roadDiagonals(map, 3, 2)
-      expect(roadDiagonals(map, 3, 2)).toEqual(sides)
-      // A local stretch has one style, rather than a different roll per tile.
-      expect(sides[1]).toBe(sides[2])
-      expect(roadDiagonals(map, 3, 3)[3]).toBe(sides[2])
-      if (sides[2]) diagonal++
-      else expect(diagonalRoadPoint(map, 3, 2)).toEqual({ x: 3, z: 2, laneScale: 1 })
+      expect(roadDiagonals(map, 3, 2)).toEqual([0, 1, 1, 0])
+      expect(roadDiagonals(map, 3, 3)).toEqual([1, 0, 0, 1])
+      expect(diagonalRoadPoint(map, 3, 2)).toEqual({ x: 2.75, z: 2.25, laneScale: Math.SQRT1_2 })
     }
-    expect(diagonal).toBeGreaterThan(870)
-    expect(diagonal).toBeLessThan(930)
   })
 
-  it("agrees at shared entrances across style-region boundaries", () => {
+  it("agrees at shared entrances across the former style-region boundaries", () => {
     // Move the staircase over the eight-tile region boundary.
     const shifted = parseAsciiMap([
       "..................", "......===.........", "........==........",
@@ -54,6 +47,32 @@ describe("diagonal roads", () => {
     expect(b).toEqual({ x: 3.25, z: 2.75, laneScale: Math.SQRT1_2 })
     // The two lane centres travel diagonally instead of stepping down a column.
     expect(b.x - a.x).toBe(b.z - a.z)
+  })
+
+  it("keeps shallow staircases on grid entrances and only straightens at 45 degrees", () => {
+    let rows = [
+      "...................", "====...............", "...===.............",
+      ".....===...........", ".......===.........", ".........=====.....",
+      "...................",
+    ]
+    for (let rotation = 0; rotation < 4; rotation++) {
+      const map = parseAsciiMap(rows)
+      for (let z = 0; z < map.depth; z++) for (let x = 0; x < map.width; x++) {
+        if (map.tiles[z * map.width + x] !== "path") continue
+        const bend = diagonalRoadBend(map, x, z)
+        if (!bend) {
+          expect(diagonalRoadPoint(map, x, z)).toEqual({ x, z, laneScale: 1 })
+          continue
+        }
+        // Each end stays at a tile-edge midpoint; no projected, off-grid joins.
+        for (const p of [bend.a, bend.b]) {
+          expect([[x, z + .5], [x + 1, z + .5], [x + .5, z], [x + .5, z + 1]])
+            .toContainEqual([p.x, p.z])
+        }
+        if (bend.straight) expect(Math.abs(bend.b.x - bend.a.x)).toBe(Math.abs(bend.b.z - bend.a.z))
+      }
+      rows = Array.from({ length: rows[0].length }, (_, x) => rows.map(row => row[x]).reverse().join(""))
+    }
   })
 
   it("preserves straight roads, isolated bends, junctions, plazas and bridge entries", () => {
