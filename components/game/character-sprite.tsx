@@ -71,7 +71,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   const origin = useMemo(() => new THREE.Vector3(), [])
   const contact = useMemo(() => new THREE.Vector3(), [])
   const corrected = useMemo(() => new THREE.Vector3(), [])
-  const playingClip = varied && type === "minstrel" ? MINSTREL_PLAYING : undefined
+  const playingClip = !visualOverride && varied && type === "minstrel" ? MINSTREL_PLAYING : undefined
   const textureEntries = useMemo(() => [
     { clip: visual.walk, url: visual.walk.url }, { clip: visual.idle, url: visual.idle.url },
     ...ACTION_CLIPS.flatMap(name => {

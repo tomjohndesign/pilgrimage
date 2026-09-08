@@ -1,3 +1,5 @@
+import { POPULATION_PROFILES } from "./population"
+import { SETTLEMENT_JOBS, jobDesign, type SettlementJob } from "../jobs/design"
 import { describe, expect, it } from "vitest"
 import { readFileSync } from "node:fs"
 import { BASE_CHARACTER_SCALE, DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE, PERSON_SPRITE_SCALE, personWalkStride, walkSpeedScale, walkContact, plantFoot, type FootPlant } from "./gait"
@@ -7,7 +9,10 @@ import { DEFAULT_POPULATION, populationVisual } from "./population-assets"
 import { CHARACTER_ASSETS, characterVisual } from "../character-assets"
 import { MONK_VISUAL, monkVisual, monkWalkSpeed, MONK_WALK_TUNING } from "./monk-assets"
 
-const WALKING_DESIGNS = [...DEFAULT_POPULATION.callings.peasant.designs, ...Object.values(PERSON_PRESETS)]
+const WALKING_DESIGNS = [
+  ...(Object.keys(SETTLEMENT_JOBS) as SettlementJob[]).flatMap(job => POPULATION_PROFILES.map((_, variant) => jobDesign(job, variant))),
+  ...DEFAULT_POPULATION.callings.peasant.designs, ...Object.values(PERSON_PRESETS),
+]
 
 describe("walking at the rendered person's scale", () => {
   it("ships the current rig and walk frame count in every active character family", () => {
@@ -66,8 +71,8 @@ describe("walking at the rendered person's scale", () => {
     }
   })
 
-  it("locks the rendered support foot between discrete poses without accumulating drift", () => {
-    for (const design of WALKING_DESIGNS) for (const scale of [0.75, 1.5, 2]) {
+  it.each(WALKING_DESIGNS)("locks the rendered support foot without accumulating drift (body %#)", (design) => {
+    for (const scale of [0.75, 1.5, 2]) {
       const body = personRecipe(design).body
       const stride = personWalkStride(design) * scale
       const rigScale = PERSON_SPRITE_SCALE * scale / BASE_PERSON.camera.viewSize

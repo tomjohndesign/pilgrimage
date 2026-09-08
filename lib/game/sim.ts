@@ -1,3 +1,4 @@
+import { settlementJob, jobSpeedScale } from "./jobs/design"
 import { seekSheep, stepShepherd, releaseSheep, type HerdingTask } from "./herding"
 import type { WildlifeWorld } from "./wildlife/simulation"
 import { cartPath, driveSegment, marketParking, type MarketParking } from "./transport/building-parking"
@@ -1293,7 +1294,9 @@ export function stepSim(
     const knightSpeed = t.type.id === "knight" ? (knightMounted(s.activity, s.horseRest)
       ? knightTravelSpeed(characterScale, knightLoadout(t.id).squire)
       : personWalkStride(knightDesign(travelerAppearance(map.seed ?? 0, t.id).variant)) * characterScale * DEFAULT_WALK_CADENCE) / DEFAULT_WALK_SPEED : undefined
-    const targetSpeed = t.pace * baseSpeed * (knightSpeed ?? speedScales?.get(t.id) ?? 1) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+    const job = settlementJob(s.employer, sim.buildings)
+    const residentSpeed = job ? jobSpeedScale(job, travelerAppearance(map.seed ?? 0, t.id).variant, characterScale) : undefined
+    const targetSpeed = t.pace * baseSpeed * (residentSpeed ?? knightSpeed ?? speedScales?.get(t.id) ?? 1) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
     s.moveSpeed = camping || sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed

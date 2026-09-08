@@ -33,7 +33,8 @@ import {
 } from "@/lib/game/map/generate-map"
 
 import { useSettlement } from "@/hooks/use-settlement"
-import { BUILDING_PREVIEW } from "@/lib/game/building-preview"
+import { previewResidents } from "@/lib/game/jobs/preview"
+import { BUILDING_PREVIEW, JOB_PREVIEW } from "@/lib/game/building-preview"
 
 import { GameHud } from "./game-hud"
 import { CheatBar } from "./cheat-bar"
@@ -258,7 +259,7 @@ export function GameShell({
 
   // Identities live outside the canvas so the HUD can name whoever is selected.
   const travelerCount = baseMap ? travelerCountForMap(baseMap, settings.traffic) : 0
-  const travelers = useMemo(
+  const roadTravelers = useMemo(
     () => (seed === null ? [] : generateTravelers(seed, travelerCount)),
     [seed, travelerCount],
   )
@@ -280,6 +281,8 @@ export function GameShell({
   useEffect(() => { footpaths.paved = ROAD_TIERS[settings.road]?.paved ?? false }, [footpaths, settings.road])
   // Keep one live map for the canvas and HUD readers, including roadside preaching.
   const map = useMemo(() => economy.map ? { ...economy.map, footpaths } : null, [economy.map, footpaths])
+  const travelers = useMemo(() => JOB_PREVIEW && map ? [...roadTravelers, ...previewResidents(map).map(resident => resident.traveler)] : roadTravelers,
+    [roadTravelers, map])
   const renown = economy.renown
   const [evangelism, setEvangelism] = useState(0)
   useEffect(() => {

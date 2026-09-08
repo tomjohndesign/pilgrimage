@@ -1,5 +1,5 @@
 import type { SpriteClip } from "../character-assets"
-import manifest from "../../../public/textures/characters/minstrel/v4/manifest.json"
+import manifest from "../../../public/textures/characters/minstrel/v5/manifest.json"
 
 export const MINSTREL_PLAYING: SpriteClip & { fps: number; reservedTones: boolean } = {
   reservedTones: (manifest as { reservedTones?: boolean }).reservedTones === true,

@@ -86,8 +86,19 @@ export function createRoadAccessories(recipe: PersonRecipe, sockets: Record<Sock
   const staff = group("walking-staff", "rightHand")
   if (design.walkingStick) {
     const { length, gripHeight } = staffDimensions(b)
-    mesh(staff, new THREE.CylinderGeometry(0.038, 0.040, length, 8), wood, 0, length / 2 - gripHeight)
-    mesh(staff, new THREE.SphereGeometry(0.041, 6, 4), wood, 0, length - gripHeight)
+    const crook = design.handTool === "Shepherd crook", bend = 0.14
+    const shaftLength = crook ? length - bend : length
+    mesh(staff, new THREE.CylinderGeometry(0.038, 0.040, shaftLength, 8), wood, 0, shaftLength / 2 - gripHeight)
+    if (crook) {
+      // A continuous bent wooden head, kept inside the original staff's height.
+      const top = shaftLength - gripHeight
+      const hook = new THREE.CatmullRomCurve3([
+        new THREE.Vector3(0, top, 0), new THREE.Vector3(0.035, top + .10, 0),
+        new THREE.Vector3(bend, top + bend, 0), new THREE.Vector3(.245, top + .10, 0),
+        new THREE.Vector3(.28, top, 0), new THREE.Vector3(.25, top - .11, 0),
+      ])
+      mesh(staff, new THREE.TubeGeometry(hook, 16, .038, 6, false), wood).name = "shepherd-crook"
+    } else mesh(staff, new THREE.SphereGeometry(0.041, 6, 4), wood, 0, length - gripHeight)
     // Keep the shaft a fine wooden line rather than inflating it with edge ink.
     staff.children.forEach(part => { part.userData.inkPart = 11 })
   }
