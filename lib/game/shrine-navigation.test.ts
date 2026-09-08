@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { buildingStepAllowed } from "./building-navigation"
+import { buildingStepAllowed, shrineFurnitureClear } from "./building-navigation"
 import { monkWander, type WanderSpot } from "./monk-wander"
-import { shrineLayout, shrineKneelers, shrineSeats } from "./shrine-layout"
-import { shrineVisitPlan } from "./shrine-visit"
+import { shrineLayout, shrineSeats, shrineStations } from "./shrine-layout"
+import { shrineExitPlan, shrineVisitPlan } from "./shrine-visit"
 import { processionGrounds } from "./relic-procession"
 import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 
@@ -15,39 +15,36 @@ function fixture(direction: number): GameMap {
     site: { hovelId: "shrine", door, branch: [door], junction: 0 } }
 }
 
-describe("walking around shrine kneelers", () => {
-  it.each([0, 1, 2, 3])("blocks kneeler shortcuts but admits the reserved visitor (view %i)", direction => {
+describe("church circulation", () => {
+  it.each([0, 1, 2, 3])("keeps prayer, queue and the offering-box exit reachable (view %i)", direction => {
     const map = fixture(direction), shrine = map.buildings[0], seats = shrineSeats(shrine, map.site!.door)
+    const stations = shrineStations(shrine, map.site!.door)
     for (const seat of seats) {
-      const plan = shrineVisitPlan(map, 0, 0, new Set(seats.filter(s => s.id !== seat.id).map(s => s.id)))!
+      const plan = shrineVisitPlan(map, 0, 0, new Set(seats.filter(s => s.id !== seat.id).map(s => s.id)), undefined, true)!
       expect(plan.seat).toBe(seat.id)
       expect(plan.route.at(-1)).toEqual(seat.tile)
-      for (let i = 1; i < plan.route.length; i++) {
-        const from = plan.route[i - 1], to = plan.route[i], last = i === plan.route.length - 1
-        expect(buildingStepAllowed(map, map.buildings, from, to, true)).toBe(!last)
-        expect(buildingStepAllowed(map, map.buildings, from, to, true, seat.id)).toBe(true)
-        expect(buildingStepAllowed(map, map.buildings, to, from, true, seat.id)).toBe(true)
-      }
-      const dx = Math.round(Math.sin(seat.heading)), dz = Math.round(Math.cos(seat.heading))
-      expect(buildingStepAllowed(map, map.buildings,
-        { x: seat.tile.x - dx, z: seat.tile.z - dz }, { x: seat.tile.x + dx, z: seat.tile.z + dz }, true)).toBe(false)
+      const exit = shrineExitPlan(map, seat.tile, plan.route)!
+      expect(exit.route[exit.offeringProgress]).toEqual(stations.offering)
+      for (const route of [plan.route, exit.route]) for (let i = 1; i < route.length; i++)
+        expect(buildingStepAllowed(map, map.buildings, route[i - 1], route[i], true)).toBe(true)
     }
+    const queue = shrineVisitPlan(map, 0, 0)!
+    expect(queue.route.at(-1)).toEqual(stations.viewing)
+    const exit = shrineExitPlan(map, stations.viewing, queue.route)!
+    expect(exit.route[0]).toEqual(queue.route[0])
+    expect(exit.route[exit.offeringProgress]).toEqual(stations.offering)
+    for (let i = 1; i < exit.route.length; i++)
+      expect(buildingStepAllowed(map, map.buildings, exit.route[i - 1], exit.route[i], true)).toBe(true)
+    expect(shrineVisitPlan(map, 0, 0, new Set(Array.from({ length: stations.queueCapacity }, (_, i) => `queue-${i}`)))).toBeNull()
   })
 
-  it.each([0, 1, 2, 3])("keeps every altar position reachable without crossing a kneeler (view %i)", direction => {
+  it.each([0, 1, 2, 3])("keeps every altar position reachable without crossing the altar (view %i)", direction => {
     const map = fixture(direction), shrine = map.buildings[0], layout = shrineLayout(shrine, map.site!.door)
     const wander = monkWander(map)
     expect(wander.prayerSpots).toHaveLength(4)
     const door = wander.spots.find(p => p.x === tileToWorldX(map, map.site!.door.x) && p.z === tileToWorldZ(map, map.site!.door.z))!
     const tile = (p: WanderSpot): TilePos => ({ x: p.x + map.width / 2 - .5, z: p.z + map.depth / 2 - .5 })
-    const clear = (p: TilePos) => {
-      const x = p.x - shrine.x - Math.floor(shrine.w / 2), z = p.z - shrine.z - Math.floor(shrine.d / 2)
-      const localX = x * Math.cos(layout.rotation) - z * Math.sin(layout.rotation)
-      const localZ = x * Math.sin(layout.rotation) + z * Math.cos(layout.rotation)
-      for (const kneeler of shrineKneelers(layout.width, layout.depth)) {
-        expect(Math.abs(localX - kneeler.x) < kneeler.length / 2 + .08 && Math.abs(localZ - (kneeler.z - .1)) < .32).toBe(false)
-      }
-    }
+    const clear = (p: TilePos) => expect(shrineFurnitureClear(shrine, map.site!.door, p, p)).toBe(true)
     for (const from of [door, ...wander.prayerSpots]) for (const to of [door, ...wander.prayerSpots]) {
       const route = wander.route(from, to)
       expect(route.at(-1)).toEqual(to)

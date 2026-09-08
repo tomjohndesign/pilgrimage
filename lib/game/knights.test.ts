@@ -93,13 +93,14 @@ describe("mounted knight journeys", () => {
     expect(knightTravelSpeed(1.5, true)).toBeLessThanOrEqual(animalWalkSpeed("horse", 1.5, "noble"))
   })
 
-  it("returns to the horse when admission becomes unaffordable", () => {
+  it("visits and returns to the horse even with no donation money", () => {
     const { map, t, sim, s } = fixture(1)
     for (let i = 0; i < 3000 && !s.horseRest; i++) stepSim(sim, [t], map, DEFAULT_WALK_SPEED, 0.1)
     expect(s.horseRest).toBeDefined()
-    s.gold = -1
+    s.gold = 0
     for (let i = 0; i < 10000 && s.horseRest; i++) stepSim(sim, [t], map, DEFAULT_WALK_SPEED, 0.1)
-    expect(s.horseRest).toBeUndefined(); expect(s.activity).toBe("fromParking"); expect(s.visits).toBe(0)
+    expect(s.horseRest).toBeUndefined(); expect(s.activity).toBe("fromParking"); expect(s.visits).toBe(1)
+    expect(sim.shrineGold).toBe(0)
   })
 })
 

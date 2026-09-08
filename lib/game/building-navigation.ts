@@ -2,7 +2,7 @@ import { sheepPenLayout } from "./workshop-layout"
 import { buildingEntry, buildingFoldEntry, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
 import { marketYardContains } from "./market-layout"
 import { isComplete, isEnterable } from "./construction"
-import { shrineLayout, shrineKneelers } from "./shrine-layout"
+import { shrineLayout } from "./shrine-layout"
 import type { BuildingDef, GameMap, TilePos } from "./map/types"
 
 export function containsTile(building: BuildingDef, p: TilePos): boolean {
@@ -22,7 +22,7 @@ export function shrineGates(building: BuildingDef, door?: TilePos): Array<{ outs
 }
 
 /** Test the whole walking segment against furniture, with room for the body. */
-export function shrineFurnitureClear(building: BuildingDef, door: TilePos | undefined, from: TilePos, to: TilePos, seat?: string): boolean {
+export function shrineFurnitureClear(building: BuildingDef, door: TilePos | undefined, from: TilePos, to: TilePos, _seat?: string): boolean {
   const layout = shrineLayout(building, door)
   const sin = Math.round(Math.sin(layout.rotation)), cos = Math.round(Math.cos(layout.rotation))
   const local = (p: TilePos) => {
@@ -32,11 +32,8 @@ export function shrineFurnitureClear(building: BuildingDef, door: TilePos | unde
   const a = local(from), b = local(to), clearance = .1
   const obstacles = [
     { id: "altar", x: 0, z: layout.altarZ, width: Math.min(.72, layout.width * .43), depth: Math.min(.46, layout.depth * .4) },
-    ...shrineKneelers(layout.width, layout.depth).map(p => ({ ...p, z: p.z - .1, width: p.length, depth: .48, placeZ: p.z })),
   ]
   return obstacles.every(p => {
-    // Only a visitor's reserved seat can be entered, as the final approach.
-    if (p.id === seat && "placeZ" in p && [a, b].some(point => point.x === p.x && point.z === p.placeZ)) return true
     let low = 0, high = 1
     for (const axis of ["x", "z"] as const) {
       const half = (axis === "x" ? p.width : p.depth) / 2 + clearance

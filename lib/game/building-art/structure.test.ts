@@ -137,13 +137,20 @@ describe("settlement construction", () => {
     expect(workshop.some(p => p.name === "axe-head")).toBe(true)
   })
 
-  it("covers the 3×5 shrine with one entrance, benches and an altar towards the rear", () => {
+  it("covers the 3×5 shrine with one entrance, a veiled relic under the altar and an offering box", () => {
     const parts = shrineStructureParts(3, 5)
     expect(new Set(parts.map(p => p.name)).size).toBe(parts.length)
     expect(parts.some(p => p.layer === "roof")).toBe(true)
     expect(parts.filter(p => p.name === "entrance-arch-0")).toHaveLength(1)
     expect(bounds(parts.find(p => p.name === "relic-table")!).getCenter(new Vector3()).z).toBeCloseTo(-1.4)
-    expect(parts.filter(p => p.name.startsWith("kneeler-") && p.name.endsWith("-pad"))).toHaveLength(4)
+    expect(parts.some(p => p.name.startsWith("kneeler-"))).toBe(false)
+    const altar = bounds(parts.find(p => p.name === "relic-table")!)
+    const shelf = bounds(parts.find(p => p.name === "relic-shelf")!)
+    const veil = bounds(parts.find(p => p.name === "relic-veil-0")!)
+    expect(shelf.max.y + .18).toBeLessThan(altar.min.y)
+    expect(veil.min.y).toBeLessThan(shelf.min.y)
+    expect(veil.max.y).toBeCloseTo(altar.max.y)
+    expect(parts.some(p => p.name === "offering-box-slot")).toBe(true)
     const inside = visibleStructureParts(parts, true)
     expect(inside.some(p => p.name === "relic-table")).toBe(true)
     expect(inside.some(p => p.layer === "roof")).toBe(false)

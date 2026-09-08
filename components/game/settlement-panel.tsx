@@ -9,7 +9,6 @@ import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import {
   jobBuildings,
   renownTiers,
-  settlementIncome,
 } from "@/lib/game/settlement"
 import { BUILDING_KINDS } from "@/lib/game/buildings"
 
@@ -32,7 +31,6 @@ export function SettlementPanel({
   if (!map || !relic) return null
   const tiers = renownTiers(balance)
   const renown = economy.renown!
-  const income = settlementIncome(settlement, economy.residents.length, balance)
   const tier = [...tiers].reverse().find((t) => renown.total >= t.renown)!
   const next = tiers.find((t) => renown.total < t.renown)
   const focusShrine = () => {
@@ -75,7 +73,7 @@ export function SettlementPanel({
               {settlement.resources[resource]}
             </div>
             <div className="text-[10px] text-ink-light">
-              +{income[resource]} / {balance.rules.incomeSeconds}s
+              {resource === "gold" ? "Visitor donations & trade" : "Timber delivered by workers"}
             </div>
           </div>
         ))}
@@ -97,7 +95,7 @@ export function SettlementPanel({
           ))}
         </dl>
         <p className="mt-2 text-[11px] italic text-ink-light">
-          The whole establishment draws pilgrims. The brothers gather wood and collect offerings.
+          The whole establishment draws pilgrims. Visitors donate and trade; workers deliver resources.
         </p>
       </details>
       {next && (

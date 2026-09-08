@@ -1,7 +1,7 @@
 import { buildingParts, type BuildingPart, type Vec3 } from "./geometry"
-import { earlyBuildingParts } from "./early-geometry"
+import { earlyBuildingParts, RELIC_TABLE_TOP } from "./early-geometry"
 import { DEFAULT_RECIPE, earlyBuildingRecipe } from "./style"
-import { shrineAltarZ, shrineKneelers, KNEELER_PAD_TOP } from "../shrine-layout"
+import { shrineAltarZ } from "../shrine-layout"
 import { EARLY_MATERIALS as palette } from "./materials"
 
 /** A plastered shrine with one door, arched openings and a timber upper nave. */
@@ -144,16 +144,20 @@ export function shrineStructureParts(width: number, depth: number): BuildingPart
   box("steeple-cross-upright","roof",[0,ridge+1.02,steepleZ],[.085,.75,.08],palette.paleWood)
   box("steeple-cross-arm","roof",[0,ridge+1.15,steepleZ],[.47,.085,.08],palette.paleWood)
 
-  for (const kneeler of shrineKneelers(width,depth)) {
-    const {x,z,length,id}=kneeler
-    box(`${id}-pad`, "interior", [x, KNEELER_PAD_TOP-.003, z-.07], [length, .006, .2], "#9d8865")
-    parts[parts.length - 1].support = { clips: ["praying"], anchorOffset: [0, .07], heading: Math.PI }
-    for (const end of [-1, 1]) {
-      box(`${id}-foot-${end}`, "interior", [x+end*length*.36,.004,z-.1], [.075,.008,.46], palette.darkWood)
-      box(`${id}-post-${end}`, "interior", [x+end*length*.42,.18,z-.27], [.045,.36,.045])
-    }
-    box(`${id}-prayer-rail`, "interior", [x,.36,z-.27], [length+.04,.045,.13], palette.paleWood)
+  // A linen veil falls from the altar slab over the reliquary underneath.
+  box("relic-shelf", "interior", [0, .105, altarZ], [.42, .04, .34], "#918c78")
+  box("altar-linen-top", "interior", [0, RELIC_TABLE_TOP + .005, altarZ], [.76, .01, .5], "#d6c8a8")
+  for (let fold = 0; fold < 12; fold++) {
+    const x = (fold - 5.5) * .06
+    const z = altarZ + .255 + (fold % 2 ? .015 : 0)
+    box(`relic-veil-${fold}`, "interior", [x, .25, z], [.061, .38, .018], fold % 2 ? "#b5a687" : "#d6c8a8")
+    box(`relic-veil-hem-${fold}`, "interior", [x, .078, z + .002], [.061, .025, .02], "#92764e")
   }
+  // Small wall-mounted timber offering box beside the entrance, with an iron slot.
+  box("offering-box", "interior", [1, .42, wallZ - .13], [.3, .24, .2], palette.darkWood)
+  box("offering-box-lid", "interior", [1, .548, wallZ - .13], [.33, .025, .23], palette.paleWood)
+  box("offering-box-slot", "interior", [1, .562, wallZ - .15], [.16, .004, .025], "#302c27")
+  for (const x of [.9, 1.1]) box(`offering-box-strap-${x}`, "interior", [x, .42, wallZ - .235], [.026, .24, .014], "#555349")
   for(const side of [-1,1]) {
     const x=side*.73,z=altarZ+.08
     box(`candle-stand-foot-${side}`,"interior",[x,.035,z],[.24,.07,.24],palette.darkWood)

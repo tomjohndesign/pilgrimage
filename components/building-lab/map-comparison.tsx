@@ -2,7 +2,7 @@
 
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 
-import { RelicDisplay } from "@/components/game/relic-display"
+import { RelicDisplay, RELIC_TABLE_DISPLAY_HEIGHT } from "@/components/game/relic-display"
 
 import { Suspense, useEffect, useMemo, useState } from "react"
 import { useThree } from "@react-three/fiber"
@@ -173,7 +173,7 @@ export function ProceduralMapScene({ recipe, grid, zoom, cutaway, onGuideReady, 
         <directionalLight name="workshop-sun" position={lightOffsetForYaw(yawForView(recipe.view))} intensity={SURFACE_LIGHT.sun} />
         <Suspense fallback={null}>
           <Site recipe={recipe} grid={grid} />
-          <group position={[0, TILE_HEIGHT, 0]}><BuildingModel terrainFloors recipe={recipe} cutaway={cutaway} />{recipe.variant === "enclosure" && <RelicDisplay />}</group>
+          <group position={[0, TILE_HEIGHT, 0]}><BuildingModel terrainFloors recipe={recipe} cutaway={cutaway} />{recipe.variant === "enclosure" && <RelicDisplay height={RELIC_TABLE_DISPLAY_HEIGHT} />}</group>
           {onGuideReady && <GuideCapture recipe={recipe} onReady={onGuideReady} />}
         </Suspense>
       </Canvas>
@@ -201,7 +201,7 @@ export function MapComparison({ recipe, imageRecipe, image, registrations, label
           <directionalLight name="workshop-sun" position={lightOffsetForYaw(yawForView(recipe.view))} intensity={SURFACE_LIGHT.sun} />
           <Suspense fallback={null}>
             <Site recipe={recipe} grid={grid} />
-            {kind === "procedural" ? <><group position={[0, TILE_HEIGHT, 0]}><BuildingModel terrainFloors recipe={recipe} />{recipe.variant === "enclosure" && <RelicDisplay />}</group><GuideCapture recipe={recipe} onReady={onGuideReady} /></> : <IllustratedBuilding image={image} recipe={imageRecipe} view={recipe.view} registrations={registrations} onStatus={setStatus} />}
+            {kind === "procedural" ? <><group position={[0, TILE_HEIGHT, 0]}><BuildingModel terrainFloors recipe={recipe} />{recipe.variant === "enclosure" && <RelicDisplay height={RELIC_TABLE_DISPLAY_HEIGHT} />}</group><GuideCapture recipe={recipe} onReady={onGuideReady} /></> : <IllustratedBuilding image={image} recipe={imageRecipe} view={recipe.view} registrations={registrations} onStatus={setStatus} />}
           </Suspense>
         </Canvas>
         {kind === "illustrated" && status && <p className={styles.mapStatus}>{status}</p>}

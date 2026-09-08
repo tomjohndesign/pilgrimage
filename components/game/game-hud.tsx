@@ -562,7 +562,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
 
       <div className="mt-2 border-t border-rule pt-2">
         <button type="button" className="hud-action"
-          disabled={!evangelizing && (!evangelism.available || carryingRelic || activity === "flying" || stamina <= MONK_TIRED_AT)}
+          disabled={monk.duty === "Keeper of the Relic" || !evangelizing && (!evangelism.available || carryingRelic || activity === "flying" || stamina <= MONK_TIRED_AT)}
           onClick={() => evangelizing ? evangelism.recall(monk.id) : evangelism.request(monk.id)}>
           {evangelizing ? "Recall from preaching" : "Evangelize on the main road"}
         </button>
@@ -570,7 +570,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
-        <button type="button" className="hud-action" disabled={!procession.available || evangelizing || activity === "toEvangelize" || activity === "preaching" || activity === "flying" ||
+        <button type="button" className="hud-action" disabled={monk.duty === "Keeper of the Relic" || !procession.available || evangelizing || activity === "toEvangelize" || activity === "preaching" || activity === "flying" ||
           (procession.monkId !== null && !carryingRelic) || (carryingRelic && (procession.returnRequested || procession.stage === "lowering" || procession.stage === "returning"))}
           onClick={() => carryingRelic ? procession.returnRelic() : procession.request(monk.id)}>
           {carryingRelic ? "Return relic" : "Carry relic in procession"}
@@ -1107,13 +1107,8 @@ export function GameHud({
             </p>}
             {selectedBuilding.id === map?.site?.hovelId && (
               <div className="mt-3 flex flex-col gap-1.5">
-                <label htmlFor="shrine-admission" className="text-[11px] text-ink-light">Admission · gold per visitor</label>
-                <input id="shrine-admission" type="number" min={0} step={1}
-                  value={economy.settlement.shrineAdmission}
-                  onChange={event => economy.setShrineAdmission(event.target.valueAsNumber)}
-                  className="pointer-events-auto w-24 border border-rule bg-parchment px-2 py-1 text-[13px] text-ink outline-none focus:border-gold" />
-                <p className="max-w-56 text-[11px] text-ink-light">Paid on entry. Only paying visitors gain piety. Set 0 for free entry without a piety reward.</p>
-                <p className="text-[11px] text-ink-light">Collected · {economy.settlement.collectedAdmission} gold</p>
+                <p className="max-w-56 text-[11px] text-ink-light">Entry is free. The keeper reveals the relic to one visitor at a time. Visitors may leave a donation in the offering box by the door; greater piety encourages larger gifts.</p>
+                <p className="text-[11px] text-ink-light">Donated · {economy.settlement.collectedAdmission} gold</p>
               </div>
             )}
             {(selectedBuilding.buildType === "workshop" || selectedBuilding.buildType === "storehouse") && (

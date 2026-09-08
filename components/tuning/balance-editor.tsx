@@ -253,11 +253,11 @@ export function BalanceEditor() {
       </div>
 
       <fieldset disabled={!ready} className="space-y-6">
-        {RULE_GROUPS.map((group, index) => (
+        {RULE_GROUPS.filter(group => group !== "Resident income").map((group, index) => (
           <details key={group} open={index < 2} className="rounded border border-rule p-5">
             <summary className="cursor-pointer font-display text-base text-ink">{group}</summary>
             <div className="mt-5 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
-              {RULE_FIELDS.filter((field) => field.group === group).map((field) => (
+              {RULE_FIELDS.filter((field) => field.group === group && field.key !== "incomeSeconds").map((field) => (
                 <NumericField
                   key={field.key}
                   id={field.key}
@@ -290,7 +290,7 @@ export function BalanceEditor() {
                   </span>
                 </summary>
                 <div className="mt-5 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {BUILDING_FIELDS.map((field) => (
+                  {BUILDING_FIELDS.filter(field => field.key !== "goldIncome" && field.key !== "woodIncome").map((field) => (
                     <NumericField
                       key={field.key}
                       id={`${def.id}.${field.key}`}

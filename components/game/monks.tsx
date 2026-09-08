@@ -1,5 +1,8 @@
 "use client"
 
+import { simRegistry } from "@/lib/game/sim"
+import { shrineLayout, shrineStations } from "@/lib/game/shrine-layout"
+import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import { recordWalkingPath } from "@/lib/game/footpaths"
 import { PietyEffects } from "./admission-effects"
 import { PixelCharacters } from "@/components/pixel-canvas"
@@ -33,8 +36,8 @@ import { monkVisual, monkWalkSpeed, monkRelicAttachment, monkRelicTrayWidth, MON
 import { rocketMonkVisual, rocketFlightClip } from "@/lib/game/rocket/assets"
 
 /**
- * The brothers follow grid routes and enter the shrine to pray. Players can
- * send one to carry the relic; brothers occasionally take it down to the road after praying behind the altar.
+ * The keeper stays behind the altar and reveals the relic to individual visitors.
+ * Other brothers follow grid routes to work and prayer; players can send them in procession.
  * Blaster Pastor sends them
  * on occasional cruises across the map; they return to their life at the shrine
  * between trips. Toggling it off recalls them and stows their packs on landing.
@@ -49,6 +52,13 @@ interface MonkState extends MonkRoutine, MonkNeeds {
 }
 
 export function Monks({ map, monks, relic, flying = false, characterScale = 1 }: { map: GameMap; monks: Monk[]; relic: Relic; flying?: boolean; characterScale?: number }) {
+  const keeperStation = useMemo(() => {
+    const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
+    if (!shrine) return null
+    const { keeper } = shrineStations(shrine, map.site?.door)
+    const x = tileToWorldX(map, keeper.x), z = tileToWorldZ(map, keeper.z)
+    return { x, z, y: walkingSurface(map, x, z).height, heading: shrineLayout(shrine, map.site?.door).rotation }
+  }, [map])
   const selection = useCameraStore((s) => s.selection)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
   const [airborneIds, setAirborneIds] = useState<ReadonlySet<number>>(new Set())
@@ -62,9 +72,20 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       const spot = spots[Math.floor(rng() * spots.length)]
       return spot
     }
-    const states: MonkState[] = (spots.length ? monks : []).map((monk, index) => ({
-      ...createMonkRoutine(wander, index, rng), ...createMonkNeeds(index), piety: monk.attributes.piety, flightWait: index * 8,
-    }))
+    const states: MonkState[] = (spots.length ? monks : []).map((monk, index) => {
+      const routine = createMonkRoutine(wander, index, rng)
+      if (index > 0 && keeperStation && routine.prayerSpot && centre) {
+        const lateral = (routine.prayerSpot.x - centre.x) * Math.cos(keeperStation.heading)
+          - (routine.prayerSpot.z - centre.z) * Math.sin(keeperStation.heading)
+        // Keep the keeper's station and the visitors' centre aisle unoccupied.
+        if (Math.abs(lateral) < .25) routine.prayerSpot = undefined
+      }
+      return {
+        ...routine, ...createMonkNeeds(index),
+        ...(index === 0 && keeperStation ? { ...keeperStation, activity: "keepingRelic" as const, route: [], pause: 0 } : {}),
+        piety: monk.attributes.piety, flightWait: index * 8,
+      }
+    })
     const activities = new Map<number, MonkActivity>()
     return { stamina: new Map<number, number>(), spots, centre, rng, flightRng, pick, states, activities, wander,
       procession: createRelicProcession(), grounds: processionGrounds(map, wander) }
@@ -124,12 +145,12 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       const index = monks.findIndex(m => m.id === controls.monkId)
       const actor = world.states[index]
       if (actor) actor.buildingTask = undefined
-      if (!actor || actor.flight || actor.preachingTask || useMonkEvangelismStore.getState().assigned.has(controls.monkId) || !startProcession(world.procession, controls.monkId, actor, world.grounds)) {
+      if (index === 0 || !actor || actor.flight || actor.preachingTask || useMonkEvangelismStore.getState().assigned.has(controls.monkId) || !startProcession(world.procession, controls.monkId, actor, world.grounds)) {
         useRelicProcessionStore.setState({ monkId: null, returnRequested: false })
       }
     }
     if (!playback.paused && world.procession.stage === "idle" && world.grounds) {
-      const index = world.states.findIndex((s, index) => !s.flight && !s.processionConsidered &&
+      const index = world.states.findIndex((s, index) => index !== 0 && !s.flight && !s.processionConsidered &&
         !s.preachingTask && !useMonkEvangelismStore.getState().assigned.has(monks[index].id) &&
         s.activity === "praying" && s.destination === "prayer" &&
         Math.hypot(s.x - world.grounds!.altar.x, s.z - world.grounds!.altar.z) < .01)
@@ -172,6 +193,22 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       }
       group.userData.rocketPack = flying || !!s.flight
       const previousX = s.x, previousZ = s.z
+      if (i === 0 && keeperStation) {
+        const sim = simRegistry.current
+        const sameWorld = sim && sim.world.road === map.road
+        const showing = sameWorld && world.procession.stage === "idle" && [...sim.travelers.values()]
+          .some(visitor => visitor.activity === "visiting" && visitor.shrineSeat?.startsWith("queue-"))
+        s.activity = showing ? "showingRelic" : "keepingRelic"
+        group.userData.activity = s.activity
+        group.userData.moving = false
+        group.userData.rocketPack = false
+        group.rotation.y = keeperStation.heading
+        group.position.set(s.x, s.y, s.z)
+        world.activities.set(monks[i].id, s.activity)
+        world.stamina.set(monks[i].id, s.stamina)
+        if (useMonkEvangelismStore.getState().assigned.has(monks[i].id)) useMonkEvangelismStore.getState().recall(monks[i].id)
+        continue
+      }
       if (playback.paused) continue
       if (i === carrierIndex) {
         const stage = world.procession.stage
@@ -278,7 +315,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
           const relicHit = event.intersections?.some(hit => hit.object.name === "relic")
           selectElement(relicHit ? { kind: "relic" } : { kind: "monk", id: monk.id }, event)
         }
-        const equipped = flying || airborneIds.has(monk.id)
+        const equipped = index !== 0 && (flying || airborneIds.has(monk.id))
         return (
           <group
             key={monk.id}

@@ -46,7 +46,7 @@ export function HudResources({ economy, settlers, open, onToggle }: {
     <span title="Stored timber" aria-label={`${wood} timber`}><Image src="/game-icons/timber.svg" width={30} height={28} alt="" />{wood}</span>
     <span title="Settlers" aria-label={`${settlers} settlers`}><Users aria-hidden size={21} />{settlers}</span>
     <span title="Pilgrim visits" aria-label={`${economy.visits} pilgrim visits`}><Footprints aria-hidden size={21} />{economy.visits}</span>
-    <HudHelp content={<><div className="hud-help-title">Shrine renown</div><p>Open the treasury, income, and renown breakdown.</p></>}>
+    <HudHelp content={<><div className="hud-help-title">Shrine renown</div><p>Open the treasury and renown breakdown.</p></>}>
       <button type="button" className="hud-resource-button" aria-label="Settlement details" aria-expanded={open} aria-controls="settlement-details" onClick={onToggle}>
         <Sparkles aria-hidden size={18} />{renown}
       </button>

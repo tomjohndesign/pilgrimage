@@ -43,19 +43,15 @@ export default function GameSpecsPage() {
           only when a complete placement succeeds. A rejected or cancelled placement spends nothing.
         </p>
         <p className="mt-3">
-          Every {r.incomeSeconds} seconds in a visible game tab, each resident adds {r.residentGold}{" "}
-          gold and {r.residentWood} wood. Each placed building adds its configured income to that
-          payment. The four founding brothers therefore provide {r.residentGold * 4} gold and{" "}
-          {r.residentWood * 4} wood per payment before construction. Background tabs skip payments;
-          there is no offline catch-up.
+          Resources come from NPC activity. Visitors enter the church free and may donate at the
+          offering box beside the door when leaving. Gifts can be zero; higher piety increases the
+          chance and size of a gift, limited by the visitor’s wallet. Buildings and resident counts
+          generate no automatic gold or timber.
         </p>
         <p className="mt-3">
-          Scheduled income models offerings and gathered timber without debiting travelers or requiring
-          jobs. Woodcutter’s huts hire up to three jobless visitors each; their workers fell nearby
-          trees and carry logs home. A tavern hires two behind its counter and a sheep pen two in its
-          fold; both work at a fixed post inside the building. A market stall takes no settler — a
-          passing vendor settles into it and keeps it for good. Each delivered unit enters the shared
-          treasury once, in addition to scheduled income, as do the counters’ takings.
+          Woodcutter’s huts hire up to three jobless visitors each; workers fell nearby trees and
+          deliver timber to storage. Tavern and market takings come from actual NPC purchases.
+          Each delivery or receipt enters the shared treasury once.
           Construction uses available stacked timber first, then other treasury wood. There are no wages, upkeep, refunds or demolition yet.
         </p>
 
@@ -99,11 +95,11 @@ export default function GameSpecsPage() {
         <div className="overflow-x-auto">
           <table className={table}>
             <caption className="mb-2 text-left italic">
-              Default catalogue; income is per {r.incomeSeconds}-second payment. Lumber-camp harvests are additional.
+              Default catalogue. Resources require NPC donations, trade or deliveries.
             </caption>
             <thead>
               <tr>
-                {["Structure", "Footprint", "Gold", "Wood", "Renown", "Unlock", "Income"].map(
+                {["Structure", "Footprint", "Gold", "Wood", "Renown", "Unlock"].map(
                   (label) => (
                     <th key={label} scope="col">
                       {label}
@@ -128,9 +124,6 @@ export default function GameSpecsPage() {
                   <td>{def.cost.wood}</td>
                   <td>+{def.renown}</td>
                   <td>{def.requiredRenown || "None"}</td>
-                  <td>
-                    {def.income.gold} gold / {def.income.wood} wood
-                  </td>
                 </tr>
               ))}
             </tbody>
@@ -216,7 +209,8 @@ export default function GameSpecsPage() {
           If that roll fails, a completed carved cross grants one independent 5% Evangelism roll.
           Additional crosses do not stack this chance. For an ordinary visit chance p, the combined
           chance is p + (1 − p) × 0.05. The HUD forecasts the combined chance, while actual visits
-          require affordable admission and a clear route.
+          require a clear route and an available queue or prayer place. The keeper reveals the veiled relic
+          beneath the altar to one visitor at a time; other visitors may pray on the open floor.
           Higher renown does not increase the road’s traveler count or spawn new archetypes.
         </p>
         <p className="mt-3">
@@ -247,7 +241,7 @@ export default function GameSpecsPage() {
             before any rule changes.
           </li>
           <li>
-            Costs, unlocks, build radius, income and renown update in existing game tabs. Current
+            Costs, unlocks, build radius and renown update in existing game tabs. Current
             supplies and placed structures are retained; price changes do not refund previous
             purchases. Starting gold and wood apply to the next new settlement.
           </li>

@@ -6,16 +6,13 @@ import type { GameMap, TilePos } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
 import { useBuildStore } from "@/lib/game/build-store"
-import { collectIncome, createSettlement, purchaseStructure, creditTimber, creditAdmission, creditTrade, syncTimberSpending, settlementRenown } from "@/lib/game/settlement"
+import { createSettlement, purchaseStructure, creditTimber, creditAdmission, creditTrade, syncTimberSpending, settlementRenown } from "@/lib/game/settlement"
 
-import { useSimulationStore } from "@/lib/game/simulation-store"
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { BUILDING_PREVIEW, buildingPreviewBalance, buildingPreviewSettlement } from "@/lib/game/building-preview"
 
 /** A generated world owns one economy. Cosmetic settings keep it; regeneration resets it. */
 export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Relic | null) {
-  const paused = useSimulationStore((s) => s.paused)
-  const simulationSpeed = useSimulationStore((s) => s.speed)
   const savedBalance = useBalanceStore((s) => s.balance)
   const balance = useMemo(() => BUILDING_PREVIEW ? buildingPreviewBalance(savedBalance) : savedBalance, [savedBalance])
   const ready = useBalanceStore((s) => s.ready)
@@ -61,10 +58,9 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   const map = useMemo(
     () =>
       world
-        ? { ...world, elevation: session.settlement.elevation ?? world.elevation, buildings: [...world.buildings.map(b => b.id === world.site?.hovelId
-          ? { ...b, admissionFee: session.settlement.shrineAdmission } : b), ...session.settlement.structures] }
+        ? { ...world, elevation: session.settlement.elevation ?? world.elevation, buildings: [...world.buildings, ...session.settlement.structures] }
         : null,
-    [world, session.settlement.elevation, session.settlement.structures, session.settlement.shrineAdmission],
+    [world, session.settlement.elevation, session.settlement.structures],
   )
 
   useEffect(() => {
@@ -89,22 +85,6 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     [map, residents, relic, balance, visits])
 
   useEffect(() => {
-    if (!world || paused) return
-    const timer = setInterval(() => {
-      if (document.hidden) return
-      setSession((current) =>
-        current.world === world
-          ? {
-              ...current,
-              settlement: collectIncome(current.settlement, residents.length, balanceRef.current),
-            }
-          : current,
-      )
-    }, balance.rules.incomeSeconds * 1000 / simulationSpeed)
-    return () => clearInterval(timer)
-  }, [world, residents.length, balance.rules.incomeSeconds, paused, simulationSpeed])
-
-  useEffect(() => {
     const cancel = (event: KeyboardEvent) => {
       if (event.key === "Escape")
         setSession((current) => ({ ...current, buildType: null, message: "" }))
@@ -115,10 +95,6 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
 
   const chooseBuild = useCallback((buildType: string | null) =>
     setSession((current) => ({ ...current, buildType, message: "" })), [])
-  const setShrineAdmission = useCallback((fee: number) => {
-    if (!Number.isSafeInteger(fee) || fee < 0) return
-    setSession(current => ({ ...current, settlement: { ...current.settlement, shrineAdmission: fee } }))
-  }, [])
   const place = (at: TilePos) => {
     const rotation = useBuildStore.getState().rotation
     setSession((current) => {
@@ -157,7 +133,6 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     buildType: session.buildType,
     message: session.message,
     chooseBuild,
-    setShrineAdmission,
     place,
   }
 }

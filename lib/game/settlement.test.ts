@@ -449,7 +449,7 @@ describe("shrine renown and income", () => {
     expect(relic).toEqual(generateRelic(12345))
   })
 
-  it("replenishes both supplies and applies income from purchased buildings", () => {
+  it("never generates resources from resident counts or purchased buildings", () => {
     const before = createSettlement()
     const map = testMap()
     map.tiles[12 * map.width + 10] = "forest"
@@ -459,10 +459,10 @@ describe("shrine renown and income", () => {
     })
     expect(purchase.error).toBeNull()
     const built = purchase.settlement
-    expect(settlementIncome(built, 4)).toEqual({ gold: 4, wood: 8 })
+    expect(settlementIncome(built, 4)).toEqual({ gold: 0, wood: 0 })
     const after = collectIncome(built, 4)
-    expect(after.resources.gold).toBe(built.resources.gold + 4)
-    expect(after.resources.wood).toBe(built.resources.wood + 8)
+    expect(after.resources.gold).toBe(built.resources.gold)
+    expect(after.resources.wood).toBe(built.resources.wood)
     expect(after.structures).toBe(built.structures)
     expect(createSettlement()).toEqual(before)
   })

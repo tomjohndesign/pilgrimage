@@ -19,20 +19,30 @@ export function shrineLayout(building: Pick<BuildingDef,"x"|"z"|"w"|"d">, door?:
 }
 
 
-/** A thin board on the paving, beneath the ground-kneeling sprite. */
-export const KNEELER_PAD_TOP = .009
-/** One prayer place per kneeler, with a clear centre aisle. Shared by art and navigation. */
-export function shrineKneelers(width: number, depth: number) {
-  return [-1,1].flatMap(side => Array.from({length:Math.max(1,depth-3)},(_,row)=>({
-    id:`kneeler-${side}-${row}`, x:side*Math.min(Math.round(width*.33),width/2-.48),
-    z:Math.floor(depth/2)-1-row, length:Math.min(.6,width*.25),
+/** Convert canonical church coordinates to the placed church's tile frame. */
+export function shrinePoint(building: Pick<BuildingDef,"x"|"z"|"w"|"d">, door: TilePos | undefined, x: number, z: number): TilePos {
+  const { rotation } = shrineLayout(building, door)
+  const sin = Math.round(Math.sin(rotation)), cos = Math.round(Math.cos(rotation))
+  return { x: building.x + Math.floor(building.w / 2) + x * cos + z * sin,
+    z: building.z + Math.floor(building.d / 2) + z * cos - x * sin }
+}
+
+/** Unfurnished prayer places beside the central queue. */
+export function shrineSeats(building: Pick<BuildingDef,"x"|"z"|"w"|"d">, door?: TilePos) {
+  const layout = shrineLayout(building, door)
+  return [-1, 1].flatMap(side => Array.from({ length: Math.max(1, layout.depth - 3) }, (_, row) => ({
+    id: `prayer-${side}-${row}`,
+    tile: shrinePoint(building, door, side, Math.floor(layout.depth / 2) - 1 - row),
+    heading: layout.rotation + Math.PI,
   })))
 }
-export function shrineSeats(building: Pick<BuildingDef,"x"|"z"|"w"|"d">, door?: TilePos) {
-  const layout=shrineLayout(building,door), sin=Math.round(Math.sin(layout.rotation)),cos=Math.round(Math.cos(layout.rotation))
-  return shrineKneelers(layout.width,layout.depth).map(kneeler=>({...kneeler,
-    tile:{x:building.x+Math.floor(building.w/2)+Math.round(kneeler.x*cos+kneeler.z*sin),
-      z:building.z+Math.floor(building.d/2)+Math.round(kneeler.z*cos-kneeler.x*sin)},
-    heading:layout.rotation+Math.PI,
-  }))
+
+export function shrineStations(building: Pick<BuildingDef,"x"|"z"|"w"|"d">, door?: TilePos) {
+  const layout = shrineLayout(building, door)
+  return {
+    viewing: shrinePoint(building, door, 0, Math.round(layout.altarZ) + 1),
+    keeper: shrinePoint(building, door, 0, Math.round(layout.altarZ) - 1),
+    offering: shrinePoint(building, door, 1, Math.floor(layout.depth / 2)),
+    queueCapacity: Math.max(1, layout.depth - 2),
+  }
 }
