@@ -44,18 +44,19 @@ describe("published foliage prototype", () => {
   })
 
   it("reproduces editable branch and leaf geometry without cast shadows", () => {
-    for (const species of FOLIAGE_SPECIES) {
-      const a = createFoliageModel(species, 1, DEFAULT_FOLIAGE[species])
-      const b = createFoliageModel(species, 1, DEFAULT_FOLIAGE[species])
-      const c = createFoliageModel(species, 2, DEFAULT_FOLIAGE[species])
+    for (const oldGrowth of [false, true]) for (const species of FOLIAGE_SPECIES) {
+      const a = createFoliageModel(species, 1, DEFAULT_FOLIAGE[species], oldGrowth)
+      const b = createFoliageModel(species, 1, DEFAULT_FOLIAGE[species], oldGrowth)
+      const c = createFoliageModel(species, 2, DEFAULT_FOLIAGE[species], oldGrowth)
       try {
         const leaves = (root: THREE.Group) => root.children.find(child => child instanceof THREE.InstancedMesh) as THREE.InstancedMesh
         expect(leaves(a.root).instanceMatrix.array).toEqual(leaves(b.root).instanceMatrix.array)
         expect(leaves(a.root).instanceMatrix.array).not.toEqual(leaves(c.root).instanceMatrix.array)
         a.root.traverse(object => expect(object.castShadow).toBe(false))
         expect(a.leafCount).toBeGreaterThan(100)
-        expect(new THREE.Box3().setFromObject(a.root).min.y).toBeGreaterThan(-0.01)
+        // Flared ancient roots bury their lower faces slightly in the ground.
+        expect(new THREE.Box3().setFromObject(a.root).min.y).toBeGreaterThan(oldGrowth ? -0.11 : -0.01)
       } finally { a.dispose(); b.dispose(); c.dispose() }
     }
-  })
+  }, 30_000)
 })

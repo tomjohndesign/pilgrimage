@@ -41,12 +41,12 @@ export function TreeLineup({
   const placements = useMemo<FoliagePlacement[]>(() => {
     const ids = species !== "all" && isFoliageSpecies(species) ? [species, species, species] : FOLIAGE_SPECIES.slice(speciesPage * 3, speciesPage * 3 + 3)
     const yaw = yawForView(view)
-    return ids.map((id, index) => ({ x: (index - 1) * 3 * Math.cos(yaw), y: TILE_HEIGHT, z: -(index - 1) * 3 * Math.sin(yaw), species: id, foliageVariant: index, brightness: darkForest ? DARK_BRIGHTNESS : 1 }))
+    return ids.map((id, index) => ({ x: (index - 1) * 3 * Math.cos(yaw), y: TILE_HEIGHT, z: -(index - 1) * 3 * Math.sin(yaw), species: id, foliageVariant: index, oldGrowth: darkForest, brightness: darkForest ? DARK_BRIGHTNESS : 1 }))
   }, [species, view, darkForest, speciesPage])
 
   return (
-    <PreviewCanvas zoom={90} view={view}>
-      <group position={[0, -1.2, 0]}>
+    <PreviewCanvas zoom={darkForest ? 80 : 90} view={view}>
+      <group position={[0, darkForest ? -1.7 : -1.2, 0]}>
         <Suspense fallback={null}>
           <TerrainTiles map={darkForest ? DARK_FOLIAGE_GROUND : FOLIAGE_GROUND} />
         </Suspense>

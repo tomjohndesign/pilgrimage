@@ -68,7 +68,7 @@ export interface MapSettings extends SceneVisibility {
   glades: number
   /** Number of small forest-floor clearings scattered through the woods. */
   clearings: number
-  /** How many dark forests stand in the road's way. */
+  /** How many ancient groves grow across the woods. */
   darkForests: number
   /** How far off the road the relic's hovel is sited, in tiles. */
   relicDistance: number

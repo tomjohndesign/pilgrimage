@@ -31,7 +31,8 @@ export const FOLIAGE_FRAME = {
   anchor: [96, 171] as const,
   directions: 8,
   variants: 3,
-  rows: FOLIAGE_SPECIES.length * 3,
+  // Ordinary species first, then their ancient, twisted counterparts.
+  rows: FOLIAGE_SPECIES.length * 3 * 2,
 } as const
 export interface FoliageAtlas {
   frame: typeof FOLIAGE_FRAME

@@ -167,6 +167,8 @@ describe("placeTrees", () => {
     const dark = placeTrees(woodsBlock(40, 11, "D"), only("birch"))
     const light = placeTrees(woodsBlock(40, 11, "F"), only("birch"))
     expect(dark.length).toBeGreaterThan(light.length)
+    expect(dark.every(tree => tree.oldGrowth)).toBe(true)
+    expect(light.some(tree => tree.oldGrowth)).toBe(false)
     expect(Math.max(...dark.map((t) => t.scale ?? 1))).toBeGreaterThan(1.2)
   })
 
