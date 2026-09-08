@@ -17,7 +17,7 @@ export type HorseVariant = typeof HORSE_VARIANTS[number]
 /** Shared by loose, harnessed and ridden animals; recorded in every affected bake. */
 export const ANIMAL_RIG_VERSION = 1
 export const TRANSPORT = {
-  version: "v23", cellSize: 128, anchor: [64, 78] as const,
+  version: "v24", cellSize: 128, anchor: [64, 78] as const,
   viewSize: BASE_PERSON.camera.viewSize * 2,
   scale: 0.74 * 128 / 48,
   wheelRadius: 0.46, wheelFrames: 24, animalFrames: 20, grazeFrames: 12, lowerFrames: 6, shopFrames: 12,

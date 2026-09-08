@@ -23,7 +23,7 @@ import { knightTravelSpeed } from "@/lib/game/knights"
 import { personWalkStride } from "@/lib/game/base-person/gait"
 import { squireVisual } from "@/lib/game/knight/visual"
 import knightMetadata from "@/public/textures/knights/v11/manifest.json"
-import transportMetadata from "@/public/textures/transport/v23/manifest.json"
+import transportMetadata from "@/public/textures/transport/v24/manifest.json"
 
 const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse", knight: "Knight" } as const
 type Subject = keyof typeof SUBJECTS
