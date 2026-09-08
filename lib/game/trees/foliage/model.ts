@@ -4,10 +4,10 @@ import { softenTreeLighting } from "../lighting"
 import { BARK_PALETTE, FOLIAGE_RAMPS, type FoliageDesign, type FoliageSpecies } from "./design"
 
 /** Editable branch structure and leaf clusters are source geometry, never map meshes. */
-export function createFoliageModel(species: FoliageSpecies, variant: number, design: FoliageDesign) {
+export function createFoliageModel(species: FoliageSpecies, variant: number, design: FoliageDesign, oldGrowth = false) {
   const rng = makeRng(1709 + variant * 7919 + ({ oak: 0, birch: 31, scotsPine: 67, beech: 103, hawthorn: 139, holly: 173 }[species]))
   const root = new THREE.Group()
-  const height = design.height * [0.9, 1, 1.06][variant]
+  const height = design.height * [0.9, 1, 1.06][variant] * (oldGrowth ? 1.16 : 1)
   const spread = design.spread * [0.96, 1.04, 1][variant]
   const materials: THREE.Material[] = []
   const geometries: THREE.BufferGeometry[] = []
@@ -57,7 +57,61 @@ export function createFoliageModel(species: FoliageSpecies, variant: number, des
     }
   }
   const origin = new THREE.Vector3()
-  if (species === "oak") {
+  if (oldGrowth) {
+    // Age is in the silhouette: buttress roots, an S-bent bole, corkscrewed
+    // limbs and bare snag ends. Bake at native size rather than scaling pixels.
+    const turn = variant * 2.1 + rng()
+    const point = (reach: number, y: number, angle = turn) =>
+      new THREE.Vector3(Math.cos(angle) * reach * spread, y * height, Math.sin(angle) * reach * spread)
+    const knee = point(0.22, 0.19)
+    const waist = point(0.12, 0.4, turn - 1.8)
+    const fork = point(0.28, 0.59, turn + 0.6)
+    branch(origin, knee, 0.19); branch(knee, waist, 0.15); branch(waist, fork, 0.12)
+    for (let i = 0; i < 6; i++) {
+      const angle = turn + i * 1.05
+      const heel = point(0.29, 0.035, angle + 0.3)
+      const toe = point(0.43 + rng() * 0.1, 0.016, angle)
+      branch(knee.clone().multiplyScalar(0.45), heel, 0.085)
+      branch(heel, toe, 0.045)
+    }
+    // Raised, winding grain follows the bole, with swollen knots at the bends.
+    for (const [a, b] of [[origin, knee], [knee, waist], [waist, fork]]) {
+      for (let rib = 0; rib < 3; rib++) {
+        let previous = a.clone()
+        for (let j = 1; j <= 4; j++) {
+          const angle = turn + rib * 2.1 + j * 0.65
+          const next = a.clone().lerp(b, j / 4).add(new THREE.Vector3(Math.cos(angle) * 0.085, 0, Math.sin(angle) * 0.085))
+          branch(previous, next, 0.035, twig); previous = next
+        }
+      }
+    }
+    for (let limb = 0; limb < 8; limb++) {
+      const angle = turn + limb * 2.4 + rng() * 0.35
+      const start = limb < 3 ? waist : fork
+      const reach = (0.68 + rng() * 0.3) * (species === "holly" ? 0.82 : 1)
+      const elbow = point(reach * 0.64, 0.49 + limb * 0.035, angle - 0.35)
+      const wrist = point(reach, 0.55 + limb * 0.045, angle + 0.12)
+      const hook = point(reach * 0.85, 0.68 + limb * 0.038, angle + 0.38)
+      branch(start, elbow, 0.082); branch(elbow, wrist, 0.053); branch(wrist, hook, 0.031)
+      // A few limbs are wholly dead; others carry ragged leaf tufts below
+      // their exposed tips, so the branch shapes remain readable at game zoom.
+      for (let finger = 0; finger < 3; finger++) {
+        const end = hook.clone().add(new THREE.Vector3(Math.cos(angle + finger) * 0.19,
+          0.13 + rng() * 0.21, Math.sin(angle + finger) * 0.19))
+        branch(hook, end, 0.016, twig)
+        if (limb % 3 !== variant % 3 && finger < 2) {
+          cluster(wrist.clone().lerp(end, 0.55), (0.23 + rng() * 0.09) * spread,
+            species === "scotsPine" ? 0.45 : 0.72)
+        }
+      }
+      const snag = elbow.clone().add(new THREE.Vector3(Math.cos(angle - 0.8) * 0.28, -0.18, Math.sin(angle - 0.8) * 0.28))
+      branch(elbow, snag, 0.026, twig)
+    }
+    const brokenTop = point(0.2, 0.98, turn + 0.9)
+    branch(fork, point(0.06, 0.81, turn - 0.6), 0.073)
+    branch(point(0.06, 0.81, turn - 0.6), brokenTop, 0.041)
+    cluster(point(0.13, 0.86, turn + 0.5), 0.24 * spread)
+  } else if (species === "oak") {
     const fork = new THREE.Vector3((rng() - 0.5) * 0.1, height * 0.3, 0)
     branch(origin, fork, 0.105)
     // A broad, asymmetrical crown with foliage at branch tips and open forks.

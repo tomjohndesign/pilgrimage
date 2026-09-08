@@ -126,6 +126,7 @@ describe("generateMap", () => {
     expect(a.tiles).toEqual(b.tiles)
     expect(a.water).toEqual(b.water)
     expect(a.road).toEqual(b.road)
+    expect(a.darkForests).toEqual(b.darkForests)
     expect(a.seed).toBe(12345)
   })
 
@@ -555,7 +556,48 @@ describe("generateMap", () => {
     const map = generateMap({ ...FLOOR, seed: 5, darkForestCount: 0 })
     expect(countTerrain(map, "darkwood")).toBe(0)
     expect(map.shortcuts).toEqual([])
+    expect(map.darkForests).toEqual([])
   })
+
+  it("gives ancient groves enclosed, empty clearings and dry approaches, including away from the road", () => {
+    let secludedSeeds = 0
+    for (const seed of SEEDS) {
+      const map = mapFor(seed)
+      const road = new Set(map.road!.map(p => `${p.x},${p.z}`))
+      const at = (p: { x: number; z: number }) => tileAt(map, p.x, p.z)!
+      let secluded = false
+      for (const forest of map.darkForests ?? []) {
+        expect(forest.clearing.length).toBeGreaterThanOrEqual(35)
+        expect(forest.clearing).toContainEqual(forest.center)
+        for (const p of forest.clearing) {
+          expect(TERRAIN[at(p)].passable).toBe(true)
+          expect(map.buildings.some(b => p.x >= b.x && p.x < b.x + b.w && p.z >= b.z && p.z < b.z + b.d)).toBe(false)
+        }
+        // A ring of ancient canopy encloses the room; the narrow entrance
+        // and pre-existing trails may interrupt it, but it must read as woods.
+        let darkRing = 0, ring = 0
+        for (let dz = -6; dz <= 6; dz++) for (let dx = -6; dx <= 6; dx++) {
+          if (Math.hypot(dx, dz) < 5 || Math.hypot(dx, dz) > 6) continue
+          ring++
+          if (tileAt(map, forest.center.x + dx, forest.center.z + dz) === "darkwood") darkRing++
+        }
+        expect(darkRing / ring, `seed ${seed} enclosing old growth`).toBeGreaterThan(0.65)
+        expect(forest.approach.at(-1)).toEqual(forest.center)
+        expect(forest.approach.length).toBeGreaterThan(4)
+        for (const [i, p] of forest.approach.entries()) {
+          expect(["track", "path", "bridge"]).toContain(at(p))
+          if (i === 0) continue
+          const prev = forest.approach[i - 1]
+          expect(Math.abs(p.x - prev.x) + Math.abs(p.z - prev.z)).toBe(1)
+          expect(Number.isFinite(elevationStep(map.elevation!, prev.z * map.width + prev.x, p.z * map.width + p.x))).toBe(true)
+        }
+        const distance = Math.min(...map.road!.map(p => Math.hypot(p.x - forest.center.x, p.z - forest.center.z)))
+        if (distance >= 18 && !forest.clearing.some(p => road.has(`${p.x},${p.z}`))) secluded = true
+      }
+      if (secluded) secludedSeeds++
+    }
+    expect(secludedSeeds).toBeGreaterThanOrEqual(SEEDS.length * 0.8)
+  }, SWEEP_TIMEOUT)
 
   it(
     "routes the road around dark forest when flat land permits a detour",
@@ -612,9 +654,9 @@ describe("generateMap", () => {
           expect(touchesDark, `seed ${seed} track runs through the dark forest`).toBe(true)
         }
       }
-      // Nearly every seed grows a dark forest in the road's way; a handful have
-      // the road's endpoints too close to the crossing for a track to fit.
-      expect(seedsWithTracks).toBeGreaterThanOrEqual(SEEDS.length * 0.8)
+      // Secluded groves need no road detour; retain shortcuts on seeds whose
+      // roadside woodland still offers a meaningful dangerous alternative.
+      expect(seedsWithTracks).toBeGreaterThan(0)
     },
     SWEEP_TIMEOUT,
   )

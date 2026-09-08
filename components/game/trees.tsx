@@ -34,6 +34,11 @@ export function Trees({ map, placements: supplied, ents = false, characterScale 
   const species = useTreeTuningStore((s) => s.species)
   const placements = useMemo(() => supplied ?? placeTrees(map, model === "sprites" ? foliageSpacing(species) : species), [map, species, supplied, model])
 
+  // Both renderers retain the original placement indices for picking and felling.
+  const proceduralHidden = useMemo(() => new Set([...felled,
+    ...placements.flatMap((tree, i) => tree.oldGrowth ? [i] : []),
+  ]), [felled, placements])
+
   const selected = selection?.kind === "tree" ? placements[selection.id] : null
   const resource = selection?.kind === "tree" ? resources.get(selection.id) : null
   const visible = !resource || resource.health > 0 || resource.remainingWood > 0 || time < (resource.stumpUntil ?? 0)
@@ -50,7 +55,12 @@ export function Trees({ map, placements: supplied, ents = false, characterScale 
         ? <Suspense fallback={null}>
             <FoliageField atlas={DEFAULT_FOLIAGE_ATLAS} placements={placements} hidden={felled} onSelect={selectTree} seed={seed} idBase={map.buildings.length} />
           </Suspense>
-        : ProceduralTreeBenchmark && <Suspense fallback={null}><ProceduralTreeBenchmark placements={placements} hidden={felled} onSelect={selectTree} entMap={ents ? map : undefined} seed={seed} idBase={map.buildings.length} /></Suspense>}
+        : <>
+            {ProceduralTreeBenchmark && <Suspense fallback={null}><ProceduralTreeBenchmark placements={placements} hidden={proceduralHidden} onSelect={selectTree} entMap={ents ? map : undefined} seed={seed} idBase={map.buildings.length} /></Suspense>}
+            <Suspense fallback={null}>
+              <FoliageField atlas={DEFAULT_FOLIAGE_ATLAS} placements={placements} hidden={felled} oldGrowthOnly onSelect={selectTree} seed={seed} idBase={map.buildings.length} />
+            </Suspense>
+          </>}
       {Array.from(resources, ([id, resource]) => resource.health <= 0 && placements[id]
         ? <TreeRemains key={id} id={id} objectId={treeObjectId(map.buildings.length, id)} tree={placements[id]} resource={resource} time={time} characterScale={characterScale} /> : null)}
     </group>

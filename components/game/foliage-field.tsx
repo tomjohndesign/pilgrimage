@@ -24,9 +24,10 @@ export interface FoliagePlacement extends TreePlacement { foliageVariant?: numbe
  * how many outline IDs the buildings already took, and `hidden` lists felled
  * trees whose remains are drawn separately.
  */
-export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, onSelect }: {
+export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, oldGrowthOnly = false, onSelect }: {
   atlas: FoliageAtlas; placements: FoliagePlacement[]; seed?: number; idBase?: number
   hidden?: ReadonlySet<number>
+  oldGrowthOnly?: boolean
   onSelect?: (index: number, event: { delta: number; stopPropagation: () => void }) => void
 }) {
   const sources = useLoader(THREE.TextureLoader, [atlas.color, atlas.depth])
@@ -42,14 +43,14 @@ export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, 
   const materials = useMemo(() => [false, true].map(ids =>
     foliageMaterial(color, depth, view, worldTexel, ids, FOLIAGE_FRAME, crop)), [color, depth, view, worldTexel, crop])
   const entries = useMemo(() => placements.flatMap((tree, index) =>
-    isFoliageSpecies(tree.species) && !hidden?.has(index) ? [{ tree, index }] : []), [placements, hidden])
+    isFoliageSpecies(tree.species) && (!oldGrowthOnly || tree.oldGrowth) && !hidden?.has(index) ? [{ tree, index }] : []), [placements, hidden, oldGrowthOnly])
   const data = useMemo(() => {
     // Frames draw from the placement order, so felling a tree never reshuffles its neighbours.
     const rng = makeRng(seed), sources: FoliageInstance[] = []
     const rolls = placements.map(() => [Math.floor(rng() * FOLIAGE_FRAME.directions), Math.floor(rng() * FOLIAGE_FRAME.variants)])
     entries.forEach(({ tree, index }) => sources.push({
       x: tree.x, y: tree.y, z: tree.z, column: rolls[index][0],
-      row: FOLIAGE_SPECIES.indexOf(tree.species as typeof FOLIAGE_SPECIES[number]) * FOLIAGE_FRAME.variants + (tree.foliageVariant ?? rolls[index][1]),
+      row: (tree.oldGrowth ? FOLIAGE_SPECIES.length * FOLIAGE_FRAME.variants : 0) + FOLIAGE_SPECIES.indexOf(tree.species as typeof FOLIAGE_SPECIES[number]) * FOLIAGE_FRAME.variants + (tree.foliageVariant ?? rolls[index][1]),
       id: encodeObjectId(treeObjectId(idBase, index)), brightness: tree.brightness ?? 1, tree: index,
     }))
     const geometry = new THREE.PlaneGeometry(1, 1)
