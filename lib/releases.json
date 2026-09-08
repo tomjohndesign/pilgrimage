@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "0b8cf8e8aad5e4027a35d3f43f19702638e35697",
-  "releaseCount": 107,
+  "lastProcessedCommit": "eda5d9d057280a3b30b7683f9102a605e27c4f67",
+  "releaseCount": 109,
   "releases": [
+    {
+      "version": "0.0.123",
+      "title": "Release 0.0.123",
+      "summary": "Replace rabbit holes with subtle grass-covered burrows (#142)",
+      "commit": "eda5d9d057280a3b30b7683f9102a605e27c4f67"
+    },
+    {
+      "version": "0.0.122",
+      "title": "Release 0.0.122",
+      "summary": "Use grid-aligned diagonal paths and remove grass seams from worn dirt (#141)",
+      "commit": "503a22bf7e9073f18fcfe918d3c25e822cb23096"
+    },
     {
       "version": "0.0.121",
       "title": "Release 0.0.121",
