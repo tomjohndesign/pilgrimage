@@ -1,3 +1,4 @@
+import { isObjectVisible } from "./scene-visibility"
 import { useBuildStore } from "./build-store"
 import { isSelected, useCameraStore, type Selection } from "./camera-store"
 import {
@@ -45,6 +46,7 @@ export function selectionObjectId(selection: Selection | null, objects: {
 const PERSON_PICK = "person"
 
 interface PickObject {
+  visible?: boolean
   userData?: Record<string, unknown>
   parent?: PickObject | null
 }
@@ -72,6 +74,8 @@ function isPersonPick(object: PickObject | null | undefined): boolean {
  * build mode nothing stops it and the ground still takes the click.
  */
 export function prioritizePeople<T extends { object: PickObject }>(hits: readonly T[]): T[] {
+  const visibleHits = hits.filter(hit => isObjectVisible(hit.object))
+  if (visibleHits.length !== hits.length) hits = visibleHits
   const people = hits.filter((hit) => isPersonPick(hit.object))
   if (people.length === 0 || people.length === hits.length) return hits as T[]
   return [...people, ...hits.filter((hit) => !isPersonPick(hit.object))]

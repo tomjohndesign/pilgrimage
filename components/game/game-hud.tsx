@@ -53,6 +53,7 @@ import { BugReportDialog } from "./bug-report-dialog"
 import { browserDiagnostics, diagnosticsSchema, type BugReportDiagnostics } from "@/lib/bug-report"
 import { useBugReportRuntime } from "@/hooks/use-bug-report-runtime"
 import { useSimulationStore } from "@/lib/game/simulation-store"
+import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES } from "@/lib/game/scene-visibility"
 import { Section, Tuner } from "./property-controls"
 import { BuildControls, HudClock, HudHelp, HudResources } from "./hud-controls"
 
@@ -119,15 +120,17 @@ function Chooser({
   value,
   options,
   onChange,
+  labelClassName = "w-16",
 }: {
   label: string
   value: number
   options: string[]
   onChange: (index: number) => void
+  labelClassName?: string
 }) {
   return (
     <div className="flex items-center">
-      <span className="w-16 shrink-0 text-[13px] font-medium text-ink-light">{label}</span>
+      <span className={`${labelClassName} shrink-0 text-[13px] font-medium text-ink-light`}>{label}</span>
       <div className="relative h-8 flex-1 rounded-[6px] bg-parchment-dark">
         <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 truncate font-display text-[11px] font-black text-ink-light">
           {options[value]}
@@ -811,6 +814,17 @@ export function GameHud({
           />
           <p className="pt-1 text-[11px] italic text-ink-light">Pixel foliage draws the baked tree sprites from the playground; trees stand one to a tile.</p>
         </div>
+        <Section {...section("Visibility")}>
+          {VISIBILITY_TOGGLES.map(([key, label]) => (
+            <Chooser key={key} label={label} labelClassName="w-24" value={settings[key] ? 1 : 0}
+              options={["Hidden", "Shown"]} onChange={(index) => set({ [key]: index === 1 })} />
+          ))}
+          <Chooser label="Buildings" labelClassName="w-24" value={["auto", "interiors", "hidden"].indexOf(settings.buildingVisibility)}
+            options={["Automatic interiors", "Show all interiors", "Hidden"]}
+            onChange={(index) => set({ buildingVisibility: (["auto", "interiors", "hidden"] as const)[index] })} />
+          <p className="py-1 text-[11px] italic text-ink-light">Automatic interiors open when you select a building or someone inside. Scenery includes rocks, plants and the signpost. Hidden objects keep working.</p>
+          <HudButton onClick={() => set(DEFAULT_SCENE_VISIBILITY)}>Reset visibility</HudButton>
+        </Section>
         {SHOW_PROPERTY_PANELS && <>
         <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />

@@ -33,7 +33,7 @@ import {
 } from "@/lib/game/render/outline"
 
 /** Built structures share their geometry with the menu and placement preview. */
-export function Buildings({ map, characterScale = 1.5 }: { map: GameMap; characterScale?: number }) {
+export function Buildings({ map, characterScale = 1.5, showInteriors = false }: { map: GameMap; characterScale?: number; showInteriors?: boolean }) {
   const costs = useRef<ConstructionCostHandle>(null)
   const selectSite = (building: BuildingDef, event: Parameters<typeof selectElement>[1]) => {
     if (selectElement({ kind: "building", id: building.id }, event)) costs.current?.show(building)
@@ -65,7 +65,7 @@ export function Buildings({ map, characterScale = 1.5 }: { map: GameMap; charact
 
         const local = rotatedFootprint(building, building.rotation)
         const cutaway = models[index].some(p => p.layer === "roof") && (
-          unitInterior === building.id || isSelected(selection, { kind: "building", id: building.id }) ||
+          showInteriors || unitInterior === building.id || isSelected(selection, { kind: "building", id: building.id }) ||
           (selection?.kind === "pile" && piles.some(p => p.id === selection.id && p.campId === building.id)))
         if (building.buildType === "storehouse" || building.buildType === "workshop") {
           return (
