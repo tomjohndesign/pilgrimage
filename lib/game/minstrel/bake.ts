@@ -28,6 +28,6 @@ export async function bakeMinstrels() {
     } finally { session.dispose() }
     await new Promise(resolve => setTimeout(resolve, 0))
   }
-  return { image: canvas.toDataURL(), depth: depth.toDataURL(), metadata: { version: 5, reservedTones: true, depthEncoding: SPRITE_DEPTH_ENCODING, templateVersion: BASE_PERSON.version,
+  return { image: canvas.toDataURL(), depth: depth.toDataURL(), metadata: { version: 6, reservedTones: true, depthEncoding: SPRITE_DEPTH_ENCODING, templateVersion: BASE_PERSON.version,
     frames, rows, fps: 16, cellSize: size, anchor: BASE_PERSON.anchor, safePadding } }
 }

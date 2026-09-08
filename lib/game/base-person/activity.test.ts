@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest"
 import { activityClip } from "./activity"
 
 describe("simulation sprite poses", () => {
+  it("uses a weary walk while moving and retains rest and carrying poses", () => {
+    expect(activityClip("seeking", true, 0, true)).toBe("wearyWalk")
+    expect(activityClip("toCamp", true, 0, true)).toBe("wearyWalk")
+    expect(activityClip("walking", true, 0, false)).toBe("walk")
+    expect(activityClip("camping", false, 0, true)).toBe("sleeping")
+    expect(activityClip("walking", false, 0, true)).toBe("idle")
+    expect(activityClip("hauling", true, 5, true)).toBe("carrying")
+  })
   it.each([
     ["preaching", "preaching"], ["praying", "praying"], ["hoisting", "hoisting"], ["procession", "procession"], ["vigil", "praying"], ["resting", "praying"], ["walking", "idle"], ["flying", "idle"],
     ["begging", "sitting"], ["givingAlms", "idle"], ["camping", "sleeping"], ["idle", "sitting"], ["visiting", "praying"],

@@ -1,5 +1,7 @@
 "use client"
 
+import { travelerWeariness } from "@/lib/game/traveler-weariness"
+
 import { withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
 import { JOB_PREVIEW } from "@/lib/game/building-preview"
 import { previewResidents, placePreviewResident } from "@/lib/game/jobs/preview"
@@ -329,6 +331,7 @@ export const Travelers = memo(function Travelers({
       const pastureTerrain = s.pasture ? tileAt(map, worldToTileX(map, s.pasture.x), worldToTileZ(map, s.pasture.z)) : null
       group.userData.pastureY = s.pasture ? walkingSurface(map, s.pasture.x, s.pasture.z).height : s.y
       group.userData.pastureGrass = pastureTerrain === "grass" || pastureTerrain === "clearing"
+      group.userData.weary = travelerWeariness(s) > 0
       group.userData.carrying = s.carrying
       group.userData.initialized = true
       group.userData.phase = travelers[i].id * 0.137

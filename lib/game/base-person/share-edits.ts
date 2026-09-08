@@ -23,7 +23,7 @@ export function parseCharacterEdits(text: string, currentCharacter: string): { c
   if (text.length > 2_000_000) throw new Error("JSON must be under 2 MB.")
   const input = JSON.parse(text)
   if (input?.format !== "pilgrimage-character-edits") return { character: currentCharacter, drafts: { [currentCharacter]: restoreCharacterDesign(input, input?.templateVersion ?? 20) } }
-  if (input.version !== 1 || ![20, 26, 27, 31, BASE_PERSON.version].includes(input.templateVersion)) throw new Error("These edits use a different character rig version.")
+  if (input.version !== 1 || ![20, 26, 27, 31, 32, BASE_PERSON.version].includes(input.templateVersion)) throw new Error("These edits use a different character rig version.")
   if (!input.drafts || typeof input.drafts !== "object" || Array.isArray(input.drafts) || Object.keys(input.drafts).length > 100) throw new Error("Invalid character drafts.")
   const drafts: Record<string, PersonDesign> = {}
   for (const [id, design] of Object.entries(input.drafts)) {

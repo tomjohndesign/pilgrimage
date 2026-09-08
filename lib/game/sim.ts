@@ -1,3 +1,4 @@
+import { wearySpeedScale } from "./traveler-weariness"
 import { housingBeds, vacantMonkBed } from "./housing"
 import { MONK_COUNT, MONK_JOIN_CHANCE, type Monk } from "./monks"
 import { monkWalkSpeed } from "./base-person/monk-assets"
@@ -1413,7 +1414,7 @@ export function stepSim(
       : knightWalkStride(travelerAppearance(map.seed ?? 0, t.id).variant) * characterScale * DEFAULT_WALK_CADENCE) / DEFAULT_WALK_SPEED : undefined
     const job = settlementJob(s.employer, sim.buildings)
     const residentSpeed = job ? jobSpeedScale(job, travelerAppearance(map.seed ?? 0, t.id).variant, characterScale) : undefined
-    const targetSpeed = t.pace * baseSpeed * (residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+    const targetSpeed = t.pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
     s.moveSpeed = camping || sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed
@@ -1835,12 +1836,15 @@ export function stepSim(
         let direction = s.direction
         let haste = s.activity === "fleeing" ? FLEE_HASTE : 1
         if (s.activity === "seeking" && !shelter) {
-          // (Re)acquire the nearest vendor who isn't off camping somewhere.
+          // Only pursue road traders or an open roadside stall. Settled keepers
+          // and shrine visitors retain their old road progress while off-road;
+          // chasing it leaves customers pacing at the enclave entrance forever.
+          // Settled counters are reached through startTavernTrip instead.
           let vendor: SimTraveler | undefined
           let nearestDistance = Infinity
           for (const candidate of vendors) {
-            if (candidate.activity === "openingShop" || candidate.activity === "packingShop" ||
-              CAMP_ACTIVITIES.includes(candidate.activity) || candidate.activity === "fromCamp") continue
+            if (candidate.employer || candidate.track || candidate.roadShortcut || candidate.praying ||
+              (candidate.activity !== "walking" && candidate.activity !== "vending")) continue
             const distance = Math.abs(candidate.progress - s.progress)
             if (distance < nearestDistance) { nearestDistance = distance; vendor = candidate }
           }
@@ -1877,7 +1881,9 @@ export function stepSim(
             direction = vendor.progress >= s.progress ? 1 : -1
             haste = SEEK_HASTE
           } else {
-            // No vendor to be had; trudge on hungry and keep watching.
+            // Resume the journey, including wrapping at the map edge. Empty
+            // needs will prompt another look for an available vendor next step.
+            s.activity = "walking"
             s.targetId = null
           }
         }

@@ -11,7 +11,7 @@ export function editedLeg(side: BodySide, phase: number, clip: BaseClip, b: Pers
   const kneeOffset = new THREE.Vector3(...poseOffset(edits, clip, side === "left" ? "leftKnee" : "rightKnee", phase)).applyQuaternion(localRotation).toArray()
   const hipOffset = new THREE.Vector3(...poseOffset(edits, clip, side === "left" ? "leftHip" : "rightHip", phase)).add(new THREE.Vector3(...pelvisShift)).applyQuaternion(localRotation).toArray()
   if ([...footOffset, ...kneeOffset, ...hipOffset].every(v => v === 0)) return base
-  const walking = clip === "walk" || clip === "carrying" || clip === "procession"
+  const walking = clip === "walk" || clip === "wearyWalk" || clip === "carrying" || clip === "procession"
   const p = ((phase + (side === "right" ? 0.5 : 0)) % 1 + 1) % 1
   const swing = (p - WALK_STANCE_FRACTION) / (1 - WALK_STANCE_FRACTION)
   const weight = walking ? base.planted ? 0 : Math.min(1, Math.max(0, Math.sin(swing * Math.PI) * 3)) : 1

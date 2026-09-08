@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import sharp from "sharp"
 import * as THREE from "three"
-import manifest from "../../../public/textures/knights/v11/manifest.json"
+import manifest from "../../../public/textures/knights/v12/manifest.json"
 import { BASE_PERSON, PERSON_CLIPS } from "../base-person/pose"
 import { personRecipe } from "../base-person/design"
 import { personWalkStride } from "../base-person/gait"
@@ -92,7 +92,7 @@ describe("knight assets", () => {
     const sheets: [string, number, number, number][] = [
       ...Object.entries(manifest.person.frameCounts).map(([name, frames]) => [`knight-${name}`, frames, KNIGHT.variants * 8, BASE_PERSON.cellSize] as [string, number, number, number]),
       ...COATS.horse.flatMap(coat => ["mounted", "saddled"].map(kind => [`${kind}-${coat.id}`, KNIGHT.frames + 1, kind === "mounted" ? KNIGHT.variants * 8 : 8, KNIGHT.cellSize] as [string, number, number, number])),
-      ...(["walk", "idle"] as const).map(clip => [`squire-${clip}`, manifest.squire.frameCounts[clip], manifest.squire.rows, manifest.squire.cellSize] as [string, number, number, number]),
+      ...(["walk", "idle", "wearyWalk"] as const).map(clip => [`squire-${clip}`, manifest.squire.frameCounts[clip], manifest.squire.rows, manifest.squire.cellSize] as [string, number, number, number]),
     ]
     for (const [name, columns, rows, size] of sheets) {
       const { data, info } = await sharp(`public/textures/knights/${KNIGHT.version}/${name}.png`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })

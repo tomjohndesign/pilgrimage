@@ -43,7 +43,7 @@ export async function bakeKnights() {
     }
     save(`knight-${clip}`, target)
   }
-  for (const clip of ["walk", "idle"] as const) {
+  for (const clip of ["walk", "idle", "wearyWalk"] as const) {
     const session = personFrameRenderer(squireDesign(), SQUIRE_PALETTE)
     const frames = PERSON_CLIPS[clip].frames, size = BASE_PERSON.cellSize, target = sheet(size * frames, size * 8)
     let gear: ReturnType<typeof equipSquire> | undefined
@@ -109,7 +109,7 @@ export async function bakeKnights() {
       camera: { ...BASE_PERSON.camera, viewSize: extent }, scale: TRANSPORT.scale,
       person: { cellSize: BASE_PERSON.cellSize, anchor: BASE_PERSON.anchor, rows: designs.length * 8, frameCounts: Object.fromEntries(clips.map(clip => [clip, PERSON_CLIPS[clip].frames])) },
       squire: { cellSize: BASE_PERSON.cellSize, anchor: BASE_PERSON.anchor, rows: 8,
-        frameCounts: { walk: PERSON_CLIPS.walk.frames, idle: PERSON_CLIPS.idle.frames }, design: squireDesign(),
+        frameCounts: { walk: PERSON_CLIPS.walk.frames, idle: PERSON_CLIPS.idle.frames, wearyWalk: PERSON_CLIPS.wearyWalk.frames }, design: squireDesign(),
         equipment: "wooden kite shield with painted leather face, rolled wool cloak and leather supply satchel" },
       equipment: "c.1066 mail hauberk and open coif, conical nasal helmet, leather belt and sheathed sword; wooden saddle, short bordered wool saddlecloth, leather tack and iron stirrups",
       reference: "https://www.bayeuxmuseum.com/en/the-bayeux-tapestry/discover-the-bayeux-tapestry/what-is-the-bayeux-tapestry-about/" } }

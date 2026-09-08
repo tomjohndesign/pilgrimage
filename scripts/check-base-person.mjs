@@ -1,7 +1,7 @@
 import sharp from "sharp"
 import { readFileSync } from "node:fs"
 const monk = process.argv.includes("--monk")
-const version = process.argv.find(arg => /^v\d+$/.test(arg)) ?? (monk ? "v38" : "v33")
+const version = process.argv.find(arg => /^v\d+$/.test(arg)) ?? (monk ? "v40" : "v34")
 if (!/^v\d+$/.test(version)) throw new Error("Expected a version such as v1")
 const prefix = monk ? `public/textures/characters/monks/${version}/manifest` : `public/textures/characters/base/base-person-${version}`
 const metadata = JSON.parse(readFileSync(`${prefix}.json`, "utf8"))

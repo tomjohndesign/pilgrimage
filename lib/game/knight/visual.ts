@@ -1,4 +1,4 @@
-import manifest from "../../../public/textures/knights/v11/manifest.json"
+import manifest from "../../../public/textures/knights/v12/manifest.json"
 import { populationVisual } from "../base-person/population-assets"
 import { personWalkStride } from "../base-person/gait"
 import { actionPlaybackRate } from "../base-person/activity"
@@ -25,5 +25,6 @@ export function squireVisual() {
   const clip = (name: keyof typeof data.frameCounts) => ({ url: `/textures/knights/${KNIGHT.version}/squire-${name}.png`, depth: `/textures/knights/${KNIGHT.version}/depth-squire-${name}.png`, columns: data.frameCounts[name], rows: data.rows, stillFrame: 0 })
   return { ...base, design, scale, rowOffset: 0, reservedTones: KNIGHT_TONES, walkStride: personWalkStride(design, scale),
     center: [data.anchor[0] / data.cellSize, 1 - data.anchor[1] / data.cellSize] as [number, number],
-    walk: { ...clip("walk"), strides: 1 }, idle: clip("idle"), actions: {} }
+    walk: { ...clip("walk"), strides: 1 }, idle: clip("idle"),
+    actions: { wearyWalk: { ...clip("wearyWalk"), strides: 1, shadow: base.shadow.actions!.wearyWalk! } } }
 }

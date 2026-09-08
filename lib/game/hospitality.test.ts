@@ -960,6 +960,49 @@ describe("houses, counters and posts", () => {
     expect(servingHouses(map, b => [...sim.travelers.values()].some(w => w.employer === b.id && w.activity === "posted")))
       .toEqual([stall])
   }, 20000)
+
+  it.each([1, -1] as const)("lets hungry travelers pass a settled vendor instead of chasing their old road position (direction %i)", direction => {
+    const { map, traveler } = fixture()
+    const def = BUILD_CATALOG.find(b => b.id === "market")!
+    const stall = { ...def, id: "market-0", buildType: "market", x: 13, z: 6, rotation: 0 as const }
+    map.buildings.push(stall)
+    addHouse(map, { x: 6, z: 12 })
+    const vendor = { ...traveler(4), type: TRAVELER_TYPES.vendor, offset: 8 / 29 }
+    const sim = createSim([vendor], map, [], obscure)
+    sim.buildings = jobBuildings(map)
+    const keeper = sim.travelers.get(vendor.id)!
+    run(sim, [vendor], map, 300, () => keeper.activity === "posted")
+    expect(keeper.activity).toBe("posted")
+
+    const hungry = ["peasant", "knight"] as const
+    const passers = hungry.map((type, id) => {
+      const t = traveler(id, direction)
+      t.type = TRAVELER_TYPES[type]
+      t.offset = (keeper.progress - direction * 2) / 29
+      t.attributes.hunger = t.attributes.thirst = 0
+      return t
+    })
+    for (const [id, s] of createSim(passers, map).travelers) {
+      // Recover travelers already stuck seeking this vendor; decline optional visits.
+      s.activity = "seeking"; s.targetId = vendor.id; s.visitCooldown = 999
+      sim.travelers.set(id, s)
+    }
+    const passed = new Set<number>()
+    run(sim, [...passers, vendor], map, 8, () => {
+      for (const t of passers) {
+        if (direction * (sim.travelers.get(t.id)!.progress - keeper.progress) > 3) passed.add(t.id)
+      }
+      return passed.size === passers.length
+    })
+    expect(passed.size).toBe(passers.length)
+    for (const t of passers) {
+      const s = sim.travelers.get(t.id)!
+      expect(s.targetId).toBeNull()
+      expect(s.hunger).toBe(0)
+      expect(s.thirst).toBe(0)
+    }
+    expect(keeper.activity).toBe("posted")
+  }, 20000)
 })
 
 describe("tree resources and timber storage", () => {

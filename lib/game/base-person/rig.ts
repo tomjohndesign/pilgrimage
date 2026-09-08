@@ -666,16 +666,19 @@ export function createBasePersonRig(recipe = personRecipe()) {
       const building = clip === "building", hammer = buildingMotion(phase)
       const sermon = clip === "preaching" ? preachingMotion(phase, b) : undefined
       const motion = walkBody(phase, clip)
-      const devotional = recipe.design.walkStyle === "Devotional" && clip === "walk"
-      headPivot.rotation.x = devotional ? 0.42 : 0
+      const weary = clip === "wearyWalk"
+      const walking = clip === "walk" || weary
+      const devotional = recipe.design.walkStyle === "Devotional" && walking
+      headPivot.rotation.x = weary ? 0.24 + wave * 0.035 : devotional ? 0.42 : 0
       headPivot.position.set(0, neckTop - waist + motion.headBob, 0)
       headPivot.rotation.y = -motion.chestYaw
       body.rotation.y = motion.hipYaw
       chest.rotation.y = motion.chestYaw - motion.hipYaw
+      chest.rotation.z = weary ? wave * 0.035 : 0
       const chair = clip === "seatedPrayer"
       const seated = clip === "sitting" || chair, praying = clip === "praying"
       const felling = clip === "treeFelling", splitting = clip === "woodcutting"
-      const carryAxe = recipe.design.handTool === "Carried axe" && (clip === "walk" || clip === "idle")
+      const carryAxe = recipe.design.handTool === "Carried axe" && (walking || clip === "idle")
       const sleep = clip === "sleeping", chop = felling || splitting, gather = clip === "gathering"
       const drop = pelvisHeight(phase, clip, b) - b.hipHeight
       // Slide the resting grip up the shaft as the hips lower, keeping the blade above the ground.
@@ -684,7 +687,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       poseRoot.rotation.set(sleep ? -Math.PI / 2 : 0, sleep && female ? Math.PI / 2 : 0, 0)
       poseRoot.position.set(0, sleep ? female ? b.shoulderOffset + 0.06 : b.torsoTop * 0.78 : 0, sleep ? (b.headCenter + b.headHeight) / 2 + 0.03 : 0)
       body.position.set(0, b.hipHeight + drop, 0)
-      body.rotation.x = gather ? 0.18 + gathering.reach * 0.3 : felling ? 0.10 : splitting ? split.lean : praying ? 0.12 + wave * 0.025 : sleep ? wave * 0.008 : chair ? 0.015 : seated ? 0.008 * wave : 0
+      body.rotation.x = weary ? 0.28 + Math.sin(phase * Math.PI * 4) * 0.025 : gather ? 0.18 + gathering.reach * 0.3 : felling ? 0.10 : splitting ? split.lean : praying ? 0.12 + wave * 0.025 : sleep ? wave * 0.008 : chair ? 0.015 : seated ? 0.008 * wave : 0
       body.rotation.y = felling ? swing.twist : splitting ? split.twist : motion.hipYaw
       // Authored offsets for the skeleton's own joints: the pelvis carries everything, the chest carries head and arms.
       const rootOffset = (joint: EditableJoint) => new THREE.Vector3(...poseOffset(edits, clip, joint, phase))
@@ -739,7 +742,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
           const standingY = longGarment && !sleep ? y - drop * Math.min(1, weight) : y
           // The robe and hanging rope ends drape together over bent knees.
           const drapeZ = z + ((seated ? 0.48 : praying || gather ? 0.19 : 0) * weight) +
-            (longGarment && (clip === "walk" || clip === "carrying" || clip === "procession") ? wave * 0.035 * recipe.design.stride * weight * weight : 0)
+            (longGarment && (walking || clip === "carrying" || clip === "procession") ? wave * 0.035 * recipe.design.stride * weight * weight : 0)
           const groundY = b.hipHeight + (0.035 - body.position.y + drapeZ * (geometry === torso.geometry ? torso.scale.z : 1) * Math.sin(body.rotation.x)) / Math.cos(body.rotation.x)
           if (longGarment && chop && y < waist) {
             // Spread the garment over the wider stance, keeping its hem planted as the torso twists.
@@ -787,15 +790,15 @@ export function createBasePersonRig(recipe = personRecipe()) {
         limb.seam.quaternion.setFromUnitVectors(up, seamVector.normalize())
         limb.shoulder.rotation.set(armAngle(limb.side, phase, clip) * recipe.design.armSwing, 0,
           (limb.side === "left" ? 1 : -1) * THREE.MathUtils.degToRad(recipe.design.armAngle))
-        const elbowSwing = clip === "walk" ? (1 - Math.cos(phase * Math.PI * 2 +
+        const elbowSwing = walking ? (1 - Math.cos(phase * Math.PI * 2 +
           (limb.side === "left" ? 0 : Math.PI) - 0.35)) * 0.14 * recipe.design.armSwing : 0
         limb.elbow.rotation.set(-THREE.MathUtils.degToRad(recipe.design.elbowBend) - elbowSwing, 0, 0)
         const sign = limb.side === "left" ? 1 : -1
         limb.hand.position.set(0, -b.forearmLength - ((chop || carryAxe) ? 0.04 : 0.025) * recipe.design.hands, 0)
         limb.hand.scale.set((chop || carryAxe) ? 0.065 : 0.043, (chop || carryAxe) ? 0.055 : 0.06, (chop || carryAxe) ? 0.060 : 0.04).multiplyScalar(recipe.design.hands)
         limb.hand.quaternion.identity()
-        if (recipe.design.walkingStick && (clip === "walk" || clip === "idle") && limb.side === "right") {
-          const { grip } = staffMotion(phase, b, clip === "walk", edits)
+        if (recipe.design.walkingStick && (walking || clip === "idle") && limb.side === "right") {
+          const { grip } = staffMotion(phase, b, walking, edits, clip)
           root.updateMatrixWorld(true)
           const target = chest.worldToLocal(root.localToWorld(new THREE.Vector3(...grip)))
           target.add(chest.position)
@@ -865,7 +868,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
           const pole = chest.worldToLocal(root.localToWorld(elbow))
           reach(limb, target.toArray() as Point3, true, pole)
         }
-        if (recipe.design.walkingStick && (clip === "walk" || clip === "idle") && limb.side === "right") {
+        if (recipe.design.walkingStick && (walking || clip === "idle") && limb.side === "right") {
           root.updateMatrixWorld(true)
           const grip = sockets.rightHand.getWorldPosition(new THREE.Vector3())
           const palm = grip.clone().add(new THREE.Vector3(0, 0.026, 0))
