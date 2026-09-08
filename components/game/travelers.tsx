@@ -16,7 +16,7 @@ import { travelerAppearance } from "@/lib/game/base-person/population"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { markPerson, selectElement } from "@/lib/game/selection"
-import { CharacterHitTarget, CharacterSelectionShadow } from "./character-selection"
+import { CharacterHitTarget, CharacterSelectionOutline } from "./character-selection"
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { setFootpathObstacles } from "@/lib/game/footpaths"
 import { jobBuildings } from "@/lib/game/settlement"
@@ -325,7 +325,7 @@ export function Travelers({
               <TravelerFigure map={map} job={jobs.get(traveler.id)} age={traveler.attributes.age} {...(traveler.type.id === "knight" ? knightLoadout(traveler.id) : cartLoadout(traveler.id))} appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
                 characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
               <CharacterHitTarget onClick={select} />
-              {selected && <CharacterSelectionShadow map={map} />}
+              {selected && <CharacterSelectionOutline />}
             </group>
           )
         })}
