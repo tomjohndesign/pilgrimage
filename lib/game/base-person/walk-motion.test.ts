@@ -8,6 +8,31 @@ import { createBasePersonRig } from "./rig"
 import { TRAVELER_TYPES } from "../travelers"
 
 describe("walking body and clothing", () => {
+  it("stoops and lowers the head while keeping the walking feet and arm lengths", () => {
+    for (const design of [DEFAULT_DESIGN, PERSON_PRESETS.Female, PERSON_PRESETS.Monk]) {
+      const recipe = personRecipe(design), rig = createBasePersonRig(recipe)
+      try {
+        for (let frame = 0; frame < 20; frame++) {
+          const phase = frame / 20
+          rig.pose(phase, "walk")
+          const upright = rig.sockets.head.getWorldPosition(new THREE.Vector3())
+          const feet = ["left", "right"].map(side => rig.root.getObjectByName(`${side}-foot`)!.getWorldPosition(new THREE.Vector3()))
+          rig.pose(phase, "wearyWalk")
+          const head = rig.sockets.head.getWorldPosition(new THREE.Vector3())
+          expect(head.y).toBeLessThan(upright.y)
+          expect(head.z - upright.z).toBeGreaterThan(0.15)
+          for (const [i, side] of ["left", "right"].entries()) {
+            const foot = rig.root.getObjectByName(`${side}-foot`)!
+            expect(foot.getWorldPosition(new THREE.Vector3()).distanceTo(feet[i])).toBeLessThan(1e-10)
+            expect(foot.getWorldQuaternion(new THREE.Quaternion()).angleTo(new THREE.Quaternion())).toBeCloseTo(0)
+            const shoulder = rig.root.getObjectByName(`${side}-shoulder`)!.getWorldPosition(new THREE.Vector3())
+            const elbow = rig.root.getObjectByName(`${side}-elbow`)!.getWorldPosition(new THREE.Vector3())
+            expect(shoulder.distanceTo(elbow)).toBeCloseTo(recipe.body.upperArmLength, 10)
+          }
+        }
+      } finally { rig.dispose() }
+    }
+  })
   it("pivots hips over fixed foot targets, counter-turns the chest and flexes the elbows", () => {
     const recipe = personRecipe(), rig = createBasePersonRig(recipe)
     const hips = rig.root.getObjectByName("pelvis")!, chest = rig.root.getObjectByName("chest-pivot")!

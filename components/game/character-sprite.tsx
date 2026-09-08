@@ -172,7 +172,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     const flight = parent.userData.activity === "flying" ? flightClip : undefined
     const playing = parent.userData.activity === "performing" ? playingClip : undefined
     const special = flight ?? playing
-    const requested = activityClip(parent.userData.activity, moving, parent.userData.carrying)
+    const requested = activityClip(parent.userData.activity, moving, parent.userData.carrying, parent.userData.weary === true)
     const actionIndex = actionIndices[requested]
     const action = requested !== "walk" && requested !== "idle" ? visual.actions[requested] : undefined
     const workTree = !moving && action && work && (requested === "treeFelling" || requested === "woodcutting")
@@ -205,7 +205,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     const texture = textures[textureIndex]
     poseDepth.map.value = depthTextures.get(textureIndex) ?? null
     poseDepth.enabled.value = poseDepth.map.value !== null
-    let frame = special ? Math.floor(actionClock.current * special.fps) % special.columns : action ? (requested === "carrying" || requested === "procession") ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) :
+    let frame = special ? Math.floor(actionClock.current * special.fps) % special.columns : action ? (requested === "carrying" || requested === "procession" || requested === "wearyWalk") ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) :
       Math.floor(actionClock.current * fps * (action.playbackRate ?? 1)) % clip.columns : moving ? walkClipFrame(clock.current, clip.columns, clip.strides ?? 1) : clip.stillFrame
     if (requested === "hoisting") {
       const progress = parent.userData.actionProgress ?? actionClock.current

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import sharp from "sharp"
 import * as THREE from "three"
-import manifest from "../../../public/textures/transport/v23/manifest.json"
+import manifest from "../../../public/textures/transport/v24/manifest.json"
 import { BASE_PERSON, PERSON_CLIPS, WALK_CLIP_STRIDES, legPose } from "../base-person/pose"
 import { personRecipe } from "../base-person/design"
 import { personWalkStride } from "../base-person/gait"
@@ -20,7 +20,12 @@ describe("transport sheet contract", () => {
   it("retains sleeping and other activities while replacing pulling locomotion", () => {
     for (let variant = 0; variant < 6; variant++) {
       const visual = pullingVisual(variant), regular = populationVisual("vendor", variant, null)
-      expect(visual.actions).toEqual(regular.actions)
+      const { wearyWalk, ...rest } = visual.actions
+      const { wearyWalk: regularWeary, ...regularRest } = regular.actions
+      expect(rest).toEqual(regularRest)
+      expect(wearyWalk.url).toContain("/transport/")
+      expect(wearyWalk.url).not.toBe(regularWeary?.url)
+      expect(wearyWalk.columns).toBe(PERSON_CLIPS.wearyWalk.frames)
       expect(visual.actions.sleeping?.columns).toBeGreaterThan(1)
       expect(visual.walk.url).toContain("/transport/")
       expect(visual.walkStride).toBe(regular.walkStride)
@@ -51,7 +56,7 @@ describe("transport sheet contract", () => {
       ...CARGO.flatMap(cargo => CART_MODES.map(mode => [`cart-${cargo}-${mode}`, mode === "shop" ? TRANSPORT.shopFrames : CART_COLUMNS, CART.directions, mode === "shop" ? SHOP.cellSize : CART.cellSize] as [string, number, number, number])),
       ...CARGO.map(cargo => [`cart-${cargo}-shop-mirrored`, TRANSPORT.shopFrames, CART.directions, SHOP.cellSize] as [string, number, number, number]),
       ...(["horse", "donkey"] as const).flatMap(kind => COATS[kind].flatMap(coat => [false, true].map(hitched => [`${kind}-${coat.id}${hitched ? "-hitched" : ""}`, ANIMAL_COLUMNS, kind === "horse" ? 16 : 8, TRANSPORT.cellSize] as [string, number, number, number]))),
-      ["puller-walk", manifest.puller.frames, manifest.puller.rows, manifest.puller.cellSize], ["puller-idle", 1, manifest.puller.rows, manifest.puller.cellSize],
+      ["puller-walk", manifest.puller.frames, manifest.puller.rows, manifest.puller.cellSize], ["puller-wearyWalk", PERSON_CLIPS.wearyWalk.frames, manifest.puller.rows, manifest.puller.cellSize], ["puller-idle", 1, manifest.puller.rows, manifest.puller.cellSize],
       ["merchant-setup", manifest.merchantSetupFrames, manifest.puller.rows, manifest.puller.cellSize],
       ["merchant-selling", manifest.keeperColumns, manifest.puller.rows, manifest.puller.cellSize],
       ...CARGO.map(cargo => [`cart-${cargo}-driver`, DRIVER_CLIP.variants, CART.directions, CART.cellSize] as [string, number, number, number]),

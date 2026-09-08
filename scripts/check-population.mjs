@@ -1,6 +1,6 @@
 import sharp from "sharp"
 import { readFileSync } from "node:fs"
-const version = process.argv[2] ?? "v27"
+const version = process.argv[2] ?? "v28"
 const jobs = process.argv.includes("--jobs")
 if (!/^v\d+$/.test(version)) throw new Error("Expected a population version such as v1")
 const pack = JSON.parse(readFileSync(`public/textures/characters/${jobs ? "jobs" : "population"}/${version}/manifest.json`, "utf8"))
@@ -14,6 +14,7 @@ for (const [type, entry] of Object.entries({ ...pack.callings, ...Object.fromEnt
   if (jobs || Number(version.slice(1)) >= 2) for (const clip of ["sleeping", "sitting", "praying", "woodcutting", "gathering", "carrying"]) {
     if (!entry.actions?.[clip] || !pack.shadows.actions?.[clip]) throw new Error(`Missing action: ${type}/${clip}`)
   }
+  if (pack.templateVersion >= 33 && (!entry.actions?.wearyWalk || !entry.depths?.wearyWalk || !pack.shadows.actions?.wearyWalk)) throw new Error(`Missing weary walk: ${type}`)
   if (entry.designs.length !== 6) throw new Error(`Missing profiles: ${type}`)
   for (const [clip, url] of Object.entries({ walk: entry.walk, idle: entry.idle, ...entry.actions })) {
     const { data, info } = await sharp(`public${url}`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })

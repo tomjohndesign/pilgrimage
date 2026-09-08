@@ -22,8 +22,8 @@ import { KNIGHT, knightDesign } from "@/lib/game/knight/design"
 import { knightTravelSpeed } from "@/lib/game/knights"
 import { personWalkStride } from "@/lib/game/base-person/gait"
 import { squireVisual } from "@/lib/game/knight/visual"
-import knightMetadata from "@/public/textures/knights/v11/manifest.json"
-import transportMetadata from "@/public/textures/transport/v23/manifest.json"
+import knightMetadata from "@/public/textures/knights/v12/manifest.json"
+import transportMetadata from "@/public/textures/transport/v24/manifest.json"
 
 const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse", knight: "Knight" } as const
 type Subject = keyof typeof SUBJECTS
@@ -245,7 +245,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   }
   useEffect(() => () => { session.current?.session.dispose(); session.current = null }, [])
   const inspected = useMemo(() => isPerson && showRig ? inspectRig(design, clip, frame % PERSON_CLIPS[clip].frames, row, previewSession(design).rig) : {}, [isPerson, showRig, design, clip, frame, row]) // eslint-disable-line react-hooks/exhaustive-deps
-  const editFrame = (joint: EditableJoint) => joint === "staffTip" && clip === "walk" && staffMotion(frame / PERSON_CLIPS.walk.frames, personRecipe(design).body).planted ? 0 : frame % PERSON_CLIPS[clip].frames
+  const editFrame = (joint: EditableJoint) => joint === "staffTip" && (clip === "walk" || clip === "wearyWalk") && staffMotion(frame / PERSON_CLIPS.walk.frames, personRecipe(design).body).planted ? 0 : frame % PERSON_CLIPS[clip].frames
   const currentOffset = (joint: EditableJoint) => poseOffset(design.poseEdits, clip, joint, editFrame(joint) / PERSON_CLIPS[clip].frames)
   const selectedKey = design.poseEdits?.[clip]?.[selectedJoint as EditableJoint]?.find(k => k.frame === editFrame(selectedJoint as EditableJoint))
   const frameKeyed = (step: number) => Object.values(design.poseEdits?.[clip] ?? {}).some(keys => keys?.some(key => key.frame === step))
@@ -261,7 +261,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     let edits: PoseEdits = design.poseEdits ?? {}
     for (let [joint, offset] of changes) {
       const at = editFrame(joint)
-      if (joint === "staffTip" && (clip === "idle" || (clip === "walk" && staffMotion(frame / PERSON_CLIPS.walk.frames, personRecipe(design).body).planted))) offset = [offset[0], 0, offset[2]]
+      if (joint === "staffTip" && (clip === "idle" || ((clip === "walk" || clip === "wearyWalk") && staffMotion(frame / PERSON_CLIPS.walk.frames, personRecipe(design).body).planted))) offset = [offset[0], 0, offset[2]]
       edits = setPoseKey(edits, clip, joint, { frame: at, offset, radius: blend }, at)
     }
     commitPose(edits)
