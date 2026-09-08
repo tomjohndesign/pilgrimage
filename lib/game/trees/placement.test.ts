@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { foliageSpacing } from "./foliage/spacing"
 
 import { parseAsciiMap } from "../map/prototype-map"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "../map/types"
@@ -7,6 +8,8 @@ import {
   MAX_FOOTPRINT,
   MAX_TREES_PER_TILE,
   placeTrees,
+  forestPathDistances,
+  PATH_THINNING_RADIUS,
   requiredSpacing,
   type TreePlacement,
 } from "./placement"
@@ -57,7 +60,8 @@ describe("placeTrees", () => {
   const trees = placeTrees(map, TREE_SPECIES)
 
   it("is deterministic in the seed and fills the woods", () => {
-    expect(trees.length).toBeGreaterThan(34 * 34)
+    expect(trees.length).toBeGreaterThan(34 * 34 * 0.45)
+    expect(trees.length).toBeLessThan(34 * 34)
     expect(placeTrees(map, TREE_SPECIES)).toEqual(trees)
     expect(placeTrees({ ...map, seed: 12 }, TREE_SPECIES)).not.toEqual(trees)
   })
@@ -136,8 +140,8 @@ describe("placeTrees", () => {
     // half-wooded; the thinning is real but gentle.
     expect(heart / heartTiles).toBeGreaterThan((rim / rimTiles) * 1.2)
     // Rim trees are smaller and lighter.
-    const rimTree = tiles.get(3 * map.width + 3)![0]
-    const heartTree = tiles.get(20 * map.width + 20)![0]
+    const rimTree = birches.find(tree => worldToTileX(map, tree.x) === 3)!
+    const heartTree = birches.find(tree => worldToTileX(map, tree.x) === 20 && worldToTileZ(map, tree.z) >= 12 && worldToTileZ(map, tree.z) <= 24)!
     expect(rimTree.scale!).toBeLessThan(heartTree.scale!)
     expect(rimTree.brightness!).toBeGreaterThan(heartTree.brightness!)
   })
@@ -164,5 +168,34 @@ describe("placeTrees", () => {
     const light = placeTrees(woodsBlock(40, 11, "F"), only("birch"))
     expect(dark.length).toBeGreaterThan(light.length)
     expect(Math.max(...dark.map((t) => t.scale ?? 1))).toBeGreaterThan(1.2)
+  })
+
+  it.each([
+    ["path", TREE_SPECIES], ["track", TREE_SPECIES],
+    ["path", foliageSpacing(TREE_SPECIES)], ["track", foliageSpacing(TREE_SPECIES)],
+  ] as const)("opens a graduated verge beside a %s, retaining dense dark forest", (path, species) => {
+    const density = (char: string) => {
+      const bands = [0, 0, 0]
+      for (const seed of [11, 19, 27, 42, 81]) {
+        const map = woodsBlock(64, seed, char)
+        for (let z = 0; z < map.depth; z++) map.tiles[z * map.width + 32] = path
+        const distances = forestPathDistances(map)
+        expect(distances[32 * map.width + 32]).toBe(0)
+        expect(distances[32 * map.width + 33]).toBe(1)
+        expect(distances[32 * map.width + 40]).toBe(PATH_THINNING_RADIUS)
+        const tiles = byTile(map, placeTrees(map, species))
+        for (let z = 10; z < 54; z++) for (const side of [-1, 1]) {
+          for (const [band, distance] of [1, 3, 8].entries()) {
+            bands[band] += tiles.get(z * map.width + 32 + distance * side)?.length ?? 0
+          }
+        }
+      }
+      return bands
+    }
+    const forest = density("F"), dark = density("D")
+    expect(forest[0]).toBeLessThan(forest[1] * 0.7)
+    expect(forest[1]).toBeLessThan(forest[2])
+    expect(dark[0]).toBeGreaterThan(forest[0] * 2)
+    expect(dark[2]).toBeGreaterThan(forest[2] * 1.3)
   })
 })

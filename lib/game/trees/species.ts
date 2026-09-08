@@ -90,6 +90,8 @@ export interface TreeSpeciesDef {
      * with the individual, so old growth holds more ground and rim trees less.
      */
     footprint: number
+    /** Native-size sprite crowns keep the same spacing at the rim and in old growth. */
+    fixedFootprint?: boolean
     /** Most trees of this species one tile can hold: 1 for the big crowns, up to 3 for scrub. */
     perTile: number
   }

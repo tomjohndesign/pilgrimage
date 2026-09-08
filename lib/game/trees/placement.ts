@@ -2,6 +2,7 @@ import { groundHeight } from "../map/elevation"
 import { computeDarkShade, computeForestShade } from "../map/forest-field"
 import { signpostPlacement, SIGNPOST_CLEARANCE } from "../map/signpost"
 import { isWoods } from "../map/terrain"
+import { isRoadTerrain } from "../map/road"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "../map/types"
 import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
 import { pickSpecies, type TreeSpeciesDef, type TreeSpeciesId, type TreeShape } from "./species"
@@ -29,7 +30,7 @@ import { pickSpecies, type TreeSpeciesDef, type TreeSpeciesId, type TreeShape } 
  * ever stand inside one another's footprint, so each tree reads as a tree.
  *
  * The stand fades at its rim: the outermost trees are a little shorter and
- * lighter, following the forest-shade field the ground colour also reads, so
+ * lighter, following the forest habitat field, so
  * the woods taper into grassland instead of stopping at a wall. Old growth
  * runs the other way — taller and darker — and the dark-shade field feathers
  * that into the woods around it so the heart of a forest never has a hard rim.
@@ -64,7 +65,27 @@ export const DARK_BRIGHTNESS = 0.6
 /** Slots a tile is offered, at most. Species caps and footprints prune from here. */
 export const MAX_TREES_PER_TILE = 3
 /** Chance of each extra slot at the very heart of the woods; fades to 0 at the rim. */
-export const EXTRA_SLOT_CHANCE = 0.5
+export const EXTRA_SLOT_CHANCE = 0.18
+
+/** A four-tile verge opens ordinary woods; old growth keeps most of its canopy. */
+export const PATH_THINNING_RADIUS = 4
+
+export function forestPathDistances(map: GameMap): Float32Array {
+  const distances = new Float32Array(map.tiles.length).fill(PATH_THINNING_RADIUS)
+  map.tiles.forEach((terrain, index) => {
+    if (!isRoadTerrain(terrain) && terrain !== "bridge") return
+    const x = index % map.width, z = Math.floor(index / map.width)
+    for (let dz = -PATH_THINNING_RADIUS; dz <= PATH_THINNING_RADIUS; dz++) {
+      for (let dx = -PATH_THINNING_RADIUS; dx <= PATH_THINNING_RADIUS; dx++) {
+        const nx = x + dx, nz = z + dz
+        if (nx < 0 || nz < 0 || nx >= map.width || nz >= map.depth) continue
+        const i = nz * map.width + nx
+        distances[i] = Math.min(distances[i], Math.hypot(dx, dz))
+      }
+    }
+  })
+  return distances
+}
 
 /**
  * Largest footprint the placement can honour, in tiles, after scaling by the
@@ -99,7 +120,8 @@ export function requiredSpacing(
   b: TreeSpeciesDef,
   bScale: number,
 ): number {
-  return Math.max(a.habitat.footprint * aScale, b.habitat.footprint * bScale)
+  return Math.max(a.habitat.footprint * (a.habitat.fixedFootprint ? 1 : aScale),
+    b.habitat.footprint * (b.habitat.fixedFootprint ? 1 : bScale))
 }
 
 export function placeTrees(
@@ -109,6 +131,7 @@ export function placeTrees(
   const seed = map.seed ?? 0
   const shade = computeForestShade(map)
   const darkShade = computeDarkShade(map)
+  const pathDistances = forestPathDistances(map)
   // Slot counts get their own stream so species and jitter (from the `trees`
   // stream) stay independent of the coin flips.
   const rngCount = makeRng(deriveSeed(seed, SEED_STREAM.treeCount))
@@ -146,9 +169,14 @@ export function placeTrees(
       const dark = darkShade[index]
       const oldGrowth = map.tiles[index] === "darkwood"
 
-      // Slots: the rim gets one, the heart up to MAX; old growth starts at two.
+      const verge = Math.max(0, 1 - pathDistances[index] / PATH_THINNING_RADIUS)
+      const retention = 1 - verge * (oldGrowth ? 0.28 : 1.04)
+      // Gaps between ordinary trees reveal the forest floor, especially beside paths.
+      if (rngCount() > (oldGrowth ? 1 : 0.25 + 0.35 * depth) * retention) continue
+
+      // Only old growth routinely fills multiple slots, even alongside a track.
       let slots = oldGrowth ? 2 : 1
-      const chance = EXTRA_SLOT_CHANCE * (oldGrowth ? dark : depth)
+      const chance = (oldGrowth ? 0.65 * dark : EXTRA_SLOT_CHANCE * depth) * retention
       for (let k = slots; k < MAX_TREES_PER_TILE; k++) if (rngCount() < chance) slots++
 
       const scale =

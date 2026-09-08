@@ -49,7 +49,7 @@ export function TreeMapPreview({ seed, size, atlas, ...pixelation }: { seed: num
       <CameraLight />
 
       <Suspense fallback={null}>
-        <TerrainTiles map={map} />
+        <TerrainTiles map={map} trees={placements} />
       </Suspense>
       <Suspense fallback={null}><FoliageField atlas={atlas} placements={placements} seed={seed} onSelect={id => useCameraStore.getState().select({ kind: "tree", id })} /></Suspense>
       <Environment map={map} />

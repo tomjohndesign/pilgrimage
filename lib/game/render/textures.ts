@@ -8,7 +8,7 @@
 import { ROAD_TIERS } from "../map/road"
 
 /** Keys for the in-game preview scenes in components/texture-preview.tsx. */
-export type TexturePreviewKind = "map-edge" | "road" | "grass" | "ground" | "water" | "sand"
+export type TexturePreviewKind = "map-edge" | "road" | "grass" | "ground" | "water" | "sand" | "forest"
 
 export interface TextureEntry {
   id: string
@@ -58,6 +58,11 @@ export const TEXTURES: TextureEntry[] = [
       preview: "grass",
     }),
   ),
+  {
+    id: "forest-floor", label: "Forest floor", url: "/textures/forest-floor-v1.png",
+    appliedTo: "Fallen leaves, humus, twigs and moss beneath standing woodland, with sparse litter at the edge.",
+    source: "Built-in imagegen — assets/recipes/textures.json#forest-floor", preview: "forest",
+  },
   {
     id: "ground",
     label: "Earth & hills",

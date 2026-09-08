@@ -165,7 +165,6 @@ export function clampRoadTier(tier: number): number {
 }
 
 /** What each kind of neighbour does to the road surface. */
-const MOSS: Tint = [0.62, 0.74, 0.52] // damp and shaded under the trees
 const DUST: Tint = [1.07, 1.03, 0.94] // dry dirt blowing across
 
 type Tint = [number, number, number]
@@ -178,28 +177,26 @@ function mixInto(tint: Tint, target: Tint, amount: number): void {
 
 /**
  * Per-tile weathering: an RGB multiplier for the road surface at (x, z),
- * derived from the 8 surrounding tiles. Forest darkens the road with moss,
- * bare earth dusts it lighter — both scaled by the tier's `weathering`, so a
+ * derived from the 8 surrounding tiles. Bare earth dusts it lighter,
+ * scaled by the tier's `weathering`, so a
  * trail soaks up its surroundings and flagstone shrugs them off. White
  * ([1,1,1]) means untouched; open grass leaves it so, since the grass itself
- * shows through the surface rather than tinting it.
+ * shows through the surface rather than tinting it. Forest shade comes from
+ * the live canopy density field, so it vanishes when those trees fall.
  */
 export function roadTint(map: GameMap, x: number, z: number, tier: number): Tint {
   const { weathering } = ROAD_TIERS[clampRoadTier(tier)]
 
-  let forest = 0
   let dirt = 0
   for (let dz = -1; dz <= 1; dz++) {
     for (let dx = -1; dx <= 1; dx++) {
       if (dx === 0 && dz === 0) continue
       const t = tileAt(map, x + dx, z + dz)
-      if (t === "forest") forest++
-      else if (t === "dirt") dirt++
+      if (t === "dirt") dirt++
     }
   }
 
   const tint: Tint = [1, 1, 1]
-  mixInto(tint, MOSS, Math.min(1, forest / 4) * 0.55 * weathering)
   mixInto(tint, DUST, Math.min(1, dirt / 6) * 0.5 * weathering)
   return tint
 }

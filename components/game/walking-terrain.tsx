@@ -5,6 +5,7 @@ import { useFrame } from "@react-three/fiber"
 import { buildFootpathRoadSegments } from "@/lib/game/footpaths"
 import { diagonalRoadSegments, type RoadSegment } from "@/lib/game/render/road-segments"
 import { frameProfile } from "@/lib/game/render/frame-profile"
+import { useBuildStore } from "@/lib/game/build-store"
 import { TerrainTiles } from "./terrain-tiles"
 
 type Props = ComponentProps<typeof TerrainTiles>
@@ -25,6 +26,7 @@ function* snapshot(map: Props["map"], founding: Roads): Generator<void, Roads> {
  * decisions stay synchronous; publishing a visual snapshot can yield to input. */
 export function WalkingTerrain(props: Props) {
   const { map } = props
+  const felledTrees = useBuildStore(s => s.felled)
   const founding = useMemo(() => diagonalRoadSegments(map), [map])
   const [published, publish] = useState<{ map: Props["map"]; roads: Roads }>()
   const work = useMemo(() => ({ elapsed: .5, revision: -1,
@@ -49,5 +51,5 @@ export function WalkingTerrain(props: Props) {
     } while (performance.now() < deadline)
     frameProfile.end("footpathSlice", started)
   })
-  return <TerrainTiles {...props} traveledRoads={published?.map === map ? published.roads : founding} regrowRoads />
+  return <TerrainTiles {...props} felledTrees={felledTrees} traveledRoads={published?.map === map ? published.roads : founding} regrowRoads />
 }

@@ -68,11 +68,17 @@ export function foliageMaterial(color: THREE.Texture, depth: THREE.Texture, view
         vec2 foliageSampleUv = (((gl_FragCoord.xy - foliageViewport.xy) / foliageViewport.zw
           - vFoliageRect.xy) / vFoliageRect.zw + vFoliageCell)
           / vec2(${frame.directions}.0, ${frame.rows}.0);`)
+    if (!ids) {
+      // Use the original atlas height so cropped billboards retain the same shading.
+      shader.fragmentShader = shader.fragmentShader.replace("#include <color_fragment>",
+        `#include <color_fragment>
+        diffuseColor.rgb *= mix(0.56, 1.0, smoothstep(0.16, 0.72, foliageSampleUv.y * ${frame.rows}.0 - vFoliageCell.y));`)
+    }
     if (ids) {
       shader.fragmentShader = "flat varying vec3 vFoliageId;\n" + shader.fragmentShader.replace("#include <opaque_fragment>",
         "outgoingLight = vFoliageId;\n#include <opaque_fragment>")
     }
   }
-  material.customProgramCacheKey = () => `foliage-depth-v3-${frame.directions}-${frame.rows}-${frame.extent}-${frame.anchor.join("-")}-${frame.cellSize}-${ids ? "ids" : "color"}`
+  material.customProgramCacheKey = () => `foliage-depth-v4-${frame.directions}-${frame.rows}-${frame.extent}-${frame.anchor.join("-")}-${frame.cellSize}-${ids ? "ids" : "color"}`
   return material
 }
