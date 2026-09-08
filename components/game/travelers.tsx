@@ -265,7 +265,7 @@ export const Travelers = memo(function Travelers({
       const onScreen = personOnScreen || parkedOnScreen
         || (selected?.kind === "traveler" && selected.id === travelers[i].id)
       if (!group) { if (onScreen) missingVisibleUnits++; continue }
-      const wasVisible = group.visible && !visualStale.current
+      const wasVisible = group.visible
       if (wasVisible !== onScreen) {
         group.visible = onScreen
         setSubtreeMatrixAutoUpdate(group, onScreen)
@@ -308,7 +308,7 @@ export const Travelers = memo(function Travelers({
         group.rotation.y = Math.atan2(workTree.x - s.x, workTree.z - s.z)
       }
       group.userData.playbackRate = playback.paused ? 0 : playback.speed
-      group.userData.motionReset = !wasVisible || group.userData.initialized !== true || distance >= 2
+      group.userData.motionReset = visualStale.current || !wasVisible || group.userData.initialized !== true || distance >= 2
       group.userData.distance = playback.paused ? 0 : moved
       const transported = travelers[i].type.id === "vendor" || travelers[i].type.id === "knight"
       group.userData.moving = moving && (transported || !s.praying)
