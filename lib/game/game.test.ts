@@ -406,13 +406,10 @@ describe("road weathering", () => {
     expect(roadTint(paved, 1, 1, 0)).toEqual([1, 1, 1])
   })
 
-  it("mosses the road under forest, darker and greener than in the open", () => {
+  it("leaves forest roads untinted so live canopy density supplies shade", () => {
     const inForest = roadTint(map, 1, 1, 0)
     const inOpen = roadTint(map, 4, 1, 0)
-    expect(luminance(inForest)).toBeLessThan(luminance(inOpen))
-    // Green holds up while red and blue drop — the mossy cast.
-    expect(inForest[1]).toBeGreaterThan(inForest[0])
-    expect(inForest[0]).toBeGreaterThan(inForest[2])
+    expect(inForest).toEqual(inOpen)
   })
 
   it("dusts the road lighter beside bare earth", () => {
@@ -432,7 +429,7 @@ describe("road weathering", () => {
 
   it("weathers developed roads less than the trail", () => {
     const drift = (tier: number) => {
-      const [r, g, b] = roadTint(map, 1, 1, tier)
+      const [r, g, b] = roadTint(map, 7, 1, tier)
       return Math.abs(1 - r) + Math.abs(1 - g) + Math.abs(1 - b)
     }
     for (let tier = 1; tier < ROAD_TIERS.length; tier++) {

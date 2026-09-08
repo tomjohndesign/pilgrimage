@@ -167,7 +167,7 @@ export function GameCanvas({
       <HearthLights><RenownSaturation map={map}>
         <PixelWorld>
           <StaticBatches />
-          <WalkingTerrain map={map} roadTier={roadTier} traffic={travelers.length}
+          <WalkingTerrain map={map} trees={trees} roadTier={roadTier} traffic={travelers.length}
             relicTraffic={relicTraffic} look={roadLook} showGrid={showGrid} />
           <Bridges map={map} roadTier={roadTier} />
           {/* Keep simulation components mounted when their visual layer is hidden. */}

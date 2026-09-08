@@ -1,0 +1,9 @@
+{
+  "id": "forest-floor",
+  "version": "v1",
+  "source": "public/textures/sources/forest-floor-v1.png",
+  "width": 128,
+  "height": 128,
+  "generator": "Built-in imagegen",
+  "recipe": "assets/recipes/textures.json#forest-floor"
+}
