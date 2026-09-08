@@ -28,9 +28,11 @@ export const DESIGN_CONTROLS = {
 export type DesignKey = keyof typeof DESIGN_CONTROLS
 export const HAIR_STYLES = ["Bald", "Cropped", "Bob", "Long", "Tonsure", "Wavy", "Ponytail", "Braids", "Bun"] as const
 export const HAT_STYLES = ["None", "Coif", "Wool cap", "Cloth cap"] as const
+export const HAND_TOOLS = ["None", "Shepherd crook", "Carried axe"] as const
 export const TUNIC_STYLES = ["Plain", "Particolour"] as const
 export type PersonDesign = Record<DesignKey, number> & {
   poseEdits?: PoseEdits
+  handTool: typeof HAND_TOOLS[number]
   hat: typeof HAT_STYLES[number]
   tunicStyle: typeof TUNIC_STYLES[number]
   satchel: boolean; walkingStick: boolean; lute: boolean
@@ -45,7 +47,7 @@ export type PersonDesign = Record<DesignKey, number> & {
   hairStyle: typeof HAIR_STYLES[number]; beard: boolean
 }
 export const DEFAULT_DESIGN: PersonDesign = {
-  hat: "None", tunicStyle: "Plain", satchel: false, walkingStick: false, lute: false, accentColor: "#d6b57b",
+  handTool: "None", hat: "None", tunicStyle: "Plain", satchel: false, walkingStick: false, lute: false, accentColor: "#d6b57b",
   bodyType: "Male", garment: "Everyday", footwear: "Boots", beltStyle: "Leather", walkStyle: "Natural", head: 1.2, build: 1, torsoHeight: 1, shoulderHeight: 1, neckHeight: 0.65, tunicLength: 1,
   legs: 0.9, feet: 1, footWidth: 0.95, footHeight: 0.7, hem: 1, sleeves: 1, stride: 0.8, ink: 0.6,
   armSpacing: 1, upperArm: 1, forearm: 1, armAngle: 3, elbowBend: 10, armSwing: 0.75, hands: 1,
@@ -80,7 +82,7 @@ function validateCurrentPersonDesign(input: Record<string, unknown>): PersonDesi
     if (input.bodyType !== "Male" && input.bodyType !== "Female") throw new Error("Invalid body type.")
     result.bodyType = input.bodyType
   }
-  for (const [key, choices] of [["hat", HAT_STYLES], ["tunicStyle", TUNIC_STYLES], ["footwear", ["Sandals", "Boots"]], ["garment", ["Everyday", "Robe"]], ["beltStyle", ["Leather", "Rope"]], ["walkStyle", ["Natural", "Devotional"]]] as const) {
+  for (const [key, choices] of [["handTool", HAND_TOOLS], ["hat", HAT_STYLES], ["tunicStyle", TUNIC_STYLES], ["footwear", ["Sandals", "Boots"]], ["garment", ["Everyday", "Robe"]], ["beltStyle", ["Leather", "Rope"]], ["walkStyle", ["Natural", "Devotional"]]] as const) {
     if (key in input) {
       const value = (input as PersonDesign)[key]
       if (!(choices as readonly string[]).includes(value)) throw new Error(`Invalid ${key}.`)
@@ -117,6 +119,8 @@ function validateCurrentPersonDesign(input: Record<string, unknown>): PersonDesi
     result.beard = false
     if (!("hairStyle" in input)) result.hairStyle = "Long"
   }
+  if (result.handTool === "Shepherd crook") result.walkingStick = true
+  if (result.handTool === "Carried axe") result.walkingStick = false
   if ("poseEdits" in input) result.poseEdits = validatePoseEdits((input as PersonDesign).poseEdits)
   return result
 }

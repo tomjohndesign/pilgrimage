@@ -8,6 +8,8 @@ import { createSettlement, placementError } from "./settlement"
 export const BUILDING_PREVIEW = process.env.NODE_ENV === "development"
   && process.env.NEXT_PUBLIC_BUILDING_PREVIEW === "1"
 
+export const JOB_PREVIEW = BUILDING_PREVIEW && process.env.NEXT_PUBLIC_JOB_PREVIEW === "1"
+
 export function buildingPreviewBalance(balance: GameBalance): GameBalance {
   return { ...balance, rules: { ...balance.rules, startingGold: 100000, startingWood: 100000, buildRadius: 128 },
     buildings: Object.fromEntries(Object.entries(balance.buildings).map(([id, tuning]) =>
@@ -15,7 +17,7 @@ export function buildingPreviewBalance(balance: GameBalance): GameBalance {
 }
 
 /** Use normal placement checks so every example retains a reachable entrance. */
-export function buildingPreviewSettlement(world: GameMap, balance: GameBalance) {
+export function buildingPreviewSettlement(world: GameMap, balance: GameBalance, withJobs = JOB_PREVIEW) {
   let settlement = createSettlement(balance)
   if (!world.site) return settlement
   const examples: Omit<BuildingDef, "x" | "z">[] = [
@@ -26,6 +28,12 @@ export function buildingPreviewSettlement(world: GameMap, balance: GameBalance) 
       height: def.wallHeight, color: "#8c7658", roofColor: "#a59164",
     })),
   ]
+  if (withJobs) {
+    const market = BUILD_CATALOG.find(b => b.id === "market")!
+    const house = BUILD_CATALOG.find(b => b.id === "house")!
+    examples.push({ ...market, id: "market-second", buildType: "market", label: "Market stall · second keeper" })
+    for (let i = 0; i < 3; i++) examples.push({ ...house, id: `staff-house-${i}`, buildType: "house" })
+  }
   const candidates = Array.from({ length: world.width * world.depth }, (_, i) => ({
     x: i % world.width, z: Math.floor(i / world.width),
   })).sort((a,b) => Math.hypot(a.x-world.site!.door.x,a.z-world.site!.door.z)

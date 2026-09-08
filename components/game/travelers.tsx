@@ -1,9 +1,12 @@
 "use client"
 
+import { JOB_PREVIEW } from "@/lib/game/building-preview"
+import { previewResidents, placePreviewResident } from "@/lib/game/jobs/preview"
+import { settlementJob, type SettlementJob } from "@/lib/game/jobs/design"
 import { processionRegistry } from "@/lib/game/relic-procession"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
@@ -101,6 +104,9 @@ export function Travelers({
   const kneelingHeading = shrine ? shrineLayout(shrine,map.site?.door).rotation + Math.PI : Math.PI
   const appearances = useMemo(() => travelers.map(t => travelerAppearance(map.seed ?? 0, t.id)), [travelers, map.seed])
   const selection = useCameraStore((s) => s.selection)
+  const [jobs, setJobs] = useState<ReadonlyMap<number, SettlementJob>>(() => new Map(JOB_PREVIEW ? previewResidents(map).map(resident =>
+    [resident.traveler.id, settlementJob(resident.building.id, [resident.building])!] as const) : []))
+  const currentJobs = useRef(jobs)
   const resourceElapsed = useRef(0)
   const obstacleSource = useRef<{ trees: TreePlacement[]; felled: number } | null>(null)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
@@ -110,8 +116,13 @@ export function Travelers({
   const sim = useMemo(() => createSim([], map, [], relic.stats), [map.road, relic])
   useEffect(() => {
     const fresh = createSim(travelers, map, [], relic.stats)
+    const residents = JOB_PREVIEW ? new Map(previewResidents(map).map(resident => [resident.traveler.id, resident])) : new Map()
     for (const [id, traveler] of fresh.travelers) {
-      if (!sim.travelers.has(id)) sim.travelers.set(id, traveler)
+      if (!sim.travelers.has(id)) {
+        const resident = residents.get(id)
+        if (resident) placePreviewResident(traveler, map, resident)
+        sim.travelers.set(id, traveler)
+      }
     }
     for (const id of sim.travelers.keys()) {
       if (!fresh.travelers.has(id)) {
@@ -162,6 +173,15 @@ export function Travelers({
       for (let tick = 0; tick < playback.speed; tick++) {
         stepSim(sim, travelers, map, speed, Math.min(delta, 0.1), movement, speedScales, characterScale)
       }
+    }
+    const nextJobs = new Map<number, SettlementJob>()
+    for (const [id, traveler] of sim.travelers) {
+      const job = settlementJob(traveler.employer, camps)
+      if (job) nextJobs.set(id, job)
+    }
+    if (nextJobs.size !== currentJobs.current.size || [...nextJobs].some(([id, job]) => currentJobs.current.get(id) !== job)) {
+      currentJobs.current = nextJobs
+      setJobs(nextJobs)
     }
     resourceElapsed.current += delta
     if (build.resourceRevision !== sim.resourceRevision || resourceElapsed.current >= 0.25) {
@@ -291,7 +311,7 @@ export function Travelers({
                 groupRefs.current[index] = node
               }}
             >
-              <TravelerFigure map={map} age={traveler.attributes.age} {...(traveler.type.id === "knight" ? knightLoadout(traveler.id) : cartLoadout(traveler.id))} appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
+              <TravelerFigure map={map} job={jobs.get(traveler.id)} age={traveler.attributes.age} {...(traveler.type.id === "knight" ? knightLoadout(traveler.id) : cartLoadout(traveler.id))} appearance={appearances[index]} selected={selected} type={traveler.type} onClick={select} idColor={idColor}
                 characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
               <CharacterHitTarget onClick={select} />
               {selected && <CharacterSelectionShadow map={map} />}

@@ -1,5 +1,8 @@
 "use client"
 
+import { jobVisual } from "@/lib/game/jobs/assets"
+import type { SettlementJob } from "@/lib/game/jobs/design"
+import { GREY_HAIR_AGE, GREY_HAIR_COLOR } from "@/lib/game/character-age"
 import { AnimalTether } from "./animal-tether"
 import { HEAVY_PATH_WEAR, recordCartPath, recordWalkingPath } from "@/lib/game/footpaths"
 import * as THREE from "three"
@@ -30,17 +33,17 @@ export const BLOCK_HEIGHT = 0.55
 export type FigureClickHandler = (event: { delta: number; stopPropagation: () => void }) => void
 
 /** The person, cart and draught animal share one selection in game and previews. */
-export function TravelerFigure({ map, age, type, onClick, idColor, selected = false, awning = false, outlineColor,
+export function TravelerFigure({ map, age, job, type, onClick, idColor, selected = false, awning = false, outlineColor,
   characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance,
   squire = false, cargo = "produce", puller = "hand", horseVariant = "common", coat,
 }: {
-  map?: GameMap; age?: number
+  map?: GameMap; age?: number; job?: SettlementJob | null
   type: TravelerTypeDef; appearance?: TravelerAppearance; selected?: boolean; idColor?: THREE.Color
   onClick?: FigureClickHandler; awning?: boolean; outlineColor?: [number, number, number]
   characterModel?: CharacterModel; characterScale?: number; characterFps?: number; walkTuning?: WalkTuning
   squire?: boolean; cargo?: Cargo; puller?: Puller; horseVariant?: HorseVariant; coat?: string
 }) {
-  const vendor = type.id === "vendor", animal = vendor && puller !== "hand"
+  const vendor = !job && type.id === "vendor", animal = vendor && puller !== "hand"
   const driver = useRef<THREE.Group>(null), setup = useRef<THREE.Group>(null), beast = useRef<THREE.Group>(null)
   const cart = useRef<THREE.Group>(null), pullingDriver = useRef<THREE.Group>(null)
   const point = useMemo(() => new THREE.Vector3(), [])
@@ -142,6 +145,11 @@ export function TravelerFigure({ map, age, type, onClick, idColor, selected = fa
   const variant = appearance?.variant ?? 0
   const pulling = useMemo(() => pullingVisual(variant), [variant])
   const color = outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] as [number, number, number] : undefined)
+  const workVisual = useMemo(() => job ? jobVisual(job, variant) : undefined, [job, variant])
+  if (workVisual) return <Suspense fallback={null}><CharacterSprite map={map} age={age} appearance={appearance}
+    complexion={appearance && age !== undefined && age >= GREY_HAIR_AGE ? { ...appearance.complexion, hair: GREY_HAIR_COLOR } : appearance?.complexion}
+    selected={selected} type={type.id} onClick={onClick} outlineColor={color} characterModel="base"
+    characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} visualOverride={workVisual} /></Suspense>
   if (type.id === "knight") return <Suspense fallback={null}><KnightFigure map={map} appearance={appearance} coat={coat} squire={squire}
     selected={selected} outlineColor={color} onClick={onClick} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} /></Suspense>
   return <Suspense fallback={null}>

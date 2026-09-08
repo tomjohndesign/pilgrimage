@@ -11,6 +11,8 @@ import { TRAVELER_TYPES } from "../travelers"
 import { KNIGHT } from "../knight/design"
 import { knightVisual, squireVisual } from "../knight/visual"
 import { MINSTREL_PLAYING } from "../minstrel/assets"
+import { jobVisual } from "../jobs/assets"
+import { SETTLEMENT_JOBS, type SettlementJob } from "../jobs/design"
 
 describe("active sprite depth assets", () => {
   it("provides registered geometry depth for every active character and transport clip", async () => {
@@ -30,6 +32,7 @@ describe("active sprite depth assets", () => {
     for (const type of Object.values(TRAVELER_TYPES)) for (const age of [30, 80]) for (let variant = 0; variant < 6; variant++) {
       visual(populationVisual(type.id, variant, null, age))
     }
+    for (const job of Object.keys(SETTLEMENT_JOBS) as SettlementJob[]) for (let variant = 0; variant < 6; variant++) visual(jobVisual(job, variant))
     for (const age of [30, 80]) { visual(monkVisual(age)); visual(rocketMonkVisual(age)); clip(rocketFlightClip(age)) }
     for (let variant = 0; variant < 6; variant++) visual(pullingVisual(variant))
     for (let variant = 0; variant < KNIGHT.variants; variant++) visual(knightVisual(variant))

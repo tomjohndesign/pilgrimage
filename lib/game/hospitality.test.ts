@@ -1,3 +1,4 @@
+import { settlementJob, SETTLEMENT_JOBS } from "./jobs/design"
 import { shrineSeats } from "./shrine-layout"
 import { afterEach, describe, expect, it } from "vitest"
 import { BUILD_CATALOG, DEFAULT_BALANCE } from "./balance"
@@ -872,6 +873,11 @@ describe("houses, counters and posts", () => {
       run(sim, people, map, 400, () => [...sim.travelers.values()].filter(s => s.activity === "posted").length === 2)
       const staff = [...sim.travelers.values()].filter(s => s.employer === place.id)
       expect(staff).toHaveLength(2)
+      useBuildStore.getState().syncResources(sim, people)
+      expect(useBuildStore.getState().settlers.map(resident => resident.duty)).toEqual(
+        staff.map(worker => SETTLEMENT_JOBS[settlementJob(worker.employer, sim.buildings)!].label))
+      expect(staff.map(worker => settlementJob(worker.employer, sim.buildings))).toEqual(
+        [type === "tavern" ? "tavern" : "shepherd", type === "tavern" ? "tavern" : "shepherd"])
       expect(new Set(staff.map(s => s.jobSlot))).toEqual(new Set([0, 1]))
       for (const worker of staff) {
         expect(worker.jobless).toBe(false)
