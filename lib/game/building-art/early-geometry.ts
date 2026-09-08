@@ -1,3 +1,4 @@
+import { marketLayout } from "../market-layout"
 import { EARLY_MATERIALS as palette } from "./materials"
 import type { BuildingPart, Vec3 } from "./geometry"
 import type { BuildingRecipe } from "./style"
@@ -27,6 +28,21 @@ type ConstructionRecipe = Omit<BuildingRecipe, "variant"> & {
 /** Small early medieval structures built directly in tile units. No plot padding. */
 export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
   const parts: BuildingPart[] = [], { width, depth, variant } = recipe
+  if (variant === "market" && depth > 2) {
+    const layout = marketLayout(width, depth)
+    const stall = earlyBuildingParts({ ...recipe, depth: layout.stallDepth }).map(part => ({
+      ...part, position: [part.position[0], part.position[1], part.position[2] + layout.stallZ] as Vec3,
+    }))
+    // Open sides let the wagon pull through. The low rear rail marks the bay
+    // without enclosing the horse under the cloth or obstructing its shafts.
+    const box = (name: string, position: Vec3, size: Vec3, color: string): BuildingPart =>
+      ({ name, layer: "base", position, size, color, outline: false })
+    return [...stall,
+      { ...box("cart-yard", [0, BUILDING_FLOOR_TOP - .025, layout.yardZ], [width - .04, .05, layout.yardDepth - .04], "#ffffff"), surface: "trail" },
+      ...[-1, 1].map(side => box(`hitching-post-${side}`, [side * (width / 2 - .2), .28, -depth / 2 + .12], [.09, .56, .09], palette.wood)),
+      box("hitching-rail", [0, .42, -depth / 2 + .12], [width - .3, .075, .075], palette.wood),
+    ]
+  }
   const floor = variant === "storehouse" ? 0.3 : 0
   const h=recipe.wallHeight, rise=recipe.roofRise
   const w = width / 2, d = depth / 2, rampStart = depth / 2 - Math.min(.65, depth * .43)

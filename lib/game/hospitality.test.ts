@@ -904,22 +904,27 @@ describe("houses, counters and posts", () => {
     expect(byHouse.size).toBe(2)
   }, 20000)
 
-  it("draws a passing vendor to keep an empty market stall for good", () => {
+  it.each([0, 4, 8])("parks vendor %s's transport before they keep an empty market stall", id => {
     const { map } = fixture()
     const def = BUILD_CATALOG.find(b => b.id === "market")!
-    const stall = { ...def, id: "market-0", buildType: "market", label: def.label, x: 13, z: 9, rotation: 0 as const }
+    const stall = { ...def, id: "market-0", buildType: "market", label: def.label, x: 13, z: 6, rotation: 0 as const }
     map.buildings.push(stall)
     const vendor: Traveler = {
-      id: 0, name: "Vendor", type: TRAVELER_TYPES.vendor, direction: 1, pace: 1, offset: 8 / 29,
+      id, name: "Vendor", type: TRAVELER_TYPES.vendor, direction: 1, pace: 1, offset: 8 / 29,
       attributes: { age: 30, gold: 60, piety: 0, status: 20, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: ["haggling"] },
     }
     const sim = createSim([vendor], map, [], obscure)
     sim.buildings = jobBuildings(map)
-    const s = sim.travelers.get(0)!
+    const s = sim.travelers.get(id)!
     run(sim, [vendor], map, 300, () => s.activity === "posted")
     expect(s.employer).toBe(stall.id)
     expect(s.activity).toBe("posted")
     expect(s.convoy).toBe(false)
+    expect(s.marketParking?.walking).toBe(true)
+    const parked = structuredClone(s.marketParking!.pose)
+    run(sim, [vendor], map, 30)
+    expect(s.marketParking!.pose).toEqual(parked)
+    expect(Math.hypot(s.x - parked.hitch.x, s.z - parked.hitch.z)).toBeGreaterThan(1)
     expect(containsTile(stall, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) })).toBe(true)
     // A kept stall is a counter: it serves food and drink like the tavern.
     expect(servingHouses(map, b => [...sim.travelers.values()].some(w => w.employer === b.id && w.activity === "posted")))

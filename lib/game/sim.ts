@@ -1,3 +1,5 @@
+import { cartPath, driveSegment, marketParking, type MarketParking } from "./transport/building-parking"
+import { roadCartPose } from "./transport/bridge-guide"
 import { blockedRoad, findRoadDiversion, takeRoadShortcut, retireBypassedRoad, exploresRoadShortcut, type WalkingShortcut } from "./walking-shortcuts"
 import { createFootpaths, HEAVY_PATH_WEAR, recordWalkingPath, regrowFootpaths, type Footpaths } from "./footpaths"
 import { knightMounted, knightLoadout, knightTravelSpeed, type HorseRest } from "./knights"
@@ -11,8 +13,8 @@ import { routePoint, routeLength, type StallRoute } from "./transport/roadside"
 import { advanceCartProgress } from "./transport/route"
 import { roadLanePoint } from "./map/road-lane"
 import { walkingSurface } from "./map/walking-surface"
-import { convoyPoint, convoyBounds, stallParking, shrineParking, type ParkingContext, type ShrineParking } from "./transport/navigation"
-import { alignCart, followCart } from "./transport/follow"
+import { convoyPoint, convoyBounds, convoyBuildingsClear, stallParking, shrineParking, type ParkingContext, type ShrineParking } from "./transport/navigation"
+import { alignCart, followCart, type CartPose } from "./transport/follow"
 import { keeperRoutine } from "./transport/keeper"
 import { populationDesign, travelerAppearance } from "./base-person/population"
 import { animalClearance } from "./transport/stall"
@@ -265,6 +267,7 @@ export interface SimTraveler {
   shortcutCheck?: number
   /** Half-tile gate on looking ahead for a footprint blocking the road. */
   diversionCheck?: number
+  diversionBuildings?: GameMap["buildings"]
   musicCooldown?: number
   musicVisit?: { performerId: number; cycle: number; spot: WorldPoint }
   /** Horse waits on a reserved verge beside a tree until its rider returns. */
@@ -282,6 +285,10 @@ export interface SimTraveler {
   stallRoute?: StallRoute
   pasture?: PastureAnimal
   shrineParking?: ShrineParking
+  marketParking?: MarketParking
+  cartPose?: CartPose
+  marketCheck?: number
+  cartRouteBlocked?: { x: number; z: number; buildings: GameMap["buildings"] }
   /** Wagons use their own road clearance profile instead of pedestrian lanes. */
   convoy: boolean
   convoyScale: number
@@ -520,6 +527,33 @@ function stepRoadShortcut(s: SimTraveler, map: GameMap, distance: number): void 
   }
 }
 
+/** Commit only a swept, building-free transport move. Pedestrian task state
+ * cannot drag a wagon through a doorway, even during a large time step. */
+function finishConvoyMove(s: SimTraveler, transportBefore: SimTraveler | null, map: GameMap, characterScale: number) {
+  if (!transportBefore) return
+  const length = map.road!.length - 1
+  const puller = cartLoadout(s.id).puller, wheelbase = -cartOffset(puller) * characterScale
+  const previous = transportBefore.cartPose ?? roadCartPose(map, transportBefore.progress, s.direction, wheelbase, characterScale)
+  const wrapped = Math.abs(s.progress - transportBefore.progress) > length / 2 && !s.track && !transportBefore.track
+  const parking = s.marketParking ?? s.shrineParking
+  let pose: CartPose | null
+  if (wrapped) pose = roadCartPose(map, s.progress, s.direction, wheelbase, characterScale)
+  else if (parking && !parking.walking) pose = parking.pose
+  else {
+    pose = driveSegment(previous, s, wheelbase, (p, heading) => convoyBuildingsClear(map, p, puller, characterScale, heading))
+    if (pose && !parking && !s.track && !s.roadShortcut && !transportBefore.roadShortcut &&
+      ["walking", "seeking", "fleeing"].includes(s.activity)) {
+      pose = roadCartPose(map, s.progress, s.direction, wheelbase, characterScale, previous)
+    }
+  }
+  if (pose && convoyBuildingsClear(map, pose, puller, characterScale)) s.cartPose = { ...pose, distance: 0 }
+  else {
+    const check = s.diversionCheck, buildings = s.diversionBuildings
+    Object.assign(s, transportBefore)
+    s.moveSpeed = 0; s.diversionCheck = check; s.diversionBuildings = buildings
+  }
+}
+
 /** Where on their route — road or track — the traveler currently belongs. */
 function currentRoutePoint(map: GameMap, s: SimTraveler): WorldPoint {
   if (s.track) {
@@ -568,6 +602,7 @@ function parkingContext(sim: SimState, s: SimTraveler, scale: number): ParkingCo
     obstacles: [...sim.travelers.values()].flatMap(other => other.id === s.id ? [] : [
       ...(other.stallRoute?.obstacles ?? []),
       ...(other.stallRoute && cartLoadout(other.id).puller !== "hand" ? convoyBounds(alignCart(other.stallRoute.park, other.stallRoute.heading, 0), cartLoadout(other.id).puller, scale) : []),
+      ...(other.marketParking ? convoyBounds(other.marketParking.parked, cartLoadout(other.id).puller, scale) : []),
       ...(other.shrineParking ? convoyBounds(other.shrineParking.parked, other.convoy ? cartLoadout(other.id).puller : "horse", scale) : []),
     ]).filter(nearby),
     people: [...sim.travelers.values()].filter(other => other.id !== s.id && nearby(other)),
@@ -806,6 +841,15 @@ function stepOffRoadWalk(
   dt: number,
   map: GameMap,
 ): boolean {
+  if (!s.offRoadRoute && s.convoy && !s.shrineParking?.walking) {
+    if (s.cartRouteBlocked?.x === to.x && s.cartRouteBlocked.z === to.z && s.cartRouteBlocked.buildings === map.buildings) return false
+    const puller = cartLoadout(s.id).puller, scale = s.convoyScale
+    const initial = s.cartPose ?? roadCartPose(map, s.progress, s.direction, -cartOffset(puller) * scale, scale)
+    const drive = cartPath(map, initial, to, puller, scale, { trees: [] })
+    if (!drive) { s.cartRouteBlocked = { ...to, buildings: map.buildings }; return false }
+    s.cartRouteBlocked = undefined
+    s.offRoadRoute = drive.entry.slice(1).map(p => ({ ...p, y: walkingSurface(map, p.x, p.z).height }))
+  }
   if (!s.offRoadRoute) {
     const route = settlementRoute(map, map.buildings,
       { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
@@ -1120,7 +1164,7 @@ export function stepSim(
     // Riders wait for a passing procession; prayer poses begin once on foot.
     // A vendor who has taken over a stall has left the wagon for good.
     const riding = t.type.id === "knight" ? knightMounted(s.activity, s.horseRest) :
-      t.type.id === "vendor" && !s.employer && cartLoadout(s.id).puller !== "hand" && !s.shrineParking?.walking &&
+      t.type.id === "vendor" && s.convoy && cartLoadout(s.id).puller !== "hand" && !s.shrineParking?.walking && !s.marketParking?.walking &&
       !["openingShop", "vending", "packingShop"].includes(s.activity)
     const processionNearby = nearProcession(sim.procession, s, s.praying)
     s.praying = !riding && processionNearby
@@ -1167,8 +1211,15 @@ export function stepSim(
     s.moveSpeed = camping || sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed
+    const transportBefore = isVendor && s.convoy && !s.shrineParking?.walking ? {
+      ...s, offRoadRoute: s.offRoadRoute ? [...s.offRoadRoute] : null,
+      roadShortcut: s.roadShortcut ? { ...s.roadShortcut } : undefined,
+      shrineParking: s.shrineParking ? { ...s.shrineParking } : undefined,
+      marketParking: s.marketParking ? { ...s.marketParking } : undefined,
+    } : null
     if (s.roadShortcut) {
       stepRoadShortcut(s, map, worldSpeed * dt)
+      finishConvoyMove(s, transportBefore, map, characterScale)
       continue
     }
 
@@ -1180,18 +1231,32 @@ export function stepSim(
     switch (s.activity) {
       case "toParking":
       case "fromParking": {
-        const parking = s.shrineParking!, inbound = s.activity === "toParking"
+        const parking = (s.marketParking ?? s.shrineParking)!, inbound = s.activity === "toParking"
         const route = inbound ? parking.entry : parking.exit, length = routeLength(route)
         const wheelbase = isVendor ? -cartOffset(cartLoadout(s.id).puller) * characterScale : 0
-        parking.distance = Math.min(length, parking.distance + worldSpeed * dt)
-        const point = routePoint(route, parking.distance)
-        parking.pose = followCart(parking.pose, point, wheelbase)
+        // Follow every bend even when the simulation advances several frames.
+        const end = Math.min(length, parking.distance + worldSpeed * dt)
+        while (parking.distance < end) {
+          parking.distance = Math.min(end, parking.distance + .04)
+          const next = followCart(parking.pose, routePoint(route, parking.distance), wheelbase)
+          if (isVendor && !convoyBuildingsClear(map, next, cartLoadout(s.id).puller, characterScale)) {
+            parking.distance = -1
+            break
+          }
+          parking.pose = next
+        }
+        if (parking.distance < 0) { Object.assign(s, transportBefore); s.moveSpeed = 0; break }
+        const point = parking.pose.hitch
         s.x = point.x; s.z = point.z; s.y = surfaceHeight(map, worldToTileX(map, s.x), worldToTileZ(map, s.z))
         if (parking.distance >= length) {
           if (inbound) {
+            if (s.marketParking) parking.parked = parking.pose
             parking.pose = parking.parked; parking.walking = true
             if (t.type.id === "knight") s.horseRest = { ...parking.parked.hitch, y: s.y, heading: parking.parked.heading, tree: parking.tree, progress: 0, lane: s.lane }
-            s.activity = "toRelic"; s.branchProgress = 0
+            if (s.marketParking) {
+              s.convoy = false
+              s.activity = "toPost"
+            } else { s.activity = "toRelic"; s.branchProgress = 0 }
           } else {
             s.progress = parking.returnProgress; s.shrineParking = undefined; s.shrineRoute = null
             s.activity = "walking"; s.visitCooldown = 30
@@ -1439,22 +1504,31 @@ export function stepSim(
         }
         // An empty market stall on the shrine's ground draws a passing vendor
         // to settle: they leave the road, take the stall, and keep it for good.
-        if (isVendor && !s.employer && !s.track && ahead >= 0 && ahead <= 6 && !s.shrineParking) {
-          const stall = sim.buildings.find(b => BUILDING_KINDS[b.kind].vendorKept && staffOf(sim, b.id).length === 0)
-          if (stall) {
+        if (isVendor && !s.employer && !s.track && ahead >= 0 && ahead <= 6 && !s.shrineParking &&
+          s.marketCheck !== Math.floor(s.progress)) {
+          s.marketCheck = Math.floor(s.progress)
+          const puller = cartLoadout(s.id).puller
+          const initial = s.cartPose ?? roadCartPose(map, s.progress, s.direction, -cartOffset(puller) * characterScale, characterScale)
+          for (const stall of sim.buildings.filter(b => BUILDING_KINDS[b.kind].vendorKept && isComplete(b) && staffOf(sim, b.id).length === 0)) {
+            const parking = marketParking(map, stall, initial, puller, characterScale, parkingContext(sim, s, characterScale))
+            if (!parking) continue
+            // Reserve the walking job only after both the drive and the walk
+            // from the bay to the counter are known to be possible.
+            const keeper = { ...s, ...parking.parked.hitch, workSlot: 0 }
+            if (!assignBuildingTask(keeper, map, "work", stall.id)) continue
+            s.buildingTask = keeper.buildingTask
             s.workSlot = 0
-            if (assignBuildingTask(s, map, "work", stall.id)) {
-              s.employer = stall.id
-              s.jobSlot = 0
-              s.jobless = false
-              s.convoy = false
-              s.stallRoute = undefined
-              s.pasture = undefined
-              s.spot = null
-              s.activity = "toPost"
-              break
-            }
+            s.employer = stall.id
+            s.jobSlot = 0
+            s.jobless = false
+            s.marketParking = parking
+            s.stallRoute = undefined
+            s.pasture = undefined
+            s.spot = null
+            s.activity = "toParking"
+            break
           }
+          if (s.marketParking) break
         }
         // A vendor whose walking stint is up pulls off to the side of the path.
         if (isVendor && !shelter && !s.track) {
@@ -1638,10 +1712,18 @@ export function stepSim(
         // riders included; the road is only theirs as far as the next wall.
         if (dt > 0 && !s.track) {
           const diversionCheck = Math.floor(s.progress) * 2 + (direction === 1 ? 1 : 0)
-          if (s.diversionCheck !== diversionCheck) {
+          if (s.diversionCheck !== diversionCheck || s.diversionBuildings !== map.buildings) {
             s.diversionCheck = diversionCheck
-            s.roadShortcut = findRoadDiversion(map, blockedRoad(map), { x: s.x, z: s.z }, s.progress, direction,
-              p => roadWorldPoint(map, p, s.lane)) ?? undefined
+            s.diversionBuildings = map.buildings
+            let diversion = findRoadDiversion(map, blockedRoad(map), { x: s.x, z: s.z }, s.progress, direction,
+              p => s.convoy ? convoyPoint(map, p) : roadWorldPoint(map, p, s.lane))
+            if (diversion && s.convoy) {
+              const puller = cartLoadout(s.id).puller
+              const initial = s.cartPose ?? roadCartPose(map, s.progress, direction, -cartOffset(puller) * characterScale, characterScale)
+              const drive = cartPath(map, initial, diversion.to, puller, characterScale, parkingContext(sim, s, characterScale))
+              diversion = drive ? { ...diversion, via: drive.entry.slice(1, -1), length: routeLength(drive.entry) } : null
+            }
+            s.roadShortcut = diversion ?? undefined
             if (s.roadShortcut) { stepRoadShortcut(s, map, worldSpeed * dt); break }
           }
         }
@@ -1826,7 +1908,9 @@ export function stepSim(
         break
       }
     }
+    finishConvoyMove(s, transportBefore, map, characterScale)
   }
+
   if (previousPositions) for (const traveler of travelers) {
     const from = previousPositions.get(traveler.id), to = sim.travelers.get(traveler.id)
     // Vendors' ground contacts are recorded from the rendered driver and axle,
