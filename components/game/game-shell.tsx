@@ -294,7 +294,11 @@ export function GameShell({
     }),
     [settings.roadOpacity, settings.roadShade, settings.roadEdgeLine, settings.roadEdgeWidth],
   )
-  const monks = useMemo(() => (seed === null ? [] : generateMonks(seed)), [seed])
+  const founders = useMemo(() => (seed === null ? [] : generateMonks(seed)), [seed])
+  const joinedMonks = useBuildStore(s => s.joinedMonks)
+  const simulation = useBuildStore(s => s.simulation)
+  const monks = useMemo(() => [...founders, ...(simulation?.world.road === baseMap?.road ? joinedMonks : [])],
+    [founders, joinedMonks, simulation, baseMap?.road])
   const economy = useSettlement(baseMap, monks, relic)
   const footpaths = useMemo(() => createFootpaths(baseMap ?? undefined), [baseMap])
   useEffect(() => { footpaths.paved = ROAD_TIERS[settings.road]?.paved ?? false }, [footpaths, settings.road])
@@ -311,7 +315,7 @@ export function GameShell({
     return () => clearInterval(timer)
   }, [map])
   const relicTraffic = useMemo(
-    () => (relic ? Math.round(travelers.reduce((sum, t) => sum + visitChance(t.attributes, relic.stats, renown?.total ?? 0, economy.balance, evangelism), 0)) : 0),
+    () => (relic ? Math.round(travelers.reduce((sum, t) => sum + visitChance(t.attributes, relic.stats, renown?.total ?? 0, economy.balance, evangelism, t.type.id), 0)) : 0),
     [travelers, relic, renown, economy.balance, evangelism],
   )
 

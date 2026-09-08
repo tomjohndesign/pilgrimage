@@ -1,5 +1,6 @@
 "use client"
 
+import { monkVisual, MONK_WALK_TUNING } from "@/lib/game/base-person/monk-assets"
 import { withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
 import { isWorldVisible } from "@/lib/game/render/visibility"
 
@@ -165,6 +166,10 @@ export function TravelerFigure({ map, age, job, type, onClick, idColor, selected
     complexion={appearance && age !== undefined && age >= GREY_HAIR_AGE ? { ...appearance.complexion, hair: GREY_HAIR_COLOR } : appearance?.complexion}
     selected={selected} type={type.id} onClick={onClick} outlineColor={color} characterModel="base"
     characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} visualOverride={workVisual} /></Suspense>
+  if (type.id === "friar") return <Suspense fallback={null}><CharacterSprite map={map} age={age}
+    complexion={appearance?.complexion} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
+    characterModel="base" characterScale={characterScale} characterFps={characterFps}
+    walkTuning={MONK_WALK_TUNING} visualOverride={monkVisual(age ?? 18)} /></Suspense>
   if (type.id === "knight") return <Suspense fallback={null}><KnightFigure map={map} appearance={appearance} coat={coat} squire={squire}
     selected={selected} outlineColor={color} onClick={onClick} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} /></Suspense>
   return <Suspense fallback={null}>

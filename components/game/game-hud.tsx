@@ -2,7 +2,7 @@
 
 import { isComplete, isHouse, isMonkShelter } from "@/lib/game/construction"
 import { BUILDING_KINDS, buildingKind } from "@/lib/game/buildings"
-import { HOUSE_BEDS } from "@/lib/game/building-art/early-geometry"
+import { housingBeds, monkBeds } from "@/lib/game/housing"
 import { FOOD_TYPES, FOOD_LABELS, STOREHOUSE_FOOD_CAPACITY, emptyFoodStock, storedFood } from "@/lib/game/storage"
 
 import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/elevation"
@@ -757,6 +757,9 @@ export function GameHud({
   const selectedKind = buildingKind(selectedBuilding?.buildType)
   const household = selectedBuilding && isHouse(selectedBuilding)
     ? [...(simRegistry.current?.travelers.values() ?? [])].filter(s => s.home === selectedBuilding.id).length : 0
+  const beds = map && selectedBuilding && isMonkShelter(selectedBuilding) ? monkBeds(map) : []
+  const brothersAtHome = selectedBuilding ? monks.filter((monk, index) =>
+    (monk.home ?? beds[index]?.home) === selectedBuilding.id).length : 0
   const staff = selectedBuilding && selectedKind
     ? [...(simRegistry.current?.travelers.values() ?? [])].filter(s => s.employer === selectedBuilding.id).length : 0
   const selectedRelic = selection?.kind === "relic"
@@ -1092,9 +1095,9 @@ export function GameHud({
             <div className="flex items-center justify-between gap-4"><Label>{selectedDefinition?.category === "scenery" ? "Scenery" : "Building"}</Label><button type="button" aria-label="Dismiss building" onClick={() => useCameraStore.getState().select(null)} className="pointer-events-auto text-xs text-ink-light">✕</button></div>
             <p className="mt-1 font-display text-xs text-ink">{selectedBuilding.label}</p>
             <ConstructionStatus building={selectedBuilding} />
-            {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">Tired monks sleep here until their stamina recovers.</p>}
+            {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">{brothersAtHome} / {housingBeds(selectedBuilding)} monks · {Math.max(0, housingBeds(selectedBuilding) - brothersAtHome)} spaces available. Tired monks sleep here until their stamina recovers.</p>}
             {isHouse(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
-              Home to {household} of {HOUSE_BEDS} settlers. They come back here to sleep and eat.
+              {household} / {housingBeds(selectedBuilding)} settlers · {Math.max(0, housingBeds(selectedBuilding) - household)} spaces available. They come back here to sleep and eat.
             </p>}
             {selectedKind && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
               {staff} of {BUILDING_KINDS[selectedKind].jobs} {BUILDING_KINDS[selectedKind].vendorKept ? "kept by a settled vendor" : "jobs taken"}

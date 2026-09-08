@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "b0f275c99ab4a2c123c3e2a644b5b5c59eecd11d",
-  "releaseCount": 114,
+  "lastProcessedCommit": "9e613231bc003d91fb0500e255cb537df0ca3e1b",
+  "releaseCount": 115,
   "releases": [
+    {
+      "version": "0.0.129",
+      "title": "Release 0.0.129",
+      "summary": "Add traveling monks and enclave housing capacity (#148)",
+      "commit": "9e613231bc003d91fb0500e255cb537df0ca3e1b"
+    },
     {
       "version": "0.0.128",
       "title": "Release 0.0.128",

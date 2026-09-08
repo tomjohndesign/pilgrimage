@@ -1,3 +1,6 @@
+import { housingBeds, vacantMonkBed } from "./housing"
+import { MONK_COUNT, MONK_JOIN_CHANCE, type Monk } from "./monks"
+import { monkWalkSpeed } from "./base-person/monk-assets"
 import { withTerrainCornerQueries } from "./map/cliff-corners"
 import { buildingSpatialQuery } from "./building-spatial"
 import { settlementJob, jobSpeedScale } from "./jobs/design"
@@ -32,7 +35,6 @@ import { DEFAULT_BALANCE, type GameBalance } from "./balance"
 import { roadsideEvangelism } from "./monk-evangelism"
 import { buildingAt } from "./settlement"
 import { isComplete, isHouse } from "./construction"
-import { buildingSupports } from "./character-support"
 import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
 import { BUILDING_KINDS, buildingCentre, isPostedWork, type PlacedBuilding } from "./buildings"
 import { DRINK_PRICE, MEAL_PRICE, SERVING_THRESHOLD, servingHouses, tavernVisitPlan, type TavernPlan } from "./tavern"
@@ -410,6 +412,7 @@ export interface SimState {
   admissionPayments: AdmissionPayment[]
   seed: number
   travelers: Map<number, SimTraveler>
+  joinedMonks: Map<number, Monk>
   /** Game time in days since the sim began (fractional). */
   time: number
   /** Danger per tile, indexed like the map's tiles; what encounters roll against. */
@@ -678,6 +681,7 @@ export function createSim(
     danger: computeDangerField(map, threats),
     relic: { ...relic },
     world: map,
+    joinedMonks: new Map(),
     shrineRenown: 0,
     balance: DEFAULT_BALANCE,
     visits: 0,
@@ -1032,9 +1036,7 @@ function findJob(sim: SimState, s: SimTraveler, map: GameMap): { building: Place
 }
 
 /** Sleeping places actually built into the house; the artwork sets the capacity. */
-function houseBeds(building: { id: string } & Parameters<typeof buildingSupports>[0]): number {
-  return buildingSupports(building).filter(support => support.clips.includes("sleeping")).length
-}
+const houseBeds = housingBeds
 
 /** A new settler moves into the nearest house that still has a bed to spare. */
 function findHome(sim: SimState, s: SimTraveler, map: GameMap): string | null {
@@ -1197,7 +1199,26 @@ function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): 
   sim.visits++
   if (s.admissionPaid > 0) s.piety = Math.min(100, s.piety + 4 + sim.relic.sanctity / 25)
   s.admissionPaid = 0
-  const job = s.shrineParking ? undefined : findJob(sim, s, map)
+  if (t.type.id === "friar") {
+    const bed = vacantMonkBed(map, sim.joinedMonks.values())
+    if (bed && nextRoll(s) < MONK_JOIN_CHANCE) {
+      sim.joinedMonks.set(t.id, {
+        id: MONK_COUNT + t.id, name: t.name, duty: "Brother of the enclave",
+        complexion: travelerAppearance(map.seed ?? 0, t.id).complexion,
+        attributes: { age: t.attributes.age, piety: s.piety, skills: [...t.attributes.skills] },
+        home: bed.home, bedSlot: bed.slot,
+        arrival: { x: s.x, y: s.y, z: s.z, stamina: s.stamina },
+      })
+      s.shrineSeat = undefined
+      s.moveSpeed = 0
+      sim.travelers.delete(t.id)
+      return
+    }
+    s.activity = "fromRelic"
+    return
+  }
+  const home = findHome(sim, s, map)
+  const job = s.shrineParking || !home ? undefined : findJob(sim, s, map)
   if (job && nextRoll(s) < (t.attributes.skills.some((skill) => BUILDING_KINDS[job.building.kind].trades.includes(skill)) ? 0.9 : 0.65)) {
     const route = settlementRoute(map, [...map.buildings, ...sim.buildings],
       { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
@@ -1207,7 +1228,7 @@ function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): 
       s.jobSlot = job.slot
       s.shrineSeat = undefined
       s.jobless = false
-      s.home = findHome(sim, s, map)
+      s.home = home
       startWorkRoute(s, route, "hauling")
       return
     }
@@ -1229,7 +1250,7 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   const served = counters.length > 0
   const chance = visitChance({ ...t.attributes, piety: s.piety,
     hunger: served ? s.hunger : 100, thirst: served ? s.thirst : 100, stamina: s.stamina },
-    sim.relic, renown, sim.balance)
+    sim.relic, renown, sim.balance, 0, t.type.id)
   s.visitCooldown = 5
   const ordinaryVisit = nextRoll(s) < chance
   const evangelism = ordinaryVisit ? 0 : roadsideEvangelism(map)
@@ -1339,7 +1360,7 @@ export function stepSim(
   for (const t of travelers) {
     const ordinal = t.type.id !== "vendor" && t.type.id !== "knight" ? explorerRank++ : -1
     const s = sim.travelers.get(t.id)
-    if (!s) continue
+    if (!s || sim.joinedMonks.has(t.id)) continue
     const previousStall = deployedStall(s)
     if (s.herding && !["toSheep", "herding"].includes(s.activity)) releaseSheep(s, sim.wildlife)
     s.herdingRetry = Math.max(0, (s.herdingRetry ?? 0) - dt)
@@ -1392,7 +1413,7 @@ export function stepSim(
       : knightWalkStride(travelerAppearance(map.seed ?? 0, t.id).variant) * characterScale * DEFAULT_WALK_CADENCE) / DEFAULT_WALK_SPEED : undefined
     const job = settlementJob(s.employer, sim.buildings)
     const residentSpeed = job ? jobSpeedScale(job, travelerAppearance(map.seed ?? 0, t.id).variant, characterScale) : undefined
-    const targetSpeed = t.pace * baseSpeed * (residentSpeed ?? knightSpeed ?? speedScales?.get(t.id) ?? 1) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+    const targetSpeed = t.pace * baseSpeed * (residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
     s.moveSpeed = camping || sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed
@@ -1714,9 +1735,10 @@ export function stepSim(
         if (isVendor && !s.employer && !s.track && ahead >= 0 && ahead <= 6 && !s.shrineParking &&
           s.marketCheck !== Math.floor(s.progress)) {
           s.marketCheck = Math.floor(s.progress)
+          const home = findHome(sim, s, map)
           const puller = cartLoadout(s.id).puller
           const initial = s.cartPose ?? roadCartPose(map, s.progress, s.direction, -cartOffset(puller) * characterScale, characterScale)
-          for (const stall of sim.buildings.filter(b => BUILDING_KINDS[b.kind].vendorKept && isComplete(b) && staffOf(sim, b.id).length === 0)) {
+          for (const stall of sim.buildings.filter(b => home && BUILDING_KINDS[b.kind].vendorKept && isComplete(b) && staffOf(sim, b.id).length === 0)) {
             const parking = marketParking(map, stall, initial, puller, characterScale, parkingContext(sim, s, characterScale))
             if (!parking) continue
             // Reserve the walking job only after both the drive and the walk
@@ -1725,6 +1747,7 @@ export function stepSim(
             if (!assignBuildingTask(keeper, map, "work", stall.id)) continue
             s.buildingTask = keeper.buildingTask
             s.workSlot = 0
+            s.home = home
             s.employer = stall.id
             s.jobSlot = 0
             s.jobless = false

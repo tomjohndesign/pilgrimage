@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { monkWander } from "./monk-wander"
 import { createMonkRoutine } from "./monk-routine"
-import { replanMonkAfterMapChange } from "./monk-work"
+import { replanMonkAfterMapChange, createMonkNeeds, stepMonkWork } from "./monk-work"
 import { makeRng } from "./rng"
 import { tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } from "./map/types"
 
@@ -58,4 +58,17 @@ describe("replanning brothers after the map changes", () => {
     expect(monk.pause).toBe(0)
     expect(monk.route[monk.route.length - 1]).toMatchObject({ x: spot(map, 5, 7).x, z: spot(map, 5, 7).z })
   })
+})
+
+
+it("sends a recruited brother to his reserved shelter bed", () => {
+  const map = shrineMap()
+  const shelter = { id: "near", buildType: "monk-shelter", x: 0, z: 7, w: 3, d: 2,
+    height: .8, label: "Shelter", color: "tan", roofColor: "brown" }
+  map.buildings.push(shelter, { ...shelter, id: "home", x: 7, z: 1 })
+  const monk = { ...createMonkRoutine(monkWander(map), 0, makeRng(1)), ...createMonkNeeds(8),
+    ...spot(map, 4, 8), home: "home", bedSlot: 2, stamina: 10 }
+  stepMonkWork(monk, map, 1, .1)
+  expect(monk.buildingTask).toMatchObject({ buildingId: "home", purpose: "rest", slot: 2 })
+  expect(monk.workSlot).toBe(8)
 })
