@@ -55,13 +55,25 @@ export function settlementRoute(
   return null
 }
 
-/**
- * The walk from the road to the shrine door. The track is ordinary ground —
- * a footprint may stand on it — so the approach is routed around whatever is
- * built there, falling back to the original branch when nothing is.
- */
-export function shrineApproach(map: GameMap): TilePos[] {
-  const site = map.site
-  if (!site) return []
-  return settlementRoute(map, map.buildings, site.branch[0], site.door) ?? site.branch
+/** The clear road tile nearest the shrine's junction; walkers turn off there. */
+export function shrineRoadHead(map: GameMap, buildings: readonly BuildingDef[] = map.buildings): TilePos | null {
+  if (!map.site) return null
+  const road = map.road
+  const covered = (p: TilePos) => buildings.some(b => p.x >= b.x && p.x < b.x + b.w && p.z >= b.z && p.z < b.z + b.d)
+  const original = map.site.branch[0]
+  if (!road) return original && !covered(original) ? original : null
+  for (let step = 0; step < road.length; step++) {
+    for (const index of step ? [map.site!.junction - step, map.site!.junction + step] : [map.site!.junction]) {
+      const tile = road[index]
+      if (tile && !covered(tile)) return tile
+    }
+  }
+  return null
+}
+
+/** The reachable approach from a visitor's departure tile, or the nearest clear road tile. */
+export function shrineApproach(map: GameMap, from?: TilePos): TilePos[] {
+  const start = from ?? shrineRoadHead(map)
+  if (!map.site || !start) return []
+  return settlementRoute(map, map.buildings, start, map.site.door) ?? []
 }

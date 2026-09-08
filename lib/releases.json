@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "c52b8b9a070462c8b166ccb4bd9690dce9f2754c",
-  "releaseCount": 99,
+  "lastProcessedCommit": "d483d7193bf516dbbb3f95f7d527ea67b0596beb",
+  "releaseCount": 100,
   "releases": [
+    {
+      "version": "0.0.114",
+      "title": "Release 0.0.114",
+      "summary": "Fix shrine detours, worker rest returns, and shortcut cache timing (#133)",
+      "commit": "d483d7193bf516dbbb3f95f7d527ea67b0596beb"
+    },
     {
       "version": "0.0.113",
       "title": "Release 0.0.113",
