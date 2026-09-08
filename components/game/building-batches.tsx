@@ -23,7 +23,7 @@ export function BuildingBatches({ children }: { children: ReactNode }) {
   const context = useMemo(() => ({ material: materials.body, register: (source: BuildingBatchSource) => {
     source.body.updateWorldMatrix(true, false)
     registry.sources.add(source); registry.revision++
-    return () => { registry.sources.delete(source); registry.revision++; source.body.visible = source.ids.visible = true }
+    return () => { registry.sources.delete(source); registry.revision++; source.body.visible = source.ids.visible = true; delete source.body.userData.batchedPickTarget }
   } }), [registry, materials])
   const state = useMemo(() => ({ revision: -1, cells: new Map<string, { sources: BuildingBatchSource[];
     geometry: ReturnType<typeof mergedBuildingBlock>; body: THREE.Mesh; ids: THREE.Mesh }>() }), [])
@@ -51,7 +51,10 @@ export function BuildingBatches({ children }: { children: ReactNode }) {
       }
       state.revision = registry.revision
     }
-    for (const source of registry.sources) source.body.visible = source.ids.visible = !buildingBatchControl.enabled
+    for (const source of registry.sources) {
+      source.body.visible = source.ids.visible = !buildingBatchControl.enabled
+      source.body.userData.batchedPickTarget = buildingBatchControl.enabled
+    }
     root.current.visible = buildingBatchControl.enabled
     const detail = sceneryDetail(scene)
     shading.value = detail === 0 ? 1 : 0
@@ -60,7 +63,7 @@ export function BuildingBatches({ children }: { children: ReactNode }) {
     }
   }, .65)
   useEffect(() => () => {
-    for (const source of registry.sources) source.body.visible = source.ids.visible = true
+    for (const source of registry.sources) { source.body.visible = source.ids.visible = true; delete source.body.userData.batchedPickTarget }
     for (const cell of state.cells.values()) cell.geometry.dispose()
     state.cells.clear(); materials.body.dispose(); materials.ids.dispose()
   }, [registry, state, materials])

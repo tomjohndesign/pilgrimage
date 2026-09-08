@@ -21,7 +21,7 @@ Use `traffic=88` for the 1,408-character reproduction. The largest map generates
 The city flag and debug handle require the benchmark build flag above.
 
 The seed contains 240 fixture buildings plus two generated buildings outside
-the city, 139,105 sprite trees, and 1,411 separate scenery sprites. Grass,
+the city, 140,303 sprite trees, and 1,404 separate scenery sprites. Grass,
 groundcover and small flowers are painted into terrain. These counts describe
 placed objects, not draw calls or individual triangles. The benchmark records
 the complete list of loaded texture images separately; its resource timing
@@ -31,6 +31,8 @@ The fixture uses real catalogue buildings, streets, terrain, wildlife, character
 rigs, A* routes and walking contacts. Residents receive deterministic random
 local destinations as they arrive. This stresses continuous city traffic;
 it does not claim to model an autonomous city's complete jobs and economy.
+The final 1,408-character run loaded 416 texture images at its initial close view;
+additional views and activities can load more.
 
 Run each command separately, without builds, unit tests or other GPU tests
 running alongside it. Pause other open game tabs for meaningful comparisons.
@@ -74,9 +76,54 @@ For fresh-run speed comparisons, run one speed per browser and set
 `BENCH_WARMUP_SPEED=1` to use the same playback rate during warm-up.
 
 The script verifies population retention, movement, reachable city destinations,
-completed journeys and camera/batch alignment. Missing visible figures are
+completed journeys and camera/batch alignment. Carts receive swept, collision-checked
+routes between street junctions; pedestrians continue using building entrances. Missing visible figures are
 recorded during camera movement. Selection checks cover roof cutaway and
 restoration, character highlights, tree leaf-hole picking and zoom changes.
+
+## Final 1,408-character measurements
+
+The integrated build was measured on Apple M5 / 16 GiB using hardware ANGLE
+Metal, 1440 × 900, DPR 1. Each row covers 20 seconds; views/speeds share one
+running city after a 15-second 1× warm-up. Builds, unit tests and other automated
+GPU tests were not running during the measurements. Desktop/system load still
+varies, so these are observations rather than guarantees.
+
+| View size | Speed | FPS | p95 ms | Long tasks |
+|---|---:|---:|---:|---:|
+| 36 | 1× | 59.7 | 16.8 | 0 |
+| 36 | 2× | 59.2 | 16.8 | 0 |
+| 36 | 3× | 59.2 | 16.8 | 0 |
+| 36 | 6× | 53.4 | 33.4 | 1 |
+| 140 | 1× | 43.1 | 33.4 | 1 |
+| 140 | 2× | 41.4 | 33.4 | 3 |
+| 140 | 3× | 35.9 | 50.0 | 3 |
+| 140 | 6× | 30.5 | 50.1 | 19 |
+
+These rows precede only the final picking-filter fix; the rendering and simulation
+code is otherwise the final build. The near city reaches approximately 60 FPS
+through 3×, and 6× remains available. The fully zoomed-out city still misses
+60 FPS. At 1× wide, approximately 23,148 trees are visible alongside the whole
+population, with 483 draw calls and 3.90 million submitted triangles. Sampled
+simulation positions did not stall; displayed distant body poses can hold for
+about 100 ms because of the reduced pose count and planted-foot contract.
+
+Five real wheel transitions passed: detail never changed during the active zoom,
+the saved-image fade actually rendered, distant terrain rims/bridge fine parts
+were hidden, and close detail returned. The largest measured switch frame was 49.9 ms; frames in the following
+500 ms were at most 33.4 ms. These warmed transitions do not establish a cold
+shader-compilation bound. Raw intervals are in the local `detail-settle.json`. Character, transport and
+tree selection passed. The final building-selection check caught an interaction
+with main's new visibility filter; source picking meshes now remain selectable
+when rendered by a batch, while hidden ancestor layers still reject clicks.
+The rebuilt application then passed building picking, roof cutaway, selection
+through zoom and complete roof restoration.
+
+The final maximum-population sweep is intentionally deferred until after merge
+at the user's request. Earlier 3,840/6,000-character results below describe prior
+checkpoints, not this exact final build. Mobile emulation also passed all five detail transitions, actual presentation
+fades and bridge/terrain restoration using the mobile threshold profile. No
+final-build maximum population or physical-mobile FPS claim is made.
 
 ## Character-stutter investigation
 
@@ -351,11 +398,18 @@ while zooming. Selection smoke tests additionally exercise five wheel changes,
 verify the final layer set, and save the next 500 ms of frame intervals to
 `detail-settle.json`, exposing a delayed hitch separately from the gesture.
 
+The main integration exposed a separate CPU hotspot in transport collision:
+every swept cart substep checked every building. Padded spatial building queries
+now narrow that work before the unchanged oriented collision test. The 120-actor,
+900-tick city regression went from 241 seconds (and one cart spawned against a
+building) to about one second after the broad phase and corrected street-based
+cart journeys. This is test runtime, not a browser FPS comparison.
+
 ## Final detail behavior and main integration
 
-Integrated `origin/main` at `7b587c9` (0.0.125), including building back-edge
+Integrated `origin/main` through `7e339fe` (0.0.126), including building back-edge
 outlines, the new grass/water art, diagonal roads and river cliffs, resident job
-outfits and cart parking. Main's visibility controls remain functional; hiding
+outfits, cart parking, and character selection without ground glow. Main's visibility controls remain functional; hiding
 characters or wildlife leaves their simulation mounted. Procedural trees are
 only available in the explicitly enabled benchmark build.
 
@@ -394,7 +448,8 @@ Speed changes select the current pose directly; skipped poses are never queued.
 viewport with DPR 1. This verifies mobile detail selection on the desktop GPU;
 it is not a physical-phone performance measurement. `BENCH_DETAIL_SMOKE=1`
 checks five wheel transitions, actual presentation fading and hidden terrain/
-bridge details. `BENCH_SMOKE=1` also includes those checks.
+bridge details. Add `BENCH_CHECKS_ONLY=1` to run correctness checks without
+collecting a frame-rate sample. `BENCH_SMOKE=1` also includes those checks.
 
 ## Terrain sprite comparison
 
@@ -455,17 +510,19 @@ There is no dynamic resolution and no hidden population reduction.
 
 ## Validation
 
-The full Vitest suite passed 149 files and 1,263 tests before the zoom-settling
-change; its additional regression test also passes. Type checking and the
-production build pass. The existing `scripts/test-sprite-depth.mjs` GPU test
+The final Vitest suite passes 156 files and 1,382 tests, including the city
+routing regression at 6× and cart broad-phase edit invalidation. Type checking
+and the benchmark-enabled production build pass. The final picking-filter
+regression also passes the focused 20-test selection suite; type checking and
+the production build were rerun after that fix. The existing `scripts/test-sprite-depth.mjs` GPU test
 passes, including batched/individual character color and IDs, scenery lighting,
 cropped/full foliage, leaf-hole picking, atlas upload reuse and mutable road
 texture contents/allocation reuse. Building cells match 3,145,728 GPU color/ID
 pixel comparisons across three detail levels, four angles and selection removal.
 Compacted terrain retains identical color pixels and depth within 1e-6 compared
 with the existing shader-masked geometry, including enclosed top-only batches.
-The active base v32, population v26 and monk
-v36/v37 asset checkers pass (119,664 population body frames, plus 2,216 frames
+The active base v33, population v29 and monk
+v38/v39 asset checkers pass (132,960 population body frames, plus 2,216 frames
 for each base/monk pack).
 
 Buried terrain-face checks retain exact interior colors and depth within 1e-6.

@@ -11,6 +11,7 @@ assert.ok(["forest", "city"].includes(scenario), "BENCH_SCENARIO must be forest 
 const target = process.env.BENCH_TARGET ?? "centre"
 assert.ok(["centre", "water"].includes(target), "BENCH_TARGET must be centre or water")
 const mobile = process.env.BENCH_MOBILE === "1"
+const checksOnly = process.env.BENCH_CHECKS_ONLY === "1"
 const count = Number(process.env.BENCH_COUNT ?? 3840)
 assert.ok(Number.isInteger(count / 16) && count > 0, "BENCH_COUNT must be a positive multiple of 16 on the 512-square map")
 const trees = process.env.BENCH_TREES ?? "sprites"
@@ -117,7 +118,7 @@ try {
       }
     }
   })
-  for (const viewSize of zooms) {
+  for (const viewSize of checksOnly ? [] : zooms) {
     if (viewSize !== zoom) {
       await page.evaluate(viewSize => { window.__pilgrimage.setPaused(true); window.__pilgrimage.setZoom(viewSize) }, viewSize)
       await page.waitForTimeout(3000)
@@ -329,7 +330,9 @@ try {
       const { profile } = await session.send("Profiler.stop")
       await writeFile(`${output}/detail-settle.cpuprofile`, JSON.stringify(profile))
     }
+    await writeFile(`${output}/detail-settle.json`, JSON.stringify(settling, null, 2))
     for (const result of settling) {
+      assert.equal(result.status.profile, mobile ? "mobile" : "desktop", "detail thresholds must match the input device")
       assert.equal(result.status.current, result.target === 140 ? 2 : result.target === (mobile ? 45 : 70) ? 1 : 0)
       assert.ok(result.transitions.length > 0, "settling must apply the final requested layer set")
       assert.ok(result.transitions.every(change => !change.zooming), "layer changes must wait for the camera")
@@ -339,7 +342,6 @@ try {
         assert.equal(result.layers.detailedBridge, false, "distant bridges must skip fine parts")
       } else assert.equal(result.layers.coarseBridge, false, "close bridges must restore their original parts")
     }
-    await writeFile(`${output}/detail-settle.json`, JSON.stringify(settling, null, 2))
     console.log("Zoom settling passed: layers retained through easing, final detail applied, post-settle frames captured")
   }
   if (process.env.BENCH_SMOKE === "1") {
@@ -358,7 +360,7 @@ try {
     await page.waitForTimeout(500)
     await page.screenshot({ path: `${output}/selected-traveler.png` })
     const selectionVisuals = await page.evaluate(() => window.__pilgrimage.selectionVisuals())
-    assert.ok(selectionVisuals.shadows > 0 && selectionVisuals.sprites > 0, "selection must retain its character highlight and individual sprite")
+    assert.ok(selectionVisuals.shadows === 0 && selectionVisuals.sprites > 0, "selection must retain its individual outlined sprite without ground glow")
     await page.evaluate(() => window.__pilgrimage.setZoom(140))
     await page.waitForFunction(() => window.__pilgrimage.sceneryDetail() === 2, undefined, { timeout: 30000 })
     const wideSelection = await page.evaluate(() => window.__pilgrimage.selectionVisuals())
@@ -386,7 +388,7 @@ try {
     await page.evaluate(id => window.__pilgrimage.selectTraveler(id), transport)
     await page.waitForTimeout(500)
     const transportVisuals = await page.evaluate(() => window.__pilgrimage.selectionVisuals())
-    assert.ok(transportVisuals.shadows > 0 && transportVisuals.sprites > 0, "batched transport must restore its individual selection rendering")
+    assert.ok(transportVisuals.shadows === 0 && transportVisuals.sprites > 0, "batched transport must restore its individual selection outline without ground glow")
     await page.screenshot({ path: `${output}/selected-transport.png` })
     // The city centre has almost no trees, and its buildings occlude the few
     // projected into that view. Exercise picking in the surrounding forest.
