@@ -59,9 +59,9 @@ import { Section, Tuner } from "./property-controls"
 import { BuildControls, HudClock, HudHelp, HudResources } from "./hud-controls"
 
 const CONTROLS: Array<[string, string]> = [
-  ["Click", "Inspect people, trees & piles"],
+  ["Tap / click", "Inspect people, trees & piles"],
   ["Drag", "Pan"],
-  ["Scroll", "Zoom"],
+  ["Pinch / scroll", "Zoom"],
   ["Q / E", "Rotate view"],
   ["W A S D", "Pan"],
   ["O", "Cycle outlines"],
@@ -132,7 +132,7 @@ function Chooser({
   return (
     <div className="flex items-center">
       <span className={`${labelClassName} shrink-0 text-[13px] font-medium text-ink-light`}>{label}</span>
-      <div className="relative h-8 flex-1 rounded-[6px] bg-parchment-dark">
+      <div className="hud-choice-track relative h-8 flex-1 rounded-[6px] bg-parchment-dark">
         <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 truncate font-display text-[11px] font-black text-ink-light">
           {options[value]}
         </span>
@@ -154,13 +154,14 @@ function Chooser({
 }
 
 /** Top-level navigation, folded into the play view. Controls live in here too. */
-function MenuPanel() {
+function MenuPanel({ onClose }: { onClose: () => void }) {
   const [showControls, setShowControls] = useState(false)
 
   return (
     <div
       className={`hud-menu pointer-events-auto absolute right-0 top-full mt-2 w-56 border border-rule bg-parchment/95 px-4 py-3 ${PANEL_SHADOW}`}
     >
+      <div className="hud-world-heading"><span>Menu</span><button type="button" className="hud-close" aria-label="Close menu" onClick={onClose}><X size={16} /></button></div>
       <nav className="flex flex-col gap-1.5">
         {SITE_MENU.map((item) => (
           <div key={item.href} className="flex flex-col gap-1">
@@ -191,6 +192,8 @@ function MenuPanel() {
         >
           Controls {showControls ? "▾" : "▸"}
         </button>
+        <button type="button" onClick={() => { useCameraStore.getState().reset(); onClose() }}
+          className="text-left font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red">Reset camera</button>
         {showControls && (
           <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
             {CONTROLS.map(([key, action]) => (
@@ -673,6 +676,7 @@ export function GameHud({
   const set = (patch: Partial<MapSettings>) => onSettingsChange({ ...settings, ...patch })
   const selection = useCameraStore((s) => s.selection)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [minimapOpen, setMinimapOpen] = useState(false)
   const [panel, setPanel] = useState<"build" | "world" | "settlement" | null>(null)
 
   const closeBuild = () => {
@@ -767,7 +771,7 @@ export function GameHud({
   return (
     <Tooltip.Provider delayDuration={180} skipDelayDuration={100}>
     <BugReportDialog diagnostics={report} onClose={() => setReport(null)} />
-    <div className="game-hud">
+    <div className="game-hud" data-panel={menuOpen ? "menu" : panel ?? (selection ? "selection" : "none")}>
       <div className="hud-frame" aria-hidden="true" />
       <header className="hud-header">
         <div className="hud-resource-bar">
@@ -792,10 +796,11 @@ export function GameHud({
           <button type="button" className="hud-header-button" aria-label="Menu" title="Menu"
             aria-expanded={menuOpen} onClick={() => {
               setMenuOpen((open) => !open)
+              useCameraStore.getState().select(null)
               setPanel(null)
               economy.chooseBuild(null)
             }}><Menu size={16} /></button>
-          {menuOpen && <MenuPanel />}
+          {menuOpen && <MenuPanel onClose={() => setMenuOpen(false)} />}
         </div>
         <HudClock />
         </div>
@@ -1083,8 +1088,15 @@ export function GameHud({
         </>}
       </aside>}
 
-      <BuildControls economy={economy} open={panel === "build"} onToggle={toggleBuild} onClose={closeBuild} />
-      {map && <aside className="hud-details-dock hud-well" aria-label="Minimap and selection" data-selected={!!selection || panel === "settlement"}>
+      <BuildControls economy={economy} open={panel === "build"} onToggle={toggleBuild} onClose={closeBuild}
+        minimapOpen={minimapOpen} onToggleMinimap={() => {
+          setMinimapOpen((open) => !open)
+          setMenuOpen(false)
+          setPanel(null)
+          economy.chooseBuild(null)
+          useCameraStore.getState().select(null)
+        }} />
+      {map && <aside id="minimap-dock" data-map-open={minimapOpen} className="hud-details-dock hud-well" aria-label="Minimap and selection" data-selected={!!selection || panel === "settlement"}>
         {panel === "settlement" && <div className="hud-inspector" id="settlement-details">
           <SettlementPanel economy={economy} monks={monks} relic={relic} onClose={() => setPanel(null)} />
         </div>}

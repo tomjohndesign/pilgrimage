@@ -3,7 +3,7 @@
 import Image from "next/image"
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react"
 import * as Tooltip from "@radix-ui/react-tooltip"
-import { Coins, Footprints, Hammer, House, Pause, Play, RotateCcw, RotateCw, Sparkles, Users, X } from "lucide-react"
+import { Coins, Map, Minus, Plus, Footprints, Hammer, House, Pause, Play, RotateCcw, RotateCw, Sparkles, Users, X } from "lucide-react"
 
 import type { useSettlement } from "@/hooks/use-settlement"
 import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
@@ -66,11 +66,13 @@ export function HudResources({ economy, settlers, open, onToggle }: {
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1GB-0
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1SK-0
  */
-export function BuildControls({ economy, open, onToggle, onClose }: {
+export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, onToggleMinimap }: {
   economy: ReturnType<typeof useSettlement>
   open: boolean
   onToggle: () => void
   onClose: () => void
+  minimapOpen: boolean
+  onToggleMinimap: () => void
 }) {
   const { map, balance, settlement, buildType, chooseBuild } = economy
   const rotation = useBuildStore((s) => s.rotation)
@@ -112,6 +114,8 @@ export function BuildControls({ economy, open, onToggle, onClose }: {
                 aria-pressed={buildType === item.id} aria-disabled={unavailable}
                 onClick={() => { if (!unavailable) chooseBuild(buildType === item.id ? null : item.id) }}>
                 <BuildThumbnail id={item.id} />
+                <span className="hud-building-label">{item.label}</span>
+                <span className="hud-building-cost">{locked ? `${item.requiredRenown} renown` : `${item.cost.gold} gold · ${item.cost.wood} wood`}</span>
                 {item.id === "workshop" && <kbd>L</kbd>}
               </button>
             </HudHelp>
@@ -131,18 +135,24 @@ export function BuildControls({ economy, open, onToggle, onClose }: {
       <button type="button" className="hud-close" aria-label="Close build options" onClick={onClose}><X size={14} /></button>
     </section>}
     {open && (selected || economy.message) && <div className={`hud-placement-status ${problem ? "hud-placement-error" : ""}`} role="status">
-      {problem ?? (selected ? `Place ${selected.label.toLowerCase()} inside influence · Click to build · Esc to cancel` : economy.message)}
+      {problem ?? (selected ? `Place ${selected.label.toLowerCase()} inside influence · Tap or click the map to build` : economy.message)}
     </div>}
     <nav className="hud-bottom-actions" aria-label="Building tools">
       <button id="build-menu-button" type="button" className="hud-action" aria-expanded={open} aria-controls="build-tray" onClick={onToggle}>
         <House size={17} aria-hidden />Build
       </button>
       <HudHelp content={<><div className="hud-help-title">Paths</div><p>Path construction is not available yet.</p></>}>
-        <button type="button" className="hud-action" aria-disabled="true"><Footprints size={17} aria-hidden />Paths</button>
+        <button type="button" className="hud-action hud-future-tool" aria-disabled="true"><Footprints size={17} aria-hidden />Paths</button>
       </HudHelp>
       <HudHelp content={<><div className="hud-help-title">Demolish</div><p>Building demolition is not available yet.</p></>}>
-        <button type="button" className="hud-action" aria-disabled="true"><Hammer size={17} aria-hidden />Demolish</button>
+        <button type="button" className="hud-action hud-future-tool" aria-disabled="true"><Hammer size={17} aria-hidden />Demolish</button>
       </HudHelp>
+      <div className="hud-mobile-camera" role="group" aria-label="Camera controls">
+        <button type="button" className="hud-action" aria-label="Zoom out" onClick={() => useCameraStore.getState().zoomBy(1.25)}><Minus size={18} /></button>
+        <button type="button" className="hud-action" aria-label="Zoom in" onClick={() => useCameraStore.getState().zoomBy(1 / 1.25)}><Plus size={18} /></button>
+        <button type="button" className="hud-action" aria-label="Rotate view" onClick={() => useCameraStore.getState().rotate(1)}><RotateCw size={18} /></button>
+        <button type="button" className="hud-action" aria-label="Toggle minimap" aria-expanded={minimapOpen} aria-controls="minimap-dock" onClick={onToggleMinimap}><Map size={18} /></button>
+      </div>
     </nav>
   </div>
 }
@@ -167,6 +177,13 @@ export function HudClock() {
       aria-pressed={paused} onClick={() => useSimulationStore.getState().togglePaused()}>
       {paused ? <Play size={14} /> : <Pause size={14} />}
     </button>
+    <select className="hud-mobile-speed hud-action" aria-label="Simulation speed" value={speed}
+      onChange={(event) => {
+        const choice = SIMULATION_SPEEDS.find((item) => item.rate === Number(event.target.value))
+        if (choice) useSimulationStore.getState().setSpeed(choice.rate)
+      }}>
+      {SIMULATION_SPEEDS.map(({ label, rate }) => <option key={rate} value={rate}>{label}×</option>)}
+    </select>
     <div className="hud-speeds" aria-label="Simulation speed">
       {SIMULATION_SPEEDS.map(({ label, rate }) => <button type="button" key={rate} aria-label={`${label}× simulation speed`} aria-pressed={speed === rate}
         onClick={() => useSimulationStore.getState().setSpeed(rate)}>{label}×</button>)}
