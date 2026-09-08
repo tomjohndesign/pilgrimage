@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "9e613231bc003d91fb0500e255cb537df0ca3e1b",
-  "releaseCount": 115,
+  "lastProcessedCommit": "fde53ee3731087af11679217de60692455737f4c",
+  "releaseCount": 116,
   "releases": [
+    {
+      "version": "0.0.130",
+      "title": "Release 0.0.130",
+      "summary": "Fix hungry NPC stalls and add weary walking animations (#149)",
+      "commit": "fde53ee3731087af11679217de60692455737f4c"
+    },
     {
       "version": "0.0.129",
       "title": "Release 0.0.129",
