@@ -5,6 +5,8 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 import { terrainCorner } from "@/lib/game/map/cliff-corners"
 import { shorelineCorners } from "@/lib/game/map/shoreline"
+import { TERRAIN_EDGE_GLSL } from "@/lib/game/render/terrain-edge-grain"
+import { TERRAIN_WATER_GLSL } from "@/lib/game/render/terrain-water"
 import { SHORELINE_SHAPE_GLSL } from "@/lib/game/render/shoreline-shape"
 import { waterfallTurbulence } from "@/lib/game/map/waterfall-turbulence"
 import { DEFAULT_ELEVATION } from "@/lib/game/map/elevation"
@@ -15,7 +17,7 @@ import { useTerrainTexture } from "./use-terrain-texture"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 
 /** Sparse ripple sprites cross tile seams; waterfall foam keeps the same pixel grid. */
-export function WaterMotion({ map }: { map: GameMap }) {
+export function WaterMotion({ map, waterPalette, edgeGrain }: { map: GameMap; waterPalette: THREE.DataTexture; edgeGrain: THREE.Texture }) {
   const material = useRef<THREE.ShaderMaterial>(null)
   const ripples = useTerrainTexture("/textures/water.png", "#000000")
   useMemo(() => {
@@ -66,11 +68,13 @@ export function WaterMotion({ map }: { map: GameMap }) {
     return {
       turbulenceStrength: { value: s.waterfallTurbulence }, currentSpeed: { value: s.turbulenceSpeed },
       rippleMap: { value: ripples },
+      waterPalette: { value: waterPalette }, terrainEdgeGrain: { value: edgeGrain },
+      groundPaletteSize: { value: new THREE.Vector2(map.width, map.depth) },
       time: { value: 0 }, seed: { value: ((map.seed ?? 0) % 10007) / 97 },
       strength: { value: s.shimmerStrength }, coverage: { value: s.shimmerCoverage },
       groupSize: { value: s.shimmerSize }, speed: { value: s.shimmerSpeed }, foam: { value: s.foam },
     }
-  }, [map.elevation, map.seed, ripples])
+  }, [map, ripples, waterPalette, edgeGrain])
   useFrame((_, dt) => { if (material.current) material.current.uniforms.time.value += Math.min(dt, 0.1) })
   return <mesh name="water-shimmer" geometry={geometry} frustumCulled={false}>
     <shaderMaterial ref={material} uniforms={uniforms} transparent depthWrite={false} side={THREE.DoubleSide}
@@ -78,6 +82,8 @@ export function WaterMotion({ map }: { map: GameMap }) {
         void main() { vShoreMode = aShoreMode; vShoreCorners = aShoreCorners; vFall = aFall; vTurbulence = aTurbulence; vUv = uv; vWorld = position.xz; vHeight = position.y;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`}
       fragmentShader={`varying float vShoreMode; varying vec4 vShoreCorners; ${SHORELINE_SHAPE_GLSL}
+        ${TERRAIN_EDGE_GLSL}
+        ${TERRAIN_WATER_GLSL}
         uniform sampler2D rippleMap;
         ${GROUND_SURFACE_GLSL}
         uniform float time, seed, strength, coverage, groupSize, speed, foam, turbulenceStrength, currentSpeed;
@@ -89,8 +95,7 @@ export function WaterMotion({ map }: { map: GameMap }) {
             mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
         }
         void main() {
-          float inset = shorelineInset(vUv, vShoreCorners);
-          if (vFall < 0.5 && (vShoreMode > 0.0 ? inset > 0.0 : inset <= 0.0)) discard;
+          if (vFall < 0.5 && terrainWaterCover(vWorld, 0.0) < 0.5) discard;
           float t = time * speed;
           vec2 world = (floor(vWorld / ${CHARACTER_PIXEL_SIZE}) + 0.5) * ${CHARACTER_PIXEL_SIZE};
           vec2 patchPos = world / groupSize + vec2(seed, seed * 0.31);

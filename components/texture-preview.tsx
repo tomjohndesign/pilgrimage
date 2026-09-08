@@ -4,6 +4,8 @@ import { Suspense } from "react"
 
 import { DEFAULT_ELEVATION } from "@/lib/game/map/elevation"
 import { parseAsciiMap } from "@/lib/game/map/prototype-map"
+import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
+import type { TreePlacement } from "@/lib/game/trees/placement"
 import type { TextureEntry } from "@/lib/game/render/textures"
 
 import { TerrainTiles } from "./game/terrain-tiles"
@@ -57,6 +59,11 @@ WATER_MAP.water = {
   depth: ["000000", "000000", "001100", "012210", "122321", "123331"].flatMap(row => [...row].map(Number)),
   flow: {},
 }
+const FOREST_MAP = parseAsciiMap([
+  "......", ".FFFF.", ".FFFF.", ".FFFF.", ".FFFF.", "......",
+])
+const FOREST_TREES: TreePlacement[] = FOREST_MAP.tiles.flatMap((t, i) => t === "forest"
+  ? [{ x: tileToWorldX(FOREST_MAP, i % FOREST_MAP.width), y: .2, z: tileToWorldZ(FOREST_MAP, Math.floor(i / FOREST_MAP.width)), species: "oak" }] : [])
 const SAND_MAP = parseAsciiMap([
   "......", "...%..", "..%%..", ".%%%%.", "%%%~~~", "~~~~~~",
 ])
@@ -85,6 +92,8 @@ function PreviewScene({ entry }: { entry: TextureEntry }) {
           </Suspense>
         </group>
       )
+    case "forest":
+      return <group position={[0, 1.4, 0]}><TerrainTiles map={FOREST_MAP} trees={FOREST_TREES} /></group>
     case "ground":
     case "water":
     case "sand":

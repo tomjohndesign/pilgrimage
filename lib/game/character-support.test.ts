@@ -63,14 +63,13 @@ describe("authored character supports", () => {
     expect(buildingSupports(building)).toHaveLength(3)
   })
 
-  it.each([{ x: 6, z: 8 }, { x: 4, z: 6 }, { x: 8, z: 6 }, { x: 6, z: 4 }])("supports prayer using shrine geometry with door %j", door => {
+  it.each([{ x: 6, z: 8 }, { x: 4, z: 6 }, { x: 8, z: 6 }, { x: 6, z: 4 }])("keeps prayer on the bare church floor with door %j", door => {
     const map = fixture(), building = map.buildings[0]
     building.w = building.d = 3
     map.site = { hovelId: building.id, door, branch: [], junction: 0 }
     for (const seat of shrineSeats(building, door)) {
       const support = characterSupport(map, tileToWorldX(map, seat.tile.x), tileToWorldZ(map, seat.tile.z), "praying")
-      expect(support?.id).toBe(`${seat.id}-pad`)
-      expect(support!.height).toBeGreaterThan(0)
+      expect(support).toBeUndefined()
       expect(characterSupport(map, tileToWorldX(map, seat.tile.x), tileToWorldZ(map, seat.tile.z), "sleeping")).toBeUndefined()
     }
   })

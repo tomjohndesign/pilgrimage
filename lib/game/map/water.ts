@@ -1,3 +1,5 @@
+import { inwardTileDepth } from "./depth-field"
+
 /**
  * Seeded water: lakes, ponds, and rivers, generated before everything else so
  * forests and the road can react to them.
@@ -243,7 +245,7 @@ export function generateWater(options: GenerateWaterOptions): WaterField {
 
   removeSmallBodies(kind, flow, width, mapDepth)
 
-  return { kind, depth: computeDepth(kind, width, mapDepth), flow, bars }
+  return { kind, depth: inwardTileDepth(kind, width, mapDepth), flow, bars }
 }
 
 /**
@@ -956,42 +958,4 @@ function removeSmallBodies(
       }
     }
   }
-}
-
-/** Depth = BFS distance from the nearest land tile, capped at 3. */
-function computeDepth(kind: Uint8Array, width: number, depth: number): Uint8Array {
-  const out = new Uint8Array(kind.length)
-  const queue: number[] = []
-  for (let i = 0; i < kind.length; i++) {
-    if (kind[i] === 0) continue
-    const x = i % width
-    const z = Math.floor(i / width)
-    for (const [dx, dz] of DIRS) {
-      const nx = x + dx
-      const nz = z + dz
-      if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
-      if (kind[nz * width + nx] === 0) {
-        out[i] = 1
-        queue.push(i)
-        break
-      }
-    }
-  }
-  for (let q = 0; q < queue.length; q++) {
-    const x = queue[q] % width
-    const z = Math.floor(queue[q] / width)
-    for (const [dx, dz] of DIRS) {
-      const nx = x + dx
-      const nz = z + dz
-      if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
-      const n = nz * width + nx
-      if (kind[n] !== 0 && out[n] === 0) {
-        out[n] = Math.min(3, out[queue[q]] + 1)
-        queue.push(n)
-      }
-    }
-  }
-  // Water with no reachable shore (a fully flooded map) is just deep.
-  for (let i = 0; i < kind.length; i++) if (kind[i] !== 0 && out[i] === 0) out[i] = 3
-  return out
 }

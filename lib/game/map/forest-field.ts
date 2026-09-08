@@ -7,11 +7,10 @@ import type { GameMap } from "./types"
  * from any tree. It is the fraction of forest tiles in a square window around
  * the tile, pushed through a smoothstep so both ends of the ramp ease out.
  *
- * Pure data — no three.js, no React — and a single source of truth: tile
- * colours and tree placement both read it, so the ground gradient and the
- * thinning tree line fade in lockstep and the forest edge never looks like a
- * wall. Computed with a summed-area table, so cost is linear in map size and
- * independent of the radius.
+ * Habitat data for placement and wildlife, not rendered canopy shade. Ground
+ * shade uses live tree density per tile (trees/ground.ts), so clearing a
+ * forest removes its shadows. Computed with a summed-area table, so cost is
+ * linear in map size and independent of the radius.
  */
 
 /**
@@ -29,7 +28,7 @@ export const DARK_SHADE_RADIUS = 3
 
 /**
  * How deep in the dark forest each tile sits, 0–1, same shape as the forest
- * shade. Trees and ground tint read it to feather old growth into the woods
+ * habitat. Tree placement reads it to feather old growth into the woods
  * around it, the same way the forest edge feathers into grass.
  */
 export function computeDarkShade(map: GameMap): Float32Array {

@@ -9,7 +9,8 @@ import { RELIC_TABLE_TOP } from "@/lib/game/building-art/early-geometry"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 
 const SIZE = 0.16
-export const RELIC_DISPLAY_HEIGHT = RELIC_TABLE_TOP + SIZE / 2 + 0.02
+export const RELIC_DISPLAY_HEIGHT = .125 + SIZE / 2 + .01
+export const RELIC_TABLE_DISPLAY_HEIGHT = RELIC_TABLE_TOP + SIZE / 2 + .02
 const PULSE_SECONDS = 3.2
 
 /** Hidden copies must not catch clicks at the table or on another monk. */

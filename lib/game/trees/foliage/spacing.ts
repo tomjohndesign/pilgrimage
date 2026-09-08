@@ -12,6 +12,6 @@ export const FOLIAGE_FOOTPRINT: Record<TreeSpeciesId, number> = {
 
 export function foliageSpacing(species: Record<TreeSpeciesId, TreeSpeciesDef>): Record<TreeSpeciesId, TreeSpeciesDef> {
   return Object.fromEntries(Object.entries(species).map(([id, def]) => [id, {
-    ...def, habitat: { ...def.habitat, footprint: FOLIAGE_FOOTPRINT[id as TreeSpeciesId], perTile: 1 },
+    ...def, habitat: { ...def.habitat, footprint: FOLIAGE_FOOTPRINT[id as TreeSpeciesId], fixedFootprint: true, perTile: 1 },
   }])) as Record<TreeSpeciesId, TreeSpeciesDef>
 }

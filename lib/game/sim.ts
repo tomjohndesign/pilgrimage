@@ -1,3 +1,4 @@
+import { wearySpeedScale } from "./traveler-weariness"
 import { housingBeds, vacantMonkBed } from "./housing"
 import { MONK_COUNT, MONK_JOIN_CHANCE, type Monk } from "./monks"
 import { monkWalkSpeed } from "./base-person/monk-assets"
@@ -40,7 +41,7 @@ import { BUILDING_KINDS, buildingCentre, isPostedWork, type PlacedBuilding } fro
 import { DRINK_PRICE, MEAL_PRICE, SERVING_THRESHOLD, servingHouses, tavernVisitPlan, type TavernPlan } from "./tavern"
 import { generateRelic, hospitalityNeedThreshold, visitChance, type RelicStats } from "./relic"
 import { settlementRoute } from "./settlement-route"
-import { admissionFee, shrineVisitPlan } from "./shrine-visit"
+import { shrineDonation, shrineExitPlan, shrineVisitPlan } from "./shrine-visit"
 import type { TreePlacement } from "./trees/placement"
 import { TREE_SPECIES } from "./trees/species"
 import type { TilePos } from "./map/types"
@@ -94,6 +95,7 @@ export type Activity =
   | "fromParking"
   | "toRelic"
   | "visiting"
+  | "offering"
   | "fromRelic"
   | "toWork"
   | "toSheep"
@@ -144,8 +146,9 @@ export type Activity =
 export const ACTIVITY_LABELS: Record<Activity, string> = {
   toParking: "Parking outside the shrine",
   fromParking: "Returning the wagon to the road",
-  toRelic: "Following the path to the shrine",
-  visiting: "Kneeling in the shrine",
+  toRelic: "Entering the shrine or waiting for the relic",
+  visiting: "Praying in the shrine",
+  offering: "At the offering box",
   fromRelic: "Returning from the shrine",
   toWork: "Walking to work",
   toSheep: "Going to gather a sheep",
@@ -309,7 +312,7 @@ export interface SimTraveler {
   constructionReturn?: import("./monk-wander").WanderSpot[]
   /** Prayer interrupts travel/work without discarding its route or reservations. */
   praying?: boolean
-  /** Actual gold paid for this visit, captured on admission. */
+  /** Voluntary gift made on departure; zero is a valid donation. */
   admissionPaid: number
   keeperTime?: number
   customerVisit?: { vendorId: number; road: { x: number; y: number; z: number }; frontage: { x: number; y: number; z: number } }
@@ -348,6 +351,9 @@ export interface SimTraveler {
   shrineRoute: TilePos[] | null
   /** Reserved until the visitor has left the shrine approach. */
   shrineSeat?: string
+  shrineQueueOrder?: number
+  offeringProgress?: number
+  offeringMade?: boolean
   /** Road lane used when entering the shrine, including a reversed approach for shelter. */
   branchEntryLane: number
   visitCooldown: number
@@ -408,6 +414,9 @@ export interface SimState {
   wildlife?: WildlifeWorld | null
   footpaths: Footpaths
   procession?: RelicProcession | null
+  shrineQueueSequence: number
+  /** Scene publishes whether the keeper is at his station. Pure simulations start staffed. */
+  shrineKeeperReady: boolean
   admissionSequence: number
   admissionPayments: AdmissionPayment[]
   seed: number
@@ -424,7 +433,7 @@ export interface SimState {
   balance: GameBalance
   visits: number
   wood: number
-  /** Cumulative admission receipts; the economy credits each payment once. */
+  /** Cumulative voluntary donations; the economy credits each payment once. */
   shrineGold: number
   /** Cumulative counter takings from the tavern and any kept market stall. */
   tradeGold: number
@@ -673,6 +682,8 @@ export function createSim(
 ): SimState {
   const sim: SimState = {
     footpaths: map.footpaths ?? createFootpaths(map),
+    shrineQueueSequence: 0,
+    shrineKeeperReady: true,
     admissionSequence: 0,
     admissionPayments: [],
     seed: map.seed ?? 0,
@@ -805,7 +816,7 @@ function findNearbySpot(
 
 const STALL_ACTIVITIES: readonly Activity[] = ["toShop", "openingShop", "vending", "packingShop"]
 /** Activities that hold someone in place; their speed stays at zero. */
-const STILL_ACTIVITIES: readonly Activity[] = ["working", "building", "browsing", "performing", "listening", "begging", "givingAlms",
+const STILL_ACTIVITIES: readonly Activity[] = ["offering", "working", "building", "browsing", "performing", "listening", "begging", "givingAlms",
   "openingShop", "packingShop", "vending", "idle", "posted", "sleeping", "buying", "sitting"]
 const CAMP_ACTIVITIES: readonly Activity[] = ["toCamp", "camping"]
 
@@ -1194,11 +1205,19 @@ function chooseTree(sim: SimState, s: SimTraveler, map: GameMap): boolean {
   return false
 }
 
-function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): void {
+function finishVisit(sim: SimState, s: SimTraveler, map: GameMap): void {
+  const exit = shrineExitPlan(map, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, s.shrineRoute ?? map.site!.branch)
+  if (!exit) return
   s.visits++
   sim.visits++
-  if (s.admissionPaid > 0) s.piety = Math.min(100, s.piety + 4 + sim.relic.sanctity / 25)
-  s.admissionPaid = 0
+  s.piety = Math.min(100, s.piety + 4 + sim.relic.sanctity / 25)
+  s.shrineRoute = exit.route
+  s.branchProgress = exit.route.length - 1
+  s.offeringProgress = exit.offeringProgress
+  s.activity = "fromRelic"
+}
+
+function settleAfterVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): void {
   if (t.type.id === "friar") {
     const bed = vacantMonkBed(map, sim.joinedMonks.values())
     if (bed && nextRoll(s) < MONK_JOIN_CHANCE) {
@@ -1214,7 +1233,6 @@ function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): 
       sim.travelers.delete(t.id)
       return
     }
-    s.activity = "fromRelic"
     return
   }
   const home = findHome(sim, s, map)
@@ -1233,7 +1251,6 @@ function finishVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): 
       return
     }
   }
-  s.activity = "fromRelic"
 }
 
 // Reuse position snapshots instead of allocating several objects and Map entries
@@ -1260,9 +1277,9 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   if ((ordinaryVisit || persuaded) && served && !needsParking &&
     Math.min(s.hunger, s.thirst) < hospitalityNeedThreshold(renown, sim.balance) &&
     startTavernTrip(sim, s, map, counters, null)) return true
-  const wantsVisit = (ordinaryVisit || persuaded) && s.gold >= admissionFee(map)
+  const wantsVisit = ordinaryVisit || persuaded
   const occupiedSeats = new Set([...sim.travelers.values()].flatMap(other =>
-    other.shrineSeat && ["toParking","toRelic","visiting","fromRelic"].includes(other.activity) ? [other.shrineSeat] : []))
+    other.shrineSeat && ["toParking","toRelic","visiting","fromRelic","offering"].includes(other.activity) ? [other.shrineSeat] : []))
   const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats, from) : null
   let visitRoute = visit?.route ?? null
   let parking: ShrineParking | null = null
@@ -1280,6 +1297,9 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
     s.shrineRoute = visitRoute
     s.shrineSeat = visit!.seat
     s.admissionPaid = 0
+    s.offeringMade = false
+    s.offeringProgress = undefined
+    s.shrineQueueOrder = ++sim.shrineQueueSequence
     if (parking) s.direction = direction
     s.shrineParking = parking ?? undefined
     s.activity = parking ? "toParking" : "toRelic"
@@ -1413,7 +1433,7 @@ export function stepSim(
       : knightWalkStride(travelerAppearance(map.seed ?? 0, t.id).variant) * characterScale * DEFAULT_WALK_CADENCE) / DEFAULT_WALK_SPEED : undefined
     const job = settlementJob(s.employer, sim.buildings)
     const residentSpeed = job ? jobSpeedScale(job, travelerAppearance(map.seed ?? 0, t.id).variant, characterScale) : undefined
-    const targetSpeed = t.pace * baseSpeed * (residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+    const targetSpeed = t.pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
     s.moveSpeed = camping || sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed
@@ -1482,29 +1502,35 @@ export function stepSim(
       case "fromRelic": {
         const branch = s.shrineRoute ?? map.site!.branch
         const inbound = s.activity === "toRelic"
-        s.branchProgress = Math.max(0, Math.min(branch.length - 1,
-          s.branchProgress + (inbound ? 1 : -1) * worldSpeed * dt))
+        let limit = branch.length - 1
+        if (inbound && s.shrineSeat?.startsWith("queue-")) {
+          const ahead = [...sim.travelers.values()].filter(other => other !== s && other.shrineSeat?.startsWith("queue-")
+            && (other.shrineQueueOrder ?? 0) < (s.shrineQueueOrder ?? 0)
+            && ["toParking", "toRelic", "visiting"].includes(other.activity))
+          limit -= ahead.length * .75
+          for (const other of ahead) {
+            // Shared approach: a faster walker must never overtake the person ahead.
+            if (other.shrineRoute?.length === branch.length && other.shrineRoute.every((p, i) => p.x === branch[i].x && p.z === branch[i].z))
+              limit = Math.min(limit, other.branchProgress - .75)
+          }
+        }
+        const previous = s.branchProgress
+        s.branchProgress = inbound ? Math.max(previous, Math.min(Math.max(0, limit), previous + worldSpeed * dt))
+          : Math.max(!s.offeringMade && s.offeringProgress !== undefined ? s.offeringProgress : 0, previous - worldSpeed * dt)
+        if (inbound && s.branchProgress === previous) s.moveSpeed = 0
         stepLane(s, inbound ? 1 : -1, worldSpeed * dt)
         const at = shrineWorldPoint(map, s)
         s.x = at.x
         s.y = at.y
         s.z = at.z
         if (inbound && s.branchProgress >= branch.length - 1) {
-          const fee = admissionFee(map)
-          if (s.gold >= fee) {
-            s.gold -= fee
-            sim.shrineGold += fee
-            s.admissionPaid = fee
-            if (fee > 0) {
-              sim.admissionPayments.push({ id: ++sim.admissionSequence, travelerId: s.id, amount: fee, x: s.x, y: s.y, z: s.z })
-              // Presentation reads these receipts by sequence; long games stay bounded.
-              if (sim.admissionPayments.length > 64) sim.admissionPayments.shift()
-            }
+          if (!s.shrineSeat?.startsWith("queue-") || (sim.shrineKeeperReady && (!sim.procession || sim.procession.stage === "idle"))) {
             s.activity = "visiting"
-            s.timer = 2 * GAME_HOUR_SECONDS
-          } else {
-            s.activity = "fromRelic"
+            s.timer = s.shrineSeat?.startsWith("queue-") ? 6 : 2 * GAME_HOUR_SECONDS
           }
+        } else if (!inbound && !s.offeringMade && s.offeringProgress !== undefined && s.branchProgress <= s.offeringProgress) {
+          s.activity = "offering"
+          s.timer = 1.5
         } else if (!inbound && s.branchProgress <= 0) {
           s.lane = s.direction * s.laneOffset
           s.horseRest = undefined
@@ -1514,13 +1540,33 @@ export function stepSim(
             s.activity = "fromParking"
           } else {
             s.activity = "walking"; s.shrineRoute = null; s.visitCooldown = 30; s.diversionCheck = undefined
+            settleAfterVisit(sim, s, t, map)
           }
         }
         break
       }
       case "visiting": {
+        if (s.shrineSeat?.startsWith("queue-") && (!sim.shrineKeeperReady || (sim.procession && sim.procession.stage !== "idle"))) break
         s.timer -= dt
-        if (s.timer <= 0 && s.stamina >= 95) finishVisit(sim, s, t, map)
+        if (s.timer <= 0) finishVisit(sim, s, map)
+        break
+      }
+      case "offering": {
+        if (dt <= 0) break
+        s.timer -= dt
+        if (s.timer > 0) break
+        if (!s.offeringMade) {
+          const amount = shrineDonation(s.piety, s.gold, () => nextRoll(s))
+          s.gold -= amount
+          sim.shrineGold += amount
+          s.admissionPaid = amount
+          s.offeringMade = true
+          if (amount > 0) {
+            sim.admissionPayments.push({ id: ++sim.admissionSequence, travelerId: s.id, amount, x: s.x, y: s.y, z: s.z })
+            if (sim.admissionPayments.length > 64) sim.admissionPayments.shift()
+          }
+        }
+        s.activity = "fromRelic"
         break
       }
       case "toWork": {
@@ -1720,7 +1766,7 @@ export function stepSim(
         // Never turn them back toward a junction they have already passed.
         const renown = sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown
         const ahead = map.site ? s.direction * (map.site.junction - s.progress) : -1
-        const shelter = !!map.site && s.gold >= admissionFee(map) && !s.track && s.activity !== "fleeing" && s.visitCooldown <= 0 &&
+        const shelter = !!map.site && !s.track && s.activity !== "fleeing" && s.visitCooldown <= 0 &&
           Math.min(s.hunger, s.thirst) < hospitalityNeedThreshold(renown, sim.balance) && ahead >= 0 && ahead <= 12
         if (s.stamina <= CAMP_STAMINA_THRESHOLD && !shelter) {
           startCamping(sim, s, t, map)
@@ -1835,12 +1881,15 @@ export function stepSim(
         let direction = s.direction
         let haste = s.activity === "fleeing" ? FLEE_HASTE : 1
         if (s.activity === "seeking" && !shelter) {
-          // (Re)acquire the nearest vendor who isn't off camping somewhere.
+          // Only pursue road traders or an open roadside stall. Settled keepers
+          // and shrine visitors retain their old road progress while off-road;
+          // chasing it leaves customers pacing at the enclave entrance forever.
+          // Settled counters are reached through startTavernTrip instead.
           let vendor: SimTraveler | undefined
           let nearestDistance = Infinity
           for (const candidate of vendors) {
-            if (candidate.activity === "openingShop" || candidate.activity === "packingShop" ||
-              CAMP_ACTIVITIES.includes(candidate.activity) || candidate.activity === "fromCamp") continue
+            if (candidate.employer || candidate.track || candidate.roadShortcut || candidate.praying ||
+              (candidate.activity !== "walking" && candidate.activity !== "vending")) continue
             const distance = Math.abs(candidate.progress - s.progress)
             if (distance < nearestDistance) { nearestDistance = distance; vendor = candidate }
           }
@@ -1877,7 +1926,9 @@ export function stepSim(
             direction = vendor.progress >= s.progress ? 1 : -1
             haste = SEEK_HASTE
           } else {
-            // No vendor to be had; trudge on hungry and keep watching.
+            // Resume the journey, including wrapping at the map edge. Empty
+            // needs will prompt another look for an available vendor next step.
+            s.activity = "walking"
             s.targetId = null
           }
         }

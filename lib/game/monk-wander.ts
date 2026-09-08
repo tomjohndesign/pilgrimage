@@ -12,7 +12,7 @@ import { buildingAt } from "./settlement"
 
 export interface WanderSpot { x: number; y: number; z: number }
 
-/** The grounds use tile centres; half-tile interior lanes fit between the kneelers and altar. */
+/** The grounds use tile centres; half-tile interior lanes fit around the altar. */
 export function monkWander(map: GameMap, radius = 3) {
   const hovel = map.buildings.find(b => b.id === map.site?.hovelId)
   const layout = hovel ? shrineLayout(hovel, map.site?.door) : null
@@ -70,7 +70,7 @@ export function monkWander(map: GameMap, radius = 3) {
   }
   const nearest = (p: WanderSpot) => {
     const tile = { x: p.x + map.width / 2 - .5, z: p.z + map.depth / 2 - .5 }
-    // Replanning mid-step must not snap across a kneeler or a wall.
+    // Replanning mid-step must not snap across the altar or a wall.
     return nodes.filter(n => Math.hypot(n.spot.x - p.x, n.spot.z - p.z) <= Math.SQRT1_2 + 1e-8
       && buildingStepAllowed(map, map.buildings, tile, n.tile, true))
       .sort((a, b) => Math.hypot(a.spot.x - p.x, a.spot.z - p.z) - Math.hypot(b.spot.x - p.x, b.spot.z - p.z))[0]

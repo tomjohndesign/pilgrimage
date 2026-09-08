@@ -1,5 +1,5 @@
 import { settlementJob, SETTLEMENT_JOBS } from "./jobs/design"
-import { shrineSeats } from "./shrine-layout"
+import { shrineSeats, shrineStations, shrineLayout } from "./shrine-layout"
 import { afterEach, describe, expect, it } from "vitest"
 import { BUILD_CATALOG, DEFAULT_BALANCE } from "./balance"
 import { createSettlement, purchaseStructure, placementError, woodcutterHuts, jobBuildings, creditTimber, creditAdmission, syncTimberSpending, settlementRenown } from "./settlement"
@@ -8,7 +8,7 @@ import { characterSupport } from "./character-support"
 import { HOUSE_BEDS } from "./building-art/early-geometry"
 import { MEAL_PRICE, servingHouses, tavernSeats } from "./tavern"
 import { buildingStepAllowed, containsTile, shrineGates } from "./building-navigation"
-import { relicHeading, shrineVisitRoute, shrineVisitPlan } from "./shrine-visit"
+import { relicHeading, shrineVisitRoute, shrineVisitPlan, shrineDonation } from "./shrine-visit"
 import { BUILDING_KINDS, placementProblem, planBuilding } from "./buildings"
 import { useBuildStore } from "./build-store"
 import { BRIDGE_RISE } from "./map/bridges"
@@ -119,7 +119,7 @@ describe("cross evangelism", () => {
     stepSim(sim, [t], map, 1.5, 0.2)
     const s = sim.travelers.get(t.id)!
     expect(s.rolls).toBe(2)
-    expect(s.activity).toBe(access === "open" ? "toRelic" : "walking")
+    expect(s.activity).toBe((access === "open" || access === "unaffordable") ? "toRelic" : "walking")
     expect(s.admissionPaid).toBe(0)
   })
 
@@ -177,7 +177,7 @@ describe("monk evangelism at the junction", () => {
     if (access === "recalled") stepMonkEvangelism(monk, map, false, 2, .1)
     const sim = createSim([t], map, [], obscure)
     stepSim(sim, [t], map, 1.5, .2)
-    expect(sim.travelers.get(t.id)!.activity).toBe(access === "open" ? "toRelic" : "walking")
+    expect(sim.travelers.get(t.id)!.activity).toBe((access === "open" || access === "unaffordable") ? "toRelic" : "walking")
     expect(sim.travelers.get(t.id)!.rolls).toBe(access === "recalled" ? 1 : 2)
   })
 })
@@ -240,70 +240,74 @@ describe("shrine hospitality", () => {
     expect(accepted(0, DEFAULT_BALANCE.rules.drawCap / DEFAULT_BALANCE.rules.visitRenown)).toBe(established)
   })
 
-  it.each([0, 1, 2, 3])("visitor %i uses the single gate, faces the relic, pays once and walks back out", (id) => {
+  it.each([0, 1, 2, 3])("visitor %i enters free, prays, and can donate only at the exit box", (id) => {
     const { map, traveler } = fixture()
     const shrine = map.buildings[0]
-    shrine.admissionFee = 3
+    shrine.admissionFee = 999 // Obsolete saved fees must never affect a visit.
     const t = devout(traveler(id))
     t.attributes.gold = 10
-    const sim = createEstablishedShrine([t], map, holy)
-    const s = sim.travelers.get(id)!
-    const route = shrineVisitRoute(map, id, 0)!
-    expect(route.at(-1)).toEqual(shrineSeats(shrine,map.site!.door)[id % 2].tile)
-    for (let i = 1; i < route.length; i++) {
-      expect(Math.abs(route[i].x - route[i - 1].x) + Math.abs(route[i].z - route[i - 1].z)).toBe(1)
-      expect(buildingStepAllowed(map, map.buildings, route[i - 1], route[i], true, i === route.length - 1 ? shrineSeats(shrine,map.site!.door)[id % 2].id : undefined)).toBe(true)
-    }
+    const sim = createEstablishedShrine([t], map, holy), s = sim.travelers.get(id)!
     run(sim, [t], map, 60, () => s.activity === "visiting")
     expect(s.activity).toBe("visiting")
+    expect(s.gold).toBe(10)
+    expect(sim.shrineGold).toBe(0)
+    expect(sim.admissionPayments).toHaveLength(0)
     expect(containsTile(shrine, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) })).toBe(true)
-    expect(s.gold).toBe(7)
-    expect(sim.shrineGold).toBe(3)
-    expect(sim.admissionPayments).toEqual([{ id: 1, travelerId: id, amount: 3, x: s.x, y: s.y, z: s.z }])
-    expect(s.admissionPaid).toBe(3)
-    const heading = relicHeading(map, s)!
-    expect(heading).toBeCloseTo(Math.atan2(tileToWorldX(map, shrine.x + 1)-s.x,tileToWorldZ(map, shrine.z + 1)-s.z))
-    shrine.admissionFee = 0 // A paid visit keeps its reward even if the price changes.
-    run(sim, [t], map, 60, () => s.activity === "fromRelic")
+    const { altar } = shrineLayout(shrine, map.site!.door)
+    expect(relicHeading(map, s)).toBeCloseTo(Math.atan2(tileToWorldX(map, altar.x) - s.x, tileToWorldZ(map, altar.z) - s.z))
+    run(sim, [t], map, 60, () => s.activity === "offering")
     expect(s.visits).toBe(1)
     expect(s.piety).toBeGreaterThan(t.attributes.piety)
-    expect(s.admissionPaid).toBe(0)
+    const { offering } = shrineStations(shrine, map.site!.door)
+    expect(s.x).toBe(tileToWorldX(map, offering.x))
+    expect(s.z).toBe(tileToWorldZ(map, offering.z))
+    expect(s.gold).toBe(10)
     run(sim, [t], map, 30, () => s.activity === "walking")
     expect(s.activity).toBe("walking")
-    expect(s.gold).toBe(7)
-    expect(sim.shrineGold).toBe(3)
+    expect(s.offeringMade).toBe(true)
+    expect(s.gold + sim.shrineGold).toBe(10)
+    expect(sim.shrineGold).toBeGreaterThanOrEqual(0)
+    expect(sim.shrineGold).toBeLessThanOrEqual(10)
+    expect(sim.admissionPayments).toHaveLength(sim.shrineGold > 0 ? 1 : 0)
+    if (sim.shrineGold > 0) expect(sim.admissionPayments[0]).toMatchObject({ amount: sim.shrineGold,
+      x: tileToWorldX(map, offering.x), z: tileToWorldZ(map, offering.z) })
     expect(s.shrineRoute).toBeNull()
     expect(t.attributes.gold).toBe(10)
-    expect(sim.admissionPayments).toHaveLength(1)
   })
 
-  it("passes an unaffordable shrine and returns unpaid if the fee rises during the approach", () => {
+  it("welcomes penniless visitors and rewards their prayer without requiring a donation", () => {
     const { map, traveler } = fixture()
-    map.buildings[0].admissionFee = 3
+    map.buildings[0].admissionFee = 1000
     const t = devout(traveler(0))
-    t.attributes.gold = 2
-    const sim = createEstablishedShrine([t], map, holy)
-    const s = sim.travelers.get(0)!
-    run(sim, [t], map, 1)
-    expect(s.activity).toBe("walking")
-    expect(s.progress).toBeGreaterThan(map.site!.junction)
-    s.gold = 3
-    s.progress = map.site!.junction - 0.1
-    s.visitCooldown = 0
-    run(sim, [t], map, 1, () => s.activity === "toRelic")
-    expect(s.activity).toBe("toRelic")
-    map.buildings[0].admissionFee = 4
-    run(sim, [t], map, 60, () => s.activity === "fromRelic")
-    expect(s.activity).toBe("fromRelic")
-    expect(s.gold).toBe(3)
+    t.attributes.gold = 0
+    const sim = createEstablishedShrine([t], map, holy), s = sim.travelers.get(0)!
+    run(sim, [t], map, 60, () => s.offeringMade === true)
+    expect(s.visits).toBe(1)
+    expect(s.piety).toBeGreaterThan(t.attributes.piety)
+    expect(s.gold).toBe(0)
     expect(sim.shrineGold).toBe(0)
-    expect(sim.visits).toBe(0)
     expect(sim.admissionPayments).toHaveLength(0)
   })
 
-  it("credits admission receipts once across spending and clears them for a new world", () => {
+  it("makes voluntary gifts random, wallet-limited and larger on average at higher piety", () => {
+    const totals = [0, 0]
+    for (let i = 0; i < 1000; i++) {
+      const rolls = [i / 1000, ((i * 37) % 1000) / 1000]
+      for (const [index, piety] of [5, 95].entries()) {
+        let cursor = 0
+        totals[index] += shrineDonation(piety, 100, () => rolls[cursor++])
+      }
+    }
+    expect(totals[0]).toBeGreaterThan(0)
+    expect(totals[1]).toBeGreaterThan(totals[0] * 4)
+    expect(shrineDonation(100, 100, () => .99)).toBe(0)
+    expect(shrineDonation(100, 0, () => 0)).toBe(0)
+    expect(shrineDonation(100, 2, () => .8)).toBe(2)
+  })
+
+  it("credits donation receipts once across spending and clears them for a new world", () => {
     const initial = createSettlement()
-    expect(initial.shrineAdmission).toBe(2)
+    expect(initial.shrineAdmission).toBe(0)
     const paid = creditAdmission(initial, 6)
     expect(paid.resources.gold).toBe(initial.resources.gold + 6)
     const spent = { ...paid, resources: { ...paid.resources, gold: 0 } }
@@ -317,27 +321,6 @@ describe("shrine hospitality", () => {
     useBuildStore.getState().reset()
     expect(useBuildStore.getState().shrineGold).toBe(0)
     expect(createSettlement().collectedAdmission).toBe(0)
-  })
-
-  it("never carries a paid visit's piety entitlement into a later free visit", () => {
-    const { map, traveler } = fixture()
-    const t = devout(traveler(0))
-    t.attributes.gold = 10
-    map.buildings[0].admissionFee = 3
-    const sim = createEstablishedShrine([t], map, holy), s = sim.travelers.get(0)!
-    run(sim, [t], map, 60, () => s.activity === "fromRelic")
-    const paidPiety = s.piety
-    expect(paidPiety).toBeGreaterThan(0)
-    map.buildings[0].admissionFee = 0
-    s.activity = "toRelic"
-    run(sim, [t], map, 1, () => s.activity === "visiting")
-    expect(s.admissionPaid).toBe(0)
-    map.buildings[0].admissionFee = 5 // Changing the current price cannot create a payment.
-    run(sim, [t], map, 60, () => s.activity === "fromRelic")
-    expect(s.visits).toBe(2)
-    expect(s.piety).toBe(paidPiety)
-    expect(s.gold).toBe(7)
-    expect(sim.admissionPayments).toHaveLength(1)
   })
 
   it.each([LINEAR_MOVEMENT, DEFAULT_MOVEMENT])("keeps shrine visitors on opposite sides in both directions (%j)", (movement) => {
@@ -670,7 +653,7 @@ describe("woodcutter huts", () => {
     sim.buildings = woodcutterHuts(builtMap)
     sim.trees = trees
     syncTimberSpending(sim, bought.settlement.spentWood)
-    run(sim, [t], builtMap, 300, () => sim.wood > 0)
+    run(sim, [t], builtMap, 450, () => sim.wood > 0)
     expect(sim.travelers.get(0)!.employer).toBe(bought.settlement.structures[0].id)
     expect(sim.wood).toBeGreaterThan(0)
     const credited = creditTimber(bought.settlement, sim.wood)
@@ -960,6 +943,49 @@ describe("houses, counters and posts", () => {
     expect(servingHouses(map, b => [...sim.travelers.values()].some(w => w.employer === b.id && w.activity === "posted")))
       .toEqual([stall])
   }, 20000)
+
+  it.each([1, -1] as const)("lets hungry travelers pass a settled vendor instead of chasing their old road position (direction %i)", direction => {
+    const { map, traveler } = fixture()
+    const def = BUILD_CATALOG.find(b => b.id === "market")!
+    const stall = { ...def, id: "market-0", buildType: "market", x: 13, z: 6, rotation: 0 as const }
+    map.buildings.push(stall)
+    addHouse(map, { x: 6, z: 12 })
+    const vendor = { ...traveler(4), type: TRAVELER_TYPES.vendor, offset: 8 / 29 }
+    const sim = createSim([vendor], map, [], obscure)
+    sim.buildings = jobBuildings(map)
+    const keeper = sim.travelers.get(vendor.id)!
+    run(sim, [vendor], map, 300, () => keeper.activity === "posted")
+    expect(keeper.activity).toBe("posted")
+
+    const hungry = ["peasant", "knight"] as const
+    const passers = hungry.map((type, id) => {
+      const t = traveler(id, direction)
+      t.type = TRAVELER_TYPES[type]
+      t.offset = (keeper.progress - direction * 2) / 29
+      t.attributes.hunger = t.attributes.thirst = 0
+      return t
+    })
+    for (const [id, s] of createSim(passers, map).travelers) {
+      // Recover travelers already stuck seeking this vendor; decline optional visits.
+      s.activity = "seeking"; s.targetId = vendor.id; s.visitCooldown = 999
+      sim.travelers.set(id, s)
+    }
+    const passed = new Set<number>()
+    run(sim, [...passers, vendor], map, 8, () => {
+      for (const t of passers) {
+        if (direction * (sim.travelers.get(t.id)!.progress - keeper.progress) > 3) passed.add(t.id)
+      }
+      return passed.size === passers.length
+    })
+    expect(passed.size).toBe(passers.length)
+    for (const t of passers) {
+      const s = sim.travelers.get(t.id)!
+      expect(s.targetId).toBeNull()
+      expect(s.hunger).toBe(0)
+      expect(s.thirst).toBe(0)
+    }
+    expect(keeper.activity).toBe("posted")
+  }, 20000)
 })
 
 describe("tree resources and timber storage", () => {
@@ -1105,31 +1131,35 @@ describe("settlement route heights", () => {
 })
 
 
-it("reserves separate kneelers, walks down the aisle, and frees seats after departures", () => {
-  const {map,traveler}=fixture()
-  map.buildings[0].d=5
-  const people=Array.from({length:5},(_,id)=>devout(traveler(id)))
-  const sim=createEstablishedShrine(people,map,holy)
-  run(sim,people,map,20,()=>[...sim.travelers.values()].filter(s=>s.activity === "visiting").length===4)
-  const seated=[...sim.travelers.values()].filter(s=>s.activity === "visiting")
-  expect(seated).toHaveLength(4)
-  const reserved=new Set(seated.map(s=>s.shrineSeat!))
-  expect(reserved.size).toBe(4)
-  expect(shrineVisitPlan(map,99,0,reserved)).toBeNull()
-  for(const visitor of seated) {
-    const seat=shrineSeats(map.buildings[0],map.site!.door).find(seat=>seat.id===visitor.shrineSeat)!
-    expect(worldToTileX(map,visitor.x)).toBe(seat.tile.x)
-    expect(worldToTileZ(map,visitor.z)).toBe(seat.tile.z)
-    const route=visitor.shrineRoute!
-    const gate=shrineGates(map.buildings[0],map.site!.door)[0]
-    expect(route).toContainEqual(gate.inside)
-    for(let i=1;i<route.length;i++) expect(buildingStepAllowed(map,map.buildings,route[i-1],route[i],true,i === route.length-1 ? visitor.shrineSeat : undefined)).toBe(true)
-    visitor.timer=0
-    visitor.hunger=visitor.thirst=visitor.stamina=100
+it("queues single file, lets the keeper show one visitor at a time, and keeps floor prayer available", () => {
+  const { map, traveler } = fixture()
+  map.buildings[0].d = 5
+  const people = Array.from({ length: 4 }, (_, id) => devout(traveler(id)))
+  people[2].pace = 2 // A faster arrival must wait behind those already in line.
+  const sim = createEstablishedShrine(people, map, holy)
+  sim.shrineKeeperReady = false
+  run(sim, people, map, 16)
+  const queue = [...sim.travelers.values()].filter(s => s.shrineSeat?.startsWith("queue-"))
+  expect(queue).toHaveLength(3)
+  expect(queue.every(s => s.activity === "toRelic")).toBe(true)
+  const ordered = [...queue].sort((a, b) => a.shrineQueueOrder! - b.shrineQueueOrder!)
+  for (let i = 1; i < ordered.length; i++) {
+    expect(ordered[i].x).toBeCloseTo(ordered[0].x)
+    expect(Math.hypot(ordered[i].x - ordered[i - 1].x, ordered[i].z - ordered[i - 1].z)).toBeGreaterThanOrEqual(.74)
   }
-  run(sim,people,map,20,()=>seated.every(s=>s.activity === "walking"))
-  expect(seated.every(s=>s.shrineSeat === undefined)).toBe(true)
-  expect(shrineVisitPlan(map,99,0,new Set([...sim.travelers.values()].flatMap(s=>s.shrineSeat?[s.shrineSeat]:[])))).not.toBeNull()
+  expect(sim.travelers.get(3)!.activity).toBe("visiting")
+  expect(sim.travelers.get(3)!.shrineSeat).toMatch(/^prayer-/)
+  sim.shrineKeeperReady = true
+  const shown: number[] = []
+  for (let tick = 0; tick < 1500; tick++) {
+    stepSim(sim, people, map, 1.5, .1)
+    const viewing = queue.filter(s => s.activity === "visiting")
+    expect(viewing.length).toBeLessThanOrEqual(1)
+    if (viewing[0] && !shown.includes(viewing[0].id)) shown.push(viewing[0].id)
+    if (queue.every(s => s.offeringMade && !s.shrineSeat)) break
+  }
+  expect(shown).toEqual(ordered.map(s => s.id))
+  expect(queue.every(s => s.visits === 1 && s.offeringMade && !s.shrineSeat)).toBe(true)
 })
 
 describe("shrine visits beside a covered junction", () => {
@@ -1216,6 +1246,25 @@ describe("shrine visits beside a covered junction", () => {
 
 
 describe("traveling monks and housing limits", () => {
+  function finishPrayer(sim: SimState, people: Traveler[], map: GameMap) {
+    for (const s of sim.travelers.values()) {
+      if (s.employer) continue
+      const plan = shrineVisitPlan(map, s.id, s.visits)!
+      const end = plan.route.at(-1)!
+      Object.assign(s, { activity: "visiting", timer: 0, shrineRoute: plan.route, shrineSeat: plan.seat,
+        branchProgress: plan.route.length - 1, offeringMade: false, offeringProgress: undefined,
+        x: tileToWorldX(map, end.x), z: tileToWorldZ(map, end.z) })
+    }
+    stepSim(sim, people, map, 1.5, 0.1)
+  }
+
+  function leaveChurch(sim: SimState, people: Traveler[], map: GameMap) {
+    const departed = () => [...sim.travelers.values()].every(s => s.offeringMade
+      && !["visiting", "fromRelic", "offering"].includes(s.activity))
+    run(sim, people, map, 60, departed)
+    expect(departed()).toBe(true)
+  }
+
   it("draws monks to an unknown enclave more often than other supplied travelers", () => {
     const { traveler } = fixture()
     const attributes = traveler(0).attributes
@@ -1231,14 +1280,17 @@ describe("traveling monks and housing limits", () => {
     const people = Array.from({ length: 60 }, (_, id) => ({ ...traveler(id), name: `Brother ${id}`, type: TRAVELER_TYPES.friar }))
     const sim = createSim(people, map)
     const arrivals = new Map(sim.travelers)
-    // Complete a wave of visits on one tick; each successful recruit reserves a bed immediately.
-    for (const s of sim.travelers.values()) Object.assign(s, { activity: "visiting", timer: 0 })
-    stepSim(sim, people, map, 1.5, 0.1)
+    for (const s of sim.travelers.values()) s.gold = 10
+    finishPrayer(sim, people, map)
+    expect(sim.joinedMonks.size).toBe(0)
+    leaveChurch(sim, people, map)
     expect(sim.joinedMonks.size).toBe(4)
     expect(sim.visits).toBe(people.length)
-    expect([...sim.travelers.values()].filter(s => s.activity === "fromRelic").length).toBe(56)
+    expect(sim.travelers.size).toBe(56)
+    expect(sim.shrineGold).toBe([...arrivals.values()].reduce((sum, s) => sum + 10 - s.gold, 0))
     for (const [id, monk] of sim.joinedMonks) {
       const visitor = arrivals.get(id)!
+      expect(visitor.offeringMade).toBe(true)
       expect(sim.travelers.has(id)).toBe(false)
       expect(monk).toMatchObject({ id: id + 4, name: people[id].name, home: "extra-shelter",
         attributes: { age: people[id].attributes.age, piety: visitor.piety },
@@ -1262,10 +1314,10 @@ describe("traveling monks and housing limits", () => {
       construction: { work: 0, required: 100 } })
     const people = Array.from({ length: 20 }, (_, id) => ({ ...traveler(id), type: TRAVELER_TYPES.friar }))
     const sim = createSim(people, map)
-    for (const s of sim.travelers.values()) Object.assign(s, { activity: "visiting", timer: 0 })
-    stepSim(sim, people, map, 1.5, 0.1)
+    finishPrayer(sim, people, map)
+    leaveChurch(sim, people, map)
     expect(sim.joinedMonks.size).toBe(0)
-    expect([...sim.travelers.values()].every(s => s.activity === "fromRelic")).toBe(true)
+    expect([...sim.travelers.values()].every(s => s.activity === "walking")).toBe(true)
   })
 
   it("limits new workers to completed house beds even when more jobs are open", () => {
@@ -1274,8 +1326,10 @@ describe("traveling monks and housing limits", () => {
     const sim = createSim(people, map)
     sim.buildings = [camp]; sim.trees = trees
     const completeVisits = () => {
-      for (const s of sim.travelers.values()) if (!s.employer) Object.assign(s, { activity: "visiting", timer: 0, jobless: true })
-      stepSim(sim, people, map, 1.5, 0.1)
+      for (const s of sim.travelers.values()) if (!s.employer) s.jobless = true
+      finishPrayer(sim, people, map)
+      expect([...sim.travelers.values()].filter(s => s.employer)).toHaveLength(0)
+      leaveChurch(sim, people, map)
     }
     completeVisits()
     expect([...sim.travelers.values()].filter(s => s.employer)).toHaveLength(0)

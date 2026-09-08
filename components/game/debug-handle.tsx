@@ -18,6 +18,7 @@ import { simRegistry, stepSim } from "@/lib/game/sim"
 import type { MovementTuning } from "@/lib/game/motion"
 import { strikeTree } from "@/lib/game/trees/impact"
 import type { EntState } from "@/lib/game/trees/ents"
+import { treeResource, STUMP_LIFETIME_DAYS } from "@/lib/game/trees/timber"
 
 import { characterOcclusionRequest, type CharacterOcclusionSample } from "@/lib/game/render/character-occlusion"
 import { buildingBatchControl } from "./building-batches"
@@ -166,7 +167,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
       constructionCosts: () => scene.getObjectByName("construction-cost-effects")?.children.flatMap(object =>
         object instanceof THREE.Sprite && object.visible ? [{ resource: object.userData.resource, amount: object.userData.amount,
           position: object.position.toArray(), opacity: object.material.opacity }] : []) ?? [],
-      /** Admission receipts and their live floating amounts for payment smoke tests. */
+      /** Donation receipts and their live floating amounts for payment smoke tests. */
       payments: () => ({
         receipts: simRegistry.current?.admissionPayments ?? [],
         effects: scene.getObjectByName("admission-effects")?.children.flatMap(object =>
@@ -298,6 +299,19 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         visits: simRegistry.current?.visits ?? 0,
       }),
       treePlacements: () => simRegistry.current?.trees ?? [],
+      /** Complete a felling for visual checks of remains and disappearing canopy shade. */
+      fellTree: (index: number) => {
+        const sim = simRegistry.current, tree = sim?.trees?.[index]
+        if (!sim || !tree || sim.felled.has(index)) return
+        const resource = sim.treeResources.get(index) ?? treeResource(tree, index, sim.seed)
+        resource.health = 0
+        resource.felledAt = sim.time
+        resource.stumpUntil = sim.time + STUMP_LIFETIME_DAYS
+        sim.treeResources.set(index, resource)
+        sim.felled.add(index)
+        sim.resourceRevision++
+        useBuildStore.getState().syncResources(sim, travelers)
+      },
       strikeTree: (index: number) => {
         const tree = simRegistry.current?.trees?.[index]
         if (tree) strikeTree(tree, 0)

@@ -1,11 +1,14 @@
 "use client"
 
+import { travelerWeariness } from "@/lib/game/traveler-weariness"
+
 import { withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
 import { JOB_PREVIEW } from "@/lib/game/building-preview"
 import { previewResidents, placePreviewResident } from "@/lib/game/jobs/preview"
 import { settlementJob, type SettlementJob } from "@/lib/game/jobs/design"
 import { wildlifeRegistry } from "@/lib/game/wildlife/registry"
 
+import { monkRegistry } from "@/lib/game/monks"
 import { processionRegistry } from "@/lib/game/relic-procession"
 import { frameProfile } from "@/lib/game/render/frame-profile"
 import { isWorldVisible } from "@/lib/game/render/visibility"
@@ -176,6 +179,7 @@ export const Travelers = memo(function Travelers({
     const build = useBuildStore.getState()
     sim.wildlife = wildlifeRegistry.current
     sim.procession = processionRegistry.current
+    sim.shrineKeeperReady = [...(monkRegistry.current?.values() ?? [])].some(activity => activity === "keepingRelic" || activity === "showingRelic")
     sim.buildings = camps
     sim.shrineRenown = shrineRenown
     sim.balance = useBalanceStore.getState().balance
@@ -283,7 +287,7 @@ export const Travelers = memo(function Travelers({
         group.rotation.y += turn * blend
       }
       const workTree = s.tree === null ? undefined : trees[s.tree]
-      if (s.activity === "visiting" && !!s.shrineSeat) {
+      if ((s.activity === "visiting" || (s.activity === "toRelic" && !moving)) && !!s.shrineSeat) {
         group.rotation.y = kneelingHeading
       }
       if ((s.activity === "performing" || s.activity === "begging") && s.walkFrom) {
@@ -335,6 +339,7 @@ export const Travelers = memo(function Travelers({
       const pastureTerrain = s.pasture ? tileAt(map, worldToTileX(map, s.pasture.x), worldToTileZ(map, s.pasture.z)) : null
       group.userData.pastureY = s.pasture ? walkingSurface(map, s.pasture.x, s.pasture.z).height : s.y
       group.userData.pastureGrass = pastureTerrain === "grass" || pastureTerrain === "clearing"
+      group.userData.weary = travelerWeariness(s) > 0
       group.userData.carrying = s.carrying
       group.userData.initialized = true
       group.userData.phase = travelers[i].id * 0.137

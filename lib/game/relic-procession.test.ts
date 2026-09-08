@@ -6,7 +6,7 @@ import { createSim, stepSim } from "./sim"
 import { generateTravelers, TRAVELER_TYPES } from "./travelers"
 import { worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import { shrineFurnitureClear, buildingStepAllowed, containsTile } from "./building-navigation"
-import { admissionFee, shrineVisitRoute } from "./shrine-visit"
+import { shrineVisitRoute } from "./shrine-visit"
 
 function fixture() {
   const map: GameMap = { width: 15, depth: 15, tiles: Array(225).fill("grass"), seed: 1,
@@ -283,7 +283,7 @@ describe("relic procession", () => {
     expect(merchant.timer).toBeCloseTo(19.9)
   })
 
-  it("preserves admission and paid visit time when a procession interrupts a visitor", () => {
+  it("preserves free entry and visit time when a procession interrupts a visitor", () => {
     const { map, p } = fixture(), travelers = generateTravelers(1, 1)
     const sim = createSim(travelers, map), visitor = sim.travelers.get(travelers[0].id)!
     const route = shrineVisitRoute(map, visitor.id, 0)!
@@ -299,18 +299,18 @@ describe("relic procession", () => {
     p.stage = "idle"
     stepSim(sim, travelers, map, 0.4, 0.1)
     expect(visitor.activity).toBe("visiting")
-    expect(visitor.gold).toBe(10 - admissionFee(map))
-    expect(sim.admissionPayments).toHaveLength(1)
+    expect(visitor.gold).toBe(10)
+    expect(sim.admissionPayments).toHaveLength(0)
     const timer = visitor.timer
     pray()
     stepSim(sim, travelers, map, 0.4, 0.1)
     expect(visitor.timer).toBe(timer)
-    expect(visitor.admissionPaid).toBe(admissionFee(map))
+    expect(visitor.admissionPaid).toBe(0)
     p.stage = "idle"
     stepSim(sim, travelers, map, 0.4, 0.1)
     expect(visitor.timer).toBeCloseTo(timer - 0.1)
-    expect(visitor.gold).toBe(10 - admissionFee(map))
-    expect(sim.shrineGold).toBe(admissionFee(map))
-    expect(sim.admissionPayments).toHaveLength(1)
+    expect(visitor.gold).toBe(10)
+    expect(sim.shrineGold).toBe(0)
+    expect(sim.admissionPayments).toHaveLength(0)
   })
 })
