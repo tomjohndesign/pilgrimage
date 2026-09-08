@@ -369,9 +369,13 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
       ? selectionObjectId(selection, { ...objects, piles: useBuildStore.getState().piles }) : 0
     const selectingCharacter = requestedId !== 0 && (selection?.kind === "monk" || selection?.kind === "traveler")
     const characterPass = stage.phase === "characters"
-    const distant = sceneryDetail(scene) > 0
+    const detail = sceneryDetail(scene)
+    const distant = detail > 0
     const closeOpacity = sceneryCloseOpacity(scene)
-    const mode = characterPass && closeOpacity === 0 ? "off" : outlineMode
+    // At the farthest view, authored building lines and sprite colors are
+    // sufficient. Selection still requests its IDs, but ordinary overlap ink
+    // must not require another complete terrain/building/tree scene pass.
+    const mode = detail === 2 || (characterPass && closeOpacity === 0) ? "off" : outlineMode
     const selectionInOtherPass = (stage.phase === "world" && selectingCharacter) || (characterPass && !selectingCharacter)
     const selectedId = selectionInOtherPass ? 0 : requestedId
     // Wide views use ordinary depth occlusion. Dropping the see-through masks

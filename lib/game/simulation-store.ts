@@ -17,9 +17,9 @@ export const BENCHMARK_SIMULATION_SPEEDS = [
 ] as const
 type SimulationSpeed = typeof BENCHMARK_SIMULATION_SPEEDS[number]["rate"]
 
-export const MAX_SIMULATION_STEP = .35
+export const MAX_SIMULATION_STEP = .42
 
-/** Combine playback work into bounded game-time steps. At 30–60 FPS even 5× needs
+/** Combine playback work into bounded game-time steps. At 30–60 FPS even 6× needs
  * one population pass, including rounded 33.4 ms frames. The separate 100 ms real-time clamp still prevents a
  * background tab from trying to catch up minutes of missed simulation. */
 export function simulationFrameStep(delta: number, speed: number): { ticks: number; dt: number } {
