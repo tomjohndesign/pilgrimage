@@ -39,6 +39,9 @@ import { isBird, type WildlifeKind } from "@/lib/game/wildlife/species"
  * never reveals a stale pose.
  */
 const SKIN_RADIUS = 4
+/** Beyond this camera view size an animal is a few pixels; re-skin it every third simulation tick. */
+const DISTANT_VIEW_SIZE = 90
+const DISTANT_POSE_STRIDE = 3
 
 /** Ambient fauna share the world's pixel grid and depth/overlap pass. Connected hides share
  * bounded vertex buffers per species for both colour and selection passes. */
@@ -114,6 +117,7 @@ export function WildlifeBatch({ kind, animals, map, scale, grazing }: { kind: Wi
     camera.updateMatrixWorld()
     frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, view.copy(camera.matrixWorld).invert()))
     bounds.radius = SKIN_RADIUS
+    const poseStride = useCameraStore.getState().viewSize > DISTANT_VIEW_SIZE ? DISTANT_POSE_STRIDE : 1
     for (let i = 0; i < animals.length; i++) {
       const animal = animals[i], bird = isBird(kind)
       bounds.center.set(animal.x, animal.y, animal.z)
@@ -122,7 +126,9 @@ export function WildlifeBatch({ kind, animals, map, scale, grazing }: { kind: Wi
       drawn.expandByPoint(bounds.center)
       // Simulation advances at 30 Hz. Reuse identical poses between ticks and
       // while paused; camera movement still refreshes visibility every frame.
-      if (posed[i] === animal.age) continue
+      // Posing rewrites every hide vertex on the CPU; far away, a slightly
+      // staler pose is invisible and saves most of that work.
+      if (posed[i] === animal.age || (posed[i] >= 0 && animal.age - posed[i] < poseStride && animal.age > posed[i])) continue
       posed[i] = animal.age
       const graze = grazing ?? animal.grazing
       const flight = animal.flight, wingBlend = flight ? easeWing(Math.min(flight.elapsed / 0.35, (flight.duration - flight.elapsed) / 0.45)) : 0
