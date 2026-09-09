@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "b83ff860ffc6cb1e0f062996a0b68acc7ddf19cd",
-  "releaseCount": 169,
+  "lastProcessedCommit": "974d8856a961d40e78b1c1d451f0be32602dc0a4",
+  "releaseCount": 170,
   "releases": [
+    {
+      "version": "0.0.184",
+      "title": "Release 0.0.184",
+      "summary": "Fix mobile twist direction and snap to isometric views (#204)",
+      "commit": "974d8856a961d40e78b1c1d451f0be32602dc0a4"
+    },
     {
       "version": "0.0.183",
       "title": "Release 0.0.183",
