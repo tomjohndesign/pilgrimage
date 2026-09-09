@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "b926810f6f835bb40cee60a1bddfd8a686a8eaf4",
-  "releaseCount": 163,
+  "lastProcessedCommit": "110ee4beaf0a2d96a74630217a96483d6a3b7316",
+  "releaseCount": 164,
   "releases": [
+    {
+      "version": "0.0.178",
+      "title": "Release 0.0.178",
+      "summary": "Remove camping, keep travellers' stamina on the road, and form companies in the live game (#197)",
+      "commit": "110ee4beaf0a2d96a74630217a96483d6a3b7316"
+    },
     {
       "version": "0.0.177",
       "title": "Release 0.0.177",
