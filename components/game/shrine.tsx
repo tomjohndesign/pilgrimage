@@ -1,6 +1,6 @@
 "use client"
 
-import { sceneryDetail } from "@/lib/game/render/scenery-detail"
+import { buildingDetail } from "@/lib/game/render/scenery-detail"
 import { useUnitInterior } from "./use-unit-interior"
 
 import { groundHeight } from "@/lib/game/map/elevation"
@@ -35,7 +35,7 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
   const relicSelected = useCameraStore(s => isSelected(s.selection, { kind: "relic" }))
   const buildingSelected = useCameraStore(s => isSelected(s.selection, { kind: "building", id: map.site?.hovelId ?? "" }))
   useFrame(({ scene }) => {
-    const near = sceneryDetail(scene) === 0
+    const near = buildingDetail(scene) === 0
     if (lights.current) lights.current.visible = near
     const sim = simRegistry.current
     const available = !processionRegistry.current || !relicIsCarried(processionRegistry.current)

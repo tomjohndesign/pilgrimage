@@ -1,7 +1,31 @@
 {
-  "lastProcessedCommit": "4d9433dec734aeb8533f72178e449a4417ae0dcb",
-  "releaseCount": 155,
+  "lastProcessedCommit": "54dbfa41dfdc7d5cd4125c15980eceb28533f2b2",
+  "releaseCount": 159,
   "releases": [
+    {
+      "version": "0.0.173",
+      "title": "Release 0.0.173",
+      "summary": "Keep building detail and interior access tied to zoom (#192)",
+      "commit": "54dbfa41dfdc7d5cd4125c15980eceb28533f2b2"
+    },
+    {
+      "version": "0.0.172",
+      "title": "Release 0.0.172",
+      "summary": "Travel parties share one path, remove 6x playback (#191)",
+      "commit": "b9370e385760dd07d863fa53eb8061ea6ecfa179"
+    },
+    {
+      "version": "0.0.171",
+      "title": "Release 0.0.171",
+      "summary": "Move the \"generating map\" caption above the loading bar (#190)",
+      "commit": "59fec5d369a88abe2ed2c0d9554294487b8ecb5e"
+    },
+    {
+      "version": "0.0.170",
+      "title": "Release 0.0.170",
+      "summary": "Add a sprite pipeline page to the asset playground (#189)",
+      "commit": "0802d07fa2587825b331dfff424eb39ef0801283"
+    },
     {
       "version": "0.0.169",
       "title": "Release 0.0.169",
