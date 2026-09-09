@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense } from "react"
+import { Suspense, useEffect, useRef, useState } from "react"
 
 import { DEFAULT_ELEVATION } from "@/lib/game/map/elevation"
 import { parseAsciiMap } from "@/lib/game/map/prototype-map"
@@ -114,9 +114,21 @@ function PreviewScene({ entry }: { entry: TextureEntry }) {
 }
 
 export function TexturePreview({ entry }: { entry: TextureEntry }) {
+  const container = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(false)
+  useEffect(() => {
+    if (!container.current) return
+    // The gallery exceeds browsers' simultaneous WebGL-context limits if every
+    // offscreen card stays mounted, evicting later scenery previews and bakers.
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { rootMargin: "200px" })
+    observer.observe(container.current)
+    return () => observer.disconnect()
+  }, [])
   return (
-    <PreviewCanvas zoom={34}>
-      <PreviewScene entry={entry} />
-    </PreviewCanvas>
+    <div ref={container} className="h-full w-full">
+      {visible && <PreviewCanvas zoom={34}>
+        <PreviewScene entry={entry} />
+      </PreviewCanvas>}
+    </div>
   )
 }

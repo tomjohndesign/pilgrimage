@@ -4,7 +4,7 @@ import { STOREHOUSE_FOOD_CAPACITY } from "./storage"
 /** Pure balance data, shared by gameplay, the tuning page and the specification. */
 export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "storehouse"
   | "monk-shelter" | "house" | "tavern" | "wood-shelter" | "market" | "guard-post" | "lumberCamp"
-  | "sheep-pen"
+  | "sheep-pen" | "well" | "watering-hole"
 
 export interface Resources {
   gold: number
@@ -168,6 +168,18 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     cost: { gold: 55, wood: 45 }, renown: 2, requiredRenown: 5,
     income: { gold: 0, wood: 0 }, w: 3, d: 2, height: 0.70,
     color: "#8c7658", roofColor: "#a59164",
+  },
+  {
+    id: "well", label: "Timber well", category: "scenery",
+    description: "Free drinking water for thirsty walkers and settlers. One person draws water at a time; keep its front approach clear.",
+    cost: { gold: 20, wood: 15 }, renown: 0, requiredRenown: 0,
+    income: { gold: 0, wood: 0 }, w: 2, d: 2, height: .58, color: "#877152", roofColor: "#95805c",
+  },
+  {
+    id: "watering-hole", label: "Watering hole", category: "scenery",
+    description: "A shallow earthen pool with an open dipping edge. Thirsty walkers and settlers take turns drinking here for free.",
+    cost: { gold: 10, wood: 0 }, renown: 0, requiredRenown: 0,
+    income: { gold: 0, wood: 0 }, w: 3, d: 2, height: .1, color: "#847657", roofColor: "#526e67",
   },
 ]
 

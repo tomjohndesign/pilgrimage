@@ -1,3 +1,4 @@
+import { drinkingMotion } from "./drinking"
 import { uncoverHead } from "./head-covering"
 import { preachingMotion } from "./preaching"
 import { buildingMotion, MALLET_HEAD_HEIGHT } from "./building"
@@ -398,6 +399,14 @@ export function createBasePersonRig(recipe = personRecipe()) {
   for (const side of [-1, 1]) mesh(new THREE.BoxGeometry(0.012, 0.14, 0.15), grain, mallet, [side * 0.127, MALLET_HEAD_HEIGHT, 0])
   sockets.rightHand.add(mallet)
   mallet.visible = false
+  const cup = new THREE.Group()
+  cup.name = "drinking-cup"
+  const cupWood = material("#997446"), cupWater = material("#42635b")
+  mesh(new THREE.CylinderGeometry(.065, .05, .09, 8, 1, true), cupWood, cup, [0, .035, .035])
+  mesh(new THREE.CylinderGeometry(.057, .057, .008, 8), cupWater, cup, [0, .073, .035])
+  mesh(new THREE.TorusGeometry(.062, .008, 4, 8), cupWood, cup, [0, .08, .035]).rotation.x = Math.PI / 2
+  sockets.rightHand.add(cup)
+  cup.visible = false
   const shaft = mesh(new THREE.CylinderGeometry(0.026, 0.032, 0.90, 6), wood, axe, [0, 0.27, 0])
   shaft.name = "axe-handle"
   // A slim wedge flares from the socket to a broad, sharpened cutting edge along +Z.
@@ -504,7 +513,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
   basket.name = "gathering-basket"
   // Plain turned wooden cup and torn bread, attached to the same editable hand socket.
   const tableCup = new THREE.Group(), tableBread = new THREE.Group()
-  tableCup.name = "drinking-cup"; tableBread.name = "eating-bread"
+  tableCup.name = "tavern-cup"; tableBread.name = "eating-bread"
   sockets.rightHand.add(tableCup, tableBread)
   mesh(new THREE.CylinderGeometry(.075, .058, .14, 8), material("#94704b"), tableCup, [0, .025, .015])
   mesh(new THREE.CylinderGeometry(.057, .057, .008, 8), material("#493827"), tableCup, [0, .098, .015])
@@ -672,6 +681,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       const splitAxis = new THREE.Vector3(0, 1, 0).applyQuaternion(splitRotation)
       const gathering = gatheringMotion(phase)
       const building = clip === "building", hammer = buildingMotion(phase)
+      const drink = clip === "drinking" || clip === "drinkingLow" ? drinkingMotion(phase, clip === "drinkingLow", b) : undefined
       const sermon = clip === "preaching" ? preachingMotion(phase, b) : undefined
       const motion = walkBody(phase, clip)
       const weary = clip === "wearyWalk"
@@ -687,6 +697,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       // Raise, hold at the mouth, then lower over a four-second loop.
       const lift = Math.min(1, Math.max(0, (1 - Math.cos(phase * Math.PI * 2)) * .8))
       const chair = clip === "seatedPrayer" || dining
+      const lowDrink = clip === "drinkingLow"
       const seated = clip === "sitting" || chair, praying = clip === "praying"
       const felling = clip === "treeFelling", splitting = clip === "woodcutting"
       const carryAxe = recipe.design.handTool === "Carried axe" && (walking || clip === "idle")
@@ -720,6 +731,8 @@ export function createBasePersonRig(recipe = personRecipe()) {
       }
       tableCup.visible = clip === "seatedDrink"
       tableBread.visible = clip === "seatedMeal"
+      cup.visible = !!drink
+      if (drink) headPivot.rotation.x = drink.nod
       basket.visible = gather
       picked.visible = gather && gathering.holding
       contents.visible = gather && gathering.deposited
@@ -754,7 +767,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
           // ankle-length. The cloth lengthens below the waist, not at the neck.
           const standingY = longGarment && !sleep ? y - drop * Math.min(1, weight) : y
           // The robe and hanging rope ends drape together over bent knees.
-          const drapeZ = z + ((seated ? 0.48 : praying || gather ? 0.19 : 0) * weight) +
+          const drapeZ = z + ((seated ? 0.48 : praying || gather || lowDrink ? 0.19 : 0) * weight) +
             (longGarment && (walking || clip === "carrying" || clip === "procession") ? wave * 0.035 * recipe.design.stride * weight * weight : 0)
           const groundY = b.hipHeight + (0.035 - body.position.y + drapeZ * (geometry === torso.geometry ? torso.scale.z : 1) * Math.sin(body.rotation.x)) / Math.cos(body.rotation.x)
           if (longGarment && chop && y < waist) {
@@ -767,7 +780,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
             positions.setXYZ(i, point.x / xScale, point.y + b.hipHeight, point.z / zScale)
           } else {
             positions.setX(i, rest[i * 3])
-            positions.setY(i, seated || praying || gather ? Math.max(y, 0.07 - drop, groundY) : standingY)
+            positions.setY(i, seated || praying || gather || lowDrink ? Math.max(y, 0.07 - drop, groundY) : standingY)
             positions.setZ(i, drapeZ)
           }
           const twist = (motion.chestYaw - motion.hipYaw) * Math.max(0, Math.min(1,
@@ -824,6 +837,11 @@ export function createBasePersonRig(recipe = personRecipe()) {
           reach(limb, [grip * .94, .26 + grip * .342, .34], true)
         }
         else if (devotional) reach(limb, [sign * 0.018, waist - b.hipHeight + 0.045 + sign * 0.015, 0.30])
+        else if (drink) {
+          const target = new THREE.Vector3(...drink[limb.side])
+          target.sub(body.position).applyQuaternion(body.quaternion.clone().invert())
+          reach(limb, target.toArray() as Point3, true)
+        }
         else if (sermon) reach(limb, sermon[limb.side], true)
         else if (building) {
           const target = new THREE.Vector3(sign * b.shoulderOffset,
@@ -909,6 +927,11 @@ export function createBasePersonRig(recipe = personRecipe()) {
         for (const prop of [tableCup, tableBread]) prop.quaternion.copy(
           sockets.rightHand.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(desired))
       }
+      if (drink) {
+        const desired = root.getWorldQuaternion(new THREE.Quaternion()).multiply(
+          new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), drink.tilt))
+        cup.quaternion.copy(sockets.rightHand.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(desired))
+      }
       if (building) {
         const desired = root.getWorldQuaternion(new THREE.Quaternion()).multiply(
           new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), hammer.pitch))
@@ -935,8 +958,8 @@ export function createBasePersonRig(recipe = personRecipe()) {
         axe.updateMatrixWorld(true)
       }
       // Long garments cover bent legs too; expose only the toes below the draped hem.
-      const hemHeight = longGarment && (seated || praying || gather) ? 0.08 :
-        seated || praying || gather || (chop && !longGarment) ? 10 : b.tunicHem + (longGarment ? 0 : drop) + 0.012
+      const hemHeight = longGarment && (seated || praying || gather || lowDrink) ? 0.08 :
+        seated || praying || gather || lowDrink || (chop && !longGarment) ? 10 : b.tunicHem + (longGarment ? 0 : drop) + 0.012
       hemPlane.set(new THREE.Vector3(0, -1, 0), hemHeight)
       hemPlane.applyMatrix4(poseRoot.matrixWorld)
       root.updateMatrixWorld(true)

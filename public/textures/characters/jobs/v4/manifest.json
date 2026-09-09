@@ -8,10 +8,10 @@
     "wearyWalk": 20,
     "sleeping": 16,
     "sitting": 8,
-    "seatedMeal": 24,
-    "seatedDrink": 24,
     "seatedPrayer": 8,
     "praying": 8,
+    "drinking": 24,
+    "drinkingLow": 24,
     "preaching": 24,
     "treeFelling": 24,
     "woodcutting": 64,
@@ -21,7 +21,7 @@
     "hoisting": 16,
     "procession": 20
   },
-  "templateVersion": 33,
+  "templateVersion": 34,
   "cellSize": 64,
   "anchor": [
     32,
@@ -36,8 +36,6 @@
         "wearyWalk": "/textures/characters/jobs/v4/woodcutter-wearyWalk.png",
         "sleeping": "/textures/characters/jobs/v4/woodcutter-sleeping.png",
         "sitting": "/textures/characters/jobs/v4/woodcutter-sitting.png",
-        "seatedMeal": "/textures/characters/jobs/v4/woodcutter-seatedMeal.png",
-        "seatedDrink": "/textures/characters/jobs/v4/woodcutter-seatedDrink.png",
         "seatedPrayer": "/textures/characters/jobs/v4/woodcutter-seatedPrayer.png",
         "praying": "/textures/characters/jobs/v4/woodcutter-praying.png",
         "treeFelling": "/textures/characters/jobs/v4/woodcutter-treeFelling.png",
@@ -47,7 +45,9 @@
         "carrying": "/textures/characters/jobs/v4/woodcutter-carrying.png",
         "hoisting": "/textures/characters/jobs/v4/woodcutter-hoisting.png",
         "procession": "/textures/characters/jobs/v4/woodcutter-procession.png",
-        "preaching": "/textures/characters/jobs/v4/woodcutter-preaching.png"
+        "preaching": "/textures/characters/jobs/v4/woodcutter-preaching.png",
+        "drinking": "/textures/characters/jobs/v4/woodcutter-drinking.png",
+        "drinkingLow": "/textures/characters/jobs/v4/woodcutter-drinkingLow.png"
       },
       "designs": [
         {
@@ -321,10 +321,10 @@
         "wearyWalk": "/textures/characters/jobs/v4/woodcutter-depth-wearyWalk.png",
         "sleeping": "/textures/characters/jobs/v4/woodcutter-depth-sleeping.png",
         "sitting": "/textures/characters/jobs/v4/woodcutter-depth-sitting.png",
-        "seatedMeal": "/textures/characters/jobs/v4/woodcutter-depth-seatedMeal.png",
-        "seatedDrink": "/textures/characters/jobs/v4/woodcutter-depth-seatedDrink.png",
         "seatedPrayer": "/textures/characters/jobs/v4/woodcutter-depth-seatedPrayer.png",
         "praying": "/textures/characters/jobs/v4/woodcutter-depth-praying.png",
+        "drinking": "/textures/characters/jobs/v4/woodcutter-depth-drinking.png",
+        "drinkingLow": "/textures/characters/jobs/v4/woodcutter-depth-drinkingLow.png",
         "preaching": "/textures/characters/jobs/v4/woodcutter-depth-preaching.png",
         "treeFelling": "/textures/characters/jobs/v4/woodcutter-depth-treeFelling.png",
         "woodcutting": "/textures/characters/jobs/v4/woodcutter-depth-woodcutting.png",
@@ -342,8 +342,6 @@
         "wearyWalk": "/textures/characters/jobs/v4/tavern-wearyWalk.png",
         "sleeping": "/textures/characters/jobs/v4/tavern-sleeping.png",
         "sitting": "/textures/characters/jobs/v4/tavern-sitting.png",
-        "seatedMeal": "/textures/characters/jobs/v4/tavern-seatedMeal.png",
-        "seatedDrink": "/textures/characters/jobs/v4/tavern-seatedDrink.png",
         "seatedPrayer": "/textures/characters/jobs/v4/tavern-seatedPrayer.png",
         "praying": "/textures/characters/jobs/v4/tavern-praying.png",
         "treeFelling": "/textures/characters/jobs/v4/tavern-treeFelling.png",
@@ -353,7 +351,9 @@
         "carrying": "/textures/characters/jobs/v4/tavern-carrying.png",
         "hoisting": "/textures/characters/jobs/v4/tavern-hoisting.png",
         "procession": "/textures/characters/jobs/v4/tavern-procession.png",
-        "preaching": "/textures/characters/jobs/v4/tavern-preaching.png"
+        "preaching": "/textures/characters/jobs/v4/tavern-preaching.png",
+        "drinking": "/textures/characters/jobs/v4/tavern-drinking.png",
+        "drinkingLow": "/textures/characters/jobs/v4/tavern-drinkingLow.png"
       },
       "designs": [
         {
@@ -627,10 +627,10 @@
         "wearyWalk": "/textures/characters/jobs/v4/tavern-depth-wearyWalk.png",
         "sleeping": "/textures/characters/jobs/v4/tavern-depth-sleeping.png",
         "sitting": "/textures/characters/jobs/v4/tavern-depth-sitting.png",
-        "seatedMeal": "/textures/characters/jobs/v4/tavern-depth-seatedMeal.png",
-        "seatedDrink": "/textures/characters/jobs/v4/tavern-depth-seatedDrink.png",
         "seatedPrayer": "/textures/characters/jobs/v4/tavern-depth-seatedPrayer.png",
         "praying": "/textures/characters/jobs/v4/tavern-depth-praying.png",
+        "drinking": "/textures/characters/jobs/v4/tavern-depth-drinking.png",
+        "drinkingLow": "/textures/characters/jobs/v4/tavern-depth-drinkingLow.png",
         "preaching": "/textures/characters/jobs/v4/tavern-depth-preaching.png",
         "treeFelling": "/textures/characters/jobs/v4/tavern-depth-treeFelling.png",
         "woodcutting": "/textures/characters/jobs/v4/tavern-depth-woodcutting.png",
@@ -648,8 +648,6 @@
         "wearyWalk": "/textures/characters/jobs/v4/shepherd-wearyWalk.png",
         "sleeping": "/textures/characters/jobs/v4/shepherd-sleeping.png",
         "sitting": "/textures/characters/jobs/v4/shepherd-sitting.png",
-        "seatedMeal": "/textures/characters/jobs/v4/shepherd-seatedMeal.png",
-        "seatedDrink": "/textures/characters/jobs/v4/shepherd-seatedDrink.png",
         "seatedPrayer": "/textures/characters/jobs/v4/shepherd-seatedPrayer.png",
         "praying": "/textures/characters/jobs/v4/shepherd-praying.png",
         "treeFelling": "/textures/characters/jobs/v4/shepherd-treeFelling.png",
@@ -659,7 +657,9 @@
         "carrying": "/textures/characters/jobs/v4/shepherd-carrying.png",
         "hoisting": "/textures/characters/jobs/v4/shepherd-hoisting.png",
         "procession": "/textures/characters/jobs/v4/shepherd-procession.png",
-        "preaching": "/textures/characters/jobs/v4/shepherd-preaching.png"
+        "preaching": "/textures/characters/jobs/v4/shepherd-preaching.png",
+        "drinking": "/textures/characters/jobs/v4/shepherd-drinking.png",
+        "drinkingLow": "/textures/characters/jobs/v4/shepherd-drinkingLow.png"
       },
       "designs": [
         {
@@ -933,10 +933,10 @@
         "wearyWalk": "/textures/characters/jobs/v4/shepherd-depth-wearyWalk.png",
         "sleeping": "/textures/characters/jobs/v4/shepherd-depth-sleeping.png",
         "sitting": "/textures/characters/jobs/v4/shepherd-depth-sitting.png",
-        "seatedMeal": "/textures/characters/jobs/v4/shepherd-depth-seatedMeal.png",
-        "seatedDrink": "/textures/characters/jobs/v4/shepherd-depth-seatedDrink.png",
         "seatedPrayer": "/textures/characters/jobs/v4/shepherd-depth-seatedPrayer.png",
         "praying": "/textures/characters/jobs/v4/shepherd-depth-praying.png",
+        "drinking": "/textures/characters/jobs/v4/shepherd-depth-drinking.png",
+        "drinkingLow": "/textures/characters/jobs/v4/shepherd-depth-drinkingLow.png",
         "preaching": "/textures/characters/jobs/v4/shepherd-depth-preaching.png",
         "treeFelling": "/textures/characters/jobs/v4/shepherd-depth-treeFelling.png",
         "woodcutting": "/textures/characters/jobs/v4/shepherd-depth-woodcutting.png",
@@ -954,8 +954,6 @@
         "wearyWalk": "/textures/characters/jobs/v4/market-wearyWalk.png",
         "sleeping": "/textures/characters/jobs/v4/market-sleeping.png",
         "sitting": "/textures/characters/jobs/v4/market-sitting.png",
-        "seatedMeal": "/textures/characters/jobs/v4/market-seatedMeal.png",
-        "seatedDrink": "/textures/characters/jobs/v4/market-seatedDrink.png",
         "seatedPrayer": "/textures/characters/jobs/v4/market-seatedPrayer.png",
         "praying": "/textures/characters/jobs/v4/market-praying.png",
         "treeFelling": "/textures/characters/jobs/v4/market-treeFelling.png",
@@ -965,7 +963,9 @@
         "carrying": "/textures/characters/jobs/v4/market-carrying.png",
         "hoisting": "/textures/characters/jobs/v4/market-hoisting.png",
         "procession": "/textures/characters/jobs/v4/market-procession.png",
-        "preaching": "/textures/characters/jobs/v4/market-preaching.png"
+        "preaching": "/textures/characters/jobs/v4/market-preaching.png",
+        "drinking": "/textures/characters/jobs/v4/market-drinking.png",
+        "drinkingLow": "/textures/characters/jobs/v4/market-drinkingLow.png"
       },
       "designs": [
         {
@@ -1239,10 +1239,10 @@
         "wearyWalk": "/textures/characters/jobs/v4/market-depth-wearyWalk.png",
         "sleeping": "/textures/characters/jobs/v4/market-depth-sleeping.png",
         "sitting": "/textures/characters/jobs/v4/market-depth-sitting.png",
-        "seatedMeal": "/textures/characters/jobs/v4/market-depth-seatedMeal.png",
-        "seatedDrink": "/textures/characters/jobs/v4/market-depth-seatedDrink.png",
         "seatedPrayer": "/textures/characters/jobs/v4/market-depth-seatedPrayer.png",
         "praying": "/textures/characters/jobs/v4/market-depth-praying.png",
+        "drinking": "/textures/characters/jobs/v4/market-depth-drinking.png",
+        "drinkingLow": "/textures/characters/jobs/v4/market-depth-drinkingLow.png",
         "preaching": "/textures/characters/jobs/v4/market-depth-preaching.png",
         "treeFelling": "/textures/characters/jobs/v4/market-depth-treeFelling.png",
         "woodcutting": "/textures/characters/jobs/v4/market-depth-woodcutting.png",
@@ -1262,8 +1262,6 @@
       "wearyWalk": "/textures/characters/jobs/v4/shadow-wearyWalk.png",
       "sleeping": "/textures/characters/jobs/v4/shadow-sleeping.png",
       "sitting": "/textures/characters/jobs/v4/shadow-sitting.png",
-      "seatedMeal": "/textures/characters/jobs/v4/shadow-seatedMeal.png",
-      "seatedDrink": "/textures/characters/jobs/v4/shadow-seatedDrink.png",
       "seatedPrayer": "/textures/characters/jobs/v4/shadow-seatedPrayer.png",
       "praying": "/textures/characters/jobs/v4/shadow-praying.png",
       "treeFelling": "/textures/characters/jobs/v4/shadow-treeFelling.png",
@@ -1273,7 +1271,9 @@
       "carrying": "/textures/characters/jobs/v4/shadow-carrying.png",
       "hoisting": "/textures/characters/jobs/v4/shadow-hoisting.png",
       "procession": "/textures/characters/jobs/v4/shadow-procession.png",
-      "preaching": "/textures/characters/jobs/v4/shadow-preaching.png"
+      "preaching": "/textures/characters/jobs/v4/shadow-preaching.png",
+      "drinking": "/textures/characters/jobs/v4/shadow-drinking.png",
+      "drinkingLow": "/textures/characters/jobs/v4/shadow-drinkingLow.png"
     }
   },
   "strideRatios": [

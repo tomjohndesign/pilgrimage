@@ -1,6 +1,6 @@
 import { expect, it } from "vitest"
 import sharp from "sharp"
-import manifest from "../../../public/textures/characters/minstrel/v6/manifest.json"
+import manifest from "../../../public/textures/characters/minstrel/v7/manifest.json"
 import { BASE_PERSON } from "../base-person/pose"
 import { MINSTREL_PLAYING } from "./assets"
 

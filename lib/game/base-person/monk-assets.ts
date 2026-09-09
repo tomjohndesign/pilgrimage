@@ -1,6 +1,6 @@
-import greyManifest from "../../../public/textures/characters/monks/v43/manifest.json"
+import greyManifest from "../../../public/textures/characters/monks/v45/manifest.json"
 import { GREY_HAIR_AGE } from "../character-age"
-import manifest from "../../../public/textures/characters/monks/v42/manifest.json"
+import manifest from "../../../public/textures/characters/monks/v44/manifest.json"
 import { DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE, personWalkStride, walkSpeedScale } from "./gait"
 import { actionPlaybackRate } from "./activity"
 import { ACTION_CLIPS, BASE_PERSON } from "./pose"

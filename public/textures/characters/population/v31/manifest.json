@@ -8,10 +8,10 @@
     "wearyWalk": 20,
     "sleeping": 16,
     "sitting": 8,
-    "seatedMeal": 24,
-    "seatedDrink": 24,
     "seatedPrayer": 8,
     "praying": 8,
+    "drinking": 24,
+    "drinkingLow": 24,
     "preaching": 24,
     "treeFelling": 24,
     "woodcutting": 64,
@@ -21,7 +21,7 @@
     "hoisting": 16,
     "procession": 20
   },
-  "templateVersion": 33,
+  "templateVersion": 34,
   "cellSize": 64,
   "anchor": [
     32,
@@ -36,8 +36,6 @@
         "wearyWalk": "/textures/characters/population/v31/peasant-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/peasant-sleeping.png",
         "sitting": "/textures/characters/population/v31/peasant-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/peasant-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/peasant-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/peasant-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/peasant-praying.png",
         "treeFelling": "/textures/characters/population/v31/peasant-treeFelling.png",
@@ -47,7 +45,9 @@
         "carrying": "/textures/characters/population/v31/peasant-carrying.png",
         "hoisting": "/textures/characters/population/v31/peasant-hoisting.png",
         "procession": "/textures/characters/population/v31/peasant-procession.png",
-        "preaching": "/textures/characters/population/v31/peasant-preaching.png"
+        "preaching": "/textures/characters/population/v31/peasant-preaching.png",
+        "drinking": "/textures/characters/population/v31/peasant-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/peasant-drinkingLow.png"
       },
       "designs": [
         {
@@ -321,10 +321,10 @@
         "wearyWalk": "/textures/characters/population/v31/peasant-depth-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/peasant-depth-sleeping.png",
         "sitting": "/textures/characters/population/v31/peasant-depth-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/peasant-depth-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/peasant-depth-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/peasant-depth-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/peasant-depth-praying.png",
+        "drinking": "/textures/characters/population/v31/peasant-depth-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/peasant-depth-drinkingLow.png",
         "preaching": "/textures/characters/population/v31/peasant-depth-preaching.png",
         "treeFelling": "/textures/characters/population/v31/peasant-depth-treeFelling.png",
         "woodcutting": "/textures/characters/population/v31/peasant-depth-woodcutting.png",
@@ -342,8 +342,6 @@
         "wearyWalk": "/textures/characters/population/v31/pilgrim-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/pilgrim-sleeping.png",
         "sitting": "/textures/characters/population/v31/pilgrim-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/pilgrim-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/pilgrim-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/pilgrim-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/pilgrim-praying.png",
         "treeFelling": "/textures/characters/population/v31/pilgrim-treeFelling.png",
@@ -353,7 +351,9 @@
         "carrying": "/textures/characters/population/v31/pilgrim-carrying.png",
         "hoisting": "/textures/characters/population/v31/pilgrim-hoisting.png",
         "procession": "/textures/characters/population/v31/pilgrim-procession.png",
-        "preaching": "/textures/characters/population/v31/pilgrim-preaching.png"
+        "preaching": "/textures/characters/population/v31/pilgrim-preaching.png",
+        "drinking": "/textures/characters/population/v31/pilgrim-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/pilgrim-drinkingLow.png"
       },
       "designs": [
         {
@@ -627,10 +627,10 @@
         "wearyWalk": "/textures/characters/population/v31/pilgrim-depth-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/pilgrim-depth-sleeping.png",
         "sitting": "/textures/characters/population/v31/pilgrim-depth-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/pilgrim-depth-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/pilgrim-depth-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/pilgrim-depth-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/pilgrim-depth-praying.png",
+        "drinking": "/textures/characters/population/v31/pilgrim-depth-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/pilgrim-depth-drinkingLow.png",
         "preaching": "/textures/characters/population/v31/pilgrim-depth-preaching.png",
         "treeFelling": "/textures/characters/population/v31/pilgrim-depth-treeFelling.png",
         "woodcutting": "/textures/characters/population/v31/pilgrim-depth-woodcutting.png",
@@ -648,8 +648,6 @@
         "wearyWalk": "/textures/characters/population/v31/merchant-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/merchant-sleeping.png",
         "sitting": "/textures/characters/population/v31/merchant-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/merchant-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/merchant-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/merchant-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/merchant-praying.png",
         "treeFelling": "/textures/characters/population/v31/merchant-treeFelling.png",
@@ -659,7 +657,9 @@
         "carrying": "/textures/characters/population/v31/merchant-carrying.png",
         "hoisting": "/textures/characters/population/v31/merchant-hoisting.png",
         "procession": "/textures/characters/population/v31/merchant-procession.png",
-        "preaching": "/textures/characters/population/v31/merchant-preaching.png"
+        "preaching": "/textures/characters/population/v31/merchant-preaching.png",
+        "drinking": "/textures/characters/population/v31/merchant-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/merchant-drinkingLow.png"
       },
       "designs": [
         {
@@ -933,10 +933,10 @@
         "wearyWalk": "/textures/characters/population/v31/merchant-depth-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/merchant-depth-sleeping.png",
         "sitting": "/textures/characters/population/v31/merchant-depth-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/merchant-depth-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/merchant-depth-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/merchant-depth-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/merchant-depth-praying.png",
+        "drinking": "/textures/characters/population/v31/merchant-depth-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/merchant-depth-drinkingLow.png",
         "preaching": "/textures/characters/population/v31/merchant-depth-preaching.png",
         "treeFelling": "/textures/characters/population/v31/merchant-depth-treeFelling.png",
         "woodcutting": "/textures/characters/population/v31/merchant-depth-woodcutting.png",
@@ -954,8 +954,6 @@
         "wearyWalk": "/textures/characters/population/v31/friar-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/friar-sleeping.png",
         "sitting": "/textures/characters/population/v31/friar-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/friar-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/friar-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/friar-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/friar-praying.png",
         "treeFelling": "/textures/characters/population/v31/friar-treeFelling.png",
@@ -965,7 +963,9 @@
         "carrying": "/textures/characters/population/v31/friar-carrying.png",
         "hoisting": "/textures/characters/population/v31/friar-hoisting.png",
         "procession": "/textures/characters/population/v31/friar-procession.png",
-        "preaching": "/textures/characters/population/v31/friar-preaching.png"
+        "preaching": "/textures/characters/population/v31/friar-preaching.png",
+        "drinking": "/textures/characters/population/v31/friar-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/friar-drinkingLow.png"
       },
       "designs": [
         {
@@ -1239,10 +1239,10 @@
         "wearyWalk": "/textures/characters/population/v31/friar-depth-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/friar-depth-sleeping.png",
         "sitting": "/textures/characters/population/v31/friar-depth-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/friar-depth-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/friar-depth-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/friar-depth-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/friar-depth-praying.png",
+        "drinking": "/textures/characters/population/v31/friar-depth-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/friar-depth-drinkingLow.png",
         "preaching": "/textures/characters/population/v31/friar-depth-preaching.png",
         "treeFelling": "/textures/characters/population/v31/friar-depth-treeFelling.png",
         "woodcutting": "/textures/characters/population/v31/friar-depth-woodcutting.png",
@@ -1260,8 +1260,6 @@
         "wearyWalk": "/textures/characters/population/v31/knight-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/knight-sleeping.png",
         "sitting": "/textures/characters/population/v31/knight-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/knight-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/knight-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/knight-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/knight-praying.png",
         "treeFelling": "/textures/characters/population/v31/knight-treeFelling.png",
@@ -1271,7 +1269,9 @@
         "carrying": "/textures/characters/population/v31/knight-carrying.png",
         "hoisting": "/textures/characters/population/v31/knight-hoisting.png",
         "procession": "/textures/characters/population/v31/knight-procession.png",
-        "preaching": "/textures/characters/population/v31/knight-preaching.png"
+        "preaching": "/textures/characters/population/v31/knight-preaching.png",
+        "drinking": "/textures/characters/population/v31/knight-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/knight-drinkingLow.png"
       },
       "designs": [
         {
@@ -1545,10 +1545,10 @@
         "wearyWalk": "/textures/characters/population/v31/knight-depth-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/knight-depth-sleeping.png",
         "sitting": "/textures/characters/population/v31/knight-depth-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/knight-depth-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/knight-depth-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/knight-depth-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/knight-depth-praying.png",
+        "drinking": "/textures/characters/population/v31/knight-depth-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/knight-depth-drinkingLow.png",
         "preaching": "/textures/characters/population/v31/knight-depth-preaching.png",
         "treeFelling": "/textures/characters/population/v31/knight-depth-treeFelling.png",
         "woodcutting": "/textures/characters/population/v31/knight-depth-woodcutting.png",
@@ -1566,8 +1566,6 @@
         "wearyWalk": "/textures/characters/population/v31/minstrel-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/minstrel-sleeping.png",
         "sitting": "/textures/characters/population/v31/minstrel-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/minstrel-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/minstrel-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/minstrel-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/minstrel-praying.png",
         "treeFelling": "/textures/characters/population/v31/minstrel-treeFelling.png",
@@ -1577,7 +1575,9 @@
         "carrying": "/textures/characters/population/v31/minstrel-carrying.png",
         "hoisting": "/textures/characters/population/v31/minstrel-hoisting.png",
         "procession": "/textures/characters/population/v31/minstrel-procession.png",
-        "preaching": "/textures/characters/population/v31/minstrel-preaching.png"
+        "preaching": "/textures/characters/population/v31/minstrel-preaching.png",
+        "drinking": "/textures/characters/population/v31/minstrel-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/minstrel-drinkingLow.png"
       },
       "designs": [
         {
@@ -1851,10 +1851,10 @@
         "wearyWalk": "/textures/characters/population/v31/minstrel-depth-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/minstrel-depth-sleeping.png",
         "sitting": "/textures/characters/population/v31/minstrel-depth-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/minstrel-depth-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/minstrel-depth-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/minstrel-depth-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/minstrel-depth-praying.png",
+        "drinking": "/textures/characters/population/v31/minstrel-depth-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/minstrel-depth-drinkingLow.png",
         "preaching": "/textures/characters/population/v31/minstrel-depth-preaching.png",
         "treeFelling": "/textures/characters/population/v31/minstrel-depth-treeFelling.png",
         "woodcutting": "/textures/characters/population/v31/minstrel-depth-woodcutting.png",
@@ -1872,8 +1872,6 @@
         "wearyWalk": "/textures/characters/population/v31/beggar-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/beggar-sleeping.png",
         "sitting": "/textures/characters/population/v31/beggar-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/beggar-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/beggar-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/beggar-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/beggar-praying.png",
         "treeFelling": "/textures/characters/population/v31/beggar-treeFelling.png",
@@ -1883,7 +1881,9 @@
         "carrying": "/textures/characters/population/v31/beggar-carrying.png",
         "hoisting": "/textures/characters/population/v31/beggar-hoisting.png",
         "procession": "/textures/characters/population/v31/beggar-procession.png",
-        "preaching": "/textures/characters/population/v31/beggar-preaching.png"
+        "preaching": "/textures/characters/population/v31/beggar-preaching.png",
+        "drinking": "/textures/characters/population/v31/beggar-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/beggar-drinkingLow.png"
       },
       "designs": [
         {
@@ -2157,10 +2157,10 @@
         "wearyWalk": "/textures/characters/population/v31/beggar-depth-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/beggar-depth-sleeping.png",
         "sitting": "/textures/characters/population/v31/beggar-depth-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/beggar-depth-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/beggar-depth-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/beggar-depth-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/beggar-depth-praying.png",
+        "drinking": "/textures/characters/population/v31/beggar-depth-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/beggar-depth-drinkingLow.png",
         "preaching": "/textures/characters/population/v31/beggar-depth-preaching.png",
         "treeFelling": "/textures/characters/population/v31/beggar-depth-treeFelling.png",
         "woodcutting": "/textures/characters/population/v31/beggar-depth-woodcutting.png",
@@ -2178,8 +2178,6 @@
         "wearyWalk": "/textures/characters/population/v31/vendor-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/vendor-sleeping.png",
         "sitting": "/textures/characters/population/v31/vendor-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/vendor-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/vendor-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/vendor-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/vendor-praying.png",
         "treeFelling": "/textures/characters/population/v31/vendor-treeFelling.png",
@@ -2189,7 +2187,9 @@
         "carrying": "/textures/characters/population/v31/vendor-carrying.png",
         "hoisting": "/textures/characters/population/v31/vendor-hoisting.png",
         "procession": "/textures/characters/population/v31/vendor-procession.png",
-        "preaching": "/textures/characters/population/v31/vendor-preaching.png"
+        "preaching": "/textures/characters/population/v31/vendor-preaching.png",
+        "drinking": "/textures/characters/population/v31/vendor-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/vendor-drinkingLow.png"
       },
       "designs": [
         {
@@ -2463,10 +2463,10 @@
         "wearyWalk": "/textures/characters/population/v31/vendor-depth-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/vendor-depth-sleeping.png",
         "sitting": "/textures/characters/population/v31/vendor-depth-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/vendor-depth-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/vendor-depth-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/vendor-depth-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/vendor-depth-praying.png",
+        "drinking": "/textures/characters/population/v31/vendor-depth-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/vendor-depth-drinkingLow.png",
         "preaching": "/textures/characters/population/v31/vendor-depth-preaching.png",
         "treeFelling": "/textures/characters/population/v31/vendor-depth-treeFelling.png",
         "woodcutting": "/textures/characters/population/v31/vendor-depth-woodcutting.png",
@@ -2486,8 +2486,6 @@
         "wearyWalk": "/textures/characters/population/v31/knight-grey-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/knight-grey-sleeping.png",
         "sitting": "/textures/characters/population/v31/knight-grey-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/knight-grey-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/knight-grey-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/knight-grey-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/knight-grey-praying.png",
         "treeFelling": "/textures/characters/population/v31/knight-grey-treeFelling.png",
@@ -2497,7 +2495,9 @@
         "carrying": "/textures/characters/population/v31/knight-grey-carrying.png",
         "hoisting": "/textures/characters/population/v31/knight-grey-hoisting.png",
         "procession": "/textures/characters/population/v31/knight-grey-procession.png",
-        "preaching": "/textures/characters/population/v31/knight-grey-preaching.png"
+        "preaching": "/textures/characters/population/v31/knight-grey-preaching.png",
+        "drinking": "/textures/characters/population/v31/knight-grey-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/knight-grey-drinkingLow.png"
       },
       "designs": [
         {
@@ -2771,10 +2771,10 @@
         "wearyWalk": "/textures/characters/population/v31/knight-grey-depth-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/knight-grey-depth-sleeping.png",
         "sitting": "/textures/characters/population/v31/knight-grey-depth-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/knight-grey-depth-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/knight-grey-depth-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/knight-grey-depth-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/knight-grey-depth-praying.png",
+        "drinking": "/textures/characters/population/v31/knight-grey-depth-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/knight-grey-depth-drinkingLow.png",
         "preaching": "/textures/characters/population/v31/knight-grey-depth-preaching.png",
         "treeFelling": "/textures/characters/population/v31/knight-grey-depth-treeFelling.png",
         "woodcutting": "/textures/characters/population/v31/knight-grey-depth-woodcutting.png",
@@ -2792,8 +2792,6 @@
         "wearyWalk": "/textures/characters/population/v31/friar-grey-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/friar-grey-sleeping.png",
         "sitting": "/textures/characters/population/v31/friar-grey-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/friar-grey-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/friar-grey-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/friar-grey-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/friar-grey-praying.png",
         "treeFelling": "/textures/characters/population/v31/friar-grey-treeFelling.png",
@@ -2803,7 +2801,9 @@
         "carrying": "/textures/characters/population/v31/friar-grey-carrying.png",
         "hoisting": "/textures/characters/population/v31/friar-grey-hoisting.png",
         "procession": "/textures/characters/population/v31/friar-grey-procession.png",
-        "preaching": "/textures/characters/population/v31/friar-grey-preaching.png"
+        "preaching": "/textures/characters/population/v31/friar-grey-preaching.png",
+        "drinking": "/textures/characters/population/v31/friar-grey-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/friar-grey-drinkingLow.png"
       },
       "designs": [
         {
@@ -3077,10 +3077,10 @@
         "wearyWalk": "/textures/characters/population/v31/friar-grey-depth-wearyWalk.png",
         "sleeping": "/textures/characters/population/v31/friar-grey-depth-sleeping.png",
         "sitting": "/textures/characters/population/v31/friar-grey-depth-sitting.png",
-        "seatedMeal": "/textures/characters/population/v31/friar-grey-depth-seatedMeal.png",
-        "seatedDrink": "/textures/characters/population/v31/friar-grey-depth-seatedDrink.png",
         "seatedPrayer": "/textures/characters/population/v31/friar-grey-depth-seatedPrayer.png",
         "praying": "/textures/characters/population/v31/friar-grey-depth-praying.png",
+        "drinking": "/textures/characters/population/v31/friar-grey-depth-drinking.png",
+        "drinkingLow": "/textures/characters/population/v31/friar-grey-depth-drinkingLow.png",
         "preaching": "/textures/characters/population/v31/friar-grey-depth-preaching.png",
         "treeFelling": "/textures/characters/population/v31/friar-grey-depth-treeFelling.png",
         "woodcutting": "/textures/characters/population/v31/friar-grey-depth-woodcutting.png",
@@ -3099,8 +3099,6 @@
       "wearyWalk": "/textures/characters/population/v31/shadow-wearyWalk.png",
       "sleeping": "/textures/characters/population/v31/shadow-sleeping.png",
       "sitting": "/textures/characters/population/v31/shadow-sitting.png",
-      "seatedMeal": "/textures/characters/population/v31/shadow-seatedMeal.png",
-      "seatedDrink": "/textures/characters/population/v31/shadow-seatedDrink.png",
       "seatedPrayer": "/textures/characters/population/v31/shadow-seatedPrayer.png",
       "praying": "/textures/characters/population/v31/shadow-praying.png",
       "treeFelling": "/textures/characters/population/v31/shadow-treeFelling.png",
@@ -3110,7 +3108,9 @@
       "carrying": "/textures/characters/population/v31/shadow-carrying.png",
       "hoisting": "/textures/characters/population/v31/shadow-hoisting.png",
       "procession": "/textures/characters/population/v31/shadow-procession.png",
-      "preaching": "/textures/characters/population/v31/shadow-preaching.png"
+      "preaching": "/textures/characters/population/v31/shadow-preaching.png",
+      "drinking": "/textures/characters/population/v31/shadow-drinking.png",
+      "drinkingLow": "/textures/characters/population/v31/shadow-drinkingLow.png"
     }
   },
   "strideRatios": [
