@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "433730360406c5caa8940556f5d8d49670c3b749",
-  "releaseCount": 167,
+  "lastProcessedCommit": "50164945cc11879f29c8827a188a276fc8633623",
+  "releaseCount": 168,
   "releases": [
+    {
+      "version": "0.0.182",
+      "title": "Release 0.0.182",
+      "summary": "Analytic wildlife hide normals and a corrected party performance note (#202)",
+      "commit": "50164945cc11879f29c8827a188a276fc8633623"
+    },
     {
       "version": "0.0.181",
       "title": "Release 0.0.181",
