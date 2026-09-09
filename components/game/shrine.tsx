@@ -32,20 +32,21 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
   const relicGroup = useRef<THREE.Group>(null)
   const veilGroup = useRef<THREE.Group>(null)
   const lights = useRef<THREE.Group>(null)
+  const relicSelected = useCameraStore(s => isSelected(s.selection, { kind: "relic" }))
+  const buildingSelected = useCameraStore(s => isSelected(s.selection, { kind: "building", id: map.site?.hovelId ?? "" }))
   useFrame(({ scene }) => {
     const near = sceneryDetail(scene) === 0
     if (lights.current) lights.current.visible = near
     const sim = simRegistry.current
     const available = !processionRegistry.current || !relicIsCarried(processionRegistry.current)
-    const showing = available && sim && sim.world.road === map.road && sim.shrineKeeperReady
-      && [...sim.travelers.values()].some(s => s.activity === "visiting" && s.shrineSeat?.startsWith("queue-"))
-    if (relicGroup.current) relicGroup.current.visible = near && !!showing
+    const showing = relicSelected || (available && sim && sim.world.road === map.road && sim.shrineKeeperReady
+      && [...sim.travelers.values()].some(s => s.activity === "visiting" && s.shrineSeat?.startsWith("queue-")))
+    if (relicGroup.current) relicGroup.current.visible = near && available && !!showing
     if (veilGroup.current) {
       veilGroup.current.scale.y = showing ? .16 : 1
       veilGroup.current.position.y = RELIC_TABLE_TOP * (1 - veilGroup.current.scale.y)
     }
   })
-  const selected = useCameraStore(s => isSelected(s.selection, { kind: "relic" }) || isSelected(s.selection, { kind: "building", id: map.site?.hovelId ?? "" }))
   const hovelIndex = map.buildings.findIndex((b) => b.id === map.site?.hovelId)
   const hovel = hovelIndex >= 0 ? map.buildings[hovelIndex] : null
 
@@ -53,9 +54,12 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
     if (!hovel || !map.site) return null
     const shape = shrineLayout(hovel, map.site.door)
     const parts = shrineStructureParts(shape.width, shape.depth)
+    const isAltar = (name: string) => name === "relic-table" || name === "relic-shelf"
+      || name === "altar-linen-top" || name.startsWith("table-trestle-")
     return {
       ...shape,
-      parts: parts.filter(p => !p.name.startsWith("relic-veil-")),
+      parts: parts.filter(p => !p.name.startsWith("relic-veil-") && !isAltar(p.name)),
+      altar: parts.filter(p => isAltar(p.name)),
       veil: parts.filter(p => p.name.startsWith("relic-veil-")),
       centreX: tileToWorldX(map, hovel.x) + (hovel.w - 1) / 2,
       centreZ: tileToWorldZ(map, hovel.z) + (hovel.d - 1) / 2,
@@ -76,8 +80,11 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
   return (
     <group position={[layout.centreX, layout.baseY, layout.centreZ]}>
       <group rotation={[0, layout.rotation, 0]} onClick={event => selectElement({ kind: "building", id: hovel.id }, event)}>
-        <StructureModel terrainFloors parts={layout.parts} cutaway={showInteriors || selected || unitInterior === hovel.id} idColor={shrineId} ink={false} />
-        <group ref={veilGroup}><StructureModel parts={layout.veil} cutaway idColor={shrineId} ink={false} /></group>
+        <StructureModel terrainFloors parts={layout.parts} cutaway={showInteriors || relicSelected || buildingSelected || unitInterior === hovel.id} idColor={shrineId} ink={false} />
+        <group name="relic-altar">
+          <StructureModel parts={layout.altar} cutaway idColor={relicId} onClick={select} ink={false} />
+          <group ref={veilGroup}><StructureModel parts={layout.veil} cutaway dynamic idColor={relicId} onClick={select} ink={false} /></group>
+        </group>
         <group ref={lights} name="shrine-lights">{[-1,1].map(side => <pointLight key={side} position={[side*.73,.8,layout.altarZ+.08]} color="#ffd184" intensity={.18} distance={1.8} decay={2} />)}</group>
       </group>
       <group ref={relicGroup} position={[layout.offset.x,0,layout.offset.z]}><RelicDisplay groundGlow={false} color={relic.color} idColor={relicId} onClick={select} /></group>
