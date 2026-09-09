@@ -24,17 +24,28 @@ export function PartyTransportFigures({ handlers, sim, map, travelers, character
   handlers: RefObject<Array<THREE.Group | null>>; sim: SimState; map: GameMap; travelers: Traveler[]; characterScale: number
 }) {
   const cull = useMemo(() => ({ frustum: new THREE.Frustum(), matrix: new THREE.Matrix4(), bounds: new THREE.Sphere(new THREE.Vector3(), 24) }), [])
-  const [parties, setParties] = useState<TravelParty[]>([]), signature = useRef("")
+  const [parties, setParties] = useState<TravelParty[]>([])
+  const mounted = useRef(new Map<number, string>())
   useFrame(({ camera }) => {
     cull.frustum.setFromProjectionMatrix(cull.matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse))
-    const visible = [...sim.parties.values()].filter(p => {
+    // Mount companies near the view and keep them until they are well outside it,
+    // so a column crossing the edge does not rebuild its sprites every frame.
+    let changed = false
+    const visible: TravelParty[] = []
+    for (const p of sim.parties.values()) {
       const point = p.transport?.pose ?? p.packs?.[0]?.pose
-      if (!point) return false
+      if (!point) continue
+      const seats = p.transport?.seats.join(",") ?? ""
+      const known = mounted.current.get(p.id)
       cull.bounds.center.set(point.x, walkingSurface(map, point.x, point.z).height, point.z)
-      return cull.frustum.intersectsSphere(cull.bounds)
-    })
-    const next = visible.map(p => `${p.id}:${p.transport?.seats.join(",") ?? ""}`).join(";")
-    if (signature.current !== next) { signature.current = next; setParties(visible) }
+      cull.bounds.radius = known === undefined ? 24 : 48
+      if (!cull.frustum.intersectsSphere(cull.bounds)) continue
+      if (known !== seats) changed = true
+      visible.push(p)
+    }
+    if (!changed && visible.length === mounted.current.size) return
+    mounted.current = new Map(visible.map(p => [p.id, p.transport?.seats.join(",") ?? ""]))
+    setParties(visible)
   }, -2.9)
   return <Suspense fallback={null}>{parties.map(party => <PartyFigure key={party.id} {...{ handlers, party, sim, map, travelers, characterScale }} />)}</Suspense>
 }

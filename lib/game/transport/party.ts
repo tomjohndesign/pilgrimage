@@ -1,7 +1,7 @@
 import type { GameMap } from "../map/types"
 import type { SimTraveler } from "../sim"
 import type { TravelParty } from "../travel-parties"
-import { partyRoadDelta, partyFormation } from "../travel-parties"
+import { diversionPoints, partyRoadDelta } from "../travel-parties"
 import { deriveSeed, makeRng } from "../rng"
 import { animalWalkSpeed, cartOffset, type Animal } from "./assets"
 import { roadCartPose } from "./bridge-guide"
@@ -42,11 +42,11 @@ export function ensurePartyTransport(party: TravelParty, members: SimTraveler[],
   const loadout = partyLoadout(party.id, members.length), leader = members[0]
   if (loadout.cart) {
     const { style, animal } = loadout.cart, wheelbase = -cartOffset(animal) * scale
-    const pose = roadCartPose(map, leader.progress, party.direction, wheelbase, scale)
+    const pose = roadCartPose(map, party.progress, party.direction, wheelbase, scale)
     // An obstructed initial position keeps this company on foot.
     if (convoyBuildingsClear(map, pose, animal, scale)) {
       party.transport = { style, animal, seats: members.slice(0, Math.min(style === "rear" ? 6 : 2, members.length - 1)).map(s => s.id),
-        phase: "road", pose, progress: leader.progress, distance: 0, animalDistance: 0, animalHeading: pose.heading, retry: 0 }
+        phase: "road", pose, progress: party.progress, distance: 0, animalDistance: 0, animalHeading: pose.heading, retry: 0 }
       boardParty(party, members, scale)
     }
   }
@@ -55,6 +55,7 @@ export function ensurePartyTransport(party: TravelParty, members: SimTraveler[],
     const progress = advanceCartProgress(map, handler.progress, -party.direction * 1.1 * scale)
     return { kind, handler: handler.id, progress, pose: roadCartPose(map, progress, party.direction, 0, scale), distance: 0 }
   })
+  void leader
 }
 export function seatParty(party: TravelParty, members: SimTraveler[], scale: number) {
   const cart = party.transport
@@ -82,29 +83,50 @@ export function parkParty(party: TravelParty, map: GameMap, scale: number, trees
   party.reason = "Pulling off the road together"
   return true
 }
-/** Move only on the existing cart curves and validated parking routes. Distances
- * belong to axle and animal separately, keeping wheel roll and hoof plants honest. */
-export function movePartyCart(party: TravelParty, map: GameMap, scale: number, speed: number, dt: number) {
+/** Turn the wagon on the spot to face the company's new direction. */
+export function turnPartyCart(party: TravelParty, map: GameMap, scale: number) {
+  const cart = party.transport
+  if (!cart || cart.phase !== "road") return
+  cart.pose = roadCartPose(map, cart.progress, party.direction, -cartOffset(cart.animal) * scale, scale)
+  cart.animalHeading = cart.pose.heading
+}
+/** Move only on the existing cart curves, the company's shared detour and validated
+ * parking routes. Distances belong to axle and animal separately, keeping wheel
+ * roll and hoof plants honest. Returns whether a maneuver finished, or on the
+ * road, whether the wagon could advance at all. */
+export function movePartyCart(party: TravelParty, map: GameMap, scale: number, speed: number, dt: number): boolean {
   const cart = party.transport!
   cart.distance = cart.animalDistance = 0
   if (dt <= 0 || !["road", "parking", "leaving"].includes(cart.phase)) return false
   const wheelbase = -cartOffset(cart.animal) * scale, previous = cart.pose
   let pose: CartPose, progress = cart.progress, done = false, routeDistance = 0
   const travel = Math.min(speed, animalWalkSpeed(cart.animal, scale)) * dt
+  if (travel <= 0 && cart.phase === "road") return true
   if (cart.phase === "road") {
-    progress = advanceCartProgress(map, cart.progress, party.direction * travel)
-    const length = map.road!.length - 1
-    const wrapped = progress < 0 || progress >= length
-    progress = ((progress % length) + length) % length
-    pose = roadCartPose(map, progress, party.direction, wheelbase, scale, wrapped ? undefined : previous)
+    const length = map.road!.length - 1, cut = party.diversion
+    const span = cut ? party.direction * (cut.end - cut.start) : 0
+    const along = cut && span > 0 ? party.direction * partyRoadDelta(cart.progress, cut.start, length) / span : -1
+    if (cut && along >= -1e-9 && along < 1) {
+      // The detour was planned around the footprint for the whole company; the
+      // wagon follows the same points, keeping road progress in step with them.
+      const distance = Math.min(cut.length, Math.max(0, along) * cut.length + travel)
+      pose = followCart(previous, routePoint(diversionPoints(cut), distance), wheelbase)
+      progress = distance >= cut.length ? ((cut.end % length) + length) % length
+        : ((cut.start + party.direction * distance / cut.length * span) % length + length) % length
+    } else {
+      progress = advanceCartProgress(map, cart.progress, party.direction * travel)
+      const wrapped = progress < 0 || progress >= length
+      progress = ((progress % length) + length) % length
+      pose = roadCartPose(map, progress, party.direction, wheelbase, scale, wrapped ? undefined : previous)
+      if (!convoyBuildingsClear(map, pose, cart.animal, scale)) return false
+    }
   } else {
     const parking = cart.parking!, route = cart.phase === "parking" ? parking.entry : parking.exit
     routeDistance = Math.min(routeLength(route), parking.distance + travel)
     pose = followCart(previous, routePoint(route, routeDistance), wheelbase)
     done = routeDistance >= routeLength(route) - 1e-6
+    if (!parkingClear(map, pose, cart.animal, scale, { trees: [] })) return false
   }
-  if (cart.phase === "road" ? !convoyBuildingsClear(map, pose, cart.animal, scale)
-    : !parkingClear(map, pose, cart.animal, scale, { trees: [] })) return false
   const animalDistance = Math.hypot(pose.hitch.x - previous.hitch.x, pose.hitch.z - previous.hitch.z)
   cart.animalHeading = animalDistance > 1e-7 ? Math.atan2(pose.hitch.x - previous.hitch.x, pose.hitch.z - previous.hitch.z) : cart.animalHeading
   cart.distance = pose.distance < 2 ? pose.distance : 0
@@ -113,42 +135,32 @@ export function movePartyCart(party: TravelParty, map: GameMap, scale: number, s
   if (cart.phase !== "road") cart.parking!.distance = routeDistance
   if (done && cart.phase === "parking") { cart.phase = "parked"; cart.parking!.distance = 0 }
   else if (done && cart.phase === "leaving") { cart.phase = "road"; cart.progress = cart.parking!.returnProgress; cart.parking = undefined }
-  return done
+  return cart.phase === "road" ? true : done
 }
 
 /** Pack handlers keep their animal in the following space reserved by partySlots.
- * At stops the load remains at the roadside with the animal; it never follows a
- * pedestrian shortcut through a building or teleports to its handler. */
+ * A formed company places the animal directly; after a stop it catches up at its
+ * own walking pace. At stops the load remains at the roadside with the animal; it
+ * never follows a pedestrian shortcut through a building or teleports to its handler. */
 export function stepPartyPacks(party: TravelParty, states: ReadonlyMap<number, SimTraveler>, map: GameMap, scale: number, dt: number) {
+  const length = map.road!.length - 1
   for (const pack of party.packs ?? []) {
     pack.distance = 0
     if (!party.members.includes(pack.handler)) pack.handler = party.members.find(id => !party.packs?.some(p => p !== pack && p.handler === id)) ?? party.members[0]
     const handler = states.get(pack.handler)
     if (!handler || party.stage !== "traveling" || handler.activity !== "walking" || dt <= 0) continue
-    const target = advanceCartProgress(map, handler.progress, -party.direction * 1.1 * scale)
-    const gap = party.direction * partyRoadDelta(target, pack.progress, map.road!.length - 1)
-    const progress = advanceCartProgress(map, pack.progress, party.direction * Math.min(Math.max(0, gap), animalWalkSpeed(pack.kind, scale) * dt))
-    const length = map.road!.length - 1, wrapped = ((progress % length) + length) % length
+    const place = advanceCartProgress(map, handler.progress, -party.direction * 1.1 * scale)
+    let progress = place
+    if (!party.formed) {
+      const gap = party.direction * partyRoadDelta(place, pack.progress, length)
+      if (gap <= 0) continue
+      progress = advanceCartProgress(map, pack.progress, party.direction * Math.min(gap, animalWalkSpeed(pack.kind, scale) * dt))
+    }
+    const wrapped = ((progress % length) + length) % length
+    if (Math.abs(partyRoadDelta(wrapped, pack.progress, length)) < 1e-9) continue
     const pose = roadCartPose(map, wrapped, party.direction, 0, scale)
     if (!convoyBuildingsClear(map, pose, pack.kind, scale * 1.3)) continue
     pack.distance = Math.hypot(pose.hitch.x - pack.pose.hitch.x, pose.hitch.z - pack.pose.hitch.z)
     pack.pose = pose; pack.progress = wrapped
   }
-}
-
-/** Cap the cart against walkers' actual positions, including acceleration and
- * bends where cart-route distance differs from pedestrian road progress. */
-export function companyCartSpeed(party: TravelParty, members: SimTraveler[], map: GameMap, scale: number, seconds: number, requested: number, dt: number) {
-  const cart = party.transport!
-  const walkers = members.filter(s => !cart.seats.includes(s.id))
-  if (!walkers.length || dt <= 0) return requested
-  const slots = partyFormation(party, [cart.seats[0], ...walkers.map(s=>s.id)], map.road!.length-1, seconds, scale)
-  const clear = (speed: number) => {
-    const next = advanceCartProgress(map, cart.progress, party.direction * speed * dt)
-    return walkers.every((s,i) => party.direction * partyRoadDelta(next,s.progress,map.road!.length-1) <= slots[i+1].behind + .15 * scale)
-  }
-  if (clear(requested)) return requested
-  let lo=0, hi=requested
-  for(let i=0;i<12;i++) { const mid=(lo+hi)/2;if(clear(mid))lo=mid;else hi=mid }
-  return lo
 }
