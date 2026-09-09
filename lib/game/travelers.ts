@@ -179,10 +179,10 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
   },
 }
 
-/** Passing travelers start supplied for their own journey. */
-const HUNGER: StatRange = { min: 80, max: 100 }
-const THIRST: StatRange = { min: 80, max: 100 }
-const STAMINA: StatRange = { min: 40, max: 100 }
+/** Start fully supplied and rested; keep the rolls to preserve the seeded cast. */
+const HUNGER: StatRange = { min: 100, max: 100 }
+const THIRST: StatRange = { min: 100, max: 100 }
+const STAMINA: StatRange = { min: 100, max: 100 }
 
 const FIRST_NAMES = {
   Male: [

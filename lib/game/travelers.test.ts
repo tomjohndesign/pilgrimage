@@ -38,13 +38,14 @@ describe("generateTravelers", () => {
       expect(travelers.some(t => t.type.id === "vendor")).toBe(true)
     }
   })
-  it("starts passing travelers supplied for their own journey", () => {
+  it("starts every passing traveler fully fed, hydrated and rested", () => {
     for (const seed of [1, 42, 12345]) {
       for (const { attributes } of generateTravelers(seed, 100)) {
         expect(attributes.happiness).toBeGreaterThanOrEqual(60)
         expect(attributes.happiness).toBeLessThanOrEqual(90)
-        expect(attributes.hunger).toBeGreaterThanOrEqual(80)
-        expect(attributes.thirst).toBeGreaterThanOrEqual(80)
+        expect(attributes.hunger).toBe(100)
+        expect(attributes.thirst).toBe(100)
+        expect(attributes.stamina).toBe(100)
       }
     }
   })
