@@ -15,7 +15,9 @@ const BONE_RADIUS = 1.2
 /** Shared rig controls for every character family.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0
  */
-export function JointOverlay<J extends string>({ joints, selected, row, offset, onSelect, onChange, onDrag, bones, carried = [], labels, label = "Character rig" }: {
+export function JointOverlay<J extends string>({ joints, selected, row, offset, onSelect, onChange, onDrag, bones, carried = [], labels, label = "Character rig", dragScale = 1 }: {
+  /** Camera extent relative to the shared person's view, for larger character families. */
+  dragScale?: number
   bones: readonly [J, J][]; labels: Record<J, string>; label?: string
   /** Bones whose first joint carries the second: dragging the bone moves the first joint only, and the second follows. */
   carried?: readonly [J, J][]
@@ -23,7 +25,7 @@ export function JointOverlay<J extends string>({ joints, selected, row, offset, 
   onSelect: (joint: J) => void; onChange: (changes: [J, Point3][]) => void; onDrag: (active: boolean) => void
 }) {
   const drag = useRef<{ joints: [J, Point3][]; pointer: number; x: number; y: number; scale: number; pending: [number, number] | null; frame: number } | null>(null)
-  const live = useRef({ joints, row, onChange, onDrag }); live.current = { joints, row, onChange, onDrag }
+  const live = useRef({ joints, row, onChange, onDrag, dragScale }); live.current = { joints, row, onChange, onDrag, dragScale }
   const local = (svg: SVGSVGElement, clientX: number, clientY: number): [number, number, number] => {
     const box = svg.getBoundingClientRect(), scale = box.width / 64
     return [(clientX - box.left) / scale, (clientY - box.top) / scale, scale]
@@ -36,7 +38,7 @@ export function JointOverlay<J extends string>({ joints, selected, row, offset, 
     if (!start.pending) return
     const [x, y] = start.pending; start.pending = null
     const delta = rigDragDelta((x - start.x) / start.scale, (y - start.y) / start.scale, live.current.row)
-    live.current.onChange(start.joints.map(([joint, offset]) => [joint, offset.map((v, i) => Math.max(-MAX_POSE_OFFSET, Math.min(MAX_POSE_OFFSET, v + delta[i]))) as Point3]))
+    live.current.onChange(start.joints.map(([joint, offset]) => [joint, offset.map((v, i) => Math.max(-MAX_POSE_OFFSET, Math.min(MAX_POSE_OFFSET, v + delta[i] * live.current.dragScale))) as Point3]))
   }
   const finish = () => { if (drag.current) { cancelAnimationFrame(drag.current.frame); drag.current = null; live.current.onDrag(false) } }
   useEffect(() => finish, []) // Unmounting mid-drag still tells the owner the drag ended.

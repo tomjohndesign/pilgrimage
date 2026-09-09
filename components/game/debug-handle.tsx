@@ -342,7 +342,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
       ents: () => {
         const ents: EntState[] = []
         scene.traverse((object) => {
-          if (object.name === "ent-legs") ents.push(...object.userData.ents)
+          if (object.name === "ent-legs" || object.name === "ent-limbs") ents.push(...object.userData.ents)
         })
         return ents
       },
