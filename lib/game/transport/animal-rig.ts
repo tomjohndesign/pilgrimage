@@ -1,3 +1,5 @@
+import { createPackLoad } from "./pack-rig"
+import { createOxRig } from "./ox-rig"
 import { animalHead, bitLocal } from "./bridle"
 import { animalOffset, type AnimalRigEdits, type AnimalClip, type AnimalJoint } from "../wildlife/rig-edits"
 import { animalCoat } from "./coats"
@@ -7,7 +9,8 @@ import { animalLeg, animalMotion, spinePoint } from "./animal-pose"
 import { model, loft, type CrossSection, type Point } from "./geometry"
 
 /** A shaped rib cage and pelvis, articulated neck/jaw, and four equine limb chains. */
-export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", coatId?: string, hitched = false) {
+export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", coatId?: string, hitched = false, pack = false) {
+  if (kind === "ox") return createOxRig(coatId, hitched, pack)
   const m = model(), donkey = kind === "donkey", noble = !donkey && variant === "noble", common = !donkey && !noble
   const profile = animalProfile(kind, variant), h = profile.legHeight, length = donkey ? 0.9 : 1.05
   const { coat, light, dark, belly, muzzle, points, stripe } = animalCoat(kind, coatId)
@@ -78,6 +81,8 @@ export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", 
     strap([-0.12, h + 0.52, 0.47], [0.12, h + 0.52, 0.47])
   }
 
+  const load = createPackLoad(m, breadth, pack)
+
   const neck = new THREE.Group(); neck.name = "articulated-neck"; m.root.add(neck)
   const { neckOrigin, poll, faceLength, faceForward, restPitch } = animalHead(kind, variant)
   const neckShape: CrossSection[] = [
@@ -114,7 +119,7 @@ export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", 
     ]), coat, [0, 0, 0], ear)
     m.mesh(loft([{ at: [0, 0.055, 0.04], width: 0.023, top: 0.009 }, { at: [0, earHeight * 0.7, 0.043], width: 0.024, top: 0.008 }, { at: [0, earHeight * 0.92, 0.025], width: 0.005, top: 0.005 }]), dark, [0, 0, 0], ear)
   }
-  if (hitched) {
+  if (hitched || pack) {
     for (const sign of [-1, 1]) {
       const bit = bitLocal(kind, variant, sign)
       const ring = m.mesh(new THREE.TorusGeometry(0.035, 0.012, 4, 8), "#a99a75", bit, head)
@@ -153,6 +158,7 @@ export function createAnimalRig(kind: Animal, variant: HorseVariant = "common", 
   return { ...m, joints: () => joints, pose(phase: number, moving: boolean, grazing = 0, edits?: AnimalRigEdits) {
     const clip: AnimalClip = moving ? "walk" : grazing > 0.5 ? "graze" : "idle"
     const motion = animalMotion(kind, phase, moving, variant)
+    load.position.set(...spinePoint([0,h+.44,0],kind,phase,moving,variant));load.rotation.set(motion.pitch,0,motion.roll)
     for (const { geometry, bind } of skin) {
       const positions = geometry.attributes.position as THREE.BufferAttribute
       for (let i = 0; i < positions.count; i++) positions.setXYZ(i, ...spinePoint([bind[i * 3], bind[i * 3 + 1], bind[i * 3 + 2]], kind, phase, moving, variant))

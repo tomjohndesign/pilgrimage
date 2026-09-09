@@ -91,9 +91,10 @@
 }
 .loading-church-caption {
   position: absolute;
-  top: calc(50% + var(--church-caption-offset) + 12px);
+  /* Sits above the progress bar: the bar's own height plus a four-pixel gap. */
+  top: calc(50% - var(--church-roof-offset) - 10 * var(--loading-pixel));
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -100%);
   color: #d4c297;
   font-family: var(--font-cinzel), serif;
   font-size: 11px;

@@ -34,7 +34,7 @@ export const BUILDING_DOOR_HEIGHT = (BASE_PERSON.body.headCenter + BASE_PERSON.b
 
 /** Open fronts sit beneath the high edge of an awning that drains to the rear. */
 export function hasFrontAwning(variant: string | undefined): boolean {
-  return ["shelter", "monk-shelter", "workshop", "market", "guard-post", "storehouse", "wood-shelter"].includes(variant ?? "")
+  return ["shelter", "monk-shelter", "workshop", "market", "guard-post", "wood-shelter"].includes(variant ?? "")
 }
 
 /** A gentle shared pitch, measured over the roof's downhill span. */

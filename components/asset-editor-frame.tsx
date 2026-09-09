@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react"
 import Link from "next/link"
-import { ArrowLeft, ArrowUpRight, SlidersHorizontal } from "lucide-react"
+import { ArrowLeft, ArrowUpRight, Shuffle, SlidersHorizontal } from "lucide-react"
 import "./game/game-hud.css"
 import "./base-person-lab.css"
 
@@ -12,7 +12,8 @@ export interface AssetEditorNavigation { mode: AssetEditorMode; onModeChange: (m
 /** Shared character-playground frame, controls drawer and asset switch.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — Shared asset editor header, building workshop (214-0)
  */
-export function AssetEditorFrame({ mode, onModeChange, version, controlsOpen, onControlsToggle, roadHref = "/play", label, status, detail, children }: AssetEditorNavigation & {
+export function AssetEditorFrame({ mode, onModeChange, version, controlsOpen, onControlsToggle, roadHref = "/play", label, status, detail, children, onRandomize, randomizeDisabled }: AssetEditorNavigation & {
+  onRandomize?: () => void; randomizeDisabled?: string;
   version: string; controlsOpen: boolean; onControlsToggle: () => void; roadHref?: string;
   label: string; status: ReactNode; detail: ReactNode; children: ReactNode
 }) {
@@ -23,7 +24,7 @@ export function AssetEditorFrame({ mode, onModeChange, version, controlsOpen, on
       <div className="person-view-buttons asset-mode-toggle" role="group" aria-label="Asset type">
         {(["characters", "animals", "buildings"] as const).map(value => <button key={value} className="hud-action" aria-pressed={mode === value} onClick={() => onModeChange(value)}>{value === "characters" ? "Characters" : value === "animals" ? "Animals" : "Buildings"}</button>)}
       </div>
-      <nav aria-label="Editor navigation"><button className="hud-action person-controls-toggle" aria-label="Controls" aria-expanded={controlsOpen} onClick={onControlsToggle}><SlidersHorizontal size={14} /><span className="asset-controls-label">Controls</span></button><Link className="hud-action" aria-label="On the road" href={roadHref}><span className="person-road-label">On the road</span><ArrowUpRight size={14} /></Link></nav>
+      <nav aria-label="Editor navigation">{onRandomize && <button className="hud-action" aria-label="Randomize" onClick={onRandomize} disabled={!!randomizeDisabled} title={randomizeDisabled ?? "Randomize map appearance"}><Shuffle size={14} /><span className="asset-randomize-label">Randomize</span></button>}<button className="hud-action person-controls-toggle" aria-label="Controls" aria-expanded={controlsOpen} onClick={onControlsToggle}><SlidersHorizontal size={14} /><span className="asset-controls-label">Controls</span></button><Link className="hud-action" aria-label="On the road" href={roadHref}><span className="person-road-label">On the road</span><ArrowUpRight size={14} /></Link></nav>
     </header>
     {children}
     <footer className="person-status"><span role="status">{status}</span><span className="person-status-detail">{detail}</span></footer>

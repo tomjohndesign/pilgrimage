@@ -1,5 +1,6 @@
 "use client"
 
+import { withTravelParties } from "@/lib/game/travel-parties"
 import { townResidents } from "@/lib/game/town-residents"
 
 import { groundHeight } from "@/lib/game/map/elevation"
@@ -13,6 +14,7 @@ import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { CHARACTER_PIXELS_PER_UNIT } from "@/lib/game/render/pixel-scale"
 import { ROAD_TIERS } from "@/lib/game/map/road"
+import { randomSeed } from "@/lib/game/rng"
 import { loadDefaultMapSize, saveDefaultMapSize } from "@/lib/game/map-size-storage"
 import { useSimulationStore, type SimulationSpeed } from "@/lib/game/simulation-store"
 import { saveMatchesWorld, saveResumesQuery } from "@/lib/game/save/resume"
@@ -67,14 +69,6 @@ const GameCanvas = dynamic(() => loadGameCanvas().then((m) => m.GameCanvas), {
 export interface MapSettings extends WorldSettings, DisplaySettings {}
 
 export const DEFAULT_SETTINGS: MapSettings = { ...DEFAULT_WORLD_SETTINGS, ...DEFAULT_DISPLAY_SETTINGS }
-
-/**
- * Picking a seed is the one legitimate use of Math.random(): it happens outside
- * the simulation, and everything downstream is deterministic in the result.
- */
-function randomSeed(): number {
-  return Math.floor(Math.random() * 2 ** 31)
-}
 
 export function GameShell({
   initialSeed,
@@ -243,7 +237,7 @@ export function GameShell({
   // Identities live outside the canvas so the HUD can name whoever is selected.
   const travelerCount = baseMap ? travelerCountForMap(baseMap, settings.traffic) : 0
   const roadTravelers = useMemo(
-    () => (!baseMap || seed === null ? [] : generateTravelers(seed, travelerCount)),
+    () => (!baseMap || seed === null ? [] : withTravelParties(generateTravelers(seed, travelerCount), seed)),
     [seed, travelerCount, baseMap],
   )
 

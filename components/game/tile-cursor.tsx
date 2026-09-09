@@ -1,6 +1,7 @@
 "use client"
 
 import { StructureModel } from "@/components/building-lab/building-model"
+import { placementBuildingLayout, placementRoofRotation } from "@/lib/game/building-placement-layout"
 import { structureParts } from "@/lib/game/building-art/structure"
 
 import { useMemo } from "react"
@@ -35,7 +36,7 @@ export function TileCursor({
   shrineRenown?: number
 }) {
   const balance = useBalanceStore((s) => s.balance)
-  const rotation = useBuildStore((s) => s.rotation)
+  const requestedRotation = useBuildStore((s) => s.rotation)
   const hovered = useCameraStore((s) => s.hovered)
   const highlight = useMemo(() => {
     if (!hovered) return new Float32Array(0)
@@ -45,7 +46,9 @@ export function TileCursor({
       [x, onBridge ? (ropeHeightAt(map, hovered.x + x * 0.999, hovered.z + z * 0.999) ?? centre) - centre : groundHeight(map, hovered.x + x * 0.999, hovered.z + z * 0.999) - centre, z]))
   }, [map, hovered])
   const build = useMemo(() => buildCatalog(balance).find((item) => item.id === buildType), [balance, buildType])
-  const parts = useMemo(() => build ? structureParts({ ...build, buildType: build.id }) : [], [build])
+  const rotation=useMemo(()=>build && hovered ? placementRoofRotation(map,build,hovered,requestedRotation) : requestedRotation,[map,build,hovered,requestedRotation])
+  const {layoutSeed,hearthZ,fireplace} = build && hovered ? placementBuildingLayout(map,{...build,...rotatedFootprint(build,rotation),...hovered,rotation,buildType:build.id,id:"construction-preview"}) : {}
+  const parts = useMemo(() => build ? structureParts({ ...build, buildType: build.id, layoutSeed, hearthZ, fireplace }) : [], [build, layoutSeed, hearthZ, fireplace])
   if (!hovered) return null
 
   if (!tileAt(map, hovered.x, hovered.z)) return null
@@ -72,7 +75,7 @@ export function TileCursor({
         </mesh>
         <group rotation={[0, buildingYaw(rotation), 0]}>
           <StructureModel parts={parts} ghostColor={color} />
-          <PlacementEntrances type={build.id} w={build.w} d={build.d} color={color} />
+          <PlacementEntrances layoutSeed={layoutSeed} type={build.id} w={build.w} d={build.d} color={color} />
         </group>
       </group>
     )

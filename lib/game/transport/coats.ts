@@ -6,6 +6,10 @@ export interface Coat { id: string; label: string; coat: string; light: string; 
  * Names describe coats, not a claim that the generic rig reproduces a breed.
  */
 export const COATS: Record<Animal, readonly Coat[]> = {
+  ox: [
+    { id: "brown", label: "Brown", coat: "#76563c", light: "#99764f", dark: "#40342a", belly: "#947458", muzzle: "#5b5143", points: "#524434" },
+    { id: "dun", label: "Dun", coat: "#a68c62", light: "#bca67c", dark: "#514435", belly: "#b5a080", muzzle: "#655b4c", points: "#6d5d43" },
+  ],
   horse: [
     { id: "bay", label: "Bay", coat: "#754831", light: "#966345", dark: "#29251f", belly: "#865b40", muzzle: "#51483c", points: "#332b23" },
     { id: "chestnut", label: "Chestnut · flaxen mane", coat: "#975b37", light: "#b57c50", dark: "#c2a276", belly: "#a86e43", muzzle: "#6f5343", points: "#975b37" },

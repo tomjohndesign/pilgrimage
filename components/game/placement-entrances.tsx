@@ -1,9 +1,9 @@
 import { buildingDoorOffset, buildingEntry, buildingYaw } from "@/lib/game/building-rotation"
 
 /** Gold thresholds and stepped inward arrows remain legible through the ghost roof. */
-export function PlacementEntrances({ type, w, d, color = "#ffe5a0" }: { type: string; w: number; d: number; color?: string }) {
+export function PlacementEntrances({ type, w, d, layoutSeed, color = "#ffe5a0" }: { type: string; w: number; d: number; layoutSeed?: number; color?: string }) {
   const sides = type === "cross" ? [] : type === "enclosure" ? [0, 1, 2, 3] : (type === "garden" || type === "tavern") ? [0, 2] : [0]
-  const entries=(type === "tavern" ? [1,-1] as const : [1] as const).map(end=>buildingEntry({x:0,z:0,w,d,buildType:type},false,end))
+  const entries=(type === "tavern" ? [1,-1] as const : [1] as const).map(end=>buildingEntry({x:0,z:0,w,d,buildType:type,layoutSeed},false,end))
   const reserved=!["cross","garden","lumberCamp"].includes(type)
   return <group name="placement-entrances">
     {reserved && entries.map((entry,index)=><mesh key={index} position={[entry.x-(w-1)/2,.045,entry.z-(d-1)/2]} renderOrder={5} raycast={()=>{}}>
@@ -14,7 +14,7 @@ export function PlacementEntrances({ type, w, d, color = "#ffe5a0" }: { type: st
       const span = side % 2 ? d : w
       const depth = side % 2 ? w : d
       const width = Math.min(0.62, span * 0.58)
-      return <group key={side} position={[sides.length === 1 || type === "tavern" ? buildingDoorOffset(w,type) : 0,0,0]} rotation={[0, buildingYaw(side), 0]}>
+      return <group key={side} position={[sides.length === 1 || type === "tavern" ? buildingDoorOffset(w,type,layoutSeed,side === 2 ? -1 : 1) : 0,0,0]} rotation={[0, buildingYaw(side), 0]}>
         <mesh position={[0, 0.09, depth / 2 - 0.04]} renderOrder={6} raycast={() => {}}>
           <boxGeometry args={[width, 0.04, 0.1]} />
           <meshBasicMaterial color="#ffe5a0" transparent depthTest={false} depthWrite={false} toneMapped={false} />

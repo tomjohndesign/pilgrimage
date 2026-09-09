@@ -15,6 +15,7 @@ import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { PixelCanvas, PixelCharacters, PixelWorld, type PixelationProps } from "@/components/pixel-canvas"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import { markSelectionScenery } from "@/lib/game/selection"
 import type { Resources } from "@/lib/game/settlement"
 import type { TilePos } from "@/lib/game/map/types"
 import { deriveSeed, SEED_STREAM } from "@/lib/game/rng"
@@ -39,7 +40,7 @@ import { Buildings } from "./buildings"
 import { BuildInfluenceOverlay } from "./build-influence-overlay"
 import { CameraLight } from "./camera-light"
 import { CameraRig } from "./camera-rig"
-import { PersonPicking } from "./character-selection"
+import { GroundSelection, PersonPicking } from "./character-selection"
 import { DebugHandle } from "./debug-handle"
 import { Environment } from "./environment"
 import { Monks } from "./monks"
@@ -208,7 +209,7 @@ export function GameCanvas({
           <group name="visibility-trees" visible={visibility.showTrees}>
             <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} model={treeModel} />
           </group>
-          <group name="visibility-scenery" visible={visibility.showScenery}>
+          <group name="visibility-scenery" ref={markSelectionScenery} visible={visibility.showScenery}>
             <Environment map={terrainMap} />
             <Signpost map={terrainMap} />
             <ForestWarnings map={terrainMap} />
@@ -238,6 +239,7 @@ export function GameCanvas({
       </SceneAssetBoundary>
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <PersonPicking />
+      <GroundSelection map={map} trees={trees} characterScale={characterScale} />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
       <DebugHandle characterScale={characterScale} map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} movement={movement} />
       <MapReveal map={map} state={reveal} landmark={!restore} onLandmarkReady={onLandmarkReady} onProgress={onRevealProgress} onPhase={phase => {

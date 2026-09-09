@@ -33,6 +33,9 @@ function captureStructure(building: BuildingDef): StructureSave {
     color: building.color,
     roofColor: building.roofColor,
     admissionFee: building.admissionFee,
+    layoutSeed: building.layoutSeed,
+    fireplace: building.fireplace,
+    hearthZ: building.hearthZ,
     construction: building.construction ? {
       work: building.construction.work,
       required: building.construction.required,
@@ -65,6 +68,9 @@ export function restoreSettlement(world: GameMap, save: SettlementSave): Settlem
       roofColor: structure.roofColor,
     }
     if (structure.admissionFee !== undefined) building.admissionFee = structure.admissionFee
+    if (structure.layoutSeed !== undefined) building.layoutSeed = structure.layoutSeed
+    if (structure.fireplace !== undefined) building.fireplace = structure.fireplace
+    if (structure.hearthZ !== undefined) building.hearthZ = structure.hearthZ
     if (structure.construction) building.construction = {
       work: structure.construction.work,
       required: structure.construction.required,

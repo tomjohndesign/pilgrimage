@@ -6,8 +6,9 @@ import * as THREE from "three"
 import { sceneryDetail } from "@/lib/game/render/scenery-detail"
 import { HearthLight } from "./hearth-lights"
 import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
-import { shelterHearth } from "@/lib/game/building-art/furnishings"
+import { buildingHearth } from "@/lib/game/building-art/furnishings"
 import { singlePlaneRoofRise } from "@/lib/game/building-art/dimensions"
+import { sharedChimneyMouth, type SharedChimney } from "@/lib/game/building-art/shared-chimney"
 
 /** Reusable billboard smoke emitter, positioned at any building's chimney mouth. */
 export function BuildingSmoke({ position, phase = 0 }: { position: [number, number, number]; phase?: number }) {
@@ -47,10 +48,11 @@ export function BuildingSmoke({ position, phase = 0 }: { position: [number, numb
 }
 
 /** Hearth light stays visible in cutaway; chimney smoke follows the intact shell. */
-export function ShelterFire({ width, depth, height, buildType, cutaway = false }: { width: number; depth: number; height: number; buildType?: string; cutaway?: boolean }) {
+export function ShelterFire({ width, depth, height, buildType, layoutSeed, hearthZ, sharedChimney, roofRise, cutaway = false }: { width: number; depth: number; height: number; buildType?: string; layoutSeed?: number; hearthZ?: number; sharedChimney?: SharedChimney; roofRise?: number; cutaway?: boolean }) {
   const root = useRef<THREE.Group>(null)
   const light=useRef<THREE.PointLight>(null), flames=useRef<THREE.Group>(null)
-  const {x,z,chimneyTop,scale}=shelterHearth(width,depth,height,singlePlaneRoofRise(depth))
+  const hearth=buildingHearth(buildType,width,depth,height,roofRise ?? singlePlaneRoofRise(depth),layoutSeed,hearthZ)
+  const {x,z,chimneyTop,scale}=hearth
   useFrame(({clock,scene})=>{
     if (!root.current) return
     root.current.visible = sceneryDetail(scene) === 0
@@ -60,7 +62,7 @@ export function ShelterFire({ width, depth, height, buildType, cutaway = false }
     if(flames.current) flames.current.scale.y=flicker
   })
   return <group ref={root} name="shelter-effects">
-    {!cutaway && <BuildingSmoke position={[x,chimneyTop+.025,z]} phase={width*.17+depth*.11} />}
+    {!cutaway && <BuildingSmoke position={sharedChimney ? sharedChimneyMouth(sharedChimney) : [x,chimneyTop+.025,z]} phase={width*.17+depth*.11+(sharedChimney?.side ?? 0)*.19} />}
     <group ref={flames} name="hearth-fire" position={[x,.14,z]} scale={[scale,1,scale]}>
       {[-1,0,1].map((side)=><mesh key={side} position={[side*.06,.065,0]} raycast={()=>{}}>
         <coneGeometry args={[.055,side===0?.22:.13,4]} />

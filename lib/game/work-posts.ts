@@ -1,3 +1,4 @@
+import { layoutHand } from "./building-layout"
 import { marketLayout } from "./market-layout"
 /**
  * Where a posted worker stands inside their workplace. Leaf data with no
@@ -17,10 +18,10 @@ export const WORK_POSTS: Record<string, readonly (readonly [number, number])[]> 
   market: [[0, 0.02]],
 }
 
-export function workPost(type: string | undefined, slot: number, w: number, d: number): { x: number; z: number } | null {
+export function workPost(type: string | undefined, slot: number, w: number, d: number, layoutSeed?: number): { x: number; z: number } | null {
   const posts = type ? WORK_POSTS[type] : undefined
   if (!posts?.length) return null
   const [x, z] = posts[((slot % posts.length) + posts.length) % posts.length]
   const layout = type === "market" ? marketLayout(w, d) : null
-  return { x: x * w, z: layout ? layout.stallZ + z * layout.stallDepth : z * d }
+  return { x: x * w * layoutHand(type,layoutSeed), z: layout ? layout.stallZ + z * layout.stallDepth : z * d }
 }

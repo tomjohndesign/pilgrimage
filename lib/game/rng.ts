@@ -17,6 +17,11 @@ export function makeRng(seed: number): () => number {
 /** The world seed everything defaults to before the player supplies one. */
 export const DEFAULT_WORLD_SEED = 20250805
 
+/** Pick a new world seed outside the deterministic simulation. */
+export function randomSeed(): number {
+  return Math.floor(Math.random() * 2 ** 31)
+}
+
 /**
  * Split one world seed into independent streams (tile jitter, trees, …) so
  * consumers never share RNG state yet all reproduce from the single seed.
@@ -65,4 +70,5 @@ export const SEED_STREAM = {
   roadShape: 15,
   characterAppearance: 16,
   wildlife: 17,
+  wildlifeAppearance: 18,
 } as const

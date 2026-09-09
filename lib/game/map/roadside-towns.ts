@@ -2,6 +2,7 @@ import { ROUTE_EDGE_INSET } from "./route-bounds"
 import { addTownWells } from "./seeded-water"
 import { settlementRoute } from "../settlement-route"
 import { BUILD_CATALOG } from "../balance"
+import { placementLayoutSeed } from "../building-layout"
 import { buildingApproaches, buildingEntry, rotatedFootprint, rotateBuildingPoint, type BuildingRotation } from "../building-rotation"
 import { levelBuildingGround } from "./elevation"
 import { tileAt, type BuildingDef, type GameMap, type RoadsideTown, type TilePos } from "./types"
@@ -10,13 +11,15 @@ import { tileAt, type BuildingDef, type GameMap, type RoadsideTown, type TilePos
 export const TOWN_SPACING = 192
 export const TOWN_CHAPEL_CLEARANCE = 48
 export const TOWN_APPROACH_CLEARANCE = 20
+/** Entrance distance from the main road; leave room for passing horse carts. */
+export const TOWN_ROAD_SETBACK = 3
 const NAMES = ["Alderford", "Hazelwick", "Birch End", "Willowbank", "Oakstead", "Ashbrook", "Elm Hollow", "Reedham"]
 
 /** The house sits beside the tavern, with parallel roof ridges and aligned fronts. */
 function townPlan(map: GameMap, junction: number, rotation: BuildingRotation, ordinal: number) {
   const road = map.road![junction]
   const outward = rotateBuildingPoint(0, -1, rotation)
-  const entry = { x: road.x + outward.x * 2, z: road.z + outward.z * 2 }
+  const entry = { x: road.x + outward.x * TOWN_ROAD_SETBACK, z: road.z + outward.z * TOWN_ROAD_SETBACK }
   // A winding road may pass close to an earlier town long after leaving it.
   // Check every existing tavern in map space, independent of travel duration.
   if (map.towns?.some(town => {
@@ -33,20 +36,30 @@ function townPlan(map: GameMap, junction: number, rotation: BuildingRotation, or
     const side = rotateBuildingPoint(index === 0 ? 0 : -3, 0, rotation)
     const origin = { ...size, x: 0, z: 0, rotation, buildType }
     const door = buildingEntry(origin)
+    // Keep the shells touching; route each varied doorway through the cleared frontage below.
+    const at = { x: entry.x + side.x - door.x, z: entry.z + side.z - door.z }
     return { id: `${id}-${index}`, owner: "independent", townId: id, buildType,
       label: `${name} ${index === 0 ? "tavern" : "house"}`, rotation, ...size,
-      x: entry.x + side.x - door.x, z: entry.z + side.z - door.z,
+      ...at, layoutSeed: placementLayoutSeed(buildType, at, map.seed),
       height: def.height, color: def.color, roofColor: def.roofColor }
   })
+  // Anchor the varied tavern entrance to the planned junction. Move both shells
+  // together so their party wall and the town exclusion radius stay unchanged.
+  const actual=buildingEntry(buildings[0]), shift={x:entry.x-actual.x,z:entry.z-actual.z}
+  for (const building of buildings) { building.x+=shift.x; building.z+=shift.z }
   const x = Math.min(...buildings.map(b => b.x)) - 1
   const z = Math.min(...buildings.map(b => b.z)) - 1
   const right = Math.max(...buildings.map(b => b.x + b.w)) + 1
   const bottom = Math.max(...buildings.map(b => b.z + b.d)) + 1
   const patch: TilePos[] = []
   for (let tz = z; tz < bottom; tz++) for (let tx = x; tx < right; tx++) patch.push({ x: tx, z: tz })
-  patch.push(road, { x: road.x + outward.x, z: road.z + outward.z })
+  for (let step = 0; step < TOWN_ROAD_SETBACK; step++) {
+    patch.push({ x: road.x + outward.x * step, z: road.z + outward.z * step })
+  }
   const occupied = (p: TilePos, b: BuildingDef, margin = 0) => p.x >= b.x - margin && p.x < b.x + b.w + margin
     && p.z >= b.z - margin && p.z < b.z + b.d + margin
+  // Protect every nearby bend, not just the road tile facing the tavern door.
+  if (buildings.some(b => map.road!.some(p => occupied(p, b, TOWN_ROAD_SETBACK)))) return null
   const chapel = map.buildings.find(b => b.id === map.site?.hovelId)
   if (chapel && buildings.some(b => Math.hypot(
     Math.max(chapel.x - b.x - b.w, b.x - chapel.x - chapel.w, 0),

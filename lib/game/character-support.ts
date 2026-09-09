@@ -40,13 +40,13 @@ const cache = new WeakMap<BuildingDef, { key: string; supports: CharacterSupport
 export function buildingSupports(building: BuildingDef, map?: GameMap) {
   const shrine = map?.site?.hovelId === building.id ? shrineLayout(building, map.site.door) : undefined
   const local = rotatedFootprint(building, building.rotation)
-  const key = JSON.stringify([building.buildType, local.w, local.d, building.height, building.color, building.roofColor, shrine?.width, shrine?.depth])
+  const key = JSON.stringify([building.buildType, local.w, local.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, shrine?.width, shrine?.depth])
   let entry = cache.get(building)
   if (entry?.key !== key) {
     const supports = partSupports(shrine ? shrineStructureParts(shrine.width, shrine.depth) : structureParts({ ...building, ...local }))
     if (!shrine) {
       // Entrance props are drawn in the approach tile's frame, outside the shell.
-      const x = buildingDoorOffset(local.w, building.buildType), z = (local.d + 1) / 2
+      const x = buildingDoorOffset(local.w, building.buildType, building.layoutSeed), z = (local.d + 1) / 2
       for (const support of partSupports(entranceParts(building.buildType ?? "house", building.height))) {
         supports.push({ ...support, x: support.x + x, z: support.z + z,
           anchor: { x: support.anchor.x + x, z: support.anchor.z + z } })

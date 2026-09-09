@@ -30,11 +30,19 @@ describe("game save schema", () => {
     expect(parseGameSave(null).error).toMatch(/not an object/)
     expect(parseGameSave({ version: SAVE_VERSION + 1 }).error).toMatch(/version/)
     const input = minimal()
-    input.playback.speed = 7
+    input.playback.speed = -1
     expect(parseGameSave(input).error).toMatch(/playback\.speed/)
     const negative = minimal()
     negative.simulation.felled = [-1]
     expect(parseGameSave(negative).error).toMatch(/felled/)
+  })
+
+  it("snaps a retired playback speed to the nearest one offered", () => {
+    const input = minimal()
+    input.playback.speed = 12
+    expect(parseGameSave(input).save?.playback.speed).toBe(6)
+    input.playback.speed = 4
+    expect(parseGameSave(input).save?.playback.speed).toBe(4)
   })
 
   it("keeps world identity to the generation inputs", () => {

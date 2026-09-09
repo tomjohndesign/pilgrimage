@@ -5,7 +5,7 @@ import { SceneAssetBoundary } from "./scene-assets"
 import { lazy, useCallback, useEffect, useMemo } from "react"
 import { BASE_CHARACTER_SCALE } from "@/lib/game/base-person/gait"
 import { useCameraStore } from "@/lib/game/camera-store"
-import { selectElement } from "@/lib/game/selection"
+import { markSelectionScenery, selectElement } from "@/lib/game/selection"
 import { useBuildStore } from "@/lib/game/build-store"
 import { deriveSeed, SEED_STREAM } from "@/lib/game/rng"
 import type { GameMap } from "@/lib/game/map/types"
@@ -52,7 +52,7 @@ export function Trees({ map, placements: supplied, ents = false, characterScale 
   const selectTree = useCallback((id: number, event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "tree", id }, event), [])
   const seed = deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes)
   return (
-    <group>
+    <group ref={markSelectionScenery}>
       {model === "sprites"
         ? <SceneAssetBoundary>
             <FoliageField atlas={DEFAULT_FOLIAGE_ATLAS} placements={placements} hidden={felled} onSelect={selectTree} seed={seed} idBase={map.buildings.length} />

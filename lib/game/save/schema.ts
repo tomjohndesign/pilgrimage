@@ -107,6 +107,9 @@ export const structureSchema = z.object({
   roofColor: z.string(),
   admissionFee: finite.min(0).optional().describe("Gold asked of each visitor, on the relic enclosure"),
   construction: constructionSchema.optional().describe("Absent once a founding structure is complete"),
+  layoutSeed: finite.optional().describe("Rolls the interior layout; kept so the rooms come back as built"),
+  fireplace: z.boolean().optional().describe("Whether the building has a hearth; absent means the type's seeded choice"),
+  hearthZ: finite.optional().describe("Row the hearth sits on"),
 })
 
 export const settlementSaveSchema = z.object({
@@ -198,9 +201,16 @@ export const cameraSaveSchema = z.object({
   viewSize: finite.positive().describe("Orthographic frustum height in world units"),
 })
 
+/** A speed the HUD no longer offers falls to the nearest it does, rather than failing the load. */
+function nearestSimulationSpeed(rate: number): number {
+  let best: number = SIMULATION_SPEEDS[0].rate
+  for (const speed of SIMULATION_SPEEDS) if (Math.abs(speed.rate - rate) < Math.abs(best - rate)) best = speed.rate
+  return best
+}
+
 export const playbackSaveSchema = z.object({
   paused: z.boolean(),
-  speed: z.number().refine(rate => SIMULATION_SPEEDS.some(speed => speed.rate === rate), "Unknown simulation speed"),
+  speed: finite.positive().transform(nearestSimulationSpeed).describe("Simulation rate; snapped to a speed the HUD offers"),
 })
 
 const relativePoint = z.object({

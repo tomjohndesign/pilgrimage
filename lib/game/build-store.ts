@@ -60,7 +60,9 @@ export const useBuildStore = create<BuildState>((set) => ({
     const settlers = travelers.flatMap((t) => {
       const live = sim.travelers.get(t.id)
       const job = settlementJob(live?.employer, sim.buildings)
-      return live?.employer && sim.buildings.find(b => b.id === live.employer)?.owner !== "independent" ? [{
+      // Town households work and sleep in independent buildings; only the player's own people are settlers.
+      const townResident = !!live?.employer && sim.buildings.find(b => b.id === live.employer)?.owner === "independent"
+      return live && !townResident && (live.employer || live.home) ? [{
         id: t.id,
         name: t.name,
         duty: job ? SETTLEMENT_JOBS[job].label : "Resident",

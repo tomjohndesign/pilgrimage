@@ -81,12 +81,15 @@ export function treeGroundField(map: GameMap, trees: readonly TreePlacement[], f
   // and the shoulders of forest tracks retain the same dark litter artwork.
   const dark = new Set(map.tiles.flatMap((t, i) => t === "darkwood" ? [i] : []))
   for (const forest of map.darkForests ?? []) for (const p of forest.clearing) dark.add(p.z * map.width + p.x)
+  // Preserve the forest edge even where cutting a track removed its trees.
+  // An authored route may cross open meadow long before reaching old growth.
+  const forestFloor = new Set(map.darkForestFloor ?? dark)
   for (const i of forestTrackTiles(map)) {
-    dark.add(i)
+    if (forestFloor.has(i)) dark.add(i)
     const x = i % map.width, z = Math.floor(i / map.width)
     for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const nx = x + dx, nz = z + dz, n = nz * map.width + nx
-      if (nx >= 0 && nz >= 0 && nx < map.width && nz < map.depth && map.tiles[n] === "clearing") dark.add(n)
+      if (nx >= 0 && nz >= 0 && nx < map.width && nz < map.depth && map.tiles[n] === "clearing" && forestFloor.has(n)) dark.add(n)
     }
   }
   const corners = depthBandCorners(map, Array.from(depths), true)

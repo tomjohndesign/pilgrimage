@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { useBuildStore } from "./build-store"
 import { useCameraStore, type Selection } from "./camera-store"
-import { markPerson, prioritizePeople, selectElement, selectionObjectId } from "./selection"
+import { markPerson, markSelectionScenery, prioritizePeople, selectElement, selectionObjectId } from "./selection"
 import { buildingObjectId, pileObjectId, RELIC_OBJECT_ID, residentObjectId, travelerObjectId, treeObjectId, wildlifeObjectId } from "./render/outline"
 
 const objects = {
@@ -58,20 +58,53 @@ describe("shared selection", () => {
     markPerson(person)
     const walker = { object: { userData: {}, parent: person }, distance: 9 }
     const hat = { object: { userData: {}, parent: person }, distance: 10 }
-    const crown = { object: { userData: {}, parent: null }, distance: 4 }
-    const trunk = { object: { userData: {}, parent: null }, distance: 6 }
+    const tree = { userData: {} as Record<string, unknown>, parent: null }
+    markSelectionScenery(tree)
+    const crown = { object: { userData: {}, parent: tree }, distance: 4 }
+    const trunk = { object: { userData: {}, parent: tree }, distance: 6 }
     expect(prioritizePeople([crown, walker, trunk, hat])).toEqual([walker, hat, crown, trunk])
   })
 
   it("leaves hits alone when people are not involved", () => {
     const crown = { object: { userData: {}, parent: null }, distance: 4 }
     const trunk = { object: { userData: {}, parent: null }, distance: 6 }
+    markSelectionScenery(crown.object)
+    markSelectionScenery(trunk.object)
     const hits = [crown, trunk]
     expect(prioritizePeople(hits)).toBe(hits)
     const person = { userData: {} as Record<string, unknown>, parent: null }
     markPerson(person)
     const people = [{ object: { userData: {}, parent: person }, distance: 1 }]
     expect(prioritizePeople(people)).toBe(people)
+  })
+
+  it.each([false, true])("picks a building before its occupants (batched: %s)", (batched) => {
+    const person = { userData: {} }
+    markPerson(person)
+    const occupant = { object: { parent: person }, distance: 9 }
+    const building = { object: { visible: !batched, userData: { batchedPickTarget: batched } }, distance: 6 }
+    const tree = { object: { userData: {} }, distance: 3 }
+    markSelectionScenery(tree.object)
+    expect(prioritizePeople([tree, building, occupant])).toEqual([building, occupant, tree])
+  })
+
+  it("keeps exposed people selectable in front of buildings and through scenery", () => {
+    const person = { userData: {} }
+    markPerson(person)
+    const walker = { object: { parent: person }, distance: 5 }
+    const building = { object: {}, distance: 9 }
+    const environment = { object: { userData: {} }, distance: 2 }
+    markSelectionScenery(environment.object)
+    expect(prioritizePeople([environment, walker, building])).toEqual([walker, building, environment])
+  })
+
+  it("does not pass clicks through other unmarked objects to people", () => {
+    const person = { userData: {} }
+    markPerson(person)
+    const walker = { object: { parent: person }, distance: 5 }
+    const prop = { object: {}, distance: 2 }
+    const hits = [prop, walker]
+    expect(prioritizePeople(hits)).toBe(hits)
   })
 
   it("ignores hidden scenery and characters, including visible children of hidden layers", () => {
@@ -84,7 +117,7 @@ describe("shared selection", () => {
     const ground = { object: { visible: true, parent: null } }
     expect(prioritizePeople([walker, roof, tree, ground])).toEqual([ground])
     hiddenLayer.visible = true
-    expect(prioritizePeople([ground, tree, walker])).toEqual([walker, ground, tree])
+    expect(prioritizePeople([ground, tree, walker])).toEqual([ground, tree, walker])
   })
 
   it("clears the effect when a selected identity is gone", () => {

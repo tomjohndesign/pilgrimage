@@ -9,7 +9,7 @@ import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/eleva
 
 import Link from "next/link"
 import * as Tooltip from "@radix-ui/react-tooltip"
-import { Menu, Settings, X } from "lucide-react"
+import { Menu, RefreshCw, Settings, X } from "lucide-react"
 import "./game-hud.css"
 import { useEffect, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
@@ -24,7 +24,7 @@ import { clampRoadTier, ROAD_TIERS } from "@/lib/game/map/road"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileAt, type BuildingDef, type GameMap } from "@/lib/game/map/types"
 import { nerve } from "@/lib/game/route-choice"
-import { parseSeed } from "@/lib/game/rng"
+import { parseSeed, randomSeed } from "@/lib/game/rng"
 import { CHANGELOG, CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, BEGGAR_RECOVERY_GOLD, simRegistry, type SimTraveler } from "@/lib/game/sim"
@@ -210,8 +210,8 @@ function MenuPanel({ onClose, playing }: { onClose: () => void; playing: boolean
 }
 
 /**
- * The seed as an editable field: paste a value and apply it. The shell owns
- * the seed; this only reports.
+ * The seed as an editable field: paste a value or refresh for a random world.
+ * The shell owns the seed; this only reports.
  */
 function SeedField({
   seed,
@@ -238,6 +238,15 @@ function SeedField({
     }
     setInvalid(false)
     onSeedChange(parsed)
+  }
+
+  const refresh = () => {
+    const rolled = randomSeed()
+    const next = rolled === seed ? (rolled + 1) % 2 ** 31 : rolled
+    setInput(String(next))
+    setInvalid(false)
+    onValidityChange?.(true)
+    onSeedChange(next)
   }
 
   return (
@@ -267,6 +276,9 @@ function SeedField({
           invalid ? "border-red" : "border-rule focus:border-gold"
         }`}
         />
+        <HudButton onClick={refresh} aria-label="Randomize world seed" title="Randomize world seed">
+          <RefreshCw size={14} aria-hidden="true" />
+        </HudButton>
         {!onValidityChange && <HudButton onClick={apply}>Apply</HudButton>}
       </div>
       {invalid && <div className="text-[11px] italic text-red">Digits only</div>}
@@ -306,9 +318,21 @@ function useLiveStats(travelerId: number): SimTraveler | null {
 }
 
 /** Who the player clicked on the road: name, calling, and what drives them. */
-function TravelerPanel({ traveler, map }: { traveler: Traveler; map: GameMap | null }) {
+function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; travelers: Traveler[]; map: GameMap | null }) {
   const a = traveler.attributes
   const live = useLiveStats(traveler.id)
+  const sim = simRegistry.current
+  const party = live?.partyId === undefined ? undefined : sim?.parties.get(live.partyId)
+  const companions = traveler.party ? travelers.filter(t => t.party?.id === traveler.party!.id) : []
+  const focusParty = () => {
+    const members = party?.members.flatMap(id => sim?.travelers.get(id) ? [sim.travelers.get(id)!] : []) ?? []
+    if (!members.length) return
+    const minX = Math.min(...members.map(s => s.x)), maxX = Math.max(...members.map(s => s.x))
+    const minZ = Math.min(...members.map(s => s.z)), maxZ = Math.max(...members.map(s => s.z))
+    const camera = useCameraStore.getState()
+    camera.panTo((minX + maxX) / 2, (minZ + maxZ) / 2)
+    camera.zoomBy(Math.max(12, Math.hypot(maxX - minX, maxZ - minZ) + 8) / camera.viewSize)
+  }
   const named = (id: string | null | undefined) => map?.buildings.find(b => b.id === id)?.label
   return (
     <Panel>
@@ -336,8 +360,8 @@ function TravelerPanel({ traveler, map }: { traveler: Traveler; map: GameMap | n
         </div>
         {live && (
           <div className="text-[11px] italic text-gold">
-            {live.praying ? "Kneeling in prayer before the relic" : ACTIVITY_LABELS[live.activity]}
-            {live.employer && " · Settler"}
+            {live.praying ? "Kneeling in prayer before the relic" : live.partyWaiting ? "Waiting for companions" : ACTIVITY_LABELS[live.activity]}
+            {(live.employer || live.home) && " · Settler"}
             {live.track && " · on the dark track"}
           </div>
         )}
@@ -348,12 +372,36 @@ function TravelerPanel({ traveler, map }: { traveler: Traveler; map: GameMap | n
             {live.home ? ` · lives at ${named(live.home) ?? "a house"}` : " · no house yet"}
           </div>
         )}
+        {live?.home && !live.employer && <div className="text-[11px] text-ink-light">Lives at {named(live.home) ?? "a house"} · Looking for work</div>}
         {live && live.fled > 0 && (
           <div className="text-[11px] italic text-red">
             Turned back {live.fled === 1 ? "once" : `${live.fled} times`}
           </div>
         )}
       </div>
+
+      {companions.length > 0 && <div className="mt-2 border-t border-rule pt-2" aria-label="Travel party">
+        <div className="flex items-center justify-between gap-2">
+          <Label>{party ? `Party of ${party.members.length}` : "Former companions"}</Label>
+          {party && <button type="button" className="hud-action" onClick={focusParty}>Find party</button>}
+        </div>
+        <div className="text-[11px] text-ink">{traveler.party!.name}</div>
+        {party && <p className="text-[11px] italic text-ink-light">{party.reason}{party.stage === "traveling" && ` · ${party.singleFile ? "Single file" : "Loose group"}`}</p>}
+        <div className="mt-1 flex max-h-36 flex-col gap-1 overflow-y-auto">
+          {companions.map(person => {
+            const state = sim?.travelers.get(person.id), monk = sim?.joinedMonks.get(person.id)
+            const resident = !!(state?.home || state?.employer || monk)
+            return <button key={person.id} type="button" className="hud-action text-left" aria-current={person.id === traveler.id ? "true" : undefined}
+              onClick={() => {
+                const camera = useCameraStore.getState()
+                camera.select(monk ? { kind: "monk", id: monk.id } : { kind: "traveler", id: person.id })
+                if (state) camera.panTo(state.x, state.z)
+              }}>
+              {person.name}{traveler.party?.partnerId === person.id ? " · Partner" : ""}{resident ? " · Settled" : state?.partyWaiting ? " · Waiting" : ""}
+            </button>
+          })}
+        </div>
+      </div>}
 
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
         <StatBar label="Status" value={a.status} />
@@ -1187,7 +1235,7 @@ export function GameHud({
           </Panel>
           )}
           {selection?.kind === "animal" && <AnimalInspector id={selection.id} />}
-          {selectedTraveler && <TravelerPanel traveler={selectedTraveler} map={map} />}
+          {selectedTraveler && <TravelerPanel traveler={selectedTraveler} travelers={travelers} map={map} />}
           {selectedMonk && <MonkPanel monk={selectedMonk} />}
           {selectedRelic && relic && <RelicPanel relic={relic} />}
         </div>}

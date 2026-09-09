@@ -148,7 +148,7 @@
 .asset-building-direction.hud-building-tile { width:100px; height:56px; gap:4px; }
 .asset-building-direction > span:first-child { font:14px var(--font-cinzel),serif; }
 @media (max-width:760px) {
-  .person-header .person-version,.person-header h1,.asset-back-label { display:none; }
+  .person-header .person-version,.person-header h1,.asset-back-label,.asset-randomize-label { display:none; }
   .asset-building-direction.hud-building-tile { width:76px; height:48px; }
   .asset-building-four .person-stage-caption { left:6px; bottom:6px; font-size:9px; letter-spacing:0; }
 }

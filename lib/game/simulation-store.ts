@@ -6,14 +6,14 @@ export const SIMULATION_SPEEDS = [
   { label: 1, rate: 2 },
   { label: 2, rate: 4 },
   { label: 3, rate: 6 },
-  { label: 6, rate: 12 },
 ] as const
 
-/** Keep intermediate comparison rates available to the opt-in benchmark handle. */
+/** Keep 6× and the intermediate comparison rates available to the opt-in benchmark handle. */
 export const BENCHMARK_SIMULATION_SPEEDS = [
   ...SIMULATION_SPEEDS,
   { label: 4, rate: 8 },
   { label: 5, rate: 10 },
+  { label: 6, rate: 12 },
 ] as const
 export type SimulationSpeed = typeof BENCHMARK_SIMULATION_SPEEDS[number]["rate"]
 

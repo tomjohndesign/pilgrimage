@@ -89,7 +89,7 @@ export function constructionStandOff(characterScale = BASE_CHARACTER_SCALE): num
 /** The stand a posted worker keeps, in the building's authored local frame. */
 function buildingWorkPost(building: BuildingDef, slot: number) {
   const local = rotatedFootprint(building, building.rotation)
-  return workPost(building.buildType, slot, local.w, local.d)
+  return workPost(building.buildType, slot, local.w, local.d, building.layoutSeed)
 }
 
 /** Place work and rest positions in the same rotated local space as the building. */
@@ -99,7 +99,7 @@ function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask
   const bed = beds[slot % beds.length]
   if (purpose === "rest" && !bed) return null
   const post = purpose === "work" ? building.buildType === "tavern"
-    ? tavernWorkStop(slot, workStop, local.w, local.d) : buildingWorkPost(building, slot) : null
+    ? tavernWorkStop(slot, workStop, local.w, local.d, building.layoutSeed, building.hearthZ) : buildingWorkPost(building, slot) : null
   if (purpose === "work" && !post) return null
   const x = purpose === "build" ? (slot % 4 - 1.5) * Math.min(0.45, (local.w - 0.5) / 3)
     : purpose === "work" ? post!.x : bed.anchor.x

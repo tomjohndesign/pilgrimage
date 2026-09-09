@@ -1,3 +1,4 @@
+import { layoutHand } from "./building-layout"
 /** Two added storage tiles alongside the original 2×2 hut; older huts scale to fit. */
 export function workshopLayout(width: number, depth: number) {
   const bayWidth = width / 3
@@ -6,9 +7,9 @@ export function workshopLayout(width: number, depth: number) {
 }
 
 /** Four live stacks occupy two bays, with a pair of stacks in each square. */
-export function workshopPileOffset(slot: number, width: number, depth: number): [number, number] {
+export function workshopPileOffset(slot: number, width: number, depth: number, layoutSeed?: number): [number, number] {
   const layout = workshopLayout(width, depth)
-  return [layout.storageX,
+  return [layout.storageX*layoutHand("workshop",layoutSeed),
     (Math.floor(slot / 2) - .5) * layout.bayDepth + (slot % 2 - .5) * layout.bayDepth * .4]
 }
 

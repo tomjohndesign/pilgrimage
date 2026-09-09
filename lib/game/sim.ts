@@ -1,3 +1,6 @@
+import { ensurePartyTransport, stepPartyPacks, seatParty, parkParty, movePartyCart, turnPartyCart } from "./transport/party"
+import { seatPoint } from "./transport/party-assets"
+import { animalWalkSpeed } from "./transport/assets"
 import { stepDevotion, HAPPINESS_THRESHOLD, TAVERN_HAPPINESS_GAIN } from "./wellbeing"
 import { isWaterSource, waterVisitPlan, WATER_SEEK_THRESHOLD, WATER_SEEK_RADIUS, WATER_VISIT_SECONDS, type WaterVisit } from "./water-sources/navigation"
 import { naturalWaterStop, WATER_THIRST_THRESHOLD, WATER_DRINK_SECONDS } from "./natural-water"
@@ -6,6 +9,7 @@ import { townResidents } from "./town-residents"
 import { placeResident } from "./jobs/residents"
 import { GAME_DAY_SECONDS, GAME_HOUR_SECONDS, START_TIME } from "./calendar"
 import { wearySpeedScale } from "./traveler-weariness"
+import { cachedFormation, diversionPoints, partyRoadDelta, partySlots, pruneTravelParties, regroupParty, syncTravelParties, type TravelParty } from "./travel-parties"
 import { housingBeds, vacantMonkBed } from "./housing"
 import { MONK_COUNT, MONK_JOIN_CHANCE, type Monk } from "./monks"
 import { monkWalkSpeed } from "./base-person/monk-assets"
@@ -14,8 +18,9 @@ import { buildingSpatialQuery } from "./building-spatial"
 import { settlementJob, jobSpeedScale } from "./jobs/design"
 import { seekSheep, stepShepherd, releaseSheep, type HerdingTask } from "./herding"
 import type { WildlifeWorld } from "./wildlife/simulation"
-import { cartPath, driveSegment, marketParking, type MarketParking } from "./transport/building-parking"
+import { cartPath, driveSegment, driveRouteSegment, marketParking, type MarketParking } from "./transport/building-parking"
 import { roadCartPose } from "./transport/bridge-guide"
+import { cartRoadDiversion } from "./transport/road-diversion"
 import { blockedRoad, findRoadDiversion, takeRoadShortcut, retireBypassedRoad, exploresRoadShortcut, type WalkingShortcut } from "./walking-shortcuts"
 import { createFootpaths, HEAVY_PATH_WEAR, recordWalkingPath, regrowFootpaths, type Footpaths } from "./footpaths"
 import { knightMounted, knightLoadout, knightTravelSpeed, knightWalkStride, type HorseRest } from "./knights"
@@ -290,6 +295,14 @@ export const BEGGAR_DELAY_SECONDS = GAME_DAY_SECONDS
 export const BEGGAR_RECOVERY_GOLD = 15
 
 export interface SimTraveler {
+  partyId?: number
+  partyWaiting?: boolean
+  partySpeed?: number
+  partyRiding?: boolean
+  partyBoarding?: boolean
+  /** Placed on the road by the company this step; the personal walking update stands aside. */
+  partyCarried?: boolean
+  partyVisitAborted?: boolean
   waterVisit?: WaterVisit
   waterRetry?: number
   /** A reversible progression; the original calling and personal attributes stay intact. */
@@ -420,6 +433,7 @@ export interface SimTraveler {
 }
 
 export interface SimState {
+  parties: Map<number, TravelParty>
   wildlife?: WildlifeWorld | null
   footpaths: Footpaths
   procession?: RelicProcession | null
@@ -601,9 +615,13 @@ function finishConvoyMove(s: SimTraveler, transportBefore: SimTraveler | null, m
   const previous = transportBefore.cartPose ?? roadCartPose(map, transportBefore.progress, s.direction, wheelbase, characterScale)
   const wrapped = Math.abs(s.progress - transportBefore.progress) > length / 2 && !s.track && !transportBefore.track
   const parking = s.marketParking ?? s.shrineParking
+  const cut = transportBefore.roadShortcut ?? s.roadShortcut
   let pose: CartPose | null
   if (wrapped) pose = roadCartPose(map, s.progress, s.direction, wheelbase, characterScale)
   else if (parking && !parking.walking) pose = parking.pose
+  else if (cut) pose = driveRouteSegment(previous, [cut.from, ...(cut.via ?? []), cut.to],
+    transportBefore.roadShortcut?.distance ?? 0, s.roadShortcut?.distance ?? cut.length, wheelbase,
+    (p, heading) => convoyBuildingsClear(map, p, puller, characterScale, heading))
   else {
     pose = driveSegment(previous, s, wheelbase, (p, heading) => convoyBuildingsClear(map, p, puller, characterScale, heading))
     if (pose && !parking && !s.track && !s.roadShortcut && !transportBefore.roadShortcut &&
@@ -700,6 +718,7 @@ export function createSim(
   relic: RelicStats = generateRelic(map.seed ?? 0).stats,
 ): SimState {
   const sim: SimState = {
+    parties: new Map(),
     footpaths: map.footpaths ?? createFootpaths(map),
     shrineQueueSequence: 0,
     shrineKeeperReady: true,
@@ -782,6 +801,21 @@ export function createSim(
       timer: t.type.id === "vendor" ? vendWalkSeconds(t.id, 0) : t.type.id === "minstrel" ? minstrelWalkSeconds(t.id, 0) : 0,
       cycle: 0,
     })
+  }
+  syncTravelParties(sim.parties, travelers, sim.travelers)
+  for (const party of sim.parties.values()) {
+    const leader = sim.travelers.get(party.members[0])!
+    const origin = leader.progress
+    const slots = partySlots(party.id, false, length, party.members.length, sim.time * GAME_DAY_SECONDS)
+    for (let slot = 0; slot < party.members.length; slot++) {
+      const member = sim.travelers.get(party.members[slot])!
+      const place = slots[slot]
+      member.progress = ((origin - party.direction * place.behind) % length + length) % length
+      member.direction = party.direction
+      member.laneOffset = place.lane
+      member.lane = party.direction * place.lane
+      Object.assign(member, roadWorldPoint(map, member.progress, member.lane))
+    }
   }
   for (const resident of townResidents(map)) {
     const actor = sim.travelers.get(resident.traveler.id)
@@ -1100,12 +1134,12 @@ function findJob(sim: SimState, s: SimTraveler, map: GameMap): { building: Place
 const houseBeds = housingBeds
 
 /** A new settler moves into the nearest house that still has a bed to spare. */
-function findHome(sim: SimState, s: SimTraveler, map: GameMap): string | null {
+function findHome(sim: SimState, s: SimTraveler, map: GameMap, beds = 1): string | null {
   const houses = map.buildings.filter(b => b.owner !== "independent" && isHouse(b) && isComplete(b))
     .sort((a, b) => Math.hypot(tileToWorldX(map, a.x) - s.x, tileToWorldZ(map, a.z) - s.z)
       - Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z))
   for (const house of houses) {
-    if ([...sim.travelers.values()].filter(other => other.home === house.id).length < houseBeds(house)) return house.id
+    if ([...sim.travelers.values()].filter(other => other.home === house.id).length + beds <= houseBeds(house)) return house.id
   }
   return null
 }
@@ -1259,8 +1293,8 @@ function finishErrand(s: SimTraveler): void {
   s.walkFrom = null
   s.offRoadRoute = null
   s.diversionCheck = undefined
-  s.activity = s.employer ? "idle" : "walking"
-  if (s.employer) s.timer = GAME_HOUR_SECONDS
+  s.activity = s.employer || s.home ? "idle" : "walking"
+  if (s.employer || s.home) s.timer = GAME_HOUR_SECONDS
 }
 
 function finishWaterTrip(s: SimTraveler): void {
@@ -1361,7 +1395,28 @@ function finishVisit(sim: SimState, s: SimTraveler, map: GameMap): void {
   s.activity = "fromRelic"
 }
 
-function settleAfterVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): void {
+function settleAfterVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
+  travelers: readonly Traveler[] = [], householdHome?: string): void {
+  if (!householdHome && t.party?.partnerId !== undefined && s.partyId !== undefined) {
+    const partner = sim.travelers.get(t.party.partnerId)
+    const identity = travelers.find(other => other.id === t.party!.partnerId)
+    const party = sim.parties.get(s.partyId)
+    if (!partner || !identity || partner.activity !== "walking" || partner.partyVisitAborted ||
+      !party?.visitStarted.includes(partner.id)) return
+    const home = findHome(sim, s, map, 2)
+    const house = map.buildings.find(b => b.id === home)
+    if (!home || !house || ![s, partner].every(person => settlementRoute(map, map.buildings,
+      { x: worldToTileX(map, person.x), z: worldToTileZ(map, person.z) }, buildingEntry(house), false, true))) return
+    // Check both people's opportunities; either partner can get the first job.
+    for (const [applicant, person, companion] of [[s, t, partner], [partner, identity, s]] as const) {
+      settleAfterVisit(sim, applicant, person, map, travelers, home)
+      if (!applicant.employer) continue
+      companion.home = home; companion.jobless = true; companion.activity = "idle"; companion.timer = 0
+      for (const member of [applicant, companion]) { member.partyId = undefined; member.partyWaiting = false; member.partySpeed = undefined }
+      return
+    }
+    return
+  }
   if (t.type.id === "friar") {
     const bed = vacantMonkBed(map, sim.joinedMonks.values())
     if (bed && nextRoll(s) < MONK_JOIN_CHANCE) {
@@ -1379,7 +1434,7 @@ function settleAfterVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameM
     }
     return
   }
-  const home = findHome(sim, s, map)
+  const home = householdHome ?? s.home ?? findHome(sim, s, map)
   const job = s.shrineParking || !home ? undefined : findJob(sim, s, map)
   if (job && nextRoll(s) < (t.attributes.skills.some((skill) => BUILDING_KINDS[job.building.kind].trades.includes(skill)) ? 0.9 : 0.65)) {
     const route = settlementRoute(map, [...map.buildings, ...sim.buildings],
@@ -1397,13 +1452,389 @@ function settleAfterVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameM
   }
 }
 
+/** Formation places within this much of their target count as taken. */
+const FORMATION_TOLERANCE = .05
+/** Bound each person's camp or seat route; a stranded companion keeps the company on the road. */
+const PARTY_ROUTE_LIMIT = 1500
+
+// Identities keyed by ID, reused across steps while the cast is unchanged.
+const identityIndexes = new WeakMap<readonly Traveler[], Map<number, Traveler>>()
+function travelerIdentities(travelers: readonly Traveler[]): Map<number, Traveler> {
+  let index = identityIndexes.get(travelers)
+  if (!index) { index = new Map(travelers.map(t => [t.id, t])); identityIndexes.set(travelers, index) }
+  return index
+}
+
+/** Road progress to a world point on the company's shared path: the road lane, or
+ * the shared detour while the road ahead is covered by a footprint. */
+function partyPathPoint(map: GameMap, party: TravelParty, progress: number, lane: number, length: number): WorldPoint {
+  const cut = party.diversion
+  if (cut) {
+    const span = party.direction * (cut.end - cut.start)
+    const t = span > 0 ? party.direction * partyRoadDelta(progress, cut.start, length) / span : -1
+    if (t >= 0 && t <= 1) {
+      const at = routePoint(diversionPoints(cut), t * cut.length)
+      return { x: at.x, y: walkingSurface(map, at.x, at.z).height, z: at.z }
+    }
+  }
+  return roadWorldPoint(map, progress, lane)
+}
+
+/** Collapse before the head reaches a bridge; expand once the tail has cleared it. */
+function bridgeInColumn(map: GameMap, head: number, direction: 1 | -1, span: number, length: number): boolean {
+  for (let d = -Math.ceil(span) - 2; d <= 5; d++) {
+    const p = map.road![Math.round(((head + direction * d) % length + length) % length)]
+    if (p && tileAt(map, p.x, p.z) === "bridge") return true
+  }
+  return false
+}
+
+/** The slowest walker or animal sets the pace; riders rest. Members are re-read a
+ * few times per game second; the eased company speed hides the steps. */
+function companyPace(party: TravelParty, members: readonly SimTraveler[], naturalSpeed: (s: SimTraveler) => number, scale: number, seconds = -Infinity): number {
+  if (seconds - party.paceAt < .25) return party.pace
+  let pace = Infinity
+  for (const s of members) if (!s.partyRiding) pace = Math.min(pace, naturalSpeed(s))
+  if (party.transport) pace = Math.min(pace, animalWalkSpeed(party.transport.animal, scale))
+  for (const pack of party.packs ?? []) pace = Math.min(pace, animalWalkSpeed(pack.kind, scale))
+  party.pace = Number.isFinite(pace) ? pace * .85 : 0
+  party.paceAt = seconds
+  return party.pace
+}
+
+/** Reserve the entire camp before moving anyone. Full camps and unreachable
+ * clearings leave the party on the road, with a bounded retry interval. Each
+ * person plans at most two bounded routes; nobody searches every pitch in turn. */
+function startPartyCamp(sim: SimState, party: TravelParty, members: SimTraveler[], map: GameMap): boolean {
+  const anchor = party.transport?.phase === "parked" ? party.transport.pose : members[Math.floor(members.length / 2)]
+  const stall = findNearbySpot(sim, members[0].id, anchor.x, anchor.z, STALL_ACTIVITIES)
+  const centre = stall ?? anchor
+  const cx = worldToTileX(map, centre.x), cz = worldToTileZ(map, centre.z)
+  // Pitches already claimed nearby, read once rather than for every candidate tile.
+  const claimed: { x: number; z: number }[] = []
+  for (const other of sim.travelers.values()) {
+    if (other.spot && Math.abs(other.spot.x - centre.x) < 8 && Math.abs(other.spot.z - centre.z) < 8) claimed.push(other.spot)
+  }
+  const candidates: TilePos[] = []
+  for (let dz = -6; dz <= 6; dz++) for (let dx = -6; dx <= 6; dx++) {
+    const tile = { x: cx + dx, z: cz + dz }, terrain = tileAt(map, tile.x, tile.z)
+    if (!["grass", "dirt", "clearing"].includes(terrain ?? "") || buildingAt(map, tile.x, tile.z)) continue
+    const x = tileToWorldX(map, tile.x), z = tileToWorldZ(map, tile.z)
+    if (claimed.some(spot => Math.hypot(spot.x - x, spot.z - z) < .8)) continue
+    candidates.push(tile)
+  }
+  candidates.sort((a, b) => Math.hypot(a.x - cx, a.z - cz) - Math.hypot(b.x - cx, b.z - cz))
+  if (candidates.length < members.length) return false
+  // A single cluster, rather than pitches scattered along a large party's tail.
+  const first = candidates[0]
+  const cluster = candidates.filter(tile => Math.hypot(tile.x - first.x, tile.z - first.z) <= 5)
+  if (cluster.length < members.length) return false
+  const plans: { s: SimTraveler; tile: TilePos; route: TilePos[] }[] = []
+  let next = 0
+  for (const s of members) {
+    const start = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
+    let tile: TilePos | undefined, route: TilePos[] | null = null
+    for (let attempt = 0; attempt < 2 && next < cluster.length && !route; attempt++) {
+      tile = cluster[next++]
+      route = settlementRoute(map, map.buildings, start, tile, false, false, undefined, PARTY_ROUTE_LIMIT)
+    }
+    if (!route || !tile) return false
+    plans.push({ s, tile, route })
+  }
+  for (const { s, tile, route } of plans) {
+    s.spot = { x: tileToWorldX(map, tile.x), y: surfaceHeight(map, tile.x, tile.z), z: tileToWorldZ(map, tile.z) }
+    routeWalk(s, map, route, s.spot)
+    s.activity = "toCamp"; s.partyWaiting = false; s.partyCarried = false
+  }
+  party.stage = "camping"; party.reason = "Making camp together"; party.elapsed = 0
+  return true
+}
+
+/** Shared decisions and shared movement run before the personal update. A company
+ * has one path and one pace: only the head's road progress moves, and every
+ * walker, rider, wagon and pack animal takes its place from it. Camps, visits,
+ * boarding and regrouping after a stop still walk each person through the
+ * existing individual systems, with bounded route planning. */
+function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, dt: number,
+  counters: ReturnType<typeof openCounters>, naturalSpeed: (s: SimTraveler) => number, characterScale: number, movement: MovementTuning) {
+  pruneTravelParties(sim.parties, sim.travelers, sim.joinedMonks)
+  if (dt <= 0) return
+  const identities = travelerIdentities(travelers)
+  const length = map.road!.length - 1
+  const seconds = sim.time * GAME_DAY_SECONDS
+  const wrap = (p: number) => ((p % length) + length) % length
+  // Standing on the road for the company this step: no personal errands, no movement.
+  const hold = (s: SimTraveler) => { s.partyWaiting = true; s.partyCarried = true; s.partySpeed = 0 }
+  // Vendors at their stalls, read once and only when a camping company is hungry.
+  let vending: SimTraveler[] | undefined
+  for (const party of sim.parties.values()) {
+    const members: SimTraveler[] = []
+    for (const id of party.members) { const s = sim.travelers.get(id); if (s) members.push(s) }
+    if (!members.length) continue
+    party.cooldown = Math.max(0, party.cooldown - dt)
+    party.retry = Math.max(0, party.retry - dt)
+    party.elapsed += dt
+    party.carried = 0
+    for (const s of members) { s.partyCarried = false; s.partyWaiting = false; s.partySpeed = 0 }
+    if (!party.transportInitialized) {
+      ensurePartyTransport(party, members, map, characterScale)
+      // A wagon or pack animal changes everyone's place; walk into the new formation.
+      if (party.transport || party.packs?.length) party.formed = false
+    }
+    const cart = party.transport
+    if (cart) {
+      cart.distance = cart.animalDistance = 0
+      cart.retry = Math.max(0, cart.retry - dt)
+      if (cart.seats.some(id => !party.members.includes(id))) cart.seats = cart.seats.filter(id => party.members.includes(id))
+      if (!cart.seats.length) cart.seats = [members[0].id]
+      if (cart.phase === "parking" || cart.phase === "leaving") {
+        const parking = cart.phase === "parking"
+        for (const s of members) hold(s)
+        const done = movePartyCart(party, map, characterScale, companyPace(party, members, naturalSpeed, characterScale), dt)
+        seatParty(party, members, characterScale)
+        if (done && parking) for (const s of members) s.partyRiding = false
+        if (done && !parking) regroupParty(party, members, length, seconds, characterScale)
+        continue
+      }
+      if (cart.phase === "parked" && cart.intent) {
+        if (cart.intent === "camp") {
+          if (party.retry <= 0) { party.retry = 8; if (startPartyCamp(sim, party, members, map)) cart.intent = undefined }
+        } else {
+          party.stage = "visiting"; party.elapsed = 0; party.retry = 0
+          party.visitPending = [...party.members]; party.visitStarted = []; cart.intent = undefined
+        }
+      }
+      if (cart.phase === "parked" && cart.intent) {
+        for (const s of members) hold(s)
+        continue
+      }
+      if ((cart.phase === "parked" && !cart.intent && party.stage === "traveling") || cart.phase === "boarding") {
+        if (cart.phase === "parked" && party.retry <= 0) {
+          party.retry = 4
+          const plans = cart.seats.map((id, seat) => {
+            const s = sim.travelers.get(id)!, target = seatPoint(seat, cart.pose, characterScale)
+            const route = settlementRoute(map, map.buildings, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
+              { x: worldToTileX(map, target.x), z: worldToTileZ(map, target.z) }, false, false, undefined, PARTY_ROUTE_LIMIT)
+            return { s, target: { ...target, y: walkingSurface(map, target.x, target.z).height }, route }
+          })
+          if (plans.every(p => p.route)) {
+            for (const p of plans) { routeWalk(p.s, map, p.route!, p.target); p.s.partyBoarding = true }
+            cart.phase = "boarding"
+          }
+        }
+        for (const s of members) hold(s)
+        if (cart.phase === "boarding") {
+          for (const [seat, id] of cart.seats.entries()) {
+            const s = sim.travelers.get(id)!
+            if (!s.partyBoarding) continue
+            const target = seatPoint(seat, cart.pose, characterScale)
+            if (stepOffRoadWalk(s, { ...target, y: walkingSurface(map, target.x, target.z).height }, naturalSpeed(s), dt, map)) {
+              s.partyBoarding = false; s.partyRiding = true; s.offRoadRoute = null; s.walkFrom = null
+            }
+          }
+          seatParty(party, members, characterScale)
+          if (cart.seats.every(id => sim.travelers.get(id)!.partyRiding)) { cart.phase = "leaving"; cart.parking!.distance = 0 }
+        }
+        party.reason = "Waiting for companions to board"
+        continue
+      }
+    }
+    if (party.stage === "visiting") {
+      if (party.visitPending.some(id => !party.members.includes(id))) party.visitPending = party.visitPending.filter(id => party.members.includes(id))
+      // Admission is asked for a few companions at a time; every attempt plans
+      // real routes, so a large company files in over several seconds.
+      if (party.retry <= 0 && party.visitPending.length) {
+        party.retry = 2
+        for (const id of party.visitPending.slice(0, 3)) {
+          const s = sim.travelers.get(id)!
+          if (tryRoadVisit(sim, s, identities.get(id)!, map, counters, s.direction, s.progress, characterScale,
+            { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, true)) {
+            party.visitPending = party.visitPending.filter(other => other !== id)
+            party.visitStarted.push(id)
+            party.elapsed = 0
+          }
+        }
+      }
+      // A closed or saturated enclave cannot keep unadmitted companions forever.
+      if (party.elapsed > 120) {
+        party.visitPending = []
+        // A missing keeper must not strand a party inside the queue. Walk back
+        // along the already validated arrival route, without counting a visit.
+        for (const s of members) if (s.shrineRoute && ["toRelic", "visiting"].includes(s.activity)) {
+          s.activity = "fromRelic"; s.offeringMade = true; s.offeringProgress = undefined; s.partyVisitAborted = true
+        }
+      }
+      for (const s of members) if (s.activity === "walking") hold(s)
+      if (!party.visitPending.length && members.every(s => s.activity === "walking")) {
+        const considered = new Set<number>()
+        for (const s of members) {
+          if (considered.has(s.id) || s.home || s.employer || s.partyVisitAborted || !party.visitStarted.includes(s.id)) continue
+          const t = identities.get(s.id)!
+          considered.add(s.id)
+          if (t.party?.partnerId !== undefined) considered.add(t.party.partnerId)
+          settleAfterVisit(sim, s, t, map, travelers)
+        }
+        // Recruitment may convert a traveler to a monk or admit a household.
+        syncTravelParties(sim.parties, travelers, sim.travelers)
+        if (!sim.parties.has(party.id)) continue
+        party.stage = "traveling"; party.cooldown = 45; party.elapsed = 0
+        party.reason = "Regrouping after the visit"
+        for (const s of members) { s.visitCooldown = 45; s.partyWaiting = false }
+        regroupParty(party, members.filter(s => s.partyId === party.id), length, seconds, characterScale)
+        continue
+      } else { party.reason = party.visitPending.length ? "Waiting for room at the enclave" : "Waiting for companions to finish visiting"; continue }
+    }
+    if (party.stage === "camping") {
+      party.reason = "Resting together"
+      // Meals remain individual transactions with an actual nearby vendor.
+      for (const s of members) {
+        if (s.activity !== "camping" || (s.hunger > BUY_THRESHOLD && s.thirst > BUY_THRESHOLD)) continue
+        vending ??= [...sim.travelers.values()].filter(other => other.activity === "vending")
+        const vendor = vending.find(other => Math.hypot(other.x - s.x, other.z - s.z) <= 5)
+        if (!vendor) continue
+        if (s.hunger <= BUY_THRESHOLD) { pay(s, vendor, FOOD_PRICE); s.hunger = 100 }
+        if (s.thirst <= BUY_THRESHOLD) { pay(s, vendor, WINE_PRICE); s.thirst = 100 }
+      }
+      if (members.every(s => s.activity === "camping" && s.stamina >= 90)) {
+        for (const s of members) startOffRoadWalk(s, "fromCamp")
+        party.stage = "returning"; party.reason = "Breaking camp together"; party.elapsed = 0
+      }
+      continue
+    }
+    if (party.stage === "returning") {
+      for (const s of members) if (s.activity === "walking") hold(s)
+      if (!members.every(s => s.activity === "walking")) continue
+      party.stage = "traveling"; party.reason = "Traveling together"; party.elapsed = 0
+      regroupParty(party, members, length, seconds, characterScale)
+    }
+    const onRoad = members.every(s => s.partyRiding || (s.activity === "walking" && !s.roadShortcut && !s.track))
+    if (!onRoad) {
+      // Someone was drawn aside by another system; the rest stand and wait.
+      for (const s of members) if (s.activity === "walking") hold(s)
+      party.reason = "Regrouping with companions"
+      continue
+    }
+    const head = members[0]
+    const ahead = map.site ? party.direction * partyRoadDelta(map.site.junction, party.progress, length) : Infinity
+    if (party.formed && party.cooldown <= 0 && ahead >= 0 && ahead <= 7) {
+      party.cooldown = 45; party.decisions++
+      const renown = sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown
+      const chance = members.reduce((sum, s) => sum + visitChance({ ...identities.get(s.id)!.attributes,
+        piety: s.piety, hunger: counters.length ? s.hunger : 100, thirst: counters.length ? s.thirst : 100, stamina: s.stamina },
+        sim.relic, renown, sim.balance, 0, identities.get(s.id)!.type.id), 0) / members.length
+      const rng = makeRng(deriveSeed(sim.seed ^ party.id, 0x56495349 + party.decisions))
+      const persuaded = chance + (1 - chance) * roadsideEvangelism(map)
+      if (rng() < persuaded) {
+        if (cart && cart.phase === "road") {
+          const occupied = [...sim.parties.values()].filter(p => p.id !== party.id && p.transport).map(p => p.transport!.pose)
+          if (!parkParty(party, map, characterScale, sim.trees, occupied, "visit")) party.cooldown = 8
+          for (const s of members) hold(s)
+          continue
+        }
+        party.stage = "visiting"; party.elapsed = 0; party.retry = 0
+        party.visitPending = [...party.members]; party.visitStarted = []
+        party.reason = "Visiting the enclave together"
+        for (const s of members) hold(s)
+        continue
+      }
+    }
+    if (party.formed && !party.singleFile && party.retry <= 0 && members.some(s => s.stamina <= CAMP_STAMINA_THRESHOLD)) {
+      party.retry = 8
+      if (cart && cart.phase === "road") {
+        const occupied = [...sim.parties.values()].filter(p => p.id !== party.id && p.transport).map(p => p.transport!.pose)
+        if (parkParty(party, map, characterScale, sim.trees, occupied, "camp")) {
+          for (const s of members) hold(s)
+          continue
+        }
+      } else if (startPartyCamp(sim, party, members, map)) continue
+      party.reason = "Looking for a clearing large enough for everyone"
+    }
+    // --- Shared movement: the head advances, everyone else derives from it. ---
+    // Riders take no place in the column; the wagon's driver stands for its head.
+    const column = cart ? [members.find(s => s.id === cart.seats[0]) ?? head, ...members.filter(s => !s.partyRiding && s.id !== cart.seats[0])] : members
+    const slots = cachedFormation(party, column.map(s => s.id), length, seconds, characterScale)
+    const span = slots[slots.length - 1].behind
+    // After a stop the head waits while anyone is behind their place, then
+    // advances past those standing ahead of theirs, until everyone is in formation.
+    let lagging = false, passing = false
+    if (!party.formed) {
+      for (let i = 0; i < column.length; i++) {
+        if (column[i].partyRiding) continue
+        const gap = party.direction * partyRoadDelta(wrap(party.progress - party.direction * slots[i].behind), column[i].progress, length)
+        if (gap > FORMATION_TOLERANCE) lagging = true
+        else if (gap < -FORMATION_TOLERANCE) passing = true
+      }
+      if (!lagging && !passing) party.formed = true
+    }
+    const tail = column[column.length - 1]
+    const paused = nearProcession(sim.procession, head, false) || nearProcession(sim.procession, tail, false)
+    const target = paused || lagging ? 0 : companyPace(party, members, naturalSpeed, characterScale, seconds)
+    party.speed = easeSpeed(party.speed, target, dt, movement.acceleration)
+    if (party.speed < 1e-6) party.speed = 0
+    let blocked = false
+    if (cart) {
+      if (party.speed > 0 && !movePartyCart(party, map, characterScale, party.speed, dt)) { blocked = true; party.speed = 0 }
+      party.progress = cart.progress
+    } else party.progress = wrap(party.progress + party.direction * party.speed * dt)
+    // Once per road tile: trouble for the head, bridges along the column, and a
+    // footprint covering the road ahead, which the whole company walks around.
+    const tile = Math.floor(party.progress)
+    if (tile !== party.headTile) {
+      party.headTile = tile
+      if (!party.diversion && map.road![tile]) meetTrouble(sim, head, identities.get(head.id)!, map, map.road![tile])
+      if (head.activity === "fleeing") {
+        // The old tail leads the way back; a wagon turns where it stands.
+        head.activity = "walking"; head.fleeTimer = 0
+        const previous = party.direction
+        party.direction = head.direction
+        for (const s of members) s.direction = party.direction
+        party.progress = cart ? cart.progress : wrap(party.progress - previous * span)
+        party.formed = false; party.speed = 0; party.diversion = undefined
+        party.headTile = Math.floor(party.progress)
+        turnPartyCart(party, map, characterScale)
+        party.reason = "Turning back together"
+      }
+      party.singleFile = bridgeInColumn(map, party.progress, party.direction, span, length)
+      if (!party.diversion) party.diversion = findRoadDiversion(map, blockedRoad(map), head, party.progress, party.direction,
+        p => roadWorldPoint(map, p, 0)) ?? undefined
+    }
+    const direction = party.direction, travel = party.speed * dt
+    for (const s of members) if (s.partyRiding) { s.partyCarried = true; s.partySpeed = party.speed; party.carried++ }
+    for (let i = 0; i < column.length; i++) {
+      const s = column[i]
+      if (s.partyRiding) continue
+      s.partyCarried = true; party.carried++
+      const place = wrap(party.progress - direction * slots[i].behind)
+      let moved = 0
+      if (party.formed) { moved = Math.abs(partyRoadDelta(place, s.progress, length)); s.progress = place }
+      else {
+        const gap = direction * partyRoadDelta(place, s.progress, length)
+        if (gap > 0) { moved = Math.min(gap, naturalSpeed(s) * dt); s.progress = gap - moved <= 1e-9 ? place : wrap(s.progress + direction * moved) }
+      }
+      s.direction = direction
+      s.laneOffset = slots[i].lane
+      stepLane(s, direction, Math.max(moved, travel))
+      s.partySpeed = moved / dt
+      s.partyWaiting = !party.formed && moved <= 1e-9
+      const at = partyPathPoint(map, party, s.progress, s.lane, length)
+      s.x = at.x; s.y = at.y; s.z = at.z
+    }
+    if (cart) seatParty(party, members, characterScale)
+    stepPartyPacks(party, sim.travelers, map, characterScale, dt)
+    // The detour is over once the last walker has rejoined the road behind it.
+    if (party.diversion && direction * partyRoadDelta(wrap(party.progress - direction * span), party.diversion.end, length) >= 0) party.diversion = undefined
+    if (party.retry <= 0 || party.reason !== "Looking for a clearing large enough for everyone")
+      party.reason = blocked ? "Waiting for the road to clear" : party.formed ? "Traveling together" : "Regrouping with companions"
+  }
+}
+
 // Reuse position snapshots instead of allocating several objects and Map entries
 // per traveler and simulation tick. Paths only read the scratch point.
 const tickPositions = new WeakMap<SimState, Float64Array>()
 /** Offer one shrine or meal visit before crossing its junction, including a diversion across it. */
 function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   counters: ReturnType<typeof openCounters>, direction: 1 | -1, parkingProgress: number,
-  characterScale: number, from?: TilePos): boolean {
+  characterScale: number, from?: TilePos, partyVisit = false): boolean {
   const isVendor = t.type.id === "vendor", needsParking = isVendor || t.type.id === "knight"
   const renown = sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown
   // Hunger and thirst only draw anyone in while a counter is open:
@@ -1418,15 +1849,18 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
     sim.relic, renown, sim.balance, 0, t.type.id)
   s.visitCooldown = 5
   const decision = nextRoll(s)
-  const ordinaryVisit = decision < Math.max(socialChance, ordinaryChance)
+  const ordinaryVisit = partyVisit || decision < Math.max(socialChance, ordinaryChance)
   const evangelism = ordinaryVisit ? 0 : roadsideEvangelism(map)
   const persuaded = evangelism > 0 && nextRoll(s) < evangelism
   // A traveler drawn by need heads for the counter, not the relic.
   // Wagons and horses stay on the road; only walkers turn aside for a meal.
   if ((ordinaryVisit || persuaded) && served && !needsParking &&
     (socialNeed || Math.min(s.hunger, s.thirst) < hospitalityNeedThreshold(renown, sim.balance)) &&
-    startTavernTrip(sim, s, map, shrineCounters, null)) return true
-  const wantsVisit = decision < ordinaryChance || persuaded
+    startTavernTrip(sim, s, map, shrineCounters, null)) {
+    s.partyVisitAborted = false
+    return true
+  }
+  const wantsVisit = partyVisit || decision < ordinaryChance || persuaded
   const occupiedSeats = new Set([...sim.travelers.values()].flatMap(other =>
     other.shrineSeat && (["toParking","toRelic","visiting","fromRelic","offering"].includes(other.activity) ||
       other.waterVisit?.resumeActivity) ? [other.shrineSeat] : []))
@@ -1453,6 +1887,7 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
     if (parking) s.direction = direction
     s.shrineParking = parking ?? undefined
     s.activity = parking ? "toParking" : "toRelic"
+    s.partyVisitAborted = false
     s.targetId = null
     s.branchEntryLane = s.lane
     s.lane = s.laneOffset
@@ -1503,6 +1938,13 @@ export function stepSim(
   regrowFootpaths(sim.footpaths, dt / GAME_DAY_SECONDS)
   // One reading of the settlement's open counters, shared by everyone this step.
   const counters = openCounters(sim, map)
+  const partyIdentities = travelerIdentities(travelers)
+  stepTravelParties(sim, travelers, map, dt, counters, state => {
+    const t = partyIdentities.get(state.id)!
+    return t.pace * baseSpeed * wearySpeedScale(state)
+      * (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)
+      * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+  }, characterScale, movement)
   const waterSources = map.buildings.filter(b => isWaterSource(b) && isComplete(b))
   const roadWalkerCount = travelers.reduce((count, t) => count + (t.type.id !== "vendor" && t.type.id !== "knight" ? 1 : 0), 0)
   let explorerRank = 0
@@ -1545,9 +1987,9 @@ export function stepSim(
     s.convoyScale = characterScale
     // Riders wait for a passing procession; prayer poses begin once on foot.
     // A vendor who has taken over a stall has left the wagon for good.
-    const riding = t.type.id === "knight" ? knightMounted(s.activity, s.horseRest) :
+    const riding = s.partyRiding || (t.type.id === "knight" ? knightMounted(s.activity, s.horseRest) :
       t.type.id === "vendor" && s.convoy && cartLoadout(s.id).puller !== "hand" && !s.shrineParking?.walking && !s.marketParking?.walking &&
-      !["openingShop", "vending", "packingShop"].includes(s.activity)
+      !["openingShop", "vending", "packingShop"].includes(s.activity))
     const processionNearby = nearProcession(sim.procession, s, s.praying)
     s.praying = !riding && processionNearby
     const socialBreak = s.happiness < HAPPINESS_THRESHOLD && s.gold >= DRINK_PRICE
@@ -1577,7 +2019,7 @@ export function stepSim(
     s.thirst = Math.max(0, s.thirst - sim.balance.rules.thirstDecay * needFactor * hours)
     if (camping || abed) s.stamina = Math.min(100, s.stamina + CAMP_STAMINA_REGEN * hours)
     // Standing at a stall, a post or a performance neither drains nor restores the legs.
-    else if (!["vending", "performing", "listening", "begging", "givingAlms", "posted", "sitting", "buying", "drinking", "drinkingLow"].includes(s.activity)) {
+    else if (!s.partyWaiting && !["vending", "performing", "listening", "begging", "givingAlms", "posted", "sitting", "buying", "drinking", "drinkingLow"].includes(s.activity)) {
       s.stamina = Math.max(0, s.stamina - sim.balance.rules.staminaDecay * hours)
     }
 
@@ -1602,9 +2044,15 @@ export function stepSim(
     const residentSpeed = job ? jobSpeedScale(job, travelerAppearance(map.seed ?? 0, t.id).variant, characterScale) : undefined
     const pace = s.beggar ? TRAVELER_TYPES.beggar.paceMin + roll(t.id, 901) * (TRAVELER_TYPES.beggar.paceMax - TRAVELER_TYPES.beggar.paceMin) : t.pace
     const beggarSpeed = s.beggar ? beggarSpeedScales?.get(t.id) ?? 1 : undefined
-    const targetSpeed = pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (beggarSpeed ?? residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
-    s.moveSpeed = camping || sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
-      easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
+    // A company sets its members' pace; only everyone else eases toward their own.
+    let targetSpeed = 0
+    if (s.partyCarried) s.moveSpeed = s.partySpeed ?? 0
+    else {
+      targetSpeed = pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (beggarSpeed ?? residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+      s.moveSpeed = camping || sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
+        easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
+    }
+    if (s.partyRiding || s.partyBoarding) continue
     const worldSpeed = s.moveSpeed
     const transportBefore = isVendor && s.convoy && !s.shrineParking?.walking ? {
       ...s, offRoadRoute: s.offRoadRoute ? [...s.offRoadRoute] : null,
@@ -1712,7 +2160,7 @@ export function stepSim(
             s.activity = "fromParking"
           } else {
             s.activity = "walking"; s.shrineRoute = null; s.visitCooldown = 30; s.diversionCheck = undefined
-            settleAfterVisit(sim, s, t, map)
+            if (!s.partyVisitAborted && s.partyId === undefined) settleAfterVisit(sim, s, t, map, travelers)
           }
         }
         break
@@ -1813,6 +2261,11 @@ export function stepSim(
       }
       case "idle": {
         s.workScale = characterScale
+        if (dt > 0 && s.home && !s.employer && s.jobless && s.timer <= 0) {
+          settleAfterVisit(sim, s, t, map, travelers, s.home)
+          if (s.employer) break
+          s.timer = GAME_HOUR_SECONDS
+        }
         // Standing behind a counter or in a fold asks little; a settler keeps
         // that post until they are genuinely hungry or tired.
         const hungry = Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD
@@ -2033,16 +2486,19 @@ export function stepSim(
       case "walking":
       case "seeking":
       case "fleeing": {
+        // The company already placed them on its shared path this step.
+        if (s.partyCarried) break
+        const grouped = s.partyId !== undefined
         // A hungry traveler may consider a shrine ahead on their own route.
         // Never turn them back toward a junction they have already passed.
         const renown = sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown
         const ahead = map.site ? s.direction * (map.site.junction - s.progress) : -1
-        const shelter = !!map.site && !s.track && s.activity !== "fleeing" && s.visitCooldown <= 0 &&
+        const shelter = !grouped && !!map.site && !s.track && s.activity !== "fleeing" && s.visitCooldown <= 0 &&
           Math.min(s.hunger, s.thirst) < hospitalityNeedThreshold(renown, sim.balance) && ahead >= 0 && ahead <= 12
-        if ((s.activity === "walking" || s.activity === "seeking") && !needsParking && !s.track && !s.roadShortcut &&
+        if (!grouped && (s.activity === "walking" || s.activity === "seeking") && !needsParking && !s.track && !s.roadShortcut &&
           s.stamina > CAMP_STAMINA_THRESHOLD && Math.min(s.hunger, s.thirst) >= SERVING_THRESHOLD &&
           startSeatRest(sim, s, map, null)) break
-        if (s.stamina <= CAMP_STAMINA_THRESHOLD && !shelter) {
+        if (!grouped && s.stamina <= CAMP_STAMINA_THRESHOLD && !shelter) {
           startCamping(sim, s, t, map)
           break
         }
@@ -2112,7 +2568,7 @@ export function stepSim(
             s.timer = 5
           }
         }
-        if (s.activity === "walking" && !shelter && !s.track && !isVendor && (s.beggar ? s.stamina > CAMP_STAMINA_THRESHOLD : Math.min(s.hunger, s.thirst, s.stamina) > 20)) {
+        if (!grouped && s.activity === "walking" && !shelter && !s.track && !isVendor && (s.beggar ? s.stamina > CAMP_STAMINA_THRESHOLD : Math.min(s.hunger, s.thirst, s.stamina) > 20)) {
           if (s.beggar) {
             s.timer -= dt
             if (s.timer <= 0) {
@@ -2145,7 +2601,7 @@ export function stepSim(
             }
           }
         }
-        if (s.activity === "walking" && !shelter && !s.track && !isVendor && !s.beggar && s.gold >= 1 &&
+        if (!grouped && s.activity === "walking" && !shelter && !s.track && !isVendor && !s.beggar && s.gold >= 1 &&
           Math.min(s.hunger, s.thirst, s.stamina) > 20) {
           const beggar = beggars.firstWithin(s.x, s.z, 3, ({ state }) => state.beggar === true && state.activity === "begging" && !state.praying &&
             s.almsEncounters?.[state.id] !== state.cycle)?.state
@@ -2164,7 +2620,7 @@ export function stepSim(
         }
         // Nobody goes shopping from the middle of the dark forest: on a track
         // they trudge on hungry until they rejoin the road.
-        if (s.activity === "walking" && !shelter && !isVendor && !s.track && (s.hunger <= 0 || s.thirst <= 0)) {
+        if (!grouped && s.activity === "walking" && !shelter && !isVendor && !s.track && (s.hunger <= 0 || s.thirst <= 0)) {
           s.activity = "seeking"
           s.targetId = null
         }
@@ -2256,18 +2712,16 @@ export function stepSim(
           if (s.diversionCheck !== check || s.diversionBuildings !== map.buildings) {
             s.diversionCheck = check
             s.diversionBuildings = map.buildings
-            diversion = findRoadDiversion(map, blockedRoad(map), { x: s.x, z: s.z }, s.progress, direction,
-              p => s.convoy ? convoyPoint(map, p) : roadWorldPoint(map, p, s.lane))
-            if (diversion && s.convoy) {
+            if (s.convoy) {
               const puller = cartLoadout(s.id).puller
               const initial = s.cartPose ?? roadCartPose(map, s.progress, direction, -cartOffset(puller) * characterScale, characterScale)
-              const drive = cartPath(map, initial, diversion.to, puller, characterScale, parkingContext(sim, s, characterScale))
-              diversion = drive ? { ...diversion, via: drive.entry.slice(1, -1), length: routeLength(drive.entry) } : null
-            }
+              diversion = cartRoadDiversion(map, initial, s.progress, direction, puller, characterScale, () => parkingContext(sim, s, characterScale))
+            } else diversion = findRoadDiversion(map, blockedRoad(map), { x: s.x, z: s.z }, s.progress, direction,
+              p => roadWorldPoint(map, p, s.lane))
           }
         }
         const site = map.site
-        if (site && site.branch.length >= 2 && s.activity !== "fleeing" && s.visitCooldown <= 0) {
+        if (!grouped && site && site.branch.length >= 2 && s.activity !== "fleeing" && s.visitCooldown <= 0) {
           const distance = ((direction * (site.junction - s.progress)) % length + length) % length
           const crossingTile = Math.floor(s.progress) !== Math.floor(s.progress + direction * worldSpeed * haste * dt)
           const bypassesJunction = diversion !== null && direction * (site.junction - s.progress) >= 0
@@ -2286,7 +2740,7 @@ export function stepSim(
           stepRoadShortcut(s, map, worldSpeed * dt)
           break
         }
-        if (dt > 0 && s.activity === "walking" && !needsParking && map.footpaths) {
+        if (!grouped && dt > 0 && s.activity === "walking" && !needsParking && map.footpaths) {
           const check = Math.floor(s.progress) * 2 + (direction === 1 ? 1 : 0)
           if (s.shortcutCheck !== check) {
             s.shortcutCheck = check
@@ -2311,7 +2765,7 @@ export function stepSim(
           const mouth = (map.shortcuts ?? []).findIndex(
             (sc) => (direction === 1 ? sc.entry : sc.exit) === after,
           )
-          if (mouth >= 0 && takesTrack(routeState(t, s), nextRoll(s))) {
+          if (!grouped && mouth >= 0 && takesTrack(routeState(t, s), nextRoll(s))) {
             s.track = {
               index: mouth,
               progress: direction === 1 ? 0 : map.shortcuts![mouth].tiles.length - 1,
@@ -2496,7 +2950,7 @@ export function stepSim(
       }
 
       case "camping": {
-        if (s.stamina >= 100) startOffRoadWalk(s, "fromCamp")
+        if (s.partyId === undefined && s.stamina >= 100) startOffRoadWalk(s, "fromCamp")
         break
       }
 
@@ -2526,8 +2980,15 @@ export function stepSim(
       const traveler = travelers[i], to = sim.travelers.get(traveler.id)
       // Vendors record their rendered driver and axle contacts separately.
       if (!to || to.convoy || to.cycle !== previousPositions[i * 3 + 2]) continue
+      let weight = traveler.type.id === "knight" && knightMounted(to.activity, to.horseRest) ? HEAVY_PATH_WEAR : 1
+      if (to.partyCarried) {
+        // A company wears the road once, charged to its head for everyone it moved.
+        const party = sim.parties.get(to.partyId!)
+        if (!party || party.members[0] !== to.id) continue
+        weight = party.carried
+      }
       from.x = previousPositions[i * 3]; from.z = previousPositions[i * 3 + 1]
-      recordWalkingPath(sim.footpaths, map, from, to, traveler.type.id === "knight" && knightMounted(to.activity, to.horseRest) ? HEAVY_PATH_WEAR : 1, nearbyBuildings)
+      recordWalkingPath(sim.footpaths, map, from, to, weight, nearbyBuildings)
     }
   }
   })
