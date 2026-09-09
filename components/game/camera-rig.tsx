@@ -7,6 +7,7 @@ import * as THREE from "three"
 import { groundHeight } from "@/lib/game/map/elevation"
 import { surfaceHeight, ropeHeightAt } from "@/lib/game/map/bridges"
 import { CameraGesture } from "@/lib/game/camera-gesture"
+import { cameraEdgePan } from "@/lib/game/camera-edge-pan"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { worldToTileX, worldToTileZ, type GameMap, type TilePos } from "@/lib/game/map/types"
@@ -23,7 +24,7 @@ import {
 /** How fast the yaw and zoom tweens converge. Higher = snappier. */
 const TWEEN_LAMBDA = 9
 
-/** Keyboard pan speed, in world units per second at the default zoom. */
+/** Keyboard and edge pan speed, in world units per second at the default zoom. */
 const KEY_PAN_SPEED = 18
 
 export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TilePos) => void }) {
@@ -34,6 +35,8 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
   const displayYaw = useRef(yawForView(useCameraStore.getState().viewIndex))
   const displayViewSize = useRef(useCameraStore.getState().viewSize)
   const heldKeys = useRef(new Set<string>())
+  const edgePointer = useRef<PointerEvent | null>(null)
+  const refreshHover = useRef<((event: PointerEvent) => void) | null>(null)
 
   const minPickY = useMemo(() => (map.water?.surface?.reduce((a, b) => Math.min(a, b), 0) ?? 0) - 0.5, [map.water])
   const pickPlane = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), -4.3))
@@ -86,14 +89,22 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
       }
       setHovered(null)
     }
+    refreshHover.current = updateHover
+
+    const trackEdgePointer = (event: PointerEvent) => {
+      edgePointer.current = event.pointerType === "mouse" && event.buttons === 0 && !gesture.active
+        ? event : null
+    }
 
     const onPointerDown = (event: PointerEvent) => {
+      edgePointer.current = null
       gesture.start(event.pointerId, point(event))
       canvas.setPointerCapture(event.pointerId)
       if (gesture.pinching) setHovered(null)
     }
 
     const onPointerMove = (event: PointerEvent) => {
+      trackEdgePointer(event)
       const movement = gesture.move(event.pointerId, point(event))
       if (!movement) {
         if (event.pointerType !== "touch") updateHover(event)
@@ -125,6 +136,8 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     const endDrag = (event: PointerEvent) => {
       if (!gesture.has(event.pointerId)) return
       const tap = gesture.end(event.pointerId, point(event), event.type !== "pointerup")
+      if (event.type === "pointerup") trackEdgePointer(event)
+      else edgePointer.current = null
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
       canvas.style.cursor = gesture.active ? "grabbing" : "grab"
       if (tap && event.button === 0) {
@@ -144,13 +157,16 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
       }
     }
     const onBlur = () => {
+      edgePointer.current = null
       gesture.clear()
       setHovered(null)
       canvas.style.cursor = "grab"
     }
     const onPointerLeave = () => {
+      edgePointer.current = null
       if (!gesture.active) setHovered(null)
     }
+    const onVisibilityChange = () => { if (document.hidden) onBlur() }
 
     // Suppress the context menu so right-drag panning stays available later.
     const onContextMenu = (event: Event) => event.preventDefault()
@@ -160,6 +176,8 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     canvas.addEventListener("click", onClick, true)
     canvas.addEventListener("lostpointercapture", endDrag)
     window.addEventListener("blur", onBlur)
+    document.addEventListener("visibilitychange", onVisibilityChange)
+    canvas.addEventListener("pointerenter", trackEdgePointer)
     canvas.addEventListener("pointermove", onPointerMove, true)
     canvas.addEventListener("pointerup", endDrag)
     canvas.addEventListener("pointercancel", endDrag)
@@ -167,11 +185,15 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     canvas.addEventListener("contextmenu", onContextMenu)
 
     return () => {
+      edgePointer.current = null
+      refreshHover.current = null
       canvas.style.touchAction = previousTouchAction
       canvas.removeEventListener("pointerdown", onPointerDown, true)
       canvas.removeEventListener("click", onClick, true)
       canvas.removeEventListener("lostpointercapture", endDrag)
       window.removeEventListener("blur", onBlur)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+      canvas.removeEventListener("pointerenter", trackEdgePointer)
       canvas.removeEventListener("pointermove", onPointerMove, true)
       canvas.removeEventListener("pointerup", endDrag)
       canvas.removeEventListener("pointercancel", endDrag)
@@ -271,6 +293,7 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     const { viewIndex, viewSize, pan, inputLocked } = useCameraStore.getState()
     if (inputLocked) {
       heldKeys.current.clear()
+      edgePointer.current = null
       displayYaw.current = yawForView(viewIndex)
       displayViewSize.current = viewSize
     }
@@ -290,18 +313,31 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
       dt,
     )
 
-    // Keyboard panning is screen-relative, so it follows the current rotation.
+    // Edge and keyboard panning follow the current camera rotation.
+    let edge = { strafe: 0, forward: 0 }
+    const pointer = edgePointer.current
+    if (pointer && !document.hidden) {
+      const canvas = gl.domElement
+      edge = cameraEdgePan(pointer.clientX, pointer.clientY, canvas.getBoundingClientRect())
+      // Hit-test each frame: a panel can open under a stationary cursor.
+      if ((edge.strafe || edge.forward) && document.elementFromPoint(pointer.clientX, pointer.clientY) !== canvas) {
+        edge = { strafe: 0, forward: 0 }
+        edgePointer.current = null
+      }
+    }
     const keys = heldKeys.current
     const up = keys.has("w") || keys.has("arrowup")
     const down = keys.has("s") || keys.has("arrowdown")
     const left = keys.has("a") || keys.has("arrowleft")
     const right = keys.has("d") || keys.has("arrowright")
-    if (up || down || left || right) {
+    const keyboardPan = up || down || left || right
+    const edgePanning = !keyboardPan && (edge.forward !== 0 || edge.strafe !== 0)
+    if (keyboardPan || edgePanning) {
       const basis = screenBasis(displayYaw.current)
       // Scale with zoom so panning feels the same at every zoom level.
       const speed = KEY_PAN_SPEED * (displayViewSize.current / 26) * dt
-      const forward = (up ? 1 : 0) - (down ? 1 : 0)
-      const strafe = (right ? 1 : 0) - (left ? 1 : 0)
+      const forward = keyboardPan ? (up ? 1 : 0) - (down ? 1 : 0) : edge.forward
+      const strafe = keyboardPan ? (right ? 1 : 0) - (left ? 1 : 0) : edge.strafe
       pan(
         basis.fwdX * forward * speed + basis.rightX * strafe * speed,
         basis.fwdZ * forward * speed + basis.rightZ * strafe * speed,
@@ -326,6 +362,8 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     // Culling, sprite poses, and their batch view anchors must all observe the
     // same transform that the final world and character passes will render.
     cam.updateMatrixWorld()
+    // Building previews must follow the tile moving under a stationary cursor.
+    if (edgePanning && pointer) refreshHover.current?.(pointer)
   }, -4)
 
   return null
