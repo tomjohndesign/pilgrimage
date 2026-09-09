@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "28ad4dd91fe86eaaa4bc3207939dd0a4070f4c1a",
-  "releaseCount": 142,
+  "lastProcessedCommit": "4708bf31d092a8d90ecffa95eebe45d15e6b3e2b",
+  "releaseCount": 143,
   "releases": [
+    {
+      "version": "0.0.157",
+      "title": "Release 0.0.157",
+      "summary": "Add NPC tavern meals and stamina recovery on chairs and benches (#172)",
+      "commit": "4708bf31d092a8d90ecffa95eebe45d15e6b3e2b"
+    },
     {
       "version": "0.0.156",
       "title": "Release 0.0.156",
