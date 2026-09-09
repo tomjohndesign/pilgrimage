@@ -620,6 +620,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   // dark-shade field so it also covers the clearings and trails threading the
   // old growth: without that, the road would happily ride a one-tile game
   // trail straight through the middle.
+  const darkForestFloor = tiles.flatMap((terrain, i) => terrain === "darkwood" ? [i] : [])
   const darkShade = computeDarkShade({ width, depth, tiles, buildings: [] })
   const darkPenalty = (i: number) =>
     tiles[i] === "darkwood" ? DARK_ROAD_COST : DARK_ROAD_COST * darkShade[i]
@@ -864,6 +865,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     road,
     shortcuts,
     darkForests,
+    darkForestFloor,
     site,
     water: waterInfo,
   }

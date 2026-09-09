@@ -110,6 +110,8 @@ export interface GameMap {
   shortcuts?: Shortcut[]
   /** Ancient groves, including those away from the main road. */
   darkForests?: DarkForest[]
+  /** Original old-growth tile indices, before roads and their shoulders clear trees. */
+  darkForestFloor?: number[]
   /** Present on generated maps: the relic's hovel and the branch that reaches it. */
   site?: FoundingSite
 }
