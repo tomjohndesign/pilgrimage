@@ -90,8 +90,8 @@ export interface TavernPlan {
 }
 
 /**
- * Reserve a table before setting out, and only promise a trip that can actually
- * be walked: to the counter first, and on to the seat afterwards.
+ * Prefer a free bench, sharing an occupied one when needed. Only promise a
+ * trip that can be walked: to the counter first, then on to the seat.
  */
 export function tavernVisitPlan(
   map: GameMap,
@@ -106,9 +106,10 @@ export function tavernVisitPlan(
   const route = fine === undefined ? settlementRoute(map, map.buildings, from, counter.tile, false, true)
     ?.map(p => ({ x: tileToWorldX(map, p.x), z: tileToWorldZ(map, p.z), y: surfaceHeight(map, p.x, p.z) })) : fine
   if (!route) return null
-  const seats = tavernSeats(map, building).filter(seat => !occupied.has(`${building.id}:${seat.id}`))
   if (building.buildType !== "tavern") return { buildingId: building.id, counter, seat: null, route }
-  for (const seat of seats) {
+  const seats = tavernSeats(map, building)
+  const reserved = (seat: TavernSeat) => occupied.has(`${building.id}:${seat.id}`)
+  for (const seat of [...seats.filter(seat => !reserved(seat)), ...seats.filter(reserved)]) {
     if (tavernWalkingRoute(map, counter.point, seat.point, seat.id)) {
       return { buildingId: building.id, counter, seat, route }
     }

@@ -879,7 +879,7 @@ describe("houses, counters and posts", () => {
     expect(sim.shrineGold).toBe(0)
   })
 
-  it("keeps one table per customer and leaves the penniless on the road", () => {
+  it("shares benches when full and leaves the penniless on the road", () => {
     const { map, traveler } = fixture()
     const people = Array.from({ length: 8 }, (_, id) => {
       const t = traveler(id, id % 2 === 0 ? 1 : -1)
@@ -889,10 +889,10 @@ describe("houses, counters and posts", () => {
     })
     const sim = createEstablishedShrine(people, map)
     const tavern = staffTavern(sim, map)
-    run(sim, people, map, 200, () => [...sim.travelers.values()].filter(s => s.activity === "sitting").length === tavernSeats(map, tavern).length)
+    run(sim, people, map, 200, () => [...sim.travelers.values()].filter(s => s.activity === "sitting").length === people.length - 1)
     const seated = [...sim.travelers.values()].filter(s => s.activity === "sitting")
-    expect(seated).toHaveLength(tavernSeats(map, tavern).length)
-    expect(new Set(seated.map(s => s.tavernVisit!.plan.seat!.id)).size).toBe(seated.length)
+    expect(seated).toHaveLength(people.length - 1)
+    expect(new Set(seated.map(s => s.tavernVisit!.plan.seat!.id)).size).toBe(tavernSeats(map, tavern).length)
     // Nobody without the price of a meal turns off the road for one.
     expect(sim.travelers.get(7)!.tavernVisit).toBeUndefined()
   })
@@ -1435,8 +1435,9 @@ describe("happiness and church devotion", () => {
     }
     run(sim, [t], map, 1)
     const s = sim.travelers.get(0)!
-    expect(s.activity).toBe("walking")
-    expect(s.tavernVisit).toBeUndefined()
+    expect(s.activity).toBe(reason === "full" ? "toTavern" : "walking")
+    if (reason === "full") expect(s.tavernVisit?.plan.seat).toBeDefined()
+    else expect(s.tavernVisit).toBeUndefined()
     expect(s.shrineSeat).toBeUndefined()
   })
 
@@ -1533,7 +1534,7 @@ describe("choosing tavern company or free water", () => {
     }
   })
 
-  it.each(["poor", "closed", "full", "blocked"] as const)("falls back to free water when an unhappy customer's tavern is %s", reason => {
+  it.each(["poor", "closed", "full", "blocked"] as const)("shares a full tavern or falls back to free water when the tavern is %s", reason => {
     const { map, t, sim, s, tavern } = choice(20, "shrine", reason === "poor" ? 0 : 10)
     if (reason === "closed") sim.travelers.delete(-1)
     if (reason === "full") for (const [i, seat] of tavernSeats(map, tavern).entries()) {
@@ -1544,7 +1545,10 @@ describe("choosing tavern company or free water", () => {
       for (let z = 0; z < map.depth; z++) map.tiles[z * map.width + 17] = "water"
     }
     stepSim(sim, [t], map, 1.5, .1)
-    expect(s.activity).toBe("toWater")
-    expect(s.tavernVisit).toBeUndefined()
+    expect(s.activity).toBe(reason === "full" ? "toTavern" : "toWater")
+    if (reason === "full") {
+      expect(s.tavernVisit?.plan.seat).toBeDefined()
+      expect(s.waterVisit).toBeUndefined()
+    } else expect(s.tavernVisit).toBeUndefined()
   })
 })

@@ -25,6 +25,18 @@ function fixture(rotation: BuildingRotation = 0) {
 }
 
 describe("tavern aisles", () => {
+  it("shares occupied benches when full and prefers a newly freed seat", () => {
+    const { map, tavern } = fixture(), seats = tavernSeats(map, tavern)
+    const occupied = new Set(seats.map(seat => `${tavern.id}:${seat.id}`))
+    const from = { x: 10, z: 20 }
+    expect(tavernVisitPlan(map, tavern, from, occupied)?.seat?.id).toBe(seats[0].id)
+    const freed = seats[seats.length - 1]
+    occupied.delete(`${tavern.id}:${freed.id}`)
+    expect(tavernVisitPlan(map, tavern, from, occupied)?.seat?.id).toBe(freed.id)
+    occupied.add(`${tavern.id}:${freed.id}`)
+    expect(tavernVisitPlan(map, tavern, from, occupied)?.seat?.id).toBe(seats[0].id)
+  })
+
   it.each([0, 1, 2, 3] as const)("rests without coin or a keeper and frees the seat after a small recovery at rotation %s", rotation => {
     const { map, tavern } = fixture(rotation)
     const traveler = { ...townResidents(map)[0].traveler, id: 7, type: TRAVELER_TYPES.peasant,

@@ -62,7 +62,7 @@ export class CharacterBatch {
   private paletteHeight = { value: 1 }
   private materials: THREE.MeshBasicMaterial[]
 
-  constructor(entry: CharacterBatchEntry, worldTexel: { value: number }, order: number) {
+  constructor(entry: CharacterBatchEntry, worldTexel: { value: number }, order: number, readonly compact = false) {
     this.color = spriteTextureView(entry.color ?? entry.sprite.material.map!)
     this.color.offset.set(0, 0); this.color.repeat.set(1, 1)
     this.materials = [false, true].map(ids => {
@@ -73,6 +73,7 @@ export class CharacterBatch {
         shader.uniforms.characterPaletteHeight = this.paletteHeight
         shader.vertexShader = `attribute vec4 characterUv;
           attribute vec4 characterView;
+          ${compact ? "attribute vec4 characterAnchor; attribute vec3 characterAxisX; attribute vec3 characterAxisY;" : ""}
           attribute vec4 characterGround;
           attribute vec2 characterCenter;
           attribute vec3 characterId;
@@ -83,14 +84,21 @@ export class CharacterBatch {
         shader.vertexShader = shader.vertexShader.replace("#include <uv_vertex>", `#include <uv_vertex>
           vMapUv = uv * characterUv.xy + characterUv.zw;
           vCharacterId = characterId; vCharacterIndex = characterIndex;`)
-        shader.vertexShader = shader.vertexShader.replace("#include <project_vertex>", `#include <project_vertex>
+        shader.vertexShader = shader.vertexShader.replace("#include <project_vertex>", compact ? `
+          vec4 characterWorldAnchor = modelMatrix * characterAnchor;
+          vec3 characterWorldX = (modelMatrix * vec4(characterAxisX, 0.0)).xyz;
+          vec3 characterWorldY = (modelMatrix * vec4(characterAxisY, 0.0)).xyz;
+          vec4 mvPosition = characterView;
+          vec2 characterScale = vec2(length(characterWorldX), length(characterWorldY));
+          mvPosition.xy += (position.xy - (characterCenter - vec2(.5))) * characterScale;
+          gl_Position = projectionMatrix * mvPosition;` : `#include <project_vertex>
           mat4 characterWorld = modelMatrix * instanceMatrix;
           mvPosition = characterView;
           vec2 characterScale = vec2(length(characterWorld[0].xyz), length(characterWorld[1].xyz));
           mvPosition.xy += (position.xy - (characterCenter - vec2(.5))) * characterScale;
           gl_Position = projectionMatrix * mvPosition;`)
         applySpriteDepth(shader, this.viewport, worldTexel, { value: new THREE.Vector4(0, 1, 0, 0) }, { map: { value: entry.depth.map.value }, enabled: { value: true } },
-          { anchor: "(modelMatrix * instanceMatrix[3])", viewAnchor: "characterView", size: "length(characterWorld[0].xyz)", ground: "characterGround" })
+          { anchor: compact ? "characterWorldAnchor" : "(modelMatrix * instanceMatrix[3])", viewAnchor: "characterView", size: compact ? "length(characterWorldX)" : "length(characterWorld[0].xyz)", ground: "characterGround" })
         shader.fragmentShader = `flat varying vec3 vCharacterId;
           flat varying float vCharacterIndex;
           uniform sampler2D characterPalette;
@@ -108,12 +116,13 @@ export class CharacterBatch {
             }`}`)
       }
       material.onBeforeRender = renderer => { renderer.getCurrentViewport(this.viewport) }
-      material.customProgramCacheKey = () => ids ? "character-batch-id-v3" : `character-batch-color-v3-${!!entry.complexion}`
+      material.customProgramCacheKey = () => `character-batch-v4-${compact}-${ids}-${!!entry.complexion}`
       return material
     })
     this.root.name = "character-atlas-batch"
     this.root.userData.order = order
     this.root.userData.viewMatrix = new THREE.Matrix4()
+    this.root.userData.compact = compact
   }
 
   write(entries: CharacterBatchEntry[], camera: THREE.Camera, parentsReady = false): void {
@@ -126,6 +135,9 @@ export class CharacterBatch {
       this.capacity = Math.max(16, 2 ** Math.ceil(Math.log2(entries.length)))
       this.geometry = new THREE.PlaneGeometry(1, 1)
       for (const [name, size] of [["characterUv", 4], ["characterView", 4], ["characterGround", 4], ["characterCenter", 2], ["characterId", 3], ["characterIndex", 1]] as const) {
+        this.geometry.setAttribute(name, new THREE.InstancedBufferAttribute(new Float32Array(this.capacity * size), size).setUsage(THREE.DynamicDrawUsage))
+      }
+      if (this.compact) for (const [name, size] of [["characterAnchor", 4], ["characterAxisX", 3], ["characterAxisY", 3]] as const) {
         this.geometry.setAttribute(name, new THREE.InstancedBufferAttribute(new Float32Array(this.capacity * size), size).setUsage(THREE.DynamicDrawUsage))
       }
       const indices = this.geometry.getAttribute("characterIndex")
@@ -147,18 +159,27 @@ export class CharacterBatch {
     }
     const uv = this.geometry.getAttribute("characterUv"), ground = this.geometry.getAttribute("characterGround")
     const view = this.geometry.getAttribute("characterView")
+    const anchor = this.geometry.getAttribute("characterAnchor"), axisX = this.geometry.getAttribute("characterAxisX"), axisY = this.geometry.getAttribute("characterAxisY")
     const center = this.geometry.getAttribute("characterCenter"), id = this.geometry.getAttribute("characterId")
     const palette = this.palette.image.data as Float32Array
     let paletteChanged = this.palette.version === 0
     let fixedChanged = false
+    let direct = 0
     entries.forEach((entry, i) => {
       const sprite = entry.sprite, texture = entry.color ?? sprite.material.map!, plane = entry.ground.value
+      const parent = sprite.parent, q = sprite.quaternion, position = sprite.position
+      // A normal billboard has no local offset/rotation. Its ready pose parent
+      // supplies the anchor; only two scaled basis columns reach the shaders.
+      // Retain the general path for editor transforms and manual matrices.
+      const compactParent = this.compact && parentsReady && parent && sprite.matrixAutoUpdate && sprite.matrixWorldAutoUpdate &&
+        position.x === 0 && position.y === 0 && position.z === 0 && q.x === 0 && q.y === 0 && q.z === 0 && q.w === 1
       // Game figures have already resolved their pose root for ground contact.
-      if (parentsReady) updateBillboardWorld(sprite)
+      if (compactParent) direct++
+      else if (parentsReady) updateBillboardWorld(sprite)
       else sprite.updateWorldMatrix(true, false)
       // Match Three's CPU model-view multiply before conversion to float. Doing
       // this in the vertex shader rounds differently at coincident pose depths.
-      const cameraView = camera.matrixWorldInverse.elements, world = sprite.matrixWorld.elements
+      const cameraView = camera.matrixWorldInverse.elements, world = compactParent ? parent.matrixWorld.elements : sprite.matrixWorld.elements
       const x = world[12], y = world[13], z = world[14], w = world[15]
       // Only the translation column is consumed. Preserve Matrix4's exact
       // multiply/add order without computing twelve unused matrix entries.
@@ -167,7 +188,12 @@ export class CharacterBatch {
         cameraView[1] * x + cameraView[5] * y + cameraView[9] * z + cameraView[13] * w,
         cameraView[2] * x + cameraView[6] * y + cameraView[10] * z + cameraView[14] * w,
         cameraView[3] * x + cameraView[7] * y + cameraView[11] * z + cameraView[15] * w)
-      this.body.instanceMatrix.array.set(sprite.matrixWorld.elements, i * 16)
+      if (this.compact) {
+        const sx = compactParent ? sprite.scale.x : 1, sy = compactParent ? sprite.scale.y : 1
+        anchor.setXYZW(i, x, y, z, w)
+        axisX.setXYZ(i, world[0] * sx + 0, world[1] * sx + 0, world[2] * sx + 0)
+        axisY.setXYZ(i, world[4] * sy + 0, world[5] * sy + 0, world[6] * sy + 0)
+      } else this.body.instanceMatrix.array.set(sprite.matrixWorld.elements, i * 16)
       if (entry.uv) uv.setXYZW(i, entry.uv.x, entry.uv.y, entry.uv.z, entry.uv.w)
       else uv.setXYZW(i, texture.repeat.x, texture.repeat.y, texture.offset.x, texture.offset.y)
       ground.setXYZW(i, plane.x, plane.y, plane.z, plane.w)
@@ -206,7 +232,13 @@ export class CharacterBatch {
     for (const attribute of [uv, view, ground]) attribute.needsUpdate = true
     if (fixedChanged) { center.needsUpdate = true; id.needsUpdate = true }
     this.body.count = this.ids.count = entries.length
-    this.body.instanceMatrix.needsUpdate = true
+    if (this.compact) for (const attribute of [anchor, axisX, axisY]) attribute.needsUpdate = true
+    else this.body.instanceMatrix.needsUpdate = true
+    // Ordinary recurring dynamic uploads only; excludes palette/identity changes
+    // and initial allocation. Three uploads full capacity without update ranges.
+    const preparation = this.root.userData.batchPreparation ??= {}
+    preparation.entries = entries.length; preparation.direct = direct
+    preparation.dynamicBytes = this.capacity * (this.compact ? 22 : 28) * 4
     if (paletteChanged) this.palette.needsUpdate = true
   }
 
