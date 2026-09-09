@@ -154,7 +154,7 @@ function Chooser({
 }
 
 /** Top-level navigation, folded into the play view. Controls live in here too. */
-function MenuPanel({ onClose }: { onClose: () => void }) {
+function MenuPanel({ onClose, playing }: { onClose: () => void; playing: boolean }) {
   const [showControls, setShowControls] = useState(false)
 
   return (
@@ -184,17 +184,17 @@ function MenuPanel({ onClose }: { onClose: () => void }) {
             ))}
           </div>
         ))}
-        <button
+        {playing && <button
           type="button"
           onClick={() => setShowControls((open) => !open)}
           aria-expanded={showControls}
           className="text-left font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red"
         >
           Controls {showControls ? "▾" : "▸"}
-        </button>
-        <button type="button" onClick={() => { useCameraStore.getState().reset(); onClose() }}
-          className="text-left font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red">Reset camera</button>
-        {showControls && (
+        </button>}
+        {playing && <button type="button" onClick={() => { useCameraStore.getState().reset(); onClose() }}
+          className="text-left font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red">Reset camera</button>}
+        {playing && showControls && (
           <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
             {CONTROLS.map(([key, action]) => (
               <div key={key} className="contents">
@@ -216,7 +216,9 @@ function MenuPanel({ onClose }: { onClose: () => void }) {
 function SeedField({
   seed,
   onSeedChange,
+  onValidityChange,
 }: {
+  onValidityChange?: (valid: boolean) => void
   seed: number | null
   onSeedChange: (seed: number) => void
 }) {
@@ -242,13 +244,20 @@ function SeedField({
     <div className="flex flex-col gap-1.5">
       <div className="flex items-stretch gap-1.5">
         <input
+        id={onValidityChange ? "landing-seed" : undefined}
         value={input}
         onChange={(event) => {
-          setInput(event.target.value)
-          setInvalid(false)
+          const value = event.target.value
+          setInput(value)
+          const parsed = parseSeed(value)
+          setInvalid(onValidityChange ? parsed === null : false)
+          if (onValidityChange) {
+            onValidityChange(parsed !== null)
+            if (parsed !== null) onSeedChange(parsed)
+          }
         }}
         onKeyDown={(event) => {
-          if (event.key === "Enter") apply()
+          if (event.key === "Enter" && !onValidityChange) apply()
         }}
         inputMode="numeric"
         spellCheck={false}
@@ -258,7 +267,7 @@ function SeedField({
           invalid ? "border-red" : "border-rule focus:border-gold"
         }`}
         />
-        <HudButton onClick={apply}>Apply</HudButton>
+        {!onValidityChange && <HudButton onClick={apply}>Apply</HudButton>}
       </div>
       {invalid && <div className="text-[11px] italic text-red">Digits only</div>}
     </div>
@@ -604,6 +613,10 @@ function MonkPanel({ monk }: { monk: Monk }) {
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1N5-0 — hover details
  */
 export function GameHud({
+  playing,
+  starting,
+  canStart,
+  onPlay,
   map,
   seed,
   relic,
@@ -622,6 +635,10 @@ export function GameHud({
   onSeedChange,
   cheats,
 }: {
+  playing: boolean
+  starting: boolean
+  canStart: boolean
+  onPlay: () => void
   cheats: { blasterPastor: boolean; lastMarch: boolean }
   economy: ReturnType<typeof useSettlement>
   map: GameMap | null
@@ -641,6 +658,7 @@ export function GameHud({
   onNewMap: (size: number) => void
   onSeedChange: (seed: number) => void
 }) {
+  const [seedValid, setSeedValid] = useState(true)
   const readRuntime = useBugReportRuntime()
   const [report, setReport] = useState<BugReportDiagnostics | null>(null)
   const [reportError, setReportError] = useState("")
@@ -704,6 +722,7 @@ export function GameHud({
   }, [map?.road])
 
   useEffect(() => {
+    if (!playing) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key === "Escape") {
@@ -730,7 +749,7 @@ export function GameHud({
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [map, economy.chooseBuild])
+  }, [map, economy.chooseBuild, playing])
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     Seed: true,
     Pixelation: true,
@@ -772,49 +791,70 @@ export function GameHud({
   return (
     <Tooltip.Provider delayDuration={180} skipDelayDuration={100}>
     <BugReportDialog diagnostics={report} onClose={() => setReport(null)} />
-    <div className="game-hud" data-panel={menuOpen ? "menu" : panel ?? (selection ? "selection" : "none")}>
+    <div className="game-hud" data-landing={!playing} data-panel={menuOpen ? "menu" : panel ?? (selection ? "selection" : "none")}>
       <div className="hud-frame" aria-hidden="true" />
       <header className="hud-header">
         <div className="hud-resource-bar">
-          <HudResources economy={economy} settlers={economy.residents.length - monks.length} open={panel === "settlement"} onToggle={() => {
+          {playing ? <HudResources economy={economy} settlers={economy.residents.length - monks.length} open={panel === "settlement"} onToggle={() => {
             setPanel((current) => current === "settlement" ? null : "settlement")
             setMenuOpen(false)
             economy.chooseBuild(null)
             useCameraStore.getState().select(null)
-          }} />
-          <Link href="/" className="hud-brand" title={`Pilgrimage ${CURRENT_VERSION}`}>Pilgrimage</Link>
+          }} /> : <nav className="hud-site-links" aria-label="Site navigation">
+            {SITE_MENU.filter(item => item.href !== "/play").map(item => <Link key={item.href} href={item.href} title={item.description}>{item.label}</Link>)}
+          </nav>}
         </div>
         <div className="hud-header-right">
         <div className="hud-header-actions">
           <MusicPlayer className="hud-header-button" compact />
-          <button type="button" className="hud-header-button" aria-label="World settings" title="World settings"
+          {playing && <button type="button" className="hud-header-button" aria-label="World settings" title="World settings"
             aria-expanded={panel === "world"} aria-controls="world-settings" onClick={() => {
               setPanel((current) => current === "world" ? null : "world")
               setMenuOpen(false)
               economy.chooseBuild(null)
               useCameraStore.getState().select(null)
-            }}><Settings size={16} /></button>
-          <button type="button" className="hud-header-button" aria-label="Menu" title="Menu"
+            }}><Settings size={16} /></button>}
+          {playing && <button type="button" className="hud-header-button" aria-label="Menu" title="Menu"
             aria-expanded={menuOpen} onClick={() => {
               setMenuOpen((open) => !open)
               useCameraStore.getState().select(null)
               setPanel(null)
               economy.chooseBuild(null)
-            }}><Menu size={16} /></button>
-          {menuOpen && <MenuPanel onClose={() => setMenuOpen(false)} />}
+            }}><Menu size={16} /></button>}
+          {playing && menuOpen && <MenuPanel playing={playing} onClose={() => setMenuOpen(false)} />}
         </div>
-        <HudClock />
+        {playing && <HudClock />}
         </div>
       </header>
-      <HudHelp content={<><div className="hud-help-title">Character population</div><p>{travelers.length} travelers across the map at {Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}% traffic density. Increase for playtesting, up to 10,000 travelers on the largest map.</p><p>Scenery and sprite detail adjust when the game slows down. Travelers outside the view keep moving and living in the world.</p></>}>
+      {playing && <HudHelp content={<><div className="hud-help-title">Character population</div><p>{travelers.length} travelers across the map at {Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}% traffic density. Increase for playtesting, up to 10,000 travelers on the largest map.</p><p>Scenery and sprite detail adjust when the game slows down. Travelers outside the view keep moving and living in the world.</p></>}>
         <section className="hud-traffic" aria-label="Traffic">
           <label htmlFor="traffic-density">Characters</label>
           <input id="traffic-density" type="range" aria-label="Traffic density" aria-valuetext={`${travelers.length} travelers, ${Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}% traffic density`} min={0} max={MAX_TRAFFIC} step={1} value={settings.traffic} onChange={(event) => set({ traffic: Number(event.target.value) })} />
           <output htmlFor="traffic-density">{travelers.length}</output>
         </section>
-      </HudHelp>
+      </HudHelp>}
 
-      {panel === "world" && <aside id="world-settings" className="hud-world hud-well" aria-label="World settings">
+      {!starting && <div className="hud-landing-heading">
+        <h1 className="hud-landing-title">Pilgrimage</h1>
+        <p className="hud-landing-subtitle">A medieval settlement builder</p>
+      </div>}
+      {!starting && <form className="hud-landing-setup hud-well" aria-label="Start a settlement" onSubmit={event => {
+        event.preventDefault()
+        if (canStart && seedValid) onPlay()
+      }}>
+        <MapSizeControl value={settings.size} onChange={size => set({ size })} />
+        <label className="text-[13px] text-ink-light" htmlFor="landing-seed">World seed</label>
+        <SeedField seed={seed} onSeedChange={onSeedChange} onValidityChange={setSeedValid} />
+        <button type="submit" className="hud-action hud-action-primary hud-landing-play" disabled={!canStart || !seedValid}>Play</button>
+      </form>}
+      {!starting && <footer className="hud-landing-footer">
+        <span>Created by <a href="https://twitter.com/tomjohndesign" target="_blank" rel="noopener noreferrer">Tomjohn</a></span>
+        <a href="https://www.youtube.com/@pilgrimagegame" target="_blank" rel="noopener noreferrer">Devblog</a>
+        <a href="https://github.com/tomjohndesign/pilgrimage" target="_blank" rel="noopener noreferrer">Github</a>
+        <Link href="/changelog">{CURRENT_VERSION}</Link>
+      </footer>}
+
+      {playing && panel === "world" && <aside id="world-settings" className="hud-world hud-well" aria-label="World settings">
         <div className="hud-world-heading"><span>World</span><button type="button" aria-label="Close world settings" onClick={() => setPanel(null)}><X size={16} /></button></div>
         <div className="mb-4 flex flex-wrap gap-2">
           <NewMapDialog defaultSize={defaultMapSize} onCreate={onNewMap} />
@@ -1089,15 +1129,15 @@ export function GameHud({
         </>}
       </aside>}
 
-      <BuildControls economy={economy} open={panel === "build"} onToggle={toggleBuild} onClose={closeBuild}
+      {playing && <BuildControls economy={economy} open={panel === "build"} onToggle={toggleBuild} onClose={closeBuild}
         minimapOpen={minimapOpen} onToggleMinimap={() => {
           setMinimapOpen((open) => !open)
           setMenuOpen(false)
           setPanel(null)
           economy.chooseBuild(null)
           useCameraStore.getState().select(null)
-        }} />
-      {map && <aside id="minimap-dock" data-map-open={minimapOpen} className="hud-details-dock hud-well" aria-label="Minimap and selection" data-selected={!!selection || panel === "settlement"}>
+        }} />}
+      {playing && map && <aside id="minimap-dock" data-map-open={minimapOpen} className="hud-details-dock hud-well" aria-label="Minimap and selection" data-selected={!!selection || panel === "settlement"}>
         {panel === "settlement" && <div className="hud-inspector" id="settlement-details">
           <SettlementPanel economy={economy} monks={monks} relic={relic} onClose={() => setPanel(null)} />
         </div>}

@@ -132,6 +132,7 @@ interface RoadSurface {
 type RoadLookUniforms = Record<keyof RoadLook | "pixelRatio", { value: number }>
 
 interface TileMaterialOptions {
+  tileCoverage?: THREE.DataTexture
   grassTexture: THREE.Texture
   groundTexture: THREE.Texture
   sandTexture: THREE.Texture
@@ -194,6 +195,7 @@ interface TileMaterialOptions {
 
 
 function makeTileMaterial({
+  tileCoverage,
   grassTexture,
   groundTexture,
   sandTexture,
@@ -206,9 +208,10 @@ function makeTileMaterial({
   road,
   edgeOnly = false,
 }: TileMaterialOptions): THREE.MeshLambertMaterial {
-  const material = new THREE.MeshLambertMaterial()
+  const material = new THREE.MeshLambertMaterial({ transparent: !!tileCoverage })
   material.onBeforeCompile = (shader) => {
     elevationShader(shader, !road)
+    if (tileCoverage) tileCoverageShader(shader, tileCoverage)
     shader.uniforms.forestFloorMap = { value: treeGround.floor }
     shader.uniforms.terrainEdgeGrain = { value: treeGround.grain }
     shader.uniforms.treeGroundMap = { value: treeGround.texture }
@@ -502,8 +505,24 @@ function makeTileMaterial({
   // The grid origin is baked into the shader source, so it has to be part of
   // the program key or two maps of different sizes would share one program.
   const gridKey = gridOrigin ? `${gridOrigin.x.toFixed(3)}:${gridOrigin.z.toFixed(3)}` : "nogrid"
-  material.customProgramCacheKey = () => `tiles-${road ? "road" : "ground"}-${gridKey}-forest-floor-sprite-atlas-v11${edgeOnly ? "-edge" : ""}`
+  material.customProgramCacheKey = () => `tiles-${road ? "road" : "ground"}-${gridKey}-forest-floor-sprite-atlas-v11${edgeOnly ? "-edge" : ""}${tileCoverage ? "-coverage" : ""}`
   return material
+}
+
+/** Presentation-only coverage, sampled at tile centres in every terrain pass.
+ * Keeps previews on the live ground shader without changing its surface artwork. */
+function tileCoverageShader(shader: Parameters<THREE.Material["onBeforeCompile"]>[0], texture: THREE.DataTexture) {
+  shader.uniforms.tileCoverage = { value: texture }
+  shader.uniforms.tileCoverageSize = { value: new THREE.Vector2(texture.image.width, texture.image.height) }
+  shader.vertexShader = `uniform sampler2D tileCoverage;
+uniform vec2 tileCoverageSize;
+varying float vTileCoverage;\n` + shader.vertexShader
+  shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
+    vTileCoverage = texture2D(tileCoverage, instanceMatrix[3].xz / tileCoverageSize + .5).r;`)
+  shader.fragmentShader = "varying float vTileCoverage;\n" + shader.fragmentShader
+  shader.fragmentShader = shader.fragmentShader
+    .replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\nif (vTileCoverage < .001) discard;")
+    .replace("#include <opaque_fragment>", "diffuseColor.a *= vTileCoverage;\n#include <opaque_fragment>")
 }
 
 /**
@@ -632,6 +651,10 @@ const NO_TREES: readonly TreePlacement[] = []
 
 type TerrainProps = {
   map: GameMap
+  /** Optional per-tile red-channel opacity for a decorative terrain footprint. */
+  tileCoverage?: THREE.DataTexture
+  /** Omit the deep earth slab for an isolated terrain preview. */
+  slab?: boolean
   /** The rendered stand, with stable indices shared by the felling store. */
   trees?: readonly TreePlacement[]
   /** Simulation removals only; hiding the tree display leaves canopy shade intact. */
@@ -872,16 +895,20 @@ export function TerrainTiles(props: TerrainProps) {
   const slabPosition: [number, number, number] = [0, shared.floor - SLAB_THICKNESS / 2, 0]
   const slabArgs: [number, number, number] = [map.width + SLAB_EXPAND, SLAB_THICKNESS, map.depth + SLAB_EXPAND]
   return <group name="terrain">
-    <mesh position={slabPosition}><boxGeometry args={slabArgs} /><meshLambertMaterial map={dirt} /></mesh>
-    <mesh position={slabPosition} layers-mask={OUTLINE_ID_LAYER_MASK}><boxGeometry args={slabArgs} /><meshBasicMaterial color="black" toneMapped={false} /></mesh>
+    {props.slab !== false && <>
+      <mesh position={slabPosition}><boxGeometry args={slabArgs} /><meshLambertMaterial map={dirt} /></mesh>
+      <mesh position={slabPosition} layers-mask={OUTLINE_ID_LAYER_MASK}><boxGeometry args={slabArgs} /><meshBasicMaterial color="black" toneMapped={false} /></mesh>
+    </>}
     <TerrainMapContext.Provider value={map}><TerrainContext.Provider value={surfaces}>{blocks.map((bounds, index) => <TerrainTileBlock key={bounds.id}
       roadTier={props.roadTier} traffic={props.traffic} relicTraffic={props.relicTraffic} look={props.look} showGrid={props.showGrid}
+      tileCoverage={props.tileCoverage}
       regrowRoads={props.regrowRoads} bounds={bounds} revision={revisions[index]} textures={textures}
       traveledRoads={snapshots.get(bounds.id)!.roads} wear={snapshots.get(bounds.id)!.wear} />)}</TerrainContext.Provider></TerrainMapContext.Provider>
   </group>
 }
 
 const TerrainTileBlock = memo(function TerrainTileBlock({
+  tileCoverage,
   roadTier = DEFAULT_ROAD_TIER, traffic = DEFAULT_TRAFFIC, relicTraffic = traffic,
   look = DEFAULT_ROAD_LOOK, showGrid = false, traveledRoads, regrowRoads = false, bounds, revision, textures, wear: wearSnapshot,
 }: Omit<TerrainProps, "map"> & { bounds: TerrainBlockBounds; revision: object; textures: { roadTexture: THREE.Texture; trailTexture: THREE.Texture; grass: THREE.Texture; ground: THREE.Texture; sand: THREE.Texture; dirt: THREE.Texture }; wear: number[] }) {
@@ -990,13 +1017,14 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
     [showGrid, map.width, map.depth],
   )
   const groundMaterial = useMemo(
-    () => makeTileMaterial({ grassTexture: grass, groundTexture: ground, sandTexture: sand, palette, waterPalette, growth, treeGround, cliffTexture: dirt, gridOrigin }),
-    [grass, ground, sand, palette, waterPalette, growth, treeGround, dirt, gridOrigin],
+    () => makeTileMaterial({ grassTexture: grass, groundTexture: ground, sandTexture: sand, palette, waterPalette, growth, treeGround, cliffTexture: dirt, gridOrigin, tileCoverage }),
+    [grass, ground, sand, palette, waterPalette, growth, treeGround, dirt, gridOrigin, tileCoverage],
   )
   useEffect(() => () => groundMaterial.dispose(), [groundMaterial])
   const roadMaterial = useMemo(
     () =>
       makeTileMaterial({
+        tileCoverage,
         grassTexture: grass,
         groundTexture: ground,
         sandTexture: sand,
@@ -1008,13 +1036,14 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
         gridOrigin,
         road: { texture: roadTexture, edgeWear: tier.edgeWear, look: lookUniforms, segments: segmentUniforms, floors: floorTexture, trail: trailTexture, isDirt: tier.tier === 0 },
       }),
-    [grass, ground, sand, palette, waterPalette, growth, treeGround, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentUniforms, floorTexture],
+    [grass, ground, sand, palette, waterPalette, growth, treeGround, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentUniforms, floorTexture, tileCoverage],
   )
   useEffect(() => () => roadMaterial.dispose(), [roadMaterial])
   // The same road surface reduced to its edge line, for the outline pass.
   const edgeMaterial = useMemo(
     () =>
       makeTileMaterial({
+        tileCoverage,
         grassTexture: grass,
         groundTexture: ground,
         sandTexture: sand,
@@ -1027,15 +1056,19 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
         road: { texture: roadTexture, edgeWear: tier.edgeWear, look: lookUniforms, segments: segmentUniforms, floors: floorTexture, trail: trailTexture, isDirt: tier.tier === 0 },
         edgeOnly: true,
       }),
-    [grass, ground, sand, palette, waterPalette, growth, treeGround, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentUniforms, floorTexture],
+    [grass, ground, sand, palette, waterPalette, growth, treeGround, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentUniforms, floorTexture, tileCoverage],
   )
   useEffect(() => () => edgeMaterial.dispose(), [edgeMaterial])
   const idGeometry = useMemo(() => makeTileGeometry(geometryCount), [geometryCount])
   const idMaterial = useMemo(() => {
     const material = new THREE.MeshBasicMaterial({ color: "black", toneMapped: false })
-    material.onBeforeCompile = shader => elevationShader(shader)
+    material.onBeforeCompile = shader => {
+      elevationShader(shader)
+      if (tileCoverage) tileCoverageShader(shader, tileCoverage)
+    }
+    material.customProgramCacheKey = () => `terrain-id${tileCoverage ? "-coverage" : ""}`
     return material
-  }, [])
+  }, [tileCoverage])
   useEffect(() => () => { idGeometry.dispose(); idMaterial.dispose() }, [idGeometry, idMaterial])
 
   const groundGeometry = useMemo(() => makeTileGeometry(geometryCount - roadCount), [geometryCount, roadCount])
