@@ -1,4 +1,7 @@
+import { routeBounds, ROUTE_EDGE_INSET } from "./route-bounds"
+import { createCrossroads } from "./crossroads"
 import { straightenRoad } from "./straighten-road"
+import { addRoadsideTowns } from "./roadside-towns"
 import { beachAccess } from "./beaches"
 import { taperRiverBanks, gradeBridgeApproaches } from "./river-banks"
 import { bridgeLayout } from "./bridges"
@@ -6,7 +9,7 @@ import { generateElevation, finishElevation, levelBuildingGround, elevationStep,
 import { drainWater } from "./hydrology"
 import { makeRng } from "../rng"
 import { computeDarkShade, computeForestShade } from "./forest-field"
-import { MinHeap, routeBlind, ROUTE_DIRS } from "./route"
+import { MinHeap, routeBlind, eraseRouteLoops, ROUTE_DIRS } from "./route"
 import { isWoods, TERRAIN, type TerrainId } from "./terrain"
 import type { BuildingDef, FoundingSite, GameMap, Shortcut, TilePos, DarkForest } from "./types"
 import { generateWater, WATER_KIND_LAKE, WATER_KIND_RIVER } from "./water"
@@ -176,12 +179,6 @@ const DARK_EDGE_KEEP_Z = 8
 
 /** A track is only worth cutting if it's at most this fraction of the detour. */
 const TRACK_MAX_RATIO = 0.85
-/** The direct route is "in the dark" where the dark shade is at least this. */
-const TRACK_DARK_SHADE = 0.5
-/** Dark stretches of the direct route closer than this merge into one crossing. */
-const TRACK_MERGE_GAP = 8
-/** A track's ends sit this many tiles beyond the dark shade on the direct route. */
-const TRACK_MARGIN = 4
 
 // --- Founding site -----------------------------------------------------------
 
@@ -520,30 +517,33 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   }
 
   // --- Dark forests: roadside obstacles and secluded woodland destinations ----
-  const entryZ = snapEdgeZ(entryRoll, 0, roadLand, width, depth)
-  const exitZ = snapEdgeZ(exitRoll, width - 1, roadLand, width, depth)
+  const entryZ = snapEdgeZ(entryRoll, 0, roadLand, width, depth, elevation)
+  const exitZ = snapEdgeZ(exitRoll, width - 1, roadLand, width, depth, elevation)
   const start = { x: 0, z: entryZ }
   const goal = { x: width - 1, z: exitZ }
   // Water-aware, with the same fallbacks for every segment of road.
   const routeRoad = (a: TilePos, b: TilePos, wander: Float64Array): number[] =>
     routeOverLand(a, b, width, depth, wander, kind, passKind, MAX_BRIDGE_SPAN, elevation) ??
     routeOverLand(a, b, width, depth, wander, kind, passKind, Infinity, elevation) ??
-    routeBlind(a, b, width, depth, wander, elevation)
+    routeBlind(a, b, width, depth, wander, elevation, routeBounds(a, b, width, depth))
   // The road seeks the path of least resistance: on top of its random wander,
   // every step pays for the ground it crosses (see ROAD_FOREST_COST), so the
   // route bends through glades, borrows clearings and trails to get across
   // the woods, and crosses solid forest where the belt is thinnest. The
   // provisional road pays the same, locating a potential roadside grove and
   // measuring how secluded the other woodland destinations are.
+  const vergeShade = computeForestShade({ width, depth, tiles, buildings: [] }, 2)
   const groundCost = (i: number): number => {
     const t = tiles[i]
-    if (t === "forest" || t === "darkwood") return ROAD_FOREST_COST
-    if (t === "clearing") return ROAD_CLEARING_COST
-    return 0
+    const surface = t === "forest" || t === "darkwood" ? ROAD_FOREST_COST : t === "clearing" ? ROAD_CLEARING_COST : 0
+    // Once the border is excluded, prefer open glades over narrow game trails
+    // hemmed in by trees, as well as avoiding the trunks themselves.
+    return surface + vergeShade[i] * ROAD_CLEARING_COST
   }
   const groundWander = new Float64Array(roadWander)
   for (let i = 0; i < groundWander.length; i++) groundWander[i] += groundCost(i)
   const provisional = routeRoad(start, goal, groundWander)
+
 
   const darkHearts: number[] = []
   if (darkForestCount > 0 && darkForestShare > 0) {
@@ -632,53 +632,18 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     if (tiles[i] === "darkwood") walkable[i] = WATER_KIND_LAKE
   }
 
-  // --- Where the direct route crosses the dark forest ------------------------
-  // The provisional road is the direct route; where it runs through the dark
-  // shade is a crossing. Each crossing gets a pair of waypoints on the direct
-  // route just outside the shade (on dry land, so every road segment can be
-  // routed water-aware). The real road is routed *through* those waypoints,
-  // so after skirting the old growth it must come back to the direct line —
-  // a genuine detour, not a road that merely drifted past one end.
-  const crossings: Array<[number, number]> = []
-  for (let p = 0; p < provisional.length; p++) {
-    if (darkShade[provisional[p]] < TRACK_DARK_SHADE) continue
-    const last = crossings[crossings.length - 1]
-    if (last && p - last[1] <= TRACK_MERGE_GAP) last[1] = p
-    else crossings.push([p, p])
-  }
-  const spans: Array<[number, number]> = []
-  for (const [pa, pb] of crossings) {
-    let a = pa - TRACK_MARGIN
-    let b = pb + TRACK_MARGIN
-    while (a > 0 && kind[provisional[a]] !== 0) a--
-    while (b < provisional.length - 1 && kind[provisional[b]] !== 0) b++
-    const prev = spans[spans.length - 1]
-    if (a <= 0 || b >= provisional.length - 1 || (prev && a <= prev[1])) continue
-    spans.push([a, b])
-  }
-
   // --- Road: west edge to east edge ------------------------------------------
-  // Routed over land with lake water impassable and rivers crossable only via
-  // straight bridges, so forest in the way gets carved but water is
-  // respected. The fallbacks keep the road guarantee even on hostile seeds.
-  // The route comes back as an ordered walk, west edge to east edge; keep
-  // that order on the map (`road`) so travelers know which way along is.
-  const stops = [provisional[0]]
-  for (const [a, b] of spans) stops.push(provisional[a], provisional[b])
-  stops.push(provisional[provisional.length - 1])
-  const roadRoute: number[] = []
-  for (let st = 0; st < stops.length - 1; st++) {
-    const segment = straightenRoad({ width, depth, tiles, buildings: [], elevation }, routeRoad(
-      { x: stops[st] % width, z: Math.floor(stops[st] / width) },
-      { x: stops[st + 1] % width, z: Math.floor(stops[st + 1] / width) },
-      roadCost,
-    ))
-    // Reserve these crossings before the next segment chooses a bridge.
-    for (const i of segment) if (kind[i]) passKind[i] = 0
-    // Consecutive segments share their junction tile; keep it once.
-    for (let k = st === 0 ? 0 : 1; k < segment.length; k++) roadRoute.push(segment[k])
-  }
+  // Route the whole road together. Pinning it to the provisional forest exits
+  // can force a return around a grove after the road has already cleared it,
+  // followed by a cutback toward the destination through the same open glade.
+  const roadRoute = straightenRoad({ width, depth, tiles, buildings: [], elevation },
+    routeRoad(start, goal, roadCost), routeBounds(start, goal, width, depth))
 
+  // Road simplification must not leave an out-and-back spur on the main road.
+  // Founding and shortcuts receive indices only after this walk is simplified.
+  const simpleRoad = eraseRouteLoops(roadRoute)
+  roadRoute.splice(0, roadRoute.length, ...simpleRoad)
+  passKind.set(kind)
   const roadTiles: number[] = []
   const road: TilePos[] = []
   const roadIndex = new Int32Array(width * depth).fill(-1)
@@ -732,7 +697,11 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     return false
   }
   const shortcuts: Shortcut[] = []
-  for (const [a, b] of spans) {
+  // Attach dangerous alternatives where the provisional line actually meets
+  // the finished road on dry land; never create a turn off a bridge deck.
+  const joins = provisional.flatMap((tile, index) => roadIndex[tile] >= 0 && kind[tile] === 0 ? [index] : [])
+  for (let j = 1; j < joins.length; j++) {
+    const a = joins[j - 1], b = joins[j]
     const entry = roadIndex[provisional[a]]
     const exit = roadIndex[provisional[b]]
     if (entry < 0 || exit <= entry) continue
@@ -799,6 +768,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     passKind,
     roadLand,
     elevation,
+    shortcuts,
   )
 
   gradeCrossings()
@@ -829,6 +799,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
       walkable,
       0,
       elevation,
+      false, // Open forest floor for stranded pockets; these repairs never stamp a road or track.
     )
     if (!route) continue
     carveRoute(route)
@@ -841,8 +812,8 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   const darkForests: DarkForest[] = []
   const approachWalls = kind.slice()
   for (const building of [hovel, shelter]) {
-    for (let z = building.z; z < building.z + building.d; z++)
-      for (let x = building.x; x < building.x + building.w; x++) approachWalls[z * width + x] = WATER_KIND_LAKE
+    for (let z = Math.max(0, building.z - 1); z <= Math.min(depth - 1, building.z + building.d); z++)
+      for (let x = Math.max(0, building.x - 1); x <= Math.min(width - 1, building.x + building.w); x++) approachWalls[z * width + x] = WATER_KIND_LAKE
   }
   const toPos = (i: number): TilePos => ({ x: i % width, z: Math.floor(i / width) })
   for (const heart of darkHearts) {
@@ -902,6 +873,8 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   // Bridge grading and founding can raise a formerly low beach; classify sand last.
   const sandy = beachAccess(map.elevation!, width, depth, kind, waterInfo)
   for (let i = 0; i < tiles.length; i++) if (tiles[i] === "sand" && !sandy[i]) tiles[i] = "grass"
+  addRoadsideTowns(map)
+  createCrossroads(map)
   return map
 }
 
@@ -982,8 +955,11 @@ function foundSite(
   passKind: Uint8Array,
   roadLand: Uint8Array,
   elevation: ElevationInfo,
+  shortcuts: readonly Shortcut[],
 ): { hovel: BuildingDef; shelter: BuildingDef; site: FoundingSite } {
   const { min: bandMin, max: bandMax } = relicDistanceBand(relicDistance)
+  // Founding must not build over the newly routed forest alternatives.
+  const reservedTracks = new Set(shortcuts.flatMap(s => s.tiles.map(p => p.z * width + p.x)))
 
   // Distance from the road is measured as it will be walked: dry, around
   // water rather than across it, from any road tile at all — the gap between
@@ -1028,6 +1004,7 @@ function foundSite(
     for (let x = outerMin; x <= width - HOVEL_WIDTH - outerMin; x++) {
       let low = Infinity, high = -Infinity
       let onRoad = false
+      let overlapsShortcut = false
       let grounded = true
       let dryTrack = false
       let nearest = Infinity
@@ -1038,6 +1015,7 @@ function foundSite(
           // Footprint and ring must be dry, reachable land — no water, no
           // bridges, no lake-locked pockets.
           if (roadLand[i] !== 1) grounded = false
+          if (inFootprint && reservedTracks.has(i)) overlapsShortcut = true
           low = Math.min(low, elevation.height[i]); high = Math.max(high, elevation.height[i])
           if (inFootprint) {
             if (tiles[i] === "path") onRoad = true
@@ -1052,9 +1030,14 @@ function foundSite(
       for (let dz = -3; dz <= -2; dz++) for (let dx = 0; dx < 3; dx++) {
         const i = (z + dz) * width + x + dx
         if (z + dz < 0 || roadLand[i] !== 1 || tiles[i] === "path") grounded = false
+        if (reservedTracks.has(i)) overlapsShortcut = true
         low = Math.min(low, elevation.height[i]); high = Math.max(high, elevation.height[i])
       }
       if (onRoad || !grounded || high - low > 0.18) continue
+      // Keep the original candidate dice so reserving a shortcut only moves
+      // a founding site when the winning footprint actually overlaps it.
+      const siteJitter = rng() * SITE_SCORE_JITTER
+      if (overlapsShortcut) continue
 
       // Outside the band, every step of shortfall or excess costs more than any
       // amount of open ground can buy back — in-band sites always win if any exist.
@@ -1079,7 +1062,7 @@ function foundSite(
       const edgeDist = Math.min(x, z, width - HOVEL_WIDTH - x, depth - HOVEL_DEPTH - z)
       const edgePenalty = Math.max(0, SITE_EDGE_MARGIN - edgeDist) * SITE_EDGE_PENALTY
 
-      const score = room - bandPenalty - bridgePenalty - edgePenalty + rng() * SITE_SCORE_JITTER
+      const score = room - bandPenalty - bridgePenalty - edgePenalty + siteJitter
       if (score > bestScore) {
         bestScore = score
         best = { x, z }
@@ -1187,7 +1170,7 @@ function foundSite(
     routeOverLand(road[junction], door, width, depth, branchWander, kind, passKind, 0, elevation) ??
     routeOverLand(road[junction], door, width, depth, branchWander, kind, passKind, MAX_BRIDGE_SPAN, elevation) ??
     routeOverLand(road[junction], door, width, depth, branchWander, kind, passKind, Infinity, elevation) ??
-    routeBlind(road[junction], door, width, depth, branchWander, elevation)
+    routeBlind(road[junction], door, width, depth, branchWander, elevation, routeBounds(road[junction], door, width, depth))
   const branch: TilePos[] = []
   for (const i of branchRoute) {
     if (tiles[i] === "water") {
@@ -1520,19 +1503,20 @@ function mainLandMask(kind: Uint8Array, width: number, depth: number,
 
 /** Nearest z on the given edge column whose tile is reachable land. */
 function snapEdgeZ(
-  zGuess: number,
-  x: number,
-  landMask: Uint8Array,
-  width: number,
-  depth: number,
+  zGuess: number, x: number, landMask: Uint8Array, width: number, depth: number, elevation: ElevationInfo,
 ): number {
-  for (let r = 0; r < depth; r++) {
-    for (const z of [zGuess - r, zGuess + r]) {
-      if (z < 0 || z >= depth) continue
-      if (landMask[z * width + x] === 1) return z
+  const dx = x === 0 ? 1 : -1
+  // Pick a portal with a dry, walkable inward run before routing the interior.
+  for (let r = 0; r < depth; r++) for (const z of [zGuess - r, zGuess + r]) {
+    if (z < ROUTE_EDGE_INSET || z >= depth - ROUTE_EDGE_INSET) continue
+    let clear = true
+    for (let step = 0; step <= ROUTE_EDGE_INSET + 2; step++) {
+      const i = z * width + x + dx * step
+      if (!landMask[i] || (step > 0 && !Number.isFinite(elevationStep(elevation, i - dx, i)))) { clear = false; break }
     }
+    if (clear) return z
   }
-  return zGuess
+  return Math.max(ROUTE_EDGE_INSET, Math.min(depth - 1 - ROUTE_EDGE_INSET, zGuess))
 }
 
 /** Nearest reachable land tile within a few rings of the point, or null. */
@@ -1574,11 +1558,11 @@ function snapToLand(
 /** Reserve crossings between searches so two hops of one route cannot weld together. */
 function routeOverLand(
   start: TilePos, goal: TilePos, width: number, depth: number, wander: Float64Array,
-  kind: Uint8Array, pass: Uint8Array, maxSpan: number, elevation: ElevationInfo,
+  kind: Uint8Array, pass: Uint8Array, maxSpan: number, elevation: ElevationInfo, keepInset = true,
 ): number[] | null {
   let reserved = pass
   for (let attempt = 0; attempt < 8; attempt++) {
-    const route = searchRouteOverLand(start, goal, width, depth, wander, kind, reserved, maxSpan, elevation)
+    const route = searchRouteOverLand(start, goal, width, depth, wander, kind, reserved, maxSpan, elevation, keepInset)
     if (!route || maxSpan === 0) return route
     const bridges = new Set<number>()
     let conflict = false
@@ -1609,7 +1593,10 @@ function searchRouteOverLand(
   pass: Uint8Array,
   maxSpan: number,
   elevation: ElevationInfo,
+  keepInset: boolean,
 ): number[] | null {
+  const allowed = keepInset ? routeBounds(start, goal, width, depth)
+    : (x: number, z: number) => x >= 0 && z >= 0 && x < width && z < depth
   const size = width * depth
   const g = new Float64Array(size).fill(Infinity)
   const cameFrom = new Int32Array(size).fill(-1)
@@ -1662,7 +1649,7 @@ function searchRouteOverLand(
     for (const [dx, dz] of ROUTE_DIRS) {
       const nx = cx + dx
       const nz = cz + dz
-      if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
+      if (!allowed(nx, nz)) continue
       const n = nz * width + nx
 
       if (pass[n] === 0) {
@@ -1697,7 +1684,7 @@ function searchRouteOverLand(
       let landing = -1
       let alongside = besideBridge(n)
       while (span <= maxSpan) {
-        if (px < 0 || pz < 0 || px >= width || pz >= depth) break
+        if (!allowed(px, pz)) break
         const t = pz * width + px
         if (pass[t] === 0) {
           // A new bridge must land on dry land, not side-on into another one.

@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense } from "react"
+import { SceneAssetBoundary } from "./scene-assets"
 import * as THREE from "three"
 import { softenTreeLighting } from "@/lib/game/trees/lighting"
 import { selectElement } from "@/lib/game/selection"
@@ -22,7 +22,7 @@ export function TreeRemains({ id, objectId, tree, resource, time, characterScale
   const idColor = new THREE.Color(...encodeObjectId(objectId))
   return (
     <group name={`tree-remains-${id}`} position={[tree.x, tree.y, tree.z]} onClick={select}>
-      {stump && <Suspense fallback={null}><TreeStump id={id} objectId={objectId} characterScale={characterScale} /></Suspense>}
+      {stump && <SceneAssetBoundary><TreeStump id={id} objectId={objectId} characterScale={characterScale} /></SceneAssetBoundary>}
       {fallen && <group name={`fallen-tree-${id}`} position={[0, radius, offsetZ]} rotation={[0, 0, Math.PI / 2]}>
         <mesh layers-mask={OUTLINE_ID_LAYER_MASK}>
           <cylinderGeometry args={[radius * resource.trunkTaper, radius, length, 7]} />

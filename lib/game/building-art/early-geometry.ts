@@ -1,3 +1,4 @@
+import { tavernLayout } from "../tavern-layout"
 import { marketLayout } from "../market-layout"
 import { EARLY_MATERIALS as palette } from "./materials"
 import type { BuildingPart, Vec3 } from "./geometry"
@@ -194,8 +195,8 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     } else panel(name,a,b,(a[2]+b[2])/2>=0)
   }
   function bedding(x: number,z: number,index: number, length: number) {
-    box(`straw-bed-${index}`,"base",[x,floor+.035,z],[.32,.07,length],palette.strawDark,undefined,false)
-    box(`wool-cover-${index}`,"base",[x,floor+.08,z+.06],[.28,.035,length*.65],index%2?"#817864":"#716e57",undefined,false)
+    box(`straw-bed-${index}`,"base",[x,floor+.035,z],[.38,.07,length],palette.strawDark,undefined,false)
+    box(`wool-cover-${index}`,"base",[x,floor+.08,z+.06],[.34,.035,length*.65],index%2?"#817864":"#716e57",undefined,false)
     parts[parts.length - 1].support = { clips: ["sleeping"], anchorOffset: [0, -.06], heading: 0 }
     box(`rolled-blanket-${index}`,"base",[x,floor+.1,z-length*.32],[.3,.11,.12],"#a3987a",undefined,false)
   }
@@ -418,8 +419,8 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     }
     if(variant === "tavern") {
       // Low drinking tables and benches occupy the left side, clear of the hearth.
-      for(const side of [-1,1]) {
-        const tx=-width*.23,tz=side*depth*.22,tableW=width*.32,tableD=depth*.15
+      for(const table of tavernLayout(width, depth).tables) {
+        const { side, x: tx, z: tz, w: tableW, d: tableD } = table
         for(const a of [-1,1]) for(const b of [-1,1]) pole(`tavern-table-${side}-leg-${a}-${b}`,[tx+a*tableW*.35,0,tz+b*tableD*.32],[tx+a*tableW*.35,.37,tz+b*tableD*.32],.025,"interior")
         box(`tavern-table-${side}-top`,"interior",[tx,.39,tz],[tableW,.045,tableD],palette.paleWood,undefined,false)
         for(const b of [-1,1]) bench(`tavern-bench-${side}-${b}`,tx,tz+b*depth*.11,tableW,.23,b>0 ? Math.PI : 0)
@@ -429,7 +430,8 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
           box(`tavern-ale-${side}-${a}`,"interior",[mx,.48,tz],[.032,.005,.032],"#614e32",undefined,false)
         }
       }
-      const counterW=width*.27,counterX=width*.2,counterZ=-depth*.14
+      const counter = tavernLayout(width, depth).counter
+      const counterW=counter.w-.035,counterX=counter.x,counterZ=counter.z
       box("tavern-serving-counter", "interior",[counterX,.23,counterZ],[counterW,.46,depth*.14],palette.wood,undefined,false)
       box("tavern-counter-top", "interior",[counterX,.475,counterZ],[counterW+.035,.035,depth*.15],palette.paleWood,undefined,false)
     }
@@ -438,7 +440,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       const hearth = shelterHearth(width,depth,h,rise)
       const bedLeft = -w+.24, bedRight = hearth.x-.285*hearth.scale-.24
       const beds = Math.max(1,Math.min(HOUSE_BEDS,Math.floor((bedRight-bedLeft)/.42)+1))
-      for(let i=0;i<beds;i++) bedding(beds === 1 ? (bedLeft+bedRight)/2 : bedLeft+(bedRight-bedLeft)*i/(beds-1),-depth*.15,i,Math.min(.7,depth*.6))
+      for(let i=0;i<beds;i++) bedding(beds === 1 ? (bedLeft+bedRight)/2 : bedLeft+(bedRight-bedLeft)*i/(beds-1),-depth*.15,i,Math.min(.9,depth*.6))
     }
     if(variant === "hall") {
       bench("hall-bench",0,-depth*.25,width*.65,.3,0)
@@ -457,7 +459,8 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     if(variant === "monk-shelter" || variant === "shelter") {
       if (variant === "shelter") {
         // Leave the rear-right hearth and front table clear of bedding.
-        for(let i=0;i<2;i++) bedding(-width*.3,-depth*.18+i*depth*.35,i,Math.min(.58,depth*.28))
+        // Full-length bodies share a column, with a gap between the two beds.
+        for(let i=0;i<2;i++) bedding(-width*.3,-depth*.24+i*depth*.48,i,Math.min(.9,depth*.44))
         bench("pilgrim-bench",width*.1,depth*.43,width*.4,.23,Math.PI)
         parts.push(...furnishingParts("shelter",width,depth,h,rise))
       } else {
@@ -465,7 +468,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
         // Keep every bed left of the fireplace, including one-tile recipe previews.
         const hearth = shelterHearth(width,depth,h,rise)
         const left = -w+.22, right = hearth.x-.285*hearth.scale-.24
-        for(let i=0;i<beds;i++) bedding(beds === 1 ? (left+right)/2 : left+(right-left)*i/(beds-1),-depth*.08,i,Math.min(.72,depth*.6))
+        for(let i=0;i<beds;i++) bedding(beds === 1 ? (left+right)/2 : left+(right-left)*i/(beds-1),-depth*.08,i,Math.min(.9,depth*.6))
       }
     } else if (variant === "market") {
       bench("stall-counter",0,depth*.23,width*.72,.38)

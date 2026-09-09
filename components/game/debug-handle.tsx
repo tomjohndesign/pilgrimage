@@ -42,7 +42,7 @@ import { BENCHMARK_SIMULATION_SPEEDS, useSimulationStore } from "@/lib/game/simu
  * (The world seed itself comes from the URL: /play?seed=….)
  * Development only, unless a local benchmark build explicitly enables it.
  */
-export function DebugHandle({ map, travelers, speed, movement, speedScales, characterScale }: { map: GameMap; travelers: Traveler[]; speed: number; movement: MovementTuning; speedScales?: ReadonlyMap<number, number>; characterScale?: number }) {
+export function DebugHandle({ map, travelers, speed, movement, speedScales, beggarSpeedScales, characterScale }: { map: GameMap; travelers: Traveler[]; speed: number; movement: MovementTuning; speedScales?: ReadonlyMap<number, number>; beggarSpeedScales?: ReadonlyMap<number, number>; characterScale?: number }) {
   const { gl, camera, scene, setDpr } = useThree()
 
   useEffect(() => {
@@ -58,6 +58,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
     }
     const handle = {
       map,
+      bakeLoadingChurch: async () => (await import("@/lib/game/render/loading-church-bake")).bakeLoadingChurch(gl),
       benchmarkTarget: benchmarkCity(map)?.centre,
       cityStats: () => cityBenchmarkStats(simRegistry.current, map),
       populationStatus: () => ({ travelers: simRegistry.current?.travelers.size ?? 0,
@@ -329,7 +330,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         const sim = simRegistry.current
         if (!sim) return
         const ticks = Math.ceil(Math.max(0, Math.min(120, seconds)) * 10)
-        for (let i = 0; i < ticks; i++) stepSim(sim, travelers, map, speed, 0.1, movement, speedScales, characterScale)
+        for (let i = 0; i < ticks; i++) stepSim(sim, travelers, map, speed, 0.1, movement, speedScales, characterScale, beggarSpeedScales)
         useBuildStore.getState().syncResources(sim, travelers)
       },
       /** Live settlement loop: who works where, who lives where, and the takings. */
@@ -346,6 +347,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         wood: simRegistry.current?.wood ?? 0,
         visits: simRegistry.current?.visits ?? 0,
       }),
+      forestWarnings: () => scene.getObjectByName("forest-warnings")?.children.map(post => ({ x: post.position.x, y: post.position.y, z: post.position.z })) ?? [],
       treePlacements: () => simRegistry.current?.trees ?? [],
       /** Complete a felling for visual checks of remains and disappearing canopy shade. */
       fellTree: (index: number) => {
@@ -426,7 +428,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
       frameQualityControl.enabled = true; crowdRenderControl.enabled = false
       delete (window as unknown as Record<string, unknown>).__pilgrimage
     }
-  }, [gl, camera, scene, map, travelers, speed, movement, speedScales, characterScale, setDpr])
+  }, [gl, camera, scene, map, travelers, speed, movement, speedScales, beggarSpeedScales, characterScale, setDpr])
 
   return null
 }

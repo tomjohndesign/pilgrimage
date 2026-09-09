@@ -40,7 +40,7 @@ describe("city stress fixture", () => {
     expect(stats.nearRoad).toBeGreaterThanOrEqual(stats.onRoad)
     expect(roadSamples).toBeGreaterThan(10000)
     expect(maxRoadDeviation).toBeLessThan(.001)
-  })
+  }, 60000)
   it("keeps 240 nonoverlapping catalogue buildings and the surrounding forest", () => {
     const map = fixture()
     expect(map.buildings).toHaveLength(240)

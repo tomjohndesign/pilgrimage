@@ -1,5 +1,8 @@
 "use client"
 
+import { useContext } from "react"
+import { CharacterMapContext } from "./character-map-context"
+
 import { useCharacterBatches, characterBatchControl } from "./character-batches"
 import { spriteTextureView } from "@/lib/game/render/sprite-texture"
 import { SpriteFrame } from "./sprite-frames"
@@ -19,6 +22,7 @@ import type { FrameRegistration } from "@/lib/game/base-person/bake"
 import type { GameMap } from "@/lib/game/map/types"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 import { characterSupport } from "@/lib/game/character-support"
+import { restContacts, restContactOrigin } from "@/lib/game/base-person/rest-contact"
 import { BASE_PERSON } from "@/lib/game/base-person/pose"
 import { walkContact, reducedWalkFrame, crossedWalkSupport, plantFoot, type FootPlant, type FootPlantResult, DEFAULT_WALK_STRIDE } from "@/lib/game/base-person/gait"
 import { ACTION_CLIPS } from "@/lib/game/base-person/pose"
@@ -44,7 +48,7 @@ import { complexionSwap, type Complexion } from "@/lib/game/base-person/complexi
 import { OUTLINE_ID_LAYER_MASK, SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import type { FigureClickHandler } from "./traveler-figure"
 
-export function CharacterSprite({ map, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, complexion = appearance?.complexion, age = 18, visualOverride, attachment, flightClip, name = "traveler" }: {
+export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, complexion = appearance?.complexion, age = 18, visualOverride, attachment, flightClip, name = "traveler" }: {
   attachment?: { content: ReactNode; clips: Partial<Record<"hoisting" | "procession", FrameRegistration[]>>; cellSize: number; anchor: number[]; restPosition?: [number, number, number] }
   flightClip?: SpriteClip & { fps: number; reservedTones?: boolean }
   map?: GameMap
@@ -63,6 +67,8 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   characterFps?: number
   walkTuning?: WalkTuning
 }) {
+  const contextMap = useContext(CharacterMapContext)
+  const map = suppliedMap ?? contextMap
   const [renderOrder] = useState(spriteRenderOrder)
   // Sample a small, stable subset; timing every NPC would distort the crowd.
   const samplePose = process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && renderOrder % 128 === 0
@@ -282,10 +288,11 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
       }
     }
     if (sprite.current) sprite.current.userData.clip = flight ? "flying" : playing ? "performing" : action ? requested : moving ? "walk" : "idle"
+    origin.setFromMatrixPosition(parent.matrixWorld)
+    const support = map && !moving && !special && action ? characterSupport(map, origin.x, origin.z, requested) : undefined
+    if (support) heading = support.heading
     const direction = spriteRow(heading, yaw)
     const row = visual.rowOffset + direction
-    origin.setFromMatrixPosition(parent.matrixWorld)
-    const support = map && !moving && !flight ? characterSupport(map, origin.x, origin.z, requested) : undefined
     if (samplePose) frameProfile.end("sampleSpriteSelection", selectionStarted)
     const contactStarted = samplePose ? frameProfile.start() : 0
     if (poseRoot.current) {
@@ -327,8 +334,11 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
         poseRoot.current.position.copy(corrected.applyMatrix4(parentInverse))
       } else {
         poseState.plant = null
-        if (support) {
-          corrected.set(origin.x, Math.max(origin.y, support.height), origin.z)
+        if (support && visual.design && (requested === "sitting" || requested === "sleeping" || requested === "seatedPrayer")) {
+          const point = restContacts(visual.design, requested, clip.columns)[frame]
+          const aligned = restContactOrigin({ ...support.anchor, y: support.height }, point,
+            direction, yaw, pitch, size / BASE_PERSON.camera.viewSize)
+          corrected.set(aligned.x, aligned.y, aligned.z)
           poseRoot.current.position.copy(corrected.applyMatrix4(parentInverse))
         } else poseRoot.current.position.set(0, 0, 0)
       }
@@ -362,9 +372,9 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
       updateTranslatedWorld(poseRoot.current)
       corrected.setFromMatrixPosition(poseRoot.current.matrixWorld)
       const surface = walkingSurface(map, corrected.x, corrected.z)
-      // The same authored top lifts the pose and clears enlarged scenery depth
-      // in both body and ID passes. Furniture is level even on graded terrain.
-      if (support && support.height >= surface.height) groundPlane.value.set(0, 1, 0, -support.height)
+      // A mattress supports the whole body; seated legs can hang below the
+      // bench, so their color and ID depth must still use the terrain plane.
+      if (support && requested === "sleeping" && support.height >= surface.height) groundPlane.value.set(0, 1, 0, -support.height)
       else groundPlane.value.set(-surface.dx, 1, -surface.dz,
         surface.dx * corrected.x + surface.dz * corrected.z - surface.height)
     } else groundPlane.value.set(0, 0, 0, 0)

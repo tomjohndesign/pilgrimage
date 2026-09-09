@@ -20,12 +20,12 @@ function straightTiles(from: number, to: number, width: number): number[] {
 /** Remove unexplained bends through open land before stamping the initial road.
  * Woods, water, bridges, buildings and cliff edges retain their original route.
  * Called separately between fixed waypoints so gameplay junctions stay anchored. */
-export function straightenRoad(map: GameMap, original: readonly number[]): number[] {
+export function straightenRoad(map: GameMap, original: readonly number[], allowed: (x: number, z: number) => boolean = () => true): number[] {
   let route = [...original]
   if (route.length < 3) return [...route]
   const occupied = new Set<number>()
   for (const b of map.buildings) for (let z = b.z; z < b.z + b.d; z++) for (let x = b.x; x < b.x + b.w; x++) occupied.add(z * map.width + x)
-  const open = (i: number) => !occupied.has(i) && ["grass", "clearing", "dirt", "sand", "path", "track"].includes(map.tiles[i])
+  const open = (i: number) => allowed(i % map.width, Math.floor(i / map.width)) && !occupied.has(i) && ["grass", "clearing", "dirt", "sand", "path", "track"].includes(map.tiles[i])
   const climb = (line: readonly number[]) => line.slice(1).reduce((sum, p, i) => sum + elevationStep(map.elevation, line[i], p), 0)
   // A ramp must leave the river along its axis, with one level tile after
   // it. Otherwise a diagonal staircase promotes every bend into more deck.
@@ -33,7 +33,7 @@ export function straightenRoad(map: GameMap, original: readonly number[]): numbe
   const wet = (i: number) => map.tiles[i] === "water" || map.tiles[i] === "bridge"
   // Road generation already carves ordinary forest. Reserve the same small
   // clearance at a bank before trees are placed, without crossing old growth.
-  const approachOpen = (i: number) => open(i) || (!occupied.has(i) && map.tiles[i] === "forest")
+  const approachOpen = (i: number) => open(i) || (!occupied.has(i) && allowed(i % map.width, Math.floor(i / map.width)) && map.tiles[i] === "forest")
   const alignExits = () => {
     for (let bank = 1; bank < route.length; bank++) {
       if (!wet(route[bank - 1]) || !approachOpen(route[bank])) continue

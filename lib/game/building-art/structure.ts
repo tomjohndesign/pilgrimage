@@ -1,3 +1,4 @@
+import type { CrossroadArm } from "../map/crossroads"
 import { wallSide } from "./cutaway"
 import type { BuildingDef } from "../map/types"
 import { buildingParts, type BuildingPart } from "./geometry"
@@ -68,15 +69,45 @@ export function visibleStructureParts(parts: BuildingPart[], cutaway: boolean, c
   }) : parts
 }
 
-/** Head of the post, where the cross is stepped on above the pointing board. */
-export const SIGNPOST_HEIGHT = 0.78
-
-/** The wayside marker at the shrine's fork; its board points along local +X. */
+/** Shared wayside timber used by the forest's existing warning signs. */
+export const SIGNPOST_HEIGHT = .78
 export function signpostParts(seed = 0): BuildingPart[] {
   return earlyBuildingParts({
     ...earlyBuildingRecipe("house"),
     variant: "signpost", width: 1, depth: 1, wallHeight: SIGNPOST_HEIGHT, roofRise: 0, seed,
   })
+}
+
+/** More room on the crossroads post for three or four independently marked boards. */
+const CROSSROAD_SIGNPOST_HEIGHT = 1.15
+
+/** Riven boards carry simple painted symbols on both faces: cross, road or trail. */
+export function crossroadSignpostParts(seed = 0, arms: CrossroadArm[] = [{ direction: { x: 1, z: 0 }, mark: "shrine" }]): BuildingPart[] {
+  const source = earlyBuildingParts({
+    ...earlyBuildingRecipe("house"),
+    variant: "signpost", width: 1, depth: 1, wallHeight: CROSSROAD_SIGNPOST_HEIGHT, roofRise: 0, seed,
+  })
+  const parts = source.filter(p => !/signpost-(board|peg|cross)/.test(p.name))
+  const board = source.filter(p => /signpost-(board|peg)$/.test(p.name))
+  arms.forEach((arm, index) => {
+    const yaw = Math.atan2(-arm.direction.z, arm.direction.x), offset = -.22 * index
+    const local = [...board]
+    const stroke = (name: string, x: number, y: number, sx: number, sy: number) => {
+      for (const side of [-1, 1]) local.push({ name: `mark-${arm.mark}-${name}-${side}`, layer: "wall",
+        position: [x, CROSSROAD_SIGNPOST_HEIGHT - .215 + y, side * .028], size: [sx, sy, .008], color: "#493d2b", outline: false })
+    }
+    if (arm.mark === "shrine") { stroke("upright", .16, 0, .028, .13); stroke("arm", .16, .025, .1, .026) }
+    else if (arm.mark === "road") { stroke("rut-a", .17, -.034, .16, .025); stroke("rut-b", .17, .034, .16, .025) }
+    else for (let i = 0; i < 3; i++) stroke(`step-${i}`, .1 + i * .06, (i % 2 ? 1 : -1) * .025, .026, .04)
+    const turn = ([x, y, z]: number[]): [number, number, number] => [x * Math.cos(yaw) + z * Math.sin(yaw), y + offset, -x * Math.sin(yaw) + z * Math.cos(yaw)]
+    for (const part of local) {
+      const vertices = part.vertices?.flatMap((_, i, a) => i % 3 === 0 ? turn(a.slice(i, i + 3)) : [])
+      parts.push({ ...part, name: `direction-${index}-${part.name}`,
+        position: vertices ? [0, 0, 0] : turn(part.position), vertices,
+        rotation: vertices ? undefined : [0, yaw, 0] })
+    }
+  })
+  return parts
 }
 
 export { shrineStructureParts } from "./shrine-geometry"

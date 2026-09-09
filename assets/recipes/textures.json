@@ -1,4 +1,9 @@
 {
+  "dark-forest-floor": {
+    "prompt": "Edit the supplied dark forest ground texture. Keep the same seamless square top-down pixel-art composition, tiny leaf fragments, pine needles, broken twigs, native pixel-cluster style and uniformly distributed texture. Change only its PALETTE: the current artwork is far too black. Make a readable muted earthy brown and olive forest floor, not black. The humus base should be medium dark grey-brown around #625b47, moss patches #535a42, dead leaves #81745a and muted taupe #8b7c60, twigs #95866b. Darkest tiny crevices no lower than #494735, absolutely no black or near-black soil areas. The game will apply normal canopy shade on top, so make the actual artwork clearly visible and moderately light. Still subdued and unwelcoming, never bright orange or gold, no green grass. No gradient, no vignette, no cast shadow, no lighting fade. Opaque PNG, tileable opposite edges, no text, no border or frame.",
+    "generator": "Built-in imagegen",
+    "import": "npm run assets:import-texture -- dark-forest-floor <source.png> v2"
+  },
   "mud-path": {
     "prompt": "Use case: stylized-concept. Asset type: seamless terrain texture for a small-scale isometric medieval game reminiscent of RCT2 and classic Age of Empires. Create a square, top-down, tileable muddy footpath surface. Tiny compact earth clumps, occasional tiny pale stones, restrained warm brown palette, simple readable texture at 128x128 pixels. Uniform diffuse lighting; no perspective, horizons, large objects, cast shadows, borders, labels or text. All opposite edges must tile seamlessly. Opaque PNG background."
   },

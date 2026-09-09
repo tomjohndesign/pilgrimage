@@ -14,6 +14,28 @@ const woods = (size: number) => parseAsciiMap(Array.from({ length: size }, (_, z
 const stand = (map: GameMap) => map.tiles.flatMap((t, i) => t === "forest" ? [tree(map, i % map.width, Math.floor(i / map.width))] : [])
 
 describe("forest depth shadow tiles", () => {
+  it("packs both authored floor sprites without recoloring or changing their native size", async () => {
+    for (const [left, file] of [[0, "forest-floor-v1.png"], [128, "dark-forest-floor-v2.png"]] as const) {
+      const source = await sharp(`public/textures/${file}`).ensureAlpha().raw().toBuffer()
+      const packed = await sharp("public/textures/forest-floors-v2.png").extract({ left, top: 0, width: 128, height: 128 }).ensureAlpha().raw().toBuffer()
+      expect(packed.equals(source)).toBe(true)
+    }
+  })
+
+  it("keeps dead snags from casting leafy canopy shade and darkens a grove's open heart", () => {
+    const map = woods(13)
+    expect(treeCanopyDepth(map, [{ ...tree(map, 6, 6), dead: true }]).every(v => v === 0)).toBe(true)
+    map.tiles = map.tiles.map(t => t === "forest" ? "darkwood" : t)
+    const clearing = []
+    for (let z = 3; z <= 9; z++) for (let x = 3; x <= 9; x++) {
+      map.tiles[z * 13 + x] = "clearing"; clearing.push({ x, z })
+    }
+    map.darkForests = [{ center: { x: 6, z: 6 }, clearing, approach: [] }]
+    const field = treeGroundField(map, [])
+    expect(field.data[(6 * 13 + 6) * 4]).toBe(0)
+    expect(field.data[(6 * 13 + 6) * 4 + 1]).toBe(255)
+  })
+
   it("deepens monotonically inward like water depth, with a dim fringe outside", () => {
     const map = woods(9), trees = stand(map)
     const depths = treeCanopyDepth(map, trees), shadows = treeShadowDepth(map, trees)

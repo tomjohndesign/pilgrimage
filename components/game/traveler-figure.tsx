@@ -1,5 +1,9 @@
 "use client"
 
+import { useContext } from "react"
+import { CharacterMapContext } from "./character-map-context"
+import { SceneAssetBoundary } from "./scene-assets"
+
 import { monkVisual, MONK_WALK_TUNING } from "@/lib/game/base-person/monk-assets"
 import { withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
 import { isWorldVisible } from "@/lib/game/render/visibility"
@@ -12,13 +16,14 @@ import { HEAVY_PATH_WEAR, recordCartPath, recordWalkingPath } from "@/lib/game/f
 import * as THREE from "three"
 import type { GameMap } from "@/lib/game/map/types"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
-import { Suspense, useMemo, useRef } from "react"
+import { useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import type { TravelerTypeDef } from "@/lib/game/travelers"
 import { CharacterSprite } from "./character-sprite"
 import { CartReins } from "./cart-reins"
 import { KnightFigure } from "./knight-figure"
 import { TransportSprite } from "./transport-sprite"
+import { VendorStall } from "./vendor-stall"
 import type { TravelerAppearance } from "@/lib/game/base-person/population"
 import { pullingVisual } from "@/lib/game/transport/visual"
 import { cartOffset, type Cargo, type Puller, type HorseVariant } from "@/lib/game/transport/assets"
@@ -37,7 +42,7 @@ export const BLOCK_HEIGHT = 0.55
 export type FigureClickHandler = (event: { delta: number; stopPropagation: () => void }) => void
 
 /** The person, cart and draught animal share one selection in game and previews. */
-export function TravelerFigure({ map, age, job, type, onClick, idColor, selected = false, awning = false, outlineColor,
+export function TravelerFigure({ map: suppliedMap, age, job, type, onClick, idColor, selected = false, awning = false, outlineColor,
   characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance,
   squire = false, cargo = "produce", puller = "hand", horseVariant = "common", coat,
 }: {
@@ -47,6 +52,8 @@ export function TravelerFigure({ map, age, job, type, onClick, idColor, selected
   characterModel?: CharacterModel; characterScale?: number; characterFps?: number; walkTuning?: WalkTuning
   squire?: boolean; cargo?: Cargo; puller?: Puller; horseVariant?: HorseVariant; coat?: string
 }) {
+  const contextMap = useContext(CharacterMapContext)
+  const map = suppliedMap ?? contextMap
   const vendor = !job && type.id === "vendor", animal = vendor && puller !== "hand"
   const driver = useRef<THREE.Group>(null), setup = useRef<THREE.Group>(null), beast = useRef<THREE.Group>(null)
   const cart = useRef<THREE.Group>(null), pullingDriver = useRef<THREE.Group>(null)
@@ -162,33 +169,35 @@ export function TravelerFigure({ map, age, job, type, onClick, idColor, selected
   const pulling = useMemo(() => pullingVisual(variant), [variant])
   const color = outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] as [number, number, number] : undefined)
   const workVisual = useMemo(() => job ? jobVisual(job, variant) : undefined, [job, variant])
-  if (workVisual) return <Suspense fallback={null}><CharacterSprite map={map} age={age} appearance={appearance}
+  if (workVisual) return <SceneAssetBoundary><CharacterSprite map={suppliedMap} age={age} appearance={appearance}
     complexion={appearance && age !== undefined && age >= GREY_HAIR_AGE ? { ...appearance.complexion, hair: GREY_HAIR_COLOR } : appearance?.complexion}
     selected={selected} type={type.id} onClick={onClick} outlineColor={color} characterModel="base"
-    characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} visualOverride={workVisual} /></Suspense>
-  if (type.id === "friar") return <Suspense fallback={null}><CharacterSprite map={map} age={age}
+    characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} visualOverride={workVisual} /></SceneAssetBoundary>
+  if (type.id === "friar") return <SceneAssetBoundary><CharacterSprite map={suppliedMap} age={age}
     complexion={appearance?.complexion} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
     characterModel="base" characterScale={characterScale} characterFps={characterFps}
-    walkTuning={MONK_WALK_TUNING} visualOverride={monkVisual(age ?? 18)} /></Suspense>
-  if (type.id === "knight") return <Suspense fallback={null}><KnightFigure map={map} appearance={appearance} coat={coat} squire={squire}
-    selected={selected} outlineColor={color} onClick={onClick} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} /></Suspense>
-  return <Suspense fallback={null}>
+    walkTuning={MONK_WALK_TUNING} visualOverride={monkVisual(age ?? 18)} /></SceneAssetBoundary>
+  if (type.id === "knight") return <SceneAssetBoundary><KnightFigure map={map} appearance={appearance} coat={coat} squire={squire}
+    selected={selected} outlineColor={color} onClick={onClick} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} /></SceneAssetBoundary>
+  return <SceneAssetBoundary>
     <group ref={driver} position={[0, 0, 0]}>
-      <CharacterSprite map={map} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
+      <CharacterSprite map={suppliedMap} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
         characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning}
         />
     </group>
     {vendor && !animal && characterModel === "base" && <group ref={pullingDriver}>
-      <CharacterSprite map={map} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
+      <CharacterSprite map={suppliedMap} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
         characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} visualOverride={pulling} />
     </group>}
     {vendor && <>
       <group ref={cart}><TransportSprite map={map} kind="cart" variant={variant} cargo={cargo} puller={puller} awning={awning} characterScale={characterScale}
-        selected={selected} outlineColor={color} onClick={onClick} /></group>
+        worldStall selected={selected} outlineColor={color} onClick={onClick} /></group>
+      <VendorStall cart={cart} cargo={cargo} puller={puller} awning={awning} characterScale={characterScale}
+        selected={selected} outlineColor={color} onClick={onClick} />
       <group ref={setup} visible={false}><TransportSprite map={map} kind="merchant" variant={variant} characterScale={characterScale * (appearance?.scale ?? 1)} selected={selected} outlineColor={color} onClick={onClick} /></group>
     </>}
     {animal && <group ref={beast}><TransportSprite map={map} kind={puller as "donkey" | "horse"} coat={coat} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} /></group>}
     {animal && <AnimalTether animal={beast} kind={puller as "horse" | "donkey"} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} />}
     {animal && <CartReins cart={cart} animal={beast} kind={puller as "horse" | "donkey"} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} />}
-  </Suspense>
+  </SceneAssetBoundary>
 }

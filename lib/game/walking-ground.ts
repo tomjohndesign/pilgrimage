@@ -1,3 +1,4 @@
+import { crossroadIslandAt } from "./map/crossroads"
 import type { buildingSpatialQuery } from "./building-spatial"
 import { terrainQueryToken } from "./map/cliff-corners"
 import { tileAt, type GameMap, type TilePos } from "./map/types"
@@ -31,6 +32,7 @@ function makeQuery(map: GameMap, nearby: Nearby, values?: Uint8Array): (point: T
     if (values?.[index]) return values[index] === 2
     const terrain = tileAt(map, p.x, p.z)
     let open = terrain === "grass" || terrain === "clearing" || terrain === "dirt" || terrain === "sand" || terrain === "path" || terrain === "track"
+    if (open && crossroadIslandAt(map, p.x, p.z)) open = false
     if (open) for (const b of nearby(p)) {
       if (p.x >= b.x && p.x < b.x + b.w && p.z >= b.z && p.z < b.z + b.d) { open = false; break }
     }

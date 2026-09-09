@@ -34,7 +34,7 @@ export const MIN_VIEW_SIZE = 8
  * render, so it must never scale with the map.
  */
 export const MAX_VIEW_SIZE = 140
-export const DEFAULT_VIEW_SIZE = 40
+export const DEFAULT_VIEW_SIZE = 32 / 1.5
 
 /**
  * The ratio that framed a 128-tile map at MAX_VIEW_SIZE — the tuning the cap

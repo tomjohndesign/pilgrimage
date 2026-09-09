@@ -1,15 +1,17 @@
+import { tavernWalkingRoute, type TavernWalkPoint } from "./tavern-navigation"
+import { tavernLayout } from "./tavern-layout"
 import { rotateBuildingPoint, rotatedFootprint, buildingEntry } from "./building-rotation"
 import { buildingSupports, placedSupport } from "./character-support"
 import { isComplete } from "./construction"
 import { surfaceHeight } from "./map/bridges"
 import { settlementRoute } from "./settlement-route"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type BuildingDef, type GameMap, type TilePos } from "./map/types"
-import { workPost } from "./work-posts"
 
 /**
  * Where the settlement sells food and drink. The shrine no longer feeds anyone:
  * a meal and a cup are bought with coin at a counter, and the takings belong to
- * the settlement (see `SimState.tradeGold`).
+ * the settlement (see `SimState.tradeGold`). Independent roadside towns run
+ * their own counters and retain all their takings.
  *
  * Two counters exist. The tavern serves inside, and its customers carry the
  * cup to a table and sit down. A market stall kept by a settled vendor serves
@@ -17,7 +19,7 @@ import { workPost } from "./work-posts"
  */
 
 export const MEAL_PRICE = 2
-export const DRINK_PRICE = 3
+export const DRINK_PRICE = 1
 /** A counter only tops up a meter this low; a cup is not also half a dinner. */
 export const SERVING_THRESHOLD = 60
 
@@ -28,7 +30,7 @@ export interface TavernSeat {
   heading: number
 }
 
-/** Completed places with a counter; a stall only counts once a keeper holds it. */
+/** All counters, including town taverns, require a keeper at their post. */
 export function servingHouses(map: GameMap, staffed: (building: BuildingDef) => boolean): BuildingDef[] {
   return map.buildings.filter(b => isComplete(b)
     && (b.buildType === "tavern" || b.buildType === "market") && staffed(b))
@@ -52,8 +54,8 @@ export function servingCounter(map: GameMap, building: BuildingDef): { tile: Til
     return { tile, point: { x: tileToWorldX(map, tile.x), y: surfaceHeight(map, tile.x, tile.z), z: tileToWorldZ(map, tile.z) } }
   }
   const local = rotatedFootprint(building, building.rotation)
-  const post = workPost("tavern", 0, local.w, local.d)!
-  const point = localPoint(map, building, post.x, post.z + local.d * 0.22)
+  const counter = tavernLayout(local.w, local.d).counter
+  const point = localPoint(map, building, counter.x, counter.z + counter.d / 2 + .16)
   const tile = { x: worldToTileX(map, point.x), z: worldToTileZ(map, point.z) }
   return { tile, point: { ...point, y: surfaceHeight(map, tile.x, tile.z) } }
 }
@@ -75,8 +77,8 @@ export interface TavernPlan {
   buildingId: string
   counter: { tile: TilePos; point: { x: number; y: number; z: number } }
   seat: TavernSeat | null
-  /** Tiles from the customer's own position to the counter. */
-  route: TilePos[]
+  /** World-space aisle route from the customer to the counter. */
+  route: TavernWalkPoint[]
 }
 
 /**
@@ -88,14 +90,18 @@ export function tavernVisitPlan(
   building: BuildingDef,
   from: TilePos,
   occupied: ReadonlySet<string> = new Set(),
+  fromWorld?: TavernWalkPoint,
 ): TavernPlan | null {
   const counter = servingCounter(map, building)
-  const route = settlementRoute(map, map.buildings, from, counter.tile, false, true)
+  const start = fromWorld ?? { x: tileToWorldX(map, from.x), z: tileToWorldZ(map, from.z), y: surfaceHeight(map, from.x, from.z) }
+  const fine = tavernWalkingRoute(map, start, counter.point)
+  const route = fine === undefined ? settlementRoute(map, map.buildings, from, counter.tile, false, true)
+    ?.map(p => ({ x: tileToWorldX(map, p.x), z: tileToWorldZ(map, p.z), y: surfaceHeight(map, p.x, p.z) })) : fine
   if (!route) return null
   const seats = tavernSeats(map, building).filter(seat => !occupied.has(`${building.id}:${seat.id}`))
   if (building.buildType !== "tavern") return { buildingId: building.id, counter, seat: null, route }
   for (const seat of seats) {
-    if (settlementRoute(map, map.buildings, counter.tile, seat.tile, false, true)) {
+    if (tavernWalkingRoute(map, counter.point, seat.point, seat.id)) {
       return { buildingId: building.id, counter, seat, route }
     }
   }

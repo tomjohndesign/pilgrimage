@@ -2,7 +2,10 @@ import type { TerrainId } from "./terrain"
 
 export interface BuildingDef {
   id: string
-  /** Player-built catalogue entry; absent on the founding hovel. */
+  /** Absent on player structures and the founding enclave. */
+  owner?: "independent"
+  townId?: string
+  /** Building catalogue entry; absent on the founding hovel. */
   buildType?: string
   /** Clockwise quarter turns; w/d already describe the rotated footprint. */
   rotation?: import("../building-rotation").BuildingRotation
@@ -75,6 +78,10 @@ export interface DarkForest {
 }
 
 export interface GameMap {
+  /** Marked islands where the generated roads and destination tracks meet. */
+  crossroads?: import("./crossroads").Crossroad[]
+  /** Independent roadside communities, indexed by distance along the main road. */
+  towns?: RoadsideTown[]
   /** Live walking traffic, shared by navigation and terrain; scoped to the running game. */
   footpaths?: import("../footpaths").Footpaths
   elevation?: import("./elevation").ElevationInfo
@@ -103,6 +110,14 @@ export interface GameMap {
   darkForests?: DarkForest[]
   /** Present on generated maps: the relic's hovel and the branch that reaches it. */
   site?: FoundingSite
+}
+
+export interface RoadsideTown {
+  id: string
+  name: string
+  junction: number
+  tavernId: string
+  buildingIds: string[]
 }
 
 export interface Shortcut {

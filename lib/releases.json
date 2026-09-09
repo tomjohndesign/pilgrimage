@@ -1,7 +1,97 @@
 {
-  "lastProcessedCommit": "ab3372f67ffd6d693257d459260ac677fa477404",
-  "releaseCount": 119,
+  "lastProcessedCommit": "264fbf246cc2e7c1dcd8097745c6abb4ab362bc7",
+  "releaseCount": 134,
   "releases": [
+    {
+      "version": "0.0.148",
+      "title": "Release 0.0.148",
+      "summary": "Reduce building placement stalls by reusing terrain and scenery (#167)",
+      "commit": "264fbf246cc2e7c1dcd8097745c6abb4ab362bc7"
+    },
+    {
+      "version": "0.0.147",
+      "title": "Release 0.0.147",
+      "summary": "Add marked crossroads and keep generated paths inland (#161)",
+      "commit": "4d46d590ef32de71d4690b203b35c495b6a22024"
+    },
+    {
+      "version": "0.0.146",
+      "title": "Release 0.0.146",
+      "summary": "Allow roadside vendors to open shops without nearby trees (#168)",
+      "commit": "9801bacd0df860bf2da350c291adc85a245a7e01"
+    },
+    {
+      "version": "0.0.145",
+      "title": "Release 0.0.145",
+      "summary": "Let NPCs drink from nearby streams and lakes (#166)",
+      "commit": "f7a46043a8231bdbe5aca3c219b1d25f723d518c"
+    },
+    {
+      "version": "0.0.144",
+      "title": "Release 0.0.144",
+      "summary": "Keep deployed vendor stalls anchored during map rotation (#165)",
+      "commit": "799d5f14bef666532aec658dbb5226454ef9cf5a"
+    },
+    {
+      "version": "0.0.143",
+      "title": "Release 0.0.143",
+      "summary": "Make tavern drinks cheaper and fund travelers for roadside stops (#164)",
+      "commit": "633ba970567c35cccd4d0a82aecef1cf932e421f"
+    },
+    {
+      "version": "0.0.142",
+      "title": "Release 0.0.142",
+      "summary": "Keep monks evangelizing for three days with rest in place (#159)",
+      "commit": "4d969f715f4f793dd5896bcc101cc9f3173159ef"
+    },
+    {
+      "version": "0.0.141",
+      "title": "Release 0.0.141",
+      "summary": "Open the altar when selecting the relic (#162)",
+      "commit": "47f7262418bdc0f29d0b23e08fe08ea94ff84817"
+    },
+    {
+      "version": "0.0.140",
+      "title": "Release 0.0.140",
+      "summary": "Fix road cutbacks and space seeded taverns by a 192-tile radius (#163)",
+      "commit": "fe9237e54aed8f970d46e854963d95647d85b0ce"
+    },
+    {
+      "version": "0.0.139",
+      "title": "Release 0.0.139",
+      "summary": "Add church-centered radial map loading (#160)",
+      "commit": "ad6ce1f682d5072dbb061b2c3560884375471919"
+    },
+    {
+      "version": "0.0.138",
+      "title": "Release 0.0.138",
+      "summary": "Halve hunger and stamina drain rates (#158)",
+      "commit": "a452c12a90ee95b8de150d19395723420777d64b"
+    },
+    {
+      "version": "0.0.137",
+      "title": "Release 0.0.137",
+      "summary": "Add staffed roadside towns and a day-based calendar (#157)",
+      "commit": "ada4082e20600b2c24f2ce99681da26b4e7752d1"
+    },
+    {
+      "version": "0.0.136",
+      "title": "Release 0.0.136",
+      "summary": "Add dead trees, dark forest floor sprites, and skull warning signs (#156)",
+      "commit": "99654cf3c1d750d76e5b47a855261bd6f60a96a0"
+    },
+    {
+      "version": "0.0.135",
+      "title": "Release 0.0.135",
+      "summary": "Align resting characters with benches and beds (#155)",
+      "commit": "d55113a49b247aabd0342fda7e945174fce5e9ed"
+    },
+    {
+      "version": "0.0.134",
+      "title": "Release 0.0.134",
+      "summary": "Add mobile pinch zoom, panning, and responsive game menus (#154)",
+      "commit": "1d41171f9a76b63b8cc71dd7ac8283fc5270807d"
+    },
     {
       "version": "0.0.133",
       "title": "Release 0.0.133",

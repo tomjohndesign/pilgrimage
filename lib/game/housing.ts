@@ -10,7 +10,7 @@ export function housingBeds(building: BuildingDef): number {
 }
 
 export function monkBeds(map: GameMap) {
-  return map.buildings.filter(isMonkShelter).flatMap(building =>
+  return map.buildings.filter(b => b.owner !== "independent" && isMonkShelter(b)).flatMap(building =>
     Array.from({ length: housingBeds(building) }, (_, slot) => ({ home: building.id, slot })))
 }
 
@@ -22,7 +22,7 @@ export function vacantMonkBed(map: GameMap, joined: Iterable<{ home?: string; be
 }
 
 export function enclaveHousing(map: GameMap, settlers: number, monks: number) {
-  const capacity = (test: (b: BuildingDef) => boolean) => map.buildings.filter(test).reduce((sum, b) => sum + housingBeds(b), 0)
+  const capacity = (test: (b: BuildingDef) => boolean) => map.buildings.filter(b => b.owner !== "independent" && test(b)).reduce((sum, b) => sum + housingBeds(b), 0)
   const places = (occupied: number, total: number) => ({ occupied, capacity: total, available: Math.max(0, total - occupied) })
   return { people: places(settlers, capacity(isHouse)), monks: places(monks, capacity(isMonkShelter)) }
 }
