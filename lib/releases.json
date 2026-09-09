@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "1d41171f9a76b63b8cc71dd7ac8283fc5270807d",
-  "releaseCount": 120,
+  "lastProcessedCommit": "d55113a49b247aabd0342fda7e945174fce5e9ed",
+  "releaseCount": 121,
   "releases": [
+    {
+      "version": "0.0.135",
+      "title": "Release 0.0.135",
+      "summary": "Align resting characters with benches and beds (#155)",
+      "commit": "d55113a49b247aabd0342fda7e945174fce5e9ed"
+    },
     {
       "version": "0.0.134",
       "title": "Release 0.0.134",
