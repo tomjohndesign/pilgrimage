@@ -2,7 +2,7 @@
 
 import { enclaveHousing } from "@/lib/game/housing"
 import { constructionStage } from "@/lib/game/construction"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { GameMap, TilePos } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
@@ -108,7 +108,9 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     setSession((current) => ({ ...current, buildType, message: "" })), [])
   const place = (at: TilePos) => {
     const rotation = useBuildStore.getState().rotation
-    setSession((current) => {
+    // Placement renders several nearby scenery blocks. Let React yield between
+    // them so camera/input updates remain responsive while the site appears.
+    startTransition(() => setSession((current) => {
       if (!baseMap || !relic || current.world !== baseMap || !current.buildType) return current
       const result = purchaseStructure(
         current.settlement,
@@ -131,7 +133,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
         buildType: result.error ? current.buildType : null,
         message: result.error ?? (BUILDING_PREVIEW ? "Building placed." : "Construction planned. Idle residents will build it."),
       }
-    })
+    }))
   }
 
   return {

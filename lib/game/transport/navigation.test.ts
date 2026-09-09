@@ -91,12 +91,12 @@ describe("merchant shrine parking", () => {
     const map = fixture(), pose = alignCart({ x: tileToWorldX(map, 15), z: tileToWorldZ(map, 3) }, Math.PI / 2, 0)
     expect(parkingTree(map, pose, [{ x: pose.x, z: tileToWorldZ(map, 5), y: 0.2, species: "oak" }])).toBeUndefined()
   })
-  it("tries the other market verge when the first has no tree", () => {
-    const map = fixture(), from = convoyPoint(map, 10), context = { trees: trees(map) }
-    const pitch = stallParking(map, from, 10, 1, -cartOffset("horse") * 1.5, 1.5, "horse", context)
+  it.each(["hand", "donkey", "horse"] as const)("parks a roadside %s shop without a tree", puller => {
+    const map = fixture(), from = convoyPoint(map, 10), context = { trees: [] }
+    const pitch = stallParking(map, from, 10, 1, -cartOffset(puller) * 1.5, 1.5, puller, context)
     expect(pitch).not.toBeNull()
-    expect(pitch!.tree).toBeDefined()
-    expect(pitch!.park.z).toBeLessThan(from.z)
+    const parked = alignCart(pitch!.park, pitch!.heading, -cartOffset(puller) * 1.5)
+    expect(parkingClear(map, parked, puller, 1.5, context, true)).toBe(true)
   })
   it("declines parking when the verge is water or buildings", () => {
     const map = fixture(); map.tiles = map.tiles.map(t => t === "grass" ? "water" : t)

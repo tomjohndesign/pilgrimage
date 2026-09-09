@@ -50,14 +50,17 @@ export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, 
     entries.forEach(({ tree, index }) => sources.push({
       x: tree.x, y: tree.y, z: tree.z, column: rolls[index][0],
       row: tree.dead ? FOLIAGE_SPECIES.length * FOLIAGE_FRAME.variants * 2 + (tree.foliageVariant ?? rolls[index][1]) : (tree.oldGrowth ? FOLIAGE_SPECIES.length * FOLIAGE_FRAME.variants : 0) + FOLIAGE_SPECIES.indexOf(tree.species as typeof FOLIAGE_SPECIES[number]) * FOLIAGE_FRAME.variants + (tree.foliageVariant ?? rolls[index][1]),
-      id: encodeObjectId(treeObjectId(idBase, index)), brightness: tree.brightness ?? 1, tree: index,
+      id: [0, 0, 0], brightness: tree.brightness ?? 1, tree: index,
     }))
     const geometry = new THREE.PlaneGeometry(1, 1)
     geometry.translate(0, FOLIAGE_FRAME.anchor[1] / FOLIAGE_FRAME.cellSize - 0.5, 0)
     geometry.setAttribute("foliageFrame", new THREE.InstancedBufferAttribute(new Float32Array(sources.length * 2), 2).setUsage(THREE.DynamicDrawUsage))
     geometry.setAttribute("foliageId", new THREE.InstancedBufferAttribute(new Float32Array(sources.length * 3), 3).setUsage(THREE.DynamicDrawUsage))
     return { geometry, instances: new FoliageInstances(sources, foliageRowRadii(crop.image.data as Float32Array)) }
-  }, [placements, entries, seed, idBase, crop])
+  }, [placements, entries, seed, crop])
+  useLayoutEffect(() => {
+    data.instances.setIds(index => encodeObjectId(treeObjectId(idBase, index)))
+  }, [data, idBase])
   const body = useRef<THREE.InstancedMesh>(null), idMesh = useRef<THREE.InstancedMesh>(null)
   const camera = useRef<THREE.Camera>(undefined)
   const raycast = useMemo(() => foliageRaycast(data.geometry, color, depth, view, () => camera.current), [data, color, depth, view])

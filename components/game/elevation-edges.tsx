@@ -1,21 +1,27 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useContext, useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 import { sceneryDetail } from "@/lib/game/render/scenery-detail"
-import { cliffCorner, terrainCorner, cliffUpperHeight } from "@/lib/game/map/cliff-corners"
+import { cliffCorner, terrainCorner, cliffUpperHeight, withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
 import { SHORE_CORNERS, shorelineCorners } from "@/lib/game/map/shoreline"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { groundHeight } from "@/lib/game/map/elevation"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 
+import { TerrainMapContext } from "./terrain-map-context"
+import type { TerrainBlockBounds } from "@/lib/game/render/terrain-blocks"
+
 /** Narrow rims follow exposed upper edges, leaving continuous slopes unmarked. */
-export function ElevationEdges({ map }: { map: GameMap }) {
+export function ElevationEdges({ map: suppliedMap, bounds, revision: suppliedRevision }: { map?: GameMap; bounds?: TerrainBlockBounds; revision?: object }) {
+  const contextMap = useContext(TerrainMapContext)
+  const map = suppliedMap ?? contextMap!
+  const revision = suppliedRevision ?? map
   const mesh = useRef<THREE.Mesh>(null)
   useFrame(({ scene }) => { if (mesh.current) mesh.current.visible = sceneryDetail(scene) === 0 })
   const width = map.elevation?.settings.edgeWidth ?? 0.045
-  const geometry = useMemo(() => {
+  const geometry = useMemo(() => withTerrainCornerQueries(map, () => {
     const positions: number[] = []
     const sides = [
       { dx: 1, dz: 0, a: [0.5, -0.5], b: [0.5, 0.5] },
@@ -23,7 +29,7 @@ export function ElevationEdges({ map }: { map: GameMap }) {
       { dx: 0, dz: 1, a: [0.5, 0.5], b: [-0.5, 0.5] },
       { dx: 0, dz: -1, a: [-0.5, -0.5], b: [0.5, -0.5] },
     ]
-    for (let z = 0; z < map.depth; z++) for (let x = 0; x < map.width; x++) {
+    for (let z = bounds?.z ?? 0; z < (bounds?.endZ ?? map.depth); z++) for (let x = bounds?.x ?? 0; x < (bounds?.endX ?? map.width); x++) {
       if (map.water?.depth[z * map.width + x]) continue
       const cut = terrainCorner(map, x, z)
       const shore = shorelineCorners(map, x, z)
@@ -68,7 +74,7 @@ export function ElevationEdges({ map }: { map: GameMap }) {
     const g = new THREE.BufferGeometry()
     g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3))
     return g
-  }, [map, width])
+  }), [revision, bounds, width])
   useEffect(() => () => geometry.dispose(), [geometry])
   return <mesh ref={mesh} name="elevation-rims" geometry={geometry} frustumCulled={false}>
     <meshBasicMaterial color="#342719" transparent opacity={map.elevation?.settings.edgeStrength ?? 0.7}

@@ -6,7 +6,6 @@ export interface Point { x: number; z: number }
 import { STALL, stallPoint, stallObstacles, type StallObstacle } from "./stall"
 
 export interface StallRoute {
-  tree?: import("../trees/placement").TreePlacement
   entry: Point[]; exit: Point[]; park: Point; heading: number; side: 1 | -1; returnProgress: number
   frontage: Point; entranceProgress: number; obstacles: StallObstacle[]
 }

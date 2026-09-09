@@ -24,6 +24,7 @@ export function routeBlind(
   depth: number,
   wander: Float64Array,
   elevation?: ElevationInfo,
+  allowed: (x: number, z: number) => boolean = () => true,
 ): number[] {
   const size = width * depth
   const g = new Float64Array(size).fill(Infinity)
@@ -50,7 +51,7 @@ export function routeBlind(
     for (const [dx, dz] of ROUTE_DIRS) {
       const nx = cx + dx
       const nz = cz + dz
-      if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
+      if (nx < 0 || nz < 0 || nx >= width || nz >= depth || !allowed(nx, nz)) continue
       const n = nz * width + nx
       if (closed[n]) continue
       const cost = g[current] + 1 + wander[n] + elevationStep(elevation, current, n)
@@ -66,6 +67,21 @@ export function routeBlind(
   const route: number[] = []
   for (let i = goalIndex; i !== -1; i = cameFrom[i]) route.push(i)
   return route.reverse()
+}
+
+/** Joined waypoint routes can revisit an earlier tile. Remove the intervening
+ * loop before stamping roads or assigning junction and shortcut indices. */
+export function eraseRouteLoops(route: readonly number[]): number[] {
+  const result: number[] = [], positions = new Map<number, number>()
+  for (const tile of route) {
+    const previous = positions.get(tile)
+    if (previous !== undefined) {
+      while (result.length > previous + 1) positions.delete(result.pop()!)
+    } else {
+      positions.set(tile, result.length); result.push(tile)
+    }
+  }
+  return result
 }
 
 /**

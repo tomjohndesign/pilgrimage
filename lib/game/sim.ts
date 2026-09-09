@@ -1,3 +1,4 @@
+import { naturalWaterStop, WATER_THIRST_THRESHOLD, WATER_DRINK_SECONDS } from "./natural-water"
 import { tavernWalkingRoute } from "./tavern-navigation"
 import { townResidents } from "./town-residents"
 import { placeResident } from "./jobs/residents"
@@ -122,6 +123,9 @@ export type Activity =
   | "building"
   | "walking"
   | "seeking"
+  | "toWater"
+  | "drinking"
+  | "fromWater"
   | "toBegging"
   | "begging"
   | "fromBegging"
@@ -175,6 +179,9 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
   building: "Building a structure",
   walking: "On the road",
   seeking: "Seeking food & drink",
+  toWater: "Walking to the water",
+  drinking: "Drinking from the water",
+  fromWater: "Returning from the water",
   toBegging: "Finding a place to ask for alms",
   begging: "Sitting beside the road, asking for alms",
   fromBegging: "Returning to the road",
@@ -335,6 +342,9 @@ export interface SimTraveler {
   jobSlot: number
   /** The house they sleep in. Settlers move in when they take work. */
   home: string | null
+  /** Bound repeated searches while passing inaccessible water. */
+  waterRetry?: number
+  waterVisit?: { spot: WorldPoint; back: WorldPoint; route: WorldPoint[]; buildings: GameMap["buildings"] }
   /** A trip to a counter: where to pay, where to sit, and where to go after. */
   tavernVisit?: {
     plan: TavernPlan
@@ -816,7 +826,7 @@ function findNearbySpot(
 const STALL_ACTIVITIES: readonly Activity[] = ["toShop", "openingShop", "vending", "packingShop"]
 /** Activities that hold someone in place; their speed stays at zero. */
 const STILL_ACTIVITIES: readonly Activity[] = ["offering", "working", "building", "browsing", "performing", "listening", "begging", "givingAlms",
-  "openingShop", "packingShop", "vending", "idle", "posted", "sleeping", "buying", "sitting"]
+  "openingShop", "packingShop", "vending", "idle", "posted", "sleeping", "buying", "sitting", "drinking"]
 const CAMP_ACTIVITIES: readonly Activity[] = ["toCamp", "camping"]
 
 /** World-space pitch on the nearest clearing to `anchor`, or in place if none. */
@@ -940,6 +950,19 @@ function startCamping(sim: SimState, s: SimTraveler, traveler: Traveler, map: Ga
       : null
   s.spot = pitchSpot(map, s, stall ?? campmates ?? s)
   startOffRoadWalk(s, "toCamp")
+}
+
+/** Keep the exact departure point and return route, including a track's lane. */
+function startWaterTrip(s: SimTraveler, map: GameMap): boolean {
+  if (s.thirst > WATER_THIRST_THRESHOLD || (s.waterRetry ?? 0) > 0) return false
+  s.waterRetry = 2
+  const stop = naturalWaterStop(map, s)
+  if (!stop) return false
+  const back = { x: s.x, y: s.y, z: s.z }
+  s.waterVisit = { spot: stop.spot, back, route: [back, ...stop.route].reverse(), buildings: map.buildings }
+  startOffRoadWalk(s, "toWater")
+  s.offRoadRoute = stop.route
+  return true
 }
 
 /** Camps and stalls use the same four-neighbour routing as settlement work. */
@@ -1150,8 +1173,12 @@ function buyRefreshment(sim: SimState, s: SimTraveler, map: GameMap): void {
     s.gold -= price
     if (!independent) sim.tradeGold += price
   }
-  if (s.hunger < SERVING_THRESHOLD && s.gold >= MEAL_PRICE) { take(MEAL_PRICE); s.hunger = 100 }
-  if (s.thirst < SERVING_THRESHOLD && s.gold >= DRINK_PRICE) { take(DRINK_PRICE); s.thirst = 100 }
+  // When coin cannot cover both, answer the most urgent need first.
+  const needs = s.thirst <= s.hunger ? ["thirst", "hunger"] as const : ["hunger", "thirst"] as const
+  for (const need of needs) {
+    const price = need === "thirst" ? DRINK_PRICE : MEAL_PRICE
+    if (s[need] < SERVING_THRESHOLD && s.gold >= price) { take(price); s[need] = 100 }
+  }
 }
 
 /** A settler's own doorstep: where they wait for work between errands. */
@@ -1443,6 +1470,7 @@ export function stepSim(
       if (dt > 0 && sim.procession) blessByProcession(sim.procession, `traveler:${s.id}`, s)
       s.moveSpeed = 0; continue
     }
+    s.waterRetry = Math.max(0, (s.waterRetry ?? 0) - dt)
     s.visitCooldown = Math.max(0, s.visitCooldown - dt)
     s.musicCooldown = Math.max(0, (s.musicCooldown ?? 0) - dt)
     const camping = s.activity === "camping"
@@ -1457,7 +1485,7 @@ export function stepSim(
     s.thirst = Math.max(0, s.thirst - sim.balance.rules.thirstDecay * needFactor * hours)
     if (camping || abed) s.stamina = Math.min(100, s.stamina + CAMP_STAMINA_REGEN * hours)
     // Standing at a stall, a post or a performance neither drains nor restores the legs.
-    else if (!["vending", "performing", "listening", "begging", "givingAlms", "posted", "sitting", "buying"].includes(s.activity)) {
+    else if (!["vending", "performing", "listening", "begging", "givingAlms", "posted", "sitting", "buying", "drinking"].includes(s.activity)) {
       s.stamina = Math.max(0, s.stamina - sim.balance.rules.staminaDecay * hours)
     }
 
@@ -1704,6 +1732,7 @@ export function stepSim(
         }
         // The counter is the quick answer to hunger and thirst; home is the
         // slow one, and the only rest a settler gets. Work comes after both.
+        if (!isVendor && startWaterTrip(s, map)) break
         if (hungry && startTavernTrip(sim, s, map, counters, workplaceReturn(sim, s, map))) break
         if (Math.min(s.hunger, s.thirst, s.stamina) < SETTLER_FED_AT) {
           if (!s.home) s.home = findHome(sim, s, map)
@@ -1808,6 +1837,41 @@ export function stepSim(
         }
         break
       }
+      case "toWater": {
+        const visit = s.waterVisit!
+        if (visit.buildings !== map.buildings) {
+          // A new construction site may close the bank during the detour.
+          startOffRoadWalk(s, "fromWater")
+          break
+        }
+        if (stepOffRoadWalk(s, visit.spot, worldSpeed, dt, map)) {
+          s.activity = "drinking"
+          s.timer = WATER_DRINK_SECONDS
+        }
+        break
+      }
+      case "drinking": {
+        s.timer -= dt
+        if (s.timer <= 0) {
+          s.thirst = 100
+          const visit = s.waterVisit!
+          startOffRoadWalk(s, "fromWater")
+          if (visit.buildings === map.buildings) s.offRoadRoute = [...visit.route]
+        }
+        break
+      }
+      case "fromWater": {
+        const visit = s.waterVisit!
+        if (visit.buildings !== map.buildings) {
+          s.offRoadRoute = null
+          visit.buildings = map.buildings
+        }
+        if (stepOffRoadWalk(s, visit.back, worldSpeed, dt, map)) {
+          s.waterVisit = undefined
+          finishErrand(s)
+        }
+        break
+      }
       case "walking":
       case "seeking":
       case "fleeing": {
@@ -1825,6 +1889,7 @@ export function stepSim(
           s.fleeTimer -= dt
           if (s.fleeTimer <= 0) s.activity = "walking"
         }
+        if ((s.activity === "walking" || s.activity === "seeking") && !isVendor && startWaterTrip(s, map)) break
         // Independent taverns welcome road walkers by need, without shrine attraction.
         if ((s.activity === "walking" || s.activity === "seeking") && !s.track && !s.roadShortcut &&
           !isVendor && t.type.id !== "knight" && s.visitCooldown <= 0 && Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD) {
@@ -2206,7 +2271,6 @@ export function stepSim(
           s.timer = SHOP_SECONDS
           if (cartLoadout(s.id).puller !== "hand") {
             s.pasture = createPasture(s, s.stallRoute?.obstacles, animalClearance(cartLoadout(s.id).puller, characterScale), s.stallRoute?.heading ?? 0)
-            s.pasture.tether = s.stallRoute?.tree
           }
 
         }

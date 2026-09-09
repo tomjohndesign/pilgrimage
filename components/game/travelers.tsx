@@ -1,5 +1,6 @@
 "use client"
 
+import { CharacterMapContext } from "./character-map-context"
 import { SceneAssetBoundary } from "./scene-assets"
 
 import { travelerWeariness } from "@/lib/game/traveler-weariness"
@@ -137,17 +138,19 @@ export const Travelers = memo(function Travelers({
 
   const sim = useMemo(() => createSim([], map, [], relic.stats), [map.road, relic])
   useEffect(() => {
-    const fresh = createSim(travelers, map, [], relic.stats)
-    const residents = JOB_PREVIEW ? new Map(previewResidents(map).map(resident => [resident.traveler.id, resident])) : new Map()
-    for (const [id, traveler] of fresh.travelers) {
-      if (!sim.travelers.has(id) && !sim.joinedMonks.has(id)) {
+    const missing = travelers.filter(t => !sim.travelers.has(t.id) && !sim.joinedMonks.has(t.id))
+    if (missing.length) {
+      const fresh = createSim(missing, map, [], relic.stats)
+      const residents = JOB_PREVIEW ? new Map(previewResidents(map).map(resident => [resident.traveler.id, resident])) : new Map()
+      for (const [id, traveler] of fresh.travelers) {
         const resident = residents.get(id)
         if (resident) placePreviewResident(traveler, map, resident)
         sim.travelers.set(id, traveler)
       }
     }
+    const present = new Set(travelers.map(t => t.id))
     for (const id of sim.travelers.keys()) {
-      if (!fresh.travelers.has(id)) {
+      if (!present.has(id)) {
         sim.travelers.get(id)!.buildingTask = undefined
         sim.travelers.delete(id)
       }
@@ -389,24 +392,24 @@ export const Travelers = memo(function Travelers({
   if (!map.road || map.road.length < 2 || travelers.length === 0) return null
 
   return (
-    <group name="travelers" ref={root}>
+    <CharacterMapContext.Provider value={map}><group name="travelers" ref={root}>
       <PixelCharacters>
         <AdmissionEffects sim={sim} characterScale={characterScale} />
         {mounted.map(index => travelers[index] && <TravelerUnit key={travelers[index].id} index={index}
-          traveler={travelers[index]} beggar={beggars.has(travelers[index].id)} map={map} appearance={appearances[index]} job={jobs.get(travelers[index].id)} groups={groupRefs}
+          traveler={travelers[index]} beggar={beggars.has(travelers[index].id)} appearance={appearances[index]} job={jobs.get(travelers[index].id)} groups={groupRefs}
           selected={isSelected(selection, { kind: "traveler", id: travelers[index].id })}
           characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />)}
       </PixelCharacters>
       {/* Geometry shares the camp's world pixel grid; only baked people use the character pass. */}
       {mounted.map(index => travelers[index] && <TravelerLog key={travelers[index].id} index={index} id={travelers[index].id}
         groups={logRefs} scale={characterScale * (characterModel === "base" ? appearances[index]?.scale ?? 1 : 1)} />)}
-    </group>
+    </group></CharacterMapContext.Provider>
   )
 })
 
 /** Stable neighbors do not rebuild rigs or materials as another figure enters view. */
-const TravelerUnit = memo(function TravelerUnit({ index, traveler, beggar, map, appearance, groups, selected, job, ...figure }: {
-  index: number; traveler: Traveler; beggar: boolean; map: GameMap; appearance: ReturnType<typeof travelerAppearance>
+const TravelerUnit = memo(function TravelerUnit({ index, traveler, beggar, appearance, groups, selected, job, ...figure }: {
+  index: number; traveler: Traveler; beggar: boolean; appearance: ReturnType<typeof travelerAppearance>
   groups: RefObject<Array<THREE.Group | null>>; selected: boolean; job?: SettlementJob
   characterModel: CharacterModel; characterScale: number; characterFps?: number; walkTuning?: WalkTuning
 }) {
@@ -416,10 +419,10 @@ const TravelerUnit = memo(function TravelerUnit({ index, traveler, beggar, map, 
   const register = useCallback((node: THREE.Group | null) => { markPerson(node); if (node) node.userData.travelerId = traveler.id; groups.current[index] = node }, [groups, index, traveler.id])
   return <group name="traveler-unit" visible={false} ref={register}>
     {!beggar && (job || traveler.type.id === "vendor" || traveler.type.id === "knight") ?
-      <TravelerFigure {...figure} map={map} job={job} age={traveler.attributes.age}
+      <TravelerFigure {...figure} job={job} age={traveler.attributes.age}
         {...(traveler.type.id === "knight" ? knightLoadout(traveler.id) : cartLoadout(traveler.id))}
         appearance={appearance} selected={selected} type={traveler.type} onClick={select} idColor={idColor} /> :
-      <SceneAssetBoundary><CharacterSprite {...figure} map={map} age={traveler.attributes.age}
+      <SceneAssetBoundary><CharacterSprite {...figure} age={traveler.attributes.age}
         appearance={appearance} selected={selected} type={beggar ? "beggar" : traveler.type.id} onClick={select}
         outlineColor={[idColor.r, idColor.g, idColor.b]} /></SceneAssetBoundary>}
     <CharacterHitTarget onClick={select} />
