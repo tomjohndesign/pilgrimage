@@ -62,6 +62,29 @@ describe("market cart yard", () => {
 })
 
 describe("cart building collisions", () => {
+  it.each([[1, .1, 8], [-1, .1, 26], [1, 1.25, 8], [-1, 1.25, 26], [1, .1, 16.2], [-1, .1, 15.8]] as const)(
+    "passes a tavern on the inside of a road bend in direction %s with dt %s from %s", (direction, dt, start) => {
+    const { map } = fixture()
+    map.road = [
+      ...Array.from({ length: 17 }, (_, x) => ({ x, z: 11 })),
+      ...Array.from({ length: 18 }, (_, z) => ({ x: 16, z: z + 12 })),
+    ]
+    for (const p of map.road) map.tiles[p.z * map.width + p.x] = "path"
+    map.buildings[0] = { ...map.buildings[0], buildType: "tavern", x: 13, z: 12, w: 3, d: 3 }
+    const traveler = generateTravelers(1, 1)[0]
+    Object.assign(traveler, { id: 8, type: TRAVELER_TYPES.vendor, direction, offset: start / 34, pace: 1 })
+    Object.assign(traveler.attributes, { piety: 0, hunger: 100, thirst: 100, stamina: 100 })
+    const sim = createSim([traveler], map), s = sim.travelers.get(8)!
+    s.timer = 10000
+    for (let i = 0; i < Math.ceil(35 / dt); i++) {
+      stepSim(sim, [traveler], map, 1, dt)
+      expect(convoyBuildingsClear(map, s.cartPose!, "horse", 1.5)).toBe(true)
+      if (direction * (s.progress - 16) > 8) break
+    }
+    expect(direction * (s.progress - 16)).toBeGreaterThan(8)
+    expect(s.roadShortcut).toBeUndefined()
+  })
+
   it("finds buildings beside a long convoy's axle and observes in-place footprint moves", () => {
     const { map } = fixture()
     map.buildings[0] = { ...map.buildings[0], buildType: "tavern", x: 13, z: 12, w: 2, d: 3 }

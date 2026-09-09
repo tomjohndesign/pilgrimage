@@ -14,8 +14,9 @@ import { buildingSpatialQuery } from "./building-spatial"
 import { settlementJob, jobSpeedScale } from "./jobs/design"
 import { seekSheep, stepShepherd, releaseSheep, type HerdingTask } from "./herding"
 import type { WildlifeWorld } from "./wildlife/simulation"
-import { cartPath, driveSegment, marketParking, type MarketParking } from "./transport/building-parking"
+import { cartPath, driveSegment, driveRouteSegment, marketParking, type MarketParking } from "./transport/building-parking"
 import { roadCartPose } from "./transport/bridge-guide"
+import { cartRoadDiversion } from "./transport/road-diversion"
 import { blockedRoad, findRoadDiversion, takeRoadShortcut, retireBypassedRoad, exploresRoadShortcut, type WalkingShortcut } from "./walking-shortcuts"
 import { createFootpaths, HEAVY_PATH_WEAR, recordWalkingPath, regrowFootpaths, type Footpaths } from "./footpaths"
 import { knightMounted, knightLoadout, knightTravelSpeed, knightWalkStride, type HorseRest } from "./knights"
@@ -591,9 +592,13 @@ function finishConvoyMove(s: SimTraveler, transportBefore: SimTraveler | null, m
   const previous = transportBefore.cartPose ?? roadCartPose(map, transportBefore.progress, s.direction, wheelbase, characterScale)
   const wrapped = Math.abs(s.progress - transportBefore.progress) > length / 2 && !s.track && !transportBefore.track
   const parking = s.marketParking ?? s.shrineParking
+  const cut = transportBefore.roadShortcut ?? s.roadShortcut
   let pose: CartPose | null
   if (wrapped) pose = roadCartPose(map, s.progress, s.direction, wheelbase, characterScale)
   else if (parking && !parking.walking) pose = parking.pose
+  else if (cut) pose = driveRouteSegment(previous, [cut.from, ...(cut.via ?? []), cut.to],
+    transportBefore.roadShortcut?.distance ?? 0, s.roadShortcut?.distance ?? cut.length, wheelbase,
+    (p, heading) => convoyBuildingsClear(map, p, puller, characterScale, heading))
   else {
     pose = driveSegment(previous, s, wheelbase, (p, heading) => convoyBuildingsClear(map, p, puller, characterScale, heading))
     if (pose && !parking && !s.track && !s.roadShortcut && !transportBefore.roadShortcut &&
@@ -2250,14 +2255,12 @@ export function stepSim(
           if (s.diversionCheck !== check || s.diversionBuildings !== map.buildings) {
             s.diversionCheck = check
             s.diversionBuildings = map.buildings
-            diversion = findRoadDiversion(map, blockedRoad(map), { x: s.x, z: s.z }, s.progress, direction,
-              p => s.convoy ? convoyPoint(map, p) : roadWorldPoint(map, p, s.lane))
-            if (diversion && s.convoy) {
+            if (s.convoy) {
               const puller = cartLoadout(s.id).puller
               const initial = s.cartPose ?? roadCartPose(map, s.progress, direction, -cartOffset(puller) * characterScale, characterScale)
-              const drive = cartPath(map, initial, diversion.to, puller, characterScale, parkingContext(sim, s, characterScale))
-              diversion = drive ? { ...diversion, via: drive.entry.slice(1, -1), length: routeLength(drive.entry) } : null
-            }
+              diversion = cartRoadDiversion(map, initial, s.progress, direction, puller, characterScale, () => parkingContext(sim, s, characterScale))
+            } else diversion = findRoadDiversion(map, blockedRoad(map), { x: s.x, z: s.z }, s.progress, direction,
+              p => roadWorldPoint(map, p, s.lane))
           }
         }
         const site = map.site

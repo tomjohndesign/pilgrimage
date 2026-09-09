@@ -2,7 +2,7 @@ import { ROUTE_EDGE_INSET } from "./route-bounds"
 import { tavernWalkingRoute } from "../tavern-navigation"
 import { tileToWorldX, tileToWorldZ } from "./types"
 import { describe, expect, it } from "vitest"
-import { addRoadsideTowns, TOWN_SPACING, TOWN_CHAPEL_CLEARANCE, TOWN_APPROACH_CLEARANCE } from "./roadside-towns"
+import { addRoadsideTowns, TOWN_SPACING, TOWN_CHAPEL_CLEARANCE, TOWN_APPROACH_CLEARANCE, TOWN_ROAD_SETBACK } from "./roadside-towns"
 import { generateMap } from "./generate-map"
 import { type GameMap, tileAt } from "./types"
 import { tavernVisitPlan, servingHouses } from "../tavern"
@@ -13,9 +13,9 @@ import { enclaveHousing } from "../housing"
 import { buildInfluence } from "../build-influence"
 
 function roadMap(): GameMap {
-  const width = 400, depth = 30
+  const width = 400, depth = 34
   const map: GameMap = { width, depth, tiles: Array(width * depth).fill("grass"), buildings: [],
-    road: Array.from({ length: width }, (_, x) => ({ x, z: 15 })) }
+    road: Array.from({ length: width }, (_, x) => ({ x, z: 17 })) }
   for (const p of map.road!) map.tiles[p.z * width + p.x] = "path"
   return map
 }
@@ -29,6 +29,8 @@ describe("independent roadside towns", () => {
       const buildings = map.buildings.filter(b => b.townId === town.id)
       expect(buildings.map(b => b.buildType)).toEqual(["tavern", "house", "well"])
       expect(buildings.every(b => b.owner === "independent" && !b.construction)).toBe(true)
+      const entry = buildingEntry(buildings[0]), junction = map.road![town.junction]
+      expect(Math.hypot(entry.x - junction.x, entry.z - junction.z)).toBe(TOWN_ROAD_SETBACK)
       if (i) {
         expect(town.junction - map.towns![i - 1].junction).toBe(TOWN_SPACING)
         expect(TOWN_SPACING).toBe(192)
@@ -68,7 +70,7 @@ describe("independent roadside towns", () => {
     // The nominal second site at x=288 is flooded; the next dry town must
     // remain outside the first tavern's circle while finding accessible land.
     for (let z = 0; z < map.depth; z++) for (let x = 280; x < 310; x++) {
-      if (z !== 15) map.tiles[z * map.width + x] = "water"
+      if (z !== 17) map.tiles[z * map.width + x] = "water"
     }
     addRoadsideTowns(map)
     expect(map.towns).toHaveLength(2)
@@ -79,7 +81,7 @@ describe("independent roadside towns", () => {
 
   it("contributes no jobs, housing, renown or building influence", () => {
     const map = roadMap()
-    map.site = { junction: 200, branch: [{ x: 200, z: 15 }], door: { x: 200, z: 15 }, hovelId: "absent" }
+    map.site = { junction: 200, branch: [{ x: 200, z: 17 }], door: { x: 200, z: 17 }, hovelId: "absent" }
     const influence = buildInfluence(map)
     addRoadsideTowns(map)
     expect(jobBuildings(map)).toEqual([])
@@ -103,6 +105,13 @@ describe("independent roadside towns", () => {
       expect(tavernWalkingRoute(map, visit!.seat!.point, { x: tileToWorldX(map, road.x), z: tileToWorldZ(map, road.z), y: .2 })).toBeTruthy()
       for (const id of town.buildingIds) {
         const building = map.buildings.find(b => b.id === id)!
+        if (building.buildType === "tavern" || building.buildType === "house") {
+          for (const p of map.road!) {
+            const dx = Math.max(building.x - p.x, p.x - (building.x + building.w - 1), 0)
+            const dz = Math.max(building.z - p.z, p.z - (building.z + building.d - 1), 0)
+            expect(Math.max(dx, dz), "road bends also leave a clear verge").toBeGreaterThan(TOWN_ROAD_SETBACK)
+          }
+        }
         for (const entry of buildingApproaches(map, building)) {
           const pathMap = { ...map, tiles: map.tiles.map(t => t === "path" || t === "track" || t === "bridge" ? t : "forest" as const) }
           expect(settlementRoute(pathMap, pathMap.buildings, road, entry), "every entrance has a continuous path").not.toBeNull()
