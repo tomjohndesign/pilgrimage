@@ -27,7 +27,7 @@ import { nerve } from "@/lib/game/route-choice"
 import { parseSeed } from "@/lib/game/rng"
 import { CHANGELOG, CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
-import { ACTIVITY_LABELS, simRegistry, type SimTraveler } from "@/lib/game/sim"
+import { ACTIVITY_LABELS, BEGGAR_RECOVERY_GOLD, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
 import { MONK_TIRED_AT } from "@/lib/game/monk-work"
 import { useMonkEvangelismStore } from "@/lib/game/monk-evangelism-store"
@@ -322,7 +322,7 @@ function TravelerPanel({ traveler, map }: { traveler: Traveler; map: GameMap | n
             style={{ backgroundColor: traveler.type.color }}
           />
           <span className="text-[13px] italic text-ink-light">
-            {traveler.type.label}, {a.age} years
+            {live?.beggar ? `Beggar · ${traveler.type.label}` : traveler.type.label}, {a.age} years
           </span>
         </div>
         {live && (
@@ -332,6 +332,7 @@ function TravelerPanel({ traveler, map }: { traveler: Traveler; map: GameMap | n
             {live.track && " · on the dark track"}
           </div>
         )}
+        {live?.beggar && <div className="text-[11px] italic text-ink-light">Needs {BEGGAR_RECOVERY_GOLD} gold to return to their calling</div>}
         {live?.employer && (
           <div className="text-[11px] text-ink-light">
             Works at {named(live.employer) ?? "a settlement building"}

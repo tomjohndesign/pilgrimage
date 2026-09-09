@@ -147,6 +147,11 @@ export function GameCanvas({
     const personSpeedScale = walkSpeedScale(visual.walkStride, scale)
     return [traveler.id, traveler.type.id === "vendor" ? vendorSpeedScale(traveler.id, scale, personSpeedScale) : personSpeedScale]
   })), [travelers, map.seed, characterModel, characterScale, population, assets])
+  const beggarSpeedScales = useMemo(() => new Map(travelers.map(traveler => {
+    const appearance = travelerAppearance(map.seed ?? 0, traveler.id)
+    const visual = populationVisual("beggar", appearance.variant, population, traveler.attributes.age)
+    return [traveler.id, walkSpeedScale(visual.walkStride, characterScale * appearance.scale)]
+  })), [travelers, map.seed, characterScale, population])
   const foundation = usePersonDesignStore(s => s.design)
   useEffect(() => { void usePersonDesignStore.getState().hydrate() }, [])
   useEffect(() => { void usePopulationStore.getState().prepare(foundation) }, [foundation])
@@ -211,7 +216,7 @@ export function GameCanvas({
           <PixelCharacters>
             <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
           </PixelCharacters>
-          <CharacterBatches><Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
+          <CharacterBatches><Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
             characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} /></CharacterBatches>
         </group>
       </SceneAssetBoundary>
@@ -224,7 +229,7 @@ export function GameCanvas({
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <PersonPicking />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
-      <DebugHandle characterScale={characterScale} map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} movement={movement} />
+      <DebugHandle characterScale={characterScale} map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} movement={movement} />
       <MapReveal map={map} state={reveal} onLandmarkReady={onLandmarkReady} onProgress={onRevealProgress} onPhase={phase => {
         setRevealStatus({ state: reveal, phase }); onRevealPhase(phase)
       }} />

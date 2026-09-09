@@ -13,6 +13,8 @@ import { TILE_HEIGHT, type TerrainId } from "./map/terrain"
 import { tileAt, tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import {
   createSim,
+  BEGGAR_DELAY_SECONDS,
+  BEGGAR_RECOVERY_GOLD,
   FOOD_PRICE,
   GAME_DAY_SECONDS,
   formatGameTime,
@@ -998,12 +1000,94 @@ describe("roadside music", () => {
   })
 })
 
+describe("beggar progression", () => {
+  it.each(["peasant", "pilgrim"] as const)("turns a %s into a beggar after a continuous day without gold, preserving identity", type => {
+    const map = makeMap(), travelers = [makeTraveler(0, type, { gold: 0 })]
+    const original = structuredClone(travelers[0])
+    const sim = createSim(travelers, map), person = sim.travelers.get(0)!
+    sim.danger.fill(0)
+    stepSim(sim, travelers, map, 0, BEGGAR_DELAY_SECONDS - 0.25)
+    expect(person.beggar).not.toBe(true)
+    stepSim(sim, travelers, map, 0, 0.25)
+    expect(person.beggar).toBe(true)
+    expect(person.activity).toBe("toBegging")
+    // Thirst has run out during the day; that must not prevent asking for help.
+    expect(person.thirst).toBe(0)
+    expect(runUntil(sim, travelers, map, () => person.activity === "begging", 30)).toBe(true)
+    stepSim(sim, travelers, map, 1, 1)
+    expect(person.activity).toBe("begging")
+    expect(travelers[0]).toEqual(original)
+  })
+
+  it("resets the poverty clock when any coin arrives before becoming a beggar", () => {
+    const map = makeMap(), travelers = [makeTraveler(0, "peasant", { gold: 0 })]
+    const sim = createSim(travelers, map), person = sim.travelers.get(0)!
+    stepSim(sim, travelers, map, 0, BEGGAR_DELAY_SECONDS - 1)
+    person.gold = 1
+    stepSim(sim, travelers, map, 0, 0.1)
+    expect(person.goldlessSeconds).toBe(0)
+    person.gold = 0
+    stepSim(sim, travelers, map, 0, 1)
+    expect(person.beggar).not.toBe(true)
+    expect(person.goldlessSeconds).toBe(1)
+  })
+
+  it.each(["merchant", "friar", "knight", "minstrel", "vendor"] as const)("does not turn a penniless %s into a beggar", type => {
+    const map = makeMap(), travelers = [makeTraveler(0, type, { gold: 0 })]
+    const sim = createSim(travelers, map), person = sim.travelers.get(0)!
+    stepSim(sim, travelers, map, 0, BEGGAR_DELAY_SECONDS)
+    expect(person.beggar).not.toBe(true)
+  })
+
+  it.each(["peasant", "pilgrim"] as const)("restores a %s at 15 gold and requires a fresh day of poverty to relapse", type => {
+    const map = makeMap(), travelers = [makeTraveler(0, type)]
+    const sim = createSim(travelers, map), person = sim.travelers.get(0)!
+    person.beggar = true
+    person.gold = BEGGAR_RECOVERY_GOLD - 1
+    person.timer = 100
+    const original = structuredClone(travelers[0])
+    const originalSpeed = travelers[0].pace * 2
+    stepSim(sim, travelers, map, 1, 0.1, LINEAR_MOVEMENT, new Map([[0, 2]]), BASE_CHARACTER_SCALE, new Map([[0, 0.75]]))
+    expect(person.beggar).toBe(true)
+    expect(person.moveSpeed).toBeLessThan(originalSpeed)
+    person.gold = BEGGAR_RECOVERY_GOLD
+    stepSim(sim, travelers, map, 1, 0.1, LINEAR_MOVEMENT, new Map([[0, 2]]), BASE_CHARACTER_SCALE, new Map([[0, 0.75]]))
+    expect(person.beggar).toBe(false)
+    expect(person.moveSpeed).toBeCloseTo(originalSpeed)
+    expect(person.gold).toBe(BEGGAR_RECOVERY_GOLD)
+    expect(travelers[0]).toEqual(original)
+    person.gold = 0
+    stepSim(sim, travelers, map, 0, 1)
+    expect(person.beggar).toBe(false)
+    expect(person.goldlessSeconds).toBe(1)
+  })
+
+  it("preserves an employed peasant's job, home, and activity during progression and recovery", () => {
+    const map = makeMap(), travelers = [makeTraveler(0, "peasant", { gold: 0 })]
+    const sim = createSim(travelers, map), person = sim.travelers.get(0)!
+    person.employer = "hut"
+    person.home = "home"
+    person.activity = "camping"
+    person.stamina = 0
+    person.spot = { x: person.x, y: person.y, z: person.z }
+    person.goldlessSeconds = BEGGAR_DELAY_SECONDS - 0.1
+    stepSim(sim, travelers, map, 0, 0.1)
+    expect(person.beggar).toBe(true)
+    expect(person.activity).toBe("camping")
+    person.gold = 15
+    stepSim(sim, travelers, map, 0, 0.1)
+    expect(person.beggar).toBe(false)
+    expect([person.employer, person.home, person.activity]).toEqual(["hut", "home", "camping"])
+  })
+})
+
 describe("roadside generosity", () => {
   function roadside(type: "beggar" | "minstrel", id = 1, piety = 50) {
     const map = makeMap()
-    const travelers = [makeTraveler(0, type, { hunger: 100, thirst: 100, stamina: 100 }),
+    const travelers = [makeTraveler(0, type === "beggar" ? "peasant" : type, { hunger: 100, thirst: 100, stamina: 100 }),
       makeTraveler(id, "pilgrim", { piety, gold: 10, hunger: 100, thirst: 100, stamina: 100 })]
     const sim = createSim(travelers, map), host = sim.travelers.get(0)!, visitor = sim.travelers.get(id)!
+    host.beggar = type === "beggar"
     host.activity = type === "beggar" ? "begging" : "performing"
     host.z = tileToWorldZ(map, 5)
     host.spot = { x: host.x, y: host.y, z: host.z }
@@ -1064,6 +1148,40 @@ describe("roadside generosity", () => {
     expect(visitor.almsVisit).toBeUndefined()
   })
 
+  it.each([false, true])("ends begging immediately when alms reach 15 gold regardless of simulation order (%s)", reversed => {
+    const { map, travelers, sim, host, visitor } = roadside("beggar", 1, 100)
+    host.gold = BEGGAR_RECOVERY_GOLD - 1
+    visitor.activity = "givingAlms"; visitor.timer = 0
+    visitor.almsVisit = { beggarId: host.id, cycle: host.cycle, spot: host.spot! }
+    if (reversed) travelers.reverse()
+    stepSim(sim, travelers, map, 1, 0.1)
+    expect(host.gold).toBe(15)
+    expect(host.beggar).toBe(false)
+    expect(host.activity).toBe("fromBegging")
+    expect(visitor.gold).toBe(9)
+    expect(runUntil(sim, travelers, map, () => host.activity === "walking", 20)).toBe(true)
+    expect(host.spot).toBeNull()
+    expect(travelers.find(t => t.id === host.id)!.type.id).toBe("peasant")
+  })
+
+  it("cancels other alms visits once an earlier donation restores the recipient", () => {
+    const { map, travelers, sim, host, visitor } = roadside("beggar", 1, 100)
+    const nextTraveler = makeTraveler(2, "pilgrim", { gold: 10 })
+    const nextVisitor = createSim([nextTraveler], map).travelers.get(2)!
+    travelers.push(nextTraveler)
+    sim.travelers.set(2, nextVisitor)
+    host.gold = 14
+    for (const giver of [visitor, nextVisitor]) {
+      giver.activity = "givingAlms"
+      giver.timer = 0
+      giver.almsVisit = { beggarId: host.id, cycle: host.cycle, spot: host.spot! }
+    }
+    stepSim(sim, travelers, map, 1, 0.1)
+    expect(host.beggar).toBe(false)
+    expect([host.gold, visitor.gold, nextVisitor.gold]).toEqual([15, 9, 10])
+    expect(nextVisitor.activity).toBe("fromAlms")
+  })
+
   it("does not create coins or pay someone who has left", () => {
     for (const gone of [false, true]) {
       const { map, travelers, sim, host, visitor } = roadside("beggar")
@@ -1079,8 +1197,9 @@ describe("roadside generosity", () => {
   })
 
   it("has beggars sit safely off the road for a long stay, then move on", () => {
-    const map = makeMap(), travelers = [makeTraveler(0, "beggar", { hunger: 100, thirst: 100, stamina: 100 })]
+    const map = makeMap(), travelers = [makeTraveler(0, "peasant", { hunger: 100, thirst: 100, stamina: 100 })]
     const sim = createSim(travelers, map), beggar = sim.travelers.get(0)!
+    beggar.beggar = true
     beggar.timer = 0
     expect(runUntil(sim, travelers, map, () => beggar.activity === "begging", 20)).toBe(true)
     expect(tileAt(map, worldToTileX(map, beggar.x), worldToTileZ(map, beggar.z))).toBe("grass")
@@ -1095,8 +1214,9 @@ describe("roadside generosity", () => {
   })
 
   it("keeps a beggar walking when there is no safe verge", () => {
-    const map = makeDarkMap(), travelers = [makeTraveler(0, "beggar")]
+    const map = makeDarkMap(), travelers = [makeTraveler(0, "peasant")]
     const sim = createSim(travelers, map), beggar = sim.travelers.get(0)!
+    beggar.beggar = true
     sim.danger.fill(0); beggar.timer = 0
     stepSim(sim, travelers, map, 1, 0.1)
     expect(beggar.activity).toBe("walking")

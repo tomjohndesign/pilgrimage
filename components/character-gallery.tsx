@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic"
 
-import { TRAVELER_TYPES, type StatRange, type TravelerTypeDef } from "@/lib/game/travelers"
+import { TRAVELER_CALLINGS, type StatRange, type TravelerTypeDef } from "@/lib/game/travelers"
 
 /* three.js touches browser globals on import, so previews are client-only. */
 const CharacterPreview = dynamic(
@@ -10,7 +10,7 @@ const CharacterPreview = dynamic(
   { ssr: false },
 )
 
-const TYPES = Object.values(TRAVELER_TYPES)
+const TYPES = TRAVELER_CALLINGS
 const TOTAL_WEIGHT = TYPES.reduce((sum, t) => sum + t.weight, 0)
 
 function CellLabel({ children }: { children: React.ReactNode }) {

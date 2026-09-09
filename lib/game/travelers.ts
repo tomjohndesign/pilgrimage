@@ -64,7 +64,7 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     id: "peasant",
     label: "Peasant",
     color: "#9c8b66",
-    weight: 60,
+    weight: 62.5,
     paceMin: 0.8,
     paceMax: 1.1,
     gold: { min: 0, max: 15 },
@@ -145,11 +145,13 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     skillCount: { min: 1, max: 2 },
     skills: ["song", "lute", "juggling", "gossip"],
   },
+  // Appearance metadata retained for the progression and saved asset settings.
+  // Beggars are never rolled as a calling; the simulation preserves their identity.
   beggar: {
     id: "beggar",
     label: "Beggar",
     color: "#786c58",
-    weight: 2.5,
+    weight: 0,
     paceMin: 0.4,
     paceMax: 0.6,
     gold: { min: 0, max: 3 },
@@ -237,7 +239,8 @@ export interface Traveler {
   pace: number
 }
 
-const TYPE_LIST = Object.values(TRAVELER_TYPES)
+export const TRAVELER_CALLINGS = Object.values(TRAVELER_TYPES).filter(type => type.id !== "beggar")
+const TYPE_LIST = TRAVELER_CALLINGS
 const TOTAL_WEIGHT = TYPE_LIST.reduce((sum, t) => sum + t.weight, 0)
 
 function pickType(rng: () => number): TravelerTypeDef {
