@@ -15,7 +15,7 @@ try {
   // Avoid previewing assets that are being exported for the first time.
   await page.goto(new URL("/assets/characters", origin).href, { waitUntil: "domcontentloaded", timeout: 120_000 })
   await page.waitForFunction(knights => knights ? window.__knightBake : window.__transportBake, knights, { timeout: 120_000 })
-  const bake = await page.evaluate(knights => knights ? window.__knightBake() : window.__transportBake(), knights)
+  const bake = await page.evaluate(({knights,partiesOnly,packsOnly}) => knights ? window.__knightBake() : window.__transportBake({partiesOnly,packsOnly}), {knights,partiesOnly:args.includes("--parties"),packsOnly:args.includes("--packs")})
   const directory = output ?? `public/textures/${knights ? "knights" : "transport"}/${bake.metadata.version}`
   if (existsSync(directory)) throw new Error("This version exists. Increment the asset version; published bakes are immutable.")
   mkdirSync(directory, { recursive: true })

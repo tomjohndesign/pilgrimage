@@ -228,6 +228,7 @@ export interface TravelerAttributes {
 }
 
 export interface Traveler {
+  party?: import("./travel-parties").PartyMembership
   /** Index into the generated batch; unique within one map's travelers. */
   id: number
   name: string
