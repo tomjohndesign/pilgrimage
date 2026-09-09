@@ -20,12 +20,13 @@ export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, o
   const shrine = map.buildings.find(b => b.id === site?.hovelId)
   if (!site || !shrine) return null
   const gate = shrineGates(shrine, site.door)[0]
-  const branch = shrineApproach(map, from)
-  if (!branch.length || !buildingStepAllowed(map, map.buildings, gate.outside, gate.inside, true)) return null
+  // A full enclave turns visitors away before any route is planned for them.
   const stations = shrineStations(shrine, site.door)
   const places = prayer ? shrineSeats(shrine, site.door) : Array.from({ length: stations.queueCapacity }, (_, i) => ({ id: `queue-${i}`, tile: stations.viewing }))
   const place = places.find(p => !occupied.has(p.id))
-  if (!place) return null
+  if (!place || !buildingStepAllowed(map, map.buildings, gate.outside, gate.inside, true)) return null
+  const branch = shrineApproach(map, from)
+  if (!branch.length) return null
   const inside = settlementRoute(map, map.buildings, gate.inside, place.tile, false, true)
   const approach = settlementRoute(map, map.buildings, site.door, gate.outside)
   return inside && approach ? { seat: place.id, route: [...branch, ...approach.slice(1), ...inside] } : null

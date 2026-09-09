@@ -54,6 +54,8 @@ export function settlementRoute(
   logging = false,
   enterShrine = false,
   seat?: string,
+  /** Give up after expanding this many tiles; callers with many fallbacks stay bounded. */
+  limit = Infinity,
 ): TilePos[] | null {
   if (!tileAt(map, start.x, start.z) || !tileAt(map, goal.x, goal.z)) return null
   const routeCost = walkingRouteQueries(map)?.edgeCost ?? footpathRouteCost
@@ -124,6 +126,7 @@ export function settlementRoute(
       return result
     }
     if (++expanded === 256 && isolatedGoal(map, buildings, origin, end, allowed, seen, generation, logging, enterShrine, seat)) return null
+    if (expanded > limit) return null
     for (const [dx, dz] of ROUTE_DIRS) {
       const next = { x: p.x + dx, z: p.z + dz }
       const terrain = tileAt(map, next.x, next.z)
