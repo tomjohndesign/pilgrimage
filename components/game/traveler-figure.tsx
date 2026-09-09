@@ -21,6 +21,7 @@ import { CharacterSprite } from "./character-sprite"
 import { CartReins } from "./cart-reins"
 import { KnightFigure } from "./knight-figure"
 import { TransportSprite } from "./transport-sprite"
+import { VendorStall } from "./vendor-stall"
 import type { TravelerAppearance } from "@/lib/game/base-person/population"
 import { pullingVisual } from "@/lib/game/transport/visual"
 import { cartOffset, type Cargo, type Puller, type HorseVariant } from "@/lib/game/transport/assets"
@@ -186,7 +187,9 @@ export function TravelerFigure({ map, age, job, type, onClick, idColor, selected
     </group>}
     {vendor && <>
       <group ref={cart}><TransportSprite map={map} kind="cart" variant={variant} cargo={cargo} puller={puller} awning={awning} characterScale={characterScale}
-        selected={selected} outlineColor={color} onClick={onClick} /></group>
+        worldStall selected={selected} outlineColor={color} onClick={onClick} /></group>
+      <VendorStall cart={cart} cargo={cargo} puller={puller} awning={awning} characterScale={characterScale}
+        selected={selected} outlineColor={color} onClick={onClick} />
       <group ref={setup} visible={false}><TransportSprite map={map} kind="merchant" variant={variant} characterScale={characterScale * (appearance?.scale ?? 1)} selected={selected} outlineColor={color} onClick={onClick} /></group>
     </>}
     {animal && <group ref={beast}><TransportSprite map={map} kind={puller as "donkey" | "horse"} coat={coat} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} /></group>}
