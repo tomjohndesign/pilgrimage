@@ -2,9 +2,10 @@
 
 The target remains 30 FPS with all 10,000 travelers at effective 6× game speed,
 including camera movement. Disabling work in a diagnostic does not meet that target.
-The fixture is the existing 512 × 512 `/play` city: 242 buildings, 90,556 sprite
-trees, 1,404 scenery sprites, plus resident monks and wildlife. No replacement
-scene or simplified demo is used.
+The historical 0.0.133 measurements used the existing 512 × 512 `/play` city:
+242 buildings, 90,556 sprite trees and 1,404 scenery sprites, plus resident monks
+and wildlife. Main has since changed map generation and tree assets; those
+counts and FPS results are historical, not measurements of the integrated build.
 
 ## Benchmark correction: gameplay versus continuous routing
 
@@ -306,3 +307,23 @@ not an implemented or measured improvement. It would need to preserve contact
 timing, account for delayed results, and report actual character update rate
 alongside camera FPS. See [Web Workers](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers)
 and [transferable buffers](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects).
+
+## Shipping validation after integration with main
+
+Performance investigation is paused at the user's request. Main through
+`af4c4f55` (0.0.149) is integrated, including loading/reveal, building-placement,
+map, sprite and reversible-begging changes. The full crowd budget remains the
+default; the unvalidated pose-worker prototype is outside application source.
+
+The production build, type checking and real GPU sprite/depth/ID comparison
+pass. The integrated full suite recorded 1,635 passing tests, two failures also
+reproduced on unchanged main `af4c4f55`, and one city-fixture timeout at 30 seconds.
+The city check passes with the same 60-second allowance as the other large-map
+checks; the targeted follow-up recorded 20 passes. The upstream failures are
+`map/bridges.test.ts` (generated `foundSite` accesses an absent road vertex) and
+`tavern-navigation.test.ts` (customer gold is 17 instead of 15). They are not
+weakened or changed in this PR. Raw logs are local under `.context/ship-*`.
+
+No new isolated FPS claim is made for this integrated build. The user-authorized
+run with other sessions active was stopped and marked unsuitable for an
+isolated comparison. Further optimization and maximum-load testing are deferred.
