@@ -6,6 +6,7 @@ export type SceneryProfile = "desktop" | "mobile"
 interface DetailState {
   current: SceneryDetail
   pending: SceneryDetail
+  zoom: SceneryDetail
   zooming: boolean
   target: number
   density: number
@@ -36,8 +37,9 @@ export function updateSceneryDetail(scene: THREE.Scene, camera: THREE.Camera, he
   const density = viewSize > 0 ? height / viewSize : Infinity
   let state = details.get(scene)
   if (!state) {
-    const initial = Math.max(minimum, chooseSceneryDetail(density, 0, profile)) as SceneryDetail
-    state = { current: initial, pending: initial, zooming: false, target, density, changedAt: time,
+    const zoom = chooseSceneryDetail(density, 0, profile)
+    const initial = Math.max(minimum, zoom) as SceneryDetail
+    state = { current: initial, pending: initial, zoom, zooming: false, target, density, changedAt: time,
       profile, from: initial, fade: 1, fadeStartedAt: -Infinity }
     details.set(scene, state)
   }
@@ -52,6 +54,9 @@ export function updateSceneryDetail(scene: THREE.Scene, camera: THREE.Camera, he
   state.target = target; state.density = density; state.profile = profile
   state.pending = Math.max(minimum, chooseSceneryDetail(density, state.current, profile)) as SceneryDetail
   state.zooming = time - state.changedAt < ZOOM_QUIET_SECONDS
+  // Buildings and their interiors follow zoom alone, including its own
+  // hysteresis history; FPS pressure must not push them across a threshold.
+  if (!state.zooming) state.zoom = chooseSceneryDetail(density, state.zoom, profile)
   if (!state.zooming && state.current !== state.pending) {
     state.from = state.current; state.current = state.pending; state.fadeStartedAt = time
   }
@@ -63,6 +68,8 @@ export function updateSceneryDetail(scene: THREE.Scene, camera: THREE.Camera, he
 /** The game updates this once after the camera, before animation callbacks.
  * Standalone asset previews retain their full authored detail. */
 export function sceneryDetail(scene: THREE.Scene): SceneryDetail { return details.get(scene)?.current ?? 0 }
+/** Authored building surfaces and interior access only simplify with zoom. */
+export function buildingDetail(scene: THREE.Scene): SceneryDetail { return details.get(scene)?.zoom ?? 0 }
 export function sceneryFadeProgress(scene: THREE.Scene): number { return details.get(scene)?.fade ?? 1 }
 export function sceneryZooming(scene: THREE.Scene): boolean { return details.get(scene)?.zooming ?? false }
 export function sceneryCloseOpacity(scene: THREE.Scene): number {
@@ -74,7 +81,7 @@ export function sceneryCloseOpacity(scene: THREE.Scene): number {
 /** Opt-in browser diagnostics; ordinary rendering reads the numeric level. */
 export function sceneryDetailStatus(scene: THREE.Scene) {
   const state = details.get(scene)
-  return state ? { current: state.current, pending: state.pending, zooming: state.zooming, fade: state.fade, profile: state.profile } : undefined
+  return state ? { current: state.current, pending: state.pending, building: state.zoom, zooming: state.zooming, fade: state.fade, profile: state.profile } : undefined
 }
 
 /** Detailed crowns and their representative shapes share the original ID. */

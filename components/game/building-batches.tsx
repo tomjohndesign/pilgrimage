@@ -6,7 +6,7 @@ import * as THREE from "three"
 import { PixelWorld } from "@/components/pixel-canvas"
 import { buildingBatchCell, buildingSurfaceMaterial, mergedBuildingBlock, type BuildingBatchSource } from "@/lib/game/render/building-batch"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
-import { sceneryDetail } from "@/lib/game/render/scenery-detail"
+import { buildingDetail } from "@/lib/game/render/scenery-detail"
 
 const Context = createContext<{ material: THREE.MeshLambertMaterial; register: (source: BuildingBatchSource) => () => void } | null>(null)
 export const useBuildingBatches = () => useContext(Context)
@@ -56,7 +56,7 @@ export function BuildingBatches({ children }: { children: ReactNode }) {
       source.body.userData.batchedPickTarget = buildingBatchControl.enabled
     }
     root.current.visible = buildingBatchControl.enabled
-    const detail = sceneryDetail(scene)
+    const detail = buildingDetail(scene)
     shading.value = detail === 0 ? 1 : 0
     for (const cell of state.cells.values()) {
       cell.body.geometry = cell.geometry.body[detail]; cell.ids.geometry = cell.geometry.ids[detail]
