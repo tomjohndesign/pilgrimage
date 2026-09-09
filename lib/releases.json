@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "8a69239bea978736a4e2246e0fa53512b9170e9c",
-  "releaseCount": 162,
+  "lastProcessedCommit": "b926810f6f835bb40cee60a1bddfd8a686a8eaf4",
+  "releaseCount": 163,
   "releases": [
+    {
+      "version": "0.0.177",
+      "title": "Release 0.0.177",
+      "summary": "Fix Ent cheat and add slow walking sprites with branch arms (#196)",
+      "commit": "b926810f6f835bb40cee60a1bddfd8a686a8eaf4"
+    },
     {
       "version": "0.0.176",
       "title": "Release 0.0.176",
