@@ -13,6 +13,12 @@ changes, and their current limits. Its controlled measurements supersede older
 maximum-load figures below; 30 FPS with 10,000 travelers at effective 6× remains
 an unmet target.
 
+The city results below predate the fixture correction: they forced continuous
+random trips and should be read as routing stress, not normal gameplay load.
+That behavior now requires `benchmark=city-stress`; `benchmark=city` preserves
+normal NPC decisions. See the investigation above for the correction and its
+limits before comparing old and new measurements.
+
 ## Hidden-layer investigation after PR #146
 
 The follow-up baseline includes main through `5cd7a1b` (0.0.129). Other local

@@ -11,6 +11,7 @@ import { isWorldVisible } from "@/lib/game/render/visibility"
 import { frameProfile } from "@/lib/game/render/frame-profile"
 import { SpriteFrames } from "./sprite-frames"
 import { benchmarkWork } from "@/lib/game/benchmark-work"
+import { frameQuality } from "@/lib/game/render/frame-quality"
 
 interface AtlasGroup {
   entries: CharacterBatchEntry[]
@@ -71,7 +72,7 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
     for (const group of groups.values()) group.entries.length = 0
     candidates.clear()
   }, -1)
-  useFrame(({ camera, scene, clock }) => {
+  useFrame(({ camera, scene, clock }, delta) => {
     // This interval also contains wildlife's independently reported callback.
     frameProfile.end("animationAndWildlife", phaseStart.current)
     const started = frameProfile.start()
@@ -95,6 +96,7 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
         root.current.add(batch.root)
       }
       group.entries.sort((a, b) => a.sprite.renderOrder - b.sprite.renderOrder)
+      batch?.setSimplified(frameQuality(scene) === 2, delta)
       batch?.write(group.entries, camera, true)
     }
     updateBatchSourceVisibility(scene, candidates, clock.elapsedTime)
@@ -111,6 +113,6 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
   }, [entries, groups, candidates, scene])
   return <Context.Provider value={entries}>
     <SpriteFrames visibleRoot={root}>{children}</SpriteFrames>
-    <PixelCharacters><group ref={root} /></PixelCharacters>
+    <PixelCharacters><group name="character-batches" ref={root} /></PixelCharacters>
   </Context.Provider>
 }

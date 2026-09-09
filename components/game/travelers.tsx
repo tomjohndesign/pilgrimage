@@ -15,6 +15,9 @@ import { processionRegistry } from "@/lib/game/relic-procession"
 import { frameProfile } from "@/lib/game/render/frame-profile"
 import { isWorldVisible } from "@/lib/game/render/visibility"
 import { figureMounts } from "@/lib/game/render/figure-mounts"
+import { CrowdBudget, crowdRanks, crowdRenderControl, crowdRenderStatus } from "@/lib/game/render/crowd-budget"
+import { sceneryZooming } from "@/lib/game/render/scenery-detail"
+import { frameQuality } from "@/lib/game/render/frame-quality"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
 import { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react"
@@ -116,6 +119,8 @@ export const Travelers = memo(function Travelers({
   const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
   const kneelingHeading = shrine ? shrineLayout(shrine,map.site?.door).rotation + Math.PI : Math.PI
   const appearances = useMemo(() => travelers.map(t => travelerAppearance(map.seed ?? 0, t.id)), [travelers, map.seed])
+  const ranks = useMemo(() => crowdRanks(travelers.map(t => t.id)), [travelers])
+  const crowdBudget = useMemo(() => new CrowdBudget(), [travelers])
   const selection = useCameraStore((s) => s.selection)
   const [jobs, setJobs] = useState<ReadonlyMap<number, SettlementJob>>(() => new Map(JOB_PREVIEW ? previewResidents(map).map(resident =>
     [resident.traveler.id, settlementJob(resident.building.id, [resident.building])!] as const) : []))
@@ -163,7 +168,10 @@ export const Travelers = memo(function Travelers({
     simRegistry.current = sim
     return () => {
       for (const traveler of sim.travelers.values()) traveler.buildingTask = undefined
-      if (simRegistry.current === sim) simRegistry.current = null
+      if (simRegistry.current === sim) {
+        simRegistry.current = null
+        Object.assign(crowdRenderStatus, { active: false, budget: 0, rendered: 0, population: 0 })
+      }
     }
   }, [sim])
 
@@ -179,7 +187,7 @@ export const Travelers = memo(function Travelers({
     return () => { unsubscribe(); stopCharacterSound() }
   }, [travelers])
 
-  useFrame(({ camera, clock: frameClock }, delta) => withTerrainCornerQueries(map, () => {
+  useFrame(({ camera, scene, clock: frameClock }, delta) => withTerrainCornerQueries(map, () => {
     const started = frameProfile.start()
     // A background tab hands us a huge delta; clamp so nobody teleports.
     const build = useBuildStore.getState()
@@ -226,6 +234,10 @@ export const Travelers = memo(function Travelers({
 
     frameProfile.end("simulation", started)
     if (!isWorldVisible(root.current) || (process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && !benchmarkWork.characterVisuals)) {
+      if (!isWorldVisible(root.current)) {
+        Object.assign(crowdRenderStatus, { active: false, budget: travelers.length, population: travelers.length, rendered: 0 })
+        if (root.current) Object.assign(root.current.userData, { renderedUnits: 0, missingVisibleUnits: 0 })
+      }
       visualStale.current = true
       return
     }
@@ -238,11 +250,14 @@ export const Travelers = memo(function Travelers({
     camera.updateMatrixWorld()
     frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, view.copy(camera.matrixWorld).invert()))
     const selected = useCameraStore.getState().selection
+    const budget = crowdBudget.update(travelers.length,
+      crowdRenderControl.enabled && frameQuality(scene) === 2,
+      delta, sceneryZooming(scene))
     const nextMounted: number[] = []
     const preparation: Array<{ index: number; distance: number }> = []
     const newLogs: number[] = []
     preparedParents.clear()
-    let pendingUnits = 0, missingVisibleUnits = 0
+    let pendingUnits = 0, missingVisibleUnits = 0, renderedUnits = 0
     for (let i = 0; i < travelers.length; i++) {
       const group = groupRefs.current[i]
       const s = sim.travelers.get(travelers[i].id)
@@ -254,6 +269,12 @@ export const Travelers = memo(function Travelers({
       }
 
       if (!s) continue
+      if (ranks[i] >= budget && !(selected?.kind === "traveler" && selected.id === travelers[i].id)) {
+        if (group?.visible) { group.visible = false; setSubtreeMatrixAutoUpdate(group, false) }
+        const logs = logRefs.current[i]
+        if (logs?.visible) { logs.visible = false; setSubtreeMatrixAutoUpdate(logs, false) }
+        continue
+      }
       bounds.center.set(s.x, s.y, s.z)
       // The selected figure stays live wherever it wanders, so its outline and
       // highlight never depend on where the camera happens to be pointing.
@@ -287,6 +308,7 @@ export const Travelers = memo(function Travelers({
         else if (logs) setSubtreeMatrixAutoUpdate(logs, true)
       }
       if (!onScreen) continue
+      renderedUnits++
 
       const dx = s.x - group.position.x
       const dz = s.z - group.position.z
@@ -387,7 +409,9 @@ export const Travelers = memo(function Travelers({
         }
       }
     }
-    if (root.current) Object.assign(root.current.userData, { requestedUnits: nextMounted.length, pendingUnits, missingVisibleUnits })
+    Object.assign(crowdRenderStatus, { active: crowdBudget.active, budget, rendered: renderedUnits, population: travelers.length })
+    if (root.current) Object.assign(root.current.userData, { requestedUnits: nextMounted.length, pendingUnits, missingVisibleUnits,
+      crowdBudget: budget, densityReduced: crowdBudget.active, renderedUnits })
     if (newLogs.length) setLogMounts(current => [...current, ...newLogs])
     // Prepare the nearest missing figures first; array/ID order can otherwise
     // spend the admission budget on the far edge of the preload margin.

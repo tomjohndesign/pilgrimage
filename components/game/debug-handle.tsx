@@ -26,6 +26,8 @@ import { buildingBatchControl } from "./building-batches"
 import { characterBatchControl } from "./character-batches"
 import { staticBatchControl } from "./static-batches"
 import { outlineFrameRef } from "./outline-pass"
+import { frameQuality, frameQualityControl } from "@/lib/game/render/frame-quality"
+import { crowdRenderControl, crowdRenderStatus } from "@/lib/game/render/crowd-budget"
 import { frameProfile } from "@/lib/game/render/frame-profile"
 import { createDrawProfile } from "@/lib/game/render/draw-profile"
 import { sceneryDetailStatus } from "@/lib/game/render/scenery-detail"
@@ -48,10 +50,19 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
 
     const drawProfile = createDrawProfile(gl, scene)
     let motionSubjects: Array<{ unit: THREE.Object3D; sprite: THREE.Sprite }> = []
+    const roots = new Map<string, THREE.Object3D>()
+    const namedRoot = (name: string) => {
+      let root = roots.get(name)
+      if (!root?.parent) { root = scene.getObjectByName(name); if (root) roots.set(name, root) }
+      return root
+    }
     const handle = {
       map,
       benchmarkTarget: benchmarkCity(map)?.centre,
       cityStats: () => cityBenchmarkStats(simRegistry.current, map),
+      populationStatus: () => ({ travelers: simRegistry.current?.travelers.size ?? 0,
+        joinedMonks: simRegistry.current?.joinedMonks.size ?? 0,
+        total: (simRegistry.current?.travelers.size ?? 0) + (simRegistry.current?.joinedMonks.size ?? 0) }),
       captureDraws: (enabled: boolean) => drawProfile.capture(enabled),
       layerVisibility: () => Object.fromEntries(["characters", "wildlife", "trees", "scenery", "buildings"].map(name =>
         [name, scene.getObjectByName(`visibility-${name}`)?.visible ?? false])),
@@ -124,12 +135,32 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         })
         return { shadows, sprites, reducedWalking }
       },
+      setAdaptiveQuality: (enabled: boolean) => { frameQualityControl.enabled = enabled },
+      setCrowdThinning: (enabled: boolean) => { crowdRenderControl.enabled = enabled },
+      figureStatus: () => ({ ...crowdRenderStatus, quality: frameQuality(scene),
+        pendingUnits: namedRoot("travelers")?.userData.pendingUnits ?? 0,
+        missingVisibleUnits: namedRoot("travelers")?.userData.missingVisibleUnits ?? 0 }),
+      adaptiveStatus: () => ({ ...crowdRenderStatus, quality: frameQuality(scene), detail: sceneryDetailStatus(scene)?.current,
+        treeDensity: namedRoot("foliage-prototype")?.children[0]?.userData.treeDensity,
+        wildlife: namedRoot("wildlife")?.visible, waterDetail: namedRoot("water-shimmer")?.visible,
+        simpleBatches: namedRoot("character-batches")?.children.filter(child => child.visible && child.userData.simplified).length ?? 0 }),
+      hiddenTraveler: () => {
+        const root = namedRoot("travelers")
+        let hidden: { id: number; x: number; z: number } | null = null
+        root?.traverse(unit => {
+          if (hidden || unit.name !== "traveler-unit" || unit.visible) return
+          const person = simRegistry.current?.travelers.get(unit.userData.travelerId)
+          if (person) hidden = { id: person.id, x: person.x, z: person.z }
+        })
+        return hidden
+      },
       cameraAlignment: () => {
         let error = 0
-        scene.traverseVisible(object => {
-          const view = object.name === "character-atlas-batch" ? object.userData.viewMatrix as THREE.Matrix4 : undefined
+        const root = namedRoot("character-batches")
+        if (root?.visible) for (const object of root.children) {
+          const view = object.visible ? object.userData.viewMatrix as THREE.Matrix4 : undefined
           if (view) for (let i = 0; i < 16; i++) error = Math.max(error, Math.abs(view.elements[i] - camera.matrixWorldInverse.elements[i]))
-        })
+        }
         return error
       },
       sceneStats: () => {
@@ -147,7 +178,9 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         const foliage = scene.getObjectByName("foliage-prototype")?.children[0] as THREE.InstancedMesh | undefined
         return { objects, visible, sprites, units, prunedCharacterRoots: [...batchedSourceRoots(scene)].length, treeRenderer: foliage ? "sprites" : "procedural",
           totalTrees: foliage?.userData.totalTrees, visibleTrees: foliage?.count, loadedUnits: loaded.size, requestedUnits: figures?.requestedUnits,
-          pendingUnits: figures?.pendingUnits, missingVisibleUnits: figures?.missingVisibleUnits }
+          pendingUnits: figures?.pendingUnits, missingVisibleUnits: figures?.missingVisibleUnits,
+          renderedTravelers: figures?.renderedUnits, crowdBudget: figures?.crowdBudget, densityReduced: figures?.densityReduced,
+          treeDensity: foliage?.userData.treeDensity ?? 1 }
       },
       sceneryDetail: () => scene.getObjectByName("scenery-batches")?.userData.sceneryDetail,
       sceneryDetailStatus: () => ({ ...sceneryDetailStatus(scene), presentationFade: scene.userData.sceneryFadeActive === true }),
@@ -390,6 +423,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
     return () => {
       drawProfile.dispose()
       resetBenchmarkWork()
+      frameQualityControl.enabled = true; crowdRenderControl.enabled = false
       delete (window as unknown as Record<string, unknown>).__pilgrimage
     }
   }, [gl, camera, scene, map, travelers, speed, movement, speedScales, characterScale, setDpr])

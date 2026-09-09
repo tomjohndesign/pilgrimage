@@ -1,6 +1,7 @@
 import { expect, it } from "vitest"
 import * as THREE from "three"
 import { foliageCropData } from "./crop"
+import { densityHash } from "../../render/crowd-budget"
 import { FoliageInstances } from "./instances"
 
 it("crops only transparent padding, preserves boundary alpha, and flips cell UVs", () => {
@@ -46,5 +47,19 @@ it("keeps every potentially visible tree through pan, rotation, zoom and parent 
     expect(data.update(mesh, camera)).toBe(false)
     expect(mesh.instanceMatrix.version).toBe(version)
   }
+  const full = [...data.visible]
+  const sampled = full.filter(index => (densityHash(sources[index].tree) & 1) === 0)
+  data.update(mesh, camera, true)
+  expect(data.visible).toEqual(sampled)
+  expect(data.update(mesh, camera, true)).toBe(false)
+  const omitted = full.find(index => !sampled.includes(index))!
+  expect(omitted).toBeDefined()
+  data.update(mesh, camera, true, sources[omitted].tree)
+  expect(data.visible).toEqual([...sampled, omitted].sort((a, b) => a - b))
+  const selectedRow = data.visible.indexOf(omitted)
+  expect(geometry.getAttribute("foliageId").getX(selectedRow)).toBeCloseTo(sources[omitted].id[0])
+  data.update(mesh, camera, false)
+  expect(data.visible).toEqual(full)
+  expect(data.sources).toBe(sources)
   mesh.dispose(); geometry.dispose(); material.dispose()
 })

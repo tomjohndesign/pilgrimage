@@ -37,6 +37,8 @@ export function SpriteFrames({ children, visibleRoot }: { children: ReactNode; v
         const { crowd, update } = listener.current
         if (crowd && crowd.control.enabled) {
           const pose = crowd.pose.current, parent = pose?.parent, entry = crowd.entry.current
+          // Hidden figures have no current pose stamp. Skip their general callback too.
+          if (parent?.name === "traveler-unit" && !parent.visible) continue
           if (pose && parent && entry && parent.name === "traveler-unit" && parent.userData.poseWorldFrame === time) {
             if (!isWorldVisible(parent)) continue
             if (updateCrowdWalk(crowd.walk, parent, pose, entry, view, detail, delta)) {

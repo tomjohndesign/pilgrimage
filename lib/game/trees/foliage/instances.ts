@@ -1,6 +1,7 @@
 import * as THREE from "three"
 import { blockKey } from "../../render/blocks"
 import { GuardedFrustum } from "../../render/guarded-frustum"
+import { densityHash } from "../../render/crowd-budget"
 
 export interface FoliageInstance {
   x: number; y: number; z: number; column: number; row: number
@@ -16,6 +17,8 @@ export class FoliageInstances {
   private version = -1
   private world = new THREE.Matrix4()
   private sphere = new THREE.Sphere()
+  private thin = false
+  private selected = -1
 
   constructor(readonly sources: readonly FoliageInstance[], private radii: Float32Array) {
     const blocks = new Map<number, { indices: number[]; box: THREE.Box3; radius: number }>()
@@ -31,10 +34,11 @@ export class FoliageInstances {
       sphere: block.box.expandByScalar(block.radius).getBoundingSphere(new THREE.Sphere()) }))
   }
 
-  update(mesh: THREE.InstancedMesh, camera: THREE.Camera): boolean {
+  update(mesh: THREE.InstancedMesh, camera: THREE.Camera, thin = false, selected = -1): boolean {
     this.view.update(camera)
-    if (this.version === this.view.version && this.world.equals(mesh.matrixWorld)) return false
+    if (this.version === this.view.version && this.world.equals(mesh.matrixWorld) && this.thin === thin && this.selected === selected) return false
     this.version = this.view.version; this.world.copy(mesh.matrixWorld)
+    this.thin = thin; this.selected = selected
     const frustum = this.view.frustum, scale = mesh.matrixWorld.getMaxScaleOnAxis()
     this.visible.length = 0
     for (const block of this.blocks) {
@@ -42,6 +46,7 @@ export class FoliageInstances {
       if (!frustum.intersectsSphere(this.sphere)) continue
       for (const index of block.indices) {
         const source = this.sources[index]
+        if (thin && source.tree !== selected && (densityHash(source.tree) & 1) !== 0) continue
         this.sphere.center.set(source.x, source.y, source.z).applyMatrix4(mesh.matrixWorld)
         this.sphere.radius = this.radii[source.row] * scale
         if (frustum.intersectsSphere(this.sphere)) this.visible.push(index)

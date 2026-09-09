@@ -9,7 +9,7 @@ import { freezeAssetUpdates } from "./asset-browser.mjs"
 // Exercise the actual /play scene with the repository's Playwright installation.
 const base = process.env.BENCH_URL ?? "http://localhost:3100"
 const scenario = process.env.BENCH_SCENARIO ?? "forest"
-assert.ok(["forest", "city"].includes(scenario), "BENCH_SCENARIO must be forest or city")
+assert.ok(["forest", "city", "city-stress"].includes(scenario), "BENCH_SCENARIO must be forest, city (normal gameplay), or city-stress (continuous random journeys)")
 const target = process.env.BENCH_TARGET ?? "centre"
 assert.ok(["centre", "water"].includes(target), "BENCH_TARGET must be centre or water")
 const mobile = process.env.BENCH_MOBILE === "1"
@@ -76,9 +76,10 @@ try {
   await page.goto(`${base}/play?seed=12345&size=512&traffic=${count / 16}&trees=${trees}&benchmark=${scenario}`, { timeout: 180000 })
   await page.waitForFunction(count => window.__pilgrimage?.sim().length === count, count, { timeout: 180000 })
   // Simulation is ready before Suspense has mounted the sprite assets.
-  await page.evaluate(({ zoom, target }) => {
+  await page.evaluate(({ zoom, target, adaptive }) => {
     const game = window.__pilgrimage, road = game.map.road
     game.setPaused?.(true)
+    game.setAdaptiveQuality(adaptive)
     let point = game.benchmarkTarget ?? road[Math.floor(road.length / 2)]
     if (target === "water") {
       const wet = game.map.tiles.flatMap((tile, i) => tile === "water" ? [{ x: i % game.map.width, z: Math.floor(i / game.map.width) }] : [])
@@ -88,7 +89,7 @@ try {
     }
     game.setTarget(point.x - game.map.width / 2 + .5, point.z - game.map.depth / 2 + .5)
     game.setZoom(zoom)
-  }, { zoom, target })
+  }, { zoom, target, adaptive: process.env.BENCH_ADAPTIVE !== "0" && process.env.BENCH_COMPONENT_ISOLATION !== "1" && process.env.BENCH_ISOLATION !== "1" })
   await page.waitForFunction(trees => {
     const game = window.__pilgrimage, scene = game.sceneStats?.()
     if (scene?.treeRenderer && scene.treeRenderer !== trees) return false
@@ -158,6 +159,7 @@ try {
     }
   for (const speed of speeds) {
     await page.evaluate(speed => window.__pilgrimage.setSpeed?.(speed), speed)
+    await page.waitForTimeout(Number(process.env.BENCH_SPEED_WARMUP ?? 10000))
     const tag = `${speeds.length === 1 ? count : `${count}-${speed}x`}${zooms.length > 1 ? `-zoom${viewSize}` : ""}`
     const info = await page.evaluate(() => {
       const game = window.__pilgrimage, gl = document.querySelector("canvas[data-engine]")?.getContext("webgl2")
@@ -182,15 +184,15 @@ try {
     if (process.env.BENCH_ALLOCATIONS === "1") await session.send("HeapProfiler.startSampling", { samplingInterval: 32768, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true })
     await page.evaluate(() => window.__pilgrimage.profileFrames?.(true))
     const measured = await page.evaluate(({ seconds, motion, rotate, zoomMotion, inputMotion, motionTrace }) => new Promise(resolve => {
-      const samples = [], motionSamples = [], longTasks = [], detailTransitions = [], sceneryDetails = new Set();
-      let previousDetail, detailChangesDuringZoom = 0
+      const samples = [], motionSamples = [], longTasks = [], detailTransitions = [], figureSamples = [], sceneryDetails = new Set();
+      let previousDetail, simulationStart, detailChangesDuringZoom = 0
       const observer = new PerformanceObserver(list => longTasks.push(...list.getEntries().map(e => ({ start: e.startTime, duration: e.duration }))))
       observer.observe({ type: "longtask", buffered: false }); let start, previous, misaligned = 0, missingFigures = 0
       const game = window.__pilgrimage, pose = game.camera()
       const canvas = document.querySelector("canvas[data-engine]")
       const x = pose.targetX, z = pose.targetZ
       function frame(now) {
-        start ??= now
+        start ??= now; simulationStart ??= game.time()
         if (previous !== undefined) samples.push(now - previous)
         previous = now
         const detail = game.sceneryDetailStatus?.()
@@ -205,7 +207,9 @@ try {
         if (samples.length % 30 === 0) {
           sceneryDetails.add(game.sceneryDetail?.())
           if (game.cameraAlignment?.() > 1e-6) misaligned++
-          missingFigures = Math.max(missingFigures, game.sceneStats?.().missingVisibleUnits ?? 0)
+          const figures = game.figureStatus()
+          figureSamples.push({ now, ...figures })
+          missingFigures = Math.max(missingFigures, figures.missingVisibleUnits)
         }
         if (motion) {
           const phase = (now - start) / (seconds * 1000)
@@ -221,7 +225,7 @@ try {
           else game.setZoom(next)
         }
         if (now - start < seconds * 1000) requestAnimationFrame(frame)
-        else { observer.disconnect(); resolve({ motionSamples, longTasks, frames: samples, misaligned, missingFigures, sceneryDetails: [...sceneryDetails], detailTransitions, detailChangesDuringZoom }) }
+        else { observer.disconnect(); resolve({ timeBefore: simulationStart, timeAfter: game.time(), elapsedSeconds: (now - start) / 1000, figureSamples, motionSamples, longTasks, frames: samples, misaligned, missingFigures, sceneryDetails: [...sceneryDetails], detailTransitions, detailChangesDuringZoom }) }
       }
       requestAnimationFrame(frame)
     }), { seconds, motion, rotate, zoomMotion, inputMotion, motionTrace: process.env.BENCH_MOTION_TRACE === "1" })
@@ -275,26 +279,31 @@ try {
     const mean = frames.reduce((a, b) => a + b, 0) / frames.length
     const metrics = Object.fromEntries(metricsAfter.metrics.map(({ name, value }) => [name, value - (metricsBefore.metrics.find(m => m.name === name)?.value ?? 0)]))
     const timings = await page.evaluate(() => window.__pilgrimage.profileFrames?.(false))
-    const gameTimeAfter = await page.evaluate(() => ({ time: window.__pilgrimage.time(), now: performance.now() }))
-    const elapsedSeconds = (gameTimeAfter.now - gameTimeBefore.now) / 1000
-    const simulatedSeconds = (gameTimeAfter.time - gameTimeBefore.time) * 600
+    const elapsedSeconds = measured.elapsedSeconds
+    const simulatedSeconds = (measured.timeAfter - measured.timeBefore) * 600
     const population = await page.evaluate(before => {
       const after = new Map(window.__pilgrimage.sim().map(s => [s.id, s]))
-      return { count: after.size, moved: before.filter(s => { const next = after.get(s.id); return next && Math.hypot(next.x - s.x, next.z - s.z) > .01 }).length }
+      return { count: after.size, ...window.__pilgrimage.populationStatus(), moved: before.filter(s => { const next = after.get(s.id); return next && Math.hypot(next.x - s.x, next.z - s.z) > .01 }).length }
     }, populationBefore)
-    assert.equal(population.count, count, "culling must retain the complete simulation")
-    assert.ok(count === 0 || population.moved > count * .5, "travelers outside the camera must keep walking")
+    assert.equal(population.total, count, "culling must retain everyone, including travelers who became monks")
+    // Normal gameplay legitimately stops people to rest, work or interact.
+    // Only the continuous-routing fixture promises a perpetually moving crowd.
+    if (scenario === "city-stress") assert.ok(count === 0 || population.moved > count * .5, "routed travelers outside the camera must keep walking")
     const city = await page.evaluate(() => window.__pilgrimage.cityStats?.())
-    if (scenario === "city" && count > 0) {
+    if (scenario.startsWith("city") && count > 0) {
       assert.ok(city?.buildings >= 200, "city must contain hundreds of real buildings")
+      assert.equal(city.mode, scenario === "city-stress" ? "routing-stress" : "gameplay")
+      if (scenario === "city") assert.equal(city.assigned, 0, "normal gameplay must not inject random benchmark trips")
+      if (scenario === "city-stress") {
       assert.equal(city.failed, 0, "every requested city destination must be reachable")
       assert.ok(city.active >= count * .98, "city population must keep following routes")
       assert.ok(city.completed > info.city.completed, "city must finish and assign new routes during measurement")
       assert.ok(city.uniqueDestinations >= 200, "routes must spread throughout the city")
+      }
     }
     const occlusion = process.env.BENCH_OCCLUSION === "1" ? await page.evaluate(() => window.__pilgrimage.characterOcclusion()) : undefined
     const observedWalkPoses = Object.fromEntries([...poseFrames].map(([detail, frames]) => [detail, [...frames].sort((a, b) => a - b)]))
-    const result = { ...info, zoom: viewSize, occlusion, city, scenario, trees, target, measuredAt: new Date().toISOString(), host: { cpu: cpus()[0]?.model, memoryGiB: totalmem() / 2 ** 30, loadAverage: loadavg() }, speed, gameTime: { elapsedSeconds, simulatedSeconds, effectiveSpeed: simulatedSeconds / elapsedSeconds / 2 }, population, timings, gpuTimings, characterMotion, observedWalkPoses, longTasks: measured.longTasks, seconds, motion, rotate, zoomMotion, inputMotion, sceneryDetails: measured.sceneryDetails, detailTransitions: measured.detailTransitions, detailChangesDuringZoom: measured.detailChangesDuringZoom, cameraMisalignedFrames: measured.misaligned, missingVisibleFigures: measured.missingFigures, frames: frames.length, fps: 1000 / mean, mean, p50: sorted[Math.floor(sorted.length * .5)], p95: sorted[Math.floor(sorted.length * .95)], p99: sorted[Math.floor(sorted.length * .99)], overBudgetPercent: frames.filter(ms => ms > 18).length / frames.length * 100, metrics, errors, browserWarnings: [...new Set(browserWarnings)] }
+    const result = { ...info, figureSamples: measured.figureSamples, zoom: viewSize, occlusion, city, scenario, trees, target, measuredAt: new Date().toISOString(), host: { cpu: cpus()[0]?.model, memoryGiB: totalmem() / 2 ** 30, loadAverage: loadavg() }, speed, gameTime: { elapsedSeconds, simulatedSeconds, effectiveSpeed: simulatedSeconds / elapsedSeconds / 2 }, population, timings, gpuTimings, characterMotion, observedWalkPoses, longTasks: measured.longTasks, seconds, motion, rotate, zoomMotion, inputMotion, sceneryDetails: measured.sceneryDetails, detailTransitions: measured.detailTransitions, detailChangesDuringZoom: measured.detailChangesDuringZoom, cameraMisalignedFrames: measured.misaligned, missingVisibleFigures: measured.missingFigures, frames: frames.length, fps: 1000 / mean, mean, p50: sorted[Math.floor(sorted.length * .5)], p95: sorted[Math.floor(sorted.length * .95)], p99: sorted[Math.floor(sorted.length * .99)], overBudgetPercent: frames.filter(ms => ms > 18).length / frames.length * 100, metrics, errors, browserWarnings: [...new Set(browserWarnings)] }
     await writeFile(`${output}/result-${tag}.json`, JSON.stringify(result, null, 2))
     console.log(JSON.stringify(result, null, 2))
     await page.screenshot({ path: `${output}/scene-${tag}.png`, timeout: 120000 })
@@ -311,6 +320,31 @@ try {
       console.log("CPU self time (ms)", profile.nodes.map(n => ({ fn: n.callFrame.functionName, url: n.callFrame.url, line: n.callFrame.lineNumber + 1, ms: Math.round((times.get(n.id) ?? 0) / 1000) })).sort((a, b) => b.ms - a.ms).slice(0, 35))
     }
   }
+  }
+  // Zoom-only restoration tests explicitly disable FPS overrides. Adaptive
+  // gameplay is measured above and exercised by its own checks below.
+  if (process.env.BENCH_ADAPTIVE_SMOKE === "1") {
+    const before = await page.evaluate(() => window.__pilgrimage.adaptiveStatus())
+    assert.equal(before.quality, 2)
+    assert.ok(!before.active && before.budget >= before.population, "adaptive visual quality must retain the full crowd budget")
+    assert.ok(count === 0 || before.rendered > 0)
+    assert.ok(before.simpleBatches > 0 && !before.wildlife && !before.waterDetail)
+    const hidden = await page.evaluate(() => window.__pilgrimage.hiddenTraveler())
+    const selected = hidden ?? await page.evaluate(() => window.__pilgrimage.sim()[0])
+    assert.ok(selected, "adaptive selection test requires a traveler")
+    await page.evaluate(({ id, x, z }) => { const g = window.__pilgrimage; g.setTarget(x, z); g.selectTraveler(id) }, selected)
+    await page.waitForFunction(() => window.__pilgrimage.selectionVisuals().sprites > 0, undefined, { timeout: 30000 })
+    assert.equal(await page.evaluate(() => window.__pilgrimage.selectionVisuals().reducedWalking), 0)
+    await page.evaluate(() => { const g = window.__pilgrimage; g.camera().select(null); g.setAdaptiveQuality(false); g.setZoom(36); g.setPaused(true) })
+    await page.waitForFunction(() => { const s = window.__pilgrimage.adaptiveStatus(); return s.quality === 0 && !s.active && s.detail === 0 && s.simpleBatches === 0 && s.wildlife && s.waterDetail }, undefined, { timeout: 30000 })
+    const after = await page.evaluate(() => window.__pilgrimage.adaptiveStatus())
+    assert.equal(after.treeDensity, 1)
+    assert.equal(await page.evaluate(() => window.__pilgrimage.populationStatus().total), count)
+    await writeFile(`${output}/adaptive-smoke.json`, JSON.stringify({ before, selected, after }, null, 2))
+    console.log("Adaptive smoke passed: full crowd budget, solid colours, hidden wildlife/water detail, full selected NPC and restored detail")
+  }
+  if (["BENCH_SMOKE", "BENCH_DETAIL_SMOKE", "BENCH_CITY_SMOKE"].some(key => process.env[key] === "1")) {
+    await page.evaluate(() => window.__pilgrimage.setAdaptiveQuality(false))
   }
   if (process.env.BENCH_SMOKE === "1" || process.env.BENCH_DETAIL_SMOKE === "1") {
     // Repeated real wheel changes must keep the resident layers until input
@@ -511,6 +545,7 @@ try {
     const layers = { characters: "Characters", wildlife: "Wildlife", buildings: "Buildings", trees: "Trees", scenery: "Scenery" }
     const cases = process.env.BENCH_COMPONENT_ISOLATION === "1" ? [
       { label: "full-running", hidden: [], paused: false },
+      { label: "adaptive-running", hidden: [], paused: false, adaptive: true, warmup: 15000 },
       { label: "resolution-75-running", hidden: [], paused: false, resolution: .75, warmup: 3000 },
       { label: "resolution-50-running", hidden: [], paused: false, resolution: .5, warmup: 3000 },
       { label: "paths-drawing-off", hidden: [], paused: false, work: { pathDrawing: false } },
@@ -554,8 +589,9 @@ try {
             condition.hidden.includes(key) ? key === "buildings" ? "2" : "0" : key === "buildings" ? "0" : "1")
         }
         await page.getByRole("button", { name: "Close world settings", exact: true }).click()
-        await page.evaluate(({ paused, terrain, speed, work, resolution }) => {
+        await page.evaluate(({ paused, terrain, speed, work, resolution, adaptive }) => {
           const game = window.__pilgrimage
+          game.setAdaptiveQuality(adaptive === true)
           game.setResolutionScale?.(resolution ?? 1); game.isolateWork?.(work ?? {}); game.setTerrainVisible(terrain !== false); game.setSpeed(speed); game.setPaused(paused)
         }, { ...condition, speed: speeds[0] })
         await page.waitForTimeout(condition.warmup ?? 1000)
@@ -567,7 +603,7 @@ try {
           const game = window.__pilgrimage, frames = [], longTasks = []
           const observer = new PerformanceObserver(list => longTasks.push(...list.getEntries().map(e => e.duration)))
           observer.observe({ type: "longtask" })
-          const timeBefore = game.time(), population = game.sim().length
+          const timeBefore = game.time(), population = game.populationStatus().total
           const before = game.sceneStats(), cityBefore = game.cityStats?.(), routesBefore = game.routeMemory?.()
           let start, last
           game.profileFrames(true); game.captureDraws(true)
@@ -579,7 +615,7 @@ try {
             const submissions = game.captureDraws(false), timings = game.profileFrames(false)
             observer.disconnect()
             resolve({ frames, longTasks, submissions, timings, timeBefore, timeAfter: game.time(), population, cityBefore, cityAfter: game.cityStats?.(), routesBefore, routesAfter: game.routeMemory?.(), work: game.isolatedWork?.(), resolution: game.renderResolution?.(),
-              retained: game.sim().length, layers: game.layerVisibility(), before, after: game.sceneStats(), render: game.renderInfo() })
+              figures: game.figureStatus(), populationAfter: game.populationStatus(), retained: game.populationStatus().total, layers: game.layerVisibility(), before, after: game.sceneStats(), render: game.renderInfo() })
           }
           requestAnimationFrame(frame)
         }), seconds)

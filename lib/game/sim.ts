@@ -21,6 +21,7 @@ import { routePoint, routeLength, type StallRoute } from "./transport/roadside"
 import { advanceCartProgress } from "./transport/route"
 import { roadLanePoint } from "./map/road-lane"
 import { treeSpatialIndex } from "./trees/spatial"
+import { RoadsideReservations } from "./roadside-reservations"
 import { SpatialPoints } from "./spatial-points"
 import { walkingSurface } from "./map/walking-surface"
 import { convoyPoint, convoyBounds, convoyBuildingsClear, stallParking, shrineParking, type ParkingContext, type ShrineParking } from "./transport/navigation"
@@ -846,21 +847,11 @@ function startOffRoadWalk(s: SimTraveler, activity: Activity): void {
 
 /** Reserve reachable open ground beside the road, keeping the performers and
  * their audience apart from each other, camps, and deployed stalls. */
-function roadsideSpot(sim: SimState, s: SimTraveler, map: GameMap, performer?: SimTraveler): WorldPoint | null {
+function roadsideSpot(sim: SimState, s: SimTraveler, map: GameMap, reservations: RoadsideReservations, performer?: SimTraveler): WorldPoint | null {
   const anchor = performer ?? s
   const cx = worldToTileX(map, anchor.x), cz = worldToTileZ(map, anchor.z)
   const start = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
   const candidates: WorldPoint[] = []
-  // Every candidate is a tile center in this 5×5 neighborhood. Discard
-  // reservations that cannot reach any candidate before the per-seat checks.
-  const minX = tileToWorldX(map, cx - 2), maxX = tileToWorldX(map, cx + 2)
-  const minZ = tileToWorldZ(map, cz - 2), maxZ = tileToWorldZ(map, cz + 2)
-  const nearby = (point: { x: number; z: number }, radius: number) => point.x >= minX - radius && point.x <= maxX + radius && point.z >= minZ - radius && point.z <= maxZ + radius
-  const occupied: SimTraveler[] = []
-  for (const other of sim.travelers.values()) {
-    if (other.id !== s.id && ((other.spot && nearby(other.spot, .9)) ||
-      (other.musicVisit && nearby(other.musicVisit.spot, .9)) || other.stallRoute?.obstacles.some(point => nearby(point, 2)))) occupied.push(other)
-  }
   const roads = performer ? [] : map.road!.filter(tile => Math.abs(tile.x - cx) <= 4 && Math.abs(tile.z - cz) <= 4)
   for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) {
     const x = cx + dx, z = cz + dz
@@ -870,12 +861,7 @@ function roadsideSpot(sim: SimState, s: SimTraveler, map: GameMap, performer?: S
     if (performer && (distance < 0.9 || distance > 2.3)) continue
     if (!performer && !roads.some(tile => (tile.x - x) ** 2 + (tile.z - z) ** 2 <= 4)) continue
     if (treeSpatialIndex(sim.trees).firstWithin(point.x, point.z, .8, (_, index) => !sim.felled.has(index))) continue
-    if (occupied.some(other => (
-      (other.spot && Math.hypot(other.spot.x - point.x, other.spot.z - point.z) < 0.9) ||
-      (other.almsVisit && Math.hypot(other.almsVisit.spot.x - point.x, other.almsVisit.spot.z - point.z) < 0.9) ||
-      (other.musicVisit && Math.hypot(other.musicVisit.spot.x - point.x, other.musicVisit.spot.z - point.z) < 0.9) ||
-      other.stallRoute?.obstacles.some(obstacle => Math.hypot(obstacle.x - point.x, obstacle.z - point.z) < 2)
-    ))) continue
+    if (reservations.occupied(point, s.id)) continue
     candidates.push(point)
   }
   candidates.sort((a, b) => Math.hypot(a.x - s.x, a.z - s.z) - Math.hypot(b.x - s.x, b.z - s.z))
@@ -1364,6 +1350,10 @@ export function stepSim(
       const point = state.activity === "toPerformance" ? state.spot ?? state : state
       return { x: point.x, z: point.z, state }
     }))
+  const beggars = new SpatialPoints([...sim.travelers.values()]
+    .filter(state => state.activity === "begging" || state.activity === "toBegging")
+    .map(state => { const point = state.activity === "toBegging" ? state.spot ?? state : state; return { x: point.x, z: point.z, state } }))
+  const reservations = new RoadsideReservations(sim.travelers.values())
   const listeners = new Map<number, number>()
   for (const state of sim.travelers.values()) if (state.musicVisit) {
     const id = state.musicVisit.performerId
@@ -1825,14 +1815,14 @@ export function stepSim(
           if (t.type.id === "beggar") {
             s.timer -= dt
             if (s.timer <= 0) {
-              const spot = roadsideSpot(sim, s, map)
+              const spot = roadsideSpot(sim, s, map, reservations)
               if (spot) { s.spot = spot; startOffRoadWalk(s, "toBegging"); break }
               s.timer = GAME_HOUR_SECONDS
             }
           } else if (t.type.id === "minstrel") {
             s.timer -= dt
             if (s.timer <= 0) {
-              const spot = roadsideSpot(sim, s, map)
+              const spot = roadsideSpot(sim, s, map, reservations)
               if (spot) { s.spot = spot; startOffRoadWalk(s, "toPerformance"); break }
               s.timer = GAME_HOUR_SECONDS
             }
@@ -1842,7 +1832,7 @@ export function stepSim(
             if (performer) {
               s.musicCooldown = 2 * GAME_HOUR_SECONDS
               if (nextRoll(s) < 0.65) {
-                const spot = roadsideSpot(sim, s, map, performer)
+                const spot = roadsideSpot(sim, s, map, reservations, performer)
                 if (spot) {
                   if (s.musicVisit) listeners.set(s.musicVisit.performerId, (listeners.get(s.musicVisit.performerId) ?? 1) - 1)
                   s.musicVisit = { performerId: performer.id, cycle: performer.cycle, spot }
@@ -1856,13 +1846,13 @@ export function stepSim(
         }
         if (s.activity === "walking" && !shelter && !s.track && !isVendor && t.type.id !== "beggar" && s.gold >= 1 &&
           Math.min(s.hunger, s.thirst, s.stamina) > 20) {
-          const beggar = [...sim.travelers.values()].find(other => other.activity === "begging" && !other.praying &&
-            Math.hypot(other.x - s.x, other.z - s.z) < 3 && s.almsEncounters?.[other.id] !== other.cycle)
+          const beggar = beggars.firstWithin(s.x, s.z, 3, ({ state }) => state.activity === "begging" && !state.praying &&
+            s.almsEncounters?.[state.id] !== state.cycle)?.state
           if (beggar) {
             // One choice per pitch: standing nearby must not reroll generosity every frame.
             ;(s.almsEncounters ??= {})[beggar.id] = beggar.cycle
             if (nextRoll(s) < 0.05 + 0.85 * Math.max(0, Math.min(100, s.piety)) / 100) {
-              const spot = roadsideSpot(sim, s, map, beggar)
+              const spot = roadsideSpot(sim, s, map, reservations, beggar)
               if (spot) {
                 s.almsVisit = { beggarId: beggar.id, cycle: beggar.cycle, spot }
                 startOffRoadWalk(s, "toAlms")
@@ -2220,6 +2210,7 @@ export function stepSim(
       }
     }
     finishConvoyMove(s, transportBefore, map, characterScale)
+    reservations.update(s)
     // Later animals in this tick must see a stall that just opened or packed up.
     if (deployedStall(s) !== previousStall) pastureObstacles = undefined
   }

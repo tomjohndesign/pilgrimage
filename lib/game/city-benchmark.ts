@@ -9,13 +9,16 @@ import { BUILD_CATALOG } from "./balance"
 import { buildingEntrance, workerRoute } from "./construction"
 import { finishElevation } from "./map/elevation"
 import { surfaceHeight } from "./map/bridges"
-import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
+import { isRoadTerrain } from "./map/road"
+import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap, type TilePos } from "./map/types"
 import { makeRng } from "./rng"
 import type { SimState } from "./sim"
 
 // Opt-in fixture in the real /play scene. Keep it attached to the stable road
 // identity so settlement publications retain it without changing saved maps.
+export type CityBenchmarkMode = "gameplay" | "routing-stress"
 interface City {
+  mode: CityBenchmarkMode
   centre: TilePos
   streets: TilePos[]
   destinations: TilePos[]
@@ -35,7 +38,7 @@ export function benchmarkCity(map: GameMap) { return map.road ? cities.get(map.r
 /** 240 complete catalogue buildings, two-tile streets and the generated forest
  * beyond the town. Authored geometry, sprite trees, wildlife and render passes
  * are the same ones used in a normal game. */
-export function createBenchmarkCity(source: GameMap): GameMap {
+export function createBenchmarkCity(source: GameMap, mode: CityBenchmarkMode = "gameplay"): GameMap {
   if (source.width < 192 || source.depth < 128) throw new Error("City benchmark needs a map at least 192 × 128")
   const map = structuredClone(source), columns = 20, rows = 12, block = 8
   const left = Math.floor((map.width - columns * block) / 2), top = Math.floor((map.depth - rows * block) / 2)
@@ -76,7 +79,7 @@ export function createBenchmarkCity(source: GameMap): GameMap {
   }
   const neighbours = destinations.map((a, i) => destinations.flatMap((b, j) =>
     i !== j && Math.abs(a.x - b.x) + Math.abs(a.z - b.z) <= 40 ? [j] : []))
-  cities.set(map.road, { centre: { x: left + columns * block / 2, z: roadZ }, streets, destinations, neighbours, buildings: destinations.length })
+  cities.set(map.road, { mode, centre: { x: left + columns * block / 2, z: roadZ }, streets, destinations, neighbours, buildings: destinations.length })
   return map
 }
 
@@ -84,7 +87,7 @@ export function createBenchmarkCity(source: GameMap): GameMap {
  * needs, foot contacts and A* all run through the existing simulation. This
  * intentionally stresses routing traffic rather than autonomous job decisions. */
 export function routeBenchmarkCity(sim: SimState, map: GameMap) {
-  if (!benchmarkCity(map)) return
+  if (benchmarkCity(map)?.mode !== "routing-stress") return
   return withWalkingRouteQueries(map, () => assignCityJourneys(sim, map))
 }
 
@@ -157,7 +160,25 @@ function assignCityJourneys(sim: SimState, map: GameMap) {
 export function cityBenchmarkStats(sim: SimState | null, map: GameMap) {
   const city = benchmarkCity(map), state = sim && journeys.get(sim)
   if (!city) return null
-  return { replayCached: sim ? replayJourneys.get(sim)?.routes.size ?? 0 : 0, replayed: sim ? replayJourneys.get(sim)?.reused ?? 0 : 0,
+  const activities: Record<string, number> = {}
+  let onRoad = 0, offRoad = 0, nearRoad = 0, employed = 0
+  for (const actor of sim?.travelers.values() ?? []) {
+    activities[actor.activity] = (activities[actor.activity] ?? 0) + 1
+    if (actor.employer) employed++
+    const x = worldToTileX(map, actor.x), z = worldToTileZ(map, actor.z)
+    if (isRoadTerrain(map.tiles[z * map.width + x])) onRoad++; else offRoad++
+    // Lane offsets and roadside social stops legitimately leave the exact
+    // road tile. Report proximity separately; neither metric proves adherence.
+    let nearby = false
+    for (let dz = -1; dz <= 1 && !nearby; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const cx = x + dx, cz = z + dz
+      if (cx >= 0 && cz >= 0 && cx < map.width && cz < map.depth && isRoadTerrain(map.tiles[cz * map.width + cx])) { nearby = true; break }
+    }
+    if (nearby) nearRoad++
+  }
+  return { mode: city.mode, activities, onRoad, offRoad, nearRoad, employed,
+    footprintContacts: map.footpaths?.contacts.size ?? 0, footprintEdges: map.footpaths?.edges.size ?? 0,
+    replayCached: sim ? replayJourneys.get(sim)?.routes.size ?? 0 : 0, replayed: sim ? replayJourneys.get(sim)?.reused ?? 0 : 0,
     buildings: city.buildings, assigned: state?.assigned ?? 0, completed: state?.completed ?? 0,
     failed: state?.failed ?? 0, uniqueDestinations: state?.destinations.size ?? 0,
     active: sim ? [...sim.travelers.values()].filter(s => s.constructionReturn?.length || s.roadShortcut).length : 0 }

@@ -21,7 +21,7 @@ import { simulationFrameStep } from "./simulation-store"
 
 const seed = 12345
 const generated = generateMap({ seed, width: 512, depth: 512 })
-const terrain = process.env.BENCH_SCENARIO === "city" ? createBenchmarkCity(generated) : generated
+const terrain = ["city", "city-stress"].includes(process.env.BENCH_SCENARIO ?? "") ? createBenchmarkCity(generated, process.env.BENCH_SCENARIO === "city-stress" ? "routing-stress" : "gameplay") : generated
 const trees = growTreePlacements(placeTrees(terrain, TREE_SPECIES), deriveSeed(seed, SEED_STREAM.treeShapes), TREE_SPECIES, 1)
 if (process.env.BENCH_SIM_PROFILE) {
   const session = new Session()

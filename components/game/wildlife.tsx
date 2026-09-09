@@ -26,6 +26,8 @@ import { selectElement } from "@/lib/game/selection"
 import { wildlifeGeometry } from "@/lib/game/wildlife/batch"
 import { useAnimalRigStore } from "@/lib/game/wildlife/rig-store"
 import { wildlifeRegistry } from "@/lib/game/wildlife/registry"
+import { frameQuality } from "@/lib/game/render/frame-quality"
+import { useCameraStore } from "@/lib/game/camera-store"
 import { createWildlifeRig } from "@/lib/game/wildlife/rig"
 import { isBird, type WildlifeKind } from "@/lib/game/wildlife/species"
 
@@ -40,6 +42,7 @@ const SKIN_RADIUS = 4
 /** Ambient fauna share the world's pixel grid and depth/overlap pass. Connected hides share
  * bounded vertex buffers per species for both colour and selection passes. */
 export function Wildlife({ map, trees, characterScale }: { map: GameMap; trees: readonly TreePlacement[]; characterScale: number }) {
+  const root = useRef<THREE.Group>(null)
   // Building placement updates map.buildings without resetting every animal's life.
   const world = useMemo(() => createWildlife(map, trees, characterScale), [map.tiles, map.seed, trees])
   useEffect(() => { wildlifeRegistry.current = world; return () => { if (wildlifeRegistry.current === world) wildlifeRegistry.current = null } }, [world])
@@ -51,7 +54,8 @@ export function Wildlife({ map, trees, characterScale }: { map: GameMap; trees: 
     world.animals.forEach(animal => { const list = groups.get(animal.kind) ?? []; list.push(animal); groups.set(animal.kind, list) })
     return [...groups]
   }, [world])
-  useFrame((_, delta) => {
+  useFrame(({ scene }, delta) => {
+    if (root.current) root.current.visible = frameQuality(scene) < 2 || useCameraStore.getState().selection?.kind === "animal"
     const playback = useSimulationStore.getState()
     if (playback.paused) return
     const felled = useBuildStore.getState().felled
@@ -79,7 +83,7 @@ export function Wildlife({ map, trees, characterScale }: { map: GameMap; trees: 
       return grassSurfaceColor(shade[i], dark[i], grains[i])
     })
   }, [map, world])
-  return <group name="wildlife" userData={{ animals: world.animals, burrows: world.burrows }}>
+  return <group ref={root} name="wildlife" userData={{ animals: world.animals, burrows: world.burrows }}>
     {world.burrows.map(burrow => <RabbitHole key={burrow.id} burrow={burrow} map={map} scale={characterScale} turf={burrowTurf[burrow.id]} />)}
     {batches.map(([kind, animals]) => <WildlifeBatch key={kind} kind={kind} animals={animals} map={map} scale={characterScale} />)}
   </group>

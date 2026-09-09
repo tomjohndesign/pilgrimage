@@ -8,14 +8,39 @@ import { generateTravelers } from "./travelers"
 import { createSim, GAME_DAY_SECONDS, stepSim } from "./sim"
 import { withWorkerRouteMemory, workerRouteMemoryStats } from "./worker-route-memory"
 import { simulationFrameStep } from "./simulation-store"
-import { worldToTileX, worldToTileZ, type GameMap } from "./map/types"
+import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 
 function fixture(): GameMap {
-  const map = createBenchmarkCity({ width: 512, depth: 512, tiles: Array(512 * 512).fill("forest"), buildings: [], seed: 12345 })
+  const map = createBenchmarkCity({ width: 512, depth: 512, tiles: Array(512 * 512).fill("forest"), buildings: [], seed: 12345 }, "routing-stress")
   map.footpaths = createFootpaths(map)
   return map
 }
 describe("city stress fixture", () => {
+  it("defaults to normal gameplay and never replaces people's activities or routes", () => {
+    const map = createBenchmarkCity({ width: 512, depth: 512, tiles: Array(512 * 512).fill("forest"), buildings: [], seed: 12345 })
+    map.footpaths = createFootpaths(map)
+    const people = generateTravelers(12345, 120), sim = createSim(people, map)
+    let roadSamples = 0, maxRoadDeviation = 0
+    for (let tick = 0; tick < 200; tick++) {
+      const before = structuredClone([...sim.travelers.values()])
+      routeBenchmarkCity(sim, map)
+      expect([...sim.travelers.values()]).toEqual(before)
+      stepSim(sim, people, map, DEFAULT_WALK_SPEED, .4)
+      // This fixture's highway is straight. Ordinary road walkers must stay
+      // on their chosen lane even at the 6× / 30 FPS simulation step.
+      for (const actor of sim.travelers.values()) if (actor.activity === "walking" && !actor.convoy && !actor.track && !actor.roadShortcut && !actor.praying) {
+        roadSamples++
+        maxRoadDeviation = Math.max(maxRoadDeviation, Math.hypot(actor.x - tileToWorldX(map, actor.progress), actor.z - (tileToWorldZ(map, map.road![0].z) - actor.lane)))
+      }
+    }
+    const stats = cityBenchmarkStats(sim, map)!
+    expect(stats).toMatchObject({ mode: "gameplay", assigned: 0, completed: 0, failed: 0 })
+    expect(stats.onRoad).toBeGreaterThan(100)
+    expect(stats.onRoad + stats.offRoad).toBe(120)
+    expect(stats.nearRoad).toBeGreaterThanOrEqual(stats.onRoad)
+    expect(roadSamples).toBeGreaterThan(10000)
+    expect(maxRoadDeviation).toBeLessThan(.001)
+  })
   it("keeps 240 nonoverlapping catalogue buildings and the surrounding forest", () => {
     const map = fixture()
     expect(map.buildings).toHaveLength(240)

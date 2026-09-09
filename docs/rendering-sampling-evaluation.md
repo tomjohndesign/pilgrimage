@@ -6,6 +6,52 @@ The fixture is the existing 512 × 512 `/play` city: 242 buildings, 90,556 sprit
 trees, 1,404 scenery sprites, plus resident monks and wildlife. No replacement
 scene or simplified demo is used.
 
+## Benchmark correction: gameplay versus continuous routing
+
+The historical city measurements below used continuous random destination
+assignment. Every traveler was forced into the worker-return activity and sent
+on another trip immediately on arrival. That deliberately high routing load
+also caused unusually broad ground wear and bypassed normal work, rest and
+social decisions. Those results describe **routing stress**, not representative
+gameplay throughput. They must not be used to claim that normal gameplay plans
+that many routes or that rendering alone explains its bottlenecks.
+
+`benchmark=city` now leaves NPC activities and routes under the normal game
+simulation. `benchmark=city-stress` explicitly selects the previous random-trip
+fixture. Both use the same map, buildings, assets and population. This is a
+populated visitor city, not a fully staffed mature settlement: the fixture does
+not invent employers or schedules. Normal gameplay can legitimately stop people
+to work, rest, listen or donate, so it does not require every actor to keep
+walking. The harness records activity counts, employed actors, exact road-tile
+occupancy, proximity within one tile of roads and growth in footprint contacts
+and edges. Roadside lane offsets and social stops make exact road-tile occupancy
+an imperfect adherence measure.
+
+The `routePlanning` frame timer measures the benchmark's trip injector. In
+normal mode it should be approximately zero; ordinary gameplay route planning
+still happens inside `simulationStep`. A zero injector timer does not mean that
+normal NPCs perform no pathfinding.
+
+Population checks count travelers who join the monastery as retained people.
+Visible-count diagnostics separate offscreen culling from density reduction.
+**Crowd thinning is disabled by default.** A diagnostic that drew only 128 of
+10,000 travelers reached about 30 FPS, but that density was rejected and is not
+an acceptable result for this target.
+
+An initial normal-gameplay run exposed a repeated full-population scan for
+nearby beggars, and the alms destination was missing from the old reservation
+prefilter. Fixes use local encounter and reservation indexes, including seats
+reserved earlier in the same simulation tick. Clean performance validation is
+pending; another Conductor session resumed during the initial comparison, so
+that interrupted run is not an accepted FPS benchmark.
+
+FPS pressure can now reduce scenery detail, tree density, wildlife, water
+shimmer and sprite coloring while retaining the complete simulated population.
+Details still wait for zoom gestures to finish. These visual changes have not
+yet demonstrated the target with the full visible crowd. A background walking
+pose prototype is parked outside application source until a representative
+profile justifies it and actual NPC update cadence can be verified.
+
 ## Techniques investigated
 
 | Technique | Work it can reduce | Fit and constraints here |
@@ -60,7 +106,7 @@ Ordinary desktop applications remain running, so these are local operating-load
 measurements, not an absolute hardware ceiling.
 
 ```sh
-BENCH_URL=http://localhost:3101 BENCH_SCENARIO=city BENCH_COUNT=10000 \
+BENCH_URL=http://localhost:3101 BENCH_SCENARIO=city-stress BENCH_COUNT=10000 \
 BENCH_ZOOMS=140 BENCH_SPEEDS=6 BENCH_WARMUP_SPEED=1 BENCH_SECONDS=10 \
 BENCH_COMPONENT_ISOLATION=1 BENCH_CHECKS_ONLY=1 BENCH_ASSERT_HIDDEN_IDLE=1 \
 BENCH_OUTPUT=.context/components node scripts/benchmark-game.mjs
@@ -74,6 +120,12 @@ time and completed trips. Path drawing, visual path updates and path wear have
 separate switches. Route replay is diagnostic: pedestrians repeat a completed
 legal route; carts keep their swept route planning. Replay coverage is recorded.
 Normal builds always run these systems.
+
+Use `BENCH_SCENARIO=city` for the corrected normal-gameplay baseline. Use
+`BENCH_SPEEDS=1,6` to compare speeds, and `BENCH_MOTION=1 BENCH_INPUT=1
+BENCH_ZOOM_MOTION=1 BENCH_ROTATE=0` for pointer pan and wheel zoom. The historical
+tables below retain their original random-routing workload; do not compare
+them directly to a normal-gameplay result as an optimization gain.
 
 The cases share a running world. Paths and cache warmth change over time;
 small FPS differences are not isolated causal gains. Paused and zero-population

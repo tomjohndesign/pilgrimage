@@ -1012,6 +1012,22 @@ describe("roadside generosity", () => {
     return { map, travelers, sim, host, visitor }
   }
 
+  it("reserves distinct alms spots among a thousand donors, including a beggar arriving this tick", () => {
+    const { map, travelers, sim, host } = roadside("beggar", 1, 100)
+    host.activity = "toBegging"
+    host.offRoadRoute = [{ x: host.x, y: host.y, z: host.z }]
+    const donors = Array.from({ length: 1000 }, (_, i) => makeTraveler(i + 2, "peasant", { piety: 100, gold: 10, hunger: 100, thirst: 100, stamina: 100 }))
+    for (const [id, donor] of createSim(donors, map).travelers) sim.travelers.set(id, donor)
+    travelers.push(...donors)
+    stepSim(sim, travelers, map, 1, .1)
+    expect(host.activity).toBe("begging")
+    const reserved = [...sim.travelers.values()].filter(person => person.almsVisit?.beggarId === host.id)
+    expect(reserved.length).toBeGreaterThan(0)
+    expect(reserved.length).toBeLessThan(25)
+    expect(new Set(reserved.map(person => `${person.almsVisit!.spot.x},${person.almsVisit!.spot.z}`)).size).toBe(reserved.length)
+    expect([...sim.travelers.values()].filter(person => person.almsEncounters?.[host.id] === host.cycle).length).toBeGreaterThan(100)
+  })
+
   it("tips only some performances, transfers real gold once, and lets listeners leave after a second", () => {
     let tips = 0
     for (let id = 1; id <= 50; id++) {

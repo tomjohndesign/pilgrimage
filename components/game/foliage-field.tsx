@@ -15,6 +15,8 @@ import { encodeObjectId, OUTLINE_ID_LAYER_MASK, treeObjectId } from "@/lib/game/
 import { makeRng } from "@/lib/game/rng"
 import { useBuildStore } from "@/lib/game/build-store"
 import { isWorldVisible } from "@/lib/game/render/visibility"
+import { sceneryDetail } from "@/lib/game/render/scenery-detail"
+import { useCameraStore } from "@/lib/game/camera-store"
 
 export interface FoliagePlacement extends TreePlacement { foliageVariant?: number }
 
@@ -70,7 +72,7 @@ export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, 
     ids.instanceMatrix = mesh.instanceMatrix; ids.instanceColor = mesh.instanceColor
     mesh.count = ids.count = 0
   }, [data, entries])
-  useFrame(({ camera: currentCamera }) => {
+  useFrame(({ camera: currentCamera, scene }) => {
     if (!isWorldVisible(body.current?.parent)) return
     const yaw = Math.atan2(currentCamera.matrixWorld.elements[8], currentCamera.matrixWorld.elements[10])
     view.value = ((Math.round(yaw / (Math.PI * 2 / FOLIAGE_FRAME.directions)) % FOLIAGE_FRAME.directions) + FOLIAGE_FRAME.directions) % FOLIAGE_FRAME.directions
@@ -79,9 +81,11 @@ export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, 
     const mesh = body.current, ids = idMesh.current
     if (mesh && ids) {
       mesh.updateWorldMatrix(true, false)
-      data.instances.update(mesh, currentCamera)
+      const thin = sceneryDetail(scene) === 2, selection = useCameraStore.getState().selection
+      data.instances.update(mesh, currentCamera, thin, selection?.kind === "tree" ? selection.id : -1)
       ids.count = mesh.count
       mesh.userData.totalTrees = entries.length
+      mesh.userData.treeDensity = thin ? .5 : 1
     }
   })
   useEffect(() => () => data.geometry.dispose(), [data])
