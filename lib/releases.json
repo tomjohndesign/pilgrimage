@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "b9370e385760dd07d863fa53eb8061ea6ecfa179",
-  "releaseCount": 158,
+  "lastProcessedCommit": "54dbfa41dfdc7d5cd4125c15980eceb28533f2b2",
+  "releaseCount": 159,
   "releases": [
+    {
+      "version": "0.0.173",
+      "title": "Release 0.0.173",
+      "summary": "Keep building detail and interior access tied to zoom (#192)",
+      "commit": "54dbfa41dfdc7d5cd4125c15980eceb28533f2b2"
+    },
     {
       "version": "0.0.172",
       "title": "Release 0.0.172",
