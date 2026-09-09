@@ -28,6 +28,33 @@ function continuous(route: TilePos[]) {
 }
 
 describe("crossroads network", () => {
+  it("leaves a well access spur as a simple path without a marked island", () => {
+    const map = fixture()
+    for (const p of map.site!.branch.slice(1)) map.tiles[p.z * map.width + p.x] = "grass"
+    map.site = undefined
+    map.buildingAccessTiles = map.darkForests![0].approach.slice(1)
+    map.darkForests = []
+    const tiles = [...map.tiles], road = [...map.road!]
+    createCrossroads(map)
+    expect(map.crossroads).toEqual([])
+    expect(map.tiles).toEqual(tiles)
+    expect(map.road).toEqual(road)
+    expect(settlementRoute(map, [], road[7], map.buildingAccessTiles.at(-1)!)).not.toBeNull()
+  })
+  it("keeps a genuine shrine crossroads while omitting its well spur from the signs", () => {
+    const map = fixture()
+    for (const p of map.darkForests![0].approach.slice(1)) map.tiles[p.z * map.width + p.x] = "grass"
+    // Leave the T's opposite verge free for main's roadside marker; the well
+    // branches from the continuing road a few tiles beyond the shrine fork.
+    map.buildingAccessTiles = Array.from({ length: 4 }, (_, i) => ({ x: 11, z: 6 - i }))
+    for (const p of map.buildingAccessTiles) map.tiles[p.z * map.width + p.x] = "track"
+    map.darkForests = []
+    createCrossroads(map)
+    expect(map.crossroads).toHaveLength(1)
+    expect(map.crossroads![0].arms).toHaveLength(3)
+    expect(map.crossroads![0].arms.some(a => a.direction.z === -1)).toBe(false)
+    expect(map.crossroads![0].arms.some(a => a.mark === "shrine")).toBe(true)
+  })
   it.each([[1, 0], [-1, 0], [0, 1], [0, -1]])("puts a T marker on the missing (%i, %i) arm without changing paths", (dx, dz) => {
     const map = fixture()
     map.site = undefined; map.darkForests = []; map.road = []

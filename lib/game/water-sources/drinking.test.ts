@@ -118,6 +118,24 @@ describe("NPC drinking", () => {
     expect(state.waterVisit).toBeUndefined()
   })
 
+  it.each(["toRelic", "fromRelic"] as const)("resumes %s at the same chapel-approach point after drinking", activity => {
+    const { state, tick, until, map } = setup()
+    map.site = { junction: 10, branch: [{ x: 10, z: 7 }, { x: 10, z: 6 }], door: { x: 10, z: 6 }, hovelId: "chapel" }
+    state.activity = activity
+    state.shrineRoute = map.site.branch
+    state.branchProgress = .5
+    state.shrineSeat = "queue-0"
+    const departure = { x: state.x, z: state.z }
+    tick(); expect(state.activity).toBe("toWater")
+    until(() => state.activity === "drinking")
+    until(() => state.activity === activity)
+    expect(state.thirst).toBe(100)
+    expect({ x: state.x, z: state.z }).toEqual(departure)
+    expect(state.branchProgress).toBe(.5)
+    expect(state.shrineSeat).toBe("queue-0")
+    expect(state.shrineRoute).toBe(map.site.branch)
+  })
+
   it("reroutes around construction added during the approach", () => {
     const { map, state, tick, until } = setup()
     tick()
