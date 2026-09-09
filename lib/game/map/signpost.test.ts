@@ -7,15 +7,25 @@ import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "./types"
 
 describe("crossroads waymarkers", () => {
   const maps = Array.from({ length: 4 }, (_, i) => generateMap({ width: MIN_MAP_SIZE, depth: MIN_MAP_SIZE, seed: i * 7919 + 1 }))
-  it("stands in the centre of a dry island encircled by paths", () => {
+  it("stands opposite T-junctions and on dry islands at four-way crossings", () => {
     for (const map of maps) {
       const posts = signpostPlacements(map)
       expect(posts.length).toBeGreaterThan(0)
       for (const post of posts) {
         expect(tileAt(map, post.tile.x, post.tile.z)).toBe("clearing")
         expect(post.x).toBe(tileToWorldX(map, post.tile.x)); expect(post.z).toBe(tileToWorldZ(map, post.tile.z))
-        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
-          if (dx || dz) expect(["path", "track"]).toContain(tileAt(map, post.tile.x + dx, post.tile.z + dz))
+        const crossroad = map.crossroads!.find(c => c.center === post.tile)!
+        if (post.arms.length === 3) {
+          const junction = crossroad.junction!
+          expect(post.tile).toEqual({
+            x: junction.x - post.arms.reduce((sum, arm) => sum + arm.direction.x, 0),
+            z: junction.z - post.arms.reduce((sum, arm) => sum + arm.direction.z, 0),
+          })
+          expect(["path", "track"]).toContain(tileAt(map, junction.x, junction.z))
+        } else {
+          for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+            if (dx || dz) expect(["path", "track"]).toContain(tileAt(map, post.tile.x + dx, post.tile.z + dz))
+          }
         }
         expect(post.arms.length).toBeGreaterThanOrEqual(3)
       }
