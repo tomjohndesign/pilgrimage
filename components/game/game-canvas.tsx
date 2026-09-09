@@ -15,6 +15,7 @@ import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { PixelCanvas, PixelCharacters, PixelWorld, type PixelationProps } from "@/components/pixel-canvas"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import { markSelectionScenery } from "@/lib/game/selection"
 import type { Resources } from "@/lib/game/settlement"
 import type { TilePos } from "@/lib/game/map/types"
 import { deriveSeed, SEED_STREAM } from "@/lib/game/rng"
@@ -204,7 +205,7 @@ export function GameCanvas({
           <group name="visibility-trees" visible={visibility.showTrees}>
             <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} model={treeModel} />
           </group>
-          <group name="visibility-scenery" visible={visibility.showScenery}>
+          <group name="visibility-scenery" ref={markSelectionScenery} visible={visibility.showScenery}>
             <Environment map={terrainMap} />
             <Signpost map={terrainMap} />
             <ForestWarnings map={terrainMap} />
