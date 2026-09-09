@@ -82,14 +82,15 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
   const body = useRef<THREE.Sprite>(null), ids = useRef<THREE.Sprite>(null)
   const batchEntries = useCharacterBatches()
   useLayoutEffect(() => {
-    // Carts have a separately composited driver's atlas; keep that shader intact.
+    // Vendor carts have a separately composited driver's atlas; keep that shader
+    // intact. Passenger carts are plain sheets and batch like the animals.
     // Edited animal frames also retain their live canvas rendering path.
-    if (!batchEntries || !body.current || !ids.current || !outlineColor || kind === "cart" || edited) return
+    if (!batchEntries || !body.current || !ids.current || !outlineColor || (kind === "cart" && !passengerCart) || edited) return
     const entry = { sprite: body.current, ids: ids.current, ground: groundPlane, depth: poseDepth,
       id: new THREE.Vector3(...outlineColor) }
     batchEntries.add(entry)
     return () => { batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
-  }, [batchEntries, groundPlane, poseDepth, kind, edited, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [batchEntries, groundPlane, poseDepth, kind, passengerCart, edited, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   const root = useRef<THREE.Group>(null), phase = useRef(0), grazingTime = useRef(0), plant = useRef<FootPlant | null>(null)
   const vectors = useMemo(() => ({ facing: new THREE.Vector3(), origin: new THREE.Vector3(), foot: new THREE.Vector3(), corrected: new THREE.Vector3() }), [])
   useFrame(({ camera, clock }, delta) => withTerrainCornerQueries(terrain, () => {

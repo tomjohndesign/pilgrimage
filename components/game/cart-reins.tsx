@@ -15,11 +15,20 @@ import { animalProfile } from "@/lib/game/transport/assets"
 import { animalBit } from "@/lib/game/transport/bridle"
 import { TRANSPORT, CART, RIG_TO_WORLD, type Animal, type HorseVariant } from "@/lib/game/transport/assets"
 import { spriteRow } from "@/lib/game/character-assets"
+import { useCameraStore } from "@/lib/game/camera-store"
 import { OUTLINE_ID_LAYER_MASK, SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import type { FigureClickHandler } from "./traveler-figure"
 
+/** Beyond this camera view size a rein pixel is smaller than a screen pixel; skip it. */
+const REINS_MAX_VIEW_SIZE = 90
+// One material for every strap and one for every ID pass: per-wagon materials
+// each cost a shader-program lookup in every render pass. IDs ride on instance colours.
+const STRAP_MATERIAL = new THREE.MeshBasicMaterial({ color: "#493727", toneMapped: false })
+const ID_MATERIAL = new THREE.MeshBasicMaterial({ color: "#ffffff", toneMapped: false })
+
 /** Leather reins follow the displayed driving hands and animal bridle through
- * turns. Native square pixels share the animal’s bake projection and depth. */
+ * turns. Native square pixels share the animal’s bake projection and depth.
+ * The strap is rebuilt only when the wagon, animal, pose or camera changed. */
 export function CartReins({ handler, draft = false, seatOffset = 0, cart, animal, kind, horseVariant, characterScale, selected, outlineColor, onClick }: {
   handler?: { calling: TravelerTypeId; variant: number }
   draft?: boolean; seatOffset?: number
@@ -29,12 +38,15 @@ export function CartReins({ handler, draft = false, seatOffset = 0, cart, animal
   const root = useRef<THREE.Group>(null), body = useRef<THREE.InstancedMesh>(null), ids = useRef<THREE.InstancedMesh>(null)
   const geometry = useMemo(() => new THREE.PlaneGeometry(1, 1), [])
   const dummy = useMemo(() => new THREE.Object3D(), [])
+  const previous = useMemo(() => new Float64Array(12).fill(NaN), [])
+  const scratch = useMemo(() => ({ origin: new THREE.Vector3(), hitch: new THREE.Vector3(), viewToLocal: new THREE.Matrix4() }), [])
   useEffect(() => () => geometry.dispose(), [geometry])
   useFrame(({ camera }) => {
     const group = root.current, wagon = cart.current, beast = animal.current
     if (!group || !body.current) return
     if (!wagon || !beast) { group.visible=false; return }
-    group.visible = wagon.visible && beast.visible && (handler ? ["walking","fleeing"].includes(wagon.userData.activity) &&
+    group.visible = useCameraStore.getState().viewSize <= REINS_MAX_VIEW_SIZE && wagon.visible && beast.visible &&
+      (handler ? ["walking","fleeing"].includes(wagon.userData.activity) &&
       wagon.position.distanceTo(beast.position)<3*characterScale : draft || wagon.userData.riding === true)
     if (!isWorldVisible(group)) return
     const sprite = beast.getObjectByName(kind) as THREE.Sprite | undefined
@@ -43,11 +55,17 @@ export function CartReins({ handler, draft = false, seatOffset = 0, cart, animal
     const cartSprite = wagon.getObjectByName(handler ? "traveler" : "cart") as THREE.Sprite | undefined
     const cartRow = cartSprite?.userData.row ?? spriteRow(wagon.userData.heading ?? 0, yaw, CART.directions)
     const animalRow = data.row ?? spriteRow(data.heading ?? 0, yaw)
-    const origin = (cartSprite ?? wagon).getWorldPosition(new THREE.Vector3()).applyMatrix4(camera.matrixWorldInverse)
-    const hitch = (sprite ?? beast).getWorldPosition(new THREE.Vector3()).applyMatrix4(camera.matrixWorldInverse)
+    const origin = (cartSprite ?? wagon).getWorldPosition(scratch.origin).applyMatrix4(camera.matrixWorldInverse)
+    const hitch = (sprite ?? beast).getWorldPosition(scratch.hitch).applyMatrix4(camera.matrixWorldInverse)
+    // Nothing that shapes the strap changed since the last frame: keep it.
+    const state = [origin.x, origin.y, origin.z, hitch.x, hitch.y, hitch.z, yaw, data.walkPhase ?? 0, cartRow, animalRow,
+      wagon.userData.riding === true ? 1 : 0, handler ? (cartSprite?.userData.displayedFrame ?? 0) + (cartSprite?.userData.clip === "wearyWalk" ? 100 : cartSprite?.userData.clip === "walk" ? 200 : 0) : 0]
+    let same = true
+    for (let i = 0; i < state.length; i++) if (previous[i] !== state[i]) { same = false; previous[i] = state[i] }
+    if (same) return
     const texel = TRANSPORT.scale / TRANSPORT.cellSize * characterScale
     group.updateWorldMatrix(true, false)
-    const viewToLocal = group.matrixWorld.clone().invert().multiply(camera.matrixWorld)
+    const viewToLocal = scratch.viewToLocal.copy(group.matrixWorld).invert().multiply(camera.matrixWorld)
     const pitch = BASE_PERSON.camera.pitch * Math.PI / 180
     let instance = 0
     const draw = (points: THREE.Vector3[]) => {
@@ -57,6 +75,16 @@ export function CartReins({ handler, draft = false, seatOffset = 0, cart, animal
         dummy.quaternion.identity(); dummy.scale.set(texel, texel, 1); dummy.updateMatrix()
         dummy.matrix.premultiply(viewToLocal)
         body.current!.setMatrixAt(instance, dummy.matrix); ids.current?.setMatrixAt(instance, dummy.matrix); instance++
+      }
+    }
+    if (ids.current && !ids.current.instanceColor) {
+      ids.current.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(ids.current.instanceMatrix.count * 3), 3)
+    }
+    if (ids.current && outlineColor) {
+      const colors = ids.current.instanceColor!
+      if (colors.getX(0) !== outlineColor[0] || colors.getY(0) !== outlineColor[1] || colors.getZ(0) !== outlineColor[2]) {
+        for (let i = 0; i < colors.count; i++) colors.setXYZ(i, outlineColor[0], outlineColor[1], outlineColor[2])
+        colors.needsUpdate = true
       }
     }
     for (const side of [-1, 1]) {
@@ -88,12 +116,8 @@ export function CartReins({ handler, draft = false, seatOffset = 0, cart, animal
     if (ids.current) ids.current.instanceMatrix.needsUpdate = true
   })
   return <group ref={root} visible={false}>
-    <instancedMesh ref={body} name={handler ? "animal-lead" : "cart-reins"} args={[geometry, undefined, 2048]} frustumCulled={false} onClick={onClick}
-      layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1}>
-      <meshBasicMaterial color="#493727" toneMapped={false} />
-    </instancedMesh>
-    {outlineColor && <instancedMesh ref={ids} args={[geometry, undefined, 2048]} frustumCulled={false} layers-mask={OUTLINE_ID_LAYER_MASK}>
-      <meshBasicMaterial color={new THREE.Color(...outlineColor)} toneMapped={false} />
-    </instancedMesh>}
+    <instancedMesh ref={body} name={handler ? "animal-lead" : "cart-reins"} args={[geometry, STRAP_MATERIAL, 2048]} frustumCulled={false} onClick={onClick}
+      layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} />
+    {outlineColor && <instancedMesh ref={ids} args={[geometry, ID_MATERIAL, 2048]} frustumCulled={false} layers-mask={OUTLINE_ID_LAYER_MASK} />}
   </group>
 }
