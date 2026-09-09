@@ -23,6 +23,17 @@ function fixture(rotation: BuildingRotation = 0) {
 }
 
 describe("tavern aisles", () => {
+  it("shares occupied benches when full and prefers a newly freed seat", () => {
+    const { map, tavern } = fixture(), seats = tavernSeats(map, tavern)
+    const occupied = new Set(seats.map(seat => `${tavern.id}:${seat.id}`))
+    const from = { x: 10, z: 20 }
+    expect(tavernVisitPlan(map, tavern, from, occupied)?.seat?.id).toBe(seats[0].id)
+    const freed = seats[seats.length - 1]
+    occupied.delete(`${tavern.id}:${freed.id}`)
+    expect(tavernVisitPlan(map, tavern, from, occupied)?.seat?.id).toBe(freed.id)
+    occupied.add(`${tavern.id}:${freed.id}`)
+    expect(tavernVisitPlan(map, tavern, from, occupied)?.seat?.id).toBe(seats[0].id)
+  })
   it("serves a road traveler while both keepers are walking inside, then seats them and lets them leave", () => {
     const { map, local } = fixture()
     const people = townResidents(map).map(r => r.traveler), sim = createSim(people, map)

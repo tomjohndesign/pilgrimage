@@ -30,7 +30,7 @@ class CharacterEntries extends Set<CharacterBatchEntry> {
 }
 
 const Context = createContext<CharacterEntries | null>(null)
-export const characterBatchControl = { enabled: true }
+export const characterBatchControl = { enabled: true, compact: false }
 export const useCharacterBatches = () => useContext(Context)
 
 /** Batch ordinary road people inside the existing color/ID/selection renderer.
@@ -91,8 +91,13 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
     for (const entry of entries.legacy) entries.publish(entry)
     for (const group of groups.values()) {
       let batch = group.batch
+      const order = batch?.root.userData.order ?? root.current.children.length + 1
+      const compact = process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && characterBatchControl.compact
+      if (batch && batch.compact !== compact) {
+        root.current.remove(batch.root); batch.dispose(); group.batch = batch = undefined
+      }
       if (!batch && group.entries.length) {
-        batch = group.batch = new CharacterBatch(group.entries[0], worldTexel, root.current.children.length + 1)
+        batch = group.batch = new CharacterBatch(group.entries[0], worldTexel, order, compact)
         root.current.add(batch.root)
       }
       group.entries.sort((a, b) => a.sprite.renderOrder - b.sprite.renderOrder)

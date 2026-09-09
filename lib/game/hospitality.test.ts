@@ -878,7 +878,7 @@ describe("houses, counters and posts", () => {
     expect(sim.shrineGold).toBe(0)
   })
 
-  it("keeps one table per customer and leaves the penniless on the road", () => {
+  it("shares benches when full and leaves the penniless on the road", () => {
     const { map, traveler } = fixture()
     const people = Array.from({ length: 6 }, (_, id) => {
       const t = traveler(id, id % 2 === 0 ? 1 : -1)
@@ -888,10 +888,10 @@ describe("houses, counters and posts", () => {
     })
     const sim = createEstablishedShrine(people, map)
     const tavern = staffTavern(sim, map)
-    run(sim, people, map, 200, () => [...sim.travelers.values()].filter(s => s.activity === "sitting").length === 4)
+    run(sim, people, map, 200, () => [...sim.travelers.values()].filter(s => s.activity === "sitting").length === 5)
     const seated = [...sim.travelers.values()].filter(s => s.activity === "sitting")
-    expect(seated).toHaveLength(tavernSeats(map, tavern).length)
-    expect(new Set(seated.map(s => s.tavernVisit!.plan.seat!.id)).size).toBe(seated.length)
+    expect(seated).toHaveLength(5)
+    expect(new Set(seated.map(s => s.tavernVisit!.plan.seat!.id)).size).toBe(tavernSeats(map, tavern).length)
     // Nobody without the price of a meal turns off the road for one.
     expect(sim.travelers.get(5)!.tavernVisit).toBeUndefined()
   })

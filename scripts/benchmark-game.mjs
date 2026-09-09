@@ -5,6 +5,7 @@ import { promisify } from "node:util"
 import { chromium } from "playwright"
 import assert from "node:assert/strict"
 import { freezeAssetUpdates } from "./asset-browser.mjs"
+import { probeCharacterCompute } from "./probe-character-compute.mjs"
 
 // Exercise the actual /play scene with the repository's Playwright installation.
 const base = process.env.BENCH_URL ?? "http://localhost:3100"
@@ -14,6 +15,7 @@ const target = process.env.BENCH_TARGET ?? "centre"
 assert.ok(["centre", "water"].includes(target), "BENCH_TARGET must be centre or water")
 const mobile = process.env.BENCH_MOBILE === "1"
 const checksOnly = process.env.BENCH_CHECKS_ONLY === "1"
+const compactBatches = process.env.BENCH_COMPACT_BATCHES === "1"
 const count = Number(process.env.BENCH_COUNT ?? 10000)
 assert.ok(Number.isInteger(count / 16) && count >= 0, "BENCH_COUNT must be a nonnegative multiple of 16 on the 512-square map")
 const trees = process.env.BENCH_TREES ?? "sprites"
@@ -74,11 +76,20 @@ try {
   await session.send("Performance.enable")
   console.log(`Loading 512 × 512 with ${count} travelers and ${trees} trees`)
   await page.goto(`${base}/play?seed=12345&size=512&traffic=${count / 16}&trees=${trees}&benchmark=${scenario}`, { timeout: 180000 })
-  await page.waitForFunction(count => window.__pilgrimage?.sim().length === count, count, { timeout: 180000 })
+  await page.waitForFunction(count => {
+    const game = window.__pilgrimage
+    return game && game.populationStatus().total === (game.expectedPopulation ?? count)
+  }, count, { timeout: 180000 })
+  // The requested traffic is supplemented by founding town households. Preserve
+  // the complete cast, including converts, rather than waiting for traffic alone.
+  const expectedPopulation = await page.evaluate(() => window.__pilgrimage.expectedPopulation ?? window.__pilgrimage.populationStatus().total)
+  assert.ok(expectedPopulation >= count, "the cast must include all requested travelers")
   // Simulation is ready before Suspense has mounted the sprite assets.
-  await page.evaluate(({ zoom, target, adaptive }) => {
+  await page.evaluate(({ zoom, target, adaptive, compactBatches }) => {
     const game = window.__pilgrimage, road = game.map.road
     game.setPaused?.(true)
+    if (compactBatches && !game.setCompactBatches) throw new Error("Compact batch POC requires the updated benchmark build")
+    game.setCompactBatches?.(compactBatches)
     game.setAdaptiveQuality(adaptive)
     let point = game.benchmarkTarget ?? road[Math.floor(road.length / 2)]
     if (target === "water") {
@@ -89,7 +100,7 @@ try {
     }
     game.setTarget(point.x - game.map.width / 2 + .5, point.z - game.map.depth / 2 + .5)
     game.setZoom(zoom)
-  }, { zoom, target, adaptive: process.env.BENCH_ADAPTIVE !== "0" && process.env.BENCH_COMPONENT_ISOLATION !== "1" && process.env.BENCH_ISOLATION !== "1" })
+  }, { zoom, target, compactBatches, adaptive: process.env.BENCH_ADAPTIVE !== "0" && process.env.BENCH_COMPONENT_ISOLATION !== "1" && process.env.BENCH_ISOLATION !== "1" })
   await page.waitForFunction(trees => {
     const game = window.__pilgrimage, scene = game.sceneStats?.()
     if (scene?.treeRenderer && scene.treeRenderer !== trees) return false
@@ -279,13 +290,15 @@ try {
     const mean = frames.reduce((a, b) => a + b, 0) / frames.length
     const metrics = Object.fromEntries(metricsAfter.metrics.map(({ name, value }) => [name, value - (metricsBefore.metrics.find(m => m.name === name)?.value ?? 0)]))
     const timings = await page.evaluate(() => window.__pilgrimage.profileFrames?.(false))
+    const batchPreparation = await page.evaluate(() => window.__pilgrimage.batchPreparation?.())
+    if (compactBatches) assert.ok(batchPreparation?.compact && batchPreparation.direct > 0, "compact POC must actually prepare direct billboard inputs")
     const elapsedSeconds = measured.elapsedSeconds
     const simulatedSeconds = (measured.timeAfter - measured.timeBefore) * 600
     const population = await page.evaluate(before => {
       const after = new Map(window.__pilgrimage.sim().map(s => [s.id, s]))
       return { count: after.size, ...window.__pilgrimage.populationStatus(), moved: before.filter(s => { const next = after.get(s.id); return next && Math.hypot(next.x - s.x, next.z - s.z) > .01 }).length }
     }, populationBefore)
-    assert.equal(population.total, count, "culling must retain everyone, including travelers who became monks")
+    assert.equal(population.total, expectedPopulation, "culling must retain everyone, including town residents and travelers who became monks")
     // Normal gameplay legitimately stops people to rest, work or interact.
     // Only the continuous-routing fixture promises a perpetually moving crowd.
     if (scenario === "city-stress") assert.ok(count === 0 || population.moved > count * .5, "routed travelers outside the camera must keep walking")
@@ -304,6 +317,8 @@ try {
     const occlusion = process.env.BENCH_OCCLUSION === "1" ? await page.evaluate(() => window.__pilgrimage.characterOcclusion()) : undefined
     const observedWalkPoses = Object.fromEntries([...poseFrames].map(([detail, frames]) => [detail, [...frames].sort((a, b) => a - b)]))
     const result = { ...info, figureSamples: measured.figureSamples, zoom: viewSize, occlusion, city, scenario, trees, target, measuredAt: new Date().toISOString(), host: { cpu: cpus()[0]?.model, memoryGiB: totalmem() / 2 ** 30, loadAverage: loadavg() }, speed, gameTime: { elapsedSeconds, simulatedSeconds, effectiveSpeed: simulatedSeconds / elapsedSeconds / 2 }, population, timings, gpuTimings, characterMotion, observedWalkPoses, longTasks: measured.longTasks, seconds, motion, rotate, zoomMotion, inputMotion, sceneryDetails: measured.sceneryDetails, detailTransitions: measured.detailTransitions, detailChangesDuringZoom: measured.detailChangesDuringZoom, cameraMisalignedFrames: measured.misaligned, missingVisibleFigures: measured.missingFigures, frames: frames.length, fps: 1000 / mean, mean, p50: sorted[Math.floor(sorted.length * .5)], p95: sorted[Math.floor(sorted.length * .95)], p99: sorted[Math.floor(sorted.length * .99)], overBudgetPercent: frames.filter(ms => ms > 18).length / frames.length * 100, metrics, errors, browserWarnings: [...new Set(browserWarnings)] }
+    result.batchPreparation = batchPreparation
+    result.requestedTravelers = count
     await writeFile(`${output}/result-${tag}.json`, JSON.stringify(result, null, 2))
     console.log(JSON.stringify(result, null, 2))
     await page.screenshot({ path: `${output}/scene-${tag}.png`, timeout: 120000 })
@@ -321,6 +336,74 @@ try {
     }
   }
   }
+  if (process.env.BENCH_BATCH_COMPARE === "1") {
+    // Hold the actual world fixed while alternating modes. This is a rendering
+    // diagnostic, never a claim about running-game FPS or effective 6× speed.
+    const samples = await page.evaluate(async seconds => {
+      const game = window.__pilgrimage, paused = game.playback().paused, compact = game.batchPreparation().compact
+      game.setPaused(true)
+      const results = []
+      try {
+        // Initial batches may retain larger allocations from camera startup.
+        // Recreate both layouts at the frozen population before measuring;
+        // otherwise the first original sample includes excess upload capacity.
+        for (const mode of [false, true]) {
+          game.setCompactBatches(mode)
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        }
+        for (const mode of [false, true, true, false]) {
+          game.setCompactBatches(mode)
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          const sample = await new Promise(resolve => {
+            const frames = [], timeBefore = game.time()
+            let start, last, alignment = 0
+            game.profileFrames(true)
+            function frame(now) {
+              start ??= now
+              if (last !== undefined) frames.push(now - last)
+              last = now; alignment = Math.max(alignment, game.cameraAlignment())
+              if (now - start < seconds * 1000) { requestAnimationFrame(frame); return }
+              const timings = game.profileFrames(false), sorted = [...frames].sort((a, b) => a - b)
+              const mean = frames.reduce((a, b) => a + b, 0) / frames.length
+              resolve({ compact: mode, frames: frames.length, fps: 1000 / mean, mean,
+                p95: sorted[Math.floor(sorted.length * .95)], p99: sorted[Math.floor(sorted.length * .99)],
+                timeBefore, timeAfter: game.time(), alignment, population: game.populationStatus().total,
+                batch: game.batchPreparation(), figures: game.figureStatus(), timings })
+            }
+            requestAnimationFrame(frame)
+          })
+          results.push(sample)
+        }
+      } finally { game.profileFrames(false); game.setCompactBatches(compact); game.setPaused(paused) }
+      return results
+    }, seconds)
+    await writeFile(`${output}/batch-comparison.json`, JSON.stringify(samples, null, 2))
+    for (const sample of samples) {
+      assert.equal(sample.timeAfter, sample.timeBefore, "paired batch samples must hold simulation time fixed")
+      assert.equal(sample.population, expectedPopulation)
+      assert.equal(sample.batch.compact, sample.compact)
+      assert.equal(sample.batch.entries, samples[0].batch.entries, "paused comparison must keep the same batch membership")
+      assert.equal(sample.batch.dynamicBytes / (sample.compact ? 22 : 28), samples[0].batch.dynamicBytes / 28,
+        "both layouts must use identical total row capacity")
+      assert.equal(sample.alignment, 0)
+      assert.equal(sample.figures.missingVisibleUnits, 0)
+      assert.ok(sample.batch.entries > 0 && (!sample.compact || sample.batch.direct > 0))
+    }
+    console.log("Paused batch comparison", JSON.stringify(samples))
+  }
+  if (process.env.BENCH_WEBGPU === "1") {
+    const paused = await page.evaluate(() => {
+      const game = window.__pilgrimage, paused = game.playback().paused
+      game.setPaused(true); return paused
+    })
+    try {
+      const input = await page.evaluate(() => window.__pilgrimage.characterComputeInput())
+      const result = await page.evaluate(probeCharacterCompute, input)
+      await writeFile(`${output}/webgpu-compute.json`, JSON.stringify(result, null, 2))
+      console.log("Native WebGPU compute probe", JSON.stringify(result))
+    } finally { await page.evaluate(paused => window.__pilgrimage.setPaused(paused), paused) }
+  }
+
   // Zoom-only restoration tests explicitly disable FPS overrides. Adaptive
   // gameplay is measured above and exercised by its own checks below.
   if (process.env.BENCH_ADAPTIVE_SMOKE === "1") {
@@ -339,7 +422,7 @@ try {
     await page.waitForFunction(() => { const s = window.__pilgrimage.adaptiveStatus(); return s.quality === 0 && !s.active && s.detail === 0 && s.simpleBatches === 0 && s.wildlife && s.waterDetail }, undefined, { timeout: 30000 })
     const after = await page.evaluate(() => window.__pilgrimage.adaptiveStatus())
     assert.equal(after.treeDensity, 1)
-    assert.equal(await page.evaluate(() => window.__pilgrimage.populationStatus().total), count)
+    assert.equal(await page.evaluate(() => window.__pilgrimage.populationStatus().total), expectedPopulation)
     await writeFile(`${output}/adaptive-smoke.json`, JSON.stringify({ before, selected, after }, null, 2))
     console.log("Adaptive smoke passed: full crowd budget, solid colours, hidden wildlife/water detail, full selected NPC and restored detail")
   }
@@ -633,7 +716,7 @@ try {
           fps: sample.frames.length * 1000 / sample.frames.reduce((a, b) => a + b, 0), p95: frames[Math.floor(frames.length * .95)] }
         results.push(result)
         await writeFile(`${output}/isolation.json`, JSON.stringify(results, null, 2))
-        assert.equal(sample.population, count); assert.equal(sample.retained, count)
+        assert.equal(sample.population, expectedPopulation); assert.equal(sample.retained, expectedPopulation)
         if (condition.paused) assert.equal(sample.timeAfter, sample.timeBefore)
         else assert.ok(sample.timeAfter > sample.timeBefore, "hidden actors must keep simulating")
         for (const name of Object.keys(layers)) {

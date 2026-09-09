@@ -1127,7 +1127,7 @@ function routeWalk(s: SimTraveler, map: GameMap, route: readonly TilePos[], to: 
 }
 
 /**
- * Set out for the nearest counter with a free table. `returnTo` is where they
+ * Set out for the nearest reachable counter. `returnTo` is where they
  * belong afterwards — a settler's workplace, or null for their place on the road.
  */
 function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
