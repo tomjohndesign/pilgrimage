@@ -1,7 +1,25 @@
 {
-  "lastProcessedCommit": "ad6ce1f682d5072dbb061b2c3560884375471919",
-  "releaseCount": 125,
+  "lastProcessedCommit": "4d969f715f4f793dd5896bcc101cc9f3173159ef",
+  "releaseCount": 128,
   "releases": [
+    {
+      "version": "0.0.142",
+      "title": "Release 0.0.142",
+      "summary": "Keep monks evangelizing for three days with rest in place (#159)",
+      "commit": "4d969f715f4f793dd5896bcc101cc9f3173159ef"
+    },
+    {
+      "version": "0.0.141",
+      "title": "Release 0.0.141",
+      "summary": "Open the altar when selecting the relic (#162)",
+      "commit": "47f7262418bdc0f29d0b23e08fe08ea94ff84817"
+    },
+    {
+      "version": "0.0.140",
+      "title": "Release 0.0.140",
+      "summary": "Fix road cutbacks and space seeded taverns by a 192-tile radius (#163)",
+      "commit": "fe9237e54aed8f970d46e854963d95647d85b0ce"
+    },
     {
       "version": "0.0.139",
       "title": "Release 0.0.139",
