@@ -349,6 +349,7 @@ function TravelerPanel({ traveler, map }: { traveler: Traveler; map: GameMap | n
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
         <StatBar label="Status" value={a.status} />
         <StatBar label="Piety" value={Math.round(live?.piety ?? a.piety)} />
+        <StatBar label="Happiness" value={Math.round(live?.happiness ?? a.happiness)} />
         <StatBar label="Hunger" value={Math.round(live?.hunger ?? a.hunger)} />
         <StatBar label="Thirst" value={Math.round(live?.thirst ?? a.thirst)} />
         <StatBar label="Stamina" value={Math.round(live?.stamina ?? a.stamina)} />
@@ -510,9 +511,9 @@ function ConstructionStatus({ building }: { building: BuildingDef }) {
 
 /** Sample the brothers' live activity and piety on the HUD's own schedule. */
 function useMonkLiveState(monkId: number) {
-  const [live, setLive] = useState<{ activity: MonkActivity | null; piety?: number }>({ activity: null })
+  const [live, setLive] = useState<{ activity: MonkActivity | null; piety?: number; happiness?: number }>({ activity: null })
   useEffect(() => {
-    const read = () => setLive({ activity: monkRegistry.current?.get(monkId) ?? null, piety: monkPositionRegistry.current?.get(monkId)?.piety })
+    const read = () => setLive({ activity: monkRegistry.current?.get(monkId) ?? null, piety: monkPositionRegistry.current?.get(monkId)?.piety, happiness: monkPositionRegistry.current?.get(monkId)?.happiness })
     read()
     const timer = setInterval(read, 250)
     return () => clearInterval(timer)
@@ -524,7 +525,7 @@ function useMonkLiveState(monkId: number) {
 function MonkPanel({ monk }: { monk: Monk }) {
   const balance = useBalanceStore((s) => s.balance)
   const a = monk.attributes
-  const { activity, piety } = useMonkLiveState(monk.id)
+  const { activity, piety, happiness } = useMonkLiveState(monk.id)
   const [stamina, setStamina] = useState(100)
   useEffect(() => {
     const read = () => setStamina(monkStaminaRegistry.current?.get(monk.id) ?? 100)
@@ -560,7 +561,8 @@ function MonkPanel({ monk }: { monk: Monk }) {
       </div>
 
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
-        <StatBar label="Piety" value={piety ?? a.piety} />
+        <StatBar label="Piety" value={Math.round(piety ?? a.piety)} />
+        <StatBar label="Happiness" value={Math.round(happiness ?? a.happiness)} />
         <StatBar label="Stamina" value={Math.round(stamina)} />
         <div className="mt-1 text-[11px] text-ink-light">Contributes +{individualRenown(monk, balance)} shrine renown</div>
       </div>

@@ -42,10 +42,12 @@ describe("tavern aisles", () => {
     expect(characterSupport(map, s.x, s.z, "seatedMeal")?.id).toBe(seat.id)
     stepSim(sim, [traveler], map, 1, 0)
     expect(s.stamina).toBe(40)
+    const happiness = s.happiness
     stepSim(sim, [traveler], map, 1, GAME_HOUR_SECONDS)
     expect(s.stamina).toBeCloseTo(44)
     stepSim(sim, [traveler], map, 1, GAME_HOUR_SECONDS * 3)
     expect(s.stamina).toBeCloseTo(48)
+    expect(s.happiness).toBeLessThanOrEqual(happiness)
     expect(s.activity).toBe("fromTavern")
     for (let tick = 0; tick < 2000 && s.tavernVisit; tick++) stepSim(sim, [traveler], map, 1, .05)
     expect(s.tavernVisit).toBeUndefined()
