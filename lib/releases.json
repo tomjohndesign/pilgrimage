@@ -1,7 +1,25 @@
 {
-  "lastProcessedCommit": "110ee4beaf0a2d96a74630217a96483d6a3b7316",
-  "releaseCount": 164,
+  "lastProcessedCommit": "433730360406c5caa8940556f5d8d49670c3b749",
+  "releaseCount": 167,
   "releases": [
+    {
+      "version": "0.0.181",
+      "title": "Release 0.0.181",
+      "summary": "Batch passenger carts, share rein materials, and throttle distant wildlife skinning (#200)",
+      "commit": "433730360406c5caa8940556f5d8d49670c3b749"
+    },
+    {
+      "version": "0.0.180",
+      "title": "Release 0.0.180",
+      "summary": "Add standalone and stackable inns with beds and four jobs (#199)",
+      "commit": "d6cb383420ac468dfa4b730034ea10bad4c7c201"
+    },
+    {
+      "version": "0.0.179",
+      "title": "Release 0.0.179",
+      "summary": "Paint the saved view from a lossless world snapshot on reload (#198)",
+      "commit": "51b48996d19f12de5e7d9e400be0a3636b31260a"
+    },
     {
       "version": "0.0.178",
       "title": "Release 0.0.178",
