@@ -33,7 +33,7 @@ interface CameraState {
   /** Camera focus point on the ground plane. */
   targetX: number
   targetZ: number
-  /** Unbounded quarter turns; fractional after a touch twist, so yaw stays continuous. */
+  /** Unbounded quarter turns; fractional during a touch twist, snapped on release. */
   viewIndex: number
   /** Orthographic frustum height in world units. */
   viewSize: number

@@ -50,6 +50,13 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     const { pan, setHovered } = useCameraStore.getState()
 
     const gesture = new CameraGesture()
+    let needsRotationSnap = false
+    const snapRotation = () => {
+      if (!needsRotationSnap) return
+      needsRotationSnap = false
+      const { viewIndex, inputLocked } = useCameraStore.getState()
+      if (!inputLocked) useCameraStore.setState({ viewIndex: Math.round(viewIndex) })
+    }
     const point = (event: PointerEvent) => ({ x: event.clientX, y: event.clientY })
     const previousTouchAction = canvas.style.touchAction
     canvas.style.touchAction = "none"
@@ -122,8 +129,9 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
         const oldYaw = displayYaw.current
         if (gesture.pinching) {
           // Touch follows the fingers directly, including during camera tweens.
-          // Clockwise fingers turn the ground clockwise, so camera yaw decreases.
-          displayYaw.current -= movement.rotation
+          // Increasing yaw turns the projected ground clockwise on screen.
+          displayYaw.current += movement.rotation
+          needsRotationSnap = true
           useCameraStore.setState({
             viewIndex: (displayYaw.current - yawForView(0)) / (Math.PI / 2),
             viewSize: displayViewSize.current,
@@ -146,6 +154,9 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     const endDrag = (event: PointerEvent) => {
       if (!gesture.has(event.pointerId)) return
       const tap = gesture.end(event.pointerId, point(event), event.type !== "pointerup")
+      // Let the existing yaw tween settle at the nearest isometric view as
+      // soon as the two-finger gesture ends, even if one finger keeps panning.
+      if (!gesture.pinching) snapRotation()
       if (event.type === "pointerup") trackEdgePointer(event)
       else edgePointer.current = null
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId)
@@ -169,6 +180,7 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     const onBlur = () => {
       edgePointer.current = null
       gesture.clear()
+      snapRotation()
       setHovered(null)
       canvas.style.cursor = "grab"
     }
