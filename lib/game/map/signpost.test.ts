@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { generateMap, MIN_MAP_SIZE } from "./generate-map"
-import { signpostPlacement, SIGNPOST_CLEARANCE, SIGNPOST_INSET } from "./signpost"
+import { signpostPlacement, tJunctionVerge, SIGNPOST_CLEARANCE, SIGNPOST_INSET } from "./signpost"
 import { placeTrees } from "../trees/placement"
 import { TREE_SPECIES } from "../trees/species"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "./types"
@@ -12,6 +12,36 @@ const mapFor = (seed: number) => generateMap({ width: MIN_MAP_SIZE, depth: MIN_M
 /** The post's tile, plus the way its board is turned, on a real generated world. */
 describe("the shrine's wayside signpost", () => {
   const maps = SEEDS.map(mapFor)
+
+  it.each([{ x: 1, z: 0 }, { x: -1, z: 0 }, { x: 0, z: 1 }, { x: 0, z: -1 }])(
+    "stands across the through road from the incoming arm %j", step => {
+      const junction = { x: 6, z: 6 }, side = { x: step.z, z: -step.x }
+      const branch = Array.from({ length: 4 }, (_, i) => ({ x: 6 + step.x * i, z: 6 + step.z * i }))
+      const road = Array.from({ length: 9 }, (_, i) => ({ x: 6 + side.x * (i - 4), z: 6 + side.z * (i - 4) }))
+      const map: GameMap = { width: 13, depth: 13, tiles: Array(169).fill("grass"), road,
+        buildings: [{ id: "shrine", x: branch[3].x + step.x, z: branch[3].z + step.z,
+          w: 1, d: 1, label: "Shrine", height: 1, color: "tan", roofColor: "brown" }],
+        site: { junction: 4, branch, door: branch[3], hovelId: "shrine" } }
+      for (const p of road) map.tiles[p.z * map.width + p.x] = "path"
+      for (const p of branch.slice(1)) map.tiles[p.z * map.width + p.x] = "track"
+      const opposite = { x: junction.x - step.x, z: junction.z - step.z }
+      const post = signpostPlacement(map)!
+      expect(post.tile).toEqual(opposite)
+      expect(post.x).toBeCloseTo(tileToWorldX(map, junction.x) - step.x * (1 - SIGNPOST_INSET))
+      expect(post.z).toBeCloseTo(tileToWorldZ(map, junction.z) - step.z * (1 - SIGNPOST_INSET))
+
+      // A blocked verge uses dry ground beside it, never the incoming lane.
+      map.tiles[opposite.z * map.width + opposite.x] = "water"
+      const fallback = signpostPlacement(map)!
+      expect((fallback.tile.x - junction.x) * step.x + (fallback.tile.z - junction.z) * step.z).toBe(-1)
+
+      // A fourth arm is a crossroads: leave every approach clear.
+      map.tiles[opposite.z * map.width + opposite.x] = "track"
+      expect(tJunctionVerge(map, junction)).toBeNull()
+      const cross = signpostPlacement(map)!
+      expect(["path", "track"]).not.toContain(tileAt(map, cross.tile.x, cross.tile.z))
+    },
+  )
 
   it("stands beside the branch on every generated world, never on the way itself", () => {
     for (const map of maps) {

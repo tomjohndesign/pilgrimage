@@ -1,5 +1,7 @@
 "use client"
 
+import { townResidents } from "@/lib/game/town-residents"
+
 import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES, type SceneVisibility } from "@/lib/game/scene-visibility"
 import { DEFAULT_ELEVATION, type ElevationSettings } from "@/lib/game/map/elevation"
 import dynamic from "next/dynamic"
@@ -304,7 +306,8 @@ export function GameShell({
   useEffect(() => { footpaths.paved = ROAD_TIERS[settings.road]?.paved ?? false }, [footpaths, settings.road])
   // Keep one live map for the canvas and HUD readers, including roadside preaching.
   const map = useMemo(() => economy.map ? { ...economy.map, footpaths } : null, [economy.map, footpaths])
-  const travelers = useMemo(() => JOB_PREVIEW && map ? [...roadTravelers, ...previewResidents(map).map(resident => resident.traveler)] : roadTravelers,
+  const travelers = useMemo(() => map ? [...roadTravelers, ...townResidents(map).map(resident => resident.traveler),
+      ...(JOB_PREVIEW ? previewResidents(map).map(resident => resident.traveler) : [])] : roadTravelers,
     [roadTravelers, map])
   const renown = economy.renown
   const [evangelism, setEvangelism] = useState(0)

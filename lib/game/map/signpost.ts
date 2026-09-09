@@ -1,5 +1,6 @@
 import { type TerrainId } from "./terrain"
-import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./types"
+import { isRoadTerrain } from "./road"
+import { tileAt, tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./types"
 
 /**
  * The wayside marker at the fork for the shrine. Pure geometry — no three.js,
@@ -9,7 +10,8 @@ import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./types"
  * the way to it is marked where it leaves the road: a post at a corner of the
  * junction, a board pointing along the branch, and a cross to say what stands
  * at the end of it. The post never stands on the track itself — it takes the
- * open ground in the crook of the fork, set in toward the corner so it reads
+ * verge opposite the incoming arm of a T junction, or an open corner at a
+ * crossroads, set in toward the road so it reads
  * as part of the junction rather than something dropped in the field.
  */
 
@@ -41,6 +43,17 @@ export interface SignpostPlacement {
   yaw: number
 }
 
+/** The empty side of a T faces the incoming arm, across the through road. */
+export function tJunctionVerge(map: GameMap, junction: TilePos): TilePos | null {
+  const neighbors = [{ x: 1, z: 0 }, { x: -1, z: 0 }, { x: 0, z: 1 }, { x: 0, z: -1 }]
+    .map(d => ({ x: junction.x + d.x, z: junction.z + d.z }))
+  const offRoad = neighbors.filter(p => {
+    const terrain = tileAt(map, p.x, p.z)
+    return !isRoadTerrain(terrain) && terrain !== "bridge"
+  })
+  return offRoad.length === 1 ? offRoad[0] : null
+}
+
 function usableCorner(map: GameMap, tile: TilePos, beside: TilePos, wooded: boolean): boolean {
   if (tile.x < 0 || tile.z < 0 || tile.x >= map.width || tile.z >= map.depth) return false
   const index = tile.z * map.width + tile.x
@@ -54,7 +67,8 @@ function usableCorner(map: GameMap, tile: TilePos, beside: TilePos, wooded: bool
 /**
  * Where the signpost stands, or null on a map with no shrine branch to mark.
  *
- * The fork's own two corners come first — the tiles diagonally out from the
+ * A T junction takes the verge opposite its incoming arm. Otherwise the fork's
+ * own two corners come first — the tiles diagonally out from the
  * junction, one either side of the road. Failing those, the search steps along
  * to the outer corners of the branch's next few bends. Open ground wins at
  * each corner in turn, but a corner in the trees is taken before the search
@@ -70,6 +84,12 @@ export function signpostPlacement(map: GameMap): SignpostPlacement | null {
   const corners: { tile: TilePos; beside: TilePos }[][] = []
   const junction = site.branch[0], first = site.branch[1]
   const step = { x: first.x - junction.x, z: first.z - junction.z }
+  const opposite = tJunctionVerge(map, junction)
+  if (opposite) {
+    corners.push([{ tile: opposite, beside: junction }])
+    const side = { x: opposite.z - junction.z, z: junction.x - opposite.x }
+    corners.push([-1, 1].map(sign => ({ tile: { x: opposite.x + sign * side.x, z: opposite.z + sign * side.z }, beside: junction })))
+  }
   corners.push([{ x: step.z, z: -step.x }, { x: -step.z, z: step.x }]
     .map(side => ({ tile: { x: first.x + side.x, z: first.z + side.z }, beside: junction })))
   // Both tiles adjacent to a bend but off the branch sit on the outside of it.

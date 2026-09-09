@@ -170,9 +170,10 @@ export function HudClock() {
     const timer = setInterval(read, 250)
     return () => clearInterval(timer)
   }, [])
-  const [day, clock] = time === null ? ["Day —", "—:—"] : formatGameTime(time).split(" — ")
+  const day = time === null ? "Day —" : `Day ${Math.floor(time) + 1}`
+  const date = time === null ? "March 1, 825 AD" : formatGameTime(time)
   return <section className="hud-clock" aria-label="Simulation time">
-    <span className="hud-day">{day}</span><span className="hud-time">{clock}</span>
+    <span className="hud-day">{day}</span><span className="hud-date">{date}</span>
     <button type="button" className="hud-pause" aria-label={paused ? "Resume simulation" : "Pause simulation"}
       aria-pressed={paused} onClick={() => useSimulationStore.getState().togglePaused()}>
       {paused ? <Play size={14} /> : <Pause size={14} />}

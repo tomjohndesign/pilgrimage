@@ -1,4 +1,5 @@
 import { straightenRoad } from "./straighten-road"
+import { addRoadsideTowns } from "./roadside-towns"
 import { beachAccess } from "./beaches"
 import { taperRiverBanks, gradeBridgeApproaches } from "./river-banks"
 import { bridgeLayout } from "./bridges"
@@ -902,6 +903,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   // Bridge grading and founding can raise a formerly low beach; classify sand last.
   const sandy = beachAccess(map.elevation!, width, depth, kind, waterInfo)
   for (let i = 0; i < tiles.length; i++) if (tiles[i] === "sand" && !sandy[i]) tiles[i] = "grass"
+  addRoadsideTowns(map)
   return map
 }
 

@@ -69,7 +69,7 @@
 .hud-minimap-north { position: absolute; top: var(--hud-space); right: var(--hud-space); color: #ecdfb7; font-size: 12px; }
 .hud-clock { gap: var(--hud-control-gap); padding: 3px; white-space: nowrap; }
 .hud-day { margin-left: var(--hud-control-gap); font-family: var(--font-cinzel), serif; color: #d4c297; font-size: 12px; }
-.hud-time { margin-right: var(--hud-control-gap); font-size: 18px; font-variant-numeric: tabular-nums; line-height: 24px; }
+.hud-date { margin-left: 4px; margin-right: var(--hud-control-gap); font-size: 14px; font-variant-numeric: tabular-nums; line-height: 24px; }
 .hud-pause { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .hud-speeds { display: flex; gap: var(--hud-control-gap); }
 .hud-speeds button { min-width: 28px; height: 28px; padding: 0 4px; font-size: 12px; cursor: pointer; }
@@ -170,7 +170,7 @@
   .hud-header-button { width: 44px; height: 44px; }
   .hud-clock { grid-column: 2; grid-row: 2; justify-self: end; gap: 2px; padding: 0; height: 46px; }
   .hud-day { font-size: 10px; margin-left: 4px; }
-  .hud-time { font-size: 15px; margin-right: 2px; }
+  .hud-date { font-size: 11px; margin-right: 2px; }
   .hud-pause { width: 44px; height: 44px; }
   .hud-speeds { display: none; }
   .hud-mobile-speed { display: block; width: 52px; padding: 0 3px; font-size: 16px; }

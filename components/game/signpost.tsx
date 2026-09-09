@@ -14,7 +14,7 @@ import { encodeObjectId, SIGNPOST_OBJECT_ID } from "@/lib/game/render/outline"
 
 /**
  * The wayside marker where the shrine's track forks from the road: a riven
- * post in the crook of the junction, a pointed board turned onto the shrine's
+ * post on the verge opposite a T junction, a pointed board turned onto the shrine's
  * bearing, and a small cross above it. Placement is decided on the map (see
  * lib/game/map/signpost.ts); this only stands the timber up.
  */

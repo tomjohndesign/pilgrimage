@@ -148,7 +148,7 @@ export const Travelers = memo(function Travelers({
     }
   }, [sim, travelers, map, relic])
 
-  const camps = useMemo(() => jobBuildings(map), [map])
+  const camps = useMemo(() => jobBuildings(map, true), [map])
 
   // Publish the running sim so the HUD's traveler panel can poll live stats.
   useEffect(() => {

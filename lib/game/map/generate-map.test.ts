@@ -137,7 +137,7 @@ describe("generateMap", () => {
   it("founds the shrine and a completed monk shelter beside its gate path", () => {
     for (const seed of SEEDS) {
       const map = mapFor(seed)
-      expect(map.buildings.map((b) => b.id), `seed ${seed} has shrine and shelter`).toEqual([HOVEL_ID, "founding-shelter"])
+      expect(map.buildings.filter(b => b.owner !== "independent").map((b) => b.id), `seed ${seed} has shrine and shelter`).toEqual([HOVEL_ID, "founding-shelter"])
       const shelter = map.buildings[1]
       expect(shelter.construction).toBeUndefined()
       expect(shelter.buildType).toBe("monk-shelter")
@@ -315,7 +315,7 @@ describe("generateMap", () => {
   it("sites the hovel on small maps too, scaling the band down", () => {
     for (const seed of SEEDS.slice(0, 10)) {
       const map = generateMap({ seed, width: 32, depth: 32 })
-      expect(map.buildings).toHaveLength(2)
+      expect(map.buildings.filter(b => b.owner !== "independent")).toHaveLength(2)
       expect(map.site!.branch.length).toBeGreaterThan(1)
     }
   }, SWEEP_TIMEOUT)
@@ -338,7 +338,7 @@ describe("generateMap", () => {
     const map = generateMap({ seed: 99, width: 512, depth: 512 })
     expect(map.tiles).toHaveLength(512 * 512)
     expect(map.tiles.every((t) => t in TERRAIN)).toBe(true)
-    expect(map.buildings.map((b) => b.id)).toEqual([HOVEL_ID, "founding-shelter"])
+    expect(map.buildings.filter(b => b.owner !== "independent").map((b) => b.id)).toEqual([HOVEL_ID, "founding-shelter"])
     const road = reachablePath(map)
     expect([...road].some((key) => key.startsWith(`${map.width - 1},`))).toBe(true)
   }, SWEEP_TIMEOUT)

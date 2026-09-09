@@ -810,6 +810,34 @@ describe("woodcutter huts", () => {
 
 
 describe("houses, counters and posts", () => {
+  it.each([1, -1] as const)("serves travelers at an independent town in direction %s without paying the player", direction => {
+    const { map, traveler } = fixture()
+    // An ordinary paid counter, operated locally from the start.
+    const def = BUILD_CATALOG.find(b => b.id === "tavern")!
+    const tavern = { ...def, id: "town-tavern", owner: "independent" as const, townId: "town",
+      buildType: "tavern", x: 13, z: 9, rotation: 0 as const }
+    map.buildings.push(tavern)
+    map.towns = [{ id: "town", name: "Alderford", junction: 10, tavernId: tavern.id, buildingIds: [tavern.id] }]
+    const t = traveler(0, direction)
+    Object.assign(t.attributes, { hunger: 40, thirst: 40, gold: 10 })
+    const sim = createSim([t], map, [], obscure)
+    const s = sim.travelers.get(t.id)!
+    sim.travelers.set(-1, { ...s, id: -1, employer: tavern.id, activity: "posted" })
+    run(sim, [t], map, 200, () => s.activity === "sitting")
+    expect(s.activity).toBe("sitting")
+    expect(s.hunger).toBeGreaterThan(90)
+    expect(s.thirst).toBeGreaterThan(90)
+    expect(s.gold).toBe(5)
+    expect(sim.tradeGold).toBe(0)
+    expect(sim.shrineGold).toBe(0)
+    expect(sim.visits).toBe(0)
+    expect(s.employer).toBeNull()
+    run(sim, [t], map, 200, () => s.activity === "walking")
+    expect(s.activity).toBe("walking")
+    expect(s.direction).toBe(direction)
+    expect(s.tavernVisit).toBeUndefined()
+  })
+
   it("seats a customer on an authored bench and pays the settlement, not the shrine", () => {
     const { map, traveler } = fixture()
     const t = traveler(0)
