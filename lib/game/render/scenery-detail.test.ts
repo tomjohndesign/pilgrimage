@@ -1,6 +1,6 @@
 import { expect, it } from "vitest"
 import * as THREE from "three"
-import { chooseSceneryDetail, updateSceneryDetail, sceneryDetailStatus, sceneryCloseOpacity, sceneryFadeProgress, scenerySourceVisible, treeEdgeOpacity } from "./scenery-detail"
+import { buildingDetail, chooseSceneryDetail, updateSceneryDetail, sceneryDetailStatus, sceneryCloseOpacity, sceneryFadeProgress, scenerySourceVisible, treeEdgeOpacity } from "./scenery-detail"
 import { indexFlatGeometry } from "./flat-geometry"
 import { StaticInstanceBatch } from "./static-instances"
 import { coarseCrown } from "../trees/coarse-crown"
@@ -28,6 +28,34 @@ it("drops detail 15 percent earlier on desktop and more aggressively on coarse-p
   expect(chooseSceneryDetail(14.5, 1, "mobile")).toBe(1)
   expect(chooseSceneryDetail(17.5, 2, "mobile")).toBe(2)
   expect(chooseSceneryDetail(30.5, 1, "mobile")).toBe(0)
+})
+
+it("keeps building zoom thresholds independent of FPS pressure, including on initial load", () => {
+  const scene = new THREE.Scene(), camera = new THREE.OrthographicCamera(-22.5, 22.5, 22.5, -22.5)
+  expect(buildingDetail(scene)).toBe(0)
+  // 20 pixels/unit is close when entering from full detail, but would stay
+  // simplified if buildings inherited the performance level's hysteresis.
+  updateSceneryDetail(scene, camera, 900, 0, 45, "desktop", 2)
+  updateSceneryDetail(scene, camera, 900, .3, 45, "desktop", 2)
+  expect(buildingDetail(scene)).toBe(0)
+  expect(sceneryDetailStatus(scene)?.current).toBe(2)
+})
+
+it("still closes and reopens interiors with settled zoom while FPS detail stays reduced", () => {
+  const scene = new THREE.Scene(), camera = new THREE.OrthographicCamera(-18, 18, 18, -18)
+  const update = (view: number, time: number) => {
+    camera.top = view / 2; camera.bottom = -view / 2
+    updateSceneryDetail(scene, camera, 900, time, view, "desktop", 2)
+    expect(sceneryDetailStatus(scene)?.current).toBe(2)
+    return buildingDetail(scene)
+  }
+  expect(update(36, 0)).toBe(0)
+  expect(update(60, .3)).toBe(0)
+  expect(update(60, .5)).toBe(1)
+  expect(update(140, .8)).toBe(1)
+  expect(update(140, 1)).toBe(2)
+  expect(update(36, 1.3)).toBe(2)
+  expect(update(36, 1.5)).toBe(0)
 })
 
 it("defers layer changes until zoom input and the camera tween settle, including reversals", () => {

@@ -1,7 +1,7 @@
 import { expect, it } from "vitest"
 import { Scene, OrthographicCamera } from "three"
 import { FrameQualityController, frameQuality, frameQualityControl, updateFrameQuality } from "./frame-quality"
-import { updateSceneryDetail, sceneryDetailStatus } from "./scenery-detail"
+import { buildingDetail, updateSceneryDetail, sceneryDetailStatus } from "./scenery-detail"
 
 it("reduces sustained slow frames, holds in background tabs, and recovers slowly", () => {
   const control = new FrameQualityController()
@@ -43,6 +43,23 @@ it("allows FPS pressure to lower close-view scenery while preserving the zoom qu
   expect(updateSceneryDetail(scene, camera, 900, 0, 36)).toBe(0)
   expect(updateSceneryDetail(scene, camera, 900, .1, 36, "desktop", 2)).toBe(0)
   expect(updateSceneryDetail(scene, camera, 900, .3, 36, "desktop", 2)).toBe(2)
+  expect(buildingDetail(scene)).toBe(0)
   expect(sceneryDetailStatus(scene)).toMatchObject({ zooming: false, fade: 0 })
   expect(updateSceneryDetail(scene, camera, 900, 1, 36, "desktop", 0)).toBe(0)
+})
+
+it("keeps buildings and interior access at close detail through sustained low FPS and recovery", () => {
+  const scene = new Scene(), camera = new OrthographicCamera(-18, 18, 18, -18)
+  let time = 0
+  const frame = (delta: number) => {
+    time += delta
+    const quality = updateFrameQuality(scene, delta, false)
+    updateSceneryDetail(scene, camera, 900, time, 36, "desktop", quality)
+    expect(buildingDetail(scene)).toBe(0)
+  }
+  for (let i = 0; i < 75; i++) frame(1 / 25)
+  expect(frameQuality(scene)).toBe(2)
+  expect(sceneryDetailStatus(scene)).toMatchObject({ current: 2, building: 0 })
+  for (let i = 0; i < 660; i++) frame(1 / 60)
+  expect(frameQuality(scene)).toBe(0)
 })

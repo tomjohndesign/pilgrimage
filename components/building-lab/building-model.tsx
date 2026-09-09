@@ -5,7 +5,7 @@ import * as THREE from "three"
 import { GRASS_TEXTURE_URL } from "@/lib/game/render/ground-surface"
 import { useFrame, type ThreeEvent } from "@react-three/fiber"
 import { buildingGeometryLevels, buildingPartDetail } from "@/lib/game/building-art/merged-geometry"
-import { sceneryDetail } from "@/lib/game/render/scenery-detail"
+import { buildingDetail } from "@/lib/game/render/scenery-detail"
 import { useBuildingBatches } from "@/components/game/building-batches"
 import { StaticBlock } from "@/components/game/static-block"
 import { buildingParts, type BuildingPart } from "@/lib/game/building-art/geometry"
@@ -85,7 +85,7 @@ function MergedParts({ parts, idColor, onClick, terrainFloors, surfaceMaterial, 
   }, [batches, batchable, levels, idColor])
   useEffect(() => () => { for (const geometry of new Set(levels)) geometry.dispose() }, [levels])
   useFrame(({ scene }) => {
-    const geometry = levels[sceneryDetail(scene)]
+    const geometry = levels[buildingDetail(scene)]
     if (body.current) body.current.geometry = geometry
     if (ids.current) ids.current.geometry = geometry
   })
@@ -122,7 +122,7 @@ export function StructureModel({ parts, idColor, ghostColor, ink = true, cutaway
   const scratch = useMemo(()=>({direction:new THREE.Vector3(),rotation:new THREE.Quaternion()}),[])
   useFrame(({camera, scene})=>{
     if (!cutaway || !root.current) return
-    const nextDistant = sceneryDetail(scene) > 0
+    const nextDistant = buildingDetail(scene) > 0
     if (distant !== nextDistant) setDistant(nextDistant)
     if (nextDistant) return
     root.current.getWorldQuaternion(scratch.rotation).invert()
