@@ -21,6 +21,7 @@ import type { TilePos } from "@/lib/game/map/types"
 import { deriveSeed, SEED_STREAM } from "@/lib/game/rng"
 import { growTreePlacements } from "@/lib/game/trees/dimensions"
 import { placeTrees } from "@/lib/game/trees/placement"
+import type { SimulationSave } from "@/lib/game/save/schema"
 import { foliageSpacing } from "@/lib/game/trees/foliage/spacing"
 import { DEFAULT_TREE_MODEL, treeModelForGame, type TreeModel } from "@/lib/game/trees/render-model"
 import { useTreeTuningStore } from "@/lib/game/trees/tree-tuning-store"
@@ -90,9 +91,12 @@ export function GameCanvas({
   onLandmarkReady,
   onRevealPhase,
   onRevealProgress,
+  restore = null,
   ...pixelation
 }: {
   map: GameMap
+  /** A saved simulation for this world, applied once when its sim is created. */
+  restore?: SimulationSave | null
   onLandmarkReady: () => void
   onRevealPhase: (phase: MapRevealPhase) => void
   onRevealProgress: (progress: number, reach: number) => void
@@ -192,7 +196,7 @@ export function GameCanvas({
       <CameraLight />
 
       <HearthLights enabled={visibility.buildingVisibility !== "hidden"}><RenownSaturation map={map}>
-      <group name="map-reveal-church" userData={{ mapRevealLandmark: true }} visible={visibility.buildingVisibility !== "hidden"}>
+      <group name="map-reveal-church" userData={{ mapRevealLandmark: !restore }} visible={visibility.buildingVisibility !== "hidden"}>
         <Shrine map={map} relic={relic} showInteriors={visibility.buildingVisibility === "interiors"} />
       </group>
       <SceneAssetBoundary>
@@ -223,7 +227,7 @@ export function GameCanvas({
           <PixelCharacters>
             <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
           </PixelCharacters>
-          <CharacterBatches><Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
+          <CharacterBatches><Travelers map={map} travelers={travelers} restore={restore} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
             characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} /></CharacterBatches>
         </group>
       </SceneAssetBoundary>
@@ -238,7 +242,7 @@ export function GameCanvas({
       <GroundSelection map={map} trees={trees} characterScale={characterScale} />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
       <DebugHandle characterScale={characterScale} map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} movement={movement} />
-      <MapReveal map={map} state={reveal} onLandmarkReady={onLandmarkReady} onProgress={onRevealProgress} onPhase={phase => {
+      <MapReveal map={map} state={reveal} landmark={!restore} onLandmarkReady={onLandmarkReady} onProgress={onRevealProgress} onPhase={phase => {
         setRevealStatus({ state: reveal, phase }); onRevealPhase(phase)
       }} />
     </PixelCanvas>

@@ -13,9 +13,11 @@ import { tileRevealFrame } from "@/lib/game/render/map-reveal-framing"
 /** Fade whole tiles along a circular wave in world space. Authored geometry
  * keeps its 60° isometric edges, slopes, river banks and cliff faces.
  */
-export function MapReveal({ map, state, onPhase, onProgress, onLandmarkReady }: {
+export function MapReveal({ map, state, onPhase, onProgress, onLandmarkReady, landmark = true }: {
   map: GameMap
   onLandmarkReady: () => void
+  /** Spread from the founding church, or from the terrain under screen centre. */
+  landmark?: boolean
   state: MapRevealState
   onPhase: (phase: MapRevealPhase) => void
   onProgress: (progress: number, reach: number) => void
@@ -59,7 +61,7 @@ export function MapReveal({ map, state, onPhase, onProgress, onLandmarkReady }: 
     const uniforms = materials.uniforms
     uniforms.mapRevealExtent.value.set(map.width, map.depth)
     if (phase === "revealing") {
-      frame.current ??= tileRevealFrame(map, camera)
+      frame.current ??= tileRevealFrame(map, camera, landmark)
       uniforms.mapRevealCentre.value.copy(frame.current.origin)
       uniforms.mapRevealReach.value = frame.current.radius
       uniforms.mapRevealProgress.value = state.progress * state.progress * (3 - 2 * state.progress)
