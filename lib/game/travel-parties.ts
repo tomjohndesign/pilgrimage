@@ -41,6 +41,13 @@ export interface TravelParty {
   diversion?: WalkingShortcut
   /** People the company moved this step; the road is worn once for all of them. */
   carried: number
+  /** Bumped whenever the roster changes, so cached places are rebuilt. */
+  roster: number
+  /** Places for the current column, refreshed as their slow drift advances. */
+  formation?: { count: number; singleFile: boolean; transport: boolean; roster: number; handlers: number; seconds: number; slots: { behind: number; lane: number }[] }
+  /** The company's pace, re-read from its members a few times per game second. */
+  pace: number
+  paceAt: number
 }
 
 const WALKING_CALLINGS: TravelerTypeId[] = ["peasant", "pilgrim", "friar", "merchant"]
@@ -125,7 +132,7 @@ function createParty(id: number, people: Traveler[], leader: SimTraveler): Trave
   return { id, name: people[0].party!.name, members: people.map(t => t.id),
     stage: "traveling", reason: "Traveling together", direction: leader.direction,
     singleFile: false, cooldown: 0, retry: 0, elapsed: 0, decisions: 0, visitPending: [], visitStarted: [],
-    progress: leader.progress, speed: 0, formed: true, headTile: Math.floor(leader.progress), carried: 0 }
+    progress: leader.progress, speed: 0, formed: true, headTile: Math.floor(leader.progress), carried: 0, roster: 0, pace: 0, paceAt: -Infinity }
 }
 
 function leaveParty(s: SimTraveler) {
@@ -148,7 +155,7 @@ export function syncTravelParties(parties: Map<number, TravelParty>, travelers: 
   for (const [id, people] of rosters) {
     people.sort((a, b) => a.party!.slot - b.party!.slot)
     const existing = parties.get(id)
-    if (existing) existing.members = people.map(t => t.id)
+    if (existing) { existing.members = people.map(t => t.id); existing.roster++ }
     else parties.set(id, createParty(id, people, states.get(people[0].id)!))
   }
 }
@@ -160,7 +167,7 @@ export function pruneTravelParties(parties: Map<number, TravelParty>, states: Re
     for (let i = party.members.length - 1; i >= 0; i--) {
       const id = party.members[i], s = states.get(id)
       if (s && !s.home && !s.employer && !joined.has(id)) continue
-      party.members.splice(i, 1)
+      party.members.splice(i, 1); party.roster++
       if (s) leaveParty(s)
     }
     if (!party.members.length) parties.delete(party.id)
@@ -178,6 +185,19 @@ export function partyFormation(party: TravelParty, members: number[], length: nu
     const handler = members.indexOf(pack.handler)
     if (handler >= 0) slots.forEach((slot, i) => { if (i > handler) slot.behind += 1.5 * scale })
   }
+  return slots
+}
+
+/** The formation for this column, reused while nothing about it changed and its
+ * slow drift has moved less than half a game second. Companies pay this once per
+ * refresh rather than rolling every place on every step. */
+export function cachedFormation(party: TravelParty, column: readonly number[], length: number, seconds: number, scale: number) {
+  const handlers = (party.packs ?? []).reduce((sum, pack) => sum + pack.handler, 0)
+  const cached = party.formation
+  if (cached && cached.count === column.length && cached.singleFile === party.singleFile && cached.transport === !!party.transport
+    && cached.roster === party.roster && cached.handlers === handlers && Math.abs(seconds - cached.seconds) < .5) return cached.slots
+  const slots = partyFormation(party, column as number[], length, seconds, scale)
+  party.formation = { count: column.length, singleFile: party.singleFile, transport: !!party.transport, roster: party.roster, handlers, seconds, slots }
   return slots
 }
 

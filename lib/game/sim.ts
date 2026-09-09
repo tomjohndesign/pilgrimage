@@ -9,7 +9,7 @@ import { townResidents } from "./town-residents"
 import { placeResident } from "./jobs/residents"
 import { GAME_DAY_SECONDS, GAME_HOUR_SECONDS, START_TIME } from "./calendar"
 import { wearySpeedScale } from "./traveler-weariness"
-import { diversionPoints, partyFormation, partyRoadDelta, partySlots, pruneTravelParties, regroupParty, syncTravelParties, type TravelParty } from "./travel-parties"
+import { cachedFormation, diversionPoints, partyRoadDelta, partySlots, pruneTravelParties, regroupParty, syncTravelParties, type TravelParty } from "./travel-parties"
 import { housingBeds, vacantMonkBed } from "./housing"
 import { MONK_COUNT, MONK_JOIN_CHANCE, type Monk } from "./monks"
 import { monkWalkSpeed } from "./base-person/monk-assets"
@@ -1483,13 +1483,17 @@ function bridgeInColumn(map: GameMap, head: number, direction: 1 | -1, span: num
   return false
 }
 
-/** The slowest walker or animal sets the pace; riders rest. */
-function companyPace(party: TravelParty, members: readonly SimTraveler[], naturalSpeed: (s: SimTraveler) => number, scale: number): number {
+/** The slowest walker or animal sets the pace; riders rest. Members are re-read a
+ * few times per game second; the eased company speed hides the steps. */
+function companyPace(party: TravelParty, members: readonly SimTraveler[], naturalSpeed: (s: SimTraveler) => number, scale: number, seconds = -Infinity): number {
+  if (seconds - party.paceAt < .25) return party.pace
   let pace = Infinity
   for (const s of members) if (!s.partyRiding) pace = Math.min(pace, naturalSpeed(s))
   if (party.transport) pace = Math.min(pace, animalWalkSpeed(party.transport.animal, scale))
   for (const pack of party.packs ?? []) pace = Math.min(pace, animalWalkSpeed(pack.kind, scale))
-  return Number.isFinite(pace) ? pace * .85 : 0
+  party.pace = Number.isFinite(pace) ? pace * .85 : 0
+  party.paceAt = seconds
+  return party.pace
 }
 
 /** Reserve the entire camp before moving anyone. Full camps and unreachable
@@ -1631,10 +1635,11 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
     }
     if (party.stage === "visiting") {
       if (party.visitPending.some(id => !party.members.includes(id))) party.visitPending = party.visitPending.filter(id => party.members.includes(id))
-      // Admission is asked again every few seconds; every attempt plans real routes.
+      // Admission is asked for a few companions at a time; every attempt plans
+      // real routes, so a large company files in over several seconds.
       if (party.retry <= 0 && party.visitPending.length) {
-        party.retry = 4
-        for (const id of [...party.visitPending]) {
+        party.retry = 2
+        for (const id of party.visitPending.slice(0, 3)) {
           const s = sim.travelers.get(id)!
           if (tryRoadVisit(sim, s, identities.get(id)!, map, counters, s.direction, s.progress, characterScale,
             { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, true)) {
@@ -1741,7 +1746,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
     // --- Shared movement: the head advances, everyone else derives from it. ---
     // Riders take no place in the column; the wagon's driver stands for its head.
     const column = cart ? [members.find(s => s.id === cart.seats[0]) ?? head, ...members.filter(s => !s.partyRiding && s.id !== cart.seats[0])] : members
-    const slots = partyFormation(party, column.map(s => s.id), length, seconds, characterScale)
+    const slots = cachedFormation(party, column.map(s => s.id), length, seconds, characterScale)
     const span = slots[slots.length - 1].behind
     // After a stop the head waits while anyone is behind their place, then
     // advances past those standing ahead of theirs, until everyone is in formation.
@@ -1757,7 +1762,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
     }
     const tail = column[column.length - 1]
     const paused = nearProcession(sim.procession, head, false) || nearProcession(sim.procession, tail, false)
-    const target = paused || lagging ? 0 : companyPace(party, members, naturalSpeed, characterScale)
+    const target = paused || lagging ? 0 : companyPace(party, members, naturalSpeed, characterScale, seconds)
     party.speed = easeSpeed(party.speed, target, dt, movement.acceleration)
     if (party.speed < 1e-6) party.speed = 0
     let blocked = false
@@ -2033,10 +2038,14 @@ export function stepSim(
     const residentSpeed = job ? jobSpeedScale(job, travelerAppearance(map.seed ?? 0, t.id).variant, characterScale) : undefined
     const pace = s.beggar ? TRAVELER_TYPES.beggar.paceMin + roll(t.id, 901) * (TRAVELER_TYPES.beggar.paceMax - TRAVELER_TYPES.beggar.paceMin) : t.pace
     const beggarSpeed = s.beggar ? beggarSpeedScales?.get(t.id) ?? 1 : undefined
-    const targetSpeed = pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (beggarSpeed ?? residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
-    s.moveSpeed = camping || sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
-      easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
+    // A company sets its members' pace; only everyone else eases toward their own.
+    let targetSpeed = 0
     if (s.partyCarried) s.moveSpeed = s.partySpeed ?? 0
+    else {
+      targetSpeed = pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (beggarSpeed ?? residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+      s.moveSpeed = camping || sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
+        easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
+    }
     if (s.partyRiding || s.partyBoarding) continue
     const worldSpeed = s.moveSpeed
     const transportBefore = isVendor && s.convoy && !s.shrineParking?.walking ? {
