@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "ada4082e20600b2c24f2ce99681da26b4e7752d1",
-  "releaseCount": 123,
+  "lastProcessedCommit": "a452c12a90ee95b8de150d19395723420777d64b",
+  "releaseCount": 124,
   "releases": [
+    {
+      "version": "0.0.138",
+      "title": "Release 0.0.138",
+      "summary": "Halve hunger and stamina drain rates (#158)",
+      "commit": "a452c12a90ee95b8de150d19395723420777d64b"
+    },
     {
       "version": "0.0.137",
       "title": "Release 0.0.137",

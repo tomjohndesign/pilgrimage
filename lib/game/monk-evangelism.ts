@@ -8,7 +8,7 @@ import { GAME_DAY_SECONDS } from "./calendar"
 
 export const MONK_EVANGELISM = 0.05
 export const MONK_EVANGELISM_DURATION = 3 * GAME_DAY_SECONDS
-const EVANGELISM_STAMINA_DRAIN = 0.125
+const EVANGELISM_STAMINA_DRAIN = 0.0625
 export interface PreachingTask { tile: TilePos; heading: number; map: GameMap; elapsed: number }
 export type EvangelizingMonk = MonkRoutine & MonkNeeds & { preachingTask?: PreachingTask }
 

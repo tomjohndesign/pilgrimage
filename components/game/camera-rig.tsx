@@ -204,6 +204,7 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     const { rotate, zoomBy, reset, cycleOutlineMode } = useCameraStore.getState()
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (useCameraStore.getState().inputLocked) return
       const target = event.target as HTMLElement | null
       if (event.defaultPrevented || target?.closest("input, textarea, select, [contenteditable=true]")) return
       const key = event.key.toLowerCase()
@@ -267,7 +268,12 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
   // These canvases use a manual camera because this rig owns the frustum.
   // --- Per-frame: tween and drive the camera ----------------------------------
   useFrame((_, delta) => {
-    const { viewIndex, viewSize, pan } = useCameraStore.getState()
+    const { viewIndex, viewSize, pan, inputLocked } = useCameraStore.getState()
+    if (inputLocked) {
+      heldKeys.current.clear()
+      displayYaw.current = yawForView(viewIndex)
+      displayViewSize.current = viewSize
+    }
     // A background tab can hand us a huge delta; clamp so tweens don't overshoot.
     const dt = Math.min(delta, 0.1)
 

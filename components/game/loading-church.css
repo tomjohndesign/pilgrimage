@@ -1,0 +1,83 @@
+.loading-church {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.loading-church-image,
+.loading-church-pulse {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  image-rendering: pixelated;
+}
+
+.loading-church-tiles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.loading-church-ground,
+.loading-church-wipe {
+  position: absolute;
+  inset: 0;
+}
+
+.loading-church-ground {
+  z-index: 0;
+  mask-image: radial-gradient(ellipse closest-side at 50% calc(50% + var(--ground-offset)),
+    #000 15%, rgb(0 0 0 / .85) 35%, rgb(0 0 0 / .35) 70%, transparent 100%),
+    url("/textures/ui/loading-falloff.svg");
+  mask-size: 100% 100%;
+  mask-position: 0 0, 0 var(--ground-offset);
+  mask-repeat: no-repeat;
+  mask-composite: intersect;
+}
+
+.loading-church[data-phase="revealing"] .loading-church-wipe {
+  mask-image: radial-gradient(ellipse var(--reveal-radius-x, .001dvh) var(--reveal-radius-y, .001dvh)
+    at 50% calc(50% + var(--ground-offset)), transparent var(--reveal-inner, 0%), #000 100%);
+}
+
+.loading-church-tiles polygon {
+  opacity: var(--shimmer-0);
+  animation: loading-church-shimmer 12s cubic-bezier(.45, 0, .55, 1) infinite;
+  animation-delay: var(--shimmer-delay);
+}
+
+.loading-church-tiles[data-noise-live="true"] polygon {
+  animation: none;
+  transition: opacity 1.6s cubic-bezier(.22, 1, .36, 1);
+}
+
+@keyframes loading-church-shimmer {
+  0%, 100% { opacity: var(--shimmer-0); }
+  25% { opacity: var(--shimmer-1); }
+  50% { opacity: var(--shimmer-2); }
+  75% { opacity: var(--shimmer-3); }
+}
+
+.loading-church-pulse { z-index: 1; }
+.loading-church-image { z-index: 2; }
+
+.loading-church-pulse polygon {
+  opacity: 0;
+  animation: loading-church-ripple 2.4s ease-in-out infinite;
+  animation-delay: var(--pulse-delay);
+}
+
+@keyframes loading-church-ripple {
+  0%, 34%, 100% { opacity: 0; }
+  12% { opacity: var(--pulse-opacity); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-church-tiles polygon {
+    animation-play-state: paused;
+  }
+  .loading-church-pulse polygon { animation: none; }
+  .loading-church-tiles[data-noise-live="true"] polygon { transition: none; }
+}

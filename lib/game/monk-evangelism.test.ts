@@ -116,6 +116,7 @@ describe("roadside preaching", () => {
 
   it("finishes after three game days including travel and sleep, then walks home", () => {
     const { map, monk } = fixture()
+    monk.stamina = MONK_TIRED_AT + 10
     let slept = false, resumed = false
     for (let elapsed = 1; elapsed < 3 * GAME_DAY_SECONDS; elapsed++) {
       const wasSleeping = monk.activity === "sleeping"
