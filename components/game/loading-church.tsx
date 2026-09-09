@@ -1,8 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
-import { DEFAULT_VIEW_SIZE, projectGround, yawForView } from "@/lib/game/render/iso"
-import type { SurroundingsSave } from "@/lib/game/save/schema"
+import { DEFAULT_VIEW_SIZE } from "@/lib/game/render/iso"
+import type { CameraSave } from "@/lib/game/save/schema"
+import { focusGridShift } from "@/lib/game/save/view"
 import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
 import { elevationNoise } from "@/lib/game/map/elevation"
 import type { MapRevealPhase } from "@/lib/game/render/map-reveal"
@@ -11,7 +12,6 @@ import { CONSTRUCTION_BAR_WIDTH, CONSTRUCTION_BAR_HEIGHT } from "@/lib/game/rend
 import "./loading-church.css"
 
 const LandingScene = dynamic(() => import("./landing-scene").then(m => m.LandingScene), { ssr: false })
-const ResumeScene = dynamic(() => import("./resume-scene").then(m => m.ResumeScene), { ssr: false })
 
 const TILE_WIDTH = Math.SQRT2
 const HALF_TILE_HEIGHT = 1 / Math.sqrt(6)
@@ -64,32 +64,32 @@ const GRID_LINES = LOADING_TILES.map(tile => `M${tile.points}Z`).join(" ")
 
 /** The opening landmark and tiled ground are ordinary page HTML, available
  * before game JavaScript. The priority image uses the actual church geometry.
- * A resumed world shows the remembered ground around the player's last view
- * instead of the church, with the ground plane at screen centre.
+ * A resumed world shows the saved picture of the player's last view instead
+ * of the church, with the ground plane at screen centre. That picture is
+ * placed by CSS properties on the document root, written by the play page's
+ * resume script before hydration and by the shell once the save is read.
  */
 export function LoadingChurch({ showChurch, phase, overlayRef, idle = false, generating = false, resuming = false, view = 0, viewSize = DEFAULT_VIEW_SIZE,
-  groundOffset = GROUND_OFFSET, surroundings = null }: {
+  groundOffset = GROUND_OFFSET, focus = null }: {
   idle?: boolean; generating?: boolean
-  /** A saved world is coming back: no church, no pulse, and the remembered land once it is known. */
+  /** A saved world is coming back: no church, no pulse, and its last view where the land will appear. */
   resuming?: boolean
   showChurch: boolean; phase: MapRevealPhase; overlayRef: RefObject<HTMLDivElement | null>; view?: number; viewSize?: number
   /** Screen-down offset of the ground plane from centre, world units. Zero when the camera targets open ground. */
   groundOffset?: number
-  /** Remembered land around the camera focus, drawn from the saved camera. */
-  surroundings?: { patch: SurroundingsSave; viewIndex: number } | null
+  /** The saved camera and map size, once known, to line the grid up with the real tiles. */
+  focus?: { camera: CameraSave; size: number } | null
 }) {
   const [sceneReady, setSceneReady] = useState(false)
   const onSceneReady = useCallback(() => setSceneReady(true), [])
   const patternId = useId()
   const tilesRef = useRef<SVGSVGElement>(null)
-  const [resumeReady, setResumeReady] = useState(false)
-  const onResumeReady = useCallback(() => setResumeReady(true), [])
   // The decorative grid is authored around the church's ground; slide it so its
   // lattice matches the remembered land, whose focus need not be a tile centre.
   const gridShift = useMemo(() => {
-    const focus = surroundings ? projectGround(surroundings.patch.offsetX, surroundings.patch.offsetZ, 0, yawForView(surroundings.viewIndex)) : { x: 0, y: 0 }
-    return { x: focus.x, y: focus.y + groundOffset - GROUND_OFFSET }
-  }, [surroundings, groundOffset])
+    const shift = focus ? focusGridShift(focus.size, focus.camera) : { x: 0, y: 0 }
+    return { x: shift.x, y: shift.y + groundOffset - GROUND_OFFSET }
+  }, [focus, groundOffset])
   const active = !idle && phase !== "complete"
   useEffect(() => {
     const root = tilesRef.current
@@ -147,9 +147,7 @@ export function LoadingChurch({ showChurch, phase, overlayRef, idle = false, gen
     </svg>}
     </div></div>}
     {idle && <div className="landing-scene" data-ready={sceneReady}><LandingScene viewSize={viewSize} onReady={onSceneReady} /></div>}
-    {surroundings && phase !== "complete" && <div className="loading-church-resume" data-ready={resumeReady} aria-hidden="true">
-      <ResumeScene patch={surroundings.patch} viewIndex={surroundings.viewIndex} viewSize={viewSize} onReady={onResumeReady} />
-    </div>}
+    {resuming && phase !== "complete" && <div className="loading-church-view" aria-hidden="true"><div className="loading-church-view-wipe" /></div>}
     {showChurch && !(idle && sceneReady) && <img src={`/textures/ui/loading-church-v1/${view}.webp`} width={256} height={256}
       fetchPriority="high" loading="eager" decoding="sync" alt="" draggable={false}
       className="loading-church-image" style={{ width: `${8 * scale}dvh`, height: `${8 * scale}dvh` }} />}

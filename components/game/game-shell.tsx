@@ -28,6 +28,7 @@ import {
   type WorldSettings,
 } from "@/lib/game/save/settings"
 import { loadDisplaySettings, loadGameSave, storeDisplaySettings } from "@/lib/game/save/storage"
+import { applyViewSnapshot, loadViewSnapshot } from "@/lib/game/save/view"
 import { playQuery } from "@/lib/game/save/url"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
@@ -77,12 +78,15 @@ export function GameShell({
   pixelation,
   benchmarkCity = false,
   expectResume = false,
+  resumeViewSize = null,
   mode = "play",
 }: {
   initialSeed?: number
   benchmarkCity?: false | CityBenchmarkMode
   /** The server saw the resume cookie: a saved world is expected on this browser. */
   expectResume?: boolean
+  /** The zoom the cookie names, so the loading overlay is at scale before the save is read. */
+  resumeViewSize?: number | null
   /**
    * The landing page (/) picks a seed and size and hands over to /play, which
    * is always the game: the saved world when there is one, else a new one.
@@ -165,6 +169,9 @@ export function GameShell({
     if (resuming) setSeed(resuming.world.seed)
     else setSeed(current => current ?? randomSeed())
     setRestore(playing ? resuming : save)
+    // The play page's resume script may have painted the last view already;
+    // this settles it either way, and clears it when the link names another world.
+    applyViewSnapshot(resuming ? loadViewSnapshot(resuming) : null)
     // The link is read once at boot; later edits arrive through state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -321,6 +328,7 @@ export function GameShell({
   const openingView = (Math.round(openingRotation / (Math.PI / 2)) + 4) % 4
   useLayoutEffect(() => {
     useCameraStore.setState({ inputLocked: revealPhase !== "complete", hovered: null })
+    if (revealPhase === "complete") applyViewSnapshot(null)
   }, [revealPhase, map?.road])
   useLayoutEffect(() => () => { useCameraStore.setState({ inputLocked: false }) }, [])
 
@@ -342,9 +350,9 @@ export function GameShell({
       <LoadingChurch showChurch={!resuming && (!openingMap || !map || landmarkRoad !== map.road || revealPhase === "loading")}
         generating={starting && revealPhase === "loading"} idle={!starting}
         phase={revealPhase} overlayRef={loadingOverlay} view={openingView} resuming={resuming}
-        viewSize={resumeWorld ? resumeWorld.camera.viewSize : openingViewSize}
+        viewSize={resumeWorld ? resumeWorld.camera.viewSize : !booted && expectResume && resumeViewSize ? resumeViewSize : openingViewSize}
         groundOffset={resuming ? 0 : undefined}
-        surroundings={resuming && resumeWorld?.surroundings ? { patch: resumeWorld.surroundings, viewIndex: resumeWorld.camera.viewIndex } : null} />
+        focus={resuming && resumeWorld ? { camera: resumeWorld.camera, size: resumeWorld.world.size } : null} />
       {map && relic ? (
         <GameCanvas
           {...pixelationSettings}

@@ -46,6 +46,14 @@ const MODE_INT: Record<OutlineMode, number> = { off: 0, overlap: 1, silhouette: 
  */
 export const outlineFrameRef: { current: (() => void) | null } = { current: null }
 
+/**
+ * The world pass's object IDs, one texel per world texel, for the view
+ * snapshot to cut its picture along whole objects. Set `wanted` before a frame
+ * so the IDs are drawn even when no outline needs them; `read` then returns
+ * RGBA bytes for a region in buffer texels, rows from the bottom.
+ */
+export const worldObjectIds: { wanted: boolean; read: ((x: number, y: number, width: number, height: number) => Uint8Array | null) | null } = { wanted: false, read: null }
+
 const VERTEX_SHADER = /* glsl */ `
   varying vec2 vUv;
   void main() {
@@ -448,7 +456,7 @@ export function OutlinePass({ objects, selection: previewSelection }: { selectio
     // Selection and one-shot diagnostics still need the matching world depth.
     // With no distant selection the character stage draws only its real colour.
     const needsIds = needsOutline || !!characterOcclusionRequest.current
-      || (stage.phase === "world" && (maskCharacters || selectingCharacter))
+      || (stage.phase === "world" && (maskCharacters || selectingCharacter || worldObjectIds.wanted))
     const ids = characterPass ? displayTarget : target
     const background = scene.background
     const mask = camera.layers.mask
@@ -552,6 +560,15 @@ export function OutlinePass({ objects, selection: previewSelection }: { selectio
     }
   })
 
+  useEffect(() => {
+    worldObjectIds.read = (x, y, width, height) => {
+      if (x < 0 || y < 0 || x + width > target.width || y + height > target.height) return null
+      const pixels = new Uint8Array(width * height * 4)
+      gl.readRenderTargetPixels(target, x, y, width, height, pixels)
+      return pixels
+    }
+    return () => { worldObjectIds.read = null }
+  }, [gl, target])
   useEffect(() => {
     outlineFrameRef.current = () => frameRef.current?.()
     return () => {

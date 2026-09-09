@@ -61,6 +61,8 @@ import { Wildlife } from "./wildlife"
 import { MapRevealState, type MapRevealPhase } from "@/lib/game/render/map-reveal"
 import { SceneAssetsContext, SceneAssetBoundary } from "./scene-assets"
 import { MapReveal } from "./map-reveal"
+import { ViewSnapshotCapture } from "./view-snapshot"
+import { CHARACTER_PIXELS_PER_UNIT } from "@/lib/game/render/pixel-scale"
 
 import { GAME_BACKGROUND } from "@/lib/game/render/background"
 
@@ -241,7 +243,8 @@ export function GameCanvas({
       <PersonPicking />
       <GroundSelection map={map} trees={trees} characterScale={characterScale} />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
-      <DebugHandle characterScale={characterScale} map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} movement={movement} />
+      <DebugHandle characterScale={characterScale} map={map} trees={trees} travelers={travelers} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} movement={movement} />
+      <ViewSnapshotCapture pixelsPerUnit={pixelation.pixelsPerUnit ?? CHARACTER_PIXELS_PER_UNIT} map={map} trees={trees} />
       <MapReveal map={map} state={reveal} landmark={!restore} onLandmarkReady={onLandmarkReady} onProgress={onRevealProgress} onPhase={phase => {
         setRevealStatus({ state: reveal, phase }); onRevealPhase(phase)
       }} />
