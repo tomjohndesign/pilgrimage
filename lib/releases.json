@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "4d969f715f4f793dd5896bcc101cc9f3173159ef",
-  "releaseCount": 128,
+  "lastProcessedCommit": "633ba970567c35cccd4d0a82aecef1cf932e421f",
+  "releaseCount": 129,
   "releases": [
+    {
+      "version": "0.0.143",
+      "title": "Release 0.0.143",
+      "summary": "Make tavern drinks cheaper and fund travelers for roadside stops (#164)",
+      "commit": "633ba970567c35cccd4d0a82aecef1cf932e421f"
+    },
     {
       "version": "0.0.142",
       "title": "Release 0.0.142",
