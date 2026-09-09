@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "633ba970567c35cccd4d0a82aecef1cf932e421f",
-  "releaseCount": 129,
+  "lastProcessedCommit": "799d5f14bef666532aec658dbb5226454ef9cf5a",
+  "releaseCount": 130,
   "releases": [
+    {
+      "version": "0.0.144",
+      "title": "Release 0.0.144",
+      "summary": "Keep deployed vendor stalls anchored during map rotation (#165)",
+      "commit": "799d5f14bef666532aec658dbb5226454ef9cf5a"
+    },
     {
       "version": "0.0.143",
       "title": "Release 0.0.143",
