@@ -1,18 +1,14 @@
 import { travelerAppearance } from "../base-person/population"
-import { BUILDING_KINDS, type PlacedBuilding } from "../buildings"
-import { buildingEntry } from "../building-rotation"
-import { assignBuildingTask } from "../construction"
+import { BUILDING_KINDS } from "../buildings"
 import { buildingSupports } from "../character-support"
-import { tileToWorldX, tileToWorldZ, type GameMap } from "../map/types"
-import { surfaceHeight } from "../map/bridges"
+import type { GameMap } from "../map/types"
 import { jobBuildings } from "../settlement"
-import type { SimTraveler } from "../sim"
 import { TRAVELER_TYPES, type Traveler } from "../travelers"
 
 /** Extra identities keep the staffed demo independent of the traffic slider. */
 export function previewResidents(map: GameMap) {
   const seen = new Map<string, number>()
-  const homes = map.buildings.filter(b => b.buildType === "house").flatMap(b =>
+  const homes = map.buildings.filter(b => b.owner !== "independent" && b.buildType === "house").flatMap(b =>
     buildingSupports(b).filter(s => s.clips.includes("sleeping")).map(() => b.id))
   let index = 0
   let nextId = 1_000_000
@@ -34,18 +30,4 @@ export function previewResidents(map: GameMap) {
     }))
 }
 
-/** Start at the actual work posts; the normal simulation owns every subsequent action. */
-export function placePreviewResident(actor: SimTraveler, map: GameMap,
-  resident: { building: PlacedBuilding; jobSlot: number; home: string | null }) {
-  const { building, jobSlot, home } = resident
-  const entry = buildingEntry(building)
-  Object.assign(actor, { employer: building.id, jobSlot, home, jobless: false, convoy: false,
-    x: tileToWorldX(map, entry.x) + (jobSlot - 1) * .14, z: tileToWorldZ(map, entry.z),
-    y: surfaceHeight(map, entry.x, entry.z), activity: "idle", timer: 1 + jobSlot, moveSpeed: 0,
-    workSlot: jobSlot, offRoadRoute: null })
-  if (assignBuildingTask(actor, map, "work", building.id)) {
-    Object.assign(actor, actor.buildingTask!.destination)
-    actor.buildingTask!.route = []
-    actor.activity = "posted"
-  }
-}
+export { placeResident as placePreviewResident } from "./residents"

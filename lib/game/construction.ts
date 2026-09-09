@@ -1,3 +1,5 @@
+import { tavernWalkingRoute } from "./tavern-navigation"
+import { tavernWorkStop } from "./tavern-layout"
 import { smoothWalkingRoute, SHORTCUT_EXPLORERS } from "./walking-shortcuts"
 import { buildingEntry, buildingYaw, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
 import { MALLET_CONTACT_REACH } from "./base-person/building"
@@ -38,6 +40,8 @@ export interface BuildingTask {
   buildingId: string
   purpose: "build" | "rest" | "work"
   slot: number
+  workStop?: number
+  workPause?: number
   heading: number
   route: WanderSpot[]
   destination: WanderSpot
@@ -56,6 +60,9 @@ function constructionCrew(building: BuildingDef): Map<Worker, BuildingTask> {
   return crew
 }
 export function workerRoute(map: GameMap, actor: WanderSpot, goal: TilePos): WanderSpot[] | null {
+  const destination = { x: tileToWorldX(map, goal.x), y: surfaceHeight(map, goal.x, goal.z), z: tileToWorldZ(map, goal.z) }
+  const fine = tavernWalkingRoute(map, actor, destination)
+  if (fine !== undefined) return fine
   const start = { x: worldToTileX(map, actor.x), z: worldToTileZ(map, actor.z) }
   // A footprint may be placed beneath an idle resident. Let them leave that
   // new site before treating it as an obstacle on subsequent trips.
@@ -78,12 +85,13 @@ function buildingWorkPost(building: BuildingDef, slot: number) {
 }
 
 /** Place work and rest positions in the same rotated local space as the building. */
-function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask["purpose"], slot: number, scale?: number) {
+function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask["purpose"], slot: number, scale?: number, workStop = 0) {
   const local = rotatedFootprint(building, building.rotation)
   const beds = purpose === "rest" ? buildingSupports(building).filter(s => s.clips.includes("sleeping")) : []
   const bed = beds[slot % beds.length]
   if (purpose === "rest" && !bed) return null
-  const post = purpose === "work" ? buildingWorkPost(building, slot) : null
+  const post = purpose === "work" ? building.buildType === "tavern"
+    ? tavernWorkStop(slot, workStop, local.w, local.d) : buildingWorkPost(building, slot) : null
   if (purpose === "work" && !post) return null
   const x = purpose === "build" ? (slot % 4 - 1.5) * Math.min(0.45, (local.w - 0.5) / 3)
     : purpose === "work" ? post!.x : bed.anchor.x
@@ -130,12 +138,14 @@ export function assignBuildingTask(actor: Worker, map: GameMap, purpose: Buildin
 }
 
 function routeToDestination(map: GameMap, actor: WanderSpot, destination: WanderSpot): WanderSpot[] | null {
+  const fine = tavernWalkingRoute(map, actor, destination)
+  if (fine !== undefined) return fine
   const route = workerRoute(map, actor, { x: worldToTileX(map, destination.x), z: worldToTileZ(map, destination.z) })
   if (route) route.push(destination)
   return route
 }
 
-export function walkWorker(actor: WanderSpot, route: WanderSpot[], speed: number, dt: number): boolean {
+export function walkWorker(actor: WanderSpot, route: WanderSpot[], speed: number, dt: number, preserveCorners = false): boolean {
   let distance = Math.max(0, speed * dt)
   while (route.length) {
     const goal = route[0], length = Math.hypot(goal.x - actor.x, goal.z - actor.z)
@@ -147,6 +157,7 @@ export function walkWorker(actor: WanderSpot, route: WanderSpot[], speed: number
     Object.assign(actor, goal)
     distance -= length
     route.shift()
+    if (preserveCorners && length > 1e-6 && route.length) return false
   }
   return true
 }
@@ -160,7 +171,7 @@ export function stepBuildingTask(actor: Worker, map: GameMap, speed: number, dt:
     actor.buildingTask = undefined
     return null
   }
-  const target = taskPosition(map, building, task.purpose, task.slot, actor.workScale)
+  const target = taskPosition(map, building, task.purpose, task.slot, actor.workScale, task.workStop)
   if (!target) { actor.buildingTask = undefined; return null }
   const resized = Math.hypot(task.destination.x - target.destination.x, task.destination.z - target.destination.z) > 0.001
   task.destination = target.destination
@@ -186,11 +197,20 @@ export function stepBuildingTask(actor: Worker, map: GameMap, speed: number, dt:
     task.route = route; task.buildings = map.buildings
   }
   if (task.route.length) {
-    walkWorker(actor, task.route, speed, dt)
+    walkWorker(actor, task.route, speed, dt, building.buildType === "tavern")
     return "walking"
   }
   if (task.purpose === "rest") return "sleeping"
-  if (task.purpose === "work") return "posted"
+  if (task.purpose === "work") {
+    if (building.buildType === "tavern") {
+      task.workPause = (task.workPause ?? 3 + task.slot * 1.5) - dt
+      if (task.workPause <= 0) {
+        task.workStop = ((task.workStop ?? 0) + 1) % 4
+        task.workPause = 3 + (task.slot + task.workStop) % 3
+      }
+    }
+    return "posted"
+  }
   const construction = building.construction!
   construction.work = Math.min(construction.required, construction.work + dt)
   return "building"

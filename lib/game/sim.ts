@@ -1,3 +1,7 @@
+import { tavernWalkingRoute } from "./tavern-navigation"
+import { townResidents } from "./town-residents"
+import { placeResident } from "./jobs/residents"
+import { GAME_DAY_SECONDS, GAME_HOUR_SECONDS, START_TIME } from "./calendar"
 import { wearySpeedScale } from "./traveler-weariness"
 import { housingBeds, vacantMonkBed } from "./housing"
 import { MONK_COUNT, MONK_JOIN_CHANCE, type Monk } from "./monks"
@@ -34,7 +38,7 @@ import { createPasture, stepPasture, type PastureAnimal } from "./transport/past
 import { LINEAR_MOVEMENT, easeSpeed, paceVariation, type MovementTuning } from "./motion"
 import { DEFAULT_BALANCE, type GameBalance } from "./balance"
 import { roadsideEvangelism } from "./monk-evangelism"
-import { buildingAt } from "./settlement"
+import { buildingAt, jobBuildings } from "./settlement"
 import { isComplete, isHouse } from "./construction"
 import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
 import { BUILDING_KINDS, buildingCentre, isPostedWork, type PlacedBuilding } from "./buildings"
@@ -199,23 +203,7 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
 
 // --- Game time ---------------------------------------------------------------
 
-/** Simulation seconds per day: 5 real minutes at the HUD's 1× (2 sim seconds/real second).
- * Roughly one uninterrupted walk along a generated 128×128 map's winding road.
- */
-export const GAME_DAY_SECONDS = 600
-const GAME_HOUR_SECONDS = GAME_DAY_SECONDS / 24
-
-/** The sim opens at dawn on day one. */
-const START_TIME = 0.25
-
-/** `time` is in days since the sim began. */
-export function formatGameTime(time: number): string {
-  const day = Math.floor(time) + 1
-  const minutes = Math.floor((time - Math.floor(time)) * 24 * 60)
-  const h = String(Math.floor(minutes / 60)).padStart(2, "0")
-  const m = String(minutes % 60).padStart(2, "0")
-  return `Day ${day} — ${h}:${m}`
-}
+export { GAME_DAY_SECONDS, formatGameTime } from "./calendar"
 
 // --- Tuning ------------------------------------------------------------------
 // Need rates are per game hour and read from the live balance below. A camp
@@ -705,7 +693,7 @@ export function createSim(
     foodStores: new Map(),
     piles: new Map(),
     resourceRevision: 0,
-    buildings: [],
+    buildings: jobBuildings(map, true),
     trees: [],
   }
   if (!map.road || map.road.length < 2) return sim
@@ -766,6 +754,10 @@ export function createSim(
       timer: t.type.id === "vendor" ? vendWalkSeconds(t.id, 0) : t.type.id === "minstrel" ? minstrelWalkSeconds(t.id, 0) : t.type.id === "beggar" ? beggarWalkSeconds(t.id, 0) : 0,
       cycle: 0,
     })
+  }
+  for (const resident of townResidents(map)) {
+    const actor = sim.travelers.get(resident.traveler.id)
+    if (actor) placeResident(actor, map, resident)
   }
   return sim
 }
@@ -959,6 +951,8 @@ function stepOffRoadWalk(
     s.x = target.x; s.y = target.y; s.z = target.z
     distance -= length
     s.offRoadRoute.shift()
+    // Render the corner before continuing, so a frame cannot cut across furniture.
+    if (length > 1e-6 && s.offRoadRoute.length && (s.activity === "toTavern" || s.activity === "fromTavern")) return false
   }
   s.walkT = 1
   return true
@@ -1032,6 +1026,7 @@ function openSlot(sim: SimState, building: PlacedBuilding): number | null {
 function findJob(sim: SimState, s: SimTraveler, map: GameMap): { building: PlacedBuilding; slot: number } | undefined {
   if (!s.jobless || s.employer) return undefined
   for (const building of sim.buildings) {
+    if (building.owner === "independent") continue
     const def = BUILDING_KINDS[building.kind]
     if (def.vendorKept) continue
     const slot = openSlot(sim, building)
@@ -1051,7 +1046,7 @@ const houseBeds = housingBeds
 
 /** A new settler moves into the nearest house that still has a bed to spare. */
 function findHome(sim: SimState, s: SimTraveler, map: GameMap): string | null {
-  const houses = map.buildings.filter(b => isHouse(b) && isComplete(b))
+  const houses = map.buildings.filter(b => b.owner !== "independent" && isHouse(b) && isComplete(b))
     .sort((a, b) => Math.hypot(tileToWorldX(map, a.x) - s.x, tileToWorldZ(map, a.z) - s.z)
       - Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z))
   for (const house of houses) {
@@ -1067,10 +1062,14 @@ function homeBedSlot(sim: SimState, s: SimTraveler): number {
   return Math.max(0, housemates.indexOf(s.id))
 }
 
-/** Counters able to serve right now: complete, and with a keeper at their post. */
+/** Complete counters with a keeper working, including patrols inside a tavern. */
 function openCounters(sim: SimState, map: GameMap) {
   const staffed = new Set<string>()
-  for (const worker of sim.travelers.values()) if (worker.employer !== null && worker.activity === "posted") staffed.add(worker.employer)
+  for (const worker of sim.travelers.values()) if (worker.employer !== null && (worker.activity === "posted" ||
+    (worker.activity === "toPost" && worker.buildingTask?.purpose === "work" && map.buildings.some(b =>
+      b.id === worker.employer && b.buildType === "tavern" &&
+      worker.x >= tileToWorldX(map, b.x) - .5 && worker.x < tileToWorldX(map, b.x) + b.w - .5 &&
+      worker.z >= tileToWorldZ(map, b.z) - .5 && worker.z < tileToWorldZ(map, b.z) + b.d - .5)))) staffed.add(worker.employer)
   return servingHouses(map, building => staffed.has(building.id))
 }
 
@@ -1089,7 +1088,8 @@ function routeWalk(s: SimTraveler, map: GameMap, route: readonly TilePos[], to: 
  */
 function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
   counters: readonly { id: string; x: number; z: number; w: number; d: number }[], returnTo: WorldPoint | null): boolean {
-  if (!counters.length || s.gold < MEAL_PRICE) return false
+  if (!counters.length || !((s.hunger < SERVING_THRESHOLD && s.gold >= MEAL_PRICE)
+    || (s.thirst < SERVING_THRESHOLD && s.gold >= DRINK_PRICE))) return false
   const from = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
   const occupied = new Set([...sim.travelers.values()].flatMap(other => other.tavernVisit?.plan.seat
     ? [`${other.tavernVisit.plan.buildingId}:${other.tavernVisit.plan.seat.id}`] : []))
@@ -1097,21 +1097,23 @@ function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
     - Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z))
   for (const house of nearest) {
     const building = map.buildings.find(b => b.id === house.id)
-    const plan = building && tavernVisitPlan(map, building, from, occupied)
+    const plan = building && tavernVisitPlan(map, building, from, occupied, s)
     if (!plan) continue
     s.tavernVisit = { plan, served: false, returnTo }
-    routeWalk(s, map, plan.route, plan.counter.point)
+    s.walkFrom = { x: s.x, y: s.y, z: s.z }; s.walkT = 0; s.targetId = null
+    s.offRoadRoute = [...plan.route, plan.counter.point]
     s.activity = "toTavern"
     return true
   }
   return false
 }
 
-/** Coin over the counter: the settlement takes it, not the server's own purse. */
-function buyRefreshment(sim: SimState, s: SimTraveler): void {
+/** Only player counters credit the settlement; independent towns keep their takings. */
+function buyRefreshment(sim: SimState, s: SimTraveler, map: GameMap): void {
+  const independent = map.buildings.find(b => b.id === s.tavernVisit?.plan.buildingId)?.owner === "independent"
   const take = (price: number) => {
     s.gold -= price
-    sim.tradeGold += price
+    if (!independent) sim.tradeGold += price
   }
   if (s.hunger < SERVING_THRESHOLD && s.gold >= MEAL_PRICE) { take(MEAL_PRICE); s.hunger = 100 }
   if (s.thirst < SERVING_THRESHOLD && s.gold >= DRINK_PRICE) { take(DRINK_PRICE); s.thirst = 100 }
@@ -1136,10 +1138,16 @@ function finishErrand(s: SimTraveler): void {
 
 /** Head back out of the door to the road, or to the work they left. */
 function leaveTavern(s: SimTraveler, map: GameMap, back: WorldPoint): void {
-  const route = settlementRoute(map, map.buildings, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
-    { x: worldToTileX(map, back.x), z: worldToTileZ(map, back.z) }, false, true)
-  if (route) routeWalk(s, map, route, back)
-  else s.offRoadRoute = [{ ...back }]
+  const fine = tavernWalkingRoute(map, s, back)
+  if (fine !== undefined) {
+    if (!fine) return
+    s.offRoadRoute = fine
+  } else {
+    const route = settlementRoute(map, map.buildings, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
+      { x: worldToTileX(map, back.x), z: worldToTileZ(map, back.z) }, false, true)
+    if (!route) return
+    routeWalk(s, map, route, back)
+  }
   s.activity = "fromTavern"
 }
 
@@ -1264,7 +1272,8 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   const renown = sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown
   // Hunger and thirst only draw anyone in while a counter is open:
   // the shrine itself keeps no table (see the tavern and the stall).
-  const served = counters.length > 0
+  const shrineCounters = counters.filter(b => b.owner !== "independent")
+  const served = shrineCounters.length > 0
   const chance = visitChance({ ...t.attributes, piety: s.piety,
     hunger: served ? s.hunger : 100, thirst: served ? s.thirst : 100, stamina: s.stamina },
     sim.relic, renown, sim.balance, 0, t.type.id)
@@ -1276,7 +1285,7 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   // Wagons and horses stay on the road; only walkers turn aside for a meal.
   if ((ordinaryVisit || persuaded) && served && !needsParking &&
     Math.min(s.hunger, s.thirst) < hospitalityNeedThreshold(renown, sim.balance) &&
-    startTavernTrip(sim, s, map, counters, null)) return true
+    startTavernTrip(sim, s, map, shrineCounters, null)) return true
   const wantsVisit = ordinaryVisit || persuaded
   const occupiedSeats = new Set([...sim.travelers.values()].flatMap(other =>
     other.shrineSeat && ["toParking","toRelic","visiting","fromRelic","offering"].includes(other.activity) ? [other.shrineSeat] : []))
@@ -1737,11 +1746,11 @@ export function stepSim(
         s.timer -= dt
         if (s.timer > 0) break
         const visit = s.tavernVisit!
-        buyRefreshment(sim, s)
+        buyRefreshment(sim, s, map)
         visit.served = true
         const seat = visit.plan.seat
-        const onward = seat && settlementRoute(map, map.buildings, visit.plan.counter.tile, seat.tile, false, true)
-        if (seat && onward) { routeWalk(s, map, onward, seat.point); s.activity = "toTavern" }
+        const onward = seat && tavernWalkingRoute(map, s, seat.point, seat.id)
+        if (seat && onward) { s.offRoadRoute = onward; s.walkT = 0; s.activity = "toTavern" }
         else leaveTavern(s, map, visit.returnTo ?? currentRoutePoint(map, s))
         break
       }
@@ -1775,6 +1784,13 @@ export function stepSim(
         if (s.activity === "fleeing") {
           s.fleeTimer -= dt
           if (s.fleeTimer <= 0) s.activity = "walking"
+        }
+        // Independent taverns welcome road walkers by need, without shrine attraction.
+        if ((s.activity === "walking" || s.activity === "seeking") && !s.track && !s.roadShortcut &&
+          !isVendor && t.type.id !== "knight" && s.visitCooldown <= 0 && Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD) {
+          const nearby = map.towns?.find(town => Math.abs(town.junction - s.progress) <= 3)
+          const counter = nearby && counters.find(b => b.id === nearby.tavernId)
+          if (counter && startTavernTrip(sim, s, map, [counter], null)) break
         }
         // An empty market stall on the shrine's ground draws a passing vendor
         // to settle: they leave the road, take the stall, and keep it for good.

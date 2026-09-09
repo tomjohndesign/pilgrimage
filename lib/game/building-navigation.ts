@@ -1,3 +1,4 @@
+import { tavernFurnitureClear } from "./tavern-layout"
 import { sheepPenLayout } from "./workshop-layout"
 import { buildingEntry, buildingFoldEntry, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
 import { marketYardContains } from "./market-layout"
@@ -68,6 +69,7 @@ export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDe
           return false
         }
       }
+      if (building.buildType === "tavern" && !tavernFurnitureClear(building, from, to)) return false
       if (a && b) continue
       const inside = a ? from : to, outside = a ? to : from
       // Cross the wall only in a doorway; the tavern also keeps a back door.
