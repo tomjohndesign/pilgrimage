@@ -25,6 +25,29 @@ function continuous(route: TilePos[]) {
 }
 
 describe("crossroads network", () => {
+  it("leaves a well access spur as a simple path without a marked island", () => {
+    const map = fixture()
+    for (const p of map.site!.branch.slice(1)) map.tiles[p.z * map.width + p.x] = "grass"
+    map.site = undefined
+    map.buildingAccessTiles = map.darkForests![0].approach.slice(1)
+    map.darkForests = []
+    const tiles = [...map.tiles], road = [...map.road!]
+    createCrossroads(map)
+    expect(map.crossroads).toEqual([])
+    expect(map.tiles).toEqual(tiles)
+    expect(map.road).toEqual(road)
+    expect(settlementRoute(map, [], road[7], map.buildingAccessTiles.at(-1)!)).not.toBeNull()
+  })
+  it("keeps a genuine shrine crossroads while omitting its well spur from the signs", () => {
+    const map = fixture()
+    map.buildingAccessTiles = map.darkForests![0].approach.slice(1)
+    map.darkForests = []
+    createCrossroads(map)
+    expect(map.crossroads).toHaveLength(1)
+    expect(map.crossroads![0].arms).toHaveLength(3)
+    expect(map.crossroads![0].arms.some(a => a.direction.z === -1)).toBe(false)
+    expect(map.crossroads![0].arms.some(a => a.mark === "shrine")).toBe(true)
+  })
   it("shares one marked island between the church, continuing road and dark forest", () => {
     const map = fixture(); createCrossroads(map)
     expect(map.crossroads).toHaveLength(1)

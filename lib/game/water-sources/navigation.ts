@@ -8,7 +8,8 @@ import { waterSourceAccessPoints, type WaterSourceKind, type WaterSourcePlacemen
 
 export interface WaterPoint { x: number; y: number; z: number }
 export const WATER_SEEK_THRESHOLD = 20
-export const WATER_SEEK_RADIUS = 8
+/** Includes a town well across the road from a tavern's rear work posts. */
+export const WATER_SEEK_RADIUS = 12
 export const WATER_VISIT_SECONDS = 8
 
 export function isWaterSource(building: BuildingDef): building is BuildingDef & { buildType: WaterSourceKind } {
@@ -23,6 +24,8 @@ export function waterSourcePlacement(map: GameMap, building: BuildingDef & { bui
 }
 
 export interface WaterVisit {
+  /** A drink beside the chapel approach resumes the reserved shrine visit. */
+  resumeActivity?: "toRelic" | "fromRelic"
   exitCleared?: boolean
   sourceId: string
   kind: WaterSourceKind

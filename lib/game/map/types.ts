@@ -78,6 +78,8 @@ export interface DarkForest {
 }
 
 export interface GameMap {
+  /** New tracks serving wells and town buildings; these do not create marked crossroads. */
+  buildingAccessTiles?: TilePos[]
   /** Marked islands where the generated roads and destination tracks meet. */
   crossroads?: import("./crossroads").Crossroad[]
   /** Independent roadside communities, indexed by distance along the main road. */

@@ -64,19 +64,21 @@ function around(route: TilePos[], center: TilePos, start?: TilePos, end?: TilePo
 /** Apply once after generation. A ring uses existing terrain rendering and real walking tiles. */
 export function createCrossroads(map: GameMap): void {
   if (map.crossroads) return
+  const buildingAccess = new Set((map.buildingAccessTiles ?? []).map(p => key(map, p)))
+  const routeTerrain = (x: number, z: number) => buildingAccess.has(z * map.width + x) ? null : tileAt(map, x, z)
   const shrine = destinationDistances(map, map.site ? [map.site.door] : [])
   const candidates: Crossroad[] = []
   for (let z = 0; z < map.depth; z++) for (let x = 0; x < map.width; x++) {
-    if (!isRoadTerrain(tileAt(map, x, z))) continue
+    if (!isRoadTerrain(routeTerrain(x, z))) continue
     const center = { x, z }, index = key(map, center)
     const directions = ROUTE_DIRS.filter(([dx, dz]) => {
-      const next = tileAt(map, x + dx, z + dz)
+      const next = routeTerrain(x + dx, z + dz)
       return isRoadTerrain(next) || next === "bridge"
     })
     if (directions.length < 3) continue
     // A filled stair-step corner is a broad bend, not a choice of destinations.
     const exits = directions.filter(([dx, dz]) => !directions.some(([sx, sz]) =>
-      dx * sx + dz * sz === 0 && isRoadTerrain(tileAt(map, x + dx + sx, z + dz + sz))))
+      dx * sx + dz * sz === 0 && isRoadTerrain(routeTerrain(x + dx + sx, z + dz + sz))))
     if (exits.length < 1) continue
     candidates.push({ center, shrineFork: !!map.site && same(center, map.site.branch[0]), arms: directions.map(([dx, dz]) => {
       const n = (z + dz) * map.width + x + dx

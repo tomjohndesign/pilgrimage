@@ -1165,6 +1165,7 @@ function startWaterTrip(sim: SimState, s: SimTraveler, map: GameMap,
   for (const source of nearby) {
     const plan = waterVisitPlan(map, source, s, back)
     if (!plan) continue
+    if (s.activity === "toRelic" || s.activity === "fromRelic") plan.visit.resumeActivity = s.activity
     s.waterVisit = plan.visit; s.offRoadRoute = plan.route; s.walkT = 0; s.targetId = null
     s.activity = "toWater"
     return true
@@ -1214,6 +1215,14 @@ function finishErrand(s: SimTraveler): void {
   s.diversionCheck = undefined
   s.activity = s.employer ? "idle" : "walking"
   if (s.employer) s.timer = GAME_HOUR_SECONDS
+}
+
+function finishWaterTrip(s: SimTraveler): void {
+  const resume = s.waterVisit?.resumeActivity
+  s.waterVisit = undefined
+  s.waterRetry = 5
+  finishErrand(s)
+  if (resume) s.activity = resume
 }
 
 /** Head back out of the door to the road, or to the work they left. */
@@ -1368,7 +1377,8 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
     startTavernTrip(sim, s, map, shrineCounters, null)) return true
   const wantsVisit = ordinaryVisit || persuaded
   const occupiedSeats = new Set([...sim.travelers.values()].flatMap(other =>
-    other.shrineSeat && ["toParking","toRelic","visiting","fromRelic","offering"].includes(other.activity) ? [other.shrineSeat] : []))
+    other.shrineSeat && (["toParking","toRelic","visiting","fromRelic","offering"].includes(other.activity) ||
+      other.waterVisit?.resumeActivity) ? [other.shrineSeat] : []))
   const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats, from) : null
   let visitRoute = visit?.route ?? null
   let parking: ShrineParking | null = null
@@ -1601,6 +1611,9 @@ export function stepSim(
       }
       case "toRelic":
       case "fromRelic": {
+        // Detour on the outdoor approach; finish crossing the chapel gate first.
+        if (dt > 0 && !buildingAt(map, worldToTileX(map, s.x), worldToTileZ(map, s.z)) &&
+          startWaterTrip(sim, s, map, waterSources, { x: s.x, y: s.y, z: s.z })) break
         const branch = s.shrineRoute ?? map.site!.branch
         const inbound = s.activity === "toRelic"
         let limit = branch.length - 1
@@ -1904,13 +1917,12 @@ export function stepSim(
           s.offRoadRoute = null
           visit.exitCleared = true
           if (Math.hypot(s.x - visit.returnTo.x, s.z - visit.returnTo.z) < 1e-6) {
-            s.waterVisit = undefined; s.waterRetry = 5; finishErrand(s); break
+            finishWaterTrip(s); break
           }
           break
         }
         if (stepOffRoadWalk(s, visit.returnTo, worldSpeed, dt, map)) {
-          s.waterVisit = undefined; s.waterRetry = 5
-          finishErrand(s)
+          finishWaterTrip(s)
         }
         break
       }
@@ -1966,7 +1978,7 @@ export function stepSim(
           s.fleeTimer -= dt
           if (s.fleeTimer <= 0) s.activity = "walking"
         }
-        if (dt > 0 && !needsParking && !s.track && !s.roadShortcut && s.activity !== "fleeing" &&
+        if (dt > 0 && !needsParking && s.activity !== "fleeing" &&
           startWaterTrip(sim, s, map, waterSources, currentRoutePoint(map, s))) break
         if (dt > 0 && (s.activity === "walking" || s.activity === "seeking") && !isVendor && startNaturalWaterTrip(s, map)) break
         // Independent taverns welcome road walkers by need, without shrine attraction.
