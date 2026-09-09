@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { withTravelParties, partyRoadDelta } from "./travel-parties"
+import { withTravelParties, partyRoadDelta, partyNeedDrain, PARTY_NEED_FLOOR, ANIMAL_NEED_DRAIN } from "./travel-parties"
 import { generateTravelers, TRAVELER_TYPES, type Traveler } from "./travelers"
 import { createSim, stepSim, type SimState } from "./sim"
 import { BUILD_CATALOG, DEFAULT_BALANCE } from "./balance"
@@ -188,5 +188,74 @@ describe("shared stops", () => {
     run(sim, travelers, map, 30)
     expect(party.stage).toBe("traveling")
     expect([...sim.travelers.values()].every(s => s.activity === "walking")).toBe(true)
+  })
+})
+
+describe("shared provisions and purse", () => {
+  it("eases the drain with company size and charges every animal", () => {
+    expect(partyNeedDrain(1)).toBe(1)
+    expect(partyNeedDrain(20)).toBeCloseTo(PARTY_NEED_FLOOR, 9)
+    expect(partyNeedDrain(40)).toBeCloseTo(PARTY_NEED_FLOOR, 9)
+    expect(partyNeedDrain(8)).toBeLessThan(partyNeedDrain(4))
+    expect(partyNeedDrain(4)).toBeLessThan(1)
+    expect(partyNeedDrain(8, 1)).toBeCloseTo(partyNeedDrain(8) + ANIMAL_NEED_DRAIN, 9)
+    expect(partyNeedDrain(8, 2)).toBeGreaterThan(1)
+  })
+
+  it("holds one purse and one store, fed by individual meals and paid by individual costs", () => {
+    const { map, travelers, sim } = fixture(8)
+    sim.balance = { ...DEFAULT_BALANCE, rules: { ...DEFAULT_BALANCE.rules, staminaDecay: 0 } }
+    const members = travelers.map(t => sim.travelers.get(t.id)!)
+    members.forEach((s, i) => { s.gold = 10 + i; s.hunger = 40 + i * 4 })
+    stepSim(sim, travelers, map, 1, .1)
+    expect(new Set(members.map(s => s.gold)).size).toBe(1)
+    expect(members[0].gold).toBeCloseTo(10 * 8 + 28, 6)
+    expect(new Set(members.map(s => s.hunger)).size).toBe(1)
+    const purse = members[0].gold, store = members[0].hunger
+    members[3].gold -= 5
+    members[5].hunger = 100
+    stepSim(sim, travelers, map, 1, .1)
+    expect(members[0].gold).toBeCloseTo(purse - 5, 6)
+    expect(members[7].gold).toBeCloseTo(purse - 5, 6)
+    expect(members[0].hunger).toBeGreaterThan(store)
+    expect(members[0].hunger).toBeLessThan(100)
+    expect(members[2].hunger).toBe(members[5].hunger)
+    // Stamina stays personal.
+    members[1].stamina = 50
+    stepSim(sim, travelers, map, 1, .1)
+    expect(members[1].stamina).toBe(50)
+    expect(members[0].stamina).toBe(100)
+  })
+
+  it("declines more slowly in a large company than alone, and faster with a wagon", () => {
+    const hungerAfter = (count: number, wagon = false) => {
+      const { map, travelers, sim } = fixture(count)
+      sim.balance = { ...DEFAULT_BALANCE, rules: { ...DEFAULT_BALANCE.rules, staminaDecay: 0 } }
+      if (wagon) {
+        const party = sim.parties.get(0)!
+        party.transport = { style: "bench", animal: "ox", seats: [], phase: "road", pose: { x: 0, z: 0, heading: 0, hitch: { x: 0, z: 0 }, distance: 0 },
+          progress: 0, distance: 0, animalDistance: 0, animalHeading: 0, retry: 0 }
+      }
+      run(sim, travelers, map, 120)
+      return sim.travelers.get(0)!.hunger
+    }
+    const alone = hungerAfter(1), company = hungerAfter(12), wagon = hungerAfter(12, true)
+    expect(alone).toBeLessThan(100)
+    expect(company).toBeGreaterThan(alone)
+    expect(wagon).toBeLessThan(company)
+  })
+
+  it("lets a departing companion take their share of the purse", () => {
+    const { map, travelers, sim } = fixture(4)
+    const members = travelers.map(t => sim.travelers.get(t.id)!)
+    members.forEach(s => { s.gold = 10 })
+    stepSim(sim, travelers, map, 1, .1)
+    expect(members[0].gold).toBe(40)
+    members[2].home = "house"
+    stepSim(sim, travelers, map, 1, .1)
+    expect(members[2].gold).toBeCloseTo(10, 6)
+    expect(members[2].partyId).toBeUndefined()
+    expect(members[0].gold).toBeCloseTo(30, 6)
+    expect(sim.parties.get(0)!.members).toEqual([0, 1, 3])
   })
 })

@@ -54,6 +54,7 @@ import { NewMapDialog } from "./new-map-dialog"
 import { browserDiagnostics, diagnosticsSchema, type BugReportDiagnostics } from "@/lib/bug-report"
 import { useBugReportRuntime } from "@/hooks/use-bug-report-runtime"
 import { useSimulationStore } from "@/lib/game/simulation-store"
+import { partyNeedDrain } from "@/lib/game/travel-parties"
 import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES } from "@/lib/game/scene-visibility"
 import { Section, Tuner } from "./property-controls"
 import { BuildControls, HudClock, HudHelp, HudResources } from "./hud-controls"
@@ -387,6 +388,7 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
         </div>
         <div className="text-[11px] text-ink">{traveler.party!.name}</div>
         {party && <p className="text-[11px] italic text-ink-light">{party.reason}{party.stage === "traveling" && ` · ${party.singleFile ? "Single file" : "Loose group"}`}</p>}
+        {party && <p className="text-[11px] text-ink-light">Shares purse, food and water · provisions last {Math.round(100 / partyNeedDrain(party.members.length, (party.transport ? 1 : 0) + (party.packs?.length ?? 0)))}% as long as alone</p>}
         <div className="mt-1 flex max-h-36 flex-col gap-1 overflow-y-auto">
           {companions.map(person => {
             const state = sim?.travelers.get(person.id), monk = sim?.joinedMonks.get(person.id)
