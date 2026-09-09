@@ -131,13 +131,13 @@ export function LoadingChurch({ showChurch, phase, overlayRef, idle = false, gen
       fetchPriority="high" loading="eager" decoding="sync" alt="" draggable={false}
       className="loading-church-image" style={{ width: `${8 * scale}dvh`, height: `${8 * scale}dvh` }} />}
     {generating && <>
+      <p className="loading-church-caption" role="status">generating map</p>
       <svg className="loading-church-progress" viewBox={`0 0 ${CONSTRUCTION_BAR_WIDTH} ${CONSTRUCTION_BAR_HEIGHT}`}
         role="progressbar" aria-label="Generating map" shapeRendering="crispEdges">
         <rect width={48} height={6} fill="#30210c" />
         <rect x={1} y={1} width={46} height={4} fill="#5b4d2f" />
         <rect className="loading-church-progress-fill" x={2} y={2} width={12} height={2} fill="#dab767" />
       </svg>
-      <p className="loading-church-caption" role="status">generating map</p>
     </>}
   </div>
 }
