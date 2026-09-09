@@ -14,6 +14,7 @@ import { DEFAULT_BALANCE } from "./balance"
 import { generateTravelers, TRAVELER_TYPES, type Traveler, type TravelerAttributes } from "./travelers"
 
 const who = (piety: number, status: number): TravelerAttributes => ({
+  happiness: 80,
   gold: 10,
   status,
   hunger: 50,

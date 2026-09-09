@@ -2,6 +2,8 @@
 
 import { SceneAssetBoundary } from "./scene-assets"
 
+import { stepDevotion } from "@/lib/game/wellbeing"
+import { useBalanceStore } from "@/lib/game/balance-store"
 import { simRegistry } from "@/lib/game/sim"
 import { shrineLayout, shrineStations } from "@/lib/game/shrine-layout"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
@@ -51,6 +53,8 @@ interface MonkState extends MonkRoutine, MonkNeeds {
   workScale?: number
   flight?: MonkFlight
   piety: number
+  happiness: number
+  hoursSinceChurch?: number
   flightWait: number
 }
 
@@ -86,7 +90,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       return {
         ...routine, ...createMonkNeeds(index),
         ...(index === 0 && keeperStation ? { ...keeperStation, activity: "keepingRelic" as const, route: [], pause: 0 } : {}),
-        piety: monk.attributes.piety, flightWait: index * 8,
+        piety: monk.attributes.piety, happiness: monk.attributes.happiness, flightWait: index * 8,
       }
     })
     const activities = new Map<number, MonkActivity>()
@@ -103,7 +107,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       if (Math.abs(lateral) < .25) routine.prayerSpot = undefined
     }
     world.states.push({ ...routine, ...createMonkNeeds(index),
-      ...monk.arrival, piety: monk.attributes.piety, flightWait: 8,
+      ...monk.arrival, piety: monk.attributes.piety, happiness: monk.attributes.happiness, flightWait: 8,
       destination: "home", pause: 0 })
   }
   for (let index = 0; index < world.states.length; index++) {
@@ -218,6 +222,9 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       }
       group.userData.rocketPack = flying || !!s.flight
       const previousX = s.x, previousZ = s.z
+      const inChurch = (i === 0 && !!keeperStation) || (!s.flight && !s.buildingTask && !s.preachingTask
+        && s.activity === "praying" && s.destination === "prayer" && i !== carrierIndex)
+      stepDevotion(s, dt, inChurch, inChurch && s.activity === "praying", useBalanceStore.getState().balance)
       if (i === 0 && keeperStation) {
         const sim = simRegistry.current
         const sameWorld = sim && sim.world.road === map.road
@@ -236,6 +243,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       }
       if (playback.paused) continue
       if (i === carrierIndex) {
+        if (dt > 0) blessByProcession(world.procession, `monk:${monks[i].id}`, s)
         const stage = world.procession.stage
         group.userData.activity = stage === "lifting" || stage === "lowering" ? "hoisting" : stage === "approaching" || stage === "idle" ? "walking" : "procession"
         if (stage === "lifting" || stage === "lowering") group.userData.moving = false

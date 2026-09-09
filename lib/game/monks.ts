@@ -17,6 +17,7 @@ export interface MonkAttributes {
   age: number
   /** Devotion, 0–100 — a monk's is never in doubt. */
   piety: number
+  happiness: number
   /** The trades a brother brought with him; the settlement's first labour. */
   skills: string[]
 }
@@ -107,10 +108,11 @@ export function generateMonks(seed: number, count = MONK_COUNT): Monk[] {
     attributes: {
       age: rollCharacterAge(rng, true),
       piety: roll(rng, PIETY),
+      happiness: 75,
       skills: pickDistinct(rng, SKILLS, roll(rng, SKILL_COUNT)),
     },
   }))
 }
 
 /** Live ground/flight coordinates for following the selected monk into interiors. */
-export const monkPositionRegistry: { current: Map<number, { x: number; y: number; z: number; piety?: number }> | null } = { current: null }
+export const monkPositionRegistry: { current: Map<number, { x: number; y: number; z: number; piety?: number; happiness?: number }> | null } = { current: null }

@@ -157,7 +157,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "tavern", label: "Tavern", category: "buildings",
-    description: "Two jobs behind the counter. Travelers and settlers buy food and drink, then eat at the tables. Chairs and outdoor benches offer a free short rest, restoring up to 8 stamina. Keep both entrances and the benches clear.",
+    description: "Two jobs behind the counter. Low happiness draws travelers and settlers here for company, even when free water is nearby. They buy food and drink and recover happiness at the tables. Chairs and outdoor benches offer a free short rest, restoring up to 8 stamina. Keep both entrances and the benches clear.",
     cost: { gold: 150, wood: 110 }, renown: 12, requiredRenown: 25,
     income: { gold: 0, wood: 0 }, w: 3, d: 4, height: 0.78,
     color: "#8c7658", roofColor: "#a59164",
@@ -439,6 +439,21 @@ export const RULE_FIELDS = [
     key: "hospitalityRenownBonus", group: "Traveler attraction", label: "Maximum renown hospitality bonus",
     description: "Added to the maximum hospitality chance at the draw cap, scaled by the square of renown / draw cap. The resulting chance is capped at 100% and still requires food or water need.",
     default: 0.5, min: 0, max: 1, step: 0.01,
+  },
+  {
+    key: "happinessDecay", group: "Traveler needs", label: "Happiness drain per game hour",
+    description: "Happiness lost while away from tavern tables. Low happiness draws customers to staffed taverns.",
+    default: 0.5, min: 0, max: 10, step: 0.1,
+  },
+  {
+    key: "pietyDecay", group: "Traveler needs", label: "Piety drain per game hour",
+    description: "Devotion lost after a day without church attendance. Default: 0.48 points per day. Prayer suspends the drain.",
+    default: 0.02, min: 0, max: 1, step: 0.01,
+  },
+  {
+    key: "prayerPiety", group: "Traveler needs", label: "Piety gained per hour of prayer",
+    description: "Devotion gained by private church prayer and monks kneeling before the relic. Relic viewings and processions also grant their own rewards.",
+    default: 3, min: 0, max: 20, step: 0.1,
   },
   {
     key: "hungerDecay", group: "Traveler needs", label: "Hunger drain per game hour",

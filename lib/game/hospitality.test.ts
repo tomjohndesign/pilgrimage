@@ -1,3 +1,4 @@
+import { naturalWaterStop } from "./natural-water"
 import { settlementJob, SETTLEMENT_JOBS } from "./jobs/design"
 import { shrineSeats, shrineStations, shrineLayout } from "./shrine-layout"
 import { afterEach, describe, expect, it } from "vitest"
@@ -45,7 +46,7 @@ function fixture() {
   const traveler = (id: number, direction: 1 | -1 = 1): Traveler => ({
     id, name: `Traveler ${id}`, type: TRAVELER_TYPES.peasant, direction, pace: 1,
     offset: (10 - direction * 0.2) / (width - 1),
-    attributes: { age: 30, gold: 0, piety: 0, status: 100, hunger: 100, thirst: 100,
+    attributes: { happiness: 80, age: 30, gold: 0, piety: 0, status: 100, hunger: 100, thirst: 100,
       stamina: 100, jobless: false, skills: [] },
   })
   return { map, camp, trees, traveler }
@@ -974,7 +975,7 @@ describe("houses, counters and posts", () => {
     addHouse(map, { x: 6, z: 12 })
     const vendor: Traveler = {
       id, name: "Vendor", type: TRAVELER_TYPES.vendor, direction: 1, pace: 1, offset: 8 / 29,
-      attributes: { age: 30, gold: 60, piety: 0, status: 20, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: ["haggling"] },
+      attributes: { happiness: 80, age: 30, gold: 60, piety: 0, status: 20, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: ["haggling"] },
     }
     const sim = createSim([vendor], map, [], obscure)
     sim.buildings = jobBuildings(map)
@@ -1343,7 +1344,7 @@ describe("traveling monks and housing limits", () => {
       expect(visitor.offeringMade).toBe(true)
       expect(sim.travelers.has(id)).toBe(false)
       expect(monk).toMatchObject({ id: id + 4, name: people[id].name, home: "extra-shelter",
-        attributes: { age: people[id].attributes.age, piety: visitor.piety },
+        attributes: { happiness: visitor.happiness, age: people[id].attributes.age, piety: visitor.piety },
         arrival: { x: visitor.x, y: visitor.y, z: visitor.z } })
       expect(visitor.employer).toBeNull()
     }
@@ -1388,5 +1389,162 @@ describe("traveling monks and housing limits", () => {
     const workers = [...sim.travelers.values()].filter(s => s.employer)
     expect(workers).toHaveLength(2)
     expect(workers.every(s => s.home === house.id)).toBe(true)
+  })
+})
+
+describe("happiness and church devotion", () => {
+  it.each([false, true])("draws a well-fed unhappy walker to a staffed tavern (independent: %s)", independent => {
+    const { map, traveler } = fixture()
+    const t = traveler(0)
+    Object.assign(t.attributes, { happiness: 0, gold: DRINK_PRICE })
+    const sim = createSim([t], map, [], obscure)
+    Object.assign(sim.balance.rules, { hungerDecay: 0, thirstDecay: 0, staminaDecay: 0 })
+    const tavern = staffTavern(sim, map)
+    if (independent) {
+      Object.assign(tavern, { owner: "independent", townId: "town" })
+      map.towns = [{ id: "town", name: "Alderford", junction: 10, tavernId: tavern.id, buildingIds: [tavern.id] }]
+    }
+    const s = sim.travelers.get(0)!
+    run(sim, [t], map, 120, () => s.activity === "sitting")
+    expect(s.activity).toBe("sitting")
+    expect(s.gold).toBe(0)
+    expect(s.tavernVisit?.drink).toBe(true)
+    expect(sim.tradeGold).toBe(independent ? 0 : DRINK_PRICE)
+    expect(s.happiness).toBe(0)
+    stepSim(sim, [t], map, 1.5, 0)
+    expect(s.happiness).toBe(0)
+    run(sim, [t], map, 120, () => s.activity === "fromTavern")
+    expect(s.happiness).toBeCloseTo(30)
+    expect(sim.visits).toBe(0)
+    expect(t.attributes.happiness).toBe(0)
+  })
+
+  it.each(["closed", "poor", "market", "full"])("does not turn happiness into a church visit when the tavern is %s", reason => {
+    const { map, traveler } = fixture()
+    const t = traveler(0)
+    Object.assign(t.attributes, { happiness: 0, gold: reason === "poor" ? 0 : 10 })
+    const sim = createSim([t], map, [], obscure)
+    const tavern = staffTavern(sim, map)
+    if (reason === "closed") sim.travelers.delete(-1)
+    if (reason === "market") tavern.buildType = "market"
+    if (reason === "full") {
+      for (const [i, seat] of tavernSeats(map, tavern).entries()) {
+        sim.travelers.set(-10 - i, { ...sim.travelers.get(0)!, id: -10 - i, activity: "sitting",
+          tavernVisit: { plan: { buildingId: tavern.id, seat, route: [], counter: { tile: seat.tile, point: seat.point } }, served: true, returnTo: null } })
+      }
+    }
+    run(sim, [t], map, 1)
+    const s = sim.travelers.get(0)!
+    expect(s.activity).toBe("walking")
+    expect(s.tavernVisit).toBeUndefined()
+    expect(s.shrineSeat).toBeUndefined()
+  })
+
+  it("lets an idle settler take a happiness break and return to their workplace", () => {
+    const { map, traveler, camp } = fixture()
+    const t = traveler(0)
+    Object.assign(t.attributes, { happiness: 40, gold: 10 })
+    const sim = createSim([t], map, [], obscure)
+    Object.assign(sim.balance.rules, { hungerDecay: 0, thirstDecay: 0, staminaDecay: 0 })
+    sim.buildings = [camp]
+    staffTavern(sim, map, { x: 19, z: 9 })
+    const s = sim.travelers.get(0)!
+    Object.assign(s, { activity: "idle", employer: camp.id })
+    run(sim, [t], map, 120, () => s.activity === "sitting")
+    expect(s.activity).toBe("sitting")
+    expect(s.tavernVisit?.returnTo).not.toBeNull()
+    run(sim, [t], map, 120, () => s.activity === "idle")
+    expect(s.activity).toBe("idle")
+    expect(s.happiness).toBeGreaterThan(60)
+    expect(s.employer).toBe(camp.id)
+  })
+
+  it("ages devotion and happiness while away, and gains piety during private prayer", () => {
+    const { map, traveler } = fixture()
+    const t = traveler(0)
+    const sim = createSim([t], map, [], obscure), s = sim.travelers.get(0)!
+    Object.assign(s, { piety: 50, happiness: 80, hoursSinceChurch: 48 })
+    stepSim(sim, [t], map, 0, GAME_DAY_SECONDS / 24)
+    expect(s.piety).toBeCloseTo(49.98)
+    expect(s.happiness).toBeCloseTo(79.5)
+    Object.assign(s, { activity: "visiting", shrineSeat: "prayer-0", timer: GAME_DAY_SECONDS, piety: 50 })
+    stepSim(sim, [t], map, 0, GAME_DAY_SECONDS / 24)
+    expect(s.piety).toBeCloseTo(53)
+    expect(s.hoursSinceChurch).toBe(0)
+  })
+})
+
+
+describe("choosing tavern company or free water", () => {
+  function choice(happiness: number, location: "shrine" | "town" | "work", gold = 10, thirst = 0) {
+    const { map, traveler, camp } = fixture()
+    map.tiles[5 * map.width + 8] = "water"
+    const t = traveler(0)
+    Object.assign(t.attributes, { happiness, thirst, hunger: 100, gold })
+    const sim = createSim([t], map, [], obscure)
+    Object.assign(sim.balance.rules, { hungerDecay: 0, thirstDecay: 0, staminaDecay: 0, happinessDecay: 0 })
+    const tavern = staffTavern(sim, map, { x: 19, z: 9 })
+    if (location === "town") {
+      Object.assign(tavern, { owner: "independent", townId: "town" })
+      map.towns = [{ id: "town", name: "Alderford", junction: 10, tavernId: tavern.id, buildingIds: [tavern.id] }]
+    }
+    const s = sim.travelers.get(0)!
+    if (location === "work") {
+      sim.buildings = [camp]
+      Object.assign(s, { activity: "idle", employer: camp.id })
+    }
+    expect(naturalWaterStop(map, s)).not.toBeNull()
+    return { map, t, sim, s, tavern }
+  }
+
+  it.each(["shrine", "town", "work"] as const)("makes happiness decide between available water and a %s tavern", location => {
+    for (const thirst of [0, 40]) for (const happiness of [20, 80]) {
+      const { map, t, sim, s } = choice(happiness, location, 10, thirst)
+      stepSim(sim, [t], map, 1.5, .1)
+      expect(s.activity).toBe(happiness < 60 ? "toTavern" : "toWater")
+      if (happiness < 60) {
+        expect(s.waterVisit).toBeUndefined()
+        run(sim, [t], map, 120, () => s.activity === "sitting")
+        expect(s.activity).toBe("sitting")
+        expect(s.thirst).toBe(100)
+        expect(s.gold).toBe(10 - DRINK_PRICE)
+      } else {
+        expect(s.tavernVisit).toBeUndefined()
+        run(sim, [t], map, 120, () => s.activity === "fromWater")
+        expect(s.activity).toBe("fromWater")
+        expect(s.thirst).toBe(100)
+        expect(s.gold).toBe(10)
+        expect(s.happiness).toBe(80)
+      }
+    }
+  })
+
+  it.each(["well", "watering-hole"] as const)("preserves happiness preference when a free %s is available", kind => {
+    for (const location of ["shrine", "town", "work"] as const) for (const happiness of [20, 80]) {
+      const { map, t, sim, s } = choice(happiness, location, 10, 40)
+      map.tiles[5 * map.width + 8] = "grass"
+      const def = BUILD_CATALOG.find(b => b.id === kind)!
+      map.buildings.push({ ...def, id: "free-water", buildType: kind, x: 6, z: 6 })
+      stepSim(sim, [t], map, 1.5, .1)
+      expect(s.activity).toBe(happiness < 60 ? "toTavern" : "toWater")
+      if (happiness < 60) expect(s.waterVisit).toBeUndefined()
+      else expect(s.waterVisit?.sourceId).toBe("free-water")
+      expect(s.naturalWaterVisit).toBeUndefined()
+    }
+  })
+
+  it.each(["poor", "closed", "full", "blocked"] as const)("falls back to free water when an unhappy customer's tavern is %s", reason => {
+    const { map, t, sim, s, tavern } = choice(20, "shrine", reason === "poor" ? 0 : 10)
+    if (reason === "closed") sim.travelers.delete(-1)
+    if (reason === "full") for (const [i, seat] of tavernSeats(map, tavern).entries()) {
+      sim.travelers.set(-10 - i, { ...s, id: -10 - i, activity: "sitting",
+        tavernVisit: { plan: { buildingId: tavern.id, seat, route: [], counter: { tile: seat.tile, point: seat.point } }, served: true, returnTo: null } })
+    }
+    if (reason === "blocked") {
+      for (let z = 0; z < map.depth; z++) map.tiles[z * map.width + 17] = "water"
+    }
+    stepSim(sim, [t], map, 1.5, .1)
+    expect(s.activity).toBe("toWater")
+    expect(s.tavernVisit).toBeUndefined()
   })
 })
