@@ -4,7 +4,7 @@ import { tileAt, type GameMap, type TilePos } from "./map/types"
 import type { MonkRoutine } from "./monk-routine"
 import { MONK_TIRED_AT, MONK_WAKE_AT, type MonkNeeds } from "./monk-work"
 import { buildingAt, settlementEvangelism } from "./settlement"
-import { GAME_DAY_SECONDS } from "./time"
+import { GAME_DAY_SECONDS } from "./calendar"
 
 export const MONK_EVANGELISM = 0.05
 export const MONK_EVANGELISM_DURATION = 3 * GAME_DAY_SECONDS

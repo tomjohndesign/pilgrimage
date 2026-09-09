@@ -11,7 +11,7 @@ import { monkWander } from "./monk-wander"
 import { createMonkNeeds, MONK_TIRED_AT, MONK_WAKE_AT, stepMonkWork } from "./monk-work"
 import { MONK_EVANGELISM, preachingRegistry, preachingSpots, roadsideEvangelism, stepMonkEvangelism, type EvangelizingMonk } from "./monk-evangelism"
 import { useMonkEvangelismStore } from "./monk-evangelism-store"
-import { GAME_DAY_SECONDS } from "./time"
+import { GAME_DAY_SECONDS } from "./calendar"
 
 function fixture() {
   const map: GameMap = { width: 20, depth: 20, tiles: Array(400).fill("grass"),

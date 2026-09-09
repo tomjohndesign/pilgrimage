@@ -1,3 +1,4 @@
+import { tavernLayout } from "../tavern-layout"
 import { marketLayout } from "../market-layout"
 import { EARLY_MATERIALS as palette } from "./materials"
 import type { BuildingPart, Vec3 } from "./geometry"
@@ -418,8 +419,8 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     }
     if(variant === "tavern") {
       // Low drinking tables and benches occupy the left side, clear of the hearth.
-      for(const side of [-1,1]) {
-        const tx=-width*.23,tz=side*depth*.22,tableW=width*.32,tableD=depth*.15
+      for(const table of tavernLayout(width, depth).tables) {
+        const { side, x: tx, z: tz, w: tableW, d: tableD } = table
         for(const a of [-1,1]) for(const b of [-1,1]) pole(`tavern-table-${side}-leg-${a}-${b}`,[tx+a*tableW*.35,0,tz+b*tableD*.32],[tx+a*tableW*.35,.37,tz+b*tableD*.32],.025,"interior")
         box(`tavern-table-${side}-top`,"interior",[tx,.39,tz],[tableW,.045,tableD],palette.paleWood,undefined,false)
         for(const b of [-1,1]) bench(`tavern-bench-${side}-${b}`,tx,tz+b*depth*.11,tableW,.23,b>0 ? Math.PI : 0)
@@ -429,7 +430,8 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
           box(`tavern-ale-${side}-${a}`,"interior",[mx,.48,tz],[.032,.005,.032],"#614e32",undefined,false)
         }
       }
-      const counterW=width*.27,counterX=width*.2,counterZ=-depth*.14
+      const counter = tavernLayout(width, depth).counter
+      const counterW=counter.w-.035,counterX=counter.x,counterZ=counter.z
       box("tavern-serving-counter", "interior",[counterX,.23,counterZ],[counterW,.46,depth*.14],palette.wood,undefined,false)
       box("tavern-counter-top", "interior",[counterX,.475,counterZ],[counterW+.035,.035,depth*.15],palette.paleWood,undefined,false)
     }
