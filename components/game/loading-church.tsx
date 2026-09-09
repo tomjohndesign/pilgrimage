@@ -1,11 +1,15 @@
 "use client"
 
-import { useEffect, useId, useRef, type CSSProperties, type RefObject } from "react"
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type RefObject } from "react"
 import { DEFAULT_VIEW_SIZE } from "@/lib/game/render/iso"
 import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
 import { elevationNoise } from "@/lib/game/map/elevation"
 import type { MapRevealPhase } from "@/lib/game/render/map-reveal"
+import dynamic from "next/dynamic"
+import { CONSTRUCTION_BAR_WIDTH, CONSTRUCTION_BAR_HEIGHT } from "@/lib/game/render/construction-bar"
 import "./loading-church.css"
+
+const LandingScene = dynamic(() => import("./landing-scene").then(m => m.LandingScene), { ssr: false })
 
 const TILE_WIDTH = Math.SQRT2
 const HALF_TILE_HEIGHT = 1 / Math.sqrt(6)
@@ -59,12 +63,15 @@ const GRID_LINES = LOADING_TILES.map(tile => `M${tile.points}Z`).join(" ")
 /** The opening landmark and tiled ground are ordinary page HTML, available
  * before game JavaScript. The priority image uses the actual church geometry.
  */
-export function LoadingChurch({ showChurch, phase, overlayRef, view = 0, viewSize = DEFAULT_VIEW_SIZE }: {
+export function LoadingChurch({ showChurch, phase, overlayRef, idle = false, generating = false, view = 0, viewSize = DEFAULT_VIEW_SIZE }: {
+  idle?: boolean; generating?: boolean
   showChurch: boolean; phase: MapRevealPhase; overlayRef: RefObject<HTMLDivElement | null>; view?: number; viewSize?: number
 }) {
+  const [sceneReady, setSceneReady] = useState(false)
+  const onSceneReady = useCallback(() => setSceneReady(true), [])
   const patternId = useId()
   const tilesRef = useRef<SVGSVGElement>(null)
-  const active = phase !== "complete"
+  const active = !idle && phase !== "complete"
   useEffect(() => {
     const root = tilesRef.current
     if (!active || !root) return
@@ -89,9 +96,9 @@ export function LoadingChurch({ showChurch, phase, overlayRef, view = 0, viewSiz
   }, [active])
   if (!showChurch && phase === "complete") return null
   const scale = 100 / viewSize
-  return <div ref={overlayRef} className="loading-church" aria-hidden="true" data-loading-church data-phase={phase}
-    style={{ "--ground-offset": `${GROUND_OFFSET * scale}dvh` } as CSSProperties}>
-    {phase !== "complete" && <div className="loading-church-ground"><div className="loading-church-wipe">
+  return <div ref={overlayRef} className="loading-church" data-loading-church data-phase={phase} data-idle={idle}
+    style={{ "--ground-offset": `${GROUND_OFFSET * scale}dvh`, "--church-caption-offset": `${3.5 * scale}dvh`, "--church-roof-offset": `${3.6 * scale}dvh`, "--loading-pixel": `${CHARACTER_PIXEL_SIZE * scale}dvh` } as CSSProperties}>
+    {phase !== "complete" && <div className="loading-church-ground" aria-hidden="true"><div className="loading-church-wipe">
     <svg ref={tilesRef} className="loading-church-tiles" width="100%" height="100%">
       <defs>
         {/* A small repeating field covers any viewport without thousands of DOM
@@ -99,14 +106,14 @@ export function LoadingChurch({ showChurch, phase, overlayRef, view = 0, viewSiz
         <pattern id={patternId} patternUnits="userSpaceOnUse" x="50%" y="50%"
           width={`${PATTERN_WIDTH * scale}dvh`} height={`${PATTERN_HEIGHT * scale}dvh`}
           viewBox={`0 0 ${PATTERN_WIDTH} ${PATTERN_HEIGHT}`}>
-          {LOADING_TILES.map((tile, i) => <polygon key={i} fill="white" points={tile.points} style={tile.style} />)}
-          <path className="loading-church-gridlines" d={GRID_LINES} fill="none" stroke="white"
+          {LOADING_TILES.map((tile, i) => <polygon key={i} fill="#749451" points={tile.points} style={tile.style} />)}
+          <path className="loading-church-gridlines" d={GRID_LINES} fill="none" stroke="#91ad6d"
             strokeOpacity={.1} strokeWidth={CHARACTER_PIXEL_SIZE} />
         </pattern>
       </defs>
       <rect width="100%" height="100%" fill={`url(#${patternId})`} />
     </svg>
-    <svg className="loading-church-pulse" viewBox="-8 -5 16 10" fill="white"
+    {!idle && <svg className="loading-church-pulse" viewBox="-8 -5 16 10" fill="white"
       style={{ width: `${16 * scale}dvh`, height: `${10 * scale}dvh`, marginTop: `${GROUND_OFFSET * scale}dvh` }}>
       {Array.from({ length: 121 }, (_, i) => {
         const x = i % 11 - 5, z = Math.floor(i / 11) - 5
@@ -117,10 +124,20 @@ export function LoadingChurch({ showChurch, phase, overlayRef, view = 0, viewSiz
           points={`${px},${py - HALF_TILE_HEIGHT} ${px + TILE_WIDTH / 2},${py} ${px},${py + HALF_TILE_HEIGHT} ${px - TILE_WIDTH / 2},${py}`}
           style={{ "--pulse-delay": `${distance * .14}s`, "--pulse-opacity": .065 * (1 - distance / 6) } as CSSProperties} />
       })}
-    </svg>
+    </svg>}
     </div></div>}
-    {showChurch && <img src={`/textures/ui/loading-church-v1/${view}.webp`} width={256} height={256}
+    {idle && <div className="landing-scene" data-ready={sceneReady}><LandingScene viewSize={viewSize} onReady={onSceneReady} /></div>}
+    {showChurch && !(idle && sceneReady) && <img src={`/textures/ui/loading-church-v1/${view}.webp`} width={256} height={256}
       fetchPriority="high" loading="eager" decoding="sync" alt="" draggable={false}
       className="loading-church-image" style={{ width: `${8 * scale}dvh`, height: `${8 * scale}dvh` }} />}
+    {generating && <>
+      <svg className="loading-church-progress" viewBox={`0 0 ${CONSTRUCTION_BAR_WIDTH} ${CONSTRUCTION_BAR_HEIGHT}`}
+        role="progressbar" aria-label="Generating map" shapeRendering="crispEdges">
+        <rect width={48} height={6} fill="#30210c" />
+        <rect x={1} y={1} width={46} height={4} fill="#5b4d2f" />
+        <rect className="loading-church-progress-fill" x={2} y={2} width={12} height={2} fill="#dab767" />
+      </svg>
+      <p className="loading-church-caption" role="status">generating map</p>
+    </>}
   </div>
 }

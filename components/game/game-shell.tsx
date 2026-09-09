@@ -55,7 +55,8 @@ import type { PixelationProps } from "@/components/pixel-canvas"
  * WebGL has no meaningful server render, and three.js touches browser globals on
  * import, so the canvas is client-only. The HUD is plain DOM and renders normally.
  */
-const GameCanvas = dynamic(() => import("./game-canvas").then((m) => m.GameCanvas), {
+const loadGameCanvas = () => import("./game-canvas")
+const GameCanvas = dynamic(() => loadGameCanvas().then((m) => m.GameCanvas), {
   ssr: false,
   loading: () => null,
 })
@@ -164,6 +165,9 @@ export function GameShell({
   /** Tune the world pixel renderer without changing map or simulation settings. */
   pixelation?: PixelationProps
 }) {
+  const [starting, setStarting] = useState(!!benchmarkCity)
+  const [started, setStarted] = useState(!!benchmarkCity)
+
   // With no ?seed= in the URL the seed is chosen client-side in an effect, so
   // the server and client never render from different seeds.
   const [seed, setSeed] = useState<number | null>(initialSeed ?? null)
@@ -174,9 +178,7 @@ export function GameShell({
   const [blasterPastor, setBlasterPastor] = useState(false)
   const [lastMarch, setLastMarch] = useState(false)
   const [defaultMapSize, setDefaultMapSize] = useState(DEFAULT_MAP_WIDTH)
-  // A bookmarked world is already fully specified. Generate its placement for
-  // the page render, so the priority church image faces the right way from the
-  // very first paint, before the canvas or browser preferences are available.
+  // Resolve preferences before Play; terrain does not exist on the landing page.
   const [mapSizeReady, setMapSizeReady] = useState(initialSettings?.size !== undefined)
   const [mapSizeSaved, setMapSizeSaved] = useState(true)
   const [settings, setSettings] = useState<MapSettings>({
@@ -189,6 +191,24 @@ export function GameShell({
     outputDpr: pixelationOverrides.outputDpr ?? pixelation?.outputDpr ?? 1,
     pixelated: pixelationOverrides.pixelated ?? pixelation?.pixelated ?? true,
   }
+
+  useEffect(() => {
+    // Load the renderer and its published assets without creating a world/canvas.
+    void loadGameCanvas().catch(() => { /* The dynamic component retries on Play. */ })
+    void import("@/lib/game/render/preload-assets").then(async m => {
+      await m.prepareOpeningCharacters()
+      await m.preloadGameAssets(settings.characterModel)
+    })
+      .catch(() => { /* Ordinary scene loading remains available on Play. */ })
+  }, [settings.characterModel])
+
+  useEffect(() => {
+    if (!starting || started) return
+    // Let the landmark return to centre and paint its indicators before generation.
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    const timer = window.setTimeout(() => setStarted(true), reducedMotion ? 32 : 480)
+    return () => window.clearTimeout(timer)
+  }, [starting, started])
 
   useEffect(() => {
     // Resolve the browser preference before generating terrain or writing the URL.
@@ -206,7 +226,7 @@ export function GameShell({
 
   // Keep seed and tuning in the URL so any map can be bookmarked and revisited.
   useEffect(() => {
-    if (seed === null || !mapSizeReady) return
+    if (!started || seed === null || !mapSizeReady) return
     const query = new URLSearchParams({
       seed: String(seed),
       size: String(settings.size),
@@ -242,11 +262,11 @@ export function GameShell({
     for (const [key, value] of Object.entries(settings.elevation)) query.set(`e_${key}`, String(value))
     if (benchmarkCity) query.set("benchmark", benchmarkCity === "routing-stress" ? "city-stress" : "city")
     window.history.replaceState(null, "", `?${query}`)
-  }, [seed, settings, benchmarkCity, mapSizeReady])
+  }, [seed, settings, benchmarkCity, mapSizeReady, started])
 
   const generatedMap = useMemo(
     () =>
-      seed === null || !mapSizeReady
+      !started || seed === null || !mapSizeReady
         ? null
         : generateMap({
             seed,
@@ -265,6 +285,7 @@ export function GameShell({
           }),
     [
       seed,
+      started,
       mapSizeReady,
       settings.elevation,
       settings.size,
@@ -289,12 +310,12 @@ export function GameShell({
   // Identities live outside the canvas so the HUD can name whoever is selected.
   const travelerCount = baseMap ? travelerCountForMap(baseMap, settings.traffic) : 0
   const roadTravelers = useMemo(
-    () => (seed === null ? [] : generateTravelers(seed, travelerCount)),
-    [seed, travelerCount],
+    () => (!baseMap || seed === null ? [] : generateTravelers(seed, travelerCount)),
+    [seed, travelerCount, baseMap],
   )
 
   // The relic and the brothers who keep it, fixed per seed like the travelers.
-  const relic = useMemo(() => (seed === null ? null : generateRelic(seed)), [seed])
+  const relic = useMemo(() => (!started || seed === null ? null : generateRelic(seed)), [seed, started])
   const roadLook = useMemo(
     () => ({
       opacity: settings.roadOpacity,
@@ -304,7 +325,7 @@ export function GameShell({
     }),
     [settings.roadOpacity, settings.roadShade, settings.roadEdgeLine, settings.roadEdgeWidth],
   )
-  const founders = useMemo(() => (seed === null ? [] : generateMonks(seed)), [seed])
+  const founders = useMemo(() => (!started || seed === null ? [] : generateMonks(seed)), [seed, started])
   const joinedMonks = useBuildStore(s => s.joinedMonks)
   const simulation = useBuildStore(s => s.simulation)
   const monks = useMemo(() => [...founders, ...(simulation?.world.road === baseMap?.road ? joinedMonks : [])],
@@ -375,7 +396,8 @@ export function GameShell({
 
   return (
     <div className="fixed inset-0 overflow-hidden select-none" style={{ backgroundColor: GAME_BACKGROUND }}>
-      <LoadingChurch showChurch={!!openingMap && (!map || landmarkRoad !== map.road || revealPhase === "loading")}
+      <LoadingChurch showChurch={!openingMap || !map || landmarkRoad !== map.road || revealPhase === "loading"}
+        generating={starting && revealPhase === "loading"} idle={!starting}
         phase={revealPhase} overlayRef={loadingOverlay} view={openingView} viewSize={openingViewSize} />
       {map && relic ? (
         <GameCanvas
@@ -416,6 +438,10 @@ export function GameShell({
         />
       ) : null}
       <GameHud
+        playing={revealPhase === "complete"}
+        starting={starting}
+        canStart={seed !== null && mapSizeReady}
+        onPlay={() => setStarting(true)}
         cheats={{ blasterPastor, lastMarch }}
         map={map}
         seed={seed}
@@ -440,7 +466,7 @@ export function GameShell({
         }}
         onSeedChange={setSeed}
       />
-      <CheatBar blasterPastor={blasterPastor} onBlasterPastor={() => setBlasterPastor(active => !active)} onLastMarch={() => setLastMarch(true)} />
+      {revealPhase === "complete" && <CheatBar blasterPastor={blasterPastor} onBlasterPastor={() => setBlasterPastor(active => !active)} onLastMarch={() => setLastMarch(true)} />}
     </div>
   )
 }
