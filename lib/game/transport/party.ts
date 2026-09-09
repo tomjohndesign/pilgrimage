@@ -6,11 +6,10 @@ import { deriveSeed, makeRng } from "../rng"
 import { animalWalkSpeed, cartOffset, type Animal } from "./assets"
 import { roadCartPose } from "./bridge-guide"
 import { followCart, type CartPose } from "./follow"
-import { convoyBuildingsClear, parkingClear, shrineParking, type ShrineParking } from "./navigation"
+import { convoyBuildingsClear, parkingClear, shrineParking, type ParkingContext, type ShrineParking } from "./navigation"
 import { routeLength, routePoint } from "./roadside"
 import { advanceCartProgress } from "./route"
 import { seatPoint, type PassengerCart, type PackAnimal } from "./party-assets"
-import type { TreePlacement } from "../trees/placement"
 
 export interface PartyTransport {
   style: PassengerCart
@@ -20,7 +19,7 @@ export interface PartyTransport {
   pose: CartPose
   progress: number
   parking?: ShrineParking
-  intent?: "camp" | "visit"
+  intent?: "visit"
   distance: number
   animalDistance: number
   animalHeading: number
@@ -72,12 +71,14 @@ export function boardParty(party: TravelParty, members: SimTraveler[], scale: nu
   for (const s of members) s.partyRiding = cart.seats.includes(s.id)
   seatParty(party, members, scale)
 }
-export function parkParty(party: TravelParty, map: GameMap, scale: number, trees: readonly TreePlacement[], occupied: CartPose[], intent: "camp" | "visit") {
+/** The context must hold only nearby trunks and obstacles, as the vendor parking
+ * context does; the parking search samples clearance thousands of times. */
+export function parkParty(party: TravelParty, map: GameMap, scale: number, context: ParkingContext, occupied: CartPose[], intent: "visit") {
   const cart = party.transport!
   if (cart.retry > 0) return false
   cart.retry = 8
   const parking = shrineParking(map, cart.progress, party.direction, -cartOffset(cart.animal) * scale,
-    cart.animal, scale, occupied, { trees }, false)
+    cart.animal, scale, occupied, context, false)
   if (!parking) return false
   cart.parking = parking; cart.phase = "parking"; cart.intent = intent
   party.reason = "Pulling off the road together"

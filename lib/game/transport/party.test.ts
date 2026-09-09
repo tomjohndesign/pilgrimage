@@ -69,25 +69,6 @@ describe("party transport", () => {
     expect(wrapped).toBe(true)
     expect(party.transport!.seats.every(id=>sim.travelers.get(id)!.progress===party.transport!.progress)).toBe(true)
   })
-  it("parks before disembarking, camps together, boards and continues", () => {
-    const { sim, run, party } = fixture()
-    run(15)
-    for (const s of sim.travelers.values()) s.stamina = 10
-    const seen = new Set<string>()
-    for (let tick = 0; tick < 3000; tick++) {
-      run(.1)
-      seen.add(`${party.stage}:${party.transport!.phase}`)
-      if (party.stage === "camping") expect([...sim.travelers.values()].some(s => s.partyRiding)).toBe(false)
-      if (seen.has("traveling:boarding") && party.transport!.phase === "road") break
-    }
-    expect(seen.has("traveling:parking")).toBe(true)
-    expect(seen.has("camping:parked")).toBe(true)
-    expect(seen.has("traveling:boarding")).toBe(true)
-    expect(party.transport!.phase).toBe("road")
-    const start = party.transport!.progress
-    run(25)
-    expect(party.transport!.progress).not.toBe(start)
-  })
   it("lets a couple settle after visiting and assigns a remaining passenger to drive", () => {
     const { sim, run, party, map, travelers } = fixture()
     travelers[0].party!.partnerId = 1; travelers[1].party!.partnerId = 0

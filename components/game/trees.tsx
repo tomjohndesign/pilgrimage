@@ -17,6 +17,7 @@ import { foliageSpacing } from "@/lib/game/trees/foliage/spacing"
 import { DEFAULT_TREE_MODEL, treeModelForGame, type TreeModel } from "@/lib/game/trees/render-model"
 import { FoliageField } from "./foliage-field"
 import { TreeRemains } from "./tree-remains"
+import { EntFoliageField } from "./ent-foliage-field"
 
 export type { TreePlacement }
 const ProceduralTreeBenchmark = process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1"
@@ -25,7 +26,7 @@ const ProceduralTreeBenchmark = process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1"
 /** The game uses depth sprites; the legacy renderer is isolated to benchmark builds. */
 export function Trees({ map, placements: supplied, ents = false, characterScale = BASE_CHARACTER_SCALE, model: requestedModel = DEFAULT_TREE_MODEL }: {
   map: GameMap; placements?: TreePlacement[]; ents?: boolean; characterScale?: number
-  /** Sprites draw the baked pixel foliage in place of the parametric trees; Ents stay rooted. */
+  /** Sprites draw the baked pixel foliage, with articulated Ent limbs when awakened. */
   model?: TreeModel
 }) {
   const model = treeModelForGame(requestedModel)
@@ -55,7 +56,8 @@ export function Trees({ map, placements: supplied, ents = false, characterScale 
     <group ref={markSelectionScenery}>
       {model === "sprites"
         ? <SceneAssetBoundary>
-            <FoliageField atlas={DEFAULT_FOLIAGE_ATLAS} placements={placements} hidden={felled} onSelect={selectTree} seed={seed} idBase={map.buildings.length} />
+            {ents ? <EntFoliageField map={map} atlas={DEFAULT_FOLIAGE_ATLAS} placements={placements} hidden={felled} onSelect={selectTree} seed={seed} idBase={map.buildings.length} />
+              : <FoliageField atlas={DEFAULT_FOLIAGE_ATLAS} placements={placements} hidden={felled} onSelect={selectTree} seed={seed} idBase={map.buildings.length} />}
           </SceneAssetBoundary>
         : <>
             {ProceduralTreeBenchmark && <SceneAssetBoundary><ProceduralTreeBenchmark placements={placements} hidden={proceduralHidden} onSelect={selectTree} entMap={ents ? map : undefined} seed={seed} idBase={map.buildings.length} /></SceneAssetBoundary>}

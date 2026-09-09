@@ -74,7 +74,7 @@ export function CheatBar({ onBlasterPastor, onLastMarch, blasterPastor = false }
                 ? "Blaster Pastor recalled — the brothers are returning to the shrine and putting away their rocket packs."
                 : "Blaster Pastor activated — the brothers will take rocket trips and return to the shrine!")
               close()
-            } else if (code.trim().toLowerCase() === "thelastmarchoftheents") {
+            } else if (/^(the)?lastmarchoftheents$/i.test(code.trim())) {
               onLastMarch()
               setMessage("The Ents are waking… About 1 in 100 trees will stroll, resting a minute between walks.")
               close()

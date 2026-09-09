@@ -1,9 +1,10 @@
 import * as THREE from "three"
 import { FOLIAGE_FRAME } from "./design"
+import type { FoliageSpriteFrame } from "./material"
 
 /** Shader billboards need matching CPU picking, including holes between leaves. */
 export function foliageRaycast(geometry: THREE.BufferGeometry, color: THREE.Texture, depth: THREE.Texture,
-  view: { value: number }, camera: () => THREE.Camera | undefined): THREE.InstancedMesh["raycast"] {
+  view: { value: number }, camera: () => THREE.Camera | undefined, layout: FoliageSpriteFrame = FOLIAGE_FRAME): THREE.InstancedMesh["raycast"] {
   const read = (texture: THREE.Texture) => {
     const canvas = document.createElement("canvas"), image = texture.image as HTMLImageElement
     canvas.width = image.width; canvas.height = image.height
@@ -23,7 +24,7 @@ export function foliageRaycast(geometry: THREE.BufferGeometry, color: THREE.Text
     for (let i = 0; i < this.count; i++) {
       this.getMatrixAt(i, matrix); matrix.premultiply(this.matrixWorld)
       anchor.setFromMatrixPosition(matrix)
-      const extent = FOLIAGE_FRAME.extent * axis.setFromMatrixColumn(matrix, 0).length()
+      const extent = layout.extent * axis.setFromMatrixColumn(matrix, 0).length()
       // Most trees are far from the pointer. Reject their complete billboard
       // before constructing and raycasting the camera-facing proxy.
       sphere.center.copy(anchor); sphere.radius = extent * 1.1
@@ -33,9 +34,9 @@ export function foliageRaycast(geometry: THREE.BufferGeometry, color: THREE.Text
       proxy.raycast(raycaster, hits)
       for (const hit of hits) {
         if (!hit.uv) continue
-        const column = (view.value + frame.getX(i)) % FOLIAGE_FRAME.directions
-        const x = column * FOLIAGE_FRAME.cellSize + Math.min(FOLIAGE_FRAME.cellSize - 1, Math.floor(hit.uv.x * FOLIAGE_FRAME.cellSize))
-        const y = frame.getY(i) * FOLIAGE_FRAME.cellSize + Math.min(FOLIAGE_FRAME.cellSize - 1, Math.floor((1 - hit.uv.y) * FOLIAGE_FRAME.cellSize))
+        const column = (view.value + frame.getX(i)) % layout.directions
+        const x = column * layout.cellSize + Math.min(layout.cellSize - 1, Math.floor(hit.uv.x * layout.cellSize))
+        const y = frame.getY(i) * layout.cellSize + Math.min(layout.cellSize - 1, Math.floor((1 - hit.uv.y) * layout.cellSize))
         const pixel = (y * colors.width + x) * 4
         if (colors.pixels[pixel + 3] < 128) continue
         const value = depths.pixels[pixel] * 256 + depths.pixels[pixel + 1]

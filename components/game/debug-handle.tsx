@@ -63,11 +63,6 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
           id, name: travelers.find(t => t.id === id)?.name, x: s.x, z: s.z, progress: s.progress,
           activity: s.activity, riding: s.partyRiding, boarding: s.partyBoarding, stamina: s.stamina, waiting: s.partyWaiting, home: s.home, employer: s.employer,
         } }) })),
-      restParty: (id: number) => {
-        const sim = simRegistry.current, party = sim?.parties.get(id)
-        const member = party && sim!.travelers.get(party.members[0])
-        if (member) member.stamina = 19
-      },
       expectedPopulation: travelers.length,
       bakeLoadingChurch: async () => (await import("@/lib/game/render/loading-church-bake")).bakeLoadingChurch(gl),
       benchmarkTarget: benchmarkCity(map)?.centre,
@@ -342,7 +337,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
       ents: () => {
         const ents: EntState[] = []
         scene.traverse((object) => {
-          if (object.name === "ent-legs") ents.push(...object.userData.ents)
+          if (object.name === "ent-legs" || object.name === "ent-limbs") ents.push(...object.userData.ents)
         })
         return ents
       },

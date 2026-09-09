@@ -1,7 +1,25 @@
 {
-  "lastProcessedCommit": "e2e99c00e671c074f69c7e41d382f03f83c83875",
-  "releaseCount": 161,
+  "lastProcessedCommit": "110ee4beaf0a2d96a74630217a96483d6a3b7316",
+  "releaseCount": 164,
   "releases": [
+    {
+      "version": "0.0.178",
+      "title": "Release 0.0.178",
+      "summary": "Remove camping, keep travellers' stamina on the road, and form companies in the live game (#197)",
+      "commit": "110ee4beaf0a2d96a74630217a96483d6a3b7316"
+    },
+    {
+      "version": "0.0.177",
+      "title": "Release 0.0.177",
+      "summary": "Fix Ent cheat and add slow walking sprites with branch arms (#196)",
+      "commit": "b926810f6f835bb40cee60a1bddfd8a686a8eaf4"
+    },
+    {
+      "version": "0.0.176",
+      "title": "Release 0.0.176",
+      "summary": "Clarify Pilgrimage ownership and restrict commercial use (#195)",
+      "commit": "8a69239bea978736a4e2246e0fa53512b9170e9c"
+    },
     {
       "version": "0.0.175",
       "title": "Release 0.0.175",
