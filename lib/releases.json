@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "54eb9fef6390abeb5a9695478eda2428541d66df",
-  "releaseCount": 137,
+  "lastProcessedCommit": "95e823dca315a123eb0d48b3989d5f642e362600",
+  "releaseCount": 138,
   "releases": [
+    {
+      "version": "0.0.152",
+      "title": "Release 0.0.152",
+      "summary": "Add buildable water sources and NPC drinking animations (#170)",
+      "commit": "95e823dca315a123eb0d48b3989d5f642e362600"
+    },
     {
       "version": "0.0.151",
       "title": "Release 0.0.151",
