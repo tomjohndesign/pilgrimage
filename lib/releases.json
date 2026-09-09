@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "e2e99c00e671c074f69c7e41d382f03f83c83875",
-  "releaseCount": 161,
+  "lastProcessedCommit": "8a69239bea978736a4e2246e0fa53512b9170e9c",
+  "releaseCount": 162,
   "releases": [
+    {
+      "version": "0.0.176",
+      "title": "Release 0.0.176",
+      "summary": "Clarify Pilgrimage ownership and restrict commercial use (#195)",
+      "commit": "8a69239bea978736a4e2246e0fa53512b9170e9c"
+    },
     {
       "version": "0.0.175",
       "title": "Release 0.0.175",
