@@ -1,0 +1,113 @@
+Pilgrimage Noncommercial Source-Available License 1.0
+
+Copyright (c) 2026 Tom Johnson (https://github.com/tomjohndesign).
+All rights reserved except as expressly granted below.
+
+1. Ownership and scope
+
+Tom Johnson retains ownership of his original Pilgrimage code and content.
+This license grants limited permission to use that material; it does not
+transfer ownership.
+
+"Covered Material" means the copyrightable material in this repository that
+Tom Johnson owns or is authorized to license and makes available under this
+license, including source code, game content, artwork, audio, documentation,
+asset recipes, procedural generators, and their copyrightable outputs. It
+includes those materials in source or compiled form, in whole or in part.
+
+Third-party dependencies, code, fonts, assets, and other separately licensed
+materials remain the property of their respective owners and are governed
+by their own licenses. This license does not replace those licenses or claim
+ownership of third-party material. Contributors retain ownership of their
+own contributions unless separately agreed in writing.
+
+2. Noncommercial permission
+
+Subject to these terms, you may view, download, run, study, copy, modify, and
+share Covered Material, including modified versions, solely for noncommercial
+purposes, such as personal play, learning, experimentation, and contributions
+to Pilgrimage.
+
+When sharing Covered Material or modified versions, you must include this
+license and preserve copyright, attribution, and third-party notices. You
+must clearly identify your modifications and must not represent your version
+as an official release or as endorsed by Tom Johnson. Covered Material in
+your distribution remains subject to this license; you may not grant rights
+to it that this license does not grant.
+
+3. No resale or commercial use
+
+Without prior written permission from Tom Johnson, you may not sell, resell,
+license for a fee, rent, or otherwise commercially exploit Covered Material
+or modified versions of it.
+
+Commercial use means use primarily intended for or directed toward commercial
+advantage or monetary compensation. Prohibited uses include:
+
+- Selling or charging for copies, downloads, access, subscriptions, or game
+  content, including through Steam or any other storefront.
+- Operating an advertising-supported or otherwise monetized version of the
+  game, website, application, or service using Covered Material.
+- Incorporating Covered Material into a commercial game, product, or service,
+  or using it to develop such a product for yourself or a client.
+
+These restrictions apply even if you rename the game, change its branding,
+modify its code or assets, or distribute only part of the Covered Material.
+Distributing something without a price does not make an otherwise commercial
+use permissible.
+
+Commercial permissions must be obtained separately from Tom Johnson through
+the contact information at https://github.com/tomjohndesign.
+
+These restrictions do not limit Tom Johnson's use or licensing of material
+he owns or of contributions licensed to him under section 6.
+
+4. Names and branding
+
+No trademark rights are granted. You may use the Pilgrimage name and identify
+Tom Johnson for accurate attribution and description, but this license does
+not authorize impersonation, misleading branding, or claims of endorsement.
+
+5. Other rights and earlier copies
+
+This is a source-available license with commercial restrictions, not an
+open-source license. Public availability does not grant additional rights.
+
+Nothing here limits rights that applicable law grants independently of this
+license, rights granted by GitHub's terms for hosting, viewing, and forking
+public repositories on GitHub, or rights validly granted under a separate
+license for an earlier copy. This license does not retroactively revoke any
+such prior permissions.
+
+6. Contributions
+
+If, after these terms are published, you intentionally submit original code
+or content for inclusion in the official Pilgrimage repository at
+https://github.com/tomjohndesign/pilgrimage, you agree to license that
+contribution to recipients under this license. You also grant Tom Johnson a
+nonexclusive, worldwide, perpetual, irrevocable, royalty-free copyright
+license to use, reproduce, modify, display, perform, distribute, and
+sublicense your contribution as part of Pilgrimage and its derivatives under
+other terms, including commercial and proprietary terms.
+
+You retain ownership of your contribution. You must have authority to grant
+these permissions and must identify any third-party material and its license
+when submitting it. Separately licensed third-party material is governed by
+its own terms and is not subject to this additional grant. Merely creating a
+fork or private modification does not constitute a submission. This section
+does not apply retroactively to earlier submissions or override a separate
+written contribution agreement.
+
+7. Termination
+
+Your permissions under this license terminate automatically if you violate
+its terms. After termination, you must stop uses that require permission
+under this license unless Tom Johnson reinstates that permission in writing.
+
+8. Disclaimer
+
+TO THE EXTENT PERMITTED BY APPLICABLE LAW, COVERED MATERIAL IS PROVIDED
+"AS IS", WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+THE COPYRIGHT HOLDERS SHALL NOT BE LIABLE FOR CLAIMS, DAMAGES, OR OTHER
+LIABILITY ARISING FROM THE MATERIAL OR ITS USE.

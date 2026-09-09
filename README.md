@@ -4,6 +4,25 @@
 
 A medieval settlement builder inspired by RollerCoaster Tycoon & Age of Empires II.
 
+## License and ownership
+
+Copyright © 2026 Tom Johnson. Tom retains ownership of his original Pilgrimage
+code and content. This repository is **source-available for noncommercial use**,
+not open source. The [license](LICENSE) permits personal play, study,
+modification, and noncommercial sharing with the required notices.
+
+**Resale and commercial use require Tom Johnson's prior written permission.**
+This includes paid Steam releases, monetized hosted versions, and incorporating
+the code or assets into commercial products, including modified or renamed
+versions. The terms cover Tom's code, artwork, audio, documentation, asset
+recipes, and procedural generators. Third-party materials retain their own
+licenses and ownership. See [LICENSE](LICENSE) for the complete terms and
+[Tom's GitHub profile](https://github.com/tomjohndesign) for permission inquiries.
+
+Before submitting code or assets for inclusion, read the contribution terms
+in [LICENSE, section 6](LICENSE). You retain ownership of your contributions
+and grant Tom permission to include them in commercial Pilgrimage releases.
+
 ## Releases and documentation
 
 Every merge to `main` gets a patch version and a changelog entry from the
