@@ -705,6 +705,22 @@ describe("generateMap", () => {
     )
   }, SWEEP_TIMEOUT)
 
+  it("continues east after clearing the grove in seed 1377249436", () => {
+    const map = generateMap({ seed: 1377249436, width: 512, depth: 512 })
+    const road = map.road!
+    const flank = road.findIndex(p => p.x >= 124)
+    const glade = road.findIndex(p => p.x >= 200)
+    expect(flank).toBeGreaterThan(0)
+    expect(glade).toBeGreaterThan(flank)
+    // The old forced forest exit dragged the road back to x=67 after it had
+    // already rounded the eastern flank, then east again across open land.
+    expect(Math.min(...road.slice(flank, glade).map(p => p.x))).toBeGreaterThanOrEqual(124)
+    expect(new Set(road.map(p => `${p.x},${p.z}`)).size).toBe(road.length)
+    for (let i = 1; i < road.length; i++) {
+      expect(Math.abs(road[i].x - road[i - 1].x) + Math.abs(road[i].z - road[i - 1].z)).toBe(1)
+    }
+  }, SWEEP_TIMEOUT)
+
   it("keeps the road at a sane length — it seeks open ground, it doesn't wander the map for it", () => {
     // Glade-seeking plus a detour around each dark forest can add up, but the
     // road still reads as a way across the map, not a maze.

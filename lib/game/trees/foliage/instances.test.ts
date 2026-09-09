@@ -56,5 +56,15 @@ it("keeps every potentially visible tree through pan, rotation, zoom and parent 
   expect(mesh.instanceMatrix.array).toEqual(matrices)
   for (let i = 0; i < mesh.count; i++) expect(ids.getX(i)).toBeCloseTo(sources[visible[i]].tree / 10000)
   expect(data.update(mesh, camera)).toBe(false)
+  // A loading boundary reconnects layout effects and clears the draw count and
+  // colors. The stationary camera must still get a complete forest next frame.
+  const count = mesh.count
+  expect(count).toBeGreaterThan(0)
+  mesh.count = 0
+  mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(sources.length * 3), 3)
+  data.invalidate()
+  expect(data.update(mesh, camera)).toBe(true)
+  expect(mesh.count).toBe(count)
+  expect(mesh.instanceColor.getX(0)).toBe(.75)
   mesh.dispose(); geometry.dispose(); material.dispose()
 })

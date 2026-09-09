@@ -28,6 +28,8 @@ export function isSelected(selection: Selection | null, candidate: Selection): b
 }
 
 interface CameraState {
+  /** User camera input waits for the opening map reveal. */
+  inputLocked: boolean
   /** Camera focus point on the ground plane. */
   targetX: number
   targetZ: number
@@ -85,15 +87,16 @@ export const useCameraStore = create<CameraState>((set) => ({
   mapWidth: DEFAULT_MAP_WIDTH,
   mapDepth: DEFAULT_MAP_DEPTH,
   selection: null,
+  inputLocked: false,
 
-  pan: (dx, dz) => set((s) => clampTarget(s, s.targetX + dx, s.targetZ + dz)),
+  pan: (dx, dz) => set((s) => s.inputLocked ? s : clampTarget(s, s.targetX + dx, s.targetZ + dz)),
 
-  panTo: (x, z) => set((s) => clampTarget(s, x, z)),
+  panTo: (x, z) => set((s) => s.inputLocked ? s : clampTarget(s, x, z)),
 
-  rotate: (direction) => set((s) => ({ viewIndex: s.viewIndex + direction })),
+  rotate: (direction) => set((s) => s.inputLocked ? s : ({ viewIndex: s.viewIndex + direction })),
 
   zoomBy: (factor) =>
-    set((s) => ({
+    set((s) => s.inputLocked ? s : ({
       viewSize: clampViewSize(s.viewSize * factor, maxViewSizeForMap(s.mapWidth, s.mapDepth)),
     })),
 
@@ -121,7 +124,7 @@ export const useCameraStore = create<CameraState>((set) => ({
 
   // Deliberately leaves mapWidth/mapDepth alone — reset is a camera action.
   reset: () =>
-    set((s) => ({
+    set((s) => s.inputLocked ? s : ({
       ...INITIAL,
       viewSize: clampViewSize(DEFAULT_VIEW_SIZE, maxViewSizeForMap(s.mapWidth, s.mapDepth)),
     })),

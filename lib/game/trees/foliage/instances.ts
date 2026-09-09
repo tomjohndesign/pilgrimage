@@ -38,6 +38,10 @@ export class FoliageInstances {
     this.version = -1
   }
 
+  /** Suspense can reconnect layout effects without replacing the source data.
+   * Repack attributes after its mesh buffers have been reset, even at rest. */
+  invalidate() { this.version = -1 }
+
   update(mesh: THREE.InstancedMesh, camera: THREE.Camera): boolean {
     this.view.update(camera)
     if (this.version === this.view.version && this.world.equals(mesh.matrixWorld)) return false

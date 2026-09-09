@@ -177,12 +177,6 @@ const DARK_EDGE_KEEP_Z = 8
 
 /** A track is only worth cutting if it's at most this fraction of the detour. */
 const TRACK_MAX_RATIO = 0.85
-/** The direct route is "in the dark" where the dark shade is at least this. */
-const TRACK_DARK_SHADE = 0.5
-/** Dark stretches of the direct route closer than this merge into one crossing. */
-const TRACK_MERGE_GAP = 8
-/** A track's ends sit this many tiles beyond the dark shade on the direct route. */
-const TRACK_MARGIN = 4
 
 // --- Founding site -----------------------------------------------------------
 
@@ -633,52 +627,12 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     if (tiles[i] === "darkwood") walkable[i] = WATER_KIND_LAKE
   }
 
-  // --- Where the direct route crosses the dark forest ------------------------
-  // The provisional road is the direct route; where it runs through the dark
-  // shade is a crossing. Each crossing gets a pair of waypoints on the direct
-  // route just outside the shade (on dry land, so every road segment can be
-  // routed water-aware). The real road is routed *through* those waypoints,
-  // so after skirting the old growth it must come back to the direct line —
-  // a genuine detour, not a road that merely drifted past one end.
-  const crossings: Array<[number, number]> = []
-  for (let p = 0; p < provisional.length; p++) {
-    if (darkShade[provisional[p]] < TRACK_DARK_SHADE) continue
-    const last = crossings[crossings.length - 1]
-    if (last && p - last[1] <= TRACK_MERGE_GAP) last[1] = p
-    else crossings.push([p, p])
-  }
-  const spans: Array<[number, number]> = []
-  for (const [pa, pb] of crossings) {
-    let a = pa - TRACK_MARGIN
-    let b = pb + TRACK_MARGIN
-    while (a > 0 && kind[provisional[a]] !== 0) a--
-    while (b < provisional.length - 1 && kind[provisional[b]] !== 0) b++
-    const prev = spans[spans.length - 1]
-    if (a <= 0 || b >= provisional.length - 1 || (prev && a <= prev[1])) continue
-    spans.push([a, b])
-  }
-
   // --- Road: west edge to east edge ------------------------------------------
-  // Routed over land with lake water impassable and rivers crossable only via
-  // straight bridges, so forest in the way gets carved but water is
-  // respected. The fallbacks keep the road guarantee even on hostile seeds.
-  // The route comes back as an ordered walk, west edge to east edge; keep
-  // that order on the map (`road`) so travelers know which way along is.
-  const stops = [provisional[0]]
-  for (const [a, b] of spans) stops.push(provisional[a], provisional[b])
-  stops.push(provisional[provisional.length - 1])
-  const roadRoute: number[] = []
-  for (let st = 0; st < stops.length - 1; st++) {
-    const segment = straightenRoad({ width, depth, tiles, buildings: [], elevation }, routeRoad(
-      { x: stops[st] % width, z: Math.floor(stops[st] / width) },
-      { x: stops[st + 1] % width, z: Math.floor(stops[st + 1] / width) },
-      roadCost,
-    ))
-    // Reserve these crossings before the next segment chooses a bridge.
-    for (const i of segment) if (kind[i]) passKind[i] = 0
-    // Consecutive segments share their junction tile; keep it once.
-    for (let k = st === 0 ? 0 : 1; k < segment.length; k++) roadRoute.push(segment[k])
-  }
+  // Route the whole road together. Pinning it to the provisional forest exits
+  // can force a return around a grove after the road has already cleared it,
+  // followed by a cutback toward the destination through the same open glade.
+  const roadRoute = straightenRoad({ width, depth, tiles, buildings: [], elevation },
+    routeRoad(start, goal, roadCost))
 
   const roadTiles: number[] = []
   const road: TilePos[] = []
@@ -733,7 +687,11 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     return false
   }
   const shortcuts: Shortcut[] = []
-  for (const [a, b] of spans) {
+  // Attach dangerous alternatives where the provisional line actually meets
+  // the finished road on dry land; never create a turn off a bridge deck.
+  const joins = provisional.flatMap((tile, index) => roadIndex[tile] >= 0 && kind[tile] === 0 ? [index] : [])
+  for (let j = 1; j < joins.length; j++) {
+    const a = joins[j - 1], b = joins[j]
     const entry = roadIndex[provisional[a]]
     const exit = roadIndex[provisional[b]]
     if (entry < 0 || exit <= entry) continue

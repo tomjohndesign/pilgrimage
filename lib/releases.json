@@ -1,7 +1,49 @@
 {
-  "lastProcessedCommit": "99654cf3c1d750d76e5b47a855261bd6f60a96a0",
-  "releaseCount": 122,
+  "lastProcessedCommit": "633ba970567c35cccd4d0a82aecef1cf932e421f",
+  "releaseCount": 129,
   "releases": [
+    {
+      "version": "0.0.143",
+      "title": "Release 0.0.143",
+      "summary": "Make tavern drinks cheaper and fund travelers for roadside stops (#164)",
+      "commit": "633ba970567c35cccd4d0a82aecef1cf932e421f"
+    },
+    {
+      "version": "0.0.142",
+      "title": "Release 0.0.142",
+      "summary": "Keep monks evangelizing for three days with rest in place (#159)",
+      "commit": "4d969f715f4f793dd5896bcc101cc9f3173159ef"
+    },
+    {
+      "version": "0.0.141",
+      "title": "Release 0.0.141",
+      "summary": "Open the altar when selecting the relic (#162)",
+      "commit": "47f7262418bdc0f29d0b23e08fe08ea94ff84817"
+    },
+    {
+      "version": "0.0.140",
+      "title": "Release 0.0.140",
+      "summary": "Fix road cutbacks and space seeded taverns by a 192-tile radius (#163)",
+      "commit": "fe9237e54aed8f970d46e854963d95647d85b0ce"
+    },
+    {
+      "version": "0.0.139",
+      "title": "Release 0.0.139",
+      "summary": "Add church-centered radial map loading (#160)",
+      "commit": "ad6ce1f682d5072dbb061b2c3560884375471919"
+    },
+    {
+      "version": "0.0.138",
+      "title": "Release 0.0.138",
+      "summary": "Halve hunger and stamina drain rates (#158)",
+      "commit": "a452c12a90ee95b8de150d19395723420777d64b"
+    },
+    {
+      "version": "0.0.137",
+      "title": "Release 0.0.137",
+      "summary": "Add staffed roadside towns and a day-based calendar (#157)",
+      "commit": "ada4082e20600b2c24f2ce99681da26b4e7752d1"
+    },
     {
       "version": "0.0.136",
       "title": "Release 0.0.136",

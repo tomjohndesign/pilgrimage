@@ -71,6 +71,7 @@ export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, 
     mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(entries.length * 3), 3).setUsage(THREE.DynamicDrawUsage)
     ids.instanceMatrix = mesh.instanceMatrix; ids.instanceColor = mesh.instanceColor
     mesh.count = ids.count = 0
+    data.instances.invalidate()
   }, [data, entries])
   useFrame(({ camera: currentCamera }) => {
     const yaw = Math.atan2(currentCamera.matrixWorld.elements[8], currentCamera.matrixWorld.elements[10])

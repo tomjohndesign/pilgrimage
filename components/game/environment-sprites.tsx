@@ -1,6 +1,8 @@
 "use client"
 
-import { memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react"
+import { SceneAssetBoundary } from "./scene-assets"
+
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 import { usePixelWorldTexel } from "@/components/pixel-canvas"
@@ -14,8 +16,8 @@ import { blockKey } from "@/lib/game/render/blocks"
 export function EnvironmentField({ placements }: { placements: EnvironmentPlacement[] }) {
   const [small, large] = useMemo(() => [placements.filter(p => !p.boulderSize), placements.filter(p => p.boulderSize)], [placements])
   return <>
-    <Suspense fallback={null}><SpriteField placements={small} /></Suspense>
-    {large.length > 0 && <Suspense fallback={null}><SpriteField placements={large} large /></Suspense>}
+    <SceneAssetBoundary><SpriteField placements={small} /></SceneAssetBoundary>
+    {large.length > 0 && <SceneAssetBoundary><SpriteField placements={large} large /></SceneAssetBoundary>}
   </>
 }
 
