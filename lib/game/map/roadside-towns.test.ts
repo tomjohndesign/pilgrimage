@@ -4,9 +4,8 @@ import { describe, expect, it } from "vitest"
 import { addRoadsideTowns, TOWN_SPACING, TOWN_CHAPEL_CLEARANCE, TOWN_APPROACH_CLEARANCE } from "./roadside-towns"
 import { generateMap } from "./generate-map"
 import { type GameMap, tileAt } from "./types"
-import { TILES_PER_DAY } from "../calendar"
 import { tavernVisitPlan, servingHouses } from "../tavern"
-import { buildingApproaches } from "../building-rotation"
+import { buildingApproaches, buildingEntry } from "../building-rotation"
 import { settlementRoute } from "../settlement-route"
 import { jobBuildings, settlementRenown } from "../settlement"
 import { enclaveHousing } from "../housing"
@@ -21,21 +20,56 @@ function roadMap(): GameMap {
 }
 
 describe("independent roadside towns", () => {
-  it("spaces complete communities just under a day's walk apart", () => {
+  it("spaces complete communities by a 192-tile radius", () => {
     const map = roadMap()
     addRoadsideTowns(map)
-    expect(map.towns).toHaveLength(3)
+    expect(map.towns).toHaveLength(2)
     for (const [i, town] of map.towns!.entries()) {
       const buildings = map.buildings.filter(b => b.townId === town.id)
       expect(buildings.map(b => b.buildType)).toEqual(["tavern", "house"])
       expect(buildings.every(b => b.owner === "independent" && !b.construction)).toBe(true)
       if (i) {
         expect(town.junction - map.towns![i - 1].junction).toBe(TOWN_SPACING)
-        expect(town.junction - map.towns![i - 1].junction).toBeLessThan(TILES_PER_DAY)
+        expect(TOWN_SPACING).toBe(192)
       }
     }
     expect(map.road!.every(p => tileAt(map, p.x, p.z) === "path")).toBe(true)
     expect(servingHouses(map, () => false)).toHaveLength(0)
+  })
+
+  it("keeps looping roads outside every earlier tavern's radius", () => {
+    const width = 440, depth = 80
+    // Three parallel passes: the third comes back close to the first town,
+    // despite being far from the most recently placed town along the road.
+    const road = [
+      ...Array.from({ length: 421 }, (_, x) => ({ x: x + 10, z: 20 })),
+      ...Array.from({ length: 20 }, (_, z) => ({ x: 430, z: z + 21 })),
+      ...Array.from({ length: 421 }, (_, x) => ({ x: 429 - x, z: 40 })),
+      ...Array.from({ length: 20 }, (_, z) => ({ x: 9, z: z + 41 })),
+      ...Array.from({ length: 421 }, (_, x) => ({ x: x + 10, z: 60 })),
+    ]
+    const map: GameMap = { width, depth, tiles: Array(width * depth).fill("grass"), buildings: [], road }
+    for (const p of road) map.tiles[p.z * width + p.x] = "path"
+    addRoadsideTowns(map)
+    expect(map.towns).toHaveLength(2)
+    const entrances = map.towns!.map(t => buildingEntry(map.buildings.find(b => b.id === t.tavernId)!))
+    for (let i = 0; i < entrances.length; i++) for (let j = 0; j < i; j++) {
+      expect(Math.hypot(entrances[i].x - entrances[j].x, entrances[i].z - entrances[j].z)).toBeGreaterThanOrEqual(192)
+    }
+  })
+
+  it("continues beyond an unsuitable site without shrinking the radius", () => {
+    const map = roadMap()
+    // The nominal second site at x=288 is flooded; the next dry town must
+    // remain outside the first tavern's circle while finding accessible land.
+    for (let z = 0; z < map.depth; z++) for (let x = 280; x < 310; x++) {
+      if (z !== 15) map.tiles[z * map.width + x] = "water"
+    }
+    addRoadsideTowns(map)
+    expect(map.towns).toHaveLength(2)
+    expect(map.road![map.towns![1].junction].x).toBeGreaterThanOrEqual(310)
+    const [a, b] = map.towns!.map(t => buildingEntry(map.buildings.find(b => b.id === t.tavernId)!))
+    expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeGreaterThanOrEqual(192)
   })
 
   it("contributes no jobs, housing, renown or building influence", () => {
@@ -52,6 +86,10 @@ describe("independent roadside towns", () => {
   it.each([1, 7919, 42, 99, 12345])("generates reachable taverns on seeded terrain (%s)", seed => {
     const map = generateMap({ seed })
     expect(map.towns!.length).toBeGreaterThan(0)
+    const entrances = map.towns!.map(t => buildingEntry(map.buildings.find(b => b.id === t.tavernId)!))
+    for (let i = 0; i < entrances.length; i++) for (let j = 0; j < i; j++) {
+      expect(Math.hypot(entrances[i].x - entrances[j].x, entrances[i].z - entrances[j].z)).toBeGreaterThanOrEqual(192)
+    }
     for (const town of map.towns!) {
       const road = map.road![town.junction]
       const tavern = map.buildings.find(b => b.id === town.tavernId)!
