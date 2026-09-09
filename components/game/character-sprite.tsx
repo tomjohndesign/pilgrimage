@@ -13,6 +13,7 @@ import type { FrameRegistration } from "@/lib/game/base-person/bake"
 import type { GameMap } from "@/lib/game/map/types"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 import { characterSupport } from "@/lib/game/character-support"
+import { restContacts, restContactOrigin } from "@/lib/game/base-person/rest-contact"
 import { personRecipe } from "@/lib/game/base-person/design"
 import { BASE_PERSON } from "@/lib/game/base-person/pose"
 import { walkContact, reducedWalkFrame, crossedWalkSupport, plantFoot, type FootPlant, type FootPlantResult, DEFAULT_WALK_STRIDE } from "@/lib/game/base-person/gait"
@@ -247,10 +248,11 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
       }
     }
     if (sprite.current) sprite.current.userData.clip = flight ? "flying" : playing ? "performing" : action ? requested : moving ? "walk" : "idle"
+    origin.setFromMatrixPosition(parent.matrixWorld)
+    const support = map && !moving && !special && action ? characterSupport(map, origin.x, origin.z, requested) : undefined
+    if (support) heading = support.heading
     const direction = spriteRow(heading, yaw)
     const row = visual.rowOffset + direction
-    origin.setFromMatrixPosition(parent.matrixWorld)
-    const support = map && !moving && !flight ? characterSupport(map, origin.x, origin.z, requested) : undefined
     if (poseRoot.current) {
       if (workTarget && workPoint) {
         footPlant.current = null
@@ -285,8 +287,11 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
         poseRoot.current.position.copy(corrected.applyMatrix4(parentInverse))
       } else {
         footPlant.current = null
-        if (support) {
-          corrected.set(origin.x, Math.max(origin.y, support.height), origin.z)
+        if (support && visual.design && (requested === "sitting" || requested === "sleeping" || requested === "seatedPrayer")) {
+          const point = restContacts(visual.design, requested, clip.columns)[frame]
+          const aligned = restContactOrigin({ ...support.anchor, y: support.height }, point,
+            direction, yaw, pitch, size / BASE_PERSON.camera.viewSize)
+          corrected.set(aligned.x, aligned.y, aligned.z)
           poseRoot.current.position.copy(corrected.applyMatrix4(parentInverse))
         } else poseRoot.current.position.set(0, 0, 0)
       }
@@ -318,9 +323,9 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
       poseRoot.current.updateWorldMatrix(false, false)
       corrected.setFromMatrixPosition(poseRoot.current.matrixWorld)
       const surface = walkingSurface(map, corrected.x, corrected.z)
-      // The same authored top lifts the pose and clears enlarged scenery depth
-      // in both body and ID passes. Furniture is level even on graded terrain.
-      if (support && support.height >= surface.height) groundPlane.value.set(0, 1, 0, -support.height)
+      // A mattress supports the whole body; seated legs can hang below the
+      // bench, so their color and ID depth must still use the terrain plane.
+      if (support && requested === "sleeping" && support.height >= surface.height) groundPlane.value.set(0, 1, 0, -support.height)
       else groundPlane.value.set(-surface.dx, 1, -surface.dz,
         surface.dx * corrected.x + surface.dz * corrected.z - surface.height)
     } else groundPlane.value.set(0, 0, 0, 0)
