@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "d55113a49b247aabd0342fda7e945174fce5e9ed",
-  "releaseCount": 121,
+  "lastProcessedCommit": "99654cf3c1d750d76e5b47a855261bd6f60a96a0",
+  "releaseCount": 122,
   "releases": [
+    {
+      "version": "0.0.136",
+      "title": "Release 0.0.136",
+      "summary": "Add dead trees, dark forest floor sprites, and skull warning signs (#156)",
+      "commit": "99654cf3c1d750d76e5b47a855261bd6f60a96a0"
+    },
     {
       "version": "0.0.135",
       "title": "Release 0.0.135",
