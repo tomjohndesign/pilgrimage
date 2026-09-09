@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "e1c01ff8b2f4454032a566a3748b9ae5a839b13c",
-  "releaseCount": 146,
+  "lastProcessedCommit": "005b1f2f36c88836dcc548c21dea4eb05dc171f2",
+  "releaseCount": 148,
   "releases": [
+    {
+      "version": "0.0.162",
+      "title": "Release 0.0.162",
+      "summary": "Reserve tree thinning for sustained FPS drops (#180)",
+      "commit": "005b1f2f36c88836dcc548c21dea4eb05dc171f2"
+    },
+    {
+      "version": "0.0.161",
+      "title": "Release 0.0.161",
+      "summary": "Make /play the landing page and preload game assets (#181)",
+      "commit": "bb50a68b6a209fba95d2bd46a686422139a857b4"
+    },
     {
       "version": "0.0.160",
       "title": "Release 0.0.160",
