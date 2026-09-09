@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "9b2b20c3e6683369a2918c698b6c1ed94a40375f",
-  "releaseCount": 154,
+  "lastProcessedCommit": "4d9433dec734aeb8533f72178e449a4417ae0dcb",
+  "releaseCount": 155,
   "releases": [
+    {
+      "version": "0.0.169",
+      "title": "Release 0.0.169",
+      "summary": "Travel in companies: carts, pack animals and settling couples (#187)",
+      "commit": "4d9433dec734aeb8533f72178e449a4417ae0dcb"
+    },
     {
       "version": "0.0.168",
       "title": "Release 0.0.168",
