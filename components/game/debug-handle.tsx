@@ -220,6 +220,10 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
       setView: (viewIndex: number) =>
         useCameraStore.setState({ viewIndex: Math.round(viewIndex) }),
       setTarget: (x: number, z: number) => useCameraStore.setState({ targetX: x, targetZ: z }),
+      cameraState: () => {
+        const { targetX, targetZ, viewIndex, viewSize } = useCameraStore.getState()
+        return { targetX, targetZ, viewIndex, viewSize }
+      },
       setZoom: (viewSize: number) => useCameraStore.setState({ viewSize }),
       setOutline: (mode: OutlineMode) => useCameraStore.setState({ outlineMode: mode }),
       reset: () => useCameraStore.getState().reset(),

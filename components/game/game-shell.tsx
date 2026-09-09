@@ -2,9 +2,9 @@
 
 import { townResidents } from "@/lib/game/town-residents"
 
-import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES, type SceneVisibility } from "@/lib/game/scene-visibility"
-import { DEFAULT_ELEVATION, groundHeight, type ElevationSettings } from "@/lib/game/map/elevation"
+import { groundHeight } from "@/lib/game/map/elevation"
 import dynamic from "next/dynamic"
+import { useRouter } from "next/navigation"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { createBenchmarkCity, benchmarkCity as cityFixture, type CityBenchmarkMode } from "@/lib/game/city-benchmark"
@@ -12,30 +12,29 @@ import { createFootpaths } from "@/lib/game/footpaths"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { CHARACTER_PIXELS_PER_UNIT } from "@/lib/game/render/pixel-scale"
-import { BASE_CHARACTER_SCALE, DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE } from "@/lib/game/base-person/gait"
-import { BASE_PERSON } from "@/lib/game/base-person/pose"
-import { DEFAULT_MOVEMENT } from "@/lib/game/motion"
-import type { CharacterModel } from "@/lib/game/character-assets"
-import { DEFAULT_TREE_MODEL, type TreeModel } from "@/lib/game/trees/render-model"
-import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER, ROAD_TIERS } from "@/lib/game/map/road"
-import { loadSavedSeed } from "@/lib/game/seed-storage"
+import { ROAD_TIERS } from "@/lib/game/map/road"
 import { loadDefaultMapSize, saveDefaultMapSize } from "@/lib/game/map-size-storage"
+import { useSimulationStore, type SimulationSpeed } from "@/lib/game/simulation-store"
+import { saveMatchesWorld, saveResumesQuery } from "@/lib/game/save/resume"
+import type { GameSave } from "@/lib/game/save/schema"
+import {
+  DEFAULT_DISPLAY_SETTINGS,
+  DEFAULT_WORLD_SETTINGS,
+  displaySettingsOf,
+  worldSettingsOf,
+  type DisplaySettings,
+  type WorldSettings,
+} from "@/lib/game/save/settings"
+import { loadDisplaySettings, loadGameSave, storeDisplaySettings } from "@/lib/game/save/storage"
+import { playQuery } from "@/lib/game/save/url"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import { generateRelic, visitChance } from "@/lib/game/relic"
 import { roadsideEvangelism } from "@/lib/game/monk-evangelism"
-import { DEFAULT_TRAFFIC, generateTravelers, travelerCountForMap } from "@/lib/game/travelers"
-import {
-  DEFAULT_CLEARING_COUNT,
-  DEFAULT_DARK_FOREST_COUNT,
-  DEFAULT_FOREST_COVERAGE,
-  DEFAULT_GLADE_COUNT,
-  DEFAULT_MAP_WIDTH,
-  DEFAULT_RELIC_DISTANCE,
-  DEFAULT_WATER_COVERAGE,
-  generateMap,
-} from "@/lib/game/map/generate-map"
+import { generateTravelers, travelerCountForMap } from "@/lib/game/travelers"
+import { DEFAULT_MAP_WIDTH, generateMap } from "@/lib/game/map/generate-map"
 
+import { useAutosave } from "@/hooks/use-autosave"
 import { useSettlement } from "@/hooks/use-settlement"
 import { previewResidents } from "@/lib/game/jobs/preview"
 import { BUILDING_PREVIEW, JOB_PREVIEW } from "@/lib/game/building-preview"
@@ -61,89 +60,13 @@ const GameCanvas = dynamic(() => loadGameCanvas().then((m) => m.GameCanvas), {
   loading: () => null,
 })
 
-/** Map tuning knobs, in HUD units (coverage is a percentage for URL cleanliness). */
-export interface MapSettings extends SceneVisibility {
-  elevation: ElevationSettings
-  /** Map edge length in tiles; maps are square. */
-  size: number
-  /** % of the map left as forest after the glades are carved. */
-  coverage: number
-  /** Number of open grass glades carved out of the forest. */
-  glades: number
-  /** Number of small forest-floor clearings scattered through the woods. */
-  clearings: number
-  /** How many ancient groves grow across the woods. */
-  darkForests: number
-  /** How far off the road the relic's hovel is sited, in tiles. */
-  relicDistance: number
-  /** Traffic density, in travelers per 128 × 128 tiles. */
-  traffic: number
-  /** Walking speed in tiles per second at the reference character size. */
-  walkSpeed: number
-  characterFps: number
-  walkSync: boolean
-  stride: number
-  paceVariation: number
-  pathEase: number
-  acceleration: number
-  characterModel: CharacterModel
-  /** Parametric trees, or the baked pixel foliage sprites from the tree playground. */
-  treeModel: TreeModel
-  /** Uniform sprite-size multipliers, independently tuned for each model. */
-  baseSize: number
-  draftSize: number
-  /** Road development tier — index into ROAD_TIERS. */
-  road: number
-  /** Road surface look, 0–1 opacity over the grass. */
-  roadOpacity: number
-  /** Road surface brightness multiplier. */
-  roadShade: number
-  /** 0–1 darkness of the line along the road's edge. */
-  roadEdgeLine: number
-  /** Width of that line in CSS pixels, like the tree and building outlines. */
-  roadEdgeWidth: number
-  /** Max % of the map under water (rivers, lakes, ponds). */
-  water: number
-  /** Forced counts for water bodies; −1 lets the seed roll them. */
-  rivers: number
-  lakes: number
-  ponds: number
-}
+/**
+ * Map tuning knobs, in HUD units: the world's generation inputs (which travel
+ * in the URL and the save) plus this device's display preferences.
+ */
+export interface MapSettings extends WorldSettings, DisplaySettings {}
 
-/** Slider value that means "let the seed decide" for water body counts. */
-export const WATER_COUNT_AUTO = -1
-
-export const DEFAULT_SETTINGS: MapSettings = {
-  ...DEFAULT_SCENE_VISIBILITY,
-  elevation: DEFAULT_ELEVATION,
-  size: DEFAULT_MAP_WIDTH,
-  coverage: Math.round(DEFAULT_FOREST_COVERAGE * 100),
-  glades: DEFAULT_GLADE_COUNT,
-  clearings: DEFAULT_CLEARING_COUNT,
-  darkForests: DEFAULT_DARK_FOREST_COUNT,
-  relicDistance: DEFAULT_RELIC_DISTANCE,
-  traffic: DEFAULT_TRAFFIC,
-  walkSpeed: DEFAULT_WALK_SPEED,
-  characterFps: BASE_PERSON.defaultFps,
-  walkSync: true,
-  stride: DEFAULT_WALK_STRIDE,
-  paceVariation: DEFAULT_MOVEMENT.variation,
-  pathEase: DEFAULT_MOVEMENT.pathEase,
-  acceleration: DEFAULT_MOVEMENT.acceleration,
-  characterModel: "base",
-  treeModel: DEFAULT_TREE_MODEL,
-  baseSize: BASE_CHARACTER_SCALE,
-  draftSize: 1,
-  road: DEFAULT_ROAD_TIER,
-  roadOpacity: DEFAULT_ROAD_LOOK.opacity,
-  roadShade: DEFAULT_ROAD_LOOK.shade,
-  roadEdgeLine: DEFAULT_ROAD_LOOK.edgeLine,
-  roadEdgeWidth: DEFAULT_ROAD_LOOK.edgeWidth,
-  water: Math.round(DEFAULT_WATER_COVERAGE * 100),
-  rivers: WATER_COUNT_AUTO,
-  lakes: WATER_COUNT_AUTO,
-  ponds: WATER_COUNT_AUTO,
-}
+export const DEFAULT_SETTINGS: MapSettings = { ...DEFAULT_WORLD_SETTINGS, ...DEFAULT_DISPLAY_SETTINGS }
 
 /**
  * Picking a seed is the one legitimate use of Math.random(): it happens outside
@@ -155,18 +78,33 @@ function randomSeed(): number {
 
 export function GameShell({
   initialSeed,
-  initialSettings,
+  initialWorld = {},
+  initialDisplay = {},
   pixelation,
   benchmarkCity = false,
+  expectResume = false,
+  mode = "play",
 }: {
   initialSeed?: number
   benchmarkCity?: false | CityBenchmarkMode
-  initialSettings?: Partial<MapSettings>
+  /** The server saw the resume cookie: a saved world is expected on this browser. */
+  expectResume?: boolean
+  /**
+   * The landing page (/) picks a seed and size and hands over to /play, which
+   * is always the game: the saved world when there is one, else a new one.
+   */
+  mode?: "landing" | "play"
+  /** Generation inputs named in the link; they decide whether the save resumes. */
+  initialWorld?: Partial<WorldSettings>
+  /** Display tuning from older links; overrides this device's preferences. */
+  initialDisplay?: Partial<DisplaySettings>
   /** Tune the world pixel renderer without changing map or simulation settings. */
   pixelation?: PixelationProps
 }) {
-  const [starting, setStarting] = useState(!!benchmarkCity)
-  const [started, setStarted] = useState(!!benchmarkCity)
+  const router = useRouter()
+  const playing = mode === "play"
+  const [starting, setStarting] = useState(playing)
+  const [started, setStarted] = useState(playing)
 
   // With no ?seed= in the URL the seed is chosen client-side in an effect, so
   // the server and client never render from different seeds.
@@ -178,13 +116,18 @@ export function GameShell({
   const [blasterPastor, setBlasterPastor] = useState(false)
   const [lastMarch, setLastMarch] = useState(false)
   const [defaultMapSize, setDefaultMapSize] = useState(DEFAULT_MAP_WIDTH)
-  // Resolve preferences before Play; terrain does not exist on the landing page.
-  const [mapSizeReady, setMapSizeReady] = useState(initialSettings?.size !== undefined)
   const [mapSizeSaved, setMapSizeSaved] = useState(true)
   const [settings, setSettings] = useState<MapSettings>({
     ...DEFAULT_SETTINGS,
-    ...initialSettings,
+    ...initialDisplay,
+    ...initialWorld,
   })
+  // The browser's save and preferences are read once after mounting, so the
+  // server and client never render from different worlds. Undefined until then.
+  const [restore, setRestore] = useState<GameSave | null | undefined>(undefined)
+  const booted = restore !== undefined
+  // The first map a matching save was applied to; a regenerated world starts fresh.
+  const restoredRoad = useRef<GameMap["road"] | null>(null)
   const [pixelationOverrides, setPixelationOverrides] = useState<PixelationProps>({})
   const pixelationSettings = {
     pixelsPerUnit: pixelationOverrides.pixelsPerUnit ?? pixelation?.pixelsPerUnit ?? CHARACTER_PIXELS_PER_UNIT,
@@ -211,62 +154,41 @@ export function GameShell({
   }, [starting, started])
 
   useEffect(() => {
-    // Resolve the browser preference before generating terrain or writing the URL.
+    // Resolve the browser's preferences and save before generating terrain or
+    // writing the URL. A link that names a different world wins over the save.
     const size = loadDefaultMapSize()
     setDefaultMapSize(size)
-    if (initialSettings?.size === undefined) setSettings(current => ({ ...current, size }))
-    setMapSizeReady(true)
-  }, [initialSettings?.size])
+    const { save } = loadGameSave()
+    // The landing page keeps the save only to offer "Continue"; its own seed is a fresh roll.
+    const resuming = playing && save && !benchmarkCity && saveResumesQuery(save, initialSeed, initialWorld) ? save : null
+    setSettings(current => ({
+      ...current,
+      ...loadDisplaySettings(),
+      ...initialDisplay,
+      ...(resuming ? { ...worldSettingsOf(resuming.world), treeModel: resuming.simulation.treeModel }
+        : initialWorld.size === undefined ? { size } : {}),
+    }))
+    if (resuming) setSeed(resuming.world.seed)
+    else setSeed(current => current ?? randomSeed())
+    setRestore(playing ? resuming : save)
+    // The link is read once at boot; later edits arrive through state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
+  // Keep the world's identity in the URL so any map can be bookmarked and revisited.
   useEffect(() => {
-    // A seed the player saved takes precedence over a random roll, but never
-    // over one named in the URL (that arrives via initialSeed).
-    if (seed === null) setSeed(loadSavedSeed() ?? randomSeed())
-  }, [seed])
+    if (!started || seed === null || !booted) return
+    window.history.replaceState(null, "", `?${playQuery(seed, settings, benchmarkCity)}`)
+  }, [seed, settings, benchmarkCity, booted, started])
 
-  // Keep seed and tuning in the URL so any map can be bookmarked and revisited.
+  // Display tuning is this browser's preference, kept across new maps.
   useEffect(() => {
-    if (!started || seed === null || !mapSizeReady) return
-    const query = new URLSearchParams({
-      seed: String(seed),
-      size: String(settings.size),
-      forest: String(settings.coverage),
-      glades: String(settings.glades),
-      clearings: String(settings.clearings),
-      dark: String(settings.darkForests),
-      relic: String(settings.relicDistance),
-      traffic: String(settings.traffic),
-      speed: String(settings.walkSpeed),
-      fps: String(settings.characterFps),
-      timing: settings.walkSync ? "distance" : "fps",
-      stride: String(settings.stride),
-      variation: String(settings.paceVariation),
-      easing: String(settings.pathEase),
-      acceleration: String(settings.acceleration),
-      characters: settings.characterModel,
-      trees: settings.treeModel,
-      baseSize: String(settings.baseSize),
-      draftSize: String(settings.draftSize),
-      road: String(settings.road),
-      opacity: String(settings.roadOpacity),
-      shade: String(settings.roadShade),
-      edgeline: String(settings.roadEdgeLine),
-      edgewidth: String(settings.roadEdgeWidth),
-      water: String(settings.water),
-      rivers: String(settings.rivers),
-      lakes: String(settings.lakes),
-      ponds: String(settings.ponds),
-    })
-    for (const [key] of VISIBILITY_TOGGLES) query.set(key, settings[key] ? "1" : "0")
-    query.set("buildingVisibility", settings.buildingVisibility)
-    for (const [key, value] of Object.entries(settings.elevation)) query.set(`e_${key}`, String(value))
-    if (benchmarkCity) query.set("benchmark", benchmarkCity === "routing-stress" ? "city-stress" : "city")
-    window.history.replaceState(null, "", `?${query}`)
-  }, [seed, settings, benchmarkCity, mapSizeReady, started])
+    if (booted) storeDisplaySettings(displaySettingsOf(settings))
+  }, [booted, settings])
 
   const generatedMap = useMemo(
     () =>
-      !started || seed === null || !mapSizeReady
+      !started || seed === null || !booted
         ? null
         : generateMap({
             seed,
@@ -286,7 +208,7 @@ export function GameShell({
     [
       seed,
       started,
-      mapSizeReady,
+      booted,
       settings.elevation,
       settings.size,
       settings.coverage,
@@ -302,6 +224,17 @@ export function GameShell({
   )
 
   const baseMap = useMemo(() => generatedMap && benchmarkCity ? createBenchmarkCity(generatedMap, benchmarkCity) : generatedMap, [generatedMap, benchmarkCity])
+
+  // A save applies to exactly one generated map: the first that matches it.
+  // Editing the seed or a generation input afterwards starts a fresh settlement.
+  const resumable = restore && saveMatchesWorld(restore, seed, settings) ? restore : null
+  const resumeWorld = resumable && (restoredRoad.current === null || (baseMap !== null && restoredRoad.current === baseMap.road)) ? resumable : null
+  const activeRestore = resumeWorld && baseMap ? resumeWorld : null
+  // The opening differs: a fresh world is revealed from its church, a resumed
+  // one from where the player left off, at the same zoom.
+  const resuming = starting && (resumeWorld !== null || (!booted && expectResume))
+  const activeRestoreRef = useRef(activeRestore)
+  activeRestoreRef.current = activeRestore
 
   const movement = useMemo(() => ({ variation: settings.paceVariation, pathEase: settings.pathEase, acceleration: settings.acceleration }),
     [settings.paceVariation, settings.pathEase, settings.acceleration])
@@ -330,7 +263,7 @@ export function GameShell({
   const simulation = useBuildStore(s => s.simulation)
   const monks = useMemo(() => [...founders, ...(simulation?.world.road === baseMap?.road ? joinedMonks : [])],
     [founders, joinedMonks, simulation, baseMap?.road])
-  const economy = useSettlement(baseMap, monks, relic)
+  const economy = useSettlement(baseMap, monks, relic, activeRestore?.settlement ?? null)
   const footpaths = useMemo(() => createFootpaths(baseMap ?? undefined), [baseMap])
   useEffect(() => { footpaths.paved = ROAD_TIERS[settings.road]?.paved ?? false }, [footpaths, settings.road])
   // Keep one live map for the canvas and HUD readers, including roadside preaching.
@@ -361,9 +294,17 @@ export function GameShell({
     camera.setMapSize(map.width, map.depth)
     if (BUILDING_PREVIEW) useCameraStore.setState({ viewSize: 24 })
     camera.select(null)
+    const resume = activeRestoreRef.current
+    if (resume) {
+      restoredRoad.current = map.road
+      useSimulationStore.setState({ paused: resume.playback.paused, speed: resume.playback.speed as SimulationSpeed })
+    }
     const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
     const city = cityFixture(map)
-    if (city) {
+    if (resume) {
+      useCameraStore.setState({ ...resume.camera })
+      camera.setMapSize(map.width, map.depth)
+    } else if (city) {
       useCameraStore.setState({ targetX: tileToWorldX(map, city.centre.x), targetZ: tileToWorldZ(map, city.centre.z), viewSize: 36 })
     } else if (hovel) {
       // Centre the church itself, matching its first-paint image. The camera
@@ -389,6 +330,14 @@ export function GameShell({
   }, [revealPhase, map?.road])
   useLayoutEffect(() => () => { useCameraStore.setState({ inputLocked: false }) }, [])
 
+  useAutosave({
+    enabled: revealPhase === "complete" && !benchmarkCity && !BUILDING_PREVIEW,
+    seed,
+    settings,
+    settlement: economy.settlement,
+    road: map?.road,
+  })
+
   // A new cast of travelers invalidates whoever was selected.
   useEffect(() => {
     useCameraStore.getState().select(null)
@@ -396,13 +345,17 @@ export function GameShell({
 
   return (
     <div className="fixed inset-0 overflow-hidden select-none" style={{ backgroundColor: GAME_BACKGROUND }}>
-      <LoadingChurch showChurch={!openingMap || !map || landmarkRoad !== map.road || revealPhase === "loading"}
+      <LoadingChurch showChurch={!resuming && (!openingMap || !map || landmarkRoad !== map.road || revealPhase === "loading")}
         generating={starting && revealPhase === "loading"} idle={!starting}
-        phase={revealPhase} overlayRef={loadingOverlay} view={openingView} viewSize={openingViewSize} />
+        phase={revealPhase} overlayRef={loadingOverlay} view={openingView} resuming={resuming}
+        viewSize={resumeWorld ? resumeWorld.camera.viewSize : openingViewSize}
+        groundOffset={resuming ? 0 : undefined}
+        surroundings={resuming && resumeWorld?.surroundings ? { patch: resumeWorld.surroundings, viewIndex: resumeWorld.camera.viewIndex } : null} />
       {map && relic ? (
         <GameCanvas
           {...pixelationSettings}
           map={map}
+          restore={activeRestore?.simulation ?? null}
           onLandmarkReady={() => setLandmarkRoad(map.road)}
           onRevealPhase={phase => setRevealStatus({ road: map.road, phase })}
           onRevealProgress={(progress, reach) => {
@@ -440,8 +393,9 @@ export function GameShell({
       <GameHud
         playing={revealPhase === "complete"}
         starting={starting}
-        canStart={seed !== null && mapSizeReady}
-        onPlay={() => setStarting(true)}
+        canStart={seed !== null && booted}
+        onPlay={() => { if (seed !== null) router.push(`/play?${playQuery(seed, settings)}`) }}
+        continueHref={!playing && booted && restore ? "/play" : null}
         cheats={{ blasterPastor, lastMarch }}
         map={map}
         seed={seed}

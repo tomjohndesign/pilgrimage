@@ -11,9 +11,14 @@ import { claimTownBuildings, settlementMap, createSettlement, purchaseStructure,
 
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { BUILDING_PREVIEW, buildingPreviewBalance, buildingPreviewSettlement } from "@/lib/game/building-preview"
+import type { SettlementSave } from "@/lib/game/save/schema"
+import { restoreSettlement } from "@/lib/game/save/settlement"
 
-/** A generated world owns one economy. Cosmetic settings keep it; regeneration resets it. */
-export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Relic | null) {
+/**
+ * A generated world owns one economy. Cosmetic settings keep it; regeneration
+ * resets it. A save for the same world seeds the economy instead of a fresh one.
+ */
+export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Relic | null, restore: SettlementSave | null = null) {
   const savedBalance = useBalanceStore((s) => s.balance)
   const balance = useMemo(() => BUILDING_PREVIEW ? buildingPreviewBalance(savedBalance) : savedBalance, [savedBalance])
   const ready = useBalanceStore((s) => s.ready)
@@ -29,14 +34,16 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   const residents = useMemo(() => [...monks, ...(sameWorld ? settlers : [])], [monks, sameWorld, settlers])
   const balanceRef = useRef(balance)
   balanceRef.current = balance
+  const openSettlement = (world: GameMap | null) => BUILDING_PREVIEW && world ? buildingPreviewSettlement(world, balance)
+    : world && restore ? restoreSettlement(world, restore) : createSettlement(balance)
   const [session, setSession] = useState(() => ({
     world,
-    settlement: BUILDING_PREVIEW && world ? buildingPreviewSettlement(world, balance) : createSettlement(balance),
+    settlement: openSettlement(world),
     buildType: null as string | null,
     message: "",
   }))
   if (session.world !== world) {
-    setSession({ world, settlement: BUILDING_PREVIEW && world ? buildingPreviewSettlement(world, balance) : createSettlement(balance), buildType: null, message: "" })
+    setSession({ world, settlement: openSettlement(world), buildType: null, message: "" })
   }
 
   // Workers own live progress. Publish only stage/completion changes to React.

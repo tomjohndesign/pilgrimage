@@ -562,6 +562,16 @@ function roadWorldPoint(map: GameMap, p: number, lane: number): WorldPoint {
   return routeWorldPoint(map, map.road!, p, lane)
 }
 
+/** Where someone stands when set down on the road at `progress`; wagons keep to the cart line. */
+export function roadPosition(map: GameMap, t: Pick<Traveler, "type">, progress: number, lane: number): WorldPoint {
+  const at = roadWorldPoint(map, progress, lane)
+  if (t.type.id === "vendor") {
+    Object.assign(at, convoyPoint(map, progress))
+    at.y = walkingSurface(map, at.x, at.z).height
+  }
+  return at
+}
+
 /** A cut spends real walking distance while retaining the road's logical progress.
  * A straight chord and a detour bent around a footprint are walked the same way. */
 function stepRoadShortcut(s: SimTraveler, map: GameMap, distance: number): void {
@@ -725,11 +735,7 @@ export function createSim(
     const laneRng = makeRng(deriveSeed(deriveSeed(map.seed ?? 0, SEED_STREAM.lanes), t.id))
     const laneOffset = t.type.id === "vendor" ? 0 : 0.18 + laneRng() * 0.1
     const lane = t.direction * laneOffset
-    const at = roadWorldPoint(map, progress, lane)
-    if (t.type.id === "vendor") {
-      Object.assign(at, convoyPoint(map, progress))
-      at.y = walkingSurface(map, at.x, at.z).height
-    }
+    const at = roadPosition(map, t, progress, lane)
     sim.travelers.set(t.id, {
       admissionPaid: 0,
       convoy: t.type.id === "vendor",

@@ -15,7 +15,7 @@ export const BENCHMARK_SIMULATION_SPEEDS = [
   { label: 4, rate: 8 },
   { label: 5, rate: 10 },
 ] as const
-type SimulationSpeed = typeof BENCHMARK_SIMULATION_SPEEDS[number]["rate"]
+export type SimulationSpeed = typeof BENCHMARK_SIMULATION_SPEEDS[number]["rate"]
 
 export const MAX_SIMULATION_STEP = .1 * 12
 

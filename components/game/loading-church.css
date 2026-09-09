@@ -105,6 +105,14 @@
 .loading-church[data-idle="true"] { z-index: 10; transform: translateX(8vw); }
 .landing-scene { position: absolute; inset: 0; z-index: 2; opacity: 0; }
 .landing-scene[data-ready="true"] { opacity: 1; }
+/* Remembered land while a saved world regenerates: fades in once its assets are
+   ready, and opens with the same wipe as the shimmer grid when the reveal runs. */
+.loading-church-resume { position: absolute; inset: 0; z-index: 2; opacity: 0; transition: opacity 300ms ease-out; }
+.loading-church-resume[data-ready="true"] { opacity: 1; }
+.loading-church[data-phase="revealing"] .loading-church-resume {
+  mask-image: radial-gradient(ellipse var(--reveal-radius-x, .001dvh) var(--reveal-radius-y, .001dvh)
+    at 50% calc(50% + var(--ground-offset)), transparent var(--reveal-inner, 0%), #000 100%);
+}
 .loading-church-caption { z-index: 5; }
 .loading-church-progress {
   position: absolute;
