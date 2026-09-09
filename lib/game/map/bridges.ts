@@ -62,6 +62,9 @@ export interface BridgeConnector extends TilePos {
 
 export interface BridgeLayout {
   corners: BridgeCorner[]
+  /** Nearby inserts and ramps, indexed once with the immutable layout. */
+  cornersAt: Map<number, BridgeCorner[]>
+  rampsAt: Map<number, BridgeRamp>
   ropeAt: Map<number, BridgeSpan>
   spans: BridgeSpan[]
   ramps: BridgeRamp[]
@@ -290,7 +293,24 @@ export function bridgeLayout(map: GameMap): BridgeLayout {
       corners.push({ x: tile.x, z: tile.z, sx, sz, radius: isolated ? BRIDGE_CORNER_RADIUS : Math.min(BRIDGE_CORNER_RADIUS, 0.5), kind: tile.kind, envelope })
     }
   }
-  const layout = { spans, ramps, connectors, rise, ropeAt, corners }
+  const cornersAt = new Map<number, BridgeCorner[]>()
+  for (const corner of corners) {
+    const reachX = BRIDGE_DECK_HALF_WIDTH + (corner.envelope ? Math.max(...corner.envelope.widths) : corner.radius)
+    const reachZ = corner.envelope?.reach ?? BRIDGE_DECK_HALF_WIDTH + corner.radius
+    const endX = corner.x + corner.sx * reachX, endZ = corner.z + corner.sz * reachZ
+    for (let z = Math.floor(Math.min(corner.z, endZ) - 1e-6); z <= Math.floor(Math.max(corner.z, endZ) + 1e-6); z++)
+      for (let x = Math.floor(Math.min(corner.x, endX) - 1e-6); x <= Math.floor(Math.max(corner.x, endX) + 1e-6); x++) {
+        const key = z * map.width + x, entries = cornersAt.get(key)
+        if (entries) entries.push(corner)
+        else cornersAt.set(key, [corner])
+      }
+  }
+  const rampsAt = new Map<number, BridgeRamp>()
+  for (const ramp of ramps) {
+    const key = ramp.z * map.width + ramp.x
+    if (!rampsAt.has(key)) rampsAt.set(key, ramp)
+  }
+  const layout = { spans, ramps, connectors, rise, ropeAt, corners, cornersAt, rampsAt }
   layoutCache.set(map, layout)
   return layout
 }
@@ -298,7 +318,8 @@ export function bridgeLayout(map: GameMap): BridgeLayout {
 /** Added deck is a partial tile; do not turn the water underneath into land. */
 export function bridgeCornerAt(map: GameMap, wx: number, wz: number) {
   const x = wx + (map.width - 1) / 2, z = wz + (map.depth - 1) / 2
-  return bridgeLayout(map).corners.find(corner => insideBridgeCorner(corner, x, z))
+  return bridgeLayout(map).cornersAt.get(Math.floor(z) * map.width + Math.floor(x))
+    ?.find(corner => insideBridgeCorner(corner, x, z))
 }
 
 /**

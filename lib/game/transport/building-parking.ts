@@ -5,7 +5,7 @@ import { tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } from "../m
 import { cartOffset, type Puller } from "./assets"
 import { alignCart, followCart, type CartPose } from "./follow"
 import { parkingClear, type ParkingContext, type ShrineParking } from "./navigation"
-import type { Point } from "./roadside"
+import { routePoint, type Point } from "./roadside"
 
 export interface MarketParking extends ShrineParking { buildingId: string }
 
@@ -20,6 +20,22 @@ export function driveSegment(pose: CartPose, to: Point, wheelbase: number, clear
     if (!clear(pose, heading)) return null
   }
   return pose
+}
+
+/** Preserve every planned bend when one simulation tick crosses several
+ * waypoints; a chord between tick endpoints can drag the axle into a wall. */
+export function driveRouteSegment(pose: CartPose, route: readonly Point[], start: number, end: number,
+  wheelbase: number, clear: (pose: CartPose, heading: number) => boolean): CartPose | null {
+  let distance = 0
+  for (let i = 1; i < route.length; i++) {
+    distance += Math.hypot(route[i].x - route[i - 1].x, route[i].z - route[i - 1].z)
+    if (distance >= end) break
+    if (distance <= start) continue
+    const next = driveSegment(pose, route[i], wheelbase, clear)
+    if (!next) return null
+    pose = next
+  }
+  return driveSegment(pose, routePoint(route, end), wheelbase, clear)
 }
 
 /** Bounded forward-only search. Heading is part of the state: a pedestrian

@@ -1,9 +1,10 @@
 import { buildingEntrance, constructionWork, isComplete } from "./construction"
+import { placementBuildingLayout, placementRoofRotation } from "./building-placement-layout"
 import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
 import { groundHeight, levelBuildingGround } from "./map/elevation"
 import { buildingKind, placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
 import { settlementRoute, shrineRoadHead } from "./settlement-route"
-import { getBuildInfluence, type BuildInfluence } from "./build-influence"
+import { buildInfluence, getBuildInfluence, type BuildInfluence } from "./build-influence"
 import type { SimState } from "./sim"
 import { DEFAULT_ADMISSION_FEE } from "./shrine-visit"
 import { TERRAIN } from "./map/terrain"
@@ -24,6 +25,8 @@ export const STARTING_RESOURCES = {
 export const SETTLEMENT_RADIUS = DEFAULT_BALANCE.rules.buildRadius
 
 export interface Settlement {
+  /** Generated buildings permanently acquired when connected influence reaches them. */
+  claimedBuildings: string[]
   /** Terrain after successful purchases; the generated base map stays immutable. */
   elevation?: GameMap["elevation"]
   resources: Resources
@@ -40,6 +43,7 @@ export interface Settlement {
 
 export function createSettlement(balance: GameBalance = DEFAULT_BALANCE): Settlement {
   return {
+    claimedBuildings: [],
     resources: { gold: balance.rules.startingGold, wood: balance.rules.startingWood },
     structures: [],
     deliveredWood: 0,
@@ -47,6 +51,32 @@ export function createSettlement(balance: GameBalance = DEFAULT_BALANCE): Settle
     shrineAdmission: DEFAULT_ADMISSION_FEE,
     collectedAdmission: 0,
     collectedTrade: 0,
+  }
+}
+
+/** Preserve generated IDs and residents; ownership is a session overlay on the base map. */
+export function settlementMap(baseMap: GameMap, settlement: Settlement): GameMap {
+  const claimed = new Set(settlement.claimedBuildings)
+  return { ...baseMap, elevation: settlement.elevation ?? baseMap.elevation,
+    buildings: [...baseMap.buildings.map(b => claimed.has(b.id) ? { ...b, owner: undefined } : b), ...settlement.structures] }
+}
+
+/** A footprint touching connected influence joins immediately; its renown can reach neighbours. */
+export function claimTownBuildings(settlement: Settlement, baseMap: GameMap, balance: GameBalance = DEFAULT_BALANCE): Settlement {
+  let result = settlement
+  while (true) {
+    const map = settlementMap(baseMap, result)
+    const independent = map.buildings.filter(b => b.owner === "independent")
+    if (!independent.length) return result
+    const influence = buildInfluence(map, balance).connected
+    const reached = independent.filter(b => {
+      for (let z = b.z; z < b.z + b.d; z++) for (let x = b.x; x < b.x + b.w; x++) {
+        if (influence[z * map.width + x]) return true
+      }
+      return false
+    })
+    if (!reached.length) return result
+    result = { ...result, claimedBuildings: [...result.claimedBuildings, ...reached.map(b => b.id)] }
   }
 }
 
@@ -95,7 +125,7 @@ export function individualRenown(monk: Monk, balance: GameBalance = DEFAULT_BALA
 export function settlementEvangelism(map: GameMap): number {
   let chance = 0
   for (const building of map.buildings) {
-    if (!isComplete(building)) continue
+    if (building.owner === "independent" || !isComplete(building)) continue
     const def = BUILD_CATALOG.find(item => item.id === building.buildType)
     chance = Math.max(chance, def?.evangelism ?? 0)
   }
@@ -113,7 +143,7 @@ export function settlementRenown(
   let buildings = 0
   let scenery = 0
   for (const building of map.buildings) {
-    if (!isComplete(building)) continue
+    if (building.owner === "independent" || !isComplete(building)) continue
     if (building.id === map.site?.hovelId) buildings += balance.rules.hovelRenown
     const def = buildCatalog(balance).find((item) => item.id === building.buildType)
     if (def?.category === "buildings") buildings += def.renown
@@ -209,6 +239,7 @@ export function placementError(
   balance: GameBalance = DEFAULT_BALANCE,
   rotation: BuildingRotation = 0,
 ): string | null {
+  rotation=placementRoofRotation(map,def,at,rotation)
   const footprint = rotatedFootprint(def, rotation)
   const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
   if (!hovel) return "A founding shrine is needed before building."
@@ -227,7 +258,7 @@ export function placementError(
   }
   // Reserve construction frontage and preserve access to every existing building.
   if (map.site) {
-    const candidate = { buildType: def.id, ...def, ...footprint, rotation, ...at, id: "construction-preview", construction: { work: 0, required: 1 } }
+    const candidate = { buildType: def.id, ...def, ...footprint, rotation, ...at, ...placementBuildingLayout(map,{...def,...footprint,rotation,...at,buildType:def.id,id:"construction-preview"}), id: "construction-preview", construction: { work: 0, required: 1 } }
     const approaches=buildingApproaches(map,candidate)
     for(const approach of approaches) {
       const terrain=tileAt(map,approach.x,approach.z)
@@ -257,14 +288,14 @@ export function placementError(
 }
 
 export function woodcutterHuts(map: GameMap): PlacedBuilding[] {
-  return map.buildings.filter((b) => b.buildType === "workshop" && isComplete(b))
+  return map.buildings.filter((b) => b.owner !== "independent" && b.buildType === "workshop" && isComplete(b))
     .map((b) => ({ ...b, kind: "workshop" }))
 }
 
 /** Every completed structure with work in it: huts, taverns, folds and stalls. */
-export function jobBuildings(map: GameMap): PlacedBuilding[] {
+export function jobBuildings(map: GameMap, includeIndependent = false): PlacedBuilding[] {
   return map.buildings.flatMap((b) => {
-    const kind = isComplete(b) ? buildingKind(b.buildType) : null
+    const kind = (includeIndependent || b.owner !== "independent") && isComplete(b) ? buildingKind(b.buildType) : null
     return kind ? [{ ...b, kind }] : []
   })
 }
@@ -303,11 +334,12 @@ export function purchaseStructure(
 ): { settlement: Settlement; error: string | null } {
   const def = buildCatalog(balance).find((item) => item.id === type)
   if (!def) return { settlement, error: "Unknown structure." }
-  const map = { ...baseMap, elevation: settlement.elevation ?? baseMap.elevation, buildings: [...baseMap.buildings, ...settlement.structures] }
+  const map = settlementMap(baseMap, settlement)
   if (settlementRenown(map, residents, relics, balance, completedVisits).total < def.requiredRenown)
     return { settlement, error: `Requires ${def.requiredRenown} shrine renown.` }
   if (!canAfford(settlement.resources, def.cost))
     return { settlement, error: "Not enough gold or wood." }
+  rotation=placementRoofRotation(map,def,at,rotation)
   const error = placementError(map, def, at, balance, rotation)
   if (error) return { settlement, error }
   const building: BuildingDef = {
@@ -318,6 +350,7 @@ export function purchaseStructure(
     z: at.z,
     ...rotatedFootprint(def, rotation),
     rotation,
+    ...placementBuildingLayout(map,{...def,...rotatedFootprint(def,rotation),rotation,...at,buildType:def.id,id:"construction-preview"}),
     height: def.height,
     color: def.color,
     roofColor: def.roofColor,

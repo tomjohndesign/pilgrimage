@@ -30,13 +30,15 @@ base/population/monk asset checkers, and `node --test scripts/test-sprite-depth.
 
 The tree playground (`/assets/textures#trees`) offers **Pixel foliage** and
 **Current trees** for comparison. Oak, beech, silver birch, Scots pine, hawthorn and holly have three
-seeded branch/leaf variants and eight camera directions (144 frames).
+seeded branch/leaf variants and eight camera directions, for both ordinary and
+ancient growth (288 frames).
 The pine uses a deliberately pointed, tiered silhouette. Their authoring model
 is in `lib/game/trees/foliage/model.ts`; the existing controls edit height, spread,
 density and leaf size. Edits rebake in the playground. Copy species JSON preserves
-those settings. This prototype does not replace the gameplay forest yet.
+those settings. The game uses foliage sprites for all trees; procedural trees
+remain a development benchmark. Ancient sprites render darkwood in either mode.
 
-The default preview loads the published `foliage/v5` color/depth atlas directly.
+The default preview loads the published `foliage/v6` color/depth atlas directly.
 Each 192-pixel cell spans `192 * CHARACTER_PIXEL_SIZE` world units, with binary
 alpha, nearest filtering, related cool, moss and olive foliage ramps with a shared bark palette, and subdued southeast
 surface lighting. The source models contain fine branches and instanced leaf
@@ -45,14 +47,16 @@ ID batch in the existing passes. Paired RG16 geometry depth handles intersection
 CPU picking uses the same atlas alpha and depth to respect gaps between leaves.
 No cast shadows are baked or rendered.
 
-Use `node scripts/export-tree-foliage.mjs v6 --url http://localhost:3219` to publish
+Use `node scripts/export-tree-foliage.mjs v7 --url http://localhost:3219` to publish
 a fresh version from the editable defaults, then update `foliage/assets.ts`.
 Existing versions cannot be overwritten. The exporter records frame dimensions,
 anchor, designs and safe padding. Validate beside the monks and in the dense
 forest at all four map views; the default prototype disables overlap outlines
 because tracing individual leaves obscures the canopy. Selection remains active.
-The **Dark forest** lineup toggle previews the existing darkwood brightness against
-darkwood ground. Forest instances use the placement brightness directly, preserving
+The **Dark forest** lineup toggle previews the ancient silhouettes and darkwood
+brightness against darkwood ground. Their bent boles, roots, broken limbs and
+ragged crowns are authored in the same model and baked at native pixel density;
+the second half of the atlas holds those variants. Forest instances use the placement brightness directly, preserving
 the smooth transition from lighter rims into darker old growth. Color patches
 follow leaf clusters; broader blades reduce fine speckling at the same native scale.
 The foliage asset tests check native scale, palette, binary alpha, every frame's

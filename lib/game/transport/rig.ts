@@ -5,7 +5,7 @@ import { stallLayout, KEEPER_SEAT } from "./stall"
 import { model } from "./geometry"
 export { createAnimalRig } from "./animal-rig"
 
-/** Source geometry is baked, never mounted as game scenery. */
+/** Shared source for transport atlases and merged, world-grounded stalls. */
 export function createCartRig(cargo: Cargo, mode: CartMode, compact = false, passengers?: PassengerCart) {
   const layout = stallLayout(compact || mode === "hand" ? "hand" : "horse")
   const itemCount = passengers === "rear" ? 0 : compact || mode === "hand" ? 3 : 6

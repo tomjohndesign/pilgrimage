@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { Music2, Slash } from "lucide-react"
 
 /**
  * Placeholder background music: a long medieval lute recording streamed via the
@@ -185,7 +186,11 @@ export function MusicPlayer({ className = "", compact = false }: { className?: s
         title={`Music ${enabled ? "on" : "off"}`}
         className={className}
       >
-        {compact ? "♪" : `♪ Music ${enabled ? "On" : "Off"}`}
+        <span className="relative inline-flex" aria-hidden="true">
+          <Music2 size={16} />
+          {!enabled && <Slash size={16} className="absolute inset-0" />}
+        </span>
+        {!compact && ` Music ${enabled ? "On" : "Off"}`}
       </button>
     </>
   )

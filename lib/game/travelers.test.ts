@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest"
 
-import { generateTravelers, travelerCountForMap, TRAVELER_TYPES } from "./travelers"
+import { generateTravelers, MAX_TRAFFIC, travelerCountForMap, TRAVELER_TYPES } from "./travelers"
 import { POPULATION_PROFILES, travelerAppearance } from "./base-person/population"
+import { DRINK_PRICE, MEAL_PRICE } from "./tavern"
 
 describe("travelerCountForMap", () => {
   it("preserves the default crowd and scales with map area", () => {
@@ -17,6 +18,7 @@ describe("travelerCountForMap", () => {
       expect(travelerCountForMap(map, 24)).toBe(travelerCountForMap(map) * 2)
       expect(travelerCountForMap(map, 0)).toBe(0)
     }
+    expect(travelerCountForMap({ width: 512, depth: 512 }, MAX_TRAFFIC)).toBe(10_000)
   })
 
   it("rounds to a whole crowd and ignores invalid densities", () => {
@@ -39,8 +41,18 @@ describe("generateTravelers", () => {
   it("starts passing travelers supplied for their own journey", () => {
     for (const seed of [1, 42, 12345]) {
       for (const { attributes } of generateTravelers(seed, 100)) {
+        expect(attributes.happiness).toBeGreaterThanOrEqual(60)
+        expect(attributes.happiness).toBeLessThanOrEqual(90)
         expect(attributes.hunger).toBeGreaterThanOrEqual(80)
         expect(attributes.thirst).toBeGreaterThanOrEqual(80)
+      }
+    }
+  })
+  it("gives road travelers enough coin for repeated food and drink stops", () => {
+    for (const seed of [1, 42, 12345]) {
+      for (const { type, attributes } of generateTravelers(seed, 500)) {
+        const stops = type.id === "beggar" ? 1 : 2
+        expect(attributes.gold).toBeGreaterThanOrEqual(stops * (MEAL_PRICE + DRINK_PRICE))
       }
     }
   })
@@ -63,7 +75,7 @@ describe("generateTravelers", () => {
       }
     }
     for (const seen of Object.values(callings)) {
-      expect([...seen].sort()).toEqual(Object.keys(TRAVELER_TYPES).filter(id => id !== "friar").sort())
+      expect([...seen].sort()).toEqual(Object.keys(TRAVELER_TYPES).filter(id => id !== "friar" && id !== "beggar").sort())
     }
   })
 
@@ -131,10 +143,10 @@ describe("generateTravelers", () => {
     expect(jobless).toBeLessThan(pilgrims.length * 0.7)
   })
 
-  it("weights callings as percent shares of the road, peasants at 60", () => {
+  it("weights callings as percent shares of the road, peasants at 62.5", () => {
     const total = Object.values(TRAVELER_TYPES).reduce((sum, t) => sum + t.weight, 0)
     expect(total).toBeCloseTo(100, 10)
-    expect(TRAVELER_TYPES.peasant.weight).toBe(60)
+    expect(TRAVELER_TYPES.peasant.weight).toBe(62.5)
   })
 
   it("fills roughly six in ten places on the road with peasants", () => {
@@ -155,12 +167,12 @@ describe("generateTravelers", () => {
   })
 })
 
-it("keeps minstrels scarce and beggars slower than the other road walkers", () => {
+it("keeps minstrels scarce and reserves beggar appearances for progression", () => {
   const crowd = generateTravelers(42, 10000)
   const minstrels = crowd.filter(t => t.type.id === "minstrel").length
   expect(minstrels / crowd.length).toBeGreaterThan(0.01)
   expect(minstrels / crowd.length).toBeLessThan(0.025)
-  expect(crowd.some(t => t.type.id === "beggar")).toBe(true)
+  expect(crowd.some(t => t.type.id === "beggar")).toBe(false)
   expect(Object.values(TRAVELER_TYPES).reduce((sum, t) => sum + t.weight, 0)).toBe(100)
   for (const type of Object.values(TRAVELER_TYPES).filter(t => t.id !== "beggar")) {
     expect(TRAVELER_TYPES.beggar.paceMax).toBeLessThan(type.paceMin)

@@ -1,3 +1,4 @@
+import { forestTrackTiles } from "../map/forest-entrances"
 import type { GameMap } from "../map/types"
 import { worldToTileX, worldToTileZ } from "../map/types"
 import { CHARACTER_PIXEL_SIZE } from "../render/pixel-scale"
@@ -14,7 +15,7 @@ export const TREE_GROUND_FRAME = { pixels: 44, columns: 5, rows: 16 } as const
 export function treeCanopyDepth(map: GameMap, trees: readonly TreePlacement[], felled?: ReadonlySet<number>) {
   const occupied = new Uint8Array(map.tiles.length)
   trees.forEach((tree, index) => {
-    if (felled?.has(index)) return
+    if (felled?.has(index) || tree.dead) return
     const x = worldToTileX(map, tree.x), z = worldToTileZ(map, tree.z)
     if (x < 0 || z < 0 || x >= map.width || z >= map.depth) return
     occupied[z * map.width + x] = 1
@@ -76,14 +77,33 @@ export function treeShadowDepth(map: GameMap, trees: readonly TreePlacement[], f
 /** R selects a solid depth/diagonal sprite. Grain never lives on internal tile edges. */
 export function treeGroundField(map: GameMap, trees: readonly TreePlacement[], felled?: ReadonlySet<number>) {
   const depths = treeShadowDepth(map, trees, felled)
+  // Binary sprite selection, never a brightness gradient. Authored clearings
+  // and the shoulders of forest tracks retain the same dark litter artwork.
+  const dark = new Set(map.tiles.flatMap((t, i) => t === "darkwood" ? [i] : []))
+  for (const forest of map.darkForests ?? []) for (const p of forest.clearing) dark.add(p.z * map.width + p.x)
+  // Preserve the forest edge even where cutting a track removed its trees.
+  // An authored route may cross open meadow long before reaching old growth.
+  const forestFloor = new Set(map.darkForestFloor ?? dark)
+  for (const i of forestTrackTiles(map)) {
+    if (forestFloor.has(i)) dark.add(i)
+    const x = i % map.width, z = Math.floor(i / map.width)
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, nz = z + dz, n = nz * map.width + nx
+      if (nx >= 0 && nz >= 0 && nx < map.width && nz < map.depth && map.tiles[n] === "clearing" && forestFloor.has(n)) dark.add(n)
+    }
+  }
   const corners = depthBandCorners(map, Array.from(depths), true)
   const data = new Uint8Array(map.width * map.depth * 4)
   for (let i = 0; i < depths.length; i++) {
-    if (!depths[i]) continue
+    if (map.tiles[i] === "water" || map.tiles[i] === "bridge") continue
+    if (!depths[i]) {
+      if (dark.has(i)) data.set([0, 255, 0, 255], i * 4)
+      continue
+    }
     const corner = corners[i]
     const donor = corner >= 0 ? depths[i + SHORE_CORNERS[corner][0]] : depths[i]
     const frame = (depths[i] * 4 + donor) * 5 + corner + 1
-    data.set([frame + 1, 0, 0, 255], i * 4)
+    data.set([frame + 1, dark.has(i) ? 255 : 0, 0, 255], i * 4)
   }
   return { data, width: map.width, height: map.depth }
 }
@@ -93,14 +113,15 @@ export const TREE_GROUND_GLSL = /* glsl */ `
   uniform sampler2D treeGroundMap;
   uniform sampler2D treeGroundAtlas;
   uniform vec2 treeGroundMapSize;
-  vec2 treeGroundCover(vec2 world) {
+  vec3 treeGroundCover(vec2 world) {
     vec2 grid = terrainPaintWorld(world) + treeGroundMapSize * 0.5;
-    float frame = floor(texture2D(treeGroundMap, (floor(grid) + 0.5) / treeGroundMapSize).r * 255.0 + 0.5) - 1.0;
-    if (frame < 0.0) return vec2(0.0);
+    vec4 record = texture2D(treeGroundMap, (floor(grid) + 0.5) / treeGroundMapSize);
+    float frame = floor(record.r * 255.0 + 0.5) - 1.0;
+    if (frame < 0.0) return vec3(0.0, record.g, record.g);
     vec2 cell = vec2(mod(frame, ${TREE_GROUND_FRAME.columns}.0), floor(frame / ${TREE_GROUND_FRAME.columns}.0));
     // Crop the last native pixel at tile boundaries rather than stretching the artwork.
     vec2 pixel = floor(fract(grid) / ${CHARACTER_PIXEL_SIZE});
     vec2 uv = (cell * ${TREE_GROUND_FRAME.pixels}.0 + pixel + 0.5) / vec2(${TREE_GROUND_FRAME.columns * TREE_GROUND_FRAME.pixels}.0, ${TREE_GROUND_FRAME.rows * TREE_GROUND_FRAME.pixels}.0);
-    return texture2D(treeGroundAtlas, vec2(uv.x, 1.0 - uv.y)).rg;
+    return vec3(texture2D(treeGroundAtlas, vec2(uv.x, 1.0 - uv.y)).rg, record.g);
   }
 `

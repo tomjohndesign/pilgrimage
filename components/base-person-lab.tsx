@@ -17,13 +17,14 @@ import { usePopulationStore } from "@/lib/game/base-person/population-store"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { MerchantMapPreview } from "./merchant-map-preview"
 import { COATS, animalCoat } from "@/lib/game/transport/coats"
-import { CARGO, TRANSPORT, PARTY_TRANSPORT_VERSION, CART, SHOP, animalStride, cartUrl, animalUrl, type Puller, type ShopState, cartColumn, type Cargo, type CartMode, type HorseVariant } from "@/lib/game/transport/assets"
+import { CARGO, TRANSPORT, PARTY_TRANSPORT_VERSION, CART, SHOP, cartLoadout, animalStride, cartUrl, animalUrl, type Puller, type ShopState, cartColumn, type Cargo, type CartMode, type HorseVariant } from "@/lib/game/transport/assets"
 import { KNIGHT, knightDesign } from "@/lib/game/knight/design"
-import { knightTravelSpeed } from "@/lib/game/knights"
+import { MONK_VISUAL } from "@/lib/game/base-person/monk-assets"
+import { knightLoadout, knightTravelSpeed } from "@/lib/game/knights"
 import { personWalkStride } from "@/lib/game/base-person/gait"
 import { squireVisual } from "@/lib/game/knight/visual"
-import knightMetadata from "@/public/textures/knights/v12/manifest.json"
-import transportMetadata from "@/public/textures/transport/v25/manifest.json"
+import knightMetadata from "@/public/textures/knights/v13/manifest.json"
+import transportMetadata from "@/public/textures/transport/v26/manifest.json"
 
 const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse", knight: "Knight" } as const
 type Subject = keyof typeof SUBJECTS
@@ -45,7 +46,9 @@ import type { RigJoint } from "@/lib/game/base-person/rig-joints"
 import { staffMotion } from "@/lib/game/base-person/staff-motion"
 import type { Point3 } from "@/lib/game/base-person/pose"
 import { populationDesign, POPULATION_PROFILES } from "@/lib/game/base-person/population"
-import { TRAVELER_TYPES } from "@/lib/game/travelers"
+import { previewRandomSeed } from "@/lib/game/preview-random"
+import { travelerAppearance } from "@/lib/game/base-person/population"
+import { TRAVELER_TYPES, generateTravelers } from "@/lib/game/travelers"
 
 import { SETTLEMENT_JOBS, jobDesign, type SettlementJob } from "@/lib/game/jobs/design"
 
@@ -141,7 +144,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   const [row, setRow] = useState(1)
   const [frame, setFrame] = useState(0)
   const [clip, setClip] = useState<BaseClip>("walk")
-  const knightClip = mountedKnight ? clip === "idle" ? "idle" : "walk" : clip === "preaching" ? "idle" : clip
+  const knightClip = mountedKnight ? clip === "idle" ? "idle" : "walk" : clip === "preaching" || clip === "seatedMeal" || clip === "seatedDrink" ? "idle" : clip
   const knightFrames = mountedKnight ? knightClip === "idle" ? 1 : knightMetadata.frames : knightMetadata.person.frameCounts[knightClip]
   const frameCount = isKnight ? knightFrames : isPerson ? PERSON_CLIPS[clip].frames : subject === "cart" ? shopState === "opening" || shopState === "packing" ? 48 : 120 : grazing ? TRANSPORT.grazeFrames : clip === "idle" ? 1 : transportMetadata.animalClips.walk.frames
   useEffect(() => {
@@ -235,6 +238,33 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     }
     drafts.current[character] = design
     setCharacter(id); setDesign(drafts.current[id] ?? { ...initial }); setHistory([]); setFuture([]); setMessage("")
+  }
+  const randomize = () => {
+    const seed = previewRandomSeed()
+    if (subject === "cart") {
+      const loadout = cartLoadout(seed % 65536)
+      setCargo(loadout.cargo); setCartPuller(loadout.puller); setCoat(loadout.coat ?? "")
+    } else if (subject === "horse" || subject === "donkey") setCoat(COATS[subject][seed % COATS[subject].length].id)
+    else if (subject === "knight") {
+      const loadout = knightLoadout(seed % 65536)
+      setKnightVariant(travelerAppearance(seed, 0).variant % KNIGHT.variants)
+      setCoat(loadout.coat); setShowSquire(loadout.squire)
+    }
+    else {
+      const type = generateTravelers(seed, 1)[0].type
+      const appearance = travelerAppearance(seed, 0)
+      if (type.id === "knight") {
+        const loadout = knightLoadout(seed % 65536)
+        setSubject("knight"); setKnightVariant(appearance.variant % KNIGHT.variants)
+        setCoat(loadout.coat); setShowSquire(loadout.squire)
+        return
+      }
+      drafts.current[character] = design
+      setCharacter("random/map")
+      setDesign({ ...(type.id === "friar" ? MONK_VISUAL.design : populationDesign(type, appearance.variant)), skinColor: appearance.complexion.skin, hairColor: appearance.complexion.hair })
+      setHistory([]); setFuture([])
+      setMessage(`${type.label} · ${POPULATION_PROFILES[appearance.variant].id.replaceAll("-", " ")} · map appearance`)
+    }
   }
   // One render session per design serves both the rig handles and the live preview, so a drag keeps its rig and compiled shaders.
   const session = useRef<{ key: string; session: PersonSession } | null>(null)
@@ -353,7 +383,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   })
   const ready = !busy && !error && !!bake && sheetMatchesDesign
 
-  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Character playground"
+  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Character playground" onRandomize={randomize}
     version={isPerson ? `Base person · v${BASE_PERSON.version}` : `${SUBJECTS[subject]} · ${isKnight ? KNIGHT.version : subject === "cart" ? TRANSPORT.version : PARTY_TRANSPORT_VERSION}`}
     controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(!controlsOpen)}
     roadHref={`/play?characters=base&baseSize=1.5&fps=${fps}`}

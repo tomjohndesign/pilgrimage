@@ -14,7 +14,7 @@ function fixture(count = 6, direction: 1 | -1 = 1) {
   const travelers: Traveler[] = Array.from({ length: count }, (_, id) => ({ id, name: `Person ${id}`,
     type: TRAVELER_TYPES.peasant, direction, offset: .3, pace: id === 0 ? 1.2 : .65 + id * .02,
     party: { id: 0, name: "Village party", slot: id },
-    attributes: { age: 30, gold: 20, status: 0, piety: 100, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: [] } }))
+    attributes: { happiness: 80, age: 30, gold: 20, status: 0, piety: 100, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: [] } }))
   const sim = createSim(travelers, map, [], { sanctity: 100, spectacle: 100, doubt: 0 })
   for (const party of sim.parties.values()) party.transportInitialized = true
   sim.balance = { ...DEFAULT_BALANCE, rules: { ...DEFAULT_BALANCE.rules, hungerDecay: 0, thirstDecay: 0, staminaDecay: 0 } }

@@ -218,7 +218,7 @@ export default function GameSpecsPage() {
           {r.thirstDecay} points per game hour respectively; camping halves both rates.
         </p>
         <p className="mt-3">
-          Food and drink are bought, never given. A counter charges 2 gold for a meal and 3 for a
+          Food and drink are bought, never given. A counter charges 2 gold for a meal and 1 for a
           cup, and only serves what the customer can pay for; the takings go to the treasury.
           Tavern customers pay at the counter and then take a table. Kneeling at the relic restores
           stamina alone.

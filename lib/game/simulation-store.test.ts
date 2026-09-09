@@ -13,4 +13,9 @@ it("preserves playback time and the background-frame clamp with bounded combined
   expect(simulationFrameStep(1 / 30, 10).ticks).toBe(1)
   expect(simulationFrameStep(.0334, 10).ticks).toBe(1)
   expect(simulationFrameStep(.034, 10).ticks).toBe(1)
+  // The player maximum is 6× (rate 12). A rounded 30 FPS frame must not
+  // double population work and push the following frame further behind.
+  expect(simulationFrameStep(1 / 30, 12)).toEqual({ ticks: 1, dt: .4 })
+  expect(simulationFrameStep(.0334, 12).ticks).toBe(1)
+  expect(simulationFrameStep(.034, 12).ticks).toBe(1)
 })

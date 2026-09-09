@@ -2,10 +2,19 @@ import type { TerrainId } from "./terrain"
 
 export interface BuildingDef {
   id: string
-  /** Player-built catalogue entry; absent on the founding hovel. */
+  /** Absent on player structures and the founding enclave. */
+  owner?: "independent"
+  townId?: string
+  /** Building catalogue entry; absent on the founding hovel. */
   buildType?: string
   /** Clockwise quarter turns; w/d already describe the rotated footprint. */
   rotation?: import("../building-rotation").BuildingRotation
+  /** Stable procedural layout; absent in older saves to preserve their entrances. */
+  layoutSeed?: number
+  /** Omitted uses the seeded, type-appropriate fireplace choice. */
+  fireplace?: boolean
+  /** Adopted chimney position along the local side wall, fixed when built. */
+  hearthZ?: number
   /** Gold paid by each visitor entering the relic enclosure. */
   admissionFee?: number
   /** Live worker progress; absent on completed founding structures. */
@@ -66,7 +75,21 @@ export interface FoundingSite {
   hovelId: string
 }
 
+/** A secluded old-growth destination; encounter contents are deliberately absent. */
+export interface DarkForest {
+  center: TilePos
+  clearing: TilePos[]
+  /** Ordered dry walk from the existing network into the central clearing. */
+  approach: TilePos[]
+}
+
 export interface GameMap {
+  /** New tracks serving wells and town buildings; these do not create marked crossroads. */
+  buildingAccessTiles?: TilePos[]
+  /** Reserved signpost sites where generated roads and destination tracks meet. */
+  crossroads?: import("./crossroads").Crossroad[]
+  /** Independent roadside communities, indexed by distance along the main road. */
+  towns?: RoadsideTown[]
   /** Live walking traffic, shared by navigation and terrain; scoped to the running game. */
   footpaths?: import("../footpaths").Footpaths
   elevation?: import("./elevation").ElevationInfo
@@ -91,8 +114,20 @@ export interface GameMap {
    * grew a dark forest the road had to go around.
    */
   shortcuts?: Shortcut[]
+  /** Ancient groves, including those away from the main road. */
+  darkForests?: DarkForest[]
+  /** Original old-growth tile indices, before roads and their shoulders clear trees. */
+  darkForestFloor?: number[]
   /** Present on generated maps: the relic's hovel and the branch that reaches it. */
   site?: FoundingSite
+}
+
+export interface RoadsideTown {
+  id: string
+  name: string
+  junction: number
+  tavernId: string
+  buildingIds: string[]
 }
 
 export interface Shortcut {

@@ -1,8 +1,9 @@
+import { forestEntrancePlacements } from "../map/forest-entrances"
 import { groundHeight } from "../map/elevation"
 import { bridgeLayout } from "../map/bridges"
 import { computeForestShade } from "../map/forest-field"
 import { type TerrainId } from "../map/terrain"
-import { signpostPlacement } from "../map/signpost"
+import { signpostPlacements } from "../map/signpost"
 import { worldToTileX, worldToTileZ, type GameMap } from "../map/types"
 import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
 import { environmentRadius, ENVIRONMENT_KINDS, type EnvironmentKind, type EnvironmentPlacement } from "./elements"
@@ -50,9 +51,11 @@ export function placeEnvironment(map: GameMap): EnvironmentPlacement[] {
     }
   }
   if (map.site) blocked.add(map.site.door.z * map.width + map.site.door.x)
-  // The signpost has the corner of its fork to itself; no boulder shares it.
-  const signpost = signpostPlacement(map)
-  if (signpost) blocked.add(signpost.tile.z * map.width + signpost.tile.x)
+  // Every crossroads island keeps its post clear of boulders and plants.
+  const signposts = signpostPlacements(map)
+  for (const post of signposts) blocked.add(post.tile.z * map.width + post.tile.x)
+
+  for (const warning of forestEntrancePlacements(map)) blocked.add(warning.tile.z * map.width + warning.tile.x)
 
   const onLand = (px: number, pz: number, radius: number, kind: EnvironmentKind) => {
     const kindIndex = ENVIRONMENT_KINDS.indexOf(kind)

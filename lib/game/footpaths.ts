@@ -1,4 +1,7 @@
+import { benchmarkWork } from "./benchmark-work"
+import { forestTrackTiles } from "./map/forest-entrances"
 import { buildingSpatialQuery } from "./building-spatial"
+import { walkingGroundQuery } from "./walking-ground"
 import { isRoadTerrain } from "./map/road"
 import { elevationStep } from "./map/elevation"
 import { tileAt, worldToTileX, worldToTileZ, type GameMap, type TilePos } from "./map/types"
@@ -23,7 +26,7 @@ export type FootpathObstacle = TilePos & { radius: number }
 export interface ObstacleIndex { source: readonly FootpathObstacle[]; reach: number; cells: Map<number, FootpathObstacle[]> }
 /** One stretch of road's answer to "is there a way across here?"; see lib/game/walking-shortcuts. */
 export interface RoadCut { end: number | null; atSeconds: number; ground: number; buildings: number }
-export interface Footpaths { rerouted: Set<number>; obstacles?: readonly FootpathObstacle[]; obstacleIndex?: ObstacleIndex; paved?: boolean; founding: Map<number, number>; edges: Map<string, Footpath>; contacts: Map<number | string, ContactTrack>; cuts?: Map<number, RoadCut>; ground: number; revision: number; elapsed: number }
+export interface Footpaths { rerouted: Set<number>; obstacles?: readonly FootpathObstacle[]; obstacleIndex?: ObstacleIndex; paved?: boolean; founding: Map<number, number>; edges: Map<number | string, Footpath>; contacts: Map<number | string, ContactTrack>; cuts?: Map<number, RoadCut>; ground: number; revision: number; elapsed: number }
 export const createFootpaths = (map?: GameMap): Footpaths => ({
   rerouted: new Set(),
   founding: new Map(map?.tiles.flatMap((terrain, index) => isRoadTerrain(terrain) ? [[index, FOUNDING_ROAD_WEAR] as const] : []) ?? []),
@@ -121,30 +124,31 @@ function foundingCompaction(map: GameMap, index: number): number {
 
 /** Original roads fade only after traffic establishes an alternative. */
 export function foundingRoadStrength(map: GameMap, index: number): number {
+  if (!map.footpaths?.paved && forestTrackTiles(map).has(index)) return .48
   if (!map.footpaths || map.footpaths.paved) return 1
   return Math.min(1, foundingCompaction(map, index) / FOUNDING_ROAD_WEAR)
 }
 
 /** Existing ruts widen from local use, independently of the population slider. */
 export function foundingRoadTraffic(map: GameMap, index: number, fallback: number): number {
+  if (!map.footpaths?.paved && forestTrackTiles(map).has(index)) return 2
   if (!map.footpaths) return fallback
   const wear = foundingCompaction(map, index)
   return 6 * Math.min(1, wear / FOUNDING_ROAD_WEAR) + 70 * Math.max(0, wear - FOUNDING_ROAD_WEAR)
 }
-const edgeKey = (a: number, b: number) => `${Math.min(a, b)}:${Math.max(a, b)}`
+/** Two 26-bit tile indices fit exactly in a JavaScript number. Avoid allocating
+ * strings for every footfall and A* edge; oversized custom maps retain a key. */
+export const footpathEdgeKey = (a: number, b: number): number | string => {
+  const low = Math.min(a, b), high = Math.max(a, b)
+  return low >= 0 && high < 0x4000000 ? low * 0x4000000 + high : `${low}:${high}`
+}
 const index = (map: GameMap, p: TilePos) => p.z * map.width + p.x
 
-function openGround(map: GameMap, p: TilePos, nearby: ReturnType<typeof buildingSpatialQuery>): boolean {
-  const terrain = tileAt(map, p.x, p.z)
-  return !!terrain && ["grass", "clearing", "dirt", "sand", "path", "track"].includes(terrain)
-    && !nearby(p).some(b => p.x >= b.x && p.x < b.x + b.w && p.z >= b.z && p.z < b.z + b.d)
-}
-
-function crossingAllowed(map: GameMap, a: TilePos, b: TilePos, nearby: ReturnType<typeof buildingSpatialQuery>): boolean {
-  if (!openGround(map, a, nearby)) return false
+function crossingAllowed(map: GameMap, a: TilePos, b: TilePos, open: (p: TilePos) => boolean): boolean {
+  if (!open(a)) return false
   if (a.x === b.x && a.z === b.z) return Number.isFinite(elevationStep(map.elevation, index(map, a), index(map, b)))
-  if (!openGround(map, b, nearby)) return false
-  if (a.x !== b.x && a.z !== b.z && (!openGround(map, { x: a.x, z: b.z }, nearby) || !openGround(map, { x: b.x, z: a.z }, nearby))) return false
+  if (!open(b)) return false
+  if (a.x !== b.x && a.z !== b.z && (!open({ x: a.x, z: b.z }) || !open({ x: b.x, z: a.z }))) return false
   return Number.isFinite(elevationStep(map.elevation, index(map, a), index(map, b)))
 }
 
@@ -155,9 +159,9 @@ const CONTACT_DIRECTIONS = Array.from({ length: 8 }, (_, direction) => ({
 /** Compact actual movement into half-tile spans, retaining lateral lane offsets.
  * Opposite-direction pedestrians use their own physical lanes; reversing on
  * exactly the same ground reinforces that ground. Sampling is distance driven. */
-function recordContact(paths: Footpaths, map: GameMap, from: TilePos, to: TilePos, a: TilePos, b: TilePos, weight: number, nearby: ReturnType<typeof buildingSpatialQuery>): void {
+function recordContact(paths: Footpaths, map: GameMap, from: TilePos, to: TilePos, a: TilePos, b: TilePos, weight: number, open: (p: TilePos) => boolean): void {
   const dx = to.x - from.x, dz = to.z - from.z
-  if (!crossingAllowed(map, a, b, nearby)) return
+  if (!crossingAllowed(map, a, b, open)) return
   const direction = ((Math.round(Math.atan2(dz, dx) / (Math.PI / 8)) % 8) + 8) % 8
   const { x: ux, z: uz } = CONTACT_DIRECTIONS[direction]
   const ax = from.x + map.width / 2, az = from.z + map.depth / 2
@@ -195,12 +199,14 @@ export function recordCartPath(paths: Footpaths, map: GameMap, before: CartPose,
 
 /** Record crossed ground, never a planned route. Undirected tile edges keep storage bounded. */
 export function recordWalkingPath(paths: Footpaths, map: GameMap, from: TilePos, to: TilePos, weight = 1, nearby = buildingSpatialQuery(map.buildings)): void {
+  if (process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && !benchmarkWork.pathWear) return
   const distance = Math.hypot(to.x - from.x, to.z - from.z)
   // Respawning at the map edge and other teleports must not draw a shortcut.
   if (!Number.isFinite(distance) || distance <= 1e-8 || distance > 2 || !Number.isFinite(weight) || weight <= 0) return
   let a = { x: worldToTileX(map, from.x), z: worldToTileZ(map, from.z) }
   const last = { x: worldToTileX(map, to.x), z: worldToTileZ(map, to.z) }
-  recordContact(paths, map, from, to, a, last, weight, nearby)
+  const open = walkingGroundQuery(map, nearby)
+  recordContact(paths, map, from, to, a, last, weight, open)
   const ground = worldToTileZ(map, (from.z + to.z) / 2) * map.width + worldToTileX(map, (from.x + to.x) / 2)
   const oldRoad = paths.founding.get(ground)
   if (oldRoad !== undefined) {
@@ -211,8 +217,8 @@ export function recordWalkingPath(paths: Footpaths, map: GameMap, from: TilePos,
   for (let step = 1; step <= steps; step++) {
     const t = step / steps
     const b = step === steps ? last : { x: worldToTileX(map, from.x + (to.x - from.x) * t), z: worldToTileZ(map, from.z + (to.z - from.z) * t) }
-    if ((a.x !== b.x || a.z !== b.z) && crossingAllowed(map, a, b, nearby)) {
-      const ai = index(map, a), bi = index(map, b), key = edgeKey(ai, bi)
+    if ((a.x !== b.x || a.z !== b.z) && crossingAllowed(map, a, b, open)) {
+      const ai = index(map, a), bi = index(map, b), key = footpathEdgeKey(ai, bi)
       const edge = paths.edges.get(key) ?? { from: Math.min(ai, bi), to: Math.max(ai, bi), wear: 0 }
       const wear = Math.min(1, edge.wear + FOOTPATH_WEAR * weight)
       if (wear !== edge.wear) {
@@ -227,6 +233,7 @@ export function recordWalkingPath(paths: Footpaths, map: GameMap, from: TilePos,
 
 /** Regrow in game time; batch at one sim second to avoid scanning the network every frame. */
 export function regrowFootpaths(paths: Footpaths, days: number): void {
+  if (process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && !benchmarkWork.pathWear) return
   if (!Number.isFinite(days) || days <= 0) return
   paths.elapsed += days
   if (paths.elapsed < 1 / 600) return
@@ -268,7 +275,7 @@ export function establishedFootpath(map: GameMap, x: number, z: number): boolean
   if (paths.founding.has(here)) return true
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
     if ((!dx && !dz) || x + dx < 0 || z + dz < 0 || x + dx >= map.width || z + dz >= map.depth) continue
-    const edge = paths.edges.get(edgeKey(here, (z + dz) * map.width + x + dx))
+    const edge = paths.edges.get(footpathEdgeKey(here, (z + dz) * map.width + x + dx))
     if ((edge?.wear ?? 0) >= FOOTPATH_ESTABLISHED_AT) return true
   }
   return false
@@ -282,7 +289,7 @@ export function footpathRouteCost(map: GameMap, from: TilePos, to: TilePos): num
   const base = isRoadTerrain(terrain) && map.footpaths?.founding.has(b)
     ? 3 - 2 * foundingRoadStrength(map, b) : walkingRouteCost(terrain)
   if (base === 1) return 1
-  const wear = map.footpaths?.edges.get(edgeKey(a, b))?.wear ?? 0
+  const wear = map.footpaths?.edges.get(footpathEdgeKey(a, b))?.wear ?? 0
   const strength = Math.min(1, Math.max(0, (wear - FOOTPATH_WEAR) / (FOOTPATH_ESTABLISHED_AT - FOOTPATH_WEAR)))
   return base - (base - 1) * strength * strength * (3 - 2 * strength)
 }
@@ -306,7 +313,7 @@ export function* buildFootpathRoadSegments(map: GameMap, paths: Footpaths): Gene
     if (track.wear <= FIRST_PASS_WEAR + 1e-6) continue
     const a = { x: Math.floor(track.ax), z: Math.floor(track.az) }
     const b = { x: Math.floor(track.bx), z: Math.floor(track.bz) }
-    if (!crossingAllowed(map, a, b, nearby)) continue
+    if (!crossingAllowed(map, a, b, walkingGroundQuery(map, nearby))) continue
     eligible.push([key, { ...track }])
   }
   return yield* buildTraveledRoadSegments(map, yield* compactContacts(eligible))

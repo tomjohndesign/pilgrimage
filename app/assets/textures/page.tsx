@@ -4,6 +4,7 @@ import Link from "next/link"
 import { TextureGallery } from "@/components/texture-gallery"
 import { TreeLab } from "@/components/tree-lab/tree-lab"
 import { CharacterTextures } from "@/components/character-textures"
+import { WaterSourceGallery } from "@/components/environment-lab/water-source-gallery"
 import { EnvironmentGallery } from "@/components/environment-lab/environment-gallery"
 
 export const metadata: Metadata = {
@@ -39,6 +40,14 @@ export default function TexturesPage() {
           <p className="mt-3 font-display text-[10px] uppercase tracking-[3px] text-gold">Meadow grass, wildflowers, shrubs, and weathered stone</p>
         </header>
         <EnvironmentGallery />
+      </section>
+
+      <section id="water-sources" className="mt-20 w-full max-w-6xl">
+        <header className="mb-10 text-center">
+          <h2 className="font-display text-3xl font-bold tracking-[6px] text-parchment md:text-4xl">WATER SOURCES</h2>
+          <p className="mt-3 font-display text-[10px] uppercase tracking-[3px] text-gold">Wells and watering holes</p>
+        </header>
+        <WaterSourceGallery />
       </section>
 
       <section id="trees" className="mt-20 w-full max-w-6xl">

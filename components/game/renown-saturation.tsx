@@ -6,6 +6,8 @@ import * as THREE from "three"
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { getBuildInfluence } from "@/lib/game/build-influence"
 import type { GameMap } from "@/lib/game/map/types"
+import { batchedSourceRoots } from "@/lib/game/render/batch-source-visibility"
+import { withoutPixelRoots } from "@/lib/game/render/pixel-characters"
 
 /** Enrich the contents of the existing influence boundary in both color passes. */
 export function RenownSaturation({ map, children }: { map: GameMap; children: ReactNode }) {
@@ -37,7 +39,7 @@ export function RenownSaturation({ map, children }: { map: GameMap; children: Re
   // New buildings and asynchronously loaded sprites can introduce materials at
   // any time. Only color-layer materials are patched; encoded outline IDs and
   // the cursor/territory overlays keep their original colors.
-  useFrame(() => root.current?.traverseVisible(object => {
+  useFrame(({ scene }) => withoutPixelRoots(batchedSourceRoots(scene), () => root.current?.traverseVisible(object => {
     if (!object.layers.isEnabled(0)) return
     if (!(object instanceof THREE.Mesh || object instanceof THREE.Sprite)) return
     const materials: THREE.Material[] = Array.isArray(object.material) ? object.material : [object.material]
@@ -98,7 +100,7 @@ export function RenownSaturation({ map, children }: { map: GameMap; children: Re
       material.addEventListener("dispose", restore)
       patched.set(material, restore)
     }
-  }), .75)
+  })), .75)
 
   return <group ref={root}>{children}</group>
 }

@@ -7,6 +7,7 @@ export interface CliffCorner { corner: number; donor: number; low: number; lower
 
 interface QueryScope {
   depth: number
+  token: object
   frame?: { elapsedTime: number }
   frameTime?: number
   epoch: number
@@ -25,11 +26,12 @@ export function withTerrainCornerQueries<T>(map: GameMap | undefined, read: () =
   if (!map) return read()
   let scope = scopes.get(map)
   if (!scope || scope.visited.length !== map.width * map.depth) {
-    scope = { depth: 0, epoch: 0, visited: new Uint32Array(map.width * map.depth), cuts: [] }
+    scope = { depth: 0, token: {}, epoch: 0, visited: new Uint32Array(map.width * map.depth), cuts: [] }
     scopes.set(map, scope)
   }
   if (scope.depth++ === 0) {
     if (!frame || scope.frame !== frame || scope.frameTime !== frame.elapsedTime) {
+      scope.token = {}
       if (++scope.epoch >= 0xffffffff) { scope.visited.fill(0); scope.epoch = 1 }
     }
     scope.frame = frame; scope.frameTime = frame?.elapsedTime
@@ -37,6 +39,12 @@ export function withTerrainCornerQueries<T>(map: GameMap | undefined, read: () =
   try { return read() }
   catch (error) { scope.frame = undefined; throw error }
   finally { scope.depth-- }
+}
+
+/** Identity of the current read-only ground snapshot; absent outside a scope. */
+export function terrainQueryToken(map: GameMap): object | undefined {
+  const scope = scopes.get(map)
+  return scope?.depth ? scope.token : undefined
 }
 
 export function terrainCorner(map: GameMap, x: number, z: number): CliffCorner | undefined {
@@ -75,14 +83,15 @@ export function cliffCorner(map: GameMap, x: number, z: number): CliffCorner | u
   if (!BANKS.has(map.tiles[index])) return
   const height = (i: number, c: number) => map.tiles[i] === "water"
     ? map.water?.surface?.[i] ?? heights[i * 4 + c] : heights[i * 4 + c]
-  for (const [corner, [dx, dz]] of CORNERS.entries()) {
+  for (let corner = 0; corner < CORNERS.length; corner++) {
+    const [dx, dz] = CORNERS[corner]
     const nx = x + dx, nz = z + dz
     if (nx < 0 || nx >= map.width || nz < 0 || nz >= map.depth) continue
     const donor = z * map.width + nx, across = nz * map.width + x, diagonal = nz * map.width + nx
-    const neighbours = [donor, across, diagonal]
-    if (neighbours.some(i => !BANKS.has(map.tiles[i]) && map.tiles[i] !== "water")) continue
-    const wet = map.tiles[donor] === "water"
-    if (neighbours.some(i => (map.tiles[i] === "water") !== wet)) continue
+    const a = map.tiles[donor], b = map.tiles[across], d = map.tiles[diagonal]
+    if ((!BANKS.has(a) && a !== "water") || (!BANKS.has(b) && b !== "water") || (!BANKS.has(d) && d !== "water")) continue
+    const wet = a === "water"
+    if ((b === "water") !== wet || (d === "water") !== wet) continue
     const c = (dx > 0 ? 1 : 0) + (dz > 0 ? 2 : 0)
     const fromX = height(donor, c ^ 1)
     const fromZ = height(across, c ^ 2)
@@ -90,8 +99,8 @@ export function cliffCorner(map: GameMap, x: number, z: number): CliffCorner | u
     if (Math.max(fromX, fromZ, fromDiagonal) - Math.min(fromX, fromZ, fromDiagonal) > .001) continue
     const h = (fromX + fromZ) / 2
     const hx = height(across, c ^ 3), hz = height(donor, c ^ 3)
-    const drops = [heights[index * 4 + c] - h, heights[index * 4 + (c ^ 1)] - hx, heights[index * 4 + (c ^ 2)] - hz]
-    if (Math.max(...drops) < .08 || Math.min(...drops) < -.001) continue
+    const drop = heights[index * 4 + c] - h, dropX = heights[index * 4 + (c ^ 1)] - hx, dropZ = heights[index * 4 + (c ^ 2)] - hz
+    if (Math.max(drop, dropX, dropZ) < .08 || Math.min(drop, dropX, dropZ) < -.001) continue
     // Preserve bridge approaches, road junction shoulders and building aprons.
     let protectedSite = false
     for (let oz = -1; oz <= 1; oz++) for (let ox = -1; ox <= 1; ox++) {

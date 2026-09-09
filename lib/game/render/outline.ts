@@ -111,7 +111,7 @@ export function wildlifeObjectId(animalIndex: number): number {
   return MAX_OBJECT_ID - 0x4000 - animalIndex
 }
 
-/** The lone wayside signpost, below wildlife and clear of every growing block. */
+/** Crossroads posts count down from here, below wildlife and clear of growing blocks. */
 export const SIGNPOST_OBJECT_ID = MAX_OBJECT_ID - 0x5000
 
 /**

@@ -7,11 +7,12 @@ const index = args.indexOf("--url"), origin = index < 0 ? "http://localhost:3219
 if (!version) throw new Error("Usage: node scripts/export-tree-foliage.mjs v1 [--url http://localhost:3219]")
 const directory = `public/textures/trees/foliage/${version}`
 if (existsSync(directory)) throw new Error("This version exists; published bakes are immutable.")
-const browser = await chromium.launch({ headless: true, args: ["--use-angle=metal"] })
+const browser = await chromium.launch({ headless: true, args: ["--use-angle=metal", "--max-active-webgl-contexts=64"] })
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } })
   await freezeAssetUpdates(page)
   page.on("pageerror", error => console.error(error.message))
+  page.on("console", message => { if (message.type() === "error" || message.text().includes("context")) console.error(message.text()) })
   await page.goto(new URL("/assets/textures", origin).href, { waitUntil: "domcontentloaded", timeout: 120_000 })
   await page.waitForFunction(() => window.__bakeTreeFoliage, undefined, { timeout: 120_000 })
   const atlas = await page.evaluate(() => window.__bakeTreeFoliage())

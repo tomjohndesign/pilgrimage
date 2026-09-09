@@ -1,9 +1,9 @@
 import type { GameMap } from "../map/types"
 import { TILE_HEIGHT } from "../map/terrain"
 
-/** Raised timber platforms and paving keep their authored floors. */
+/** Raised platforms, paving and water sources keep their authored ground. */
 export function hasDirtFloor(variant: string | undefined): boolean {
-  return variant !== "storehouse" && variant !== "enclosure"
+  return variant !== "storehouse" && variant !== "enclosure" && variant !== "well" && variant !== "watering-hole"
 }
 
 /** A small worn apron outside the occupied tiles; never changes placement or routes. */

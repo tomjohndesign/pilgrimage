@@ -19,7 +19,7 @@ import type { FigureClickHandler } from "./traveler-figure"
 
 /**
  * Clicks pick the person under the pointer before the scenery in front of them,
- * so a walker stays reachable through the crowns and walls that hide them.
+ * so a walker stays reachable through trees while buildings block their occupants.
  * Mounted once per scene; every monk and traveler group marks itself with
  * `markPerson`.
  */

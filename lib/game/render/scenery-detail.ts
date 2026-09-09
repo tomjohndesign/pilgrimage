@@ -29,14 +29,14 @@ export function chooseSceneryDetail(pixelsPerUnit: number, previous: SceneryDeta
 }
 
 export function updateSceneryDetail(scene: THREE.Scene, camera: THREE.Camera, height: number,
-  time: number, requestedViewSize?: number, profile: SceneryProfile = "desktop"): SceneryDetail {
+  time: number, requestedViewSize?: number, profile: SceneryProfile = "desktop", minimum: SceneryDetail = 0): SceneryDetail {
   const cam = camera as THREE.OrthographicCamera
   const viewSize = cam.isOrthographicCamera ? (cam.top - cam.bottom) / cam.zoom : 0
   const target = requestedViewSize === undefined ? viewSize : requestedViewSize / cam.zoom
   const density = viewSize > 0 ? height / viewSize : Infinity
   let state = details.get(scene)
   if (!state) {
-    const initial = chooseSceneryDetail(density, 0, profile)
+    const initial = Math.max(minimum, chooseSceneryDetail(density, 0, profile)) as SceneryDetail
     state = { current: initial, pending: initial, zooming: false, target, density, changedAt: time,
       profile, from: initial, fade: 1, fadeStartedAt: -Infinity }
     details.set(scene, state)
@@ -50,7 +50,7 @@ export function updateSceneryDetail(scene: THREE.Scene, camera: THREE.Camera, he
     && Math.abs(density / state.density - 1) * height / 2 > .25
   if (target !== state.target || tweening || densityMoving || time < state.changedAt) state.changedAt = time
   state.target = target; state.density = density; state.profile = profile
-  state.pending = chooseSceneryDetail(density, state.current, profile)
+  state.pending = Math.max(minimum, chooseSceneryDetail(density, state.current, profile)) as SceneryDetail
   state.zooming = time - state.changedAt < ZOOM_QUIET_SECONDS
   if (!state.zooming && state.current !== state.pending) {
     state.from = state.current; state.current = state.pending; state.fadeStartedAt = time

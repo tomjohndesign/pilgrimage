@@ -3,7 +3,8 @@
 import { DEFAULT_SCENE_VISIBILITY, type SceneVisibility } from "@/lib/game/scene-visibility"
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { terrainMapSnapshot } from "@/lib/game/render/terrain-blocks"
 import { travelerAppearance } from "@/lib/game/base-person/population"
 import { populationVisual } from "@/lib/game/base-person/population-assets"
 import { walkSpeedScale } from "@/lib/game/base-person/gait"
@@ -14,6 +15,7 @@ import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { PixelCanvas, PixelCharacters, PixelWorld, type PixelationProps } from "@/components/pixel-canvas"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import { markSelectionScenery } from "@/lib/game/selection"
 import type { Resources } from "@/lib/game/settlement"
 import type { TilePos } from "@/lib/game/map/types"
 import { deriveSeed, SEED_STREAM } from "@/lib/game/rng"
@@ -45,7 +47,7 @@ import { OutlinePass } from "./outline-pass"
 import { RenownSaturation } from "./renown-saturation"
 import { vendorSpeedScale } from "@/lib/game/transport/assets"
 import { Shrine } from "./shrine"
-import { Signpost } from "./signpost"
+import { Signpost, ForestWarnings } from "./signpost"
 import type { RoadLook } from "@/lib/game/map/road"
 import { WalkingTerrain } from "./walking-terrain"
 import { TileCursor } from "./tile-cursor"
@@ -55,7 +57,11 @@ import { Travelers } from "./travelers"
 import { Trees } from "./trees"
 import { Wildlife } from "./wildlife"
 
-const BACKGROUND = "#14100a"
+import { MapRevealState, type MapRevealPhase } from "@/lib/game/render/map-reveal"
+import { SceneAssetsContext, SceneAssetBoundary } from "./scene-assets"
+import { MapReveal } from "./map-reveal"
+
+import { GAME_BACKGROUND } from "@/lib/game/render/background"
 
 export function GameCanvas({
   map,
@@ -81,9 +87,15 @@ export function GameCanvas({
   baseRenown,
   resources,
   onPlace,
+  onLandmarkReady,
+  onRevealPhase,
+  onRevealProgress,
   ...pixelation
 }: {
   map: GameMap
+  onLandmarkReady: () => void
+  onRevealPhase: (phase: MapRevealPhase) => void
+  onRevealProgress: (progress: number, reach: number) => void
   buildType: string | null
   shrineRenown: number
   baseRenown: number
@@ -115,6 +127,14 @@ export function GameCanvas({
   showGrid?: boolean
   visibility?: SceneVisibility
 } & PixelationProps) {
+  const previousTerrain = useRef<GameMap>(undefined)
+  const terrainMap = useMemo(() => {
+    previousTerrain.current = terrainMapSnapshot(map, previousTerrain.current)
+    return previousTerrain.current
+  }, [map])
+  const reveal = useMemo(() => new MapRevealState(), [map.road])
+  const [revealStatus, setRevealStatus] = useState<{ state: MapRevealState; phase: MapRevealPhase } | null>(null)
+  const phase = revealStatus?.state === reveal ? revealStatus.phase : "loading"
   const selection = useCameraStore(s => s.selection)
   useEffect(() => {
     if (!selection) return
@@ -134,6 +154,11 @@ export function GameCanvas({
     const personSpeedScale = walkSpeedScale(visual.walkStride, scale)
     return [traveler.id, traveler.type.id === "vendor" ? vendorSpeedScale(traveler.id, scale, personSpeedScale) : personSpeedScale]
   })), [travelers, map.seed, characterModel, characterScale, population, assets])
+  const beggarSpeedScales = useMemo(() => new Map(travelers.map(traveler => {
+    const appearance = travelerAppearance(map.seed ?? 0, traveler.id)
+    const visual = populationVisual("beggar", appearance.variant, population, traveler.attributes.age)
+    return [traveler.id, walkSpeedScale(visual.walkStride, characterScale * appearance.scale)]
+  })), [travelers, map.seed, characterScale, population])
   const foundation = usePersonDesignStore(s => s.design)
   useEffect(() => { void usePersonDesignStore.getState().hydrate() }, [])
   useEffect(() => { void usePopulationStore.getState().prepare(foundation) }, [foundation])
@@ -143,6 +168,8 @@ export function GameCanvas({
   const trees = useMemo(() => growTreePlacements(placeTrees(map, treeModel === "sprites" ? foliageSpacing(species) : species),
     deriveSeed(map.seed ?? 0, SEED_STREAM.treeShapes), species, variance), [map.tiles, species, variance, treeModel])
   return (
+    <div className="relative h-full w-full" data-map-reveal={phase}>
+    <SceneAssetsContext.Provider value={reveal}>
     <PixelCanvas
       {...pixelation}
       orthographic
@@ -151,7 +178,7 @@ export function GameCanvas({
       }}
       camera={{ manual: true, position: [20, 20, 20], near: CAM_NEAR, far: CAM_FAR }}
     >
-      <color attach="background" args={[BACKGROUND]} />
+      <color attach="background" args={[GAME_BACKGROUND]} />
 
       {/*
         No cast shadows — separation between overlapping objects comes from the
@@ -164,19 +191,24 @@ export function GameCanvas({
       <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
       <CameraLight />
 
-      <HearthLights><RenownSaturation map={map}>
+      <HearthLights enabled={visibility.buildingVisibility !== "hidden"}><RenownSaturation map={map}>
+      <group name="map-reveal-church" userData={{ mapRevealLandmark: true }} visible={visibility.buildingVisibility !== "hidden"}>
+        <Shrine map={map} relic={relic} showInteriors={visibility.buildingVisibility === "interiors"} />
+      </group>
+      <SceneAssetBoundary>
         <PixelWorld>
           <StaticBatches />
-          <WalkingTerrain map={map} trees={trees} roadTier={roadTier} traffic={travelers.length}
+          <WalkingTerrain map={terrainMap} trees={trees} roadTier={roadTier} traffic={travelers.length}
             relicTraffic={relicTraffic} look={roadLook} showGrid={showGrid} />
-          <Bridges map={map} roadTier={roadTier} />
+          <Bridges map={terrainMap} roadTier={roadTier} />
           {/* Keep simulation components mounted when their visual layer is hidden. */}
           <group name="visibility-trees" visible={visibility.showTrees}>
             <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} model={treeModel} />
           </group>
-          <group name="visibility-scenery" visible={visibility.showScenery}>
-            <Environment map={map} />
-            <Signpost map={map} />
+          <group name="visibility-scenery" ref={markSelectionScenery} visible={visibility.showScenery}>
+            <Environment map={terrainMap} />
+            <Signpost map={terrainMap} />
+            <ForestWarnings map={terrainMap} />
           </group>
         </PixelWorld>
         <group name="visibility-wildlife" visible={visibility.showWildlife}>
@@ -185,25 +217,34 @@ export function GameCanvas({
         <group name="visibility-buildings" visible={visibility.buildingVisibility !== "hidden"}>
           <BuildingBatches>
             <Buildings map={map} characterScale={characterScale} showInteriors={visibility.buildingVisibility === "interiors"} />
-            <Shrine map={map} relic={relic} showInteriors={visibility.buildingVisibility === "interiors"} />
           </BuildingBatches>
         </group>
         <group name="visibility-characters" visible={visibility.showCharacters}>
           <PixelCharacters>
             <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
           </PixelCharacters>
-          <CharacterBatches><Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
+          <CharacterBatches><Travelers map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
             characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} /></CharacterBatches>
         </group>
+      </SceneAssetBoundary>
       </RenownSaturation></HearthLights>
+      <SceneAssetBoundary>
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
       <BuildInfluenceOverlay map={map} buildMode={!!buildType} />
 
+      </SceneAssetBoundary>
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <PersonPicking />
       <GroundSelection map={map} trees={trees} characterScale={characterScale} />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
-      <DebugHandle characterScale={characterScale} map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} movement={movement} />
+      <DebugHandle characterScale={characterScale} map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} movement={movement} />
+      <MapReveal map={map} state={reveal} onLandmarkReady={onLandmarkReady} onProgress={onRevealProgress} onPhase={phase => {
+        setRevealStatus({ state: reveal, phase }); onRevealPhase(phase)
+      }} />
     </PixelCanvas>
+    </SceneAssetsContext.Provider>
+    {phase !== "complete" && <div className="absolute inset-0 z-10"
+      onPointerDown={event => event.stopPropagation()} onWheel={event => event.stopPropagation()} />}
+    </div>
   )
 }

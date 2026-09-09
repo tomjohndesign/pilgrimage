@@ -46,6 +46,7 @@ export function selectionObjectId(selection: Selection | null, objects: {
 
 /** Marks a rendered subtree as a person, for `prioritizePeople`. */
 const PERSON_PICK = "person"
+const SCENERY_PICK = "selectionScenery"
 
 interface PickObject {
   visible?: boolean
@@ -58,22 +59,23 @@ export function markPerson(object: { userData: Record<string, unknown> } | null 
   if (object) object.userData[PERSON_PICK] = true
 }
 
-/** True when the object, or anything it hangs from, stands for a person. */
-function isPersonPick(object: PickObject | null | undefined): boolean {
+/** Only trees and environment scenery yield their clicks to people behind them. */
+export function markSelectionScenery(object: { userData: Record<string, unknown> } | null | undefined) {
+  if (object) object.userData[SCENERY_PICK] = true
+}
+
+function hasPickTag(object: PickObject | null | undefined, tag: string): boolean {
   for (let node = object ?? null; node; node = node.parent ?? null) {
-    if (node.userData?.[PERSON_PICK] === true) return true
+    if (node.userData?.[tag] === true) return true
   }
   return false
 }
 
 /**
- * Re-order raycast hits so people come first. A walker is small next to the
- * trees and buildings around them, so the nearest hit under the pointer is
- * usually the scenery standing in front — clicking a pilgrim on a forest path
- * would pick the crown that hides them. Distance order is kept within each
- * group, so the nearest person still wins, and scenery is only demoted, never
- * dropped: with no tool active the person's handler stops the event, and in
- * build mode nothing stops it and the ground still takes the click.
+ * Let people be picked through trees and environment scenery. Other surfaces
+ * keep their distance order with people, so roofs and walls block occupants
+ * while an exposed person in front of a building remains selectable. Scenery
+ * is demoted only when a person is hit, and retained for build-tool events.
  */
 export function prioritizePeople<T extends { object: PickObject }>(hits: readonly T[]): T[] {
   // Batched buildings keep their original surface as the exact picking mesh.
@@ -81,7 +83,11 @@ export function prioritizePeople<T extends { object: PickObject }>(hits: readonl
   const visibleHits = hits.filter(hit => hit.object.userData?.batchedPickTarget === true
     ? isObjectVisible(hit.object.parent ?? {}) : isObjectVisible(hit.object))
   if (visibleHits.length !== hits.length) hits = visibleHits
-  const people = hits.filter((hit) => isPersonPick(hit.object))
-  if (people.length === 0 || people.length === hits.length) return hits as T[]
-  return [...people, ...hits.filter((hit) => !isPersonPick(hit.object))]
+  if (!hits.some(hit => hasPickTag(hit.object, PERSON_PICK))) return hits as T[]
+  const solid: T[] = [], scenery: T[] = []
+  for (const hit of hits) {
+    const passThrough = hasPickTag(hit.object, SCENERY_PICK) && !hasPickTag(hit.object, PERSON_PICK)
+    ;(passThrough ? scenery : solid).push(hit)
+  }
+  return scenery.length ? [...solid, ...scenery] : hits as T[]
 }

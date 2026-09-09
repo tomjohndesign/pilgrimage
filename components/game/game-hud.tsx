@@ -9,7 +9,7 @@ import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/eleva
 
 import Link from "next/link"
 import * as Tooltip from "@radix-ui/react-tooltip"
-import { Menu, Settings, X } from "lucide-react"
+import { Menu, RefreshCw, Settings, X } from "lucide-react"
 import "./game-hud.css"
 import { useEffect, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
@@ -24,10 +24,10 @@ import { clampRoadTier, ROAD_TIERS } from "@/lib/game/map/road"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileAt, type BuildingDef, type GameMap } from "@/lib/game/map/types"
 import { nerve } from "@/lib/game/route-choice"
-import { parseSeed } from "@/lib/game/rng"
+import { parseSeed, randomSeed } from "@/lib/game/rng"
 import { CHANGELOG, CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
-import { ACTIVITY_LABELS, simRegistry, type SimTraveler } from "@/lib/game/sim"
+import { ACTIVITY_LABELS, BEGGAR_RECOVERY_GOLD, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
 import { MONK_TIRED_AT } from "@/lib/game/monk-work"
 import { useMonkEvangelismStore } from "@/lib/game/monk-evangelism-store"
@@ -59,9 +59,9 @@ import { Section, Tuner } from "./property-controls"
 import { BuildControls, HudClock, HudHelp, HudResources } from "./hud-controls"
 
 const CONTROLS: Array<[string, string]> = [
-  ["Click", "Inspect people, trees & piles"],
+  ["Tap / click", "Inspect people, trees & piles"],
   ["Drag", "Pan"],
-  ["Scroll", "Zoom"],
+  ["Pinch / scroll", "Zoom"],
   ["Q / E", "Rotate view"],
   ["W A S D", "Pan"],
   ["O", "Cycle outlines"],
@@ -132,7 +132,7 @@ function Chooser({
   return (
     <div className="flex items-center">
       <span className={`${labelClassName} shrink-0 text-[13px] font-medium text-ink-light`}>{label}</span>
-      <div className="relative h-8 flex-1 rounded-[6px] bg-parchment-dark">
+      <div className="hud-choice-track relative h-8 flex-1 rounded-[6px] bg-parchment-dark">
         <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 truncate font-display text-[11px] font-black text-ink-light">
           {options[value]}
         </span>
@@ -154,13 +154,14 @@ function Chooser({
 }
 
 /** Top-level navigation, folded into the play view. Controls live in here too. */
-function MenuPanel() {
+function MenuPanel({ onClose, playing }: { onClose: () => void; playing: boolean }) {
   const [showControls, setShowControls] = useState(false)
 
   return (
     <div
       className={`hud-menu pointer-events-auto absolute right-0 top-full mt-2 w-56 border border-rule bg-parchment/95 px-4 py-3 ${PANEL_SHADOW}`}
     >
+      <div className="hud-world-heading"><span>Menu</span><button type="button" className="hud-close" aria-label="Close menu" onClick={onClose}><X size={16} /></button></div>
       <nav className="flex flex-col gap-1.5">
         {SITE_MENU.map((item) => (
           <div key={item.href} className="flex flex-col gap-1">
@@ -183,15 +184,17 @@ function MenuPanel() {
             ))}
           </div>
         ))}
-        <button
+        {playing && <button
           type="button"
           onClick={() => setShowControls((open) => !open)}
           aria-expanded={showControls}
           className="text-left font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red"
         >
           Controls {showControls ? "▾" : "▸"}
-        </button>
-        {showControls && (
+        </button>}
+        {playing && <button type="button" onClick={() => { useCameraStore.getState().reset(); onClose() }}
+          className="text-left font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red">Reset camera</button>}
+        {playing && showControls && (
           <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
             {CONTROLS.map(([key, action]) => (
               <div key={key} className="contents">
@@ -207,13 +210,15 @@ function MenuPanel() {
 }
 
 /**
- * The seed as an editable field: paste a value and apply it, or save it as the
- * default for future sessions. The shell owns the seed; this only reports.
+ * The seed as an editable field: paste a value or refresh for a random world.
+ * The shell owns the seed; this only reports.
  */
 function SeedField({
   seed,
   onSeedChange,
+  onValidityChange,
 }: {
+  onValidityChange?: (valid: boolean) => void
   seed: number | null
   onSeedChange: (seed: number) => void
 }) {
@@ -235,17 +240,33 @@ function SeedField({
     onSeedChange(parsed)
   }
 
+  const refresh = () => {
+    const rolled = randomSeed()
+    const next = rolled === seed ? (rolled + 1) % 2 ** 31 : rolled
+    setInput(String(next))
+    setInvalid(false)
+    onValidityChange?.(true)
+    onSeedChange(next)
+  }
+
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-stretch gap-1.5">
         <input
+        id={onValidityChange ? "landing-seed" : undefined}
         value={input}
         onChange={(event) => {
-          setInput(event.target.value)
-          setInvalid(false)
+          const value = event.target.value
+          setInput(value)
+          const parsed = parseSeed(value)
+          setInvalid(onValidityChange ? parsed === null : false)
+          if (onValidityChange) {
+            onValidityChange(parsed !== null)
+            if (parsed !== null) onSeedChange(parsed)
+          }
         }}
         onKeyDown={(event) => {
-          if (event.key === "Enter") apply()
+          if (event.key === "Enter" && !onValidityChange) apply()
         }}
         inputMode="numeric"
         spellCheck={false}
@@ -255,7 +276,10 @@ function SeedField({
           invalid ? "border-red" : "border-rule focus:border-gold"
         }`}
         />
-        <HudButton onClick={apply}>Apply</HudButton>
+        <HudButton onClick={refresh} aria-label="Randomize world seed" title="Randomize world seed">
+          <RefreshCw size={14} aria-hidden="true" />
+        </HudButton>
+        {!onValidityChange && <HudButton onClick={apply}>Apply</HudButton>}
       </div>
       {invalid && <div className="text-[11px] italic text-red">Digits only</div>}
     </div>
@@ -331,7 +355,7 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
             style={{ backgroundColor: traveler.type.color }}
           />
           <span className="text-[13px] italic text-ink-light">
-            {traveler.type.label}, {a.age} years
+            {live?.beggar ? `Beggar · ${traveler.type.label}` : traveler.type.label}, {a.age} years
           </span>
         </div>
         {live && (
@@ -341,6 +365,7 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
             {live.track && " · on the dark track"}
           </div>
         )}
+        {live?.beggar && <div className="text-[11px] italic text-ink-light">Needs {BEGGAR_RECOVERY_GOLD} gold to return to their calling</div>}
         {live?.employer && (
           <div className="text-[11px] text-ink-light">
             Works at {named(live.employer) ?? "a settlement building"}
@@ -381,6 +406,7 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
         <StatBar label="Status" value={a.status} />
         <StatBar label="Piety" value={Math.round(live?.piety ?? a.piety)} />
+        <StatBar label="Happiness" value={Math.round(live?.happiness ?? a.happiness)} />
         <StatBar label="Hunger" value={Math.round(live?.hunger ?? a.hunger)} />
         <StatBar label="Thirst" value={Math.round(live?.thirst ?? a.thirst)} />
         <StatBar label="Stamina" value={Math.round(live?.stamina ?? a.stamina)} />
@@ -542,9 +568,9 @@ function ConstructionStatus({ building }: { building: BuildingDef }) {
 
 /** Sample the brothers' live activity and piety on the HUD's own schedule. */
 function useMonkLiveState(monkId: number) {
-  const [live, setLive] = useState<{ activity: MonkActivity | null; piety?: number }>({ activity: null })
+  const [live, setLive] = useState<{ activity: MonkActivity | null; piety?: number; happiness?: number }>({ activity: null })
   useEffect(() => {
-    const read = () => setLive({ activity: monkRegistry.current?.get(monkId) ?? null, piety: monkPositionRegistry.current?.get(monkId)?.piety })
+    const read = () => setLive({ activity: monkRegistry.current?.get(monkId) ?? null, piety: monkPositionRegistry.current?.get(monkId)?.piety, happiness: monkPositionRegistry.current?.get(monkId)?.happiness })
     read()
     const timer = setInterval(read, 250)
     return () => clearInterval(timer)
@@ -556,7 +582,7 @@ function useMonkLiveState(monkId: number) {
 function MonkPanel({ monk }: { monk: Monk }) {
   const balance = useBalanceStore((s) => s.balance)
   const a = monk.attributes
-  const { activity, piety } = useMonkLiveState(monk.id)
+  const { activity, piety, happiness } = useMonkLiveState(monk.id)
   const [stamina, setStamina] = useState(100)
   useEffect(() => {
     const read = () => setStamina(monkStaminaRegistry.current?.get(monk.id) ?? 100)
@@ -587,12 +613,13 @@ function MonkPanel({ monk }: { monk: Monk }) {
           {monk.duty}, {a.age} years
         </div>
         {activity && (
-          <div className="text-[11px] italic text-gold">{MONK_ACTIVITY_LABELS[activity]}</div>
+          <div className="text-[11px] italic text-gold">{evangelizing && activity === "sleeping" ? "Sleeping on an evangelism mission" : MONK_ACTIVITY_LABELS[activity]}</div>
         )}
       </div>
 
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
-        <StatBar label="Piety" value={piety ?? a.piety} />
+        <StatBar label="Piety" value={Math.round(piety ?? a.piety)} />
+        <StatBar label="Happiness" value={Math.round(happiness ?? a.happiness)} />
         <StatBar label="Stamina" value={Math.round(stamina)} />
         <div className="mt-1 text-[11px] text-ink-light">Contributes +{individualRenown(monk, balance)} shrine renown</div>
       </div>
@@ -603,7 +630,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
           onClick={() => evangelizing ? evangelism.recall(monk.id) : evangelism.request(monk.id)}>
           {evangelizing ? "Recall from preaching" : "Evangelize on the main road"}
         </button>
-        <p className="mt-1 text-[11px] italic text-ink-light">Preach beside the junction until recalled or tired. Gives passing travelers a 5% extra chance to visit the relic, independent of a cross. Extra preachers do not stack.</p>
+        <p className="mt-1 text-[11px] italic text-ink-light">Preach beside the junction for 3 days, including travel and rest, or until recalled. Monks tire more slowly and sleep where they are before resuming. While preaching, gives passing travelers a 5% extra chance to visit the relic, independent of a cross. Extra preachers do not stack.</p>
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
@@ -636,6 +663,10 @@ function MonkPanel({ monk }: { monk: Monk }) {
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1N5-0 — hover details
  */
 export function GameHud({
+  playing,
+  starting,
+  canStart,
+  onPlay,
   map,
   seed,
   relic,
@@ -654,6 +685,10 @@ export function GameHud({
   onSeedChange,
   cheats,
 }: {
+  playing: boolean
+  starting: boolean
+  canStart: boolean
+  onPlay: () => void
   cheats: { blasterPastor: boolean; lastMarch: boolean }
   economy: ReturnType<typeof useSettlement>
   map: GameMap | null
@@ -673,6 +708,7 @@ export function GameHud({
   onNewMap: (size: number) => void
   onSeedChange: (seed: number) => void
 }) {
+  const [seedValid, setSeedValid] = useState(true)
   const readRuntime = useBugReportRuntime()
   const [report, setReport] = useState<BugReportDiagnostics | null>(null)
   const [reportError, setReportError] = useState("")
@@ -709,6 +745,7 @@ export function GameHud({
   const set = (patch: Partial<MapSettings>) => onSettingsChange({ ...settings, ...patch })
   const selection = useCameraStore((s) => s.selection)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [minimapOpen, setMinimapOpen] = useState(false)
   const [panel, setPanel] = useState<"build" | "world" | "settlement" | null>(null)
 
   const closeBuild = () => {
@@ -735,6 +772,7 @@ export function GameHud({
   }, [map?.road])
 
   useEffect(() => {
+    if (!playing) return
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key === "Escape") {
@@ -761,7 +799,7 @@ export function GameHud({
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [map, economy.chooseBuild])
+  }, [map, economy.chooseBuild, playing])
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     Seed: true,
     Pixelation: true,
@@ -803,48 +841,70 @@ export function GameHud({
   return (
     <Tooltip.Provider delayDuration={180} skipDelayDuration={100}>
     <BugReportDialog diagnostics={report} onClose={() => setReport(null)} />
-    <div className="game-hud">
+    <div className="game-hud" data-landing={!playing} data-panel={menuOpen ? "menu" : panel ?? (selection ? "selection" : "none")}>
       <div className="hud-frame" aria-hidden="true" />
       <header className="hud-header">
         <div className="hud-resource-bar">
-          <HudResources economy={economy} settlers={economy.residents.length - monks.length} open={panel === "settlement"} onToggle={() => {
+          {playing ? <HudResources economy={economy} settlers={economy.residents.length - monks.length} open={panel === "settlement"} onToggle={() => {
             setPanel((current) => current === "settlement" ? null : "settlement")
             setMenuOpen(false)
             economy.chooseBuild(null)
             useCameraStore.getState().select(null)
-          }} />
-          <Link href="/" className="hud-brand" title={`Pilgrimage ${CURRENT_VERSION}`}>Pilgrimage</Link>
+          }} /> : <nav className="hud-site-links" aria-label="Site navigation">
+            {SITE_MENU.filter(item => item.href !== "/play").map(item => <Link key={item.href} href={item.href} title={item.description}>{item.label}</Link>)}
+          </nav>}
         </div>
         <div className="hud-header-right">
         <div className="hud-header-actions">
           <MusicPlayer className="hud-header-button" compact />
-          <button type="button" className="hud-header-button" aria-label="World settings" title="World settings"
+          {playing && <button type="button" className="hud-header-button" aria-label="World settings" title="World settings"
             aria-expanded={panel === "world"} aria-controls="world-settings" onClick={() => {
               setPanel((current) => current === "world" ? null : "world")
               setMenuOpen(false)
               economy.chooseBuild(null)
               useCameraStore.getState().select(null)
-            }}><Settings size={16} /></button>
-          <button type="button" className="hud-header-button" aria-label="Menu" title="Menu"
+            }}><Settings size={16} /></button>}
+          {playing && <button type="button" className="hud-header-button" aria-label="Menu" title="Menu"
             aria-expanded={menuOpen} onClick={() => {
               setMenuOpen((open) => !open)
+              useCameraStore.getState().select(null)
               setPanel(null)
               economy.chooseBuild(null)
-            }}><Menu size={16} /></button>
-          {menuOpen && <MenuPanel />}
+            }}><Menu size={16} /></button>}
+          {playing && menuOpen && <MenuPanel playing={playing} onClose={() => setMenuOpen(false)} />}
         </div>
-        <HudClock />
+        {playing && <HudClock />}
         </div>
       </header>
-      <HudHelp content={<><div className="hud-help-title">Character population</div><p>{travelers.length} travelers across the map at {Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}% traffic density. Increase for playtesting, up to 20× the normal population.</p></>}>
+      {playing && <HudHelp content={<><div className="hud-help-title">Character population</div><p>{travelers.length} travelers across the map at {Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}% traffic density. Increase for playtesting, up to 10,000 travelers on the largest map.</p><p>Scenery and sprite detail adjust when the game slows down. Travelers outside the view keep moving and living in the world.</p></>}>
         <section className="hud-traffic" aria-label="Traffic">
           <label htmlFor="traffic-density">Characters</label>
           <input id="traffic-density" type="range" aria-label="Traffic density" aria-valuetext={`${travelers.length} travelers, ${Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}% traffic density`} min={0} max={MAX_TRAFFIC} step={1} value={settings.traffic} onChange={(event) => set({ traffic: Number(event.target.value) })} />
           <output htmlFor="traffic-density">{travelers.length}</output>
         </section>
-      </HudHelp>
+      </HudHelp>}
 
-      {panel === "world" && <aside id="world-settings" className="hud-world hud-well" aria-label="World settings">
+      {!starting && <div className="hud-landing-heading">
+        <h1 className="hud-landing-title">Pilgrimage</h1>
+        <p className="hud-landing-subtitle">A medieval settlement builder</p>
+      </div>}
+      {!starting && <form className="hud-landing-setup hud-well" aria-label="Start a settlement" onSubmit={event => {
+        event.preventDefault()
+        if (canStart && seedValid) onPlay()
+      }}>
+        <MapSizeControl value={settings.size} onChange={size => set({ size })} />
+        <label className="text-[13px] text-ink-light" htmlFor="landing-seed">World seed</label>
+        <SeedField seed={seed} onSeedChange={onSeedChange} onValidityChange={setSeedValid} />
+        <button type="submit" className="hud-action hud-action-primary hud-landing-play" disabled={!canStart || !seedValid}>Play</button>
+      </form>}
+      {!starting && <footer className="hud-landing-footer">
+        <span>Created by <a href="https://twitter.com/tomjohndesign" target="_blank" rel="noopener noreferrer">Tomjohn</a></span>
+        <a href="https://www.youtube.com/@pilgrimagegame" target="_blank" rel="noopener noreferrer">Devblog</a>
+        <a href="https://github.com/tomjohndesign/pilgrimage" target="_blank" rel="noopener noreferrer">Github</a>
+        <Link href="/changelog">{CURRENT_VERSION}</Link>
+      </footer>}
+
+      {playing && panel === "world" && <aside id="world-settings" className="hud-world hud-well" aria-label="World settings">
         <div className="hud-world-heading"><span>World</span><button type="button" aria-label="Close world settings" onClick={() => setPanel(null)}><X size={16} /></button></div>
         <div className="mb-4 flex flex-wrap gap-2">
           <NewMapDialog defaultSize={defaultMapSize} onCreate={onNewMap} />
@@ -1119,8 +1179,15 @@ export function GameHud({
         </>}
       </aside>}
 
-      <BuildControls economy={economy} open={panel === "build"} onToggle={toggleBuild} onClose={closeBuild} />
-      {map && <aside className="hud-details-dock hud-well" aria-label="Minimap and selection" data-selected={!!selection || panel === "settlement"}>
+      {playing && <BuildControls economy={economy} open={panel === "build"} onToggle={toggleBuild} onClose={closeBuild}
+        minimapOpen={minimapOpen} onToggleMinimap={() => {
+          setMinimapOpen((open) => !open)
+          setMenuOpen(false)
+          setPanel(null)
+          economy.chooseBuild(null)
+          useCameraStore.getState().select(null)
+        }} />}
+      {playing && map && <aside id="minimap-dock" data-map-open={minimapOpen} className="hud-details-dock hud-well" aria-label="Minimap and selection" data-selected={!!selection || panel === "settlement"}>
         {panel === "settlement" && <div className="hud-inspector" id="settlement-details">
           <SettlementPanel economy={economy} monks={monks} relic={relic} onClose={() => setPanel(null)} />
         </div>}
@@ -1131,6 +1198,7 @@ export function GameHud({
             <div className="flex items-center justify-between gap-4"><Label>{selectedDefinition?.category === "scenery" ? "Scenery" : "Building"}</Label><button type="button" aria-label="Dismiss building" onClick={() => useCameraStore.getState().select(null)} className="pointer-events-auto text-xs text-ink-light">✕</button></div>
             <p className="mt-1 font-display text-xs text-ink">{selectedBuilding.label}</p>
             <ConstructionStatus building={selectedBuilding} />
+            {selectedBuilding.owner === "independent" && <p className="mt-2 max-w-56 text-[11px] text-ink-light">Independent roadside town. {selectedBuilding.buildType === "tavern" ? "Locally run tavern serving food and drink to passing travelers." : "Home to the townspeople."} Joins your settlement when your influence reaches this building; until then, it earns you no income or renown.</p>}
             {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">{brothersAtHome} / {housingBeds(selectedBuilding)} monks · {Math.max(0, housingBeds(selectedBuilding) - brothersAtHome)} spaces available. Tired monks sleep here until their stamina recovers.</p>}
             {isHouse(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
               {household} / {housingBeds(selectedBuilding)} settlers · {Math.max(0, housingBeds(selectedBuilding) - household)} spaces available. They come back here to sleep and eat.
@@ -1153,7 +1221,7 @@ export function GameHud({
               {FOOD_TYPES.map(type => <p key={type}>{FOOD_LABELS[type]} · {foodStock[type]}</p>)}
               <p className="mt-1 italic">Food supplies start empty; food gathering is still to come.</p>
             </div>}
-            {selectedDefinition && isComplete(selectedBuilding) && <>
+            {selectedBuilding.owner !== "independent" && selectedDefinition && isComplete(selectedBuilding) && <>
               <p className="mt-2 text-[11px] text-ink-light">Contributes +{selectedDefinition.renown} shrine renown</p>
               <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">{selectedDefinition.description}</p>
               <p className="mt-1 text-[11px] text-ink-light">{buildingIncomeLabel(selectedDefinition, economy.balance)}</p>

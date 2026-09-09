@@ -1,3 +1,4 @@
+import { placementLayoutSeed } from "./building-layout"
 import { BUILD_CATALOG, type GameBalance } from "./balance"
 import { EARLY_BUILDINGS } from "./building-art/style"
 import { levelBuildingGround } from "./map/elevation"
@@ -39,7 +40,7 @@ export function buildingPreviewSettlement(world: GameMap, balance: GameBalance, 
   })).sort((a,b) => Math.hypot(a.x-world.site!.door.x,a.z-world.site!.door.z)
     - Math.hypot(b.x-world.site!.door.x,b.z-world.site!.door.z))
   for (const example of examples) {
-    if (world.buildings.some(b => b.buildType === example.buildType && b.id !== world.site?.hovelId)) continue
+    if (world.buildings.some(b => b.owner !== "independent" && b.buildType === example.buildType && b.id !== world.site?.hovelId)) continue
     const map = { ...world, elevation: settlement.elevation ?? world.elevation,
       buildings: [...world.buildings, ...settlement.structures] }
     // The gallery's woodcutter can be inspected even away from harvestable trees.
@@ -50,22 +51,22 @@ export function buildingPreviewSettlement(world: GameMap, balance: GameBalance, 
       return placementError(map, placement, at, balance) === null
     })
     if (!at) continue
-    const building = { ...example, ...at, id: `preview-${example.id}`, rotation: 0 as const }
+    const building = { ...example, ...at, layoutSeed: placementLayoutSeed(example.buildType ?? "", at, map.seed), id: `preview-${example.id}`, rotation: 0 as const }
     settlement = { ...settlement, elevation: levelBuildingGround(map, building),
       structures: [...settlement.structures, building] }
   }
-  // Two matching roof sections repeat side by side, with separate front approaches.
+  // A short home joins the front half of a deeper tavern, as an uneven compound.
   const map = { ...world, elevation: settlement.elevation ?? world.elevation,
     buildings: [...world.buildings,...settlement.structures] }
-  const pair = { ...BUILD_CATALOG[0], w: 4, d: 2 }
+  const pair = { ...BUILD_CATALOG[0], w: 5, d: 4 }
   const at = candidates.find(at => !map.buildings.some(b => at.x < b.x+b.w+1 && at.x+pair.w+1 > b.x
     && at.z < b.z+b.d+1 && at.z+pair.d+1 > b.z) && placementError(map,pair,at,balance) === null)
   if(at) {
     const module = { buildType: "house", w: 2, d: 2, height: .70, color: "#8c7658", roofColor: "#a59164" }
-    settlement = { ...settlement, elevation: levelBuildingGround(map,{...at,w:4,d:2}),
+    settlement = { ...settlement, elevation: levelBuildingGround(map,{...at,w:5,d:4}),
       structures: [...settlement.structures,
-        { ...module,...at,id:"preview-roofline-left",label:"Joined roof · left module",rotation:0 },
-        { ...module,x:at.x+2,z:at.z,id:"preview-roofline-right",label:"Joined roof · right module",rotation:0 },
+        { ...module,x:at.x,z:at.z+2,id:"preview-roofline-left",layoutSeed:0,label:"Joined roof · house",rotation:0 },
+        { ...module,buildType:"tavern",w:3,d:4,height:.78,x:at.x+2,z:at.z,id:"preview-roofline-right",layoutSeed:3,label:"Joined roof · tavern",rotation:0 },
       ] }
   }
   return settlement

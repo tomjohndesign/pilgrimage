@@ -12,8 +12,8 @@ import { tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } from "@/li
 import { selectElement } from "@/lib/game/selection"
 
 /** Props belong to the reserved approach square, outside the shell's occupied tiles. */
-export function EntranceDetails({map,idColors,onSelect}:{map:GameMap;idColors:Color[];onSelect:(building:BuildingDef,event:Parameters<typeof selectElement>[1])=>void}) {
-  const models=useMemo(()=>map.buildings.map(b=>entranceParts(b.id===map.site?.hovelId ? "shrine" : b.buildType ?? "house",b.height)),[map.buildings,map.site?.hovelId])
+export function EntranceDetails({map,idColors,onSelect,variationSeed}:{map:GameMap;idColors:Color[];variationSeed?:(building:BuildingDef)=>number;onSelect:(building:BuildingDef,event:Parameters<typeof selectElement>[1])=>void}) {
+  const models=useMemo(()=>map.buildings.map(b=>entranceParts(b.id===map.site?.hovelId ? "shrine" : b.buildType ?? "house",b.height,variationSeed?.(b) ?? 17)),[map.buildings,map.site?.hovelId,variationSeed])
   return <group name="entrance-details">
     {map.buildings.map((building,index)=>{
       const at=buildingApproach(map,building)

@@ -5,7 +5,7 @@ import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 import { RelicDisplay, RELIC_TABLE_DISPLAY_HEIGHT } from "@/components/game/relic-display"
 
 import { Suspense, useEffect, useMemo, useState } from "react"
-import { useThree } from "@react-three/fiber"
+import { useThree, type ThreeEvent } from "@react-three/fiber"
 import * as THREE from "three"
 import { PixelCanvas as Canvas, PixelCharacters } from "@/components/pixel-canvas"
 import { TerrainTiles } from "@/components/game/terrain-tiles"
@@ -16,14 +16,23 @@ import { BASE_CHARACTER_SCALE } from "@/lib/game/base-person/gait"
 import { TRAVELER_TYPES } from "@/lib/game/travelers"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { cameraOffset, yawForView, lightOffsetForYaw } from "@/lib/game/render/iso"
-import { buildingPreviewMap } from "@/lib/game/building-art/map-preview"
+import { buildingPreviewMap, previewNeighbors, previewPlacement, type PreviewPlacement } from "@/lib/game/building-art/map-preview"
 import { hidePreviewPaper } from "@/lib/game/building-art/preview-alpha"
 import { BUILDING_VIEWS, projectionLayout } from "@/lib/game/building-art/projection"
 import { buildingDimensions, referencePersonPosition } from "@/lib/game/building-art/dimensions"
 import { PERSON_HEIGHT, HOVEL_DOOR_HEIGHT } from "@/lib/game/world-scale"
 import type { BuildingRecipe } from "@/lib/game/building-art/style"
 import type { Registrations } from "@/lib/game/building-art/registration"
-import { BuildingModel } from "./building-model"
+import { BuildingModel, StructureModel } from "./building-model"
+import { earlyBuildingParts } from "@/lib/game/building-art/early-geometry"
+import { buildingRoofJoins, roofOutlineOwners } from "@/lib/game/building-art/roof-joins"
+import { buildingParts } from "@/lib/game/building-art/geometry"
+import { EntranceDetails } from "@/components/game/entrance-details"
+import { OutlinePass } from "@/components/game/outline-pass"
+import { ShelterFire } from "@/components/game/building-smoke"
+import { hasDomesticHearth } from "@/lib/game/building-art/furnishings"
+import { buildingYaw, type BuildingRotation } from "@/lib/game/building-rotation"
+import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type TilePos, type GameMap } from "@/lib/game/map/types"
 import { registeredAtlasPng } from "./image-files"
 import styles from "./building-lab.module.css"
 
@@ -137,8 +146,8 @@ function IllustratedBuilding({ image, recipe, view, registrations, onStatus }: {
   </sprite>
 }
 
-function Site({ recipe, grid }: { recipe: BuildingRecipe; grid: boolean }) {
-  const map = useMemo(() => buildingPreviewMap(recipe), [recipe.width, recipe.depth, recipe.variant])
+function Site({ recipe, grid, map: suppliedMap }: { recipe: BuildingRecipe; grid: boolean; map?: GameMap }) {
+  const map = useMemo(() => suppliedMap ?? buildingPreviewMap(recipe), [suppliedMap, recipe.width, recipe.depth, recipe.variant])
   const trees = useMemo(() => [
     { x: -recipe.width / 2 - 3.5, z: -recipe.depth / 2 - 3, y: TILE_HEIGHT, species: "oak" as const, scale: 0.7 },
     { x: recipe.width / 2 + 3, z: -recipe.depth / 2 - 3.5, y: TILE_HEIGHT, species: "birch" as const, scale: 0.8 },
@@ -150,7 +159,7 @@ function Site({ recipe, grid }: { recipe: BuildingRecipe; grid: boolean }) {
       <TravelerFigure characterModel="base" characterScale={BASE_CHARACTER_SCALE} type={TRAVELER_TYPES.pilgrim} />
     </group>
     </PixelCharacters><group name="workshop-surroundings">
-      <FoliageField atlas={DEFAULT_FOLIAGE_ATLAS} placements={trees} seed={7919} />
+      <FoliageField atlas={DEFAULT_FOLIAGE_ATLAS} placements={trees} seed={7919} idBase={map.buildings.length} />
       <PixelCharacters><group position={[1.5, TILE_HEIGHT, recipe.depth / 2 + 1.8]}><TravelerFigure characterModel="base" characterScale={BASE_CHARACTER_SCALE} type={TRAVELER_TYPES.pilgrim} /></group>
       <group position={[-3, TILE_HEIGHT, recipe.depth / 2 + 2.5]} rotation={[0, Math.PI / 2, 0]}><TravelerFigure characterModel="base" characterScale={BASE_CHARACTER_SCALE} type={TRAVELER_TYPES.vendor} /></group></PixelCharacters>
     </group>
@@ -160,27 +169,97 @@ function Site({ recipe, grid }: { recipe: BuildingRecipe; grid: boolean }) {
 /** A single view of the same procedural asset used by the live hovel.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — Building workshop — procedural (214-0)
  */
-export function ProceduralMapScene({ recipe, grid, zoom, cutaway, onGuideReady, embedded = false }: {
-  recipe: BuildingRecipe; grid: boolean; zoom: number; cutaway: boolean; embedded?: boolean; onGuideReady?: (capture: CaptureMapGuide | null) => void
+export function ProceduralMapScene({ recipe, grid, zoom, selectedId = null, onSelect, neighbor, placement = null, placementRotation = 0, snapRoofs = true, onPlace, onPlacementStatus, onGuideReady, embedded = false }: {
+  recipe: BuildingRecipe; grid: boolean; zoom: number; selectedId?: string | null; onSelect?: (id: string | null) => void; neighbor?: BuildingRecipe | PreviewPlacement[]; placement?: BuildingRecipe | null; placementRotation?: BuildingRotation; snapRoofs?: boolean; onPlace?: (placed: PreviewPlacement) => void; onPlacementStatus?: (status: string) => void; embedded?: boolean; onGuideReady?: (capture: CaptureMapGuide | null) => void
 }) {
+  const map = useMemo(() => buildingPreviewMap(recipe, neighbor), [recipe, neighbor])
+  const study = useMemo(() => ({...recipe,width:map.width-12,depth:map.depth-12}), [recipe,map.width,map.depth])
+  const recipes = useMemo(() => new Map([["workshop",recipe],...previewNeighbors(recipe,neighbor).map(p=>[p.id,p.recipe] as const)]), [recipe,neighbor])
   return <section className={embedded ? "asset-building-scene" : styles.mapPanel} aria-label={`${BUILDING_VIEWS[recipe.view].name} procedural building on game tiles`}>
     {!embedded && <div className={styles.mapLabel}><strong>{BUILDING_VIEWS[recipe.view].name}</strong><span>{recipe.width} × {recipe.depth} tile footprint</span></div>}
     <div className={embedded ? "asset-building-viewport" : styles.mapCanvas}>
-      <Canvas frameloop="demand" orthographic camera={{ near: 0.1, far: 400 }} outputDpr={1} fallback={<p>This map preview needs WebGL.</p>}>
+      <Canvas frameloop="demand" onPointerMissed={() => {if(!placement) onSelect?.(null)}} orthographic camera={{ near: 0.1, far: 400 }} outputDpr={1} fallback={<p>This map preview needs WebGL.</p>}>
         <color attach="background" args={["#14100a"]} />
-        <SceneCamera recipe={recipe} zoom={zoom} />
+        <SceneCamera recipe={study} zoom={zoom} />
         <ambientLight intensity={SURFACE_LIGHT.ambient} />
         <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
         <directionalLight name="workshop-sun" position={lightOffsetForYaw(yawForView(recipe.view))} intensity={SURFACE_LIGHT.sun} />
         <Suspense fallback={null}>
-          <Site recipe={recipe} grid={grid} />
-          <group position={[0, TILE_HEIGHT, 0]}><BuildingModel terrainFloors recipe={recipe} cutaway={cutaway} />{recipe.variant === "enclosure" && <RelicDisplay height={RELIC_TABLE_DISPLAY_HEIGHT} />}</group>
-          {onGuideReady && <GuideCapture recipe={recipe} onReady={onGuideReady} />}
+          <group onClick={event => { if (!placement && event.delta <= 6) onSelect?.(null) }}><Site recipe={study} grid={grid} map={map} /></group>
+          <PreviewBuildings recipes={recipes} map={map} selectedId={selectedId} onSelect={onSelect} placing={Boolean(placement)} />
+          {placement && <PlacementPreview map={map} recipes={recipes} recipe={placement} rotation={placementRotation} snap={snapRoofs} onPlace={onPlace} onStatus={onPlacementStatus} />}
+          {onGuideReady && <GuideCapture recipe={study} onReady={onGuideReady} />}
         </Suspense>
+        <OutlinePass objects={{ buildings: map.buildings, travelers: [], monks: [] }} selection={selectedId ? {kind:"building",id:selectedId} : null} />
       </Canvas>
       {embedded && <span className="person-stage-caption">{BUILDING_VIEWS[recipe.view].name} · {recipe.width} × {recipe.depth} tiles</span>}
     </div>
   </section>
+}
+
+/** The same side-edge joins and layout recipes as placed homes, on the existing preview map. */
+function PreviewBuildings({ recipes, map, selectedId, onSelect, placing }: { recipes: ReadonlyMap<string,BuildingRecipe>; map: GameMap; selectedId: string | null; onSelect?: (id: string | null) => void; placing?: boolean }) {
+  const { models, owners } = useMemo(() => {
+    const joins = buildingRoofJoins(map, b => recipes.get(b.id)!.roofRise)
+    const models = map.buildings.map(b => {
+      const own = { ...recipes.get(b.id)!,
+        layoutSeed: b.layoutSeed, hearthZ: b.hearthZ, fireplace: b.fireplace }
+      return { recipe: own, parts: joins.has(b.id)
+        ? earlyBuildingParts({ ...own, roofJoins: joins.get(b.id) }) : buildingParts(own),
+        chimney: joins.get(b.id)?.find(join => join.chimney)?.chimney }
+    })
+    return { models, owners: roofOutlineOwners(map.buildings, joins) }
+  }, [recipes, map])
+  const idColors = useMemo(() => map.buildings.map((_, i) => new THREE.Color(((selectedId ? i : owners[i]) + 1) / 255, 0, 0)), [map, owners, selectedId])
+  const select=(id: string, event: {delta: number; stopPropagation: () => void}) => {
+    if (placing || event.delta>6) return
+    event.stopPropagation(); onSelect?.(id===selectedId ? null : id)
+  }
+  return <group name="preview-buildings">
+    <EntranceDetails map={map} idColors={idColors} onSelect={(building,event)=>select(building.id,event)} variationSeed={building => models[map.buildings.indexOf(building)].recipe.seed} />
+    {map.buildings.map((building,i)=><group key={building.id} name={`preview-building-${building.id}`} userData={{buildingId:building.id}} onClick={event=>select(building.id,event)} rotation={[0,buildingYaw(building.rotation),0]} position={[tileToWorldX(map,building.x)+(building.w-1)/2,TILE_HEIGHT,tileToWorldZ(map,building.z)+(building.d-1)/2]}>
+      <StructureModel terrainFloors ink={false} parts={models[i].parts} idColor={idColors[i]} cutaway={building.id===selectedId} />
+      {models[i].recipe.variant === "enclosure" && <RelicDisplay height={RELIC_TABLE_DISPLAY_HEIGHT} />}
+      {hasDomesticHearth(building.buildType,building.layoutSeed,building.fireplace) && <ShelterFire buildType={models[i].recipe.variant} width={models[i].recipe.width} depth={models[i].recipe.depth} height={building.height} roofRise={models[i].recipe.roofRise} layoutSeed={building.layoutSeed} hearthZ={building.hearthZ} sharedChimney={models[i].chimney} cutaway={building.id===selectedId} />}
+    </group>)}
+  </group>
+}
+
+/** Tile picking uses a ground plane, so roofs cannot shift the placement origin. */
+function PlacementPreview({map,recipes,recipe,rotation,snap,onPlace,onStatus}: {
+  map:GameMap;recipes:ReadonlyMap<string,BuildingRecipe>;recipe:BuildingRecipe;rotation:BuildingRotation;snap:boolean;
+  onPlace?: (placed:PreviewPlacement)=>void;onStatus?: (status:string)=>void;
+}) {
+  const [at,setAt]=useState<TilePos|null>(null)
+  const candidate=useMemo(()=>at ? previewPlacement(map,recipe,at,rotation,snap,recipes) : null,[map,recipe,at,rotation,snap,recipes])
+  const parts=useMemo(()=>{
+    if(!candidate) return []
+    const joins=buildingRoofJoins({...map,buildings:[...map.buildings,candidate.building]},b=>b.id===candidate.building.id ? recipe.roofRise : recipes.get(b.id)!.roofRise)
+    return earlyBuildingParts({...candidate.recipe,roofJoins:joins.get(candidate.building.id)})
+  },[candidate,map,recipe.roofRise,recipes])
+  useEffect(()=>{
+    if(candidate) onStatus?.(candidate.error ?? `${recipe.subject} · ${(candidate.building.rotation ?? 0)*90}°${candidate.snapped ? " · aligned to neighboring roof" : ""} · click to place`)
+  },[candidate,recipe.subject,onStatus])
+  const tile=(event:ThreeEvent<PointerEvent|MouseEvent>)=>({x:worldToTileX(map,event.point.x),z:worldToTileZ(map,event.point.z)})
+  const building=candidate?.building,color=candidate?.error ? "#db6656" : "#93bc6c"
+  return <group name="building-placement-tool">
+    <mesh position={[0,TILE_HEIGHT+.008,0]} rotation={[-Math.PI/2,0,0]}
+      onPointerMove={event=>{const point=tile(event);setAt(old=>old?.x===point.x && old.z===point.z ? old : point)}}
+      onClick={event=>{
+        if(event.delta>6) return
+        event.stopPropagation()
+        const next=previewPlacement(map,recipe,tile(event),rotation,snap,recipes)
+        if(next.error) {onStatus?.(next.error);return}
+        const origin=map.buildings[0]
+        onPlace?.({id:"new",recipe:next.recipe,x:next.building.x-origin.x,z:next.building.z-origin.z,rotation:next.building.rotation ?? 0})
+      }}>
+      <planeGeometry args={[map.width,map.depth]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
+    </mesh>
+    {building && <group position={[tileToWorldX(map,building.x)+(building.w-1)/2,TILE_HEIGHT,tileToWorldZ(map,building.z)+(building.d-1)/2]}>
+      <mesh position={[0,.025,0]} raycast={()=>{}}><boxGeometry args={[building.w,.025,building.d]} /><meshBasicMaterial color={color} transparent opacity={.45} depthWrite={false} /></mesh>
+      <group rotation={[0,buildingYaw(building.rotation),0]}><StructureModel parts={parts} ghostColor={color} /></group>
+    </group>}
+  </group>
 }
 
 /** Matched map scenes, sharing game terrain, camera, tile scale and surroundings.

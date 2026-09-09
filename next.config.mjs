@@ -20,6 +20,9 @@ function gitBranch() {
 const nextConfig = {
   // The dev overlay badge sits in the bottom-left corner, on top of the game HUD.
   devIndicators: false,
+  // Opt-in game profiles need original function/line attribution. Ordinary
+  // production builds keep the existing source-map policy.
+  productionBrowserSourceMaps: process.env.NEXT_PUBLIC_GAME_BENCHMARK === '1',
   env: {
     NEXT_PUBLIC_GIT_BRANCH:
       process.env.NODE_ENV === 'development' ? gitBranch() : '',

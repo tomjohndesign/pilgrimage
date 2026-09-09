@@ -25,6 +25,8 @@ export interface PixelationProps {
 
 export interface PixelSceneStage {
   phase: "world" | "characters" | "all"
+  /** Evaluated before the world pass temporarily hides character roots. */
+  hasCharacters: boolean
   /** World-buffer crop, shared by colour, depth, and outline IDs. */
   scale: THREE.Vector2
   offset: THREE.Vector2
@@ -116,6 +118,10 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
       uPreviousScale: { value: new THREE.Vector2() },
       uPreviousOffset: { value: new THREE.Vector2() },
       uDetailFade: { value: 1 },
+      uBackground: { value: new THREE.Color() },
+      uBackgroundLinear: { value: new THREE.Color() },
+      uHasBackground: { value: false },
+      uMapReveal: { value: false },
     }
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute("position", new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3))
@@ -140,6 +146,10 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
         uniform vec2 uPreviousScale;
         uniform vec2 uPreviousOffset;
         uniform float uDetailFade;
+        uniform vec3 uBackground;
+        uniform vec3 uBackgroundLinear;
+        uniform bool uHasBackground;
+        uniform bool uMapReveal;
         varying vec2 vUv;
         void main() {
           vec2 sampleUv = (vUv - 0.5) * uScale + 0.5 + uOffset;
@@ -149,8 +159,14 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
             gl_FragColor = mix(texture2D(tPrevious, previousUv), gl_FragColor, uDetailFade);
           }
           gl_FragDepth = texture2D(tDepth, sampleUv).x;
+          bool clearBackground = uHasBackground && gl_FragDepth >= 1.0
+            && distance(gl_FragColor.rgb, uBackgroundLinear) < 0.0001;
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
+          if (uMapReveal) gl_FragColor.rgb = mix(uBackground, gl_FragColor.rgb, gl_FragColor.a);
+          // A CSS-matched clear colour is not a lit surface: skip tone mapping.
+          if (clearBackground) gl_FragColor.rgb = uBackground;
+          if (uMapReveal) gl_FragColor.a = 1.0;
         }
       `,
     })
@@ -206,7 +222,16 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
         renderer.worldTexel.value = 0
         const cam = camera as THREE.OrthographicCamera
         const r = resources
+        r.stage.hasCharacters = tagPixelCharacters(renderer.characters, scene)
+        r.uniforms.uHasBackground.value = scene.background instanceof THREE.Color
+        if (scene.background instanceof THREE.Color) {
+          r.uniforms.uBackgroundLinear.value.copy(scene.background)
+          scene.background.getRGB(r.uniforms.uBackground.value, gl.outputColorSpace)
+        }
+        r.uniforms.uMapReveal.value = scene.userData.mapRevealActive === true
+        const revealDirect = scene.userData.mapRevealDirect as { value: boolean } | undefined
         if (!pixelated || !cam.isOrthographicCamera) {
+          if (revealDirect) revealDirect.value = true
           r.stage.phase = "all"
           renderScene(camera, null, r.stage)
           return
@@ -267,13 +292,13 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
 
         r.uniforms.uScale.value.set(width * density / bufferWidth, height * density / bufferHeight)
         r.uniforms.uOffset.value.set(-dx * density / bufferWidth, -dy * density / bufferHeight)
-        tagPixelCharacters(renderer.characters, scene)
         r.stage.phase = "world"
+        if (revealDirect) revealDirect.value = false
         withoutPixelCharacters(renderer.characters, () => renderScene(r.camera, r.target, r.stage))
         r.hasWorld = true; r.lastWorldCamera.copy(cam.matrixWorld)
         gl.setRenderTarget(null)
         gl.render(r.screen, r.screenCamera)
-        if (renderer.characters.size) {
+        if (r.stage.hasCharacters) {
           const background = scene.background
           const mask = camera.layers.mask
           const autoClear = gl.autoClear
@@ -283,6 +308,7 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
             camera.layers.set(CHARACTER_COLOR_LAYER)
             renderer.worldTexel.value = 1 / density
             r.stage.phase = "characters"
+            if (revealDirect) revealDirect.value = true
             withoutPixelRoots(renderer.world, () => renderScene(camera, null, r.stage))
           } finally {
             renderer.worldTexel.value = 0

@@ -1,16 +1,30 @@
+import { makeRng } from "../rng"
+import { reflectBuildingParts } from "../building-layout"
 import { BUILDING_DOOR_HEIGHT } from "./dimensions"
 import type { BuildingPart, Vec3 } from "./geometry"
 
 /** Furniture against the building edge of the reserved path tile; the middle stays wide enough to walk through. */
-export function entranceParts(type: string, wallHeight = .78): BuildingPart[] {
+export function entranceParts(type: string, wallHeight = .78, seed = 17): BuildingPart[] {
+  const random = makeRng(seed), hand = random() < .5 ? -1 : 1, furnishing = (Math.floor(random()*3)+2)%3
+  const wood = ["#806b4c", "#947b55", "#71634c"][Math.floor(random()*3)]
   const parts:BuildingPart[]=[]
-  const box=(name:string,position:Vec3,size:Vec3,color:string,rotation?:Vec3)=>parts.push({name:`entry-${name}`,layer:"interior",position,size,color,rotation,outline:false})
-  const x=-.38,z=-.38
+  const box=(name:string,position:Vec3,size:Vec3,color:string,rotation?:Vec3)=>parts.push({name:`entry-${name}`,layer:"interior",position,size,color: color === "#806b4c" ? wood : color,rotation,outline:false})
+  const x=-.37-random()*.005,z=-.382-random()*.006
   if(["tavern","shelter","house","monk-shelter","hall","shrine"].includes(type)) {
+    if (furnishing === 0) {
+      box("supply-chest",[x,.13,z],[.23,.26,.21],wood)
+      for(const side of [-1,1]) box(`chest-band-${side}`,[x+side*.065,.266,z],[.018,.02,.22],"#594d3a")
+    } else if (furnishing === 1) {
+      box("water-tub",[x,.10,z],[.22,.20,.22],wood)
+      box("tub-water",[x,.205,z],[.17,.01,.17],"#64756c")
+      box("tub-hoop",[x,.045,z],[.22,.025,.22],"#5b523f")
+    } else if (type !== "tavern") {
     for(const a of [-1,1]) for(const b of [-1,1]) box(`chair-leg-${a}-${b}`,[x+a*.08,.12,z+b*.08],[.026,.24,.026],"#806b4c")
     box("chair-seat",[x,.25,z],[.22,.035,.22],"#9f875e")
+    parts[parts.length-1].support = { clips: ["sitting", "seatedMeal", "seatedDrink"], heading: 0 }
     for(const side of [-1,1]) box(`chair-back-post-${side}`,[x+side*.085,.36,z-.085],[.028,.27,.028],"#806b4c")
     box("chair-back",[x,.45,z-.085],[.20,.08,.025],"#968058")
+    }
   } else if(type==="market" || type==="storehouse") {
     box("basket",[x,.10,z],[.20,.20,.22],"#967e58")
     for(let i=0;i<3;i++) box(`produce-${i}`,[x+(i-1)*.05,.215,z],[.055,.055,.09],type==="market" ? ["#98634f","#899157","#ac8657"][i] : "#b29a6e")
@@ -41,7 +55,7 @@ export function entranceParts(type: string, wallHeight = .78): BuildingPart[] {
       box(`sign-cup-handle-${side}`,[x+side*.004,boardY-.005,boardZ+.075],[.008,.11,.06],"#8a4b3c")
       box(`sign-cup-handle-hole-${side}`,[x+side*.008,boardY-.005,boardZ+.075],[.006,.06,.028],"#e6d7a8")
     }
-    return parts
+    return hand === -1 ? reflectBuildingParts(parts) : parts
   }
   const sx=.39,sz=-.47
   box("sign-post",[sx,.32,sz],[.035,.64,.035],"#725c40")
@@ -59,5 +73,5 @@ export function entranceParts(type: string, wallHeight = .78): BuildingPart[] {
     box("sign-symbol",[sx,.56,sz+.018],[.12,.045,.008],type==="market" ? "#986657" : "#746844")
     box("sign-symbol-end",[sx-.045,.59,sz+.018],[.03,.03,.008],"#746844")
   }
-  return parts
+  return hand === -1 ? reflectBuildingParts(parts) : parts
 }

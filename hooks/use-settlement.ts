@@ -2,12 +2,12 @@
 
 import { enclaveHousing } from "@/lib/game/housing"
 import { constructionStage } from "@/lib/game/construction"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { GameMap, TilePos } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
 import { useBuildStore } from "@/lib/game/build-store"
-import { createSettlement, purchaseStructure, creditTimber, creditAdmission, creditTrade, syncTimberSpending, settlementRenown } from "@/lib/game/settlement"
+import { claimTownBuildings, settlementMap, createSettlement, purchaseStructure, creditTimber, creditAdmission, creditTrade, syncTimberSpending, settlementRenown } from "@/lib/game/settlement"
 
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { BUILDING_PREVIEW, buildingPreviewBalance, buildingPreviewSettlement } from "@/lib/game/building-preview"
@@ -59,10 +59,20 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   const map = useMemo(
     () =>
       world
-        ? { ...world, elevation: session.settlement.elevation ?? world.elevation, buildings: [...world.buildings, ...session.settlement.structures] }
+        ? settlementMap(world, session.settlement)
         : null,
-    [world, session.settlement.elevation, session.settlement.structures],
+    [world, session.settlement.elevation, session.settlement.structures, session.settlement.claimedBuildings],
   )
+
+  useEffect(() => {
+    if (!world) return
+    setSession(current => {
+      if (current.world !== world) return current
+      const settlement = claimTownBuildings(current.settlement, world, balance)
+      return settlement === current.settlement ? current : { ...current, settlement,
+        message: "Roadside buildings have joined your settlement." }
+    })
+  }, [world, map, balance])
 
   useEffect(() => {
     useBuildStore.getState().setTool(session.buildType)
@@ -98,7 +108,9 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     setSession((current) => ({ ...current, buildType, message: "" })), [])
   const place = (at: TilePos) => {
     const rotation = useBuildStore.getState().rotation
-    setSession((current) => {
+    // Placement renders several nearby scenery blocks. Let React yield between
+    // them so camera/input updates remain responsive while the site appears.
+    startTransition(() => setSession((current) => {
       if (!baseMap || !relic || current.world !== baseMap || !current.buildType) return current
       const result = purchaseStructure(
         current.settlement,
@@ -121,7 +133,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
         buildType: result.error ? current.buildType : null,
         message: result.error ?? (BUILDING_PREVIEW ? "Building placed." : "Construction planned. Idle residents will build it."),
       }
-    })
+    }))
   }
 
   return {

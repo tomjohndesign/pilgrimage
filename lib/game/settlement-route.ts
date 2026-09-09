@@ -1,4 +1,5 @@
 import { footpathRouteCost } from "./footpaths"
+import { walkingRouteQueries } from "./walking-route-queries"
 import { buildingSpatialQuery } from "./building-spatial"
 import { buildingStepAllowed } from "./building-navigation"
 import { elevationStep } from "./map/elevation"
@@ -12,6 +13,7 @@ const workspaces = new WeakMap<GameMap, {
   generation: number; seen: Uint32Array; closed: Uint32Array
   parents: Int32Array; costs: Float64Array
 }>()
+const shortestRoutes = new WeakMap<GameMap, Map<number, Int32Array>>()
 
 /** A nearby destination may sit in a disconnected pocket. After A* has
  * explored 256 tiles, inspect up to 4096 predecessors of the goal. Exhausting
@@ -54,6 +56,7 @@ export function settlementRoute(
   seat?: string,
 ): TilePos[] | null {
   if (!tileAt(map, start.x, start.z) || !tileAt(map, goal.x, goal.z)) return null
+  const routeCost = walkingRouteQueries(map)?.edgeCost ?? footpathRouteCost
   const nearby = buildingSpatialQuery(buildings)
   const allowed = (from: TilePos, to: TilePos, seat?: string) => {
     const a = nearby(from), b = nearby(to)
@@ -64,6 +67,30 @@ export function settlementRoute(
   const origin = key(start)
   const end = key(goal)
   const size = map.width * map.depth
+  const routeKey = origin * size + end
+  let shortest = shortestRoutes.get(map)
+  const cached = shortest?.get(routeKey)
+  if (cached && cached[0] === origin && cached[cached.length - 1] === end && cached.length === Math.abs(start.x - goal.x) + Math.abs(start.z - goal.z) + 1) {
+    // A Manhattan-length path with unit-cost edges reaches the absolute lower
+    // bound of this four-connected graph. Revalidate its live clearance and
+    // wear in O(path length); no competing route can improve its cost, even
+    // after traffic wears new shortcuts elsewhere in the settlement.
+    let valid = true, from = start
+    for (let i = 1; i < cached.length; i++) {
+      const index = cached[i], next = { x: index % map.width, z: Math.floor(index / map.width) }
+      const terrain = tileAt(map, next.x, next.z)
+      if (Math.abs(next.x - from.x) + Math.abs(next.z - from.z) !== 1 || !terrain || !(TERRAIN[terrain].passable || (logging && isWoods(terrain))) ||
+        !allowed(from, next, i === 1 || i === cached.length - 1 ? seat : undefined) ||
+        (map.tiles[cached[i - 1]] !== "bridge" && terrain !== "bridge" && !Number.isFinite(elevationStep(map.elevation, cached[i - 1], index))) ||
+        routeCost(map, from, next) !== 1) { valid = false; break }
+      from = next
+    }
+    if (valid) {
+      shortest!.delete(routeKey); shortest!.set(routeKey, cached)
+      return Array.from(cached, index => ({ x: index % map.width, z: Math.floor(index / map.width) }))
+    }
+    shortest!.delete(routeKey)
+  }
   let workspace = workspaces.get(map)
   if (!workspace || workspace.seen.length !== size) {
     workspace = { generation: 0, seen: new Uint32Array(size), closed: new Uint32Array(size), parents: new Int32Array(size), costs: new Float64Array(size) }
@@ -88,7 +115,13 @@ export function settlementRoute(
       for (let i = end; i !== -1; i = parents[i]) {
         result.push({ x: i % map.width, z: Math.floor(i / map.width) })
       }
-      return result.reverse()
+      result.reverse()
+      if (costs[end] === heuristic(start)) {
+        if (!shortest) { shortest = new Map(); shortestRoutes.set(map, shortest) }
+        if (shortest.size >= 4096) shortest.delete(shortest.keys().next().value!)
+        shortest.set(routeKey, Int32Array.from(result, key))
+      }
+      return result
     }
     if (++expanded === 256 && isolatedGoal(map, buildings, origin, end, allowed, seen, generation, logging, enterShrine, seat)) return null
     for (const [dx, dz] of ROUTE_DIRS) {
@@ -99,7 +132,7 @@ export function settlementRoute(
       if (!allowed(p, next, seatAccess)) continue
       const index = key(next)
       if (map.tiles[current] !== "bridge" && terrain !== "bridge" && !Number.isFinite(elevationStep(map.elevation, current, index))) continue
-      const cost = costs[current] + footpathRouteCost(map, p, next)
+      const cost = costs[current] + routeCost(map, p, next)
       if (seen[index] === generation && cost >= costs[index]) continue
       seen[index] = generation; costs[index] = cost
       parents[index] = current

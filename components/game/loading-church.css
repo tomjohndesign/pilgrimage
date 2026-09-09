@@ -1,0 +1,145 @@
+.loading-church {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  overflow: visible;
+  transform: translate(0, 0) scale(1);
+  transition: transform 450ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.loading-church-image,
+.loading-church-pulse {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  image-rendering: pixelated;
+}
+
+.loading-church-tiles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.loading-church-ground,
+.loading-church-wipe {
+  position: absolute;
+  inset: 0;
+}
+
+.loading-church-ground {
+  z-index: 0;
+  mask-image: radial-gradient(ellipse closest-side at 50% calc(50% + var(--ground-offset)),
+    #000 15%, rgb(0 0 0 / .85) 35%, rgb(0 0 0 / .35) 70%, transparent 100%),
+    url("/textures/ui/loading-falloff.svg");
+  mask-size: 100% 100%;
+  mask-position: 0 0, 0 var(--ground-offset);
+  mask-repeat: no-repeat;
+  mask-composite: intersect;
+}
+
+.loading-church[data-phase="revealing"] .loading-church-wipe {
+  mask-image: radial-gradient(ellipse var(--reveal-radius-x, .001dvh) var(--reveal-radius-y, .001dvh)
+    at 50% calc(50% + var(--ground-offset)), transparent var(--reveal-inner, 0%), #000 100%);
+}
+
+.loading-church-tiles polygon {
+  opacity: var(--shimmer-0);
+  animation: loading-church-shimmer 12s cubic-bezier(.45, 0, .55, 1) infinite;
+  animation-delay: var(--shimmer-delay);
+}
+
+.loading-church-tiles[data-noise-live="true"] polygon {
+  animation: none;
+  transition: opacity 1.6s cubic-bezier(.22, 1, .36, 1);
+}
+
+@keyframes loading-church-shimmer {
+  0%, 100% { opacity: var(--shimmer-0); }
+  25% { opacity: var(--shimmer-1); }
+  50% { opacity: var(--shimmer-2); }
+  75% { opacity: var(--shimmer-3); }
+}
+
+.loading-church-pulse { z-index: 1; }
+.loading-church-image { z-index: 2; }
+
+.loading-church-pulse polygon {
+  opacity: 0;
+  animation: loading-church-ripple 2.4s ease-in-out infinite;
+  animation-delay: var(--pulse-delay);
+}
+
+@keyframes loading-church-ripple {
+  0%, 34%, 100% { opacity: 0; }
+  12% { opacity: var(--pulse-opacity); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-church-tiles polygon {
+    animation-play-state: paused;
+  }
+  .loading-church-pulse polygon { animation: none; }
+  .loading-church-tiles[data-noise-live="true"] polygon { transition: none; }
+}
+
+.loading-church[data-idle="true"] .loading-church-tiles polygon {
+  animation: none;
+  opacity: calc(var(--shimmer-0) * 3);
+}
+.loading-church-caption {
+  position: absolute;
+  top: calc(50% + var(--church-caption-offset) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  color: #d4c297;
+  font-family: var(--font-cinzel), serif;
+  font-size: 11px;
+  letter-spacing: .12em;
+  white-space: nowrap;
+}
+
+/* Keep indicators outside the ground mask and above the rendered scene. */
+.loading-church[data-idle="true"] { z-index: 10; transform: translateX(8vw); }
+.landing-scene { position: absolute; inset: 0; z-index: 2; opacity: 0; }
+.landing-scene[data-ready="true"] { opacity: 1; }
+.loading-church-caption { z-index: 5; }
+.loading-church-progress {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  top: calc(50% - var(--church-roof-offset));
+  transform: translate(-50%, -100%);
+  width: calc(48 * var(--loading-pixel));
+  height: calc(6 * var(--loading-pixel));
+  overflow: visible;
+}
+.loading-church-progress-fill { animation: loading-church-progress 1.2s steps(32) infinite alternate; }
+@keyframes loading-church-progress { to { transform: translateX(32px); } }
+@media (max-width: 640px) {
+  .loading-church[data-idle="true"] { transform: translateY(-19dvh) scale(.78); transform-origin: 50% 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-church { transition: none; }
+  .loading-church-progress-fill { animation: none; width: 24px; }
+}
+
+.landing-scene[data-ready="true"] { pointer-events: auto; }
+/* Pointer selection uses the building mesh; keyboard users get the same action. */
+.landing-church-keyboard { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.landing-church-keyboard:focus-visible {
+  z-index: 3;
+  left: 50%;
+  top: calc(50% + var(--church-caption-offset));
+  transform: translateX(-50%);
+  width: auto;
+  height: auto;
+  clip-path: none;
+  padding: 8px 12px;
+  background: #30291c;
+  color: #f2e8d5;
+  border: 1px solid #dab767;
+  outline: 2px solid #f4d991;
+}

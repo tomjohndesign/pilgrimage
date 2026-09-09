@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { createFootpaths, markGroundChanged, recordWalkingPath, regrowFootpaths } from "./footpaths"
 import { blockedRoad, findRoadDiversion, findRoadShortcut, takeRoadShortcut, retireBypassedRoad, exploresRoadShortcut, shortcutCost, smoothWalkingRoute } from "./walking-shortcuts"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap, type TilePos } from "./map/types"
 import { DEFAULT_ELEVATION } from "./map/elevation"
+import * as buildingSpatial from "./building-spatial"
 import { createSim, stepSim } from "./sim"
 import { generateTravelers, TRAVELER_TYPES } from "./travelers"
 
@@ -31,6 +32,23 @@ function walk(map: GameMap, a: TilePos, b: TilePos, passes: number) {
 }
 
 describe("traffic gradually cuts off detours", () => {
+  it("rechecks a blocking tile before repeating a failed cut, and immediately sees reopened ground", () => {
+    const map = fixture(), from = world(map, { x: 1, z: 8 }), to = world(map, { x: 12, z: 8 })
+    const costs = vi.fn(() => 3)
+    map.tiles[8 * map.width + 7] = "water"
+    expect(shortcutCost(map, from, to, false, undefined, costs)).toBe(Infinity)
+    expect(costs.mock.calls.length).toBeGreaterThan(0)
+    costs.mockClear()
+    expect(shortcutCost(map, from, to, false, undefined, costs)).toBe(Infinity)
+    expect(costs).not.toHaveBeenCalled()
+    map.tiles[8 * map.width + 7] = "grass"
+    expect(Number.isFinite(shortcutCost(map, from, to, false, undefined, costs))).toBe(true)
+    map.buildings.push({ id: "hut", label: "Hut", x: 7, z: 8, w: 1, d: 1, height: 1, color: "#ccc", roofColor: "#999" })
+    expect(shortcutCost(map, from, to)).toBe(Infinity)
+    expect(shortcutCost(map, from, to)).toBe(Infinity)
+    map.buildings[0].z = 9
+    expect(Number.isFinite(shortcutCost(map, from, to))).toBe(true)
+  })
   it("lets arriving walkers adopt new wear after three simulation seconds", () => {
     const map = fixture()
     const travelers = generateTravelers(7, 8).map(t => ({ ...t, type: TRAVELER_TYPES.peasant, direction: 1 as const,
@@ -140,12 +158,29 @@ describe("traffic gradually cuts off detours", () => {
   it("leaves straight routes alone and never cuts past gameplay junctions", () => {
     const map = fixture()
     map.road = Array.from({ length: 14 }, (_, x) => ({ x: x + 1, z: 6 }))
+    const queries = vi.spyOn(buildingSpatial, "buildingSpatialQuery")
     expect(findRoadShortcut(map, 1, 1, p => pointAt(map, p), true)).toBeNull()
+    expect(queries).not.toHaveBeenCalled()
+    queries.mockRestore()
     const bent = fixture()
     bent.site = { junction: 5, branch: [], door: { x: 4, z: 5 }, hovelId: "shrine" }
     const cut = findRoadShortcut(bent, 1, 1, p => pointAt(bent, p), true)
     expect(cut === null || cut.end <= 3.5).toBe(true)
     expect(findRoadShortcut(bent, 5, 1, p => pointAt(bent, p), true)).toBeNull()
+  })
+
+  it("checks deferred road edges before accepting a later bend, including live building edits", () => {
+    const map = fixture()
+    const find = () => findRoadShortcut(map, 1, 1, p => pointAt(map, p), true)
+    const clear = find()
+    expect(clear).not.toBeNull()
+    // The proposed chord stays south of this wall, but the road it replaces
+    // goes through it before there is enough curvature to consider a cut.
+    const hut = { id: "hut", label: "Hut", x: 3, z: 5, w: 1, d: 1, height: 1, color: "", roofColor: "" }
+    map.buildings.push(hut)
+    expect(find()).toBeNull()
+    hut.z = 10
+    expect(find()).toEqual(clear)
   })
 
   it.each(["water", "forest", "darkwood", "bridge"] as const)("rejects cuts across %s even with exploration bias", terrain => {

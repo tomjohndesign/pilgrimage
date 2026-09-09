@@ -26,7 +26,7 @@ function fixture(id = 0, count = 8, direction: 1 | -1 = 1) {
   const map: GameMap = { width: 100, depth: 30, seed: 42, tiles: Array(3000).fill("grass"), buildings: [], road: Array.from({ length: 100 }, (_, x) => ({ x, z: 10 })), shortcuts: [] }
   for (const p of map.road!) map.tiles[p.z * map.width + p.x] = "path"
   const travelers: Traveler[] = Array.from({ length: count }, (_, slot) => ({ id: id + slot, name: `Person ${slot}`, type: TRAVELER_TYPES.peasant, direction, offset: .3, pace: .8,
-    party: { id, name: "Village party", slot }, attributes: { age: 30, gold: 20, status: 0, piety: 100, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: [] } }))
+    party: { id, name: "Village party", slot }, attributes: { happiness: 80, age: 30, gold: 20, status: 0, piety: 100, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: [] } }))
   const sim = createSim(travelers, map)
   sim.balance = { ...DEFAULT_BALANCE, rules: { ...DEFAULT_BALANCE.rules, hungerDecay: 0, thirstDecay: 0, staminaDecay: 0 } }
   const run = (seconds: number) => { for (let i = 0; i < seconds * 10; i++) stepSim(sim, travelers, map, 1, .1) }

@@ -1,4 +1,6 @@
+import { tavernExteriorBenches } from "./building-art/furnishings"
 import { sheepPenLayout } from "./workshop-layout"
+import { layoutHand } from "./building-layout"
 import type { BuildingDef, GameMap, TilePos } from "./map/types"
 
 /** Clockwise quarter turns viewed from above; absent on older structures. */
@@ -27,15 +29,19 @@ export function rotateBuildingPoint(x: number, z: number, rotation = 0): TilePos
 }
 
 /** Centre a doorway on a whole tile, including even-width building fronts. */
-export function buildingDoorOffset(width: number, type?: string): number {
+export function buildingDoorOffset(width: number, type?: string, layoutSeed?: number, end: 1 | -1 = 1): number {
+  // Three-tile homes can open centrally or opposite their hearth. Reflecting the
+  // layout supplies both side doors, keeping the tavern's rear service door clear.
+  const doorSeed = end === -1 ? Math.floor((layoutSeed ?? 0) / 3) : layoutSeed ?? 0
+  if (width === 3 && ["house","tavern","hall","shelter","monk-shelter","storehouse"].includes(type ?? "")) return (doorSeed % 3 === 0 ? 0 : -1) * layoutHand(type, layoutSeed)
   // The woodcutter opens onto its left-hand court; the sheep pen onto its hut door.
-  return (type === "workshop" || type === "sheep-pen" ? 0 : Math.floor((width-1)/2))-(width-1)/2
+  return ((type === "workshop" || type === "sheep-pen" ? 0 : Math.floor((width-1)/2))-(width-1)/2) * layoutHand(type, layoutSeed)
 }
 
 /** Keep an integer arrival tile aligned with the door or the workshop's open court. */
-export function buildingEntry(building: Pick<BuildingDef, "x" | "z" | "w" | "d" | "rotation" | "buildType">, inside = false, end: 1 | -1 = 1): TilePos {
+export function buildingEntry(building: Pick<BuildingDef, "x" | "z" | "w" | "d" | "rotation" | "buildType" | "layoutSeed">, inside = false, end: 1 | -1 = 1): TilePos {
   const local = rotatedFootprint(building, building.rotation)
-  const doorX = building.buildType ? buildingDoorOffset(local.w,building.buildType) : -(local.w-1)/2
+  const doorX = building.buildType ? buildingDoorOffset(local.w,building.buildType,building.layoutSeed,end) : -(local.w-1)/2
   const offset = rotateBuildingPoint(doorX, end * ((local.d - 1) / 2 + (inside ? 0 : 1)), building.rotation)
   return { x: building.x + (building.w - 1) / 2 + offset.x, z: building.z + (building.d - 1) / 2 + offset.z }
 }
@@ -45,7 +51,7 @@ export function buildingFoldEntry(building: BuildingDef, inside = false): TilePo
   const { w, d } = rotatedFootprint(building, building.rotation)
   const gateX = sheepPenLayout(w).penLeft + Math.min(.62, d * .42) / 2
   const tileX = Math.round(gateX + (w - 1) / 2) - (w - 1) / 2
-  const offset = rotateBuildingPoint(tileX, (d - 1) / 2 + (inside ? 0 : 1), building.rotation)
+  const offset = rotateBuildingPoint(tileX*layoutHand(building.buildType,building.layoutSeed), (d - 1) / 2 + (inside ? 0 : 1), building.rotation)
   return { x: building.x + (building.w - 1) / 2 + offset.x, z: building.z + (building.d - 1) / 2 + offset.z }
 }
 
@@ -56,10 +62,18 @@ export function buildingApproach(map: Pick<GameMap,"site">,building: BuildingDef
   return buildingEntry(building)
 }
 
-/** Every doorway owns a clear approach; taverns also open onto a rear service path. */
+/** Every doorway owns a clear approach; taverns also reserve their outdoor bench tiles. */
 export function buildingApproaches(map: Pick<GameMap,"site">, building: BuildingDef): TilePos[] {
   const front=buildingApproach(map,building)
   if(!front) return []
-  return building.buildType === "tavern" && building.id !== map.site?.hovelId
-    ? [front,buildingEntry(building,false,-1)] : building.buildType === "sheep-pen" ? [front, buildingFoldEntry(building)] : [front]
+  if (building.buildType === "tavern" && building.id !== map.site?.hovelId) {
+    const { w, d } = rotatedFootprint(building, building.rotation)
+    const benches = tavernExteriorBenches(w, d, building.layoutSeed).map(bench => {
+      const offset = rotateBuildingPoint(bench.x, bench.z, building.rotation)
+      return { x: Math.round(building.x + (building.w - 1) / 2 + offset.x),
+        z: Math.round(building.z + (building.d - 1) / 2 + offset.z) }
+    })
+    return [front, buildingEntry(building, false, -1), ...benches]
+  }
+  return building.buildType === "sheep-pen" ? [front, buildingFoldEntry(building)] : [front]
 }

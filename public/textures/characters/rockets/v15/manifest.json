@@ -1,0 +1,47 @@
+{
+  "version": 15,
+  "reservedTones": true,
+  "depthEncoding": "view-offset-rg16-v1",
+  "templateVersion": 34,
+  "cellSize": 64,
+  "anchor": [
+    32,
+    48.5
+  ],
+  "camera": {
+    "pitch": 35.264389682754654,
+    "viewSize": 3.466666666666667
+  },
+  "directions": [
+    "S",
+    "SW",
+    "W",
+    "NW",
+    "N",
+    "NE",
+    "E",
+    "SE"
+  ],
+  "frameCounts": {
+    "idle": 1,
+    "walk": 20,
+    "wearyWalk": 20,
+    "sleeping": 16,
+    "sitting": 8,
+    "seatedPrayer": 8,
+    "praying": 8,
+    "drinking": 24,
+    "drinkingLow": 24,
+    "preaching": 24,
+    "treeFelling": 24,
+    "woodcutting": 64,
+    "building": 24,
+    "gathering": 24,
+    "carrying": 20,
+    "hoisting": 16,
+    "procession": 20,
+    "flying": 8
+  },
+  "flightFps": 12,
+  "safePadding": 5
+}

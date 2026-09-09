@@ -4,7 +4,7 @@ import { STOREHOUSE_FOOD_CAPACITY } from "./storage"
 /** Pure balance data, shared by gameplay, the tuning page and the specification. */
 export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "storehouse"
   | "monk-shelter" | "house" | "tavern" | "wood-shelter" | "market" | "guard-post" | "lumberCamp"
-  | "sheep-pen"
+  | "sheep-pen" | "well" | "watering-hole"
 
 export interface Resources {
   gold: number
@@ -157,7 +157,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "tavern", label: "Tavern", category: "buildings",
-    description: "Two jobs behind the counter. Travelers and settlers buy food and drink here for gold, then sit at the tables. Its front and back doors each keep a clear path tile.",
+    description: "Two jobs behind the counter. Low happiness draws travelers and settlers here for company, even when free water is nearby. They buy food and drink and recover happiness at the tables. Chairs and outdoor benches offer a free short rest, restoring up to 8 stamina. Keep both entrances and the benches clear.",
     cost: { gold: 150, wood: 110 }, renown: 12, requiredRenown: 25,
     income: { gold: 0, wood: 0 }, w: 3, d: 4, height: 0.78,
     color: "#8c7658", roofColor: "#a59164",
@@ -168,6 +168,18 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     cost: { gold: 55, wood: 45 }, renown: 2, requiredRenown: 5,
     income: { gold: 0, wood: 0 }, w: 3, d: 2, height: 0.70,
     color: "#8c7658", roofColor: "#a59164",
+  },
+  {
+    id: "well", label: "Timber well", category: "scenery",
+    description: "Free drinking water for thirsty walkers and settlers. One person draws water at a time; keep its front approach clear.",
+    cost: { gold: 20, wood: 15 }, renown: 0, requiredRenown: 0,
+    income: { gold: 0, wood: 0 }, w: 2, d: 2, height: .58, color: "#877152", roofColor: "#95805c",
+  },
+  {
+    id: "watering-hole", label: "Watering hole", category: "scenery",
+    description: "A shallow earthen pool with an open dipping edge. Thirsty walkers and settlers take turns drinking here for free.",
+    cost: { gold: 10, wood: 0 }, renown: 0, requiredRenown: 0,
+    income: { gold: 0, wood: 0 }, w: 3, d: 2, height: .1, color: "#847657", roofColor: "#526e67",
   },
 ]
 
@@ -429,9 +441,24 @@ export const RULE_FIELDS = [
     default: 0.5, min: 0, max: 1, step: 0.01,
   },
   {
+    key: "happinessDecay", group: "Traveler needs", label: "Happiness drain per game hour",
+    description: "Happiness lost while away from tavern tables. Low happiness draws customers to staffed taverns.",
+    default: 0.5, min: 0, max: 10, step: 0.1,
+  },
+  {
+    key: "pietyDecay", group: "Traveler needs", label: "Piety drain per game hour",
+    description: "Devotion lost after a day without church attendance. Default: 0.48 points per day. Prayer suspends the drain.",
+    default: 0.02, min: 0, max: 1, step: 0.01,
+  },
+  {
+    key: "prayerPiety", group: "Traveler needs", label: "Piety gained per hour of prayer",
+    description: "Devotion gained by private church prayer and monks kneeling before the relic. Relic viewings and processions also grant their own rewards.",
+    default: 3, min: 0, max: 20, step: 0.1,
+  },
+  {
     key: "hungerDecay", group: "Traveler needs", label: "Hunger drain per game hour",
-    description: "Fullness lost per game hour. Default: 72 points per day, with a full bar lasting about 33 hours. Camping halves this rate; shrine hospitality restores it.",
-    default: 3, min: 0, max: 50, step: 0.1,
+    description: "Fullness lost per game hour. Default: 36 points per day, with a full bar lasting about 67 hours. Camping halves this rate; shrine hospitality restores it.",
+    default: 1.5, min: 0, max: 50, step: 0.1,
   },
   {
     key: "thirstDecay", group: "Traveler needs", label: "Thirst drain per game hour",
@@ -440,8 +467,8 @@ export const RULE_FIELDS = [
   },
   {
     key: "staminaDecay", group: "Traveler needs", label: "Stamina drain per game hour",
-    description: "Energy lost per game hour. Default: a full bar lasts about 48 hours, with travelers looking for lodging once it falls below 20. Camping restores stamina and tending a parked stall holds it steady; drinking does not restore energy.",
-    default: 2.1, min: 0, max: 50, step: 0.1,
+    description: "Energy lost per game hour. Default: a full bar lasts about 95 hours, with travelers looking for lodging once it falls below 20. Camping restores stamina, seated breaks restore a little, and tending a parked stall holds it steady. Standing drink stops do not restore energy.",
+    default: 1.05, min: 0, max: 50, step: 0.05,
   },
 ] as const
 export type RuleKey = (typeof RULE_FIELDS)[number]["key"]
@@ -602,7 +629,7 @@ export function validateBalance(
   }
   return { balance: clean, error: null }
 }
-export const BALANCE_VERSION = 4
+export const BALANCE_VERSION = 5
 export function exportBalance(balance: GameBalance): string {
   return JSON.stringify({ version: BALANCE_VERSION, balance }, null, 2)
 }
@@ -610,8 +637,8 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
   try {
     const preset = record(JSON.parse(json))
     const version = preset?.version
-    if (version !== 1 && version !== 2 && version !== 3 && version !== BALANCE_VERSION)
-      return { balance: null, error: "Unsupported preset version. Expected version 1, 2, 3 or 4." }
+    if (version !== 1 && version !== 2 && version !== 3 && version !== 4 && version !== BALANCE_VERSION)
+      return { balance: null, error: "Unsupported preset version. Expected version 1, 2, 3, 4 or 5." }
     // Add defaults for new structures while retaining all authored settings.
     const saved = record(preset?.balance)
     const rules = record(saved?.rules)
@@ -629,8 +656,9 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
         hospitalityRenownBonus: DEFAULT_BALANCE.rules.hospitalityRenownBonus,
         ...rules,
         // Adopt slower defaults in old saves without overwriting custom rates.
-        ...(version !== BALANCE_VERSION && rules.hungerDecay === 12.5 ? { hungerDecay: DEFAULT_BALANCE.rules.hungerDecay } : {}),
-        ...(version !== BALANCE_VERSION && rules.thirstDecay === 25 ? { thirstDecay: DEFAULT_BALANCE.rules.thirstDecay } : {}),
+        ...((version < 4 && rules.hungerDecay === 12.5 || version < 5 && rules.hungerDecay === 3) ? { hungerDecay: DEFAULT_BALANCE.rules.hungerDecay } : {}),
+        ...(version < 4 && rules.thirstDecay === 25 ? { thirstDecay: DEFAULT_BALANCE.rules.thirstDecay } : {}),
+        ...(version < 5 && rules.staminaDecay === 2.1 ? { staminaDecay: DEFAULT_BALANCE.rules.staminaDecay } : {}),
       },
       buildings: {
         ...DEFAULT_BALANCE.buildings,
@@ -642,7 +670,7 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
           workshop: { ...record(buildings.workshop), woodIncome: 0 },
         } : {}),
         // The tavern now earns at the counter; retire its old passive payment.
-        ...(version !== BALANCE_VERSION && record(buildings.tavern)?.goldIncome === 10 ? {
+        ...(version < 4 && record(buildings.tavern)?.goldIncome === 10 ? {
           tavern: { ...record(buildings.tavern), goldIncome: 0 },
         } : {}),
       },

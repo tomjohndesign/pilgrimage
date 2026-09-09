@@ -2,6 +2,14 @@ import { expect, it } from "vitest"
 import { makeRng } from "./rng"
 import { SpatialPoints } from "./spatial-points"
 
+it("makes new reservations visible immediately while preserving encounter order", () => {
+  const first = { x: 3.99, z: 0 }, second = { x: 4.01, z: 0 }
+  const index = new SpatialPoints([first])
+  index.add(second)
+  expect(index.firstWithin(4, 0, 1)).toBe(first)
+  expect(index.firstWithin(4, 0, 1, point => point !== first)).toBe(second)
+})
+
 it("matches ordered population scans across negative coordinates, bucket edges and empty neighborhoods", () => {
   const rng = makeRng(12345)
   const people = Array.from({ length: 6000 }, (_, id) => ({ id, x: rng() * 512 - 256, z: rng() * 512 - 256 }))

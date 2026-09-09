@@ -1,3 +1,4 @@
+import { placementBuildingLayout } from "./building-placement-layout"
 import { settlementRoute } from "./settlement-route"
 import { buildingApproaches, buildingEntry, rotatedFootprint, type BuildingRotation } from "./building-rotation"
 import { getBuildInfluence } from "./build-influence"
@@ -166,19 +167,21 @@ describe("build and buy", () => {
     expect(result.error).toBeNull()
     const placed = result.settlement.structures[0]
     expect([placed.w, placed.d]).toEqual([2, 2])
-    expect(structureParts(placed)).toEqual(structureParts({ ...def, buildType: def.id }))
+    expect(structureParts(placed)).toEqual(structureParts({ ...def, buildType: def.id, layoutSeed: placed.layoutSeed, fireplace: placed.fireplace, hearthZ: placed.hearthZ }))
     expect(structureParts(placed).some(p => p.layer === "roof")).toBe(true)
     expect(placementError({ ...map, buildings: [...map.buildings, placed] }, def, { x: 11, z: 15 })).toMatch(/occupies/)
   })
 
   it("keeps storehouse entrances reachable when placing stores and later additions", () => {
-    const map = testMap()
-    map.tiles[16 * map.width + 10] = "water"
-    expect(purchaseStructure(createSettlement(), map, monks, [relic], "storehouse", { x: 10, z: 14 }).error).toMatch(/access/)
-    map.tiles[16 * map.width + 10] = "grass"
+    const map = testMap(), def=BUILD_CATALOG.find(b=>b.id==="storehouse")!
+    const candidate={...def,x:10,z:14,buildType:def.id,id:"preview"}
+    const entry=buildingEntry({...candidate,...placementBuildingLayout(map,candidate)})
+    map.tiles[entry.z * map.width + entry.x] = "water"
+    expect(purchaseStructure(createSettlement(), map, monks, [relic], "storehouse", { x: 10, z: 14 }).error).toMatch(/access|entrance/)
+    map.tiles[entry.z * map.width + entry.x] = "grass"
     const placed = purchaseStructure(createSettlement(), map, monks, [relic], "storehouse", { x: 10, z: 14 })
     expect(placed.error).toBeNull()
-    const blocked = purchaseStructure(placed.settlement, map, monks, [relic], "cross", { x: 10, z: 16 })
+    const blocked = purchaseStructure(placed.settlement, map, monks, [relic], "cross", entry)
     expect(blocked.error).toMatch(/access/)
     expect(blocked.settlement).toBe(placed.settlement)
   })
@@ -480,16 +483,29 @@ it.each([0,1,2,3] as BuildingRotation[])("reserves a walkable entrance tile and 
   expect(placementError(map,marker,entry)).toBeNull()
 })
 
-it.each([0,1,2,3] as BuildingRotation[])("reserves both tavern approaches and releases both on removal (rotation %i)", rotation => {
+it.each([0,1,2,3] as BuildingRotation[])("reserves tavern doorways and outdoor benches and releases them on removal (rotation %i)", rotation => {
   const map=testMap(),def=BUILD_CATALOG.find(b=>b.id==="hall")!
   const building={...def,...rotatedFootprint({w:3,d:4},rotation),x:8,z:8,rotation,id:"tavern",buildType:"tavern"}
   map.buildings.push(building)
   const entries=buildingApproaches(map,building),marker=BUILD_CATALOG.find(b=>b.id==="cross")!
-  expect(entries).toHaveLength(2)
+  expect(entries).toHaveLength(4)
   for(const entry of entries) {
     expect(placementError(map,marker,entry)).toMatch(/entrance path tile/)
     expect(settlementRoute(map,map.buildings,map.site!.door,entry)).not.toBeNull()
   }
   map.buildings.pop()
   for(const entry of entries) expect(placementError(map,marker,entry)).toBeNull()
+})
+
+it("buys the same roof-snapped rotation shown by the placement preview", async()=>{
+  const {placementRoofRotation}=await import("./building-placement-layout")
+  const map=testMap(),house=BUILD_CATALOG.find(b=>b.id==="house")!,tavern=BUILD_CATALOG.find(b=>b.id==="tavern")!
+  map.buildings.push({...tavern,id:"neighbor-tavern",buildType:"tavern",x:7,z:12,layoutSeed:18})
+  const at={x:10,z:14},rotation=placementRoofRotation(map,house,at,1)
+  expect(rotation).toBe(0)
+  expect(placementError(map,house,at,undefined,1)).toBeNull()
+  const before={...createSettlement(),resources:{...house.cost}}
+  const result=purchaseStructure(before,map,monks,[relic],"house",at,undefined,10000,1)
+  expect(result.error).toBeNull()
+  expect(result.settlement.structures[0]).toMatchObject({...at,rotation,w:2,d:2})
 })

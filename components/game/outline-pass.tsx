@@ -3,12 +3,12 @@
 import { useEffect, useMemo } from "react"
 import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
-import { usePixelCharacterRoots, usePixelScene } from "@/components/pixel-canvas"
+import { usePixelScene } from "@/components/pixel-canvas"
 import { CHARACTER_COLOR_LAYER, CHARACTER_ID_LAYER } from "@/lib/game/render/pixel-characters"
 import { characterOcclusionRequest, sampleCharacterOcclusion } from "@/lib/game/render/character-occlusion"
 import { sceneryCloseOpacity, sceneryDetail, treeEdgeOpacity } from "@/lib/game/render/scenery-detail"
 
-import { useCameraStore } from "@/lib/game/camera-store"
+import { useCameraStore, type Selection } from "@/lib/game/camera-store"
 import { useBuildStore } from "@/lib/game/build-store"
 import { COMPANION_OUTLINE_OPACITY, SELECTION_OUTLINE_COLOR, SELECTION_OUTLINE_OPACITY, SELECTION_FILL, SELECTION_FILL_OPACITY, selectionObjectId } from "@/lib/game/selection"
 import { simRegistry } from "@/lib/game/sim"
@@ -69,6 +69,7 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform sampler2D tMasked;
   uniform sampler2D tMaskedDepth;
   uniform sampler2D tRoadEdge;
+  uniform bool uMapReveal;
   uniform bool uRoadEdges;
   uniform float uRoadEdgeOpacity;
   uniform bool uMaskCharacters;
@@ -94,8 +95,10 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform vec3 uSelectionFill;
   uniform float uSelectionOpacity;
   varying vec2 vUv;
+  float revealOpacity = 1.0;
 
   void finishColor() {
+    if (uMapReveal) gl_FragColor.a *= revealOpacity;
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
@@ -122,7 +125,9 @@ const FRAGMENT_SHADER = /* glsl */ `
     // Scenery-only edges already exist in the enlarged world image.
     if (uCharacterPass && idC < uCharacterIdMin && idN < uCharacterIdMin) return false;
     float dN = texture2D(tDepth, uv).x;
-    return dN < dC - 1.0e-5;                // neighbour must be in front
+    bool nearer = dN < dC - 1.0e-5;
+    if (nearer && uMapReveal) revealOpacity = min(revealOpacity, texture2D(tId, uv).a);
+    return nearer;                         // neighbour must be in front
   }
 
   bool animalBorder(vec2 uv, float idC, float dC) {
@@ -154,6 +159,7 @@ const FRAGMENT_SHADER = /* glsl */ `
     // Keep the sample on the visible pixel; uTexel still sets one world-pixel
     // border width, just as it does for trees and buildings.
     vec2 pixelUv = vUv;
+    if (uMapReveal) revealOpacity = texture2D(tId, pixelUv).a;
     float idC = idAt(pixelUv);
     float dC = texture2D(tDepth, pixelUv).x;
     if (uCharacterSelected) {
@@ -257,9 +263,8 @@ const FRAGMENT_SHADER = /* glsl */ `
   }
 `
 
-export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof selectionObjectId>[1], "piles"> }) {
+export function OutlinePass({ objects, selection: previewSelection }: { selection?: Selection | null; objects?: Omit<Parameters<typeof selectionObjectId>[1], "piles"> }) {
   const { gl, scene, camera: displayCamera, size } = useThree()
-  const characterRoots = usePixelCharacterRoots()
 
   // ID + depth buffer at drawing-buffer resolution. Nearest filtering is load-
   // bearing: interpolated ID colours would decode as phantom objects.
@@ -381,6 +386,7 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
       uSelectionOutlineOpacity: { value: SELECTION_OUTLINE_OPACITY },
       uSelectionFill: { value: new THREE.Color(SELECTION_FILL) },
       uSelectionOpacity: { value: SELECTION_FILL_OPACITY },
+      uMapReveal: { value: false },
     }
     const geometry = new THREE.BufferGeometry()
     // One triangle covering the whole screen — no quad seam, no matrices.
@@ -416,19 +422,24 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
   const bufferSize = useMemo(() => new THREE.Vector2(), [])
 
   const frameRef = usePixelScene((camera, destination, stage) => {
-    const { outlineMode, selection } = useCameraStore.getState()
+    const { outlineMode, selection: worldSelection } = useCameraStore.getState()
+    const selection = previewSelection === undefined ? worldSelection : previewSelection
     const requestedId = objects
       ? selectionObjectId(selection, { ...objects, piles: useBuildStore.getState().piles }) : 0
     const selectingCharacter = requestedId !== 0 && (selection?.kind === "monk" || selection?.kind === "traveler")
     const characterPass = stage.phase === "characters"
-    const distant = sceneryDetail(scene) > 0
+    const detail = sceneryDetail(scene)
+    const distant = detail > 0
     const closeOpacity = sceneryCloseOpacity(scene)
-    const mode = characterPass && closeOpacity === 0 ? "off" : outlineMode
+    // At the farthest view, authored building lines and sprite colors are
+    // sufficient. Selection still requests its IDs, but ordinary overlap ink
+    // must not require another complete terrain/building/tree scene pass.
+    const mode = detail === 2 || (characterPass && closeOpacity === 0) ? "off" : outlineMode
     const selectionInOtherPass = (stage.phase === "world" && selectingCharacter) || (characterPass && !selectingCharacter)
     const selectedId = selectionInOtherPass ? 0 : requestedId
     // Wide views use ordinary depth occlusion. Dropping the see-through masks
     // removes the extra character colour and road-edge scene renders entirely.
-    const maskCharacters = closeOpacity > 0 && characterRoots.size > 0
+    const maskCharacters = closeOpacity > 0 && stage.hasCharacters
     // Trees hide the roads under them in the same pass they are drawn in.
     const roadEdgePass = !characterPass && !distant
     const maskPass = characterPass && maskCharacters
@@ -499,6 +510,7 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
       if (!characterPass) gl.clear()
       gl.render(scene, camera)
       if (needsOutline) {
+        pass.uniforms.uMapReveal.value = scene.userData.mapRevealActive === true
         pass.uniforms.tId.value = ids.texture
         pass.uniforms.tDepth.value = ids.depthTexture
         // One world texel for every border, including display-resolution figures.

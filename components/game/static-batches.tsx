@@ -7,7 +7,9 @@ import { cullStaticBlocks, staticInstanceRevision, staticInstanceSources } from 
 import { StaticInstanceBatch, staticInstanceKey } from "@/lib/game/render/static-instances"
 import { isWorldVisible } from "@/lib/game/render/visibility"
 import { GuardedFrustum } from "@/lib/game/render/guarded-frustum"
-import { scenerySourceVisible, sceneryDetail, updateSceneryDetail } from "@/lib/game/render/scenery-detail"
+import { scenerySourceVisible, sceneryDetail, sceneryZooming, updateSceneryDetail } from "@/lib/game/render/scenery-detail"
+import { frameQuality, updateFrameQuality } from "@/lib/game/render/frame-quality"
+import { crowdRenderStatus } from "@/lib/game/render/crowd-budget"
 import { useCameraStore } from "@/lib/game/camera-store"
 
 export const staticBatchControl = { enabled: true }
@@ -25,9 +27,12 @@ export function StaticBatches() {
     update(); query.addEventListener("change", update)
     return () => query.removeEventListener("change", update)
   }, [])
-  useFrame(({ camera, size, clock }) => {
+  useFrame(({ camera, size, clock }, delta) => {
     const profile = coarsePointer.current && Math.min(size.width, size.height) <= 1024 ? "mobile" : "desktop"
-    updateSceneryDetail(scene, camera, size.height, clock.elapsedTime, useCameraStore.getState().viewSize, profile)
+    const requested = useCameraStore.getState().viewSize, before = frameQuality(scene)
+    updateSceneryDetail(scene, camera, size.height, clock.elapsedTime, requested, profile, before)
+    const quality = updateFrameQuality(scene, delta, document.hidden || sceneryZooming(scene), !crowdRenderStatus.active || crowdRenderStatus.budget >= crowdRenderStatus.population)
+    if (quality !== before) updateSceneryDetail(scene, camera, size.height, clock.elapsedTime, requested, profile, quality)
   }, -3.9)
   useFrame(({ camera }) => {
     if (!root.current) return

@@ -1,3 +1,6 @@
+import { layoutHand } from "./building-layout"
+import { crossroadIslandAt } from "./map/crossroads"
+import { tavernFurnitureClear } from "./tavern-layout"
 import { sheepPenLayout } from "./workshop-layout"
 import { buildingEntry, buildingFoldEntry, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
 import { marketYardContains } from "./market-layout"
@@ -52,6 +55,7 @@ export function shrineFurnitureClear(building: BuildingDef, door: TilePos | unde
 
 /** Closed buildings block walking. Shrine visits cross walls only at a gate. */
 export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDef[], from: TilePos, to: TilePos, enterShrine = false, seat?: string): boolean {
+  if (crossroadIslandAt(map, to.x, to.z)) return false
   for (const building of buildings) {
     const a = containsTile(building, from) && !marketYardContains(building, from), b = containsTile(building, to) && !marketYardContains(building, to)
     if (!a && !b) continue
@@ -59,7 +63,7 @@ export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDe
       if (building.buildType === "sheep-pen") {
         const local = rotatedFootprint(building, building.rotation)
         const inHut = (p: TilePos) => rotateBuildingPoint(p.x - building.x - (building.w - 1) / 2,
-          p.z - building.z - (building.d - 1) / 2, -(building.rotation ?? 0)).x < sheepPenLayout(local.w).penLeft
+          p.z - building.z - (building.d - 1) / 2, -(building.rotation ?? 0)).x * layoutHand(building.buildType,building.layoutSeed) < sheepPenLayout(local.w).penLeft
         if (a && b) { if (inHut(from) !== inHut(to)) return false; continue }
         const inside = a ? from : to, outside = a ? to : from
         if (!inHut(inside)) {
@@ -68,6 +72,7 @@ export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDe
           return false
         }
       }
+      if (building.buildType === "tavern" && !tavernFurnitureClear(building, from, to)) return false
       if (a && b) continue
       const inside = a ? from : to, outside = a ? to : from
       // Cross the wall only in a doorway; the tavern also keeps a back door.

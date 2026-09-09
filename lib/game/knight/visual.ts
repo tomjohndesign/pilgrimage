@@ -1,4 +1,4 @@
-import manifest from "../../../public/textures/knights/v12/manifest.json"
+import manifest from "../../../public/textures/knights/v13/manifest.json"
 import { populationVisual } from "../base-person/population-assets"
 import { personWalkStride } from "../base-person/gait"
 import { actionPlaybackRate } from "../base-person/activity"

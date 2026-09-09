@@ -26,18 +26,26 @@ export const VARIANTS = [
   { id: "porch", name: "Pilgrim’s porch", description: "A sheltered entrance recessed beneath the gable.", image: "/assets/buildings/hovel-porch-views-v4.png", manifest: "/assets/buildings/hovel-porch-views-v4.json" },
 ] as const
 
+/** Work courts, sheep folds and pilgrim bedding need at least a 2×2 plot. */
+export function minimumBuildingSize(variant: string) {
+  return ["workshop","sheep-pen","shelter"].includes(variant) ? {width:2,depth:2} : {width:1,depth:1}
+}
+
 export const recipeSchema = z.object({
   subject: z.string().trim().min(1).max(160),
-  variant: z.enum(["enclosure", "monk-shelter", "house", "storehouse", "wood-shelter", "tavern", "gable", "hipped", "porch"]),
+  variant: z.enum(["enclosure", "monk-shelter", "house", "storehouse", "wood-shelter", "tavern", "shelter", "workshop", "garden", "cross", "hall", "lumberCamp", "market", "guard-post", "sheep-pen", "gable", "hipped", "porch"]),
   width: z.number().int().min(1).max(5),
   depth: z.number().int().min(1).max(5),
   wallHeight: z.number().min(0.25).max(1.4),
   roofRise: z.number().min(0).max(1.5),
   seed: z.number().int().min(0).max(99999),
+  fireplace: z.boolean().optional(),
+  hearthZ: z.number().finite().optional(),
+  layoutSeed: z.number().int().min(0).max(65535).optional(),
   view: z.number().int().min(0).max(3),
   output: z.enum(["concept", "sprite"]),
   notes: z.string().max(2000),
-})
+}).refine(recipe=>{ const min=minimumBuildingSize(recipe.variant); return recipe.width>=min.width && recipe.depth>=min.depth }, {message:"This building form needs a plot at least 2 × 2 tiles."})
 export type BuildingRecipe = z.infer<typeof recipeSchema>
 export const LEGACY_RECIPE: BuildingRecipe = {
   subject: "Hovel of the Relic", variant: "gable", width: 5, depth: 5,
@@ -50,8 +58,17 @@ export const EARLY_BUILDINGS = [
   { id: "monk-shelter", name: "Monks’ shelter", description: "An open-front thatched sleeping shelter with a rear-sloping awning, plain crosses, a stone chimney and fireplace, horizontal log windbreaks and straw bedrolls.", width: 3, depth: 2, wallHeight: 0.62, roofRise: singlePlaneRoofRise(2) },
   { id: "house", name: "House", description: "A compact log-built home with a low single-plane thatched roof, a deep arched brow over the low-eave doorway, a stone chimney and fireplace, and straw beds for its household.", width: 2, depth: 2, wallHeight: 0.70, roofRise: singlePlaneRoofRise(2) },
   { id: "tavern", name: "Tavern", description: "A broad timber-and-rubble alehouse with a back-to-back thatched roof, an arched entrance, stone hearth and chimney, wooden drinking tables, benches and an ale-cup sign.", width: 3, depth: 4, wallHeight: 0.78, roofRise: singlePlaneRoofRise(4) },
-  { id: "storehouse", name: "Raised store", description: "An open-sided store on timber legs, with a plank entry ramp and sacks beneath a thatched roof held by two plain timber battens.", width: 1, depth: 1, wallHeight: 0.55, roofRise: singlePlaneRoofRise(1) },
+  { id: "storehouse", name: "Raised store", description: "An open-sided store on timber legs, with a plank entry ramp and sacks beneath a thatched roof held by two plain timber battens.", width: 2, depth: 2, wallHeight: 0.62, roofRise: singlePlaneRoofRise(2) },
   { id: "wood-shelter", name: "Wood shelter", description: "An open lean-to with a low thatched roof over split wood and spare poles.", width: 2, depth: 1, wallHeight: 0.62, roofRise: singlePlaneRoofRise(1) },
+  { id: "shelter", name: "Pilgrim shelter", description: "An open resting shelter with straw beds, a bench and a domestic hearth.", width: 2, depth: 2, wallHeight: 0.62, roofRise: singlePlaneRoofRise(2) },
+  { id: "workshop", name: "Woodcutter’s hut", description: "An open work court beside covered timber bays and a rear workbench.", width: 3, depth: 2, wallHeight: 0.68, roofRise: singlePlaneRoofRise(2) },
+  { id: "hall", name: "Shrine hall", description: "An enclosed gathering hall with a sheltered doorway, timber benches and wooden crosses.", width: 2, depth: 3, wallHeight: 0.78, roofRise: singlePlaneRoofRise(3) },
+  { id: "market", name: "Market stall", description: "A cloth-covered counter with wares and an open cart yard behind it.", width: 4, depth: 4, wallHeight: 0.65, roofRise: singlePlaneRoofRise(4) },
+  { id: "guard-post", name: "Guard post", description: "A small sheltered watch post with a bench and staff.", width: 2, depth: 2, wallHeight: 0.65, roofRise: singlePlaneRoofRise(2) },
+  { id: "sheep-pen", name: "Sheep pen", description: "A hut and hearth beside an open railed fold with a gate and trough.", width: 3, depth: 2, wallHeight: 0.70, roofRise: singlePlaneRoofRise(2) },
+  { id: "lumberCamp", name: "Timber yard", description: "An open timber yard with low boundary rails and space for live timber stacks.", width: 2, depth: 2, wallHeight: 0.65, roofRise: 0 },
+  { id: "garden", name: "Cloister garden", description: "Two herb beds flank a narrow flagstone path.", width: 2, depth: 1, wallHeight: 0.25, roofRise: 0 },
+  { id: "cross", name: "Carved cross", description: "A plain pegged wooden cross set into a small stone footing.", width: 1, depth: 1, wallHeight: 1.1, roofRise: 0 },
 ] as const
 export type EarlyBuildingType = typeof EARLY_BUILDINGS[number]["id"]
 export function earlyBuildingRecipe(variant: EarlyBuildingType): BuildingRecipe {

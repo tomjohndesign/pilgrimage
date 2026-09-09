@@ -1,3 +1,4 @@
+import { layoutHand } from "./building-layout"
 import { buildingCentre } from "./buildings"
 import { rotateBuildingPoint, rotatedFootprint } from "./building-rotation"
 import { isComplete, walkWorker, workerRoute } from "./construction"
@@ -35,7 +36,7 @@ export function foldLayout(map: GameMap, pen: BuildingDef, scale = 1) {
   const { w, d } = rotatedFootprint(pen, pen.rotation), { penLeft } = sheepPenLayout(w)
   const centre = buildingCentre(map, pen)
   const point = (x: number, z: number): WanderSpot => {
-    const p = rotateBuildingPoint(x, z, pen.rotation)
+    const p = rotateBuildingPoint(x*layoutHand(pen.buildType,pen.layoutSeed), z, pen.rotation)
     const at = { x: centre.x + p.x, z: centre.z + p.z }
     return { ...at, y: walkingSurface(map, at.x, at.z).height }
   }
