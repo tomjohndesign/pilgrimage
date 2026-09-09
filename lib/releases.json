@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "d8f8811c80cb3c3a9a5f7a2a0d919b4b5a089f68",
-  "releaseCount": 153,
+  "lastProcessedCommit": "9b2b20c3e6683369a2918c698b6c1ed94a40375f",
+  "releaseCount": 154,
   "releases": [
+    {
+      "version": "0.0.168",
+      "title": "Release 0.0.168",
+      "summary": "Halve the traveler thirst rate (#188)",
+      "commit": "9b2b20c3e6683369a2918c698b6c1ed94a40375f"
+    },
     {
       "version": "0.0.167",
       "title": "Release 0.0.167",
