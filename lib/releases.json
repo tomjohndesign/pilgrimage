@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "d6b931c32917697f5d517bb8664374f4a87031f2",
-  "releaseCount": 152,
+  "lastProcessedCommit": "d8f8811c80cb3c3a9a5f7a2a0d919b4b5a089f68",
+  "releaseCount": 153,
   "releases": [
+    {
+      "version": "0.0.167",
+      "title": "Release 0.0.167",
+      "summary": "Prioritize building selection over obscured NPCs (#186)",
+      "commit": "d8f8811c80cb3c3a9a5f7a2a0d919b4b5a089f68"
+    },
     {
       "version": "0.0.166",
       "title": "Release 0.0.166",
