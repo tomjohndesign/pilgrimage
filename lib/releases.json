@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "a452c12a90ee95b8de150d19395723420777d64b",
-  "releaseCount": 124,
+  "lastProcessedCommit": "ad6ce1f682d5072dbb061b2c3560884375471919",
+  "releaseCount": 125,
   "releases": [
+    {
+      "version": "0.0.139",
+      "title": "Release 0.0.139",
+      "summary": "Add church-centered radial map loading (#160)",
+      "commit": "ad6ce1f682d5072dbb061b2c3560884375471919"
+    },
     {
       "version": "0.0.138",
       "title": "Release 0.0.138",
