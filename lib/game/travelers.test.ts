@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { generateTravelers, travelerCountForMap, TRAVELER_TYPES } from "./travelers"
 import { POPULATION_PROFILES, travelerAppearance } from "./base-person/population"
+import { DRINK_PRICE, MEAL_PRICE } from "./tavern"
 
 describe("travelerCountForMap", () => {
   it("preserves the default crowd and scales with map area", () => {
@@ -41,6 +42,14 @@ describe("generateTravelers", () => {
       for (const { attributes } of generateTravelers(seed, 100)) {
         expect(attributes.hunger).toBeGreaterThanOrEqual(80)
         expect(attributes.thirst).toBeGreaterThanOrEqual(80)
+      }
+    }
+  })
+  it("gives road travelers enough coin for repeated food and drink stops", () => {
+    for (const seed of [1, 42, 12345]) {
+      for (const { type, attributes } of generateTravelers(seed, 500)) {
+        const stops = type.id === "beggar" ? 1 : 2
+        expect(attributes.gold).toBeGreaterThanOrEqual(stops * (MEAL_PRICE + DRINK_PRICE))
       }
     }
   })
