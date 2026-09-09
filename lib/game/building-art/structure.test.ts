@@ -24,7 +24,7 @@ const catalogue = BUILD_CATALOG.map(def => ({ ...def, buildType: def.id }))
 const partsFor = (id: string) => structureParts(catalogue.find(def => def.id === id)!)
 
 describe("settlement construction", () => {
-  it.each([...catalogue, ...PROTOTYPE_BUILDINGS])("$label has complete, deterministic geometry within its occupied tiles", (building) => {
+  it.each([...catalogue, ...PROTOTYPE_BUILDINGS])("$label has complete, deterministic geometry within its occupied tiles and reserved bench frontage", (building) => {
     const parts = structureParts(building)
     expect(parts.length).toBeGreaterThan(5)
     expect(new Set(parts.map(part => part.name)).size).toBe(parts.length)
@@ -35,8 +35,8 @@ describe("settlement construction", () => {
       const box = bounds(part)
       expect(box.min.x, part.name).toBeGreaterThanOrEqual(-building.w / 2 - .001)
       expect(box.max.x, part.name).toBeLessThanOrEqual(building.w / 2 + .001)
-      expect(box.min.z, part.name).toBeGreaterThanOrEqual(-building.d / 2 - .001)
-      expect(box.max.z, part.name).toBeLessThanOrEqual(building.d / 2 + .001)
+      expect(box.min.z, part.name).toBeGreaterThanOrEqual(-building.d / 2 - .001 - (part.name.startsWith("tavern-outside-") ? .6 : 0))
+      expect(box.max.z, part.name).toBeLessThanOrEqual(building.d / 2 + .001 + (part.name.startsWith("tavern-outside-") ? .6 : 0))
       const groundSurface = part.name === "cart-yard" || part.name === "floor" && building.buildType !== "storehouse"
         || part.name.startsWith("paving-") || part.name.startsWith("garden-path-") || part.name === "hall-threshold"
       expect(box.min.y, part.name).toBeGreaterThanOrEqual(groundSurface ? -.06 : -.001)

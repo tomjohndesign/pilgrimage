@@ -880,20 +880,20 @@ describe("houses, counters and posts", () => {
 
   it("keeps one table per customer and leaves the penniless on the road", () => {
     const { map, traveler } = fixture()
-    const people = Array.from({ length: 6 }, (_, id) => {
+    const people = Array.from({ length: 8 }, (_, id) => {
       const t = traveler(id, id % 2 === 0 ? 1 : -1)
       t.attributes.hunger = 0
-      t.attributes.gold = id === 5 ? 0 : 10
+      t.attributes.gold = id === 7 ? 0 : 10
       return t
     })
     const sim = createEstablishedShrine(people, map)
     const tavern = staffTavern(sim, map)
-    run(sim, people, map, 200, () => [...sim.travelers.values()].filter(s => s.activity === "sitting").length === 4)
+    run(sim, people, map, 200, () => [...sim.travelers.values()].filter(s => s.activity === "sitting").length === tavernSeats(map, tavern).length)
     const seated = [...sim.travelers.values()].filter(s => s.activity === "sitting")
     expect(seated).toHaveLength(tavernSeats(map, tavern).length)
     expect(new Set(seated.map(s => s.tavernVisit!.plan.seat!.id)).size).toBe(seated.length)
     // Nobody without the price of a meal turns off the road for one.
-    expect(sim.travelers.get(5)!.tavernVisit).toBeUndefined()
+    expect(sim.travelers.get(7)!.tavernVisit).toBeUndefined()
   })
 
   it("does not draw anyone to a tavern with nobody behind the counter", () => {

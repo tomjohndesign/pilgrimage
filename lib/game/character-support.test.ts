@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { buildingSupports, characterSupport, partSupports, placedSupport } from "./character-support"
 import { assignBuildingTask, stepBuildingTask, type Worker } from "./construction"
-import { rotatedFootprint, type BuildingRotation } from "./building-rotation"
+import { seatRestPlan } from "./tavern"
+import { buildingEntry, rotatedFootprint, type BuildingRotation } from "./building-rotation"
 import { shrineSeats } from "./shrine-layout"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "./map/types"
 
@@ -12,6 +13,19 @@ function fixture(type = "monk-shelter"): GameMap {
 }
 
 describe("authored character supports", () => {
+  it.each([0, 1, 2, 3] as BuildingRotation[])("routes to the exterior chair in its drawn entrance frame at rotation %s", rotation => {
+    const map = fixture("house"), building = map.buildings[0]
+    Object.assign(building, { rotation, ...rotatedFootprint({ w: 3, d: 2 }, rotation) })
+    const entry = buildingEntry(building), start = { x: tileToWorldX(map, entry.x), y: 0, z: tileToWorldZ(map, entry.z) }
+    const plan = seatRestPlan(map, building, start, new Set())!
+    expect(plan?.seat?.id).toBe("entry-chair-seat")
+    const support = characterSupport(map, plan.seat!.point.x, plan.seat!.point.z, "sitting")!
+    expect(support.id).toBe("entry-chair-seat")
+    expect(support.anchor.x).toBeCloseTo(plan.seat!.point.x)
+    expect(support.anchor.z).toBeCloseTo(plan.seat!.point.z)
+    expect(seatRestPlan(map, building, start, new Set([`${building.id}:entry-chair-seat`]))).toBeNull()
+  })
+
   it("derives the contact height and anchor from a rotated furniture top", () => {
     const [support] = partSupports([{ name: "new-furniture", layer: "interior", color: "", position: [2, .3, 4],
       size: [.8, .1, .4], rotation: [0, Math.PI / 2, 0], support: { clips: ["sitting"], anchorOffset: [0, .1] } }])
@@ -56,11 +70,11 @@ describe("authored character supports", () => {
 
   it("refreshes supports when the same building is resized or its recipe changes", () => {
     const map = fixture(), building = map.buildings[0]
-    expect(buildingSupports(building)).toHaveLength(4)
+    expect(buildingSupports(building)).toHaveLength(5)
     building.w = 2
-    expect(buildingSupports(building)).toHaveLength(3)
+    expect(buildingSupports(building)).toHaveLength(4)
     building.buildType = "shelter"
-    expect(buildingSupports(building)).toHaveLength(3)
+    expect(buildingSupports(building)).toHaveLength(4)
   })
 
   it.each([{ x: 6, z: 8 }, { x: 4, z: 6 }, { x: 8, z: 6 }, { x: 6, z: 4 }])("keeps prayer on the bare church floor with door %j", door => {

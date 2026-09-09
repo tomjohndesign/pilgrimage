@@ -480,12 +480,12 @@ it.each([0,1,2,3] as BuildingRotation[])("reserves a walkable entrance tile and 
   expect(placementError(map,marker,entry)).toBeNull()
 })
 
-it.each([0,1,2,3] as BuildingRotation[])("reserves both tavern approaches and releases both on removal (rotation %i)", rotation => {
+it.each([0,1,2,3] as BuildingRotation[])("reserves tavern doorways and outdoor benches and releases them on removal (rotation %i)", rotation => {
   const map=testMap(),def=BUILD_CATALOG.find(b=>b.id==="hall")!
   const building={...def,...rotatedFootprint({w:3,d:4},rotation),x:8,z:8,rotation,id:"tavern",buildType:"tavern"}
   map.buildings.push(building)
   const entries=buildingApproaches(map,building),marker=BUILD_CATALOG.find(b=>b.id==="cross")!
-  expect(entries).toHaveLength(2)
+  expect(entries).toHaveLength(4)
   for(const entry of entries) {
     expect(placementError(map,marker,entry)).toMatch(/entrance path tile/)
     expect(settlementRoute(map,map.buildings,map.site!.door,entry)).not.toBeNull()

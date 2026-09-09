@@ -1,4 +1,4 @@
-import { shelterHearth } from "./building-art/furnishings"
+import { shelterHearth, tavernExteriorBenches } from "./building-art/furnishings"
 import { rotateBuildingPoint, rotatedFootprint } from "./building-rotation"
 import type { BuildingDef, TilePos } from "./map/types"
 
@@ -11,11 +11,13 @@ export function tavernLayout(w: number, d: number) {
     x: -w * .23, z: side * d * .22, w: w * .32, d: d * .15 }))
   const benches = tables.flatMap(table => [-1, 1].map(side => ({
     id: `tavern-bench-${table.side}-${side}-seat`, x: table.x, z: table.z + side * d * .11,
-    w: table.w, d: .18,
+    w: .32, d: .18,
   })))
+  // Benches flank the front/rear approaches, leaving both door tiles clear.
+  const exteriorBenches = tavernExteriorBenches(w, d)
   const counter = { id: "tavern-counter-top", x: w * .2, z: -d * .14, w: w * .27 + .035, d: d * .15 }
   const hearth = shelterHearth(w, d, 0, 0)
-  return { tables, benches, counter, obstacles: [...tables, ...benches, counter,
+  return { tables, benches, exteriorBenches, counter, obstacles: [...tables, ...benches, counter,
     { id: "hearth", x: hearth.x, z: hearth.z, w: .57 * hearth.scale, d: .57 * hearth.scale }] }
 }
 
