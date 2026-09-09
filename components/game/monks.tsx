@@ -333,9 +333,14 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         const id = new THREE.Color(...encodeObjectId(residentObjectId(index)))
         const selected = isSelected(selection, { kind: "monk", id: monk.id })
         const select = (event: { delta: number; stopPropagation: () => void; intersections?: Array<{ object: THREE.Object3D }> }) => {
-          // The generous body hit target overlaps the raised hands. Give the
-          // visible reliquary priority when the ray also hits its actual mesh.
-          const relicHit = event.intersections?.some(hit => hit.object.name === "relic")
+          // Generous body targets overlap both the carried relic and the altar
+          // in front of its keeper. Their actual surfaces take click priority.
+          const relicHit = event.intersections?.some(hit => {
+            for (let object: THREE.Object3D | null = hit.object; object; object = object.parent) {
+              if (object.name === "relic" || object.name === "relic-altar") return true
+            }
+            return false
+          })
           selectElement(relicHit ? { kind: "relic" } : { kind: "monk", id: monk.id }, event)
         }
         const equipped = index !== 0 && (flying || airborneIds.has(monk.id))
