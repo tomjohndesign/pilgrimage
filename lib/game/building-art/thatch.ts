@@ -3,7 +3,7 @@ import { EARLY_MATERIALS as palette } from "./materials"
 
 /** Broad, uneven straw bundles suggest long stalks without subpixel hatching. */
 export function thatchSurface(highLeft: Vec3, highRight: Vec3, lowLeft: Vec3, lowRight: Vec3,
-  seed: number, name = "1"): BuildingPart[] {
+  seed: number, name = "1", edges: { left: boolean; right: boolean; low: boolean } = { left: true, right: true, low: true }): BuildingPart[] {
   const parts: BuildingPart[] = []
   let serial = 0
   const random = () => { const n = Math.sin(++serial*127.1+seed*31.7)*43758.5453; return n-Math.floor(n) }
@@ -14,11 +14,13 @@ export function thatchSurface(highLeft: Vec3, highRight: Vec3, lowLeft: Vec3, lo
     u=Math.max(0,Math.min(1,u))
     // Small inward scallops soften the outline without entering neighbouring tiles.
     const edgeT=Math.max(0,(t-.8)/.2)**2
-    const trimT=Math.min(.08,(.025+.012*Math.sin(u*23+seed)) / length)
-    const trimU=Math.min(.12,(.022+.012*Math.sin(t*19+seed)) / width)
+    const sharedEdge = (!edges.left ? (1-u)**8 : 0) + (!edges.right ? u**8 : 0)
+    const trimT=edges.low ? Math.min(.08,(.025+.012*Math.sin(u*23+seed)) / length) * (1-sharedEdge) : 0
+    const trimU=(u<.5 ? edges.left : edges.right) ? Math.min(.12,(.022+.012*Math.sin(t*19+seed)) / width) : 0
     const pt=t-edgeT*trimT, pu=u+(1-2*u)*Math.abs(2*u-1)**8*trimU
     const p = mix(mix(highLeft,lowLeft,pt),mix(highRight,lowRight,pt),pu)
-    return [p[0],p[1]+lift*.55,p[2]]
+    const seamLift = lift >= .1 ? lift + (.16-lift)*sharedEdge : lift
+    return [p[0],p[1]+seamLift*.55,p[2]]
   }
   const face = (suffix: string,vertices: number[],color: string) => parts.push({
     name: `thatch-${suffix}-${name}`, layer: "roof", position: [0,0,0], vertices, color, outline: false,
@@ -34,8 +36,9 @@ export function thatchSurface(highLeft: Vec3, highRight: Vec3, lowLeft: Vec3, lo
     eave.push(...quad(at(1,a,.14),at(1,b,.14),at(1,b,.015),at(1,a,.015)))
   }
   face("underlay",underlay,palette.strawDark)
-  face("eave",eave,"#917d57")
-  for(const u of [0,1]) {
+  if (edges.low) face("eave",eave,"#917d57")
+  const verges = [edges.left ? 0 : -1, edges.right ? 1 : -1].filter(u=>u>=0)
+  for(const u of verges) {
     const verge:number[]=[],steps=Math.max(3,Math.ceil(length/.25))
     for(let i=0;i<steps;i++) {
       const a=i/steps,b=(i+1)/steps
@@ -45,11 +48,11 @@ export function thatchSurface(highLeft: Vec3, highRight: Vec3, lowLeft: Vec3, lo
   }
   // Broken end grain on the thick mattress, sized to the existing world pixel grid.
   const edgeGrain: number[] = [], exposed: number[] = []
-  for(let i=0;i<Math.ceil(width*9);i++) {
+  for(let i=0;i<(edges.low ? Math.ceil(width*9) : 0);i++) {
     const u=random()*.97, du=Math.min(.025/width,1-u), top=.085+random()*.05
     edgeGrain.push(...quad(at(1,u,top),at(1,u,.025+random()*.035),at(1,u+du,.035),at(1,u+du,top)))
   }
-  for(const u of [0,1]) for(let i=0;i<Math.ceil(length*5);i++) {
+  for(const u of verges) for(let i=0;i<Math.ceil(length*5);i++) {
     const t=random()*.97, dt=Math.min(.05/length,1-t), y=.065+random()*.04
     edgeGrain.push(...quad(at(t,u,y),at(t+dt,u,y-.012),at(t+dt,u,y+.02),at(t,u,y+.025)))
   }

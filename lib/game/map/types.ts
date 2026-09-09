@@ -9,6 +9,12 @@ export interface BuildingDef {
   buildType?: string
   /** Clockwise quarter turns; w/d already describe the rotated footprint. */
   rotation?: import("../building-rotation").BuildingRotation
+  /** Stable procedural layout; absent in older saves to preserve their entrances. */
+  layoutSeed?: number
+  /** Omitted uses the seeded, type-appropriate fireplace choice. */
+  fireplace?: boolean
+  /** Adopted chimney position along the local side wall, fixed when built. */
+  hearthZ?: number
   /** Gold paid by each visitor entering the relic enclosure. */
   admissionFee?: number
   /** Live worker progress; absent on completed founding structures. */

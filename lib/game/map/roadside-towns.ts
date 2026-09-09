@@ -2,6 +2,7 @@ import { ROUTE_EDGE_INSET } from "./route-bounds"
 import { addTownWells } from "./seeded-water"
 import { settlementRoute } from "../settlement-route"
 import { BUILD_CATALOG } from "../balance"
+import { placementLayoutSeed } from "../building-layout"
 import { buildingApproaches, buildingEntry, rotatedFootprint, rotateBuildingPoint, type BuildingRotation } from "../building-rotation"
 import { levelBuildingGround } from "./elevation"
 import { tileAt, type BuildingDef, type GameMap, type RoadsideTown, type TilePos } from "./types"
@@ -35,11 +36,17 @@ function townPlan(map: GameMap, junction: number, rotation: BuildingRotation, or
     const side = rotateBuildingPoint(index === 0 ? 0 : -3, 0, rotation)
     const origin = { ...size, x: 0, z: 0, rotation, buildType }
     const door = buildingEntry(origin)
+    // Keep the shells touching; route each varied doorway through the cleared frontage below.
+    const at = { x: entry.x + side.x - door.x, z: entry.z + side.z - door.z }
     return { id: `${id}-${index}`, owner: "independent", townId: id, buildType,
       label: `${name} ${index === 0 ? "tavern" : "house"}`, rotation, ...size,
-      x: entry.x + side.x - door.x, z: entry.z + side.z - door.z,
+      ...at, layoutSeed: placementLayoutSeed(buildType, at, map.seed),
       height: def.height, color: def.color, roofColor: def.roofColor }
   })
+  // Anchor the varied tavern entrance to the planned junction. Move both shells
+  // together so their party wall and the town exclusion radius stay unchanged.
+  const actual=buildingEntry(buildings[0]), shift={x:entry.x-actual.x,z:entry.z-actual.z}
+  for (const building of buildings) { building.x+=shift.x; building.z+=shift.z }
   const x = Math.min(...buildings.map(b => b.x)) - 1
   const z = Math.min(...buildings.map(b => b.z)) - 1
   const right = Math.max(...buildings.map(b => b.x + b.w)) + 1

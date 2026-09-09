@@ -1,4 +1,5 @@
 import { buildingEntrance, constructionWork, isComplete } from "./construction"
+import { placementBuildingLayout, placementRoofRotation } from "./building-placement-layout"
 import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
 import { groundHeight, levelBuildingGround } from "./map/elevation"
 import { buildingKind, placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
@@ -238,6 +239,7 @@ export function placementError(
   balance: GameBalance = DEFAULT_BALANCE,
   rotation: BuildingRotation = 0,
 ): string | null {
+  rotation=placementRoofRotation(map,def,at,rotation)
   const footprint = rotatedFootprint(def, rotation)
   const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
   if (!hovel) return "A founding shrine is needed before building."
@@ -256,7 +258,7 @@ export function placementError(
   }
   // Reserve construction frontage and preserve access to every existing building.
   if (map.site) {
-    const candidate = { buildType: def.id, ...def, ...footprint, rotation, ...at, id: "construction-preview", construction: { work: 0, required: 1 } }
+    const candidate = { buildType: def.id, ...def, ...footprint, rotation, ...at, ...placementBuildingLayout(map,{...def,...footprint,rotation,...at,buildType:def.id,id:"construction-preview"}), id: "construction-preview", construction: { work: 0, required: 1 } }
     const approaches=buildingApproaches(map,candidate)
     for(const approach of approaches) {
       const terrain=tileAt(map,approach.x,approach.z)
@@ -337,6 +339,7 @@ export function purchaseStructure(
     return { settlement, error: `Requires ${def.requiredRenown} shrine renown.` }
   if (!canAfford(settlement.resources, def.cost))
     return { settlement, error: "Not enough gold or wood." }
+  rotation=placementRoofRotation(map,def,at,rotation)
   const error = placementError(map, def, at, balance, rotation)
   if (error) return { settlement, error }
   const building: BuildingDef = {
@@ -347,6 +350,7 @@ export function purchaseStructure(
     z: at.z,
     ...rotatedFootprint(def, rotation),
     rotation,
+    ...placementBuildingLayout(map,{...def,...rotatedFootprint(def,rotation),rotation,...at,buildType:def.id,id:"construction-preview"}),
     height: def.height,
     color: def.color,
     roofColor: def.roofColor,

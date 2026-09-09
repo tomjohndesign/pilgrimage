@@ -86,7 +86,8 @@ describe("tavern aisles", () => {
   it("serves a road traveler while both keepers are walking inside, then seats them and lets them leave", () => {
     const { map, local } = fixture()
     const people = townResidents(map).map(r => r.traveler), sim = createSim(people, map)
-    for (let tick = 0; tick < 400 && ![...sim.travelers.values()].every(s => s.activity === "toPost"); tick++) {
+    // Different clear-aisle routes change the overlap between the keepers' walking and pause cycles.
+    for (let tick = 0; tick < 2400 && ![...sim.travelers.values()].every(s => s.activity === "toPost"); tick++) {
       stepSim(sim, people, map, 1, .05)
     }
     expect([...sim.travelers.values()].every(s => s.activity === "toPost")).toBe(true)

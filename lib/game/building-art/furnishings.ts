@@ -1,22 +1,45 @@
+import { makeRng } from "../rng"
+import { buildingDoorOffset } from "../building-rotation"
+import { layoutHand } from "../building-layout"
+import { sheepPenLayout } from "../workshop-layout"
 import type { BuildingPart, Vec3 } from "./geometry"
 import { EARLY_MATERIALS as palette } from "./materials"
+import { sharedChimneyParts, type SharedChimney } from "./shared-chimney"
 
 /** Local attachment points shared by the stone chimney and its reusable effects. */
-export function shelterHearth(width: number, depth: number, height: number, rise: number) {
+export function shelterHearth(width: number, depth: number, height: number, rise: number, layoutSeed = 0, hearthZ?: number) {
   const scale = Math.min(1, width / 1.5, depth / 1.5)
-  return { x: width / 2 - .36 * scale, z: -depth / 2 + .36 * scale,
+  // Along-wall coordinates are tile centres, including even-depth shells whose
+  // geometric centre lies between two tiles. Adopted flues use the same grid.
+  const slot=Math.floor(layoutSeed/9)%3, first=-(depth-1)/2
+  const choices=[0,Math.max(0,Math.floor(depth/2)-1),Math.floor(depth/2)]
+  const tile=Math.max(0,Math.min(depth-1,Math.round(hearthZ === undefined ? choices[slot] : hearthZ-first)))
+  const z=first+tile
+  return { x: width / 2 - .36 * scale, z,
     chimneyTop: Math.max(.78, height + rise + .32), scale }
 }
 
 /** Chimneys identify domestic hearths and the tavern’s cooking fire. */
-export function hasDomesticHearth(variant: string | undefined): boolean {
-  return variant === "shelter" || variant === "monk-shelter" || variant === "house" || variant === "tavern"
+export function hasDomesticHearth(variant: string | undefined, layoutSeed = 0, fireplace?: boolean): boolean {
+  if (!["shelter","monk-shelter","house","tavern","sheep-pen"].includes(variant ?? "")) return false
+  return fireplace ?? (variant !== "house" || Math.floor(layoutSeed/27)%4 !== 3)
+}
+
+/** Resolve the actual local fireplace, including huts inside a larger open plot. */
+export function buildingHearth(variant: string | undefined, width: number, depth: number, height: number, rise: number, layoutSeed = 0, hearthZ?: number) {
+  const hut=variant === "sheep-pen" ? sheepPenLayout(width) : {coreWidth:width,coreX:0}
+  const hearth=shelterHearth(hut.coreWidth,depth,height,rise,layoutSeed,hearthZ)
+  return {...hearth,x:(hearth.x+hut.coreX)*layoutHand(variant,layoutSeed),z:hearth.z}
 }
 
 /** One fireplace kit for homes and shelters, with a compact footprint in small huts. */
-export function hearthParts(width: number, depth: number, height: number, rise: number): BuildingPart[] {
+export function hearthParts(width: number, depth: number, height: number, rise: number, shared?: SharedChimney, layoutSeed = 0, hearthZ?: number, variationSeed = 17): BuildingPart[] {
   const parts: BuildingPart[] = []
-  const { x, z, chimneyTop, scale } = shelterHearth(width,depth,height,rise)
+  const { x, z, chimneyTop, scale } = shelterHearth(width,depth,height,rise,layoutSeed,hearthZ)
+  const random = makeRng(variationSeed), stone = ["#a09b87", "#858a7d", "#999788", "#777d72"]
+  const stoneColor = () => stone[Math.floor(random() * stone.length)]
+  const shaftWidth = .28 + random() * .045
+  const alongWall = z > -depth/2+.36*scale+.01
   // Remove the chimney as one wall, including its differently shaped rim stones.
   const chimneySide: [number, number] = Math.abs(x) > Math.abs(z) ? [Math.sign(x),0] : [0,Math.sign(z)]
   const box = (name: string, position: Vec3, size: Vec3, color: string, rotation?: Vec3, layer: BuildingPart["layer"] = "interior") =>
@@ -24,28 +47,41 @@ export function hearthParts(width: number, depth: number, height: number, rise: 
       size: [size[0]*scale,size[1],size[2]*scale], color, rotation, layer,
       cutawaySide: layer === "wall" ? chimneySide : undefined, outline: false })
   box("hearth-slab", [x,.035,z], [.57,.07,.57], palette.stone)
-  box("hearth-back", [x,.29,z-.22], [.55,.51,.12], "#78796c")
-  box("hearth-side", [x+.22,.24,z], [.12,.41,.46], "#858477")
+  box("hearth-back", [x,.29,z-.22], [.55,.51,.12], stoneColor())
+  box("hearth-side", [x+.22,.24,z], [.12,.41,.46], stoneColor())
+  // A corner supplies one enclosure wall; a fireplace farther along the wall
+  // needs its own second stone cheek around the room-facing opening.
+  if (alongWall) box("hearth-other-side", [x-.22,.24,z], [.12,.41,.46], stoneColor())
   box("hearth-soot", [x,.22,z-.151], [.31,.28,.015], "#3d3b32")
   for(const sign of [-1,1]) box(`hearth-log-${sign}`, [x,.105,z], [.32,.07,.07], palette.darkWood, [0,sign*.5,0])
   box("hearth-embers", [x,.13,z], [.21,.035,.18], "#dc773b")
-  box("chimney-hood", [x,.58,z], [.49,.18,.44], "#89897a",undefined,"wall")
-  const courses=Math.ceil((chimneyTop-.67)/.13)
+  if (alongWall) for (const part of parts) {
+    const dx=part.position[0]-x,dz=part.position[2]-z
+    part.position=[x-dz,part.position[1],z+dx]
+    part.rotation=[0,(part.rotation?.[1] ?? 0)-Math.PI/2,0]
+  }
+  box("chimney-hood", [x,.58,z], [.49,.18,.44], stoneColor(),undefined,"wall")
+  if (shared) return [...parts, ...sharedChimneyParts(shared, { x, z }, variationSeed)]
+  const courses=Math.ceil((chimneyTop-.67)/(.10+random()*.065))
   for(let i=0;i<courses;i++) {
     const y=.67+(i+.5)*(chimneyTop-.67)/courses
-    box(`chimney-course-${i}`, [x,y,z], [i%2?.29:.32,(chimneyTop-.67)/courses-.008,.29], i%3?"#969587":"#7e8176",undefined,"wall")
+    box(`chimney-course-${i}`, [x,y,z], [shaftWidth+(i%2?.01:0),(chimneyTop-.67)/courses-.006,shaftWidth], stoneColor(),undefined,"wall")
   }
+  // Some masons corbel a broad cap; others finish with a plain narrow shaft.
+  // The mouth and smoke anchor retain the same height in either treatment.
+  if (variationSeed % 3 !== 0) box("chimney-cap-course", [x,chimneyTop-.11,z],
+    [variationSeed % 3 === 1 ? .43 : .37,.075,variationSeed % 3 === 1 ? .43 : .37],stoneColor(),undefined,"wall")
   // Open rim, so the smoke actually leaves a dark chimney mouth.
   for(const sign of [-1,1]) {
-    box(`chimney-rim-x-${sign}`, [x+sign*.16,chimneyTop,z], [.07,.08,.39], palette.stone,undefined,"wall")
-    box(`chimney-rim-z-${sign}`, [x,chimneyTop,z+sign*.16], [.25,.08,.07], palette.stone,undefined,"wall")
+    box(`chimney-rim-x-${sign}`, [x+sign*.16,chimneyTop,z], [.07,.08,.39], stoneColor(),undefined,"wall")
+    box(`chimney-rim-z-${sign}`, [x,chimneyTop,z+sign*.16], [.25,.08,.07], stoneColor(),undefined,"wall")
   }
   box("chimney-mouth", [x,chimneyTop-.04,z], [.25,.015,.25], "#393b35",undefined,"wall")
   return parts
 }
 
 /** Work and domestic props use the same faceted timber palette as the shell. */
-export function furnishingParts(kind: "workshop" | "shelter", width: number, depth: number, height: number, rise: number): BuildingPart[] {
+export function furnishingParts(kind: "workshop" | "shelter", width: number, depth: number, height: number, rise: number, layoutSeed = 0, hearthZ?: number, variationSeed = 17): BuildingPart[] {
   const parts: BuildingPart[] = []
   const box = (name: string, position: Vec3, size: Vec3, color: string = palette.wood, rotation?: Vec3, layer: BuildingPart["layer"] = "interior") =>
     parts.push({ name, position, size, color, rotation, layer, outline: false })
@@ -82,7 +118,7 @@ export function furnishingParts(kind: "workshop" | "shelter", width: number, dep
     for(let i=0;i<55;i++) box(`sawdust-${i}`, [width*.15+Math.sin(i*7.13)*width*.21,.008,depth*.04+Math.cos(i*4.71)*depth*.3], [.025+(i%3)*.012,.012,.025], i%3 ? "#bca273" : palette.paleWood, [0,i*.7,0])
     for(let i=0;i<7;i++) box(`wood-offcut-${i}`, [width*.31+Math.sin(i*4)*.18,.025,depth*.3+Math.cos(i*7)*.19], [.07,.035,.13], palette.paleWood, [0,i,0])
   } else {
-    parts.push(...hearthParts(width,depth,height,rise))
+    parts.push(...hearthParts(width,depth,height,rise,undefined,layoutSeed,hearthZ,variationSeed))
     const tx=width*.13, tz=depth*.24
     for(const a of [-1,1]) for(const b of [-1,1]) leg(`home-table-leg-${a}-${b}`,tx+a*.24,tz+b*.15,.35)
     box("home-table-top", [tx,.37,tz], [.64,.055,.43], palette.paleWood)
@@ -105,9 +141,9 @@ export function furnishingParts(kind: "workshop" | "shelter", width: number, dep
 }
 
 /** Exterior bench geometry and its reserved frontage share these local coordinates. */
-export function tavernExteriorBenches(w: number, d: number) {
+export function tavernExteriorBenches(w: number, d: number, layoutSeed = 0, hand = layoutHand("tavern", layoutSeed)) {
   return [-1, 1].map(side => ({
-    id: `tavern-outside-${side}-seat`, x: -w * .27, z: side * (d / 2 + .28),
+    id: `tavern-outside-${side}-seat`, x: (buildingDoorOffset(w, "tavern", layoutSeed, side as 1 | -1) * layoutHand("tavern", layoutSeed) < 0 ? 1 : -1) * w * .27 * hand, z: side * (d / 2 + .28),
     w: w * .32, d: .18, heading: side > 0 ? 0 : Math.PI,
   }))
 }

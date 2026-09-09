@@ -7,6 +7,7 @@ import { personCamera } from "@/lib/game/base-person/camera"
 import { BASE_PERSON } from "@/lib/game/base-person/pose"
 import { createAnimalRig } from "@/lib/game/transport/animal-rig"
 import { animalProfile, type Animal, type HorseVariant } from "@/lib/game/transport/assets"
+import { WILDLIFE_COATS } from "@/lib/game/wildlife/appearance"
 import { createWildlifeRig } from "@/lib/game/wildlife/rig"
 import { BURROW_SECONDS, burrowPreview } from "@/lib/game/wildlife/burrow-motion"
 import { createBurrowRig } from "@/lib/game/wildlife/burrow"
@@ -28,8 +29,8 @@ export function animalActions(kind: AnimalSubject): AnimalClip[] {
 export const ACTION_LABELS: Record<AnimalClip, string> = { idle: "Idle", walk: "Walk", trot: "Trot", canter: "Lope", gallop: "Run", hop: "Hop", leap: "Leap", graze: "Graze", lie: "Lie down / rise", burrow: "Enter / leave burrow", fly: "Fly", glide: "Glide" }
 
 /** Native camera and pixel size are identical to the person editor. */
-export function AnimalPreview({ subject, lineup, motion, playing, row, zoom, rate, coat, horseVariant, onSelect, directionCanvases, showRig, construction, frame: inspectedFrame, edits, joints, selected, onInspect, onJoint, onPose, onDrag }: {
-  subject: AnimalSubject; lineup: boolean; motion: AnimalMotion; playing: boolean; row: number; zoom: number; rate: number; coat: string; horseVariant: HorseVariant; onSelect: (subject: AnimalSubject) => void
+export function AnimalPreview({ subject, lineup, motion, playing, row, zoom, rate, coat, wildlifeCoat = "natural", horseVariant, onSelect, directionCanvases, showRig, construction, frame: inspectedFrame, edits, joints, selected, onInspect, onJoint, onPose, onDrag }: {
+  subject: AnimalSubject; lineup: boolean; motion: AnimalMotion; playing: boolean; row: number; zoom: number; rate: number; coat: string; wildlifeCoat?: string; horseVariant: HorseVariant; onSelect: (subject: AnimalSubject) => void
   directionCanvases: RefObject<(HTMLCanvasElement | null)[]>
   construction: boolean; showRig: boolean; frame: number; edits: AnimalRigEdits; joints: AnimalInspection; selected: AnimalJoint
   onInspect: (frame: number, joints: AnimalInspection) => void; onJoint: (joint: AnimalJoint) => void; onPose: (changes: [AnimalJoint, Point3][]) => void; onDrag: (active: boolean) => void
@@ -49,6 +50,16 @@ export function AnimalPreview({ subject, lineup, motion, playing, row, zoom, rat
     const actors = (lineup ? SUBJECTS : [subject]).map(kind => {
       const equine = kind === "donkey" || kind === "horse"
       const rig = equine ? createAnimalRig(kind, horseVariant, coat) : createWildlifeRig(kind, construction)
+      const tinted = new Set<THREE.Material>()
+      if (!equine && !construction) rig.root.traverse(object => {
+        if (!(object instanceof THREE.Mesh)) return
+        for (const material of [object.material].flat()) {
+          if (!tinted.has(material) && material instanceof THREE.MeshLambertMaterial) {
+            material.color.multiply(new THREE.Color(WILDLIFE_COATS.find(value => value.id === wildlifeCoat)?.tint ?? "#ffffff"))
+            tinted.add(material)
+          }
+        }
+      })
       rig.root.traverse(object => { if (object instanceof THREE.Mesh) (object.material as THREE.Material).clippingPlanes = [ground] })
       const canvas = container.querySelector<HTMLCanvasElement>(`[data-animal="${kind}"]`)!
       return { kind, rig, canvas, context: canvas.getContext("2d")!, equine, phase: 0, age: 0, motion: "" }
@@ -110,7 +121,7 @@ export function AnimalPreview({ subject, lineup, motion, playing, row, zoom, rat
     }
     request = requestAnimationFrame(draw)
     return () => { cancelAnimationFrame(request); actors.forEach(actor => actor.rig.dispose()); hole.dispose(); renderer.dispose(); renderer.forceContextLoss() }
-  }, [subject, lineup, coat, horseVariant, directionCanvases, construction])
+  }, [subject, lineup, coat, wildlifeCoat, horseVariant, directionCanvases, construction])
   return <div ref={host} className={lineup ? "animal-lineup" : "person-sprite"} style={lineup ? { gridTemplateColumns: `repeat(4, ${64 * zoom}px)` } : undefined}>
     {(lineup ? SUBJECTS : [subject]).map(kind => <div key={kind} style={{ width: 64 * zoom, height: 64 * zoom, position: "relative", flexShrink: 0 }}>
       <canvas data-animal={kind} width={64} height={64} role="img" aria-label={`${kind} model preview`} style={{ width: "100%", height: "100%", imageRendering: "pixelated" }} />
