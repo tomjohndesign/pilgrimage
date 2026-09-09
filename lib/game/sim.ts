@@ -1,3 +1,4 @@
+import { stepDevotion, HAPPINESS_THRESHOLD, TAVERN_HAPPINESS_GAIN } from "./wellbeing"
 import { naturalWaterStop, WATER_THIRST_THRESHOLD, WATER_DRINK_SECONDS } from "./natural-water"
 import { tavernWalkingRoute } from "./tavern-navigation"
 import { townResidents } from "./town-residents"
@@ -334,6 +335,8 @@ export interface SimTraveler {
   activity: Activity
   gold: number
   piety: number
+  happiness: number
+  hoursSinceChurch?: number
   jobless: boolean
   deliveryBuilding?: string | null
   employer: string | null
@@ -735,6 +738,7 @@ export function createSim(
       activity: "walking",
       gold: t.attributes.gold,
       piety: t.attributes.piety,
+      happiness: t.attributes.happiness,
       jobless: t.attributes.jobless,
       employer: null,
       jobSlot: 0,
@@ -1133,7 +1137,7 @@ function routeWalk(s: SimTraveler, map: GameMap, route: readonly TilePos[], to: 
 function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
   counters: readonly { id: string; x: number; z: number; w: number; d: number }[], returnTo: WorldPoint | null): boolean {
   if (!counters.length || !((s.hunger < SERVING_THRESHOLD && s.gold >= MEAL_PRICE)
-    || (s.thirst < SERVING_THRESHOLD && s.gold >= DRINK_PRICE))) return false
+    || ((s.thirst < SERVING_THRESHOLD || s.happiness < HAPPINESS_THRESHOLD) && s.gold >= DRINK_PRICE))) return false
   const from = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
   const occupied = new Set([...sim.travelers.values()].flatMap(other => other.tavernVisit?.plan.seat
     ? [`${other.tavernVisit.plan.buildingId}:${other.tavernVisit.plan.seat.id}`] : []))
@@ -1141,6 +1145,9 @@ function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
     - Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z))
   for (const house of nearest) {
     const building = map.buildings.find(b => b.id === house.id)
+    const physicalNeed = (s.hunger < SERVING_THRESHOLD && s.gold >= MEAL_PRICE)
+      || (s.thirst < SERVING_THRESHOLD && s.gold >= DRINK_PRICE)
+    if (!physicalNeed && building?.buildType !== "tavern") continue
     const plan = building && tavernVisitPlan(map, building, from, occupied, s)
     if (!plan) continue
     s.tavernVisit = { plan, served: false, returnTo }
@@ -1159,12 +1166,15 @@ function buyRefreshment(sim: SimState, s: SimTraveler, map: GameMap): void {
     s.gold -= price
     if (!independent) sim.tradeGold += price
   }
+  const socialDrink = !!s.tavernVisit?.plan.seat && s.happiness < HAPPINESS_THRESHOLD
+  let purchased = false
   // When coin cannot cover both, answer the most urgent need first.
   const needs = s.thirst <= s.hunger ? ["thirst", "hunger"] as const : ["hunger", "thirst"] as const
   for (const need of needs) {
     const price = need === "thirst" ? DRINK_PRICE : MEAL_PRICE
-    if (s[need] < SERVING_THRESHOLD && s.gold >= price) { take(price); s[need] = 100 }
+    if (s[need] < SERVING_THRESHOLD && s.gold >= price) { take(price); s[need] = 100; purchased = true }
   }
+  if (!purchased && socialDrink && s.gold >= DRINK_PRICE) { take(DRINK_PRICE); s.thirst = 100 }
 }
 
 /** A settler's own doorstep: where they wait for work between errands. */
@@ -1264,6 +1274,7 @@ function chooseTree(sim: SimState, s: SimTraveler, map: GameMap): boolean {
 function finishVisit(sim: SimState, s: SimTraveler, map: GameMap): void {
   const exit = shrineExitPlan(map, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, s.shrineRoute ?? map.site!.branch)
   if (!exit) return
+  s.hoursSinceChurch = 0
   s.visits++
   sim.visits++
   s.piety = Math.min(100, s.piety + 4 + sim.relic.sanctity / 25)
@@ -1280,7 +1291,7 @@ function settleAfterVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameM
       sim.joinedMonks.set(t.id, {
         id: MONK_COUNT + t.id, name: t.name, duty: "Brother of the enclave",
         complexion: travelerAppearance(map.seed ?? 0, t.id).complexion,
-        attributes: { age: t.attributes.age, piety: s.piety, skills: [...t.attributes.skills] },
+        attributes: { age: t.attributes.age, piety: s.piety, happiness: s.happiness, skills: [...t.attributes.skills] },
         home: bed.home, bedSlot: bed.slot,
         arrival: { x: s.x, y: s.y, z: s.z, stamina: s.stamina },
       })
@@ -1322,19 +1333,23 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   // the shrine itself keeps no table (see the tavern and the stall).
   const shrineCounters = counters.filter(b => b.owner !== "independent")
   const served = shrineCounters.length > 0
-  const chance = visitChance({ ...t.attributes, piety: s.piety,
+  const socialNeed = !needsParking && shrineCounters.some(b => b.buildType === "tavern") && s.gold >= DRINK_PRICE
+    && s.happiness < HAPPINESS_THRESHOLD
+  const socialChance = socialNeed ? (HAPPINESS_THRESHOLD - s.happiness) / HAPPINESS_THRESHOLD : 0
+  const ordinaryChance = visitChance({ ...t.attributes, piety: s.piety,
     hunger: served ? s.hunger : 100, thirst: served ? s.thirst : 100, stamina: s.stamina },
     sim.relic, renown, sim.balance, 0, t.type.id)
   s.visitCooldown = 5
-  const ordinaryVisit = nextRoll(s) < chance
+  const decision = nextRoll(s)
+  const ordinaryVisit = decision < Math.max(socialChance, ordinaryChance)
   const evangelism = ordinaryVisit ? 0 : roadsideEvangelism(map)
   const persuaded = evangelism > 0 && nextRoll(s) < evangelism
   // A traveler drawn by need heads for the counter, not the relic.
   // Wagons and horses stay on the road; only walkers turn aside for a meal.
   if ((ordinaryVisit || persuaded) && served && !needsParking &&
-    Math.min(s.hunger, s.thirst) < hospitalityNeedThreshold(renown, sim.balance) &&
+    (socialNeed || Math.min(s.hunger, s.thirst) < hospitalityNeedThreshold(renown, sim.balance)) &&
     startTavernTrip(sim, s, map, shrineCounters, null)) return true
-  const wantsVisit = ordinaryVisit || persuaded
+  const wantsVisit = decision < ordinaryChance || persuaded
   const occupiedSeats = new Set([...sim.travelers.values()].flatMap(other =>
     other.shrineSeat && ["toParking","toRelic","visiting","fromRelic","offering"].includes(other.activity) ? [other.shrineSeat] : []))
   const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats, from) : null
@@ -1456,6 +1471,11 @@ export function stepSim(
       !["openingShop", "vending", "packingShop"].includes(s.activity)
     const processionNearby = nearProcession(sim.procession, s, s.praying)
     s.praying = !riding && processionNearby
+    const socialBreak = s.happiness < HAPPINESS_THRESHOLD && s.gold >= DRINK_PRICE
+      && counters.some(b => b.buildType === "tavern" && b.id !== s.employer)
+    const inChurch = s.activity === "visiting" || s.activity === "offering"
+    stepDevotion(s, dt, inChurch, !processionNearby && s.activity === "visiting" && !s.shrineSeat?.startsWith("queue-"), sim.balance)
+    if (s.activity !== "sitting") s.happiness = Math.max(0, s.happiness - sim.balance.rules.happinessDecay * hours)
     if (processionNearby) {
       if (dt > 0 && sim.procession) blessByProcession(sim.procession, `traveler:${s.id}`, s)
       s.moveSpeed = 0; continue
@@ -1711,8 +1731,9 @@ export function stepSim(
         // Standing behind a counter or in a fold asks little; a settler keeps
         // that post until they are genuinely hungry or tired.
         const hungry = Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD
+        const unhappy = socialBreak
         const workplace = sim.buildings.find(b => b.id === s.employer)
-        if (workplace && isPostedWork(workplace.kind) && !hungry && s.stamina > SETTLER_TIRED_AT) {
+        if (workplace && isPostedWork(workplace.kind) && !hungry && !unhappy && s.stamina > SETTLER_TIRED_AT) {
           if (workplace.kind === "sheep-pen" && dt > 0 && !s.herdingRetry) {
             s.herdingRetry = 5
             if (seekSheep(s, sim.wildlife, map, characterScale)) break
@@ -1720,8 +1741,8 @@ export function stepSim(
           s.workSlot = s.jobSlot
           if (assignBuildingTask(s, map, "work", workplace.id)) { s.activity = "toPost"; break }
         }
-        // The counter is the quick answer to hunger and thirst; home is the
-        // slow one, and the only rest a settler gets. Work comes after both.
+        // Company makes a tavern worth paying for; thirst alone favors free water.
+        if (unhappy && startTavernTrip(sim, s, map, counters.filter(b => b.buildType === "tavern"), workplaceReturn(sim, s, map))) break
         if (!isVendor && startWaterTrip(s, map)) break
         if (hungry && startTavernTrip(sim, s, map, counters, workplaceReturn(sim, s, map))) break
         if (Math.min(s.hunger, s.thirst, s.stamina) < SETTLER_FED_AT) {
@@ -1768,7 +1789,8 @@ export function stepSim(
       case "toSheep":
       case "herding": {
         if (dt <= 0) break
-        if (s.stamina <= SETTLER_TIRED_AT || Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD) {
+        if (s.stamina <= SETTLER_TIRED_AT || Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD
+          || socialBreak) {
           releaseSheep(s, sim.wildlife); s.activity = "idle"; s.timer = 0
         } else if (!stepShepherd(s, sim.wildlife, map, targetSpeed, dt, characterScale)) {
           s.activity = "idle"; s.timer = 0
@@ -1782,7 +1804,8 @@ export function stepSim(
         if (!state) { s.activity = "idle"; s.timer = GAME_HOUR_SECONDS; break }
         s.activity = state === "walking" ? "toPost" : "posted"
         // Step away to sleep or eat; the slot stays theirs while they are gone.
-        if (state === "posted" && (s.stamina <= SETTLER_TIRED_AT || Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD)) {
+        if (state === "posted" && (s.stamina <= SETTLER_TIRED_AT || Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD
+          || socialBreak)) {
           s.buildingTask = undefined
           s.activity = "idle"
           s.timer = 0
@@ -1814,6 +1837,7 @@ export function stepSim(
         break
       }
       case "sitting": {
+        s.happiness = Math.min(100, s.happiness + TAVERN_HAPPINESS_GAIN * Math.min(dt, Math.max(0, s.timer)) / (TABLE_HOURS * GAME_HOUR_SECONDS))
         s.timer -= dt
         if (s.timer <= 0) leaveTavern(s, map, s.tavernVisit!.returnTo ?? currentRoutePoint(map, s))
         break
@@ -1879,14 +1903,21 @@ export function stepSim(
           s.fleeTimer -= dt
           if (s.fleeTimer <= 0) s.activity = "walking"
         }
-        if ((s.activity === "walking" || s.activity === "seeking") && !isVendor && startWaterTrip(s, map)) break
-        // Independent taverns welcome road walkers by need, without shrine attraction.
-        if ((s.activity === "walking" || s.activity === "seeking") && !s.track && !s.roadShortcut &&
-          !isVendor && t.type.id !== "knight" && s.visitCooldown <= 0 && Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD) {
-          const nearby = map.towns?.find(town => Math.abs(town.junction - s.progress) <= 3)
-          const counter = nearby && counters.find(b => b.id === nearby.tavernId)
-          if (counter && startTavernTrip(sim, s, map, [counter], null)) break
+        const roadCustomer = (s.activity === "walking" || s.activity === "seeking") && !s.track && !s.roadShortcut &&
+          !isVendor && t.type.id !== "knight" && s.visitCooldown <= 0
+        const nearbyTown = roadCustomer ? map.towns?.find(town => Math.abs(town.junction - s.progress) <= 3) : undefined
+        const townCounter = nearbyTown ? counters.find(b => b.id === nearbyTown.tavernId) : undefined
+        // An unhappy walker chooses company over the bank, even when thirsty.
+        // Keep the same local town reach and only approach a shrine still ahead.
+        if (roadCustomer && s.happiness < HAPPINESS_THRESHOLD && s.gold >= DRINK_PRICE) {
+          const taverns = counters.filter(b => b.buildType === "tavern" &&
+            (b.id === townCounter?.id || (b.owner !== "independent" && ahead >= 0 && ahead <= 3)))
+          if (startTavernTrip(sim, s, map, taverns, null)) break
         }
+        // If content, penniless, or unable to get a table, use reachable free water.
+        if ((s.activity === "walking" || s.activity === "seeking") && !isVendor && startWaterTrip(s, map)) break
+        if (townCounter && Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD &&
+          startTavernTrip(sim, s, map, [townCounter], null)) break
         // An empty market stall on the shrine's ground draws a passing vendor
         // to settle: they leave the road, take the stall, and keep it for good.
         if (isVendor && !s.employer && !s.track && ahead >= 0 && ahead <= 6 && !s.shrineParking &&

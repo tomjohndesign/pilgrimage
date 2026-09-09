@@ -24,7 +24,7 @@ export function previewResidents(map: GameMap) {
         : ["Willa", "Agnes", "Edith", "Aelfwyn", "Hilda", "Rowena"])[index % 6]
       const traveler: Traveler = { id, name, type: TRAVELER_TYPES[building.kind === "market" ? "vendor" : "peasant"],
         offset: 0, direction: 1, pace: 1,
-        attributes: { age: 24 + index, gold: 40, status: 25, piety: 60, hunger: 100, thirst: 100,
+        attributes: { happiness: 80, age: 24 + index, gold: 40, status: 25, piety: 60, hunger: 100, thirst: 100,
           stamina: 100, jobless: false, skills: [...BUILDING_KINDS[building.kind].trades] } }
       return { traveler, building, jobSlot, home: homes[index++] ?? null }
     }))

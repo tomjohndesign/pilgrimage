@@ -217,6 +217,8 @@ export interface TravelerAttributes {
   thirst: number
   /** Devotion, 0–100. */
   piety: number
+  /** Contentment, 0–100; low happiness draws them to taverns. */
+  happiness: number
   /** 0–100 — the worn-out rest sooner. */
   stamina: number
   jobless: boolean
@@ -268,8 +270,9 @@ function rollSkills(rng: () => number, type: TravelerTypeDef): string[] {
   return pool.slice(0, count)
 }
 
-function rollAttributes(rng: () => number, type: TravelerTypeDef): TravelerAttributes {
+function rollAttributes(rng: () => number, type: TravelerTypeDef, happiness: number): TravelerAttributes {
   return {
+    happiness,
     gold: rollStat(rng, type.gold),
     status: rollStat(rng, type.status),
     hunger: rollStat(rng, HUNGER),
@@ -319,7 +322,7 @@ export function generateTravelers(seed: number, count: number): Traveler[] {
         BYNAMES[Math.floor(rng() * BYNAMES.length)]
       }`,
       type,
-      attributes: rollAttributes(rng, type),
+      attributes: rollAttributes(rng, type, rollStat(makeRng(deriveSeed(seed, i + 130363)), { min: 60, max: 90 })),
       offset: rng(),
       direction: rng() < 0.5 ? 1 : -1,
       pace: type.paceMin + rng() * (type.paceMax - type.paceMin),
