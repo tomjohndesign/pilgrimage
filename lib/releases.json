@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "4d9433dec734aeb8533f72178e449a4417ae0dcb",
-  "releaseCount": 155,
+  "lastProcessedCommit": "0802d07fa2587825b331dfff424eb39ef0801283",
+  "releaseCount": 156,
   "releases": [
+    {
+      "version": "0.0.170",
+      "title": "Release 0.0.170",
+      "summary": "Add a sprite pipeline page to the asset playground (#189)",
+      "commit": "0802d07fa2587825b331dfff424eb39ef0801283"
+    },
     {
       "version": "0.0.169",
       "title": "Release 0.0.169",
