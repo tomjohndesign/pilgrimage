@@ -31,7 +31,11 @@ export function cartRoadDiversion(map: GameMap, initial: CartPose, progress: num
     at = next
   }
   if (blocked === undefined) return null
-  const context = getContext()
+  // Walking traffic shares this route and moves on. Treating it as permanent
+  // parking occupancy can reject the initial pose, so the cart drives too close
+  // to the wall to turn before trying again. Keep trunks and parked transport.
+  const { trees, obstacles } = getContext()
+  const context = { trees, obstacles }
   // Rejoin beyond the obstruction with the axle already facing down the road.
   // A pedestrian's nearest free tile can leave the cart scraping the same wall.
   for (let beyond = wheelbase + 2; beyond <= wheelbase + 12; beyond += 2) {

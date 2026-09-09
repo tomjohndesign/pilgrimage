@@ -62,6 +62,31 @@ describe("market cart yard", () => {
 })
 
 describe("cart building collisions", () => {
+  it.each([[1, .1], [-1, .1], [1, 1.25], [-1, 1.25]] as const)(
+    "passes a building with pedestrians on the approach in direction %s with dt %s", (direction, dt) => {
+    const { map } = fixture()
+    map.road = Array.from({ length: 30 }, (_, x) => ({ x, z: 4 }))
+    for (const p of map.road) map.tiles[p.z * map.width + p.x] = "path"
+    map.buildings[0] = { ...map.buildings[0], buildType: "tavern", x: 13, z: 3, w: 2, d: 3 }
+    const travelers = generateTravelers(1, 2)
+    const start = direction === 1 ? 7 : 20
+    Object.assign(travelers[0], { id: 8, type: TRAVELER_TYPES.vendor, direction, offset: start / 29, pace: 1 })
+    Object.assign(travelers[1], { id: 1, type: TRAVELER_TYPES.peasant, direction, offset: (start - direction) / 29, pace: 1 })
+    for (const t of travelers) Object.assign(t.attributes, { piety: 0, hunger: 100, thirst: 100, stamina: 100 })
+    const sim = createSim(travelers, map), s = sim.travelers.get(8)!
+    s.timer = 10000
+    let diverted = false
+    for (let i = 0; i < Math.ceil(50 / dt); i++) {
+      stepSim(sim, travelers, map, 1, dt)
+      expect(convoyBuildingsClear(map, s.cartPose!, "horse", 1.5)).toBe(true)
+      diverted ||= !!s.roadShortcut
+      if (diverted && !s.roadShortcut) break
+    }
+    expect(diverted).toBe(true)
+    expect(direction * (s.progress - 14)).toBeGreaterThan(0)
+    expect(s.roadShortcut).toBeUndefined()
+  })
+
   it.each([[1, .1, 8], [-1, .1, 26], [1, 1.25, 8], [-1, 1.25, 26], [1, .1, 16.2], [-1, .1, 15.8]] as const)(
     "passes a tavern on the inside of a road bend in direction %s with dt %s from %s", (direction, dt, start) => {
     const { map } = fixture()
