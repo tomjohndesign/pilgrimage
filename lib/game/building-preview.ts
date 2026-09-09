@@ -4,6 +4,7 @@ import { EARLY_BUILDINGS } from "./building-art/style"
 import { levelBuildingGround } from "./map/elevation"
 import type { BuildingDef, GameMap } from "./map/types"
 import { createSettlement, placementError } from "./settlement"
+import { BUILDING_KINDS, buildingKind } from "./buildings"
 
 /** Opt-in local play session for comparing the complete building kit. */
 export const BUILDING_PREVIEW = process.env.NODE_ENV === "development"
@@ -33,7 +34,9 @@ export function buildingPreviewSettlement(world: GameMap, balance: GameBalance, 
     const market = BUILD_CATALOG.find(b => b.id === "market")!
     const house = BUILD_CATALOG.find(b => b.id === "house")!
     examples.push({ ...market, id: "market-second", buildType: "market", label: "Market stall · second keeper" })
-    for (let i = 0; i < 3; i++) examples.push({ ...house, id: `staff-house-${i}`, buildType: "house" })
+    const jobs=examples.reduce((total,b)=>total+(buildingKind(b.buildType) ? BUILDING_KINDS[buildingKind(b.buildType)!].jobs : 0),BUILDING_KINDS.tavern.jobs)
+    // The catalogue house and the later joined-roof house already supply four beds.
+    for (let i = 0; i < Math.ceil((jobs-4)/2); i++) examples.push({ ...house, id: `staff-house-${i}`, buildType: "house" })
   }
   const candidates = Array.from({ length: world.width * world.depth }, (_, i) => ({
     x: i % world.width, z: Math.floor(i / world.width),

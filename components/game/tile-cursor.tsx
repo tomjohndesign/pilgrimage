@@ -47,8 +47,8 @@ export function TileCursor({
   }, [map, hovered])
   const build = useMemo(() => buildCatalog(balance).find((item) => item.id === buildType), [balance, buildType])
   const rotation=useMemo(()=>build && hovered ? placementRoofRotation(map,build,hovered,requestedRotation) : requestedRotation,[map,build,hovered,requestedRotation])
-  const {layoutSeed,hearthZ,fireplace} = build && hovered ? placementBuildingLayout(map,{...build,...rotatedFootprint(build,rotation),...hovered,rotation,buildType:build.id,id:"construction-preview"}) : {}
-  const parts = useMemo(() => build ? structureParts({ ...build, buildType: build.id, layoutSeed, hearthZ, fireplace }) : [], [build, layoutSeed, hearthZ, fireplace])
+  const {layoutSeed,hearthZ,fireplace,supportId,floorHeight,tavernFlue} = build && hovered ? placementBuildingLayout(map,{...build,...rotatedFootprint(build,rotation),...hovered,rotation,buildType:build.id,id:"construction-preview"}) : {}
+  const parts = useMemo(() => build ? structureParts({ ...build, buildType: build.id, layoutSeed, hearthZ, fireplace, supportId, floorHeight, tavernFlue }) : [], [build, layoutSeed, hearthZ, fireplace, supportId, floorHeight, tavernFlue])
   if (!hovered) return null
 
   if (!tileAt(map, hovered.x, hovered.z)) return null
@@ -65,7 +65,7 @@ export function TileCursor({
       <group
         position={[
           tileToWorldX(map, hovered.x) + (footprint.w - 1) / 2,
-          groundHeight(map, hovered.x + (footprint.w - 1) / 2, hovered.z + (footprint.d - 1) / 2),
+          groundHeight(map, hovered.x + (footprint.w - 1) / 2, hovered.z + (footprint.d - 1) / 2) + (floorHeight ?? 0),
           tileToWorldZ(map, hovered.z) + (footprint.d - 1) / 2,
         ]}
       >
@@ -75,7 +75,7 @@ export function TileCursor({
         </mesh>
         <group rotation={[0, buildingYaw(rotation), 0]}>
           <StructureModel parts={parts} ghostColor={color} />
-          <PlacementEntrances layoutSeed={layoutSeed} type={build.id} w={build.w} d={build.d} color={color} />
+          {!supportId && <PlacementEntrances layoutSeed={layoutSeed} type={build.id} w={build.w} d={build.d} color={color} />}
         </group>
       </group>
     )

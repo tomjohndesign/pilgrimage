@@ -40,7 +40,7 @@ const cache = new WeakMap<BuildingDef, { key: string; supports: CharacterSupport
 export function buildingSupports(building: BuildingDef, map?: GameMap) {
   const shrine = map?.site?.hovelId === building.id ? shrineLayout(building, map.site.door) : undefined
   const local = rotatedFootprint(building, building.rotation)
-  const key = JSON.stringify([building.buildType, local.w, local.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, shrine?.width, shrine?.depth])
+  const key = JSON.stringify([building.buildType, local.w, local.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, building.supportId, building.tavernFlue, shrine?.width, shrine?.depth])
   let entry = cache.get(building)
   if (entry?.key !== key) {
     const supports = partSupports(shrine ? shrineStructureParts(shrine.width, shrine.depth) : structureParts({ ...building, ...local }))
@@ -68,12 +68,12 @@ export function placedSupport(map: GameMap, building: BuildingDef, support: Char
   const ground = support.id.startsWith("entry-") ? groundHeight(map, entry.x, entry.z)
     : groundHeight(map, building.x + (building.w - 1) / 2, building.z + (building.d - 1) / 2)
   return { ...support, ...point(support.x, support.z), anchor: point(support.anchor.x, support.anchor.z),
-    height: ground + support.height,
+    height: ground + (building.floorHeight ?? 0) + support.height,
     yaw: support.yaw + yaw, heading: support.heading + yaw }
 }
 
 /** Only an authored, compatible top under the actor can support its current pose. */
-export function characterSupport(map: GameMap, x: number, z: number, clip: BaseClip): CharacterSupport | undefined {
+export function characterSupport(map: GameMap, x: number, z: number, clip: BaseClip, y?: number): CharacterSupport | undefined {
   let highest: CharacterSupport | undefined
   for (const building of map.buildings) {
     if (building.construction && building.construction.work < building.construction.required) continue
@@ -86,7 +86,7 @@ export function characterSupport(map: GameMap, x: number, z: number, clip: BaseC
       const sx = dx * Math.cos(support.yaw) - dz * Math.sin(support.yaw)
       const sz = dx * Math.sin(support.yaw) + dz * Math.cos(support.yaw)
       if (Math.abs(sx) > support.width / 2 + 1e-6 || Math.abs(sz) > support.depth / 2 + 1e-6) continue
-      if (!highest || support.height > highest.height) highest = support
+      if (!highest || (y === undefined ? support.height > highest.height : Math.abs(support.height-y) < Math.abs(highest.height-y))) highest = support
     }
   }
   return highest

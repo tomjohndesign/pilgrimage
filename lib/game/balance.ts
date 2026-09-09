@@ -3,7 +3,7 @@ import { STOREHOUSE_FOOD_CAPACITY } from "./storage"
 
 /** Pure balance data, shared by gameplay, the tuning page and the specification. */
 export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "storehouse"
-  | "monk-shelter" | "house" | "tavern" | "wood-shelter" | "market" | "guard-post" | "lumberCamp"
+  | "inn" | "monk-shelter" | "house" | "tavern" | "wood-shelter" | "market" | "guard-post" | "lumberCamp"
   | "sheep-pen" | "well" | "watering-hole"
 
 export interface Resources {
@@ -161,6 +161,13 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     cost: { gold: 150, wood: 110 }, renown: 12, requiredRenown: 25,
     income: { gold: 0, wood: 0 }, w: 3, d: 4, height: 0.78,
     color: "#8c7658", roofColor: "#a59164",
+  },
+  {
+    id: "inn", label: "Inn", category: "buildings",
+    description: "Four jobs tending an open dormitory of bunks and beds. A standalone inn has a front reception area, door and fireplace. Over a completed tavern, it becomes a sleeping floor reached by ladder, with overhanging timber-and-plaster walls and a steep perpendicular roof.",
+    cost: { gold: 100, wood: 85 }, renown: 6, requiredRenown: 15,
+    income: { gold: 0, wood: 0 }, w: 3, d: 4, height: 1.2,
+    color: "#b7ae94", roofColor: "#827052",
   },
   {
     id: "sheep-pen", label: "Sheep pen", category: "buildings",
@@ -564,6 +571,7 @@ export function buildingIncomeLabel(def: BuildDefinition, balance: GameBalance):
   return def.id === "workshop" ? "3 woodcutting jobs"
     : def.id === "tavern" ? "2 jobs · food & drink for gold"
     : def.id === "sheep-pen" ? "2 herding jobs"
+    : def.id === "inn" ? "4 jobs · bunks & beds"
     : def.id === "house" ? "Homes 2 settlers"
     : def.id === "monk-shelter" || def.id === "shelter" ? "Adds monk housing when complete"
     : def.id === "market" ? "Draws a vendor to keep it"

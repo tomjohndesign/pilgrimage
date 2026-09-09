@@ -1206,6 +1206,10 @@ export function GameHud({
             <div className="flex items-center justify-between gap-4"><Label>{selectedDefinition?.category === "scenery" ? "Scenery" : "Building"}</Label><button type="button" aria-label="Dismiss building" onClick={() => useCameraStore.getState().select(null)} className="pointer-events-auto text-xs text-ink-light">✕</button></div>
             <p className="mt-1 font-display text-xs text-ink">{selectedBuilding.label}</p>
             <ConstructionStatus building={selectedBuilding} />
+            {selectedBuilding.buildType === "inn" && <p className="mt-1 text-[11px] text-ink-light">Open dormitory · {selectedBuilding.supportId ? "Upper floor · ladder access" : "Ground floor"} · {selectedBuilding.fireplace ? "Hearth" : "Unheated"}</p>}
+            {map?.buildings.filter(b=>b.id===selectedBuilding.supportId || b.supportId===selectedBuilding.id).map(floor=><button key={floor.id} type="button" className="mt-2 block text-[11px] text-ink underline underline-offset-2" onClick={()=>useCameraStore.getState().select({kind:"building",id:floor.id})}>
+              Inspect {floor.label.toLowerCase()} {floor.supportId ? "upstairs" : "downstairs"}
+            </button>)}
             {selectedBuilding.owner === "independent" && <p className="mt-2 max-w-56 text-[11px] text-ink-light">Independent roadside town. {selectedBuilding.buildType === "tavern" ? "Locally run tavern serving food and drink to passing travelers." : "Home to the townspeople."} Joins your settlement when your influence reaches this building; until then, it earns you no income or renown.</p>}
             {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">{brothersAtHome} / {housingBeds(selectedBuilding)} monks · {Math.max(0, housingBeds(selectedBuilding) - brothersAtHome)} spaces available. Tired monks sleep here until their stamina recovers.</p>}
             {isHouse(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">

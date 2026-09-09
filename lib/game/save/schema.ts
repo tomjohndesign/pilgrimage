@@ -109,6 +109,9 @@ export const structureSchema = z.object({
   construction: constructionSchema.optional().describe("Absent once a founding structure is complete"),
   layoutSeed: finite.optional().describe("Rolls the interior layout; kept so the rooms come back as built"),
   fireplace: z.boolean().optional().describe("Whether the building has a hearth; absent means the type's seeded choice"),
+  supportId: z.string().optional(),
+  floorHeight: finite.min(0).optional(),
+  tavernFlue: z.object({x:finite,z:finite}).optional(),
   hearthZ: finite.optional().describe("Row the hearth sits on"),
 })
 

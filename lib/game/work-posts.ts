@@ -12,6 +12,8 @@ import { marketLayout } from "./market-layout"
 export const WORK_POSTS: Record<string, readonly (readonly [number, number])[]> = {
   // Either side of the serving counter, which stands at (width×.2, -depth×.14).
   tavern: [[0.06, -0.30], [0.34, -0.30]],
+  // Both aisles, clear of the central beds, reception furniture and ladder.
+  inn: [[-.215,-.225],[.215,-.225],[-.215,.225],[.215,.225]],
   // Out in the open fold, clear of the water trough and the gate.
   "sheep-pen": [[0.14, -0.10], [0.32, 0.18]],
   // Behind the stall counter at the front of the footprint.

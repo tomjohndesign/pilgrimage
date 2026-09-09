@@ -1,3 +1,4 @@
+import { innPlacementLayout } from "../inn"
 import type { GameMap, BuildingDef, TilePos } from "../map/types"
 import type { TerrainId } from "../map/terrain"
 import { EARLY_BUILDINGS, earlyBuildingRecipe, type BuildingRecipe } from "./style"
@@ -63,7 +64,7 @@ export function buildingPreviewMap(recipe: BuildingRecipe, neighbor?: BuildingRe
   const recipes=new Map(placed.map(p=>[p.id,p.recipe]))
   for(const shell of shells) {
     const next={...shell,x:shell.x+offsetX,z:shell.z+offsetZ}
-    map.buildings.push(next.hearthZ === undefined ? {...next,...adoptNeighborChimney(map,next,b=>recipes.get(b.id)!.roofRise)} : next)
+    map.buildings.push(next.buildType === "inn" ? {...next,...innPlacementLayout(map,next)} : next.hearthZ === undefined ? {...next,...adoptNeighborChimney(map,next,b=>recipes.get(b.id)!.roofRise)} : next)
   }
   const occupied=(x:number,z:number)=>map.buildings.some(b=>x>=b.x && x<b.x+b.w && z>=b.z && z<b.z+b.d)
   for(const building of map.buildings) for(const entry of buildingApproaches(map,building)) {
@@ -84,7 +85,7 @@ export function previewPlacement(map: GameMap, recipe: BuildingRecipe, at: TileP
   const riseFor=(b:BuildingDef)=>b.id===building.id ? recipe.roofRise : recipes.get(b.id)!.roofRise
   const aligned=snap ? roofAlignedRotation(map,building,riseFor) : rotation
   building={...building,...rotatedFootprint({w:recipe.width,d:recipe.depth},aligned),rotation:aligned}
-  building={...building,...adoptNeighborChimney(map,building,riseFor)}
+  building={...building,...(building.buildType === "inn" ? innPlacementLayout(map,building) : adoptNeighborChimney(map,building,riseFor))}
   return {building,recipe:{...recipe,layoutSeed:building.layoutSeed,hearthZ:building.hearthZ,fireplace:building.fireplace},
     error:placementClearance(map,building),snapped:aligned!==rotation}
 }

@@ -1,5 +1,7 @@
 "use client"
 
+import { tavernStackParts } from "@/lib/game/building-art/stacked"
+
 import { WaterSources } from "./water-sources"
 import { isWaterSource, waterSourcePlacement } from "@/lib/game/water-sources/navigation"
 import { CloseScenery } from "./close-scenery"
@@ -25,7 +27,7 @@ import { selectElement } from "@/lib/game/selection"
 import { useBuildStore } from "@/lib/game/build-store"
 import { workshopPileOffset } from "@/lib/game/workshop-layout"
 import { pileOffset } from "@/lib/game/trees/timber"
-import { ShelterFire } from "./building-smoke"
+import { InnFlueSmoke, ShelterFire } from "./building-smoke"
 import { hasDomesticHearth } from "@/lib/game/building-art/furnishings"
 import { buildingRoofJoins, roofOutlineOwners } from "@/lib/game/building-art/roof-joins"
 import { WoodPile } from "./wood-pile"
@@ -57,14 +59,17 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
     ? [{ ...waterSourcePlacement(map, building), idColor: encodeObjectId(buildingObjectId(index)) }] : []), [map, buildings])
   const modelCache = useRef(new Map<string, { key: string; parts: ReturnType<typeof constructionParts>; idColor: THREE.Color }>())
   const models = useMemo(() => {
+    const supported = new Map<string, BuildingDef[]>()
+    for (const b of buildings) if (b.supportId) supported.set(b.supportId,[...(supported.get(b.supportId) ?? []),b])
     const next = new Map<string, { key: string; parts: ReturnType<typeof constructionParts>; idColor: THREE.Color }>()
     const result = buildings.map((building, index) => {
       const footprint = rotatedFootprint(building, building.rotation)
       const joins = roofJoins.get(building.id)
-      const key = JSON.stringify([index, building.buildType, footprint.w, footprint.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, joins, constructionStage(building)])
+      const inns = supported.get(building.id) ?? []
+      const key = JSON.stringify([index, building.buildType, footprint.w, footprint.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, building.floorHeight, building.supportId, building.tavernFlue, inns.map(b=>[b.id,b.x,b.z,b.floorHeight]), joins, constructionStage(building)])
       const old = modelCache.current.get(building.id)
       const model = old?.key === key ? old : { key,
-        parts: constructionParts({ ...building, ...footprint }, joins), idColor: new THREE.Color(...encodeObjectId(buildingObjectId(index))) }
+        parts: tavernStackParts(constructionParts({ ...building, ...footprint }, joins), building, inns), idColor: new THREE.Color(...encodeObjectId(buildingObjectId(index))) }
       next.set(building.id, model)
       return model
     })
@@ -89,10 +94,11 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
       {buildings.map((building, index) => {
         // The hovel has its own geometry (see shrine.tsx); its ID slot stays reserved.
         if (building.id === map.site?.hovelId) return null
+        if (building.supportId && (unitInterior === building.supportId || isSelected(selection,{kind:"building",id:building.supportId}))) return null
         // Footprint centre: the origin tile's centre, offset by half the extra tiles.
         const centreX = tileToWorldX(map, building.x) + (building.w - 1) / 2
         const centreZ = tileToWorldZ(map, building.z) + (building.d - 1) / 2
-        const baseY = groundHeight(map, building.x + (building.w - 1) / 2, building.z + (building.d - 1) / 2)
+        const baseY = groundHeight(map, building.x + (building.w - 1) / 2, building.z + (building.d - 1) / 2) + (building.floorHeight ?? 0)
 
         if (isWaterSource(building) && isComplete(building)) {
           return <group key={building.id}>
@@ -130,8 +136,9 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
         return (
           <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
             <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
+            {isComplete(building) && building.supportId && <InnFlueSmoke width={local.w} depth={local.d} height={building.height} flue={building.tavernFlue} cutaway={cutaway} />}
             {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
-            {isComplete(building) && hasDomesticHearth(building.buildType,building.layoutSeed,building.fireplace) && <ShelterFire buildType={building.buildType} layoutSeed={building.layoutSeed} hearthZ={building.hearthZ} sharedChimney={roofJoins.get(building.id)?.find(join=>join.chimney)?.chimney} width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
+            {isComplete(building) && !building.supportId && hasDomesticHearth(building.buildType,building.layoutSeed,building.fireplace) && <ShelterFire smoke={!map.buildings.some(b=>b.supportId===building.id)} buildType={building.buildType} layoutSeed={building.layoutSeed} hearthZ={building.hearthZ} sharedChimney={roofJoins.get(building.id)?.find(join=>join.chimney)?.chimney} width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
           </group>
         )
       })}

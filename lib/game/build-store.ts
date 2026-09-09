@@ -65,7 +65,7 @@ export const useBuildStore = create<BuildState>((set) => ({
       return live && !townResident && (live.employer || live.home) ? [{
         id: t.id,
         name: t.name,
-        duty: job ? SETTLEMENT_JOBS[job].label : "Resident",
+        duty: sim.buildings.find(b=>b.id===live.employer)?.kind === "inn" ? "Inn worker" : job ? SETTLEMENT_JOBS[job].label : "Resident",
         attributes: { age: t.attributes.age, piety: live.piety, happiness: live.happiness, skills: t.attributes.skills },
       }] : []
     })
