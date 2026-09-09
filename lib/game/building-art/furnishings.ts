@@ -1,4 +1,5 @@
 import { makeRng } from "../rng"
+import { buildingDoorOffset } from "../building-rotation"
 import { layoutHand } from "../building-layout"
 import { sheepPenLayout } from "../workshop-layout"
 import type { BuildingPart, Vec3 } from "./geometry"
@@ -137,4 +138,12 @@ export function furnishingParts(kind: "workshop" | "shelter", width: number, dep
     }
   }
   return parts
+}
+
+/** Exterior bench geometry and its reserved frontage share these local coordinates. */
+export function tavernExteriorBenches(w: number, d: number, layoutSeed = 0, hand = layoutHand("tavern", layoutSeed)) {
+  return [-1, 1].map(side => ({
+    id: `tavern-outside-${side}-seat`, x: (buildingDoorOffset(w, "tavern", layoutSeed, side as 1 | -1) * layoutHand("tavern", layoutSeed) < 0 ? 1 : -1) * w * .27 * hand, z: side * (d / 2 + .28),
+    w: w * .32, d: .18, heading: side > 0 ? 0 : Math.PI,
+  }))
 }

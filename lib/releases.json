@@ -1,7 +1,67 @@
 {
-  "lastProcessedCommit": "9eb124e4ca3994c0790662fee4ffd835079615bf",
-  "releaseCount": 136,
+  "lastProcessedCommit": "e1c01ff8b2f4454032a566a3748b9ae5a839b13c",
+  "releaseCount": 146,
   "releases": [
+    {
+      "version": "0.0.160",
+      "title": "Release 0.0.160",
+      "summary": "Add generated wells and springs with NPC drinking access (#175)",
+      "commit": "e1c01ff8b2f4454032a566a3748b9ae5a839b13c"
+    },
+    {
+      "version": "0.0.159",
+      "title": "Release 0.0.159",
+      "summary": "Optimize road shortcut planning and add GPU performance probes (#179)",
+      "commit": "9f065f8aae60817a0d16f53ec6a083e1a87811eb"
+    },
+    {
+      "version": "0.0.158",
+      "title": "Release 0.0.158",
+      "summary": "Add happiness-driven tavern visits and gradual piety decay (#173)",
+      "commit": "423e70147c7c8fe7c936f6793385160bebe7d66c"
+    },
+    {
+      "version": "0.0.157",
+      "title": "Release 0.0.157",
+      "summary": "Add NPC tavern meals and stamina recovery on chairs and benches (#172)",
+      "commit": "4708bf31d092a8d90ecffa95eebe45d15e6b3e2b"
+    },
+    {
+      "version": "0.0.156",
+      "title": "Release 0.0.156",
+      "summary": "Preserve character detail under frame pressure (#174)",
+      "commit": "28ad4dd91fe86eaaa4bc3207939dd0a4070f4c1a"
+    },
+    {
+      "version": "0.0.155",
+      "title": "Release 0.0.155",
+      "summary": "Place signposts opposite T-junctions and clear of taverns (#177)",
+      "commit": "7f5e66e2d6c0e744accdd68258e35a9614c5c6c5"
+    },
+    {
+      "version": "0.0.154",
+      "title": "Release 0.0.154",
+      "summary": "Add two-finger twist camera rotation on mobile (#176)",
+      "commit": "9be2bc4658f21b3047ba794a7035939bea10f62d"
+    },
+    {
+      "version": "0.0.153",
+      "title": "Release 0.0.153",
+      "summary": "Add map panning at screen edges (#178)",
+      "commit": "76278f18b343e33a4c1814818d7c8e406f18210b"
+    },
+    {
+      "version": "0.0.152",
+      "title": "Release 0.0.152",
+      "summary": "Add buildable water sources and NPC drinking animations (#170)",
+      "commit": "95e823dca315a123eb0d48b3989d5f642e362600"
+    },
+    {
+      "version": "0.0.151",
+      "title": "Release 0.0.151",
+      "summary": "Document performance restart cases and deferred computation offloading (#171)",
+      "commit": "54eb9fef6390abeb5a9695478eda2428541d66df"
+    },
     {
       "version": "0.0.150",
       "title": "Release 0.0.150",

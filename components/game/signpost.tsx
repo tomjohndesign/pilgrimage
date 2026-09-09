@@ -11,7 +11,7 @@ import { signpostPlacements } from "@/lib/game/map/signpost"
 import type { GameMap } from "@/lib/game/map/types"
 import { encodeObjectId, SIGNPOST_OBJECT_ID } from "@/lib/game/render/outline"
 
-/** Central waymarkers use the shared pixelated scenery renderer and directional timber boards. */
+/** Waymarkers use the shared pixelated scenery renderer and directional timber boards. */
 export function Signpost({ map }: { map: GameMap }) {
   const posts = useMemo(() => signpostPlacements(map).map((post, index) => ({
     ...post,

@@ -1,0 +1,15 @@
+{
+  "version": 7,
+  "reservedTones": true,
+  "depthEncoding": "view-offset-rg16-v1",
+  "templateVersion": 34,
+  "frames": 16,
+  "rows": 48,
+  "fps": 16,
+  "cellSize": 64,
+  "anchor": [
+    32,
+    48.5
+  ],
+  "safePadding": 11
+}

@@ -49,7 +49,7 @@ describe("furnished procedural rooms", () => {
         const bounds=furnitureBounds([parts.find(p=>p.name===item.id)!])
         for(const key of ["x","z","w","d"] as const) expect(bounds[key]).toBeCloseTo(item[key])
       }
-      for(const support of partSupports(parts).filter(p=>p.clips.includes("sitting"))) {
+      for(const support of partSupports(parts).filter(p=>p.clips.includes("sitting") && !p.id.startsWith("tavern-outside-"))) {
         expect(tavernInteriorRoute(building,layout.serving,support.anchor,support.id),`${w}×${d} seed ${layoutSeed} ${support.id}`).not.toBeNull()
       }
     }

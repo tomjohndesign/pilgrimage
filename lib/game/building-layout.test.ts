@@ -5,8 +5,8 @@ import { placementLayoutSeed } from "./building-layout"
 import { structureParts } from "./building-art/structure"
 import { buildingSupports } from "./character-support"
 import { tavernLayout, tavernWorkStop } from "./tavern-layout"
-import { tavernInteriorRoute } from "./tavern-navigation"
-import type { BuildingDef } from "./map/types"
+import { tavernInteriorRoute, tavernWalkingRoute, tavernWorldPoint } from "./tavern-navigation"
+import type { BuildingDef, GameMap } from "./map/types"
 
 const building = (type: string, layoutSeed?: number): BuildingDef => ({
   ...BUILD_CATALOG.find(b=>b.id===type)!, buildType:type, x:10,z:10,layoutSeed,
@@ -47,12 +47,22 @@ describe("repeatable building layouts", () => {
     const b=building("tavern",seed), layout=tavernLayout(b.w,b.d,seed)
     const parts=structureParts(b), door=parts.find(p=>p.name==="doorway-shadow")!
     for(const table of layout.tables) expect(parts.find(p=>p.name===table.id)!.position[0]).toBe(table.x)
-    for(const support of buildingSupports(b).filter(s=>s.clips.includes("sitting"))) {
+    for(const support of buildingSupports(b).filter(s=>s.clips.includes("sitting") && !s.id.startsWith("tavern-outside-"))) {
       expect(layout.benches.find(p=>p.id===support.id)?.x).toBeCloseTo(support.x)
       for(const side of [-1,1]) {
         const entrance=parts.find(p=>p.name===(side===1 ? "doorway-shadow" : "back-doorway-shadow"))!
         expect(tavernInteriorRoute(b,{x:entrance.position[0],z:side*(b.d/2-.16)},support.anchor,support.id)).not.toBeNull()
       }
+    }
+    const map: GameMap = {width:30,depth:30,tiles:Array(900).fill("grass"),buildings:[b],road:[]}
+    for(const support of buildingSupports(b).filter(s=>s.id.startsWith("tavern-outside-"))) {
+      const bench=layout.exteriorBenches.find(p=>p.id===support.id)!
+      expect(bench.x).toBeCloseTo(support.anchor.x)
+      expect(bench.z).toBeCloseTo(support.anchor.z)
+      const end=support.z>0 ? 1 : -1
+      const door=parts.find(p=>p.name===(end===1 ? "doorway-shadow" : "back-doorway-shadow"))!
+      expect(Math.abs(bench.x-door.position[0])).toBeGreaterThan(bench.w/2+.3)
+      expect(tavernWalkingRoute(map,tavernWorldPoint(map,b,layout.serving),tavernWorldPoint(map,b,support.anchor),support.id)).not.toBeNull()
     }
     for(const slot of [0,1]) for(const stop of [0,1,2,3]) {
       const point=tavernWorkStop(slot,stop,b.w,b.d,seed)
@@ -115,7 +125,7 @@ it("gives every buildable form a repeatable layout and keeps reflected utility a
   const { buildingParts }=await import("./building-art/geometry")
   const { hasBuildingLayouts }=await import("./building-layout")
   const { workshopPileOffset }=await import("./workshop-layout")
-  for(const type of BUILD_CATALOG.map(b=>b.id)) expect(EARLY_BUILDINGS.some(b=>b.id===type)).toBe(true)
+  for(const type of BUILD_CATALOG.filter(b=>!["well","watering-hole"].includes(b.id)).map(b=>b.id)) expect(EARLY_BUILDINGS.some(b=>b.id===type)).toBe(true)
   for(const preset of EARLY_BUILDINGS) {
     expect(hasBuildingLayouts(preset.id)).toBe(true)
     const recipe=earlyBuildingRecipe(preset.id), a=buildingParts({...recipe,layoutSeed:0}), b=buildingParts({...recipe,layoutSeed:1})

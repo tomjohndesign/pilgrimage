@@ -203,21 +203,31 @@ export function findRoadShortcut(map: GameMap, progress: number, direction: 1 | 
   const protectedPoints = [map.site?.junction, ...(map.shortcuts ?? []).flatMap(s => [s.entry, s.exit])].filter((p): p is number => p !== undefined)
   if (protectedPoints.some(p => Math.abs(p - progress) < 1.5)) return null
   const from = pointAt(progress)
-  let previous = from, cost = 0, walked = 0, best: WalkingShortcut | null = null, saving = .6
+  const points = [from]
+  let nearby: ReturnType<typeof buildingSpatialQuery> | undefined
+  let previous = from, cost = 0, walked = 0, best: WalkingShortcut | null = null, saving = .6, evaluated = 0
   for (let step = 1; step <= SHORTCUT_LOOKAHEAD * 2; step++) {
     const end = progress + direction * step * .5
     if (end < 1 || end > road.length - 2 || protectedPoints.some(p => direction * (p - progress) >= 0 && direction * (p - end) < 1.5)) break
     const to = pointAt(end)
     walked += length(previous, to)
-    cost += shortcutCost(map, previous, to, exploring)
-    if (!Number.isFinite(cost)) break
+    points.push(to)
     previous = to
     const direct = length(from, to)
     if (direct > walked * .8 || walked - direct <= saving) continue
+    // Only sample clearance and wear when the geometry can offer a shortcut.
+    // Catch up in the original order, including every intervening road edge.
+    nearby ??= buildingSpatialQuery(map.buildings)
+    for (; evaluated < step;) {
+      const edge = ++evaluated
+      cost += shortcutCost(map, points[edge - 1], points[edge], exploring, nearby)
+      if (!Number.isFinite(cost)) break
+    }
+    if (!Number.isFinite(cost)) break
     // Following the road is the default. Only adopt a new line once repeated
     // traffic has made it almost as easy as walking the existing road.
-    if (!exploring && (!establishedShortcut(map, from, to) || shortcutCost(map, from, to) > direct * 1.35)) continue
-    if (shortcutCost(map, from, to, exploring) > cost * .98) continue
+    if (!exploring && (!establishedShortcut(map, from, to) || shortcutCost(map, from, to, false, nearby) > direct * 1.35)) continue
+    if (shortcutCost(map, from, to, exploring, nearby) > cost * .98) continue
     best = { from, to, start: progress, end, length: direct, distance: 0 }
     saving = walked - direct
   }

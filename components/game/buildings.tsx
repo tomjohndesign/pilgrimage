@@ -1,5 +1,7 @@
 "use client"
 
+import { WaterSources } from "./water-sources"
+import { isWaterSource, waterSourcePlacement } from "@/lib/game/water-sources/navigation"
 import { CloseScenery } from "./close-scenery"
 import { EntranceDetails } from "./entrance-details"
 import { ConstructionProgress } from "./construction-progress"
@@ -51,6 +53,8 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
   const buildings = map.buildings
   const roofJoins = useMemo(() => buildingRoofJoins(map), [buildings, map.elevation, map.site?.hovelId])
   const outlineOwners = useMemo(() => roofOutlineOwners(buildings, roofJoins), [buildings, roofJoins])
+  const waterPlacements = useMemo(() => buildings.flatMap((building, index) => isWaterSource(building) && isComplete(building)
+    ? [{ ...waterSourcePlacement(map, building), idColor: encodeObjectId(buildingObjectId(index)) }] : []), [map, buildings])
   const modelCache = useRef(new Map<string, { key: string; parts: ReturnType<typeof constructionParts>; idColor: THREE.Color }>())
   const models = useMemo(() => {
     const next = new Map<string, { key: string; parts: ReturnType<typeof constructionParts>; idColor: THREE.Color }>()
@@ -79,6 +83,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
 
   return (
     <group>
+      {waterPlacements.length > 0 && <WaterSources placements={waterPlacements} />}
       <EntranceDetails map={map} idColors={idColors} onSelect={selectSite} />
       <PixelCharacters><ConstructionCostEffects ref={costs} map={map} characterScale={characterScale} /></PixelCharacters>
       {buildings.map((building, index) => {
@@ -89,6 +94,14 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
         const centreZ = tileToWorldZ(map, building.z) + (building.d - 1) / 2
         const baseY = groundHeight(map, building.x + (building.w - 1) / 2, building.z + (building.d - 1) / 2)
 
+        if (isWaterSource(building) && isComplete(building)) {
+          return <group key={building.id}>
+            <mesh position={[centreX, baseY + .25, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={event => selectSite(building, event)}>
+              <boxGeometry args={[building.buildType === "well" ? 1.2 : 2.2, .5, building.buildType === "well" ? 1.2 : 1.6]} />
+              <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
+            </mesh>
+          </group>
+        }
         const local = rotatedFootprint(building, building.rotation)
         const cutaway = models[index].parts.some(p => p.layer === "roof") && (
           showInteriors || unitInterior === building.id || isSelected(selection, { kind: "building", id: building.id }) ||

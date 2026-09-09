@@ -20,8 +20,8 @@ describe("early medieval building kit", () => {
         const box=bounds(part), context=`${preset.id} ${width}×${depth} ${part.name}`
         expect(box.min.x,context).toBeGreaterThanOrEqual(-width/2-.001)
         expect(box.max.x,context).toBeLessThanOrEqual(width/2+.001)
-        expect(box.min.z,context).toBeGreaterThanOrEqual(-depth/2-.001)
-        expect(box.max.z,context).toBeLessThanOrEqual(depth/2+.001)
+        expect(box.min.z,context).toBeGreaterThanOrEqual(-depth/2-.001-(part.name.startsWith("tavern-outside-") ? .6 : 0))
+        expect(box.max.z,context).toBeLessThanOrEqual(depth/2+.001+(part.name.startsWith("tavern-outside-") ? .6 : 0))
         expect(box.min.y,context).toBeGreaterThanOrEqual(-.06)
         expect(Number.isFinite(box.max.y),context).toBe(true)
         whole.union(box)

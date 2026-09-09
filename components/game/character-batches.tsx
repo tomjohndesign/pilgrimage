@@ -11,7 +11,6 @@ import { isWorldVisible } from "@/lib/game/render/visibility"
 import { frameProfile } from "@/lib/game/render/frame-profile"
 import { SpriteFrames } from "./sprite-frames"
 import { benchmarkWork } from "@/lib/game/benchmark-work"
-import { frameQuality } from "@/lib/game/render/frame-quality"
 
 interface AtlasGroup {
   entries: CharacterBatchEntry[]
@@ -30,7 +29,7 @@ class CharacterEntries extends Set<CharacterBatchEntry> {
 }
 
 const Context = createContext<CharacterEntries | null>(null)
-export const characterBatchControl = { enabled: true }
+export const characterBatchControl = { enabled: true, compact: false }
 export const useCharacterBatches = () => useContext(Context)
 
 /** Batch ordinary road people inside the existing color/ID/selection renderer.
@@ -72,7 +71,7 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
     for (const group of groups.values()) group.entries.length = 0
     candidates.clear()
   }, -1)
-  useFrame(({ camera, scene, clock }, delta) => {
+  useFrame(({ camera, scene, clock }) => {
     // This interval also contains wildlife's independently reported callback.
     frameProfile.end("animationAndWildlife", phaseStart.current)
     const started = frameProfile.start()
@@ -91,12 +90,16 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
     for (const entry of entries.legacy) entries.publish(entry)
     for (const group of groups.values()) {
       let batch = group.batch
+      const order = batch?.root.userData.order ?? root.current.children.length + 1
+      const compact = process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && characterBatchControl.compact
+      if (batch && batch.compact !== compact) {
+        root.current.remove(batch.root); batch.dispose(); group.batch = batch = undefined
+      }
       if (!batch && group.entries.length) {
-        batch = group.batch = new CharacterBatch(group.entries[0], worldTexel, root.current.children.length + 1)
+        batch = group.batch = new CharacterBatch(group.entries[0], worldTexel, order, compact)
         root.current.add(batch.root)
       }
       group.entries.sort((a, b) => a.sprite.renderOrder - b.sprite.renderOrder)
-      batch?.setSimplified(frameQuality(scene) === 2, delta)
       batch?.write(group.entries, camera, true)
     }
     updateBatchSourceVisibility(scene, candidates, clock.elapsedTime)

@@ -27,7 +27,7 @@ describe("independent roadside towns", () => {
     expect(map.towns).toHaveLength(2)
     for (const [i, town] of map.towns!.entries()) {
       const buildings = map.buildings.filter(b => b.townId === town.id)
-      expect(buildings.map(b => b.buildType)).toEqual(["tavern", "house"])
+      expect(buildings.map(b => b.buildType)).toEqual(["tavern", "house", "well"])
       expect(buildings.every(b => b.owner === "independent" && !b.construction)).toBe(true)
       if (i) {
         expect(town.junction - map.towns![i - 1].junction).toBe(TOWN_SPACING)

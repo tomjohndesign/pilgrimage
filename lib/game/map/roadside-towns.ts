@@ -1,4 +1,5 @@
 import { ROUTE_EDGE_INSET } from "./route-bounds"
+import { addTownWells } from "./seeded-water"
 import { settlementRoute } from "../settlement-route"
 import { BUILD_CATALOG } from "../balance"
 import { placementLayoutSeed } from "../building-layout"
@@ -93,12 +94,14 @@ export function addRoadsideTowns(map: GameMap): void {
       }
       for (const b of plan.buildings) candidate.elevation = levelBuildingGround(candidate, b)
       let accessible = true
+      const accessTiles: TilePos[] = []
       for (const b of plan.buildings) for (const entrance of buildingApproaches(candidate, b)) {
         const route = settlementRoute(candidate, candidate.buildings, road[junction], entrance)
         // A town must not reintroduce surfaced paths along the map border.
         if (!route || route.some(p => Math.min(p.x, p.z, map.width - 1 - p.x, map.depth - 1 - p.z) < ROUTE_EDGE_INSET)) { accessible = false; break }
         for (const p of route) {
           const i = p.z * map.width + p.x
+          if (candidate.tiles[i] !== "path" && candidate.tiles[i] !== "track" && candidate.tiles[i] !== "bridge") accessTiles.push(p)
           if (candidate.tiles[i] !== "path" && candidate.tiles[i] !== "bridge") candidate.tiles[i] = "track"
         }
       }
@@ -106,9 +109,11 @@ export function addRoadsideTowns(map: GameMap): void {
       // The generator also retains the original tile array while finishing the world.
       for (let i = 0; i < map.tiles.length; i++) map.tiles[i] = candidate.tiles[i]
       map.buildings.push(...plan.buildings)
+      map.buildingAccessTiles = [...(map.buildingAccessTiles ?? []), ...accessTiles]
       map.elevation = candidate.elevation
       map.towns.push(plan.town)
       break
     }
   }
+  addTownWells(map)
 }

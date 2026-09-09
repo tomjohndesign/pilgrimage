@@ -58,6 +58,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
     }
     const handle = {
       map,
+      expectedPopulation: travelers.length,
       bakeLoadingChurch: async () => (await import("@/lib/game/render/loading-church-bake")).bakeLoadingChurch(gl),
       benchmarkTarget: benchmarkCity(map)?.centre,
       cityStats: () => cityBenchmarkStats(simRegistry.current, map),
@@ -116,6 +117,30 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
       isolatedWork: () => ({ ...benchmarkWork }),
       setBuildingBatching: (enabled: boolean) => { buildingBatchControl.enabled = enabled },
       setBatching: (enabled: boolean) => { characterBatchControl.enabled = enabled },
+      setCompactBatches: (enabled: boolean) => {
+        if (process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1") characterBatchControl.compact = enabled
+      },
+      batchPreparation: () => {
+        const totals = { compact: characterBatchControl.compact, batches: 0, entries: 0, direct: 0, dynamicBytes: 0 }
+        for (const batch of namedRoot("character-batches")?.children ?? []) {
+          if (!batch.visible || !batch.userData.batchPreparation) continue
+          totals.batches++
+          for (const key of ["entries", "direct", "dynamicBytes"] as const) totals[key] += batch.userData.batchPreparation[key]
+        }
+        return totals
+      },
+      characterComputeInput: () => {
+        const anchors: number[] = []
+        scene.traverse(object => {
+          if (!(object instanceof THREE.Sprite) || !characterBatchEntry(object) || anchors.length >= 16384 * 4) return
+          let visible = true
+          object.traverseAncestors(parent => { visible &&= parent.visible })
+          if (!visible) return
+          object.updateWorldMatrix(true, false)
+          anchors.push(...object.matrixWorld.elements.slice(12, 16))
+        })
+        return { anchors, view: camera.matrixWorldInverse.elements.slice() }
+      },
       setSceneryBatching: (enabled: boolean) => { staticBatchControl.enabled = enabled },
       setPaused: (paused: boolean) => useSimulationStore.setState({ paused }),
       setSpeed: (label: number) => {
@@ -143,8 +168,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
         missingVisibleUnits: namedRoot("travelers")?.userData.missingVisibleUnits ?? 0 }),
       adaptiveStatus: () => ({ ...crowdRenderStatus, quality: frameQuality(scene), detail: sceneryDetailStatus(scene)?.current,
         treeDensity: namedRoot("foliage-prototype")?.children[0]?.userData.treeDensity,
-        wildlife: namedRoot("wildlife")?.visible, waterDetail: namedRoot("water-shimmer")?.visible,
-        simpleBatches: namedRoot("character-batches")?.children.filter(child => child.visible && child.userData.simplified).length ?? 0 }),
+        wildlife: namedRoot("wildlife")?.visible, waterDetail: namedRoot("water-shimmer")?.visible }),
       hiddenTraveler: () => {
         const root = namedRoot("travelers")
         let hidden: { id: number; x: number; z: number } | null = null
@@ -425,6 +449,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
     return () => {
       drawProfile.dispose()
       resetBenchmarkWork()
+      characterBatchControl.compact = false
       frameQualityControl.enabled = true; crowdRenderControl.enabled = false
       delete (window as unknown as Record<string, unknown>).__pilgrimage
     }

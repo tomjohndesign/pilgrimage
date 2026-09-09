@@ -33,8 +33,8 @@ describe("settlement job sprites", () => {
         expect(atlas, `${job}/${profile.id}/${clip}`).toBeDefined()
         expect(atlas?.columns).toBe(definition.frames)
         expect(atlas?.rows).toBe(48)
-        expect(atlas?.url).toContain(`/jobs/v3/${job}-`)
-        expect(atlas?.depth).toContain(`/jobs/v3/${job}-depth-`)
+        expect(atlas?.url).toContain(`/jobs/v5/${job}-`)
+        expect(atlas?.depth).toContain(`/jobs/v5/${job}-depth-`)
       }
       for (const scale of [0.75, 1.5, 2]) {
         expect(DEFAULT_WALK_SPEED * jobSpeedScale(job, variant, scale) / (visual.walkStride * scale) * 120).toBeCloseTo(138)

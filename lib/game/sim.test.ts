@@ -87,6 +87,7 @@ function makeTraveler(
     name: `Test ${id}`,
     type: TRAVELER_TYPES[typeId],
     attributes: {
+      happiness: 80,
       gold: 10,
       status: 50,
       hunger: 80,
@@ -1263,18 +1264,18 @@ describe("natural water stops", () => {
     expect(s.thirst).toBe(5)
     expect(runUntil(sim, travelers, map, () => {
       expect(tileAt(map, worldToTileX(map, s.x), worldToTileZ(map, s.z))).not.toBe("water")
-      return s.activity === "drinking"
+      return s.activity === "drinkingLow"
     }, 60)).toBe(true)
     expect(s.thirst).toBe(5)
     expect(Math.hypot(s.x - tileToWorldX(map, 12), s.z - tileToWorldZ(map, 7))).toBeCloseTo(.7)
     stepSim(sim, travelers, map, 1, 1)
-    expect(s.activity).toBe("drinking")
+    expect(s.activity).toBe("drinkingLow")
     expect(s.thirst).toBe(5)
     expect(runUntil(sim, travelers, map, () => s.activity === "fromWater", 5)).toBe(true)
     expect([s.thirst, s.gold, s.hunger, s.stamina]).toEqual([100, 0, 50, 70])
     expect(runUntil(sim, travelers, map, () => s.activity === "walking", 30)).toBe(true)
     expect(s).toMatchObject(start)
-    expect(s.waterVisit).toBeUndefined()
+    expect(s.naturalWaterVisit).toBeUndefined()
     stepSim(sim, travelers, map, 1, .1)
     expect(s.progress).toBeGreaterThan(start.progress)
   })
@@ -1286,7 +1287,7 @@ describe("natural water stops", () => {
     Object.assign(s, { direction, track: { index: 0, progress: 9 }, progress: 8,
       x: tileToWorldX(map, 14), z: tileToWorldZ(map, 1) })
     const track = { ...s.track! }
-    expect(runUntil(sim, travelers, map, () => s.activity === "drinking", 20)).toBe(true)
+    expect(runUntil(sim, travelers, map, () => s.activity === "drinkingLow", 20)).toBe(true)
     expect(runUntil(sim, travelers, map, () => s.activity === "walking", 20)).toBe(true)
     expect(s).toMatchObject({ direction, track, progress: 8 })
     expect(s.thirst).toBeGreaterThan(90)
@@ -1313,7 +1314,7 @@ describe("natural water stops", () => {
     Object.assign(s, { activity: "fleeing", fleeTimer: 10, thirst: 0 })
     stepSim(sim, travelers, map, 1, .1)
     expect(s.activity).toBe("fleeing")
-    expect(s.waterVisit).toBeUndefined()
+    expect(s.naturalWaterVisit).toBeUndefined()
   })
 
   it("lets a settler return to work after drinking", () => {
@@ -1321,7 +1322,7 @@ describe("natural water stops", () => {
     const sim = createSim(travelers, map), s = sim.travelers.get(0)!
     Object.assign(s, { activity: "idle", employer: "woodcutter", home: null })
     const start = { x: s.x, z: s.z }
-    expect(runUntil(sim, travelers, map, () => s.activity === "drinking", 60)).toBe(true)
+    expect(runUntil(sim, travelers, map, () => s.activity === "drinkingLow", 60)).toBe(true)
     expect(runUntil(sim, travelers, map, () => s.activity === "idle", 30)).toBe(true)
     expect(s).toMatchObject({ ...start, employer: "woodcutter" })
     expect(s.thirst).toBeGreaterThan(90)

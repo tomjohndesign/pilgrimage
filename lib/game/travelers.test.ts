@@ -41,6 +41,8 @@ describe("generateTravelers", () => {
   it("starts passing travelers supplied for their own journey", () => {
     for (const seed of [1, 42, 12345]) {
       for (const { attributes } of generateTravelers(seed, 100)) {
+        expect(attributes.happiness).toBeGreaterThanOrEqual(60)
+        expect(attributes.happiness).toBeLessThanOrEqual(90)
         expect(attributes.hunger).toBeGreaterThanOrEqual(80)
         expect(attributes.thirst).toBeGreaterThanOrEqual(80)
       }

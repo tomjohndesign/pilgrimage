@@ -1,3 +1,4 @@
+import { waterSourceParts } from "../water-sources/model"
 import type { CrossroadArm } from "../map/crossroads"
 import { wallSide } from "./cutaway"
 import type { BuildingDef } from "../map/types"
@@ -19,6 +20,7 @@ function isSettlementType(type: string | undefined): type is SettlementBuildingT
 
 /** One source for placed structures, construction ghosts and build-menu images. */
 export function structureParts(building: StructureAppearance, roofJoins: RoofJoin[] = []): BuildingPart[] {
+  if (building.buildType === "well" || building.buildType === "watering-hole") return waterSourceParts(building.buildType)
   const preset = EARLY_BUILDINGS.find((item) => item.id === building.buildType)
   if (preset) {
     const parts = earlyBuildingParts({ ...earlyBuildingRecipe(preset.id), layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins, width: building.w, depth: building.d, wallHeight: building.height,

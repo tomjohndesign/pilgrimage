@@ -23,8 +23,8 @@ import { MONK_VISUAL } from "@/lib/game/base-person/monk-assets"
 import { knightLoadout, knightTravelSpeed } from "@/lib/game/knights"
 import { personWalkStride } from "@/lib/game/base-person/gait"
 import { squireVisual } from "@/lib/game/knight/visual"
-import knightMetadata from "@/public/textures/knights/v12/manifest.json"
-import transportMetadata from "@/public/textures/transport/v25/manifest.json"
+import knightMetadata from "@/public/textures/knights/v13/manifest.json"
+import transportMetadata from "@/public/textures/transport/v26/manifest.json"
 
 const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse", knight: "Knight" } as const
 type Subject = keyof typeof SUBJECTS
@@ -144,7 +144,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   const [row, setRow] = useState(1)
   const [frame, setFrame] = useState(0)
   const [clip, setClip] = useState<BaseClip>("walk")
-  const knightClip = mountedKnight ? clip === "idle" ? "idle" : "walk" : clip === "preaching" ? "idle" : clip
+  const knightClip = mountedKnight ? clip === "idle" ? "idle" : "walk" : clip === "preaching" || clip === "seatedMeal" || clip === "seatedDrink" ? "idle" : clip
   const knightFrames = mountedKnight ? knightClip === "idle" ? 1 : knightMetadata.frames : knightMetadata.person.frameCounts[knightClip]
   const frameCount = isKnight ? knightFrames : isPerson ? PERSON_CLIPS[clip].frames : subject === "cart" ? shopState === "opening" || shopState === "packing" ? 48 : 120 : grazing ? TRANSPORT.grazeFrames : clip === "idle" ? 1 : transportMetadata.animalClips.walk.frames
   useEffect(() => {

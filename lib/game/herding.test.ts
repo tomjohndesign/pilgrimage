@@ -15,7 +15,7 @@ function fixture(rotation: BuildingRotation = 0) {
   const pen = { ...def, ...rotatedFootprint(def, rotation), id: "pen", buildType: "sheep-pen", kind: "sheep-pen" as const, x: 16, z: 16, rotation }
   map.buildings.push(pen)
   const people: Traveler[] = [0, 1].map(id => ({ id, name: `Shepherd ${id}`, type: TRAVELER_TYPES.peasant, direction: 1, pace: 1, offset: .1,
-    attributes: { age: 30, gold: 0, piety: 0, status: 0, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: ["herding"] } }))
+    attributes: { happiness: 80, age: 30, gold: 0, piety: 0, status: 0, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: ["herding"] } }))
   const world = createWildlife(map, [], 1.5), sheep = world.animals.filter(a => a.kind === "sheep").slice(0, 4)
   for (const a of world.animals) if (!sheep.includes(a)) { a.reserve = true; a.concealed = true }
   sheep.forEach((a, i) => Object.assign(a, { x: -4 + i, z: 4, home: { x: -4 + i, z: 4 }, leader: a.id, rest: 10000, target: null }))

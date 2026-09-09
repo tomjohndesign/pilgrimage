@@ -1,6 +1,6 @@
 import { overlapsFloor, insideRoom } from "./building-art/furniture-placement"
 import { layoutHand } from "./building-layout"
-import { shelterHearth } from "./building-art/furnishings"
+import { shelterHearth, tavernExteriorBenches } from "./building-art/furnishings"
 import { rotateBuildingPoint, rotatedFootprint } from "./building-rotation"
 import type { BuildingDef, TilePos } from "./map/types"
 
@@ -22,8 +22,8 @@ export function tavernLayout(w: number, d: number, layoutSeed?: number, hearthZ?
     const offset=table.thickness/2+Math.min(.14,d*.035)
     return { id:`tavern-bench-${table.side}-${side}-seat`,table:table.side,side,
       x:table.x+Math.sin(table.yaw)*side*offset,z:table.z+Math.cos(table.yaw)*side*offset,
-      w:table.yaw ? .18 : table.length,d:table.yaw ? table.length : .18,
-      length:table.length,yaw:table.yaw,heading:table.yaw+(side>0 ? Math.PI : 0) }
+      w:table.yaw ? .18 : Math.min(.32,table.length),d:table.yaw ? Math.min(.32,table.length) : .18,
+      length:Math.min(.32,table.length),yaw:table.yaw,heading:table.yaw+(side>0 ? Math.PI : 0) }
   }))
   const counter = { id: "tavern-counter-top", x: w * .2, z: -d * .14,
     w: Math.min(1.15,w*.27+.035), d: Math.min(.6,d*.15), yaw:0 }
@@ -44,16 +44,17 @@ export function tavernLayout(w: number, d: number, layoutSeed?: number, hearthZ?
     const side=tables.length+1,table={id:`tavern-table-${side}-top`,side,x:w*.26,z,
       w:.75,d:.40,length:.75,thickness:.40,yaw:0}
     const seats=[-1,1].map(sign=>({id:`tavern-bench-${side}-${sign}-seat`,table:side,side:sign,
-      x:table.x,z:z+sign*.34,w:.75,d:.18,length:.75,yaw:0,heading:sign>0 ? Math.PI : 0}))
+      x:table.x,z:z+sign*.34,w:.32,d:.18,length:.32,yaw:0,heading:sign>0 ? Math.PI : 0}))
     const group={x:table.x,z,w:.75,d:.86}
     if(!insideRoom(group,w,d) || [...tables,...benches,counter,fireplace,{...serving,w:.3,d:.3}].some(p=>overlapsFloor(group,p,.15))) continue
     tables.push(table);benches.push(...seats)
   }
-  for (const item of [...tables, ...benches, counter, fireplace, serving]) item.x *= hand
+  const exteriorBenches = tavernExteriorBenches(w, d, seed, 1)
+  for (const item of [...tables, ...benches, ...exteriorBenches, counter, fireplace, serving]) item.x *= hand
   for (const table of tables) table.yaw*=hand
   for (const bench of benches) {bench.yaw*=hand;bench.heading*=hand}
   counter.yaw*=hand
-  return { tables, benches, counter, serving, obstacles: [...tables, ...benches, counter, fireplace] }
+  return { tables, benches, exteriorBenches, counter, serving, obstacles: [...tables, ...benches, counter, fireplace] }
 
 }
 

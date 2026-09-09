@@ -9,7 +9,8 @@ import type { WanderSpot } from "./monk-wander"
 
 /** Maximum actual walk from the path to a bank, in tiles. */
 export const WATER_DETOUR_LIMIT = 6
-export const WATER_THIRST_THRESHOLD = 20
+/** Consider free water as soon as a paid counter would offer a drink. */
+export const WATER_THIRST_THRESHOLD = 60
 export const WATER_DRINK_SECONDS = 3
 
 export interface WaterStop {

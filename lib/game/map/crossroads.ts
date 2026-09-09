@@ -1,4 +1,5 @@
 import { elevationStep } from "./elevation"
+import { buildingApproaches } from "../building-rotation"
 import { isRoadTerrain } from "./road"
 import { ROUTE_DIRS } from "./route"
 import { tileAt, type GameMap, type TilePos } from "./types"
@@ -13,7 +14,7 @@ const distance = (a: TilePos, b: TilePos) => Math.max(Math.abs(a.x - b.x), Math.
 const RING = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]] as const
 
 const islands = new WeakMap<Crossroad[], Set<number>>()
-/** Reserved ground: navigation, carts and construction all leave the post's island alone. */
+/** Reserved ground: navigation, carts and construction all leave the post alone. */
 export function crossroadIslandAt(map: GameMap, x: number, z: number): boolean {
   if (!map.crossroads?.length) return false
   let cells = islands.get(map.crossroads)
@@ -61,22 +62,30 @@ function around(route: TilePos[], center: TilePos, start?: TilePos, end?: TilePo
   return { route: result, indices }
 }
 
-/** Apply once after generation. A ring uses existing terrain rendering and real walking tiles. */
+/** Apply once after generation: roadside posts at Ts, walkable rings at four-way crossings. */
 export function createCrossroads(map: GameMap): void {
   if (map.crossroads) return
+  const buildingAccess = new Set((map.buildingAccessTiles ?? []).map(p => key(map, p)))
+  const routeTerrain = (x: number, z: number) => buildingAccess.has(z * map.width + x) ? null : tileAt(map, x, z)
   const shrine = destinationDistances(map, map.site ? [map.site.door] : [])
   const candidates: Crossroad[] = []
+  // Door tracks are building approaches, not destinations needing a waymarker.
+  // Include the road across the frontage so a post cannot move opposite the tavern.
+  const tavernEntries = map.buildings.filter(b => b.buildType === "tavern")
+    .flatMap(b => buildingApproaches(map, b))
+  const nearTavern = (p: TilePos) => tavernEntries.some(entry => distance(entry, p) <= 3)
   for (let z = 0; z < map.depth; z++) for (let x = 0; x < map.width; x++) {
-    if (!isRoadTerrain(tileAt(map, x, z))) continue
+    if (!isRoadTerrain(routeTerrain(x, z))) continue
     const center = { x, z }, index = key(map, center)
+    if (nearTavern(center)) continue
     const directions = ROUTE_DIRS.filter(([dx, dz]) => {
-      const next = tileAt(map, x + dx, z + dz)
+      const next = routeTerrain(x + dx, z + dz)
       return isRoadTerrain(next) || next === "bridge"
     })
     if (directions.length < 3) continue
     // A filled stair-step corner is a broad bend, not a choice of destinations.
     const exits = directions.filter(([dx, dz]) => !directions.some(([sx, sz]) =>
-      dx * sx + dz * sz === 0 && isRoadTerrain(tileAt(map, x + dx + sx, z + dz + sz))))
+      dx * sx + dz * sz === 0 && isRoadTerrain(routeTerrain(x + dx + sx, z + dz + sz))))
     if (exits.length < 1) continue
     candidates.push({ center, shrineFork: !!map.site && same(center, map.site.branch[0]), arms: directions.map(([dx, dz]) => {
       const n = (z + dz) * map.width + x + dx
@@ -90,10 +99,26 @@ export function createCrossroads(map: GameMap): void {
   for (const crossroad of candidates) {
     const junction = crossroad.center
     if (map.crossroads.some(c => distance(c.center, junction) <= 3)) continue
+    if (crossroad.arms.length === 3) {
+      // The missing arm is across the through road from the incoming path.
+      // Leave the junction and all route indices intact; never carve a ring at a T.
+      const [dx, dz] = ROUTE_DIRS.find(([x, z]) => !crossroad.arms.some(a => a.direction.x === x && a.direction.z === z))!
+      const center = { x: junction.x + dx, z: junction.z + dz }
+      const terrain = tileAt(map, center.x, center.z)
+      if (!terrain || isRoadTerrain(terrain) || ["water", "bridge", "darkwood"].includes(terrain)) continue
+      if (nearTavern(center) || map.crossroads.some(c => distance(c.center, center) <= 2)) continue
+      if (map.buildings.some(b => center.x >= b.x - 1 && center.x <= b.x + b.w && center.z >= b.z - 1 && center.z <= b.z + b.d)) continue
+      if (map.site && same(map.site.door, center)) continue
+      if (!Number.isFinite(elevationStep(map.elevation, key(map, junction), key(map, center)))) continue
+      map.tiles[key(map, center)] = "clearing"
+      map.crossroads.push({ ...crossroad, center, junction })
+      continue
+    }
     // A junction on an edge or beside an obstacle still needs a marker. Try
     // the adjoining ground. Narrow bridge landings can use the first dry
     // corner along an outgoing track, keeping the marker beside the fork.
     const fits = (center: TilePos) => {
+      if (nearTavern(center)) return false
       if (map.crossroads!.some(c => distance(c.center, center) <= 2)) return false
       if ((map.darkForests ?? []).some(grove => distance(grove.center, center) <= 2)) return false
       if (map.site && same(map.site.door, center)) return false

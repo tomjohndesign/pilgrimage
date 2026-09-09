@@ -18,7 +18,7 @@ export function townResidents(map: GameMap) {
         id, name: `${jobSlot === 0 ? "Aldwin" : "Edith"} of ${town.name}`,
         type: TRAVELER_TYPES.peasant, pace: 1, direction: 1,
         offset: town.junction / Math.max(1, (map.road?.length ?? 1) - 1),
-        attributes: { age: 28 + jobSlot * 5, gold: 40, piety: 30, status: 25,
+        attributes: { age: 28 + jobSlot * 5, gold: 40, piety: 30, happiness: 75, status: 25,
           hunger: 100 - jobSlot * 20, thirst: 100 - jobSlot * 20, stamina: 100 - jobSlot * 15,
           jobless: false, skills: [...BUILDING_KINDS.tavern.trades] },
       }

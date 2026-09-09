@@ -7,7 +7,7 @@ import ts from "typescript"
 
 // Real GPU depth testing: unit tests cannot catch interpolation/quantization seams.
 test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned outlines", async () => {
-  const metadata = JSON.parse(await readFile(new URL("../public/textures/characters/base/base-person-v34.json", import.meta.url), "utf8"))
+  const metadata = JSON.parse(await readFile(new URL("../public/textures/characters/base/base-person-v36.json", import.meta.url), "utf8"))
   const poseClips = Object.fromEntries(Object.entries(metadata.clips).map(([clip, frames]) => [clip, frames.length / metadata.directions.length]))
   const shader = ts.transpileModule(await readFile(new URL("../lib/game/render/sprite-depth.ts", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.ESNext },
@@ -600,7 +600,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       }, rowOffset)
       foliageResults.push(foliage)
     }
-    const batched = await page.evaluate(async columns => {
+    const compareBatches = async compact => page.evaluate(async ({ columns, compact }) => {
       const THREE = await import("/three.module.js")
       const { CharacterBatch, characterPalette } = await import("/batch-character-batch.js")
       const { applyComplexionSwap, complexionUniforms } = await import("/batch-complexion-swap.js")
@@ -653,11 +653,11 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
           } else originals.add(sprite)
           return sprite
         })
-        return { sprite: sprites[0], ids: sprites[1], complexion, simpleColor: new THREE.Color("#657b50"), ground, depth: pose, id }
+        return { sprite: sprites[0], ids: sprites[1], complexion, ground, depth: pose, id }
       })
-      let batch = new CharacterBatch(entries[0], worldTexel, 1)
+      let batch = new CharacterBatch(entries[0], worldTexel, 1, compact)
       scene.add(batch.root)
-      let compared = 0, mismatches = 0, visible = 0, simplifiedCompared = 0, simplifiedMismatches = 0
+      let compared = 0, mismatches = 0, visible = 0, detailedColorCases = 0
       const examples = [], byLayer = [0, 0]
       for (const recolor of [true, false]) {
         if (!recolor) {
@@ -669,7 +669,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
             material.customProgramCacheKey = () => "test-batch-uncolored"
             material.needsUpdate = true
           }
-          batch = new CharacterBatch(entries[0], worldTexel, 1); scene.add(batch.root)
+          batch = new CharacterBatch(entries[0], worldTexel, 1, compact); scene.add(batch.root)
         }
         for (const size of [192, 384]) {
           gl.setSize(size, size)
@@ -684,6 +684,10 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
             camera.position.set(Math.sin(yaw) * 20, 14, Math.cos(yaw) * 20); camera.lookAt(0, .3, 0); camera.updateMatrixWorld()
             for (let frame = 0; frame < 3; frame++) {
               entries.forEach((entry, i) => {
+                for (const sprite of [entry.sprite, entry.ids]) if (sprite.parent !== originals) {
+                  sprite.parent.position.y = .02 + frame * .03
+                  sprite.parent.scale.set(.85 + frame * .1, 1.05, .95)
+                }
                 const map = entry.sprite.material.map
                 map.repeat.set(1 / columns, 1 / 8); map.offset.set(((i + frame) % columns) / columns, direction / 8)
                 // Mix direct shared-atlas UVs with ordinary private texture
@@ -706,16 +710,14 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
                 camera.layers.set(layer)
                 originals.visible = true; batch.root.visible = false; const reference = capture()
                 originals.visible = false; batch.root.visible = true; const actual = capture()
-                if (size === 192 && direction === 0 && frame === 0) {
-                  batch.setSimplified(true)
-                  const simplified = capture(), colours = new Set()
+                if (layer === 0) {
+                  const colours = new Set()
                   for (let i = 0; i < actual.length; i += 4) {
-                    if (actual[i + 3] !== simplified[i + 3]) simplifiedMismatches++
-                    if (layer === 1 && [0, 1, 2].some(c => actual[i + c] !== simplified[i + c])) simplifiedMismatches++
-                    if (simplified[i + 3]) { simplifiedCompared++; colours.add(simplified.slice(i, i + 3).join(",")) }
+                    if (actual[i + 3]) colours.add(actual.slice(i, i + 3).join(","))
                   }
-                  if (layer === 0 && colours.size !== 1) simplifiedMismatches++
-                  batch.setSimplified(false)
+                  // Even unselected crowd batches must retain authored shading,
+                  // skin and clothing instead of becoming a single-color shape.
+                  if (colours.size > 1) detailedColorCases++
                 }
                 for (let i = 0; i < actual.length; i += 4) {
                   if (reference[i + 3]) visible++
@@ -735,8 +737,11 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       batch.write(entries.slice(0, 2), camera); batch.write([], camera); batch.dispose()
       originals.traverse(sprite => { if (sprite instanceof THREE.Sprite) { sprite.material.map.dispose(); sprite.material.dispose() } })
       color.dispose(); depth.dispose(); gl.dispose()
-      return { compared, visible, mismatches, simplifiedCompared, simplifiedMismatches, byLayer, examples }
-    }, poseClips.walk)
+      return { compact, compared, visible, mismatches, detailedColorCases, byLayer, examples }
+    }, { columns: poseClips.walk, compact })
+    const batchResults = []
+    for (const compact of [false, true]) batchResults.push(await compareBatches(compact))
+    console.log("Character batch GPU comparisons", batchResults)
     const buildings = await page.evaluate(async () => {
       const THREE = await import("/three.module.js")
       const { mergedBuildingBlock, buildingSurfaceMaterial } = await import("/batch-building-batch.js")
@@ -1086,10 +1091,11 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     assert.ok(uploads.preserved && uploads.changed > 0, `real atlas changes must still upload: ${JSON.stringify(uploads)}`)
     assert.ok(scenery.compared > 10000, JSON.stringify(scenery))
     assert.equal(scenery.mismatches, 0, `visible scenery batches must preserve lighting and overlap pixels: ${JSON.stringify(scenery)}`)
-    assert.ok(batched.simplifiedCompared > 1000, JSON.stringify(batched))
-    assert.equal(batched.simplifiedMismatches, 0, "solid colour must preserve silhouette, depth ordering and selection IDs")
-    assert.ok(batched.visible > 10000, JSON.stringify(batched))
-    assert.equal(batched.mismatches, 0, `batched color and ID pixels must match individual sprites: ${JSON.stringify(batched)}`)
+    for (const batched of batchResults) {
+      assert.equal(batched.detailedColorCases, 96, "all crowd views must retain authored color detail")
+      assert.ok(batched.visible > 10000, JSON.stringify(batched))
+      assert.equal(batched.mismatches, 0, `batched color and ID pixels must match individual sprites: ${JSON.stringify(batched)}`)
+    }
     for (const foliage of foliageResults) {
       assert.ok(foliage.cropCompared > 1000, JSON.stringify(foliage))
       assert.equal(foliage.cropMismatches, 0, `cropping transparent foliage padding must retain visible pixels: ${JSON.stringify(foliage)}`)

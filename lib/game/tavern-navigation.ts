@@ -61,7 +61,20 @@ function tavernAt(map: GameMap, p: TilePos) {
 /** Undefined delegates ordinary travel; null means the tavern trip is blocked. */
 export function tavernWalkingRoute(map: GameMap, from: TavernWalkPoint, to: TavernWalkPoint, seat?: string): TavernWalkPoint[] | null | undefined {
   const start = tavernAt(map, from), end = tavernAt(map, to)
-  if (!start && !end) return undefined
+  if (!start && !end) {
+    const exterior = map.buildings.some(b => {
+      if (b.buildType !== "tavern") return false
+      const { w, d } = rotatedFootprint(b, b.rotation)
+      return tavernLayout(w, d, b.layoutSeed, b.hearthZ).exteriorBenches.some(bench =>
+        same(local(map, b, from), bench) || same(local(map, b, to), bench))
+    })
+    if (!exterior) return undefined
+    const route = settlementRoute(map, map.buildings,
+      { x: worldToTileX(map, from.x), z: worldToTileZ(map, from.z) },
+      { x: worldToTileX(map, to.x), z: worldToTileZ(map, to.z) }, false, true)
+    return route ? [from, ...route.map(p => ({ x: tileToWorldX(map, p.x), z: tileToWorldZ(map, p.z),
+      y: surfaceHeight(map, p.x, p.z) })), to] : null
+  }
   if (start && start === end) return tavernInteriorRoute(start, local(map, start, from), local(map, start, to), seat)
     ?.map(p => tavernWorldPoint(map, start, p)) ?? null
   const options = (building: BuildingDef | undefined, point: TavernWalkPoint, leaving: boolean) => {

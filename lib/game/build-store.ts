@@ -64,7 +64,7 @@ export const useBuildStore = create<BuildState>((set) => ({
         id: t.id,
         name: t.name,
         duty: job ? SETTLEMENT_JOBS[job].label : "Resident",
-        attributes: { age: t.attributes.age, piety: live.piety, skills: t.attributes.skills },
+        attributes: { age: t.attributes.age, piety: live.piety, happiness: live.happiness, skills: t.attributes.skills },
       }] : []
     })
     return {

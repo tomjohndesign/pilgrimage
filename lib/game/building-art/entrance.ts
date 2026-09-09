@@ -5,7 +5,7 @@ import type { BuildingPart, Vec3 } from "./geometry"
 
 /** Furniture against the building edge of the reserved path tile; the middle stays wide enough to walk through. */
 export function entranceParts(type: string, wallHeight = .78, seed = 17): BuildingPart[] {
-  const random = makeRng(seed), hand = random() < .5 ? -1 : 1, furnishing = Math.floor(random()*3)
+  const random = makeRng(seed), hand = random() < .5 ? -1 : 1, furnishing = (Math.floor(random()*3)+2)%3
   const wood = ["#806b4c", "#947b55", "#71634c"][Math.floor(random()*3)]
   const parts:BuildingPart[]=[]
   const box=(name:string,position:Vec3,size:Vec3,color:string,rotation?:Vec3)=>parts.push({name:`entry-${name}`,layer:"interior",position,size,color: color === "#806b4c" ? wood : color,rotation,outline:false})
@@ -18,9 +18,10 @@ export function entranceParts(type: string, wallHeight = .78, seed = 17): Buildi
       box("water-tub",[x,.10,z],[.22,.20,.22],wood)
       box("tub-water",[x,.205,z],[.17,.01,.17],"#64756c")
       box("tub-hoop",[x,.045,z],[.22,.025,.22],"#5b523f")
-    } else {
+    } else if (type !== "tavern") {
     for(const a of [-1,1]) for(const b of [-1,1]) box(`chair-leg-${a}-${b}`,[x+a*.08,.12,z+b*.08],[.026,.24,.026],"#806b4c")
     box("chair-seat",[x,.25,z],[.22,.035,.22],"#9f875e")
+    parts[parts.length-1].support = { clips: ["sitting", "seatedMeal", "seatedDrink"], heading: 0 }
     for(const side of [-1,1]) box(`chair-back-post-${side}`,[x+side*.085,.36,z-.085],[.028,.27,.028],"#806b4c")
     box("chair-back",[x,.45,z-.085],[.20,.08,.025],"#968058")
     }
