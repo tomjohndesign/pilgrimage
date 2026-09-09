@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "04409e665c2fe80f28a9fd94f7082397d92e8b77",
-  "releaseCount": 151,
+  "lastProcessedCommit": "d6b931c32917697f5d517bb8664374f4a87031f2",
+  "releaseCount": 152,
   "releases": [
+    {
+      "version": "0.0.166",
+      "title": "Release 0.0.166",
+      "summary": "Add refresh button to randomize world seed (#185)",
+      "commit": "d6b931c32917697f5d517bb8664374f4a87031f2"
+    },
     {
       "version": "0.0.165",
       "title": "Release 0.0.165",
