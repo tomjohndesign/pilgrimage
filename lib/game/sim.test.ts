@@ -173,36 +173,36 @@ describe("game time", () => {
 })
 
 describe("stepSim", () => {
-  it.each(["hunger", "thirst", "stamina"] as const)("keeps moving toward camp with empty %s and regains pace after recovery", need => {
+  it.each(["hunger", "thirst", "stamina"] as const)("keeps moving off the road with empty %s and regains pace after recovery", need => {
     const map = makeMap(), travelers = [makeTraveler(0, "peasant", { hunger: 100, thirst: 100, stamina: 100, [need]: 0 })]
     const sim = createSim(travelers, map), s = sim.travelers.get(0)!
     sim.balance = structuredClone(DEFAULT_BALANCE)
     Object.assign(sim.balance.rules, { hungerDecay: 0, thirstDecay: 0, staminaDecay: 0 })
-    s.activity = "toCamp"
+    s.activity = "toBegging"
     s.x = tileToWorldX(map, 10); s.z = tileToWorldZ(map, 6)
     s.walkFrom = { x: s.x, y: s.y, z: s.z }
     s.spot = { x: s.x + 5, y: s.y, z: s.z }
     const start = s.x
     for (let i = 0; i < 10; i++) stepSim(sim, travelers, map, 1, 0.1)
     expect(s.x - start).toBeCloseTo(MIN_WEARY_SPEED)
-    expect(s.activity).toBe("toCamp")
+    expect(s.activity).toBe("toBegging")
     s[need] = 100
     const recovered = s.x
     for (let i = 0; i < 10; i++) stepSim(sim, travelers, map, 1, 0.1)
     expect(s.x - recovered).toBeCloseTo(1)
   })
 
-  it("records a traveler walking to camp, without wearing ground while paused or resting", () => {
+  it("records a traveler walking off the road, without wearing ground while paused or resting", () => {
     const map = makeMap(), traveler = makeTraveler(0, "pilgrim")
     const sim = createSim([traveler], map), s = sim.travelers.get(traveler.id)!
     s.x = tileToWorldX(map, 10); s.z = tileToWorldZ(map, 5)
-    s.activity = "toCamp"
+    s.activity = "toBegging"
     s.walkFrom = { x: s.x, y: s.y, z: s.z }
     s.spot = { x: tileToWorldX(map, 10), y: s.y, z: tileToWorldZ(map, 7) }
     stepSim(sim, [traveler], map, 1, 0)
     expect(sim.footpaths.edges.size).toBe(0)
-    for (let i = 0; i < 200 && s.activity === "toCamp"; i++) stepSim(sim, [traveler], map, 1, .1)
-    expect(s.activity).toBe("camping")
+    for (let i = 0; i < 200 && s.activity === "toBegging"; i++) stepSim(sim, [traveler], map, 1, .1)
+    expect(s.activity).toBe("begging")
     expect(sim.footpaths.edges.size).toBeGreaterThan(0)
     const edges = structuredClone(sim.footpaths.edges)
     stepSim(sim, [traveler], map, 1, 0)
@@ -211,7 +211,7 @@ describe("stepSim", () => {
     for (const [key, edge] of sim.footpaths.edges) expect(edge.wear).toBeLessThanOrEqual(edges.get(key)!.wear)
   })
 
-  it("uses live needs tuning for walkers and keeps camping's reduced drain", () => {
+  it("uses live needs tuning for walkers and never tires them on the road", () => {
     const map = makeMap()
     const travelers = [makeTraveler(0, "knight")]
     const sim = createSim(travelers, map)
@@ -219,16 +219,11 @@ describe("stepSim", () => {
     const s = sim.travelers.get(0)!
     const hour = GAME_DAY_SECONDS / 24
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([78.5, 77, 78.95])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([78.5, 77, 80])
 
-    Object.assign(sim.balance.rules, { hungerDecay: 2, thirstDecay: 6, staminaDecay: 0 })
+    Object.assign(sim.balance.rules, { hungerDecay: 2, thirstDecay: 6, staminaDecay: 10 })
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([76.5, 71, 78.95])
-
-    s.activity = "camping"
-    s.stamina = 0
-    stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([75.5, 68, 60])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([76.5, 71, 80])
   })
 
   it("keeps food and water supplied longer over an active day", () => {
@@ -246,13 +241,13 @@ describe("stepSim", () => {
         s.activity = "walking"
       }
     }
-    // Nothing bottoms out in a day: a full cup lasts about 33 hours, and walkers
-    // pitch camp once stamina falls below 20.
+    // Nothing bottoms out in a day: a full cup lasts about 33 hours, and the
+    // road itself never tires anyone.
     expect(depleted).toEqual({ hunger: 0, thirst: 0, stamina: 0 })
     expect(sim.time).toBeCloseTo(1)
   })
 
-  it("wears travelers down as they walk", () => {
+  it("wears travelers' food and water down as they walk, but never their legs", () => {
     const map = makeMap()
     const travelers = [makeTraveler(0, "knight")]
     const sim = createSim(travelers, map)
@@ -263,82 +258,14 @@ describe("stepSim", () => {
 
     expect(s.hunger).toBeLessThan(80)
     expect(s.thirst).toBeLessThan(80)
-    expect(s.stamina).toBeLessThan(80)
+    expect(s.stamina).toBe(80)
     expect(s.x).not.toBe(startX)
     expect(s.activity).toBe("walking")
   })
 
-  it("camps in a clearing when exhausted — never in woods or on the road — then rests and returns", () => {
-    const map = makeMap()
-    const travelers = [makeTraveler(0, "knight", { stamina: 1, hunger: 100, thirst: 100 })]
-    const sim = createSim(travelers, map)
-    const s = sim.travelers.get(0)!
 
-    expect(runUntil(sim, travelers, map, () => s.activity === "camping", 20)).toBe(true)
-    const terrain = tileAt(map, worldToTileX(map, s.spot!.x), worldToTileZ(map, s.spot!.z))
-    expect(["grass", "dirt", "clearing"]).toContain(terrain)
 
-    const staminaAsleep = s.stamina
-    stepSim(sim, travelers, map, 1, 0.5)
-    expect(s.stamina).toBeGreaterThan(staminaAsleep)
 
-    expect(runUntil(sim, travelers, map, () => s.activity === "walking", GAME_DAY_SECONDS / 4)).toBe(true)
-    expect(s.stamina).toBeGreaterThan(90)
-    expect(s.spot).toBeNull()
-    expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) - s.laneOffset)
-  })
-
-  it("keeps new camps out of purchased building footprints", () => {
-    const map = makeMap()
-    map.buildings.push({
-      id: "settlement-0", buildType: "shelter", label: "Shelter",
-      x: 0, z: 5, w: map.width, d: 1, height: 1, color: "#888", roofColor: "#444",
-    })
-    const travelers = [makeTraveler(0, "knight", { stamina: 1, hunger: 100, thirst: 100 })]
-    const sim = createSim(travelers, map)
-    const traveler = sim.travelers.get(0)!
-
-    expect(runUntil(sim, travelers, map, () => traveler.activity === "camping", 20)).toBe(true)
-    expect(worldToTileZ(map, traveler.spot!.z)).not.toBe(5)
-  })
-
-  it("has pilgrims join a nearby camp instead of camping alone", () => {
-    const map = makeMap()
-    const travelers = [
-      makeTraveler(0, "friar", {}, 0.5),
-      makeTraveler(1, "pilgrim", { stamina: 0.1, hunger: 100, thirst: 100 }, 0.6),
-    ]
-    const sim = createSim(travelers, map)
-
-    // Hand-place the friar's camp a few tiles from the pilgrim's road position.
-    const friar = sim.travelers.get(0)!
-    friar.activity = "camping"
-    friar.spot = { x: friar.x + 2, y: 0.2, z: friar.z + 2 }
-
-    const pilgrim = sim.travelers.get(1)!
-    expect(runUntil(sim, travelers, map, () => pilgrim.spot !== null, 5)).toBe(true)
-    const dist = Math.hypot(pilgrim.spot!.x - friar.spot.x, pilgrim.spot!.z - friar.spot.z)
-    expect(dist).toBeLessThan(3)
-  })
-
-  it("anchors anyone's camp to a nearby stall — food beats solitude", () => {
-    const map = makeMap()
-    const travelers = [
-      makeTraveler(0, "vendor", {}, 0.5),
-      makeTraveler(1, "knight", { stamina: 0.1, hunger: 100, thirst: 100 }, 0.6),
-    ]
-    const sim = createSim(travelers, map)
-
-    const vendor = sim.travelers.get(0)!
-    vendor.activity = "vending"
-    vendor.timer = 999
-    vendor.spot = { x: vendor.x + 1, y: 0.2, z: vendor.z + 2 }
-
-    const knight = sim.travelers.get(1)!
-    expect(runUntil(sim, travelers, map, () => knight.spot !== null, 5)).toBe(true)
-    const dist = Math.hypot(knight.spot!.x - vendor.spot.x, knight.spot!.z - vendor.spot.z)
-    expect(dist).toBeLessThan(3)
-  })
 
   it("buys food from a vendor when starving; gold changes hands", () => {
     const map = makeMap()
@@ -369,7 +296,7 @@ describe("stepSim", () => {
     expect(runUntil(sim, travelers, map, () => buyer.thirst > 50, 10)).toBe(true)
     expect(buyer.gold).toBe(10 - WINE_PRICE)
     expect(vendor.gold).toBe(WINE_PRICE)
-    expect(buyer.stamina).toBeLessThan(50)
+    expect(buyer.stamina).toBe(50)
     expect(buyer.hunger).toBeLessThan(50)
   })
 
@@ -847,21 +774,10 @@ describe("tracks through the dark forest", () => {
     expect(worldToTileZ(map, s.z)).toBe(exitTile.z)
   })
 
-  it("comes back from camp to the track it was on, not the road", () => {
-    const map = makeTrackMap()
-    const travelers = [makeTraveler(0, "knight", { stamina: 0.5, hunger: 100, thirst: 100 }, beforeMouth)]
-    const sim = createSim(travelers, map)
-    const s = sim.travelers.get(0)!
-    s.track = { index: 0, progress: 8 }
-    expect(runUntil(sim, travelers, map, () => s.activity === "camping", 20)).toBe(true)
-    expect(runUntil(sim, travelers, map, () => s.activity === "walking", 60)).toBe(true)
-    expect(s.track).not.toBeNull()
-    expect(tileAt(map, worldToTileX(map, s.x), worldToTileZ(map, s.z))).toBe("track")
-  })
 })
 
 describe("off-road grid walking", () => {
-  it.each(["toCamp", "toShop"] as const)("routes %s around a wall and water instead of walking straight through them", (activity) => {
+  it.each(["toBegging", "toShop"] as const)("routes %s around a wall and water instead of walking straight through them", (activity) => {
     const map = makeMap()
     map.buildings.push({ id: "inn", label: "Inn", x: 12, z: 5, w: 2, d: 2, height: 1, color: "", roofColor: "" })
     map.tiles[6 * map.width + 11] = "water"
@@ -878,11 +794,11 @@ describe("off-road grid walking", () => {
       expect(tileAt(map, x, z)).not.toBe("water")
       expect(Math.hypot(s.x - before.x, s.z - before.z)).toBeLessThanOrEqual(s.moveSpeed * 0.01 + 1e-8)
     }
-    expect(s.activity).toBe(activity === "toCamp" ? "camping" : "openingShop")
+    expect(s.activity).toBe(activity === "toBegging" ? "begging" : "openingShop")
     expect(s.x).toBe(s.spot.x)
     expect(s.z).toBe(s.spot.z)
     // Force the return journey and check the same obstacles in reverse.
-    s.activity = activity === "toCamp" ? "fromCamp" : "fromShop"
+    s.activity = activity === "toBegging" ? "fromBegging" : "fromShop"
     s.offRoadRoute = null
     for (let i = 0; i < 2000 && !["walking"].includes(s.activity); i++) {
       stepSim(sim, [traveler], map, 1, 0.01)
@@ -894,16 +810,6 @@ describe("off-road grid walking", () => {
     expect(s.z).toBeCloseTo(tileToWorldZ(map, 4) - s.laneOffset)
   })
 
-  it("does not choose a camping spot across an impassable forest ridge", () => {
-    const map = makeMap(), traveler = makeTraveler(0, "knight", { stamina: 0 })
-    const sim = createSim([traveler], map), s = sim.travelers.get(0)!
-    // A nearby vendor attracts the camper toward the unreachable side.
-    const vendor = { ...s, id: 1, activity: "vending" as const, spot: { x: s.x, y: TILE_HEIGHT, z: tileToWorldZ(map, 2) } }
-    sim.travelers.set(1, vendor)
-    stepSim(sim, [traveler], map, 1, 0.1)
-    expect(s.spot).not.toBeNull()
-    expect(worldToTileZ(map, s.spot!.z)).toBeGreaterThan(4)
-  })
 })
 
 describe("roadside music", () => {
@@ -1071,17 +977,17 @@ describe("beggar progression", () => {
     const sim = createSim(travelers, map), person = sim.travelers.get(0)!
     person.employer = "hut"
     person.home = "home"
-    person.activity = "camping"
+    person.activity = "offering"; person.timer = 5
     person.stamina = 0
     person.spot = { x: person.x, y: person.y, z: person.z }
     person.goldlessSeconds = BEGGAR_DELAY_SECONDS - 0.1
     stepSim(sim, travelers, map, 0, 0.1)
     expect(person.beggar).toBe(true)
-    expect(person.activity).toBe("camping")
+    expect(person.activity).toBe("offering")
     person.gold = 15
     stepSim(sim, travelers, map, 0, 0.1)
     expect(person.beggar).toBe(false)
-    expect([person.employer, person.home, person.activity]).toEqual(["hut", "home", "camping"])
+    expect([person.employer, person.home, person.activity]).toEqual(["hut", "home", "offering"])
   })
 })
 

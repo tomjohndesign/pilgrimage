@@ -84,7 +84,7 @@ import { TRAVELER_TYPES, type Traveler } from "./travelers"
  *    down the branch. The brothers restore their needs and bestow piety before
  *    they return to the road; each visit spreads the shrine's renown.
  *  - Jobless visitors may settle into a woodcutter hut slot, walk to a reserved
- *    tree, fell it and haul logs home. Camps provide rest when needs run low.
+ *    tree, fell it and haul logs home. Legs never tire on the road.
  *  - Stamina below 20 → leave the road for the nearest open ground (grass, dirt,
  *    or a forest-floor clearing — never solid woods or the road itself) and
  *    camp until rested. A roadside stall is
@@ -247,6 +247,8 @@ const HOME_DRINK_PER_HOUR = 40
 const SETTLER_FED_AT = 80
 /** An exhausted traveler anchors to a stall or camp within this many tiles. */
 const CAMP_JOIN_RADIUS = 10
+/** On the road, on a track or hurrying away: the journey itself never tires anyone. */
+const TRAVEL_ACTIVITIES: readonly Activity[] = ["walking", "seeking", "fleeing"]
 /** How far off the road anyone will look for a clearing. */
 const CAMP_SEARCH_RADIUS = 6
 /** The hungry hurry: pace multiplier while chasing a vendor. */
@@ -816,6 +818,7 @@ export function createSim(
       member.lane = party.direction * place.lane
       Object.assign(member, roadWorldPoint(map, member.progress, member.lane))
     }
+    party.formed = true
   }
   for (const resident of townResidents(map)) {
     const actor = sim.travelers.get(resident.traveler.id)
@@ -828,25 +831,6 @@ export function createSim(
  * Nearest open tile to a world point: grass, dirt, or a forest-floor clearing —
  * never solid woods or the road itself.
  */
-function findClearTile(map: GameMap, wx: number, wz: number, start: TilePos): { x: number; z: number } | null {
-  const cx = worldToTileX(map, wx)
-  const cz = worldToTileZ(map, wz)
-  for (let r = 0; r <= CAMP_SEARCH_RADIUS; r++) {
-    for (let dz = -r; dz <= r; dz++) {
-      for (let dx = -r; dx <= r; dx++) {
-        if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue
-        const terrain = tileAt(map, cx + dx, cz + dz)
-        if ((terrain === "grass" || terrain === "dirt" || terrain === "clearing") && !buildingAt(map, cx + dx, cz + dz)) {
-          const goal = { x: cx + dx, z: cz + dz }
-          if (settlementRoute(map, map.buildings, start, goal)) return goal
-        }
-      }
-    }
-  }
-  return null
-}
-
-/** Nearest pitched spot among travelers in the given activities, within radius. */
 function findNearbySpot(
   sim: SimState,
   selfId: number,
@@ -872,23 +856,6 @@ const STALL_ACTIVITIES: readonly Activity[] = ["toShop", "openingShop", "vending
 /** Activities that hold someone in place; their speed stays at zero. */
 const STILL_ACTIVITIES: readonly Activity[] = ["offering", "working", "building", "browsing", "performing", "listening", "begging", "givingAlms",
   "openingShop", "packingShop", "vending", "idle", "posted", "sleeping", "buying", "sitting", "drinking", "drinkingLow"]
-const CAMP_ACTIVITIES: readonly Activity[] = ["toCamp", "camping"]
-
-/** World-space pitch on the nearest clearing to `anchor`, or in place if none. */
-function pitchSpot(
-  map: GameMap,
-  s: SimTraveler,
-  anchor: { x: number; z: number },
-): { x: number; y: number; z: number } {
-  const tile = findClearTile(map, anchor.x, anchor.z, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) })
-  return tile
-    ? {
-        x: tileToWorldX(map, tile.x),
-        y: surfaceHeight(map, tile.x, tile.z),
-        z: tileToWorldZ(map, tile.z),
-      }
-    : { x: s.x, y: s.y, z: s.z }
-}
 
 function startOffRoadWalk(s: SimTraveler, activity: Activity): void {
   s.walkFrom = { x: s.x, y: s.y, z: s.z }
@@ -968,18 +935,6 @@ function availablePerformance(sim: SimState, s: SimTraveler): SimTraveler | unde
   const visit = s.musicVisit
   const performer = visit && sim.travelers.get(visit.performerId)
   return performer?.activity === "performing" && !performer.praying && performer.cycle === visit?.cycle ? performer : undefined
-}
-
-function startCamping(sim: SimState, s: SimTraveler, traveler: Traveler, map: GameMap): void {
-  // A vendor's stall anchors anyone's camp — food nearby beats solitude.
-  // Failing that, pilgrims look for other campers; the rest camp where they are.
-  const stall = findNearbySpot(sim, s.id, s.x, s.z, STALL_ACTIVITIES)
-  const campmates =
-    !stall && traveler.type.id === "pilgrim"
-      ? findNearbySpot(sim, s.id, s.x, s.z, CAMP_ACTIVITIES)
-      : null
-  s.spot = pitchSpot(map, s, stall ?? campmates ?? s)
-  startOffRoadWalk(s, "toCamp")
 }
 
 /** Keep the exact departure point and return route, including a track's lane. */
@@ -1459,6 +1414,7 @@ const PARTY_ROUTE_LIMIT = 1500
 
 // Identities keyed by ID, reused across steps while the cast is unchanged.
 const identityIndexes = new WeakMap<readonly Traveler[], Map<number, Traveler>>()
+const syncedCasts = new WeakSet<readonly Traveler[]>()
 function travelerIdentities(travelers: readonly Traveler[]): Map<number, Traveler> {
   let index = identityIndexes.get(travelers)
   if (!index) { index = new Map(travelers.map(t => [t.id, t])); identityIndexes.set(travelers, index) }
@@ -1502,61 +1458,16 @@ function companyPace(party: TravelParty, members: readonly SimTraveler[], natura
   return party.pace
 }
 
-/** Reserve the entire camp before moving anyone. Full camps and unreachable
- * clearings leave the party on the road, with a bounded retry interval. Each
- * person plans at most two bounded routes; nobody searches every pitch in turn. */
-function startPartyCamp(sim: SimState, party: TravelParty, members: SimTraveler[], map: GameMap): boolean {
-  const anchor = party.transport?.phase === "parked" ? party.transport.pose : members[Math.floor(members.length / 2)]
-  const stall = findNearbySpot(sim, members[0].id, anchor.x, anchor.z, STALL_ACTIVITIES)
-  const centre = stall ?? anchor
-  const cx = worldToTileX(map, centre.x), cz = worldToTileZ(map, centre.z)
-  // Pitches already claimed nearby, read once rather than for every candidate tile.
-  const claimed: { x: number; z: number }[] = []
-  for (const other of sim.travelers.values()) {
-    if (other.spot && Math.abs(other.spot.x - centre.x) < 8 && Math.abs(other.spot.z - centre.z) < 8) claimed.push(other.spot)
-  }
-  const candidates: TilePos[] = []
-  for (let dz = -6; dz <= 6; dz++) for (let dx = -6; dx <= 6; dx++) {
-    const tile = { x: cx + dx, z: cz + dz }, terrain = tileAt(map, tile.x, tile.z)
-    if (!["grass", "dirt", "clearing"].includes(terrain ?? "") || buildingAt(map, tile.x, tile.z)) continue
-    const x = tileToWorldX(map, tile.x), z = tileToWorldZ(map, tile.z)
-    if (claimed.some(spot => Math.hypot(spot.x - x, spot.z - z) < .8)) continue
-    candidates.push(tile)
-  }
-  candidates.sort((a, b) => Math.hypot(a.x - cx, a.z - cz) - Math.hypot(b.x - cx, b.z - cz))
-  if (candidates.length < members.length) return false
-  // A single cluster, rather than pitches scattered along a large party's tail.
-  const first = candidates[0]
-  const cluster = candidates.filter(tile => Math.hypot(tile.x - first.x, tile.z - first.z) <= 5)
-  if (cluster.length < members.length) return false
-  const plans: { s: SimTraveler; tile: TilePos; route: TilePos[] }[] = []
-  let next = 0
-  for (const s of members) {
-    const start = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
-    let tile: TilePos | undefined, route: TilePos[] | null = null
-    for (let attempt = 0; attempt < 2 && next < cluster.length && !route; attempt++) {
-      tile = cluster[next++]
-      route = settlementRoute(map, map.buildings, start, tile, false, false, undefined, PARTY_ROUTE_LIMIT)
-    }
-    if (!route || !tile) return false
-    plans.push({ s, tile, route })
-  }
-  for (const { s, tile, route } of plans) {
-    s.spot = { x: tileToWorldX(map, tile.x), y: surfaceHeight(map, tile.x, tile.z), z: tileToWorldZ(map, tile.z) }
-    routeWalk(s, map, route, s.spot)
-    s.activity = "toCamp"; s.partyWaiting = false; s.partyCarried = false
-  }
-  party.stage = "camping"; party.reason = "Making camp together"; party.elapsed = 0
-  return true
-}
-
 /** Shared decisions and shared movement run before the personal update. A company
  * has one path and one pace: only the head's road progress moves, and every
- * walker, rider, wagon and pack animal takes its place from it. Camps, visits,
+ * walker, rider, wagon and pack animal takes its place from it. Visits,
  * boarding and regrouping after a stop still walk each person through the
  * existing individual systems, with bounded route planning. */
 function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, dt: number,
   counters: ReturnType<typeof openCounters>, naturalSpeed: (s: SimTraveler) => number, characterScale: number, movement: MovementTuning) {
+  // The game adds its cast to an empty simulation and restores saves after
+  // creation, so companies are formed once per cast here, not only in createSim.
+  if (!syncedCasts.has(travelers)) { syncedCasts.add(travelers); syncTravelParties(sim.parties, travelers, sim.travelers) }
   pruneTravelParties(sim.parties, sim.travelers, sim.joinedMonks)
   if (dt <= 0) return
   const identities = travelerIdentities(travelers)
@@ -1576,8 +1487,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
     party.elapsed += dt
     party.carried = 0
     for (const s of members) { s.partyCarried = false; s.partyWaiting = false; s.partySpeed = 0 }
-    sharePartyNeeds(party, members, sim.balance.rules.hungerDecay, sim.balance.rules.thirstDecay,
-      party.stage === "camping" ? CAMP_NEED_FACTOR : 1, dt / GAME_HOUR_SECONDS)
+    sharePartyNeeds(party, members, sim.balance.rules.hungerDecay, sim.balance.rules.thirstDecay, 1, dt / GAME_HOUR_SECONDS)
     if (!party.transportInitialized) {
       ensurePartyTransport(party, members, map, characterScale)
       // A wagon or pack animal changes everyone's place; walk into the new formation.
@@ -1599,16 +1509,8 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
         continue
       }
       if (cart.phase === "parked" && cart.intent) {
-        if (cart.intent === "camp") {
-          if (party.retry <= 0) { party.retry = 8; if (startPartyCamp(sim, party, members, map)) cart.intent = undefined }
-        } else {
-          party.stage = "visiting"; party.elapsed = 0; party.retry = 0
-          party.visitPending = [...party.members]; party.visitStarted = []; cart.intent = undefined
-        }
-      }
-      if (cart.phase === "parked" && cart.intent) {
-        for (const s of members) hold(s)
-        continue
+        party.stage = "visiting"; party.elapsed = 0; party.retry = 0
+        party.visitPending = [...party.members]; party.visitStarted = []; cart.intent = undefined
       }
       if ((cart.phase === "parked" && !cart.intent && party.stage === "traveling") || cart.phase === "boarding") {
         if (cart.phase === "parked" && party.retry <= 0) {
@@ -1686,29 +1588,6 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
         continue
       } else { party.reason = party.visitPending.length ? "Waiting for room at the enclave" : "Waiting for companions to finish visiting"; continue }
     }
-    if (party.stage === "camping") {
-      party.reason = "Resting together"
-      // Meals remain individual transactions with an actual nearby vendor.
-      for (const s of members) {
-        if (s.activity !== "camping" || (s.hunger > BUY_THRESHOLD && s.thirst > BUY_THRESHOLD)) continue
-        vending ??= [...sim.travelers.values()].filter(other => other.activity === "vending")
-        const vendor = vending.find(other => Math.hypot(other.x - s.x, other.z - s.z) <= 5)
-        if (!vendor) continue
-        if (s.hunger <= BUY_THRESHOLD) { pay(s, vendor, FOOD_PRICE); s.hunger = 100 }
-        if (s.thirst <= BUY_THRESHOLD) { pay(s, vendor, WINE_PRICE); s.thirst = 100 }
-      }
-      if (members.every(s => s.activity === "camping" && s.stamina >= 90)) {
-        for (const s of members) startOffRoadWalk(s, "fromCamp")
-        party.stage = "returning"; party.reason = "Breaking camp together"; party.elapsed = 0
-      }
-      continue
-    }
-    if (party.stage === "returning") {
-      for (const s of members) if (s.activity === "walking") hold(s)
-      if (!members.every(s => s.activity === "walking")) continue
-      party.stage = "traveling"; party.reason = "Traveling together"; party.elapsed = 0
-      regroupParty(party, members, length, seconds, characterScale)
-    }
     const onRoad = members.every(s => s.partyRiding || (s.activity === "walking" && !s.roadShortcut && !s.track))
     if (!onRoad) {
       // Someone was drawn aside by another system; the rest stand and wait.
@@ -1729,7 +1608,11 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
       if (rng() < persuaded) {
         if (cart && cart.phase === "road") {
           const occupied = [...sim.parties.values()].filter(p => p.id !== party.id && p.transport).map(p => p.transport!.pose)
-          if (!parkParty(party, map, characterScale, sim.trees, occupied, "visit")) party.cooldown = 8
+          const driver = members.find(s => s.id === cart.seats[0]) ?? head
+          // Companions walking behind the wagon are not obstacles to its own parking.
+          const context = parkingContext(sim, driver, characterScale)
+          context.people = context.people?.filter(person => !party.members.includes((person as { id?: number }).id ?? -1))
+          if (!parkParty(party, map, characterScale, context, occupied, "visit")) party.cooldown = 8
           for (const s of members) hold(s)
           continue
         }
@@ -1739,17 +1622,6 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
         for (const s of members) hold(s)
         continue
       }
-    }
-    if (party.formed && !party.singleFile && party.retry <= 0 && members.some(s => s.stamina <= CAMP_STAMINA_THRESHOLD)) {
-      party.retry = 8
-      if (cart && cart.phase === "road") {
-        const occupied = [...sim.parties.values()].filter(p => p.id !== party.id && p.transport).map(p => p.transport!.pose)
-        if (parkParty(party, map, characterScale, sim.trees, occupied, "camp")) {
-          for (const s of members) hold(s)
-          continue
-        }
-      } else if (startPartyCamp(sim, party, members, map)) continue
-      party.reason = "Looking for a clearing large enough for everyone"
     }
     // --- Shared movement: the head advances, everyone else derives from it. ---
     // Riders take no place in the column; the wagon's driver stands for its head.
@@ -1825,8 +1697,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
     stepPartyPacks(party, sim.travelers, map, characterScale, dt)
     // The detour is over once the last walker has rejoined the road behind it.
     if (party.diversion && direction * partyRoadDelta(wrap(party.progress - direction * span), party.diversion.end, length) >= 0) party.diversion = undefined
-    if (party.retry <= 0 || party.reason !== "Looking for a clearing large enough for everyone")
-      party.reason = blocked ? "Waiting for the road to clear" : party.formed ? "Traveling together" : "Regrouping with companions"
+    party.reason = blocked ? "Waiting for the road to clear" : party.formed ? "Traveling together" : "Regrouping with companions"
   }
 }
 
@@ -2009,22 +1880,23 @@ export function stepSim(
     s.visitCooldown = Math.max(0, s.visitCooldown - dt)
     s.waterRetry = Math.max(0, (s.waterRetry ?? 0) - dt)
     s.musicCooldown = Math.max(0, (s.musicCooldown ?? 0) - dt)
-    const camping = s.activity === "camping"
     // Kneeling in the shrine is a rest, not a meal: the brothers keep no table.
     const sheltered = s.activity === "visiting"
     const abed = s.activity === "sleeping"
     const isVendor = t.type.id === "vendor", needsParking = isVendor || t.type.id === "knight"
 
     // --- Needs march on ------------------------------------------------------
-    const needFactor = camping || abed ? CAMP_NEED_FACTOR : 1
+    const needFactor = abed ? CAMP_NEED_FACTOR : 1
     // A company eats and drinks from one shared store, drained by its party step.
     if (s.partyId === undefined) {
       s.hunger = Math.max(0, s.hunger - sim.balance.rules.hungerDecay * needFactor * hours)
       s.thirst = Math.max(0, s.thirst - sim.balance.rules.thirstDecay * needFactor * hours)
     }
-    if (camping || abed) s.stamina = Math.min(100, s.stamina + CAMP_STAMINA_REGEN * hours)
-    // Standing at a stall, a post or a performance neither drains nor restores the legs.
-    else if (!s.partyWaiting && !["vending", "performing", "listening", "begging", "givingAlms", "posted", "sitting", "buying", "drinking", "drinkingLow"].includes(s.activity)) {
+    if (abed) s.stamina = Math.min(100, s.stamina + CAMP_STAMINA_REGEN * hours)
+    // Travelling on the road costs no stamina, and standing at a stall, a post
+    // or a performance neither drains nor restores the legs.
+    else if (!s.partyWaiting && !s.partyCarried && !TRAVEL_ACTIVITIES.includes(s.activity) &&
+      !["vending", "performing", "listening", "begging", "givingAlms", "posted", "sitting", "buying", "drinking", "drinkingLow"].includes(s.activity)) {
       s.stamina = Math.max(0, s.stamina - sim.balance.rules.staminaDecay * hours)
     }
 
@@ -2054,7 +1926,7 @@ export function stepSim(
     if (s.partyCarried) s.moveSpeed = s.partySpeed ?? 0
     else {
       targetSpeed = pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (beggarSpeed ?? residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
-      s.moveSpeed = camping || sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
+      s.moveSpeed = sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
         easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     }
     if (s.partyRiding || s.partyBoarding) continue
@@ -2294,8 +2166,6 @@ export function stepSim(
           if (!s.home) s.home = findHome(sim, s, map)
           s.workSlot = homeBedSlot(sim, s)
           if (s.home && assignBuildingTask(s, map, "rest", s.home)) { s.activity = "toHome"; break }
-          // Nowhere of their own to sleep: bed down beside the work.
-          if (s.stamina <= 0) { startCamping(sim, s, t, map); break }
         }
         s.workSlot = s.id
         if (Math.min(s.hunger, s.thirst, s.stamina) >= SETTLER_FED_AT && assignBuildingTask(s, map, "build")) {
@@ -2503,10 +2373,6 @@ export function stepSim(
         if (!grouped && (s.activity === "walking" || s.activity === "seeking") && !needsParking && !s.track && !s.roadShortcut &&
           s.stamina > CAMP_STAMINA_THRESHOLD && Math.min(s.hunger, s.thirst) >= SERVING_THRESHOLD &&
           startSeatRest(sim, s, map, null)) break
-        if (!grouped && s.stamina <= CAMP_STAMINA_THRESHOLD && !shelter) {
-          startCamping(sim, s, t, map)
-          break
-        }
         if (s.activity === "fleeing") {
           s.fleeTimer -= dt
           if (s.fleeTimer <= 0) s.activity = "walking"
@@ -2949,24 +2815,6 @@ export function stepSim(
         break
       }
 
-      case "toCamp": {
-        if (stepOffRoadWalk(s, s.spot!, worldSpeed, dt, map)) s.activity = "camping"
-        break
-      }
-
-      case "camping": {
-        if (s.partyId === undefined && s.stamina >= 100) startOffRoadWalk(s, "fromCamp")
-        break
-      }
-
-      case "fromCamp": {
-        const back = workplaceReturn(sim, s, map) ?? currentRoutePoint(map, s)
-        if (stepOffRoadWalk(s, back, worldSpeed, dt, map)) {
-          finishErrand(s)
-          s.spot = null
-        }
-        break
-      }
     }
     finishConvoyMove(s, transportBefore, map, characterScale)
     reservations.update(s)

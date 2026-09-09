@@ -172,6 +172,8 @@ export const Travelers = memo(function Travelers({
         if (resident) placePreviewResident(traveler, map, resident)
         sim.travelers.set(id, traveler)
       }
+      // Companies formed for the new cast travel on, already in formation.
+      for (const [id, party] of fresh.parties) if (!sim.parties.has(id)) sim.parties.set(id, party)
     }
     const present = new Set(travelers.map(t => t.id))
     for (const id of sim.travelers.keys()) {
