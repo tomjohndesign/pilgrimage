@@ -658,6 +658,8 @@ describe("generateMap", () => {
           let touchesDark = false
           for (let i = 0; i < track.tiles.length; i++) {
             const t = track.tiles[i]
+            expect(map.buildings.some(b => t.x >= b.x && t.x < b.x + b.w && t.z >= b.z && t.z < b.z + b.d),
+              `seed ${seed} shortcut stays outside building footprints`).toBe(false)
             expect(["track", "path", "bridge"], `seed ${seed} track is carved`).toContain(
               tileAt(map, t.x, t.z),
             )
@@ -722,6 +724,22 @@ describe("generateMap", () => {
     expect(roadside / SEEDS.length, "roadside is far less wooded than the map").toBeLessThan(
       mapWide / SEEDS.length - 0.15,
     )
+  }, SWEEP_TIMEOUT)
+
+  it("continues east after clearing the grove in seed 1377249436", () => {
+    const map = generateMap({ seed: 1377249436, width: 512, depth: 512 })
+    const road = map.road!
+    const flank = road.findIndex(p => p.x >= 124)
+    const glade = road.findIndex(p => p.x >= 200)
+    expect(flank).toBeGreaterThan(0)
+    expect(glade).toBeGreaterThan(flank)
+    // The old forced forest exit dragged the road back to x=67 after it had
+    // already rounded the eastern flank, then east again across open land.
+    expect(Math.min(...road.slice(flank, glade).map(p => p.x))).toBeGreaterThanOrEqual(124)
+    expect(new Set(road.map(p => `${p.x},${p.z}`)).size).toBe(road.length)
+    for (let i = 1; i < road.length; i++) {
+      expect(Math.abs(road[i].x - road[i - 1].x) + Math.abs(road[i].z - road[i - 1].z)).toBe(1)
+    }
   }, SWEEP_TIMEOUT)
 
   it("keeps the road at a sane length — it seeks open ground, it doesn't wander the map for it", () => {

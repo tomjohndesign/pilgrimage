@@ -2,17 +2,13 @@ import { ROUTE_EDGE_INSET } from "./route-bounds"
 import { settlementRoute } from "../settlement-route"
 import { BUILD_CATALOG } from "../balance"
 import { buildingApproaches, buildingEntry, rotatedFootprint, rotateBuildingPoint, type BuildingRotation } from "../building-rotation"
-import { TILES_PER_DAY } from "../calendar"
 import { levelBuildingGround } from "./elevation"
 import { tileAt, type BuildingDef, type GameMap, type RoadsideTown, type TilePos } from "./types"
 
-export const TOWN_SPACING = TILES_PER_DAY - 16
+/** Minimum straight-line distance between seeded tavern entrances, in tiles. */
+export const TOWN_SPACING = 192
 export const TOWN_CHAPEL_CLEARANCE = 48
 export const TOWN_APPROACH_CLEARANCE = 20
-const SEARCH_RADIUS = 8
-// Prefer a slightly shorter leg when the ideal stop falls on water or steep land.
-const SEARCH_OFFSETS = [0, ...Array.from({ length: SEARCH_RADIUS }, (_, i) => [i + 1, -i - 1]).flat(),
-  ...Array.from({ length: 24 }, (_, i) => -SEARCH_RADIUS - i - 1)]
 const NAMES = ["Alderford", "Hazelwick", "Birch End", "Willowbank", "Oakstead", "Ashbrook", "Elm Hollow", "Reedham"]
 
 /** The house sits beside the tavern, with parallel roof ridges and aligned fronts. */
@@ -20,6 +16,13 @@ function townPlan(map: GameMap, junction: number, rotation: BuildingRotation, or
   const road = map.road![junction]
   const outward = rotateBuildingPoint(0, -1, rotation)
   const entry = { x: road.x + outward.x * 2, z: road.z + outward.z * 2 }
+  // A winding road may pass close to an earlier town long after leaving it.
+  // Check every existing tavern in map space, independent of travel duration.
+  if (map.towns?.some(town => {
+    const tavern = map.buildings.find(b => b.id === town.tavernId)!
+    const other = buildingEntry(tavern)
+    return Math.hypot(entry.x - other.x, entry.z - other.z) < TOWN_SPACING
+  })) return null
   const id = `roadside-town-${ordinal}`
   const name = NAMES[((((map.seed ?? 0) >>> 0) % NAMES.length) + ordinal) % NAMES.length]
   const buildings = (["tavern", "house"] as const).map((buildType, index): BuildingDef => {
@@ -66,49 +69,39 @@ function townPlan(map: GameMap, junction: number, rotation: BuildingRotation, or
   return { town, buildings, patch }
 }
 
-/** Mutates only a newly generated map. Distances follow road steps, including bends. */
+/** Mutates only a newly generated map. Each tavern excludes a 192-tile radius. */
 export function addRoadsideTowns(map: GameMap): void {
   map.towns = []
   const road = map.road ?? []
-  let target = Math.min(TOWN_SPACING / 2, Math.floor((road.length - 1) / 2))
-  while (target < road.length - 12) {
-    let placed = false
-    for (const offset of SEARCH_OFFSETS) {
-      if (placed) break
-      const junction = target + offset
-      if (junction < 12 || junction >= road.length - 12) continue
-      for (const rotation of [0, 1, 2, 3] as const) {
-        const plan = townPlan(map, junction, rotation, map.towns.length)
-        if (!plan) continue
-        // Plan on a private copy so a blocked entrance cannot leave half a town behind.
-        const candidate = { ...map, tiles: [...map.tiles], buildings: [...map.buildings, ...plan.buildings] }
-        for (const p of plan.patch) {
-          const i = p.z * map.width + p.x
-          if (candidate.tiles[i] !== "path" && candidate.tiles[i] !== "track") candidate.tiles[i] = "grass"
-        }
-        for (const b of plan.buildings) candidate.elevation = levelBuildingGround(candidate, b)
-        let accessible = true
-        for (const b of plan.buildings) for (const entrance of buildingApproaches(candidate, b)) {
-          const route = settlementRoute(candidate, candidate.buildings, road[junction], entrance)
-          // A town must not reintroduce surfaced paths along the map border.
-          if (!route || route.some(p => Math.min(p.x, p.z, map.width - 1 - p.x, map.depth - 1 - p.z) < ROUTE_EDGE_INSET)) { accessible = false; break }
-          for (const p of route) {
-            const i = p.z * map.width + p.x
-            if (candidate.tiles[i] !== "path" && candidate.tiles[i] !== "bridge") candidate.tiles[i] = "track"
-          }
-        }
-        if (!accessible) continue
-        // The generator also retains the original tile array while finishing the world.
-        for (let i = 0; i < map.tiles.length; i++) map.tiles[i] = candidate.tiles[i]
-        map.buildings.push(...plan.buildings)
-        map.elevation = candidate.elevation
-        map.towns.push(plan.town)
-        target = junction + TOWN_SPACING
-        placed = true
-        break
+  const first = Math.max(12, Math.min(TOWN_SPACING / 2, Math.floor((road.length - 1) / 2)))
+  for (let junction = first; junction < road.length - 12; junction++) {
+    for (const rotation of [0, 1, 2, 3] as const) {
+      const plan = townPlan(map, junction, rotation, map.towns.length)
+      if (!plan) continue
+      // Plan on a private copy so a blocked entrance cannot leave half a town behind.
+      const candidate = { ...map, tiles: [...map.tiles], buildings: [...map.buildings, ...plan.buildings] }
+      for (const p of plan.patch) {
+        const i = p.z * map.width + p.x
+        if (candidate.tiles[i] !== "path" && candidate.tiles[i] !== "track") candidate.tiles[i] = "grass"
       }
+      for (const b of plan.buildings) candidate.elevation = levelBuildingGround(candidate, b)
+      let accessible = true
+      for (const b of plan.buildings) for (const entrance of buildingApproaches(candidate, b)) {
+        const route = settlementRoute(candidate, candidate.buildings, road[junction], entrance)
+        // A town must not reintroduce surfaced paths along the map border.
+        if (!route || route.some(p => Math.min(p.x, p.z, map.width - 1 - p.x, map.depth - 1 - p.z) < ROUTE_EDGE_INSET)) { accessible = false; break }
+        for (const p of route) {
+          const i = p.z * map.width + p.x
+          if (candidate.tiles[i] !== "path" && candidate.tiles[i] !== "bridge") candidate.tiles[i] = "track"
+        }
+      }
+      if (!accessible) continue
+      // The generator also retains the original tile array while finishing the world.
+      for (let i = 0; i < map.tiles.length; i++) map.tiles[i] = candidate.tiles[i]
+      map.buildings.push(...plan.buildings)
+      map.elevation = candidate.elevation
+      map.towns.push(plan.town)
+      break
     }
-    // Unsuitable terrain advances the search; never place a town in water or on a cliff.
-    if (!placed) target += SEARCH_RADIUS * 2 + 1
   }
 }
