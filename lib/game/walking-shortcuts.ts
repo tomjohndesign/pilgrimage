@@ -1,6 +1,7 @@
-import { crossroadIslandAt } from "./map/crossroads"
 import { buildingSpatialQuery } from "./building-spatial"
-import { FOOTPATH_ESTABLISHED_AT, footpathRouteCost, obstaclesNear, type FootpathObstacle } from "./footpaths"
+import { walkingGroundQuery } from "./walking-ground"
+import { walkingRouteQueries } from "./walking-route-queries"
+import { FOOTPATH_ESTABLISHED_AT, footpathEdgeKey, footpathRouteCost, obstaclesNear, type FootpathObstacle } from "./footpaths"
 import { elevationStep } from "./map/elevation"
 import { settlementRoute } from "./settlement-route"
 import { tileAt, tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type BuildingDef, type GameMap, type TilePos } from "./map/types"
@@ -14,6 +15,14 @@ export function exploresRoadShortcut(ordinal: number, cycle: number, seed: numbe
   const cohort = Math.floor(ordinal / 8), size = Math.min(8, population - cohort * 8)
   return size > 0 && ordinal % 8 === ((seed + cohort * 5 + cycle * 3) % size + size) % size
 }
+/** Individual, repeatable willingness to pioneer a cut on this journey.
+ * People at the same start/door can choose differently without rerolling at
+ * each bend or requiring a private copy of the navigation calculations. */
+export function exploresWorkerShortcut(map: GameMap, id: number, start: TilePos, goal: TilePos): boolean {
+  const journey = Math.imul(start.z * map.width + start.x + 1, 0x85ebca6b) ^ Math.imul(goal.z * map.width + goal.x + 1, 0xc2b2ae35)
+  return exploresRoadShortcut(id, journey, map.seed ?? 0, Math.ceil((id + 1) / 8) * 8)
+}
+
 export interface WalkingShortcut {
   from: TilePos; to: TilePos; start: number; end: number; distance: number; length: number
   /** Intermediate world points on a forced detour; a plain cut runs straight. */
@@ -25,6 +34,10 @@ const length = (a: TilePos, b: TilePos) => Math.hypot(b.x - a.x, b.z - a.z)
 /** Scratch for the obstacles beside one segment. Costing never nests, and the
  * list never escapes the call, so one buffer serves every caller. */
 const NEARBY: FootpathObstacle[] = []
+const CLEARANCE_SIDES = [-.16, .16] as const
+const CHORD_DIAMETER = SHORTCUT_LOOKAHEAD * 2 + 1
+// Sparse start cells, dense local offsets: at most 20 MiB on a busy large map.
+const blockedChords = new WeakMap<GameMap, { width: number; depth: number; rows: Map<number, Uint32Array> }>()
 
 /** World-space segment cost, including body clearance and both sides of diagonal corners. */
 export function shortcutCost(map: GameMap, from: TilePos, to: TilePos, exploring = false, nearby = buildingSpatialQuery(map.buildings), routeCost = footpathRouteCost): number {
@@ -32,38 +45,79 @@ export function shortcutCost(map: GameMap, from: TilePos, to: TilePos, exploring
   if (distance < 1e-8) return 0
   const dx = (to.x - from.x) / distance, dz = (to.z - from.z) / distance
   const steps = Math.ceil(distance / .2)
-  const tile = (p: TilePos) => ({ x: worldToTileX(map, p.x), z: worldToTileZ(map, p.z) })
-  const open = (p: TilePos) => {
-    const terrain = tileAt(map, p.x, p.z)
-    return !!terrain && !crossroadIslandAt(map, p.x, p.z) && ["grass", "clearing", "dirt", "sand", "path", "track"].includes(terrain)
-      && !nearby(p).some(b => p.x >= b.x && p.x < b.x + b.w && p.z >= b.z && p.z < b.z + b.d)
+  const tile = (x: number, z: number, into: TilePos) => {
+    into.x = worldToTileX(map, x); into.z = worldToTileZ(map, z)
+    return into
+  }
+  const open = walkingGroundQuery(map, nearby)
+  // Grid routes repeatedly try the same corner cuts. Remember one tile that
+  // actually blocks each failed chord, then recheck that live tile next time.
+  // This is a proof of failure, not a stale route answer: removing the wall or
+  // changing the ground immediately resumes the complete clearance test.
+  const fromX = from.x + (map.width - 1) / 2, fromZ = from.z + (map.depth - 1) / 2
+  const toX = to.x + (map.width - 1) / 2, toZ = to.z + (map.depth - 1) / 2
+  const gridChord = Number.isInteger(fromX) && Number.isInteger(fromZ) && Number.isInteger(toX) && Number.isInteger(toZ)
+    && fromX >= 0 && fromZ >= 0 && toX >= 0 && toZ >= 0 && fromX < map.width && toX < map.width && fromZ < map.depth && toZ < map.depth
+    && Math.abs(toX - fromX) <= SHORTCUT_LOOKAHEAD && Math.abs(toZ - fromZ) <= SHORTCUT_LOOKAHEAD
+  let rows: Map<number, Uint32Array> | undefined, row: Uint32Array | undefined, startCell = 0, chord = 0
+  if (gridChord) {
+    let cached = blockedChords.get(map)
+    if (!cached || cached.width !== map.width || cached.depth !== map.depth) {
+      cached = { width: map.width, depth: map.depth, rows: new Map() }; blockedChords.set(map, cached)
+    }
+    rows = cached.rows; startCell = fromZ * map.width + fromX
+    chord = (toZ - fromZ + SHORTCUT_LOOKAHEAD) * CHORD_DIAMETER + toX - fromX + SHORTCUT_LOOKAHEAD
+    row = rows.get(startCell)
+    const blocked = row?.[chord]
+    if (blocked) {
+      const index = blocked - 1
+      if (!open({ x: index % map.width, z: Math.floor(index / map.width) })) return Infinity
+      row![chord] = 0
+    }
+  }
+  const closed = (point: TilePos) => {
+    if (open(point)) return false
+    if (rows && point.x >= 0 && point.z >= 0 && point.x < map.width && point.z < map.depth) {
+      if (!row) {
+        if (rows.size >= 8192) rows.delete(rows.keys().next().value!)
+        row = new Uint32Array(CHORD_DIAMETER ** 2); rows.set(startCell, row)
+      }
+      row[chord] = point.z * map.width + point.x + 1
+    }
+    return true
   }
   const obstacles = obstaclesNear(map.footpaths,
     Math.min(from.x, to.x), Math.min(from.z, to.z), Math.max(from.x, to.x), Math.max(from.z, to.z), .15, NEARBY)
-  let previous = tile(from), cost = 0
-  if (!open(previous)) return Infinity
+  const previous = tile(from.x, from.z, { x: 0, z: 0 }), next = { x: 0, z: 0 }
+  const p = { x: 0, z: 0 }, sidePoint = { x: 0, z: 0 }, corner = { x: 0, z: 0 }
+  const behind = { x: 0, z: 0 }, ahead = { x: 0, z: 0 }
+  let cost = 0
+  if (closed(previous)) return Infinity
   for (let step = 0; step <= steps; step++) {
-    const t = step / steps, p = { x: from.x + (to.x - from.x) * t, z: from.z + (to.z - from.z) * t }
-    const next = tile(p)
-    if (!open(next) || obstacles.some(o => length(p, o) < o.radius + .15)) return Infinity
-    for (const side of [-.16, .16]) if (!open(tile({ x: p.x - dz * side, z: p.z + dx * side }))) return Infinity
+    const t = step / steps
+    p.x = from.x + (to.x - from.x) * t; p.z = from.z + (to.z - from.z) * t
+    tile(p.x, p.z, next)
+    if (closed(next)) return Infinity
+    for (const obstacle of obstacles) if (length(p, obstacle) < obstacle.radius + .15) return Infinity
+    for (const side of CLEARANCE_SIDES) if (closed(tile(p.x - dz * side, p.z + dx * side, sidePoint))) return Infinity
     const a = previous.z * map.width + previous.x, b = next.z * map.width + next.x
     if (!Number.isFinite(elevationStep(map.elevation, a, b))) return Infinity
     if (previous.x !== next.x && previous.z !== next.z) {
-      for (const corner of [{ x: previous.x, z: next.z }, { x: next.x, z: previous.z }]) {
+      for (let side = 0; side < 2; side++) {
+        corner.x = side ? next.x : previous.x; corner.z = side ? previous.z : next.z
         const c = corner.z * map.width + corner.x
-        if (!open(corner) || !Number.isFinite(elevationStep(map.elevation, a, c)) || !Number.isFinite(elevationStep(map.elevation, c, b))) return Infinity
+        if (closed(corner) || !Number.isFinite(elevationStep(map.elevation, a, c)) || !Number.isFinite(elevationStep(map.elevation, c, b))) return Infinity
       }
     }
     if (step > 0) {
       // Inspect the edge this sample is approaching as well as the occupied tile.
       // This lets a worn diagonal attract the next walker before they enter it.
-      const behind = tile({ x: p.x - dx * .51, z: p.z - dz * .51 })
-      const ahead = tile({ x: p.x + dx * .51, z: p.z + dz * .51 })
+      tile(p.x - dx * .51, p.z - dz * .51, behind)
+      tile(p.x + dx * .51, p.z + dz * .51, ahead)
       const base = Math.min(routeCost(map, previous, next), routeCost(map, behind, next), routeCost(map, next, ahead))
       cost += (1 + (base - 1) * (exploring ? .1 : 1)) * distance / steps
     }
-    previous = next
+    previous.x = next.x; previous.z = next.z
   }
   return cost
 }
@@ -76,29 +130,47 @@ export function smoothWalkingRoute<T extends TilePos>(map: GameMap, route: T[], 
   // change during this synchronous operation, so sample each fact once.
   const edgeCosts = new Float64Array(route.length).fill(NaN)
   const edgeLengths = new Float64Array(route.length)
+  for (let i = 1; i < route.length; i++) edgeLengths[i] = length(route[i - 1], route[i])
   const costs = new Map<number, number>(), size = map.width * map.depth
-  const routeCost: typeof footpathRouteCost = (map, from, to) => {
+  const shared = walkingRouteQueries(map)
+  const routeCost: typeof footpathRouteCost = shared?.edgeCost ?? ((map, from, to) => {
     if (from.x < 0 || from.z < 0 || to.x < 0 || to.z < 0 || from.x >= map.width || to.x >= map.width || from.z >= map.depth || to.z >= map.depth)
       return footpathRouteCost(map, from, to)
     const key = (from.z * map.width + from.x) * size + to.z * map.width + to.x
     let cost = costs.get(key)
     if (cost === undefined) { cost = footpathRouteCost(map, from, to); costs.set(key, cost) }
     return cost
+  })
+  const segmentCost = (from: TilePos, to: TilePos) => {
+    if (!shared) return shortcutCost(map, from, to, exploring, nearby, routeCost)
+    const ax = from.x + (map.width - 1) / 2, az = from.z + (map.depth - 1) / 2
+    const bx = to.x + (map.width - 1) / 2, bz = to.z + (map.depth - 1) / 2
+    if (!Number.isInteger(ax) || !Number.isInteger(az) || !Number.isInteger(bx) || !Number.isInteger(bz) ||
+      ax < 0 || az < 0 || bx < 0 || bz < 0 || ax >= map.width || bx >= map.width || az >= map.depth || bz >= map.depth)
+      return shortcutCost(map, from, to, exploring, nearby, routeCost)
+    const key = (az * map.width + ax) * size + bz * map.width + bx, segments = shared.segments[exploring ? 1 : 0]
+    let cost = segments.get(key)
+    if (cost === undefined) { cost = shortcutCost(map, from, to, exploring, nearby, routeCost); segments.set(key, cost) }
+    return cost
   }
   const result = [route[0]]
   for (let from = 0; from < route.length - 1;) {
-    let best = from + 1, walked = 0, cost = 0, saving = .25
+    let best = from + 1, walked = 0, cost = 0, saving = .25, evaluated = from
     for (let to = from + 1; to < Math.min(route.length, from + SHORTCUT_LOOKAHEAD + 1); to++) {
-      if (Number.isNaN(edgeCosts[to])) {
-        edgeLengths[to] = length(route[to - 1], route[to])
-        edgeCosts[to] = shortcutCost(map, route[to - 1], route[to], exploring, nearby, routeCost)
-      }
       walked += edgeLengths[to]
-      cost += edgeCosts[to]
-      if (!Number.isFinite(cost)) break // Preserve gates, interiors and bridge approaches.
       const direct = length(route[from], route[to])
       if (direct > walked * .92 || walked - direct <= saving) continue
-      if (shortcutCost(map, route[from], route[to], exploring, nearby, routeCost) > cost * .98) continue
+      // Straight stretches cannot be shortened. Only inspect clearance and wear
+      // once a chord can save distance, retaining the same edge summation order
+      // and rejecting any intervening gate, interior or bridge approach.
+      for (; evaluated < to;) {
+        const edge = ++evaluated
+        if (Number.isNaN(edgeCosts[edge])) edgeCosts[edge] = segmentCost(route[edge - 1], route[edge])
+        cost += edgeCosts[edge]
+        if (!Number.isFinite(cost)) break
+      }
+      if (!Number.isFinite(cost)) break
+      if (segmentCost(route[from], route[to]) > cost * .98) continue
       best = to; saving = walked - direct
     }
     result.push(route[best]); from = best
@@ -116,7 +188,7 @@ function establishedShortcut(map: GameMap, from: TilePos, to: TilePos): boolean 
     const x = worldToTileX(map, from.x + (to.x - from.x) * t), z = worldToTileZ(map, from.z + (to.z - from.z) * t)
     const index = z * map.width + x
     if (previous >= 0 && previous !== index && (!paths.founding.has(previous) || !paths.founding.has(index))) {
-      const edge = paths.edges.get(`${Math.min(previous, index)}:${Math.max(previous, index)}`)
+      const edge = paths.edges.get(footpathEdgeKey(previous, index))
       if ((edge?.wear ?? 0) >= FOOTPATH_ESTABLISHED_AT) return true
     }
     previous = index

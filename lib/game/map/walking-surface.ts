@@ -19,7 +19,7 @@ export function walkingSurface(map: GameMap, wx: number, wz: number) {
   }
   const rise = layout.rise[index]
   if (rise > 0) {
-    const ramp = layout.ramps.find(r => r.x === tx && r.z === tz)
+    const ramp = layout.rampsAt.get(index)
     const dx = ramp ? BRIDGE_RISE * ramp.dx : 0, dz = ramp ? BRIDGE_RISE * ramp.dz : 0
     return { height: TILE_HEIGHT + rise + (x - tx) * dx + (z - tz) * dz, dx, dz }
   }

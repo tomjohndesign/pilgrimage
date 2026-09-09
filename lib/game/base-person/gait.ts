@@ -1,5 +1,5 @@
 import { BASE_PERSON, WALK_STANCE_FRACTION, walkFoot, type BodySide } from "./pose"
-import { DEFAULT_DESIGN, personRecipe, type PersonDesign } from "./design"
+import { DEFAULT_DESIGN, personBody, type PersonDesign } from "./design"
 
 export const BASE_CHARACTER_SCALE = 1.5
 export const PERSON_SPRITE_SCALE = 0.74 * BASE_PERSON.cellSize / 48
@@ -11,7 +11,7 @@ export const PERSON_SPRITE_SCALE = 0.74 * BASE_PERSON.cellSize / 48
  */
 export function personWalkStride(design: PersonDesign, spriteScale = PERSON_SPRITE_SCALE,
   viewSize = BASE_PERSON.camera.viewSize): number {
-  return 2 * personRecipe(design).body.stride / WALK_STANCE_FRACTION * spriteScale / viewSize
+  return 2 * personBody(design).stride / WALK_STANCE_FRACTION * spriteScale / viewSize
 }
 
 /** About 0.353 tiles per left/right cycle at the default on-road size. */
@@ -35,6 +35,8 @@ export function walkContact(phase: number, frames: number, body: typeof BASE_PER
   return { side, x: ankle[0], z: ankle[2] + body.footLength * 0.22 }
 }
 
+const reducedPoses = new Map<number, Uint16Array>()
+
 /** A subset of authored poses, still selected by distance. Always retain the
  * first displayed pose of each support change so both feet keep their timing.
  * Current 20-pose strides retain 10 poses at medium detail and 8 at far detail. */
@@ -42,13 +44,21 @@ export function reducedWalkFrame(frame: number, frames: number, strides: number,
   const perStride = frames / strides
   if (!detail || !Number.isInteger(perStride) || perStride < 12) return frame
   const cycle = Math.floor(frame / perStride), within = frame % perStride
+  const key = perStride * 2 + detail - 1
+  let poses = reducedPoses.get(key)
+  if (poses && Number.isInteger(within) && within >= 0) return cycle * perStride + poses[within]
   const step = detail === 1 ? 2 : 3
-  let selected = Math.floor(within / step) * step
   const first = Math.ceil((WALK_STANCE_FRACTION - .5) * perStride - 1e-9)
   const second = Math.ceil(WALK_STANCE_FRACTION * perStride - 1e-9)
-  if (within >= first) selected = Math.max(selected, first)
-  if (within >= second) selected = Math.max(selected, second)
-  return cycle * perStride + selected
+  const select = (at: number) => Math.max(Math.floor(at / step) * step, at >= first ? first : -Infinity, at >= second ? second : -Infinity)
+  // Runtime atlases have a few dozen poses. Bound editor/custom input storage;
+  // unusual fractional or out-of-range inputs retain the arithmetic path.
+  if (perStride <= 4096 && Number.isInteger(within) && within >= 0) {
+    poses = Uint16Array.from({ length: perStride }, (_, i) => select(i))
+    reducedPoses.set(key, poses)
+    return cycle * perStride + poses[within]
+  }
+  return cycle * perStride + select(within)
 }
 
 /** Detect support transfers crossed between rendered poses, including a whole

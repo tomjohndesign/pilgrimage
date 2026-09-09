@@ -2,8 +2,11 @@
 
 import { startTransition, useMemo, useState, type ComponentProps } from "react"
 import { useFrame } from "@react-three/fiber"
+import { benchmarkWork } from "@/lib/game/benchmark-work"
 import { buildFootpathRoadSegments } from "@/lib/game/footpaths"
 import { diagonalRoadSegments, type RoadSegment } from "@/lib/game/render/road-segments"
+import { frameQuality } from "@/lib/game/render/frame-quality"
+import { sceneryZooming } from "@/lib/game/render/scenery-detail"
 import { frameProfile } from "@/lib/game/render/frame-profile"
 import { useBuildStore } from "@/lib/game/build-store"
 import { TerrainTiles } from "./terrain-tiles"
@@ -31,20 +34,24 @@ export function WalkingTerrain(props: Props) {
   const [published, publish] = useState<{ map: Props["map"]; roads: Roads }>()
   const work = useMemo(() => ({ elapsed: .5, revision: -1,
     pending: null as Generator<void, Roads> | null }), [map, founding])
-  useFrame((_, delta) => {
+  useFrame(({ scene }, delta) => {
+    if (process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && !benchmarkWork.pathUpdates) return
     work.elapsed += delta
+    if (sceneryZooming(scene)) return
+    const reduced = frameQuality(scene) > 0
     const revision = map.footpaths?.revision ?? 0
-    if (!work.pending && work.elapsed >= .5 && work.revision !== revision) {
+    if (!work.pending && work.elapsed >= (reduced ? 2 : .5) && work.revision !== revision) {
       work.elapsed = 0
       work.revision = revision
       work.pending = snapshot(map, founding)
     }
     if (!work.pending) return
-    const started = frameProfile.start(), deadline = performance.now() + 1
+    const started = frameProfile.start(), deadline = performance.now() + (reduced ? .25 : 1)
     do {
       const next = work.pending.next()
       if (next.done) {
         work.pending = null
+        if (reduced) work.elapsed = 0
         startTransition(() => publish({ map, roads: next.value }))
         break
       }

@@ -190,7 +190,7 @@ export function GameCanvas({
       <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
       <CameraLight />
 
-      <HearthLights><RenownSaturation map={map}>
+      <HearthLights enabled={visibility.buildingVisibility !== "hidden"}><RenownSaturation map={map}>
       <group name="map-reveal-church" userData={{ mapRevealLandmark: true }} visible={visibility.buildingVisibility !== "hidden"}>
         <Shrine map={map} relic={relic} showInteriors={visibility.buildingVisibility === "interiors"} />
       </group>

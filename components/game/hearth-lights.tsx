@@ -14,7 +14,7 @@ const HearthContext = createContext<{ register: (light: THREE.PointLight) => () 
 /** Local lights otherwise enter every terrain vertex shader, even when their
  * building is miles outside the view. Reuse a bounded set near the view centre;
  * its size stays constant during camera movement to avoid shader recompiles. */
-export function HearthLights({ children }: { children: ReactNode }) {
+export function HearthLights({ children, enabled = true }: { children: ReactNode; enabled?: boolean }) {
   const root = useRef<THREE.Group>(null)
   const sources = useMemo(() => new Set<THREE.PointLight>(), [])
   const [count, setCount] = useState(0)
@@ -28,7 +28,7 @@ export function HearthLights({ children }: { children: ReactNode }) {
     candidates: [] as Array<{ source: THREE.PointLight; distance: number }> }), [])
   useFrame(({ camera, scene }) => {
     if (!root.current) return
-    root.current.visible = sceneryDetail(scene) === 0
+    root.current.visible = enabled && sceneryDetail(scene) === 0
     if (!root.current.visible) return
     const { point, projected, matrix, frustum, sphere, candidates } = scratch
     frustum.setFromProjectionMatrix(matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse))

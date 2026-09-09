@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { createFootpaths, markGroundChanged, recordWalkingPath, regrowFootpaths } from "./footpaths"
 import { blockedRoad, findRoadDiversion, findRoadShortcut, takeRoadShortcut, retireBypassedRoad, exploresRoadShortcut, shortcutCost, smoothWalkingRoute } from "./walking-shortcuts"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap, type TilePos } from "./map/types"
@@ -31,6 +31,23 @@ function walk(map: GameMap, a: TilePos, b: TilePos, passes: number) {
 }
 
 describe("traffic gradually cuts off detours", () => {
+  it("rechecks a blocking tile before repeating a failed cut, and immediately sees reopened ground", () => {
+    const map = fixture(), from = world(map, { x: 1, z: 8 }), to = world(map, { x: 12, z: 8 })
+    const costs = vi.fn(() => 3)
+    map.tiles[8 * map.width + 7] = "water"
+    expect(shortcutCost(map, from, to, false, undefined, costs)).toBe(Infinity)
+    expect(costs.mock.calls.length).toBeGreaterThan(0)
+    costs.mockClear()
+    expect(shortcutCost(map, from, to, false, undefined, costs)).toBe(Infinity)
+    expect(costs).not.toHaveBeenCalled()
+    map.tiles[8 * map.width + 7] = "grass"
+    expect(Number.isFinite(shortcutCost(map, from, to, false, undefined, costs))).toBe(true)
+    map.buildings.push({ id: "hut", label: "Hut", x: 7, z: 8, w: 1, d: 1, height: 1, color: "#ccc", roofColor: "#999" })
+    expect(shortcutCost(map, from, to)).toBe(Infinity)
+    expect(shortcutCost(map, from, to)).toBe(Infinity)
+    map.buildings[0].z = 9
+    expect(Number.isFinite(shortcutCost(map, from, to))).toBe(true)
+  })
   it("lets arriving walkers adopt new wear after three simulation seconds", () => {
     const map = fixture()
     const travelers = generateTravelers(7, 8).map(t => ({ ...t, type: TRAVELER_TYPES.peasant, direction: 1 as const,

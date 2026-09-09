@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { generateTravelers, travelerCountForMap, TRAVELER_TYPES } from "./travelers"
+import { generateTravelers, MAX_TRAFFIC, travelerCountForMap, TRAVELER_TYPES } from "./travelers"
 import { POPULATION_PROFILES, travelerAppearance } from "./base-person/population"
 import { DRINK_PRICE, MEAL_PRICE } from "./tavern"
 
@@ -18,6 +18,7 @@ describe("travelerCountForMap", () => {
       expect(travelerCountForMap(map, 24)).toBe(travelerCountForMap(map) * 2)
       expect(travelerCountForMap(map, 0)).toBe(0)
     }
+    expect(travelerCountForMap({ width: 512, depth: 512 }, MAX_TRAFFIC)).toBe(10_000)
   })
 
   it("rounds to a whole crowd and ignores invalid densities", () => {

@@ -17,11 +17,12 @@ export const BENCHMARK_SIMULATION_SPEEDS = [
 ] as const
 type SimulationSpeed = typeof BENCHMARK_SIMULATION_SPEEDS[number]["rate"]
 
-export const MAX_SIMULATION_STEP = .35
+export const MAX_SIMULATION_STEP = .1 * 12
 
-/** Combine playback work into bounded game-time steps. At 30–60 FPS even 5× needs
- * one population pass, including rounded 33.4 ms frames. The separate 100 ms real-time clamp still prevents a
- * background tab from trying to catch up minutes of missed simulation. */
+/** Movement follows complete route segments and sweeps transport collisions.
+ * Keep the 100 ms real-time bound at every supported speed: a slow frame must
+ * not trigger extra whole-population passes and make the next frame slower.
+ * The clamp also prevents background tabs catching up minutes of simulation. */
 export function simulationFrameStep(delta: number, speed: number): { ticks: number; dt: number } {
   const clamped = Math.min(Math.max(0, delta), .1)
   const elapsed = clamped * speed

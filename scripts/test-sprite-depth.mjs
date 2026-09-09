@@ -34,11 +34,15 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     }).outputText.replace('"../../render/sprite-depth"', '"/shader.js"').replace('"./design"', '"/foliage-design.js"')
   }
   const batchModules = {}
-  for (const name of ["building-batch", "road-segment-texture", "terrain-elevation", "terrain-hidden-faces", "character-batch", "sprite-texture", "static-instances", "scenery-detail", "flat-geometry", "complexion-swap", "outline"]) {
+  batchModules.wildlife = ts.transpileModule(await readFile(new URL("../lib/game/wildlife/batch.ts", import.meta.url), "utf8"), {
+    compilerOptions: { module: ts.ModuleKind.ESNext },
+  }).outputText.replaceAll('"../render/outline"', '"/batch-outline.js"')
+  for (const name of ["building-batch", "road-segment-texture", "terrain-elevation", "terrain-hidden-faces", "character-batch", "sprite-texture", "sprite-transforms", "static-instances", "scenery-detail", "flat-geometry", "complexion-swap", "outline"]) {
     batchModules[name] = ts.transpileModule(await readFile(new URL(`../lib/game/render/${name}.ts`, import.meta.url), "utf8"), {
       compilerOptions: { module: ts.ModuleKind.ESNext },
     }).outputText.replaceAll('"./sprite-depth"', '"/shader.js"')
       .replaceAll('"./sprite-texture"', '"/batch-sprite-texture.js"')
+      .replaceAll('"./sprite-transforms"', '"/batch-sprite-transforms.js"')
       .replaceAll('"./complexion-swap"', '"/batch-complexion-swap.js"')
       .replaceAll('"./scenery-detail"', '"/batch-scenery-detail.js"')
       .replaceAll('"./flat-geometry"', '"/batch-flat-geometry.js"')
@@ -639,13 +643,21 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
           sprite.layers.set(ids ? 1 : 0); sprite.renderOrder = i + 1
           sprite.center.set(.5, .2421875); sprite.scale.setScalar(.71 + i * .035)
           sprite.position.set((i % 5 - 2) * .22, .02, (Math.floor(i / 5) - 1.5) * .24)
-          originals.add(sprite); return sprite
+          if (i % 2 === 0) {
+            // Real game billboards have zero local offset inside an animated
+            // pose root. Exercise the specialized world-matrix path as well
+            // as offset/editor sprites that require the general transform.
+            const root = new THREE.Group()
+            root.position.copy(sprite.position); root.rotation.y = i * .13
+            sprite.position.set(0, 0, 0); root.add(sprite); originals.add(root)
+          } else originals.add(sprite)
+          return sprite
         })
-        return { sprite: sprites[0], ids: sprites[1], complexion, ground, depth: pose, id }
+        return { sprite: sprites[0], ids: sprites[1], complexion, simpleColor: new THREE.Color("#657b50"), ground, depth: pose, id }
       })
       let batch = new CharacterBatch(entries[0], worldTexel, 1)
       scene.add(batch.root)
-      let compared = 0, mismatches = 0, visible = 0
+      let compared = 0, mismatches = 0, visible = 0, simplifiedCompared = 0, simplifiedMismatches = 0
       const examples = [], byLayer = [0, 0]
       for (const recolor of [true, false]) {
         if (!recolor) {
@@ -674,14 +686,37 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
               entries.forEach((entry, i) => {
                 const map = entry.sprite.material.map
                 map.repeat.set(1 / columns, 1 / 8); map.offset.set(((i + frame) % columns) / columns, direction / 8)
+                // Mix direct shared-atlas UVs with ordinary private texture
+                // views, then change membership/UVs as poses advance.
+                const direct = (i + frame) % 3 !== 0
+                entry.color = direct ? color : undefined
+                entry.uv = direct ? new THREE.Vector4(map.repeat.x, map.repeat.y, map.offset.x, map.offset.y) : undefined
+                if (i % 2 === 0 && (!entry.fixedAttributes || frame === 2)) entry.fixedAttributes = Float32Array.from([
+                  entry.sprite.center.x, entry.sprite.center.y, entry.id.x, entry.id.y, entry.id.z,
+                ])
                 if (entry.complexion && frame === 2) entry.complexion.complexionTo.value[0].setRGB(.22 + i * .002, .4, .25)
                 entry.palette = entry.complexion && frame > 0 ? characterPalette(entry.complexion) : undefined
               })
-              originals.visible = true; originals.updateWorldMatrix(true, true); batch.write(entries, camera, true)
+              // Removing the first source moves remaining IDs into new rows;
+              // restoring it must restore their exact centers/IDs/palettes.
+              const active = frame === 1 ? entries.slice(1) : entries
+              entries.forEach((entry, i) => { entry.sprite.visible = entry.ids.visible = frame !== 1 || i !== 0 })
+              originals.visible = true; originals.updateWorldMatrix(true, true); batch.write(active, camera, true)
               for (const layer of [0, 1]) {
                 camera.layers.set(layer)
                 originals.visible = true; batch.root.visible = false; const reference = capture()
                 originals.visible = false; batch.root.visible = true; const actual = capture()
+                if (size === 192 && direction === 0 && frame === 0) {
+                  batch.setSimplified(true)
+                  const simplified = capture(), colours = new Set()
+                  for (let i = 0; i < actual.length; i += 4) {
+                    if (actual[i + 3] !== simplified[i + 3]) simplifiedMismatches++
+                    if (layer === 1 && [0, 1, 2].some(c => actual[i + c] !== simplified[i + c])) simplifiedMismatches++
+                    if (simplified[i + 3]) { simplifiedCompared++; colours.add(simplified.slice(i, i + 3).join(",")) }
+                  }
+                  if (layer === 0 && colours.size !== 1) simplifiedMismatches++
+                  batch.setSimplified(false)
+                }
                 for (let i = 0; i < actual.length; i += 4) {
                   if (reference[i + 3]) visible++
                   if (!reference[i + 3] && !actual[i + 3]) continue
@@ -698,9 +733,9 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         }
       }
       batch.write(entries.slice(0, 2), camera); batch.write([], camera); batch.dispose()
-      originals.children.forEach(sprite => { sprite.material.map.dispose(); sprite.material.dispose() })
+      originals.traverse(sprite => { if (sprite instanceof THREE.Sprite) { sprite.material.map.dispose(); sprite.material.dispose() } })
       color.dispose(); depth.dispose(); gl.dispose()
-      return { compared, visible, mismatches, byLayer, examples }
+      return { compared, visible, mismatches, simplifiedCompared, simplifiedMismatches, byLayer, examples }
     }, poseClips.walk)
     const buildings = await page.evaluate(async () => {
       const THREE = await import("/three.module.js")
@@ -970,6 +1005,55 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     })
     assert.equal(roads.mismatches, 0, `road updates must reach the GPU across reuse and growth: ${JSON.stringify(roads)}`)
     assert.equal(roads.allocations, roads.expectedAllocations, `ordinary road wear must reuse GPU storage: ${JSON.stringify(roads)}`)
+    const wildlife = await page.evaluate(async () => {
+      const THREE = await import("/three.module.js")
+      const { wildlifeGeometry } = await import("/batch-wildlife.js")
+      const { encodeObjectId, wildlifeObjectId } = await import("/batch-outline.js")
+      const source = new THREE.BoxGeometry(.7, 1, .6)
+      source.setAttribute("color", new THREE.Float32BufferAttribute(new Float32Array(source.attributes.position.count * 3).fill(.6), 3))
+      const part = new THREE.Mesh(source), identities = [7, 13, 29], batch = wildlifeGeometry([part], identities)
+      const gl = new THREE.WebGLRenderer(), scene = new THREE.Scene(), reference = new THREE.Scene()
+      const camera = new THREE.OrthographicCamera(-4, 4, 4, -4, .1, 20)
+      camera.position.set(0, 2, 6); camera.lookAt(0, 0, 0)
+      const target = new THREE.WebGLRenderTarget(128, 128)
+      const material = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, toneMapped: false })
+      const mesh = new THREE.Mesh(batch.geometry, material); mesh.frustumCulled = false; scene.add(mesh)
+      const individuals = identities.map(id => {
+        const color = source.clone(), ids = source.clone(), tint = encodeObjectId(wildlifeObjectId(id))
+        for (let i = 0; i < ids.attributes.color.count; i++) ids.attributes.color.setXYZ(i, ...tint)
+        const body = new THREE.Mesh(color, material); reference.add(body)
+        return { body, color, ids }
+      })
+      const read = world => {
+        gl.setRenderTarget(target); gl.render(world, camera)
+        const pixels = new Uint8Array(128 * 128 * 4)
+        gl.readRenderTargetPixels(target, 0, 0, 128, 128, pixels)
+        return pixels
+      }
+      let mismatches = 0, compared = 0, triangles = []
+      for (const [step, admitted] of [[2, 0], [], [1], [0, 1, 2]].entries()) {
+        for (let i = 0; i < individuals.length; i++) {
+          individuals[i].body.position.set(i * 2 - 2, step * .1, 0)
+          if (admitted.includes(i)) batch.write(i, new THREE.Matrix4().makeTranslation(i * 2 - 2, step * .1, 0))
+          individuals[i].body.visible = admitted.includes(i)
+        }
+        batch.setVisible(admitted); batch.finish()
+        for (const ids of [false, true]) {
+          mesh.geometry = ids ? batch.idGeometry : batch.geometry
+          individuals.forEach(individual => { individual.body.geometry = ids ? individual.ids : individual.color })
+          const actual = read(scene); triangles.push({ actual: gl.info.render.triangles, expected: admitted.length * 12 })
+          const expected = read(reference)
+          for (let i = 0; i < actual.length; i++) { compared++; if (actual[i] !== expected[i]) mismatches++ }
+        }
+      }
+      individuals.forEach(({ color, ids }) => { color.dispose(); ids.dispose() })
+      batch.dispose(); source.dispose(); part.material.dispose(); material.dispose(); target.dispose(); gl.dispose()
+      return { mismatches, compared, triangles }
+    })
+    assert.equal(wildlife.mismatches, 0, `culled wildlife must retain color/ID pixels after partial uploads and restoration: ${JSON.stringify(wildlife)}`)
+    for (const count of wildlife.triangles) assert.equal(count.actual, count.expected, "hidden wildlife must submit no triangles")
+    console.log("Wildlife visible indices and partial uploads", wildlife)
+
     const uploads = await page.evaluate(async () => {
       const THREE = await import("/three.module.js")
       const { spriteTextureView } = await import("/batch-sprite-texture.js")
@@ -1002,6 +1086,8 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     assert.ok(uploads.preserved && uploads.changed > 0, `real atlas changes must still upload: ${JSON.stringify(uploads)}`)
     assert.ok(scenery.compared > 10000, JSON.stringify(scenery))
     assert.equal(scenery.mismatches, 0, `visible scenery batches must preserve lighting and overlap pixels: ${JSON.stringify(scenery)}`)
+    assert.ok(batched.simplifiedCompared > 1000, JSON.stringify(batched))
+    assert.equal(batched.simplifiedMismatches, 0, "solid colour must preserve silhouette, depth ordering and selection IDs")
     assert.ok(batched.visible > 10000, JSON.stringify(batched))
     assert.equal(batched.mismatches, 0, `batched color and ID pixels must match individual sprites: ${JSON.stringify(batched)}`)
     for (const foliage of foliageResults) {

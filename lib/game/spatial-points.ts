@@ -2,15 +2,20 @@
  * indexed point across cells. Original ordering is retained for Array.find. */
 export class SpatialPoints<T extends { x: number; z: number }> {
   private cells = new Map<number, Map<number, Array<{ point: T; order: number }>>>()
+  private nextOrder = 0
   constructor(points: readonly T[], private cellSize = 4) {
-    points.forEach((point, order) => {
-      const x = Math.floor(point.x / cellSize), z = Math.floor(point.z / cellSize)
-      let column = this.cells.get(x)
-      if (!column) this.cells.set(x, column = new Map())
-      let cell = column.get(z)
-      if (!cell) column.set(z, cell = [])
-      cell.push({ point, order })
-    })
+    for (const point of points) this.add(point)
+  }
+
+  /** Reservations made earlier in a tick are visible to later actors. */
+  add(point: T): void {
+    const order = this.nextOrder++
+    const x = Math.floor(point.x / this.cellSize), z = Math.floor(point.z / this.cellSize)
+    let column = this.cells.get(x)
+    if (!column) this.cells.set(x, column = new Map())
+    let cell = column.get(z)
+    if (!cell) column.set(z, cell = [])
+    cell.push({ point, order })
   }
 
   /** Keep later decisions in the same simulation tick aware of earlier moves. */

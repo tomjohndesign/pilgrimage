@@ -1,5 +1,6 @@
 "use client"
 
+import { benchmarkWork } from "@/lib/game/benchmark-work"
 import { TerrainMapContext } from "./terrain-map-context"
 import { createContext, useContext, memo, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
@@ -970,7 +971,17 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
     lookUniforms.edgeWidth.value = look.edgeWidth
     lookUniforms.pixelRatio.value = dpr
   }, [lookUniforms, look, dpr])
-  useFrame(({ scene }) => { lookUniforms.edgeLine.value = sceneryDetail(scene) === 0 ? look.edgeLine : 0 })
+  useFrame(({ scene }) => {
+    lookUniforms.edgeLine.value = sceneryDetail(scene) === 0 ? look.edgeLine : 0
+    if (process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1") {
+      const shown = benchmarkWork.pathDrawing
+      if (roadMeshRef.current) {
+        roadMeshRef.current.material = shown ? roadMaterial : groundMaterial
+        roadMeshRef.current.userData.pathsVisible = shown
+      }
+      if (edgeMeshRef.current) edgeMeshRef.current.visible = shown && roadCount > 0
+    }
+  })
 
   // Tile boundaries sit at integer offsets from -width/2, so the lattice
   // origin is that half-extent modulo one tile.
@@ -1296,6 +1307,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
       </instancedMesh>
 
       <instancedMesh
+        name="terrain-path"
         ref={roadMeshRef}
         key={tier.id}
         // Skip empty road batches, such as paths entirely covered by bridges.
@@ -1317,6 +1329,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
         key={`edge-${tier.id}`}
         visible={roadCount > 0}
         frustumCulled
+        name="terrain-path-edge"
         ref={edgeMeshRef}
         args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, roadCount]}
         layers-mask={ROAD_EDGE_LAYER_MASK}

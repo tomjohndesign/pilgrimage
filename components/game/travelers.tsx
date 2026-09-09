@@ -4,6 +4,8 @@ import { CharacterMapContext } from "./character-map-context"
 import { SceneAssetBoundary } from "./scene-assets"
 
 import { travelerWeariness } from "@/lib/game/traveler-weariness"
+import { benchmarkWork } from "@/lib/game/benchmark-work"
+import { withWorkerRouteMemory } from "@/lib/game/worker-route-memory"
 
 import { withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
 import { JOB_PREVIEW } from "@/lib/game/building-preview"
@@ -14,7 +16,11 @@ import { wildlifeRegistry } from "@/lib/game/wildlife/registry"
 import { monkRegistry } from "@/lib/game/monks"
 import { processionRegistry } from "@/lib/game/relic-procession"
 import { frameProfile } from "@/lib/game/render/frame-profile"
+import { isWorldVisible } from "@/lib/game/render/visibility"
 import { figureMounts } from "@/lib/game/render/figure-mounts"
+import { CrowdBudget, crowdRanks, crowdRenderControl, crowdRenderStatus } from "@/lib/game/render/crowd-budget"
+import { sceneryZooming } from "@/lib/game/render/scenery-detail"
+import { frameQuality } from "@/lib/game/render/frame-quality"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react"
@@ -118,6 +124,8 @@ export const Travelers = memo(function Travelers({
   const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
   const kneelingHeading = shrine ? shrineLayout(shrine,map.site?.door).rotation + Math.PI : Math.PI
   const appearances = useMemo(() => travelers.map(t => travelerAppearance(map.seed ?? 0, t.id)), [travelers, map.seed])
+  const ranks = useMemo(() => crowdRanks(travelers.map(t => t.id)), [travelers])
+  const crowdBudget = useMemo(() => new CrowdBudget(), [travelers])
   const selection = useCameraStore((s) => s.selection)
   const [jobs, setJobs] = useState<ReadonlyMap<number, SettlementJob>>(() => new Map(JOB_PREVIEW ? previewResidents(map).map(resident =>
     [resident.traveler.id, settlementJob(resident.building.id, [resident.building])!] as const) : []))
@@ -125,18 +133,23 @@ export const Travelers = memo(function Travelers({
   const [beggars, setBeggars] = useState<ReadonlySet<number>>(() => new Set())
   const currentBeggars = useRef(beggars)
   const resourceElapsed = useRef(0)
-  const preparedParents = useMemo(() => new Set<THREE.Object3D>(), [])
+  const preparedParents = useMemo(() => new Map<THREE.Object3D, boolean>(), [])
+  const identityMatrix = useMemo(() => new THREE.Matrix4(), [])
   const obstacleSource = useRef<{ trees: TreePlacement[]; felled: number } | null>(null)
   // Simulation retains the entire population. Mount detailed figures only in a
   // padded camera neighborhood, retaining a bounded cache for camera returns. Hidden rigs skip posing.
   const [mounted, setMounted] = useState<number[]>([])
   const mountedRef = useRef<number[]>([])
   const root = useRef<THREE.Group>(null)
+  const visualStale = useRef(false)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
   const logRefs = useRef<Array<THREE.Group | null>>([])
+  const [logMounts, setLogMounts] = useState<number[]>([])
+  const requestedLogs = useRef(new Set<number>())
   const cull = useMemo(() => ({ frustum: new THREE.Frustum(), viewProjection: new THREE.Matrix4(), view: new THREE.Matrix4(), bounds: new THREE.Sphere(undefined, FIGURE_RADIUS) }), [])
 
   const sim = useMemo(() => createSim([], map, [], relic.stats), [map.road, relic])
+  useEffect(() => { requestedLogs.current.clear(); setLogMounts([]) }, [sim])
   useEffect(() => {
     const missing = travelers.filter(t => !sim.travelers.has(t.id) && !sim.joinedMonks.has(t.id))
     if (missing.length) {
@@ -164,7 +177,10 @@ export const Travelers = memo(function Travelers({
     simRegistry.current = sim
     return () => {
       for (const traveler of sim.travelers.values()) traveler.buildingTask = undefined
-      if (simRegistry.current === sim) simRegistry.current = null
+      if (simRegistry.current === sim) {
+        simRegistry.current = null
+        Object.assign(crowdRenderStatus, { active: false, budget: 0, rendered: 0, population: 0 })
+      }
     }
   }, [sim])
 
@@ -180,7 +196,7 @@ export const Travelers = memo(function Travelers({
     return () => { unsubscribe(); stopCharacterSound() }
   }, [travelers, sim])
 
-  useFrame(({ camera, clock: frameClock }, delta) => withTerrainCornerQueries(map, () => {
+  useFrame(({ camera, scene, clock: frameClock }, delta) => withTerrainCornerQueries(map, () => {
     const started = frameProfile.start()
     // A background tab hands us a huge delta; clamp so nobody teleports.
     const build = useBuildStore.getState()
@@ -200,8 +216,14 @@ export const Travelers = memo(function Travelers({
     if (!playback.paused) {
       const { ticks, dt } = simulationFrameStep(delta, playback.speed)
       for (let tick = 0; tick < ticks; tick++) {
+        withWorkerRouteMemory(map, sim.time * GAME_DAY_SECONDS, () => {
+        const planning = frameProfile.start()
         routeBenchmarkCity(sim, map)
+        frameProfile.end("routePlanning", planning)
+        const stepping = frameProfile.start()
         stepSim(sim, travelers, map, speed, dt, movement, speedScales, characterScale, beggarSpeedScales)
+        frameProfile.end("simulationStep", stepping)
+        })
       }
     }
     const nextBeggars = new Set<number>()
@@ -226,6 +248,14 @@ export const Travelers = memo(function Travelers({
     }
 
     frameProfile.end("simulation", started)
+    if (!isWorldVisible(root.current) || (process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && !benchmarkWork.characterVisuals)) {
+      if (!isWorldVisible(root.current)) {
+        Object.assign(crowdRenderStatus, { active: false, budget: travelers.length, population: travelers.length, rendered: 0 })
+        if (root.current) Object.assign(root.current.userData, { renderedUnits: 0, missingVisibleUnits: 0 })
+      }
+      visualStale.current = true
+      return
+    }
     const poseStarted = frameProfile.start()
     // Everyone keeps walking in the simulation above, but a figure the camera
     // cannot see is not worth posing: the block below is the expensive half,
@@ -235,10 +265,14 @@ export const Travelers = memo(function Travelers({
     camera.updateMatrixWorld()
     frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, view.copy(camera.matrixWorld).invert()))
     const selected = useCameraStore.getState().selection
+    const budget = crowdBudget.update(travelers.length,
+      crowdRenderControl.enabled && frameQuality(scene) === 2,
+      delta, sceneryZooming(scene))
     const nextMounted: number[] = []
     const preparation: Array<{ index: number; distance: number }> = []
+    const newLogs: number[] = []
     preparedParents.clear()
-    let pendingUnits = 0, missingVisibleUnits = 0
+    let pendingUnits = 0, missingVisibleUnits = 0, renderedUnits = 0
     for (let i = 0; i < travelers.length; i++) {
       const group = groupRefs.current[i]
       const s = sim.travelers.get(travelers[i].id)
@@ -250,6 +284,12 @@ export const Travelers = memo(function Travelers({
       }
 
       if (!s) continue
+      if (ranks[i] >= budget && !(selected?.kind === "traveler" && selected.id === travelers[i].id)) {
+        if (group?.visible) { group.visible = false; setSubtreeMatrixAutoUpdate(group, false) }
+        const logs = logRefs.current[i]
+        if (logs?.visible) { logs.visible = false; setSubtreeMatrixAutoUpdate(logs, false) }
+        continue
+      }
       bounds.center.set(s.x, s.y, s.z)
       // The selected figure stays live wherever it wanders, so its outline and
       // highlight never depend on where the camera happens to be pointing.
@@ -283,17 +323,19 @@ export const Travelers = memo(function Travelers({
         else if (logs) setSubtreeMatrixAutoUpdate(logs, true)
       }
       if (!onScreen) continue
+      renderedUnits++
 
       const dx = s.x - group.position.x
       const dz = s.z - group.position.z
       const distance = Math.hypot(dx, dz)
-      const moved = group.userData.initialized === true && distance < 2 ? distance : 0
+      const moved = !visualStale.current && group.userData.initialized === true && distance < 2 ? distance : 0
       const moving = playback.paused ? group.userData.moving === true : moved > 1e-6
       if (moving && !playback.paused) {
         const target = Math.atan2(dx, dz)
-        const turn = Math.atan2(Math.sin(target - group.rotation.y), Math.cos(target - group.rotation.y))
+        const difference = target - group.rotation.y
+        const turn = difference > Math.PI || difference < -Math.PI ? Math.atan2(Math.sin(difference), Math.cos(difference)) : difference
         const blend = movement.pathEase === 0 ? 1 : 1 - Math.exp(-Math.min(delta, 0.1) / (movement.pathEase * 0.18))
-        group.rotation.y += turn * blend
+        if (turn !== 0) group.rotation.y += turn * blend
       }
       const workTree = s.tree === null ? undefined : trees[s.tree]
       if ((s.activity === "visiting" || (s.activity === "toRelic" && !moving)) && !!s.shrineSeat) {
@@ -317,7 +359,7 @@ export const Travelers = memo(function Travelers({
         group.rotation.y = Math.atan2(workTree.x - s.x, workTree.z - s.z)
       }
       group.userData.playbackRate = playback.paused ? 0 : playback.speed
-      group.userData.motionReset = !wasVisible || group.userData.initialized !== true || distance >= 2
+      group.userData.motionReset = visualStale.current || !wasVisible || group.userData.initialized !== true || distance >= 2
       group.userData.distance = playback.paused ? 0 : moved
       const transported = travelers[i].type.id === "vendor" || travelers[i].type.id === "knight"
       group.userData.moving = moving && (transported || !s.praying)
@@ -326,28 +368,30 @@ export const Travelers = memo(function Travelers({
       }
       group.userData.activity = s.praying ? "praying" : s.activity
       group.userData.routineActivity = s.activity
-      group.userData.transportParking = s.marketParking ?? s.shrineParking
-      // Render the same collision-checked pose used by the simulation; a
-      // settled keeper leaves that pose in the market's rear yard.
-      group.userData.cartProgress = s.convoy && s.activity === "walking" && !s.track && !s.shrineParking && !s.roadShortcut ? s.progress : undefined
-      group.userData.cartDirection = s.direction
-      group.userData.cartManeuver = !!s.cartPose
-      group.userData.cartPose = s.marketParking?.pose ?? s.shrineParking?.pose ?? s.cartPose
-      group.userData.animalHeading = undefined
-      group.userData.reversing = false
-      group.userData.keeperTime = s.keeperTime ?? 0
-      group.userData.keeperAudience = s.activity === "vending" && travelers.some(other => {
-        const person = sim.travelers.get(other.id)
-        return other.id !== s.id && person && Math.hypot(person.x - s.x, person.z - s.z) < 3
-      })
-      group.userData.shopHeading = s.stallRoute?.heading
-      group.userData.shopSide = s.stallRoute?.side ?? 1
-      group.userData.shopProgress = s.activity === "openingShop" ? 1 - s.timer / SHOP_SECONDS : s.activity === "packingShop" ? s.timer / SHOP_SECONDS : s.activity === "vending" ? 1 : 0
-      group.userData.horseRest = s.horseRest
-      group.userData.pasture = s.pasture
-      const pastureTerrain = s.pasture ? tileAt(map, worldToTileX(map, s.pasture.x), worldToTileZ(map, s.pasture.z)) : null
-      group.userData.pastureY = s.pasture ? walkingSurface(map, s.pasture.x, s.pasture.z).height : s.y
-      group.userData.pastureGrass = pastureTerrain === "grass" || pastureTerrain === "clearing"
+      if (transported) {
+        group.userData.transportParking = s.marketParking ?? s.shrineParking
+        // Render the same collision-checked pose used by the simulation; a
+        // settled keeper leaves that pose in the market's rear yard.
+        group.userData.cartProgress = s.convoy && s.activity === "walking" && !s.track && !s.shrineParking && !s.roadShortcut ? s.progress : undefined
+        group.userData.cartDirection = s.direction
+        group.userData.cartManeuver = !!s.cartPose
+        group.userData.cartPose = s.marketParking?.pose ?? s.shrineParking?.pose ?? s.cartPose
+        group.userData.animalHeading = undefined
+        group.userData.reversing = false
+        group.userData.keeperTime = s.keeperTime ?? 0
+        group.userData.keeperAudience = s.activity === "vending" && travelers.some(other => {
+          const person = sim.travelers.get(other.id)
+          return other.id !== s.id && person && Math.hypot(person.x - s.x, person.z - s.z) < 3
+        })
+        group.userData.shopHeading = s.stallRoute?.heading
+        group.userData.shopSide = s.stallRoute?.side ?? 1
+        group.userData.shopProgress = s.activity === "openingShop" ? 1 - s.timer / SHOP_SECONDS : s.activity === "packingShop" ? s.timer / SHOP_SECONDS : s.activity === "vending" ? 1 : 0
+        group.userData.horseRest = s.horseRest
+        group.userData.pasture = s.pasture
+        const pastureTerrain = s.pasture ? tileAt(map, worldToTileX(map, s.pasture.x), worldToTileZ(map, s.pasture.z)) : null
+        group.userData.pastureY = s.pasture ? walkingSurface(map, s.pasture.x, s.pasture.z).height : s.y
+        group.userData.pastureGrass = pastureTerrain === "grass" || pastureTerrain === "clearing"
+      }
       group.userData.weary = travelerWeariness(s) > 0
       group.userData.carrying = s.carrying
       group.userData.initialized = true
@@ -358,34 +402,48 @@ export const Travelers = memo(function Travelers({
       group.position.set(s.x, y, s.z)
       // Keep baked bodies at their authored proportions.
       group.scale.y = 1
-      group.rotation.z = 0
+      if (group.rotation.z !== 0) group.rotation.z = 0
       // Resolve shared ancestors once, then each live unit once. Its direct
       // sprite can reuse this matrix instead of revisiting the whole ancestry.
       if (group.parent && !preparedParents.has(group.parent)) {
-        group.parent.updateWorldMatrix(true, false); preparedParents.add(group.parent)
+        group.parent.updateWorldMatrix(true, false)
+        preparedParents.set(group.parent, group.parent.matrixWorld.equals(identityMatrix))
       }
-      group.updateWorldMatrix(false, false)
+      if (group.parent && preparedParents.get(group.parent)) {
+        group.updateMatrix(); group.matrixWorld.copy(group.matrix); group.matrixWorldNeedsUpdate = false
+      } else group.updateWorldMatrix(false, false)
       group.userData.poseWorldFrame = frameClock.elapsedTime
       const logs = logRefs.current[i]
+      const carryingLog = s.carrying > 0 && !s.praying
+      if (carryingLog && !requestedLogs.current.has(i)) { requestedLogs.current.add(i); newLogs.push(i) }
       if (logs) {
-        logs.visible = s.carrying > 0 && !s.praying
-        logs.position.copy(group.position)
-        logs.quaternion.copy(group.quaternion)
+        logs.visible = carryingLog
+        if (carryingLog) {
+          logs.position.copy(group.position)
+          logs.quaternion.copy(group.quaternion)
+        }
       }
     }
-    if (root.current) Object.assign(root.current.userData, { requestedUnits: nextMounted.length, pendingUnits, missingVisibleUnits })
+    Object.assign(crowdRenderStatus, { active: crowdBudget.active, budget, rendered: renderedUnits, population: travelers.length })
+    if (root.current) Object.assign(root.current.userData, { requestedUnits: nextMounted.length, pendingUnits, missingVisibleUnits,
+      crowdBudget: budget, densityReduced: crowdBudget.active, renderedUnits })
+    if (newLogs.length) setLogMounts(current => [...current, ...newLogs])
     // Prepare the nearest missing figures first; array/ID order can otherwise
     // spend the admission budget on the far edge of the preload margin.
     const desired = preparation.length ? [
       ...preparation.sort((a, b) => a.distance - b.distance).map(entry => entry.index),
       ...nextMounted.filter(index => groupRefs.current[index]),
     ] : nextMounted
+    // Retain visited figures up to the population limit. Their clip textures
+    // are lazy and hidden poses stay idle; zooming back out should not dispose
+    // and recreate thousands of already-loaded rigs beside the camera update.
     const next = figureMounts(mountedRef.current, desired,
-      selected?.kind === "traveler" ? travelers.findIndex(t => t.id === selected.id) : -1, 16, Math.min(4096, travelers.length))
+      selected?.kind === "traveler" ? travelers.findIndex(t => t.id === selected.id) : -1, 16, travelers.length)
     if (mountedRef.current !== next) {
       mountedRef.current = next
       setMounted(next)
     }
+    visualStale.current = false
     frameProfile.end("travelerPositions", poseStarted)
   }), -3)
 
@@ -401,7 +459,7 @@ export const Travelers = memo(function Travelers({
           characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />)}
       </PixelCharacters>
       {/* Geometry shares the camp's world pixel grid; only baked people use the character pass. */}
-      {mounted.map(index => travelers[index] && <TravelerLog key={travelers[index].id} index={index} id={travelers[index].id}
+      {logMounts.map(index => travelers[index] && <TravelerLog key={travelers[index].id} index={index} id={travelers[index].id}
         groups={logRefs} scale={characterScale * (characterModel === "base" ? appearances[index]?.scale ?? 1 : 1)} />)}
     </group></CharacterMapContext.Provider>
   )
@@ -413,11 +471,24 @@ const TravelerUnit = memo(function TravelerUnit({ index, traveler, beggar, appea
   groups: RefObject<Array<THREE.Group | null>>; selected: boolean; job?: SettlementJob
   characterModel: CharacterModel; characterScale: number; characterFps?: number; walkTuning?: WalkTuning
 }) {
+  // Keep frequently read motion fields in one stable object layout. Growing
+  // an initially empty userData object field by field sends large crowds
+  // through dictionary lookups in both the position and sprite callbacks.
+  const motion = useMemo(() => ({
+    person: true, travelerId: traveler.id, donated: false, workTree: undefined,
+    playbackRate: 0, motionReset: true, distance: 0, moving: false,
+    activity: undefined, routineActivity: undefined, weary: false, carrying: 0,
+    initialized: false, phase: traveler.id * .137, heading: 0, poseWorldFrame: -1,
+    transportParking: undefined, cartProgress: undefined, cartDirection: undefined,
+    cartManeuver: false, cartPose: undefined, animalHeading: undefined, reversing: false,
+    keeperTime: 0, keeperAudience: false, shopHeading: undefined, shopSide: 1,
+    shopProgress: 0, horseRest: undefined, pasture: undefined, pastureY: 0, pastureGrass: false,
+  }), [traveler.id])
   const idColor = useMemo(() => new THREE.Color(...encodeObjectId(travelerObjectId(index))), [index])
   const select = useCallback((event: { delta: number; stopPropagation: () => void }) =>
     selectElement({ kind: "traveler", id: traveler.id }, event), [traveler.id])
   const register = useCallback((node: THREE.Group | null) => { markPerson(node); if (node) node.userData.travelerId = traveler.id; groups.current[index] = node }, [groups, index, traveler.id])
-  return <group name="traveler-unit" visible={false} ref={register}>
+  return <group name="traveler-unit" visible={false} ref={register} userData={motion}>
     {!beggar && (job || traveler.type.id === "vendor" || traveler.type.id === "knight") ?
       <TravelerFigure {...figure} job={job} age={traveler.attributes.age}
         {...(traveler.type.id === "knight" ? knightLoadout(traveler.id) : cartLoadout(traveler.id))}

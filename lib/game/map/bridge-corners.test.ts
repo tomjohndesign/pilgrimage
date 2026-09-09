@@ -15,6 +15,15 @@ import { cartOffset } from "../transport/assets"
 import { BASE_CHARACTER_SCALE } from "../base-person/gait"
 
 describe("bridge inside corner decks", () => {
+  it("matches exact corner containment across the spatial index, including outside the map", () => {
+    for (const scenario of ["bridge", "short_bridge", "compound_bridge"] as const) {
+      const map = turningMap(scenario), corners = bridgeLayout(map).corners
+      for (let z = -2; z <= map.depth + 2; z += .23) for (let x = -2; x <= map.width + 2; x += .23) {
+        expect(bridgeCornerAt(map, tileToWorldX(map, x), tileToWorldZ(map, z)))
+          .toBe(corners.find(corner => insideBridgeCorner(corner, x, z)))
+      }
+    }
+  })
   it("joins both arms tangentially in all four orientations", () => {
     for (const sx of [-1, 1] as const) for (const sz of [-1, 1] as const) {
       const c = { x: 4, z: 4, sx, sz, radius: BRIDGE_CORNER_RADIUS, kind: "road" as const }

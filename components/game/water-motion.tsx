@@ -15,6 +15,7 @@ import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
 import { GROUND_SURFACE_GLSL, GROUND_UV_SCALE } from "@/lib/game/render/ground-surface"
 import { useTerrainTexture } from "./use-terrain-texture"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
+import { frameQuality } from "@/lib/game/render/frame-quality"
 
 import { TerrainMapContext } from "./terrain-map-context"
 import type { TerrainBlockBounds } from "@/lib/game/render/terrain-blocks"
@@ -25,6 +26,7 @@ export function WaterMotion({ map: suppliedMap, waterPalette, edgeGrain, bounds,
   const map = suppliedMap ?? contextMap!
   const revision = suppliedRevision ?? map
   const material = useRef<THREE.ShaderMaterial>(null)
+  const mesh = useRef<THREE.Mesh>(null)
   const ripples = useTerrainTexture("/textures/water.png", "#000000")
   useMemo(() => {
     ripples.wrapS = ripples.wrapT = THREE.RepeatWrapping
@@ -81,8 +83,12 @@ export function WaterMotion({ map: suppliedMap, waterPalette, edgeGrain, bounds,
       groupSize: { value: s.shimmerSize }, speed: { value: s.shimmerSpeed }, foam: { value: s.foam },
     }
   }, [map.width, map.depth, map.seed, map.elevation?.settings, ripples, waterPalette, edgeGrain])
-  useFrame((_, dt) => { if (material.current) material.current.uniforms.time.value += Math.min(dt, 0.1) })
-  return <mesh name="water-shimmer" geometry={geometry} frustumCulled={false}>
+  useFrame(({ scene }, dt) => {
+    const detailed = frameQuality(scene) === 0
+    if (mesh.current) mesh.current.visible = detailed
+    if (detailed && material.current) material.current.uniforms.time.value += Math.min(dt, 0.1)
+  })
+  return <mesh ref={mesh} name="water-shimmer" geometry={geometry} frustumCulled={false}>
     <shaderMaterial ref={material} uniforms={uniforms} transparent depthWrite={false} side={THREE.DoubleSide}
       vertexShader={`attribute float aShoreMode; varying float vShoreMode; attribute vec4 aShoreCorners; varying vec4 vShoreCorners; attribute float aFall; attribute vec3 aTurbulence; varying vec3 vTurbulence; varying float vFall; varying float vHeight; varying vec2 vUv; varying vec2 vWorld;
         void main() { vShoreMode = aShoreMode; vShoreCorners = aShoreCorners; vFall = aFall; vTurbulence = aTurbulence; vUv = uv; vWorld = position.xz; vHeight = position.y;

@@ -5,6 +5,7 @@ import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 import { createAdmissionAudio } from "@/lib/game/admission-audio"
 import { sceneryDetail } from "@/lib/game/render/scenery-detail"
+import { isWorldVisible } from "@/lib/game/render/visibility"
 import { createPaymentFloaters, PAYMENT_LIFETIME } from "@/lib/game/render/payment-floaters"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import type { RelicProcession } from "@/lib/game/relic-procession"
@@ -47,7 +48,7 @@ function FloatingEffects({ source, characterScale }: { source: SimState | RelicP
   useFrame(({ scene }, delta) => {
     const live = state.current
     if (!live || !group.current) return
-    if (sceneryDetail(scene) > 0) {
+    if (sceneryDetail(scene) > 0 || !isWorldVisible(group.current.parent)) {
       if (group.current.visible) live.floaters.step(PAYMENT_LIFETIME)
       group.current.visible = false
       live.seen = "blessings" in source ? source.blessingSequence : source.admissionSequence

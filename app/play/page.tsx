@@ -89,5 +89,5 @@ export default async function PlayPage({
   if (lakes !== undefined) initialSettings.lakes = lakes
   if (ponds !== undefined) initialSettings.ponds = ponds
 
-  return <GameShell benchmarkCity={process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && params.benchmark === "city"} initialSeed={parseIntParam(params.seed)} initialSettings={initialSettings} />
+  return <GameShell benchmarkCity={process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && (params.benchmark === "city" ? "gameplay" : params.benchmark === "city-stress" ? "routing-stress" : false)} initialSeed={parseIntParam(params.seed)} initialSettings={initialSettings} />
 }

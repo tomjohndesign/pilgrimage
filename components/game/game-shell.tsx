@@ -7,7 +7,7 @@ import { DEFAULT_ELEVATION, groundHeight, type ElevationSettings } from "@/lib/g
 import dynamic from "next/dynamic"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
-import { createBenchmarkCity, benchmarkCity as cityFixture } from "@/lib/game/city-benchmark"
+import { createBenchmarkCity, benchmarkCity as cityFixture, type CityBenchmarkMode } from "@/lib/game/city-benchmark"
 import { createFootpaths } from "@/lib/game/footpaths"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
@@ -159,7 +159,7 @@ export function GameShell({
   benchmarkCity = false,
 }: {
   initialSeed?: number
-  benchmarkCity?: boolean
+  benchmarkCity?: false | CityBenchmarkMode
   initialSettings?: Partial<MapSettings>
   /** Tune the world pixel renderer without changing map or simulation settings. */
   pixelation?: PixelationProps
@@ -240,7 +240,7 @@ export function GameShell({
     for (const [key] of VISIBILITY_TOGGLES) query.set(key, settings[key] ? "1" : "0")
     query.set("buildingVisibility", settings.buildingVisibility)
     for (const [key, value] of Object.entries(settings.elevation)) query.set(`e_${key}`, String(value))
-    if (benchmarkCity) query.set("benchmark", "city")
+    if (benchmarkCity) query.set("benchmark", benchmarkCity === "routing-stress" ? "city-stress" : "city")
     window.history.replaceState(null, "", `?${query}`)
   }, [seed, settings, benchmarkCity, mapSizeReady])
 
@@ -280,7 +280,7 @@ export function GameShell({
     ],
   )
 
-  const baseMap = useMemo(() => generatedMap && benchmarkCity ? createBenchmarkCity(generatedMap) : generatedMap, [generatedMap, benchmarkCity])
+  const baseMap = useMemo(() => generatedMap && benchmarkCity ? createBenchmarkCity(generatedMap, benchmarkCity) : generatedMap, [generatedMap, benchmarkCity])
 
   const movement = useMemo(() => ({ variation: settings.paceVariation, pathEase: settings.pathEase, acceleration: settings.acceleration }),
     [settings.paceVariation, settings.pathEase, settings.acceleration])
