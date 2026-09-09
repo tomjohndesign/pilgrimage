@@ -1,0 +1,61 @@
+{
+  "frame": {
+    "cellSize": 128,
+    "extent": 2.9599999999999995,
+    "anchor": [
+      64,
+      88
+    ],
+    "directions": 8,
+    "variants": 1,
+    "rows": 2
+  },
+  "definitions": {
+    "well": {
+      "label": "Timber-lined well",
+      "description": "A low oak curb, wooden bucket and rope for drawing water by hand.",
+      "footprint": [
+        1.4,
+        1.4
+      ],
+      "access": [
+        {
+          "stand": [
+            0,
+            0,
+            0.83
+          ],
+          "water": [
+            0,
+            0.46,
+            0.25
+          ],
+          "action": "draw-water"
+        }
+      ]
+    },
+    "watering-hole": {
+      "label": "Natural watering hole",
+      "description": "An unbuilt pool with an earthen bank, scattered stones and an open dipping edge.",
+      "footprint": [
+        2.3,
+        1.8
+      ],
+      "access": [
+        {
+          "stand": [
+            0,
+            0,
+            1.03
+          ],
+          "water": [
+            0,
+            0.035,
+            0.5
+          ],
+          "action": "dip-water"
+        }
+      ]
+    }
+  }
+}

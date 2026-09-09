@@ -1,3 +1,4 @@
+import { waterSourceParts } from "../water-sources/model"
 import { wallSide } from "./cutaway"
 import type { BuildingDef } from "../map/types"
 import { buildingParts, type BuildingPart } from "./geometry"
@@ -17,6 +18,7 @@ function isSettlementType(type: string | undefined): type is SettlementBuildingT
 
 /** One source for placed structures, construction ghosts and build-menu images. */
 export function structureParts(building: StructureAppearance): BuildingPart[] {
+  if (building.buildType === "well" || building.buildType === "watering-hole") return waterSourceParts(building.buildType)
   const preset = EARLY_BUILDINGS.find((item) => item.id === building.buildType)
   if (preset) {
     const parts = buildingParts({ ...earlyBuildingRecipe(preset.id), width: building.w, depth: building.d, wallHeight: building.height,

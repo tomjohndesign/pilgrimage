@@ -25,6 +25,21 @@ export function EnvironmentField({ placements }: { placements: EnvironmentPlacem
 function SpriteField({ placements, large = false }: { placements: EnvironmentPlacement[]; large?: boolean }) {
   const atlas = large ? BOULDER_ATLAS : ENVIRONMENT_ATLAS
   const frame = large ? BOULDER_FRAME : ENVIRONMENT_FRAME
+  const specimens = useMemo(() => placements.map(p => ({ ...p, row: (p.boulderSize ? BOULDER_SIZES.indexOf(p.boulderSize) : ENVIRONMENT_KINDS.indexOf(p.kind)) * frame.variants + (p.seed >>> 0) % frame.variants })), [placements, frame])
+  return <ScenerySpriteField placements={specimens} atlas={atlas} frame={frame} />
+}
+
+export interface ScenerySpritePlacement {
+  x: number; y: number; z: number; yaw: number; brightness: number; row: number
+  idColor?: readonly [number, number, number]
+}
+
+/** Shared depth-aware, native-pixel renderer for authored scenery atlases. */
+export function ScenerySpriteField({ placements, atlas, frame }: {
+  placements: ScenerySpritePlacement[]
+  atlas: { color: string; depth: string }
+  frame: EnvironmentSpriteFrame
+}) {
   const sources = useLoader(THREE.TextureLoader, [atlas.color, atlas.depth])
   const color = useMemo(() => {
     const texture = sources[0].clone()
@@ -37,13 +52,13 @@ function SpriteField({ placements, large = false }: { placements: EnvironmentPla
   const view = useMemo(() => ({ value: 0 }), []), worldTexel = usePixelWorldTexel()
   const materials = useMemo(() => [false, true].map(ids => foliageMaterial(color, depth, view, worldTexel, ids, frame)), [color, depth, view, worldTexel, frame])
   const blocks = useMemo(() => {
-    const out = new Map<number, EnvironmentPlacement[]>()
+    const out = new Map<number, ScenerySpritePlacement[]>()
     for (const p of placements) { const key = blockKey(p.x, p.z); const block = out.get(key) ?? []; block.push(p); out.set(key, block) }
     return [...out]
   }, [placements])
   useFrame(({ camera }) => {
     const yaw = Math.atan2(camera.matrixWorld.elements[8], camera.matrixWorld.elements[10])
-    view.value = (Math.round(yaw / (Math.PI * 2 / ENVIRONMENT_FRAME.directions)) + ENVIRONMENT_FRAME.directions) % ENVIRONMENT_FRAME.directions
+    view.value = (Math.round(yaw / (Math.PI * 2 / frame.directions)) + frame.directions) % frame.directions
   })
   useEffect(() => () => { color.dispose(); depth.dispose(); materials.forEach(m => m.dispose()) }, [color, depth, materials])
   return <group name="environment-sprites">
@@ -51,17 +66,17 @@ function SpriteField({ placements, large = false }: { placements: EnvironmentPla
   </group>
 }
 
-function SpriteBlock({ placements, materials, frame }: { placements: EnvironmentPlacement[]; materials: THREE.Material[]; frame: EnvironmentSpriteFrame }) {
+function SpriteBlock({ placements, materials, frame }: { placements: ScenerySpritePlacement[]; materials: THREE.Material[]; frame: EnvironmentSpriteFrame }) {
   const body = useRef<THREE.InstancedMesh>(null), ids = useRef<THREE.InstancedMesh>(null)
   const geometry = useMemo(() => {
     const g = new THREE.PlaneGeometry(1, 1)
     g.translate(0, frame.anchor[1] / frame.cellSize - .5, 0)
     g.setAttribute("foliageFrame", new THREE.InstancedBufferAttribute(new Float32Array(placements.flatMap(p => [
       Math.round(p.yaw / (Math.PI * 2 / frame.directions)) % frame.directions,
-      (p.boulderSize ? BOULDER_SIZES.indexOf(p.boulderSize) : ENVIRONMENT_KINDS.indexOf(p.kind)) * frame.variants + (p.seed >>> 0) % frame.variants,
+      p.row,
     ])), 2))
     // Small scenery occludes hidden outlines without adding a contour of its own.
-    g.setAttribute("foliageId", new THREE.InstancedBufferAttribute(new Float32Array(placements.length * 3), 3))
+    g.setAttribute("foliageId", new THREE.InstancedBufferAttribute(new Float32Array(placements.flatMap(p => p.idColor ? [...p.idColor] : [0, 0, 0])), 3))
     // Shader-facing quads need conservative bounds independent of camera yaw.
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), frame.extent)
     return g

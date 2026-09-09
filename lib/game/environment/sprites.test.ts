@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest"
 import sharp from "sharp"
 import { BOULDER_ATLAS, BOULDER_FRAME, ENVIRONMENT_ATLAS, ENVIRONMENT_FRAME } from "./sprites"
+import { WATER_SOURCE_ATLAS, WATER_SOURCE_FRAME } from "../water-sources/assets"
 import { CHARACTER_PIXEL_SIZE } from "../render/pixel-scale"
 
 describe("environment sprites", () => {
   it.each([
+    { name: "water sources", frame: WATER_SOURCE_FRAME, atlas: WATER_SOURCE_ATLAS },
     { name: "small scenery", frame: ENVIRONMENT_FRAME, atlas: ENVIRONMENT_ATLAS },
     { name: "large boulder groups", frame: BOULDER_FRAME, atlas: BOULDER_ATLAS },
   ])("keeps $name grounded with native pixels, complete depth and unclipped silhouettes", async ({ frame, atlas }) => {

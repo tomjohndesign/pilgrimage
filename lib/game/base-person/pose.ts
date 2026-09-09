@@ -1,3 +1,4 @@
+import { DRINKING_FRAMES } from "./drinking"
 import { BUILDING_FRAMES } from "./building"
 import recipe from "../../../assets/recipes/base-person.json"
 import { SPLITTING_FRAMES, splittingMotion } from "./splitting"
@@ -18,6 +19,8 @@ export const PERSON_CLIPS = {
   sitting: { label: "Sitting", frames: 8 },
   seatedPrayer: { label: "Seated prayer", frames: 8 },
   praying: { label: "Praying", frames: 8 },
+  drinking: { label: "Drinking · well", frames: DRINKING_FRAMES },
+  drinkingLow: { label: "Drinking · watering hole", frames: DRINKING_FRAMES },
   preaching: { label: "Preaching", frames: 24 },
   treeFelling: { label: "Chopping · standing tree", frames: 24 },
   woodcutting: { label: "Chopping · fallen wood", frames: SPLITTING_FRAMES },
@@ -28,7 +31,7 @@ export const PERSON_CLIPS = {
   procession: { label: "Carrying overhead", frames: 20 },
 } as const
 export type BaseClip = keyof typeof PERSON_CLIPS
-export const ACTION_CLIPS = ["wearyWalk", "sleeping", "sitting", "seatedPrayer", "praying", "treeFelling", "woodcutting", "building", "gathering", "carrying", "hoisting", "procession", "preaching"] as const
+export const ACTION_CLIPS = ["wearyWalk", "sleeping", "sitting", "seatedPrayer", "praying", "treeFelling", "woodcutting", "building", "gathering", "carrying", "hoisting", "procession", "preaching", "drinking", "drinkingLow"] as const
 export type ActionClip = typeof ACTION_CLIPS[number]
 
 export function choppingHipDrop(clip: BaseClip, phase = 0, hipHeight = BASE_PERSON.body.hipHeight) {
@@ -80,7 +83,7 @@ export function pelvisHeight(phase: number, clip: BaseClip, b = BASE_PERSON.body
   if (clip === "seatedPrayer") return b.ankleHeight + b.shinLength
   if (clip === "sitting") return 0.25
   if (clip === "praying") return 0.1 + b.thighLength * 0.9
-  if (clip === "gathering") return 0.22
+  if (clip === "gathering" || clip === "drinkingLow") return 0.22
   // Eight degrees of resting knee flexion: upright, without locking the joint.
   const reachSquared = b.thighLength ** 2 + b.shinLength ** 2
     + 2 * b.thighLength * b.shinLength * Math.cos(8 * Math.PI / 180)

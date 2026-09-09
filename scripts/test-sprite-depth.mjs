@@ -7,7 +7,7 @@ import ts from "typescript"
 
 // Real GPU depth testing: unit tests cannot catch interpolation/quantization seams.
 test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned outlines", async () => {
-  const metadata = JSON.parse(await readFile(new URL("../public/textures/characters/base/base-person-v34.json", import.meta.url), "utf8"))
+  const metadata = JSON.parse(await readFile(new URL("../public/textures/characters/base/base-person-v35.json", import.meta.url), "utf8"))
   const poseClips = Object.fromEntries(Object.entries(metadata.clips).map(([clip, frames]) => [clip, frames.length / metadata.directions.length]))
   const shader = ts.transpileModule(await readFile(new URL("../lib/game/render/sprite-depth.ts", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.ESNext },
