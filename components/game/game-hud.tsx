@@ -9,7 +9,7 @@ import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/eleva
 
 import Link from "next/link"
 import * as Tooltip from "@radix-ui/react-tooltip"
-import { Menu, Settings, X } from "lucide-react"
+import { Menu, RefreshCw, Settings, X } from "lucide-react"
 import "./game-hud.css"
 import { useEffect, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
@@ -24,7 +24,7 @@ import { clampRoadTier, ROAD_TIERS } from "@/lib/game/map/road"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileAt, type BuildingDef, type GameMap } from "@/lib/game/map/types"
 import { nerve } from "@/lib/game/route-choice"
-import { parseSeed } from "@/lib/game/rng"
+import { parseSeed, randomSeed } from "@/lib/game/rng"
 import { CHANGELOG, CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, BEGGAR_RECOVERY_GOLD, simRegistry, type SimTraveler } from "@/lib/game/sim"
@@ -210,8 +210,8 @@ function MenuPanel({ onClose, playing }: { onClose: () => void; playing: boolean
 }
 
 /**
- * The seed as an editable field: paste a value and apply it, or save it as the
- * default for future sessions. The shell owns the seed; this only reports.
+ * The seed as an editable field: paste a value or refresh for a random world.
+ * The shell owns the seed; this only reports.
  */
 function SeedField({
   seed,
@@ -238,6 +238,15 @@ function SeedField({
     }
     setInvalid(false)
     onSeedChange(parsed)
+  }
+
+  const refresh = () => {
+    const rolled = randomSeed()
+    const next = rolled === seed ? (rolled + 1) % 2 ** 31 : rolled
+    setInput(String(next))
+    setInvalid(false)
+    onValidityChange?.(true)
+    onSeedChange(next)
   }
 
   return (
@@ -267,6 +276,9 @@ function SeedField({
           invalid ? "border-red" : "border-rule focus:border-gold"
         }`}
         />
+        <HudButton onClick={refresh} aria-label="Randomize world seed" title="Randomize world seed">
+          <RefreshCw size={14} aria-hidden="true" />
+        </HudButton>
         {!onValidityChange && <HudButton onClick={apply}>Apply</HudButton>}
       </div>
       {invalid && <div className="text-[11px] italic text-red">Digits only</div>}

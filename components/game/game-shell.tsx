@@ -19,6 +19,7 @@ import type { CharacterModel } from "@/lib/game/character-assets"
 import { DEFAULT_TREE_MODEL, type TreeModel } from "@/lib/game/trees/render-model"
 import { DEFAULT_ROAD_LOOK, DEFAULT_ROAD_TIER, ROAD_TIERS } from "@/lib/game/map/road"
 import { loadSavedSeed } from "@/lib/game/seed-storage"
+import { randomSeed } from "@/lib/game/rng"
 import { loadDefaultMapSize, saveDefaultMapSize } from "@/lib/game/map-size-storage"
 import { generateMonks } from "@/lib/game/monks"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
@@ -143,14 +144,6 @@ export const DEFAULT_SETTINGS: MapSettings = {
   rivers: WATER_COUNT_AUTO,
   lakes: WATER_COUNT_AUTO,
   ponds: WATER_COUNT_AUTO,
-}
-
-/**
- * Picking a seed is the one legitimate use of Math.random(): it happens outside
- * the simulation, and everything downstream is deterministic in the result.
- */
-function randomSeed(): number {
-  return Math.floor(Math.random() * 2 ** 31)
 }
 
 export function GameShell({
