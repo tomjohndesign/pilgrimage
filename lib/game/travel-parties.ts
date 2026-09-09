@@ -214,7 +214,14 @@ export function syncTravelParties(parties: Map<number, TravelParty>, travelers: 
     people.sort((a, b) => a.party!.slot - b.party!.slot)
     const existing = parties.get(id)
     if (existing) { existing.members = people.map(t => t.id); existing.roster++ }
-    else parties.set(id, createParty(id, people, states.get(people[0].id)!))
+    else {
+      const leader = states.get(people[0].id)!
+      // Companions spawn or resume wherever they stood; the head starts where the
+      // leader is and the others walk into formation instead of jumping to it.
+      const party = createParty(id, people, leader)
+      party.formed = people.every(t => Math.abs(partyRoadDelta(states.get(t.id)!.progress, leader.progress, Number.MAX_SAFE_INTEGER)) < 1e-9)
+      parties.set(id, party)
+    }
   }
 }
 

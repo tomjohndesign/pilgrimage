@@ -114,6 +114,14 @@ export function restoreSimulation(sim: SimState, save: SimulationSave, travelers
     if (!s || !t) continue
     restoreTraveler(sim, s, t, record, map, roadLength, workplaceIds, buildingIds)
   }
+  // Companies pick up from where their leader resumed and walk back into formation.
+  for (const party of sim.parties.values()) {
+    const leader = sim.travelers.get(party.members[0])
+    if (!leader) continue
+    party.progress = leader.progress; party.direction = leader.direction
+    party.headTile = Math.floor(leader.progress); party.speed = 0; party.formed = false
+    party.diversion = undefined; party.provisioned = false
+  }
 }
 
 function pickFood(stock: Record<string, number>): Partial<FoodStock> {

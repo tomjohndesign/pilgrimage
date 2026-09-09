@@ -191,6 +191,26 @@ describe("shared stops", () => {
   })
 })
 
+describe("companies for a cast added after creation", () => {
+  it("forms and carries companies when travelers join an empty simulation, as the game does", () => {
+    const { map, travelers } = fixture(6)
+    const sim = createSim([], map, [], { sanctity: 100, spectacle: 100, doubt: 0 })
+    const fresh = createSim(travelers, map, [], { sanctity: 100, spectacle: 100, doubt: 0 })
+    for (const [id, s] of fresh.travelers) sim.travelers.set(id, s)
+    expect(sim.parties.size).toBe(0)
+    sim.balance = { ...DEFAULT_BALANCE, rules: { ...DEFAULT_BALANCE.rules, hungerDecay: 0, thirstDecay: 0, staminaDecay: 0 } }
+    for (const party of sim.parties.values()) party.transportInitialized = true
+    stepSim(sim, travelers, map, 1, .1)
+    for (const party of sim.parties.values()) party.transportInitialized = true
+    expect(sim.parties.size).toBe(1)
+    expect([...sim.travelers.values()].every(s => s.partyId === 0 && s.partyCarried)).toBe(true)
+    run(sim, travelers, map, 30)
+    expect(sim.parties.get(0)!.formed).toBe(true)
+    const members = [...sim.travelers.values()]
+    expect(Math.max(...members.map(s => Math.abs(partyRoadDelta(s.progress, members[0].progress, 79))))).toBeLessThan(10)
+  })
+})
+
 describe("shared provisions and purse", () => {
   it("eases the drain with company size and charges every animal", () => {
     expect(partyNeedDrain(1)).toBe(1)

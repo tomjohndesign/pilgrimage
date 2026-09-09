@@ -816,6 +816,7 @@ export function createSim(
       member.lane = party.direction * place.lane
       Object.assign(member, roadWorldPoint(map, member.progress, member.lane))
     }
+    party.formed = true
   }
   for (const resident of townResidents(map)) {
     const actor = sim.travelers.get(resident.traveler.id)
@@ -1459,6 +1460,7 @@ const PARTY_ROUTE_LIMIT = 1500
 
 // Identities keyed by ID, reused across steps while the cast is unchanged.
 const identityIndexes = new WeakMap<readonly Traveler[], Map<number, Traveler>>()
+const syncedCasts = new WeakSet<readonly Traveler[]>()
 function travelerIdentities(travelers: readonly Traveler[]): Map<number, Traveler> {
   let index = identityIndexes.get(travelers)
   if (!index) { index = new Map(travelers.map(t => [t.id, t])); identityIndexes.set(travelers, index) }
@@ -1557,6 +1559,9 @@ function startPartyCamp(sim: SimState, party: TravelParty, members: SimTraveler[
  * existing individual systems, with bounded route planning. */
 function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, dt: number,
   counters: ReturnType<typeof openCounters>, naturalSpeed: (s: SimTraveler) => number, characterScale: number, movement: MovementTuning) {
+  // The game adds its cast to an empty simulation and restores saves after
+  // creation, so companies are formed once per cast here, not only in createSim.
+  if (!syncedCasts.has(travelers)) { syncedCasts.add(travelers); syncTravelParties(sim.parties, travelers, sim.travelers) }
   pruneTravelParties(sim.parties, sim.travelers, sim.joinedMonks)
   if (dt <= 0) return
   const identities = travelerIdentities(travelers)
