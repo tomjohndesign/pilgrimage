@@ -37,12 +37,12 @@ describe("furniture pose registration", () => {
     }
   })
 
-  it("rests every population profile and monk outfit on the surface throughout both animations", () => {
+  it("rests every population profile and monk outfit on the surface throughout resting and dining animations", () => {
     const pitch = Math.tan(BASE_PERSON.camera.pitch * Math.PI / 180)
     for (const design of designs) {
       const rig = createBasePersonRig(personRecipe(design))
       try {
-        for (const clip of ["sitting", "sleeping"] as const) {
+        for (const clip of ["sitting", "sleeping", "seatedMeal", "seatedDrink"] as const) {
           const frames = PERSON_CLIPS[clip].frames
           const contacts = restContacts(design, clip, frames)
           for (let frame = 0; frame < frames; frame++) {
@@ -54,7 +54,7 @@ describe("furniture pose registration", () => {
             rig.root.updateMatrixWorld(true)
             const torso = rig.root.getObjectByName(design.garment === "Robe" ? "robe" : design.bodyType === "Female" ? "sleeveless-dress" : "shirt")!
             expect(new THREE.Box3().setFromObject(torso, true).min.y).toBeCloseTo(target.y, 6)
-            if (clip === "sitting") {
+            if (clip !== "sleeping") {
               const hips = rig.root.getObjectByName("pelvis")!.getWorldPosition(new THREE.Vector3())
               expect(hips.x).toBeCloseTo(target.x, 6)
               expect(hips.z).toBeCloseTo(target.z, 6)

@@ -2,7 +2,7 @@ import { isRoadTerrain } from "./road"
 import type { CrossroadArm } from "./crossroads"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./types"
 
-/** Keep crowns, rocks and ground plants clear of every marked island. */
+/** Keep crowns, rocks and ground plants clear of every post. */
 export const SIGNPOST_CLEARANCE = 0.85
 export interface SignpostPlacement {
   tile: TilePos
@@ -11,7 +11,7 @@ export interface SignpostPlacement {
   yaw: number
 }
 
-/** The post stands at the centre of the ground its paths circle. */
+/** Posts stand on the opposite verge at Ts and on central islands at crossroads. */
 export function signpostPlacements(map: GameMap): (Omit<SignpostPlacement, "yaw"> & { arms: CrossroadArm[] })[] {
   return (map.crossroads ?? []).map(({ center, arms }) => ({
     tile: center, x: tileToWorldX(map, center.x), z: tileToWorldZ(map, center.z), arms,

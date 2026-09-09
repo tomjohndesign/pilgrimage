@@ -38,6 +38,7 @@ export function activityClip(activity: Activity | MonkActivity | undefined, movi
 /** Keep editor playback and in-game action timing on the same clock. */
 export function actionPlaybackRate(clip: BaseClip, design?: Pick<PersonDesign, "bodyType" | "walkStyle">): number {
   if (clip === "woodcutting" || clip === "treeFelling") return woodcuttingProfile(design).playbackRate * PERSON_CLIPS[clip].frames / BASE_PERSON.defaultFps * (clip === "woodcutting" ? 0.5 : 1)
+  if (clip === "seatedMeal" || clip === "seatedDrink") return PERSON_CLIPS[clip].frames / (4 * BASE_PERSON.defaultFps)
   if (clip === "drinking" || clip === "drinkingLow") return PERSON_CLIPS[clip].frames / (DRINKING_SECONDS * BASE_PERSON.defaultFps)
   if (clip === "preaching") return PERSON_CLIPS.preaching.frames / (4 * BASE_PERSON.defaultFps)
   if (clip === "building") return 0.75 * PERSON_CLIPS.building.frames / BASE_PERSON.defaultFps

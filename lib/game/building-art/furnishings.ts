@@ -103,3 +103,11 @@ export function furnishingParts(kind: "workshop" | "shelter", width: number, dep
   }
   return parts
 }
+
+/** Exterior bench geometry and its reserved frontage share these local coordinates. */
+export function tavernExteriorBenches(w: number, d: number) {
+  return [-1, 1].map(side => ({
+    id: `tavern-outside-${side}-seat`, x: -w * .27, z: side * (d / 2 + .28),
+    w: w * .32, d: .18, heading: side > 0 ? 0 : Math.PI,
+  }))
+}

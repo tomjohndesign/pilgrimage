@@ -3,11 +3,15 @@ export interface GesturePoint { x: number; y: number }
 function frame(points: Map<number, GesturePoint>) {
   const [a, b] = points.values()
   return b
-    ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, distance: Math.hypot(b.x - a.x, b.y - a.y) }
-    : { ...a, distance: 0 }
+    ? {
+      x: (a.x + b.x) / 2, y: (a.y + b.y) / 2,
+      distance: Math.hypot(b.x - a.x, b.y - a.y),
+      angle: Math.atan2(b.y - a.y, b.x - a.x),
+    }
+    : { ...a, distance: 0, angle: 0 }
 }
 
-/** A gesture stays camera-only after a drag or pinch, until every finger lifts. */
+/** A gesture stays camera-only after a drag, pinch or twist, until every finger lifts. */
 export class CameraGesture {
   private points = new Map<number, GesturePoint>()
   private origin: GesturePoint = { x: 0, y: 0 }
@@ -32,9 +36,13 @@ export class CameraGesture {
     this.points.set(id, point)
     if (Math.hypot(point.x - this.origin.x, point.y - this.origin.y) > 6) this.dragged = true
     const after = frame(this.points)
+    const angle = after.angle - before.angle
     return {
       before, after,
       zoom: before.distance > 0 && after.distance > 0 ? before.distance / after.distance : 1,
+      // Take the short arc across ±π; coincident fingers have no direction.
+      rotation: before.distance > 0 && after.distance > 0
+        ? Math.atan2(Math.sin(angle), Math.cos(angle)) : 0,
     }
   }
 
