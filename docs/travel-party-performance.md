@@ -56,14 +56,15 @@ culling edge.
 ## Simulation benchmark
 
 Per-step times over the normal-gameplay city, seed 12345, `dt` 0.1 s, with the
-same code for both rows. "Individuals" is the same cast without companies.
+same code for both rows, on a quiet machine. "Individuals" is the same cast
+without companies.
 
 | Population | Steps | Mode | Mean | p50 | p95 | Max |
 |---|---:|---|---:|---:|---:|---:|
-| 3,840 | 600 | Individuals | 48.6 ms | 33.5 ms | 143 ms | 480 ms |
-| 3,840 | 600 | Parties | 16.9 ms | 11.8 ms | 38.7 ms | 120 ms |
-| 10,000 | 400 | Individuals | 73.4 ms | 49.4 ms | 209 ms | 906 ms |
-| 10,000 | 400 | Parties | 44.7 ms | 33.9 ms | 95 ms | 368 ms |
+| 3,840 | 600 | Individuals | 13.8 ms | 12.0 ms | 23.2 ms | 45 ms |
+| 3,840 | 600 | Parties | 8.3 ms | 7.1 ms | 12.6 ms | 45 ms |
+| 10,000 | 400 | Individuals | 34.3 ms | 25.1 ms | 78.2 ms | 212 ms |
+| 10,000 | 400 | Parties | 20.7 ms | 18.0 ms | 34.9 ms | 86 ms |
 
 In the grouped profile, shortcut search, seat-rest and water-trip planning
 fall from about 25% of simulation time to under 2%. The remaining per-member
@@ -72,34 +73,49 @@ shared needs update. A company of twenty plans zero routes while it travels.
 
 The first party implementation, measured the same way at 1,408 travelers,
 ran 700 steps in 10.7 s and then took more than 17 minutes for the next 600.
+Two later stalls had the same shape and were removed in turn: company camps
+(planning up to 169 pitches per member, since replaced by no camping at all)
+and wagon parking at the enclave, which checked clearance against every tree
+on the map for every route sample instead of the nearby obstacles vendors use.
 
 ## Browser benchmark
 
 Benchmark-enabled production builds, 1,408 travelers, 1440 × 900 at DPR 1,
 Apple M5, hardware ANGLE Metal, 15-second samples after warmup, adaptive
-quality off. Seed 12345, normal-gameplay city. "Before parties" is main at
-0.0.168; "Shared path" is this branch. Fifteen-second samples in an aging
-world are indicative, not a controlled equal-work comparison.
+quality off, 1× speed. Seed 12345, normal-gameplay city. "Before" is main at
+0.0.168, before companies existed; "After" is this branch with companies,
+shared provisions, no camping, batched passenger carts and shared rein
+materials. Both servers ran side by side and each condition alternated between
+them, so both sides saw the same background load from other sessions (one-minute
+load average 5–12). The numbers are therefore lower than an idle machine would
+give, but comparable with each other.
 
-| Build | View | Speed | FPS | p95 frame | Sim step mean / p95 / max |
-|---|---:|---:|---:|---:|---:|
-| Before parties | 36 | 1× | 34.9 | 33.4 ms | 6.1 / 10.7 / 103 ms |
-| Before parties | 36 | 6× | 19.9 | 133.3 ms | 20.6 / 47.7 / 162 ms |
-| Before parties | 140 | 1× | 13.2 | 133.4 ms | 17.4 / 38.2 / 886 ms |
-| Before parties | 140 | 6× | 17.4 | 133.3 ms | 22.4 / 64.3 / 688 ms |
-| First parties (#187) | 36 | 1× | 2.6 | 166.7 ms | 340.6 / 68.9 / 61,808 ms |
-| Shared path | 36 | 1× | 53.9 | 33.3 ms | 4.0 / 5.6 / 106 ms |
-| Shared path | 36 | 6× | 27.3 | 66.6 ms | 15.0 / 33.8 / 696 ms |
-| Shared path | 140 | 1× | 23.3 | 66.8 ms | 8.8 / 27.9 / 44 ms |
-| Shared path | 140 | 6× | 14.4 | 166.7 ms | 27.2 / 111.3 / 174 ms |
+| Condition | View | Before FPS (p95 ms) | After FPS (p95 ms) |
+|---|---|---:|---:|
+| Static | Close (36) | 37.8 (33.4) | 32.1 (50.0) |
+| Static | Wide (140) | 25.8 (66.6) | 23.7 (66.7) |
+| Panning | Close (36) | 36.6 (50.0) | 41.0 (33.4) |
+| Panning | Wide (140) | 24.2 (66.6) | 26.0 (50.1) |
+| Zooming | Close (36) | 13.7 (166.6) | 19.2 (83.4) |
+| Zooming | Wide (140) | 30.9 (50.0) | 30.3 (50.0) |
 
-All samples retained the full population with zero missing visible figures
-and zero browser errors. The shared-path build is ahead of the pre-party
-build in three of four conditions; the wide 6× sample is within the noise of
-these short runs and its world had reached more group stops. The 30 FPS at
-10,000 travelers and 6× target from the [restart guide](performance-restart-guide.md)
-remains unverified; this pass removes the regression and makes companies
-cheaper than individuals, it does not claim that target.
+The first party build measured 2.6 FPS static at the close view, with one
+61.8-second simulation step. After the shared-path model, companies render at
+parity with the pre-party build while drawing 78 wagons, 85 pack animals and
+their passengers on top of the same crowd; the static close view is the one
+condition still behind, tracking about 150 extra draw calls per frame from
+vendor carts and rein instances. Every sample retained the full population with
+zero missing visible figures and zero browser errors. The 30 FPS at 10,000
+travelers and 6× target from the [restart guide](performance-restart-guide.md)
+remains unverified.
+
+Close-zoom profiles attribute the remaining frame to Three.js walking the
+scene graph in each of the six render passes (about 13%), the wildlife
+skinning at the wide view (now re-skinned every third tick when distant, with
+analytic hide normals), and shader-program lookups forced by character
+materials that render into a linear-space mask target and then to the sRGB
+screen (about 5%, from vendor carts after reins and passenger carts were made
+to share materials or batch).
 
 Reproduce the simulation rows with the existing benchmark:
 
