@@ -3,7 +3,8 @@
 import { DEFAULT_SCENE_VISIBILITY, type SceneVisibility } from "@/lib/game/scene-visibility"
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
+import { terrainMapSnapshot } from "@/lib/game/render/terrain-blocks"
 import { travelerAppearance } from "@/lib/game/base-person/population"
 import { populationVisual } from "@/lib/game/base-person/population-assets"
 import { walkSpeedScale } from "@/lib/game/base-person/gait"
@@ -115,6 +116,11 @@ export function GameCanvas({
   showGrid?: boolean
   visibility?: SceneVisibility
 } & PixelationProps) {
+  const previousTerrain = useRef<GameMap>(undefined)
+  const terrainMap = useMemo(() => {
+    previousTerrain.current = terrainMapSnapshot(map, previousTerrain.current)
+    return previousTerrain.current
+  }, [map])
   const selection = useCameraStore(s => s.selection)
   useEffect(() => {
     if (!selection) return
@@ -167,17 +173,17 @@ export function GameCanvas({
       <HearthLights><RenownSaturation map={map}>
         <PixelWorld>
           <StaticBatches />
-          <WalkingTerrain map={map} trees={trees} roadTier={roadTier} traffic={travelers.length}
+          <WalkingTerrain map={terrainMap} trees={trees} roadTier={roadTier} traffic={travelers.length}
             relicTraffic={relicTraffic} look={roadLook} showGrid={showGrid} />
-          <Bridges map={map} roadTier={roadTier} />
+          <Bridges map={terrainMap} roadTier={roadTier} />
           {/* Keep simulation components mounted when their visual layer is hidden. */}
           <group name="visibility-trees" visible={visibility.showTrees}>
             <Trees map={map} placements={trees} ents={lastMarch} characterScale={characterScale} model={treeModel} />
           </group>
           <group name="visibility-scenery" visible={visibility.showScenery}>
-            <Environment map={map} />
-            <Signpost map={map} />
-            <ForestWarnings map={map} />
+            <Environment map={terrainMap} />
+            <Signpost map={terrainMap} />
+            <ForestWarnings map={terrainMap} />
           </group>
         </PixelWorld>
         <group name="visibility-wildlife" visible={visibility.showWildlife}>

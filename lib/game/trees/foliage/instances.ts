@@ -31,6 +31,13 @@ export class FoliageInstances {
       sphere: block.box.expandByScalar(block.radius).getBoundingSphere(new THREE.Sphere()) }))
   }
 
+  /** Building IDs precede tree IDs. A new building changes only those colors,
+   * leaving tree geometry, spatial blocks and picking indices intact. */
+  setIds(idForTree: (tree: number) => readonly number[]): void {
+    for (const source of this.sources) source.id = idForTree(source.tree)
+    this.version = -1
+  }
+
   update(mesh: THREE.InstancedMesh, camera: THREE.Camera): boolean {
     this.view.update(camera)
     if (this.version === this.view.version && this.world.equals(mesh.matrixWorld)) return false

@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react"
+import { memo, Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 import { usePixelWorldTexel } from "@/components/pixel-canvas"
@@ -34,9 +34,15 @@ function SpriteField({ placements, large = false }: { placements: EnvironmentPla
   const depth = useMemo(() => configureSpriteDepthTexture(sources[1].clone()), [sources])
   const view = useMemo(() => ({ value: 0 }), []), worldTexel = usePixelWorldTexel()
   const materials = useMemo(() => [false, true].map(ids => foliageMaterial(color, depth, view, worldTexel, ids, frame)), [color, depth, view, worldTexel, frame])
+  const previous = useRef(new Map<number, EnvironmentPlacement[]>())
   const blocks = useMemo(() => {
     const out = new Map<number, EnvironmentPlacement[]>()
     for (const p of placements) { const key = blockKey(p.x, p.z); const block = out.get(key) ?? []; block.push(p); out.set(key, block) }
+    for (const [key, block] of out) {
+      const old = previous.current.get(key)
+      if (old && old.length === block.length && old.every((p, i) => p === block[i])) out.set(key, old)
+    }
+    previous.current = out
     return [...out]
   }, [placements])
   useFrame(({ camera }) => {
@@ -49,7 +55,7 @@ function SpriteField({ placements, large = false }: { placements: EnvironmentPla
   </group>
 }
 
-function SpriteBlock({ placements, materials, frame }: { placements: EnvironmentPlacement[]; materials: THREE.Material[]; frame: EnvironmentSpriteFrame }) {
+const SpriteBlock = memo(function SpriteBlock({ placements, materials, frame }: { placements: EnvironmentPlacement[]; materials: THREE.Material[]; frame: EnvironmentSpriteFrame }) {
   const body = useRef<THREE.InstancedMesh>(null), ids = useRef<THREE.InstancedMesh>(null)
   const geometry = useMemo(() => {
     const g = new THREE.PlaneGeometry(1, 1)
@@ -80,4 +86,4 @@ function SpriteBlock({ placements, materials, frame }: { placements: Environment
     <instancedMesh ref={body} args={[geometry, materials[0], placements.length]} raycast={() => {}} />
     <instancedMesh ref={ids} args={[geometry, materials[1], placements.length]} layers-mask={OUTLINE_ID_LAYER_MASK} raycast={() => {}} />
   </group>
-}
+})
