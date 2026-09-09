@@ -216,16 +216,16 @@ describe("stepSim", () => {
     const s = sim.travelers.get(0)!
     const hour = GAME_DAY_SECONDS / 24
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([77, 74, 77.9])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([78.5, 74, 78.95])
 
     Object.assign(sim.balance.rules, { hungerDecay: 2, thirstDecay: 6, staminaDecay: 0 })
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([75, 68, 77.9])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([76.5, 68, 78.95])
 
     s.activity = "camping"
     s.stamina = 0
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([74, 65, 60])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([75.5, 65, 60])
   })
 
   it("keeps food and water supplied longer over an active day", () => {
