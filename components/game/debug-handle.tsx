@@ -293,6 +293,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         wood: simRegistry.current?.wood ?? 0,
         visits: simRegistry.current?.visits ?? 0,
       }),
+      forestWarnings: () => scene.getObjectByName("forest-warnings")?.children.map(post => ({ x: post.position.x, y: post.position.y, z: post.position.z })) ?? [],
       treePlacements: () => simRegistry.current?.trees ?? [],
       /** Complete a felling for visual checks of remains and disappearing canopy shade. */
       fellTree: (index: number) => {

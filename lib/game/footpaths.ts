@@ -1,3 +1,4 @@
+import { forestTrackTiles } from "./map/forest-entrances"
 import { buildingSpatialQuery } from "./building-spatial"
 import { isRoadTerrain } from "./map/road"
 import { elevationStep } from "./map/elevation"
@@ -121,12 +122,14 @@ function foundingCompaction(map: GameMap, index: number): number {
 
 /** Original roads fade only after traffic establishes an alternative. */
 export function foundingRoadStrength(map: GameMap, index: number): number {
+  if (!map.footpaths?.paved && forestTrackTiles(map).has(index)) return .48
   if (!map.footpaths || map.footpaths.paved) return 1
   return Math.min(1, foundingCompaction(map, index) / FOUNDING_ROAD_WEAR)
 }
 
 /** Existing ruts widen from local use, independently of the population slider. */
 export function foundingRoadTraffic(map: GameMap, index: number, fallback: number): number {
+  if (!map.footpaths?.paved && forestTrackTiles(map).has(index)) return 2
   if (!map.footpaths) return fallback
   const wear = foundingCompaction(map, index)
   return 6 * Math.min(1, wear / FOUNDING_ROAD_WEAR) + 70 * Math.max(0, wear - FOUNDING_ROAD_WEAR)

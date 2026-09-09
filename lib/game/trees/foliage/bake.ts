@@ -24,8 +24,10 @@ export async function bakeFoliage(designs: FoliageDesigns, cancelled: () => bool
   const foliagePalette = colorsOf(FOLIAGE_PALETTE), barkPalette = colorsOf(BARK_PALETTE)
   let safePadding: number = size
   try {
-    for (const oldGrowth of [false, true]) for (const [speciesIndex, species] of FOLIAGE_SPECIES.entries()) for (let variant = 0; variant < variants; variant++) {
-      const model = createFoliageModel(species, variant, designs[species], oldGrowth); scene.add(model.root)
+    for (const state of [0, 1, 2]) for (const [speciesIndex, species] of FOLIAGE_SPECIES.entries()) for (let variant = 0; variant < variants; variant++) {
+      if (state === 2 && speciesIndex > 0) continue
+      const oldGrowth = state > 0
+      const model = createFoliageModel(species, variant, designs[species], oldGrowth, state === 2); scene.add(model.root)
       try {
         for (let view = 0; view < directions; view++) {
           if (cancelled()) throw new DOMException("Superseded foliage design", "AbortError")
@@ -46,7 +48,10 @@ export async function bakeFoliage(designs: FoliageDesigns, cancelled: () => bool
             const x = i / 4 % size, y = Math.floor(i / 4 / size)
             safePadding = Math.min(safePadding, x, y, size - x - 1, size - y - 1)
           }
-          const row = (oldGrowth ? FOLIAGE_SPECIES.length * variants : 0) + speciesIndex * variants + variant
+          if (renderer.getContext().isContextLost() || !pixels.data.some((v, i) => i % 4 === 3 && v === 255)) {
+            throw new Error(`Tree bake lost its WebGL context or produced an empty frame (${state}/${species}/${variant}/${view}).`)
+          }
+          const row = (state * FOLIAGE_SPECIES.length * variants) + speciesIndex * variants + variant
           zctx.drawImage(depth.render(scene, camera, size, extent, pixels.data, pixels.data), view * size, row * size)
           fctx.putImageData(pixels, 0, 0); ctx.drawImage(frame, view * size, row * size)
           await new Promise(resolve => setTimeout(resolve, 0))

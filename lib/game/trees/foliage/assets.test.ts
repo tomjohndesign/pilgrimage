@@ -43,6 +43,15 @@ describe("published foliage prototype", () => {
     })
   })
 
+  it("bakes bare snags with real branch depth and no leaf instances", () => {
+    const model = createFoliageModel("oak", 1, DEFAULT_FOLIAGE.oak, true, true)
+    try {
+      expect(model.leafCount).toBe(0)
+      expect(model.root.children.filter(c => c instanceof THREE.Mesh).length).toBeGreaterThan(40)
+      expect(new THREE.Box3().setFromObject(model.root).max.y).toBeGreaterThan(2)
+    } finally { model.dispose() }
+  })
+
   it("reproduces editable branch and leaf geometry without cast shadows", () => {
     for (const oldGrowth of [false, true]) for (const species of FOLIAGE_SPECIES) {
       const a = createFoliageModel(species, 1, DEFAULT_FOLIAGE[species], oldGrowth)

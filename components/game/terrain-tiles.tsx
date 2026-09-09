@@ -368,13 +368,18 @@ function makeTileMaterial({
         `${road ? "" : "#include <color_fragment>"}
         {
           vec2 world = vWorld;
-          vec2 treeCover = vGridTop > 0.5 ? treeGroundCover(world) : vec2(0.0);
+          vec3 treeCover = vGridTop > 0.5 ? treeGroundCover(world) : vec3(0.0);
           vec3 grassColor = sampleSward(grassMap, world);
           // Leaf clusters, humus and moss share the native grass pixel size.
           // Broad patches reveal turf between the varied fallen-leaf motifs.
-          vec3 litter = texture2D(forestFloorMap, world * ${ROAD_UV_SCALE}).rgb * vec3(1.65, 1.80, 1.55);
+          // Two authored floor sprites share a sampler; nearest sampling keeps
+          // their palette and pixel size intact, with no color gradient.
+          vec2 floorPixel = floor(fract(world * ${ROAD_UV_SCALE}) * 128.0);
+          vec2 floorUv = (floorPixel + vec2(treeCover.z > 0.5 ? 128.5 : 0.5, 0.5)) / vec2(256.0, 128.0);
+          vec3 litter = texture2D(forestFloorMap, floorUv).rgb;
+          if (treeCover.z < 0.5) litter *= vec3(1.65, 1.80, 1.55);
           float litterPatch = tileNoise(floor(world / ${CHARACTER_PIXEL_SIZE}) * ${CHARACTER_PIXEL_SIZE * .65});
-          float litterCover = treeCover.y * mix(0.55, 1.0, step(0.34, litterPatch));
+          float litterCover = treeCover.z > 0.5 ? 1.0 : treeCover.y * mix(0.55, 1.0, step(0.34, litterPatch));
           grassColor = mix(grassColor, litter, litterCover);
           #ifdef USE_ROAD_MAP
             // Read the same ground palette as neighbouring terrain, then lay
@@ -493,7 +498,7 @@ function makeTileMaterial({
   // The grid origin is baked into the shader source, so it has to be part of
   // the program key or two maps of different sizes would share one program.
   const gridKey = gridOrigin ? `${gridOrigin.x.toFixed(3)}:${gridOrigin.z.toFixed(3)}` : "nogrid"
-  material.customProgramCacheKey = () => `tiles-${road ? "road" : "ground"}-${gridKey}-forest-floor-continuous-grain-v8${edgeOnly ? "-edge" : ""}`
+  material.customProgramCacheKey = () => `tiles-${road ? "road" : "ground"}-${gridKey}-forest-floor-sprite-atlas-v11${edgeOnly ? "-edge" : ""}`
   return material
 }
 
@@ -663,12 +668,13 @@ interface TerrainSurfaces extends TerrainShared {
  * repaints the blocks it changes; offscreen blocks are rejected in every pass. */
 export function TerrainTiles(props: TerrainProps) {
   const { map, trees = NO_TREES, felledTrees } = props
-  const forestFloor = useTerrainTexture("/textures/forest-floor-v1.png", "#73633f")
+  const forestFloor = useTerrainTexture("/textures/forest-floors-v2.png", "#73633f")
   const edgeGrain = useTerrainTexture(TERRAIN_EDGE_GRAIN_URL, "#808080")
   useMemo(() => {
     forestFloor.wrapS = forestFloor.wrapT = THREE.RepeatWrapping
     forestFloor.magFilter = THREE.NearestFilter
-    forestFloor.minFilter = THREE.NearestMipmapLinearFilter
+    forestFloor.minFilter = THREE.NearestFilter
+    forestFloor.generateMipmaps = false
     edgeGrain.colorSpace = THREE.NoColorSpace
     edgeGrain.wrapS = edgeGrain.wrapT = THREE.RepeatWrapping
     edgeGrain.minFilter = edgeGrain.magFilter = THREE.NearestFilter

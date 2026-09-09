@@ -1,3 +1,4 @@
+import { forestEntrancePlacements, FOREST_WARNING_CLEARANCE } from "../map/forest-entrances"
 import { groundHeight } from "../map/elevation"
 import { computeDarkShade, computeForestShade } from "../map/forest-field"
 import { signpostPlacement, SIGNPOST_CLEARANCE } from "../map/signpost"
@@ -54,6 +55,8 @@ export interface TreePlacement {
   oldGrowth?: boolean
   /** Runtime Ent motion; moving trees cannot be claimed for felling. */
   walking?: boolean
+  /** Bare ancient snag, baked with the same native pixels and paired depth. */
+  dead?: boolean
 }
 
 /** Edge trees scale down to this fraction of a core tree's size. */
@@ -62,7 +65,9 @@ export const EDGE_SIZE_SCALE = 0.7
 /** Old growth stands this much taller than the woods around it, at full dark shade. */
 export const DARK_HEIGHT_SCALE = 1.45
 /** And this much darker. */
-export const DARK_BRIGHTNESS = 0.6
+export const DARK_BRIGHTNESS = 0.42
+/** Scattered snags; the great majority of the ancient canopy stays alive. */
+export const DEAD_TREE_CHANCE = 0.2
 
 /** Slots a tile is offered, at most. Species caps and footprints prune from here. */
 export const MAX_TREES_PER_TILE = 3
@@ -144,6 +149,7 @@ export function placeTrees(
   const byTile: (number[] | undefined)[] = new Array(map.width * map.depth)
   // The wayside signpost may take a corner inside the woods; leave it standing room.
   const signpost = signpostPlacement(map)
+  const warnings = forestEntrancePlacements(map)
 
   const hasRoom = (px: number, pz: number, def: TreeSpeciesDef, scale: number, x: number, z: number) => {
     for (let dz = -1; dz <= 1; dz++) {
@@ -206,9 +212,11 @@ export function placeTrees(
           const pz = cz + (rng() - 0.5) * SCATTER
           if (!hasRoom(px, pz, def, scale, x, z)) continue
           if (signpost && Math.hypot(px - signpost.x, pz - signpost.z) < SIGNPOST_CLEARANCE) continue
+          if (warnings.some(p => Math.hypot(px - p.x, pz - p.z) < FOREST_WARNING_CLEARANCE)) continue
           if (!here) byTile[index] = here = []
           here.push(out.length)
-          out.push({ x: px, y: groundHeight(map, px + map.width / 2 - 0.5, pz + map.depth / 2 - 0.5), z: pz, species: id, scale, brightness, oldGrowth })
+          out.push({ x: px, y: groundHeight(map, px + map.width / 2 - 0.5, pz + map.depth / 2 - 0.5), z: pz, species: id, scale, brightness, oldGrowth,
+            dead: oldGrowth && makeRng(deriveSeed(seed, index * MAX_TREES_PER_TILE + t + 731))() < DEAD_TREE_CHANCE })
           break
         }
       }

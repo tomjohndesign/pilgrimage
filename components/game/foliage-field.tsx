@@ -49,7 +49,7 @@ export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, 
     const rolls = placements.map(() => [Math.floor(rng() * FOLIAGE_FRAME.directions), Math.floor(rng() * FOLIAGE_FRAME.variants)])
     entries.forEach(({ tree, index }) => sources.push({
       x: tree.x, y: tree.y, z: tree.z, column: rolls[index][0],
-      row: (tree.oldGrowth ? FOLIAGE_SPECIES.length * FOLIAGE_FRAME.variants : 0) + FOLIAGE_SPECIES.indexOf(tree.species as typeof FOLIAGE_SPECIES[number]) * FOLIAGE_FRAME.variants + (tree.foliageVariant ?? rolls[index][1]),
+      row: tree.dead ? FOLIAGE_SPECIES.length * FOLIAGE_FRAME.variants * 2 + (tree.foliageVariant ?? rolls[index][1]) : (tree.oldGrowth ? FOLIAGE_SPECIES.length * FOLIAGE_FRAME.variants : 0) + FOLIAGE_SPECIES.indexOf(tree.species as typeof FOLIAGE_SPECIES[number]) * FOLIAGE_FRAME.variants + (tree.foliageVariant ?? rolls[index][1]),
       id: encodeObjectId(treeObjectId(idBase, index)), brightness: tree.brightness ?? 1, tree: index,
     }))
     const geometry = new THREE.PlaneGeometry(1, 1)
