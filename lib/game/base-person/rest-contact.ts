@@ -3,7 +3,7 @@ import { personRecipe, type PersonDesign } from "./design"
 import { BASE_PERSON, type Point3 } from "./pose"
 import { createBasePersonRig } from "./rig"
 
-type RestClip = "sitting" | "sleeping" | "seatedPrayer"
+type RestClip = "sitting" | "sleeping" | "seatedPrayer" | "seatedMeal" | "seatedDrink"
 const contacts = new WeakMap<PersonDesign, Map<string, Point3[]>>()
 
 /** Register the outfit's underside, including proportions and saved pose edits. */

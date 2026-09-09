@@ -881,20 +881,20 @@ describe("houses, counters and posts", () => {
 
   it("keeps one table per customer and leaves the penniless on the road", () => {
     const { map, traveler } = fixture()
-    const people = Array.from({ length: 6 }, (_, id) => {
+    const people = Array.from({ length: 8 }, (_, id) => {
       const t = traveler(id, id % 2 === 0 ? 1 : -1)
       t.attributes.hunger = 0
-      t.attributes.gold = id === 5 ? 0 : 10
+      t.attributes.gold = id === 7 ? 0 : 10
       return t
     })
     const sim = createEstablishedShrine(people, map)
     const tavern = staffTavern(sim, map)
-    run(sim, people, map, 200, () => [...sim.travelers.values()].filter(s => s.activity === "sitting").length === 4)
+    run(sim, people, map, 200, () => [...sim.travelers.values()].filter(s => s.activity === "sitting").length === tavernSeats(map, tavern).length)
     const seated = [...sim.travelers.values()].filter(s => s.activity === "sitting")
     expect(seated).toHaveLength(tavernSeats(map, tavern).length)
     expect(new Set(seated.map(s => s.tavernVisit!.plan.seat!.id)).size).toBe(seated.length)
     // Nobody without the price of a meal turns off the road for one.
-    expect(sim.travelers.get(5)!.tavernVisit).toBeUndefined()
+    expect(sim.travelers.get(7)!.tavernVisit).toBeUndefined()
   })
 
   it("does not draw anyone to a tavern with nobody behind the counter", () => {
@@ -1408,6 +1408,7 @@ describe("happiness and church devotion", () => {
     run(sim, [t], map, 120, () => s.activity === "sitting")
     expect(s.activity).toBe("sitting")
     expect(s.gold).toBe(0)
+    expect(s.tavernVisit?.drink).toBe(true)
     expect(sim.tradeGold).toBe(independent ? 0 : DRINK_PRICE)
     expect(s.happiness).toBe(0)
     stepSim(sim, [t], map, 1.5, 0)
@@ -1515,6 +1516,20 @@ describe("choosing tavern company or free water", () => {
         expect(s.gold).toBe(10)
         expect(s.happiness).toBe(80)
       }
+    }
+  })
+
+  it.each(["well", "watering-hole"] as const)("preserves happiness preference when a free %s is available", kind => {
+    for (const location of ["shrine", "town", "work"] as const) for (const happiness of [20, 80]) {
+      const { map, t, sim, s } = choice(happiness, location, 10, 40)
+      map.tiles[5 * map.width + 8] = "grass"
+      const def = BUILD_CATALOG.find(b => b.id === kind)!
+      map.buildings.push({ ...def, id: "free-water", buildType: kind, x: 6, z: 6 })
+      stepSim(sim, [t], map, 1.5, .1)
+      expect(s.activity).toBe(happiness < 60 ? "toTavern" : "toWater")
+      if (happiness < 60) expect(s.waterVisit).toBeUndefined()
+      else expect(s.waterVisit?.sourceId).toBe("free-water")
+      expect(s.naturalWaterVisit).toBeUndefined()
     }
   })
 

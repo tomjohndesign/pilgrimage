@@ -12,15 +12,15 @@ function bounds(part: BuildingPart) {
 }
 
 describe("early medieval building kit", () => {
-  it.each(EARLY_BUILDINGS)("$name fills every supported footprint without spilling into neighbours", (preset) => {
+  it.each(EARLY_BUILDINGS)("$name fills every supported footprint within its footprint and reserved bench frontage", (preset) => {
     for(let width=1;width<=5;width++) for(let depth=1;depth<=5;depth++) {
       const parts=buildingParts({...earlyBuildingRecipe(preset.id),width,depth}), whole=new Box3()
       for(const part of parts) {
         const box=bounds(part), context=`${preset.id} ${width}×${depth} ${part.name}`
         expect(box.min.x,context).toBeGreaterThanOrEqual(-width/2-.001)
         expect(box.max.x,context).toBeLessThanOrEqual(width/2+.001)
-        expect(box.min.z,context).toBeGreaterThanOrEqual(-depth/2-.001)
-        expect(box.max.z,context).toBeLessThanOrEqual(depth/2+.001)
+        expect(box.min.z,context).toBeGreaterThanOrEqual(-depth/2-.001-(part.name.startsWith("tavern-outside-") ? .6 : 0))
+        expect(box.max.z,context).toBeLessThanOrEqual(depth/2+.001+(part.name.startsWith("tavern-outside-") ? .6 : 0))
         expect(box.min.y,context).toBeGreaterThanOrEqual(-.06)
         expect(Number.isFinite(box.max.y),context).toBe(true)
         whole.union(box)

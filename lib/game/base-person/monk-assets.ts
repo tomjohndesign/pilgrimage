@@ -1,6 +1,6 @@
-import greyManifest from "../../../public/textures/characters/monks/v41/manifest.json"
+import greyManifest from "../../../public/textures/characters/monks/v45/manifest.json"
 import { GREY_HAIR_AGE } from "../character-age"
-import manifest from "../../../public/textures/characters/monks/v40/manifest.json"
+import manifest from "../../../public/textures/characters/monks/v44/manifest.json"
 import { DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE, personWalkStride, walkSpeedScale } from "./gait"
 import { actionPlaybackRate } from "./activity"
 import { ACTION_CLIPS, BASE_PERSON } from "./pose"
@@ -12,7 +12,7 @@ function visualForMonk(manifest: typeof greyManifest): ReturnType<typeof populat
   return {
     walk: { strides: "walkStrides" in manifest ? Number(manifest.walkStrides) : 1, url: manifest.images.walk, depth: manifest.images.depthWalk, columns: manifest.frameCount, rows: manifest.directions.length, stillFrame: 0 },
     idle: { url: manifest.images.idle, depth: manifest.images.depthIdle, columns: 1, rows: manifest.directions.length, stillFrame: 0 },
-    actions: Object.fromEntries(ACTION_CLIPS.map(clip => [clip, {
+    actions: Object.fromEntries(ACTION_CLIPS.filter((clip): clip is keyof typeof manifest.images.actions => clip in manifest.images.actions).map(clip => [clip, {
       ...manifest.images.actions[clip], playbackRate: actionPlaybackRate(clip, validatePersonDesign(manifest.design)), columns: manifest.clips[clip].length / manifest.directions.length,
       rows: manifest.directions.length, stillFrame: 0,
     }])),

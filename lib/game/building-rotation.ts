@@ -1,3 +1,4 @@
+import { tavernExteriorBenches } from "./building-art/furnishings"
 import { sheepPenLayout } from "./workshop-layout"
 import type { BuildingDef, GameMap, TilePos } from "./map/types"
 
@@ -56,10 +57,18 @@ export function buildingApproach(map: Pick<GameMap,"site">,building: BuildingDef
   return buildingEntry(building)
 }
 
-/** Every doorway owns a clear approach; taverns also open onto a rear service path. */
+/** Every doorway owns a clear approach; taverns also reserve their outdoor bench tiles. */
 export function buildingApproaches(map: Pick<GameMap,"site">, building: BuildingDef): TilePos[] {
   const front=buildingApproach(map,building)
   if(!front) return []
-  return building.buildType === "tavern" && building.id !== map.site?.hovelId
-    ? [front,buildingEntry(building,false,-1)] : building.buildType === "sheep-pen" ? [front, buildingFoldEntry(building)] : [front]
+  if (building.buildType === "tavern" && building.id !== map.site?.hovelId) {
+    const { w, d } = rotatedFootprint(building, building.rotation)
+    const benches = tavernExteriorBenches(w, d).map(bench => {
+      const offset = rotateBuildingPoint(bench.x, bench.z, building.rotation)
+      return { x: Math.round(building.x + (building.w - 1) / 2 + offset.x),
+        z: Math.round(building.z + (building.d - 1) / 2 + offset.z) }
+    })
+    return [front, buildingEntry(building, false, -1), ...benches]
+  }
+  return building.buildType === "sheep-pen" ? [front, buildingFoldEntry(building)] : [front]
 }

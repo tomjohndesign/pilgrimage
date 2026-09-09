@@ -3,8 +3,10 @@ import { BUILD_CATALOG } from "./balance"
 import { rotatedFootprint, type BuildingRotation, buildingEntry, rotateBuildingPoint } from "./building-rotation"
 import { tavernLayout, tavernLocalPoint, tavernSegmentClear, tavernWorkStop } from "./tavern-layout"
 import { tavernInteriorRoute, tavernWalkingRoute, tavernWorldPoint } from "./tavern-navigation"
-import { servingCounter, tavernSeats, tavernVisitPlan } from "./tavern"
+import { servingCounter, tavernSeats, tavernVisitPlan, seatRestPlan, MEAL_PRICE, DRINK_PRICE } from "./tavern"
 import { buildingStepAllowed } from "./building-navigation"
+import { characterSupport } from "./character-support"
+import { GAME_HOUR_SECONDS } from "./calendar"
 import { createSim, stepSim } from "./sim"
 import { townResidents } from "./town-residents"
 import { TRAVELER_TYPES } from "./travelers"
@@ -23,6 +25,52 @@ function fixture(rotation: BuildingRotation = 0) {
 }
 
 describe("tavern aisles", () => {
+  it.each([0, 1, 2, 3] as const)("rests without coin or a keeper and frees the seat after a small recovery at rotation %s", rotation => {
+    const { map, tavern } = fixture(rotation)
+    const traveler = { ...townResidents(map)[0].traveler, id: 7, type: TRAVELER_TYPES.peasant,
+      attributes: { ...townResidents(map)[0].traveler.attributes, hunger: 100, thirst: 100, stamina: 40, gold: 0 } }
+    const sim = createSim([traveler], map), s = sim.travelers.get(7)!
+    Object.assign(sim.balance.rules, { hungerDecay: 0, thirstDecay: 0, staminaDecay: 0 })
+    Object.assign(s, tavernWorldPoint(map, tavern, { x: 0, z: 2.5 }), { activity: "walking", visitCooldown: 0 })
+    stepSim(sim, [traveler], map, 1, .05)
+    expect(s.activity).toBe("toTavern")
+    expect(s.tavernVisit?.plan.seat?.id).toContain("tavern-outside")
+    for (let tick = 0; tick < 1200 && s.activity !== "sitting"; tick++) stepSim(sim, [traveler], map, 1, .05)
+    expect(s.activity).toBe("sitting")
+    const seat = s.tavernVisit!.plan.seat!
+    expect(characterSupport(map, s.x, s.z, "sitting")?.id).toBe(seat.id)
+    expect(characterSupport(map, s.x, s.z, "seatedMeal")?.id).toBe(seat.id)
+    stepSim(sim, [traveler], map, 1, 0)
+    expect(s.stamina).toBe(40)
+    const happiness = s.happiness
+    stepSim(sim, [traveler], map, 1, GAME_HOUR_SECONDS)
+    expect(s.stamina).toBeCloseTo(44)
+    stepSim(sim, [traveler], map, 1, GAME_HOUR_SECONDS * 3)
+    expect(s.stamina).toBeCloseTo(48)
+    expect(s.happiness).toBeLessThanOrEqual(happiness)
+    expect(s.activity).toBe("fromTavern")
+    for (let tick = 0; tick < 2000 && s.tavernVisit; tick++) stepSim(sim, [traveler], map, 1, .05)
+    expect(s.tavernVisit).toBeUndefined()
+    expect(s.visitCooldown).toBeGreaterThan(0)
+    expect(s.gold).toBe(0)
+    expect(sim.tradeGold).toBe(0)
+  })
+
+  it("reserves indoor chairs when the exterior is full and never double books a seat", () => {
+    const { map, tavern } = fixture(), from = tavernWorldPoint(map, tavern, { x: 0, z: 2.5 })
+    const occupied = new Set<string>()
+    for (let index = 0; index < tavernSeats(map, tavern).length; index++) {
+      const plan = seatRestPlan(map, tavern, from, occupied)!
+      expect(plan).not.toBeNull()
+      if (index < 2) expect(plan.seat!.id).toContain("tavern-outside")
+      else expect(plan.seat!.id).toContain("tavern-bench")
+      occupied.add(`${tavern.id}:${plan.seat!.id}`)
+    }
+    expect(seatRestPlan(map, tavern, from, occupied)).toBeNull()
+    Object.assign(tavern, { construction: { work: 0, required: 10 } })
+    expect(seatRestPlan(map, tavern, from, new Set())).toBeNull()
+  })
+
   it("serves a road traveler while both keepers are walking inside, then seats them and lets them leave", () => {
     const { map, local } = fixture()
     const people = townResidents(map).map(r => r.traveler), sim = createSim(people, map)
@@ -48,7 +96,7 @@ describe("tavern aisles", () => {
     }
     expect(seated).toBe(true)
     expect(customer.tavernVisit).toBeUndefined()
-    expect(customer.gold).toBe(15)
+    expect(customer.gold).toBe(20 - MEAL_PRICE - DRINK_PRICE)
     expect(customer.activity).toBe("walking")
   })
 

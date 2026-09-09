@@ -4,7 +4,7 @@ import { freezeAssetUpdates } from "./asset-browser.mjs"
 
 const args = process.argv.slice(2), index = args.indexOf("--url")
 const origin = index < 0 ? "http://localhost:3000" : args[index + 1]
-const directory = "public/textures/characters/rockets/v14"
+const directory = "public/textures/characters/rockets/v16"
 if (existsSync(directory)) throw new Error("This rocket version exists; publish a new version instead of overwriting it.")
 const browser = await chromium.launch({ headless: true, args: ["--use-angle=metal"] })
 try {

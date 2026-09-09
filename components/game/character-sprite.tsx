@@ -189,17 +189,16 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
   const batchEntries = useCharacterBatches()
   const batchEntry = useRef<CharacterBatchEntry | null>(null)
   const batchUv = useMemo(() => new THREE.Vector4(), [])
-  const simpleColor = useMemo(() => visual.design ? new THREE.Color(visual.design.tunicColor) : undefined, [visual.design])
   useLayoutEffect(() => {
     if (!batchEntries || !sprite.current || !idSprite.current || !outlineColor || name !== "traveler") return
-    const entry = { sprite: sprite.current, ids: idSprite.current, publishesPose: true, complexion: complexionValues, palette: characterPalette(complexionValues), simpleColor, ground: groundPlane,
+    const entry = { sprite: sprite.current, ids: idSprite.current, publishesPose: true, complexion: complexionValues, palette: characterPalette(complexionValues), ground: groundPlane,
       fixedAttributes: Float32Array.from([center.x, center.y, ...outlineColor]), depth: poseDepth, id: new THREE.Vector3(...outlineColor) }
     batchEntry.current = entry
     const unregisterEntry = registerCharacterBatchEntry(entry)
     batchEntries.add(entry)
     const unregister = registerSimpleBatchSource(entry.sprite, entry.ids)
     return () => { batchEntry.current = null; unregisterEntry(); unregister(); batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
-  }, [batchEntries, complexionValues, simpleColor, groundPlane, poseDepth, name, center, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [batchEntries, complexionValues, groundPlane, poseDepth, name, center, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
 
   const crowdWalk = useMemo<CrowdWalk | null>(() => map && rig && !attachment && walkTuning?.sync !== false ? {
     map, rig, walk: visual.walk, weary: visual.actions.wearyWalk, wearyIndex: actionIndices.wearyWalk,
@@ -231,7 +230,8 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
     const flight = parent.userData.activity === "flying" ? flightClip : undefined
     const playing = parent.userData.activity === "performing" ? playingClip : undefined
     const special = flight ?? playing
-    const requested = activityClip(parent.userData.activity, moving, parent.userData.carrying, parent.userData.weary === true)
+    const refreshment: import("@/lib/game/base-person/pose").ActionClip | undefined = parent.userData.refreshmentClip
+    const requested = !moving && refreshment && visual.actions[refreshment] ? refreshment : activityClip(parent.userData.activity, moving, parent.userData.carrying, parent.userData.weary === true)
     const actionIndex = actionIndices[requested]
     const action = requested !== "walk" && requested !== "idle" ? visual.actions[requested] : undefined
     const workTree = !moving && action && work && (requested === "treeFelling" || requested === "woodcutting")
@@ -334,7 +334,7 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
         poseRoot.current.position.copy(corrected.applyMatrix4(parentInverse))
       } else {
         poseState.plant = null
-        if (support && visual.design && (requested === "sitting" || requested === "sleeping" || requested === "seatedPrayer")) {
+        if (support && visual.design && (requested === "sitting" || requested === "sleeping" || requested === "seatedPrayer" || requested === "seatedMeal" || requested === "seatedDrink")) {
           const point = restContacts(visual.design, requested, clip.columns)[frame]
           const aligned = restContactOrigin({ ...support.anchor, y: support.height }, point,
             direction, yaw, pitch, size / BASE_PERSON.camera.viewSize)

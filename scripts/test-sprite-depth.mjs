@@ -7,7 +7,7 @@ import ts from "typescript"
 
 // Real GPU depth testing: unit tests cannot catch interpolation/quantization seams.
 test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned outlines", async () => {
-  const metadata = JSON.parse(await readFile(new URL("../public/textures/characters/base/base-person-v34.json", import.meta.url), "utf8"))
+  const metadata = JSON.parse(await readFile(new URL("../public/textures/characters/base/base-person-v36.json", import.meta.url), "utf8"))
   const poseClips = Object.fromEntries(Object.entries(metadata.clips).map(([clip, frames]) => [clip, frames.length / metadata.directions.length]))
   const shader = ts.transpileModule(await readFile(new URL("../lib/game/render/sprite-depth.ts", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.ESNext },
@@ -653,11 +653,11 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
           } else originals.add(sprite)
           return sprite
         })
-        return { sprite: sprites[0], ids: sprites[1], complexion, simpleColor: new THREE.Color("#657b50"), ground, depth: pose, id }
+        return { sprite: sprites[0], ids: sprites[1], complexion, ground, depth: pose, id }
       })
       let batch = new CharacterBatch(entries[0], worldTexel, 1)
       scene.add(batch.root)
-      let compared = 0, mismatches = 0, visible = 0, simplifiedCompared = 0, simplifiedMismatches = 0
+      let compared = 0, mismatches = 0, visible = 0, detailedColorCases = 0
       const examples = [], byLayer = [0, 0]
       for (const recolor of [true, false]) {
         if (!recolor) {
@@ -706,16 +706,14 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
                 camera.layers.set(layer)
                 originals.visible = true; batch.root.visible = false; const reference = capture()
                 originals.visible = false; batch.root.visible = true; const actual = capture()
-                if (size === 192 && direction === 0 && frame === 0) {
-                  batch.setSimplified(true)
-                  const simplified = capture(), colours = new Set()
+                if (layer === 0) {
+                  const colours = new Set()
                   for (let i = 0; i < actual.length; i += 4) {
-                    if (actual[i + 3] !== simplified[i + 3]) simplifiedMismatches++
-                    if (layer === 1 && [0, 1, 2].some(c => actual[i + c] !== simplified[i + c])) simplifiedMismatches++
-                    if (simplified[i + 3]) { simplifiedCompared++; colours.add(simplified.slice(i, i + 3).join(",")) }
+                    if (actual[i + 3]) colours.add(actual.slice(i, i + 3).join(","))
                   }
-                  if (layer === 0 && colours.size !== 1) simplifiedMismatches++
-                  batch.setSimplified(false)
+                  // Even unselected crowd batches must retain authored shading,
+                  // skin and clothing instead of becoming a single-color shape.
+                  if (colours.size > 1) detailedColorCases++
                 }
                 for (let i = 0; i < actual.length; i += 4) {
                   if (reference[i + 3]) visible++
@@ -735,7 +733,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       batch.write(entries.slice(0, 2), camera); batch.write([], camera); batch.dispose()
       originals.traverse(sprite => { if (sprite instanceof THREE.Sprite) { sprite.material.map.dispose(); sprite.material.dispose() } })
       color.dispose(); depth.dispose(); gl.dispose()
-      return { compared, visible, mismatches, simplifiedCompared, simplifiedMismatches, byLayer, examples }
+      return { compared, visible, mismatches, detailedColorCases, byLayer, examples }
     }, poseClips.walk)
     const buildings = await page.evaluate(async () => {
       const THREE = await import("/three.module.js")
@@ -1086,8 +1084,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     assert.ok(uploads.preserved && uploads.changed > 0, `real atlas changes must still upload: ${JSON.stringify(uploads)}`)
     assert.ok(scenery.compared > 10000, JSON.stringify(scenery))
     assert.equal(scenery.mismatches, 0, `visible scenery batches must preserve lighting and overlap pixels: ${JSON.stringify(scenery)}`)
-    assert.ok(batched.simplifiedCompared > 1000, JSON.stringify(batched))
-    assert.equal(batched.simplifiedMismatches, 0, "solid colour must preserve silhouette, depth ordering and selection IDs")
+    assert.equal(batched.detailedColorCases, 96, "all crowd views must retain authored color detail")
     assert.ok(batched.visible > 10000, JSON.stringify(batched))
     assert.equal(batched.mismatches, 0, `batched color and ID pixels must match individual sprites: ${JSON.stringify(batched)}`)
     for (const foliage of foliageResults) {

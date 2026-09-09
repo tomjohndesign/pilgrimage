@@ -22,6 +22,10 @@ export const MEAL_PRICE = 2
 export const DRINK_PRICE = 1
 /** A counter only tops up a meter this low; a cup is not also half a dinner. */
 export const SERVING_THRESHOLD = 60
+export const SEAT_REST_THRESHOLD = 50
+export const SEAT_STAMINA_PER_HOUR = 4
+/** A short seated break, in game hours; sleep remains the main recovery. */
+export const TABLE_HOURS = 2
 
 export interface TavernSeat {
   id: string
@@ -60,9 +64,13 @@ export function servingCounter(map: GameMap, building: BuildingDef): { tile: Til
   return { tile, point: { ...point, y: surfaceHeight(map, tile.x, tile.z) } }
 }
 
-/** The authored bench places, in the order visitors take them. */
+/** The authored chairs and benches, in the order visitors take them. */
 export function tavernSeats(map: GameMap, building: BuildingDef): TavernSeat[] {
   if (building.buildType !== "tavern") return []
+  return buildingSeats(map, building)
+}
+
+function buildingSeats(map: GameMap, building: BuildingDef): TavernSeat[] {
   return buildingSupports(building, map)
     .filter(support => support.clips.includes("sitting"))
     .map(support => {
@@ -77,7 +85,7 @@ export interface TavernPlan {
   buildingId: string
   counter: { tile: TilePos; point: { x: number; y: number; z: number } }
   seat: TavernSeat | null
-  /** World-space aisle route from the customer to the counter. */
+  /** World-space route to the counter, or directly to a seat for a free rest. */
   route: TavernWalkPoint[]
 }
 
@@ -104,6 +112,24 @@ export function tavernVisitPlan(
     if (tavernWalkingRoute(map, counter.point, seat.point, seat.id)) {
       return { buildingId: building.id, counter, seat, route }
     }
+  }
+  return null
+}
+
+/** A free short rest uses a tavern seat or an exterior chair, without needing a keeper. */
+export function seatRestPlan(map: GameMap, building: BuildingDef, from: TavernWalkPoint,
+  occupied: ReadonlySet<string>): TavernPlan | null {
+  if (!isComplete(building)) return null
+  const seats = buildingSeats(map, building).filter(seat =>
+    (building.buildType === "tavern" || seat.id.startsWith("entry-")) && !occupied.has(`${building.id}:${seat.id}`))
+    .sort((a, b) => Number(b.id.startsWith("tavern-outside")) - Number(a.id.startsWith("tavern-outside")))
+  for (const seat of seats) {
+    const fine = tavernWalkingRoute(map, from, seat.point, seat.id)
+    const route = fine === undefined ? settlementRoute(map, map.buildings,
+      { x: worldToTileX(map, from.x), z: worldToTileZ(map, from.z) }, seat.tile, false, true)
+      ?.map(p => ({ x: tileToWorldX(map, p.x), z: tileToWorldZ(map, p.z), y: surfaceHeight(map, p.x, p.z) })) : fine
+    if (route) return { buildingId: building.id, seat, counter: { tile: seat.tile, point: seat.point },
+      route: [...route, seat.point] }
   }
   return null
 }

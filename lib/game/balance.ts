@@ -4,7 +4,7 @@ import { STOREHOUSE_FOOD_CAPACITY } from "./storage"
 /** Pure balance data, shared by gameplay, the tuning page and the specification. */
 export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "storehouse"
   | "monk-shelter" | "house" | "tavern" | "wood-shelter" | "market" | "guard-post" | "lumberCamp"
-  | "sheep-pen"
+  | "sheep-pen" | "well" | "watering-hole"
 
 export interface Resources {
   gold: number
@@ -157,7 +157,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "tavern", label: "Tavern", category: "buildings",
-    description: "Two jobs behind the counter. Low happiness draws travelers and settlers here for company, even when free water is nearby. They buy food and drink for gold and recover happiness at the tables. Its front and back doors each keep a clear path tile.",
+    description: "Two jobs behind the counter. Low happiness draws travelers and settlers here for company, even when free water is nearby. They buy food and drink and recover happiness at the tables. Chairs and outdoor benches offer a free short rest, restoring up to 8 stamina. Keep both entrances and the benches clear.",
     cost: { gold: 150, wood: 110 }, renown: 12, requiredRenown: 25,
     income: { gold: 0, wood: 0 }, w: 3, d: 4, height: 0.78,
     color: "#8c7658", roofColor: "#a59164",
@@ -168,6 +168,18 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     cost: { gold: 55, wood: 45 }, renown: 2, requiredRenown: 5,
     income: { gold: 0, wood: 0 }, w: 3, d: 2, height: 0.70,
     color: "#8c7658", roofColor: "#a59164",
+  },
+  {
+    id: "well", label: "Timber well", category: "scenery",
+    description: "Free drinking water for thirsty walkers and settlers. One person draws water at a time; keep its front approach clear.",
+    cost: { gold: 20, wood: 15 }, renown: 0, requiredRenown: 0,
+    income: { gold: 0, wood: 0 }, w: 2, d: 2, height: .58, color: "#877152", roofColor: "#95805c",
+  },
+  {
+    id: "watering-hole", label: "Watering hole", category: "scenery",
+    description: "A shallow earthen pool with an open dipping edge. Thirsty walkers and settlers take turns drinking here for free.",
+    cost: { gold: 10, wood: 0 }, renown: 0, requiredRenown: 0,
+    income: { gold: 0, wood: 0 }, w: 3, d: 2, height: .1, color: "#847657", roofColor: "#526e67",
   },
 ]
 
@@ -455,7 +467,7 @@ export const RULE_FIELDS = [
   },
   {
     key: "staminaDecay", group: "Traveler needs", label: "Stamina drain per game hour",
-    description: "Energy lost per game hour. Default: a full bar lasts about 95 hours, with travelers looking for lodging once it falls below 20. Camping restores stamina and tending a parked stall holds it steady; drinking does not restore energy.",
+    description: "Energy lost per game hour. Default: a full bar lasts about 95 hours, with travelers looking for lodging once it falls below 20. Camping restores stamina, seated breaks restore a little, and tending a parked stall holds it steady. Standing drink stops do not restore energy.",
     default: 1.05, min: 0, max: 50, step: 0.05,
   },
 ] as const
