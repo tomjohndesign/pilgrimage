@@ -462,8 +462,8 @@ export const RULE_FIELDS = [
   },
   {
     key: "thirstDecay", group: "Traveler needs", label: "Thirst drain per game hour",
-    description: "Hydration lost per game hour. Default: 144 points per day, with a full bar lasting about 17 hours. Camping halves this rate; shrine hospitality restores it.",
-    default: 6, min: 0, max: 50, step: 0.1,
+    description: "Hydration lost per game hour. Default: 72 points per day, with a full bar lasting about 33 hours. Camping halves this rate; shrine hospitality restores it.",
+    default: 3, min: 0, max: 50, step: 0.1,
   },
   {
     key: "staminaDecay", group: "Traveler needs", label: "Stamina drain per game hour",
@@ -629,7 +629,7 @@ export function validateBalance(
   }
   return { balance: clean, error: null }
 }
-export const BALANCE_VERSION = 5
+export const BALANCE_VERSION = 6
 export function exportBalance(balance: GameBalance): string {
   return JSON.stringify({ version: BALANCE_VERSION, balance }, null, 2)
 }
@@ -637,8 +637,8 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
   try {
     const preset = record(JSON.parse(json))
     const version = preset?.version
-    if (version !== 1 && version !== 2 && version !== 3 && version !== 4 && version !== BALANCE_VERSION)
-      return { balance: null, error: "Unsupported preset version. Expected version 1, 2, 3, 4 or 5." }
+    if (version !== 1 && version !== 2 && version !== 3 && version !== 4 && version !== 5 && version !== BALANCE_VERSION)
+      return { balance: null, error: "Unsupported preset version. Expected version 1, 2, 3, 4, 5 or 6." }
     // Add defaults for new structures while retaining all authored settings.
     const saved = record(preset?.balance)
     const rules = record(saved?.rules)
@@ -657,7 +657,7 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
         ...rules,
         // Adopt slower defaults in old saves without overwriting custom rates.
         ...((version < 4 && rules.hungerDecay === 12.5 || version < 5 && rules.hungerDecay === 3) ? { hungerDecay: DEFAULT_BALANCE.rules.hungerDecay } : {}),
-        ...(version < 4 && rules.thirstDecay === 25 ? { thirstDecay: DEFAULT_BALANCE.rules.thirstDecay } : {}),
+        ...((version < 4 && rules.thirstDecay === 25 || version < 6 && rules.thirstDecay === 6) ? { thirstDecay: DEFAULT_BALANCE.rules.thirstDecay } : {}),
         ...(version < 5 && rules.staminaDecay === 2.1 ? { staminaDecay: DEFAULT_BALANCE.rules.staminaDecay } : {}),
       },
       buildings: {

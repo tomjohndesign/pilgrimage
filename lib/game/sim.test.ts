@@ -219,16 +219,16 @@ describe("stepSim", () => {
     const s = sim.travelers.get(0)!
     const hour = GAME_DAY_SECONDS / 24
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([78.5, 74, 78.95])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([78.5, 77, 78.95])
 
     Object.assign(sim.balance.rules, { hungerDecay: 2, thirstDecay: 6, staminaDecay: 0 })
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([76.5, 68, 78.95])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([76.5, 71, 78.95])
 
     s.activity = "camping"
     s.stamina = 0
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([75.5, 65, 60])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([75.5, 68, 60])
   })
 
   it("keeps food and water supplied longer over an active day", () => {
@@ -246,8 +246,9 @@ describe("stepSim", () => {
         s.activity = "walking"
       }
     }
-    // Legs never bottom out: walkers pitch camp once stamina falls below 20.
-    expect(depleted).toEqual({ hunger: 0, thirst: 1, stamina: 0 })
+    // Nothing bottoms out in a day: a full cup lasts about 33 hours, and walkers
+    // pitch camp once stamina falls below 20.
+    expect(depleted).toEqual({ hunger: 0, thirst: 0, stamina: 0 })
     expect(sim.time).toBeCloseTo(1)
   })
 
@@ -372,7 +373,7 @@ describe("stepSim", () => {
     expect(buyer.hunger).toBeLessThan(50)
   })
 
-  it("needs only one drink in the first day when starting fully supplied", () => {
+  it("needs only one drink in the first two days when starting fully supplied", () => {
     const map = makeMap()
     const travelers = [
       makeTraveler(0, "pilgrim", { hunger: 100, thirst: 100, gold: 100 }),
@@ -384,7 +385,7 @@ describe("stepSim", () => {
     const buyer = sim.travelers.get(0)!, vendor = sim.travelers.get(1)!
     vendor.timer = GAME_DAY_SECONDS + 1
     let meals = 0, drinks = 0
-    for (let elapsed = 0; elapsed < GAME_DAY_SECONDS; elapsed += 0.25) {
+    for (let elapsed = 0; elapsed < 2 * GAME_DAY_SECONDS; elapsed += 0.25) {
       const { hunger, thirst } = buyer
       stepSim(sim, travelers, map, 0, 0.25)
       if (buyer.hunger > hunger) meals++
@@ -1014,8 +1015,8 @@ describe("beggar progression", () => {
     stepSim(sim, travelers, map, 0, 0.25)
     expect(person.beggar).toBe(true)
     expect(person.activity).toBe("toBegging")
-    // Thirst has run out during the day; that must not prevent asking for help.
-    expect(person.thirst).toBe(0)
+    // An empty cup must not prevent asking for help.
+    person.thirst = 0
     expect(runUntil(sim, travelers, map, () => person.activity === "begging", 30)).toBe(true)
     stepSim(sim, travelers, map, 1, 1)
     expect(person.activity).toBe("begging")
