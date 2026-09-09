@@ -39,7 +39,7 @@ import { Buildings } from "./buildings"
 import { BuildInfluenceOverlay } from "./build-influence-overlay"
 import { CameraLight } from "./camera-light"
 import { CameraRig } from "./camera-rig"
-import { PersonPicking } from "./character-selection"
+import { GroundSelection, PersonPicking } from "./character-selection"
 import { DebugHandle } from "./debug-handle"
 import { Environment } from "./environment"
 import { Monks } from "./monks"
@@ -235,6 +235,7 @@ export function GameCanvas({
       </SceneAssetBoundary>
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <PersonPicking />
+      <GroundSelection map={map} trees={trees} characterScale={characterScale} />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
       <DebugHandle characterScale={characterScale} map={map} travelers={travelers} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} movement={movement} />
       <MapReveal map={map} state={reveal} onLandmarkReady={onLandmarkReady} onProgress={onRevealProgress} onPhase={phase => {

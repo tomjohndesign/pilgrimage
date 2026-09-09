@@ -10,8 +10,11 @@ export type Cargo = typeof CARGO[number]
 export const CART_MODES = ["hand", "donkey", "horse", "shop"] as const
 export type Puller = "hand" | Animal
 export type ShopState = "travel" | "opening" | "trading" | "packing"
-export type CartMode = typeof CART_MODES[number]
-export type Animal = "donkey" | "horse"
+export type CartMode = typeof CART_MODES[number] | "ox"
+export type Animal = "donkey" | "horse" | "ox"
+/** Additive transport art; existing equine and merchant bakes stay immutable. */
+export const PARTY_TRANSPORT_VERSION = "v28"
+export const PACK_ANIMAL_VERSION = "v29"
 export const HORSE_VARIANTS = ["common", "noble"] as const
 export type HorseVariant = typeof HORSE_VARIANTS[number]
 /** Shared by loose, harnessed and ridden animals; recorded in every affected bake. */
@@ -37,12 +40,12 @@ export const HORSE_CART_Z = -3.1 * RIG_TO_WORLD
 export const SHOP_SECONDS = 4
 export const CART = { directions: 16, cellSize: 160, anchor: [80, 94] } as const
 export const SHOP = { cellSize: 256, anchor: [128, 142], footprint: [3, 2] } as const
-export function cartOffset(puller: Puller) { return puller === "hand" ? HAND_CART_Z : puller === "horse" ? HORSE_CART_Z : DONKEY_CART_Z }
+export function cartOffset(puller: Puller) { return puller === "hand" ? HAND_CART_Z : puller === "horse" || puller === "ox" ? HORSE_CART_Z : DONKEY_CART_Z }
 export function cartColumn(_cargo: Cargo, mode: CartMode, phase: number) {
   return mode === "shop" ? TRANSPORT.shopFrames - 1 : Math.floor(((phase % 1 + 1) % 1) * TRANSPORT.wheelFrames)
 }
-export function cartUrl(cargo: Cargo, mode: CartMode, side = 1, compact = false) { return `/textures/transport/${TRANSPORT.version}/cart-${cargo}-${mode}${mode === "shop" && compact ? "-small" : ""}${mode === "shop" && side < 0 ? "-mirrored" : ""}.png` }
-export function animalUrl(kind: Animal, coat: string, hitched = false) { return `/textures/transport/${TRANSPORT.version}/${kind}-${coat}${hitched ? "-hitched" : ""}.png` }
+export function cartUrl(cargo: Cargo, mode: CartMode, side = 1, compact = false) { return `/textures/transport/${TRANSPORT.version}/cart-${cargo}-${mode === "ox" ? "horse" : mode}${mode === "shop" && compact ? "-small" : ""}${mode === "shop" && side < 0 ? "-mirrored" : ""}.png` }
+export function animalUrl(kind: Animal, coat: string, hitched = false, pack = false) { return `/textures/transport/${pack ? PACK_ANIMAL_VERSION : PARTY_TRANSPORT_VERSION}/${kind}-${coat}${pack ? "-pack" : hitched ? "-hitched" : ""}.png` }
 
 /** Stable visual variety, independent of the simulation's random stream. */
 export function cartLoadout(id: number): { cargo: Cargo; puller: Puller; coat?: string } {
@@ -53,6 +56,8 @@ export function cartLoadout(id: number): { cargo: Cargo; puller: Puller; coat?: 
 
 /** Four distinct footfalls per cycle; cadence changes never alter planted-foot travel. */
 export const ANIMAL_PROFILES = {
+  ox: { label: "Ox", cyclesPerSecond: 0.62, stride: 0.44, lift: 0.065, legHeight: 1.02, legSpread: 0.31, legZ: 0.55,
+    sway: 0.018, bob: 0.008, pitch: 0.01, roll: 0.018, neckNod: 0.025, headNod: 0.022, walkNeckLean: 0.025, spineFlex: 0.01 },
   donkey: { label: "Donkey", cyclesPerSecond: 0.82, stride: 0.23, lift: 0.06, legHeight: 0.87, legSpread: 0.22, legZ: 0.62,
     sway: 0.020, bob: 0.013, pitch: 0.016, roll: 0.024, neckNod: 0.065, headNod: 0.06, walkNeckLean: 0.055, spineFlex: 0.018 },
   common: { label: "Common horse", cyclesPerSecond: 0.95, stride: 0.28, lift: 0.08, legHeight: 1.08, legSpread: 0.235, legZ: 0.75,
@@ -64,7 +69,7 @@ export type QuadrupedProfile = { [K in Exclude<keyof typeof ANIMAL_PROFILES.donk
 export function quadrupedBody(p: QuadrupedProfile) {
   return { ...BASE_PERSON.body, ankleHeight: 0.07, legOffset: p.legSpread, stride: p.stride, footLift: p.lift, footLength: 0.19 }
 }
-export function animalProfile(kind: Animal, variant: HorseVariant = "common") { return ANIMAL_PROFILES[kind === "donkey" ? "donkey" : variant] }
+export function animalProfile(kind: Animal, variant: HorseVariant = "common") { return ANIMAL_PROFILES[kind === "horse" ? variant : kind] }
 export function animalBody(kind: Animal, variant: HorseVariant = "common") {
   return quadrupedBody(animalProfile(kind, variant))
 }

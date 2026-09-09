@@ -17,7 +17,7 @@ import { usePopulationStore } from "@/lib/game/base-person/population-store"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
 import { MerchantMapPreview } from "./merchant-map-preview"
 import { COATS, animalCoat } from "@/lib/game/transport/coats"
-import { CARGO, TRANSPORT, CART, SHOP, cartLoadout, animalStride, cartUrl, animalUrl, type Puller, type ShopState, cartColumn, type Cargo, type CartMode, type HorseVariant } from "@/lib/game/transport/assets"
+import { CARGO, TRANSPORT, PARTY_TRANSPORT_VERSION, CART, SHOP, cartLoadout, animalStride, cartUrl, animalUrl, type Puller, type ShopState, cartColumn, type Cargo, type CartMode, type HorseVariant } from "@/lib/game/transport/assets"
 import { KNIGHT, knightDesign } from "@/lib/game/knight/design"
 import { MONK_VISUAL } from "@/lib/game/base-person/monk-assets"
 import { knightLoadout, knightTravelSpeed } from "@/lib/game/knights"
@@ -134,7 +134,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     window.__jobBake = async progress => (await import("@/lib/game/jobs/bake")).bakeJobs(progress)
     window.__minstrelBake = async () => (await import("@/lib/game/minstrel/bake")).bakeMinstrels()
     window.__knightBake = async () => (await import("@/lib/game/knight/bake")).bakeKnights()
-    window.__transportBake = async () => (await import("@/lib/game/transport/bake")).bakeTransport()
+    window.__transportBake = async (options) => (await import("@/lib/game/transport/bake")).bakeTransport(options)
     window.__choppingBlockBake = bakeChoppingBlock
     window.__rocketMonkBake = async () => (await import("@/lib/game/rocket/bake")).bakeRocketMonks()
     return () => { delete target.__bakePersonPopulation; delete window.__jobBake; delete window.__transportBake; delete window.__knightBake; delete window.__minstrelBake; delete window.__choppingBlockBake; delete window.__rocketMonkBake }
@@ -384,7 +384,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   const ready = !busy && !error && !!bake && sheetMatchesDesign
 
   return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Character playground" onRandomize={randomize}
-    version={isPerson ? `Base person · v${BASE_PERSON.version}` : `${SUBJECTS[subject]} · ${isKnight ? KNIGHT.version : TRANSPORT.version}`}
+    version={isPerson ? `Base person · v${BASE_PERSON.version}` : `${SUBJECTS[subject]} · ${isKnight ? KNIGHT.version : subject === "cart" ? TRANSPORT.version : PARTY_TRANSPORT_VERSION}`}
     controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(!controlsOpen)}
     roadHref={`/play?characters=base&baseSize=1.5&fps=${fps}`}
     status={onMap ? "Merchant journey and turning simulations · game scale" : !isPerson ? `${subject === "horse" ? transportMetadata.animalProfiles[horseVariant].label : SUBJECTS[subject]} · ${clipLabel}` : dragging ? "Live preview · release to finish sprite sheets." : busy ? bakeProgress ? `Updating sprite sheets · ${Math.round(bakeProgress.done / bakeProgress.total * 100)}%` : "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}
@@ -486,7 +486,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
             {!onMap && <Section {...section("Animation")}><Tuner label="Timing" labelClassName="w-28" value={fps} min={1} max={24} display={`${(fps * animationRate).toFixed(1)} fps`} onChange={setFps} /></Section>}
             <Section {...section("Files")}><div className="person-file-actions">
               <a className={button} href={url} download>Download sprite sheet</a>
-              <a className={button} href={isKnight ? `/textures/knights/${KNIGHT.version}/manifest.json` : `/textures/transport/${TRANSPORT.version}/manifest.json`} download>Download sheet metadata</a>
+              <a className={button} href={isKnight ? `/textures/knights/${KNIGHT.version}/manifest.json` : `/textures/transport/${subject === "cart" ? TRANSPORT.version : PARTY_TRANSPORT_VERSION}/manifest.json`} download>Download sheet metadata</a>
             </div><p className="person-hint">{pixels} × {pixels} px cell · {subject === "cart" ? CART.directions : 8} directions<br />{isKnight ? mountedKnight ? knightMetadata.safePadding : 4 : transportMetadata.safePadding} px safe margin</p></Section>
           </>}
         </div>
