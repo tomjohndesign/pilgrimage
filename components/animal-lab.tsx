@@ -8,11 +8,11 @@ import { Section } from "./game/property-controls"
 import { AnimalPreview, animalActions, ACTION_LABELS, type AnimalSubject, type AnimalMotion } from "./animal-preview"
 import { WILDLIFE_PROFILES, isBird } from "@/lib/game/wildlife/species"
 import { COATS, animalCoat } from "@/lib/game/transport/coats"
-import { animalUrl, TRANSPORT, type HorseVariant } from "@/lib/game/transport/assets"
+import { animalUrl, PARTY_TRANSPORT_VERSION, PACK_ANIMAL_VERSION, type HorseVariant } from "@/lib/game/transport/assets"
 
 export const ANIMAL_SUBJECTS: Record<AnimalSubject, string> = {
   deer: "Deer · doe", buck: "Deer · buck", sheep: "Sheep", goat: "Goat", rabbit: "Rabbit",
-  hawk: "Hawk", sparrow: "Sparrow", boar: "Boar", fox: "Fox", donkey: "Donkey", horse: "Horse",
+  hawk: "Hawk", sparrow: "Sparrow", boar: "Boar", fox: "Fox", donkey: "Donkey / mule", horse: "Horse", ox: "Ox",
 }
 const HABITATS: Record<AnimalSubject, string> = {
   deer: "Does wander open ground in small groups, away from paths and settlements.",
@@ -25,6 +25,7 @@ const HABITATS: Record<AnimalSubject, string> = {
   boar: "Boars walk, root and rest near the forest.",
   fox: "Foxes trot or lope along the forest margin, then lie down to rest.",
   donkey: "Donkeys accompany merchants and graze beside their parked carts.",
+  ox: "Oxen keep an even four-beat walk with broad, split hooves and a steady head.",
   horse: "Horses accompany merchants and graze beside their parked carts.",
 }
 import { CharacterAnimationDock } from "./character-rig-editor"
@@ -42,25 +43,27 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
   const search = useSearchParams(), router = useRouter()
   const requested = search.get("animal") ?? search.get("asset")
   const [subject, setSubject] = useState<AnimalSubject>(requested && Object.hasOwn(ANIMAL_SUBJECTS, requested) ? requested as AnimalSubject : "deer")
-  const [motion, setMotion] = useState<AnimalMotion>(["hawk", "sparrow", "horse", "donkey"].includes(subject) ? "graze" : "idle")
-  const [playing, setPlaying] = useState(["hawk", "sparrow", "horse", "donkey"].includes(subject)), [lineup, setLineup] = useState(false)
+  const [motion, setMotion] = useState<AnimalMotion>(["hawk", "sparrow", "horse", "donkey", "ox"].includes(subject) ? "graze" : "idle")
+  const [playing, setPlaying] = useState(["hawk", "sparrow", "horse", "donkey", "ox"].includes(subject)), [lineup, setLineup] = useState(false)
   const [row, setRow] = useState(1), [rate, setRate] = useState(1)
   const { zoom, setZoom } = useAssetPreviewStore()
   const stage = useRef<HTMLDivElement>(null), drag = useRef<{ x: number; y: number; row: number; pan: boolean; offset: [number, number] } | null>(null)
   const [offset, setOffset] = useState<[number, number]>([0, 0])
   usePreviewWheel(stage)
   const [construction, setConstruction] = useState(false)
+  const [pack, setPack] = useState(false)
   const [coat, setCoat] = useState(""), [horseVariant, setHorseVariant] = useState<HorseVariant>("common")
   const [controlsOpen, setControlsOpen] = useState(false)
   const [sections, setSections] = useState<Record<string, boolean>>({})
-  const equine = subject === "donkey" || subject === "horse", bird = !equine && isBird(subject)
+  const packed = pack && (subject === "horse" || subject === "donkey" || subject === "ox")
+  const equine = subject === "donkey" || subject === "horse" || subject === "ox", bird = !equine && isBird(subject)
   const section = (title: string) => ({ title, open: sections[title] ?? true, onToggle: () => setSections(old => ({ ...old, [title]: !(old[title] ?? true) })) })
   useEffect(() => {
     if (active && requested && Object.hasOwn(ANIMAL_SUBJECTS, requested)) setSubject(requested as AnimalSubject)
   }, [active, requested])
   const choose = (animal: AnimalSubject) => {
     setConstruction(false)
-    if (!["hawk", "sparrow", "horse", "donkey"].includes(animal)) { setMotion("idle"); setPlaying(false) }
+    if (!["hawk", "sparrow", "horse", "donkey", "ox"].includes(animal)) { setMotion("idle"); setPlaying(false) }
     setSubject(animal); setCoat(""); setLineup(false); setOffset([0, 0])
     const params = new URLSearchParams(search.toString()); params.set("asset", "animals"); params.set("animal", animal)
     router.replace(`/assets/characters?${params}`, { scroll: false })
@@ -92,7 +95,7 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
   const actions = animalActions(subject), action = actions.includes(motion) ? motion : actions.includes("graze") ? "graze" : bird ? "fly" : "idle"
   const actionLabel = ACTION_LABELS[action]
   const frameKeyed = (step: number) => Object.values(edits.clips[action]?.keys ?? {}).some(keys => keys?.some(key => key.frame === step))
-  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} version="11 animals" label="Animal asset playground"
+  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} version={`${Object.keys(ANIMAL_SUBJECTS).length} animals`} label="Animal asset playground"
     controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(v => !v)}
     status={`${lineup ? "All animals" : ANIMAL_SUBJECTS[subject]} · ${actionLabel}${playing ? "" : " · Paused"}`}
     detail="Game models · shared pixel scale">
@@ -105,12 +108,13 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
             <div className="person-presets">{Object.entries(ANIMAL_SUBJECTS).map(([id, label]) => <button key={id} className="hud-action" aria-pressed={subject === id && !lineup} onClick={() => choose(id as AnimalSubject)}>{label}</button>)}</div>
           </Section>
           {equine && <Section {...section("Appearance")}>
-            {subject === "horse" && <label className="person-choice">Build<select aria-label="Horse build" value={horseVariant} onChange={e => setHorseVariant(e.target.value as HorseVariant)}><option value="common">Common</option><option value="noble">Noble</option></select></label>}
+            {equine && <label className="person-choice">Equipment<select aria-label="Animal equipment" value={pack ? "pack" : "none"} onChange={e => setPack(e.target.value === "pack")}><option value="none">None</option><option value="pack">Tied bundles</option></select></label>}
+            {subject === "horse" && !pack && <label className="person-choice">Build<select aria-label="Horse build" value={horseVariant} onChange={e => setHorseVariant(e.target.value as HorseVariant)}><option value="common">Common</option><option value="noble">Noble</option></select></label>}
             <label className="person-choice">Coat<select aria-label="Animal coat" value={coat || COATS[subject][0].id} onChange={e => setCoat(e.target.value)}>{COATS[subject].map(value => <option key={value.id} value={value.id}>{value.label}</option>)}</select></label>
           </Section>}
           {equine && <Section {...section("Files")}><div className="person-file-actions">
-            <a className="hud-action" href={animalUrl(subject, animalCoat(subject, coat).id)} download>Download sprite sheet</a>
-            <a className="hud-action" href={`/textures/transport/${TRANSPORT.version}/manifest.json`} download>Download sheet metadata</a>
+            <a className="hud-action" href={animalUrl(subject, animalCoat(subject, packed ? undefined : coat).id, false, packed)} download>Download sprite sheet</a>
+            <a className="hud-action" href={`/textures/transport/${packed ? PACK_ANIMAL_VERSION : PARTY_TRANSPORT_VERSION}/manifest.json`} download>Download sheet metadata</a>
           </div></Section>}
           <Section {...section("In the world")}><p className="person-hint">{HABITATS[subject]}</p></Section>
           <Section {...section("Inspection")}>
@@ -136,12 +140,12 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
           onPointerMove={event => { const start = drag.current; if (!start) return; if (start.pan) setOffset([start.offset[0] + event.clientX - start.x, start.offset[1] + event.clientY - start.y]); else setRow(((start.row + Math.trunc((event.clientX - start.x) / 48)) % 8 + 8) % 8) }}
           onPointerUp={event => { drag.current = null; event.currentTarget.releasePointerCapture(event.pointerId) }} onLostPointerCapture={() => { drag.current = null }}>
           <div style={{ transform: `translate(${offset[0]}px, ${offset[1]}px)` }}>
-          {active && <AnimalPreview subject={subject} lineup={lineup} motion={action} playing={playing} row={row} zoom={zoom} rate={rate} coat={coat} horseVariant={horseVariant} onSelect={choose} directionCanvases={directionCanvases} showRig={showRig} construction={construction && !bird && !equine} frame={frame} edits={edits} joints={joints} selected={selectedJoint}
+          {active && <AnimalPreview pack={packed} subject={subject} lineup={lineup} motion={action} playing={playing} row={row} zoom={zoom} rate={rate} coat={coat} horseVariant={horseVariant} onSelect={choose} directionCanvases={directionCanvases} showRig={showRig} construction={construction && !bird && !equine} frame={frame} edits={edits} joints={joints} selected={selectedJoint}
             onInspect={(next, inspection) => { setFrame(next); setJoints(inspection) }} onJoint={joint => { setSelectedJoint(joint); setPlaying(false) }}
             onPose={changes => commit(changes.reduce((next, [joint, value]) => animalPoseKey(next, action, joint, { frame, offset: value, radius: 4 }, frame), edits))}
             onDrag={active => { if (active) { dragEdit.current = edits; setPlaying(false) } else endDrag() }} />}
           </div>
-          <span className="person-stage-caption">{lineup ? "Deer · sheep · goats · rabbits · birds · boars · foxes · donkey · horse" : `${equine ? ANIMAL_SUBJECTS[subject] : WILDLIFE_PROFILES[subject].label} · ${actionLabel}`}</span>
+          <span className="person-stage-caption">{lineup ? "Deer · sheep · goats · rabbits · birds · boars · foxes · donkey / mule · horse · ox" : `${equine ? ANIMAL_SUBJECTS[subject] : WILDLIFE_PROFILES[subject].label} · ${actionLabel}`}</span>
         </div>
         {showRig && !lineup && <AnimalRigInspector joints={joints} selected={selectedJoint} onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} edits={edits} clip={action} frame={frame}
           onChange={commit} frameKeyed={frameKeyed(frame)} onResetFrame={() => commit(animalClearFrame(edits, action, frame))} bird={bird} equine={equine}

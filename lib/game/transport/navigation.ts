@@ -158,7 +158,7 @@ export function parkingTree(map: GameMap, pose: CartPose, trees: readonly TreePl
 /** Try compact pull-offs near the junction. Validate the entire rigid convoy
  * through arrival AND departure before committing; blocked grass means no visit. */
 export function shrineParking(map: GameMap, progress: number, direction: 1 | -1, wheelbase: number, puller: Puller, scale: number,
-  occupied: readonly CartPose[] = [], context: ParkingContext = { trees: [] }): ShrineParking | null {
+  occupied: readonly CartPose[] = [], context: ParkingContext = { trees: [] }, requireTree = true): ShrineParking | null {
   const reserved = { ...context, obstacles: [...(context.obstacles ?? []), ...occupied.flatMap(pose => convoyBounds(pose, "horse", scale))] }
   const start = convoyPoint(map, progress, scale), ahead = convoyPoint(map, progress + direction * 0.1, scale)
   const heading = Math.atan2(ahead.x - start.x, ahead.z - start.z)
@@ -185,7 +185,7 @@ export function shrineParking(map: GameMap, progress: number, direction: 1 | -1,
       if (route === entry) { parked = pose; if (!parkingClear(map, parked, puller, scale, reserved, true)) { valid = false; break } }
     }
     const tree = valid && puller !== "hand" ? parkingTree(map, parked, context.trees) : undefined
-    if (valid && (puller === "hand" || tree)) return { tree, entry, exit, pose: initial, parked, returnProgress: returnProgress + direction * 0.5, distance: 0, walking: false }
+    if (valid && (!requireTree || puller === "hand" || tree)) return { tree, entry, exit, pose: initial, parked, returnProgress: returnProgress + direction * 0.5, distance: 0, walking: false }
   }
   return null
 }

@@ -248,6 +248,7 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
     }
     if (sprite.current) sprite.current.userData.clip = flight ? "flying" : playing ? "performing" : action ? requested : moving ? "walk" : "idle"
     const direction = spriteRow(heading, yaw)
+    if (sprite.current) sprite.current.userData.direction = direction
     const row = visual.rowOffset + direction
     origin.setFromMatrixPosition(parent.matrixWorld)
     const support = map && !moving && !flight ? characterSupport(map, origin.x, origin.z, requested) : undefined

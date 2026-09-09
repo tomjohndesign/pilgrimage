@@ -45,6 +45,8 @@ import {
 import { BASE_CHARACTER_SCALE } from "@/lib/game/base-person/gait"
 import { WoodLog } from "./wood-log"
 import { PixelCharacters } from "@/components/pixel-canvas"
+import { handlerVisual } from "@/lib/game/transport/handler-assets"
+import { PartyTransportFigures } from "./party-transport"
 import { TravelerFigure } from "./traveler-figure"
 import { CharacterSprite } from "./character-sprite"
 import { AdmissionEffects } from "./admission-effects"
@@ -116,6 +118,8 @@ export const Travelers = memo(function Travelers({
   const selection = useCameraStore((s) => s.selection)
   const [jobs, setJobs] = useState<ReadonlyMap<number, SettlementJob>>(() => new Map(JOB_PREVIEW ? previewResidents(map).map(resident =>
     [resident.traveler.id, settlementJob(resident.building.id, [resident.building])!] as const) : []))
+  const [handlers, setHandlers] = useState<Set<number>>(() => new Set())
+  const currentHandlers = useRef(handlers)
   const currentJobs = useRef(jobs)
   const resourceElapsed = useRef(0)
   const preparedParents = useMemo(() => new Set<THREE.Object3D>(), [])
@@ -195,6 +199,8 @@ export const Travelers = memo(function Travelers({
         stepSim(sim, travelers, map, speed, dt, movement, speedScales, characterScale)
       }
     }
+    const nextHandlers = new Set([...sim.parties.values()].flatMap(party => (party.packs ?? []).map(pack => pack.handler)))
+    if (nextHandlers.size !== currentHandlers.current.size || [...nextHandlers].some(id => !currentHandlers.current.has(id))) { currentHandlers.current = nextHandlers; setHandlers(nextHandlers) }
     const nextJobs = new Map<number, SettlementJob>()
     for (const [id, traveler] of sim.travelers) {
       const job = settlementJob(traveler.employer, camps)
@@ -256,8 +262,8 @@ export const Travelers = memo(function Travelers({
         }
       }
       bounds.radius = FIGURE_RADIUS
-      const onScreen = personOnScreen || parkedOnScreen
-        || (selected?.kind === "traveler" && selected.id === travelers[i].id)
+      const onScreen = !s.partyRiding && (personOnScreen || parkedOnScreen
+        || (selected?.kind === "traveler" && selected.id === travelers[i].id))
       if (!group) { if (onScreen) missingVisibleUnits++; continue }
       const wasVisible = group.visible
       if (wasVisible !== onScreen) {
@@ -379,9 +385,10 @@ export const Travelers = memo(function Travelers({
   return (
     <group name="travelers" ref={root}>
       <PixelCharacters>
+        <PartyTransportFigures handlers={groupRefs} sim={sim} map={map} travelers={travelers} characterScale={characterScale} />
         <AdmissionEffects sim={sim} characterScale={characterScale} />
         {mounted.map(index => travelers[index] && <TravelerUnit key={travelers[index].id} index={index}
-          traveler={travelers[index]} map={map} appearance={appearances[index]} job={jobs.get(travelers[index].id)} groups={groupRefs}
+          traveler={travelers[index]} packHandler={handlers.has(travelers[index].id)} map={map} appearance={appearances[index]} job={jobs.get(travelers[index].id)} groups={groupRefs}
           selected={isSelected(selection, { kind: "traveler", id: travelers[index].id })}
           characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />)}
       </PixelCharacters>
@@ -393,21 +400,22 @@ export const Travelers = memo(function Travelers({
 })
 
 /** Stable neighbors do not rebuild rigs or materials as another figure enters view. */
-const TravelerUnit = memo(function TravelerUnit({ index, traveler, map, appearance, groups, selected, job, ...figure }: {
-  index: number; traveler: Traveler; map: GameMap; appearance: ReturnType<typeof travelerAppearance>
+const TravelerUnit = memo(function TravelerUnit({ packHandler, index, traveler, map, appearance, groups, selected, job, ...figure }: {
+  packHandler?: boolean; index: number; traveler: Traveler; map: GameMap; appearance: ReturnType<typeof travelerAppearance>
   groups: RefObject<Array<THREE.Group | null>>; selected: boolean; job?: SettlementJob
   characterModel: CharacterModel; characterScale: number; characterFps?: number; walkTuning?: WalkTuning
 }) {
   const idColor = useMemo(() => new THREE.Color(...encodeObjectId(travelerObjectId(index))), [index])
   const select = useCallback((event: { delta: number; stopPropagation: () => void }) =>
     selectElement({ kind: "traveler", id: traveler.id }, event), [traveler.id])
+  const leading = useMemo(() => packHandler ? handlerVisual(traveler.type.id, appearance.variant, traveler.attributes.age) : undefined, [packHandler, traveler.type.id, appearance.variant, traveler.attributes.age])
   const register = useCallback((node: THREE.Group | null) => { markPerson(node); if (node) node.userData.travelerId = traveler.id; groups.current[index] = node }, [groups, index, traveler.id])
   return <group name="traveler-unit" visible={false} ref={register}>
     {job || traveler.type.id === "vendor" || traveler.type.id === "knight" ?
       <TravelerFigure {...figure} map={map} job={job} age={traveler.attributes.age}
         {...(traveler.type.id === "knight" ? knightLoadout(traveler.id) : cartLoadout(traveler.id))}
         appearance={appearance} selected={selected} type={traveler.type} onClick={select} idColor={idColor} /> :
-      <Suspense fallback={null}><CharacterSprite {...figure} map={map} age={traveler.attributes.age}
+      <Suspense fallback={null}><CharacterSprite {...figure} visualOverride={leading} map={map} age={traveler.attributes.age}
         appearance={appearance} selected={selected} type={traveler.type.id} onClick={select}
         outlineColor={[idColor.r, idColor.g, idColor.b]} /></Suspense>}
     <CharacterHitTarget onClick={select} />

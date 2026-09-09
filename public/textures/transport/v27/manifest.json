@@ -1,0 +1,125 @@
+{
+  "version": "v27",
+  "cellSize": 160,
+  "seats": [
+    {
+      "x": -0.32,
+      "y": 0.73,
+      "z": 1.24,
+      "heading": 0
+    },
+    {
+      "x": 0.32,
+      "y": 0.73,
+      "z": 1.24,
+      "heading": 0
+    },
+    {
+      "x": -0.42,
+      "y": 0.53,
+      "z": -0.52,
+      "heading": 1.5707963267948966
+    },
+    {
+      "x": 0.42,
+      "y": 0.53,
+      "z": -0.52,
+      "heading": -1.5707963267948966
+    },
+    {
+      "x": -0.42,
+      "y": 0.53,
+      "z": 0.18,
+      "heading": 1.5707963267948966
+    },
+    {
+      "x": 0.42,
+      "y": 0.53,
+      "z": 0.18,
+      "heading": -1.5707963267948966
+    }
+  ],
+  "columns": 24,
+  "animalRigVersion": 1,
+  "animalProfiles": {
+    "ox": {
+      "label": "Ox",
+      "cyclesPerSecond": 0.62,
+      "stride": 0.44,
+      "lift": 0.065,
+      "legHeight": 1.02,
+      "legSpread": 0.31,
+      "legZ": 0.55,
+      "sway": 0.018,
+      "bob": 0.008,
+      "pitch": 0.01,
+      "roll": 0.018,
+      "neckNod": 0.025,
+      "headNod": 0.022,
+      "walkNeckLean": 0.025,
+      "spineFlex": 0.01
+    },
+    "donkey": {
+      "label": "Donkey",
+      "cyclesPerSecond": 0.82,
+      "stride": 0.23,
+      "lift": 0.06,
+      "legHeight": 0.87,
+      "legSpread": 0.22,
+      "legZ": 0.62,
+      "sway": 0.02,
+      "bob": 0.013,
+      "pitch": 0.016,
+      "roll": 0.024,
+      "neckNod": 0.065,
+      "headNod": 0.06,
+      "walkNeckLean": 0.055,
+      "spineFlex": 0.018
+    },
+    "common": {
+      "label": "Common horse",
+      "cyclesPerSecond": 0.95,
+      "stride": 0.28,
+      "lift": 0.08,
+      "legHeight": 1.08,
+      "legSpread": 0.235,
+      "legZ": 0.75,
+      "sway": 0.025,
+      "bob": 0.016,
+      "pitch": 0.018,
+      "roll": 0.022,
+      "neckNod": 0.075,
+      "headNod": 0.06,
+      "walkNeckLean": 0.08,
+      "spineFlex": 0.022
+    },
+    "noble": {
+      "label": "Noble horse",
+      "cyclesPerSecond": 0.98,
+      "stride": 0.36,
+      "lift": 0.09,
+      "legHeight": 1.23,
+      "legSpread": 0.29,
+      "legZ": 0.78,
+      "sway": 0.025,
+      "bob": 0.018,
+      "pitch": 0.018,
+      "roll": 0.022,
+      "neckNod": 0.075,
+      "headNod": 0.06,
+      "walkNeckLean": 0.12,
+      "spineFlex": 0.025
+    }
+  },
+  "safePadding": 26,
+  "depthEncoding": "view-offset-rg16-v1",
+  "animalFrames": 20,
+  "animalColumns": 39,
+  "animalAnchor": [
+    64,
+    78
+  ],
+  "animalCellSize": 128,
+  "animalScale": 1.9733333333333334,
+  "rigToWorld": 0.2846153846153846
+}

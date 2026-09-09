@@ -13,6 +13,7 @@ import { DEFAULT_MOVEMENT } from "./motion"
 import { generateRelic } from "./relic"
 import { createSim, stepSim } from "./sim"
 import { generateTravelers } from "./travelers"
+import { withTravelParties } from "./travel-parties"
 import { growTreePlacements } from "./trees/dimensions"
 import { placeTrees } from "./trees/placement"
 import { TREE_SPECIES } from "./trees/species"
@@ -39,7 +40,8 @@ describe("512 × 512, full population simulation", () => {
   for (const count of process.env.BENCH_COUNT ? [Number(process.env.BENCH_COUNT)] : [2000, 3840, 6000]) {
     const map = { ...terrain, footpaths: createFootpaths(terrain) }
     setFootpathObstacles(map.footpaths, trees.map(tree => ({ x: tree.x, z: tree.z, radius: Math.max(.18, (tree.footprint ?? .3) * .5) })))
-    const travelers = generateTravelers(seed, count)
+    const cast = generateTravelers(seed, count)
+    const travelers = process.env.BENCH_PARTIES === "1" ? withTravelParties(cast, seed) : cast
     const sim = createSim(travelers, map, [], generateRelic(seed).stats)
     sim.trees = trees
     sim.buildings = jobBuildings(map)
@@ -49,7 +51,7 @@ describe("512 × 512, full population simulation", () => {
       const speed = walkSpeedScale(visual.walkStride, scale)
       return [t.id, t.type.id === "vendor" ? vendorSpeedScale(t.id, scale, speed) : speed]
     }))
-    bench(`${count} travelers`, () => {
+    bench(`${count} travelers${process.env.BENCH_PARTIES === "1" ? " in parties" : " individually"}`, () => {
       const { ticks, dt } = simulationFrameStep(1 / 60, Number(process.env.BENCH_SIM_RATE ?? 2))
       for (let tick = 0; tick < ticks; tick++) {
         routeBenchmarkCity(sim, map)

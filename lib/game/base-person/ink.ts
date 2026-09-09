@@ -48,3 +48,22 @@ export function inkPersonFrame(source: Uint8ClampedArray, parts: Uint8ClampedArr
   }
   return { pixels: output, padding }
 }
+
+/** Animals use the same four-neighbour, one-native-pixel silhouette as people.
+ * Keep each coat's local color, mixing the border toward warm ink rather than
+ * adding a black cutout. No pixels are added beneath a planted hoof. */
+export function inkAnimalFrame(source: Uint8ClampedArray, size: number, strength = .6) {
+  const output = new Uint8ClampedArray(source.length)
+  const solid = (x:number,y:number) => x>=0 && y>=0 && x<size && y<size && source[(y*size+x)*4+3]>=128
+  let floor = 0
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++)if(solid(x,y))floor=y
+  for(let y=0;y<=floor;y++)for(let x=0;x<size;x++) {
+    const i=(y*size+x)*4, occupied=solid(x,y)
+    const next=occupied ? [x,y] : [[x-1,y],[x+1,y],[x,y-1],[x,y+1]].find(([a,b])=>solid(a,b))
+    if(!next)continue
+    const sample=(next[1]*size+next[0])*4
+    for(let c=0;c<3;c++)output[i+c]=occupied ? source[sample+c] : source[sample+c]*(1-strength)+[30,24,17][c]*strength
+    output[i+3]=255
+  }
+  return output
+}

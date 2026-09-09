@@ -1,5 +1,7 @@
 "use client"
 
+import { withTravelParties } from "@/lib/game/travel-parties"
+
 import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES, type SceneVisibility } from "@/lib/game/scene-visibility"
 import { DEFAULT_ELEVATION, type ElevationSettings } from "@/lib/game/map/elevation"
 import dynamic from "next/dynamic"
@@ -279,7 +281,7 @@ export function GameShell({
   // Identities live outside the canvas so the HUD can name whoever is selected.
   const travelerCount = baseMap ? travelerCountForMap(baseMap, settings.traffic) : 0
   const roadTravelers = useMemo(
-    () => (seed === null ? [] : generateTravelers(seed, travelerCount)),
+    () => (seed === null ? [] : withTravelParties(generateTravelers(seed, travelerCount), seed)),
     [seed, travelerCount],
   )
 

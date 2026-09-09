@@ -18,6 +18,8 @@ import { plantFoot, type FootPlant } from "@/lib/game/base-person/gait"
 import { BASE_PERSON, WALK_STANCE_FRACTION } from "@/lib/game/base-person/pose"
 import { animalCoat } from "@/lib/game/transport/coats"
 import { TRANSPORT, CART, SHOP, cartUrl, animalUrl, type Puller, RIG_TO_WORLD, cartColumn, animalStride, type Animal, type Cargo, type HorseVariant } from "@/lib/game/transport/assets"
+import { passengerCartUrl, passengerUrl, passengerColumn, PASSENGER_COLUMNS, type PassengerCart } from "@/lib/game/transport/party-assets"
+import type { TravelerTypeId } from "@/lib/game/travelers"
 import { DRIVER_CLIP } from "@/lib/game/transport/driver"
 import { transportPhase } from "@/lib/game/transport/animal-travel"
 import { applyDriverLayer } from "@/lib/game/transport/driver-layer"
@@ -29,25 +31,26 @@ import { KNIGHT } from "@/lib/game/knight/design"
 import manifest from "@/public/textures/transport/v25/manifest.json"
 import type { FigureClickHandler } from "./traveler-figure"
 
-export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0, horseVariant = "common", cargo = "produce", puller = "hand", awning = false, characterScale = 1,
+export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", pack = false, knight, map: terrain, kind, coat, variant = 0, horseVariant = "common", cargo = "produce", puller = "hand", awning = false, characterScale = 1,
   selected = false, outlineColor, onClick, position = [0, 0, 0] }: {
+  passengerCart?: PassengerCart; seat?: number; calling?: TravelerTypeId; pack?: boolean
   knight?: "mounted" | "saddled"
-  map?: GameMap; kind: "cart" | "merchant" | Animal; coat?: string; variant?: number; horseVariant?: HorseVariant; cargo?: Cargo; puller?: Puller; awning?: boolean; characterScale?: number
+  map?: GameMap; kind: "cart" | "merchant" | "passenger" | Animal; coat?: string; variant?: number; horseVariant?: HorseVariant; cargo?: Cargo; puller?: Puller; awning?: boolean; characterScale?: number
   selected?: boolean; outlineColor?: [number, number, number]; onClick?: FigureClickHandler; position?: [number, number, number]
 }) {
-  const animal = kind === "donkey" || kind === "horse"
+  const animal = kind === "donkey" || kind === "horse" || kind === "ox"
   const edits = useAnimalRigStore(state => state.designs[kind])
   const hasEdits = animal && !!edits && Object.keys(edits.clips).length > 0
-  const edited = useMemo(() => hasEdits && (kind === "donkey" || kind === "horse") ? createEditedAnimalFrame(kind, horseVariant, coat, knight ? { kind: knight, variant } : undefined) : null, [hasEdits, kind, horseVariant, coat, knight, variant])
+  const edited = useMemo(() => hasEdits && (kind === "donkey" || kind === "horse" || kind === "ox") ? createEditedAnimalFrame(kind, horseVariant, coat, knight ? { kind: knight, variant } : undefined, pack) : null, [hasEdits, kind, horseVariant, coat, knight, variant, pack])
   useEffect(() => () => edited?.dispose(), [edited])
   const [renderOrder] = useState(spriteRenderOrder)
-  const urls = knight ? Array(2).fill(`/textures/knights/${KNIGHT.version}/${knight}-${animalCoat("horse", coat).id}.png`) : kind === "cart" ? [cartUrl(cargo, puller), cartUrl(cargo, "shop", 1, puller === "hand"), cartUrl(cargo, "shop", -1, puller === "hand"), `/textures/transport/${TRANSPORT.version}/cart-${cargo}-driver.png`]
-    : kind === "merchant" ? [`/textures/transport/${TRANSPORT.version}/merchant-setup.png`, `/textures/transport/${TRANSPORT.version}/merchant-selling.png`] : [animalUrl(kind, animalCoat(kind, coat).id), animalUrl(kind, animalCoat(kind, coat).id, true)]
+  const urls = kind === "passenger" ? [passengerUrl(seat)] : passengerCart ? [passengerCartUrl(passengerCart)] : knight ? Array(2).fill(`/textures/knights/${KNIGHT.version}/${knight}-${animalCoat("horse", coat).id}.png`) : kind === "cart" ? [cartUrl(cargo, puller), cartUrl(cargo, "shop", 1, puller === "hand"), cartUrl(cargo, "shop", -1, puller === "hand"), `/textures/transport/${TRANSPORT.version}/cart-${cargo}-driver.png`]
+    : kind === "merchant" ? [`/textures/transport/${TRANSPORT.version}/merchant-setup.png`, `/textures/transport/${TRANSPORT.version}/merchant-selling.png`] : [animalUrl(kind, animalCoat(kind, pack ? undefined : coat).id, false, pack), animalUrl(kind, animalCoat(kind, pack ? undefined : coat).id, true, pack)]
   const sources = useLoader(THREE.TextureLoader, [...urls, ...urls.map(url => url.replace(/([^/]+)$/, "depth-$1"))])
   const poseDepth = useMemo<SpritePoseDepth>(() => ({ map: { value: null }, enabled: { value: true } }), [])
   const depths = useMemo(() => sources.slice(urls.length).map(configureSpriteDepthTexture), [sources, urls.length])
-  const rows = knight ? knight === "mounted" ? KNIGHT.variants * 8 : 8 : kind === "cart" ? CART.directions : kind === "merchant" ? manifest.puller.rows : kind === "horse" ? manifest.animalRows.horse : 8
-  const rowOffset = knight ? knight === "mounted" ? (variant % KNIGHT.variants) * 8 : 0 : kind === "merchant" ? variant * 8 : kind === "horse" ? manifest.horseVariants[horseVariant].rowOffset : 0
+  const rows = knight ? knight === "mounted" ? KNIGHT.variants * 8 : 8 : kind === "cart" || kind === "passenger" ? CART.directions : kind === "merchant" ? manifest.puller.rows : kind === "horse" && !pack ? manifest.animalRows.horse : 8
+  const rowOffset = knight ? knight === "mounted" ? (variant % KNIGHT.variants) * 8 : 0 : kind === "merchant" ? variant * 8 : kind === "horse" && !pack ? manifest.horseVariants[horseVariant].rowOffset : 0
   const walk = knight ? { start: 1, frames: KNIGHT.frames } : manifest.animalClips.walk
   const maps = useMemo(() => sources.slice(0, urls.length).map(source => {
     const map = spriteTextureView(source)
@@ -64,16 +67,16 @@ export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0,
     if (idPass) material.userData.objectId = new THREE.Vector3(...(outlineColor ?? [0, 0, 0]))
     material.onBeforeCompile = shader => {
       applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth)
-      if (kind === "cart") applyDriverLayer(shader, maps[3], driverFrame, driverVisible, depths[3])
+      if (kind === "cart" && !passengerCart) applyDriverLayer(shader, maps[3], driverFrame, driverVisible, depths[3])
       if (idPass) {
         shader.uniforms.transportId = { value: new THREE.Vector3(...(outlineColor ?? [0, 0, 0])) }
         shader.fragmentShader = "uniform vec3 transportId;\n" + shader.fragmentShader.replace("#include <alphatest_fragment>", "#include <alphatest_fragment>\ndiffuseColor.rgb = transportId;")
       }
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => `transport-${kind}-${idPass ? "id" : "color"}-v4`
+    material.customProgramCacheKey = () => `transport-${kind}-${passengerCart ?? "vendor"}-${idPass ? "id" : "color"}-v4`
     return material
-  }), [map, maps, kind, driverFrame, driverVisible, viewport, worldTexel, groundPlane, poseDepth, depths, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }), [map, maps, kind, passengerCart, driverFrame, driverVisible, viewport, worldTexel, groundPlane, poseDepth, depths, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => { materials.forEach(m => m.dispose()) }, [materials])
   useEffect(() => () => maps.forEach(map => map.dispose()), [maps])
   const body = useRef<THREE.Sprite>(null), ids = useRef<THREE.Sprite>(null)
@@ -95,8 +98,8 @@ export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0,
     const data = parent.userData
     if (data.motionReset) plant.current = null
     const heading = typeof data.heading === "number" ? data.heading : (parent.getWorldDirection(vectors.facing), Math.atan2(vectors.facing.x, vectors.facing.z))
-    const yaw = Math.atan2(camera.matrixWorld.elements[8], camera.matrixWorld.elements[10]), row = spriteRow(heading, yaw, kind === "cart" ? CART.directions : 8)
-    const shop = data.activity === undefined ? awning : ["vending", "openingShop", "packingShop"].includes(data.activity)
+    const yaw = Math.atan2(camera.matrixWorld.elements[8], camera.matrixWorld.elements[10]), row = spriteRow(heading, yaw, kind === "cart" || kind === "passenger" ? CART.directions : 8)
+    const shop = !passengerCart && (data.activity === undefined ? awning : ["vending", "openingShop", "packingShop"].includes(data.activity))
     const moving = data.moving === true, distance = data.playbackRate === 0 ? 0 : data.distance ?? 0
     const stride = animal ? animalStride(kind, characterScale, horseVariant) : manifest.wheelCycleRadians * TRANSPORT.wheelRadius * RIG_TO_WORLD * characterScale
     if (moving) phase.current = transportPhase(phase.current, Math.abs(distance), stride, data.reversing === true)
@@ -106,9 +109,9 @@ export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0,
     driverVisible.value = kind === "cart" && data.riding === true && !shop ? 1 : 0
     driverFrame.value.set(variant / DRIVER_CLIP.variants, (CART.directions - 1 - row) / CART.directions, 1 / DRIVER_CLIP.variants, 1 / CART.directions)
     const keeperClip = kind === "merchant" ? KEEPER_CLIPS[data.keeperPose as keyof typeof KEEPER_CLIPS] : undefined
-    const columns = knight ? KNIGHT.frames + 1 : kind === "merchant" ? keeperClip ? KEEPER_COLUMNS : manifest.merchantSetupFrames : kind === "cart" ? shop ? manifest.shop.frames : manifest.cartColumns : manifest.animalColumns
+    const columns = kind === "passenger" ? PASSENGER_COLUMNS : knight ? KNIGHT.frames + 1 : kind === "merchant" ? keeperClip ? KEEPER_COLUMNS : manifest.merchantSetupFrames : kind === "cart" ? shop ? manifest.shop.frames : manifest.cartColumns : manifest.animalColumns
     const progress = Math.max(0, Math.min(1, data.shopProgress ?? 1))
-    const column = kind === "merchant" ? keeperClip ? keeperClip.start + Math.min(keeperClip.frames - 1, Math.floor((data.keeperPhase ?? 0) * keeperClip.frames)) : Math.min(columns - 1, Math.floor(progress * columns))
+    const column = kind === "passenger" ? passengerColumn(calling, variant) : kind === "merchant" ? keeperClip ? keeperClip.start + Math.min(keeperClip.frames - 1, Math.floor((data.keeperPhase ?? 0) * keeperClip.frames)) : Math.min(columns - 1, Math.floor(progress * columns))
       : kind === "cart" ? shop ? Math.round(progress * (columns - 1)) : cartColumn(cargo, puller, phase.current)
       : moving ? walk.start + Math.floor(phase.current * walk.frames)
       : data.grazing && !knight ? grazingTime.current < 0.75 ? lower.start + Math.min(lower.frames - 1, Math.floor(grazingTime.current / 0.75 * lower.frames))
@@ -125,8 +128,8 @@ export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0,
       poseDepth.map.value = edited.depthTexture
     }
     for (const material of materials) material.map = active
-    const cell = knight ? KNIGHT.cellSize : kind === "merchant" ? manifest.puller.cellSize : kind === "cart" ? shop ? SHOP.cellSize : CART.cellSize : manifest.cellSize
-    const anchor = knight ? KNIGHT.anchor : kind === "merchant" ? manifest.puller.anchor : kind === "cart" ? shop ? SHOP.anchor : CART.anchor : manifest.anchor
+    const cell = knight ? KNIGHT.cellSize : kind === "merchant" ? manifest.puller.cellSize : kind === "passenger" ? CART.cellSize : kind === "cart" ? shop ? SHOP.cellSize : CART.cellSize : manifest.cellSize
+    const anchor = knight ? KNIGHT.anchor : kind === "merchant" ? manifest.puller.anchor : kind === "passenger" ? CART.anchor : kind === "cart" ? shop ? SHOP.anchor : CART.anchor : manifest.anchor
     group.children.forEach(child => { if (child instanceof THREE.Sprite) {
       Object.assign(child.userData, { walkPhase: phase.current, walkStride: stride, distance, heading, row, moving, reversing: data.reversing, hitched: data.hitched, keeperPose: data.keeperPose, riding: data.riding, column })
       child.center.set(anchor[0] / cell, 1 - anchor[1] / cell)
