@@ -65,4 +65,5 @@ export const SEED_STREAM = {
   roadShape: 15,
   characterAppearance: 16,
   wildlife: 17,
+  wildlifeAppearance: 18,
 } as const

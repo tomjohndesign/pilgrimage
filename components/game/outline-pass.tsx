@@ -8,7 +8,7 @@ import { CHARACTER_COLOR_LAYER, CHARACTER_ID_LAYER } from "@/lib/game/render/pix
 import { characterOcclusionRequest, sampleCharacterOcclusion } from "@/lib/game/render/character-occlusion"
 import { sceneryCloseOpacity, sceneryDetail, treeEdgeOpacity } from "@/lib/game/render/scenery-detail"
 
-import { useCameraStore } from "@/lib/game/camera-store"
+import { useCameraStore, type Selection } from "@/lib/game/camera-store"
 import { useBuildStore } from "@/lib/game/build-store"
 import { SELECTION_OUTLINE_COLOR, SELECTION_OUTLINE_OPACITY, SELECTION_FILL, SELECTION_FILL_OPACITY, selectionObjectId } from "@/lib/game/selection"
 import {
@@ -217,7 +217,7 @@ const FRAGMENT_SHADER = /* glsl */ `
   }
 `
 
-export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof selectionObjectId>[1], "piles"> }) {
+export function OutlinePass({ objects, selection: previewSelection }: { selection?: Selection | null; objects?: Omit<Parameters<typeof selectionObjectId>[1], "piles"> }) {
   const { gl, scene, camera: displayCamera, size } = useThree()
 
   // ID + depth buffer at drawing-buffer resolution. Nearest filtering is load-
@@ -371,7 +371,8 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
   const bufferSize = useMemo(() => new THREE.Vector2(), [])
 
   const frameRef = usePixelScene((camera, destination, stage) => {
-    const { outlineMode, selection } = useCameraStore.getState()
+    const { outlineMode, selection: worldSelection } = useCameraStore.getState()
+    const selection = previewSelection === undefined ? worldSelection : previewSelection
     const requestedId = objects
       ? selectionObjectId(selection, { ...objects, piles: useBuildStore.getState().piles }) : 0
     const selectingCharacter = requestedId !== 0 && (selection?.kind === "monk" || selection?.kind === "traveler")

@@ -1,5 +1,7 @@
 "use client"
 
+import { placementRoofRotation } from "@/lib/game/building-placement-layout"
+
 import Image from "next/image"
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react"
 import * as Tooltip from "@radix-ui/react-tooltip"
@@ -89,7 +91,8 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
     return map && hovered ? placementError(map, selected, hovered, balance, rotation) : null
   }, [selected, renown, settlement.resources, map, hovered, balance, rotation])
 
-  const footprint = selected && rotatedFootprint(selected, rotation)
+  const alignedRotation=useMemo(()=>map && selected && hovered ? placementRoofRotation(map,selected,hovered,rotation) : rotation,[map,selected,hovered,rotation])
+  const footprint = selected && rotatedFootprint(selected, alignedRotation)
 
   return <div className="hud-bottom-center">
     {open && <section id="build-tray" className="hud-well hud-build-tray" aria-label="Build options">
@@ -125,7 +128,7 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
           <button type="button" className="hud-action" aria-label="Rotate building counterclockwise" aria-keyshortcuts="Meta+R" title="Rotate counterclockwise (Cmd+R)" onClick={() => rotateBuilding(-1)}>
             <RotateCcw size={15} aria-hidden /> <kbd>⌘ R</kbd>
           </button>
-          <span>{rotation * 90}° · {footprint.w} × {footprint.d} tiles</span>
+          <span>{alignedRotation * 90}° · {footprint.w} × {footprint.d} tiles</span>
           <button type="button" className="hud-action" aria-label="Rotate building clockwise" aria-keyshortcuts="R" title="Rotate clockwise (R)" onClick={() => rotateBuilding(1)}>
             <RotateCw size={15} aria-hidden /> <kbd>R</kbd>
           </button>

@@ -3,7 +3,7 @@ import { encodeObjectId, wildlifeObjectId } from "../render/outline"
 
 /** Connected animated hides are packed into one bounded buffer per species.
  * Both colour and selection passes consume the identical deformed vertices. */
-export function wildlifeGeometry(parts: THREE.Mesh[], ids: number[]) {
+export function wildlifeGeometry(parts: THREE.Mesh[], ids: number[], coats: readonly string[] = []) {
   const vertices = parts.reduce((sum, part) => sum + part.geometry.attributes.position.count, 0)
   const indices = parts.reduce((sum, part) => sum + (part.geometry.index?.count ?? part.geometry.attributes.position.count), 0)
   const geometry = new THREE.BufferGeometry(), idGeometry = new THREE.BufferGeometry()
@@ -11,10 +11,11 @@ export function wildlifeGeometry(parts: THREE.Mesh[], ids: number[]) {
   const normal = new THREE.BufferAttribute(new Float32Array(vertices * ids.length * 3), 3).setUsage(THREE.DynamicDrawUsage)
   const color = new Float32Array(vertices * ids.length * 3), idColor = new Float32Array(color.length), index: number[] = []
   let offset = 0
-  for (const id of ids) for (const part of parts) {
+  for (const [animal, id] of ids.entries()) for (const part of parts) {
+    const coat = new THREE.Color(coats[animal] ?? "#ffffff")
     const source = part.geometry, count = source.attributes.position.count, tint = encodeObjectId(wildlifeObjectId(id))
     for (let i = 0; i < count; i++) {
-      color.set([source.attributes.color.getX(i), source.attributes.color.getY(i), source.attributes.color.getZ(i)], (offset + i) * 3)
+      color.set([source.attributes.color.getX(i) * coat.r, source.attributes.color.getY(i) * coat.g, source.attributes.color.getZ(i) * coat.b], (offset + i) * 3)
       idColor.set(tint, (offset + i) * 3)
     }
     for (let i = 0; i < (source.index?.count ?? count); i++) index.push(offset + (source.index?.getX(i) ?? i))

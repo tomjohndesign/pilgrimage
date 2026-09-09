@@ -54,8 +54,8 @@ export function servingCounter(map: GameMap, building: BuildingDef): { tile: Til
     return { tile, point: { x: tileToWorldX(map, tile.x), y: surfaceHeight(map, tile.x, tile.z), z: tileToWorldZ(map, tile.z) } }
   }
   const local = rotatedFootprint(building, building.rotation)
-  const counter = tavernLayout(local.w, local.d).counter
-  const point = localPoint(map, building, counter.x, counter.z + counter.d / 2 + .16)
+  const serving = tavernLayout(local.w, local.d, building.layoutSeed, building.hearthZ).serving
+  const point = localPoint(map, building, serving.x, serving.z)
   const tile = { x: worldToTileX(map, point.x), z: worldToTileZ(map, point.z) }
   return { tile, point: { ...point, y: surfaceHeight(map, tile.x, tile.z) } }
 }

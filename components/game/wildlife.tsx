@@ -23,6 +23,7 @@ import { birdGlide, easeWing } from "@/lib/game/wildlife/motion"
 import { RIG_TO_WORLD } from "@/lib/game/transport/assets"
 import { createWildlife, startleWildlife, stepWildlife, type WildlifeAnimal } from "@/lib/game/wildlife/simulation"
 import { selectElement } from "@/lib/game/selection"
+import { wildlifeAppearance } from "@/lib/game/wildlife/appearance"
 import { wildlifeGeometry } from "@/lib/game/wildlife/batch"
 import { useAnimalRigStore } from "@/lib/game/wildlife/rig-store"
 import { wildlifeRegistry } from "@/lib/game/wildlife/registry"
@@ -92,7 +93,7 @@ export function Wildlife({ map, trees, characterScale }: { map: GameMap; trees: 
 export function WildlifeBatch({ kind, animals, map, scale, grazing }: { kind: WildlifeKind; animals: WildlifeAnimal[]; map: GameMap; scale: number; grazing?: number }) {
   const group = useRef<THREE.Group>(null)
   const rig = useMemo(() => createWildlifeRig(kind), [kind])
-  const batch = useMemo(() => wildlifeGeometry(rig.parts, animals.map(animal => animal.id)), [rig, animals])
+  const batch = useMemo(() => wildlifeGeometry(rig.parts, animals.map(animal => animal.id), animals.map(animal => wildlifeAppearance(map.seed ?? 0, animal.id).tint)), [rig, animals, map.seed])
   const material = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true }), [])
   const idMaterial = useMemo(() => new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }), [])
   const scratch = useMemo(() => ({ root: new THREE.Object3D(), frustum: new THREE.Frustum(), viewProjection: new THREE.Matrix4(), view: new THREE.Matrix4(), bounds: new THREE.Sphere(), drawn: new THREE.Box3(), sphere: new THREE.Sphere() }), [])

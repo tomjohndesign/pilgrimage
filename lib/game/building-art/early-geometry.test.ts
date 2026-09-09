@@ -1,3 +1,4 @@
+import { minimumBuildingSize } from "./style"
 import { describe, expect, it } from "vitest"
 import { Box3, BoxGeometry, BufferGeometry, Float32BufferAttribute, Matrix4, Euler, Quaternion, Vector3 } from "three"
 import { buildingParts, type BuildingPart } from "./geometry"
@@ -13,7 +14,7 @@ function bounds(part: BuildingPart) {
 
 describe("early medieval building kit", () => {
   it.each(EARLY_BUILDINGS)("$name fills every supported footprint without spilling into neighbours", (preset) => {
-    for(let width=1;width<=5;width++) for(let depth=1;depth<=5;depth++) {
+    for(let width=minimumBuildingSize(preset.id).width;width<=5;width++) for(let depth=minimumBuildingSize(preset.id).depth;depth<=5;depth++) {
       const parts=buildingParts({...earlyBuildingRecipe(preset.id),width,depth}), whole=new Box3()
       for(const part of parts) {
         const box=bounds(part), context=`${preset.id} ${width}×${depth} ${part.name}`
@@ -92,7 +93,7 @@ describe("early medieval building kit", () => {
 
   it("gives homes and the tavern a fireplace clear of beds and a chimney above the roof in every footprint", () => {
     for(const variant of ["monk-shelter", "house", "tavern"] as const) {
-      for(let width=1;width<=5;width++) for(let depth=1;depth<=5;depth++) {
+      for(let width=minimumBuildingSize(variant).width;width<=5;width++) for(let depth=minimumBuildingSize(variant).depth;depth<=5;depth++) {
         const parts = buildingParts({...earlyBuildingRecipe(variant),width,depth})
         const hearth = bounds(parts.find(p => p.name === "hearth-slab")!)
         const chimney = bounds(parts.find(p => p.name === "chimney-mouth")!)
@@ -158,4 +159,14 @@ it("gives the tavern an unobstructed rear doorway and a taller front brow",()=>{
     const inside=visibleStructureParts(parts,true,[x,-1])
     expect(inside.some(p=>p.name.startsWith("back-door"))).toBe(false)
   }
+})
+
+
+it("slopes the raised store roof down toward its front entrance",()=>{
+  const parts=buildingParts(earlyBuildingRecipe("storehouse"))
+  const vertices=parts.filter(p=>p.name.startsWith("thatch-bundle-")).flatMap(p=>p.vertices ?? [])
+  const front:number[]=[],back:number[]=[]
+  for(let i=0;i<vertices.length;i+=3) (vertices[i+2]>0 ? front : back).push(vertices[i+1])
+  expect(Math.max(...back)).toBeGreaterThan(Math.max(...front))
+  expect(parts.some(p=>p.name==="entry-ramp")).toBe(true)
 })

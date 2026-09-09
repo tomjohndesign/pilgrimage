@@ -39,7 +39,7 @@ const cache = new WeakMap<BuildingDef, { key: string; supports: CharacterSupport
 export function buildingSupports(building: BuildingDef, map?: GameMap) {
   const shrine = map?.site?.hovelId === building.id ? shrineLayout(building, map.site.door) : undefined
   const local = rotatedFootprint(building, building.rotation)
-  const key = JSON.stringify([building.buildType, local.w, local.d, building.height, building.color, building.roofColor, shrine?.width, shrine?.depth])
+  const key = JSON.stringify([building.buildType, local.w, local.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, shrine?.width, shrine?.depth])
   let entry = cache.get(building)
   if (entry?.key !== key) {
     entry = { key, supports: partSupports(shrine ? shrineStructureParts(shrine.width, shrine.depth) : structureParts({ ...building, ...local })) }

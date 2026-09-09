@@ -25,6 +25,7 @@ import { workshopPileOffset } from "@/lib/game/workshop-layout"
 import { pileOffset } from "@/lib/game/trees/timber"
 import { ShelterFire } from "./building-smoke"
 import { hasDomesticHearth } from "@/lib/game/building-art/furnishings"
+import { buildingRoofJoins, roofOutlineOwners } from "@/lib/game/building-art/roof-joins"
 import { WoodPile } from "./wood-pile"
 import { tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } from "@/lib/game/map/types"
 import {
@@ -48,26 +49,32 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
   const foodStores = useBuildStore(s => s.foodStores)
   const piles = useBuildStore((s) => s.piles)
   const buildings = map.buildings
+  const roofJoins = useMemo(() => buildingRoofJoins(map), [buildings, map.elevation, map.site?.hovelId])
+  const outlineOwners = useMemo(() => roofOutlineOwners(buildings, roofJoins), [buildings, roofJoins])
   const modelCache = useRef(new Map<string, { key: string; parts: ReturnType<typeof constructionParts>; idColor: THREE.Color }>())
   const models = useMemo(() => {
     const next = new Map<string, { key: string; parts: ReturnType<typeof constructionParts>; idColor: THREE.Color }>()
     const result = buildings.map((building, index) => {
       const footprint = rotatedFootprint(building, building.rotation)
-      const key = JSON.stringify([index, building.buildType, footprint.w, footprint.d, building.height, building.color, building.roofColor, constructionStage(building)])
+      const joins = roofJoins.get(building.id)
+      const key = JSON.stringify([index, building.buildType, footprint.w, footprint.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, joins, constructionStage(building)])
       const old = modelCache.current.get(building.id)
       const model = old?.key === key ? old : { key,
-        parts: constructionParts({ ...building, ...footprint }), idColor: new THREE.Color(...encodeObjectId(buildingObjectId(index))) }
+        parts: constructionParts({ ...building, ...footprint }, joins), idColor: new THREE.Color(...encodeObjectId(buildingObjectId(index))) }
       next.set(building.id, model)
       return model
     })
     modelCache.current = next
     return result
-  }, [buildings])
+  }, [buildings, roofJoins])
   const idColors = useMemo(
     // Component tuples straight into the working colour space — an ID is data,
     // not a colour, so it must dodge sRGB conversion to survive readback.
-    () => models.map(model => model.idColor),
-    [models],
+    () => {
+      const selected = new Set(buildings.flatMap((building, i) => isSelected(selection, { kind: "building", id: building.id }) ? [outlineOwners[i]] : []))
+      return models.map((model, i) => selected.has(outlineOwners[i]) ? model.idColor : models[outlineOwners[i]].idColor)
+    },
+    [models, buildings, outlineOwners, selection],
   )
 
   return (
@@ -100,7 +107,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
               })}
               {piles.filter((pile) => pile.campId === building.id).map((pile) => {
                 const store = building.buildType === "storehouse"
-                const [x, z] = store ? pileOffset(pile.slot) : workshopPileOffset(pile.slot, local.w, local.d)
+                const [x, z] = store ? pileOffset(pile.slot) : workshopPileOffset(pile.slot, local.w, local.d, building.layoutSeed)
                 return <group key={pile.id} position={[x, store ? 0.35 : 0.08, store ? z * 0.5 - 0.1 : z]}><WoodPile pile={pile} objectId={pileObjectId(piles.indexOf(pile))} /></group>
               })}</CloseScenery>
             </group>
@@ -111,7 +118,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
           <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
             <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
             {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
-            {isComplete(building) && hasDomesticHearth(building.buildType) && <ShelterFire buildType={building.buildType} width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
+            {isComplete(building) && hasDomesticHearth(building.buildType,building.layoutSeed,building.fireplace) && <ShelterFire buildType={building.buildType} layoutSeed={building.layoutSeed} hearthZ={building.hearthZ} sharedChimney={roofJoins.get(building.id)?.find(join=>join.chimney)?.chimney} width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
           </group>
         )
       })}

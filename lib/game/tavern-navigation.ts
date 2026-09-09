@@ -10,7 +10,7 @@ const same = (a: TilePos, b: TilePos) => Math.hypot(a.x - b.x, a.z - b.z) < 1e-6
 /** A small visibility graph resolves aisles narrower than a world tile. */
 export function tavernInteriorRoute(building: BuildingDef, from: TilePos, to: TilePos, seat?: string): TilePos[] | null {
   const { w, d } = rotatedFootprint(building, building.rotation)
-  const { obstacles, benches } = tavernLayout(w, d)
+  const { obstacles, benches } = tavernLayout(w, d, building.layoutSeed, building.hearthZ)
   const inside = (p: TilePos) => Math.abs(p.x) <= w / 2 - .13 && Math.abs(p.z) <= d / 2 - .13
   if (!inside(from) || !inside(to)) return null
   const startingBench = benches.find(b => Math.abs(from.x - b.x) <= b.w / 2 + .01 && Math.abs(from.z - b.z) <= b.d / 2 + .01)?.id
@@ -68,7 +68,7 @@ export function tavernWalkingRoute(map: GameMap, from: TavernWalkPoint, to: Tave
     if (!building) return [{ outside: point, route: [point] }]
     const { w, d } = rotatedFootprint(building, building.rotation)
     return ([1, -1] as const).flatMap(side => {
-      const door = { x: buildingDoorOffset(w, "tavern"), z: side * (d / 2 - .16) }
+      const door = { x: buildingDoorOffset(w, "tavern", building.layoutSeed, side), z: side * (d / 2 - .16) }
       const path = tavernInteriorRoute(building, leaving ? local(map, building, point) : door,
         leaving ? door : local(map, building, point), leaving ? undefined : seat)
       if (!path) return []

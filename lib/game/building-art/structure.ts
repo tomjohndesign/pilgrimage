@@ -5,8 +5,9 @@ import { buildingParts, type BuildingPart } from "./geometry"
 import { earlyBuildingParts, type SettlementBuildingType } from "./early-geometry"
 import { EARLY_BUILDINGS, earlyBuildingRecipe } from "./style"
 import { singlePlaneRoofRise } from "./dimensions"
+import type { RoofJoin } from "./roof-joins"
 
-export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor">
+export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor" | "layoutSeed" | "hearthZ" | "fireplace">
 
 const SETTLEMENT_TYPES: readonly SettlementBuildingType[] = [
   "shelter", "workshop", "hall", "garden", "cross", "lumberCamp", "market", "guard-post", "sheep-pen",
@@ -17,13 +18,13 @@ function isSettlementType(type: string | undefined): type is SettlementBuildingT
 }
 
 /** One source for placed structures, construction ghosts and build-menu images. */
-export function structureParts(building: StructureAppearance): BuildingPart[] {
+export function structureParts(building: StructureAppearance, roofJoins: RoofJoin[] = []): BuildingPart[] {
   const preset = EARLY_BUILDINGS.find((item) => item.id === building.buildType)
   if (preset) {
-    const parts = buildingParts({ ...earlyBuildingRecipe(preset.id), width: building.w, depth: building.d, wallHeight: building.height,
+    const parts = earlyBuildingParts({ ...earlyBuildingRecipe(preset.id), layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins, width: building.w, depth: building.d, wallHeight: building.height,
       roofRise: preset.id === "enclosure" ? 0 : singlePlaneRoofRise(building.d) })
     // Food and timber are live inventories; leave room for them in the store.
-    if (building.buildType !== "storehouse") return parts
+    if (building.buildType !== "storehouse") return building.buildType === "workshop" ? parts.filter(p=>!p.name.startsWith("firewood-")) : parts
     const contents: BuildingPart[] = []
     // Empty food bins remain recognizable before the first delivery.
     const binWidth = building.w * 0.18, binDepth = building.d * 0.16
@@ -43,6 +44,7 @@ export function structureParts(building: StructureAppearance): BuildingPart[] {
   if (isSettlementType(building.buildType)) return earlyBuildingParts({
     ...earlyBuildingRecipe("house"),
     variant: building.buildType,
+    layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins,
     width: building.w,
     depth: building.d,
     wallHeight: building.height,
