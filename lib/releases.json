@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "50164945cc11879f29c8827a188a276fc8633623",
-  "releaseCount": 168,
+  "lastProcessedCommit": "b83ff860ffc6cb1e0f062996a0b68acc7ddf19cd",
+  "releaseCount": 169,
   "releases": [
+    {
+      "version": "0.0.183",
+      "title": "Release 0.0.183",
+      "summary": "Prevent pedestrians from blocking cart detours around buildings (#201)",
+      "commit": "b83ff860ffc6cb1e0f062996a0b68acc7ddf19cd"
+    },
     {
       "version": "0.0.182",
       "title": "Release 0.0.182",
