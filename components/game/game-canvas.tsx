@@ -45,7 +45,7 @@ import { OutlinePass } from "./outline-pass"
 import { RenownSaturation } from "./renown-saturation"
 import { vendorSpeedScale } from "@/lib/game/transport/assets"
 import { Shrine } from "./shrine"
-import { Signpost } from "./signpost"
+import { Signpost, ForestWarnings } from "./signpost"
 import type { RoadLook } from "@/lib/game/map/road"
 import { WalkingTerrain } from "./walking-terrain"
 import { TileCursor } from "./tile-cursor"
@@ -177,6 +177,7 @@ export function GameCanvas({
           <group name="visibility-scenery" visible={visibility.showScenery}>
             <Environment map={map} />
             <Signpost map={map} />
+            <ForestWarnings map={map} />
           </group>
         </PixelWorld>
         <group name="visibility-wildlife" visible={visibility.showWildlife}>

@@ -1,3 +1,4 @@
+import { forestEntrancePlacements } from "../map/forest-entrances"
 import { groundHeight } from "../map/elevation"
 import { bridgeLayout } from "../map/bridges"
 import { computeForestShade } from "../map/forest-field"
@@ -53,6 +54,8 @@ export function placeEnvironment(map: GameMap): EnvironmentPlacement[] {
   // The signpost has the corner of its fork to itself; no boulder shares it.
   const signpost = signpostPlacement(map)
   if (signpost) blocked.add(signpost.tile.z * map.width + signpost.tile.x)
+
+  for (const warning of forestEntrancePlacements(map)) blocked.add(warning.tile.z * map.width + warning.tile.x)
 
   const onLand = (px: number, pz: number, radius: number, kind: EnvironmentKind) => {
     const kindIndex = ENVIRONMENT_KINDS.indexOf(kind)

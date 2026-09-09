@@ -4,7 +4,7 @@ import { softenTreeLighting } from "../lighting"
 import { BARK_PALETTE, FOLIAGE_RAMPS, type FoliageDesign, type FoliageSpecies } from "./design"
 
 /** Editable branch structure and leaf clusters are source geometry, never map meshes. */
-export function createFoliageModel(species: FoliageSpecies, variant: number, design: FoliageDesign, oldGrowth = false) {
+export function createFoliageModel(species: FoliageSpecies, variant: number, design: FoliageDesign, oldGrowth = false, dead = false) {
   const rng = makeRng(1709 + variant * 7919 + ({ oak: 0, birch: 31, scotsPine: 67, beech: 103, hawthorn: 139, holly: 173 }[species]))
   const root = new THREE.Group()
   const height = design.height * [0.9, 1, 1.06][variant] * (oldGrowth ? 1.16 : 1)
@@ -40,6 +40,7 @@ export function createFoliageModel(species: FoliageSpecies, variant: number, des
   const family = (species === "scotsPine" || species === "holly" ? [0, 1, 0] : species === "birch" ? [1, 2, 2] : [1, 2, 0])[variant]
   const matrix = new THREE.Matrix4(), position = new THREE.Vector3(), rotation = new THREE.Quaternion(), scale = new THREE.Vector3()
   const cluster = (center: THREE.Vector3, radius: number, vertical = 0.65) => {
+    if (dead) return
     const count = Math.round(48 * design.density * (radius / 0.22) ** 2)
     const ramp = FOLIAGE_RAMPS[rng() > 0.78 ? 1 : family]
     const baseShade = (species === "birch" ? 3 : species === "holly" ? 1 : 2) + (rng() > 0.7 ? 1 : 0)
@@ -227,7 +228,7 @@ export function createFoliageModel(species: FoliageSpecies, variant: number, des
   }
   const mesh = new THREE.InstancedMesh(leafGeometry, leafMaterial, leaves.length)
   leaves.forEach((leaf, i) => { mesh.setMatrixAt(i, leaf.matrix); mesh.setColorAt(i, leaf.color) })
-  mesh.instanceMatrix.needsUpdate = true; mesh.instanceColor!.needsUpdate = true
+  mesh.instanceMatrix.needsUpdate = true; if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
   root.add(mesh)
   return { root, leafCount: leaves.length, dispose() {
     mesh.dispose(); geometries.forEach(g => g.dispose()); materials.forEach(m => m.dispose())

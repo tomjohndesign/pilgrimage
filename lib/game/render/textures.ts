@@ -59,6 +59,11 @@ export const TEXTURES: TextureEntry[] = [
     }),
   ),
   {
+    id: "dark-forest-floor", label: "Dark forest floor", url: "/textures/dark-forest-floor-v2.png",
+    appliedTo: "Muted brown and olive leaf litter and dead twigs in ancient groves, their clearings and tracks. Darkness is authored into the sprite palette.",
+    source: "Built-in imagegen — assets/recipes/textures.json#dark-forest-floor", preview: "forest",
+  },
+  {
     id: "forest-floor", label: "Forest floor", url: "/textures/forest-floor-v1.png",
     appliedTo: "Fallen leaves, humus, twigs and moss beneath standing woodland, with sparse litter at the edge.",
     source: "Built-in imagegen — assets/recipes/textures.json#forest-floor", preview: "forest",

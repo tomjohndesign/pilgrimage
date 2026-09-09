@@ -1,0 +1,9 @@
+{
+  "id": "dark-forest-floor",
+  "version": "v2",
+  "source": "public/textures/sources/dark-forest-floor-v2.png",
+  "width": 128,
+  "height": 128,
+  "generator": "Built-in imagegen",
+  "recipe": "assets/recipes/textures.json#dark-forest-floor"
+}
