@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "423e70147c7c8fe7c936f6793385160bebe7d66c",
-  "releaseCount": 144,
+  "lastProcessedCommit": "e1c01ff8b2f4454032a566a3748b9ae5a839b13c",
+  "releaseCount": 146,
   "releases": [
+    {
+      "version": "0.0.160",
+      "title": "Release 0.0.160",
+      "summary": "Add generated wells and springs with NPC drinking access (#175)",
+      "commit": "e1c01ff8b2f4454032a566a3748b9ae5a839b13c"
+    },
+    {
+      "version": "0.0.159",
+      "title": "Release 0.0.159",
+      "summary": "Optimize road shortcut planning and add GPU performance probes (#179)",
+      "commit": "9f065f8aae60817a0d16f53ec6a083e1a87811eb"
+    },
     {
       "version": "0.0.158",
       "title": "Release 0.0.158",
