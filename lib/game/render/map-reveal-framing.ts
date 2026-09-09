@@ -2,8 +2,12 @@ import * as THREE from "three"
 import { groundHeight } from "../map/elevation"
 import type { GameMap } from "../map/types"
 
-/** Find the terrain under screen centre, including raised slopes and cliffs. */
-export function tileRevealFrame(map: GameMap, camera: THREE.Camera) {
+/**
+ * Find the terrain under screen centre, including raised slopes and cliffs.
+ * A fresh world spreads from its founding church; a resumed one from wherever
+ * the player was looking.
+ */
+export function tileRevealFrame(map: GameMap, camera: THREE.Camera, landmark = true) {
   let top = 0
   for (const height of map.elevation?.corners ?? []) top = Math.max(top, height)
   for (const height of map.water?.surface ?? []) top = Math.max(top, height)
@@ -43,7 +47,7 @@ export function tileRevealFrame(map: GameMap, camera: THREE.Camera) {
   const tile = (x: number, z: number) => new THREE.Vector2(
     THREE.MathUtils.clamp(Math.floor(x + map.width / 2), 0, map.width - 1),
     THREE.MathUtils.clamp(Math.floor(z + map.depth / 2), 0, map.depth - 1))
-  const church = map.buildings.find(building => building.id === map.site?.hovelId)
+  const church = landmark ? map.buildings.find(building => building.id === map.site?.hovelId) : undefined
   const origin = church ? new THREE.Vector2(church.x + (church.w - 1) / 2, church.z + (church.d - 1) / 2)
     : tile(centre.x, centre.y)
   let minX = origin.x, maxX = origin.x, minZ = origin.y, maxZ = origin.y

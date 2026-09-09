@@ -686,8 +686,11 @@ export function GameHud({
   onNewMap,
   onSeedChange,
   cheats,
+  continueHref = null,
 }: {
   playing: boolean
+  /** Where the saved world resumes, when this browser has one; shown on the landing page. */
+  continueHref?: string | null
   starting: boolean
   canStart: boolean
   onPlay: () => void
@@ -897,7 +900,10 @@ export function GameHud({
         <MapSizeControl value={settings.size} onChange={size => set({ size })} />
         <label className="text-[13px] text-ink-light" htmlFor="landing-seed">World seed</label>
         <SeedField seed={seed} onSeedChange={onSeedChange} onValidityChange={setSeedValid} />
-        <button type="submit" className="hud-action hud-action-primary hud-landing-play" disabled={!canStart || !seedValid}>Play</button>
+        {continueHref && <Link href={continueHref} className="hud-action hud-action-primary hud-landing-play">Continue</Link>}
+        <button type="submit" className={`hud-action hud-landing-play${continueHref ? "" : " hud-action-primary"}`} disabled={!canStart || !seedValid}>
+          {continueHref ? "New world" : "Play"}
+        </button>
       </form>}
       {!starting && <footer className="hud-landing-footer">
         <span>Created by <a href="https://twitter.com/tomjohndesign" target="_blank" rel="noopener noreferrer">Tomjohn</a></span>

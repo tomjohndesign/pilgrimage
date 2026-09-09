@@ -12,6 +12,8 @@ import { JOB_PREVIEW } from "@/lib/game/building-preview"
 import { previewResidents, placePreviewResident } from "@/lib/game/jobs/preview"
 import { settlementJob, type SettlementJob } from "@/lib/game/jobs/design"
 import { wildlifeRegistry } from "@/lib/game/wildlife/registry"
+import type { SimulationSave } from "@/lib/game/save/schema"
+import { restoreSimulation } from "@/lib/game/save/simulation"
 
 import { monkRegistry } from "@/lib/game/monks"
 import { processionRegistry } from "@/lib/game/relic-procession"
@@ -40,7 +42,7 @@ import { useBuildStore } from "@/lib/game/build-store"
 import type { Relic } from "@/lib/game/relic"
 import type { TreePlacement } from "@/lib/game/trees/placement"
 import { tileAt, worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
-import { GAME_DAY_SECONDS, createSim, simRegistry, stepSim } from "@/lib/game/sim"
+import { GAME_DAY_SECONDS, createSim, simRegistry, stepSim, type SimState } from "@/lib/game/sim"
 import { shrineLayout } from "@/lib/game/shrine-layout"
 import type { Traveler } from "@/lib/game/travelers"
 import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/game/motion"
@@ -90,6 +92,9 @@ function setSubtreeMatrixAutoUpdate(root: THREE.Object3D, enabled: boolean): voi
   root.traverse((object) => { object.matrixAutoUpdate = enabled; object.matrixWorldAutoUpdate = enabled })
 }
 
+/** Each sim takes its save once; later cast or map changes must not replay it. */
+const restoredSims = new WeakSet<SimState>()
+
 export const Travelers = memo(function Travelers({
   map,
   travelers,
@@ -104,9 +109,12 @@ export const Travelers = memo(function Travelers({
   relic,
   trees,
   shrineRenown,
+  restore = null,
 }: {
   map: GameMap
   travelers: Traveler[]
+  /** A saved simulation for this world, applied once after the cast is placed. */
+  restore?: SimulationSave | null
   relic: Relic
   trees: TreePlacement[]
   shrineRenown: number
@@ -172,7 +180,11 @@ export const Travelers = memo(function Travelers({
         sim.travelers.delete(id)
       }
     }
-  }, [sim, travelers, map, relic])
+    if (restore && !restoredSims.has(sim)) {
+      restoredSims.add(sim)
+      restoreSimulation(sim, restore, travelers, map, trees.length)
+    }
+  }, [sim, travelers, map, relic, restore, trees])
 
   const camps = useMemo(() => jobBuildings(map, true), [map])
 

@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "54dbfa41dfdc7d5cd4125c15980eceb28533f2b2",
-  "releaseCount": 159,
+  "lastProcessedCommit": "e2e99c00e671c074f69c7e41d382f03f83c83875",
+  "releaseCount": 161,
   "releases": [
+    {
+      "version": "0.0.175",
+      "title": "Release 0.0.175",
+      "summary": "Save the game to browser storage and resume it on reload (#193)",
+      "commit": "e2e99c00e671c074f69c7e41d382f03f83c83875"
+    },
+    {
+      "version": "0.0.174",
+      "title": "Release 0.0.174",
+      "summary": "Companies share one purse and one store of food and water (#194)",
+      "commit": "c2baaf1bfca44f8415a67e3090845a71c032d940"
+    },
     {
       "version": "0.0.173",
       "title": "Release 0.0.173",

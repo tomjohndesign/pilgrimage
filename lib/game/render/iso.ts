@@ -107,6 +107,18 @@ export function panDelta(
   }
 }
 
+/**
+ * Where a ground-plane offset (dx, dz) at height y lands on screen, in the
+ * frustum's world units: x grows right, y grows down. The loading overlay's
+ * remembered tiles and the rendered terrain agree through this one projection.
+ */
+export function projectGround(dx: number, dz: number, y: number, yaw: number): { x: number; y: number } {
+  const b = screenBasis(yaw)
+  const right = dx * b.rightX + dz * b.rightZ
+  const up = (dx * b.fwdX + dz * b.fwdZ) * Math.sin(ISO_PITCH) + y * Math.cos(ISO_PITCH)
+  return { x: right, y: -up }
+}
+
 /** World units covered by one screen pixel, given the frustum height. */
 export function worldPerPixel(viewSize: number, canvasHeightPx: number): number {
   return viewSize / Math.max(1, canvasHeightPx)

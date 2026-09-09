@@ -37,3 +37,12 @@ it("includes every visible terrain tile and tall scenery in the final ring", () 
     expect(Math.hypot(x - frame.origin.x, z - frame.origin.y)).toBeLessThanOrEqual(frame.radius)
   }
 })
+
+it("spreads from the terrain under screen centre when the world is resumed", () => {
+  const map = mapAtHeight(0)
+  map.buildings.push({ id: "hovel", label: "Hovel", x: 5, z: 7, w: 2, d: 2, height: 1, color: "#000", roofColor: "#000" })
+  map.site = { junction: 0, branch: [], door: { x: 5, z: 9 }, hovelId: "hovel" }
+  const camera = cameraAtView(0)
+  expect(tileRevealFrame(map, camera).origin.toArray()).toEqual([5.5, 7.5])
+  expect(tileRevealFrame(map, camera, false).origin.toArray()).toEqual([32, 32])
+})

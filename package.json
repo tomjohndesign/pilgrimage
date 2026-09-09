@@ -1,6 +1,6 @@
 {
   "name": "my-project",
-  "version": "0.0.173",
+  "version": "0.0.175",
   "private": true,
   "scripts": {
     "dev": "next dev",
