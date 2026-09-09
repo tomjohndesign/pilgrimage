@@ -189,17 +189,16 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
   const batchEntries = useCharacterBatches()
   const batchEntry = useRef<CharacterBatchEntry | null>(null)
   const batchUv = useMemo(() => new THREE.Vector4(), [])
-  const simpleColor = useMemo(() => visual.design ? new THREE.Color(visual.design.tunicColor) : undefined, [visual.design])
   useLayoutEffect(() => {
     if (!batchEntries || !sprite.current || !idSprite.current || !outlineColor || name !== "traveler") return
-    const entry = { sprite: sprite.current, ids: idSprite.current, publishesPose: true, complexion: complexionValues, palette: characterPalette(complexionValues), simpleColor, ground: groundPlane,
+    const entry = { sprite: sprite.current, ids: idSprite.current, publishesPose: true, complexion: complexionValues, palette: characterPalette(complexionValues), ground: groundPlane,
       fixedAttributes: Float32Array.from([center.x, center.y, ...outlineColor]), depth: poseDepth, id: new THREE.Vector3(...outlineColor) }
     batchEntry.current = entry
     const unregisterEntry = registerCharacterBatchEntry(entry)
     batchEntries.add(entry)
     const unregister = registerSimpleBatchSource(entry.sprite, entry.ids)
     return () => { batchEntry.current = null; unregisterEntry(); unregister(); batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
-  }, [batchEntries, complexionValues, simpleColor, groundPlane, poseDepth, name, center, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [batchEntries, complexionValues, groundPlane, poseDepth, name, center, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
 
   const crowdWalk = useMemo<CrowdWalk | null>(() => map && rig && !attachment && walkTuning?.sync !== false ? {
     map, rig, walk: visual.walk, weary: visual.actions.wearyWalk, wearyIndex: actionIndices.wearyWalk,
