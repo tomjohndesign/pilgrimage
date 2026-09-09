@@ -2,11 +2,14 @@ import { walkWorker, workerRoute } from "./construction"
 import { ROUTE_DIRS } from "./map/route"
 import { tileAt, type GameMap, type TilePos } from "./map/types"
 import type { MonkRoutine } from "./monk-routine"
-import { MONK_TIRED_AT, type MonkNeeds } from "./monk-work"
+import { MONK_TIRED_AT, MONK_WAKE_AT, type MonkNeeds } from "./monk-work"
 import { buildingAt, settlementEvangelism } from "./settlement"
+import { GAME_DAY_SECONDS } from "./calendar"
 
 export const MONK_EVANGELISM = 0.05
-export interface PreachingTask { tile: TilePos; heading: number; map: GameMap }
+export const MONK_EVANGELISM_DURATION = 3 * GAME_DAY_SECONDS
+const EVANGELISM_STAMINA_DRAIN = 0.0625
+export interface PreachingTask { tile: TilePos; heading: number; map: GameMap; elapsed: number }
 export type EvangelizingMonk = MonkRoutine & MonkNeeds & { preachingTask?: PreachingTask }
 
 /** The scene publishes live arrivals; an order alone never attracts travelers. */
@@ -46,14 +49,15 @@ export function stopEvangelizing(s: EvangelizingMonk): void {
   s.activity = "walking"
 }
 
-/** Explicit preaching interrupts ordinary work, then releases the monk when recalled or tired. */
+/** Three-day assignments include travel and sleep in place, and can be recalled early. */
 export function stepMonkEvangelism(s: EvangelizingMonk, map: GameMap, requested: boolean, speed: number, dt: number,
   occupied: readonly TilePos[] = []): boolean {
   if (dt <= 0) return !!s.preachingTask
-  if (!requested || s.stamina <= MONK_TIRED_AT) {
+  if (!requested) {
     if (s.preachingTask) stopEvangelizing(s)
     return false
   }
+  const sleeping = s.activity === "sleeping"
   if (!s.preachingTask || s.preachingTask.map !== map) {
     let assigned = false
     for (const tile of preachingSpots(map)) {
@@ -64,14 +68,25 @@ export function stepMonkEvangelism(s: EvangelizingMonk, map: GameMap, requested:
       s.buildingTask = undefined
       s.route = route
       s.pause = 0
-      s.preachingTask = { tile, heading: Math.atan2(road.x - tile.x, road.z - tile.z), map }
+      s.preachingTask = { tile, heading: Math.atan2(road.x - tile.x, road.z - tile.z), map, elapsed: s.preachingTask?.elapsed ?? 0 }
       s.activity = "toEvangelize"
       assigned = true
       break
     }
     if (!assigned) { stopEvangelizing(s); return false }
   }
-  s.stamina = Math.max(0, s.stamina - dt * 0.125)
+  s.preachingTask!.elapsed += dt
+  if (s.preachingTask!.elapsed >= MONK_EVANGELISM_DURATION) {
+    stopEvangelizing(s)
+    return false
+  }
+  if (sleeping || s.stamina <= MONK_TIRED_AT) {
+    s.activity = "sleeping"
+    s.stamina = Math.min(100, s.stamina + dt * 4)
+    if (s.stamina >= MONK_WAKE_AT) s.activity = s.route.length ? "toEvangelize" : "preaching"
+    return true
+  }
+  s.stamina = Math.max(0, s.stamina - dt * EVANGELISM_STAMINA_DRAIN)
   s.activity = walkWorker(s, s.route, speed, dt) ? "preaching" : "toEvangelize"
   return true
 }
