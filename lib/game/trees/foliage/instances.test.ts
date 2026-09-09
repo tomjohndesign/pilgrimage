@@ -4,6 +4,24 @@ import { foliageCropData } from "./crop"
 import { densityHash } from "../../render/crowd-budget"
 import { FoliageInstances } from "./instances"
 
+it("keeps an Ent visible and pickable after it walks out of its original block", () => {
+  const source = { x: 1000, y: 0, z: 1000, column: 0, row: 0, id: [0, 0, .5], brightness: 1, tree: 7 }
+  const data = new FoliageInstances([source], new Float32Array([2]), new Set([7]))
+  const geometry = new THREE.PlaneGeometry(1, 1), material = new THREE.MeshBasicMaterial()
+  geometry.setAttribute("foliageFrame", new THREE.InstancedBufferAttribute(new Float32Array(2), 2))
+  geometry.setAttribute("foliageId", new THREE.InstancedBufferAttribute(new Float32Array(3), 3))
+  const mesh = new THREE.InstancedMesh(geometry, material, 1)
+  mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(3), 3)
+  const camera = new THREE.OrthographicCamera(-5, 5, 5, -5, .1, 100)
+  camera.position.set(0, 8, 10); camera.lookAt(0, 0, 0); camera.updateMatrixWorld()
+  data.update(mesh, camera); expect(mesh.count).toBe(0)
+  source.x = 0; source.z = 0; data.invalidate()
+  data.update(mesh, camera, true)
+  expect(mesh.count).toBe(1); expect(data.visible).toEqual([0])
+  expect(geometry.getAttribute("foliageId").getZ(0)).toBe(.5)
+  mesh.dispose(); geometry.dispose(); material.dispose()
+})
+
 it("crops only transparent padding, preserves boundary alpha, and flips cell UVs", () => {
   const pixels = new Uint8Array(16 * 8 * 4)
   pixels[(4 * 16 + 3) * 4 + 3] = 255

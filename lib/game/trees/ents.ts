@@ -21,13 +21,14 @@ export interface EntState {
   phase: "rooted" | "rising" | "walking" | "planting"
   elapsed: number
   wait: number
+  walkSeconds?: number
   rng: () => number
 }
 
 /** Stable one-in-a-hundred eligibility, separate from tree shapes and placement. */
 export function createEnt(placement: TreePlacement, seed: number, index: number): EntState | undefined {
   const rng = makeRng(deriveSeed(deriveSeed(seed, SEED_STREAM.ents), index))
-  if (rng() >= ENT_CHANCE) return undefined
+  if (rng() >= ENT_CHANCE || placement.dead) return undefined
   return {
     x: placement.x, z: placement.z,
     fromX: placement.x, fromZ: placement.z,
@@ -40,7 +41,7 @@ export function createEnt(placement: TreePlacement, seed: number, index: number)
 
 function clearRoute(map: GameMap, x: number, z: number, targetX: number, targetZ: number): boolean {
   // Check the whole short walk, so an ent cannot cross water or a building.
-  const steps = Math.ceil(Math.hypot(targetX - x, targetZ - z) * 4)
+  const steps = Math.max(1, Math.ceil(Math.hypot(targetX - x, targetZ - z) * 4))
   for (let i = 0; i <= steps; i++) {
     const tx = worldToTileX(map, x + (targetX - x) * i / steps)
     const tz = worldToTileZ(map, z + (targetZ - z) * i / steps)
@@ -52,8 +53,9 @@ function clearRoute(map: GameMap, x: number, z: number, targetX: number, targetZ
   return true
 }
 
-/** A thirty-second stroll followed by one minute planted before the next walk. */
-export function stepEnt(ent: EntState, map: GameMap, delta: number): void {
+/** Rig-scaled strolls followed by a minute planted; legacy benchmarks retain thirty-second walks. */
+export function stepEnt(ent: EntState, map: GameMap, delta: number, gait?: { stride: number; seconds: number }): void {
+  if (!Number.isFinite(delta) || delta <= 0) return
   const dt = Math.max(0, Math.min(delta, 0.1))
   if (ent.phase === "rooted") {
     ent.wait -= dt
@@ -61,7 +63,9 @@ export function stepEnt(ent: EntState, map: GameMap, delta: number): void {
     ent.wait = ENT_REST_SECONDS
     for (let attempt = 0; attempt < 12; attempt++) {
       const heading = ent.rng() * Math.PI * 2
-      const distance = 2 + ent.rng() * 2
+      const reach = 2 + ent.rng() * 2
+      // Complete strides finish in double support before the roots settle.
+      const distance = gait ? Math.max(1, Math.round(reach / gait.stride)) * gait.stride : reach
       const x = ent.x + Math.sin(heading) * distance
       const z = ent.z + Math.cos(heading) * distance
       if (!clearRoute(map, ent.x, ent.z, x, z)) continue
@@ -70,6 +74,7 @@ export function stepEnt(ent: EntState, map: GameMap, delta: number): void {
       ent.targetX = x
       ent.targetZ = z
       ent.heading = heading
+      ent.walkSeconds = gait ? distance / gait.stride * gait.seconds : ENT_WALK_SECONDS
       ent.phase = "rising"
       ent.elapsed = 0
       return
@@ -82,11 +87,18 @@ export function stepEnt(ent: EntState, map: GameMap, delta: number): void {
     ent.lift = Math.min(1, ent.elapsed / ENT_RISE_SECONDS) * ENT_LEG_HEIGHT
     if (ent.elapsed >= ENT_RISE_SECONDS) { ent.phase = "walking"; ent.elapsed = 0 }
   } else if (ent.phase === "walking") {
-    const progress = Math.min(1, ent.elapsed / ENT_WALK_SECONDS)
+    const duration = ent.walkSeconds ?? ENT_WALK_SECONDS
+    const progress = Math.min(1, ent.elapsed / duration)
+    const nextX = ent.fromX + (ent.targetX - ent.fromX) * progress
+    const nextZ = ent.fromZ + (ent.targetZ - ent.fromZ) * progress
+    if (!clearRoute(map, ent.x, ent.z, nextX, nextZ)) {
+      ent.phase = "planting"; ent.elapsed = 0; ent.lift = ENT_LEG_HEIGHT
+      return
+    }
     ent.x = ent.fromX + (ent.targetX - ent.fromX) * progress
     ent.z = ent.fromZ + (ent.targetZ - ent.fromZ) * progress
-    ent.lift = ENT_LEG_HEIGHT + Math.sin(progress * Math.PI * 20) * 0.035
-    if (ent.elapsed >= ENT_WALK_SECONDS) { ent.phase = "planting"; ent.elapsed = 0; ent.lift = ENT_LEG_HEIGHT }
+    ent.lift = ENT_LEG_HEIGHT + (gait ? 0 : Math.sin(progress * Math.PI * 20) * 0.035)
+    if (ent.elapsed >= duration) { ent.phase = "planting"; ent.elapsed = 0; ent.lift = ENT_LEG_HEIGHT }
   } else {
     ent.lift = Math.max(0, 1 - ent.elapsed / ENT_RISE_SECONDS) * ENT_LEG_HEIGHT
     if (ent.elapsed >= ENT_RISE_SECONDS) {
