@@ -1,7 +1,25 @@
 {
-  "lastProcessedCommit": "005b1f2f36c88836dcc548c21dea4eb05dc171f2",
-  "releaseCount": 148,
+  "lastProcessedCommit": "04409e665c2fe80f28a9fd94f7082397d92e8b77",
+  "releaseCount": 151,
   "releases": [
+    {
+      "version": "0.0.165",
+      "title": "Release 0.0.165",
+      "summary": "Join building roofs and add varied layouts and playground placement (#184)",
+      "commit": "04409e665c2fe80f28a9fd94f7082397d92e8b77"
+    },
+    {
+      "version": "0.0.164",
+      "title": "Release 0.0.164",
+      "summary": "Keep dark path textures inside forest boundaries (#182)",
+      "commit": "d6298a3cc3fbdc998154428e81fce7edaa582785"
+    },
+    {
+      "version": "0.0.163",
+      "title": "Release 0.0.163",
+      "summary": "Fix cart detours around buildings and increase roadside town setbacks (#183)",
+      "commit": "55431996b4d45532d5f0afcfd6f3226509a16e31"
+    },
     {
       "version": "0.0.162",
       "title": "Release 0.0.162",
