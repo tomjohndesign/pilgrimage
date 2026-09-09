@@ -13,7 +13,9 @@ export async function bakeEnvironment() {
   return { ...small, boulders }
 }
 
-async function bakeSet(layout: EnvironmentSpriteFrame, specimens: { kind: EnvironmentKind; boulderSize?: BoulderSize }[]) {
+export async function bakeScenerySet<T>(layout: EnvironmentSpriteFrame, specimens: readonly T[],
+  createModel: (specimen: T, seed: number, unlit: boolean) => ReturnType<typeof environmentModel>,
+  scaleFor: (specimen: T, variant: number) => number = () => 1) {
   const { cellSize: size, extent, anchor, directions, variants, rows } = layout
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false })
   renderer.setPixelRatio(1); renderer.setSize(size, size); renderer.setClearColor(0, 0)
@@ -28,11 +30,11 @@ async function bakeSet(layout: EnvironmentSpriteFrame, specimens: { kind: Enviro
   const topdown = canvas(size * variants, size * specimens.length)
   const frame = canvas(size, size), ctx = frame.getContext("2d", { willReadFrequently: true })!
   try {
-    for (const [index, { kind, boulderSize }] of specimens.entries()) for (let variant = 0; variant < variants; variant++) {
+    for (const [index, specimen] of specimens.entries()) for (let variant = 0; variant < variants; variant++) {
       const seed = 42 + index * 31 + variant * 7
-      const model = environmentModel(kind, seed, false, boulderSize)
+      const model = createModel(specimen, seed, false)
       // Size variation belongs to the bake, preserving native pixel size in game.
-      const scale = boulderSize ? .96 + variant * .02 : .75 + variant * .1
+      const scale = scaleFor(specimen, variant)
       model.root.scale.setScalar(scale)
       scene.add(model.root)
       try {
@@ -41,13 +43,16 @@ async function bakeSet(layout: EnvironmentSpriteFrame, specimens: { kind: Enviro
           renderer.render(scene, camera)
           ctx.clearRect(0, 0, size, size); ctx.drawImage(renderer.domElement, 0, 0)
           const pixels = ctx.getImageData(0, 0, size, size)
+          if (renderer.getContext().isContextLost() || !pixels.data.some((value, i) => i % 4 === 3 && value > 0)) {
+            throw new Error(`Scenery bake lost its image at specimen ${index}, variant ${variant}, view ${view}`)
+          }
           const row = index * variants + variant
           depths.getContext("2d")!.drawImage(depth.render(scene, camera, size, extent, pixels.data, pixels.data), view * size, row * size)
           color.getContext("2d")!.drawImage(frame, view * size, row * size)
           await new Promise(resolve => setTimeout(resolve, 0))
         }
       } finally { scene.remove(model.root); model.dispose() }
-      const flat = environmentModel(kind, seed, true, boulderSize)
+      const flat = createModel(specimen, seed, true)
       flat.root.scale.setScalar(scale)
       scene.add(flat.root)
       const overhead = camera.clone(); overhead.position.set(0, 10, 0); overhead.up.set(0, 0, -1); overhead.lookAt(0, 0, 0)
@@ -57,4 +62,10 @@ async function bakeSet(layout: EnvironmentSpriteFrame, specimens: { kind: Enviro
     }
     return { frame: layout, color: color.toDataURL(), depth: depths.toDataURL(), topdown: topdown.toDataURL() }
   } finally { depth.dispose(); renderer.dispose() }
+}
+
+function bakeSet(layout: EnvironmentSpriteFrame, specimens: { kind: EnvironmentKind; boulderSize?: BoulderSize }[]) {
+  return bakeScenerySet(layout, specimens,
+    ({ kind, boulderSize }, seed, unlit) => environmentModel(kind, seed, unlit, boulderSize),
+    ({ boulderSize }, variant) => boulderSize ? .96 + variant * .02 : .75 + variant * .1)
 }

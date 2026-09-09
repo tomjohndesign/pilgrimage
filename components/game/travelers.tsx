@@ -348,6 +348,8 @@ export const Travelers = memo(function Travelers({
         const performer = sim.travelers.get(s.musicVisit.performerId)
         if (performer) group.rotation.y = Math.atan2(performer.x - s.x, performer.z - s.z)
       }
+      if ((s.activity === "drinking" || s.activity === "drinkingLow") && s.waterVisit) group.rotation.y = s.waterVisit.heading
+      if (s.activity === "drinkingLow" && s.naturalWaterVisit) group.rotation.y = s.naturalWaterVisit.heading
       if (s.activity === "building") group.rotation.y = s.buildingTask?.heading ?? Math.PI
       if (s.activity === "givingAlms" && s.almsVisit) {
         const beggar = sim.travelers.get(s.almsVisit.beggarId)
