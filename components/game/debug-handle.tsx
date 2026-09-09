@@ -36,7 +36,7 @@ import { BENCHMARK_SIMULATION_SPEEDS, useSimulationStore } from "@/lib/game/simu
  * (The world seed itself comes from the URL: /play?seed=….)
  * Development only, unless a local benchmark build explicitly enables it.
  */
-export function DebugHandle({ map, travelers, speed, movement, speedScales, characterScale }: { map: GameMap; travelers: Traveler[]; speed: number; movement: MovementTuning; speedScales?: ReadonlyMap<number, number>; characterScale?: number }) {
+export function DebugHandle({ map, travelers, speed, movement, speedScales, beggarSpeedScales, characterScale }: { map: GameMap; travelers: Traveler[]; speed: number; movement: MovementTuning; speedScales?: ReadonlyMap<number, number>; beggarSpeedScales?: ReadonlyMap<number, number>; characterScale?: number }) {
   const { gl, camera, scene } = useThree()
 
   useEffect(() => {
@@ -277,7 +277,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         const sim = simRegistry.current
         if (!sim) return
         const ticks = Math.ceil(Math.max(0, Math.min(120, seconds)) * 10)
-        for (let i = 0; i < ticks; i++) stepSim(sim, travelers, map, speed, 0.1, movement, speedScales, characterScale)
+        for (let i = 0; i < ticks; i++) stepSim(sim, travelers, map, speed, 0.1, movement, speedScales, characterScale, beggarSpeedScales)
         useBuildStore.getState().syncResources(sim, travelers)
       },
       /** Live settlement loop: who works where, who lives where, and the takings. */
@@ -372,7 +372,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
     return () => {
       delete (window as unknown as Record<string, unknown>).__pilgrimage
     }
-  }, [gl, camera, scene, map, travelers, speed, movement, speedScales, characterScale])
+  }, [gl, camera, scene, map, travelers, speed, movement, speedScales, beggarSpeedScales, characterScale])
 
   return null
 }

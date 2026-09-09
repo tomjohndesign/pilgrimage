@@ -62,7 +62,7 @@ import {
 } from "./map/types"
 import { holdsNerve, takesTrack, type RouteState } from "./route-choice"
 import { deriveSeed, makeRng, SEED_STREAM } from "./rng"
-import type { Traveler } from "./travelers"
+import { TRAVELER_TYPES, type Traveler } from "./travelers"
 
 /**
  * The living layer on top of traveler identity: a game clock ticks, needs decay
@@ -184,7 +184,7 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
   fromWater: "Returning from the water",
   toBegging: "Finding a place to ask for alms",
   begging: "Sitting beside the road, asking for alms",
-  fromBegging: "Moving to another place",
+  fromBegging: "Returning to the road",
   toAlms: "Approaching to give alms",
   givingAlms: "Giving alms",
   fromAlms: "Returning to the road",
@@ -288,7 +288,14 @@ function minstrelWalkSeconds(id: number, cycle: number): number {
   return (3 + ((id * 19 + cycle * 11) % 5)) * GAME_HOUR_SECONDS
 }
 
+/** Continuous time without coin before peasants and pilgrims fall into begging. */
+export const BEGGAR_DELAY_SECONDS = GAME_DAY_SECONDS
+export const BEGGAR_RECOVERY_GOLD = 15
+
 export interface SimTraveler {
+  /** A reversible progression; the original calling and personal attributes stay intact. */
+  beggar?: boolean
+  goldlessSeconds?: number
   roadShortcut?: WalkingShortcut
   shortcutCheck?: number
   /** Road-tile gate on looking ahead for a footprint blocking the road. */
@@ -761,7 +768,7 @@ export function createSim(
       walkT: 0,
       offRoadRoute: null,
       targetId: null,
-      timer: t.type.id === "vendor" ? vendWalkSeconds(t.id, 0) : t.type.id === "minstrel" ? minstrelWalkSeconds(t.id, 0) : t.type.id === "beggar" ? beggarWalkSeconds(t.id, 0) : 0,
+      timer: t.type.id === "vendor" ? vendWalkSeconds(t.id, 0) : t.type.id === "minstrel" ? minstrelWalkSeconds(t.id, 0) : 0,
       cycle: 0,
     })
   }
@@ -887,7 +894,33 @@ function roadsideSpot(sim: SimState, s: SimTraveler, map: GameMap, performer?: S
 
 function availableBeggar(sim: SimState, s: SimTraveler): SimTraveler | undefined {
   const visit = s.almsVisit, beggar = visit && sim.travelers.get(visit.beggarId)
-  return beggar?.activity === "begging" && !beggar.praying && beggar.cycle === visit?.cycle ? beggar : undefined
+  return beggar?.beggar && beggar.activity === "begging" && !beggar.praying && beggar.cycle === visit?.cycle ? beggar : undefined
+}
+
+function recoverFromBegging(s: SimTraveler): void {
+  if (!s.beggar || s.gold < BEGGAR_RECOVERY_GOLD) return
+  s.beggar = false
+  s.goldlessSeconds = 0
+  if (s.activity === "toBegging" || s.activity === "begging") {
+    s.cycle++
+    startOffRoadWalk(s, "fromBegging")
+  }
+}
+
+function stepPoverty(s: SimTraveler, t: Traveler, dt: number): void {
+  recoverFromBegging(s)
+  if (s.beggar) return
+  if (t.type.id !== "peasant" && t.type.id !== "pilgrim") return
+  s.goldlessSeconds = s.gold > 0 ? 0 : (s.goldlessSeconds ?? 0) + Math.max(0, dt)
+  if (s.goldlessSeconds >= BEGGAR_DELAY_SECONDS) {
+    s.beggar = true
+    // Do not overwrite a rest, work or visit timer. Begging starts back on the road.
+    if (s.activity === "walking" || s.activity === "seeking") {
+      s.activity = "walking"
+      s.targetId = null
+      s.timer = 0
+    }
+  }
 }
 
 function donate(sim: SimState, giver: SimTraveler, recipient: SimTraveler): void {
@@ -998,7 +1031,7 @@ function stepStallWalk(map: GameMap, s: SimTraveler, leaving: boolean, distance:
 }
 
 function routeState(t: Traveler, s: SimTraveler): RouteState {
-  return { type: t.type.id, piety: s.piety, stamina: s.stamina }
+  return { type: s.beggar ? "beggar" : t.type.id, piety: s.piety, stamina: s.stamina }
 }
 
 function nextRoll(s: SimTraveler): number {
@@ -1032,6 +1065,8 @@ function pay(buyer: SimTraveler, vendor: SimTraveler, price: number): void {
   const paid = Math.min(price, buyer.gold)
   buyer.gold -= paid
   vendor.gold += paid
+  if (paid > 0) vendor.goldlessSeconds = 0
+  recoverFromBegging(vendor)
 }
 
 function staffOf(sim: SimState, buildingId: string): SimTraveler[] {
@@ -1361,6 +1396,8 @@ export function stepSim(
   /** Rendered stride relative to the reference person, keyed by traveler ID. */
   speedScales?: ReadonlyMap<number, number>,
   characterScale = BASE_CHARACTER_SCALE,
+  /** Strides of the beggar outfits, using the same rendered scale and rig. */
+  beggarSpeedScales?: ReadonlyMap<number, number>,
 ): void {
   return withTerrainCornerQueries(map, () => {
   if (!map.road || map.road.length < 2) return
@@ -1417,6 +1454,7 @@ export function stepSim(
     const ordinal = t.type.id !== "vendor" && t.type.id !== "knight" ? explorerRank++ : -1
     const s = sim.travelers.get(t.id)
     if (!s || sim.joinedMonks.has(t.id)) continue
+    stepPoverty(s, t, dt)
     const previousStall = deployedStall(s)
     if (s.herding && !["toSheep", "herding"].includes(s.activity)) releaseSheep(s, sim.wildlife)
     s.herdingRetry = Math.max(0, (s.herdingRetry ?? 0) - dt)
@@ -1470,7 +1508,9 @@ export function stepSim(
       : knightWalkStride(travelerAppearance(map.seed ?? 0, t.id).variant) * characterScale * DEFAULT_WALK_CADENCE) / DEFAULT_WALK_SPEED : undefined
     const job = settlementJob(s.employer, sim.buildings)
     const residentSpeed = job ? jobSpeedScale(job, travelerAppearance(map.seed ?? 0, t.id).variant, characterScale) : undefined
-    const targetSpeed = t.pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+    const pace = s.beggar ? TRAVELER_TYPES.beggar.paceMin + roll(t.id, 901) * (TRAVELER_TYPES.beggar.paceMax - TRAVELER_TYPES.beggar.paceMin) : t.pace
+    const beggarSpeed = s.beggar ? beggarSpeedScales?.get(t.id) ?? 1 : undefined
+    const targetSpeed = pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (beggarSpeed ?? residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
     s.moveSpeed = camping || sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
       easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     const worldSpeed = s.moveSpeed
@@ -1902,8 +1942,8 @@ export function stepSim(
             s.timer = 5
           }
         }
-        if (s.activity === "walking" && !shelter && !s.track && !isVendor && Math.min(s.hunger, s.thirst, s.stamina) > 20) {
-          if (t.type.id === "beggar") {
+        if (s.activity === "walking" && !shelter && !s.track && !isVendor && (s.beggar ? s.stamina > CAMP_STAMINA_THRESHOLD : Math.min(s.hunger, s.thirst, s.stamina) > 20)) {
+          if (s.beggar) {
             s.timer -= dt
             if (s.timer <= 0) {
               const spot = roadsideSpot(sim, s, map)
@@ -1935,9 +1975,9 @@ export function stepSim(
             }
           }
         }
-        if (s.activity === "walking" && !shelter && !s.track && !isVendor && t.type.id !== "beggar" && s.gold >= 1 &&
+        if (s.activity === "walking" && !shelter && !s.track && !isVendor && !s.beggar && s.gold >= 1 &&
           Math.min(s.hunger, s.thirst, s.stamina) > 20) {
-          const beggar = [...sim.travelers.values()].find(other => other.activity === "begging" && !other.praying &&
+          const beggar = [...sim.travelers.values()].find(other => other.beggar && other.activity === "begging" && !other.praying &&
             Math.hypot(other.x - s.x, other.z - s.z) < 3 && s.almsEncounters?.[other.id] !== other.cycle)
           if (beggar) {
             // One choice per pitch: standing nearby must not reroll generosity every frame.
@@ -2127,7 +2167,7 @@ export function stepSim(
       }
       case "begging": {
         s.timer -= dt
-        if (s.timer <= 0 || Math.min(s.hunger, s.thirst, s.stamina) <= 10) {
+        if (s.timer <= 0 || s.stamina <= CAMP_STAMINA_THRESHOLD) {
           s.cycle++
           startOffRoadWalk(s, "fromBegging")
         }
@@ -2302,6 +2342,11 @@ export function stepSim(
     finishConvoyMove(s, transportBefore, map, characterScale)
     // Later animals in this tick must see a stall that just opened or packed up.
     if (deployedStall(s) !== previousStall) pastureObstacles = undefined
+  }
+  // Catch wages and other credits even when the recipient already took their turn.
+  for (const s of sim.travelers.values()) {
+    if (s.gold > 0) s.goldlessSeconds = 0
+    recoverFromBegging(s)
   }
   if (dt > 0) {
     const from = { x: 0, z: 0 }
