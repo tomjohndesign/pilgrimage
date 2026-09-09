@@ -1,5 +1,7 @@
 "use client"
 
+import { SceneAssetBoundary } from "./scene-assets"
+
 import { travelerWeariness } from "@/lib/game/traveler-weariness"
 
 import { withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
@@ -14,7 +16,7 @@ import { frameProfile } from "@/lib/game/render/frame-profile"
 import { figureMounts } from "@/lib/game/render/figure-mounts"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
-import { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
@@ -407,9 +409,9 @@ const TravelerUnit = memo(function TravelerUnit({ index, traveler, map, appearan
       <TravelerFigure {...figure} map={map} job={job} age={traveler.attributes.age}
         {...(traveler.type.id === "knight" ? knightLoadout(traveler.id) : cartLoadout(traveler.id))}
         appearance={appearance} selected={selected} type={traveler.type} onClick={select} idColor={idColor} /> :
-      <Suspense fallback={null}><CharacterSprite {...figure} map={map} age={traveler.attributes.age}
+      <SceneAssetBoundary><CharacterSprite {...figure} map={map} age={traveler.attributes.age}
         appearance={appearance} selected={selected} type={traveler.type.id} onClick={select}
-        outlineColor={[idColor.r, idColor.g, idColor.b]} /></Suspense>}
+        outlineColor={[idColor.r, idColor.g, idColor.b]} /></SceneAssetBoundary>}
     <CharacterHitTarget onClick={select} />
     {selected && <CharacterSelectionOutline />}
   </group>
