@@ -1,3 +1,4 @@
+import { crossroadIslandAt } from "./map/crossroads"
 import { buildingSpatialQuery } from "./building-spatial"
 import { FOOTPATH_ESTABLISHED_AT, footpathRouteCost, obstaclesNear, type FootpathObstacle } from "./footpaths"
 import { elevationStep } from "./map/elevation"
@@ -34,7 +35,7 @@ export function shortcutCost(map: GameMap, from: TilePos, to: TilePos, exploring
   const tile = (p: TilePos) => ({ x: worldToTileX(map, p.x), z: worldToTileZ(map, p.z) })
   const open = (p: TilePos) => {
     const terrain = tileAt(map, p.x, p.z)
-    return !!terrain && ["grass", "clearing", "dirt", "sand", "path", "track"].includes(terrain)
+    return !!terrain && !crossroadIslandAt(map, p.x, p.z) && ["grass", "clearing", "dirt", "sand", "path", "track"].includes(terrain)
       && !nearby(p).some(b => p.x >= b.x && p.x < b.x + b.w && p.z >= b.z && p.z < b.z + b.d)
   }
   const obstacles = obstaclesNear(map.footpaths,

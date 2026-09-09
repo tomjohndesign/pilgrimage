@@ -75,6 +75,8 @@ export interface DarkForest {
 }
 
 export interface GameMap {
+  /** Marked islands where the generated roads and destination tracks meet. */
+  crossroads?: import("./crossroads").Crossroad[]
   /** Live walking traffic, shared by navigation and terrain; scoped to the running game. */
   footpaths?: import("../footpaths").Footpaths
   elevation?: import("./elevation").ElevationInfo

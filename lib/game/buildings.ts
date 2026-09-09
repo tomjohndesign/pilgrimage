@@ -1,3 +1,4 @@
+import { crossroadIslandAt } from "./map/crossroads"
 import { MARKET_WIDTH, MARKET_DEPTH } from "./market-layout"
 import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
 import { settlementRoute } from "./settlement-route"
@@ -178,7 +179,7 @@ export function placementProblem(
   for (let dz = 0; dz < footprint.d; dz++) {
     for (let dx = 0; dx < footprint.w; dx++) {
       const terrain = tileAt(map, x + dx, z + dz)
-      if (!terrain || !TERRAIN[terrain].buildable) return "terrain"
+      if (!terrain || !TERRAIN[terrain].buildable || crossroadIslandAt(map, x + dx, z + dz)) return "terrain"
     }
   }
   if (existing.some((b) => footprintsOverlap(b, footprint))) return "occupied"

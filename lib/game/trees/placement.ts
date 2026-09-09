@@ -1,7 +1,7 @@
 import { forestEntrancePlacements, FOREST_WARNING_CLEARANCE } from "../map/forest-entrances"
 import { groundHeight } from "../map/elevation"
 import { computeDarkShade, computeForestShade } from "../map/forest-field"
-import { signpostPlacement, SIGNPOST_CLEARANCE } from "../map/signpost"
+import { signpostPlacements, SIGNPOST_CLEARANCE } from "../map/signpost"
 import { isWoods } from "../map/terrain"
 import { isRoadTerrain } from "../map/road"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "../map/types"
@@ -147,8 +147,8 @@ export function placeTrees(
   const out: TreePlacement[] = []
   // Indices into `out` of the trees on each tile, for the cap and the room check.
   const byTile: (number[] | undefined)[] = new Array(map.width * map.depth)
-  // The wayside signpost may take a corner inside the woods; leave it standing room.
-  const signpost = signpostPlacement(map)
+  // Keep every sign clear of overhanging trees.
+  const signposts = signpostPlacements(map)
   const warnings = forestEntrancePlacements(map)
 
   const hasRoom = (px: number, pz: number, def: TreeSpeciesDef, scale: number, x: number, z: number) => {
@@ -211,7 +211,7 @@ export function placeTrees(
           const px = cx + (rng() - 0.5) * SCATTER
           const pz = cz + (rng() - 0.5) * SCATTER
           if (!hasRoom(px, pz, def, scale, x, z)) continue
-          if (signpost && Math.hypot(px - signpost.x, pz - signpost.z) < SIGNPOST_CLEARANCE) continue
+          if (signposts.some(post => Math.hypot(px - post.x, pz - post.z) < SIGNPOST_CLEARANCE)) continue
           if (warnings.some(p => Math.hypot(px - p.x, pz - p.z) < FOREST_WARNING_CLEARANCE)) continue
           if (!here) byTile[index] = here = []
           here.push(out.length)
