@@ -1,4 +1,3 @@
-import { inkAnimalFrame } from "../base-person/ink"
 import * as THREE from "three"
 import { addSurfaceLighting } from "../render/lighting"
 import { spriteDepthBaker } from "../render/bake-depth"
@@ -27,9 +26,9 @@ function frameScene() {
   camera.position.set(0, target + 10 * Math.sin(pitch), 10 * Math.cos(pitch)); camera.lookAt(0, target, 0)
   return { renderer, scene, camera, depth: spriteDepthBaker(renderer) }
 }
-export function createEditedAnimalFrame(kind: Animal, variant: HorseVariant, coat?: string, knight?: { kind: "mounted" | "saddled"; variant: number }, pack = false) {
+export function createEditedAnimalFrame(kind: Animal, variant: HorseVariant, coat?: string, knight?: { kind: "mounted" | "saddled"; variant: number }) {
   const render = shared ??= frameScene(); users++
-  const free = createAnimalRig(kind, variant, animalCoat(kind, coat).id, false, pack), hitched = createAnimalRig(kind, variant, animalCoat(kind, coat).id, true, pack)
+  const free = createAnimalRig(kind, variant, animalCoat(kind, coat).id), hitched = createAnimalRig(kind, variant, animalCoat(kind, coat).id, true)
   const tack = knight ? createRidingTack(free.root) : null
   const rider = knight?.kind === "mounted" ? createBasePersonRig(personRecipe(knightDesign(knight.variant))) : null
   const gear = rider ? equipKnight(rider, knight!.variant) : null
@@ -59,9 +58,8 @@ export function createEditedAnimalFrame(kind: Animal, variant: HorseVariant, coa
     try {
       render.renderer.render(render.scene, render.camera)
       context.clearRect(0, 0, canvas.width, canvas.height); context.drawImage(render.renderer.domElement, 0, 0)
-      const colors = context.getImageData(0, 0, canvas.width, canvas.height), pixels = new Uint8ClampedArray(colors.data)
-      colors.data.set(inkAnimalFrame(pixels, canvas.width)); context.putImageData(colors, 0, 0)
-      depthContext.drawImage(render.depth.render(render.scene, render.camera, TRANSPORT.cellSize, TRANSPORT.viewSize, pixels, colors.data), 0, 0)
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
+      depthContext.drawImage(render.depth.render(render.scene, render.camera, TRANSPORT.cellSize, TRANSPORT.viewSize, pixels, pixels), 0, 0)
       texture.needsUpdate = true; depthTexture.needsUpdate = true
     } finally { render.scene.remove(rig.root) }
   }, dispose() {

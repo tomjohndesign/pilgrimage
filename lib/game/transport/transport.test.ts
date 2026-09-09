@@ -44,7 +44,7 @@ describe("transport sheet contract", () => {
     expect(manifest.cellSize).toBe(TRANSPORT.cellSize)
     expect(manifest.anchor).toEqual(TRANSPORT.anchor)
     expect(manifest.camera.viewSize).toBe(TRANSPORT.viewSize)
-    expect(ANIMAL_PROFILES).toMatchObject(manifest.animalProfiles)
+    expect(manifest.animalProfiles).toEqual(ANIMAL_PROFILES)
     expect(manifest.animalRigVersion).toBe(ANIMAL_RIG_VERSION)
     expect(manifest.horseVariants).toEqual({ common: { rowOffset: 0 }, noble: { rowOffset: 8 } })
     expect(TRANSPORT.scale / TRANSPORT.cellSize).toBeCloseTo(0.74 / 48, 12)
@@ -87,7 +87,7 @@ describe("transport sheet contract", () => {
       expect(column).toBeLessThan(mode === "shop" ? TRANSPORT.shopFrames : TRANSPORT.wheelFrames)
     }
     expect(new Set(Array.from({ length: 48 }, (_, id) => { const { cargo, puller } = cartLoadout(id); return `${cargo}:${puller}` })).size).toBe(12)
-    expect(COATS).toMatchObject(manifest.coats)
+    expect(manifest.coats).toEqual(COATS)
     expect(manifest.shop.footprint).toEqual([3, 2])
     expect(manifest.animalClips.graze.frames).toBeGreaterThan(1)
   })
@@ -99,7 +99,7 @@ describe("transport ground contacts", () => {
     // Lateral walk sequence: left fore, right hind, right fore, left hind.
     // https://horses.extension.org/horse-walk/
     const legs = [["left", false], ["right", true], ["right", false], ["left", true]] as const
-    for (const [kind, variant] of [["ox", "common"], ["donkey", "common"], ["horse", "common"], ["horse", "noble"]] as const) {
+    for (const [kind, variant] of [["donkey", "common"], ["horse", "common"], ["horse", "noble"]] as const) {
       for (let beat = 0; beat < 4; beat++) {
         const phase = beat / 4
         const landing = legs.filter(([side, rear]) => !animalLeg(kind, side, rear, phase - 0.001, true, variant).planted && animalLeg(kind, side, rear, phase + 0.001, true, variant).planted)
@@ -139,7 +139,7 @@ describe("transport ground contacts", () => {
 
   it("preserves every bone length, planted hoof and loop closure across all three animal profiles", () => {
     const length = (a: number[], b: number[]) => Math.hypot(...a.map((x, i) => x - b[i]))
-    for (const [kind, variant] of [["ox", "common"], ["donkey", "common"], ["horse", "common"], ["horse", "noble"]] as const) for (const rear of [false, true]) for (const side of ["left", "right"] as const) {
+    for (const [kind, variant] of [["donkey", "common"], ["horse", "common"], ["horse", "noble"]] as const) for (const rear of [false, true]) for (const side of ["left", "right"] as const) {
       const body = animalBody(kind, variant), bones = animalBoneLengths(kind, rear, variant)
       for (let f = 0; f <= 100; f++) {
         const p = animalLeg(kind, side, rear, f / 100, true, variant)
@@ -167,7 +167,7 @@ describe("transport ground contacts", () => {
   })
 
   it("stands on extended forelegs instead of permanently crouching", () => {
-    for (const [kind, variant] of [["ox", "common"], ["donkey", "common"], ["horse", "common"], ["horse", "noble"]] as const) {
+    for (const [kind, variant] of [["donkey", "common"], ["horse", "common"], ["horse", "noble"]] as const) {
       const p = animalLeg(kind, "left", false, 0, false, variant)
       const upper = new THREE.Vector3(...p.upperJoint).sub(new THREE.Vector3(...p.knee)).normalize()
       const lower = new THREE.Vector3(...p.ankle).sub(new THREE.Vector3(...p.knee)).normalize()

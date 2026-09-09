@@ -1,5 +1,4 @@
 "use client"
-import { inkAnimalFrame } from "@/lib/game/base-person/ink"
 
 import { useEffect, useRef, type RefObject } from "react"
 import * as THREE from "three"
@@ -21,17 +20,17 @@ import type { Point3 } from "@/lib/game/base-person/pose"
 
 export type AnimalSubject = WildlifeKind | Animal
 export type AnimalMotion = AnimalClip
-const SUBJECTS: AnimalSubject[] = ["buck", "deer", "sheep", "goat", "rabbit", "fox", "boar", "sparrow", "hawk", "donkey", "horse", "ox"]
+const SUBJECTS: AnimalSubject[] = ["buck", "deer", "sheep", "goat", "rabbit", "fox", "boar", "sparrow", "hawk", "donkey", "horse"]
 export function animalActions(kind: AnimalSubject): AnimalClip[] {
-  if (kind === "donkey" || kind === "horse" || kind === "ox") return ["idle", "walk", "graze"]
+  if (kind === "donkey" || kind === "horse") return ["idle", "walk", "graze"]
   if (isBird(kind)) return ["idle", "fly", "glide"]
   return ["idle", ...speciesGaits(kind), ...(kind === "fox" ? ["lie"] as const : ["graze"] as const), ...(kind === "rabbit" ? ["burrow"] as const : [])]
 }
 export const ACTION_LABELS: Record<AnimalClip, string> = { idle: "Idle", walk: "Walk", trot: "Trot", canter: "Lope", gallop: "Run", hop: "Hop", leap: "Leap", graze: "Graze", lie: "Lie down / rise", burrow: "Enter / leave burrow", fly: "Fly", glide: "Glide" }
 
 /** Native camera and pixel size are identical to the person editor. */
-export function AnimalPreview({ pack = false, subject, lineup, motion, playing, row, zoom, rate, coat, wildlifeCoat = "natural", horseVariant, onSelect, directionCanvases, showRig, construction, frame: inspectedFrame, edits, joints, selected, onInspect, onJoint, onPose, onDrag }: {
-  pack?: boolean; subject: AnimalSubject; lineup: boolean; motion: AnimalMotion; playing: boolean; row: number; zoom: number; rate: number; coat: string; wildlifeCoat?: string; horseVariant: HorseVariant; onSelect: (subject: AnimalSubject) => void
+export function AnimalPreview({ subject, lineup, motion, playing, row, zoom, rate, coat, wildlifeCoat = "natural", horseVariant, onSelect, directionCanvases, showRig, construction, frame: inspectedFrame, edits, joints, selected, onInspect, onJoint, onPose, onDrag }: {
+  subject: AnimalSubject; lineup: boolean; motion: AnimalMotion; playing: boolean; row: number; zoom: number; rate: number; coat: string; wildlifeCoat?: string; horseVariant: HorseVariant; onSelect: (subject: AnimalSubject) => void
   directionCanvases: RefObject<(HTMLCanvasElement | null)[]>
   construction: boolean; showRig: boolean; frame: number; edits: AnimalRigEdits; joints: AnimalInspection; selected: AnimalJoint
   onInspect: (frame: number, joints: AnimalInspection) => void; onJoint: (joint: AnimalJoint) => void; onPose: (changes: [AnimalJoint, Point3][]) => void; onDrag: (active: boolean) => void
@@ -49,8 +48,8 @@ export function AnimalPreview({ pack = false, subject, lineup, motion, playing, 
     addSurfaceLighting(scene)
     const hole = createBurrowRig(), ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
     const actors = (lineup ? SUBJECTS : [subject]).map(kind => {
-      const equine = kind === "donkey" || kind === "horse" || kind === "ox"
-      const rig = equine ? createAnimalRig(kind, pack ? "common" : horseVariant, pack ? undefined : coat, false, pack) : createWildlifeRig(kind, construction)
+      const equine = kind === "donkey" || kind === "horse"
+      const rig = equine ? createAnimalRig(kind, horseVariant, coat) : createWildlifeRig(kind, construction)
       const tinted = new Set<THREE.Material>()
       if (!equine && !construction) rig.root.traverse(object => {
         if (!(object instanceof THREE.Mesh)) return
@@ -96,7 +95,6 @@ export function AnimalPreview({ pack = false, subject, lineup, motion, playing, 
         if(shelter)scene.add(hole.root)
         scene.add(rig.root); renderer.render(scene, camera)
         context.clearRect(0, 0, canvas.width, canvas.height); context.drawImage(renderer.domElement, 0, 0)
-        if (!construction) { const pixels=context.getImageData(0,0,canvas.width,canvas.height);pixels.data.set(inkAnimalFrame(pixels.data,canvas.width));context.putImageData(pixels,0,0) }
         // Handles follow every frame while the rig is shown so a drag never trails the pointer.
         if (kind === subject && now - inspectedAt > (s.showRig ? 15 : 50)) {
           const inspection: AnimalInspection = {}
@@ -113,7 +111,6 @@ export function AnimalPreview({ pack = false, subject, lineup, motion, playing, 
             face(direction)
             renderer.render(scene, camera)
             context.clearRect(0, 0, target.width, target.height); context.drawImage(renderer.domElement, 0, 0)
-            if (!construction) { const pixels=context.getImageData(0,0,target.width,target.height);pixels.data.set(inkAnimalFrame(pixels.data,target.width));context.putImageData(pixels,0,0) }
           }
           face(s.row)
           directionsAt = now
@@ -124,7 +121,7 @@ export function AnimalPreview({ pack = false, subject, lineup, motion, playing, 
     }
     request = requestAnimationFrame(draw)
     return () => { cancelAnimationFrame(request); actors.forEach(actor => actor.rig.dispose()); hole.dispose(); renderer.dispose(); renderer.forceContextLoss() }
-  }, [subject, lineup, coat, wildlifeCoat, horseVariant, pack, directionCanvases, construction])
+  }, [subject, lineup, coat, wildlifeCoat, horseVariant, directionCanvases, construction])
   return <div ref={host} className={lineup ? "animal-lineup" : "person-sprite"} style={lineup ? { gridTemplateColumns: `repeat(4, ${64 * zoom}px)` } : undefined}>
     {(lineup ? SUBJECTS : [subject]).map(kind => <div key={kind} style={{ width: 64 * zoom, height: 64 * zoom, position: "relative", flexShrink: 0 }}>
       <canvas data-animal={kind} width={64} height={64} role="img" aria-label={`${kind} model preview`} style={{ width: "100%", height: "100%", imageRendering: "pixelated" }} />

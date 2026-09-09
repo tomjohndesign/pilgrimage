@@ -1,6 +1,3 @@
-import { inkAnimalFrame } from "../base-person/ink"
-import { packHandlerDesign } from "./handler"
-import { PARTY_BAKE, PASSENGER_SEATS, PASSENGER_CALLINGS, PASSENGER_COLUMNS } from "./party-assets"
 import * as THREE from "three"
 import { addSurfaceLighting } from "../render/lighting"
 import { BASE_PERSON, PERSON_CLIPS, WALK_CLIP_STRIDES } from "../base-person/pose"
@@ -11,7 +8,7 @@ import { merchantGesture } from "./merchant-poses"
 import { COATS } from "./coats"
 import { populationDesign } from "../base-person/population"
 import { TRAVELER_TYPES } from "../travelers"
-import { PACK_ANIMAL_VERSION, CARGO, CART, CART_WIDTH_SCALE, SHOP, SHOP_SECONDS, CART_MODES, TRANSPORT, ANIMAL_COLUMNS, ANIMAL_RIG_VERSION, CART_COLUMNS, ANIMAL_PROFILES, HORSE_VARIANTS, pullingDesign } from "./assets"
+import { CARGO, CART, CART_WIDTH_SCALE, SHOP, SHOP_SECONDS, CART_MODES, TRANSPORT, ANIMAL_COLUMNS, ANIMAL_RIG_VERSION, CART_COLUMNS, ANIMAL_PROFILES, HORSE_VARIANTS, pullingDesign } from "./assets"
 import { createAnimalRig, createCartRig } from "./rig"
 import { spriteDepthBaker, SPRITE_DEPTH_ENCODING } from "../render/bake-depth"
 
@@ -23,7 +20,7 @@ function canvas(width: number, height: number) {
 async function decode(url: string) { const image = new Image(); image.src = url; await image.decode(); return image }
 
 /** Deterministic native-pixel exports, at the person's camera and pixel density. */
-export async function bakeTransport(options: { partiesOnly?: boolean; packsOnly?: boolean } = {}) {
+export async function bakeTransport() {
   let size: number = TRANSPORT.cellSize
   const extent = TRANSPORT.viewSize, anchor = TRANSPORT.anchor
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, preserveDrawingBuffer: true })
@@ -46,7 +43,7 @@ export async function bakeTransport(options: { partiesOnly?: boolean; packsOnly?
     frame = canvas(cell, cell)
   }
   let safePadding: number = size
-  function render(root: THREE.Group, row: number, target: ReturnType<typeof canvas>, col: number, targetRow = row, directions = 8, animalInk = false) {
+  function render(root: THREE.Group, row: number, target: ReturnType<typeof canvas>, col: number, targetRow = row, directions = 8) {
     root.rotation.y = -row * Math.PI * 2 / directions
     renderer.render(scene, camera)
     frame.ctx.clearRect(0, 0, size, size); frame.ctx.drawImage(renderer.domElement, 0, 0)
@@ -59,10 +56,8 @@ export async function bakeTransport(options: { partiesOnly?: boolean; packsOnly?
       const x = i / 4 % size, y = Math.floor(i / 4 / size)
       safePadding = Math.min(safePadding, x, y, size - 1 - x, size - 1 - y)
     }
-    const source = new Uint8ClampedArray(data.data)
-    if (animalInk) data.data.set(inkAnimalFrame(source, size))
     frame.ctx.putImageData(data, 0, 0); target.ctx.drawImage(frame.canvas, col * size, targetRow * size)
-    target.depthCtx.drawImage(depthBaker.render(scene, camera, size, camera.right - camera.left, source, data.data), col * size, targetRow * size)
+    target.depthCtx.drawImage(depthBaker.render(scene, camera, size, camera.right - camera.left, data.data, data.data), col * size, targetRow * size)
   }
   const images: Record<string, string> = {}
   const save = (name: string, sheet: ReturnType<typeof canvas>) => {
@@ -70,86 +65,6 @@ export async function bakeTransport(options: { partiesOnly?: boolean; packsOnly?
     images[`depth-${name}`] = sheet.depth.toDataURL()
   }
   try {
-    if (options.partiesOnly || options.packsOnly) {
-      for (const style of options.packsOnly ? [] : ["bench","rear"] as const) {
-        configure(CART.cellSize,CART.anchor)
-        const sheet=canvas(size*CART_COLUMNS,size*CART.directions), rig=createCartRig("textiles","horse",false,style)
-        scene.add(rig.root)
-        for(let row=0;row<CART.directions;row++)for(let f=0;f<CART_COLUMNS;f++) {rig.pose(f/CART_COLUMNS);render(rig.root,row,sheet,f,row,CART.directions)}
-        scene.remove(rig.root);rig.dispose();save(`cart-${style}`,sheet)
-      }
-      configure(TRANSPORT.cellSize,TRANSPORT.anchor)
-      for(const kind of ["ox","donkey","horse"] as const)for(const pack of options.packsOnly ? [true] : [false,true]) {
-        const coats=pack?COATS[kind].slice(0,1):COATS[kind]
-        for(const coat of coats)for(const hitched of pack?[false]:[false,true]) {
-          const variants=kind==="horse"&&!pack?HORSE_VARIANTS:["common"] as const
-          const sheet=canvas(size*ANIMAL_COLUMNS,size*8*variants.length)
-          for(const [index,variant] of variants.entries()) {
-            const rig=createAnimalRig(kind,variant,coat.id,hitched,pack);scene.add(rig.root)
-            for(let row=0;row<8;row++)for(let f=0;f<ANIMAL_COLUMNS;f++) {
-              const walking=f>=1&&f<=TRANSPORT.animalFrames, lowerStart=1+TRANSPORT.animalFrames, grazeStart=lowerStart+TRANSPORT.lowerFrames
-              const grazing=f>=grazeStart?1:f>=lowerStart?(f-lowerStart)/(TRANSPORT.lowerFrames-1):0
-              const phase=walking?(f-1)/TRANSPORT.animalFrames:f>=grazeStart?(f-grazeStart)/TRANSPORT.grazeFrames:0
-              rig.pose(phase,walking,grazing);render(rig.root,row,sheet,f,index*8+row,8,true)
-            }
-            scene.remove(rig.root);rig.dispose()
-          }
-          save(`${kind}-${coat.id}${pack?"-pack":hitched?"-hitched":""}`,sheet)
-        }
-      }
-      if (options.packsOnly) {
-        if (safePadding < 4) throw new Error(`Pack animal exceeds safe frame (${safePadding}px).`)
-        return { images, metadata: { ...TRANSPORT, version: PACK_ANIMAL_VERSION, directions: 8,
-          animalColumns: ANIMAL_COLUMNS, animalProfiles: ANIMAL_PROFILES, animalRigVersion: ANIMAL_RIG_VERSION,
-          animalInk: .6, safePadding, depthEncoding: SPRITE_DEPTH_ENCODING, coats: COATS } }
-      }
-      const handlers: Record<string, { designs: ReturnType<typeof packHandlerDesign>[]; hands: Record<string, Array<{x:number;y:number;depth:number}>> }> = {}
-      for(const calling of PASSENGER_CALLINGS) {
-        const designs=Array.from({length:6},(_,variant)=>packHandlerDesign(calling,variant)), hands: Record<string, Array<{x:number;y:number;depth:number}>> = {}
-        for(const clip of ["walk","wearyWalk","idle"] as const) {
-          const frames=PERSON_CLIPS[clip].frames, sheet=canvas(BASE_PERSON.cellSize*frames,BASE_PERSON.cellSize*48)
-          hands[clip]=[]
-          for(const design of designs) {
-            const session=personFrameRenderer(design)
-            const variant=designs.indexOf(design)
-            try {for(let row=0;row<8;row++)for(let f=0;f<frames;f++) {
-              const frame=session.render(clip,f/frames,row,false)
-              sheet.ctx.drawImage(frame.canvas,f*BASE_PERSON.cellSize,(variant*8+row)*BASE_PERSON.cellSize)
-              sheet.depthCtx.drawImage(frame.depth!,f*BASE_PERSON.cellSize,(variant*8+row)*BASE_PERSON.cellSize)
-              hands[clip].push(frame.sockets.leftHand)
-            }}finally{session.dispose()}
-          }
-          save(`handler-${calling}-${clip}`,sheet)
-        }
-        handlers[calling]={designs,hands}
-      }
-      for(const [seatIndex,seat] of PASSENGER_SEATS.entries()) {
-        const sheet=canvas(CART.cellSize*PASSENGER_COLUMNS,CART.cellSize*CART.directions)
-        const occluder=createCartRig("textiles","horse",false,"rear"), depth=new THREE.MeshBasicMaterial({colorWrite:false})
-        const originals: Array<{mesh:THREE.Mesh;material:THREE.Material|THREE.Material[]}> = []
-        occluder.root.traverse(object=>{if(object instanceof THREE.Mesh){originals.push({mesh:object,material:object.material});object.material=depth;object.renderOrder=-1}})
-        try {
-          for(const [callingIndex,calling] of PASSENGER_CALLINGS.entries())for(let variant=0;variant<6;variant++) {
-            const design=populationDesign(TRAVELER_TYPES[calling],variant)
-            const session=personFrameRenderer(design,[],{cellSize:CART.cellSize,anchor:CART.anchor,viewSize:TRANSPORT.viewSize*CART.cellSize/TRANSPORT.cellSize,occluder:occluder.root})
-            try {for(let row=0;row<CART.directions;row++) {
-              const angle=-row*Math.PI*2/CART.directions;occluder.root.rotation.y=angle
-              const frame=session.render("idle",0,row/2,false,rig=>{
-                rig.root.position.set(0,0,0);poseDriver(rig,design,seatIndex===0)
-                const staff=rig.root.getObjectByName("walking-staff");if(staff)staff.visible=false
-                rig.root.rotation.y=angle+seat.heading
-                rig.root.position.set(seat.x*Math.cos(angle)+seat.z*Math.sin(angle),seat.y,-seat.x*Math.sin(angle)+seat.z*Math.cos(angle))
-              })
-              sheet.ctx.drawImage(frame.canvas,(callingIndex*6+variant)*CART.cellSize,row*CART.cellSize)
-              sheet.depthCtx.drawImage(frame.depth!,(callingIndex*6+variant)*CART.cellSize,row*CART.cellSize)
-            }}finally{session.dispose()}
-          }
-        }finally{originals.forEach(({mesh,material})=>{mesh.material=material});depth.dispose();occluder.dispose()}
-        save(`passenger-${seatIndex}`,sheet)
-      }
-      if(safePadding<4)throw new Error(`Party transport exceeds safe frame (${safePadding}px).`)
-      return {images,metadata:{...PARTY_BAKE,handlers,handlerFrame:{cellSize:BASE_PERSON.cellSize,anchor:BASE_PERSON.anchor,templateVersion:BASE_PERSON.version,frames:{walk:PERSON_CLIPS.walk.frames,wearyWalk:PERSON_CLIPS.wearyWalk.frames,idle:PERSON_CLIPS.idle.frames}},animalInk:.6,animalRigVersion:ANIMAL_RIG_VERSION,animalProfiles:ANIMAL_PROFILES,safePadding,depthEncoding:SPRITE_DEPTH_ENCODING,animalFrames:TRANSPORT.animalFrames,animalColumns:ANIMAL_COLUMNS,animalAnchor:TRANSPORT.anchor,animalCellSize:TRANSPORT.cellSize,animalScale:TRANSPORT.scale,rigToWorld:TRANSPORT.scale/TRANSPORT.viewSize}}
-    }
     for (const cargo of CARGO) for (const mode of CART_MODES) for (const side of mode === "shop" ? [1, -1] : [1]) for (const compact of mode === "shop" ? [false, true] : [false]) {
       configure(mode === "shop" ? SHOP.cellSize : CART.cellSize, mode === "shop" ? SHOP.anchor : CART.anchor)
       const frames = mode === "shop" ? TRANSPORT.shopFrames : CART_COLUMNS

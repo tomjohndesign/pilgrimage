@@ -8,7 +8,7 @@ import { benchmarkWork, resetBenchmarkWork, type BenchmarkWork } from "@/lib/gam
 import { benchmarkCity, cityBenchmarkStats } from "@/lib/game/city-benchmark"
 import { processionRegistry } from "@/lib/game/relic-procession"
 import { useBuildStore } from "@/lib/game/build-store"
-import { useCameraStore, type Selection } from "@/lib/game/camera-store"
+import { useCameraStore } from "@/lib/game/camera-store"
 import { placeEnvironment } from "@/lib/game/environment/placement"
 import { cliffCorner } from "@/lib/game/map/cliff-corners"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -58,16 +58,6 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
     }
     const handle = {
       map,
-      parties: () => [...(simRegistry.current?.parties.values() ?? [])].map(p => ({ ...p,
-        members: p.members.map(id => { const s = simRegistry.current!.travelers.get(id)!; return {
-          id, name: travelers.find(t => t.id === id)?.name, x: s.x, z: s.z, progress: s.progress,
-          activity: s.activity, riding: s.partyRiding, boarding: s.partyBoarding, stamina: s.stamina, waiting: s.partyWaiting, home: s.home, employer: s.employer,
-        } }) })),
-      restParty: (id: number) => {
-        const sim = simRegistry.current, party = sim?.parties.get(id)
-        const member = party && sim!.travelers.get(party.members[0])
-        if (member) member.stamina = 19
-      },
       expectedPopulation: travelers.length,
       bakeLoadingChurch: async () => (await import("@/lib/game/render/loading-church-bake")).bakeLoadingChurch(gl),
       benchmarkTarget: benchmarkCity(map)?.centre,
@@ -159,20 +149,17 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
         useSimulationStore.setState({ speed: speed.rate })
       },
       playback: () => useSimulationStore.getState(),
-      selectObject: (selection: Selection | null) => useCameraStore.getState().select(selection),
       selectTraveler: (id: number) => useCameraStore.getState().select({ kind: "traveler", id }),
       selectionVisuals: () => {
         let shadows = 0, sprites = 0, reducedWalking = 0
-        const groundRings = { primary: 0, companions: 0 }
         scene.traverseVisible(object => {
-          if (object.name === "selection-ground-ring") groundRings[object.userData.primary ? "primary" : "companions"]++
           if (object.name === "character-selection-shadow") shadows++
           if (object instanceof THREE.Sprite && object.layers.isEnabled(SELECTED_CHARACTER_LAYER)) {
             sprites++
             if (object.userData.walkDetail > 0) reducedWalking++
           }
         })
-        return { shadows, sprites, reducedWalking, groundRings }
+        return { shadows, sprites, reducedWalking }
       },
       setAdaptiveQuality: (enabled: boolean) => { frameQualityControl.enabled = enabled },
       setCrowdThinning: (enabled: boolean) => { crowdRenderControl.enabled = enabled },
@@ -317,7 +304,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
       transportSprites: () => {
         const sprites: Array<{ kind: string; bridgeGuided: boolean; position: number[]; sheet: string; columns: number; rows: number; visible: boolean; heading: number; grazing: boolean; reversing: boolean; phase: number }> = []
         scene.traverse(object => {
-          if (!(object instanceof THREE.Sprite) || !["cart", "horse", "donkey", "ox", "merchant"].includes(object.name)) return
+          if (!(object instanceof THREE.Sprite) || !["cart", "horse", "donkey", "merchant"].includes(object.name)) return
           const map = object.material.map, data = object.parent?.parent?.userData
           let visible = true; object.traverseAncestors(parent => { visible &&= parent.visible })
           sprites.push({ kind: object.name, bridgeGuided: data?.bridgeGuided === true, position: object.getWorldPosition(new THREE.Vector3()).toArray(), sheet: (map?.image as HTMLImageElement)?.src ?? "",

@@ -1,6 +1,5 @@
 "use client"
 
-import { withTravelParties } from "@/lib/game/travel-parties"
 import { townResidents } from "@/lib/game/town-residents"
 
 import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES, type SceneVisibility } from "@/lib/game/scene-visibility"
@@ -304,7 +303,7 @@ export function GameShell({
   // Identities live outside the canvas so the HUD can name whoever is selected.
   const travelerCount = baseMap ? travelerCountForMap(baseMap, settings.traffic) : 0
   const roadTravelers = useMemo(
-    () => (!baseMap || seed === null ? [] : withTravelParties(generateTravelers(seed, travelerCount), seed)),
+    () => (!baseMap || seed === null ? [] : generateTravelers(seed, travelerCount)),
     [seed, travelerCount, baseMap],
   )
 

@@ -4,15 +4,12 @@ import { animalMotion, spinePoint } from "./animal-pose"
 import type { Point3 } from "../base-person/pose"
 
 export function animalHead(kind: Animal, variant: HorseVariant) {
-  if (kind === "ox") return { neckOrigin: [0, animalProfile(kind).legHeight + .22, .66] as Point3,
-    poll: [0, .22, .65] as Point3, faceLength: .85, faceForward: .85, restPitch: .05 }
   const donkey = kind === "donkey", noble = !donkey && variant === "noble"
   return { neckOrigin: [0, animalProfile(kind, variant).legHeight + 0.18, 0.58] as Point3,
     poll: (noble ? [0, 1.02, 0.4] : donkey ? [0, 0.39, 0.64] : [0, 0.58, 0.75]) as Point3,
     faceLength: donkey ? 0.88 : 1, faceForward: noble ? 0.86 : 1, restPitch: donkey ? 0.16 : noble ? -0.05 : 0.10 }
 }
 export function bitLocal(kind: Animal, variant: HorseVariant, side: number): Point3 {
-  if (kind === "ox") return [side * .21, -.34, .4]
   const head = animalHead(kind, variant)
   return [side * 0.15, -0.46 * head.faceLength, 0.51 * head.faceForward]
 }

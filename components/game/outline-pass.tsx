@@ -10,8 +10,7 @@ import { sceneryCloseOpacity, sceneryDetail, treeEdgeOpacity } from "@/lib/game/
 
 import { useCameraStore, type Selection } from "@/lib/game/camera-store"
 import { useBuildStore } from "@/lib/game/build-store"
-import { COMPANION_OUTLINE_OPACITY, SELECTION_OUTLINE_COLOR, SELECTION_OUTLINE_OPACITY, SELECTION_FILL, SELECTION_FILL_OPACITY, selectionObjectId } from "@/lib/game/selection"
-import { simRegistry } from "@/lib/game/sim"
+import { SELECTION_OUTLINE_COLOR, SELECTION_OUTLINE_OPACITY, SELECTION_FILL, SELECTION_FILL_OPACITY, selectionObjectId } from "@/lib/game/selection"
 import {
   OUTLINE_ID_LAYER,
   ROAD_EDGE_LAYER,
@@ -81,15 +80,10 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform bool uCharacterSelected;
   uniform bool uCharacterPass;
   uniform float uCharacterIdMin;
-  uniform float uAnimalIdMin;
-  uniform float uAnimalIdMax;
   uniform vec2 uTexel;
   uniform int uMode; // 1 = overlap only, 2 = full silhouette
   uniform vec3 uColor;
   uniform float uSelectedId;
-  uniform float uCompanionIds[20];
-  uniform int uCompanionCount;
-  uniform float uCompanionOpacity;
   uniform vec3 uSelectionColor;
   uniform float uSelectionOutlineOpacity;
   uniform vec3 uSelectionFill;
@@ -130,26 +124,9 @@ const FRAGMENT_SHADER = /* glsl */ `
     return nearer;                         // neighbour must be in front
   }
 
-  bool animalBorder(vec2 uv, float idC, float dC) {
-    return abs(idAt(uv) - idC) > .5 && texture2D(tDepth, uv).x > dC + 1.0e-5;
-  }
-
   bool selectedNeighbour(vec2 uv, float dC) {
     return abs(idAt(uv) - uSelectedId) < 0.5
       && texture2D(tDepth, uv).x < dC - 1.0e-5;
-  }
-
-  bool companion(float id) {
-    if (id < uCharacterIdMin) return false;
-    for (int i = 0; i < 20; i++) {
-      if (i >= uCompanionCount) break;
-      if (abs(id - uCompanionIds[i]) < 0.5) return true;
-    }
-    return false;
-  }
-
-  bool companionNeighbour(vec2 uv, float dC) {
-    return texture2D(tDepth, uv).x < dC - 1.0e-5 && companion(idAt(uv));
   }
 
   void main() {
@@ -223,29 +200,6 @@ const FRAGMENT_SHADER = /* glsl */ `
         gl_FragColor = vec4(uSelectionColor, uSelectionOutlineOpacity);
         finishColor(); return;
       }
-    }
-    // Reuse visible IDs: companions get a quieter edge, with no selection fill
-    // or extra scene render. Foreground people and scenery still occlude it.
-    if (uCompanionCount > 0 && !companion(idC)) {
-      bool companionEdge =
-        companionNeighbour(pixelUv + vec2(uTexel.x, 0.0), dC) ||
-        companionNeighbour(pixelUv - vec2(uTexel.x, 0.0), dC) ||
-        companionNeighbour(pixelUv + vec2(0.0, uTexel.y), dC) ||
-        companionNeighbour(pixelUv - vec2(0.0, uTexel.y), dC);
-      if (companionEdge) {
-        gl_FragColor = vec4(uSelectionColor, uCompanionOpacity);
-        finishColor(); return;
-      }
-    }
-    // Live wildlife have no baked sprite ink. Shade one native pixel inside
-    // their visible silhouette, retaining the coat color under a tonal border.
-    // This uses the existing world IDs and respects foreground occluders.
-    if (!uCharacterPass && idC >= uAnimalIdMin && idC <= uAnimalIdMax) {
-      bool animalEdge = animalBorder(pixelUv + vec2(uTexel.x, 0.0), idC, dC)
-        || animalBorder(pixelUv - vec2(uTexel.x, 0.0), idC, dC)
-        || animalBorder(pixelUv + vec2(0.0, uTexel.y), idC, dC)
-        || animalBorder(pixelUv - vec2(0.0, uTexel.y), idC, dC);
-      if (animalEdge) { gl_FragColor = vec4(uColor, .38); finishColor(); return; }
     }
     if (uMode == 0) discard;
     if (idC >= uTreeIdMin && idC <= uTreeIdMax && uTreeEdgeOpacity <= 0.0) discard;
@@ -373,15 +327,10 @@ export function OutlinePass({ objects, selection: previewSelection }: { selectio
       uCharacterSelected: { value: false },
       uCharacterPass: { value: false },
       uCharacterIdMin: { value: MAX_OBJECT_ID - 0x2000 + 1 },
-      uAnimalIdMin: { value: MAX_OBJECT_ID - 0x5000 + 1 },
-      uAnimalIdMax: { value: MAX_OBJECT_ID - 0x4000 },
       uTexel: { value: new THREE.Vector2() },
       uMode: { value: 0 },
       uColor: { value: new THREE.Color(OUTLINE_COLOR) },
       uSelectedId: { value: 0 },
-      uCompanionIds: { value: new Float32Array(20) },
-      uCompanionCount: { value: 0 },
-      uCompanionOpacity: { value: COMPANION_OUTLINE_OPACITY },
       uSelectionColor: { value: new THREE.Color(SELECTION_OUTLINE_COLOR) },
       uSelectionOutlineOpacity: { value: SELECTION_OUTLINE_OPACITY },
       uSelectionFill: { value: new THREE.Color(SELECTION_FILL) },
@@ -523,16 +472,6 @@ export function OutlinePass({ objects, selection: previewSelection }: { selectio
         }
         pass.uniforms.uMode.value = MODE_INT[mode]
         pass.uniforms.uSelectedId.value = selectedId
-        const sim = simRegistry.current
-        const partyId = selection?.kind === "traveler" ? sim?.travelers.get(selection.id)?.partyId : undefined
-        const companions = characterPass && partyId !== undefined ? sim?.parties.get(partyId)?.members ?? [] : []
-        let companionCount = 0
-        if (objects) for (const id of companions) {
-          if (selection?.kind === "traveler" && id === selection.id) continue
-          const objectId = selectionObjectId({ kind: "traveler", id }, { ...objects, piles: [] })
-          if (objectId && companionCount < 20) pass.uniforms.uCompanionIds.value[companionCount++] = objectId
-        }
-        pass.uniforms.uCompanionCount.value = companionCount
         pass.uniforms.uCharacterSelected.value = characterSelected
         pass.uniforms.uCharacterPass.value = characterPass
         pass.uniforms.uMaskCharacters.value = maskPass

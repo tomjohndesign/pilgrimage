@@ -1,4 +1,3 @@
-import type { PassengerCart } from "./party-assets"
 import * as THREE from "three"
 import { TRANSPORT, CART_WIDTH_SCALE, CART_WHEEL_X, type Cargo, type CartMode } from "./assets"
 import { stallLayout, KEEPER_SEAT } from "./stall"
@@ -6,9 +5,9 @@ import { model } from "./geometry"
 export { createAnimalRig } from "./animal-rig"
 
 /** Shared source for transport atlases and merged, world-grounded stalls. */
-export function createCartRig(cargo: Cargo, mode: CartMode, compact = false, passengers?: PassengerCart) {
+export function createCartRig(cargo: Cargo, mode: CartMode, compact = false) {
   const layout = stallLayout(compact || mode === "hand" ? "hand" : "horse")
-  const itemCount = passengers === "rear" ? 0 : compact || mode === "hand" ? 3 : 6
+  const itemCount = compact || mode === "hand" ? 3 : 6
   const loaded: THREE.Object3D[][] = [], spread: THREE.Object3D[][] = []
   const m = model(), wood = "#65513b", edge = "#393025"
   const boards = ["#65513b", "#574834", "#766149", "#514533", "#6a5841"]
@@ -50,7 +49,7 @@ export function createCartRig(cargo: Cargo, mode: CartMode, compact = false, pas
     }
     return wheel
   })
-  const animal = mode === "donkey" || mode === "horse" || mode === "ox"
+  const animal = mode === "donkey" || mode === "horse"
   const tip = mode === "shop" ? 0.95 : 2.18
   // Only hand carts and parked shops carry rigid handles.
   if (!animal) for (const sign of [-1, 1]) {
@@ -65,10 +64,6 @@ export function createCartRig(cargo: Cargo, mode: CartMode, compact = false, pas
     }
     m.box([0, 0.89, 1.72], [1.4, 0.10, 0.40], wood).name = "driver-footboard"
     m.box([0, 1.48, 0.64], [1.58, 0.25, 0.10], wood).name = "driver-backrest"
-  }
-  if (passengers === "rear") for (const x of [-.53,.53]) {
-    m.box([x,1.12,-.17],[.32,.12,1.43],wood).name="passenger-bench"
-    for(const z of [-.67,.33]) m.box([x,.89,z],[.1,.44,.1],edge)
   }
   for (let i = 0; i < itemCount; i++) {
     const start = m.root.children.length

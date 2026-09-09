@@ -11,8 +11,6 @@ export const SELECTION_OUTLINE_COLOR = "#ffffff"
 export const SELECTION_OUTLINE_OPACITY = 0.65
 export const SELECTION_FILL = "#fff2ba"
 export const SELECTION_FILL_OPACITY = 0.06
-/** Companions retain a faint edge; only the inspected person gets a fill. */
-export const COMPANION_OUTLINE_OPACITY = 0.22
 
 /** All world selections share drag rejection, build-tool priority, and toggle behavior. */
 export function selectElement(candidate: Selection, event: { delta: number; stopPropagation: () => void }) {

@@ -292,7 +292,6 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
     const support = map && !moving && !special && action ? characterSupport(map, origin.x, origin.z, requested) : undefined
     if (support) heading = support.heading
     const direction = spriteRow(heading, yaw)
-    if (sprite.current) sprite.current.userData.direction = direction
     const row = visual.rowOffset + direction
     if (samplePose) frameProfile.end("sampleSpriteSelection", selectionStarted)
     const contactStarted = samplePose ? frameProfile.start() : 0

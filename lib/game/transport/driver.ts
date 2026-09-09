@@ -17,7 +17,7 @@ export function driverPoint(point: Point3, heading: number): Point3 {
 /** A transport-only pose on the shared person meshes. Thighs extend over the
  * bench, knees sit below the hips, and shins hang vertically. Bone lengths,
  * outfits and the walking rig are retained. Call after the rig's idle pose. */
-export function poseDriver(rig: ReturnType<typeof createBasePersonRig>, design: PersonDesign, driving = true) {
+export function poseDriver(rig: ReturnType<typeof createBasePersonRig>, design: PersonDesign) {
   const b = personRecipe(design).body, root = rig.root
   const pelvis = root.getObjectByName("pelvis")!
   pelvis.position.y = DRIVER_HIP
@@ -59,7 +59,7 @@ export function poseDriver(rig: ReturnType<typeof createBasePersonRig>, design: 
       }
     }
     const shoulder = root.getObjectByName(`${side}-shoulder`)!, elbow = root.getObjectByName(`${side}-elbow`)!
-    const target = driving ? new THREE.Vector3(sign * DRIVER_GRIP.x, DRIVER_GRIP.y, DRIVER_GRIP.z) : new THREE.Vector3(sign*.18,DRIVER_HIP+.13,.3)
+    const target = new THREE.Vector3(sign * DRIVER_GRIP.x, DRIVER_GRIP.y, DRIVER_GRIP.z)
     shoulder.parent!.worldToLocal(root.localToWorld(target))
     const start = shoulder.position.clone(), axis = target.clone().sub(start), length = axis.length()
     const lower = b.forearmLength + 0.04 * design.hands
