@@ -43,6 +43,31 @@ describe("forest depth shadow tiles", () => {
     expect(Array.from(shadows.slice(4 * 9, 5 * 9))).toEqual([1, 1, 2, 3, 3, 3, 2, 1, 1])
   })
 
+  it.each(["approach", "shortcut"] as const)("keeps a %s and its shoulders standard until entering the forest", routeKind => {
+    const map = parseAsciiMap([
+      "..........",
+      ".....DDD..",
+      ".--------.",
+      ".....DDD..",
+      "..........",
+    ])
+    const route = Array.from({ length: 8 }, (_, i) => ({ x: i + 1, z: 2 }))
+    // Record the old-growth footprint before carving the track and verges.
+    map.darkForestFloor = []
+    for (let z = 1; z <= 3; z++) for (let x = 5; x <= 7; x++) {
+      map.darkForestFloor.push(z * map.width + x)
+      map.tiles[z * map.width + x] = z === 2 ? "track" : "clearing"
+    }
+    map.tiles[map.width + 4] = "clearing"
+    if (routeKind === "approach") map.darkForests = [{ center: route[6], clearing: [], approach: route }]
+    else map.shortcuts = [{ entry: 0, exit: 7, tiles: route }]
+    const field = treeGroundField(map, [])
+    const dark = (x: number, z: number) => field.data[(z * map.width + x) * 4 + 1]
+    for (const x of [1, 2, 3, 4, 8]) expect(dark(x, 2)).toBe(0)
+    expect(dark(4, 1)).toBe(0)
+    for (const x of [5, 6, 7]) for (const z of [1, 2, 3]) expect(dark(x, z)).toBe(255)
+  })
+
   it("keeps isolated trees dim regardless of the number of trunks on that tile", () => {
     const map = woods(9), single = [tree(map, 4, 4)]
     expect(treeCanopyDepth(map, single)[4 * 9 + 4]).toBe(1)

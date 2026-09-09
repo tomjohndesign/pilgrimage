@@ -724,7 +724,7 @@ export function TerrainTiles(props: TerrainProps) {
     texture.minFilter = texture.magFilter = THREE.NearestFilter
     texture.needsUpdate = true
     return { texture, atlas: shadowAtlas, floor: forestFloor, grain: edgeGrain, size: new THREE.Vector2(map.width, map.depth) }
-  }, [map.tiles, map.width, map.depth, map.shortcuts, map.darkForests, trees, felledTrees, shadowAtlas, forestFloor, edgeGrain])
+  }, [map.tiles, map.width, map.depth, map.shortcuts, map.darkForests, map.darkForestFloor, trees, felledTrees, shadowAtlas, forestFloor, edgeGrain])
   useEffect(() => () => treeGround.texture.dispose(), [treeGround])
 
   const tier = ROAD_TIERS[clampRoadTier(props.roadTier ?? DEFAULT_ROAD_TIER)]
