@@ -78,6 +78,8 @@ export interface DarkForest {
 }
 
 export interface GameMap {
+  /** Marked islands where the generated roads and destination tracks meet. */
+  crossroads?: import("./crossroads").Crossroad[]
   /** Independent roadside communities, indexed by distance along the main road. */
   towns?: RoadsideTown[]
   /** Live walking traffic, shared by navigation and terrain; scoped to the running game. */

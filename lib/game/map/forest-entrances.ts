@@ -1,7 +1,7 @@
 import { computeDarkShade } from "./forest-field"
 import { groundHeight } from "./elevation"
 import { isRoadTerrain } from "./road"
-import { signpostPlacement, tJunctionVerge, SIGNPOST_CLEARANCE, type SignpostPlacement } from "./signpost"
+import { signpostPlacements, tJunctionVerge, SIGNPOST_CLEARANCE, type SignpostPlacement } from "./signpost"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./types"
 
 /** Keep broad ancient crowns from covering the warning board and skull. */
@@ -26,7 +26,7 @@ export function forestTrackTiles(map: GameMap): ReadonlySet<number> {
 /** Mark the first shaded threshold from each end of a through-track, and each grove approach. */
 export function forestEntrancePlacements(map: GameMap): SignpostPlacement[] {
   const shade = computeDarkShade(map), out: SignpostPlacement[] = []
-  const shrine = signpostPlacement(map)
+  const crossroads = signpostPlacements(map)
   const walks = [...routes(map), ...(map.shortcuts ?? []).map(s => [...s.tiles].reverse())]
   for (const route of walks) {
     const threshold = route.findIndex(p => shade[p.z * map.width + p.x] >= .12)
@@ -49,7 +49,7 @@ export function forestEntrancePlacements(map: GameMap): SignpostPlacement[] {
         const x = tileToWorldX(map, tile.x) - side.x * .2, z = tileToWorldZ(map, tile.z) - side.z * .2
         const height = groundHeight(map, tile.x - side.x * .2, tile.z - side.z * .2)
         if (Math.abs(height - groundHeight(map, at.x, at.z)) > .25) continue
-        if (shrine && Math.hypot(x - shrine.x, z - shrine.z) < SIGNPOST_CLEARANCE * 2) continue
+        if (crossroads.some(post => Math.hypot(x - post.x, z - post.z) < SIGNPOST_CLEARANCE * 2)) continue
         if (out.some(p => Math.hypot(x - p.x, z - p.z) < 3)) { placed = true; break }
         // The board and skull face approaching walkers; local +Z is its front.
         out.push({ tile, x, z, yaw: Math.atan2(-dx, -dz) })

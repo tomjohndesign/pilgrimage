@@ -1,3 +1,4 @@
+import { crossroadIslandAt } from "./map/crossroads"
 import { forestTrackTiles } from "./map/forest-entrances"
 import { buildingSpatialQuery } from "./building-spatial"
 import { isRoadTerrain } from "./map/road"
@@ -139,7 +140,7 @@ const index = (map: GameMap, p: TilePos) => p.z * map.width + p.x
 
 function openGround(map: GameMap, p: TilePos, nearby: ReturnType<typeof buildingSpatialQuery>): boolean {
   const terrain = tileAt(map, p.x, p.z)
-  return !!terrain && ["grass", "clearing", "dirt", "sand", "path", "track"].includes(terrain)
+  return !!terrain && !crossroadIslandAt(map, p.x, p.z) && ["grass", "clearing", "dirt", "sand", "path", "track"].includes(terrain)
     && !nearby(p).some(b => p.x >= b.x && p.x < b.x + b.w && p.z >= b.z && p.z < b.z + b.d)
 }
 

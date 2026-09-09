@@ -1,3 +1,4 @@
+import { ROUTE_EDGE_INSET } from "./route-bounds"
 import { tavernWalkingRoute } from "../tavern-navigation"
 import { tileToWorldX, tileToWorldZ } from "./types"
 import { describe, expect, it } from "vitest"
@@ -34,6 +35,10 @@ describe("independent roadside towns", () => {
       }
     }
     expect(map.road!.every(p => tileAt(map, p.x, p.z) === "path")).toBe(true)
+    for (let i = 0; i < map.tiles.length; i++) if (map.tiles[i] === "track") {
+      const x = i % map.width, z = Math.floor(i / map.width)
+      expect(Math.min(x, z, map.width - 1 - x, map.depth - 1 - z)).toBeGreaterThanOrEqual(ROUTE_EDGE_INSET)
+    }
     expect(servingHouses(map, () => false)).toHaveLength(0)
   })
 
