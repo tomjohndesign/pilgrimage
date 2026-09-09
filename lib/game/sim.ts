@@ -2231,7 +2231,6 @@ export function stepSim(
           s.timer = SHOP_SECONDS
           if (cartLoadout(s.id).puller !== "hand") {
             s.pasture = createPasture(s, s.stallRoute?.obstacles, animalClearance(cartLoadout(s.id).puller, characterScale), s.stallRoute?.heading ?? 0)
-            s.pasture.tether = s.stallRoute?.tree
           }
 
         }
