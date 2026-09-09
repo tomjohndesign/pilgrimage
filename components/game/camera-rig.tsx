@@ -100,23 +100,33 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
         return
       }
       if (gesture.dragged) {
+        if (useCameraStore.getState().inputLocked) {
+          event.stopPropagation()
+          setHovered(null)
+          return
+        }
         canvas.style.cursor = "grabbing"
         const rect = canvas.getBoundingClientRect()
         const oldScale = worldPerPixel(displayViewSize.current, rect.height)
+        const oldYaw = displayYaw.current
         if (gesture.pinching) {
-          // Touch follows the fingers directly, including during a wheel tween.
-          useCameraStore.setState({ viewSize: displayViewSize.current })
+          // Touch follows the fingers directly, including during camera tweens.
+          // Clockwise fingers turn the ground clockwise, so camera yaw decreases.
+          displayYaw.current -= movement.rotation
+          useCameraStore.setState({
+            viewIndex: (displayYaw.current - yawForView(0)) / (Math.PI / 2),
+            viewSize: displayViewSize.current,
+          })
           useCameraStore.getState().zoomBy(movement.zoom)
           displayViewSize.current = useCameraStore.getState().viewSize
         }
         const newScale = worldPerPixel(displayViewSize.current, rect.height)
         const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2
-        // Preserve the ground point under the moving pinch midpoint, even when
-        // zoom reaches its limits. A one-finger drag is the same transform.
-        const dx = (movement.after.x - cx) * newScale - (movement.before.x - cx) * oldScale
-        const dy = (movement.after.y - cy) * newScale - (movement.before.y - cy) * oldScale
-        const delta = panDelta(displayYaw.current, dx, dy, 1)
-        pan(delta.dx, delta.dz)
+        // Preserve the ground point under the midpoint through pan, zoom and
+        // twist. Each screen offset uses its own camera scale and orientation.
+        const before = panDelta(oldYaw, movement.before.x - cx, movement.before.y - cy, oldScale)
+        const after = panDelta(displayYaw.current, movement.after.x - cx, movement.after.y - cy, newScale)
+        pan(after.dx - before.dx, after.dz - before.dz)
         event.stopPropagation()
         setHovered(null)
       } else updateHover(event)
