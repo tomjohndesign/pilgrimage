@@ -94,8 +94,8 @@ describe("crossroads network", () => {
     expect(map.tiles).toEqual(before)
   })
   it("leaves tavern approach junctions unmarked and their paths unchanged", () => {
-    const map: GameMap = { width: 400, depth: 30, tiles: Array(12000).fill("grass"), buildings: [],
-      road: Array.from({ length: 400 }, (_, x) => ({ x, z: 15 })) }
+    const map: GameMap = { width: 400, depth: 34, tiles: Array(13600).fill("grass"), buildings: [],
+      road: Array.from({ length: 400 }, (_, x) => ({ x, z: 17 })) }
     for (const p of map.road!) map.tiles[p.z * map.width + p.x] = "path"
     addRoadsideTowns(map)
     expect(map.towns!.length).toBeGreaterThan(0)

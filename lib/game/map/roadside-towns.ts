@@ -10,13 +10,15 @@ import { tileAt, type BuildingDef, type GameMap, type RoadsideTown, type TilePos
 export const TOWN_SPACING = 192
 export const TOWN_CHAPEL_CLEARANCE = 48
 export const TOWN_APPROACH_CLEARANCE = 20
+/** Entrance distance from the main road; leave room for passing horse carts. */
+export const TOWN_ROAD_SETBACK = 3
 const NAMES = ["Alderford", "Hazelwick", "Birch End", "Willowbank", "Oakstead", "Ashbrook", "Elm Hollow", "Reedham"]
 
 /** The house sits beside the tavern, with parallel roof ridges and aligned fronts. */
 function townPlan(map: GameMap, junction: number, rotation: BuildingRotation, ordinal: number) {
   const road = map.road![junction]
   const outward = rotateBuildingPoint(0, -1, rotation)
-  const entry = { x: road.x + outward.x * 2, z: road.z + outward.z * 2 }
+  const entry = { x: road.x + outward.x * TOWN_ROAD_SETBACK, z: road.z + outward.z * TOWN_ROAD_SETBACK }
   // A winding road may pass close to an earlier town long after leaving it.
   // Check every existing tavern in map space, independent of travel duration.
   if (map.towns?.some(town => {
@@ -44,9 +46,13 @@ function townPlan(map: GameMap, junction: number, rotation: BuildingRotation, or
   const bottom = Math.max(...buildings.map(b => b.z + b.d)) + 1
   const patch: TilePos[] = []
   for (let tz = z; tz < bottom; tz++) for (let tx = x; tx < right; tx++) patch.push({ x: tx, z: tz })
-  patch.push(road, { x: road.x + outward.x, z: road.z + outward.z })
+  for (let step = 0; step < TOWN_ROAD_SETBACK; step++) {
+    patch.push({ x: road.x + outward.x * step, z: road.z + outward.z * step })
+  }
   const occupied = (p: TilePos, b: BuildingDef, margin = 0) => p.x >= b.x - margin && p.x < b.x + b.w + margin
     && p.z >= b.z - margin && p.z < b.z + b.d + margin
+  // Protect every nearby bend, not just the road tile facing the tavern door.
+  if (buildings.some(b => map.road!.some(p => occupied(p, b, TOWN_ROAD_SETBACK)))) return null
   const chapel = map.buildings.find(b => b.id === map.site?.hovelId)
   if (chapel && buildings.some(b => Math.hypot(
     Math.max(chapel.x - b.x - b.w, b.x - chapel.x - chapel.w, 0),
