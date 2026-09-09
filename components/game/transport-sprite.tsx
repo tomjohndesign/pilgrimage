@@ -29,11 +29,11 @@ import { KNIGHT } from "@/lib/game/knight/design"
 import manifest from "@/public/textures/transport/v26/manifest.json"
 import type { FigureClickHandler } from "./traveler-figure"
 
-export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0, horseVariant = "common", cargo = "produce", puller = "hand", awning = false, characterScale = 1,
+export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0, horseVariant = "common", cargo = "produce", puller = "hand", awning = false, worldStall = false, characterScale = 1,
   selected = false, outlineColor, onClick, position = [0, 0, 0] }: {
   knight?: "mounted" | "saddled"
   map?: GameMap; kind: "cart" | "merchant" | Animal; coat?: string; variant?: number; horseVariant?: HorseVariant; cargo?: Cargo; puller?: Puller; awning?: boolean; characterScale?: number
-  selected?: boolean; outlineColor?: [number, number, number]; onClick?: FigureClickHandler; position?: [number, number, number]
+  selected?: boolean; outlineColor?: [number, number, number]; onClick?: FigureClickHandler; position?: [number, number, number]; worldStall?: boolean
 }) {
   const animal = kind === "donkey" || kind === "horse"
   const edits = useAnimalRigStore(state => state.designs[kind])
@@ -97,6 +97,8 @@ export function TransportSprite({ knight, map: terrain, kind, coat, variant = 0,
     const heading = typeof data.heading === "number" ? data.heading : (parent.getWorldDirection(vectors.facing), Math.atan2(vectors.facing.x, vectors.facing.z))
     const yaw = Math.atan2(camera.matrixWorld.elements[8], camera.matrixWorld.elements[10]), row = spriteRow(heading, yaw, kind === "cart" ? CART.directions : 8)
     const shop = data.activity === undefined ? awning : ["vending", "openingShop", "packingShop"].includes(data.activity)
+    group.visible = !(worldStall && kind === "cart" && shop)
+    if (!group.visible) return
     const moving = data.moving === true, distance = data.playbackRate === 0 ? 0 : data.distance ?? 0
     const stride = animal ? animalStride(kind, characterScale, horseVariant) : manifest.wheelCycleRadians * TRANSPORT.wheelRadius * RIG_TO_WORLD * characterScale
     if (moving) phase.current = transportPhase(phase.current, Math.abs(distance), stride, data.reversing === true)

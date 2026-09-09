@@ -18,6 +18,29 @@ function world(map: GameMap, p: TilePos) {
 }
 
 describe("characters prefer paths", () => {
+  it("reuses a proven shortest route while observing new obstacles and terrain costs", () => {
+    const map: GameMap = { width: 24, depth: 24, tiles: Array(576).fill("path"), buildings: [] }
+    const start = { x: 2, z: 2 }, goal = { x: 20, z: 20 }
+    const first = settlementRoute(map, map.buildings, start, goal)!
+    const costs = vi.spyOn(footpaths, "footpathRouteCost")
+    try {
+      expect(settlementRoute(map, map.buildings, start, goal)).toEqual(first)
+      expect(costs.mock.calls.length).toBe(first.length - 1)
+      const blocked = first[3]
+      map.tiles[blocked.z * map.width + blocked.x] = "water"
+      const diverted = settlementRoute(map, map.buildings, start, goal)!
+      expect(diverted).not.toContainEqual(blocked)
+      const costly = diverted[4]
+      map.tiles[costly.z * map.width + costly.x] = "grass"
+      const cheaper = settlementRoute(map, map.buildings, start, goal)!
+      expect(cheaper).not.toContainEqual(costly)
+      const b = cheaper[5]
+      map.buildings.push({ id: "hut", label: "Hut", x: b.x, z: b.z, w: 1, d: 1, height: 1, color: "#ccc", roofColor: "#999" })
+      expect(settlementRoute(map, map.buildings, start, goal)).not.toContainEqual(b)
+      first[0].x = 1000
+      expect(settlementRoute(map, map.buildings, start, goal)?.[0]).toEqual(start)
+    } finally { costs.mockRestore() }
+  })
   it("rejects an isolated nearby destination without searching the largest map", () => {
     const map: GameMap = { width: 512, depth: 512, tiles: Array(512 * 512).fill("grass"), buildings: [] }
     const goal = { x: 258, z: 256 }, start = { x: 254, z: 256 }

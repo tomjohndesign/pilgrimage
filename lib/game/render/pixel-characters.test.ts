@@ -1,10 +1,38 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 import { CHARACTER_COLOR_LAYER, CHARACTER_ID_LAYER, tagPixelCharacters, withoutPixelCharacters } from "./pixel-characters"
-import { batchSourceRoot, updateBatchSourceVisibility, batchedSourceRoots } from "./batch-source-visibility"
+import { batchSourceRoot, updateBatchSourceVisibility, batchedSourceRoots, registerSimpleBatchSource } from "./batch-source-visibility"
 import { OUTLINE_ID_LAYER, SELECTED_CHARACTER_LAYER } from "./outline"
 
 describe("separate character rendering", () => {
+  it("omits hidden ancestor subtrees and resumes tagging on the first visible frame", () => {
+    const scene = new THREE.Scene(), visibility = new THREE.Group(), root = new THREE.Group(), sprite = new THREE.Sprite()
+    root.add(sprite); visibility.add(root); scene.add(visibility)
+    visibility.visible = false
+    expect(tagPixelCharacters([root], scene)).toBe(false)
+    expect(sprite.layers.isEnabled(CHARACTER_COLOR_LAYER)).toBe(false)
+    visibility.visible = true
+    expect(tagPixelCharacters([root], scene)).toBe(true)
+    expect(sprite.layers.isEnabled(CHARACTER_COLOR_LAYER)).toBe(true)
+    visibility.visible = false
+    expect(tagPixelCharacters([root], scene)).toBe(false)
+  })
+
+  it("skips an empty character pass despite resident hit volumes, lights, IDs and batch capacity", () => {
+    const scene = new THREE.Scene(), root = new THREE.Group()
+    const hit = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ visible: false }))
+    const batch = new THREE.InstancedMesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial(), 8)
+    const ids = new THREE.Sprite(); ids.layers.set(OUTLINE_ID_LAYER)
+    batch.count = 0
+    root.add(hit, batch, ids, new THREE.AmbientLight()); scene.add(root)
+    expect(tagPixelCharacters([root], scene)).toBe(false)
+    batch.count = 1
+    expect(tagPixelCharacters([root], scene)).toBe(true)
+    batch.geometry.setDrawRange(0, 0)
+    expect(tagPixelCharacters([root], scene)).toBe(false)
+    hit.geometry.dispose(); hit.material.dispose(); batch.geometry.dispose(); batch.material.dispose(); ids.material.dispose()
+  })
+
   it("includes sprites, carried geometry, and lights without changing picking or ID identity", () => {
     const scene = new THREE.Scene(), root = new THREE.Group()
     const sprite = new THREE.Sprite(), cart = new THREE.Mesh(), id = new THREE.Mesh(), world = new THREE.Mesh(), light = new THREE.AmbientLight()
@@ -106,4 +134,47 @@ it("prunes batched people with invisible click materials while keeping moving hi
   updateBatchSourceVisibility(scene, [unit])
   expect([...batchedSourceRoots(scene)]).toEqual([])
   hit.geometry.dispose(); hit.material.dispose()
+})
+
+it("updates picking branches of prepared travelers without recomposing their batched poses", () => {
+  const scene = new THREE.Scene(), unit = new THREE.Group(), pose = new THREE.Group(), clickParent = new THREE.Group()
+  unit.name = "traveler-unit"
+  const sprite = new THREE.Sprite(), hit = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ visible: false }))
+  sprite.visible = false; pose.add(sprite); clickParent.add(hit); unit.add(pose, clickParent); scene.add(unit)
+  for (const x of [1, -3, 8]) {
+    unit.position.x = x; unit.updateWorldMatrix(true, false); unit.userData.poseWorldFrame = x
+    pose.position.x = 12 // The batch owns this pose; pruning must not visit it.
+    clickParent.position.y = 2; hit.position.z = 3
+    updateBatchSourceVisibility(scene, [unit], x)
+    expect(hit.matrixWorld.elements.slice(12, 15)).toEqual([x, 2, 3])
+    expect(pose.matrix.elements[12]).toBe(0)
+    expect([...batchedSourceRoots(scene)]).toEqual([unit])
+  }
+  hit.geometry.dispose(); hit.material.dispose()
+})
+
+it("invalidates simple source pruning for added equipment, picking children, and material changes", () => {
+  const scene = new THREE.Scene(), unit = new THREE.Group(), pose = new THREE.Group()
+  unit.name = "traveler-unit"
+  const sprite = new THREE.Sprite(), ids = new THREE.Sprite(), gear = new THREE.Mesh()
+  const hit = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ visible: false }))
+  hit.name = "character-hit-target"; hit.position.y = .4
+  sprite.visible = ids.visible = false
+  pose.add(sprite, ids); unit.add(pose, hit); scene.add(unit)
+  const unregister = registerSimpleBatchSource(sprite, ids)
+  unit.position.x = 3; unit.rotation.y = .8; unit.updateWorldMatrix(true, false); unit.userData.poseWorldFrame = 1
+  const pruned = () => { updateBatchSourceVisibility(scene, [unit], 1); return [...batchedSourceRoots(scene)] }
+  expect(pruned()).toEqual([unit])
+  expect(hit.matrixWorld.elements.slice(12, 15)).toEqual([3, .4, 0])
+  for (const parent of [unit, pose, hit]) {
+    parent.add(gear)
+    expect(pruned()).toEqual([])
+    parent.remove(gear)
+    expect(pruned()).toEqual([unit])
+  }
+  hit.material.visible = true
+  expect(pruned()).toEqual([])
+  hit.material.visible = false; sprite.visible = true
+  expect(pruned()).toEqual([])
+  unregister(); hit.geometry.dispose(); hit.material.dispose()
 })

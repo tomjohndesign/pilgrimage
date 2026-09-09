@@ -2,7 +2,7 @@
 
 import { SceneAssetBoundary } from "./scene-assets"
 
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 import { usePixelWorldTexel } from "@/components/pixel-canvas"
@@ -25,7 +25,15 @@ export function EnvironmentField({ placements }: { placements: EnvironmentPlacem
 function SpriteField({ placements, large = false }: { placements: EnvironmentPlacement[]; large?: boolean }) {
   const atlas = large ? BOULDER_ATLAS : ENVIRONMENT_ATLAS
   const frame = large ? BOULDER_FRAME : ENVIRONMENT_FRAME
-  const specimens = useMemo(() => placements.map(p => ({ ...p, row: (p.boulderSize ? BOULDER_SIZES.indexOf(p.boulderSize) : ENVIRONMENT_KINDS.indexOf(p.kind)) * frame.variants + (p.seed >>> 0) % frame.variants })), [placements, frame])
+  const specimenCache = useMemo(() => new WeakMap<EnvironmentPlacement, ScenerySpritePlacement>(), [frame])
+  const specimens = useMemo(() => placements.map(p => {
+    let specimen = specimenCache.get(p)
+    if (!specimen) {
+      specimen = { ...p, row: (p.boulderSize ? BOULDER_SIZES.indexOf(p.boulderSize) : ENVIRONMENT_KINDS.indexOf(p.kind)) * frame.variants + (p.seed >>> 0) % frame.variants }
+      specimenCache.set(p, specimen)
+    }
+    return specimen
+  }), [placements, frame, specimenCache])
   return <ScenerySpriteField placements={specimens} atlas={atlas} frame={frame} />
 }
 
@@ -51,9 +59,15 @@ export function ScenerySpriteField({ placements, atlas, frame }: {
   const depth = useMemo(() => configureSpriteDepthTexture(sources[1].clone()), [sources])
   const view = useMemo(() => ({ value: 0 }), []), worldTexel = usePixelWorldTexel()
   const materials = useMemo(() => [false, true].map(ids => foliageMaterial(color, depth, view, worldTexel, ids, frame)), [color, depth, view, worldTexel, frame])
+  const previous = useRef(new Map<number, ScenerySpritePlacement[]>())
   const blocks = useMemo(() => {
     const out = new Map<number, ScenerySpritePlacement[]>()
     for (const p of placements) { const key = blockKey(p.x, p.z); const block = out.get(key) ?? []; block.push(p); out.set(key, block) }
+    for (const [key, block] of out) {
+      const old = previous.current.get(key)
+      if (old && old.length === block.length && old.every((p, i) => p === block[i])) out.set(key, old)
+    }
+    previous.current = out
     return [...out]
   }, [placements])
   useFrame(({ camera }) => {
@@ -66,7 +80,7 @@ export function ScenerySpriteField({ placements, atlas, frame }: {
   </group>
 }
 
-function SpriteBlock({ placements, materials, frame }: { placements: ScenerySpritePlacement[]; materials: THREE.Material[]; frame: EnvironmentSpriteFrame }) {
+const SpriteBlock = memo(function SpriteBlock({ placements, materials, frame }: { placements: ScenerySpritePlacement[]; materials: THREE.Material[]; frame: EnvironmentSpriteFrame }) {
   const body = useRef<THREE.InstancedMesh>(null), ids = useRef<THREE.InstancedMesh>(null)
   const geometry = useMemo(() => {
     const g = new THREE.PlaneGeometry(1, 1)
@@ -97,4 +111,4 @@ function SpriteBlock({ placements, materials, frame }: { placements: ScenerySpri
     <instancedMesh ref={body} args={[geometry, materials[0], placements.length]} raycast={() => {}} />
     <instancedMesh ref={ids} args={[geometry, materials[1], placements.length]} layers-mask={OUTLINE_ID_LAYER_MASK} raycast={() => {}} />
   </group>
-}
+})

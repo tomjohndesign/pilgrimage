@@ -1,3 +1,4 @@
+import { crossroadIslandAt } from "./map/crossroads"
 import { tavernFurnitureClear } from "./tavern-layout"
 import { sheepPenLayout } from "./workshop-layout"
 import { buildingEntry, buildingFoldEntry, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
@@ -53,6 +54,7 @@ export function shrineFurnitureClear(building: BuildingDef, door: TilePos | unde
 
 /** Closed buildings block walking. Shrine visits cross walls only at a gate. */
 export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDef[], from: TilePos, to: TilePos, enterShrine = false, seat?: string): boolean {
+  if (crossroadIslandAt(map, to.x, to.z)) return false
   for (const building of buildings) {
     const a = containsTile(building, from) && !marketYardContains(building, from), b = containsTile(building, to) && !marketYardContains(building, to)
     if (!a && !b) continue

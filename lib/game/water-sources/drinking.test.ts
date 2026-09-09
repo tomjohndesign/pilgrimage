@@ -52,6 +52,25 @@ describe("NPC drinking", () => {
     tick(); expect(second.activity).toBe("toWater")
   })
 
+  it("lets another walker use a natural bank while the well is reserved", () => {
+    const { sim, map, state, tick, until } = setup("well", 2)
+    const second = sim.travelers.get(1)!
+    Object.assign(second, { x: state.x, y: state.y, z: state.z, progress: state.progress })
+    map.tiles[8 * map.width + 12] = "water"
+    tick()
+    expect(state.waterVisit?.sourceId).toBe("water")
+    expect(state.naturalWaterVisit).toBeUndefined()
+    expect(second.waterVisit).toBeUndefined()
+    expect(second.naturalWaterVisit).toBeDefined()
+    until(() => second.activity === "drinkingLow")
+    expect(Number.isFinite(second.naturalWaterVisit?.heading)).toBe(true)
+    until(() => second.activity === "walking")
+    expect(second.thirst).toBe(100)
+    expect(second.naturalWaterVisit).toBeUndefined()
+    until(() => state.activity === "walking")
+    expect(state.thirst).toBe(100)
+  })
+
   it("finishes an eight-second drink on time despite fractional ticks and need decay", () => {
     const { state, sim, tick, until } = setup()
     sim.balance.rules.thirstDecay = 6

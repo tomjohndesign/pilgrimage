@@ -5,17 +5,34 @@ import { MATCH_TOLERANCE } from "./complexion-swap"
 import { COMPLEXION_SLOTS } from "../base-person/complexion"
 import { applySpriteDepth, type SpritePoseDepth } from "./sprite-depth"
 import { OUTLINE_ID_LAYER_MASK } from "./outline"
+import { updateBillboardWorld } from "./sprite-transforms"
 
 export interface CharacterBatchEntry {
   sprite: THREE.Sprite
   ids: THREE.Sprite
+  /** Direct atlas/UV state for batched poses; ordinary source sprites may omit it. */
+  color?: THREE.Texture
+  uv?: THREE.Vector4
+  /** This source publishes its ready pose directly during the animation phase. */
+  publishesPose?: boolean
+  /** Immutable center/ID snapshot; omit for mutable editor/test sprites. */
+  fixedAttributes?: Float32Array
   complexion?: ComplexionUniforms
   /** Immutable palette snapshot, replaced when appearance changes. Omit for
    * callers that edit complexion uniforms in place. */
   palette?: Float32Array
+  /** Representative authored cloth colour for the lowest visual quality. */
+  simpleColor?: THREE.Color
   ground: { value: THREE.Vector4 }
   depth: SpritePoseDepth
   id: THREE.Vector3
+}
+
+const sourceEntries = new WeakMap<THREE.Sprite, CharacterBatchEntry>()
+export const characterBatchEntry = (sprite: THREE.Sprite) => sourceEntries.get(sprite)
+export function registerCharacterBatchEntry(entry: CharacterBatchEntry) {
+  sourceEntries.set(entry.sprite, entry)
+  return () => { if (sourceEntries.get(entry.sprite) === entry) sourceEntries.delete(entry.sprite) }
 }
 
 export function characterPalette(complexion: ComplexionUniforms): Float32Array {
@@ -37,16 +54,18 @@ export class CharacterBatch {
   private geometry!: THREE.PlaneGeometry
   private palette!: THREE.DataTexture
   private paletteRows: Array<Float32Array | undefined> = []
+  private fixedRows: Array<Float32Array | undefined> = []
   private body!: THREE.InstancedMesh
   private ids!: THREE.InstancedMesh
   private color: THREE.Texture
   private viewport = new THREE.Vector4()
   private paletteUniform = { value: null as THREE.DataTexture | null }
   private paletteHeight = { value: 1 }
+  private simplified = { value: 0 }
   private materials: THREE.MeshBasicMaterial[]
 
   constructor(entry: CharacterBatchEntry, worldTexel: { value: number }, order: number) {
-    this.color = spriteTextureView(entry.sprite.material.map!)
+    this.color = spriteTextureView(entry.color ?? entry.sprite.material.map!)
     this.color.offset.set(0, 0); this.color.repeat.set(1, 1)
     this.materials = [false, true].map(ids => {
       const material = new THREE.MeshBasicMaterial({ map: this.color, alphaTest: .5, transparent: false, toneMapped: false })
@@ -54,6 +73,8 @@ export class CharacterBatch {
       material.onBeforeCompile = shader => {
         shader.uniforms.characterPalette = this.paletteUniform
         shader.uniforms.characterPaletteHeight = this.paletteHeight
+        shader.uniforms.characterSimplified = this.simplified
+        shader.uniforms.characterSimpleColor = { value: entry.simpleColor ?? new THREE.Color() }
         shader.vertexShader = `attribute vec4 characterUv;
           attribute vec4 characterView;
           attribute vec4 characterGround;
@@ -78,24 +99,37 @@ export class CharacterBatch {
           flat varying float vCharacterIndex;
           uniform sampler2D characterPalette;
           uniform float characterPaletteHeight;
+          uniform float characterSimplified;
+          uniform vec3 characterSimpleColor;
         ` + shader.fragmentShader.replace("#include <map_fragment>", ids
           ? "#include <map_fragment>\ndiffuseColor.rgb = vCharacterId;"
-          : !entry.complexion ? "#include <map_fragment>" : `#include <map_fragment>
+          : `#include <map_fragment>
+            if (characterSimplified >= 1.0) diffuseColor.rgb = characterSimpleColor;
+            else { ${!entry.complexion ? "" : `
             for (int i = 0; i < ${COMPLEXION_SLOTS}; i++) {
               vec2 at = vec2((float(i) + .5) / ${COMPLEXION_SLOTS * 2}.0, (vCharacterIndex + .5) / characterPaletteHeight);
               vec3 from = texture2D(characterPalette, at).rgb;
               if (all(lessThan(abs(diffuseColor.rgb - from), vec3(${MATCH_TOLERANCE})))) {
                 diffuseColor.rgb = texture2D(characterPalette, at + vec2(.5, 0.0)).rgb; break;
               }
-            }`)
+            }`}
+            diffuseColor.rgb = mix(diffuseColor.rgb, characterSimpleColor, characterSimplified); }`)
       }
       material.onBeforeRender = renderer => { renderer.getCurrentViewport(this.viewport) }
-      material.customProgramCacheKey = () => ids ? "character-batch-id-v1" : `character-batch-color-v1-${!!entry.complexion}`
+      material.customProgramCacheKey = () => ids ? "character-batch-id-v2" : `character-batch-color-v2-${!!entry.complexion}`
       return material
     })
     this.root.name = "character-atlas-batch"
     this.root.userData.order = order
     this.root.userData.viewMatrix = new THREE.Matrix4()
+    this.root.userData.canSimplify = !!entry.simpleColor
+  }
+
+  setSimplified(enabled: boolean, delta = Infinity): void {
+    const target = enabled && this.root.userData.canSimplify ? 1 : 0
+    const step = Math.max(0, delta) / .24
+    this.simplified.value += Math.max(-step, Math.min(step, target - this.simplified.value))
+    this.root.userData.simplified = this.simplified.value > 0
   }
 
   write(entries: CharacterBatchEntry[], camera: THREE.Camera, parentsReady = false): void {
@@ -110,6 +144,9 @@ export class CharacterBatch {
       for (const [name, size] of [["characterUv", 4], ["characterView", 4], ["characterGround", 4], ["characterCenter", 2], ["characterId", 3], ["characterIndex", 1]] as const) {
         this.geometry.setAttribute(name, new THREE.InstancedBufferAttribute(new Float32Array(this.capacity * size), size).setUsage(THREE.DynamicDrawUsage))
       }
+      const indices = this.geometry.getAttribute("characterIndex")
+      for (let i = 0; i < this.capacity; i++) indices.setX(i, i)
+      this.fixedRows.length = 0
       this.palette = new THREE.DataTexture(new Float32Array(this.capacity * COMPLEXION_SLOTS * 8), COMPLEXION_SLOTS * 2, this.capacity, THREE.RGBAFormat, THREE.FloatType)
       this.paletteRows.length = 0
       this.paletteUniform.value = this.palette; this.paletteHeight.value = this.capacity
@@ -126,13 +163,15 @@ export class CharacterBatch {
     }
     const uv = this.geometry.getAttribute("characterUv"), ground = this.geometry.getAttribute("characterGround")
     const view = this.geometry.getAttribute("characterView")
-    const center = this.geometry.getAttribute("characterCenter"), id = this.geometry.getAttribute("characterId"), index = this.geometry.getAttribute("characterIndex")
+    const center = this.geometry.getAttribute("characterCenter"), id = this.geometry.getAttribute("characterId")
     const palette = this.palette.image.data as Float32Array
     let paletteChanged = this.palette.version === 0
+    let fixedChanged = false
     entries.forEach((entry, i) => {
-      const sprite = entry.sprite, texture = sprite.material.map!, plane = entry.ground.value
+      const sprite = entry.sprite, texture = entry.color ?? sprite.material.map!, plane = entry.ground.value
       // Game figures have already resolved their pose root for ground contact.
-      sprite.updateWorldMatrix(!parentsReady, false)
+      if (parentsReady) updateBillboardWorld(sprite)
+      else sprite.updateWorldMatrix(true, false)
       // Match Three's CPU model-view multiply before conversion to float. Doing
       // this in the vertex shader rounds differently at coincident pose depths.
       const cameraView = camera.matrixWorldInverse.elements, world = sprite.matrixWorld.elements
@@ -144,10 +183,20 @@ export class CharacterBatch {
         cameraView[1] * x + cameraView[5] * y + cameraView[9] * z + cameraView[13] * w,
         cameraView[2] * x + cameraView[6] * y + cameraView[10] * z + cameraView[14] * w,
         cameraView[3] * x + cameraView[7] * y + cameraView[11] * z + cameraView[15] * w)
-      this.body.setMatrixAt(i, sprite.matrixWorld)
-      uv.setXYZW(i, texture.repeat.x, texture.repeat.y, texture.offset.x, texture.offset.y)
+      this.body.instanceMatrix.array.set(sprite.matrixWorld.elements, i * 16)
+      if (entry.uv) uv.setXYZW(i, entry.uv.x, entry.uv.y, entry.uv.z, entry.uv.w)
+      else uv.setXYZW(i, texture.repeat.x, texture.repeat.y, texture.offset.x, texture.offset.y)
       ground.setXYZW(i, plane.x, plane.y, plane.z, plane.w)
-      center.setXY(i, sprite.center.x, sprite.center.y); id.setXYZ(i, entry.id.x, entry.id.y, entry.id.z); index.setX(i, i)
+      if (entry.fixedAttributes) {
+        if (this.fixedRows[i] !== entry.fixedAttributes) {
+          const values = entry.fixedAttributes
+          center.setXY(i, values[0], values[1]); id.setXYZ(i, values[2], values[3], values[4])
+          this.fixedRows[i] = values; fixedChanged = true
+        }
+      } else {
+        center.setXY(i, sprite.center.x, sprite.center.y); id.setXYZ(i, entry.id.x, entry.id.y, entry.id.z)
+        this.fixedRows[i] = undefined; fixedChanged = true
+      }
       if (entry.palette) {
         if (this.paletteRows[i] !== entry.palette) {
           palette.set(entry.palette, i * COMPLEXION_SLOTS * 8)
@@ -170,7 +219,8 @@ export class CharacterBatch {
         }
       }
     })
-    for (const attribute of [uv, view, ground, center, id, index]) attribute.needsUpdate = true
+    for (const attribute of [uv, view, ground]) attribute.needsUpdate = true
+    if (fixedChanged) { center.needsUpdate = true; id.needsUpdate = true }
     this.body.count = this.ids.count = entries.length
     this.body.instanceMatrix.needsUpdate = true
     if (paletteChanged) this.palette.needsUpdate = true

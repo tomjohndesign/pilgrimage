@@ -30,7 +30,11 @@ strip until the drinker has stepped out. Visitors drink for eight seconds,
 restoring thirst without charging gold or restoring food or stamina, then
 return to their road position or workplace. Failed searches retry after five
 seconds; removed sources abort service and construction changes replan routes.
-Mounted travelers and traveling vendors retain their existing provisioning.
+Walkers can also use reachable stream and lake banks when no built source is
+available, retaining the natural-water detour and return routing. Natural banks
+use the crouched drinking sprites and keep their three-second drinking duration.
+Knights retain their existing dismounting stops at natural banks; traveling
+vendors retain their existing provisioning.
 
 `drinking` and `drinkingLow` use the shared person rig and a wooden cup. Each
 24-frame loop lasts four seconds; both poses have fixed leg lengths and planted

@@ -7,6 +7,26 @@ import { tileToWorldX, tileToWorldZ, type GameMap } from "./types"
 import { walkingSurface } from "./walking-surface"
 
 describe("topography", () => {
+  it("keeps already level plots and distant navigation buffers intact", () => {
+    const size = 12, count = size * size
+    const map: GameMap = { width: size, depth: size, tiles: Array(count).fill("grass"), buildings: [],
+      elevation: { settings: DEFAULT_ELEVATION, height: Array(count).fill(0), corners: Array(count * 4).fill(0), slope: Array(count).fill(0), cliffs: Array(count).fill(0) } }
+    const plot = { x: 4, z: 4, w: 2, d: 2 }
+    expect(levelBuildingGround(map, plot)).toBe(map.elevation)
+    map.elevation!.height[4 * size + 4] = .7
+    const water = new Uint8Array(count)
+    finishElevation(map.elevation!, size, size, water, [])
+    const original = structuredClone(map.elevation!)
+    const graded = levelBuildingGround(map, plot)!
+    const rebuilt = structuredClone(graded)
+    finishElevation(rebuilt, size, size, water, [])
+    expect(graded.cliffs).toEqual(rebuilt.cliffs)
+    expect(graded.slope).toEqual(rebuilt.slope)
+    expect(map.elevation).toEqual(original)
+    expect(graded.height[0]).toBe(original.height[0])
+    expect(graded.corners.slice(0, 4)).toEqual(original.corners.slice(0, 4))
+  })
+
   it.each([1, 42, 7919])("keeps every founding building's floor clear of terrain for seed %i", seed => {
     const map = generateMap({ seed })
     for (const building of map.buildings) {

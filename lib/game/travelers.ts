@@ -64,10 +64,10 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     id: "peasant",
     label: "Peasant",
     color: "#9c8b66",
-    weight: 60,
+    weight: 62.5,
     paceMin: 0.8,
     paceMax: 1.1,
-    gold: { min: 0, max: 15 },
+    gold: { min: 10, max: 35 },
     status: { min: 5, max: 25 },
     piety: { min: 30, max: 80 },
     joblessChance: 0.6,
@@ -81,7 +81,7 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     weight: 18,
     paceMin: 0.8,
     paceMax: 1.1,
-    gold: { min: 5, max: 40 },
+    gold: { min: 15, max: 60 },
     status: { min: 10, max: 40 },
     piety: { min: 60, max: 100 },
     joblessChance: 0.5,
@@ -110,7 +110,7 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     weight: 5.5,
     paceMin: 0.75,
     paceMax: 1.0,
-    gold: { min: 0, max: 10 },
+    gold: { min: 10, max: 25 },
     status: { min: 30, max: 60 },
     piety: { min: 70, max: 100 },
     joblessChance: 0,
@@ -138,21 +138,23 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     weight: 1.5,
     paceMin: 0.9,
     paceMax: 1.2,
-    gold: { min: 5, max: 30 },
+    gold: { min: 15, max: 50 },
     status: { min: 20, max: 50 },
     piety: { min: 10, max: 50 },
     joblessChance: 0.35,
     skillCount: { min: 1, max: 2 },
     skills: ["song", "lute", "juggling", "gossip"],
   },
+  // Appearance metadata retained for the progression and saved asset settings.
+  // Beggars are never rolled as a calling; the simulation preserves their identity.
   beggar: {
     id: "beggar",
     label: "Beggar",
     color: "#786c58",
-    weight: 2.5,
+    weight: 0,
     paceMin: 0.4,
     paceMax: 0.6,
-    gold: { min: 0, max: 3 },
+    gold: { min: 5, max: 10 },
     status: { min: 0, max: 10 },
     piety: { min: 25, max: 85 },
     joblessChance: 0.8,
@@ -237,7 +239,8 @@ export interface Traveler {
   pace: number
 }
 
-const TYPE_LIST = Object.values(TRAVELER_TYPES)
+export const TRAVELER_CALLINGS = Object.values(TRAVELER_TYPES).filter(type => type.id !== "beggar")
+const TYPE_LIST = TRAVELER_CALLINGS
 const TOTAL_WEIGHT = TYPE_LIST.reduce((sum, t) => sum + t.weight, 0)
 
 function pickType(rng: () => number): TravelerTypeDef {
@@ -282,8 +285,8 @@ function rollAttributes(rng: () => number, type: TravelerTypeDef): TravelerAttri
 /** Travelers per 128 × 128 tiles; also the count on the reference map. */
 export const DEFAULT_TRAFFIC = 12
 
-/** Upper end of the playtesting slider, in travelers per 128 × 128 tiles. */
-export const MAX_TRAFFIC = DEFAULT_TRAFFIC * 20
+/** Playtesting density limit: 10,000 travelers on the largest 512 × 512 map. */
+export const MAX_TRAFFIC = 625
 
 /** Convert the traffic density into a whole crowd using the generated map's area. */
 export function travelerCountForMap(

@@ -19,7 +19,7 @@ import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type BuildingDe
  */
 
 export const MEAL_PRICE = 2
-export const DRINK_PRICE = 3
+export const DRINK_PRICE = 1
 /** A counter only tops up a meter this low; a cup is not also half a dinner. */
 export const SERVING_THRESHOLD = 60
 

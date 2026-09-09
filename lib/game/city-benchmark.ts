@@ -1,3 +1,6 @@
+import { benchmarkWork } from "./benchmark-work"
+import type { WanderSpot } from "./monk-wander"
+import { withWalkingRouteQueries } from "./walking-route-queries"
 import { cartLoadout, cartOffset } from "./transport/assets"
 import { alignCart } from "./transport/follow"
 import { cartPath } from "./transport/building-parking"
@@ -6,13 +9,16 @@ import { BUILD_CATALOG } from "./balance"
 import { buildingEntrance, workerRoute } from "./construction"
 import { finishElevation } from "./map/elevation"
 import { surfaceHeight } from "./map/bridges"
-import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
+import { isRoadTerrain } from "./map/road"
+import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap, type TilePos } from "./map/types"
 import { makeRng } from "./rng"
 import type { SimState } from "./sim"
 
 // Opt-in fixture in the real /play scene. Keep it attached to the stable road
 // identity so settlement publications retain it without changing saved maps.
+export type CityBenchmarkMode = "gameplay" | "routing-stress"
 interface City {
+  mode: CityBenchmarkMode
   centre: TilePos
   streets: TilePos[]
   destinations: TilePos[]
@@ -24,12 +30,15 @@ const journeys = new WeakMap<SimState, {
   people: Map<number, { rng: () => number; destination: number; trips: number }>
   assigned: number; completed: number; failed: number; destinations: Set<number>
 }>()
+const replayJourneys = new WeakMap<SimState, {
+  routes: Map<number, { from: number; to: number; points: WanderSpot[] }>; reused: number
+}>()
 export function benchmarkCity(map: GameMap) { return map.road ? cities.get(map.road) : undefined }
 
 /** 240 complete catalogue buildings, two-tile streets and the generated forest
  * beyond the town. Authored geometry, sprite trees, wildlife and render passes
  * are the same ones used in a normal game. */
-export function createBenchmarkCity(source: GameMap): GameMap {
+export function createBenchmarkCity(source: GameMap, mode: CityBenchmarkMode = "gameplay"): GameMap {
   if (source.width < 192 || source.depth < 128) throw new Error("City benchmark needs a map at least 192 × 128")
   const map = structuredClone(source), columns = 20, rows = 12, block = 8
   const left = Math.floor((map.width - columns * block) / 2), top = Math.floor((map.depth - rows * block) / 2)
@@ -70,7 +79,7 @@ export function createBenchmarkCity(source: GameMap): GameMap {
   }
   const neighbours = destinations.map((a, i) => destinations.flatMap((b, j) =>
     i !== j && Math.abs(a.x - b.x) + Math.abs(a.z - b.z) <= 40 ? [j] : []))
-  cities.set(map.road, { centre: { x: left + columns * block / 2, z: roadZ }, streets, destinations, neighbours, buildings: destinations.length })
+  cities.set(map.road, { mode, centre: { x: left + columns * block / 2, z: roadZ }, streets, destinations, neighbours, buildings: destinations.length })
   return map
 }
 
@@ -78,8 +87,17 @@ export function createBenchmarkCity(source: GameMap): GameMap {
  * needs, foot contacts and A* all run through the existing simulation. This
  * intentionally stresses routing traffic rather than autonomous job decisions. */
 export function routeBenchmarkCity(sim: SimState, map: GameMap) {
+  if (benchmarkCity(map)?.mode !== "routing-stress") return
+  return withWalkingRouteQueries(map, () => assignCityJourneys(sim, map))
+}
+
+function assignCityJourneys(sim: SimState, map: GameMap) {
   const city = benchmarkCity(map)
   if (!city) return
+  const replaying = process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && benchmarkWork.replayRoutes
+  let replay = replayJourneys.get(sim)
+  if (replaying && !replay) { replay = { routes: new Map(), reused: 0 }; replayJourneys.set(sim, replay) }
+  if (!replaying) replayJourneys.delete(sim)
   let state = journeys.get(sim)
   if (!state) { state = { people: new Map(), assigned: 0, completed: 0, failed: 0, destinations: new Set() }; journeys.set(sim, state) }
   for (const actor of sim.travelers.values()) {
@@ -119,9 +137,20 @@ export function routeBenchmarkCity(sim: SimState, map: GameMap) {
       if (!assigned) state.failed++
       continue
     }
+    const repeated = replaying ? replay?.routes.get(actor.id) : undefined
+    if (repeated && (person.destination === repeated.to || person.destination === repeated.from)) {
+      const reverse = person.destination === repeated.to
+      actor.activity = "fromBuild"
+      actor.constructionReturn = repeated.points.map(point => ({ ...point }))
+      if (reverse) actor.constructionReturn.reverse()
+      person.destination = reverse ? repeated.from : repeated.to
+      person.trips++; replay!.reused++; state.assigned++; state.destinations.add(person.destination)
+      continue
+    }
     const destination = options[Math.floor(person.rng() * options.length)]
     const route = workerRoute(map, actor, city.destinations[destination])
     if (!route?.length) { state.failed++; continue }
+    if (replaying) replay!.routes.set(actor.id, { from: person.destination, to: destination, points: route.map(point => ({ ...point })) })
     actor.activity = "fromBuild"; actor.constructionReturn = route
     person.destination = destination; person.trips++
     state.assigned++; state.destinations.add(destination)
@@ -131,7 +160,26 @@ export function routeBenchmarkCity(sim: SimState, map: GameMap) {
 export function cityBenchmarkStats(sim: SimState | null, map: GameMap) {
   const city = benchmarkCity(map), state = sim && journeys.get(sim)
   if (!city) return null
-  return { buildings: city.buildings, assigned: state?.assigned ?? 0, completed: state?.completed ?? 0,
+  const activities: Record<string, number> = {}
+  let onRoad = 0, offRoad = 0, nearRoad = 0, employed = 0
+  for (const actor of sim?.travelers.values() ?? []) {
+    activities[actor.activity] = (activities[actor.activity] ?? 0) + 1
+    if (actor.employer) employed++
+    const x = worldToTileX(map, actor.x), z = worldToTileZ(map, actor.z)
+    if (isRoadTerrain(map.tiles[z * map.width + x])) onRoad++; else offRoad++
+    // Lane offsets and roadside social stops legitimately leave the exact
+    // road tile. Report proximity separately; neither metric proves adherence.
+    let nearby = false
+    for (let dz = -1; dz <= 1 && !nearby; dz++) for (let dx = -1; dx <= 1; dx++) {
+      const cx = x + dx, cz = z + dz
+      if (cx >= 0 && cz >= 0 && cx < map.width && cz < map.depth && isRoadTerrain(map.tiles[cz * map.width + cx])) { nearby = true; break }
+    }
+    if (nearby) nearRoad++
+  }
+  return { mode: city.mode, activities, onRoad, offRoad, nearRoad, employed,
+    footprintContacts: map.footpaths?.contacts.size ?? 0, footprintEdges: map.footpaths?.edges.size ?? 0,
+    replayCached: sim ? replayJourneys.get(sim)?.routes.size ?? 0 : 0, replayed: sim ? replayJourneys.get(sim)?.reused ?? 0 : 0,
+    buildings: city.buildings, assigned: state?.assigned ?? 0, completed: state?.completed ?? 0,
     failed: state?.failed ?? 0, uniqueDestinations: state?.destinations.size ?? 0,
     active: sim ? [...sim.travelers.values()].filter(s => s.constructionReturn?.length || s.roadShortcut).length : 0 }
 }

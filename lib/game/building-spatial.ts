@@ -1,4 +1,5 @@
-import type { BuildingDef, TilePos } from "./map/types"
+import type { BuildingDef, GameMap, TilePos } from "./map/types"
+import { terrainQueryToken } from "./map/cliff-corners"
 
 const BLOCK = 8
 const cellKey = (x: number, z: number) => x >= -4096 && x < 4096 && z >= -4096 && z < 4096
@@ -8,6 +9,22 @@ interface BuildingIndex {
   bounds: number[]; sources: BuildingDef[]; query: (point: TilePos) => readonly BuildingDef[]
 }
 const indexes = new WeakMap<readonly BuildingDef[], Map<number, BuildingIndex>>()
+const snapshots = new WeakMap<GameMap, Map<number, { token: object; buildings: readonly BuildingDef[]; query: BuildingIndex["query"] }>>()
+
+/** Repeated swept-body samples in one read-only terrain operation share the
+ * already validated index. Ordinary callers retain in-place edit detection. */
+export function mapBuildingQuery(map: GameMap, padding = 0) {
+  const token = terrainQueryToken(map)
+  if (!token) return buildingSpatialQuery(map.buildings, padding)
+  let variants = snapshots.get(map)
+  if (!variants) { variants = new Map(); snapshots.set(map, variants) }
+  let snapshot = variants.get(padding)
+  if (!snapshot || snapshot.token !== token || snapshot.buildings !== map.buildings) {
+    snapshot = { token, buildings: map.buildings, query: buildingSpatialQuery(map.buildings, padding) }
+    variants.set(padding, snapshot)
+  }
+  return snapshot.query
+}
 
 /** Validate once per navigation operation, then inspect just the footprints
  * beside each path sample. Live construction progress does not change bounds. */

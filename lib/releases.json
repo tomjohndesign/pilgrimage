@@ -1,7 +1,55 @@
 {
-  "lastProcessedCommit": "4d969f715f4f793dd5896bcc101cc9f3173159ef",
-  "releaseCount": 128,
+  "lastProcessedCommit": "9eb124e4ca3994c0790662fee4ffd835079615bf",
+  "releaseCount": 136,
   "releases": [
+    {
+      "version": "0.0.150",
+      "title": "Release 0.0.150",
+      "summary": "Reduce crowd CPU work and adapt visual detail under frame pressure (#153)",
+      "commit": "9eb124e4ca3994c0790662fee4ffd835079615bf"
+    },
+    {
+      "version": "0.0.149",
+      "title": "Release 0.0.149",
+      "summary": "Make begging reversible with recovery at 15 gold (#169)",
+      "commit": "c2ef49bc76ca780c144681b620afbf0dc5c74bb4"
+    },
+    {
+      "version": "0.0.148",
+      "title": "Release 0.0.148",
+      "summary": "Reduce building placement stalls by reusing terrain and scenery (#167)",
+      "commit": "264fbf246cc2e7c1dcd8097745c6abb4ab362bc7"
+    },
+    {
+      "version": "0.0.147",
+      "title": "Release 0.0.147",
+      "summary": "Add marked crossroads and keep generated paths inland (#161)",
+      "commit": "4d46d590ef32de71d4690b203b35c495b6a22024"
+    },
+    {
+      "version": "0.0.146",
+      "title": "Release 0.0.146",
+      "summary": "Allow roadside vendors to open shops without nearby trees (#168)",
+      "commit": "9801bacd0df860bf2da350c291adc85a245a7e01"
+    },
+    {
+      "version": "0.0.145",
+      "title": "Release 0.0.145",
+      "summary": "Let NPCs drink from nearby streams and lakes (#166)",
+      "commit": "f7a46043a8231bdbe5aca3c219b1d25f723d518c"
+    },
+    {
+      "version": "0.0.144",
+      "title": "Release 0.0.144",
+      "summary": "Keep deployed vendor stalls anchored during map rotation (#165)",
+      "commit": "799d5f14bef666532aec658dbb5226454ef9cf5a"
+    },
+    {
+      "version": "0.0.143",
+      "title": "Release 0.0.143",
+      "summary": "Make tavern drinks cheaper and fund travelers for roadside stops (#164)",
+      "commit": "633ba970567c35cccd4d0a82aecef1cf932e421f"
+    },
     {
       "version": "0.0.142",
       "title": "Release 0.0.142",

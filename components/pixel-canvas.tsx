@@ -25,6 +25,8 @@ export interface PixelationProps {
 
 export interface PixelSceneStage {
   phase: "world" | "characters" | "all"
+  /** Evaluated before the world pass temporarily hides character roots. */
+  hasCharacters: boolean
   /** World-buffer crop, shared by colour, depth, and outline IDs. */
   scale: THREE.Vector2
   offset: THREE.Vector2
@@ -220,6 +222,7 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
         renderer.worldTexel.value = 0
         const cam = camera as THREE.OrthographicCamera
         const r = resources
+        r.stage.hasCharacters = tagPixelCharacters(renderer.characters, scene)
         r.uniforms.uHasBackground.value = scene.background instanceof THREE.Color
         if (scene.background instanceof THREE.Color) {
           r.uniforms.uBackgroundLinear.value.copy(scene.background)
@@ -289,14 +292,13 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
 
         r.uniforms.uScale.value.set(width * density / bufferWidth, height * density / bufferHeight)
         r.uniforms.uOffset.value.set(-dx * density / bufferWidth, -dy * density / bufferHeight)
-        tagPixelCharacters(renderer.characters, scene)
         r.stage.phase = "world"
         if (revealDirect) revealDirect.value = false
         withoutPixelCharacters(renderer.characters, () => renderScene(r.camera, r.target, r.stage))
         r.hasWorld = true; r.lastWorldCamera.copy(cam.matrixWorld)
         gl.setRenderTarget(null)
         gl.render(r.screen, r.screenCamera)
-        if (renderer.characters.size) {
+        if (r.stage.hasCharacters) {
           const background = scene.background
           const mask = camera.layers.mask
           const autoClear = gl.autoClear

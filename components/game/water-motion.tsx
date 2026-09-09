@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useContext, useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 import { terrainCorner } from "@/lib/game/map/cliff-corners"
@@ -15,10 +15,18 @@ import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
 import { GROUND_SURFACE_GLSL, GROUND_UV_SCALE } from "@/lib/game/render/ground-surface"
 import { useTerrainTexture } from "./use-terrain-texture"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
+import { frameQuality } from "@/lib/game/render/frame-quality"
+
+import { TerrainMapContext } from "./terrain-map-context"
+import type { TerrainBlockBounds } from "@/lib/game/render/terrain-blocks"
 
 /** Sparse ripple sprites cross tile seams; waterfall foam keeps the same pixel grid. */
-export function WaterMotion({ map, waterPalette, edgeGrain }: { map: GameMap; waterPalette: THREE.DataTexture; edgeGrain: THREE.Texture }) {
+export function WaterMotion({ map: suppliedMap, waterPalette, edgeGrain, bounds, revision: suppliedRevision, turbulenceField }: { map?: GameMap; waterPalette: THREE.DataTexture; edgeGrain: THREE.Texture; bounds?: TerrainBlockBounds; revision?: object; turbulenceField?: Float32Array }) {
+  const contextMap = useContext(TerrainMapContext)
+  const map = suppliedMap ?? contextMap!
+  const revision = suppliedRevision ?? map
   const material = useRef<THREE.ShaderMaterial>(null)
+  const mesh = useRef<THREE.Mesh>(null)
   const ripples = useTerrainTexture("/textures/water.png", "#000000")
   useMemo(() => {
     ripples.wrapS = ripples.wrapT = THREE.RepeatWrapping
@@ -27,15 +35,15 @@ export function WaterMotion({ map, waterPalette, edgeGrain }: { map: GameMap; wa
   }, [ripples])
   const geometry = useMemo(() => {
     const positions: number[] = [], uv: number[] = [], falling: number[] = [], turbulence: number[] = [], shores: number[] = [], modes: number[] = []
-    const field = waterfallTurbulence(map.water, map.tiles.length, map.elevation?.settings.turbulenceReach ?? DEFAULT_ELEVATION.turbulenceReach)
+    const field = turbulenceField ?? waterfallTurbulence(map.water, map.tiles.length, map.elevation?.settings.turbulenceReach ?? DEFAULT_ELEVATION.turbulenceReach)
     const quad = (a: number[], b: number[], c: number[], d: number[], fall = 0, current = [0, 0, 0], shore = [0, 0, 0, 0], mode = 1) => {
       for (const p of [a, b, c, c, b, d]) { positions.push(...p); falling.push(fall); turbulence.push(...current); shores.push(...shore); modes.push(mode) }
       uv.push(0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1)
     }
     const water = map.water
-    for (let i = 0; i < map.tiles.length; i++) {
+    for (let tz = bounds?.z ?? 0; tz < (bounds?.endZ ?? map.depth); tz++) for (let tx = bounds?.x ?? 0; tx < (bounds?.endX ?? map.width); tx++) {
+      const i = tz * map.width + tx
       const wet = !!(water?.depth[i] || map.tiles[i] === "water" || map.tiles[i] === "bridge")
-      const tx = i % map.width, tz = Math.floor(i / map.width)
       const cut = terrainCorner(map, tx, tz)
       const shore = cut ? [0, 0, 0, 0] : shorelineCorners(map, tx, tz)
       if (cut && (wet || map.tiles[cut.donor] === "water")) shore[cut.corner] = 1
@@ -61,7 +69,7 @@ export function WaterMotion({ map, waterPalette, edgeGrain }: { map: GameMap; wa
     g.setAttribute("aShoreMode", new THREE.Float32BufferAttribute(modes, 1))
     g.setAttribute("aFall", new THREE.Float32BufferAttribute(falling, 1))
     return g
-  }, [map])
+  }, [revision, bounds, turbulenceField])
   useEffect(() => () => geometry.dispose(), [geometry])
   const uniforms = useMemo(() => {
     const s = { ...DEFAULT_ELEVATION, ...map.elevation?.settings }
@@ -74,9 +82,13 @@ export function WaterMotion({ map, waterPalette, edgeGrain }: { map: GameMap; wa
       strength: { value: s.shimmerStrength }, coverage: { value: s.shimmerCoverage },
       groupSize: { value: s.shimmerSize }, speed: { value: s.shimmerSpeed }, foam: { value: s.foam },
     }
-  }, [map, ripples, waterPalette, edgeGrain])
-  useFrame((_, dt) => { if (material.current) material.current.uniforms.time.value += Math.min(dt, 0.1) })
-  return <mesh name="water-shimmer" geometry={geometry} frustumCulled={false}>
+  }, [map.width, map.depth, map.seed, map.elevation?.settings, ripples, waterPalette, edgeGrain])
+  useFrame(({ scene }, dt) => {
+    const detailed = frameQuality(scene) === 0
+    if (mesh.current) mesh.current.visible = detailed
+    if (detailed && material.current) material.current.uniforms.time.value += Math.min(dt, 0.1)
+  })
+  return <mesh ref={mesh} name="water-shimmer" geometry={geometry} frustumCulled={false}>
     <shaderMaterial ref={material} uniforms={uniforms} transparent depthWrite={false} side={THREE.DoubleSide}
       vertexShader={`attribute float aShoreMode; varying float vShoreMode; attribute vec4 aShoreCorners; varying vec4 vShoreCorners; attribute float aFall; attribute vec3 aTurbulence; varying vec3 vTurbulence; varying float vFall; varying float vHeight; varying vec2 vUv; varying vec2 vWorld;
         void main() { vShoreMode = aShoreMode; vShoreCorners = aShoreCorners; vFall = aFall; vTurbulence = aTurbulence; vUv = uv; vWorld = position.xz; vHeight = position.y;

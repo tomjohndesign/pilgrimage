@@ -14,6 +14,9 @@ import { configureSpriteDepthTexture } from "@/lib/game/render/sprite-depth"
 import { encodeObjectId, OUTLINE_ID_LAYER_MASK, treeObjectId } from "@/lib/game/render/outline"
 import { makeRng } from "@/lib/game/rng"
 import { useBuildStore } from "@/lib/game/build-store"
+import { isWorldVisible } from "@/lib/game/render/visibility"
+import { sceneryDetail } from "@/lib/game/render/scenery-detail"
+import { useCameraStore } from "@/lib/game/camera-store"
 
 export interface FoliagePlacement extends TreePlacement { foliageVariant?: number }
 
@@ -50,14 +53,17 @@ export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, 
     entries.forEach(({ tree, index }) => sources.push({
       x: tree.x, y: tree.y, z: tree.z, column: rolls[index][0],
       row: tree.dead ? FOLIAGE_SPECIES.length * FOLIAGE_FRAME.variants * 2 + (tree.foliageVariant ?? rolls[index][1]) : (tree.oldGrowth ? FOLIAGE_SPECIES.length * FOLIAGE_FRAME.variants : 0) + FOLIAGE_SPECIES.indexOf(tree.species as typeof FOLIAGE_SPECIES[number]) * FOLIAGE_FRAME.variants + (tree.foliageVariant ?? rolls[index][1]),
-      id: encodeObjectId(treeObjectId(idBase, index)), brightness: tree.brightness ?? 1, tree: index,
+      id: [0, 0, 0], brightness: tree.brightness ?? 1, tree: index,
     }))
     const geometry = new THREE.PlaneGeometry(1, 1)
     geometry.translate(0, FOLIAGE_FRAME.anchor[1] / FOLIAGE_FRAME.cellSize - 0.5, 0)
     geometry.setAttribute("foliageFrame", new THREE.InstancedBufferAttribute(new Float32Array(sources.length * 2), 2).setUsage(THREE.DynamicDrawUsage))
     geometry.setAttribute("foliageId", new THREE.InstancedBufferAttribute(new Float32Array(sources.length * 3), 3).setUsage(THREE.DynamicDrawUsage))
     return { geometry, instances: new FoliageInstances(sources, foliageRowRadii(crop.image.data as Float32Array)) }
-  }, [placements, entries, seed, idBase, crop])
+  }, [placements, entries, seed, crop])
+  useLayoutEffect(() => {
+    data.instances.setIds(index => encodeObjectId(treeObjectId(idBase, index)))
+  }, [data, idBase])
   const body = useRef<THREE.InstancedMesh>(null), idMesh = useRef<THREE.InstancedMesh>(null)
   const camera = useRef<THREE.Camera>(undefined)
   const raycast = useMemo(() => foliageRaycast(data.geometry, color, depth, view, () => camera.current), [data, color, depth, view])
@@ -70,7 +76,8 @@ export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, 
     mesh.count = ids.count = 0
     data.instances.invalidate()
   }, [data, entries])
-  useFrame(({ camera: currentCamera }) => {
+  useFrame(({ camera: currentCamera, scene }) => {
+    if (!isWorldVisible(body.current?.parent)) return
     const yaw = Math.atan2(currentCamera.matrixWorld.elements[8], currentCamera.matrixWorld.elements[10])
     view.value = ((Math.round(yaw / (Math.PI * 2 / FOLIAGE_FRAME.directions)) % FOLIAGE_FRAME.directions) + FOLIAGE_FRAME.directions) % FOLIAGE_FRAME.directions
     // Picking uses the same camera-facing bounds as the instanced color quads.
@@ -78,9 +85,11 @@ export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, 
     const mesh = body.current, ids = idMesh.current
     if (mesh && ids) {
       mesh.updateWorldMatrix(true, false)
-      data.instances.update(mesh, currentCamera)
+      const thin = sceneryDetail(scene) === 2, selection = useCameraStore.getState().selection
+      data.instances.update(mesh, currentCamera, thin, selection?.kind === "tree" ? selection.id : -1)
       ids.count = mesh.count
       mesh.userData.totalTrees = entries.length
+      mesh.userData.treeDensity = thin ? .5 : 1
     }
   })
   useEffect(() => () => data.geometry.dispose(), [data])

@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { benchmarkWork, resetBenchmarkWork, type BenchmarkWork } from "@/lib/game/benchmark-work"
 import { benchmarkCity, cityBenchmarkStats } from "@/lib/game/city-benchmark"
 import { processionRegistry } from "@/lib/game/relic-procession"
 import { useBuildStore } from "@/lib/game/build-store"
@@ -25,9 +26,14 @@ import { buildingBatchControl } from "./building-batches"
 import { characterBatchControl } from "./character-batches"
 import { staticBatchControl } from "./static-batches"
 import { outlineFrameRef } from "./outline-pass"
+import { frameQuality, frameQualityControl } from "@/lib/game/render/frame-quality"
+import { crowdRenderControl, crowdRenderStatus } from "@/lib/game/render/crowd-budget"
 import { frameProfile } from "@/lib/game/render/frame-profile"
+import { createDrawProfile } from "@/lib/game/render/draw-profile"
 import { sceneryDetailStatus } from "@/lib/game/render/scenery-detail"
 import { batchedSourceRoots } from "@/lib/game/render/batch-source-visibility"
+import { characterBatchEntry } from "@/lib/game/render/character-batch"
+import { workerRouteMemoryStats } from "@/lib/game/worker-route-memory"
 import { BENCHMARK_SIMULATION_SPEEDS, useSimulationStore } from "@/lib/game/simulation-store"
 
 /**
@@ -36,18 +42,31 @@ import { BENCHMARK_SIMULATION_SPEEDS, useSimulationStore } from "@/lib/game/simu
  * (The world seed itself comes from the URL: /play?seed=….)
  * Development only, unless a local benchmark build explicitly enables it.
  */
-export function DebugHandle({ map, travelers, speed, movement, speedScales, characterScale }: { map: GameMap; travelers: Traveler[]; speed: number; movement: MovementTuning; speedScales?: ReadonlyMap<number, number>; characterScale?: number }) {
-  const { gl, camera, scene } = useThree()
+export function DebugHandle({ map, travelers, speed, movement, speedScales, beggarSpeedScales, characterScale }: { map: GameMap; travelers: Traveler[]; speed: number; movement: MovementTuning; speedScales?: ReadonlyMap<number, number>; beggarSpeedScales?: ReadonlyMap<number, number>; characterScale?: number }) {
+  const { gl, camera, scene, setDpr } = useThree()
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_GAME_BENCHMARK !== "1") return
 
+    const drawProfile = createDrawProfile(gl, scene)
     let motionSubjects: Array<{ unit: THREE.Object3D; sprite: THREE.Sprite }> = []
+    const roots = new Map<string, THREE.Object3D>()
+    const namedRoot = (name: string) => {
+      let root = roots.get(name)
+      if (!root?.parent) { root = scene.getObjectByName(name); if (root) roots.set(name, root) }
+      return root
+    }
     const handle = {
       map,
       bakeLoadingChurch: async () => (await import("@/lib/game/render/loading-church-bake")).bakeLoadingChurch(gl),
       benchmarkTarget: benchmarkCity(map)?.centre,
       cityStats: () => cityBenchmarkStats(simRegistry.current, map),
+      populationStatus: () => ({ travelers: simRegistry.current?.travelers.size ?? 0,
+        joinedMonks: simRegistry.current?.joinedMonks.size ?? 0,
+        total: (simRegistry.current?.travelers.size ?? 0) + (simRegistry.current?.joinedMonks.size ?? 0) }),
+      captureDraws: (enabled: boolean) => drawProfile.capture(enabled),
+      layerVisibility: () => Object.fromEntries(["characters", "wildlife", "trees", "scenery", "buildings"].map(name =>
+        [name, scene.getObjectByName(`visibility-${name}`)?.visible ?? false])),
       inventory: () => {
         let scenerySprites = 0
         scene.traverse(object => {
@@ -89,6 +108,12 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         return counts
       },
       profileFrames: frameProfile.capture,
+      routeMemory: () => workerRouteMemoryStats(map),
+      isolateWork: (settings: Partial<BenchmarkWork>) => {
+        resetBenchmarkWork(); Object.assign(benchmarkWork, settings)
+        return { ...benchmarkWork }
+      },
+      isolatedWork: () => ({ ...benchmarkWork }),
       setBuildingBatching: (enabled: boolean) => { buildingBatchControl.enabled = enabled },
       setBatching: (enabled: boolean) => { characterBatchControl.enabled = enabled },
       setSceneryBatching: (enabled: boolean) => { staticBatchControl.enabled = enabled },
@@ -111,12 +136,32 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         })
         return { shadows, sprites, reducedWalking }
       },
+      setAdaptiveQuality: (enabled: boolean) => { frameQualityControl.enabled = enabled },
+      setCrowdThinning: (enabled: boolean) => { crowdRenderControl.enabled = enabled },
+      figureStatus: () => ({ ...crowdRenderStatus, quality: frameQuality(scene),
+        pendingUnits: namedRoot("travelers")?.userData.pendingUnits ?? 0,
+        missingVisibleUnits: namedRoot("travelers")?.userData.missingVisibleUnits ?? 0 }),
+      adaptiveStatus: () => ({ ...crowdRenderStatus, quality: frameQuality(scene), detail: sceneryDetailStatus(scene)?.current,
+        treeDensity: namedRoot("foliage-prototype")?.children[0]?.userData.treeDensity,
+        wildlife: namedRoot("wildlife")?.visible, waterDetail: namedRoot("water-shimmer")?.visible,
+        simpleBatches: namedRoot("character-batches")?.children.filter(child => child.visible && child.userData.simplified).length ?? 0 }),
+      hiddenTraveler: () => {
+        const root = namedRoot("travelers")
+        let hidden: { id: number; x: number; z: number } | null = null
+        root?.traverse(unit => {
+          if (hidden || unit.name !== "traveler-unit" || unit.visible) return
+          const person = simRegistry.current?.travelers.get(unit.userData.travelerId)
+          if (person) hidden = { id: person.id, x: person.x, z: person.z }
+        })
+        return hidden
+      },
       cameraAlignment: () => {
         let error = 0
-        scene.traverseVisible(object => {
-          const view = object.name === "character-atlas-batch" ? object.userData.viewMatrix as THREE.Matrix4 : undefined
+        const root = namedRoot("character-batches")
+        if (root?.visible) for (const object of root.children) {
+          const view = object.visible ? object.userData.viewMatrix as THREE.Matrix4 : undefined
           if (view) for (let i = 0; i < 16; i++) error = Math.max(error, Math.abs(view.elements[i] - camera.matrixWorldInverse.elements[i]))
-        })
+        }
         return error
       },
       sceneStats: () => {
@@ -134,7 +179,9 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         const foliage = scene.getObjectByName("foliage-prototype")?.children[0] as THREE.InstancedMesh | undefined
         return { objects, visible, sprites, units, prunedCharacterRoots: [...batchedSourceRoots(scene)].length, treeRenderer: foliage ? "sprites" : "procedural",
           totalTrees: foliage?.userData.totalTrees, visibleTrees: foliage?.count, loadedUnits: loaded.size, requestedUnits: figures?.requestedUnits,
-          pendingUnits: figures?.pendingUnits, missingVisibleUnits: figures?.missingVisibleUnits }
+          pendingUnits: figures?.pendingUnits, missingVisibleUnits: figures?.missingVisibleUnits,
+          renderedTravelers: figures?.renderedUnits, crowdBudget: figures?.crowdBudget, densityReduced: figures?.densityReduced,
+          treeDensity: foliage?.userData.treeDensity ?? 1 }
       },
       sceneryDetail: () => scene.getObjectByName("scenery-batches")?.userData.sceneryDetail,
       sceneryDetailStatus: () => ({ ...sceneryDetailStatus(scene), presentationFade: scene.userData.sceneryFadeActive === true }),
@@ -176,6 +223,11 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
           object instanceof THREE.Sprite && object.visible
             ? [{ amount: object.userData.amount, position: object.position.toArray(), opacity: object.material.opacity }] : []) ?? [],
       }),
+      setResolutionScale: (scale: number) => {
+        if (!Number.isFinite(scale) || scale < .25 || scale > 1) throw new Error("Resolution scale must be between .25 and 1")
+        setDpr(scale)
+      },
+      renderResolution: () => ({ scale: gl.getPixelRatio(), width: gl.domElement.width, height: gl.domElement.height }),
       setTerrainVisible: (visible: boolean) => { const terrain = scene.getObjectByName("terrain"); if (terrain) terrain.visible = visible },
       setHearthLightsVisible: (visible: boolean) => { const lights = scene.getObjectByName("hearth-light-pool"); if (lights) lights.visible = visible },
       renderInfo: () => ({
@@ -203,10 +255,11 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         const sprites: Array<{ model: string; calling: string; variant: number | null; bodyType: string; appearanceScale: number; position: number[]; phase: number; sync: boolean; fps: number; sheet: string; repeat: number[]; offset: number[]; center: number[]; scale: number[] }> = []
         scene.traverse((object) => {
           if (object.name !== "traveler" || !(object instanceof THREE.Sprite)) return
-          const map = object.material.map
+          const entry = characterBatchEntry(object)
+          const map = entry?.color ?? object.material.map
           const image = map?.image as HTMLImageElement | undefined
           sprites.push({ model: object.userData.characterModel, calling: object.userData.calling, variant: object.userData.variant, bodyType: object.userData.bodyType, appearanceScale: object.userData.appearanceScale, position: object.getWorldPosition(new THREE.Vector3()).toArray(), phase: object.userData.walkPhase, sync: object.userData.sync, fps: object.userData.fps, sheet: image?.src ?? "",
-            repeat: map?.repeat.toArray() ?? [], offset: map?.offset.toArray() ?? [], center: object.center.toArray(), scale: object.scale.toArray() })
+            repeat: entry?.uv ? [entry.uv.x, entry.uv.y] : map?.repeat.toArray() ?? [], offset: entry?.uv ? [entry.uv.z, entry.uv.w] : map?.offset.toArray() ?? [], center: object.center.toArray(), scale: object.scale.toArray() })
         })
         return sprites
       },
@@ -277,7 +330,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
         const sim = simRegistry.current
         if (!sim) return
         const ticks = Math.ceil(Math.max(0, Math.min(120, seconds)) * 10)
-        for (let i = 0; i < ticks; i++) stepSim(sim, travelers, map, speed, 0.1, movement, speedScales, characterScale)
+        for (let i = 0; i < ticks; i++) stepSim(sim, travelers, map, speed, 0.1, movement, speedScales, characterScale, beggarSpeedScales)
         useBuildStore.getState().syncResources(sim, travelers)
       },
       /** Live settlement loop: who works where, who lives where, and the takings. */
@@ -370,9 +423,12 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
 
     ;(window as unknown as Record<string, unknown>).__pilgrimage = handle
     return () => {
+      drawProfile.dispose()
+      resetBenchmarkWork()
+      frameQualityControl.enabled = true; crowdRenderControl.enabled = false
       delete (window as unknown as Record<string, unknown>).__pilgrimage
     }
-  }, [gl, camera, scene, map, travelers, speed, movement, speedScales, characterScale])
+  }, [gl, camera, scene, map, travelers, speed, movement, speedScales, beggarSpeedScales, characterScale, setDpr])
 
   return null
 }

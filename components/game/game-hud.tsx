@@ -27,7 +27,7 @@ import { nerve } from "@/lib/game/route-choice"
 import { parseSeed } from "@/lib/game/rng"
 import { CHANGELOG, CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
-import { ACTIVITY_LABELS, simRegistry, type SimTraveler } from "@/lib/game/sim"
+import { ACTIVITY_LABELS, BEGGAR_RECOVERY_GOLD, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
 import { MONK_TIRED_AT } from "@/lib/game/monk-work"
 import { useMonkEvangelismStore } from "@/lib/game/monk-evangelism-store"
@@ -322,7 +322,7 @@ function TravelerPanel({ traveler, map }: { traveler: Traveler; map: GameMap | n
             style={{ backgroundColor: traveler.type.color }}
           />
           <span className="text-[13px] italic text-ink-light">
-            {traveler.type.label}, {a.age} years
+            {live?.beggar ? `Beggar · ${traveler.type.label}` : traveler.type.label}, {a.age} years
           </span>
         </div>
         {live && (
@@ -332,6 +332,7 @@ function TravelerPanel({ traveler, map }: { traveler: Traveler; map: GameMap | n
             {live.track && " · on the dark track"}
           </div>
         )}
+        {live?.beggar && <div className="text-[11px] italic text-ink-light">Needs {BEGGAR_RECOVERY_GOLD} gold to return to their calling</div>}
         {live?.employer && (
           <div className="text-[11px] text-ink-light">
             Works at {named(live.employer) ?? "a settlement building"}
@@ -805,7 +806,7 @@ export function GameHud({
         <HudClock />
         </div>
       </header>
-      <HudHelp content={<><div className="hud-help-title">Character population</div><p>{travelers.length} travelers across the map at {Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}% traffic density. Increase for playtesting, up to 20× the normal population.</p></>}>
+      <HudHelp content={<><div className="hud-help-title">Character population</div><p>{travelers.length} travelers across the map at {Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}% traffic density. Increase for playtesting, up to 10,000 travelers on the largest map.</p><p>Scenery and sprite detail adjust when the game slows down. Travelers outside the view keep moving and living in the world.</p></>}>
         <section className="hud-traffic" aria-label="Traffic">
           <label htmlFor="traffic-density">Characters</label>
           <input id="traffic-density" type="range" aria-label="Traffic density" aria-valuetext={`${travelers.length} travelers, ${Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}% traffic density`} min={0} max={MAX_TRAFFIC} step={1} value={settings.traffic} onChange={(event) => set({ traffic: Number(event.target.value) })} />

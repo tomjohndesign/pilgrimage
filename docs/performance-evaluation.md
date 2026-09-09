@@ -1,10 +1,274 @@
 # Largest-map performance evaluation
 
 The benchmark exercises the real `/play` scene on the largest 512 × 512 map.
-It covers 1,408, 2,000, 3,840 and 6,000 travelers, playback speeds through 6×,
+It covers populations through 10,000 travelers, playback speeds through 6×,
 pointer dragging, wheel zooming and camera rotation. Sprite trees are the
 normal renderer and the benchmark default. Procedural trees remain available
 only in an explicitly enabled benchmark build for historical comparisons.
+
+The newer [rendering-sampling investigation](rendering-sampling-evaluation.md)
+records the zero-character and 10,000-character component isolation runs,
+resolution/checkerboard research, CPU profiles, shared walking and routing
+changes, and their current limits. Its controlled measurements supersede older
+maximum-load figures below; 30 FPS with 10,000 travelers at effective 6× remains
+an unmet target.
+
+The city results below predate the fixture correction: they forced continuous
+random trips and should be read as routing stress, not normal gameplay load.
+That behavior now requires `benchmark=city-stress`; `benchmark=city` preserves
+normal NPC decisions. See the investigation above for the correction and its
+limits before comparing old and new measurements.
+
+## Hidden-layer investigation after PR #146
+
+The follow-up baseline includes main through `5cd7a1b` (0.0.129). Other local
+Conductor sessions were idle throughout the measurements. The 1,408-person
+city used sprite trees, a 1440 × 900 viewport, DPR 1, Apple M5/16 GiB and
+hardware ANGLE Metal. Each visibility condition ran for eight seconds after
+settling, with opt-in CPU and actual draw-submission counters. These short
+isolation samples are diagnostic; they are not a maximum-population result.
+
+The real World settings controls already prevented hidden characters from
+reaching GPU draws. Every hidden layer submitted zero draws, the full traveler
+population remained simulated, pause stopped simulation time, and restoring
+visibility resumed character draws. Resident geometry counts alone would
+have incorrectly suggested that hidden figures were still rendering.
+
+| Baseline condition, 1× | Close FPS / p95 ms | Wide FPS / p95 ms |
+|---|---:|---:|
+| All shown, running | 59.9 / 16.8 | 54.6 / 33.3 |
+| Characters hidden, running | 60.0 / 16.7 | 56.9 / 33.3 |
+| Characters hidden, paused | 60.0 / 16.7 | 57.1 / 33.3 |
+| Characters and wildlife hidden, paused | 60.0 / 16.8 | 57.0 / 33.3 |
+| Buildings also hidden, paused | 60.0 / 16.7 | 60.0 / 16.7 |
+
+At wide view, the baseline still spent 1.84 ms/frame preparing hidden traveler
+positions, 0.18 ms scanning character batches, and 2.75 ms in the interval
+containing wildlife visual preparation and other animation callbacks. An empty
+character scene pass also remained. The all-shown frame submitted approximately
+2.48 million terrain triangles, 843,000 building triangles, 473,000 wildlife
+triangles, and 4,000 character triangles across its render passes. Triangle
+counts describe submitted work, not a direct measure of GPU time.
+
+The follow-up changes:
+
+- Skip hidden travelers' visual positioning, culling and figure admission,
+  while retaining simulation/resource updates. Reset motion contacts on restore.
+- Skip hidden character batch scans, tree instance preparation and wildlife
+  skinning; keep their resident resources available for showing them again.
+- Check registered character roots' ancestors and drawable contents before
+  scheduling character color/ID/mask work. Empty batch capacity, hit volumes,
+  lights and ID-only objects do not require a character color pass.
+- Stop hidden building lights and floating visual effects. Consume hidden
+  receipt sequences so showing a layer does not replay old payments.
+- Submit wildlife indices only for visible animals, preserving stable source
+  vertices, picking and object IDs. Upload only changed animal vertex ranges
+  and reuse unchanged poses between simulation ticks and while paused.
+- Omit ordinary world overlap ink and its scene-ID/composite passes at the
+  farthest detail level. Authored building lines and selected-object outlines
+  remain, with the existing fade between detail levels.
+- Raise the bounded simulation step from .35 to .42 seconds for the current
+  6× maximum. Rounded 30 FPS frames retain one population pass instead of two,
+  preserving game-time advancement and the existing 100 ms background clamp.
+
+Before the farthest-view pass and simulation-step changes, the integrated
+0.0.132 hidden-layer retest (`a007ffc`, incorporating main `8c3da9c`) gives:
+
+| Follow-up condition, 1× | Close FPS / p95 ms | Wide FPS / p95 ms |
+|---|---:|---:|
+| All shown, running | 60.0 / 16.7 | 45.3 / 33.4 |
+| Characters hidden, running | 60.0 / 16.8 | 59.5 / 16.8 |
+| Characters hidden, paused | 60.0 / 16.8 | 59.3 / 16.8 |
+| Characters and wildlife hidden, paused | 60.0 / 16.7 | 60.0 / 16.8 |
+| Buildings also hidden, paused | 60.0 / 16.8 | 60.0 / 16.8 |
+
+Every hidden-traveler sample now records **zero visual-position updates**,
+near-zero batch preparation, zero character draws, and no distant character
+scene pass. Wildlife's submitted wide-view triangles fell to about 75,000 in
+the all-shown sample; its buffer now contains indices only for visible animals.
+The all-shown wide view remains below 60 FPS. Its mean CPU timings include
+2.44 ms simulation, 1.97 ms traveler positioning, 7.76 ms in animation/wildlife
+callbacks, 2.76 ms character batching and 3.66 ms rendering. These intervals
+are useful for attribution but do not include every browser task.
+
+This is **not an isolated before/after FPS comparison**: main added weary-walk
+art, terrain/shadow changes and economy updates between the two builds.
+That 0.0.132 fixture has 86,792 trees and initially loaded 445 texture images.
+The actual hide/show assertions, eliminated work counters and within-build
+visibility comparisons establish the hidden-layer behavior directly.
+
+The 0.0.132 checkpoint passed 161 test files and 1,424 tests, including
+6× city collision/routing at both 60 FPS and rounded 30 FPS display intervals.
+GPU validation includes 524,288
+wildlife color/ID byte comparisons with no differences after reordering,
+partial uploads, hiding and restoration; culled animals submit zero triangles.
+Type checking and the benchmark-enabled production build pass. Asset checks
+pass base v34, population v30 (142,560 body frames), and monks v40/v41
+(2,376 frames each, also 2,376 for base).
+
+Reproduce the visibility comparison with:
+
+```sh
+BENCH_URL=http://localhost:3101 BENCH_SCENARIO=city BENCH_COUNT=1408 \
+BENCH_CHECKS_ONLY=1 BENCH_ISOLATION=1 BENCH_ASSERT_HIDDEN_IDLE=1 \
+BENCH_ZOOMS=36,140 BENCH_SECONDS=8 BENCH_OUTPUT=.context/visibility \
+node scripts/benchmark-game.mjs
+```
+
+The optional GPU timer-query run is separate from the FPS comparison. Its Metal
+elapsed-query values sometimes exceeded the measured interval between frames;
+do not interpret them as independently additive GPU busy time or derive an FPS
+ceiling from them. Actual hidden-layer submission counts and ordinary frame
+intervals provide the direct evidence above.
+
+## Final pass and simulation-step measurements
+
+The final render/simulation changes (`5469046`, main 0.0.132) were measured
+with 15-second stationary samples, followed by separate CPU profiles. Other
+Conductor sessions remained idle; ordinary desktop applications remained
+running. This is a local operating-load comparison, not a laboratory hardware
+ceiling. The interrupted runs were discarded in full.
+
+| Travelers | View size | Speed | Before FPS / p95 ms | Final FPS / p95 ms |
+|---|---:|---:|---:|---:|
+| 3,840 | 36 | 1× | 41.0 / 33.4 | 44.8 / 33.4 |
+| 3,840 | 36 | 3× | 29.7 / 50.0 | 34.1 / 50.0 |
+| 3,840 | 36 | 6× | 18.4 / 83.3 | 23.5 / 50.1 |
+| 3,840 | 140 | 1× | 18.6 / 66.7 | 22.2 / 50.1 |
+| 3,840 | 140 | 3× | 15.9 / 83.4 | 20.3 / 66.7 |
+| 3,840 | 140 | 6× | 12.2 / 116.6 | 17.8 / 66.7 |
+
+All 3,840 travelers remained simulated and every sample reported zero missing
+visible figures and zero browser errors. Observed game speed was approximately
+1.00×, 2.97–3.00× and 5.94–6.00× respectively. Low FPS still causes character
+stutter and camera frame drops at this population; these changes do not achieve
+60 FPS at the previous maximum.
+
+At 1,408 travelers, the farthest-view pass change measured 57.8 FPS / 16.8 ms
+p95 at 1× and 46.0 FPS / 33.4 ms at 6× in separate 12-second samples. It reduced
+ordinary overview submission to about 271 draws and 1.72 million triangles.
+Selection, building roof cutaways and detail transitions passed after removing
+the ordinary far-view overlap pass. These samples precede the simulation-step
+retune, which only changes frames that cross the old step threshold.
+
+The final 3,840-person wide 1× CPU sample spent means of 5.79 ms in simulation,
+4.58 ms positioning travelers, 14.34 ms in the animation/wildlife callback
+interval, 6.76 ms batching characters and 2.38 ms rendering. At close 6×,
+simulation averaged 16.52 ms. The CPU work for active characters and the
+simulation is now a stronger limit than further reducing sprite image quality.
+Hiding characters avoids their rendering and visual preparation but deliberately
+keeps gameplay simulation running.
+
+## New 10,000-traveler limit
+
+The player slider now reaches 10,000 travelers on a 512 × 512 map, preserving
+the existing area scaling and default population. The browser benchmark defaults
+to 10,000 and the simulation benchmark includes it in its default sweep. Counts
+refer to travelers; resident monks and wildlife remain additional active actors.
+The 10,000-person city loaded 483 texture images at its initial close view,
+with 242 buildings, 86,792 sprite trees and 1,404 scenery sprites.
+
+The 15-second stationary sweep used the same renderer and simulation as the
+final 3,840 run. The subsequent restoration correction (`81848bd5` includes it)
+only changes the first frame after showing hidden characters; these stationary
+samples keep every layer shown.
+
+| View size | Requested speed | FPS | p95 ms | Observed game speed |
+|---|---:|---:|---:|---:|
+| 36 | 1× | 16.1 | 100.0 | 0.99× |
+| 36 | 3× | 9.2 | 150.1 | 2.66× |
+| 36 | 6× | 6.4 | 200.1 | 3.85× |
+| 140 | 1× | 9.9 | 116.8 | 0.96× |
+| 140 | 3× | 7.4 | 183.3 | 2.23× |
+| 140 | 6× | 6.3 | 183.4 | 3.78× |
+
+All six samples retained all 10,000 travelers, completed city journeys without
+failed routes, and recorded zero missing visible figures and zero browser
+errors. The limit is suitable for exposing overload, not smooth gameplay on
+this machine. Frames exceeding the existing 100 ms simulation clamp also make
+the game fall behind its requested speed.
+
+At wide 1×, mean CPU intervals were 17.31 ms simulation, 12.77 ms traveler
+positioning, 33.15 ms animation/wildlife callbacks, 19.81 ms character batching,
+and 3.72 ms rendering. At close 6×, simulation alone averaged 82.78 ms/frame.
+Lower-resolution sprite sheets cannot remove that CPU work. Reaching 60 FPS at
+this population requires substantial reductions in per-actor CPU preparation
+and simulation scheduling; the current pass does not establish that capability.
+
+The 0.0.132 10,000-traveler pointer-drag/wheel run measured 9.2 FPS / 166.7 ms
+p95 at 1× and 5.4 FPS / 250.0 ms at 6×. Both retained camera/batch alignment
+and made zero detail switches during zoom. The first sweep peaked at 430
+missing visible figures in one sampled frame while admission caught up. The subsequent 6× sweep,
+after those views were loaded, recorded zero. The bounded admission queue
+therefore still causes visible pop-in under maximum-load camera movement.
+Selection, building cutaway/restoration and settled detail fades all passed.
+
+## Integration with the subsequent forest update
+
+Main 0.0.133 (`9b9fd94b`, merged here as `f857b057`) adds woodland approaches,
+clearings and foliage v6. The 0.0.132 measurements above retain their original
+labels and object counts; they are not measurements of the new forest layout.
+
+The new forest fixture contains 90,556 sprite trees. Four short eight-second
+stationary checks at 1,408 travelers measured:
+
+| View size | Speed | FPS | p95 ms |
+|---|---:|---:|---:|
+| 36 | 1× | 60.0 | 16.8 |
+| 36 | 6× | 57.8 | 16.8 |
+| 140 | 1× | 57.1 | 16.8 |
+| 140 | 6× | 48.7 | 33.4 |
+
+Every sample retained the complete population, valid city routes, zero missing
+visible figures and zero browser errors. These are short integration checks;
+the longer 0.0.132 load sweeps remain separately labeled above.
+
+The final real-UI visibility sweep ran all nine conditions at both zoom levels.
+Hidden characters measured 60.0 FPS while running at both close and wide views,
+with zero actual character draws and zero visual-position updates. The distant
+empty character scene pass was absent. Paused hidden characters measured
+60.0 FPS close and 59.9 FPS wide. Showing the layer restored character draws;
+the later wide all-shown samples measured 54.6 FPS before hiding and 51.1 FPS
+after restoration. These later samples include the older shared simulation
+state, opt-in draw counters and changing desktop load.
+
+The final 10,000-traveler desktop camera sweep used actual pointer dragging
+and wheel zooming between view sizes 24 and 140, with 12 seconds per speed:
+
+| Requested speed | FPS | p95 ms | Observed game speed | Peak missing visible figures |
+|---|---:|---:|---:|---:|
+| 1× | 8.5 | 199.9 | 0.79× | 461 |
+| 3× | 6.0 | 233.4 | 1.82× | 0 |
+| 6× | 4.5 | 450.0 | 2.69× | 0 |
+
+Every sample retained all 10,000 travelers and valid routes, with zero browser
+errors, zero camera/batch misalignment and zero detail switches during zoom.
+The first sweep again exposes admission pop-in; later sweeps reuse those
+mounted assets. Selection, tree and transport picking, building roof cutaway,
+restoration and post-zoom detail fades all pass. This verifies correctness of
+the interaction pipeline under load, while directly demonstrating that maximum
+population still drops frames heavily. The 10,000-person city initially loaded
+483 texture images with foliage v6.
+
+The touch/mobile viewport check (412 × 915, desktop Metal GPU) passes the
+more aggressive mobile thresholds: close at view size 20, reduced at 45 and
+farthest at 140. All five wheel transitions keep layers resident while the
+camera eases, apply detail after settling, fade the presentation, hide distant
+terrain rims/fine bridge parts and restore close geometry. This is device-profile
+correctness coverage, not a physical mobile-device FPS result.
+
+On the integrated source, 1,424 tests pass and one existing hospitality test
+fails because the generated worlds now produce nine early shrine visits against
+an assertion requiring fewer than nine (`lib/game/hospitality.test.ts:466`).
+The same focused test fails identically on an unchanged detached checkout of
+`9b9fd94b`. The established-shrine comparison still passes. This branch leaves
+that upstream gameplay/test threshold unchanged.
+
+Type checking and the benchmark-enabled production build pass on the final
+integration. The real GPU overlap, terrain contact, outlines, building selection,
+wildlife culling and partial-upload tests pass with foliage v6, including the exact
+wildlife color/ID comparisons. The traffic-control test verifies that the
+maximum density produces exactly 10,000 travelers on a 512 × 512 map.
 
 ## Reproduce
 
@@ -15,13 +279,15 @@ npm run start -- --port 3101
 ```
 
 Open the city at
-`http://localhost:3101/play?seed=12345&size=512&traffic=240&trees=sprites&benchmark=city`.
-Use `traffic=88` for the 1,408-character reproduction. The largest map generates
-16 travelers per traffic unit, so benchmark counts must be multiples of 16.
+`http://localhost:3101/play?seed=12345&size=512&traffic=625&trees=sprites&benchmark=city`.
+The traffic control now reaches 10,000 travelers on this map (`traffic=625`),
+and the browser benchmark defaults to that count. Use `traffic=88` for the
+1,408-character reproduction or `traffic=240` for the previous 3,840 limit.
+The largest map generates 16 travelers per traffic unit, so benchmark counts must be multiples of 16.
 The city flag and debug handle require the benchmark build flag above.
 
-The seed contains 240 fixture buildings plus two generated buildings outside
-the city, 140,303 sprite trees, and 1,404 separate scenery sprites. Grass,
+The 0.0.133 seed contains 240 fixture buildings plus two generated buildings outside
+the city, 90,556 sprite trees, and 1,404 separate scenery sprites. Grass,
 groundcover and small flowers are painted into terrain. These counts describe
 placed objects, not draw calls or individual triangles. The benchmark records
 the complete list of loaded texture images separately; its resource timing
@@ -31,7 +297,7 @@ The fixture uses real catalogue buildings, streets, terrain, wildlife, character
 rigs, A* routes and walking contacts. Residents receive deterministic random
 local destinations as they arrive. This stresses continuous city traffic;
 it does not claim to model an autonomous city's complete jobs and economy.
-The final 1,408-character run loaded 416 texture images at its initial close view;
+The 0.0.133 1,408-character run loaded 445 texture images at its initial close view;
 additional views and activities can load more.
 
 Run each command separately, without builds, unit tests or other GPU tests
@@ -39,11 +305,11 @@ running alongside it. Pause other open game tabs for meaningful comparisons.
 On macOS, prefix commands with `caffeinate -di` to prevent host sleep.
 
 ```sh
-BENCH_URL=http://localhost:3101 BENCH_SCENARIO=city BENCH_TERRAIN=sprites BENCH_COUNT=3840 BENCH_ZOOMS=36,70,140 BENCH_OCCLUSION=1 BENCH_SPEEDS=0.5,1,2,3,6 BENCH_PROFILE=0 BENCH_CITY_SMOKE=1 BENCH_OUTPUT=.context/city npm run bench:game
-BENCH_URL=http://localhost:3101 BENCH_SCENARIO=city BENCH_TERRAIN=sprites BENCH_COUNT=1408 BENCH_WARMUP=120000 BENCH_SECONDS=25 BENCH_SPEEDS=1,5 BENCH_MOTION_TRACE=1 BENCH_PROFILE=0 BENCH_OUTPUT=.context/city-soak npm run bench:game
-BENCH_URL=http://localhost:3101 BENCH_SCENARIO=city BENCH_TERRAIN=sprites BENCH_COUNT=3840 BENCH_SPEEDS=1,5 BENCH_MOTION=1 BENCH_ROTATE=0 BENCH_ZOOM_MOTION=1 BENCH_INPUT=1 BENCH_PROFILE=0 BENCH_OUTPUT=.context/city-motion npm run bench:game
-BENCH_URL=http://localhost:3101 BENCH_TERRAIN=sprites BENCH_TARGET=water BENCH_COUNT=3840 BENCH_SPEEDS=1,5 BENCH_ZOOM_MOTION=1 BENCH_INPUT=1 BENCH_PROFILE=0 BENCH_OUTPUT=.context/water npm run bench:game
-BENCH_SCENARIO=city BENCH_COUNT=3840 BENCH_SIM_RATE=10 BENCH_WARMUP_TICKS=900 npm run bench:sim
+BENCH_URL=http://localhost:3101 BENCH_SCENARIO=city BENCH_TERRAIN=sprites BENCH_COUNT=10000 BENCH_ZOOMS=36,70,140 BENCH_OCCLUSION=1 BENCH_SPEEDS=0.5,1,2,3,6 BENCH_PROFILE=0 BENCH_CITY_SMOKE=1 BENCH_OUTPUT=.context/city npm run bench:game
+BENCH_URL=http://localhost:3101 BENCH_SCENARIO=city BENCH_TERRAIN=sprites BENCH_COUNT=1408 BENCH_WARMUP=120000 BENCH_SECONDS=25 BENCH_SPEEDS=1,6 BENCH_MOTION_TRACE=1 BENCH_PROFILE=0 BENCH_OUTPUT=.context/city-soak npm run bench:game
+BENCH_URL=http://localhost:3101 BENCH_SCENARIO=city BENCH_TERRAIN=sprites BENCH_COUNT=10000 BENCH_SPEEDS=1,3,6 BENCH_MOTION=1 BENCH_ROTATE=0 BENCH_ZOOM_MOTION=1 BENCH_INPUT=1 BENCH_PROFILE=0 BENCH_OUTPUT=.context/city-motion npm run bench:game
+BENCH_URL=http://localhost:3101 BENCH_TERRAIN=sprites BENCH_TARGET=water BENCH_COUNT=3840 BENCH_SPEEDS=1,6 BENCH_ZOOM_MOTION=1 BENCH_INPUT=1 BENCH_PROFILE=0 BENCH_OUTPUT=.context/water npm run bench:game
+BENCH_SCENARIO=city BENCH_COUNT=10000 BENCH_SIM_RATE=12 BENCH_WARMUP_TICKS=900 npm run bench:sim
 ```
 
 Each browser run writes JSON metrics and screenshots to `BENCH_OUTPUT`.
@@ -81,7 +347,13 @@ routes between street junctions; pedestrians continue using building entrances. 
 recorded during camera movement. Selection checks cover roof cutaway and
 restoration, character highlights, tree leaf-hole picking and zoom changes.
 
-## Final 1,408-character measurements
+## PR #146 checkpoint history
+
+The sections below preserve measurements and decisions from the original pass,
+before the post-merge hidden-layer investigation and 0.0.132 integration above.
+Their asset counts and FPS describe those earlier builds.
+
+### 1,408-character measurements
 
 The integrated build was measured on Apple M5 / 16 GiB using hardware ANGLE
 Metal, 1440 × 900, DPR 1. Each row covers 20 seconds; views/speeds share one
@@ -125,7 +397,7 @@ checkpoints, not this exact final build. Mobile emulation also passed all five d
 fades and bridge/terrain restoration using the mobile threshold profile. No
 final-build maximum population or physical-mobile FPS claim is made.
 
-## Character-stutter investigation
+### Character-stutter investigation
 
 A short 1,408-character city run reached 58.1 FPS, p95 16.8 ms, with no main-thread
 long tasks. Simulated positions advanced continuously in the sampled walkers.
@@ -169,7 +441,7 @@ speedup. The latest sampled walkers had no simulated-position holds. Wildlife's
 inside the remaining frame budget; 60 FPS across all city conditions is not
 established by these measurements.
 
-## Current walking and distant-view changes
+### Current walking and distant-view changes
 
 A slow 5× frame could skip a complete foot-support change and end on the same
 foot. The old anchor then cancelled the body's next translation, even though
@@ -275,7 +547,7 @@ and 3.5 ms traveler positioning; at 5× they were 16.9, 24.5 and 3.5 ms. These
 CPU intervals do not measure GPU execution time. Smaller sprite textures would
 not remove these per-character operations.
 
-## Distant walking poses and playback ceiling
+### Distant walking poses and playback ceiling
 
 Walking phase continues to advance from actual distance every browser frame.
 Nearby characters and selected characters display the full authored sequence.
@@ -322,7 +594,7 @@ never queues all skipped atlas frames for later rendering. Host desktop/browser
 activity still varied between the fresh runs, so these are measured comparisons
 on this machine rather than a universal performance ceiling.
 
-## Character-overlap occlusion
+### Character-overlap occlusion
 
 Frustum culling already skips objects outside the camera. Depth testing hides
 covered pixels, but it does not skip a whole character's pose update or batch
@@ -351,7 +623,7 @@ the 1× sample hid 87 of 2,279 fully in-view IDs (3.8%). It measured 28.1 FPS.
 Whole-character overlap culling offers more potential on that crowded road,
 but its sampled savings are still small compared with the current frame deficit.
 
-## Distant outlines, masks and zoom settling
+### Distant outlines, masks and zoom settling
 
 At distant detail, ordinary character and tree overlap outlines are disabled.
 Trees neither receive nor cast overlap ink, and character/road visibility masks
@@ -405,7 +677,7 @@ now narrow that work before the unchanged oriented collision test. The 120-actor
 building) to about one second after the broad phase and corrected street-based
 cart journeys. This is test runtime, not a browser FPS comparison.
 
-## Final detail behavior and main integration
+### Final detail behavior and main integration
 
 Integrated `origin/main` through `7e339fe` (0.0.126), including building back-edge
 outlines, the new grass/water art, diagonal roads and river cliffs, resident job
@@ -451,7 +723,7 @@ checks five wheel transitions, actual presentation fading and hidden terrain/
 bridge details. Add `BENCH_CHECKS_ONLY=1` to run correctness checks without
 collecting a frame-rate sample. `BENCH_SMOKE=1` also includes those checks.
 
-## Terrain sprite comparison
+### Terrain sprite comparison
 
 Integrated the grass, water, environmental sprites and diagonal transitions
 from commit `0b8cf8e`, retaining the existing spatial terrain renderer. Both
@@ -474,7 +746,7 @@ The old-water 1× run also recorded 370 missing visible figures during zoom;
 these six new-terrain measurements recorded zero missing figures and zero
 camera/batch misalignment samples.
 
-## Other optimizations retained
+### Other optimizations retained
 
 - All travelers remain simulated. Detailed figures are mounted around the camera
   with bounded admission and a cache; hidden figures skip rig posing. Compatible
@@ -508,7 +780,7 @@ Resolution, shared rigs and uniform pixel scale remain in place. Unneeded
 outline and mask passes are skipped at distant detail.
 There is no dynamic resolution and no hidden population reduction.
 
-## Validation
+### Validation
 
 The final Vitest suite passes 156 files and 1,382 tests, including the city
 routing regression at 6× and cart broad-phase edit invalidation. Type checking
@@ -530,7 +802,7 @@ Shared-edge color ties may differ within 1/64 of a screen pixel of a tile edge;
 the measured differences cover less than 0.1% of compared pixels, with no depth
 changes. These are checked separately from interior color mismatches.
 
-## Historical forest checkpoint
+### Historical forest checkpoint
 
 Before the new terrain integration and city fixture, the optimized sprite-tree
 forest contained 143,594 trees. At view size 36, 3,840 travelers measured

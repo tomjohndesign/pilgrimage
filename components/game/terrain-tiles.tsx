@@ -1,14 +1,18 @@
 "use client"
 
-import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react"
+import { benchmarkWork } from "@/lib/game/benchmark-work"
+import { TerrainMapContext } from "./terrain-map-context"
+import { createContext, useContext, memo, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
+import { waterfallTurbulence } from "@/lib/game/map/waterfall-turbulence"
+import { DEFAULT_ELEVATION } from "@/lib/game/map/elevation"
 import { RoadSegmentTexture } from "@/lib/game/render/road-segment-texture"
 import { sceneryDetail } from "@/lib/game/render/scenery-detail"
 import { elevationShader } from "@/lib/game/render/terrain-elevation"
 import { terrainHiddenFaces, compactTerrainFaces } from "@/lib/game/render/terrain-hidden-faces"
-import { TERRAIN_BLOCK, terrainBlocks, sameRoadSnapshot, type TerrainBlockBounds } from "@/lib/game/render/terrain-blocks"
+import { TERRAIN_BLOCK, terrainBlockState, type TerrainBlockState, terrainBlocks, sameRoadSnapshot, type TerrainBlockBounds } from "@/lib/game/render/terrain-blocks"
 import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
 import { terrainCorner, type CliffCorner } from "@/lib/game/map/cliff-corners"
 import { waterDepthCorners } from "@/lib/game/map/water-depth-corners"
@@ -662,7 +666,10 @@ interface TerrainSurfaces extends TerrainShared {
   waterPalette: THREE.DataTexture
   cuts: ReadonlyMap<number, CliffCorner>
   hiddenFaces: Uint8Array
+  turbulence: Float32Array
 }
+
+const TerrainContext = createContext<TerrainSurfaces>(null!)
 
 /** Static land is batched in spatial blocks. Each road snapshot only
  * repaints the blocks it changes; offscreen blocks are rejected in every pass. */
@@ -694,29 +701,39 @@ export function TerrainTiles(props: TerrainProps) {
     texture.minFilter = texture.magFilter = THREE.NearestFilter
     texture.needsUpdate = true
     return { texture, atlas: shadowAtlas, floor: forestFloor, grain: edgeGrain, size: new THREE.Vector2(map.width, map.depth) }
-  }, [map, trees, felledTrees, shadowAtlas, forestFloor, edgeGrain])
+  }, [map.tiles, map.width, map.depth, map.shortcuts, map.darkForests, trees, felledTrees, shadowAtlas, forestFloor, edgeGrain])
   useEffect(() => () => treeGround.texture.dispose(), [treeGround])
 
   const tier = ROAD_TIERS[clampRoadTier(props.roadTier ?? DEFAULT_ROAD_TIER)]
-  const shared = useMemo<TerrainShared>(() => {
-    const bridges = bridgeLayout(map)
-    const coveredLand = new Set([...bridges.connectors, ...bridges.ramps].map(t => t.z * map.width + t.x))
-    const floors = dirtFloorMask(map)
-    const floorTexture = new THREE.DataTexture(floors.data, map.width, map.depth)
-    floorTexture.needsUpdate = true
+  const grain = useMemo(() => {
     const rng = makeRng(deriveSeed(map.seed ?? 0, SEED_STREAM.tileJitter))
-    return { coveredLand, floors, floorTexture, shoulders: junctionShoulders(map, coveredLand),
-      grain: Float64Array.from({ length: map.width * map.depth }, () => rng() - .5),
-      floor: (map.elevation?.height.reduce((a, b) => Math.min(a, b), SLAB_TOP) ?? SLAB_TOP) - .02 }
-  }, [map])
-  useEffect(() => () => shared.floorTexture.dispose(), [shared])
+    return Float64Array.from({ length: map.width * map.depth }, () => rng() - .5)
+  }, [map.tiles, map.width, map.depth, map.seed])
+  const previousLandscape = useRef<Pick<TerrainShared, "coveredLand" | "shoulders" | "grain">>(undefined)
+  const landscape = useMemo(() => {
+    const bridges = bridgeLayout(map), old = previousLandscape.current
+    let coveredLand = new Set([...bridges.connectors, ...bridges.ramps].map(t => t.z * map.width + t.x))
+    if (old && old.coveredLand.size === coveredLand.size && [...coveredLand].every(i => old.coveredLand.has(i))) coveredLand = old.coveredLand
+    let shoulders = junctionShoulders(map, coveredLand)
+    if (old && old.shoulders.size === shoulders.size && [...shoulders].every(([i, flags]) => flags.every((flag, side) => old.shoulders.get(i)?.[side] === flag))) shoulders = old.shoulders
+    const next = old && old.coveredLand === coveredLand && old.shoulders === shoulders && old.grain === grain
+      ? old : { coveredLand, shoulders, grain }
+    previousLandscape.current = next
+    return next
+  }, [map, grain])
+  const floors = useMemo(() => dirtFloorMask(map), [map.tiles, map.width, map.depth, map.buildings, map.elevation, map.water, map.site])
+  const floorTexture = useMemo(() => new THREE.DataTexture(new Uint8Array(map.width * map.depth * 4), map.width, map.depth), [map.width, map.depth])
+  useLayoutEffect(() => { floorTexture.image.data = floors.data; floorTexture.needsUpdate = true }, [floorTexture, floors])
+  useEffect(() => () => floorTexture.dispose(), [floorTexture])
+  const floor = useMemo(() => (map.elevation?.height.reduce((a, b) => Math.min(a, b), SLAB_TOP) ?? SLAB_TOP) - .02, [map.elevation])
+  const shared = useMemo<TerrainShared>(() => ({ ...landscape, floors, floorTexture, floor }), [landscape, floors, floorTexture, floor])
   const { coveredLand } = shared
+  const growthField = useMemo(() => groundGrowthField(map), [map.tiles, map.width, map.depth, map.seed, map.buildings])
   const growth = useMemo(() => {
-    const field = groundGrowthField(map)
-    const texture = new THREE.DataTexture(field.data, field.width, field.height)
-    texture.needsUpdate = true
-    return { texture, origin: new THREE.Vector2(...field.origin) }
-  }, [map])
+    const texture = new THREE.DataTexture(new Uint8Array(growthField.data.length), growthField.width, growthField.height)
+    return { texture, origin: new THREE.Vector2(...growthField.origin) }
+  }, [growthField.width, growthField.height, map.width, map.depth])
+  useLayoutEffect(() => { growth.texture.image.data = growthField.data; growth.texture.needsUpdate = true }, [growth, growthField])
   useEffect(() => () => growth.texture.dispose(), [growth])
 
   const palette = useMemo(() => {
@@ -752,7 +769,7 @@ export function TerrainTiles(props: TerrainProps) {
     const texture = new THREE.DataTexture(data, map.width, map.depth, THREE.RGBAFormat, THREE.FloatType)
     texture.needsUpdate = true
     return texture
-  }, [map, coveredLand])
+  }, [map.tiles, map.width, map.depth, map.seed, map.water, coveredLand])
   useEffect(() => () => palette.dispose(), [palette])
   const waterPalette = useMemo(() => {
     const data = new Float32Array(map.tiles.length * 4), corners = waterDepthCorners(map)
@@ -770,7 +787,7 @@ export function TerrainTiles(props: TerrainProps) {
     const texture = new THREE.DataTexture(data, map.width, map.depth, THREE.RGBAFormat, THREE.FloatType)
     texture.needsUpdate = true
     return texture
-  }, [map])
+  }, [map.tiles, map.width, map.depth, map.seed, map.water])
   useEffect(() => () => waterPalette.dispose(), [waterPalette])
   const cuts = useMemo(() => {
     const cuts = new Map<number, CliffCorner>()
@@ -781,9 +798,15 @@ export function TerrainTiles(props: TerrainProps) {
     return cuts
   }, [map, coveredLand])
   const hiddenFaces = useMemo(() => terrainHiddenFaces(map, cuts), [map, cuts])
-  const surfaces = useMemo(() => ({ ...shared, treeGround, growth, palette, waterPalette, cuts, hiddenFaces }), [shared, treeGround, growth, palette, waterPalette, cuts, hiddenFaces])
+  const turbulence = useMemo(() => waterfallTurbulence(map.water, map.tiles.length, map.elevation?.settings.turbulenceReach ?? DEFAULT_ELEVATION.turbulenceReach), [map.water, map.tiles.length, map.elevation?.settings.turbulenceReach])
+  const surfaces = useMemo(() => ({ ...shared, turbulence, treeGround, growth, palette, waterPalette, cuts, hiddenFaces }), [shared, turbulence, treeGround, growth, palette, waterPalette, cuts, hiddenFaces])
   const blocks = useMemo(() => terrainBlocks(map.width, map.depth), [map.width, map.depth])
-  const founding = useMemo(() => diagonalRoadSegments(map, shared.coveredLand), [map, shared])
+  const blockState = useRef<TerrainBlockState>(undefined)
+  const revisions = useMemo(() => {
+    blockState.current = terrainBlockState(map, blocks, blockState.current)
+    return blockState.current.revisions
+  }, [map, blocks])
+  const founding = useMemo(() => diagonalRoadSegments(map, coveredLand), [map, coveredLand])
   const blockForTile = useMemo(() => {
     const across = Math.ceil(map.width / TERRAIN_BLOCK)
     return (tile: number) => blocks[Math.floor(Math.floor(tile / map.width) / TERRAIN_BLOCK) * across + Math.floor((tile % map.width) / TERRAIN_BLOCK)].id
@@ -796,7 +819,7 @@ export function TerrainTiles(props: TerrainProps) {
       list.push(tile); grouped.set(key, list)
     }
     return grouped
-  }, [map, shared, blockForTile])
+  }, [map.tiles, landscape, blockForTile])
   const previous = useRef(new Map<number, { roads: Map<number, readonly RoadSegment[]>; wear: number[] }>())
   const snapshots = useMemo(() => {
     const source = props.traveledRoads ?? founding
@@ -849,19 +872,21 @@ export function TerrainTiles(props: TerrainProps) {
   const slabPosition: [number, number, number] = [0, shared.floor - SLAB_THICKNESS / 2, 0]
   const slabArgs: [number, number, number] = [map.width + SLAB_EXPAND, SLAB_THICKNESS, map.depth + SLAB_EXPAND]
   return <group name="terrain">
-    <WaterMotion map={map} waterPalette={waterPalette} edgeGrain={edgeGrain} />
-    <ElevationEdges map={map} />
     <mesh position={slabPosition}><boxGeometry args={slabArgs} /><meshLambertMaterial map={dirt} /></mesh>
     <mesh position={slabPosition} layers-mask={OUTLINE_ID_LAYER_MASK}><boxGeometry args={slabArgs} /><meshBasicMaterial color="black" toneMapped={false} /></mesh>
-    {blocks.map(bounds => <TerrainTileBlock key={bounds.id} {...props} bounds={bounds} shared={surfaces} textures={textures}
-      traveledRoads={snapshots.get(bounds.id)!.roads} wear={snapshots.get(bounds.id)!.wear} />)}
+    <TerrainMapContext.Provider value={map}><TerrainContext.Provider value={surfaces}>{blocks.map((bounds, index) => <TerrainTileBlock key={bounds.id}
+      roadTier={props.roadTier} traffic={props.traffic} relicTraffic={props.relicTraffic} look={props.look} showGrid={props.showGrid}
+      regrowRoads={props.regrowRoads} bounds={bounds} revision={revisions[index]} textures={textures}
+      traveledRoads={snapshots.get(bounds.id)!.roads} wear={snapshots.get(bounds.id)!.wear} />)}</TerrainContext.Provider></TerrainMapContext.Provider>
   </group>
 }
 
 const TerrainTileBlock = memo(function TerrainTileBlock({
-  map, roadTier = DEFAULT_ROAD_TIER, traffic = DEFAULT_TRAFFIC, relicTraffic = traffic,
-  look = DEFAULT_ROAD_LOOK, showGrid = false, traveledRoads, regrowRoads = false, bounds, shared, textures, wear: wearSnapshot,
-}: TerrainProps & { bounds: TerrainBlockBounds; shared: TerrainSurfaces; textures: { roadTexture: THREE.Texture; trailTexture: THREE.Texture; grass: THREE.Texture; ground: THREE.Texture; sand: THREE.Texture; dirt: THREE.Texture }; wear: number[] }) {
+  roadTier = DEFAULT_ROAD_TIER, traffic = DEFAULT_TRAFFIC, relicTraffic = traffic,
+  look = DEFAULT_ROAD_LOOK, showGrid = false, traveledRoads, regrowRoads = false, bounds, revision, textures, wear: wearSnapshot,
+}: Omit<TerrainProps, "map"> & { bounds: TerrainBlockBounds; revision: object; textures: { roadTexture: THREE.Texture; trailTexture: THREE.Texture; grass: THREE.Texture; ground: THREE.Texture; sand: THREE.Texture; dirt: THREE.Texture }; wear: number[] }) {
+  const map = useContext(TerrainMapContext)!
+  const shared = useContext(TerrainContext)
   const { roadTexture, trailTexture, grass, ground, sand, dirt } = textures
   const groundMeshRef = useRef<THREE.InstancedMesh>(null)
   const roadMeshRef = useRef<THREE.InstancedMesh>(null)
@@ -880,7 +905,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
       segments.set(index, roads.map(s => s[4] < 2 || s[4] === 3 ? [s[0], s[1], s[2], s[3], s[4], opacity] : s))
     }
     return segments
-  }, [map, coveredLand, traveledRoads, regrowRoads, tier.paved, wearSnapshot])
+  }, [revision, coveredLand, traveledRoads, regrowRoads, tier.paved, wearSnapshot])
   const segmentData = useMemo(() => {
     const count = [...diagonalSegments.values()].reduce((sum, segments) => sum + segments.length * 2, 0)
     const data = new Float32Array(Math.max(1, count) * 4)
@@ -895,7 +920,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
       }
     }
     return { data, ranges }
-  }, [diagonalSegments, traffic, relicTraffic, tier.tier, map, regrowRoads])
+  }, [diagonalSegments, traffic, relicTraffic, tier.tier, revision, regrowRoads])
   const segmentTexture = useMemo(() => new RoadSegmentTexture(), [])
   useEffect(() => () => segmentTexture.dispose(), [segmentTexture])
   const cliffCuts = useMemo(() => {
@@ -905,7 +930,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
       if (cut) cuts.set(z * map.width + x, cut)
     }
     return cuts
-  }, [map, shared.cuts, bounds])
+  }, [revision, bounds])
   const geometryCount = count + cliffCuts.size
   const segmentUniforms = useMemo(() => ({ texture: { value: null as THREE.DataTexture | null }, size: { value: new THREE.Vector2() } }), [])
   useLayoutEffect(() => {
@@ -923,7 +948,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
     const previous = previousRoadTiles.current
     if (previous.length !== tiles.length || tiles.some((tile, i) => tile !== previous[i])) previousRoadTiles.current = tiles
     return previousRoadTiles.current
-  }, [map, bounds, coveredLand, shoulders, diagonalSegments, floors, cliffCuts])
+  }, [revision, bounds, coveredLand, shoulders, diagonalSegments, cliffCuts])
   const roadCount = roadTiles.length
   const roadTileSet = useMemo(() => new Set(roadTiles), [roadTiles])
 
@@ -946,7 +971,17 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
     lookUniforms.edgeWidth.value = look.edgeWidth
     lookUniforms.pixelRatio.value = dpr
   }, [lookUniforms, look, dpr])
-  useFrame(({ scene }) => { lookUniforms.edgeLine.value = sceneryDetail(scene) === 0 ? look.edgeLine : 0 })
+  useFrame(({ scene }) => {
+    lookUniforms.edgeLine.value = sceneryDetail(scene) === 0 ? look.edgeLine : 0
+    if (process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1") {
+      const shown = benchmarkWork.pathDrawing
+      if (roadMeshRef.current) {
+        roadMeshRef.current.material = shown ? roadMaterial : groundMaterial
+        roadMeshRef.current.userData.pathsVisible = shown
+      }
+      if (edgeMeshRef.current) edgeMeshRef.current.visible = shown && roadCount > 0
+    }
+  })
 
   // Tile boundaries sit at integer offsets from -width/2, so the lattice
   // origin is that half-extent modulo one tile.
@@ -1227,7 +1262,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
     edgeMesh.computeBoundingSphere()
     idMesh.computeBoundingSphere()
   }, [
-    map,
+    revision,
     tier,
     roadGeometry,
     groundGeometry,
@@ -1238,7 +1273,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
     idGeometry,
     shoulders,
     roadTileSet,
-    floors, bounds, shared,
+    bounds,
   ])
 
   // Wear changes frequently; land colors, terrain matrices and cliff bounds do
@@ -1256,10 +1291,12 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
       surface.setZ(i, start); surface.setW(i, count)
     })
     land.needsUpdate = surface.needsUpdate = true
-  }, [map, roadGeometry, roadTiles, traffic, relicTraffic, tier, regrowRoads, segmentData, wearSnapshot, shared])
+  }, [revision, roadGeometry, roadTiles, traffic, relicTraffic, tier, regrowRoads, segmentData, wearSnapshot])
 
   return (
     <StaticBlock>
+      <ElevationEdges bounds={bounds} revision={revision} />
+      <WaterMotion bounds={bounds} revision={revision} waterPalette={waterPalette} edgeGrain={treeGround!.grain} turbulenceField={shared.turbulence} />
       <instancedMesh
         frustumCulled
         ref={groundMeshRef}
@@ -1270,6 +1307,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
       </instancedMesh>
 
       <instancedMesh
+        name="terrain-path"
         ref={roadMeshRef}
         key={tier.id}
         // Skip empty road batches, such as paths entirely covered by bridges.
@@ -1291,6 +1329,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
         key={`edge-${tier.id}`}
         visible={roadCount > 0}
         frustumCulled
+        name="terrain-path-edge"
         ref={edgeMeshRef}
         args={[undefined as unknown as THREE.BufferGeometry, undefined as unknown as THREE.Material, roadCount]}
         layers-mask={ROAD_EDGE_LAYER_MASK}

@@ -190,13 +190,22 @@ export function levelBuildingGround(map: GameMap, building: Pick<BuildingDef, "x
   const original = map.elevation
   if (!original) return undefined
   const { x, z, w, d } = building
-  const foundation = groundHeight(map, x + (w - 1) / 2, z + (d - 1) / 2) - TILE_HEIGHT
-  const elevation = { ...original, height: [...original.height], corners: [...original.corners] }
+  let foundation = groundHeight(map, x + (w - 1) / 2, z + (d - 1) / 2) - TILE_HEIGHT
+  const corner = original.corners[(z * map.width + x) * 4]
+  // Adding/subtracting TILE_HEIGHT can round an already flat foundation.
+  if (Math.abs(foundation - corner) < 1e-12) foundation = corner
+  // Most shrine plots are already level. Keep their buffers (and all readers'
+  // caches) intact; copy only the arrays that grading actually changes.
+  const elevation = { ...original }
+  const write = (field: "height" | "corners", index: number) => {
+    if (elevation[field][index] === foundation) return
+    if (elevation[field] === original[field]) elevation[field] = [...original[field]]
+    elevation[field][index] = foundation
+  }
   const inside = (tx: number, tz: number) => tx >= x && tx < x + w && tz >= z && tz < z + d
-  const water = Uint8Array.from(map.tiles, (terrain, i) =>
-    (map.water ? map.water.depth[i] > 0 : terrain === "water" || terrain === "bridge") ? 1 : 0)
+  const wet = (i: number) => map.water ? map.water.depth[i] > 0 : map.tiles[i] === "water" || map.tiles[i] === "bridge"
   for (let tz = z; tz < z + d; tz++) for (let tx = x; tx < x + w; tx++) {
-    elevation.height[tz * map.width + tx] = foundation
+    write("height", tz * map.width + tx)
   }
   for (let vz = z; vz <= z + d; vz++) for (let vx = x; vx <= x + w; vx++) {
     const touching: Array<{ x: number; z: number; i: number; corner: number }> = []
@@ -207,15 +216,34 @@ export function levelBuildingGround(map: GameMap, building: Pick<BuildingDef, "x
     }
     const sharedHeights = touching.filter((t) => inside(t.x, t.z)).map((t) => original.corners[t.i * 4 + t.corner])
     for (const t of touching) {
-      if (water[t.i]) continue
+      if (wet(t.i)) continue
       if (!inside(t.x, t.z)) {
         if (!sharedHeights.includes(original.corners[t.i * 4 + t.corner])) continue
         if (map.buildings.some((b) => t.x >= b.x && t.x < b.x + b.w && t.z >= b.z && t.z < b.z + b.d)) continue
       }
-      elevation.corners[t.i * 4 + t.corner] = foundation
+      write("corners", t.i * 4 + t.corner)
     }
   }
-  updateElevationEdges(elevation, map.width, map.depth, water, map.water?.surface ?? original.height)
+  if (elevation.height === original.height && elevation.corners === original.corners) return original
+  if (elevation.height !== original.height) {
+    elevation.slope = [...original.slope]; elevation.cliffs = [...original.cliffs]
+    const height = (i: number) => wet(i) ? (map.water?.surface ?? original.height)[i] : elevation.height[i]
+    // Only edges touching the footprint can have changed, including the
+    // reverse edge on its neighbours. Corner smoothing does not change them.
+    for (let tz = Math.max(0, z - 1); tz < Math.min(map.depth, z + d + 1); tz++) {
+      for (let tx = Math.max(0, x - 1); tx < Math.min(map.width, x + w + 1); tx++) {
+        const i = tz * map.width + tx
+        elevation.slope[i] = 0; elevation.cliffs[i] = 0
+        ROUTE_DIRS.forEach(([dx, dz], side) => {
+          const nx = tx + dx, nz = tz + dz, n = nz * map.width + nx
+          if (nx < 0 || nz < 0 || nx >= map.width || nz >= map.depth) return
+          const delta = Math.abs(height(i) - height(n))
+          if (!wet(i) && !wet(n)) elevation.slope[i] = Math.max(elevation.slope[i], delta)
+          if (delta >= elevation.settings.cliffThreshold) elevation.cliffs[i] |= 1 << side
+        })
+      }
+    }
+  }
   return elevation
 }
 
