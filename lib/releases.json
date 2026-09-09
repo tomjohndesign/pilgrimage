@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "9eb124e4ca3994c0790662fee4ffd835079615bf",
-  "releaseCount": 136,
+  "lastProcessedCommit": "54eb9fef6390abeb5a9695478eda2428541d66df",
+  "releaseCount": 137,
   "releases": [
+    {
+      "version": "0.0.151",
+      "title": "Release 0.0.151",
+      "summary": "Document performance restart cases and deferred computation offloading (#171)",
+      "commit": "54eb9fef6390abeb5a9695478eda2428541d66df"
+    },
     {
       "version": "0.0.150",
       "title": "Release 0.0.150",
