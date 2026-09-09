@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "264fbf246cc2e7c1dcd8097745c6abb4ab362bc7",
-  "releaseCount": 134,
+  "lastProcessedCommit": "c2ef49bc76ca780c144681b620afbf0dc5c74bb4",
+  "releaseCount": 135,
   "releases": [
+    {
+      "version": "0.0.149",
+      "title": "Release 0.0.149",
+      "summary": "Make begging reversible with recovery at 15 gold (#169)",
+      "commit": "c2ef49bc76ca780c144681b620afbf0dc5c74bb4"
+    },
     {
       "version": "0.0.148",
       "title": "Release 0.0.148",
