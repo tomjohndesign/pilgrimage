@@ -1,6 +1,6 @@
 import sharp from "sharp"
 import { readFileSync } from "node:fs"
-const version = process.argv[2] ?? "v31"
+const version = process.argv[2] ?? "v32"
 const jobs = process.argv.includes("--jobs")
 if (!/^v\d+$/.test(version)) throw new Error("Expected a population version such as v1")
 const pack = JSON.parse(readFileSync(`public/textures/characters/${jobs ? "jobs" : "population"}/${version}/manifest.json`, "utf8"))

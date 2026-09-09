@@ -168,8 +168,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
         missingVisibleUnits: namedRoot("travelers")?.userData.missingVisibleUnits ?? 0 }),
       adaptiveStatus: () => ({ ...crowdRenderStatus, quality: frameQuality(scene), detail: sceneryDetailStatus(scene)?.current,
         treeDensity: namedRoot("foliage-prototype")?.children[0]?.userData.treeDensity,
-        wildlife: namedRoot("wildlife")?.visible, waterDetail: namedRoot("water-shimmer")?.visible,
-        simpleBatches: namedRoot("character-batches")?.children.filter(child => child.visible && child.userData.simplified).length ?? 0 }),
+        wildlife: namedRoot("wildlife")?.visible, waterDetail: namedRoot("water-shimmer")?.visible }),
       hiddenTraveler: () => {
         const root = namedRoot("travelers")
         let hidden: { id: number; x: number; z: number } | null = null

@@ -12,7 +12,7 @@ function setup(kind: "well" | "watering-hole" = "well", count = 1) {
     road: Array.from({ length: 24 }, (_, x) => ({ x, z: 7 })) }
   for (const p of map.road!) map.tiles[p.z * map.width + p.x] = "path"
   const travelers: Traveler[] = Array.from({ length: count }, (_, id) => ({ id, name: `Walker ${id}`, type: TRAVELER_TYPES.peasant,
-    attributes: { gold: 0, status: 50, hunger: 80, thirst: 5, piety: 0, stamina: 80, jobless: false, skills: [], age: 30 },
+    attributes: { happiness: 80, gold: 0, status: 50, hunger: 80, thirst: 5, piety: 0, stamina: 80, jobless: false, skills: [], age: 30 },
     offset: .5, direction: 1, pace: 1 }))
   const sim = createSim(travelers, map)
   Object.assign(sim.balance.rules, { thirstDecay: 0, hungerDecay: 0, staminaDecay: 0 })

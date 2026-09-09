@@ -7,7 +7,8 @@ import { tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } from "../m
 import { waterSourceAccessPoints, type WaterSourceKind, type WaterSourcePlacement } from "./assets"
 
 export interface WaterPoint { x: number; y: number; z: number }
-export const WATER_SEEK_THRESHOLD = 20
+/** Match the drink threshold so happiness decides between taverns and free water. */
+export const WATER_SEEK_THRESHOLD = 60
 export const WATER_SEEK_RADIUS = 8
 export const WATER_VISIT_SECONDS = 8
 

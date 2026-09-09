@@ -204,7 +204,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
   function bench(name: string, x: number, z: number, length: number, top = .3, facing?: number) {
     for (const end of [-1, 1]) pole(`${name}-leg-${end}`, [x+end*length*.35,floor,z], [x+end*length*.35,floor+top,z], .035, "interior")
     box(`${name}-seat`, "interior", [x,floor+top,z], [length,.045,.18], palette.paleWood, undefined, false)
-    if (facing !== undefined) parts[parts.length-1].support = { clips: ["sitting"], heading: facing }
+    if (facing !== undefined) parts[parts.length-1].support = { clips: ["sitting", "seatedMeal", "seatedDrink"], heading: facing }
   }
   if (variant === "garden") {
     // Two herb beds leave a narrow flagstone walk between them.
@@ -423,12 +423,28 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
         const { side, x: tx, z: tz, w: tableW, d: tableD } = table
         for(const a of [-1,1]) for(const b of [-1,1]) pole(`tavern-table-${side}-leg-${a}-${b}`,[tx+a*tableW*.35,0,tz+b*tableD*.32],[tx+a*tableW*.35,.37,tz+b*tableD*.32],.025,"interior")
         box(`tavern-table-${side}-top`,"interior",[tx,.39,tz],[tableW,.045,tableD],palette.paleWood,undefined,false)
-        for(const b of [-1,1]) bench(`tavern-bench-${side}-${b}`,tx,tz+b*depth*.11,tableW,.23,b>0 ? Math.PI : 0)
-        for(const a of [-1,1]) {
-          const mx=tx+a*tableW*.23
-          box(`tavern-cup-${side}-${a}`,"interior",[mx,.445,tz],[.045,.065,.045],"#ad9166",undefined,false)
-          box(`tavern-ale-${side}-${a}`,"interior",[mx,.48,tz],[.032,.005,.032],"#614e32",undefined,false)
+        for(const b of [-1,1]) {
+          const name = `tavern-bench-${side}-${b}`, seatZ = tz+b*depth*.11
+          bench(name,tx,seatZ,.32,.23,b>0 ? Math.PI : 0)
+          // Plain pegged plank chairs, with the backs away from the tabletop.
+          for (const end of [-1,1]) pole(`${name}-back-post-${end}`,
+            [tx+end*.13,floor,seatZ+b*.07],[tx+end*.13,floor+.49,seatZ+b*.07],.022,"interior")
+          box(`${name}-back`,"interior",[tx,floor+.43,seatZ+b*.07],[.30,.10,.035],palette.wood,undefined,false)
         }
+        for(const a of [-1,1]) {
+          const mx=tx
+          box(`tavern-trencher-${side}-${a}`,"interior",[mx,.421,tz+a*tableD*.23],[.15,.018,.13],palette.wood,undefined,false)
+          box(`tavern-bread-${side}-${a}`,"interior",[mx-.025,.446,tz+a*tableD*.23],[.085,.035,.065],"#b58d52",undefined,false)
+          box(`tavern-cheese-${side}-${a}`,"interior",[mx+.045,.44,tz+a*tableD*.23],[.04,.025,.05],"#cfba79",undefined,false)
+          box(`tavern-cup-${side}-${a}`,"interior",[mx+a*.14,.445,tz+a*tableD*.25],[.045,.065,.045],"#ad9166",undefined,false)
+          box(`tavern-ale-${side}-${a}`,"interior",[mx+a*.14,.48,tz+a*tableD*.25],[.032,.005,.032],"#614e32",undefined,false)
+        }
+      }
+      for (const seat of tavernLayout(width, depth).exteriorBenches) {
+        const first = parts.length
+        bench(seat.id.replace(/-seat$/, ""), seat.x, seat.z, seat.w, .23, seat.heading)
+        // Exterior furniture remains visible with the roof on or walls cut away.
+        for (const part of parts.slice(first)) part.layer = "base"
       }
       const counter = tavernLayout(width, depth).counter
       const counterW=counter.w-.035,counterX=counter.x,counterZ=counter.z

@@ -141,3 +141,14 @@ the seat-sharing change.
 After seat sharing, the four focused tavern navigation, hospitality, town
 resident, and walking-shortcut suites passed 130 of 131 tests; only the same
 pre-existing payment assertion failed. TypeScript checking passed again.
+
+After merging main's tavern meals, resting, wellbeing, and character-detail
+changes, all 266 tests in the nine focused simulation and rendering suites pass
+(the hospitality suite was rerun after adapting its full-tavern expectations).
+Main fixes the old payment assertion. The sharing scenario now covers seven
+paying visitors using six seats, including the new exterior seats. Free-rest
+reservations retain main's behavior; paying visitors may share occupied seats.
+TypeScript checking, the benchmark-enabled production build, and the GPU
+comparison pass: both batch formats match 1,797,424 visible pixels exactly and
+preserve authored colors in all 96 detailed-color cases. These are correctness
+checks; the historical performance numbers above were not rerun after merging.

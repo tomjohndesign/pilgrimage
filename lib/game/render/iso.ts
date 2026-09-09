@@ -2,10 +2,9 @@
  * Isometric camera math. Pure functions — no three.js, no React — so the
  * projection and panning behaviour can be unit-tested headlessly.
  *
- * The camera is orthographic with a fixed pitch and one of four fixed yaws,
- * RCT2-style. It orbits a `target` point on the ground plane (y = 0); panning
- * moves that target, rotation snaps between the four views, zoom changes the
- * orthographic frustum height.
+ * The camera is orthographic with a fixed pitch. It orbits a `target` point on
+ * the ground plane (y = 0); panning moves that target, keyboard rotation steps
+ * by quarter turns, touch twists rotate freely, and zoom changes the frustum height.
  */
 
 /** True isometric: atan(1/√2) ≈ 35.264°, so a cube's top face is a regular rhombus. */

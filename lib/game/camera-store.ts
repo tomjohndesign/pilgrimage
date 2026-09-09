@@ -33,7 +33,7 @@ interface CameraState {
   /** Camera focus point on the ground plane. */
   targetX: number
   targetZ: number
-  /** Unbounded integer so rotation tweens can wrap without spinning backwards. */
+  /** Unbounded quarter turns; fractional after a touch twist, so yaw stays continuous. */
   viewIndex: number
   /** Orthographic frustum height in world units. */
   viewSize: number

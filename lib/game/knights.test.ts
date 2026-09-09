@@ -17,7 +17,7 @@ function fixture(direction: 1 | -1) {
     site: { hovelId: "shrine", door: { x: 14, z: 10 }, junction: 14, branch: Array.from({ length: 5 }, (_, i) => ({ x: 14, z: 14 - i })) } }
   for (const p of [...map.road!, ...map.site!.branch]) map.tiles[p.z * map.width + p.x] = "path"
   const t: Traveler = { id: 0, type: TRAVELER_TYPES.knight, name: "Knight", pace: 1, direction, offset: (14 - direction * 0.03) / 29,
-    attributes: { gold: 100, piety: 100, hunger: 100, thirst: 100, stamina: 100, status: 100, jobless: false, skills: [], age: 30 } }
+    attributes: { happiness: 80, gold: 100, piety: 100, hunger: 100, thirst: 100, stamina: 100, status: 100, jobless: false, skills: [], age: 30 } }
   const sim = createSim([t], map); sim.shrineRenown = 10000
   sim.trees = [1, -1].map(side => ({ x: tileToWorldX(map, 14 + side * 2), y: 0.2, z: tileToWorldZ(map, 17), species: "oak" as const }))
   return { map, t, sim, s: sim.travelers.get(0)! }

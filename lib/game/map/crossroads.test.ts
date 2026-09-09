@@ -3,11 +3,14 @@ import { forestTrackTiles } from "./forest-entrances"
 import { createFootpaths, foundingRoadTraffic, foundingRoadStrength } from "../footpaths"
 import { describe, expect, it } from "vitest"
 import { createCrossroads, crossroadIslandAt } from "./crossroads"
-import { type GameMap, type TilePos, tileToWorldX, tileToWorldZ } from "./types"
+import { type GameMap, type TilePos, tileAt, tileToWorldX, tileToWorldZ } from "./types"
 import { settlementRoute } from "../settlement-route"
 import { shortcutCost } from "../walking-shortcuts"
 import { cartRoute } from "../transport/route"
 import { crossroadSignpostParts } from "../building-art/structure"
+import { addRoadsideTowns } from "./roadside-towns"
+import { tJunctionVerge } from "./signpost"
+import { elevationStep } from "./elevation"
 
 function fixture(): GameMap {
   const road = Array.from({ length: 15 }, (_, x) => ({ x, z: 7 }))
@@ -25,6 +28,55 @@ function continuous(route: TilePos[]) {
 }
 
 describe("crossroads network", () => {
+  it.each([[1, 0], [-1, 0], [0, 1], [0, -1]])("puts a T marker on the missing (%i, %i) arm without changing paths", (dx, dz) => {
+    const map = fixture()
+    map.site = undefined; map.darkForests = []; map.road = []
+    map.tiles.fill("grass")
+    for (const [x, z] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      if (x === dx && z === dz) continue
+      for (let i = 0; i <= 5; i++) map.tiles[(7 + z * i) * map.width + 7 + x * i] = "path"
+    }
+    const before = [...map.tiles]
+    createCrossroads(map)
+    const center = { x: 7 + dx, z: 7 + dz }
+    expect(map.crossroads).toHaveLength(1)
+    expect(map.crossroads![0].center).toEqual(center)
+    expect(map.crossroads![0].arms).toHaveLength(3)
+    expect(crossroadIslandAt(map, 7, 7)).toBe(false)
+    for (let i = 0; i < before.length; i++) {
+      expect(map.tiles[i]).toBe(i === center.z * map.width + center.x ? "clearing" : before[i])
+    }
+  })
+  it("keeps T-junction road and shrine routes unchanged", () => {
+    const map = fixture()
+    for (const p of map.darkForests![0].approach.slice(1)) map.tiles[p.z * map.width + p.x] = "grass"
+    map.darkForests = []
+    const before = JSON.stringify({ road: map.road, site: map.site })
+    createCrossroads(map)
+    expect(map.crossroads![0].center).toEqual({ x: 7, z: 6 })
+    expect(JSON.stringify({ road: map.road, site: map.site })).toBe(before)
+  })
+  it.each(["water", "darkwood"] as const)("omits a T marker when the opposite verge is %s", terrain => {
+    const map = fixture()
+    for (const p of map.darkForests![0].approach.slice(1)) map.tiles[p.z * map.width + p.x] = "grass"
+    map.darkForests = []
+    map.tiles[6 * map.width + 7] = terrain
+    const before = [...map.tiles]
+    createCrossroads(map)
+    expect(map.crossroads).toEqual([])
+    expect(map.tiles).toEqual(before)
+  })
+  it("leaves tavern approach junctions unmarked and their paths unchanged", () => {
+    const map: GameMap = { width: 400, depth: 30, tiles: Array(12000).fill("grass"), buildings: [],
+      road: Array.from({ length: 400 }, (_, x) => ({ x, z: 15 })) }
+    for (const p of map.road!) map.tiles[p.z * map.width + p.x] = "path"
+    addRoadsideTowns(map)
+    expect(map.towns!.length).toBeGreaterThan(0)
+    const before = JSON.stringify({ tiles: map.tiles, road: map.road, towns: map.towns })
+    createCrossroads(map)
+    expect(map.crossroads).toEqual([])
+    expect(JSON.stringify({ tiles: map.tiles, road: map.road, towns: map.towns })).toBe(before)
+  })
   it("shares one marked island between the church, continuing road and dark forest", () => {
     const map = fixture(); createCrossroads(map)
     expect(map.crossroads).toHaveLength(1)
@@ -70,7 +122,7 @@ describe("crossroads network", () => {
     expect(map.crossroads).toHaveLength(1); expect(map.tiles[6 * 15 + 6]).toBe("water")
     expect(map.crossroads![0].center).not.toEqual({ x: 7, z: 7 })
   })
-  it("marks boundary forks using an island on the inward side", () => {
+  it("omits boundary T markers when the opposite verge is outside the map", () => {
     const map = fixture()
     map.tiles.fill("grass")
     map.road = Array.from({ length: 15 }, (_, x) => ({ x, z: 0 }))
@@ -81,21 +133,21 @@ describe("crossroads network", () => {
     for (const p of map.site!.branch) map.tiles[p.z * 15 + p.x] = "track"
     for (const p of map.road) map.tiles[p.z * 15 + p.x] = "path"
     createCrossroads(map)
-    expect(map.crossroads).toHaveLength(1)
-    expect(map.crossroads![0].center).toEqual({ x: 7, z: 1 })
+    expect(map.crossroads).toHaveLength(0)
     expect(map.site!.branch[0]).toEqual(map.road[map.site!.junction])
     continuous(map.road); continuous(map.site!.branch)
     for (const p of [...map.road, ...map.site!.branch]) expect(crossroadIslandAt(map, p.x, p.z)).toBe(false)
   })
-  it("recognizes a bridge as a road arm and fits the island beside its landing", () => {
+  it("recognizes a bridge as a T arm and places the post across from the incoming path", () => {
     const map = fixture()
     map.tiles[7 * 15 + 6] = "bridge"
-    for (let x = 4; x < 11; x++) map.tiles[6 * 15 + x] = "water"
+    for (const p of map.darkForests![0].approach.slice(1)) map.tiles[p.z * map.width + p.x] = "grass"
     map.darkForests = []
     createCrossroads(map)
     expect(map.crossroads).toHaveLength(1)
     expect(map.crossroads![0].arms.filter(a => a.mark === "road")).toHaveLength(2)
     expect(map.tiles[7 * 15 + 6]).toBe("bridge")
+    expect(map.crossroads![0].center).toEqual({ x: 7, z: 6 })
     expect(map.site!.branch[0]).toEqual(map.road![map.site!.junction])
     continuous(map.road!); continuous(map.site!.branch)
   })
@@ -131,11 +183,18 @@ describe("generated crossroads", () => {
     }
   })
   it.each([128, 192, 256].flatMap(size => [0, 2, 3, 4, 5, 20260908].map(seed => ({ size, seed }))))(
-    "marks the shrine junction on a fresh $size-tile world, seed $seed", ({ size, seed }) => {
+    "marks the shrine junction when its verge is usable on a $size-tile world, seed $seed", ({ size, seed }) => {
       const map = generateMap({ width: size, depth: size, seed })
       const fork = map.site!.branch[0]
       expect(map.road!.length).toBeGreaterThan(0)
-      expect(map.crossroads!.some(c => Math.hypot(c.center.x - fork.x, c.center.z - fork.z) <= 4)).toBe(true)
+      if (!map.crossroads!.some(c => Math.hypot(c.center.x - fork.x, c.center.z - fork.z) <= 4)) {
+        // A T beside water, the map edge or a cliff has no safe opposite verge.
+        const verge = tJunctionVerge(map, fork)
+        expect(verge).not.toBeNull()
+        const terrain = tileAt(map, verge!.x, verge!.z)
+        expect(!terrain || ["water", "bridge", "darkwood"].includes(terrain)
+          || !Number.isFinite(elevationStep(map.elevation, fork.z * size + fork.x, verge!.z * size + verge!.x))).toBe(true)
+      }
     }, 30000)
   it("retains lightly worn forest approaches outside the canopy without marking forests at the crossroads", () => {
     const map = fixture(); createCrossroads(map); map.footpaths = createFootpaths(map)

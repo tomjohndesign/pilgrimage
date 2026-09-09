@@ -87,6 +87,7 @@ function makeTraveler(
     name: `Test ${id}`,
     type: TRAVELER_TYPES[typeId],
     attributes: {
+      happiness: 80,
       gold: 10,
       status: 50,
       hunger: 80,

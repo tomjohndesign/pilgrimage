@@ -411,7 +411,7 @@ try {
     assert.equal(before.quality, 2)
     assert.ok(!before.active && before.budget >= before.population, "adaptive visual quality must retain the full crowd budget")
     assert.ok(count === 0 || before.rendered > 0)
-    assert.ok(before.simpleBatches > 0 && !before.wildlife && !before.waterDetail)
+    assert.ok(!before.wildlife && !before.waterDetail)
     const hidden = await page.evaluate(() => window.__pilgrimage.hiddenTraveler())
     const selected = hidden ?? await page.evaluate(() => window.__pilgrimage.sim()[0])
     assert.ok(selected, "adaptive selection test requires a traveler")
@@ -419,12 +419,12 @@ try {
     await page.waitForFunction(() => window.__pilgrimage.selectionVisuals().sprites > 0, undefined, { timeout: 30000 })
     assert.equal(await page.evaluate(() => window.__pilgrimage.selectionVisuals().reducedWalking), 0)
     await page.evaluate(() => { const g = window.__pilgrimage; g.camera().select(null); g.setAdaptiveQuality(false); g.setZoom(36); g.setPaused(true) })
-    await page.waitForFunction(() => { const s = window.__pilgrimage.adaptiveStatus(); return s.quality === 0 && !s.active && s.detail === 0 && s.simpleBatches === 0 && s.wildlife && s.waterDetail }, undefined, { timeout: 30000 })
+    await page.waitForFunction(() => { const s = window.__pilgrimage.adaptiveStatus(); return s.quality === 0 && !s.active && s.detail === 0 && s.wildlife && s.waterDetail }, undefined, { timeout: 30000 })
     const after = await page.evaluate(() => window.__pilgrimage.adaptiveStatus())
     assert.equal(after.treeDensity, 1)
     assert.equal(await page.evaluate(() => window.__pilgrimage.populationStatus().total), expectedPopulation)
     await writeFile(`${output}/adaptive-smoke.json`, JSON.stringify({ before, selected, after }, null, 2))
-    console.log("Adaptive smoke passed: full crowd budget, solid colours, hidden wildlife/water detail, full selected NPC and restored detail")
+    console.log("Adaptive smoke passed: full crowd budget, hidden wildlife/water detail, full selected NPC and restored detail")
   }
   if (["BENCH_SMOKE", "BENCH_DETAIL_SMOKE", "BENCH_CITY_SMOKE"].some(key => process.env[key] === "1")) {
     await page.evaluate(() => window.__pilgrimage.setAdaptiveQuality(false))
