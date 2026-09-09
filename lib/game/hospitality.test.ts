@@ -470,26 +470,6 @@ describe("shrine hospitality", () => {
 })
 
 describe("woodcutter huts", () => {
-  it("returns a homeless settler to their workplace after camping", () => {
-    const { map, camp, traveler } = fixture(), t = traveler(0)
-    map.buildings.push(camp)
-    const sim = createSim([t], map), s = sim.travelers.get(0)!
-    sim.buildings = jobBuildings(map)
-    const entry = buildingEntry(camp)
-    Object.assign(s, { employer: camp.id, home: null, activity: "idle", stamina: 0,
-      x: tileToWorldX(map, entry.x), z: tileToWorldZ(map, entry.z) })
-    run(sim, [t], map, 120, () => s.activity === "camping")
-    expect(s.activity).toBe("camping")
-    run(sim, [t], map, 120, () => s.activity === "fromCamp")
-    expect(s.activity).toBe("fromCamp")
-    run(sim, [t], map, 120, () => s.activity !== "fromCamp")
-    expect(s.activity).toBe("idle")
-    expect(s.employer).toBe(camp.id)
-    expect(s.x).toBeCloseTo(tileToWorldX(map, entry.x))
-    expect(s.z).toBeCloseTo(tileToWorldZ(map, entry.z))
-    expect(s.spot).toBeNull()
-    expect(s.offRoadRoute).toBeNull()
-  })
 
   it.each(["hunger", "thirst", "stamina"] as const)("keeps a settled builder assigned through completion with depleted %s", need => {
     for (const atWork of [false, true]) {

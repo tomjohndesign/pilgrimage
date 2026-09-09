@@ -19,7 +19,7 @@ export interface TravelParty {
   id: number
   name: string
   members: number[]
-  stage: "traveling" | "camping" | "returning" | "visiting"
+  stage: "traveling" | "visiting"
   reason: string
   direction: 1 | -1
   singleFile: boolean

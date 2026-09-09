@@ -124,31 +124,7 @@ describe("shared stops", () => {
     } else expect(party.members).toEqual([0, 1, 2, 3])
   })
 
-  it("reserves distinct camp pitches, waits for the tired member, and leaves together", () => {
-    const { map, travelers, sim } = fixture(12)
-    sim.travelers.get(0)!.stamina = 10
-    const party = sim.parties.get(0)!
-    stepSim(sim, travelers, map, 1, .1)
-    expect(party.stage).toBe("camping")
-    expect(new Set([...sim.travelers.values()].map(s => `${s.spot!.x}:${s.spot!.z}`)).size).toBe(12)
-    run(sim, travelers, map, 50, () => [...sim.travelers.values()].every(s => s.activity === "camping"))
-    expect([...sim.travelers.values()].every(s => s.activity === "camping")).toBe(true)
-    expect(sim.travelers.get(1)!.stamina).toBeGreaterThan(sim.travelers.get(0)!.stamina)
-    run(sim, travelers, map, 120, () => party.stage === "traveling")
-    expect(party.stage).toBe("traveling")
-    expect([...sim.travelers.values()].every(s => s.activity === "walking" && !s.spot)).toBe(true)
-  })
 
-  it("keeps moving if no clearing can accommodate the party", () => {
-    const { map, travelers, sim } = fixture(10)
-    map.tiles = map.tiles.map(t => t === "path" ? t : "forest")
-    sim.travelers.get(0)!.stamina = 10
-    const before = sim.travelers.get(0)!.progress
-    run(sim, travelers, map, 10)
-    expect(sim.parties.get(0)!.stage).toBe("traveling")
-    expect(sim.travelers.get(0)!.progress).toBeGreaterThan(before)
-    expect([...sim.travelers.values()].every(s => s.spot === null)).toBe(true)
-  })
 
   it("visits together without overbooking, then continues with members who did not settle", () => {
     const { map, travelers, sim } = fixture(8)
@@ -208,6 +184,17 @@ describe("companies for a cast added after creation", () => {
     expect(sim.parties.get(0)!.formed).toBe(true)
     const members = [...sim.travelers.values()]
     expect(Math.max(...members.map(s => Math.abs(partyRoadDelta(s.progress, members[0].progress, 79))))).toBeLessThan(10)
+  })
+})
+
+describe("tireless travel", () => {
+  it("never drains stamina on the road, alone or in company, and never makes camp", () => {
+    const { map, travelers, sim } = fixture(6)
+    sim.balance = structuredClone(DEFAULT_BALANCE)
+    for (const s of sim.travelers.values()) s.stamina = 15
+    run(sim, travelers, map, 120)
+    expect([...sim.travelers.values()].every(s => s.stamina === 15 && s.activity === "walking" && s.spot === null)).toBe(true)
+    expect(sim.parties.get(0)!.stage).toBe("traveling")
   })
 })
 

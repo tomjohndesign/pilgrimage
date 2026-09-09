@@ -83,7 +83,7 @@ function PartyFigure({ handlers, party, sim, map, travelers, characterScale }: {
     }
     party.packs?.forEach((pack, i) => {
       place(packs.current[i], pack.pose.hitch, pack.pose.heading, pack.distance > 1e-7)
-      if (packs.current[i]) packs.current[i]!.userData.grazing = party.stage === "camping" && pack.distance < 1e-7
+      if (packs.current[i]) packs.current[i]!.userData.grazing = false
     })
   }, -2.8)
   return <group name="party-transport">
