@@ -8,9 +8,10 @@ const FLOOR = { width: MIN_MAP_SIZE, depth: MIN_MAP_SIZE }
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import { createMonkRoutine } from "./monk-routine"
 import { monkWander } from "./monk-wander"
-import { createMonkNeeds, stepMonkWork } from "./monk-work"
+import { createMonkNeeds, MONK_TIRED_AT, MONK_WAKE_AT, stepMonkWork } from "./monk-work"
 import { MONK_EVANGELISM, preachingRegistry, preachingSpots, roadsideEvangelism, stepMonkEvangelism, type EvangelizingMonk } from "./monk-evangelism"
 import { useMonkEvangelismStore } from "./monk-evangelism-store"
+import { GAME_DAY_SECONDS } from "./time"
 
 function fixture() {
   const map: GameMap = { width: 20, depth: 20, tiles: Array(400).fill("grass"),
@@ -59,13 +60,75 @@ describe("roadside preaching", () => {
     expect(roadsideEvangelism({ ...map, road: [...map.road!] })).toBe(.05)
   })
 
-  it.each(["recall", "tired"])("stops persuasion and walks home on %s", reason => {
+  it.each(["preaching", "sleeping"])("stops persuasion and walks home when recalled while %s", activity => {
     const { map, monk } = fixture()
     arrive(monk, map)
-    if (reason === "tired") monk.stamina = 25
-    expect(stepMonkEvangelism(monk, map, reason !== "recall", 2, .1)).toBe(false)
+    if (activity === "sleeping") {
+      monk.stamina = MONK_TIRED_AT
+      stepMonkEvangelism(monk, map, true, 2, .1)
+      expect(monk.activity).toBe("sleeping")
+    }
+    expect(stepMonkEvangelism(monk, map, false, 2, .1)).toBe(false)
     expect(roadsideEvangelism(map)).toBe(0)
     expect(monk.preachingTask).toBeUndefined()
+    for (let i = 0; i < 300 && monk.destination === "home"; i++) stepMonkWork(monk, map, 2, .1)
+    expect(monk.x).toBeCloseTo(tileToWorldX(map, map.site!.door.x))
+    expect(monk.z).toBeCloseTo(tileToWorldZ(map, map.site!.door.z))
+  })
+
+  it("uses half the ordinary stamina drain while preaching", () => {
+    const { map, monk } = fixture()
+    arrive(monk, map)
+    const ordinary = { ...monk, activity: "resting" as const, route: [] }
+    const before = monk.stamina
+    stepMonkEvangelism(monk, map, true, 2, 10)
+    stepMonkWork(ordinary, map, 2, 10)
+    expect(before - monk.stamina).toBeCloseTo((before - ordinary.stamina) / 2)
+  })
+
+  it.each(["approaching", "preaching"])("sleeps in place when tired while %s, then resumes the assignment", phase => {
+    const { map, monk } = fixture()
+    if (phase === "preaching") arrive(monk, map)
+    else stepMonkEvangelism(monk, map, true, 2, .1)
+    const task = monk.preachingTask
+    const position = { x: monk.x, y: monk.y, z: monk.z }
+    const route = structuredClone(monk.route)
+    monk.stamina = MONK_TIRED_AT
+    expect(stepMonkEvangelism(monk, map, true, 2, .1)).toBe(true)
+    expect(monk.activity).toBe("sleeping")
+    expect(activityClip(monk.activity, false)).toBe("sleeping")
+    expect(roadsideEvangelism(map)).toBe(0)
+    const paused = structuredClone(monk)
+    stepMonkEvangelism(monk, map, true, 2, 0)
+    expect(monk).toEqual(paused)
+    for (let i = 0; i < 200 && monk.activity === "sleeping"; i++) {
+      expect(stepMonkEvangelism(monk, map, true, 2, .1)).toBe(true)
+      expect({ x: monk.x, y: monk.y, z: monk.z }).toEqual(position)
+      expect(monk.route).toEqual(route)
+      expect(monk.buildingTask).toBeUndefined()
+    }
+    expect(monk.stamina).toBeGreaterThanOrEqual(MONK_WAKE_AT)
+    expect(monk.preachingTask).toBe(task)
+    expect(monk.activity).toBe(phase === "preaching" ? "preaching" : "toEvangelize")
+    arrive(monk, map)
+    expect(roadsideEvangelism(map)).toBeCloseTo(MONK_EVANGELISM)
+  })
+
+  it("finishes after three game days including travel and sleep, then walks home", () => {
+    const { map, monk } = fixture()
+    let slept = false, resumed = false
+    for (let elapsed = 1; elapsed < 3 * GAME_DAY_SECONDS; elapsed++) {
+      const wasSleeping = monk.activity === "sleeping"
+      expect(stepMonkEvangelism(monk, map, true, 2, 1)).toBe(true)
+      slept ||= monk.activity === "sleeping"
+      resumed ||= wasSleeping && monk.activity === "preaching"
+    }
+    expect(slept).toBe(true)
+    expect(resumed).toBe(true)
+    expect(stepMonkEvangelism(monk, map, true, 2, 1)).toBe(false)
+    expect(monk.preachingTask).toBeUndefined()
+    expect(roadsideEvangelism(map)).toBe(0)
+    expect(monk.destination).toBe("home")
     for (let i = 0; i < 300 && monk.destination === "home"; i++) stepMonkWork(monk, map, 2, .1)
     expect(monk.x).toBeCloseTo(tileToWorldX(map, map.site!.door.x))
     expect(monk.z).toBeCloseTo(tileToWorldZ(map, map.site!.door.z))
@@ -90,9 +153,11 @@ describe("roadside preaching", () => {
     stepMonkEvangelism(other, map, true, 2, .1, [occupied])
     expect(other.preachingTask!.tile).not.toEqual(occupied)
     const changed = { ...map, buildings: [...map.buildings, { ...map.buildings[0], ...occupied, w: 1, d: 1, id: "new", construction: { work: 0, required: 12 } }] }
+    const elapsed = monk.preachingTask!.elapsed
     stepMonkEvangelism(monk, changed, true, 2, .1)
     expect(monk.preachingTask!.tile).not.toEqual(occupied)
     expect(monk.preachingTask!.map).toBe(changed)
+    expect(monk.preachingTask!.elapsed).toBeCloseTo(elapsed + .1)
   })
 
   it("declines orders when all shoulders are impassable", () => {

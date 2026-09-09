@@ -554,7 +554,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
           {monk.duty}, {a.age} years
         </div>
         {activity && (
-          <div className="text-[11px] italic text-gold">{MONK_ACTIVITY_LABELS[activity]}</div>
+          <div className="text-[11px] italic text-gold">{evangelizing && activity === "sleeping" ? "Sleeping on an evangelism mission" : MONK_ACTIVITY_LABELS[activity]}</div>
         )}
       </div>
 
@@ -570,7 +570,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
           onClick={() => evangelizing ? evangelism.recall(monk.id) : evangelism.request(monk.id)}>
           {evangelizing ? "Recall from preaching" : "Evangelize on the main road"}
         </button>
-        <p className="mt-1 text-[11px] italic text-ink-light">Preach beside the junction until recalled or tired. Gives passing travelers a 5% extra chance to visit the relic, independent of a cross. Extra preachers do not stack.</p>
+        <p className="mt-1 text-[11px] italic text-ink-light">Preach beside the junction for 3 days, including travel and rest, or until recalled. Monks tire more slowly and sleep where they are before resuming. While preaching, gives passing travelers a 5% extra chance to visit the relic, independent of a cross. Extra preachers do not stack.</p>
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">

@@ -34,6 +34,7 @@ import { createPasture, stepPasture, type PastureAnimal } from "./transport/past
 import { LINEAR_MOVEMENT, easeSpeed, paceVariation, type MovementTuning } from "./motion"
 import { DEFAULT_BALANCE, type GameBalance } from "./balance"
 import { roadsideEvangelism } from "./monk-evangelism"
+import { GAME_DAY_SECONDS } from "./time"
 import { buildingAt } from "./settlement"
 import { isComplete, isHouse } from "./construction"
 import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
@@ -199,10 +200,7 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
 
 // --- Game time ---------------------------------------------------------------
 
-/** Simulation seconds per day: 5 real minutes at the HUD's 1× (2 sim seconds/real second).
- * Roughly one uninterrupted walk along a generated 128×128 map's winding road.
- */
-export const GAME_DAY_SECONDS = 600
+export { GAME_DAY_SECONDS } from "./time"
 const GAME_HOUR_SECONDS = GAME_DAY_SECONDS / 24
 
 /** The sim opens at dawn on day one. */
