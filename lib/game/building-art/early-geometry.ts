@@ -194,8 +194,8 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     } else panel(name,a,b,(a[2]+b[2])/2>=0)
   }
   function bedding(x: number,z: number,index: number, length: number) {
-    box(`straw-bed-${index}`,"base",[x,floor+.035,z],[.32,.07,length],palette.strawDark,undefined,false)
-    box(`wool-cover-${index}`,"base",[x,floor+.08,z+.06],[.28,.035,length*.65],index%2?"#817864":"#716e57",undefined,false)
+    box(`straw-bed-${index}`,"base",[x,floor+.035,z],[.38,.07,length],palette.strawDark,undefined,false)
+    box(`wool-cover-${index}`,"base",[x,floor+.08,z+.06],[.34,.035,length*.65],index%2?"#817864":"#716e57",undefined,false)
     parts[parts.length - 1].support = { clips: ["sleeping"], anchorOffset: [0, -.06], heading: 0 }
     box(`rolled-blanket-${index}`,"base",[x,floor+.1,z-length*.32],[.3,.11,.12],"#a3987a",undefined,false)
   }
@@ -438,7 +438,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       const hearth = shelterHearth(width,depth,h,rise)
       const bedLeft = -w+.24, bedRight = hearth.x-.285*hearth.scale-.24
       const beds = Math.max(1,Math.min(HOUSE_BEDS,Math.floor((bedRight-bedLeft)/.42)+1))
-      for(let i=0;i<beds;i++) bedding(beds === 1 ? (bedLeft+bedRight)/2 : bedLeft+(bedRight-bedLeft)*i/(beds-1),-depth*.15,i,Math.min(.7,depth*.6))
+      for(let i=0;i<beds;i++) bedding(beds === 1 ? (bedLeft+bedRight)/2 : bedLeft+(bedRight-bedLeft)*i/(beds-1),-depth*.15,i,Math.min(.9,depth*.6))
     }
     if(variant === "hall") {
       bench("hall-bench",0,-depth*.25,width*.65,.3,0)
@@ -457,7 +457,8 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     if(variant === "monk-shelter" || variant === "shelter") {
       if (variant === "shelter") {
         // Leave the rear-right hearth and front table clear of bedding.
-        for(let i=0;i<2;i++) bedding(-width*.3,-depth*.18+i*depth*.35,i,Math.min(.58,depth*.28))
+        // Full-length bodies share a column, with a gap between the two beds.
+        for(let i=0;i<2;i++) bedding(-width*.3,-depth*.24+i*depth*.48,i,Math.min(.9,depth*.44))
         bench("pilgrim-bench",width*.1,depth*.43,width*.4,.23,Math.PI)
         parts.push(...furnishingParts("shelter",width,depth,h,rise))
       } else {
@@ -465,7 +466,7 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
         // Keep every bed left of the fireplace, including one-tile recipe previews.
         const hearth = shelterHearth(width,depth,h,rise)
         const left = -w+.22, right = hearth.x-.285*hearth.scale-.24
-        for(let i=0;i<beds;i++) bedding(beds === 1 ? (left+right)/2 : left+(right-left)*i/(beds-1),-depth*.08,i,Math.min(.72,depth*.6))
+        for(let i=0;i<beds;i++) bedding(beds === 1 ? (left+right)/2 : left+(right-left)*i/(beds-1),-depth*.08,i,Math.min(.9,depth*.6))
       }
     } else if (variant === "market") {
       bench("stall-counter",0,depth*.23,width*.72,.38)
