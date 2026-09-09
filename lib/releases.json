@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "9801bacd0df860bf2da350c291adc85a245a7e01",
-  "releaseCount": 132,
+  "lastProcessedCommit": "264fbf246cc2e7c1dcd8097745c6abb4ab362bc7",
+  "releaseCount": 134,
   "releases": [
+    {
+      "version": "0.0.148",
+      "title": "Release 0.0.148",
+      "summary": "Reduce building placement stalls by reusing terrain and scenery (#167)",
+      "commit": "264fbf246cc2e7c1dcd8097745c6abb4ab362bc7"
+    },
+    {
+      "version": "0.0.147",
+      "title": "Release 0.0.147",
+      "summary": "Add marked crossroads and keep generated paths inland (#161)",
+      "commit": "4d46d590ef32de71d4690b203b35c495b6a22024"
+    },
     {
       "version": "0.0.146",
       "title": "Release 0.0.146",
