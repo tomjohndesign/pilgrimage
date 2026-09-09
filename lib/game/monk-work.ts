@@ -12,7 +12,7 @@ export function createMonkNeeds(index: number): MonkNeeds { return { workSlot: i
 /** Finish assigned construction before resting; tired monks cannot take new work. */
 export function stepMonkWork(s: MonkRoutine & MonkNeeds, map: GameMap, speed: number, dt: number): boolean {
   if (dt <= 0) return !!s.buildingTask
-  if (s.activity !== "sleeping") s.stamina = Math.max(0, s.stamina - dt * (s.activity === "building" ? 0.8 : 0.25))
+  if (s.activity !== "sleeping") s.stamina = Math.max(0, s.stamina - dt * (s.activity === "building" ? 0.4 : 0.125))
   s.jobSearch = Math.max(0, s.jobSearch - dt)
   if (s.stamina <= MONK_TIRED_AT && !s.buildingTask && s.jobSearch === 0) {
     const workSlot = s.workSlot

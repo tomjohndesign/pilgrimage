@@ -71,7 +71,7 @@ export function stepMonkEvangelism(s: EvangelizingMonk, map: GameMap, requested:
     }
     if (!assigned) { stopEvangelizing(s); return false }
   }
-  s.stamina = Math.max(0, s.stamina - dt * 0.25)
+  s.stamina = Math.max(0, s.stamina - dt * 0.125)
   s.activity = walkWorker(s, s.route, speed, dt) ? "preaching" : "toEvangelize"
   return true
 }
