@@ -502,6 +502,14 @@ export function createBasePersonRig(recipe = personRecipe()) {
   axeImpact.visible = false
   const basket = new THREE.Group()
   basket.name = "gathering-basket"
+  // Plain turned wooden cup and torn bread, attached to the same editable hand socket.
+  const tableCup = new THREE.Group(), tableBread = new THREE.Group()
+  tableCup.name = "drinking-cup"; tableBread.name = "eating-bread"
+  sockets.rightHand.add(tableCup, tableBread)
+  mesh(new THREE.CylinderGeometry(.075, .058, .14, 8), material("#94704b"), tableCup, [0, .025, .015])
+  mesh(new THREE.CylinderGeometry(.057, .057, .008, 8), material("#493827"), tableCup, [0, .098, .015])
+  ellipsoid(tableBread, [0, .025, .025], [.075, .055, .05], material("#b68a50"))
+  ellipsoid(tableBread, [0, .055, .027], [.055, .025, .038], material("#d2b478"))
   basket.position.set(-0.43, 0.115, 0.3)
   basket.scale.setScalar(female ? 0.7 : 1)
   mesh(new THREE.CylinderGeometry(0.21, 0.16, 0.22, 10, 1, true), wood, basket)
@@ -675,7 +683,10 @@ export function createBasePersonRig(recipe = personRecipe()) {
       body.rotation.y = motion.hipYaw
       chest.rotation.y = motion.chestYaw - motion.hipYaw
       chest.rotation.z = weary ? wave * 0.035 : 0
-      const chair = clip === "seatedPrayer"
+      const dining = clip === "seatedMeal" || clip === "seatedDrink"
+      // Raise, hold at the mouth, then lower over a four-second loop.
+      const lift = Math.min(1, Math.max(0, (1 - Math.cos(phase * Math.PI * 2)) * .8))
+      const chair = clip === "seatedPrayer" || dining
       const seated = clip === "sitting" || chair, praying = clip === "praying"
       const felling = clip === "treeFelling", splitting = clip === "woodcutting"
       const carryAxe = recipe.design.handTool === "Carried axe" && (walking || clip === "idle")
@@ -707,6 +718,8 @@ export function createBasePersonRig(recipe = personRecipe()) {
         headPivot.rotation.x = sermon.nod
         headPivot.rotation.y = -sermon.turn * 0.5
       }
+      tableCup.visible = clip === "seatedDrink"
+      tableBread.visible = clip === "seatedMeal"
       basket.visible = gather
       picked.visible = gather && gathering.holding
       contents.visible = gather && gathering.deposited
@@ -818,6 +831,11 @@ export function createBasePersonRig(recipe = personRecipe()) {
           target.sub(body.position).applyQuaternion(body.quaternion.clone().invert())
           reach(limb, target.toArray() as Point3, true)
         }
+        else if (dining) {
+          const target = limb.side === "left" ? new THREE.Vector3(sign * .20, .06, .30) :
+            new THREE.Vector3(-.20, .14, .40).lerp(new THREE.Vector3(-.06, b.headCenter - b.hipHeight - .12, .22), lift)
+          reach(limb, target.toArray() as Point3, true)
+        }
         else if (praying || chair) reach(limb, [sign * 0.035, b.chestHeight - b.hipHeight, 0.33])
         else if (felling) {
           // Carry the two-handed grip with the chest as it twists, within both arms' reach.
@@ -885,6 +903,12 @@ export function createBasePersonRig(recipe = personRecipe()) {
       headPivot.position.add(parent.worldToLocal(root.localToWorld(headOffset)).sub(zero))
       root.updateMatrixWorld(true)
       roadAccessories.pose(clip, phase, edits)
+      if (dining) {
+        const desired = root.getWorldQuaternion(new THREE.Quaternion()).multiply(
+          new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), clip === "seatedDrink" ? -lift * .65 : 0))
+        for (const prop of [tableCup, tableBread]) prop.quaternion.copy(
+          sockets.rightHand.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(desired))
+      }
       if (building) {
         const desired = root.getWorldQuaternion(new THREE.Quaternion()).multiply(
           new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), hammer.pitch))

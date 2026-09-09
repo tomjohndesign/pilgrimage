@@ -367,6 +367,9 @@ export const Travelers = memo(function Travelers({
         group.rotation.y = Math.atan2(sim.procession.position.x - s.x, sim.procession.position.z - s.z)
       }
       group.userData.activity = s.praying ? "praying" : s.activity
+      const refreshments = !s.praying && s.activity === "sitting" ? s.tavernVisit : undefined
+      group.userData.refreshmentClip = refreshments?.meal && (!refreshments.drink || Math.floor(s.timer / 4) % 2 === 0)
+        ? "seatedMeal" : refreshments?.drink ? "seatedDrink" : undefined
       group.userData.routineActivity = s.activity
       if (transported) {
         group.userData.transportParking = s.marketParking ?? s.shrineParking

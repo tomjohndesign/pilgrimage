@@ -9,6 +9,23 @@ import { TRAVELER_TYPES } from "../travelers"
 const distance = (a: Point3, b: Point3) => Math.hypot(...a.map((v, i) => v - b[i]))
 
 describe("activity rig", () => {
+  it.each(["seatedMeal", "seatedDrink"] as const)("raises a held refreshment while keeping feet planted for %s", clip => {
+    const rig = createBasePersonRig()
+    try {
+      rig.pose(0, clip)
+      const low = rig.sockets.rightHand.getWorldPosition(new THREE.Vector3())
+      const feet = [rig.joints().leftFoot, rig.joints().rightFoot]
+      rig.pose(.5, clip)
+      expect(rig.sockets.rightHand.getWorldPosition(new THREE.Vector3()).y).toBeGreaterThan(low.y + .15)
+      expect([rig.joints().leftFoot, rig.joints().rightFoot]).toEqual(feet)
+      expect(rig.root.getObjectByName("drinking-cup")!.visible).toBe(clip === "seatedDrink")
+      expect(rig.root.getObjectByName("eating-bread")!.visible).toBe(clip === "seatedMeal")
+      rig.pose(0, "walk")
+      expect(rig.root.getObjectByName("drinking-cup")!.visible).toBe(false)
+      expect(rig.root.getObjectByName("eating-bread")!.visible).toBe(false)
+    } finally { rig.dispose() }
+  })
+
   it("keeps leg lengths fixed across seated, kneeling, gathering and carrying profiles", () => {
     for (let profile = 0; profile < POPULATION_PROFILES.length; profile++) {
       const b = personRecipe(populationDesign(TRAVELER_TYPES.peasant, profile)).body

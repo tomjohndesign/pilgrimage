@@ -157,7 +157,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "tavern", label: "Tavern", category: "buildings",
-    description: "Two jobs behind the counter. Travelers and settlers buy food and drink here for gold, then sit at the tables. Its front and back doors each keep a clear path tile.",
+    description: "Two jobs behind the counter. Travelers and settlers buy food and drink, then eat at the tables. Chairs and outdoor benches offer a free short rest, restoring up to 8 stamina. Keep both entrances and the benches clear.",
     cost: { gold: 150, wood: 110 }, renown: 12, requiredRenown: 25,
     income: { gold: 0, wood: 0 }, w: 3, d: 4, height: 0.78,
     color: "#8c7658", roofColor: "#a59164",
@@ -440,7 +440,7 @@ export const RULE_FIELDS = [
   },
   {
     key: "staminaDecay", group: "Traveler needs", label: "Stamina drain per game hour",
-    description: "Energy lost per game hour. Default: a full bar lasts about 95 hours, with travelers looking for lodging once it falls below 20. Camping restores stamina and tending a parked stall holds it steady; drinking does not restore energy.",
+    description: "Energy lost per game hour. Default: a full bar lasts about 95 hours, with travelers looking for lodging once it falls below 20. Camping restores stamina, seated breaks restore a little, and tending a parked stall holds it steady. Standing drink stops do not restore energy.",
     default: 1.05, min: 0, max: 50, step: 0.05,
   },
 ] as const
