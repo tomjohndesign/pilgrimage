@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { SAVE_VERSION, worldIdentity, type GameSave } from "./schema"
 import { DEFAULT_WORLD_SETTINGS, DEFAULT_DISPLAY_SETTINGS } from "./settings"
-import { clearGameSave, DISPLAY_SETTINGS_KEY, GAME_SAVE_KEY, loadDisplaySettings, loadGameSave, resumeCookieSeed, storeDisplaySettings, storeGameSave } from "./storage"
+import { clearGameSave, DISPLAY_SETTINGS_KEY, GAME_SAVE_KEY, loadDisplaySettings, loadGameSave, parseResumeCookie, storeDisplaySettings, storeGameSave } from "./storage"
 
 let saved: Map<string, string>
 beforeEach(() => {
@@ -44,12 +44,26 @@ describe("save storage", () => {
     expect(loadGameSave().error).toMatch(/version/)
   })
 
-  it("reads the saved seed from the resume cookie", () => {
-    expect(resumeCookieSeed("15839")).toBe(15839)
-    expect(resumeCookieSeed("")).toBeNull()
-    expect(resumeCookieSeed(undefined)).toBeNull()
-    expect(resumeCookieSeed("abc")).toBeNull()
-    expect(resumeCookieSeed("-1")).toBeNull()
+  it("reads the saved seed and zoom from the resume cookie", () => {
+    expect(parseResumeCookie("15839")).toEqual({ seed: 15839, viewSize: null })
+    expect(parseResumeCookie("15839:14")).toEqual({ seed: 15839, viewSize: 14 })
+    expect(parseResumeCookie("15839:21.333333333333332")).toEqual({ seed: 15839, viewSize: 21.333333333333332 })
+    expect(parseResumeCookie("15839:0")).toEqual({ seed: 15839, viewSize: null })
+    expect(parseResumeCookie("")).toBeNull()
+    expect(parseResumeCookie(undefined)).toBeNull()
+    expect(parseResumeCookie("abc")).toBeNull()
+    expect(parseResumeCookie("-1")).toBeNull()
+    expect(parseResumeCookie("15839:x")).toBeNull()
+  })
+
+  it("marks the browser resumable with the saved seed and zoom", () => {
+    const document = { cookie: "" }
+    vi.stubGlobal("document", document)
+    expect(storeGameSave(save())).toBe(true)
+    expect(document.cookie).toMatch(/^pilgrimage\.resume=3:24; /)
+    expect(parseResumeCookie(document.cookie.split(";")[0].split("=")[1])).toEqual({ seed: 3, viewSize: 24 })
+    clearGameSave()
+    expect(document.cookie).toMatch(/^pilgrimage\.resume=; .*max-age=0/)
   })
 
   it("keeps display preferences separately and forgivingly", () => {

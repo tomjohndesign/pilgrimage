@@ -5,7 +5,7 @@ import { batchedSourceRoots } from "@/lib/game/render/batch-source-visibility"
 import { frameProfile } from "@/lib/game/render/frame-profile"
 import { sceneryDetail, sceneryFadeProgress, sceneryZooming } from "@/lib/game/render/scenery-detail"
 
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react"
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from "react"
 import { Canvas, useFrame, type CanvasProps } from "@react-three/fiber"
 import * as THREE from "three"
 import { CHARACTER_COLOR_LAYER, tagPixelCharacters, withoutPixelCharacters, withoutPixelRoots } from "@/lib/game/render/pixel-characters"
@@ -32,9 +32,32 @@ export interface PixelSceneStage {
   offset: THREE.Vector2
 }
 type RenderScene = (camera: THREE.Camera, target: THREE.WebGLRenderTarget | null, stage: PixelSceneStage) => void
+
+/** A crop of the world image as it reached the screen: one sample per world texel, rows top-down. */
+export interface WorldCapture {
+  data: Uint8ClampedArray
+  cols: number
+  rows: number
+  /** Origin of the crop in world-buffer texels, from the bottom-left like the buffers themselves. */
+  x0: number
+  y0: number
+  /** Texels per world unit this frame. */
+  density: number
+  /** Crop centre from the display centre, in frustum units, right and down. */
+  offsetX: number
+  offsetY: number
+}
+interface WorldCaptureRequest {
+  halfWidth: number
+  halfHeight: number
+  /** How far above the display centre the crop is centred, in frustum units. */
+  up: number
+  onResult: (capture: WorldCapture | null) => void
+}
 interface PixelRenderer {
   scene: { current: RenderScene | null }
   frame: { current: (() => void) | null }
+  capture: { current: WorldCaptureRequest | null }
   characters: Set<THREE.Object3D>
   world: Set<THREE.Object3D>
   worldTexel: { value: number }
@@ -79,6 +102,67 @@ export function PixelWorld({ children }: { children: ReactNode }) {
     return () => { renderer.world.delete(group) }
   }, [renderer])
   return <group ref={root}>{children}</group>
+}
+
+/**
+ * Read the world image back around the display centre, before characters are
+ * drawn over it. `request` is fulfilled by the next frame's own render, so it
+ * costs only the readback; `now` renders a frame to answer at once, for the
+ * moment the page is going away. Sizes are frustum units either side of centre.
+ */
+export function usePixelCapture() {
+  const renderer = useContext(PixelRenderContext)
+  if (!renderer) throw new Error("usePixelCapture requires PixelCanvas")
+  const request = useCallback((halfWidth: number, halfHeight: number, up: number, onResult: WorldCaptureRequest["onResult"]) => {
+    renderer.capture.current?.onResult(null)
+    renderer.capture.current = { halfWidth, halfHeight, up, onResult }
+  }, [renderer])
+  const now = useCallback((halfWidth: number, halfHeight: number, up: number): WorldCapture | null => {
+    if (!renderer.frame.current) return null
+    let result: WorldCapture | null = null
+    request(halfWidth, halfHeight, up, capture => { result = capture })
+    renderer.frame.current()
+    renderer.capture.current = null
+    return result
+  }, [renderer, request])
+  return useMemo(() => ({ request, now }), [request, now])
+}
+
+/**
+ * Sample the display pixels that show each world texel of a crop around the
+ * display centre. The presentation quad has just been drawn with nearest
+ * filtering, so every texel covers at least one display pixel and the pixel
+ * under its centre carries the texel's final colour: tone mapped, in the
+ * output colour space, with the world-pass outlines already inked. Sizes are
+ * frustum units either side of the crop centre, which sits `up` above the
+ * display centre.
+ */
+function captureWorldRegion(gl: THREE.WebGLRenderer, r: { target: THREE.WebGLRenderTarget; displaySize: THREE.Vector2 },
+  scale: THREE.Vector2, offset: THREE.Vector2, density: number, width: number, height: number, request: WorldCaptureRequest): WorldCapture | null {
+  const bufferWidth = r.target.width, bufferHeight = r.target.height
+  const cols = Math.min(Math.floor(width * density) - 2, Math.round(2 * request.halfWidth * density))
+  const rows = Math.min(Math.floor(height * density) - 2, Math.round(2 * request.halfHeight * density))
+  if (cols < 1 || rows < 1) return null
+  const centreX = bufferWidth * (.5 + offset.x), centreY = bufferHeight * (.5 + offset.y)
+  const x0 = THREE.MathUtils.clamp(Math.round(centreX - cols / 2), 0, bufferWidth - cols)
+  const y0 = THREE.MathUtils.clamp(Math.round(centreY + request.up * density - rows / 2), 0, bufferHeight - rows)
+  const display = r.displaySize
+  const px = (t: number) => THREE.MathUtils.clamp(Math.floor((((t + .5) / bufferWidth - .5 - offset.x) / scale.x + .5) * display.x), 0, display.x - 1)
+  const py = (t: number) => THREE.MathUtils.clamp(Math.floor((((t + .5) / bufferHeight - .5 - offset.y) / scale.y + .5) * display.y), 0, display.y - 1)
+  const left = px(x0), right = px(x0 + cols - 1), bottom = py(y0), top = py(y0 + rows - 1)
+  const w = right - left + 1, h = top - bottom + 1
+  const pixels = new Uint8Array(w * h * 4)
+  const context = gl.getContext()
+  context.readPixels(left, bottom, w, h, context.RGBA, context.UNSIGNED_BYTE, pixels)
+  const data = new Uint8ClampedArray(cols * rows * 4)
+  for (let row = 0; row < rows; row++) {
+    const sy = py(y0 + rows - 1 - row) - bottom
+    for (let col = 0; col < cols; col++) {
+      const source = (sy * w + px(x0 + col) - left) * 4, target = (row * cols + col) * 4
+      data[target] = pixels[source]; data[target + 1] = pixels[source + 1]; data[target + 2] = pixels[source + 2]; data[target + 3] = 255
+    }
+  }
+  return { data, cols, rows, x0, y0, density, offsetX: (x0 + cols / 2 - centreX) / density, offsetY: -(y0 + rows / 2 - centreY) / density }
 }
 
 /** Register scene effects for both the world pass and the display-resolution characters. */
@@ -298,6 +382,11 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
         r.hasWorld = true; r.lastWorldCamera.copy(cam.matrixWorld)
         gl.setRenderTarget(null)
         gl.render(r.screen, r.screenCamera)
+        const capture = renderer.capture.current
+        if (capture) {
+          renderer.capture.current = null
+          capture.onResult(captureWorldRegion(gl, r, r.uniforms.uScale.value, r.uniforms.uOffset.value, density, width, height, capture))
+        }
         if (r.stage.hasCharacters) {
           const background = scene.background
           const mask = camera.layers.mask
@@ -344,7 +433,7 @@ export function PixelCanvas({
   outputDpr = 1,
   ...props
 }: Omit<CanvasProps, "dpr" | "gl"> & PixelationProps) {
-  const renderer = useMemo<PixelRenderer>(() => ({ scene: { current: null }, frame: { current: null }, characters: new Set(), world: new Set(), worldTexel: { value: 0 } }), [])
+  const renderer = useMemo<PixelRenderer>(() => ({ scene: { current: null }, frame: { current: null }, capture: { current: null }, characters: new Set(), world: new Set(), worldTexel: { value: 0 } }), [])
   const density = Number.isFinite(pixelsPerUnit) ? THREE.MathUtils.clamp(pixelsPerUnit, 1, 64) : CHARACTER_PIXELS_PER_UNIT
   const dpr = Number.isFinite(outputDpr) ? THREE.MathUtils.clamp(outputDpr, 0.5, 2) : 1
   return (

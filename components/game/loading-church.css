@@ -106,13 +106,30 @@
 .loading-church[data-idle="true"] { z-index: 10; transform: translateX(8vw); }
 .landing-scene { position: absolute; inset: 0; z-index: 2; opacity: 0; }
 .landing-scene[data-ready="true"] { opacity: 1; }
-/* Remembered land while a saved world regenerates: fades in once its assets are
-   ready, and opens with the same wipe as the shimmer grid when the reveal runs. */
-.loading-church-resume { position: absolute; inset: 0; z-index: 2; opacity: 0; transition: opacity 300ms ease-out; }
-.loading-church-resume[data-ready="true"] { opacity: 1; }
-.loading-church[data-phase="revealing"] .loading-church-resume {
+/* The saved picture of the last view while its world regenerates. The root
+   properties come from the play page's resume script (see lib/game/save/view.ts);
+   without them the box is empty. It is sized in dvh at the saved zoom so its
+   texels are the game's own pixels, is already cut into a disc of tiles, and
+   opens with the same wipe when the reveal runs. */
+.loading-church-view {
+  position: absolute;
+  z-index: 2;
+  left: calc(50% + var(--resume-view-x, 0dvh));
+  top: calc(50% + var(--ground-offset) + var(--resume-view-y, 0dvh));
+  width: var(--resume-view-width, 0);
+  height: var(--resume-view-height, 0);
+  transform: translate(-50%, -50%);
+}
+.loading-church-view-wipe {
+  position: absolute;
+  inset: 0;
+  background-image: var(--resume-view);
+  background-size: 100% 100%;
+  image-rendering: pixelated;
+}
+.loading-church[data-phase="revealing"] .loading-church-view-wipe {
   mask-image: radial-gradient(ellipse var(--reveal-radius-x, .001dvh) var(--reveal-radius-y, .001dvh)
-    at 50% calc(50% + var(--ground-offset)), transparent var(--reveal-inner, 0%), #000 100%);
+    at calc(50% - var(--resume-view-x, 0dvh)) calc(50% - var(--resume-view-y, 0dvh)), transparent var(--reveal-inner, 0%), #000 100%);
 }
 .loading-church-caption { z-index: 5; }
 .loading-church-progress {

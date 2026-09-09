@@ -29,7 +29,6 @@ top of them. A save is tens of kilobytes on a default map, not megabytes.
 | `simulation` | Day count, economy totals, relic reputation, felled trees, timber and food stores, each person's lasting state, brothers who joined. | Errands, routes, seats and carts are re-planned. |
 | `camera`     | Focus point, rotation and zoom.                                                        | Applied after the opening reveal.        |
 | `playback`   | Paused flag and simulation speed.                                                      | Applied as the world opens.              |
-| `surroundings` | Terrain, corner heights, trees and scenery in a disc around the camera focus.       | Drawn by the game's own renderers in the loading overlay until the real tiles arrive. |
 
 People are saved as who they are, not what they were doing. Attributes, purse,
 job, home and place on the road survive; a traveler rejoins the road where they
@@ -67,9 +66,20 @@ kept across new maps. Older links that carry display parameters are still read
 but never written back.
 
 A resumed world opens where the player left off,
-at the same zoom and rotation, with the remembered disc of land standing in
+at the same zoom and rotation, with a picture of the last view standing in
 for the terrain while it regenerates; the reveal then spreads from there. The
 landing page and the opening on the founding church are for a fresh start.
+
+That picture is presentation cache, not part of the document. Each autosave
+also keeps a crop of the game's own world buffer around the camera focus under
+`pilgrimage.view.v1` (`lib/game/save/view.ts`), cut into a disc of whole tiles
+and tagged with the world and camera pose it was taken at. The cut follows the
+world pass's object IDs: a tree or building shows entire when the tile it
+stands on is inside the disc and not at all when it is not, and bare ground
+follows the tile under it. The play page inlines a script that paints it at
+the saved zoom while the HTML is still parsing, so the middle of the screen
+shows exactly what the reveal will uncover, from the first frame. A save with
+any other pose ignores it.
 
 Autosave runs every five seconds while a world is open and whenever the tab is
 hidden or the page goes away. One slot per browser for now; accounts add named
