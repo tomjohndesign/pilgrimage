@@ -111,6 +111,17 @@ describe("balance presets", () => {
     Object.assign(current.rules, { hungerDecay: 3, staminaDecay: 2.1 })
     expect(importBalance(exportBalance(current)).balance).toEqual(current)
   })
+  it("halves the previous default thirst rate in version 5 presets", () => {
+    const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
+    old.version = 5
+    old.balance.rules.thirstDecay = 6
+    expect(importBalance(JSON.stringify(old)).balance?.rules.thirstDecay).toBe(3)
+    old.balance.rules.thirstDecay = 9
+    expect(importBalance(JSON.stringify(old)).balance?.rules.thirstDecay).toBe(9)
+    const current = fresh()
+    current.rules.thirstDecay = 6
+    expect(importBalance(exportBalance(current)).balance).toEqual(current)
+  })
   it.each([NaN, Infinity, -1, 1.5, 100001, "200", null])(
     "rejects invalid starting supplies: %s",
     (value) => {
