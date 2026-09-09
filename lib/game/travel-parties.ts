@@ -48,6 +48,60 @@ export interface TravelParty {
   /** The company's pace, re-read from its members a few times per game second. */
   pace: number
   paceAt: number
+  /** One purse and one store of food and water for the whole company. Stamina stays personal. */
+  provisioned: boolean
+  gold: number
+  hunger: number
+  thirst: number
+}
+
+/** The largest companies drain food and water at this fraction of a lone walker's rate. */
+export const PARTY_NEED_FLOOR = .4
+/** Company size at which the floor is reached. */
+export const PARTY_NEED_SPAN = 20
+/** Each draft or pack animal eats and drinks like this many extra people. */
+export const ANIMAL_NEED_DRAIN = .75
+
+/** Multiplier on a lone walker's hunger and thirst decay for a company. A larger
+ * company shares water and food and so declines more slowly, easing toward the
+ * floor; every wagon and pack animal adds its own appetite on top. Stamina is
+ * unaffected: legs are not shared. */
+export function partyNeedDrain(size: number, animals = 0): number {
+  const t = Math.max(0, Math.min(1, (size - 1) / (PARTY_NEED_SPAN - 1)))
+  const eased = t * t * (3 - 2 * t)
+  return 1 - (1 - PARTY_NEED_FLOOR) * eased + animals * ANIMAL_NEED_DRAIN
+}
+
+/** Pool what the members hold once, then each step reconcile what individuals
+ * earned, paid, ate or drank, apply the company's eased decay, and hand the
+ * shared values back to everyone. An individual meal or drink feeds the store. */
+export function sharePartyNeeds(party: TravelParty, members: readonly SimTraveler[], hungerDecay: number, thirstDecay: number, needFactor: number, hours: number) {
+  const count = members.length
+  if (!count) return
+  if (!party.provisioned) {
+    party.provisioned = true
+    party.gold = 0; party.hunger = 0; party.thirst = 0
+    for (const s of members) { party.gold += s.gold; party.hunger += s.hunger / count; party.thirst += s.thirst / count }
+  } else {
+    let gold = party.gold, hunger = 0, thirst = 0
+    for (const s of members) { gold += s.gold - party.gold; hunger += s.hunger; thirst += s.thirst }
+    party.gold = Math.max(0, gold); party.hunger = hunger / count; party.thirst = thirst / count
+  }
+  const animals = (party.transport ? 1 : 0) + (party.packs?.length ?? 0)
+  const drain = partyNeedDrain(count, animals) * needFactor * hours
+  party.hunger = Math.max(0, party.hunger - hungerDecay * drain)
+  party.thirst = Math.max(0, party.thirst - thirstDecay * drain)
+  for (const s of members) { s.gold = party.gold; s.hunger = party.hunger; s.thirst = party.thirst }
+}
+
+/** Someone leaving takes their share of the purse; food and water stay as they
+ * stand. The rest keep holding exactly the purse, which the next step reconciles. */
+function takeShare(party: TravelParty | undefined, s: SimTraveler, states: ReadonlyMap<number, SimTraveler>) {
+  if (!party?.provisioned || !party.members.includes(s.id)) return
+  const share = party.gold / Math.max(1, party.members.length)
+  s.gold = share
+  party.gold = Math.max(0, party.gold - share)
+  for (const id of party.members) { const other = states.get(id); if (other && other !== s) other.gold = party.gold }
 }
 
 const WALKING_CALLINGS: TravelerTypeId[] = ["peasant", "pilgrim", "friar", "merchant"]
@@ -132,7 +186,8 @@ function createParty(id: number, people: Traveler[], leader: SimTraveler): Trave
   return { id, name: people[0].party!.name, members: people.map(t => t.id),
     stage: "traveling", reason: "Traveling together", direction: leader.direction,
     singleFile: false, cooldown: 0, retry: 0, elapsed: 0, decisions: 0, visitPending: [], visitStarted: [],
-    progress: leader.progress, speed: 0, formed: true, headTile: Math.floor(leader.progress), carried: 0, roster: 0, pace: 0, paceAt: -Infinity }
+    progress: leader.progress, speed: 0, formed: true, headTile: Math.floor(leader.progress), carried: 0, roster: 0, pace: 0, paceAt: -Infinity,
+    provisioned: false, gold: 0, hunger: 0, thirst: 0 }
 }
 
 function leaveParty(s: SimTraveler) {
@@ -150,7 +205,10 @@ export function syncTravelParties(parties: Map<number, TravelParty>, travelers: 
     members.push(t); rosters.set(t.party.id, members)
     s.partyId = t.party.id
   }
-  for (const s of states.values()) if (s.partyId !== undefined && (!rosters.get(s.partyId)?.some(t => t.id === s.id))) leaveParty(s)
+  for (const s of states.values()) if (s.partyId !== undefined && (!rosters.get(s.partyId)?.some(t => t.id === s.id))) {
+    takeShare(parties.get(s.partyId), s, states)
+    leaveParty(s)
+  }
   for (const id of parties.keys()) if (!rosters.has(id)) parties.delete(id)
   for (const [id, people] of rosters) {
     people.sort((a, b) => a.party!.slot - b.party!.slot)
@@ -167,6 +225,7 @@ export function pruneTravelParties(parties: Map<number, TravelParty>, states: Re
     for (let i = party.members.length - 1; i >= 0; i--) {
       const id = party.members[i], s = states.get(id)
       if (s && !s.home && !s.employer && !joined.has(id)) continue
+      if (s) takeShare(party, s, states)
       party.members.splice(i, 1); party.roster++
       if (s) leaveParty(s)
     }

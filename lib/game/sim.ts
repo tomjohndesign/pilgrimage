@@ -9,7 +9,7 @@ import { townResidents } from "./town-residents"
 import { placeResident } from "./jobs/residents"
 import { GAME_DAY_SECONDS, GAME_HOUR_SECONDS, START_TIME } from "./calendar"
 import { wearySpeedScale } from "./traveler-weariness"
-import { cachedFormation, diversionPoints, partyRoadDelta, partySlots, pruneTravelParties, regroupParty, syncTravelParties, type TravelParty } from "./travel-parties"
+import { cachedFormation, diversionPoints, partyRoadDelta, sharePartyNeeds, partySlots, pruneTravelParties, regroupParty, syncTravelParties, type TravelParty } from "./travel-parties"
 import { housingBeds, vacantMonkBed } from "./housing"
 import { MONK_COUNT, MONK_JOIN_CHANCE, type Monk } from "./monks"
 import { monkWalkSpeed } from "./base-person/monk-assets"
@@ -1570,6 +1570,8 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
     party.elapsed += dt
     party.carried = 0
     for (const s of members) { s.partyCarried = false; s.partyWaiting = false; s.partySpeed = 0 }
+    sharePartyNeeds(party, members, sim.balance.rules.hungerDecay, sim.balance.rules.thirstDecay,
+      party.stage === "camping" ? CAMP_NEED_FACTOR : 1, dt / GAME_HOUR_SECONDS)
     if (!party.transportInitialized) {
       ensurePartyTransport(party, members, map, characterScale)
       // A wagon or pack animal changes everyone's place; walk into the new formation.
@@ -2009,8 +2011,11 @@ export function stepSim(
 
     // --- Needs march on ------------------------------------------------------
     const needFactor = camping || abed ? CAMP_NEED_FACTOR : 1
-    s.hunger = Math.max(0, s.hunger - sim.balance.rules.hungerDecay * needFactor * hours)
-    s.thirst = Math.max(0, s.thirst - sim.balance.rules.thirstDecay * needFactor * hours)
+    // A company eats and drinks from one shared store, drained by its party step.
+    if (s.partyId === undefined) {
+      s.hunger = Math.max(0, s.hunger - sim.balance.rules.hungerDecay * needFactor * hours)
+      s.thirst = Math.max(0, s.thirst - sim.balance.rules.thirstDecay * needFactor * hours)
+    }
     if (camping || abed) s.stamina = Math.min(100, s.stamina + CAMP_STAMINA_REGEN * hours)
     // Standing at a stall, a post or a performance neither drains nor restores the legs.
     else if (!s.partyWaiting && !["vending", "performing", "listening", "begging", "givingAlms", "posted", "sitting", "buying", "drinking", "drinkingLow"].includes(s.activity)) {
