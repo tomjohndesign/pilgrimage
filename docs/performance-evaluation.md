@@ -1,5 +1,7 @@
 # Largest-map performance evaluation
 
+To resume the paused work, start with the [restart guide and test cases](performance-restart-guide.md).
+
 The benchmark exercises the real `/play` scene on the largest 512 × 512 map.
 It covers populations through 10,000 travelers, playback speeds through 6×,
 pointer dragging, wheel zooming and camera rotation. Sprite trees are the

@@ -1,5 +1,8 @@
 # Rendering sampling and the 10,000-person city
 
+For the paused-work handoff, runnable cases and server-computation question, see
+the [performance restart guide](performance-restart-guide.md).
+
 The target remains 30 FPS with all 10,000 travelers at effective 6× game speed,
 including camera movement. Disabling work in a diagnostic does not meet that target.
 The historical 0.0.133 measurements used the existing 512 × 512 `/play` city:
