@@ -10,7 +10,7 @@ import { useUnitInterior } from "./use-unit-interior"
 
 import { StructureModel } from "@/components/building-lab/building-model"
 import { constructionParts } from "@/lib/game/building-art/construction"
-import { isComplete } from "@/lib/game/construction"
+import { constructionStage, isComplete } from "@/lib/game/construction"
 
 import { groundHeight } from "@/lib/game/map/elevation"
 
@@ -48,12 +48,26 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
   const foodStores = useBuildStore(s => s.foodStores)
   const piles = useBuildStore((s) => s.piles)
   const buildings = map.buildings
-  const models = useMemo(() => buildings.map(building => constructionParts({ ...building, ...rotatedFootprint(building, building.rotation) })), [buildings])
+  const modelCache = useRef(new Map<string, { key: string; parts: ReturnType<typeof constructionParts>; idColor: THREE.Color }>())
+  const models = useMemo(() => {
+    const next = new Map<string, { key: string; parts: ReturnType<typeof constructionParts>; idColor: THREE.Color }>()
+    const result = buildings.map((building, index) => {
+      const footprint = rotatedFootprint(building, building.rotation)
+      const key = JSON.stringify([index, building.buildType, footprint.w, footprint.d, building.height, building.color, building.roofColor, constructionStage(building)])
+      const old = modelCache.current.get(building.id)
+      const model = old?.key === key ? old : { key,
+        parts: constructionParts({ ...building, ...footprint }), idColor: new THREE.Color(...encodeObjectId(buildingObjectId(index))) }
+      next.set(building.id, model)
+      return model
+    })
+    modelCache.current = next
+    return result
+  }, [buildings])
   const idColors = useMemo(
     // Component tuples straight into the working colour space — an ID is data,
     // not a colour, so it must dodge sRGB conversion to survive readback.
-    () => buildings.map((_, index) => new THREE.Color(...encodeObjectId(buildingObjectId(index)))),
-    [map, buildings],
+    () => models.map(model => model.idColor),
+    [models],
   )
 
   return (
@@ -69,13 +83,13 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
         const baseY = groundHeight(map, building.x + (building.w - 1) / 2, building.z + (building.d - 1) / 2)
 
         const local = rotatedFootprint(building, building.rotation)
-        const cutaway = models[index].some(p => p.layer === "roof") && (
+        const cutaway = models[index].parts.some(p => p.layer === "roof") && (
           showInteriors || unitInterior === building.id || isSelected(selection, { kind: "building", id: building.id }) ||
           (selection?.kind === "pile" && piles.some(p => p.id === selection.id && p.campId === building.id)))
         if (building.buildType === "storehouse" || building.buildType === "workshop") {
           return (
             <group key={building.id} name={`storage-${building.id}`} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
-              <StructureModel terrainFloors parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
+              <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
               {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
               <CloseScenery enabled={building.buildType === "storehouse"}>{building.buildType === "storehouse" && FOOD_TYPES.map((type, slot) => {
                 const amount = foodStores.get(building.id)?.[type] ?? 0
@@ -95,7 +109,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
 
         return (
           <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
-            <StructureModel terrainFloors parts={models[index]} idColor={idColors[index]} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
+            <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
             {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
             {isComplete(building) && hasDomesticHearth(building.buildType) && <ShelterFire buildType={building.buildType} width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
           </group>

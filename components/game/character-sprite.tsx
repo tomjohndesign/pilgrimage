@@ -1,5 +1,8 @@
 "use client"
 
+import { useContext } from "react"
+import { CharacterMapContext } from "./character-map-context"
+
 import { useCharacterBatches } from "./character-batches"
 import { spriteTextureView } from "@/lib/game/render/sprite-texture"
 import { withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
@@ -40,7 +43,7 @@ import { complexionSwap, type Complexion } from "@/lib/game/base-person/complexi
 import { OUTLINE_ID_LAYER_MASK, SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import type { FigureClickHandler } from "./traveler-figure"
 
-export function CharacterSprite({ map, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, complexion = appearance?.complexion, age = 18, visualOverride, attachment, flightClip, name = "traveler" }: {
+export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, complexion = appearance?.complexion, age = 18, visualOverride, attachment, flightClip, name = "traveler" }: {
   attachment?: { content: ReactNode; clips: Partial<Record<"hoisting" | "procession", FrameRegistration[]>>; cellSize: number; anchor: number[]; restPosition?: [number, number, number] }
   flightClip?: SpriteClip & { fps: number; reservedTones?: boolean }
   map?: GameMap
@@ -59,6 +62,8 @@ export function CharacterSprite({ map, type, onClick, outlineColor, selected = f
   characterFps?: number
   walkTuning?: WalkTuning
 }) {
+  const contextMap = useContext(CharacterMapContext)
+  const map = suppliedMap ?? contextMap
   const [renderOrder] = useState(spriteRenderOrder)
   const asset = useCharacterAssetStore((s) => s.assets[type])
   const custom = usePersonDesignStore((s) => s.atlas)

@@ -46,6 +46,16 @@ it("keeps every potentially visible tree through pan, rotation, zoom and parent 
     expect(data.update(mesh, camera)).toBe(false)
     expect(mesh.instanceMatrix.version).toBe(version)
   }
+  const visible = [...data.visible], matrices = mesh.instanceMatrix.array.slice()
+  const ids = geometry.getAttribute("foliageId")
+  data.setIds(tree => [tree / 10000, .4, .5])
+  expect(data.update(mesh, camera)).toBe(true)
+  expect(data.visible).toEqual(visible)
+  expect(mesh.geometry).toBe(geometry)
+  expect(geometry.getAttribute("foliageId")).toBe(ids)
+  expect(mesh.instanceMatrix.array).toEqual(matrices)
+  for (let i = 0; i < mesh.count; i++) expect(ids.getX(i)).toBeCloseTo(sources[visible[i]].tree / 10000)
+  expect(data.update(mesh, camera)).toBe(false)
   // A loading boundary reconnects layout effects and clears the draw count and
   // colors. The stationary camera must still get a complete forest next frame.
   const count = mesh.count
