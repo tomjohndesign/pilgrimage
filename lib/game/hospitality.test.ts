@@ -6,7 +6,7 @@ import { createSettlement, purchaseStructure, placementError, woodcutterHuts, jo
 import { buildingEntry } from "./building-rotation"
 import { characterSupport } from "./character-support"
 import { HOUSE_BEDS } from "./building-art/early-geometry"
-import { MEAL_PRICE, servingHouses, tavernSeats } from "./tavern"
+import { DRINK_PRICE, MEAL_PRICE, servingHouses, tavernSeats } from "./tavern"
 import { buildingStepAllowed, containsTile, shrineGates } from "./building-navigation"
 import { relicHeading, shrineVisitRoute, shrineVisitPlan, shrineDonation } from "./shrine-visit"
 import { BUILDING_KINDS, placementProblem, planBuilding } from "./buildings"
@@ -810,6 +810,28 @@ describe("woodcutter huts", () => {
 
 
 describe("houses, counters and posts", () => {
+  it.each([
+    { hunger: 40, thirst: 0, gold: MEAL_PRICE, served: "thirst", price: DRINK_PRICE },
+    { hunger: 0, thirst: 40, gold: MEAL_PRICE, served: "hunger", price: MEAL_PRICE },
+    { hunger: 0, thirst: 0, gold: DRINK_PRICE, served: "thirst", price: DRINK_PRICE },
+    { hunger: 0, thirst: 40, gold: DRINK_PRICE, served: "thirst", price: DRINK_PRICE },
+    { hunger: 100, thirst: 0, gold: DRINK_PRICE, served: "thirst", price: DRINK_PRICE },
+  ] as const)("serves $served first with hunger $hunger, thirst $thirst and $gold gold", ({ hunger, thirst, gold, served, price }) => {
+    const { map, traveler } = fixture()
+    const t = traveler(0)
+    Object.assign(t.attributes, { hunger, thirst, gold })
+    const sim = createEstablishedShrine([t], map)
+    staffTavern(sim, map)
+    const s = sim.travelers.get(t.id)!
+    run(sim, [t], map, 200, () => s.activity === "sitting")
+    expect(s.activity).toBe("sitting")
+    expect(s[served]).toBeGreaterThan(95)
+    const other = served === "thirst" ? "hunger" : "thirst"
+    expect(s[other]).toBeLessThanOrEqual(t.attributes[other])
+    expect(s.gold).toBe(gold - price)
+    expect(sim.tradeGold).toBe(price)
+  })
+
   it.each([1, -1] as const)("serves travelers at an independent town in direction %s without paying the player", direction => {
     const { map, traveler } = fixture()
     // An ordinary paid counter, operated locally from the start.
@@ -827,7 +849,7 @@ describe("houses, counters and posts", () => {
     expect(s.activity).toBe("sitting")
     expect(s.hunger).toBeGreaterThan(90)
     expect(s.thirst).toBeGreaterThan(90)
-    expect(s.gold).toBe(5)
+    expect(s.gold).toBe(10 - MEAL_PRICE - DRINK_PRICE)
     expect(sim.tradeGold).toBe(0)
     expect(sim.shrineGold).toBe(0)
     expect(sim.visits).toBe(0)
@@ -1251,7 +1273,7 @@ describe("shrine visits beside a covered junction", () => {
     expect(s.activity).toBe("toTavern")
     for (let i = 0; i < 2000 && s.activity !== "walking"; i++) step()
     expect(s.activity).toBe("walking")
-    expect(sim.tradeGold).toBe(5)
+    expect(sim.tradeGold).toBe(MEAL_PRICE + DRINK_PRICE)
     expect(s.tavernVisit).toBeUndefined()
     for (let i = 0; i < 300 && direction * (s.progress - 10) < 3; i++) step()
     expect(direction * (s.progress - 10)).toBeGreaterThanOrEqual(3)

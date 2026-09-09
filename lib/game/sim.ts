@@ -1115,8 +1115,12 @@ function buyRefreshment(sim: SimState, s: SimTraveler, map: GameMap): void {
     s.gold -= price
     if (!independent) sim.tradeGold += price
   }
-  if (s.hunger < SERVING_THRESHOLD && s.gold >= MEAL_PRICE) { take(MEAL_PRICE); s.hunger = 100 }
-  if (s.thirst < SERVING_THRESHOLD && s.gold >= DRINK_PRICE) { take(DRINK_PRICE); s.thirst = 100 }
+  // When coin cannot cover both, answer the most urgent need first.
+  const needs = s.thirst <= s.hunger ? ["thirst", "hunger"] as const : ["hunger", "thirst"] as const
+  for (const need of needs) {
+    const price = need === "thirst" ? DRINK_PRICE : MEAL_PRICE
+    if (s[need] < SERVING_THRESHOLD && s.gold >= price) { take(price); s[need] = 100 }
+  }
 }
 
 /** A settler's own doorstep: where they wait for work between errands. */
