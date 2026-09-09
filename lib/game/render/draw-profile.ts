@@ -10,6 +10,9 @@ export function createDrawProfile(renderer: THREE.WebGLRenderer, scene: THREE.Sc
   let active = false
   let draws: Record<string, DrawTotals> = {}, passes: Record<string, number> = {}
   const category = (object: THREE.Object3D) => {
+    // Isolation swaps a road mesh to its plain-ground material in place.
+    if (object.name === "terrain-path") return object.userData.pathsVisible === false ? "ground" : "paths"
+    if (object.name === "terrain-path-edge") return "paths"
     const cached = categories.get(object)
     if (cached) return cached
     let label = object.name || object.type

@@ -37,11 +37,12 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
   batchModules.wildlife = ts.transpileModule(await readFile(new URL("../lib/game/wildlife/batch.ts", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.ESNext },
   }).outputText.replaceAll('"../render/outline"', '"/batch-outline.js"')
-  for (const name of ["building-batch", "road-segment-texture", "terrain-elevation", "terrain-hidden-faces", "character-batch", "sprite-texture", "static-instances", "scenery-detail", "flat-geometry", "complexion-swap", "outline"]) {
+  for (const name of ["building-batch", "road-segment-texture", "terrain-elevation", "terrain-hidden-faces", "character-batch", "sprite-texture", "sprite-transforms", "static-instances", "scenery-detail", "flat-geometry", "complexion-swap", "outline"]) {
     batchModules[name] = ts.transpileModule(await readFile(new URL(`../lib/game/render/${name}.ts`, import.meta.url), "utf8"), {
       compilerOptions: { module: ts.ModuleKind.ESNext },
     }).outputText.replaceAll('"./sprite-depth"', '"/shader.js"')
       .replaceAll('"./sprite-texture"', '"/batch-sprite-texture.js"')
+      .replaceAll('"./sprite-transforms"', '"/batch-sprite-transforms.js"')
       .replaceAll('"./complexion-swap"', '"/batch-complexion-swap.js"')
       .replaceAll('"./scenery-detail"', '"/batch-scenery-detail.js"')
       .replaceAll('"./flat-geometry"', '"/batch-flat-geometry.js"')
@@ -642,7 +643,15 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
           sprite.layers.set(ids ? 1 : 0); sprite.renderOrder = i + 1
           sprite.center.set(.5, .2421875); sprite.scale.setScalar(.71 + i * .035)
           sprite.position.set((i % 5 - 2) * .22, .02, (Math.floor(i / 5) - 1.5) * .24)
-          originals.add(sprite); return sprite
+          if (i % 2 === 0) {
+            // Real game billboards have zero local offset inside an animated
+            // pose root. Exercise the specialized world-matrix path as well
+            // as offset/editor sprites that require the general transform.
+            const root = new THREE.Group()
+            root.position.copy(sprite.position); root.rotation.y = i * .13
+            sprite.position.set(0, 0, 0); root.add(sprite); originals.add(root)
+          } else originals.add(sprite)
+          return sprite
         })
         return { sprite: sprites[0], ids: sprites[1], complexion, ground, depth: pose, id }
       })
@@ -677,10 +686,22 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
               entries.forEach((entry, i) => {
                 const map = entry.sprite.material.map
                 map.repeat.set(1 / columns, 1 / 8); map.offset.set(((i + frame) % columns) / columns, direction / 8)
+                // Mix direct shared-atlas UVs with ordinary private texture
+                // views, then change membership/UVs as poses advance.
+                const direct = (i + frame) % 3 !== 0
+                entry.color = direct ? color : undefined
+                entry.uv = direct ? new THREE.Vector4(map.repeat.x, map.repeat.y, map.offset.x, map.offset.y) : undefined
+                if (i % 2 === 0 && (!entry.fixedAttributes || frame === 2)) entry.fixedAttributes = Float32Array.from([
+                  entry.sprite.center.x, entry.sprite.center.y, entry.id.x, entry.id.y, entry.id.z,
+                ])
                 if (entry.complexion && frame === 2) entry.complexion.complexionTo.value[0].setRGB(.22 + i * .002, .4, .25)
                 entry.palette = entry.complexion && frame > 0 ? characterPalette(entry.complexion) : undefined
               })
-              originals.visible = true; originals.updateWorldMatrix(true, true); batch.write(entries, camera, true)
+              // Removing the first source moves remaining IDs into new rows;
+              // restoring it must restore their exact centers/IDs/palettes.
+              const active = frame === 1 ? entries.slice(1) : entries
+              entries.forEach((entry, i) => { entry.sprite.visible = entry.ids.visible = frame !== 1 || i !== 0 })
+              originals.visible = true; originals.updateWorldMatrix(true, true); batch.write(active, camera, true)
               for (const layer of [0, 1]) {
                 camera.layers.set(layer)
                 originals.visible = true; batch.root.visible = false; const reference = capture()
@@ -701,7 +722,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         }
       }
       batch.write(entries.slice(0, 2), camera); batch.write([], camera); batch.dispose()
-      originals.children.forEach(sprite => { sprite.material.map.dispose(); sprite.material.dispose() })
+      originals.traverse(sprite => { if (sprite instanceof THREE.Sprite) { sprite.material.map.dispose(); sprite.material.dispose() } })
       color.dispose(); depth.dispose(); gl.dispose()
       return { compared, visible, mismatches, byLayer, examples }
     }, poseClips.walk)

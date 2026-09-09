@@ -64,14 +64,20 @@ export function shorelineCorners(map: GameMap, x: number, z: number): SideFlags 
   const corners: SideFlags = [0, 0, 0, 0]
   const terrain = tileAt(map, x, z)
   if (terrain === null || !["water", "sand", "grass", "dirt", "clearing", "hills", "forest", "darkwood"].includes(terrain)) return corners
-  if (map.buildings.some(b => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d)) return corners
+  const covered = () => map.buildings.some(b => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d)
   if (terrain === "water") {
+    if (covered()) return corners
     const corner = waterCorner(map, x, z)
     if (corner >= 0) corners[corner] = 1
     return corners
   }
-  for (const [corner, [dx, dz]] of SHORE_CORNERS.entries()) {
+  let checkedBuildings = false
+  for (let corner = 0; corner < SHORE_CORNERS.length; corner++) {
+    const [dx, dz] = SHORE_CORNERS[corner]
     if (!isWaterTile(map, x + dx, z) || !isWaterTile(map, x, z + dz) || !isWaterTile(map, x + dx, z + dz)) continue
+    // Most walking ground has no water corner. A footprint scan can only
+    // affect a candidate shoreline; do it once, after that cheap rejection.
+    if (!checkedBuildings) { if (covered()) return corners; checkedBuildings = true }
     if (!cornerSurfacesMeet(map, x, z, dx, dz)) continue
     const a = waterCorner(map, x + dx, z), b = waterCorner(map, x, z + dz)
     if ((a >= 0 && SHORE_CORNERS[a][0] === -dx) || (b >= 0 && SHORE_CORNERS[b][1] === -dz)) continue

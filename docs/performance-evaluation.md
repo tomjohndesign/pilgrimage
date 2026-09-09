@@ -6,6 +6,13 @@ pointer dragging, wheel zooming and camera rotation. Sprite trees are the
 normal renderer and the benchmark default. Procedural trees remain available
 only in an explicitly enabled benchmark build for historical comparisons.
 
+The newer [rendering-sampling investigation](rendering-sampling-evaluation.md)
+records the zero-character and 10,000-character component isolation runs,
+resolution/checkerboard research, CPU profiles, shared walking and routing
+changes, and their current limits. Its controlled measurements supersede older
+maximum-load figures below; 30 FPS with 10,000 travelers at effective 6× remains
+an unmet target.
+
 ## Hidden-layer investigation after PR #146
 
 The follow-up baseline includes main through `5cd7a1b` (0.0.129). Other local

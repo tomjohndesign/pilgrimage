@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 import { CHARACTER_COLOR_LAYER, CHARACTER_ID_LAYER, tagPixelCharacters, withoutPixelCharacters } from "./pixel-characters"
-import { batchSourceRoot, updateBatchSourceVisibility, batchedSourceRoots } from "./batch-source-visibility"
+import { batchSourceRoot, updateBatchSourceVisibility, batchedSourceRoots, registerSimpleBatchSource } from "./batch-source-visibility"
 import { OUTLINE_ID_LAYER, SELECTED_CHARACTER_LAYER } from "./outline"
 
 describe("separate character rendering", () => {
@@ -134,4 +134,47 @@ it("prunes batched people with invisible click materials while keeping moving hi
   updateBatchSourceVisibility(scene, [unit])
   expect([...batchedSourceRoots(scene)]).toEqual([])
   hit.geometry.dispose(); hit.material.dispose()
+})
+
+it("updates picking branches of prepared travelers without recomposing their batched poses", () => {
+  const scene = new THREE.Scene(), unit = new THREE.Group(), pose = new THREE.Group(), clickParent = new THREE.Group()
+  unit.name = "traveler-unit"
+  const sprite = new THREE.Sprite(), hit = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ visible: false }))
+  sprite.visible = false; pose.add(sprite); clickParent.add(hit); unit.add(pose, clickParent); scene.add(unit)
+  for (const x of [1, -3, 8]) {
+    unit.position.x = x; unit.updateWorldMatrix(true, false); unit.userData.poseWorldFrame = x
+    pose.position.x = 12 // The batch owns this pose; pruning must not visit it.
+    clickParent.position.y = 2; hit.position.z = 3
+    updateBatchSourceVisibility(scene, [unit], x)
+    expect(hit.matrixWorld.elements.slice(12, 15)).toEqual([x, 2, 3])
+    expect(pose.matrix.elements[12]).toBe(0)
+    expect([...batchedSourceRoots(scene)]).toEqual([unit])
+  }
+  hit.geometry.dispose(); hit.material.dispose()
+})
+
+it("invalidates simple source pruning for added equipment, picking children, and material changes", () => {
+  const scene = new THREE.Scene(), unit = new THREE.Group(), pose = new THREE.Group()
+  unit.name = "traveler-unit"
+  const sprite = new THREE.Sprite(), ids = new THREE.Sprite(), gear = new THREE.Mesh()
+  const hit = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial({ visible: false }))
+  hit.name = "character-hit-target"; hit.position.y = .4
+  sprite.visible = ids.visible = false
+  pose.add(sprite, ids); unit.add(pose, hit); scene.add(unit)
+  const unregister = registerSimpleBatchSource(sprite, ids)
+  unit.position.x = 3; unit.rotation.y = .8; unit.updateWorldMatrix(true, false); unit.userData.poseWorldFrame = 1
+  const pruned = () => { updateBatchSourceVisibility(scene, [unit], 1); return [...batchedSourceRoots(scene)] }
+  expect(pruned()).toEqual([unit])
+  expect(hit.matrixWorld.elements.slice(12, 15)).toEqual([3, .4, 0])
+  for (const parent of [unit, pose, hit]) {
+    parent.add(gear)
+    expect(pruned()).toEqual([])
+    parent.remove(gear)
+    expect(pruned()).toEqual([unit])
+  }
+  hit.material.visible = true
+  expect(pruned()).toEqual([])
+  hit.material.visible = false; sprite.visible = true
+  expect(pruned()).toEqual([])
+  unregister(); hit.geometry.dispose(); hit.material.dispose()
 })

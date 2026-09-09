@@ -1,3 +1,6 @@
+import { benchmarkWork } from "./benchmark-work"
+import type { WanderSpot } from "./monk-wander"
+import { withWalkingRouteQueries } from "./walking-route-queries"
 import { cartLoadout, cartOffset } from "./transport/assets"
 import { alignCart } from "./transport/follow"
 import { cartPath } from "./transport/building-parking"
@@ -23,6 +26,9 @@ const cities = new WeakMap<NonNullable<GameMap["road"]>, City>()
 const journeys = new WeakMap<SimState, {
   people: Map<number, { rng: () => number; destination: number; trips: number }>
   assigned: number; completed: number; failed: number; destinations: Set<number>
+}>()
+const replayJourneys = new WeakMap<SimState, {
+  routes: Map<number, { from: number; to: number; points: WanderSpot[] }>; reused: number
 }>()
 export function benchmarkCity(map: GameMap) { return map.road ? cities.get(map.road) : undefined }
 
@@ -78,8 +84,17 @@ export function createBenchmarkCity(source: GameMap): GameMap {
  * needs, foot contacts and A* all run through the existing simulation. This
  * intentionally stresses routing traffic rather than autonomous job decisions. */
 export function routeBenchmarkCity(sim: SimState, map: GameMap) {
+  if (!benchmarkCity(map)) return
+  return withWalkingRouteQueries(map, () => assignCityJourneys(sim, map))
+}
+
+function assignCityJourneys(sim: SimState, map: GameMap) {
   const city = benchmarkCity(map)
   if (!city) return
+  const replaying = process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && benchmarkWork.replayRoutes
+  let replay = replayJourneys.get(sim)
+  if (replaying && !replay) { replay = { routes: new Map(), reused: 0 }; replayJourneys.set(sim, replay) }
+  if (!replaying) replayJourneys.delete(sim)
   let state = journeys.get(sim)
   if (!state) { state = { people: new Map(), assigned: 0, completed: 0, failed: 0, destinations: new Set() }; journeys.set(sim, state) }
   for (const actor of sim.travelers.values()) {
@@ -119,9 +134,20 @@ export function routeBenchmarkCity(sim: SimState, map: GameMap) {
       if (!assigned) state.failed++
       continue
     }
+    const repeated = replaying ? replay?.routes.get(actor.id) : undefined
+    if (repeated && (person.destination === repeated.to || person.destination === repeated.from)) {
+      const reverse = person.destination === repeated.to
+      actor.activity = "fromBuild"
+      actor.constructionReturn = repeated.points.map(point => ({ ...point }))
+      if (reverse) actor.constructionReturn.reverse()
+      person.destination = reverse ? repeated.from : repeated.to
+      person.trips++; replay!.reused++; state.assigned++; state.destinations.add(person.destination)
+      continue
+    }
     const destination = options[Math.floor(person.rng() * options.length)]
     const route = workerRoute(map, actor, city.destinations[destination])
     if (!route?.length) { state.failed++; continue }
+    if (replaying) replay!.routes.set(actor.id, { from: person.destination, to: destination, points: route.map(point => ({ ...point })) })
     actor.activity = "fromBuild"; actor.constructionReturn = route
     person.destination = destination; person.trips++
     state.assigned++; state.destinations.add(destination)
@@ -131,7 +157,8 @@ export function routeBenchmarkCity(sim: SimState, map: GameMap) {
 export function cityBenchmarkStats(sim: SimState | null, map: GameMap) {
   const city = benchmarkCity(map), state = sim && journeys.get(sim)
   if (!city) return null
-  return { buildings: city.buildings, assigned: state?.assigned ?? 0, completed: state?.completed ?? 0,
+  return { replayCached: sim ? replayJourneys.get(sim)?.routes.size ?? 0 : 0, replayed: sim ? replayJourneys.get(sim)?.reused ?? 0 : 0,
+    buildings: city.buildings, assigned: state?.assigned ?? 0, completed: state?.completed ?? 0,
     failed: state?.failed ?? 0, uniqueDestinations: state?.destinations.size ?? 0,
     active: sim ? [...sim.travelers.values()].filter(s => s.constructionReturn?.length || s.roadShortcut).length : 0 }
 }

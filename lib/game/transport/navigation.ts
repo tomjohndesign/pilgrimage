@@ -1,4 +1,4 @@
-import { buildingSpatialQuery } from "../building-spatial"
+import { mapBuildingQuery } from "../building-spatial"
 import { buildingYaw, rotateBuildingPoint, rotatedFootprint } from "../building-rotation"
 import { marketLayout, marketYardContains } from "../market-layout"
 import type { TreePlacement } from "../trees/placement"
@@ -37,6 +37,7 @@ export function convoyBounds(pose: CartPose, puller: Puller, scale: number, anim
 /** Test oriented body bounds against every touched tile, including shafts and
  * the animal's head. Tile/box SAT catches edges without a per-pixel grid. */
 export function convoyClear(map: GameMap, pose: CartPose, puller: Puller, scale: number, grassOnly = false, animalHeading = pose.heading): boolean {
+  const nearby = mapBuildingQuery(map)
   const boxes = convoyBounds(pose, puller, scale, animalHeading)
   const layout = bridgeLayout(map)
   const supported=(p:Point)=>{
@@ -85,7 +86,7 @@ export function convoyClear(map: GameMap, pose: CartPose, puller: Puller, scale:
           continue
         }
         if (!(terrain === "grass" || terrain === "clearing" || (!grassOnly && (terrain === "dirt" || terrain === "path" || terrain === "track" || terrain === "bridge")))) return false
-        const building = buildingAt(map, x, z)
+        const building = nearby({ x, z }).find(b => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d)
         if ((building && !marketYardContains(building, { x, z })) || (!layout.rise[z * map.width + x] && Math.abs(groundHeight(map, x, z) - height) >= 0.3)) return false
       }
     }
@@ -120,7 +121,7 @@ export function convoyBuildingsClear(map: GameMap, pose: CartPose, puller: Pulle
   // Query a padded cell for each rigid body, then retain the exact oriented
   // overlap test. A long cart can touch a building outside its hitch's cell.
   const padding = Math.ceil(Math.max(0, ...bounds.map(body => Math.hypot(body.halfWidth, body.halfLength))))
-  const nearby = buildingSpatialQuery(map.buildings, padding)
+  const nearby = mapBuildingQuery(map, padding)
   return bounds.every(body => nearby({ x: body.x + (map.width - 1) / 2, z: body.z + (map.depth - 1) / 2 }).every(building => {
     const size = rotatedFootprint(building, building.rotation)
     const market = building.buildType === "market" ? marketLayout(size.w, size.d) : null

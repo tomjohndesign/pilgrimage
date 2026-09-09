@@ -3,6 +3,13 @@ import { buildFootpathRoadSegments, compactFootpathContacts, createFootpaths, FO
 import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 import { settlementRoute } from "./settlement-route"
 import { monkWander } from "./monk-wander"
+import { footpathEdgeKey } from "./footpaths"
+
+it("packs undirected wear edges without collisions through the largest supported indices", () => {
+  const pairs = [[0, 1], [0, 262143], [1, 262143], [262142, 262143], [67108862, 67108863], [-1, 1], [0, 67108864]]
+  expect(new Set(pairs.map(([a, b]) => footpathEdgeKey(a, b))).size).toBe(pairs.length)
+  for (const [a, b] of pairs) expect(footpathEdgeKey(a, b)).toBe(footpathEdgeKey(b, a))
+})
 import { alignCart } from "./transport/follow"
 import { BASE_CHARACTER_SCALE } from "./base-person/gait"
 

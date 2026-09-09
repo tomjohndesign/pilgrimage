@@ -1,4 +1,4 @@
-import { smoothWalkingRoute, SHORTCUT_EXPLORERS } from "./walking-shortcuts"
+import { exploresWorkerShortcut, smoothWalkingRoute, SHORTCUT_EXPLORERS } from "./walking-shortcuts"
 import { buildingEntry, buildingYaw, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
 import { MALLET_CONTACT_REACH } from "./base-person/building"
 import { BASE_CHARACTER_SCALE, PERSON_SPRITE_SCALE } from "./base-person/gait"
@@ -9,6 +9,7 @@ import { settlementRoute } from "./settlement-route"
 import type { WanderSpot } from "./monk-wander"
 import { buildingSupports } from "./character-support"
 import { workPost } from "./work-posts"
+import { rememberedWorkerCorridor, rememberedWorkerRoute } from "./worker-route-memory"
 
 export interface Construction { work: number; required: number; cost?: { gold: number; wood: number } }
 /** Worker-seconds: small sites finish quickly; doubling the area quadruples the work. */
@@ -55,15 +56,22 @@ function constructionCrew(building: BuildingDef): Map<Worker, BuildingTask> {
   for (const [worker, task] of crew) if (worker.buildingTask !== task) crew.delete(worker)
   return crew
 }
-export function workerRoute(map: GameMap, actor: WanderSpot, goal: TilePos): WanderSpot[] | null {
+export function workerRoute(map: GameMap, actor: WanderSpot & { id?: number }, goal: TilePos): WanderSpot[] | null {
   const start = { x: worldToTileX(map, actor.x), z: worldToTileZ(map, actor.z) }
   // A footprint may be placed beneath an idle resident. Let them leave that
   // new site before treating it as an obstacle on subsequent trips.
-  const obstacles = map.buildings.filter(b => isComplete(b) || !(start.x >= b.x && start.x < b.x + b.w && start.z >= b.z && start.z < b.z + b.d))
-  const route = settlementRoute(map, obstacles, start, goal, false, true)
-  if (!route) return null
+  const canLeave = (b: BuildingDef) => !isComplete(b) && start.x >= b.x && start.x < b.x + b.w && start.z >= b.z && start.z < b.z + b.d
+  // Retain the shared obstacle index unless this actor needs to escape a newly
+  // placed site. Allocating a new array otherwise rebuilds it for every trip.
+  const obstacles = map.buildings.some(canLeave) ? map.buildings.filter(b => !canLeave(b)) : map.buildings
   const journey = Math.abs(Math.sin(actor.x * 12.9898 + actor.z * 78.233 + goal.x * 37.719 + goal.z))
-  return smoothWalkingRoute(map, route.map(p => ({ x: tileToWorldX(map, p.x), y: surfaceHeight(map, p.x, p.z), z: tileToWorldZ(map, p.z) })), journey < SHORTCUT_EXPLORERS)
+  const exploring = actor.id === undefined ? journey < SHORTCUT_EXPLORERS : exploresWorkerShortcut(map, actor.id, start, goal)
+  const plan = () => {
+    const search = () => settlementRoute(map, obstacles, start, goal, false, true)
+    const route = obstacles === map.buildings ? rememberedWorkerCorridor(map, start, goal, search) : search()
+    return route && smoothWalkingRoute(map, route.map(p => ({ x: tileToWorldX(map, p.x), y: surfaceHeight(map, p.x, p.z), z: tileToWorldZ(map, p.z) })), exploring)
+  }
+  return obstacles === map.buildings ? rememberedWorkerRoute(map, start, goal, exploring, plan) : plan()
 }
 
 /** The mallet's forward reach, converted through the actual sprite's bake camera. */
@@ -144,7 +152,7 @@ export function walkWorker(actor: WanderSpot, route: WanderSpot[], speed: number
       actor.x += (goal.x - actor.x) * t; actor.y += (goal.y - actor.y) * t; actor.z += (goal.z - actor.z) * t
       return false
     }
-    Object.assign(actor, goal)
+    actor.x = goal.x; actor.y = goal.y; actor.z = goal.z
     distance -= length
     route.shift()
   }

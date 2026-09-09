@@ -2,6 +2,7 @@
 
 import { startTransition, useMemo, useState, type ComponentProps } from "react"
 import { useFrame } from "@react-three/fiber"
+import { benchmarkWork } from "@/lib/game/benchmark-work"
 import { buildFootpathRoadSegments } from "@/lib/game/footpaths"
 import { diagonalRoadSegments, type RoadSegment } from "@/lib/game/render/road-segments"
 import { frameProfile } from "@/lib/game/render/frame-profile"
@@ -32,6 +33,7 @@ export function WalkingTerrain(props: Props) {
   const work = useMemo(() => ({ elapsed: .5, revision: -1,
     pending: null as Generator<void, Roads> | null }), [map, founding])
   useFrame((_, delta) => {
+    if (process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && !benchmarkWork.pathUpdates) return
     work.elapsed += delta
     const revision = map.footpaths?.revision ?? 0
     if (!work.pending && work.elapsed >= .5 && work.revision !== revision) {

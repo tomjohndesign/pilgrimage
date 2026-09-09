@@ -148,7 +148,7 @@ export const PALETTE_TONES = { shared: 0, skin: 1, hair: 2 } as const
 export type PaletteTone = typeof PALETTE_TONES[keyof typeof PALETTE_TONES]
 export function personRecipe(input: PersonDesign = DEFAULT_DESIGN) {
   const design = validatePersonDesign(input)
-  const result = structuredClone(recipe), b = result.body, original = recipe.body
+  const result = structuredClone(recipe), b = result.body
   result.palette.tunic = design.tunicColor; result.palette.skin = design.skinColor
   if (design.beltStyle === "Rope") result.palette.belt = "#c9ac78"
   const clothColors = design.bodyType === "Female" ? [design.shirtColor, design.coveringColor] : [design.trouserColor]
@@ -165,6 +165,18 @@ export function personRecipe(input: PersonDesign = DEFAULT_DESIGN) {
   if (design.beltStyle === "Rope") add(PALETTE_TONES.shared, [0.65, 1, 1.25].map(f => shade(result.palette.belt, f)))
   result.renderPalette = entries.map(entry => entry[0])
   const paletteTones = entries.map(entry => entry[1])
+  return { ...result, paletteTones, body: applyPersonBody(design, b), design }
+}
+export type PersonRecipe = ReturnType<typeof personRecipe>
+
+/** The same authored body used by the baker, without constructing palettes and
+ * cloning unrelated render settings when only stride/contact geometry is needed. */
+export function personBody(input: PersonDesign = DEFAULT_DESIGN) {
+  return applyPersonBody(validatePersonDesign(input), { ...recipe.body })
+}
+
+function applyPersonBody(design: PersonDesign, b: typeof recipe.body) {
+  const original = recipe.body
   b.headWidth *= design.head; b.headHeight *= design.head; b.headDepth *= design.head
   for (const key of ["torsoTop", "torsoBottom", "shoulderOffset", "legOffset", "thighWidth", "shinWidth"] as const) b[key] *= design.build
   const female = design.bodyType === "Female"
@@ -202,6 +214,5 @@ export function personRecipe(input: PersonDesign = DEFAULT_DESIGN) {
   // Leave a little knee bend at the longest planted reach; never stretch bones.
   const reach = Math.sqrt(Math.max(0, (b.thighLength + b.shinLength) ** 2 - (b.hipHeight - b.ankleHeight) ** 2)) * 0.95
   b.stride = Math.min(original.stride * design.stride, reach)
-  return { ...result, paletteTones, body: { ...b, waistRadius, bustDepth, torsoShoulderHeight, chestHeight, tunicHem, tunicHemUpper }, design }
+  return { ...b, waistRadius, bustDepth, torsoShoulderHeight, chestHeight, tunicHem, tunicHemUpper }
 }
-export type PersonRecipe = ReturnType<typeof personRecipe>

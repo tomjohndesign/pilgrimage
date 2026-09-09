@@ -15,7 +15,7 @@ assert.ok(["centre", "water"].includes(target), "BENCH_TARGET must be centre or 
 const mobile = process.env.BENCH_MOBILE === "1"
 const checksOnly = process.env.BENCH_CHECKS_ONLY === "1"
 const count = Number(process.env.BENCH_COUNT ?? 10000)
-assert.ok(Number.isInteger(count / 16) && count > 0, "BENCH_COUNT must be a positive multiple of 16 on the 512-square map")
+assert.ok(Number.isInteger(count / 16) && count >= 0, "BENCH_COUNT must be a nonnegative multiple of 16 on the 512-square map")
 const trees = process.env.BENCH_TREES ?? "sprites"
 assert.ok(["sprites", "procedural"].includes(trees), "BENCH_TREES must be sprites or procedural")
 const seconds = Number(process.env.BENCH_SECONDS ?? 20)
@@ -283,9 +283,9 @@ try {
       return { count: after.size, moved: before.filter(s => { const next = after.get(s.id); return next && Math.hypot(next.x - s.x, next.z - s.z) > .01 }).length }
     }, populationBefore)
     assert.equal(population.count, count, "culling must retain the complete simulation")
-    assert.ok(population.moved > count * .5, "travelers outside the camera must keep walking")
+    assert.ok(count === 0 || population.moved > count * .5, "travelers outside the camera must keep walking")
     const city = await page.evaluate(() => window.__pilgrimage.cityStats?.())
-    if (scenario === "city") {
+    if (scenario === "city" && count > 0) {
       assert.ok(city?.buildings >= 200, "city must contain hundreds of real buildings")
       assert.equal(city.failed, 0, "every requested city destination must be reachable")
       assert.ok(city.active >= count * .98, "city population must keep following routes")
@@ -497,7 +497,7 @@ try {
       "deselecting must restore the complete building geometry")
     console.log("City smoke passed: building picking, roof cutaway, selection through zoom, and complete roof restoration")
   }
-  if (process.env.BENCH_ISOLATION === "1") {
+  if (process.env.BENCH_ISOLATION === "1" || process.env.BENCH_COMPONENT_ISOLATION === "1") {
     const results = []
     const environment = await page.evaluate(() => {
       const game = window.__pilgrimage, gl = document.querySelector("canvas[data-engine]")?.getContext("webgl2")
@@ -509,7 +509,27 @@ try {
       hardware: { cpu: cpus()[0]?.model, cores: cpus().length, memory: totalmem(), load: loadavg() },
       count, scenario, trees, seconds, mobile, gpuInstrumented: process.env.BENCH_GPU === "1" }, null, 2))
     const layers = { characters: "Characters", wildlife: "Wildlife", buildings: "Buildings", trees: "Trees", scenery: "Scenery" }
-    const cases = [
+    const cases = process.env.BENCH_COMPONENT_ISOLATION === "1" ? [
+      { label: "full-running", hidden: [], paused: false },
+      { label: "resolution-75-running", hidden: [], paused: false, resolution: .75, warmup: 3000 },
+      { label: "resolution-50-running", hidden: [], paused: false, resolution: .5, warmup: 3000 },
+      { label: "paths-drawing-off", hidden: [], paused: false, work: { pathDrawing: false } },
+      { label: "paths-appearance-updates-off", hidden: [], paused: false, work: { pathUpdates: false } },
+      { label: "paths-wear-off", hidden: [], paused: false, work: { pathWear: false } },
+      { label: "pedestrians-reuse-completed-routes", hidden: [], paused: false, work: { replayRoutes: true }, warmup: 15000 },
+      { label: "all-path-work-off", hidden: [], paused: false, work: { pathDrawing: false, pathUpdates: false, pathWear: false, replayRoutes: true }, warmup: 5000 },
+      { label: "characters-hidden-running", hidden: ["characters"], paused: false },
+      { label: "character-visuals-frozen-running", hidden: [], paused: false, work: { characterVisuals: false } },
+      { label: "characters-hidden-path-work-off", hidden: ["characters"], paused: false, work: { pathDrawing: false, pathUpdates: false, pathWear: false, replayRoutes: true }, warmup: 15000 },
+      { label: "full-paused", hidden: [], paused: true },
+      { label: "character-visuals-frozen-paused", hidden: [], paused: true, work: { characterVisuals: false } },
+      { label: "resolution-50-paused", hidden: [], paused: true, resolution: .5, warmup: 3000 },
+      { label: "paths-off-paused", hidden: [], paused: true, work: { pathDrawing: false, pathUpdates: false } },
+      { label: "characters-hidden-paused", hidden: ["characters"], paused: true },
+      { label: "only-characters-paused", hidden: ["wildlife", "buildings", "trees", "scenery"], paused: true, terrain: false },
+      { label: "all-hidden-paused", hidden: Object.keys(layers), paused: true, terrain: false },
+      { label: "restored-running", hidden: [], paused: false },
+    ] : [
       { label: "visible-running", hidden: [], paused: false },
       { label: "characters-hidden-running", hidden: ["characters"], paused: false },
       { label: "characters-hidden-paused", hidden: ["characters"], paused: true },
@@ -520,10 +540,13 @@ try {
       { label: "named-layers-and-terrain-hidden-paused", hidden: Object.keys(layers), paused: true, terrain: false },
       { label: "restored-running", hidden: [], paused: false },
     ]
+    const caseFilter = process.env.BENCH_ISOLATION_CASES?.split(",")
+    if (caseFilter) for (const label of caseFilter) assert.ok(cases.some(condition => condition.label === label), `unknown isolation case ${label}`)
     for (const viewSize of zooms) {
       await page.evaluate(viewSize => { window.__pilgrimage.setPaused(true); window.__pilgrimage.setZoom(viewSize) }, viewSize)
       await page.waitForTimeout(1500)
       for (const condition of cases) {
+        if (caseFilter && !caseFilter.includes(condition.label)) continue
         // Exercise the player controls, not a separate debug visibility override.
         await page.getByRole("button", { name: "World settings", exact: true }).click()
         for (const [key, label] of Object.entries(layers)) {
@@ -531,11 +554,11 @@ try {
             condition.hidden.includes(key) ? key === "buildings" ? "2" : "0" : key === "buildings" ? "0" : "1")
         }
         await page.getByRole("button", { name: "Close world settings", exact: true }).click()
-        await page.evaluate(({ paused, terrain, speed }) => {
+        await page.evaluate(({ paused, terrain, speed, work, resolution }) => {
           const game = window.__pilgrimage
-          game.setTerrainVisible(terrain !== false); game.setSpeed(speed); game.setPaused(paused)
+          game.setResolutionScale?.(resolution ?? 1); game.isolateWork?.(work ?? {}); game.setTerrainVisible(terrain !== false); game.setSpeed(speed); game.setPaused(paused)
         }, { ...condition, speed: speeds[0] })
-        await page.waitForTimeout(1000)
+        await page.waitForTimeout(condition.warmup ?? 1000)
         if (process.env.BENCH_GPU === "1") await page.evaluate(() => {
           const probe = window.__benchmarkGPU
           probe.reset?.(); probe.samples.length = 0; probe.disjoint = 0; probe.active = true
@@ -545,7 +568,7 @@ try {
           const observer = new PerformanceObserver(list => longTasks.push(...list.getEntries().map(e => e.duration)))
           observer.observe({ type: "longtask" })
           const timeBefore = game.time(), population = game.sim().length
-          const before = game.sceneStats()
+          const before = game.sceneStats(), cityBefore = game.cityStats?.(), routesBefore = game.routeMemory?.()
           let start, last
           game.profileFrames(true); game.captureDraws(true)
           const frame = now => {
@@ -555,7 +578,7 @@ try {
             if (now - start < seconds * 1000) { requestAnimationFrame(frame); return }
             const submissions = game.captureDraws(false), timings = game.profileFrames(false)
             observer.disconnect()
-            resolve({ frames, longTasks, submissions, timings, timeBefore, timeAfter: game.time(), population,
+            resolve({ frames, longTasks, submissions, timings, timeBefore, timeAfter: game.time(), population, cityBefore, cityAfter: game.cityStats?.(), routesBefore, routesAfter: game.routeMemory?.(), work: game.isolatedWork?.(), resolution: game.renderResolution?.(),
               retained: game.sim().length, layers: game.layerVisibility(), before, after: game.sceneStats(), render: game.renderInfo() })
           }
           requestAnimationFrame(frame)
@@ -570,6 +593,7 @@ try {
         }) : undefined
         const frames = [...sample.frames].sort((a, b) => a - b)
         const result = { ...condition, viewSize, speed: speeds[0], gpu, ...sample,
+          effectiveSpeed: (sample.timeAfter - sample.timeBefore) * 600 / (sample.frames.reduce((a, b) => a + b, 0) / 1000) / 2,
           fps: sample.frames.length * 1000 / sample.frames.reduce((a, b) => a + b, 0), p95: frames[Math.floor(frames.length * .95)] }
         results.push(result)
         await writeFile(`${output}/isolation.json`, JSON.stringify(results, null, 2))
@@ -580,14 +604,25 @@ try {
           assert.equal(sample.layers[name], !condition.hidden.includes(name))
           if (condition.hidden.includes(name)) assert.equal(sample.submissions.draws[name]?.calls ?? 0, 0, `hidden ${name} must submit zero draws`)
         }
-        if (!condition.hidden.includes("characters")) assert.ok(sample.submissions.draws.characters?.calls > 0,
+        if (count > 0 && !condition.hidden.includes("characters")) assert.ok(sample.submissions.draws.characters?.calls > 0,
           "shown characters must resume actual drawing")
+        if (condition.work?.pathDrawing === false) assert.equal(sample.submissions.draws.paths?.calls ?? 0, 0, "disabled paths must submit no path shaders")
+        if (condition.work?.pathUpdates === false) assert.equal(sample.timings.footpathSlice?.count ?? 0, 0, "disabled path appearance must skip updates")
+        if (condition.work?.characterVisuals === false) assert.equal(sample.timings.travelerPositions?.count ?? 0, 0, "frozen visuals must skip positioning while retaining their last draw data")
         if (process.env.BENCH_ASSERT_HIDDEN_IDLE === "1" && condition.hidden.includes("characters")) {
           assert.equal(sample.timings.travelerPositions?.count ?? 0, 0, "hidden people must skip visual positioning")
           if (viewSize > 36) assert.equal(sample.submissions.passes["scene-layer-8"] ?? 0, 0,
             "an empty distant character stage must be omitted")
         }
         if (condition.label === "restored-running") await page.screenshot({ path: `${output}/restored-zoom${viewSize}.png` })
+        if (process.env.BENCH_ISOLATION_PROFILE?.split(",").includes(condition.label)) {
+          // CPU sampling is deliberately after the ordinary FPS interval.
+          await session.send("Profiler.enable"); await session.send("Profiler.start")
+          await page.waitForTimeout(8000)
+          const { profile } = await session.send("Profiler.stop")
+          await writeFile(`${output}/cpu-${condition.label}-zoom${viewSize}.cpuprofile`, JSON.stringify(profile))
+          await session.send("Profiler.disable")
+        }
         console.log("Isolation", { viewSize, label: condition.label, fps: result.fps, p95: result.p95, gpu,
           characterDraws: sample.submissions.draws.characters?.calls ?? 0 })
       }

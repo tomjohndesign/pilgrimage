@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
+import { benchmarkWork, resetBenchmarkWork } from "./benchmark-work"
 import { createFootpaths } from "./footpaths"
 import { createBenchmarkCity, cityBenchmarkStats, routeBenchmarkCity } from "./city-benchmark"
 import { buildingStepAllowed } from "./building-navigation"
 import { DEFAULT_WALK_SPEED } from "./base-person/gait"
 import { generateTravelers } from "./travelers"
-import { createSim, stepSim } from "./sim"
+import { createSim, GAME_DAY_SECONDS, stepSim } from "./sim"
+import { withWorkerRouteMemory, workerRouteMemoryStats } from "./worker-route-memory"
 import { simulationFrameStep } from "./simulation-store"
 import { worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 
@@ -22,15 +24,41 @@ describe("city stress fixture", () => {
     for (const [i, a] of map.buildings.entries()) for (const b of map.buildings.slice(i + 1))
       expect(a.x < b.x + b.w && a.x + a.w > b.x && a.z < b.z + b.d && a.z + a.d > b.z).toBe(false)
   })
-  it.each([1 / 60, .034])("routes real walkers around footprints at 6× with %s-second display frames", delta => {
+  it("replays completed pedestrian routes only for diagnostics and restores fresh planning", () => {
+    vi.stubEnv("NEXT_PUBLIC_GAME_BENCHMARK", "1")
+    benchmarkWork.replayRoutes = true
+    try {
+      const map = fixture(), people = generateTravelers(12345, 48), sim = createSim(people, map)
+      for (let tick = 0; tick < 600; tick++) {
+        routeBenchmarkCity(sim, map)
+        const before = [...sim.travelers.values()].map(s => ({ x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }))
+        stepSim(sim, people, map, DEFAULT_WALK_SPEED, 1.2)
+        let i = 0
+        for (const actor of sim.travelers.values()) {
+          const next = { x: worldToTileX(map, actor.x), z: worldToTileZ(map, actor.z) }
+          expect(buildingStepAllowed(map, map.buildings, before[i++], next, true)).toBe(true)
+        }
+      }
+      const stats = cityBenchmarkStats(sim, map)!
+      expect(stats.failed).toBe(0)
+      expect(stats.replayCached).toBeGreaterThan(40)
+      expect(stats.replayed).toBeGreaterThan(100)
+      resetBenchmarkWork()
+      routeBenchmarkCity(sim, map)
+      expect(cityBenchmarkStats(sim, map)!.replayCached).toBe(0)
+    } finally { resetBenchmarkWork(); vi.unstubAllEnvs() }
+  })
+  it.each([1 / 60, .034, .1])("routes real walkers around footprints at 6× with %s-second display frames", delta => {
     const map = fixture(), people = generateTravelers(12345, 120), sim = createSim(people, map)
     routeBenchmarkCity(sim, map)
     const moved = new Set<number>()
     for (let tick = 0; tick < 900; tick++) {
-      routeBenchmarkCity(sim, map)
       const previous = [...sim.travelers.values()].map(s => ({ x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }))
       const { ticks, dt } = simulationFrameStep(delta, 12)
-      for (let step = 0; step < ticks; step++) stepSim(sim, people, map, DEFAULT_WALK_SPEED, dt)
+      for (let step = 0; step < ticks; step++) withWorkerRouteMemory(map, sim.time * GAME_DAY_SECONDS, () => {
+        routeBenchmarkCity(sim, map)
+        stepSim(sim, people, map, DEFAULT_WALK_SPEED, dt)
+      })
       let i = 0
       for (const actor of sim.travelers.values()) {
         const next = { x: worldToTileX(map, actor.x), z: worldToTileZ(map, actor.z) }
@@ -44,5 +72,6 @@ describe("city stress fixture", () => {
     expect(stats.completed).toBeGreaterThan(50)
     expect(stats.uniqueDestinations).toBeGreaterThan(120)
     expect(moved.size).toBe(120)
+    expect(workerRouteMemoryStats(map).planned).toBeGreaterThan(0)
   }, 60000)
 })
