@@ -440,6 +440,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
             <label className="person-check"><input type="checkbox" checked={guides} onChange={e => setGuides(e.target.checked)} />Attachment guides</label>
             <div className="person-palette">{renderPalette.map((color, index) => <span key={`${index}-${color}`} title={color} style={{ background: color }} />)}</div>
             <p className="person-hint">{pixels} × {pixels} px cell · {renderPalette.length} colours<br />{sheetMatchesDesign ? `${bake.metadata.safePadding} px safe margin` : "Checking margins…"}</p>
+            <Link className={button} href="/assets/characters/pipeline">How this sprite is baked <ArrowUpRight size={12} /></Link>
           </Section>
           <Section {...section("Files", false)}>
             <div className="person-file-actions">
