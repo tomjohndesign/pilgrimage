@@ -123,7 +123,7 @@
 .hud-world-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 0 var(--hud-space); font-family: var(--font-cinzel), serif; font-size: 14px; }
 .hud-world-heading button { cursor: pointer; }
 .hud-inspector { min-height: 0; overflow-y: auto; overscroll-behavior: contain; border-bottom: 1px solid #8c784c; }
-.hud-inspector, .hud-world, .hud-menu, .hud-report {
+.hud-inspector, .hud-world, .hud-menu, .hud-report, .hud-landing-setup {
   --parchment: #211e16;
   --parchment-dark: #423725;
   --ink: #f2e8d5;
@@ -229,4 +229,102 @@
   .hud-resources { gap: 8px; }
   .hud-details-dock { max-height: calc(100% - 128px); }
   .hud-build-tray { max-height: calc(100dvh - 208px); }
+}
+
+/* The opening screen shares the live game's frame and control surfaces. */
+.hud-site-links { display: flex; align-items: center; gap: 20px; padding: 0 var(--hud-space); overflow-x: auto; }
+.hud-site-links a { flex-shrink: 0; font-family: var(--font-cinzel), serif; font-size: 11px; color: #d3c097; white-space: nowrap; }
+.hud-site-links a:hover { color: #f9e5af; }
+.hud-landing-setup {
+  position: absolute;
+  z-index: 20;
+  right: calc(50% + 15dvh);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 280px;
+  max-width: calc(50% - 36px);
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  pointer-events: auto;
+}
+.hud-landing-setup > label { margin-bottom: -8px; }
+.hud-landing-play { height: 42px; margin-top: 4px; font-size: 14px; }
+@media (max-width: 1024px) {
+  .game-hud[data-landing="true"] .hud-header { display: flex; }
+  .game-hud[data-landing="true"] .hud-header-right { display: flex; }
+  .hud-site-links { gap: 16px; min-height: 44px; }
+}
+/* Primary actions retain the HUD's shape and gold palette. */
+.hud-action-primary {
+  --hud-button-face: #dab767;
+  --hud-button-edge: #f0d598;
+  --hud-button-hover: #ebcc85;
+  color: #30210c;
+  text-shadow: none;
+  font-weight: 700;
+}
+.hud-action.hud-action-primary:not(:disabled) { color: #30210c; }
+.game-hud[data-landing="true"] .hud-header { z-index: 45; }
+@media (max-width: 640px) {
+  .hud-landing-setup {
+    left: max(16px, env(safe-area-inset-left));
+    right: max(16px, env(safe-area-inset-right));
+    top: auto;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    transform: none;
+    width: auto;
+    max-width: none;
+    max-height: calc(100dvh - 100px);
+    overflow-y: auto;
+    padding: 16px;
+    gap: 10px;
+  }
+  .hud-landing-setup h1 { font-size: 18px; }
+  .hud-landing-setup input { font-size: 16px; }
+  .hud-landing-play { height: 48px; }
+}
+
+.hud-landing-heading {
+  position: absolute;
+  top: 19%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  text-align: center;
+}
+.hud-landing-title {
+  font-family: var(--font-cinzel), serif;
+  font-size: clamp(32px, 5vw, 80px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: .12em;
+  text-indent: .12em;
+  text-transform: uppercase;
+  color: #f2e8d5;
+  white-space: nowrap;
+}
+.hud-landing-subtitle { margin-top: 12px; font-size: clamp(14px, 1.4vw, 19px); color: #d3c097; white-space: nowrap; }
+.hud-landing-footer {
+  position: absolute;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  left: max(20px, env(safe-area-inset-left));
+  right: max(20px, env(safe-area-inset-right));
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  font-size: 13px;
+  color: #bda97f;
+  pointer-events: auto;
+}
+.hud-landing-footer > * { white-space: nowrap; }
+.hud-landing-footer a:hover { color: #f9e5af; }
+@media (max-width: 640px) {
+  .hud-landing-heading { top: 100px; }
+  .hud-landing-title { font-size: clamp(25px, 7.5vw, 42px); letter-spacing: .07em; }
+  .hud-landing-subtitle { margin-top: 6px; }
+  .hud-landing-footer { bottom: calc(18px + env(safe-area-inset-bottom)); gap: 4px 16px; font-size: 12px; }
 }
