@@ -36,6 +36,9 @@ function captureStructure(building: BuildingDef): StructureSave {
     layoutSeed: building.layoutSeed,
     fireplace: building.fireplace,
     hearthZ: building.hearthZ,
+    supportId: building.supportId,
+    floorHeight: building.floorHeight,
+    tavernFlue: building.tavernFlue,
     construction: building.construction ? {
       work: building.construction.work,
       required: building.construction.required,
@@ -70,13 +73,16 @@ export function restoreSettlement(world: GameMap, save: SettlementSave): Settlem
     if (structure.admissionFee !== undefined) building.admissionFee = structure.admissionFee
     if (structure.layoutSeed !== undefined) building.layoutSeed = structure.layoutSeed
     if (structure.fireplace !== undefined) building.fireplace = structure.fireplace
+    if (structure.supportId !== undefined) building.supportId = structure.supportId
+    if (structure.floorHeight !== undefined) building.floorHeight = structure.floorHeight
+    if (structure.tavernFlue !== undefined) building.tavernFlue = structure.tavernFlue
     if (structure.hearthZ !== undefined) building.hearthZ = structure.hearthZ
     if (structure.construction) building.construction = {
       work: structure.construction.work,
       required: structure.construction.required,
       ...(structure.construction.cost ? { cost: { ...structure.construction.cost } } : {}),
     }
-    elevation = levelBuildingGround({ ...world, elevation, buildings: [...world.buildings, ...structures] }, building) ?? elevation
+    if (!building.supportId) elevation = levelBuildingGround({ ...world, elevation, buildings: [...world.buildings, ...structures] }, building) ?? elevation
     structures.push(building)
   }
   const known = new Set(world.buildings.map(building => building.id))

@@ -1,3 +1,4 @@
+import { innParts } from "./inn"
 import { furnishFloorplan } from "./floorplan"
 import { turnFurniture } from "./furniture-placement"
 import { tavernLayout } from "../tavern-layout"
@@ -33,6 +34,7 @@ type ConstructionRecipe = Omit<BuildingRecipe, "variant"> & {
 
 /** Small early medieval structures built directly in tile units. No plot padding. */
 export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
+  if (recipe.variant === "inn") return innParts(recipe.width,recipe.depth,recipe.wallHeight,recipe.fireplace !== false,recipe.seed+(recipe.layoutSeed ?? 0))
   const mirrored = layoutHand(recipe.variant, recipe.layoutSeed) === -1
   const local = mirrored ? { ...recipe, roofJoins: recipe.roofJoins?.map(join => ({ ...join, side: -join.side as -1 | 1,
     chimney: join.chimney ? { ...join.chimney, side: -join.chimney.side as -1 | 1, x: -join.chimney.x } : undefined })) } : recipe

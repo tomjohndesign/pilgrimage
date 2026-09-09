@@ -14,6 +14,18 @@ export const HOVEL_WALL_HEIGHT = 0.9
 export const HOVEL_ROOF_RISE = 0.825
 /** A roof changes pitch after at most two tiles of horizontal run. */
 export const MAX_ROOF_RUN = 2
+/** Upper inn walls project beyond the tavern; the eaves extend farther again. */
+export const INN_OVERHANG = .16
+export const INN_ROOF_OVERHANG = .24
+export const INN_UPPER_ROOF_PITCH = .85
+
+/** Clear the uphill edge of the chimney cap, including the roof covering. */
+export function innHearthRoofRise(width: number, depth: number, upper = true): number {
+  const scale = Math.min(1, width / 1.5, depth / 1.5)
+  if (!upper) return .1+(.5+.195*scale)*.32
+  return .1 + (INN_OVERHANG + (.36 + .195) * scale) * INN_UPPER_ROOF_PITCH
+}
+
 export function roofRun(depth: number): number {
   return depth <= MAX_ROOF_RUN ? depth : depth / (2 * Math.ceil(depth / (2 * MAX_ROOF_RUN)))
 }

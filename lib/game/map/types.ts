@@ -15,6 +15,12 @@ export interface BuildingDef {
   fireplace?: boolean
   /** Adopted chimney position along the local side wall, fixed when built. */
   hearthZ?: number
+  /** Independent upper storey supported by this tavern. */
+  supportId?: string
+  /** Floor height above the levelled ground; zero for standalone buildings. */
+  floorHeight?: number
+  /** The tavern's flue passes through the upper floor without a second hearth. */
+  tavernFlue?: { x: number; z: number }
   /** Gold paid by each visitor entering the relic enclosure. */
   admissionFee?: number
   /** Live worker progress; absent on completed founding structures. */

@@ -28,12 +28,13 @@ export const VARIANTS = [
 
 /** Work courts, sheep folds and pilgrim bedding need at least a 2×2 plot. */
 export function minimumBuildingSize(variant: string) {
+  if (variant === "inn") return {width:3,depth:4}
   return ["workshop","sheep-pen","shelter"].includes(variant) ? {width:2,depth:2} : {width:1,depth:1}
 }
 
 export const recipeSchema = z.object({
   subject: z.string().trim().min(1).max(160),
-  variant: z.enum(["enclosure", "monk-shelter", "house", "storehouse", "wood-shelter", "tavern", "shelter", "workshop", "garden", "cross", "hall", "lumberCamp", "market", "guard-post", "sheep-pen", "gable", "hipped", "porch"]),
+  variant: z.enum(["inn", "enclosure", "monk-shelter", "house", "storehouse", "wood-shelter", "tavern", "shelter", "workshop", "garden", "cross", "hall", "lumberCamp", "market", "guard-post", "sheep-pen", "gable", "hipped", "porch"]),
   width: z.number().int().min(1).max(5),
   depth: z.number().int().min(1).max(5),
   wallHeight: z.number().min(0.25).max(1.4),
@@ -54,6 +55,7 @@ export const LEGACY_RECIPE: BuildingRecipe = {
 
 /** Authored starting dimensions; choosing a type restores its intended proportions. */
 export const EARLY_BUILDINGS = [
+  { id: "inn", name: "Inn", description: "An open dormitory of bunks and beds, with crossed timber framing, rough plaster and a partly shingled roof. Stands alone or covers a tavern’s full footprint, with the upper roof running perpendicular to the tavern’s roof.", width: 3, depth: 4, wallHeight: 1.2, roofRise: singlePlaneRoofRise(2) },
   { id: "enclosure", name: "Relic enclosure", description: "Four open timber gates with plain crosses, low paling walls and a glowing relic on a rough stone table under the sky.", width: 3, depth: 3, wallHeight: 0.42, roofRise: 0 },
   { id: "monk-shelter", name: "Monks’ shelter", description: "An open-front thatched sleeping shelter with a rear-sloping awning, plain crosses, a stone chimney and fireplace, horizontal log windbreaks and straw bedrolls.", width: 3, depth: 2, wallHeight: 0.62, roofRise: singlePlaneRoofRise(2) },
   { id: "house", name: "House", description: "A compact log-built home with a low single-plane thatched roof, a deep arched brow over the low-eave doorway, a stone chimney and fireplace, and straw beds for its household.", width: 2, depth: 2, wallHeight: 0.70, roofRise: singlePlaneRoofRise(2) },

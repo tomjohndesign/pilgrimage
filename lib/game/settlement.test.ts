@@ -156,7 +156,7 @@ describe("build and buy", () => {
 
   it("offers the whole building kit except the relic enclosure", () => {
     expect(BUILD_CATALOG.filter(b => b.category === "buildings").map(b => b.id))
-      .toEqual(["shelter", "workshop", "hall", "storehouse", "monk-shelter", "house", "wood-shelter", "lumberCamp", "market", "guard-post", "tavern", "sheep-pen"])
+      .toEqual(["shelter", "workshop", "hall", "storehouse", "monk-shelter", "house", "wood-shelter", "lumberCamp", "market", "guard-post", "tavern", "inn", "sheep-pen"])
     for (const type of ["enclosure", "gable", "hovel"])
       expect(purchaseStructure(createSettlement(), testMap(), monks, [relic], type, { x: 10, z: 14 }).error).toBe("Unknown structure.")
   })
