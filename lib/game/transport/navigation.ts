@@ -190,12 +190,11 @@ export function shrineParking(map: GameMap, progress: number, direction: 1 | -1,
   return null
 }
 
-/** Market stops use the same clearance and tree requirement, trying either verge. */
+/** Roadside shops need convoy clearance on either verge; animals graze without a tether. */
 export function stallParking(map: GameMap, from: Point, progress: number, direction: 1 | -1, wheelbase: number, scale: number, puller: Puller, context: ParkingContext) {
   return roadsideStall(map, from, progress, direction, wheelbase, scale, puller, pitch => {
     const parked = alignCart(pitch.park, pitch.heading, wheelbase)
-    pitch.tree = puller === "hand" ? undefined : parkingTree(map, parked, context.trees)
-    if (!parkingClear(map, parked, puller, scale, context, true) || (puller !== "hand" && !pitch.tree)) return false
+    if (!parkingClear(map, parked, puller, scale, context, true)) return false
     let pose = alignCart(from, pitch.heading, wheelbase)
     for (const route of [pitch.entry, pitch.exit]) {
       const length = routeLength(route)
