@@ -38,7 +38,7 @@ export function buildInfluence(map: GameMap, balance: GameBalance = DEFAULT_BALA
   for (const tile of approach) stamp(tile.x, tile.z, APPROACH_BUILD_WIDTH)
   const catalog = buildCatalog(balance)
   for (const building of map.buildings) {
-    if (!isComplete(building)) continue
+    if (building.owner === "independent" || !isComplete(building)) continue
     const renown = building.id === map.site.hovelId ? balance.rules.hovelRenown
       : catalog.find((def) => def.id === building.buildType)?.renown ?? 0
     if (renown > 0) stamp(building.x + (building.w - 1) / 2,

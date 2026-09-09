@@ -1,6 +1,8 @@
 "use client"
 
-import { Suspense, lazy, useCallback, useEffect, useMemo } from "react"
+import { SceneAssetBoundary } from "./scene-assets"
+
+import { lazy, useCallback, useEffect, useMemo } from "react"
 import { BASE_CHARACTER_SCALE } from "@/lib/game/base-person/gait"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { selectElement } from "@/lib/game/selection"
@@ -52,14 +54,14 @@ export function Trees({ map, placements: supplied, ents = false, characterScale 
   return (
     <group>
       {model === "sprites"
-        ? <Suspense fallback={null}>
+        ? <SceneAssetBoundary>
             <FoliageField atlas={DEFAULT_FOLIAGE_ATLAS} placements={placements} hidden={felled} onSelect={selectTree} seed={seed} idBase={map.buildings.length} />
-          </Suspense>
+          </SceneAssetBoundary>
         : <>
-            {ProceduralTreeBenchmark && <Suspense fallback={null}><ProceduralTreeBenchmark placements={placements} hidden={proceduralHidden} onSelect={selectTree} entMap={ents ? map : undefined} seed={seed} idBase={map.buildings.length} /></Suspense>}
-            <Suspense fallback={null}>
+            {ProceduralTreeBenchmark && <SceneAssetBoundary><ProceduralTreeBenchmark placements={placements} hidden={proceduralHidden} onSelect={selectTree} entMap={ents ? map : undefined} seed={seed} idBase={map.buildings.length} /></SceneAssetBoundary>}
+            <SceneAssetBoundary>
               <FoliageField atlas={DEFAULT_FOLIAGE_ATLAS} placements={placements} hidden={felled} oldGrowthOnly onSelect={selectTree} seed={seed} idBase={map.buildings.length} />
-            </Suspense>
+            </SceneAssetBoundary>
           </>}
       {Array.from(resources, ([id, resource]) => resource.health <= 0 && placements[id]
         ? <TreeRemains key={id} id={id} objectId={treeObjectId(map.buildings.length, id)} tree={placements[id]} resource={resource} time={time} characterScale={characterScale} /> : null)}

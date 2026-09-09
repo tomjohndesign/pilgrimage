@@ -1,5 +1,7 @@
 "use client"
 
+import { SceneAssetBoundary } from "./scene-assets"
+
 import { simRegistry } from "@/lib/game/sim"
 import { shrineLayout, shrineStations } from "@/lib/game/shrine-layout"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
@@ -19,7 +21,7 @@ import { RelicDisplay, RELIC_DISPLAY_HEIGHT } from "./relic-display"
 
 import { createMonkRoutine, stepMonkRoutine, type MonkRoutine } from "@/lib/game/monk-routine"
 import { monkWander, type WanderSpot } from "@/lib/game/monk-wander"
-import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
@@ -347,7 +349,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
               groupRefs.current[index] = node
             }}
           >
-            <Suspense fallback={null}>
+            <SceneAssetBoundary>
               <CharacterSprite map={map} name="monk" type="friar" characterModel="base" characterScale={characterScale}
                 complexion={monk.complexion}
                 visualOverride={equipped ? rocketMonkVisual(monk.attributes.age) : monkVisual(monk.attributes.age)}
@@ -358,7 +360,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
                     onClick={event => selectElement({ kind: "relic" }, event)} /> }} selected={selected} onClick={select}
                 outlineColor={[id.r, id.g, id.b]}
                 walkTuning={MONK_WALK_TUNING} />
-            </Suspense>
+            </SceneAssetBoundary>
             <CharacterHitTarget onClick={select} />
             {selected && <CharacterSelectionOutline flying={airborneIds.has(monk.id)} />}
           </group>

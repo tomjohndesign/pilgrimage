@@ -132,6 +132,7 @@ export function createCrossroads(map: GameMap): void {
       shortcut.tiles = around(shortcut.tiles, center, anchor(shortcut.entry), anchor(shortcut.exit)).route
       shortcut.entry = rerouted.indices[shortcut.entry]; shortcut.exit = rerouted.indices[shortcut.exit]
     }
+    for (const town of map.towns ?? []) town.junction = rerouted.indices[town.junction]
     for (const grove of map.darkForests ?? []) grove.approach = around(grove.approach, center).route
     map.road = rerouted.route
     const surface = oldRoad.some(p => distance(p, center) <= 1) ? "path" : "track"

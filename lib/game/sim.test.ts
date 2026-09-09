@@ -1,3 +1,4 @@
+import { TILES_PER_DAY } from "./calendar"
 import { MIN_WEARY_SPEED } from "./traveler-weariness"
 import { DEFAULT_WALK_SPEED, BASE_CHARACTER_SCALE } from "./base-person/gait"
 import { knightLoadout, knightTravelSpeed } from "./knights"
@@ -133,9 +134,8 @@ function runUntil(
 }
 
 describe("game time", () => {
-  it("lasts five real minutes at the displayed normal speed", () => {
-    const normal = SIMULATION_SPEEDS.find(speed => speed.label === 1)!
-    expect(GAME_DAY_SECONDS / normal.rate).toBe(300)
+  it("lasts 144 tiles at the reference walking pace", () => {
+    expect(GAME_DAY_SECONDS * DEFAULT_WALK_SPEED).toBeCloseTo(TILES_PER_DAY)
   })
   it("advances with real time at the configured day length", () => {
     const map = makeMap()
@@ -158,14 +158,14 @@ describe("game time", () => {
       }
       expect(person.progress - before.progress).toBeCloseTo(.5 * rate, 8)
       expect(sim.time - before.time).toBeCloseTo(rate / GAME_DAY_SECONDS, 10)
-      expect(before.hunger - person.hunger).toBeCloseTo(DEFAULT_BALANCE.rules.hungerDecay * rate / 25, 8)
+      expect(before.hunger - person.hunger).toBeCloseTo(DEFAULT_BALANCE.rules.hungerDecay * rate / (GAME_DAY_SECONDS / 24), 8)
       expect(person.activity).toBe("walking")
     }
   })
 
-  it("formats days and hours", () => {
-    expect(formatGameTime(0.25)).toBe("Day 1 — 06:00")
-    expect(formatGameTime(2.5)).toBe("Day 3 — 12:00")
+  it("formats calendar dates", () => {
+    expect(formatGameTime(0.25)).toBe("March 1, 825 AD")
+    expect(formatGameTime(2.5)).toBe("March 3, 825 AD")
   })
 })
 
@@ -216,16 +216,16 @@ describe("stepSim", () => {
     const s = sim.travelers.get(0)!
     const hour = GAME_DAY_SECONDS / 24
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([77, 74, 77.9])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([78.5, 74, 78.95])
 
     Object.assign(sim.balance.rules, { hungerDecay: 2, thirstDecay: 6, staminaDecay: 0 })
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([75, 68, 77.9])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([76.5, 68, 78.95])
 
     s.activity = "camping"
     s.stamina = 0
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([74, 65, 60])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([75.5, 65, 60])
   })
 
   it("keeps food and water supplied longer over an active day", () => {
@@ -245,7 +245,7 @@ describe("stepSim", () => {
     }
     // Legs never bottom out: walkers pitch camp once stamina falls below 20.
     expect(depleted).toEqual({ hunger: 0, thirst: 1, stamina: 0 })
-    expect(sim.time).toBeCloseTo(1.25)
+    expect(sim.time).toBeCloseTo(1)
   })
 
   it("wears travelers down as they walk", () => {

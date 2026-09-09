@@ -96,6 +96,21 @@ describe("balance presets", () => {
     old.balance.rules.thirstDecay = 10
     expect(importBalance(JSON.stringify(old)).balance?.rules).toMatchObject({ hungerDecay: 8, thirstDecay: 10 })
   })
+  it("halves previous default rates in saved presets while preserving custom tuning", () => {
+    const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
+    old.version = 4
+    Object.assign(old.balance.rules, { hungerDecay: 3, staminaDecay: 2.1, thirstDecay: 25 })
+    old.balance.buildings.tavern.goldIncome = 10
+    const result = importBalance(JSON.stringify(old))
+    expect(result.error).toBeNull()
+    expect(result.balance?.rules).toMatchObject({ hungerDecay: 1.5, staminaDecay: 1.05, thirstDecay: 25 })
+    expect(result.balance?.buildings.tavern.goldIncome).toBe(10)
+    Object.assign(old.balance.rules, { hungerDecay: 8, staminaDecay: 7 })
+    expect(importBalance(JSON.stringify(old)).balance?.rules).toMatchObject({ hungerDecay: 8, staminaDecay: 7 })
+    const current = fresh()
+    Object.assign(current.rules, { hungerDecay: 3, staminaDecay: 2.1 })
+    expect(importBalance(exportBalance(current)).balance).toEqual(current)
+  })
   it.each([NaN, Infinity, -1, 1.5, 100001, "200", null])(
     "rejects invalid starting supplies: %s",
     (value) => {

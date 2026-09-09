@@ -39,7 +39,7 @@ export function buildingPreviewSettlement(world: GameMap, balance: GameBalance, 
   })).sort((a,b) => Math.hypot(a.x-world.site!.door.x,a.z-world.site!.door.z)
     - Math.hypot(b.x-world.site!.door.x,b.z-world.site!.door.z))
   for (const example of examples) {
-    if (world.buildings.some(b => b.buildType === example.buildType && b.id !== world.site?.hovelId)) continue
+    if (world.buildings.some(b => b.owner !== "independent" && b.buildType === example.buildType && b.id !== world.site?.hovelId)) continue
     const map = { ...world, elevation: settlement.elevation ?? world.elevation,
       buildings: [...world.buildings, ...settlement.structures] }
     // The gallery's woodcutter can be inspected even away from harvestable trees.

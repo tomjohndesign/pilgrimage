@@ -1,7 +1,7 @@
 import { computeDarkShade } from "./forest-field"
 import { groundHeight } from "./elevation"
 import { isRoadTerrain } from "./road"
-import { signpostPlacements, SIGNPOST_CLEARANCE, type SignpostPlacement } from "./signpost"
+import { signpostPlacements, tJunctionVerge, SIGNPOST_CLEARANCE, type SignpostPlacement } from "./signpost"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./types"
 
 /** Keep broad ancient crowns from covering the warning board and skull. */
@@ -39,6 +39,8 @@ export function forestEntrancePlacements(map: GameMap): SignpostPlacement[] {
       const sides: TilePos[] = [{ x: -dz, z: dx }, { x: dz, z: -dx }]
       sides.sort((a, b) => Number(["forest", "darkwood"].includes(tileAt(map, at.x + a.x, at.z + a.z) ?? ""))
         - Number(["forest", "darkwood"].includes(tileAt(map, at.x + b.x, at.z + b.z) ?? "")))
+      const opposite = tJunctionVerge(map, at)
+      if (opposite) sides.unshift({ x: opposite.x - at.x, z: opposite.z - at.z })
       for (const side of sides) {
         const tile = { x: at.x + side.x, z: at.z + side.z }, terrain = tileAt(map, tile.x, tile.z)
         if (!terrain || isRoadTerrain(terrain) || !["grass", "clearing", "forest", "darkwood", "dirt", "sand"].includes(terrain)) continue

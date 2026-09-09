@@ -68,6 +68,7 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform sampler2D tMasked;
   uniform sampler2D tMaskedDepth;
   uniform sampler2D tRoadEdge;
+  uniform bool uMapReveal;
   uniform bool uRoadEdges;
   uniform float uRoadEdgeOpacity;
   uniform bool uMaskCharacters;
@@ -88,8 +89,10 @@ const FRAGMENT_SHADER = /* glsl */ `
   uniform vec3 uSelectionFill;
   uniform float uSelectionOpacity;
   varying vec2 vUv;
+  float revealOpacity = 1.0;
 
   void finishColor() {
+    if (uMapReveal) gl_FragColor.a *= revealOpacity;
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
   }
@@ -116,7 +119,9 @@ const FRAGMENT_SHADER = /* glsl */ `
     // Scenery-only edges already exist in the enlarged world image.
     if (uCharacterPass && idC < uCharacterIdMin && idN < uCharacterIdMin) return false;
     float dN = texture2D(tDepth, uv).x;
-    return dN < dC - 1.0e-5;                // neighbour must be in front
+    bool nearer = dN < dC - 1.0e-5;
+    if (nearer && uMapReveal) revealOpacity = min(revealOpacity, texture2D(tId, uv).a);
+    return nearer;                         // neighbour must be in front
   }
 
   bool selectedNeighbour(vec2 uv, float dC) {
@@ -131,6 +136,7 @@ const FRAGMENT_SHADER = /* glsl */ `
     // Keep the sample on the visible pixel; uTexel still sets one world-pixel
     // border width, just as it does for trees and buildings.
     vec2 pixelUv = vUv;
+    if (uMapReveal) revealOpacity = texture2D(tId, pixelUv).a;
     float idC = idAt(pixelUv);
     float dC = texture2D(tDepth, pixelUv).x;
     if (uCharacterSelected) {
@@ -330,6 +336,7 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
       uSelectionOutlineOpacity: { value: SELECTION_OUTLINE_OPACITY },
       uSelectionFill: { value: new THREE.Color(SELECTION_FILL) },
       uSelectionOpacity: { value: SELECTION_FILL_OPACITY },
+      uMapReveal: { value: false },
     }
     const geometry = new THREE.BufferGeometry()
     // One triangle covering the whole screen — no quad seam, no matrices.
@@ -448,6 +455,7 @@ export function OutlinePass({ objects }: { objects?: Omit<Parameters<typeof sele
       if (!characterPass) gl.clear()
       gl.render(scene, camera)
       if (needsOutline) {
+        pass.uniforms.uMapReveal.value = scene.userData.mapRevealActive === true
         pass.uniforms.tId.value = ids.texture
         pass.uniforms.tDepth.value = ids.depthTexture
         // One world texel for every border, including display-resolution figures.

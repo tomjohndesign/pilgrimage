@@ -58,6 +58,13 @@ describe("crossroads network", () => {
     expect(shortcut.tiles[0]).toEqual(map.road![shortcut.entry])
     expect(shortcut.tiles.at(-1)).toEqual(map.road![shortcut.exit])
   })
+  it("keeps a roadside town anchored after an earlier crossroads lengthens the road", () => {
+    const map = fixture(), entrance = map.road![12]
+    map.towns = [{ id: "town", name: "Alderford", junction: 12, tavernId: "tavern", buildingIds: [] }]
+    createCrossroads(map)
+    expect(map.towns[0].junction).toBeGreaterThan(12)
+    expect(map.road![map.towns[0].junction]).toEqual(entrance)
+  })
   it("never carves islands through water or building entrances", () => {
     const map = fixture(); map.tiles[6 * 15 + 6] = "water"; createCrossroads(map)
     expect(map.crossroads).toHaveLength(1); expect(map.tiles[6 * 15 + 6]).toBe("water")

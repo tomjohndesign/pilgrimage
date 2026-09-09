@@ -102,7 +102,7 @@ export function Minimap({ map }: { map: GameMap }) {
       ctx.setTransform(transform)
       ctx.drawImage(base, -map.width / 2, -map.depth / 2)
       for (const building of map.buildings) {
-        ctx.fillStyle = building.id === map.site?.hovelId ? "#e1c777" : "#d4975b"
+        ctx.fillStyle = building.id === map.site?.hovelId ? "#e1c777" : building.owner === "independent" ? "#b6b4a1" : "#d4975b"
         ctx.fillRect(building.x - map.width / 2, building.z - map.depth / 2, building.w, building.d)
       }
       ctx.restore()

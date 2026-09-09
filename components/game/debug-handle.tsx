@@ -45,6 +45,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, char
     let motionSubjects: Array<{ unit: THREE.Object3D; sprite: THREE.Sprite }> = []
     const handle = {
       map,
+      bakeLoadingChurch: async () => (await import("@/lib/game/render/loading-church-bake")).bakeLoadingChurch(gl),
       benchmarkTarget: benchmarkCity(map)?.centre,
       cityStats: () => cityBenchmarkStats(simRegistry.current, map),
       inventory: () => {
