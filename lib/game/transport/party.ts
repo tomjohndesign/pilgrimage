@@ -9,6 +9,7 @@ import { followCart, type CartPose } from "./follow"
 import { convoyBuildingsClear, parkingClear, shrineParking, type ParkingContext, type ShrineParking } from "./navigation"
 import { routeLength, routePoint } from "./roadside"
 import { advanceCartProgress } from "./route"
+import { driveRouteSegment } from "./building-parking"
 import { seatPoint, type PassengerCart, type PackAnimal } from "./party-assets"
 
 export interface PartyTransport {
@@ -24,6 +25,9 @@ export interface PartyTransport {
   animalDistance: number
   animalHeading: number
   retry: number
+  /** Check the whole convoy ahead once per road tile/direction or building edit. */
+  diversionCheck?: number
+  diversionBuildings?: GameMap["buildings"]
 }
 export interface PartyPack { kind: PackAnimal; handler: number; progress: number; pose: CartPose; distance: number }
 
@@ -107,11 +111,20 @@ export function movePartyCart(party: TravelParty, map: GameMap, scale: number, s
     const length = map.road!.length - 1, cut = party.diversion
     const span = cut ? party.direction * (cut.end - cut.start) : 0
     const along = cut && span > 0 ? party.direction * partyRoadDelta(cart.progress, cut.start, length) / span : -1
-    if (cut && along >= -1e-9 && along < 1) {
-      // The detour was planned around the footprint for the whole company; the
-      // wagon follows the same points, keeping road progress in step with them.
+    // Wrapped progress can round just below the endpoint; let the wagon leave
+    // while its followers still need the shared detour behind it.
+    if (cut && along >= -1e-9 && along < 1 - 1e-9) {
+      // Follow every planned bend, even when a large tick crosses waypoints.
+      // Cutting straight to its endpoint can drag the trailing axle into a wall.
       const distance = Math.min(cut.length, Math.max(0, along) * cut.length + travel)
-      pose = followCart(previous, routePoint(diversionPoints(cut), distance), wheelbase)
+      let axleDistance = 0
+      const next = driveRouteSegment(previous, diversionPoints(cut), Math.max(0, along) * cut.length, distance,
+        wheelbase, (p, heading) => {
+          axleDistance += p.distance
+          return convoyBuildingsClear(map, p, cart.animal, scale, heading)
+        })
+      if (!next || !convoyBuildingsClear(map, next, cart.animal, scale)) return false
+      pose = { ...next, distance: axleDistance }
       progress = distance >= cut.length ? ((cut.end % length) + length) % length
         : ((cut.start + party.direction * distance / cut.length * span) % length + length) % length
     } else {
