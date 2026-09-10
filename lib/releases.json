@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "41aa68402cdd5e8acf895189d1bcbdb21ca1b5c2",
-  "releaseCount": 187,
+  "lastProcessedCommit": "88da1453034599c7077f5a4cec0b7c07651081c2",
+  "releaseCount": 189,
   "releases": [
+    {
+      "version": "0.0.203",
+      "title": "Release 0.0.203",
+      "summary": "Fix sprite rotation and synchronize preview cameras (#222)",
+      "commit": "88da1453034599c7077f5a4cec0b7c07651081c2"
+    },
+    {
+      "version": "0.0.202",
+      "title": "Release 0.0.202",
+      "summary": "Fix carts and grazing animals getting stuck around obstacles (#221)",
+      "commit": "2c2da62f47b37a663edebb654fc04e00cc47b5ae"
+    },
     {
       "version": "0.0.201",
       "title": "Release 0.0.201",
