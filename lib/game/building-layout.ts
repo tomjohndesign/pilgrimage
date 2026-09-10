@@ -2,7 +2,7 @@ import type { BuildingPart } from "./building-art/geometry"
 import type { TilePos } from "./map/types"
 
 export function hasBuildingLayouts(type?: string): boolean {
-  return ["house", "tavern", "hall", "shelter", "monk-shelter", "enclosure", "storehouse", "wood-shelter", "workshop", "market", "sheep-pen", "guard-post", "garden", "cross", "lumberCamp"].includes(type ?? "")
+  return ["inn", "house", "tavern", "hall", "shelter", "monk-shelter", "enclosure", "storehouse", "wood-shelter", "workshop", "market", "sheep-pen", "guard-post", "garden", "cross", "lumberCamp"].includes(type ?? "")
 }
 
 /** Persisted on purchase. Older saves retain their original doors and furniture. */
@@ -14,7 +14,7 @@ export function placementLayoutSeed(type: string, at: TilePos, worldSeed = 0): n
 }
 
 export function layoutHand(type?: string, seed = 0): 1 | -1 {
-  return hasBuildingLayouts(type) && (seed & 1) ? -1 : 1
+  return type !== "inn" && hasBuildingLayouts(type) && (seed & 1) ? -1 : 1
 }
 
 /** Reflect the entire authored layout, including contacts, normals and cutaways. */

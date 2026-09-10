@@ -1,5 +1,7 @@
 "use client"
 
+import { structureParts } from "@/lib/game/building-art/structure"
+import { tavernStackParts } from "@/lib/game/building-art/stacked"
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 
 import { RelicDisplay, RELIC_TABLE_DISPLAY_HEIGHT } from "@/components/game/relic-display"
@@ -29,7 +31,7 @@ import { buildingRoofJoins, roofOutlineOwners } from "@/lib/game/building-art/ro
 import { buildingParts } from "@/lib/game/building-art/geometry"
 import { EntranceDetails } from "@/components/game/entrance-details"
 import { OutlinePass } from "@/components/game/outline-pass"
-import { ShelterFire } from "@/components/game/building-smoke"
+import { InnFlueSmoke, ShelterFire } from "@/components/game/building-smoke"
 import { hasDomesticHearth } from "@/lib/game/building-art/furnishings"
 import { buildingYaw, type BuildingRotation } from "@/lib/game/building-rotation"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type TilePos, type GameMap } from "@/lib/game/map/types"
@@ -204,8 +206,8 @@ function PreviewBuildings({ recipes, map, selectedId, onSelect, placing }: { rec
     const models = map.buildings.map(b => {
       const own = { ...recipes.get(b.id)!,
         layoutSeed: b.layoutSeed, hearthZ: b.hearthZ, fireplace: b.fireplace }
-      return { recipe: own, parts: joins.has(b.id)
-        ? earlyBuildingParts({ ...own, roofJoins: joins.get(b.id) }) : buildingParts(own),
+      return { recipe: own, parts: tavernStackParts(b.buildType === "inn" ? structureParts({...b,w:own.width,d:own.depth}) : joins.has(b.id)
+        ? earlyBuildingParts({ ...own, roofJoins: joins.get(b.id) }) : buildingParts(own),b,map.buildings.filter(inn=>inn.supportId===b.id)),
         chimney: joins.get(b.id)?.find(join => join.chimney)?.chimney }
     })
     return { models, owners: roofOutlineOwners(map.buildings, joins) }
@@ -217,10 +219,11 @@ function PreviewBuildings({ recipes, map, selectedId, onSelect, placing }: { rec
   }
   return <group name="preview-buildings">
     <EntranceDetails map={map} idColors={idColors} onSelect={(building,event)=>select(building.id,event)} variationSeed={building => models[map.buildings.indexOf(building)].recipe.seed} />
-    {map.buildings.map((building,i)=><group key={building.id} name={`preview-building-${building.id}`} userData={{buildingId:building.id}} onClick={event=>select(building.id,event)} rotation={[0,buildingYaw(building.rotation),0]} position={[tileToWorldX(map,building.x)+(building.w-1)/2,TILE_HEIGHT,tileToWorldZ(map,building.z)+(building.d-1)/2]}>
+    {map.buildings.map((building,i)=>building.supportId===selectedId ? null : <group key={building.id} name={`preview-building-${building.id}`} userData={{buildingId:building.id}} onClick={event=>select(building.id,event)} rotation={[0,buildingYaw(building.rotation),0]} position={[tileToWorldX(map,building.x)+(building.w-1)/2,TILE_HEIGHT+(building.floorHeight ?? 0),tileToWorldZ(map,building.z)+(building.d-1)/2]}>
       <StructureModel terrainFloors ink={false} parts={models[i].parts} idColor={idColors[i]} cutaway={building.id===selectedId} />
+      {building.supportId && <InnFlueSmoke width={models[i].recipe.width} depth={models[i].recipe.depth} height={building.height} flue={building.tavernFlue} cutaway={building.id===selectedId} />}
       {models[i].recipe.variant === "enclosure" && <RelicDisplay height={RELIC_TABLE_DISPLAY_HEIGHT} />}
-      {hasDomesticHearth(building.buildType,building.layoutSeed,building.fireplace) && <ShelterFire buildType={models[i].recipe.variant} width={models[i].recipe.width} depth={models[i].recipe.depth} height={building.height} roofRise={models[i].recipe.roofRise} layoutSeed={building.layoutSeed} hearthZ={building.hearthZ} sharedChimney={models[i].chimney} cutaway={building.id===selectedId} />}
+      {!building.supportId && hasDomesticHearth(building.buildType,building.layoutSeed,building.fireplace) && <ShelterFire smoke={!map.buildings.some(b=>b.supportId===building.id)} buildType={models[i].recipe.variant} width={models[i].recipe.width} depth={models[i].recipe.depth} height={building.height} roofRise={models[i].recipe.roofRise} layoutSeed={building.layoutSeed} hearthZ={building.hearthZ} sharedChimney={models[i].chimney} cutaway={building.id===selectedId} />}
     </group>)}
   </group>
 }
@@ -235,7 +238,7 @@ function PlacementPreview({map,recipes,recipe,rotation,snap,onPlace,onStatus}: {
   const parts=useMemo(()=>{
     if(!candidate) return []
     const joins=buildingRoofJoins({...map,buildings:[...map.buildings,candidate.building]},b=>b.id===candidate.building.id ? recipe.roofRise : recipes.get(b.id)!.roofRise)
-    return earlyBuildingParts({...candidate.recipe,roofJoins:joins.get(candidate.building.id)})
+    return candidate.building.buildType === "inn" ? structureParts({...candidate.building,w:recipe.width,d:recipe.depth}) : earlyBuildingParts({...candidate.recipe,roofJoins:joins.get(candidate.building.id)})
   },[candidate,map,recipe.roofRise,recipes])
   useEffect(()=>{
     if(candidate) onStatus?.(candidate.error ?? `${recipe.subject} · ${(candidate.building.rotation ?? 0)*90}°${candidate.snapped ? " · aligned to neighboring roof" : ""} · click to place`)
@@ -255,7 +258,7 @@ function PlacementPreview({map,recipes,recipe,rotation,snap,onPlace,onStatus}: {
       }}>
       <planeGeometry args={[map.width,map.depth]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
     </mesh>
-    {building && <group position={[tileToWorldX(map,building.x)+(building.w-1)/2,TILE_HEIGHT,tileToWorldZ(map,building.z)+(building.d-1)/2]}>
+    {building && <group position={[tileToWorldX(map,building.x)+(building.w-1)/2,TILE_HEIGHT+(building.floorHeight ?? 0),tileToWorldZ(map,building.z)+(building.d-1)/2]}>
       <mesh position={[0,.025,0]} raycast={()=>{}}><boxGeometry args={[building.w,.025,building.d]} /><meshBasicMaterial color={color} transparent opacity={.45} depthWrite={false} /></mesh>
       <group rotation={[0,buildingYaw(building.rotation),0]}><StructureModel parts={parts} ghostColor={color} /></group>
     </group>}

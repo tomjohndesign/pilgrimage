@@ -109,6 +109,9 @@ export const structureSchema = z.object({
   construction: constructionSchema.optional().describe("Absent once a founding structure is complete"),
   layoutSeed: finite.optional().describe("Rolls the interior layout; kept so the rooms come back as built"),
   fireplace: z.boolean().optional().describe("Whether the building has a hearth; absent means the type's seeded choice"),
+  supportId: z.string().optional(),
+  floorHeight: finite.min(0).optional(),
+  tavernFlue: z.object({x:finite,z:finite}).optional(),
   hearthZ: finite.optional().describe("Row the hearth sits on"),
 })
 
@@ -213,40 +216,6 @@ export const playbackSaveSchema = z.object({
   speed: finite.positive().transform(nearestSimulationSpeed).describe("Simulation rate; snapped to a speed the HUD offers"),
 })
 
-const relativePoint = z.object({
-  x: finite.describe("East of the camera focus, world units"),
-  y: finite.describe("Ground height, world units"),
-  z: finite.describe("South of the camera focus, world units"),
-})
-
-export const surroundingsSchema = z.object({
-  x: tile.describe("Tile under the camera focus"),
-  z: tile,
-  offsetX: finite.min(-1).max(1).describe("Tile centre minus camera focus, world units"),
-  offsetZ: finite.min(-1).max(1),
-  radius: z.number().int().min(0).max(16).describe("Patch reaches this many tiles each way"),
-  terrain: z.array(z.string().nullable()).describe("Row-major terrain ids over the (2·radius+1)² patch; null outside the map"),
-  height: z.array(finite).describe("Terrain height per patch tile, relative to the base, as the map stores it"),
-  corners: z.array(finite).describe("Four corner heights per patch tile (NW, NE, SW, SE), for slopes"),
-  trees: z.array(relativePoint.extend({
-    species: z.string(),
-    brightness: finite.optional(),
-    oldGrowth: z.boolean().optional(),
-    dead: z.boolean().optional(),
-  })).describe("Standing trees inside the patch"),
-  scenery: z.array(relativePoint.extend({
-    kind: z.string(),
-    scale: finite,
-    yaw: finite,
-    brightness: finite,
-    seed: finite,
-    boulderSize: z.string().optional(),
-    cluster: finite.optional(),
-  })).describe("Rocks, shrubs and boulders inside the patch"),
-}).refine(patch => patch.terrain.length === (2 * patch.radius + 1) ** 2 && patch.height.length === patch.terrain.length
-  && patch.corners.length === patch.terrain.length * 4, "Patch size mismatch")
-  .describe("A small memory of the land around the camera, drawn with the game's own assets while the world regenerates")
-
 export const gameSaveSchema = z.object({
   version: z.literal(SAVE_VERSION),
   savedAt: z.string().describe("ISO 8601 time of the save"),
@@ -255,7 +224,6 @@ export const gameSaveSchema = z.object({
   simulation: simulationSaveSchema,
   camera: cameraSaveSchema,
   playback: playbackSaveSchema,
-  surroundings: surroundingsSchema.optional(),
 })
 
 export type ElevationSave = z.output<typeof elevationSettingsSchema>
@@ -264,7 +232,6 @@ export type StructureSave = z.output<typeof structureSchema>
 export type TravelerSave = z.output<typeof travelerSaveSchema>
 export type SimulationSave = z.output<typeof simulationSaveSchema>
 export type CameraSave = z.output<typeof cameraSaveSchema>
-export type SurroundingsSave = z.output<typeof surroundingsSchema>
 export type PlaybackSave = z.output<typeof playbackSaveSchema>
 export type GameSave = z.output<typeof gameSaveSchema>
 /** The seed with its world settings: what identifies one world. */

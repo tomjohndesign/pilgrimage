@@ -11,7 +11,8 @@ const jobs = Object.keys(SETTLEMENT_JOBS) as SettlementJob[]
 describe("settlement job sprites", () => {
   it("maps every workplace to an outfit only after accepting employment", () => {
     const buildings = Object.values(BUILDING_KINDS).map(kind => ({ id: `${kind.id}-1`, kind: kind.id }))
-    expect(buildings.map(building => settlementJob(building.id, buildings))).toEqual(jobs)
+    expect(new Set(buildings.map(building => settlementJob(building.id, buildings)))).toEqual(new Set(jobs))
+    expect(settlementJob("inn-1", buildings)).toBe("tavern")
     expect(settlementJob(null, buildings)).toBeNull()
     expect(settlementJob("removed-building", buildings)).toBeNull()
   })

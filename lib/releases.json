@@ -1,7 +1,91 @@
 {
-  "lastProcessedCommit": "e2e99c00e671c074f69c7e41d382f03f83c83875",
-  "releaseCount": 161,
+  "lastProcessedCommit": "c7efe5ab00b2944c101a9bc888a0ce9cd16f1668",
+  "releaseCount": 175,
   "releases": [
+    {
+      "version": "0.0.189",
+      "title": "Release 0.0.189",
+      "summary": "Cache route vertex heights for road point sampling (#208)",
+      "commit": "c7efe5ab00b2944c101a9bc888a0ce9cd16f1668"
+    },
+    {
+      "version": "0.0.188",
+      "title": "Release 0.0.188",
+      "summary": "Keep party carts moving around roadside buildings (#207)",
+      "commit": "f4e081eacc7de745d431d1c0366e633c6f710fba"
+    },
+    {
+      "version": "0.0.187",
+      "title": "Release 0.0.187",
+      "summary": "Cache road lane tile facts, trim transport sprite frame work (#205)",
+      "commit": "355a863ed0f3f51957b02a40d4d6de702a55ad22"
+    },
+    {
+      "version": "0.0.186",
+      "title": "Release 0.0.186",
+      "summary": "Start the background music at a truly random point in the track (#206)",
+      "commit": "78a3ab27480239fd7ac0b446c26877c8ab42c800"
+    },
+    {
+      "version": "0.0.185",
+      "title": "Release 0.0.185",
+      "summary": "Start all travellers fully fed, hydrated and rested (#203)",
+      "commit": "3488287f1c60333ae3b53fd396aaf7f59db143cb"
+    },
+    {
+      "version": "0.0.184",
+      "title": "Release 0.0.184",
+      "summary": "Fix mobile twist direction and snap to isometric views (#204)",
+      "commit": "974d8856a961d40e78b1c1d451f0be32602dc0a4"
+    },
+    {
+      "version": "0.0.183",
+      "title": "Release 0.0.183",
+      "summary": "Prevent pedestrians from blocking cart detours around buildings (#201)",
+      "commit": "b83ff860ffc6cb1e0f062996a0b68acc7ddf19cd"
+    },
+    {
+      "version": "0.0.182",
+      "title": "Release 0.0.182",
+      "summary": "Analytic wildlife hide normals and a corrected party performance note (#202)",
+      "commit": "50164945cc11879f29c8827a188a276fc8633623"
+    },
+    {
+      "version": "0.0.181",
+      "title": "Release 0.0.181",
+      "summary": "Batch passenger carts, share rein materials, and throttle distant wildlife skinning (#200)",
+      "commit": "433730360406c5caa8940556f5d8d49670c3b749"
+    },
+    {
+      "version": "0.0.180",
+      "title": "Release 0.0.180",
+      "summary": "Add standalone and stackable inns with beds and four jobs (#199)",
+      "commit": "d6cb383420ac468dfa4b730034ea10bad4c7c201"
+    },
+    {
+      "version": "0.0.179",
+      "title": "Release 0.0.179",
+      "summary": "Paint the saved view from a lossless world snapshot on reload (#198)",
+      "commit": "51b48996d19f12de5e7d9e400be0a3636b31260a"
+    },
+    {
+      "version": "0.0.178",
+      "title": "Release 0.0.178",
+      "summary": "Remove camping, keep travellers' stamina on the road, and form companies in the live game (#197)",
+      "commit": "110ee4beaf0a2d96a74630217a96483d6a3b7316"
+    },
+    {
+      "version": "0.0.177",
+      "title": "Release 0.0.177",
+      "summary": "Fix Ent cheat and add slow walking sprites with branch arms (#196)",
+      "commit": "b926810f6f835bb40cee60a1bddfd8a686a8eaf4"
+    },
+    {
+      "version": "0.0.176",
+      "title": "Release 0.0.176",
+      "summary": "Clarify Pilgrimage ownership and restrict commercial use (#195)",
+      "commit": "8a69239bea978736a4e2246e0fa53512b9170e9c"
+    },
     {
       "version": "0.0.175",
       "title": "Release 0.0.175",

@@ -19,11 +19,13 @@ export class FoliageInstances {
   private sphere = new THREE.Sphere()
   private thin = false
   private selected = -1
+  private moving: number[] = []
 
-  constructor(readonly sources: readonly FoliageInstance[], private radii: Float32Array) {
+  constructor(readonly sources: readonly FoliageInstance[], private radii: Float32Array, moving?: ReadonlySet<number>) {
     const blocks = new Map<number, { indices: number[]; box: THREE.Box3; radius: number }>()
     const point = new THREE.Vector3()
     sources.forEach((source, index) => {
+      if (moving?.has(source.tree)) { this.moving.push(index); return }
       const key = blockKey(source.x, source.z)
       let block = blocks.get(key)
       if (!block) { block = { indices: [], box: new THREE.Box3(), radius: 0 }; blocks.set(key, block) }
@@ -62,6 +64,14 @@ export class FoliageInstances {
         this.sphere.radius = this.radii[source.row] * scale
         if (frustum.intersectsSphere(this.sphere)) this.visible.push(index)
       }
+    }
+    // Moving crowns no longer belong to their original block. Cull them at their
+    // current position instead of inflating bounds across the entire map.
+    for (const index of this.moving) {
+      const source = this.sources[index]
+      this.sphere.center.set(source.x, source.y, source.z).applyMatrix4(mesh.matrixWorld)
+      this.sphere.radius = this.radii[source.row] * scale
+      if (frustum.intersectsSphere(this.sphere)) this.visible.push(index)
     }
     // Preserve the original tie order for overlapping equal-depth texels.
     this.visible.sort((a, b) => a - b)

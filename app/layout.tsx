@@ -54,7 +54,9 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${cinzel.variable} ${ebGaramond.variable} bg-[#1a1208]`}>
+    // The play page's resume script styles the root element before hydration
+    // (see lib/game/save/view.ts), which React must not report as a mismatch.
+    <html lang="en" className={`${cinzel.variable} ${ebGaramond.variable} bg-[#1a1208]`} suppressHydrationWarning>
       <body className="font-serif antialiased">
         <BalanceProvider>{children}</BalanceProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}

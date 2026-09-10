@@ -16,7 +16,7 @@ describe("staffed settlement demo", () => {
   it("includes every purchasable building and staffs every workplace with both genders represented", () => {
     for (const building of BUILD_CATALOG) expect(map.buildings.some(b => b.buildType === building.id)).toBe(true)
     const residents = previewResidents(map)
-    expect(residents).toHaveLength(9)
+    expect(residents).toHaveLength(jobBuildings(map).filter(b=>b.id.startsWith("preview-")).reduce((total,b)=>total+BUILDING_KINDS[b.kind].jobs,0))
     expect(new Set(residents.map(r => r.traveler.id)).size).toBe(residents.length)
     expect(residents.every(r => r.home !== null)).toBe(true)
     for (const building of jobBuildings(map)) {

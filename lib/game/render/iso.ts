@@ -4,7 +4,7 @@
  *
  * The camera is orthographic with a fixed pitch. It orbits a `target` point on
  * the ground plane (y = 0); panning moves that target, keyboard rotation steps
- * by quarter turns, touch twists rotate freely, and zoom changes the frustum height.
+ * by quarter turns, touch twists snap on release, and zoom changes the frustum height.
  */
 
 /** True isometric: atan(1/√2) ≈ 35.264°, so a cube's top face is a regular rhombus. */

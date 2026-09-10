@@ -38,8 +38,10 @@ describe("town households", () => {
     expect(residents).toHaveLength(2)
     expect(new Set(travelers.map(t => t.id)).size).toBe(2)
     for (const resident of residents) {
+      expect(resident.traveler.attributes).toMatchObject({ hunger: 100, thirst: 100, stamina: 100 })
       expect(sim.travelers.get(resident.traveler.id)).toMatchObject({
         employer: "town-tavern", home: "town-house", jobless: false, activity: "posted", jobSlot: resident.jobSlot,
+        hunger: 100, thirst: 100, stamina: 100,
       })
     }
     const staffed = (id: string) => [...sim.travelers.values()].some(s => s.employer === id && s.activity === "posted")

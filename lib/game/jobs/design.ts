@@ -13,7 +13,7 @@ export const SETTLEMENT_JOBS = {
 export type SettlementJob = keyof typeof SETTLEMENT_JOBS
 
 const BUILDING_JOBS: Record<BuildingKind, SettlementJob> = {
-  workshop: "woodcutter", tavern: "tavern", "sheep-pen": "shepherd", market: "market",
+  workshop: "woodcutter", tavern: "tavern", inn: "tavern", "sheep-pen": "shepherd", market: "market",
 }
 
 export function settlementJob(employer: string | null | undefined, buildings: readonly { id: string; kind: BuildingKind }[]): SettlementJob | null {

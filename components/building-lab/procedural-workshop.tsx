@@ -57,6 +57,14 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
     setRecipe({...earlyBuildingRecipe("tavern"),layoutSeed:18});setNeighbors(tavernPreviewNeighbors());setNeighbor(true)
     setSelectedId(null);setPlacement(null);setNotice("Tavern with two houses: one shared hearth and one house without a fireplace.")
   }
+  function showInnExample() {
+    const inn=earlyBuildingRecipe("inn")
+    setRecipe({...earlyBuildingRecipe("tavern"),layoutSeed:0,fireplace:true})
+    setNeighbors([{id:"upper-inn",recipe:inn,x:0,z:0,rotation:0},
+      {id:"standalone-inn",recipe:inn,x:4,z:1,rotation:0}])
+    setNeighbor(true);setSelectedId(null);setPlacement(null)
+    setNotice("Inn over the full tavern, beside a standalone inn. Select either floor to look inside.")
+  }
   useEffect(() => {
     if(!placement) return
     const key=(event:KeyboardEvent)=>{
@@ -160,6 +168,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
           </Section>
           <Section {...section("Place buildings")}>
             <button className="hud-action" onClick={showTavernExample}>Tavern + two houses</button>
+            <button className="hud-action" onClick={showInnExample}>Tavern + Inn</button>
             <label className="person-choice">Building to place<select aria-label="Building to place" value={placeType} onChange={e=>{setPlaceType(e.target.value);setPlacement(null)}}>
               <option value="current">Copy current recipe</option>{EARLY_BUILDINGS.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
             </select></label>

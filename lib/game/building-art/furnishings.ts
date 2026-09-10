@@ -5,6 +5,7 @@ import { sheepPenLayout } from "../workshop-layout"
 import type { BuildingPart, Vec3 } from "./geometry"
 import { EARLY_MATERIALS as palette } from "./materials"
 import { sharedChimneyParts, type SharedChimney } from "./shared-chimney"
+import { innHearthRoofRise } from "./dimensions"
 
 /** Local attachment points shared by the stone chimney and its reusable effects. */
 export function shelterHearth(width: number, depth: number, height: number, rise: number, layoutSeed = 0, hearthZ?: number) {
@@ -21,6 +22,7 @@ export function shelterHearth(width: number, depth: number, height: number, rise
 
 /** Chimneys identify domestic hearths and the tavern’s cooking fire. */
 export function hasDomesticHearth(variant: string | undefined, layoutSeed = 0, fireplace?: boolean): boolean {
+  if (variant === "inn") return fireplace !== false
   if (!["shelter","monk-shelter","house","tavern","sheep-pen"].includes(variant ?? "")) return false
   return fireplace ?? (variant !== "house" || Math.floor(layoutSeed/27)%4 !== 3)
 }
@@ -28,7 +30,7 @@ export function hasDomesticHearth(variant: string | undefined, layoutSeed = 0, f
 /** Resolve the actual local fireplace, including huts inside a larger open plot. */
 export function buildingHearth(variant: string | undefined, width: number, depth: number, height: number, rise: number, layoutSeed = 0, hearthZ?: number) {
   const hut=variant === "sheep-pen" ? sheepPenLayout(width) : {coreWidth:width,coreX:0}
-  const hearth=shelterHearth(hut.coreWidth,depth,height,rise,layoutSeed,hearthZ)
+  const hearth=shelterHearth(hut.coreWidth,depth,height,variant === "inn" ? innHearthRoofRise(width,depth,false) : rise,variant === "inn" ? 0 : layoutSeed,variant === "inn" ? depth/2-.5 : hearthZ)
   return {...hearth,x:(hearth.x+hut.coreX)*layoutHand(variant,layoutSeed),z:hearth.z}
 }
 

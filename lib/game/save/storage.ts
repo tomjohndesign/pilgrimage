@@ -10,27 +10,32 @@ import type { DisplaySettings } from "./settings"
 export const GAME_SAVE_KEY = "pilgrimage.game.v1"
 export const DISPLAY_SETTINGS_KEY = "pilgrimage.display.v1"
 /**
- * A cookie carries the saved world's seed, since the server cannot read
- * localStorage. It lets the play page render straight into the resume loading
- * state, and the landing page offer "Continue", before the browser's save is
- * read. Nothing else about the game is in it.
+ * A cookie carries the saved world's seed and the zoom it was left at, since
+ * the server cannot read localStorage. It lets the play page render straight
+ * into the resume loading state at the right scale, and the landing page
+ * offer "Continue", before the browser's save is read. Nothing else about the
+ * game is in it.
  */
 export const RESUME_COOKIE = "pilgrimage.resume"
 
-function markResumable(seed: number | null): void {
+function markResumable(save: GameSave | null): void {
   try {
     if (typeof document === "undefined") return
-    document.cookie = `${RESUME_COOKIE}=${seed === null ? "" : String(seed >>> 0)}; path=/; max-age=${seed === null ? 0 : 60 * 60 * 24 * 365}; SameSite=Lax`
+    const value = save === null ? "" : `${save.world.seed >>> 0}:${save.camera.viewSize}`
+    document.cookie = `${RESUME_COOKIE}=${value}; path=/; max-age=${save === null ? 0 : 60 * 60 * 24 * 365}; SameSite=Lax`
   } catch {
     /* Cookies blocked: the game still resumes once the save is read. */
   }
 }
 
-/** The seed the cookie names, or null when there is no usable cookie. */
-export function resumeCookieSeed(value: string | undefined): number | null {
-  if (value === undefined || !/^\d+$/.test(value)) return null
-  const seed = Number(value)
-  return Number.isSafeInteger(seed) ? seed >>> 0 : null
+/** What the cookie names (`seed` or `seed:viewSize`), or null when there is no usable cookie. */
+export function parseResumeCookie(value: string | undefined): { seed: number; viewSize: number | null } | null {
+  const match = value === undefined ? null : /^(\d+)(?::(\d+(?:\.\d+)?))?$/.exec(value)
+  if (!match) return null
+  const seed = Number(match[1])
+  if (!Number.isSafeInteger(seed)) return null
+  const viewSize = match[2] === undefined ? NaN : Number(match[2])
+  return { seed: seed >>> 0, viewSize: Number.isFinite(viewSize) && viewSize > 0 ? viewSize : null }
 }
 
 function storage(): Storage | null {
@@ -65,7 +70,7 @@ export function storeGameSave(save: GameSave): boolean {
   if (!store) return false
   try {
     store.setItem(GAME_SAVE_KEY, JSON.stringify(save))
-    markResumable(save.world.seed)
+    markResumable(save)
     return true
   } catch {
     return false

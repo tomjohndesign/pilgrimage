@@ -17,7 +17,7 @@ import { WORK_POSTS } from "./work-posts"
  * places the shrine and monk shelter; lumber camps are the player's doing.
  */
 
-export type BuildingKind = "workshop" | "tavern" | "sheep-pen" | "market"
+export type BuildingKind = "workshop" | "tavern" | "inn" | "sheep-pen" | "market"
 
 export interface BuildingKindDef {
   id: BuildingKind
@@ -68,6 +68,11 @@ export const BUILDING_KINDS: Record<BuildingKind, BuildingKindDef> = {
     workRadius: 0,
     trades: ["brewing", "cooking", "haggling"],
   },
+  inn: {
+    id: "inn", label: "Inn", blurb: "Four jobs tending the shared sleeping floor.",
+    w: 3, d: 4, height: 1.2, color: "#b7ae94", roofColor: "#827052",
+    jobs: 4, workRadius: 0, trades: ["labour", "cooking", "haggling"],
+  },
   "sheep-pen": {
     id: "sheep-pen",
     label: "Sheep pen",
@@ -103,7 +108,7 @@ export function isPostedWork(kind: BuildingKind): boolean {
 }
 
 /** Places the player can build that hire, in the order the sim considers them. */
-export const JOB_KINDS: readonly BuildingKind[] = ["workshop", "tavern", "sheep-pen", "market"]
+export const JOB_KINDS: readonly BuildingKind[] = ["workshop", "tavern", "inn", "sheep-pen", "market"]
 
 /** The kind of work a placed structure offers, if any. */
 export function buildingKind(buildType: string | undefined): BuildingKind | null {

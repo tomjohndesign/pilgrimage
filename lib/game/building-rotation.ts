@@ -57,6 +57,7 @@ export function buildingFoldEntry(building: BuildingDef, inside = false): TilePo
 
 /** Reserved, walkable frontage; decorative scenery has no doorway to protect. */
 export function buildingApproach(map: Pick<GameMap,"site">,building: BuildingDef): TilePos | null {
+  if(building.supportId) return null
   if(building.id === map.site?.hovelId) return map.site.door
   if(["garden","cross","lumberCamp"].includes(building.buildType ?? "")) return null
   return buildingEntry(building)

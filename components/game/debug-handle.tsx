@@ -18,6 +18,7 @@ import type { Traveler } from "@/lib/game/travelers"
 import { simRegistry, stepSim } from "@/lib/game/sim"
 import type { MovementTuning } from "@/lib/game/motion"
 import { strikeTree } from "@/lib/game/trees/impact"
+import type { TreePlacement } from "@/lib/game/trees/placement"
 import type { EntState } from "@/lib/game/trees/ents"
 import { treeResource, STUMP_LIFETIME_DAYS } from "@/lib/game/trees/timber"
 
@@ -25,7 +26,7 @@ import { characterOcclusionRequest, type CharacterOcclusionSample } from "@/lib/
 import { buildingBatchControl } from "./building-batches"
 import { characterBatchControl } from "./character-batches"
 import { staticBatchControl } from "./static-batches"
-import { outlineFrameRef } from "./outline-pass"
+import { outlineFrameRef, worldObjectIds } from "./outline-pass"
 import { frameQuality, frameQualityControl } from "@/lib/game/render/frame-quality"
 import { crowdRenderControl, crowdRenderStatus } from "@/lib/game/render/crowd-budget"
 import { frameProfile } from "@/lib/game/render/frame-profile"
@@ -42,7 +43,7 @@ import { BENCHMARK_SIMULATION_SPEEDS, useSimulationStore } from "@/lib/game/simu
  * (The world seed itself comes from the URL: /play?seed=….)
  * Development only, unless a local benchmark build explicitly enables it.
  */
-export function DebugHandle({ map, travelers, speed, movement, speedScales, beggarSpeedScales, characterScale }: { map: GameMap; travelers: Traveler[]; speed: number; movement: MovementTuning; speedScales?: ReadonlyMap<number, number>; beggarSpeedScales?: ReadonlyMap<number, number>; characterScale?: number }) {
+export function DebugHandle({ map, trees, travelers, speed, movement, speedScales, beggarSpeedScales, characterScale }: { map: GameMap; trees?: readonly TreePlacement[]; travelers: Traveler[]; speed: number; movement: MovementTuning; speedScales?: ReadonlyMap<number, number>; beggarSpeedScales?: ReadonlyMap<number, number>; characterScale?: number }) {
   const { gl, camera, scene, setDpr } = useThree()
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
     }
     const handle = {
       map,
+      trees,
       parties: () => [...(simRegistry.current?.parties.values() ?? [])].map(p => ({ ...p,
         members: p.members.map(id => { const s = simRegistry.current!.travelers.get(id)!; return {
           id, name: travelers.find(t => t.id === id)?.name, x: s.x, z: s.z, progress: s.progress,
@@ -228,6 +230,8 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
       setView: (viewIndex: number) =>
         useCameraStore.setState({ viewIndex: Math.round(viewIndex) }),
       setTarget: (x: number, z: number) => useCameraStore.setState({ targetX: x, targetZ: z }),
+      /** Object IDs of the last world pass, for checking what the view snapshot cuts along. */
+      objectIds: (x: number, y: number, width: number, height: number) => { worldObjectIds.wanted = true; return worldObjectIds.read?.(x, y, width, height) ?? null },
       cameraState: () => {
         const { targetX, targetZ, viewIndex, viewSize } = useCameraStore.getState()
         return { targetX, targetZ, viewIndex, viewSize }
@@ -337,7 +341,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
       ents: () => {
         const ents: EntState[] = []
         scene.traverse((object) => {
-          if (object.name === "ent-legs") ents.push(...object.userData.ents)
+          if (object.name === "ent-legs" || object.name === "ent-limbs") ents.push(...object.userData.ents)
         })
         return ents
       },
@@ -465,7 +469,7 @@ export function DebugHandle({ map, travelers, speed, movement, speedScales, begg
       frameQualityControl.enabled = true; crowdRenderControl.enabled = false
       delete (window as unknown as Record<string, unknown>).__pilgrimage
     }
-  }, [gl, camera, scene, map, travelers, speed, movement, speedScales, beggarSpeedScales, characterScale, setDpr])
+  }, [gl, camera, scene, map, trees, travelers, speed, movement, speedScales, beggarSpeedScales, characterScale, setDpr])
 
   return null
 }

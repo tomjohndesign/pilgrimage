@@ -1,3 +1,6 @@
+import { INN_OVERHANG } from "../inn"
+import { innLadderParts, innParts } from "./inn"
+import { innLayout } from "../inn-layout"
 import { waterSourceParts } from "../water-sources/model"
 import type { CrossroadArm } from "../map/crossroads"
 import { wallSide } from "./cutaway"
@@ -8,7 +11,7 @@ import { EARLY_BUILDINGS, earlyBuildingRecipe } from "./style"
 import { singlePlaneRoofRise } from "./dimensions"
 import type { RoofJoin } from "./roof-joins"
 
-export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor" | "layoutSeed" | "hearthZ" | "fireplace">
+export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor" | "layoutSeed" | "hearthZ" | "fireplace" | "floorHeight" | "supportId" | "tavernFlue">
 
 const SETTLEMENT_TYPES: readonly SettlementBuildingType[] = [
   "shelter", "workshop", "hall", "garden", "cross", "lumberCamp", "market", "guard-post", "sheep-pen",
@@ -23,8 +26,24 @@ export function structureParts(building: StructureAppearance, roofJoins: RoofJoi
   if (building.buildType === "well" || building.buildType === "watering-hole") return waterSourceParts(building.buildType)
   const preset = EARLY_BUILDINGS.find((item) => item.id === building.buildType)
   if (preset) {
-    const parts = earlyBuildingParts({ ...earlyBuildingRecipe(preset.id), layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins, width: building.w, depth: building.d, wallHeight: building.height,
+    const parts = building.buildType === "inn" && building.supportId
+      ? innParts(building.w,building.d,building.height,false,17+(building.layoutSeed ?? 0),true,building.tavernFlue)
+      : earlyBuildingParts({ ...earlyBuildingRecipe(preset.id), layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins, width: building.w, depth: building.d, wallHeight: building.height,
       roofRise: preset.id === "enclosure" ? 0 : singlePlaneRoofRise(building.d) })
+    if (building.buildType === "inn" && building.supportId && building.floorHeight) {
+      // The ladder opens into the right aisle beside the middle row of beds.
+      const {x:hatchX,z:hatchZ}=innLayout(building.w,building.d,true).hatch
+      const deckW=building.w+INN_OVERHANG*2,deckD=building.d+INN_OVERHANG*2
+      const deck=parts.filter(p=>p.name!=="floor" && !p.name.startsWith("inn-floorboard-"))
+      const plank=(name:string,x:number,z:number,w:number,d:number):BuildingPart=>({name,layer:"base",position:[x,.018,z],size:[w,.04,d],color:"#987e58",outline:false})
+      const left=-deckW/2+.06,right=deckW/2-.06
+      deck.push(plank("inn-deck-side--1",(left+hatchX-.24)/2,0,hatchX-.24-left,deckD-.12),
+        plank("inn-deck-side-1",(right+hatchX+.24)/2,0,right-hatchX-.24,deckD-.12))
+      const back=-deckD/2+.06,front=deckD/2-.06
+      deck.push(plank("inn-deck-back",hatchX,(back+hatchZ-.24)/2,.48,hatchZ-.24-back),
+        plank("inn-deck-front",hatchX,(front+hatchZ+.24)/2,.48,front-hatchZ-.24))
+      return [...deck,...innLadderParts(building.floorHeight,building.w,building.d)]
+    }
     // Food and timber are live inventories; leave room for them in the store.
     if (building.buildType !== "storehouse") return building.buildType === "workshop" ? parts.filter(p=>!p.name.startsWith("firewood-")) : parts
     const contents: BuildingPart[] = []

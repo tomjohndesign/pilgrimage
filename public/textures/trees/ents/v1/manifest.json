@@ -1,0 +1,26 @@
+{
+  "version": "v1",
+  "color": "/textures/trees/ents/v1/color.png",
+  "depth": "/textures/trees/ents/v1/depth.png",
+  "cellSize": 64,
+  "extent": 1.4799999999999998,
+  "anchor": [
+    32,
+    54
+  ],
+  "directions": 8,
+  "frames": 20,
+  "rows": 126,
+  "secondsPerStride": 6,
+  "stanceFraction": 0.6,
+  "species": [
+    "oak",
+    "beech",
+    "birch",
+    "scotsPine",
+    "hawthorn",
+    "holly"
+  ],
+  "layout": "21 rows per species: 20 distance-driven walking poses, then idle. Columns are eight directions. Existing foliage crowns attach at the shared rig pelvis.",
+  "depthEncoding": "view-offset-rg16-v1"
+}

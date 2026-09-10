@@ -1,3 +1,4 @@
+import { innPlacementError } from "./inn"
 import { buildingEntrance, constructionWork, isComplete } from "./construction"
 import { placementBuildingLayout, placementRoofRotation } from "./building-placement-layout"
 import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
@@ -244,6 +245,8 @@ export function placementError(
   const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
   if (!hovel) return "A founding shrine is needed before building."
   if (!Number.isInteger(at.x) || !Number.isInteger(at.z)) return "Choose a tile on the map."
+  const stacked=innPlacementError(map,{...def,...footprint,...at,rotation,buildType:def.id})
+  if (stacked !== undefined) return stacked
   const influence = getBuildInfluence(map, balance)
   for (let z = at.z; z < at.z + footprint.d; z++) {
     for (let x = at.x; x < at.x + footprint.w; x++) {
@@ -278,7 +281,7 @@ export function placementError(
     const junction = shrineRoadHead(map, occupied)
     if (junction && !settlementRoute(map, occupied, junction, map.site.door))
       return "Leave a way through from the road to the shrine door."
-    for (const camp of map.buildings.filter(b => b.buildType)) {
+    for (const camp of map.buildings.filter(b => b.buildType && !b.supportId)) {
       const entries=buildingApproaches(map,camp)
       if ((entries.length ? entries : [buildingEntry(camp)]).some(entry=>!settlementRoute(map, occupied, map.site!.door, entry)))
         return "Keep access to existing buildings clear."
@@ -359,7 +362,7 @@ export function purchaseStructure(
   return {
     settlement: {
       ...settlement,
-      elevation: levelBuildingGround(map, building),
+      elevation: building.supportId ? settlement.elevation : levelBuildingGround(map, building),
       spentWood: settlement.spentWood + def.cost.wood,
       resources: {
         gold: settlement.resources.gold - def.cost.gold,

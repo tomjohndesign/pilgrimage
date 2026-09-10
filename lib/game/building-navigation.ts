@@ -57,6 +57,7 @@ export function shrineFurnitureClear(building: BuildingDef, door: TilePos | unde
 export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDef[], from: TilePos, to: TilePos, enterShrine = false, seat?: string): boolean {
   if (crossroadIslandAt(map, to.x, to.z)) return false
   for (const building of buildings) {
+    if (building.supportId) continue
     const a = containsTile(building, from) && !marketYardContains(building, from), b = containsTile(building, to) && !marketYardContains(building, to)
     if (!a && !b) continue
     if (enterShrine && isEnterable(building) && isComplete(building)) {
