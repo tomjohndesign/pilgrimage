@@ -1,4 +1,9 @@
 .loading-church {
+  /* The loading UI keeps a fixed pixel size independently of the world zoom. */
+  --loading-pixel: 1px;
+  /* Clear the clipped preview, including saved tree canopies, while keeping
+     the caption on screen when a close zoom fills the viewport. */
+  --loading-indicator-top: max(48px, min(20%, calc(50% + var(--ground-offset) + var(--resume-view-y, 0dvh) - var(--resume-view-height, 50dvh) / 2 - 16px)));
   position: absolute;
   inset: 0;
   z-index: 40;
@@ -92,7 +97,7 @@
 .loading-church-caption {
   position: absolute;
   /* Sits above the progress bar: the bar's own height plus a four-pixel gap. */
-  top: calc(50% - var(--church-roof-offset) - 10 * var(--loading-pixel));
+  top: calc(var(--loading-indicator-top) - 10 * var(--loading-pixel));
   left: 50%;
   transform: translate(-50%, -100%);
   color: #d4c297;
@@ -136,7 +141,7 @@
   position: absolute;
   z-index: 5;
   left: 50%;
-  top: calc(50% - var(--church-roof-offset));
+  top: var(--loading-indicator-top);
   transform: translate(-50%, -100%);
   width: calc(48 * var(--loading-pixel));
   height: calc(6 * var(--loading-pixel));
