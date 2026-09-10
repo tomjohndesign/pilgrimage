@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "c7efe5ab00b2944c101a9bc888a0ce9cd16f1668",
-  "releaseCount": 175,
+  "lastProcessedCommit": "2d6e53ffb5327bdddd28d64dc1987dcc7b16114a",
+  "releaseCount": 176,
   "releases": [
+    {
+      "version": "0.0.190",
+      "title": "Release 0.0.190",
+      "summary": "Read open taverns once per step and skip speed inputs for carried company members (#209)",
+      "commit": "2d6e53ffb5327bdddd28d64dc1987dcc7b16114a"
+    },
     {
       "version": "0.0.189",
       "title": "Release 0.0.189",
