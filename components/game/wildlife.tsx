@@ -31,6 +31,7 @@ import { frameQuality } from "@/lib/game/render/frame-quality"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { createWildlifeRig } from "@/lib/game/wildlife/rig"
 import { isBird, type WildlifeKind } from "@/lib/game/wildlife/species"
+import { WILDLIFE_STEP_SECONDS, wildlifePoseDue } from "@/lib/game/wildlife/pose-timing"
 
 /**
  * Radius of the sphere an animal is culled by, in tiles. Comfortably larger
@@ -39,9 +40,6 @@ import { isBird, type WildlifeKind } from "@/lib/game/wildlife/species"
  * never reveals a stale pose.
  */
 const SKIN_RADIUS = 4
-/** Beyond this camera view size an animal is a few pixels; re-skin it every third simulation tick. */
-const DISTANT_VIEW_SIZE = 90
-const DISTANT_POSE_STRIDE = 3
 
 /** Ambient fauna share the world's pixel grid and depth/overlap pass. Connected hides share
  * bounded vertex buffers per species for both colour and selection passes. */
@@ -67,14 +65,14 @@ export function Wildlife({ map, trees, characterScale }: { map: GameMap; trees: 
     strikes.current.length = 0
     // Fixed simulation steps keep flock timings reproducible across display frame rates.
     accumulator.current += Math.min(delta, 0.1) * playback.speed
-    if (accumulator.current < 1 / 30) return
+    if (accumulator.current < WILDLIFE_STEP_SECONDS) return
     const started = frameProfile.start()
     const people = [...(simRegistry.current?.travelers.values() ?? [])]
     const nearbyPeople = new SpatialPoints(people)
     const nearbyAnimals = new SpatialPoints(world.animals.filter(animal => !isBird(animal.kind)))
-    while (accumulator.current >= 1 / 30) {
-      stepWildlife(world, map, 1 / 30, characterScale, felled, people, useAnimalRigStore.getState().designs, nearbyPeople, nearbyAnimals)
-      accumulator.current -= 1 / 30
+    while (accumulator.current >= WILDLIFE_STEP_SECONDS) {
+      stepWildlife(world, map, WILDLIFE_STEP_SECONDS, characterScale, felled, people, useAnimalRigStore.getState().designs, nearbyPeople, nearbyAnimals)
+      accumulator.current -= WILDLIFE_STEP_SECONDS
     }
     frameProfile.end("wildlife", started)
   }, -1)
@@ -117,7 +115,7 @@ export function WildlifeBatch({ kind, animals, map, scale, grazing }: { kind: Wi
     camera.updateMatrixWorld()
     frustum.setFromProjectionMatrix(viewProjection.multiplyMatrices(camera.projectionMatrix, view.copy(camera.matrixWorld).invert()))
     bounds.radius = SKIN_RADIUS
-    const poseStride = useCameraStore.getState().viewSize > DISTANT_VIEW_SIZE ? DISTANT_POSE_STRIDE : 1
+    const viewSize = useCameraStore.getState().viewSize
     for (let i = 0; i < animals.length; i++) {
       const animal = animals[i], bird = isBird(kind)
       bounds.center.set(animal.x, animal.y, animal.z)
@@ -128,7 +126,7 @@ export function WildlifeBatch({ kind, animals, map, scale, grazing }: { kind: Wi
       // while paused; camera movement still refreshes visibility every frame.
       // Posing rewrites every hide vertex on the CPU; far away, a slightly
       // staler pose is invisible and saves most of that work.
-      if (posed[i] === animal.age || (posed[i] >= 0 && animal.age - posed[i] < poseStride && animal.age > posed[i])) continue
+      if (!wildlifePoseDue(animal.age, posed[i], viewSize)) continue
       posed[i] = animal.age
       const graze = grazing ?? animal.grazing
       const flight = animal.flight, wingBlend = flight ? easeWing(Math.min(flight.elapsed / 0.35, (flight.duration - flight.elapsed) / 0.45)) : 0
