@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { buildingStepAllowed, shrineFurnitureClear } from "./building-navigation"
 import { monkWander, type WanderSpot } from "./monk-wander"
-import { shrineLayout, shrineSeats, shrineStations } from "./shrine-layout"
+import { shrineLayout, shrineSeats, shrineStations, isRelicViewingSeat } from "./shrine-layout"
 import { shrineExitPlan, shrineVisitPlan } from "./shrine-visit"
 import { processionGrounds } from "./relic-procession"
 import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
@@ -16,6 +16,22 @@ function fixture(direction: number): GameMap {
 }
 
 describe("church circulation", () => {
+  it.each([0, 1, 2, 3])("reserves twenty distinct group places inside the nave (view %i)", direction => {
+    const map = fixture(direction), occupied = new Set<string>(), points = new Set<string>()
+    for (let id = 0; id < 20; id++) {
+      const plan = shrineVisitPlan(map, id, 0, occupied, undefined, false, true)!
+      expect(plan, `group visitor ${id}`).not.toBeNull()
+      expect(isRelicViewingSeat(plan.seat)).toBe(true)
+      expect(shrineFurnitureClear(map.buildings[0], map.site!.door, plan.route.at(-1)!, plan.point!)).toBe(true)
+      occupied.add(plan.seat)
+      points.add(JSON.stringify(plan.point))
+    }
+    expect(occupied.size).toBe(20)
+    expect(points.size).toBe(20)
+    expect(shrineVisitPlan(map, 30, 0, occupied)).toBeNull()
+    expect(isRelicViewingSeat("prayer-0")).toBe(false)
+  })
+
   it.each([0, 1, 2, 3])("keeps prayer, queue and the offering-box exit reachable (view %i)", direction => {
     const map = fixture(direction), shrine = map.buildings[0], seats = shrineSeats(shrine, map.site!.door)
     const stations = shrineStations(shrine, map.site!.door)

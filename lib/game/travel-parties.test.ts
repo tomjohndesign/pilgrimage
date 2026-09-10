@@ -96,38 +96,30 @@ describe("coordinated travel", () => {
 })
 
 describe("shared stops", () => {
-  it.each([1, 2])("keeps a couple together when %i beds are available", beds => {
-    const { map, travelers, sim } = fixture(4)
+  it("lets one partner stay for a job without settling their companion", () => {
+    const { map, travelers, sim } = fixture(2)
     travelers[0].party!.partnerId = 1; travelers[1].party!.partnerId = 0
-    for (const id of [0, 1]) { travelers[id].attributes.jobless = true; travelers[id].attributes.skills = ["cooking"]; sim.travelers.get(id)!.jobless = true }
+    for (const id of [0, 1]) sim.travelers.get(id)!.jobless = true
     map.site = { hovelId: "shrine", door: { x: 28, z: 9 }, junction: 28,
       branch: Array.from({ length: 5 }, (_, i) => ({ x: 28, z: 5 + i })) }
-    map.buildings.push({ id: "shrine", label: "Shrine", x: 27, z: 10, w: 3, d: 3, height: 1, color: "tan", roofColor: "brown" })
-    const house = { ...BUILD_CATALOG.find(b => b.id === "house")!, id: "house", buildType: "house", x: 34, z: 9 }
-    const tavern = { ...BUILD_CATALOG.find(b => b.id === "tavern")!, id: "tavern", buildType: "tavern", x: 39, z: 9 }
-    map.buildings.push(house, tavern)
+    map.buildings.push({ id: "shrine", label: "Shrine", x: 27, z: 10, w: 3, d: 3, height: 1, color: "tan", roofColor: "brown" },
+      { ...BUILD_CATALOG.find(b => b.id === "house")!, id: "house", buildType: "house", x: 34, z: 9 },
+      { ...BUILD_CATALOG.find(b => b.id === "tavern")!, id: "tavern", buildType: "tavern", x: 39, z: 9 })
     sim.buildings = jobBuildings(map)
-    // Leave just one job. The second partner must be a real unemployed resident.
-    sim.travelers.set(-1, { ...sim.travelers.get(0)!, id: -1, employer: "tavern", home: null, partyId: undefined, activity: "posted", jobSlot: 0 })
-    if (beds === 1) sim.travelers.set(-2, { ...sim.travelers.get(0)!, id: -2, home: "house", partyId: undefined, activity: "idle" })
     const party = sim.parties.get(0)!
-    run(sim, travelers, map, 350, () => party.decisions > 0 && party.stage === "traveling")
-    expect(sim.visits).toBe(4)
-    const couple = [sim.travelers.get(0)!, sim.travelers.get(1)!]
-    expect(couple.map(s => s.home)).toEqual(beds === 2 ? ["house", "house"] : [null, null])
-    if (beds === 2) {
-      expect(couple.filter(s => s.employer === "tavern")).toHaveLength(1)
-      expect(party.members).toEqual([2, 3])
-      run(sim, travelers, map, 90)
-      expect(couple.every(s => s.partyId === undefined && s.home === "house")).toBe(true)
-      expect(couple.some(s => !s.employer && ["idle", "toHome", "sleeping", "toBuild", "building", "fromBuild"].includes(s.activity))).toBe(true)
-    } else expect(party.members).toEqual([0, 1, 2, 3])
+    run(sim, travelers, map, 2500, () => [...sim.travelers.values()].some(s => !!s.employer))
+    const settled = [...sim.travelers.values()].filter(s => s.employer)
+    expect(settled).toHaveLength(1)
+    expect(settled[0].visits).toBeGreaterThan(0)
+    expect(settled[0].home).toBe("house")
+    const companion = sim.travelers.get(settled[0].id === 0 ? 1 : 0)!
+    expect(companion.home).toBeNull()
+    expect(party.members).toContain(companion.id)
+    expect(party.members).not.toContain(settled[0].id)
   })
 
-
-
-  it("visits together without overbooking, then continues with members who did not settle", () => {
-    const { map, travelers, sim } = fixture(8)
+  it.each([8, 20])("views the relic together without overbooking (%i companions)", count => {
+    const { map, travelers, sim } = fixture(count)
     map.site = { hovelId: "shrine", door: { x: 28, z: 9 }, junction: 28,
       branch: Array.from({ length: 5 }, (_, i) => ({ x: 28, z: 5 + i })) }
     for (const p of map.site.branch) map.tiles[p.z * map.width + p.x] = "track"
@@ -137,10 +129,12 @@ describe("shared stops", () => {
     expect(party.stage).toBe("visiting")
     for (let i = 0; i < 3500 && (party.stage !== "traveling" || !sim.visits); i++) {
       stepSim(sim, travelers, map, 1, .1)
+      // No one completes a viewing before their companions have gathered.
+      expect([0, count]).toContain(sim.visits)
       const seats = [...sim.travelers.values()].flatMap(s => s.shrineSeat ? [s.shrineSeat] : [])
       expect(new Set(seats).size).toBe(seats.length)
     }
-    expect(sim.visits).toBe(8)
+    expect(sim.visits).toBe(count)
     expect(party.decisions).toBe(1)
     expect(party.stage).toBe("traveling")
     // A resident retains identity and position, but no longer holds up departure.
@@ -164,6 +158,21 @@ describe("shared stops", () => {
     run(sim, travelers, map, 30)
     expect(party.stage).toBe("traveling")
     expect([...sim.travelers.values()].every(s => s.activity === "walking")).toBe(true)
+  })
+})
+
+describe("company water stops", () => {
+  it.each(["well", "river"])("refills the shared supply at a %s and resumes travel", source => {
+    const { map, travelers, sim } = fixture(8)
+    if (source === "well") map.buildings.push({ ...BUILD_CATALOG.find(b => b.id === "well")!, id: "well", buildType: "well", x: 24, z: 8 })
+    else map.tiles[7 * map.width + 24] = "water"
+    for (const s of sim.travelers.values()) s.thirst = 5
+    const party = sim.parties.get(0)!, before = party.progress
+    run(sim, travelers, map, 150, () => party.thirst > 95 && party.waterCarrier === undefined)
+    expect(party.thirst).toBeGreaterThan(95)
+    expect([...sim.travelers.values()].every(s => s.thirst > 95 && s.activity === "walking")).toBe(true)
+    run(sim, travelers, map, 10)
+    expect(party.progress).toBeGreaterThan(before)
   })
 })
 

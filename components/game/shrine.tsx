@@ -19,7 +19,7 @@ import { RelicDisplay } from "./relic-display"
 import { shrineStructureParts } from "@/lib/game/building-art/structure"
 import { simRegistry } from "@/lib/game/sim"
 import { RELIC_TABLE_TOP } from "@/lib/game/building-art/early-geometry"
-import { shrineLayout } from "@/lib/game/shrine-layout"
+import { shrineLayout, isRelicViewingSeat } from "@/lib/game/shrine-layout"
 import {
   buildingObjectId,
   encodeObjectId,
@@ -40,7 +40,7 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
     const sim = simRegistry.current
     const available = !processionRegistry.current || !relicIsCarried(processionRegistry.current)
     const showing = relicSelected || (available && sim && sim.world.road === map.road && sim.shrineKeeperReady
-      && [...sim.travelers.values()].some(s => s.activity === "visiting" && s.shrineSeat?.startsWith("queue-")))
+      && [...sim.travelers.values()].some(s => s.activity === "visiting" && isRelicViewingSeat(s.shrineSeat)))
     if (relicGroup.current) relicGroup.current.visible = near && available && !!showing
     if (veilGroup.current) {
       veilGroup.current.scale.y = showing ? .16 : 1

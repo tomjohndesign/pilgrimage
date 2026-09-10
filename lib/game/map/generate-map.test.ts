@@ -164,7 +164,8 @@ describe("generateMap", () => {
             const onApproach = map.site!.branch.some(p => p.x === hovel.x + dx && p.z === hovel.z + dz)
             const onShelterPath = (dz === -1 && dx >= (door.z < hovel.z ? 0 : -1) && dx <= (door.z < hovel.z ? 1 : 0)) ||
               (door.z >= hovel.z && ((dx === -1 && dz >= -1) || (dz === hovel.d && dx <= 1)))
-            expect(onApproach || onShelterPath, `seed ${seed} only the approach and shelter connection are paved`).toBe(true)
+            const onWaterPath = map.buildingAccessTiles?.some(p => p.x === hovel.x + dx && p.z === hovel.z + dz)
+            expect(onApproach || onShelterPath || onWaterPath, `seed ${seed} only the approach, shelter and rear well connections are paved`).toBe(true)
           }
         }
       }
