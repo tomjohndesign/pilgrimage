@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "7c77271f37fc31d40bfc85153e5cb8e37c6ed63b",
-  "releaseCount": 185,
+  "lastProcessedCommit": "fac13b7896fff34a0ea795826edcee1f5dbffd24",
+  "releaseCount": 186,
   "releases": [
+    {
+      "version": "0.0.200",
+      "title": "Release 0.0.200",
+      "summary": "Add natural stony river shallows and ford crossings (#219)",
+      "commit": "fac13b7896fff34a0ea795826edcee1f5dbffd24"
+    },
     {
       "version": "0.0.199",
       "title": "Release 0.0.199",
