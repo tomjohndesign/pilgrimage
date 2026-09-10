@@ -140,6 +140,7 @@ export const Travelers = memo(function Travelers({
   const [jobs, setJobs] = useState<ReadonlyMap<number, SettlementJob>>(() => new Map(JOB_PREVIEW ? previewResidents(map).map(resident =>
     [resident.traveler.id, settlementJob(resident.building.id, [resident.building])!] as const) : []))
   const [handlers, setHandlers] = useState<Set<number>>(() => new Set())
+  const characterMapRef = useRef<GameMap | null>(null)
   const currentHandlers = useRef(handlers)
   const currentJobs = useRef(jobs)
   const [beggars, setBeggars] = useState<ReadonlySet<number>>(() => new Set())
@@ -475,23 +476,46 @@ export const Travelers = memo(function Travelers({
     frameProfile.end("travelerPositions", poseStarted)
   }), -3)
 
+  // Figures read terrain, roads, bridges and footpaths from the map, never its
+  // buildings. Keep the same object across placements so a new building does not
+  // re-render every mounted character; the simulation still receives the live map.
+  const characterMap = useMemo(() => {
+    const previous = characterMapRef.current
+    if (previous && Object.keys(map).every(key => key === "buildings" || (map as unknown as Record<string, unknown>)[key] === (previous as unknown as Record<string, unknown>)[key])
+      && Object.keys(previous).every(key => key in map)) return previous
+    characterMapRef.current = map
+    return map
+  }, [map])
+
   if (!map.road || map.road.length < 2 || travelers.length === 0) return null
 
   return (
-    <CharacterMapContext.Provider value={map}><group name="travelers" ref={root}>
+    <CharacterMapContext.Provider value={characterMap}><group name="travelers" ref={root}>
       <PixelCharacters>
-        <PartyTransportFigures handlers={groupRefs} sim={sim} map={map} travelers={travelers} characterScale={characterScale} />
+        <PartyTransportFigures handlers={groupRefs} sim={sim} map={characterMap} travelers={travelers} characterScale={characterScale} />
         <AdmissionEffects sim={sim} characterScale={characterScale} />
-        {mounted.map(index => travelers[index] && <TravelerUnit key={travelers[index].id} index={index}
-          traveler={travelers[index]} packHandler={handlers.has(travelers[index].id)} beggar={beggars.has(travelers[index].id)} appearance={appearances[index]} job={jobs.get(travelers[index].id)} groups={groupRefs}
-          selected={isSelected(selection, { kind: "traveler", id: travelers[index].id })}
-          characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />)}
+        <TravelerUnits mounted={mounted} travelers={travelers} handlers={handlers} beggars={beggars} appearances={appearances} jobs={jobs} groups={groupRefs}
+          selection={selection} characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} />
       </PixelCharacters>
       {/* Geometry shares the camp's world pixel grid; only baked people use the character pass. */}
       {logMounts.map(index => travelers[index] && <TravelerLog key={travelers[index].id} index={index} id={travelers[index].id}
         groups={logRefs} scale={characterScale * (characterModel === "base" ? appearances[index]?.scale ?? 1 : 1)} />)}
     </group></CharacterMapContext.Provider>
   )
+})
+
+/** One element for the whole mounted crowd. A map or resource change re-renders
+ * the parent without React reconciling every unit, which in development also
+ * skips the per-element prop diff that made building placement stall. */
+const TravelerUnits = memo(function TravelerUnits({ mounted, travelers, handlers, beggars, appearances, jobs, groups, selection, ...figure }: {
+  mounted: number[]; travelers: Traveler[]; handlers: ReadonlySet<number>; beggars: ReadonlySet<number>
+  appearances: ReturnType<typeof travelerAppearance>[]; jobs: ReadonlyMap<number, SettlementJob>; groups: RefObject<Array<THREE.Group | null>>
+  selection: ReturnType<typeof useCameraStore.getState>["selection"]
+  characterModel: CharacterModel; characterScale: number; characterFps?: number; walkTuning?: WalkTuning
+}) {
+  return <>{mounted.map(index => travelers[index] && <TravelerUnit key={travelers[index].id} index={index}
+    traveler={travelers[index]} packHandler={handlers.has(travelers[index].id)} beggar={beggars.has(travelers[index].id)} appearance={appearances[index]} job={jobs.get(travelers[index].id)} groups={groups}
+    selected={isSelected(selection, { kind: "traveler", id: travelers[index].id })} {...figure} />)}</>
 })
 
 /** Stable neighbors do not rebuild rigs or materials as another figure enters view. */
