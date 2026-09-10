@@ -80,7 +80,7 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
   const rotation = useBuildStore((s) => s.rotation)
   const rotateBuilding = useBuildStore((s) => s.rotateBuilding)
   const hovered = useCameraStore((s) => s.hovered)
-  const catalog = useMemo(() => [...buildCatalog(balance)].sort((a, b) =>
+  const catalog = useMemo(() => buildCatalog(balance).filter(item => !item.retired).sort((a, b) =>
     a.id === "workshop" ? -1 : b.id === "workshop" ? 1 : 0), [balance])
   const renown = economy.renown?.total ?? 0
   const selected = catalog.find((item) => item.id === buildType)

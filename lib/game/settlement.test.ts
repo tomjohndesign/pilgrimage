@@ -59,7 +59,7 @@ function testMap(): GameMap {
 }
 const monks = generateMonks(12345)
 const relic = generateRelic(12345)
-const shelter = BUILD_CATALOG.find((item) => item.id === "shelter")!
+const house = BUILD_CATALOG.find((item) => item.id === "house")!
 const cross = BUILD_CATALOG.find((item) => item.id === "cross")!
 
 /** A shrine off a through road, as the generator lays one out: road, track, door. */
@@ -94,6 +94,17 @@ function wearPath(map: GameMap, from: TilePos, to: TilePos, passes = 20) {
 const garden = BUILD_CATALOG.find((item) => item.id === "garden")!
 
 describe("build and buy", () => {
+  it.each(["shelter", "wood-shelter", "lumberCamp", "watering-hole"])("retires %s without deleting existing structures or charging for new ones", type => {
+    const def = BUILD_CATALOG.find(b => b.id === type)!
+    expect(def.retired).toBe(true)
+    const existing = { ...def, id: "legacy", buildType: type, x: 10, z: 14 }
+    const before = { ...createSettlement(), structures: [existing] }
+    const result = purchaseStructure(before, testMap(), monks, [relic], type, { x: 18, z: 14 }, undefined, 10000)
+    expect(result.error).toBe("This structure is no longer available to build.")
+    expect(result.settlement).toBe(before)
+    expect(result.settlement.structures[0]).toBe(existing)
+    expect(structureParts(existing).length).toBeGreaterThan(0)
+  })
   it("activates evangelism only after construction and never stacks extra crosses", () => {
     const map = testMap()
     expect(settlementEvangelism(map)).toBe(0)
@@ -154,9 +165,9 @@ describe("build and buy", () => {
     expect(placementError(map, def, at, undefined, 1)).toBeNull()
   })
 
-  it("offers the whole building kit except the relic enclosure", () => {
-    expect(BUILD_CATALOG.filter(b => b.category === "buildings").map(b => b.id))
-      .toEqual(["shelter", "workshop", "hall", "storehouse", "monk-shelter", "house", "wood-shelter", "lumberCamp", "market", "guard-post", "tavern", "inn", "sheep-pen"])
+  it("offers the active building kit", () => {
+    expect(BUILD_CATALOG.filter(b => b.category === "buildings" && !b.retired).map(b => b.id))
+      .toEqual(["workshop", "hall", "storehouse", "monk-shelter", "house", "market", "guard-post", "tavern", "inn", "sheep-pen"])
     for (const type of ["enclosure", "gable", "hovel"])
       expect(purchaseStructure(createSettlement(), testMap(), monks, [relic], type, { x: 10, z: 14 }).error).toBe("Unknown structure.")
   })
@@ -194,22 +205,22 @@ describe("build and buy", () => {
     const original = structuredClone(map.elevation)
     const before = { ...createSettlement(), resources: { gold: 1000, wood: 1000 } }
     const at = { x: 11, z: 14 }
-    const previewHeight = groundHeight(map, at.x + (shelter.w - 1) / 2, at.z + (shelter.d - 1) / 2)
-    const first = purchaseStructure(before, map, monks, [relic], shelter.id, at)
+    const previewHeight = groundHeight(map, at.x + (house.w - 1) / 2, at.z + (house.d - 1) / 2)
+    const first = purchaseStructure(before, map, monks, [relic], house.id, at)
     expect(first.error).toBeNull()
     const firstElevation = structuredClone(first.settlement.elevation!)
-    const second = purchaseStructure(first.settlement, map, monks, [relic], shelter.id, { x: 9, z: 14 })
+    const second = purchaseStructure(first.settlement, map, monks, [relic], house.id, { x: 9, z: 14 })
     expect(second.error).toBeNull()
     expect(second.settlement.elevation).not.toBe(first.settlement.elevation)
     for (const settlement of [first.settlement, second.settlement]) {
       const placedMap = { ...map, elevation: settlement.elevation }
-      for (let z = at.z; z < at.z + shelter.d; z++) for (let x = at.x; x < at.x + shelter.w; x++) {
+      for (let z = at.z; z < at.z + house.d; z++) for (let x = at.x; x < at.x + house.w; x++) {
         for (const dx of [-0.49, 0.49]) for (const dz of [-0.49, 0.49]) {
           expect(groundHeight(placedMap, x + dx, z + dz)).toBeCloseTo(previewHeight)
         }
       }
     }
-    const rejected = purchaseStructure(second.settlement, map, monks, [relic], shelter.id, at)
+    const rejected = purchaseStructure(second.settlement, map, monks, [relic], house.id, at)
     expect(rejected.error).toMatch(/occupies/)
     expect(rejected.settlement).toBe(second.settlement)
     expect(map.elevation).toEqual(original)
@@ -224,28 +235,28 @@ describe("build and buy", () => {
     expect(buildTileError(map, 11, 14, influence)).toBeNull()
     map.elevation.cliffs[i] = 1
     expect(buildTileError(map, 11, 14, influence)).toMatch(/cliffs/)
-    expect(placementError(map, shelter, { x: 11, z: 14 })).toMatch(/cliffs/)
+    expect(placementError(map, house, { x: 11, z: 14 })).toMatch(/cliffs/)
     map.elevation.cliffs[i] = 0
     map.elevation.corners.fill(0.4, (i + 1) * 4, (i + 2) * 4)
-    expect(placementError(map, shelter, { x: 11, z: 14 })).toMatch(/level ground/)
+    expect(placementError(map, house, { x: 11, z: 14 })).toMatch(/level ground/)
   })
 
   it("pays once on successful placement, retaining the base map and founding supplies", () => {
     const before = createSettlement()
     const map = testMap()
-    const result = purchaseStructure(before, map, monks, [relic], "shelter", { x: 11, z: 14 })
+    const result = purchaseStructure(before, map, monks, [relic], "house", { x: 11, z: 14 })
     expect(result.error).toBeNull()
     expect(result.settlement.resources).toEqual({
-      gold: STARTING_RESOURCES.gold - 45,
-      wood: STARTING_RESOURCES.wood - 35,
+      gold: STARTING_RESOURCES.gold - 40,
+      wood: STARTING_RESOURCES.wood - 30,
     })
     expect(result.settlement.structures[0]).toMatchObject({
-      buildType: "shelter",
+      buildType: "house",
       x: 11,
       z: 14,
       w: 2,
       d: 2,
-      construction: { work: 0, required: 96, cost: { gold: 45, wood: 35 } },
+      construction: { work: 0, required: 96, cost: { gold: 40, wood: 30 } },
     })
     expect(before.resources).toEqual(STARTING_RESOURCES)
     expect(before.structures).toHaveLength(0)
@@ -253,20 +264,20 @@ describe("build and buy", () => {
   })
 
   it.each([
-    { gold: 44, wood: 100 },
-    { gold: 100, wood: 34 },
+    { gold: 39, wood: 100 },
+    { gold: 100, wood: 29 },
   ])("requires enough of each currency: %j", (resources) => {
     const before = { ...createSettlement(), resources }
-    const result = purchaseStructure(before, testMap(), monks, [relic], "shelter", { x: 11, z: 14 })
+    const result = purchaseStructure(before, testMap(), monks, [relic], "house", { x: 11, z: 14 })
     expect(result.error).toMatch(/Not enough/)
     expect(result.settlement).toBe(before)
   })
 
   it("allows exact funds, then refuses a second purchase without going negative", () => {
-    const before = { ...createSettlement(), resources: { ...shelter.cost } }
-    const result = purchaseStructure(before, testMap(), monks, [relic], "shelter", { x: 11, z: 14 })
+    const before = { ...createSettlement(), resources: { ...house.cost } }
+    const result = purchaseStructure(before, testMap(), monks, [relic], "house", { x: 11, z: 14 })
     expect(result.settlement.resources).toEqual({ gold: 0, wood: 0 })
-    const second = purchaseStructure(result.settlement, testMap(), monks, [relic], "shelter", {
+    const second = purchaseStructure(result.settlement, testMap(), monks, [relic], "house", {
       x: 18,
       z: 14,
     })
@@ -277,9 +288,9 @@ describe("build and buy", () => {
   it("rejects overlap with both the founding hovel and player additions without charging", () => {
     const before = createSettlement()
     expect(
-      purchaseStructure(before, testMap(), monks, [relic], "shelter", { x: 13, z: 13 }).settlement,
+      purchaseStructure(before, testMap(), monks, [relic], "house", { x: 13, z: 13 }).settlement,
     ).toBe(before)
-    const first = purchaseStructure(before, testMap(), monks, [relic], "shelter", {
+    const first = purchaseStructure(before, testMap(), monks, [relic], "house", {
       x: 11,
       z: 14,
     }).settlement
@@ -294,7 +305,7 @@ describe("build and buy", () => {
       const map = testMap()
       map.tiles[15 * map.width + 12] = terrain
       const before = createSettlement()
-      const result = purchaseStructure(before, map, monks, [relic], "shelter", { x: 11, z: 14 })
+      const result = purchaseStructure(before, map, monks, [relic], "house", { x: 11, z: 14 })
       expect(result.error).toBeTruthy()
       expect(result.settlement).toBe(before)
     },
@@ -305,7 +316,7 @@ describe("build and buy", () => {
     const road = Array.from({ length: 30 }, (_, z) => ({ x: 11, z }))
     for (const p of road) map.tiles[p.z * map.width + p.x] = "path"
     map.road = road
-    expect(placementError(map, shelter, { x: 10, z: 12 })).toBeNull()
+    expect(placementError(map, house, { x: 10, z: 12 })).toBeNull()
   })
 
   it("refuses a footprint that pens the road in with nowhere to go around", () => {
@@ -316,14 +327,14 @@ describe("build and buy", () => {
       map.tiles[z * map.width + 11] = "path"
       for (const x of [10, 12]) map.tiles[z * map.width + x] = "water"
     }
-    const across = { ...shelter, id: "dam", buildType: "shelter", label: "Dam", w: 1, d: 2, x: 11, z: 12, rotation: 0 as const }
+    const across = { ...house, id: "dam", buildType: "house", label: "Dam", w: 1, d: 2, x: 11, z: 12, rotation: 0 as const }
     expect(roadBlockError(map, [...map.buildings, across])).toMatch(/way around the road/)
   })
 
   it("keeps the road's map edges clear for arrivals and departures", () => {
     const map = testMap()
     map.road = Array.from({ length: 30 }, (_, z) => ({ x: 11, z }))
-    const across = { ...shelter, id: "gate", buildType: "shelter", label: "Gate", x: 10, z: 0, rotation: 0 as const }
+    const across = { ...house, id: "gate", buildType: "house", label: "Gate", x: 10, z: 0, rotation: 0 as const }
     expect(roadBlockError(map, [...map.buildings, across])).toMatch(/leaves the map/)
     expect(roadBlockError(map, [...map.buildings, { ...across, z: 12 }])).toBeNull()
   })
@@ -357,13 +368,13 @@ describe("build and buy", () => {
   })
 
   it("keeps the approach clear even if its terrain is open", () => {
-    expect(placementError(testMap(), shelter, { x: 13, z: 16 })).toMatch(/approach/)
+    expect(placementError(testMap(), house, { x: 13, z: 16 })).toMatch(/approach/)
   })
 
   it("rejects distant sites, partial off-map footprints and fractional coordinates", () => {
-    expect(placementError(testMap(), shelter, { x: 0, z: 0 })).toBeTruthy()
-    expect(placementError(testMap(), shelter, { x: 29, z: 14 })).toBeTruthy()
-    expect(placementError(testMap(), shelter, { x: 11.5, z: 14 })).toBeTruthy()
+    expect(placementError(testMap(), house, { x: 0, z: 0 })).toBeTruthy()
+    expect(placementError(testMap(), house, { x: 29, z: 14 })).toBeTruthy()
+    expect(placementError(testMap(), house, { x: 11.5, z: 14 })).toBeTruthy()
   })
 
   it("housing does not unlock the hall; completed visits can earn the required renown", () => {
@@ -379,7 +390,7 @@ describe("build and buy", () => {
       { x: 15, z: 10 },
       { x: 17, z: 10 },
     ]) {
-      const purchase = purchaseStructure(settlement, map, [], [], "shelter", at)
+      const purchase = purchaseStructure(settlement, map, [], [], "house", at)
       expect(purchase.error).toBeNull()
       settlement = purchase.settlement
     }
@@ -396,7 +407,7 @@ describe("build and buy", () => {
       let available = false
       for (let z = hovel.z - 12; z <= hovel.z + 12 && !available; z++) {
         for (let x = hovel.x - 12; x <= hovel.x + 12; x++) {
-          if (!placementError(map, shelter, { x, z })) {
+          if (!placementError(map, house, { x, z })) {
             available = true
             break
           }
@@ -410,7 +421,7 @@ describe("build and buy", () => {
 describe("shrine renown and income", () => {
   it("adds all four sources and counts each resident and relic separately", () => {
     const map = testMap()
-    const first = purchaseStructure(createSettlement(), map, monks, [relic], "shelter", {
+    const first = purchaseStructure(createSettlement(), map, monks, [relic], "house", {
       x: 11,
       z: 14,
     }).settlement
@@ -425,7 +436,7 @@ describe("shrine renown and income", () => {
       monks,
       relics,
     )
-    expect(total.buildings).toBe(5 + shelter.renown)
+    expect(total.buildings).toBe(5 + house.renown)
     expect(total.scenery).toBe(garden.renown)
     expect(total.individuals).toBe(monks.reduce((sum, monk) => sum + individualRenown(monk), 0))
     expect(total.relics).toBe(relics.reduce((sum, item) => sum + relicRenown(item), 0))
