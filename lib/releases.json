@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "f9ebe2a643f669c3afd6b9a9575bb8edc1255d94",
-  "releaseCount": 180,
+  "lastProcessedCommit": "c232a11a124aadf8fd72d83c1386535c60ff8f89",
+  "releaseCount": 181,
   "releases": [
+    {
+      "version": "0.0.195",
+      "title": "Release 0.0.195",
+      "summary": "Make repeated Ent cheat codes toggle the setting off (#214)",
+      "commit": "c232a11a124aadf8fd72d83c1386535c60ff8f89"
+    },
     {
       "version": "0.0.194",
       "title": "Release 0.0.194",
