@@ -1297,7 +1297,7 @@ describe("shrine visits beside a covered junction", () => {
 })
 
 
-describe("traveling monks and housing limits", () => {
+describe("traveling monks, nuns and housing limits", () => {
   function finishPrayer(sim: SimState, people: Traveler[], map: GameMap) {
     for (const s of sim.travelers.values()) {
       if (s.employer) continue
@@ -1370,6 +1370,29 @@ describe("traveling monks and housing limits", () => {
     leaveChurch(sim, people, map)
     expect(sim.joinedMonks.size).toBe(0)
     expect([...sim.travelers.values()].every(s => s.activity === "walking")).toBe(true)
+  })
+
+  it.each([false, true])("keeps visiting nuns out of settlement jobs even with housing and vacancies (jobless: %s)", (jobless) => {
+    const { map, camp, trees, traveler } = fixture()
+    addHouse(map)
+    const people = Array.from({ length: 40 }, (_, id) => {
+      const person = { ...traveler(id), type: TRAVELER_TYPES.nun }
+      person.attributes.jobless = jobless
+      return person
+    })
+    const sim = createSim(people, map)
+    sim.buildings = [camp]
+    sim.trees = trees
+    finishPrayer(sim, people, map)
+    leaveChurch(sim, people, map)
+    expect(sim.visits).toBe(people.length)
+    expect(sim.joinedMonks.size).toBe(0)
+    expect(sim.travelers.size).toBe(people.length)
+    for (const visitor of sim.travelers.values()) {
+      expect(visitor.employer).toBeNull()
+      expect(visitor.home).toBeNull()
+      expect(visitor.activity).toBe("walking")
+    }
   })
 
   it("limits new workers to completed house beds even when more jobs are open", () => {

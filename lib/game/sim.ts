@@ -1419,6 +1419,8 @@ function finishVisit(sim: SimState, s: SimTraveler, map: GameMap): void {
 }
 
 function settleAfterVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): void {
+  // Nuns retain their religious calling instead of taking settlement jobs.
+  if (t.type.id === "nun") return
   if (t.type.id === "friar") {
     const bed = vacantMonkBed(map, sim.joinedMonks.values())
     if (bed && nextRoll(s) < MONK_JOIN_CHANCE) {
