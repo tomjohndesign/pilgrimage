@@ -5,7 +5,7 @@ import { SceneAssetBoundary } from "./scene-assets"
 import { stepDevotion } from "@/lib/game/wellbeing"
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { simRegistry } from "@/lib/game/sim"
-import { shrineLayout, shrineStations } from "@/lib/game/shrine-layout"
+import { shrineLayout, shrineStations, isRelicViewingSeat } from "@/lib/game/shrine-layout"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import { monkBeds } from "@/lib/game/housing"
 import { recordWalkingPath } from "@/lib/game/footpaths"
@@ -229,7 +229,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         const sim = simRegistry.current
         const sameWorld = sim && sim.world.road === map.road
         const showing = sameWorld && world.procession.stage === "idle" && [...sim.travelers.values()]
-          .some(visitor => visitor.activity === "visiting" && visitor.shrineSeat?.startsWith("queue-"))
+          .some(visitor => visitor.activity === "visiting" && isRelicViewingSeat(visitor.shrineSeat))
         s.activity = showing ? "showingRelic" : "keepingRelic"
         group.userData.activity = s.activity
         group.userData.moving = false

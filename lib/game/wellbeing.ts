@@ -22,3 +22,14 @@ export function stepDevotion(s: DevotionState, dt: number, inChurch: boolean, pr
   s.piety = Math.max(0, Math.min(100, s.piety + (praying ? balance.rules.prayerPiety * hours : 0)
     - (praying ? 0 : balance.rules.pietyDecay * absence)))
 }
+
+/** A fulfilled visit lifts spirits; steady employment sustains a contented life. */
+export const RELIC_HAPPINESS_GAIN = 20
+export const EMPLOYED_HAPPINESS = 85
+export function stepHappiness(s: { happiness: number }, hours: number, employed: boolean,
+  socializing: boolean, balance: GameBalance = DEFAULT_BALANCE): void {
+  if (hours <= 0 || socializing) return
+  s.happiness = employed
+    ? s.happiness + (EMPLOYED_HAPPINESS - s.happiness) * (1 - Math.exp(-hours / 6))
+    : Math.max(0, s.happiness - balance.rules.happinessDecay * hours)
+}

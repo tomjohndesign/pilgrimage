@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { GAME_HOUR_SECONDS } from "./calendar"
-import { stepDevotion } from "./wellbeing"
+import { stepDevotion, stepHappiness } from "./wellbeing"
 
 describe("devotion over game time", () => {
   it("drains only the hours beyond a day without church, independently of tick size", () => {
@@ -31,5 +31,20 @@ describe("devotion over game time", () => {
     expect(npc.piety).toBe(100)
     stepDevotion(npc, 10000 * GAME_HOUR_SECONDS, false)
     expect(npc.piety).toBe(0)
+  })
+})
+
+describe("employment and happiness", () => {
+  it("sustains high worker happiness across days, independently of tick size", () => {
+    const whole = { happiness: 20 }, ticks = { happiness: 20 }, traveler = { happiness: 80 }
+    stepHappiness(whole, 72, true, false)
+    for (let i = 0; i < 720; i++) stepHappiness(ticks, .1, true, false)
+    stepHappiness(traveler, 72, false, false)
+    expect(whole.happiness).toBeGreaterThan(84)
+    expect(ticks.happiness).toBeCloseTo(whole.happiness, 8)
+    expect(traveler.happiness).toBe(44)
+    const paused = { happiness: 40 }
+    stepHappiness(paused, 0, true, false)
+    expect(paused.happiness).toBe(40)
   })
 })

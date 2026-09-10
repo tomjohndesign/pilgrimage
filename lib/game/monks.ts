@@ -10,7 +10,7 @@ import { deriveSeed, makeRng, SEED_STREAM } from "./rng"
 
 export const MONK_COUNT = 4
 export const MONK_VISIT_CHANCE = 0.6
-export const MONK_JOIN_CHANCE = 0.35
+export const MONK_JOIN_CHANCE = 0.1
 
 export interface MonkAttributes {
   /** Years. */

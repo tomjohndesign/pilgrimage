@@ -46,3 +46,8 @@ export function shrineStations(building: Pick<BuildingDef,"x"|"z"|"w"|"d">, door
     queueCapacity: Math.max(1, layout.depth - 2),
   }
 }
+
+/** Queue visitors and gathered companies both ask the keeper to uncover the relic. */
+export function isRelicViewingSeat(seat?: string): boolean {
+  return !!seat && (seat.startsWith("queue-") || seat.startsWith("group-"))
+}
