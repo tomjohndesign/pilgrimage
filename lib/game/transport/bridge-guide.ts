@@ -3,7 +3,7 @@ import { insideBridgeCorner } from "../map/bridge-corners"
 import type { GameMap } from "../map/types"
 import { CART_WHEEL_X, CART_WIDTH_SCALE, RIG_TO_WORLD } from "./assets"
 import { cartOnRoute, followCart, type CartPose } from "./follow"
-import { advanceCartProgress, cartRoutePoint, DEFAULT_CART_TURN_RADIUS } from "./route"
+import { advanceCartProgress, cartTrafficPoint, DEFAULT_CART_TURN_RADIUS } from "./route"
 
 export function cartGroundContacts(pose: CartPose, scale: number) {
   const half=CART_WHEEL_X*CART_WIDTH_SCALE*RIG_TO_WORLD*scale
@@ -39,7 +39,7 @@ function ranges(map:GameMap) {
  * A two-tile ground transition avoids a snap when entering/leaving the assist. */
 export function roadCartPose(map:GameMap,progress:number,direction:1|-1,wheelbase:number,scale:number,
   previous?:CartPose,radius=DEFAULT_CART_TURN_RADIUS):CartPose {
-  const point=(p:number)=>cartRoutePoint(map,p,radius),hitch=point(progress)
+  const point=(p:number)=>cartTrafficPoint(map,p,direction,radius),hitch=point(progress)
   if(previous&&Math.hypot(hitch.x-previous.hitch.x,hitch.z-previous.hitch.z)<1e-8)return {...previous,distance:0}
   // The visual body can articulate independently. The ground blend still
   // needs the drawbar's heading, otherwise each step tries to realign the
@@ -55,7 +55,11 @@ export function roadCartPose(map:GameMap,progress:number,direction:1|-1,wheelbas
   const gap=Math.min(...bridges.map(r=>Math.max(0,r.start-last,first-r.end)))
   const t=Math.max(0,1-gap/2),weight=t*t*(3-2*t)
   if(!weight)return free
-  const x=free.x+(target.x-free.x)*weight,z=free.z+(target.z-free.z)*weight
+  let x=free.x+(target.x-free.x)*weight,z=free.z+(target.z-free.z)*weight
+  // Merging from a side lane adds lateral travel on the approach. The blended
+  // axle may shorten its hitch gap, but must never stretch the rigid drawbar.
+  const gapToHitch=Math.hypot(x-hitch.x,z-hitch.z)
+  if(gapToHitch>wheelbase){x=hitch.x+(x-hitch.x)*wheelbase/gapToHitch;z=hitch.z+(z-hitch.z)*wheelbase/gapToHitch}
   const distance=previous?Math.hypot(x-previous.x,z-previous.z):0
   // Face the axle's actual movement, including the ground transition. Looking
   // at the hitch rotates the cart too early when the horse has cleared a bend.

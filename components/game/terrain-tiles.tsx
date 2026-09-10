@@ -929,7 +929,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
       : diagonalRoadSegments(map, coveredLand)
     if (regrowRoads && !tier.paved) for (const [index, roads] of segments) {
       const opacity = foundingRoadStrength(map, index)
-      segments.set(index, roads.map(s => s[4] < 2 || s[4] === 3 ? [s[0], s[1], s[2], s[3], s[4], opacity] : s))
+      segments.set(index, roads.map(s => s[4] < 2 || s[4] === 3 ? [s[0], s[1], s[2], s[3], s[4], opacity, s[6]] : s))
     }
     return segments
   }, [revision, coveredLand, traveledRoads, regrowRoads, tier.paved, wearSnapshot])
@@ -1314,9 +1314,10 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
   useLayoutEffect(() => {
     const land = roadGeometry.getAttribute("aLand") as THREE.InstancedBufferAttribute
     const surface = roadGeometry.getAttribute("aSurface") as THREE.InstancedBufferAttribute
-    const road = roadWear(traffic, tier.tier), track = roadWear(relicTraffic, tier.tier)
+    const keepMedian = (map.mainRoadWidth ?? 1) > 1
+    const road = roadWear(traffic, tier.tier, keepMedian), track = roadWear(relicTraffic, tier.tier)
     roadTiles.forEach((index, i) => {
-      const wear = regrowRoads ? roadWear(foundingRoadTraffic(map, index, map.tiles[index] === "track" ? relicTraffic : traffic), tier.tier)
+      const wear = regrowRoads ? roadWear(foundingRoadTraffic(map, index, map.tiles[index] === "track" ? relicTraffic : traffic), tier.tier, keepMedian && map.tiles[index] !== "track")
         : map.tiles[index] === "track" ? track : road
       land.setY(i, wear.edge); land.setZ(i, wear.inner)
       land.setW(i, regrowRoads && !tier.paved ? foundingRoadStrength(map, index) : 1)

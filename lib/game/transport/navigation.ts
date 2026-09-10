@@ -4,7 +4,7 @@ import { marketLayout, marketYardContains } from "../market-layout"
 import type { TreePlacement } from "../trees/placement"
 import { pastureSegmentClear, type StallObstacle } from "./stall"
 import { cartGroundContacts, onBridgeDeck } from "./bridge-guide"
-import { cartRoutePoint } from "./route"
+import { cartTrafficPoint } from "./route"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, tileAt, type GameMap } from "../map/types"
 import { buildingAt } from "../settlement"
 import { bridgeCornerAt, bridgeLayout } from "../map/bridges"
@@ -15,9 +15,9 @@ import { RIG_TO_WORLD, CART_WIDTH_SCALE, type Puller } from "./assets"
 import { alignCart, cartOnRoute, followCart, type CartPose } from "./follow"
 import { roadsideStall, roundRoute, routeLength, routePoint, type Point } from "./roadside"
 
-/** Only wagons ease into wider turns; the terrain and walking lanes stay fixed. */
-export function convoyPoint(map: GameMap, progress: number, _scale = BASE_CHARACTER_SCALE): Point {
-  return cartRoutePoint(map, progress)
+/** Cart lanes ease through broad turns and keep left like the walking traffic. */
+export function convoyPoint(map: GameMap, progress: number, _scale = BASE_CHARACTER_SCALE, direction: 1 | -1 = 1): Point {
+  return cartTrafficPoint(map, progress, direction)
 }
 
 /** Shared oriented footprints for carts, shafts and unmounted horses. */
@@ -161,20 +161,20 @@ export function parkingTree(map: GameMap, pose: CartPose, trees: readonly TreePl
 export function shrineParking(map: GameMap, progress: number, direction: 1 | -1, wheelbase: number, puller: Puller, scale: number,
   occupied: readonly CartPose[] = [], context: ParkingContext = { trees: [] }, requireTree = true): ShrineParking | null {
   const reserved = { ...context, obstacles: [...(context.obstacles ?? []), ...occupied.flatMap(pose => convoyBounds(pose, "horse", scale))] }
-  const start = convoyPoint(map, progress, scale), ahead = convoyPoint(map, progress + direction * 0.1, scale)
+  const start = convoyPoint(map, progress, scale, direction), ahead = convoyPoint(map, progress + direction * 0.1, scale, direction)
   const heading = Math.atan2(ahead.x - start.x, ahead.z - start.z)
-  const initial = cartOnRoute(progress, direction, wheelbase, p => convoyPoint(map, p, scale))
+  const initial = cartOnRoute(progress, direction, wheelbase, p => convoyPoint(map, p, scale, direction))
   for (const depth of [1.5, 2, 2.5, 3]) for (const side of [1, -1]) for (const advance of [5, 6, 7]) {
     const returnProgress = progress + direction * advance
     if (returnProgress < 0 || returnProgress > map.road!.length - 1) continue
     const local = (along: number, across: number) => ({ x: start.x + Math.sin(heading) * along + Math.cos(heading) * across * side,
       z: start.z + Math.cos(heading) * along - Math.sin(heading) * across * side })
-    const park = local(2 + wheelbase, depth), end = convoyPoint(map, returnProgress, scale)
+    const park = local(2 + wheelbase, depth), end = convoyPoint(map, returnProgress, scale, direction)
     const departure = local(2.6 + wheelbase, depth)
     // Pull forward onto the road; never ask the horse to reverse the wagon.
     if ((end.x - departure.x) * Math.sin(heading) + (end.z - departure.z) * Math.cos(heading) < 0.5) continue
     const entry = roundRoute([start, local(0.4, 0), local(1.4, depth), park], 0.4)
-    const exit = roundRoute([park, departure, end, convoyPoint(map, returnProgress + direction * 0.5, scale)], 0.4)
+    const exit = roundRoute([park, departure, end, convoyPoint(map, returnProgress + direction * 0.5, scale, direction)], 0.4)
     let pose = initial, parked = initial, valid = true
     for (const route of [entry, exit]) {
       const length = routeLength(route)

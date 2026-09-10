@@ -114,6 +114,8 @@ export interface GameMap {
    * order a traveller crosses it. Steps over rivers are bridge tiles.
    */
   road?: TilePos[]
+  /** Physical width around the main centreline; omitted on legacy authored maps. */
+  mainRoadWidth?: number
   /**
    * Secondary tracks: each a shorter, more dangerous walk through a dark
    * forest between two points on the road. Present on generated maps that

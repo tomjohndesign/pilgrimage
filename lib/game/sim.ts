@@ -600,7 +600,7 @@ function routeWorldPoint(
   }
   const x = tileToWorldX(map, tx), z = tileToWorldZ(map, tz)
   const nearBridge = surfaces.nearBridge[i0] === 2 || surfaces.nearBridge[i0 + 1] === 2
-  const point = { x, z, y: nearBridge ? walkingSurface(map,x,z).height : ay + (by-ay)*frac }
+  const point = { x, z, y: (nearBridge || (route === map.road && (map.mainRoadWidth ?? 1) > 1)) ? walkingSurface(map,x,z).height : ay + (by-ay)*frac }
   return point
 }
 
@@ -609,10 +609,10 @@ function roadWorldPoint(map: GameMap, p: number, lane: number): WorldPoint {
 }
 
 /** Where someone stands when set down on the road at `progress`; wagons keep to the cart line. */
-export function roadPosition(map: GameMap, t: Pick<Traveler, "type">, progress: number, lane: number): WorldPoint {
+export function roadPosition(map: GameMap, t: Pick<Traveler, "type"> & Partial<Pick<Traveler, "direction">>, progress: number, lane: number): WorldPoint {
   const at = roadWorldPoint(map, progress, lane)
   if (t.type.id === "vendor") {
-    Object.assign(at, convoyPoint(map, progress))
+    Object.assign(at, convoyPoint(map, progress, BASE_CHARACTER_SCALE, t.direction ?? 1))
     at.y = walkingSurface(map, at.x, at.z).height
   }
   return at
@@ -677,7 +677,7 @@ function currentRoutePoint(map: GameMap, s: SimTraveler): WorldPoint {
   }
   const point = roadWorldPoint(map, s.progress, s.lane)
   if (!s.convoy) return point
-  const cart = convoyPoint(map, s.progress, s.convoyScale)
+  const cart = convoyPoint(map, s.progress, s.convoyScale, s.direction)
   return { ...cart, y: walkingSurface(map, cart.x, cart.z).height }
 }
 
@@ -850,8 +850,8 @@ export function createSim(
       const place = slots[slot]
       member.progress = ((origin - party.direction * place.behind) % length + length) % length
       member.direction = party.direction
-      member.laneOffset = place.lane
-      member.lane = party.direction * place.lane
+      member.laneOffset = (map.mainRoadWidth ?? 1) > 1 ? .28 + place.lane * .28 : place.lane
+      member.lane = party.direction * member.laneOffset
       Object.assign(member, roadWorldPoint(map, member.progress, member.lane))
     }
     party.formed = true
@@ -1749,7 +1749,8 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
         if (gap > 0) { moved = Math.min(gap, naturalSpeed(s) * dt); s.progress = gap - moved <= 1e-9 ? place : wrap(s.progress + direction * moved) }
       }
       s.direction = direction
-      s.laneOffset = slots[i].lane
+      s.laneOffset = (map.mainRoadWidth ?? 1) > 1 && !party.singleFile && !(cart && i === 0)
+        ? .28 + slots[i].lane * .28 : slots[i].lane
       s.partySpeed = moved / dt
       s.partyWaiting = !party.formed && moved <= 1e-9
       if (i > 0 && !refreshFollowers) continue
