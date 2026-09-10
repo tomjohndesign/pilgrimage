@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { Group, OrthographicCamera, Raycaster, Sprite, Vector2 } from "three"
 import { useBuildStore } from "./build-store"
 import { useCameraStore, type Selection } from "./camera-store"
 import { markPerson, markSelectionScenery, prioritizePeople, selectElement, selectionObjectId } from "./selection"
@@ -137,5 +138,36 @@ describe("shared selection", () => {
     layer.visible = true
     roof.object.userData.batchedPickTarget = false
     expect(prioritizePeople([roof])).toEqual([])
+  })
+
+  it.each([false, true])("keeps the full transport sprite clickable through scenery (batched: %s)", (batched) => {
+    const layer = new Group(), transport = new Group(), cart = new Sprite()
+    layer.add(transport); transport.add(cart)
+    markPerson(transport)
+    cart.userData.batchedPickTarget = true
+    cart.visible = !batched
+    cart.scale.set(3, 3, 1)
+    layer.updateMatrixWorld(true)
+    const camera = new OrthographicCamera(-2, 2, 2, -2, .1, 20)
+    camera.position.z = 10
+    camera.updateMatrixWorld(true)
+    const raycaster = new Raycaster()
+    // Click away from the axle/driver, on the outer part of the cart sprite.
+    raycaster.setFromCamera(new Vector2(.6, .3), camera)
+    const hits = raycaster.intersectObject(cart)
+    expect(hits).toHaveLength(1)
+    const tree = { object: { userData: {} }, distance: 2 }
+    markSelectionScenery(tree.object)
+    expect(prioritizePeople([tree, ...hits])).toEqual([...hits, tree])
+
+    // Hidden transport poses (such as a deployed vendor sprite) and the
+    // Characters display preference must still suppress the original target.
+    transport.visible = false
+    expect(prioritizePeople(hits)).toEqual([])
+    transport.visible = true
+    layer.visible = false
+    expect(prioritizePeople(hits)).toEqual([])
+    layer.visible = true
+    expect(prioritizePeople(hits)).toEqual(hits)
   })
 })

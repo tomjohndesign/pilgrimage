@@ -78,7 +78,7 @@ function hasPickTag(object: PickObject | null | undefined, tag: string): boolean
  * is demoted only when a person is hit, and retained for build-tool events.
  */
 export function prioritizePeople<T extends { object: PickObject }>(hits: readonly T[]): T[] {
-  // Batched buildings keep their original surface as the exact picking mesh.
+  // Batched buildings and transport keep their original surfaces for picking.
   // Its own render visibility is off; user-hidden ancestors still reject hits.
   const visibleHits = hits.filter(hit => hit.object.userData?.batchedPickTarget === true
     ? isObjectVisible(hit.object.parent ?? {}) : isObjectVisible(hit.object))
