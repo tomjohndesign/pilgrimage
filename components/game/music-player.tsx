@@ -14,10 +14,8 @@ const VIDEO_ID = "5F5dgg1eeGE"
 /** 0–100. Quiet enough to sit under the game rather than in front of it. */
 const VOLUME = 20
 const MUSIC_STORAGE_KEY = "pilgrimage.music"
-/** Used only if the player hasn't reported a duration yet; the real track is ~10h. */
-const FALLBACK_DURATION_SECONDS = 9 * 60 * 60
-/** Never drop in this close to the end, so the random start isn't over in seconds. */
-const TAIL_SECONDS = 10 * 60
+/** Retry until metadata supplies the actual video length. */
+const DURATION_POLL_MS = 200
 
 interface YouTubePlayer {
   playVideo: () => void
@@ -36,7 +34,10 @@ declare global {
         options: {
           videoId: string
           playerVars: Record<string, string | number>
-          events: { onReady: (event: { target: YouTubePlayer }) => void }
+          events: {
+            onReady: (event: { target: YouTubePlayer }) => void
+            onStateChange: (event: { target: YouTubePlayer; data: number }) => void
+          }
         },
       ) => YouTubePlayer
     }
@@ -70,6 +71,7 @@ export function MusicPlayer({ className = "", compact = false }: { className?: s
   const [enabled, setEnabled] = useState(true)
   // Only the first play jumps; pausing and resuming picks up where it left off.
   const seekedRef = useRef(false)
+  const seekTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     setEnabled(loadMusicEnabled() ?? true)
@@ -82,6 +84,7 @@ export function MusicPlayer({ className = "", compact = false }: { className?: s
 
     const create = () => {
       if (cancelled || !window.YT) return
+      seekedRef.current = false
       // The API replaces the host element with the player iframe in place.
       playerRef.current = new window.YT.Player(host, {
         videoId: VIDEO_ID,
@@ -98,8 +101,15 @@ export function MusicPlayer({ className = "", compact = false }: { className?: s
         },
         events: {
           onReady: (event) => {
-            event.target.setVolume(VOLUME)
+            if (cancelled) return
+            // Keep the opening silent while metadata loads and the seek buffers.
+            event.target.setVolume(0)
             setReady(true)
+          },
+          onStateChange: (event) => {
+            if (!cancelled && event.data === 1 && seekedRef.current) {
+              event.target.setVolume(VOLUME)
+            }
           },
         },
       })
@@ -122,6 +132,7 @@ export function MusicPlayer({ className = "", compact = false }: { className?: s
 
     return () => {
       cancelled = true
+      if (seekTimerRef.current !== null) window.clearTimeout(seekTimerRef.current)
       playerRef.current?.destroy()
       playerRef.current = null
     }
@@ -142,16 +153,34 @@ export function MusicPlayer({ className = "", compact = false }: { className?: s
     const player = playerRef.current
     if (!ready || !interacted || !player) return
     if (enabled) {
+      if (!document.hidden) player.playVideo()
       if (!seekedRef.current) {
-        seekedRef.current = true
         // Ten hours of lute is a lot to always hear the first minute of, so
-        // each session drops in somewhere else in the recording.
-        const duration = player.getDuration() || FALLBACK_DURATION_SECONDS
-        const span = Math.max(0, duration - TAIL_SECONDS)
-        player.seekTo(Math.random() * span, true)
+        // each session drops in at an entirely random point in the recording.
+        // The player only reports a duration once it has the video's metadata,
+        // and seeking past the end just bounces back to the start, so wait for
+        // a real length instead of jumping against a guessed one.
+        const jump = () => {
+          seekTimerRef.current = null
+          const current = playerRef.current
+          if (!current) return
+          const duration = current.getDuration()
+          if (document.hidden || !Number.isFinite(duration) || duration <= 0) {
+            seekTimerRef.current = window.setTimeout(jump, DURATION_POLL_MS)
+            return
+          }
+          seekedRef.current = true
+          current.seekTo(Math.random() * duration, true)
+        }
+        jump()
       }
-      player.playVideo()
     } else player.pauseVideo()
+    return () => {
+      if (seekTimerRef.current !== null) {
+        window.clearTimeout(seekTimerRef.current)
+        seekTimerRef.current = null
+      }
+    }
   }, [ready, interacted, enabled])
 
   // The game falls silent with the tab, like it would if it paused.
