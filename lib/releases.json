@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "3488287f1c60333ae3b53fd396aaf7f59db143cb",
-  "releaseCount": 171,
+  "lastProcessedCommit": "78a3ab27480239fd7ac0b446c26877c8ab42c800",
+  "releaseCount": 172,
   "releases": [
+    {
+      "version": "0.0.186",
+      "title": "Release 0.0.186",
+      "summary": "Start the background music at a truly random point in the track (#206)",
+      "commit": "78a3ab27480239fd7ac0b446c26877c8ab42c800"
+    },
     {
       "version": "0.0.185",
       "title": "Release 0.0.185",
