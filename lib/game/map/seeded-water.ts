@@ -32,9 +32,9 @@ export function hasNearbyWater(map: GameMap, from: TilePos, radius = TOWN_WATER_
 
 /** Try a small side clearing without covering routes, entrances, water or ancient hearts. */
 function placeSource(map: GameMap, anchor: TilePos, kind: "well" | "watering-hole",
-  id: string, label: string, rotationStart = 0, townId?: string): BuildingDef | null {
+  id: string, label: string, rotationStart = 0, townId?: string, maxGap = 4): BuildingDef | null {
   const def = BUILD_CATALOG.find(b => b.id === kind)!
-  for (let gap = 2; gap <= 4; gap++) for (let turn = 0; turn < 4; turn++) {
+  for (let gap = 2; gap <= maxGap; gap++) for (let turn = 0; turn < 4; turn++) {
     const rotation = ((rotationStart + turn) % 4) as 0 | 1 | 2 | 3
     const outward = rotateBuildingPoint(0, -1, rotation)
     const entry = { x: anchor.x + outward.x * gap, z: anchor.z + outward.z * gap }
@@ -97,12 +97,16 @@ function placeSource(map: GameMap, anchor: TilePos, kind: "well" | "watering-hol
 }
 
 /** Keep the well near the enclave, beside the final stretch approaching the chapel. */
-export function addFoundingWell(map: GameMap): void {
+export function addFoundingWell(map: GameMap, extendSearch = false): void {
   const branch = map.site?.branch ?? []
   const preferred = Math.max(0, branch.length - 10)
   const anchors = branch.map((p, i) => ({ p, score: Math.abs(i - preferred) }))
     .sort((a, b) => a.score - b.score)
   for (const { p } of anchors) if (placeSource(map, p, "well", FOUNDING_WELL_ID, "Enclave well")) return
+  // A central chapel can have a narrow approach between slopes. Look a little
+  // farther sideways for level ground, keeping the same short, dry access and
+  // footprint checks. Legacy worlds retain their original search extent.
+  if (extendSearch) for (const { p } of anchors) if (placeSource(map, p, "well", FOUNDING_WELL_ID, "Enclave well", 0, undefined, 8)) return
 }
 
 /** Seeded chance encounters, with spacing but no regular interval or guaranteed count. */

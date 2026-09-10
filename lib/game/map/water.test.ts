@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest"
 
 import { makeRng } from "../rng"
-import { makeTerrain, meanderLine } from "./water"
+import { generateWater, makeTerrain, meanderLine } from "./water"
 
 const SIZE = 128
+
+it("can keep lake footprints at a fixed tile scale without changing live defaults", () => {
+  const options = { width: 192, depth: 192, coverage: .2, riverCount: 0, lakeCount: 1, pondCount: 0 }
+  const ordinary = generateWater({ ...options, rng: makeRng(7919) })
+  expect(generateWater({ ...options, landmarkArea: 192 ** 2, rng: makeRng(7919) })).toEqual(ordinary)
+  const surrounding = generateWater({ ...options, width: 384, depth: 384, landmarkArea: 192 ** 2, rng: makeRng(7919) })
+  const count = (kind: Uint8Array) => kind.reduce((sum, value) => sum + Number(value !== 0), 0)
+  expect(count(surrounding.kind)).toBeGreaterThan(800)
+  expect(count(surrounding.kind)).toBeLessThan(1800)
+})
 
 /** A river for one seed, built the way generateWater builds them. */
 function river(seed: number) {

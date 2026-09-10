@@ -90,6 +90,9 @@ export interface DarkForest {
 }
 
 export interface GameMap {
+  /** Deterministic canopy style selected by the world seed. */
+  woodlandMethod?: "groves" | "cellular"
+  mainClearings?: TilePos[]
   /** New tracks serving wells and town buildings; these do not create marked crossroads. */
   buildingAccessTiles?: TilePos[]
   /** Reserved signpost sites where generated roads and destination tracks meet. */

@@ -132,7 +132,8 @@ describe("arrivalOdds", () => {
       const m = generateMap({ ...FLOOR, seed })
       const field = computeDangerField(m)
       roadOdds += arrivalOdds(field, m, m.road!, 0.35)
-      for (const track of m.shortcuts ?? []) {
+      for (const forest of m.darkForests ?? []) {
+        const track = { tiles: forest.approach }
         trackOdds += arrivalOdds(field, m, track.tiles, 0.35)
         knightTrackOdds += arrivalOdds(field, m, track.tiles, 0.85)
         tracks++

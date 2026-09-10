@@ -17,6 +17,17 @@ const minimal = () => ({
 })
 
 describe("game save schema", () => {
+  it("migrates existing saves without changing their terrain generator", () => {
+    const input = minimal()
+    const { generation: _generation, ...world } = input.world
+    const result = parseGameSave({ ...input, version: 1, world })
+    expect(result.error).toBeNull()
+    expect(result.save?.version).toBe(SAVE_VERSION)
+    expect(result.save?.world.generation).toBe(1)
+    expect(result.save?.settlement).toEqual(parseGameSave(input).save?.settlement)
+    expect(parseGameSave(input).save?.world.generation).toBe(2)
+  })
+
   it("accepts a well-formed document and fills elevation defaults", () => {
     const input = minimal()
     input.world.elevation = { maxHeight: 3 } as typeof input.world.elevation

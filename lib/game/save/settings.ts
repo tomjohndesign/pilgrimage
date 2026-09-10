@@ -29,6 +29,8 @@ import {
  * preference of this browser, kept across new maps and never put in the URL.
  */
 export interface WorldSettings {
+  /** Internal terrain version, retained when resuming older worlds. */
+  generation: number
   elevation: ElevationSettings
   /** Map edge length in tiles; maps are square. */
   size: number
@@ -83,6 +85,7 @@ export interface DisplaySettings extends SceneVisibility {
 export const WATER_COUNT_AUTO = -1
 
 export const DEFAULT_WORLD_SETTINGS: WorldSettings = {
+  generation: 2,
   elevation: DEFAULT_ELEVATION,
   size: DEFAULT_MAP_WIDTH,
   coverage: Math.round(DEFAULT_FOREST_COVERAGE * 100),

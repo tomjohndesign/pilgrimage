@@ -17,10 +17,26 @@ function straightTiles(from: number, to: number, width: number): number[] {
   return result
 }
 
+/** Keep the diagonal steps together, between long cardinal runs. The raster
+ * stays four-connected; the shared road geometry resolves each alternating
+ * pair into a continuous 45-degree stretch. Try elbows at either end as well
+ * as in the middle so obstacles can move a bend without adding tiny zigzags. */
+function elbowLines(from: number, to: number, width: number): number[][] {
+  const x = from % width, z = Math.floor(from / width)
+  const dx = to % width - x, dz = Math.floor(to / width) - z
+  const nx = Math.abs(dx), nz = Math.abs(dz), diagonal = Math.min(nx, nz)
+  const extra = Math.abs(nx - nz), sx = Math.sign(dx), sz = Math.sign(dz)
+  return [...new Set([Math.floor(extra / 2), 0, extra])].map(before => {
+    const ax = x + (nx > nz ? sx * before : 0), az = z + (nz > nx ? sz * before : 0)
+    const a = az * width + ax, b = (az + sz * diagonal) * width + ax + sx * diagonal
+    return [...straightTiles(from, a, width), ...straightTiles(a, b, width).slice(1), ...straightTiles(b, to, width).slice(1)]
+  })
+}
+
 /** Remove unexplained bends through open land before stamping the initial road.
  * Woods, water, bridges, buildings and cliff edges retain their original route.
  * Called separately between fixed waypoints so gameplay junctions stay anchored. */
-export function straightenRoad(map: GameMap, original: readonly number[], allowed: (x: number, z: number) => boolean = () => true): number[] {
+export function straightenRoad(map: GameMap, original: readonly number[], allowed: (x: number, z: number) => boolean = () => true, shape: "straight" | "elbows" = "straight"): number[] {
   let route = [...original]
   if (route.length < 3) return [...route]
   const occupied = new Set<number>()
@@ -62,6 +78,25 @@ export function straightenRoad(map: GameMap, original: readonly number[], allowe
   const result = [route[0]]
   for (let from = 0; from < route.length - 1;) {
     let best = from + 1, replacement = [route[from], route[best]]
+    if (shape === "elbows" && open(route[from])) {
+      // Search the longest open stretch first. Short local shortcuts recreate
+      // the shallow staircase we are trying to remove. Keep the old smoother
+      // below for legacy generation so saved worlds retain their roads.
+      let end = from + 1
+      while (end < route.length && end <= from + 128 && open(route[end])
+        && (end === from + 1 || !pinned.has(route[end - 1]))) end++
+      search: for (let to = end - 1; to > from + 1; to--) {
+        const old = route.slice(from, to + 1), maxClimb = climb(old) + (map.elevation?.settings.slopeCost ?? 1) * .1
+        const retained = new Set([...result.slice(0, -1), ...route.slice(to + 1)])
+        for (const line of elbowLines(route[from], route[to], map.width)) {
+          if (line.length > old.length || !line.every(open) || climb(line) > maxClimb || line.some(i => retained.has(i))) continue
+          best = to; replacement = line
+          break search
+        }
+      }
+      result.push(...replacement.slice(1)); from = best
+      continue
+    }
     if (open(route[from])) for (let to = from + 1; to < Math.min(route.length, from + 33); to++) {
       if (!open(route[to]) || (to > from + 1 && pinned.has(route[to - 1]))) break
       const line = straightTiles(route[from], route[to], map.width)

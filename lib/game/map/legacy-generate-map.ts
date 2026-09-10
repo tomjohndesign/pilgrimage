@@ -1,6 +1,4 @@
-import { expandReachable, nearestReachableLand } from "./connectivity"
-import { generateLegacyMap } from "./legacy-generate-map"
-import { DEFAULT_SETTINGS, PLAYABLE_SEED_REGION_SIZE, sampleWoodland, seedingMethodForSeed } from "./woodland"
+// Frozen generator for worlds saved before the woodland seeding update.
 import { routeBounds, ROUTE_EDGE_INSET } from "./route-bounds"
 import { createCrossroads } from "./crossroads"
 import { straightenRoad } from "./straighten-road"
@@ -18,12 +16,55 @@ import { isWoods, TERRAIN, type TerrainId } from "./terrain"
 import type { BuildingDef, FoundingSite, GameMap, Shortcut, TilePos, DarkForest } from "./types"
 import { generateWater, WATER_KIND_LAKE, WATER_KIND_RIVER } from "./water"
 
-/** Seed-selected wind-spread or cellular woodland, sampled at fixed tile scale.
- * Jagged ancient forests sit inside normal canopy, with large irregular hearts
- * and one narrow destination approach. Main clearings connect to the road;
- * rivers use bank-to-bank bridges and lakes remain barriers. Founding reserves
- * a church, shelter, dry gate path, and nearby ordinary lumber. Independent
- * random streams keep terrain and route tuning reproducible. */
+/**
+ * Seeded map generation. The world is dense forest by default: water (rivers,
+ * lakes, ponds) is laid down first, then the map grows as solid woods, open
+ * grass glades are carved out of it, small forest-floor clearings are
+ * scattered through it, and winding trails link everything together. One road
+ * runs from the west edge to the east edge along the path of least
+ * resistance: it bends through glades and clearings and, where it has to
+ * cross a belt of trees, picks the narrowest crossing it can find. The same
+ * seed always produces the identical map, so a seed number is a complete,
+ * shareable description of a world.
+ *
+ * Every world also comes founded: the monks' hovel already stands, with the
+ * relic inside, deep in the woods a long way off the road, and a beaten track
+ * branches from the road to its door. A completed monk shelter faces the gate path
+ * beside it; subsequent structures are built by residents. The game begins with the hovel
+ * because without it there is nothing for travelers to turn aside for.
+ *
+ * Two kinds of openness, on purpose:
+ *  - "grass" glades are true open land — buildable, the places to settle.
+ *  - "clearing" tiles are still forest in character (no trees drawn on them,
+ *    but not buildable) — the trails and small clearings that let units pass
+ *    through woods that would otherwise be a solid wall of trees.
+ *
+ * Water routes around everything else's guarantees rather than breaking them:
+ * lakes get sand beaches, rivers get point bars, and the road crosses rivers
+ * only on straight bridges of at most MAX_BRIDGE_SPAN tiles — never lakes.
+ * Bridges belong to the road alone. Trails are desire lines, not engineering:
+ * they never bridge, so a trail bound for the far bank runs down to the water
+ * and stops there, and some simply peter out in the woods or branch off to
+ * nowhere. The relic's track forks from the road on the hovel's own bank, so
+ * it too stays dry (a bridge is its last resort, never its habit). Glades and
+ * clearings are joined by a nearest-neighbour spanning tree, that network is
+ * tied into the road, and a final pass gives every pocket of passable land a
+ * trail to reachable ground when only forest lies between them — pockets with
+ * water in the way stay cut off, as rivers should.
+ *
+ * Dark forests are large ancient groves with open hearts and narrow approach
+ * tracks. One may intercept the road's direct line; the others seek secluded
+ * woodland. The road avoids their shade, retaining dangerous shortcuts where
+ * it makes a worthwhile detour. The central clearings remain empty for future
+ * encounters, with dry trails joining them to the reachable network.
+ *
+ * Forest, dark forest, trail, road, site, and water randomness come from
+ * separate streams derived from the seed, so tuning one part's knobs never
+ * moves the others' dice — tuning stays comparable across renders of the same
+ * seed. The road's *route* does react to the land, by design: it bends to
+ * meet the glades and to skirt the dark forest, but with the same forest it
+ * always rolls the same way.
+ */
 
 /** Worlds are big; nothing generates smaller than this on a side. */
 export const MIN_MAP_SIZE = 128
@@ -32,8 +73,6 @@ export const DEFAULT_MAP_WIDTH = 192
 export const DEFAULT_MAP_DEPTH = 192
 
 export interface GenerateMapOptions {
-  /** Saved-world compatibility; new worlds use generation 2. */
-  generation?: number
   elevation?: Partial<ElevationSettings>
   seed: number
   /** Clamped up to MIN_MAP_SIZE — 128×128 is the smallest world that generates. */
@@ -41,7 +80,7 @@ export interface GenerateMapOptions {
   depth?: number
   /** Fraction of the dry land left as forest after the glades are carved (0–1). */
   forestCoverage?: number
-  /** Open-glade density per reference 192×192 region. */
+  /** Number of open grass glades carved out of the forest. */
   gladeCount?: number
   /** Number of small forest-floor clearings scattered through the woods. */
   clearingCount?: number
@@ -58,20 +97,22 @@ export interface GenerateMapOptions {
   riverCount?: number
   lakeCount?: number
   pondCount?: number
-  /** Ancient grove density per reference 192×192 region. */
+  /** How many ancient groves to grow across the woods. */
   darkForestCount?: number
-  /** Size of each ancient grove as a fraction of a reference 192×192 region. */
+  /** Size of each dark forest as a fraction of the map. */
   darkForestShare?: number
 }
 
-export const DEFAULT_FOREST_COVERAGE = 0.4
-export const DEFAULT_GLADE_COUNT = 8
+export const DEFAULT_FOREST_COVERAGE = 0.6
+export const DEFAULT_GLADE_COUNT = 12
 export const DEFAULT_CLEARING_COUNT = 22
 export const DEFAULT_SPUR_COUNT = 8
 export const DEFAULT_WATER_COVERAGE = 0.1
-export const DEFAULT_DARK_FOREST_COUNT = 1
-export const DEFAULT_DARK_FOREST_SHARE = 0.09
+export const DEFAULT_DARK_FOREST_COUNT = 2
+export const DEFAULT_DARK_FOREST_SHARE = 0.035
 
+/** Chance a trail between two stops peters out in the woods before arriving. */
+const TRAIL_FADE_CHANCE = 0.2
 /** How far a spur aims from the trail it leaves, in tiles, before it fades. */
 const SPUR_REACH_MIN = 8
 const SPUR_REACH_MAX = 24
@@ -117,6 +158,29 @@ const BRIDGE_TILE_COST = 3
  * off by dark forest still gets a road through it.
  */
 export const DARK_ROAD_COST = 25
+
+/** Allow some existing forest-floor trails inside the wooded core. */
+const DARK_HEART_MIN_SHADE = 0.6
+/** Minimum distance between ancient grove centres, in both map axes. */
+const DARK_HEART_SPACING = 20
+/**
+ * Extend each rounded core north and south before organic growth. The wider
+ * stand encloses a clearing and gives roadside groves meaningful detours.
+ */
+const DARK_BAR_HALF = 10
+/** Reserve enough woodland around each clearing to leave a thick enclosing canopy. */
+const DARK_CORE_RADIUS = 7
+const DARK_OFF_ROAD_DISTANCE = 18
+/** Dark forest stays this many tiles clear of the west and east edges. */
+const DARK_EDGE_KEEP = 10
+/**
+ * …and of the north and south edges, so a bar never becomes a wall from the
+ * map's edge that the road can only pass on one side, far away.
+ */
+const DARK_EDGE_KEEP_Z = 8
+
+/** A track is only worth cutting if it's at most this fraction of the detour. */
+const TRACK_MAX_RATIO = 0.85
 
 // --- Founding site -----------------------------------------------------------
 
@@ -178,8 +242,7 @@ export const JUNCTION_CLEARING_RADIUS = 3
 /** Chance a tile on the exclusion zone's outer ring keeps its trees, ragging the rim. */
 const JUNCTION_CLEARING_RAGGED = 0.45
 
-export function generateMap(options: GenerateMapOptions): GameMap {
-  if (options.generation === 1) return generateLegacyMap(options)
+export function generateLegacyMap(options: GenerateMapOptions): GameMap {
   const {
     seed,
     forestCoverage = DEFAULT_FOREST_COVERAGE,
@@ -203,6 +266,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   const rngTrail = makeRng(seed ^ 0xc2b2ae35)
   const rngSite = makeRng(seed ^ 0x27d4eb2f)
   const rngWater = makeRng(seed ^ 0x94d049bb)
+  const rngDark = makeRng(seed ^ 0x165667b1)
 
   const tiles: TerrainId[] = new Array<TerrainId>(width * depth).fill("forest")
 
@@ -223,14 +287,15 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     riverCount: options.riverCount,
     lakeCount: options.lakeCount,
     pondCount: options.pondCount,
-    landmarkArea: Math.min(width * depth, DEFAULT_MAP_WIDTH * DEFAULT_MAP_DEPTH),
   })
   const { kind } = water
   const elevation = generateElevation(seed, width, depth, kind, options.elevation, water.flow)
   const waterInfo = drainWater(kind, water.depth, width, depth, elevation)
   taperRiverBanks(elevation, width, depth, kind, waterInfo, water.flow, seed)
+  let landCount = 0
   for (let i = 0; i < kind.length; i++) {
     if (kind[i] !== 0) tiles[i] = "water"
+    else landCount++
   }
 
   // --- Beaches ---------------------------------------------------------------
@@ -288,84 +353,63 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     }
   }
 
-  // Sample the same wind-spread/cellular canopy used by the map lab. Keep
-  // feature sizes in tiles; sampling a larger region adds stands and glades.
-  const woodlandMethod = seedingMethodForSeed(seed)
-  const woodland = sampleWoodland(woodlandMethod, { ...DEFAULT_SETTINGS, seed,
-    forest: forestCoverage * 100, clearings: gladeCount,
-    darkCount: darkForestCount, darkShare: darkForestShare * 100,
-    water: 0, rivers: 0, lakes: 0 }, width, depth, PLAYABLE_SEED_REGION_SIZE)
-  for (let i = 0; i < tiles.length; i++) if (!kind[i] && tiles[i] !== "sand") {
-    tiles[i] = woodland.darkMask[i] ? "darkwood" : woodland.tiles[i]
-  }
-  // Keep old growth inside a normal woodland belt beside actual shorelines.
-  // The outer map can crop normal groves, while road portals stay outside darkwood.
-  for (let z = 0; z < depth; z++) for (let x = 0; x < width; x++) {
-    const i = z * width + x
-    if (tiles[i] !== "darkwood") continue
-    // A cropped ancient stand still needs a normal-woodland border, but a
-    // straight inset would turn its silhouette into a conspicuous square.
-    const edgeBelt = 12 + Math.round(2 * Math.sin(x / 3 + seed) + 2 * Math.sin(z / 4 - seed))
-    let rim = Math.min(x, z, width - 1 - x, depth - 1 - z) < edgeBelt
-    for (let dz = -5; dz <= 5 && !rim; dz++) for (let dx = -5; dx <= 5; dx++) {
-      const nx = x + dx, nz = z + dz
-      if (nx >= 0 && nz >= 0 && nx < width && nz < depth && kind[nz * width + nx]) { rim = true; break }
-    }
-    if (rim) tiles[i] = "forest"
-  }
-  const heartShapes = new Map<number, number[]>()
-  const darkHearts: number[] = []
-  const assignedDark = new Uint8Array(tiles.length)
-  for (const c of woodland.clearings.filter(c => c.kind === "heart")) {
-    const heart = c.z * width + c.x
-    if (tiles[heart] !== "darkwood" || assignedDark[heart]) continue
-    const shape = new Set(c.tiles.filter(i => {
-      const x = i % width, z = Math.floor(i / width)
-      for (let dz = -3; dz <= 3; dz++) for (let dx = -3; dx <= 3; dx++) {
-        const nx = x + dx, nz = z + dz
-        if (nx < 0 || nz < 0 || nx >= width || nz >= depth || tiles[nz * width + nx] !== "darkwood") return false
+  // --- Glades: grass carved out of the forest until the openness target ------
+  // Centres are picked best-of-k for distance from earlier glades, so the
+  // openness reads as separate glades in the woods instead of one merged plain.
+  const centers: Array<{ x: number; z: number }> = []
+  const pickGladeCenter = (): { x: number; z: number } => {
+    let best = { x: 0, z: 0 }
+    let bestScore = -1
+    for (let k = 0; k < 8; k++) {
+      const x = EDGE_MARGIN + Math.floor(rngForest() * (width - EDGE_MARGIN * 2))
+      const z = EDGE_MARGIN + Math.floor(rngForest() * (depth - EDGE_MARGIN * 2))
+      let score = Infinity
+      for (const c of centers) score = Math.min(score, Math.abs(x - c.x) + Math.abs(z - c.z))
+      if (score > bestScore) {
+        bestScore = score
+        best = { x, z }
       }
-      return true
-    }))
-    if (!shape.has(heart)) continue
-    const clearing = [heart], seen = new Set(clearing)
-    for (let head = 0; head < clearing.length; head++) for (const [dx, dz] of ROUTE_DIRS) {
-      const i = clearing[head], n = i + dz * width + dx
-      if (shape.has(n) && !seen.has(n) && Number.isFinite(elevationStep(elevation, i, n))) { seen.add(n); clearing.push(n) }
     }
-    // A lake or cliff may erase this destination, but never leave a tiny round substitute.
-    if (clearing.length < 100) continue
-    const component = [heart]; assignedDark[heart] = 1
-    for (let head = 0; head < component.length; head++) for (const [dx, dz] of ROUTE_DIRS) {
-      const i = component[head], x = i % width + dx, z = Math.floor(i / width) + dz, n = z * width + x
-      if (x >= 0 && z >= 0 && x < width && z < depth && tiles[n] === "darkwood" && !assignedDark[n]) { assignedDark[n] = 1; component.push(n) }
-    }
-    heartShapes.set(heart, clearing); darkHearts.push(heart)
-  }
-  const centers: TilePos[] = []
-  for (const c of woodland.clearings.filter(c => c.kind === "main")) {
-    // The canopy study has no elevation. Its nominal centre can land on a
-    // one-tile cliff face, so anchor the live destination on the largest
-    // walkable part of that same clearing instead of stranding it on a ledge.
-    const remaining = new Set(c.tiles.filter(i => !kind[i] && tiles[i] === "grass"))
-    let largest: number[] = []
-    while (remaining.size) {
-      const patch = [remaining.values().next().value!]; remaining.delete(patch[0])
-      for (let head = 0; head < patch.length; head++) for (const [dx, dz] of ROUTE_DIRS) {
-        const i = patch[head], x = i % width + dx, z = Math.floor(i / width) + dz, n = z * width + x
-        if (x >= 0 && z >= 0 && x < width && z < depth && remaining.has(n) && Number.isFinite(elevationStep(elevation, i, n))) {
-          remaining.delete(n); patch.push(n)
-        }
-      }
-      if (patch.length > largest.length) largest = patch
-    }
-    if (!largest.length) continue
-    const anchor = largest.reduce((best, i) => Math.hypot(i % width - c.x, Math.floor(i / width) - c.z)
-      < Math.hypot(best % width - c.x, Math.floor(best / width) - c.z) ? i : best)
-    centers.push({ x: anchor % width, z: Math.floor(anchor / width) })
+    return best
   }
 
-  const mainClearings = centers.slice()
+  // Openness is budgeted against dry land, not the whole grid, so a watery
+  // seed stays as forest-dominant as a dry one.
+  const gladeBudget = Math.floor((1 - forestCoverage) * landCount)
+  let carved = 0
+  for (let g = 0; g < gladeCount; g++) {
+    // Split what's left of the budget across the remaining glades, with some
+    // variation so they differ in size — except the last glade, which takes the
+    // exact remainder so total openness stays honest even when the random
+    // factors all ran small.
+    const variation = g === gladeCount - 1 ? 1 : 0.6 + rngForest() * 0.8
+    const share = Math.round(((gladeBudget - carved) / (gladeCount - g)) * variation)
+    const blob = growBlob(tiles, width, depth, share, pickGladeCenter(), rngForest, "grass")
+    if (blob) {
+      centers.push(blob.center)
+      carved += blob.added
+    }
+  }
+
+  // Blob growth stalls against map edges, water, and earlier glades, so the
+  // planned glades can come up short. Top up with extra pockets until the
+  // openness budget is met — the cap keeps degenerate knob values terminating.
+  let topUps = 12
+  while (carved < gladeBudget && topUps-- > 0) {
+    const blob = growBlob(
+      tiles,
+      width,
+      depth,
+      gladeBudget - carved,
+      pickGladeCenter(),
+      rngForest,
+      "grass",
+    )
+    if (blob) {
+      centers.push(blob.center)
+      carved += blob.added
+    }
+  }
 
   // --- Small clearings: forest floor, passable but still woods ---------------
   for (let c = 0; c < clearingCount; c++) {
@@ -375,17 +419,26 @@ export function generateMap(options: GenerateMapOptions): GameMap {
       x: 1 + Math.floor(rngForest() * (width - 2)),
       z: 1 + Math.floor(rngForest() * (depth - 2)),
     }
-    if (tiles[center.z * width + center.x] !== "forest") continue
     const blob = growBlob(tiles, width, depth, size, center, rngForest, "clearing")
     if (blob) centers.push(blob.center)
   }
 
-  // --- Trails: dry links and optional woodland spurs -------------------------
-  // Full main-clearing connections are completed after the road establishes
-  // river crossings. Old growth is a wall until its single approach is carved.
+  // --- Trails: join every glade and clearing into one network ----------------
+  // Nearest-neighbour spanning tree over the centres, each edge routed with
+  // the wandering A* and carved as forest-floor clearing. Trails route around
+  // water but never over it — bridges are the road's alone. A trail whose far
+  // stop lies across a river is routed as if it could cross, then cut at the
+  // bank, so it runs down to the water and stops. Some trails also peter out
+  // in the woods short of where they were going.
+  //
+  // `passKind` is the water mask the road and the relic's track route on:
+  // every bridge they build is knocked out of it so a later route walks an
+  // existing bridge for free instead of building a duplicate one tile over.
+  // Trails route on `walkable` — `kind` itself, so to them a bridge is still
+  // water — and once the dark forests have grown, old growth joins water as a
+  // wall: a trail runs up to its edge and stops, never through it.
   const passKind = kind.slice()
   const walkable = kind.slice()
-  for (let i = 0; i < tiles.length; i++) if (tiles[i] === "darkwood") walkable[i] = WATER_KIND_LAKE
   const trailTiles: number[] = []
   const carveRoute = (route: number[]): void => {
     for (const i of route) {
@@ -437,7 +490,11 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     }
     const next = pending[bestPending]
     pending.splice(bestPending, 1)
-    carveTrail(trailStops[next], trailStops[bestConnected])
+    // Both rolls are always drawn so the fade chance never shifts the stream.
+    const fadeRoll = rngTrail()
+    const lengthRoll = rngTrail()
+    const keep = fadeRoll < TRAIL_FADE_CHANCE ? 0.4 + lengthRoll * 0.4 : 1
+    carveTrail(trailStops[next], trailStops[bestConnected], keep)
     connected.push(next)
   }
 
@@ -461,36 +518,22 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     if (to) carveTrail({ x: fx, z: fz }, to, keep)
   }
 
-  // --- Road endpoints and terrain costs --------------------------------------
+  // --- Dark forests: roadside obstacles and secluded woodland destinations ----
   const entryZ = snapEdgeZ(entryRoll, 0, roadLand, width, depth, elevation)
   const exitZ = snapEdgeZ(exitRoll, width - 1, roadLand, width, depth, elevation)
   const start = { x: 0, z: entryZ }
   const goal = { x: width - 1, z: exitZ }
   // Water-aware, with the same fallbacks for every segment of road.
-  const routeRoad = (a: TilePos, b: TilePos, wander: Float64Array): number[] => {
-    const around = routeOverLand(a, b, width, depth, wander, walkable, walkable, MAX_BRIDGE_SPAN, elevation)
-    if (around) return around
-    const route = routeOverLand(a, b, width, depth, wander, kind, passKind, MAX_BRIDGE_SPAN, elevation) ??
-      routeOverLand(a, b, width, depth, wander, kind, passKind, Infinity, elevation) ??
-      routeBlind(a, b, width, depth, wander, elevation, routeBounds(a, b, width, depth))
-    // If an ancient stand seals the only legal river pass, it remains ordinary
-    // woodland in this world. Never cut a through-road into its dark heart.
-    const removed = new Set<number>()
-    for (const start of route) if (tiles[start] === "darkwood" && !removed.has(start)) {
-      const queue = [start]; removed.add(start)
-      for (let head = 0; head < queue.length; head++) for (const [dx, dz] of ROUTE_DIRS) {
-        const i = queue[head], x = i % width + dx, z = Math.floor(i / width) + dz, n = z * width + x
-        if (x >= 0 && z >= 0 && x < width && z < depth && tiles[n] === "darkwood" && !removed.has(n)) { removed.add(n); queue.push(n) }
-      }
-    }
-    for (const i of removed) { tiles[i] = "forest"; walkable[i] = kind[i] }
-    return route
-  }
+  const routeRoad = (a: TilePos, b: TilePos, wander: Float64Array): number[] =>
+    routeOverLand(a, b, width, depth, wander, kind, passKind, MAX_BRIDGE_SPAN, elevation) ??
+    routeOverLand(a, b, width, depth, wander, kind, passKind, Infinity, elevation) ??
+    routeBlind(a, b, width, depth, wander, elevation, routeBounds(a, b, width, depth))
   // The road seeks the path of least resistance: on top of its random wander,
   // every step pays for the ground it crosses (see ROAD_FOREST_COST), so the
   // route bends through glades, borrows clearings and trails to get across
   // the woods, and crosses solid forest where the belt is thinnest. The
-  // access tracks use the same terrain cost when approaching an ancient heart.
+  // provisional road pays the same, locating a potential roadside grove and
+  // measuring how secluded the other woodland destinations are.
   const vergeShade = computeForestShade({ width, depth, tiles, buildings: [] }, 2)
   const groundCost = (i: number): number => {
     const t = tiles[i]
@@ -501,17 +544,91 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   }
   const groundWander = new Float64Array(roadWander)
   for (let i = 0; i < groundWander.length; i++) groundWander[i] += groundCost(i)
+  const provisional = routeRoad(start, goal, groundWander)
 
 
-  // Keep the road outside old growth and prefer open land beyond its canopy.
-  routeRoad(start, goal, groundWander) // Resolve any blocked river pass before reserving ancient floor.
+  const darkHearts: number[] = []
+  if (darkForestCount > 0 && darkForestShare > 0) {
+    const shade = computeForestShade({ width, depth, tiles, buildings: [] })
+    const inHeartland = (i: number) => {
+      const x = i % width
+      const z = Math.floor(i / width)
+      return (
+        x >= DARK_EDGE_KEEP &&
+        x < width - DARK_EDGE_KEEP &&
+        z >= DARK_EDGE_KEEP_Z &&
+        z < depth - DARK_EDGE_KEEP_Z
+      )
+    }
+    const canEnter = (i: number) =>
+      inHeartland(i) &&
+      (tiles[i] === "forest" || tiles[i] === "darkwood" || tiles[i] === "clearing")
+    // How far a bar could extend from this tile before hitting open land.
+    const room = (i: number, dz: number) => {
+      let run = 0
+      let z = Math.floor(i / width) + dz
+      while (z >= 0 && z < depth && run < DARK_BAR_HALF && canEnter(z * width + (i % width))) {
+        run++
+        z += dz
+      }
+      return run
+    }
+    // A grove needs a whole wooded core, including a walkable central floor.
+    // Reject shoreline slivers and cliff faces rather than carving them away.
+    const roadDistance = landDistanceField(provisional, kind, width, depth, elevation)
+    const coreFits = (i: number) => {
+      const x = i % width, z = Math.floor(i / width)
+      for (let dz = -DARK_CORE_RADIUS; dz <= DARK_CORE_RADIUS; dz++) {
+        for (let dx = -DARK_CORE_RADIUS; dx <= DARK_CORE_RADIUS; dx++) {
+          if (dx * dx + dz * dz > DARK_CORE_RADIUS ** 2) continue
+          const n = (z + dz) * width + x + dx
+          if (!canEnter(n)) return false
+          if (Math.abs(dx) <= 4 && Math.abs(dz) <= 4) {
+            if (!Number.isFinite(elevationStep(elevation, n, n + 1)) ||
+                !Number.isFinite(elevationStep(elevation, n, n + width))) return false
+          }
+        }
+      }
+      return true
+    }
+    const candidates = tiles.flatMap((_, i) =>
+      canEnter(i) && shade[i] >= DARK_HEART_MIN_SHADE && roadDistance.dist[i] >= 0 && coreFits(i) ? [i] : [])
+    const onRoad = new Set(provisional)
+    const target = Math.round(darkForestShare * width * depth)
+    const spacing = Math.max(DARK_HEART_SPACING, Math.sqrt(target) * 1.6)
+    for (let d = 0; d < darkForestCount; d++) {
+      const spaced = candidates.filter(i => tiles[i] !== "darkwood" && darkHearts.every(h =>
+        Math.hypot(h % width - i % width, Math.floor(h / width) - Math.floor(i / width)) >= spacing))
+      // Retain a roadside grove when room permits; all remaining hearts seek
+      // woodland well away from the direct route, including north/south of it.
+      const preferred = spaced.filter(i => d === 0 ? onRoad.has(i) : roadDistance.dist[i] >= DARK_OFF_ROAD_DISTANCE)
+      const pool = preferred.length ? preferred : spaced
+      if (!pool.length) break
+      let best = pool[0], bestScore = -Infinity
+      for (let k = 0; k < 24; k++) {
+        const i = pool[Math.floor(rngDark() * pool.length)]
+        const score = Math.min(room(i, 1), room(i, -1)) + shade[i]
+        if (score > bestScore) { bestScore = score; best = i }
+      }
+      darkHearts.push(best)
+      growDarkForest(tiles, width, depth, best, target, rngDark, canEnter)
+    }
+  }
+
+  // Everything routed from here on pays to enter dark forest — the road
+  // detours; the road-tie, the relic's branch, and the repair trails skirt —
+  // but nothing is ever impassable. The surcharge is feathered by the
+  // dark-shade field so it also covers the clearings and trails threading the
+  // old growth: without that, the road would happily ride a one-tile game
+  // trail straight through the middle.
   const darkForestFloor = tiles.flatMap((terrain, i) => terrain === "darkwood" ? [i] : [])
   const darkShade = computeDarkShade({ width, depth, tiles, buildings: [] })
   const darkPenalty = (i: number) =>
     tiles[i] === "darkwood" ? DARK_ROAD_COST : DARK_ROAD_COST * darkShade[i]
   const roadCost = new Float64Array(width * depth)
   for (let i = 0; i < roadCost.length; i++) {
-    // Prefer economical lines through open ground.
+    // The provisional line locates forest crossings; the finished road should
+    // already take an economical line rather than invite walkers to straighten it.
     roadCost[i] = roadWander[i] * .175 + groundCost(i) + darkPenalty(i)
     trailWander[i] += darkPenalty(i)
     // Trails, unlike the road, never enter old growth at all.
@@ -519,9 +636,11 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   }
 
   // --- Road: west edge to east edge ------------------------------------------
-  // Route the whole road together, then straighten open stretches.
+  // Route the whole road together. Pinning it to the provisional forest exits
+  // can force a return around a grove after the road has already cleared it,
+  // followed by a cutback toward the destination through the same open glade.
   const roadRoute = straightenRoad({ width, depth, tiles, buildings: [], elevation },
-    routeRoad(start, goal, roadCost), routeBounds(start, goal, width, depth), "elbows")
+    routeRoad(start, goal, roadCost), routeBounds(start, goal, width, depth))
 
   // Road simplification must not leave an out-and-back spur on the main road.
   // Founding and shortcuts receive indices only after this walk is simplified.
@@ -557,8 +676,66 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   }
   gradeCrossings()
 
-  // Ancient hearts have one destination approach; they are never through shortcuts.
+  // --- Tracks: the short way through each dark forest ------------------------
+  // Kept only if it really is a shortcut and really runs through old growth —
+  // a road that barely bent around a sliver earns no track. "Through" means
+  // the line runs on or right beside dark trees: the direct route seeks the
+  // path of least resistance, so in deep woods it is usually riding a game
+  // trail, and a game trail through the heart of the old growth is exactly
+  // the dangerous short way this is meant to be. Bridges are the road's
+  // alone: a direct line with open water under it is re-routed dry between
+  // the same two road tiles (the road's own bridges are fine to ride), and if
+  // no dry way through the old growth is short enough, that forest simply
+  // gets no track.
+  const touchesDark = (i: number): boolean => {
+    if (tiles[i] === "darkwood") return true
+    const x = i % width
+    const z = Math.floor(i / width)
+    for (const [dx, dz] of ROUTE_DIRS) {
+      const nx = x + dx
+      const nz = z + dz
+      if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
+      if (tiles[nz * width + nx] === "darkwood") return true
+    }
+    return false
+  }
   const shortcuts: Shortcut[] = []
+  // Attach dangerous alternatives where the provisional line actually meets
+  // the finished road on dry land; never create a turn off a bridge deck.
+  const joins = provisional.flatMap((tile, index) => roadIndex[tile] >= 0 && kind[tile] === 0 ? [index] : [])
+  for (let j = 1; j < joins.length; j++) {
+    const a = joins[j - 1], b = joins[j]
+    const entry = roadIndex[provisional[a]]
+    const exit = roadIndex[provisional[b]]
+    if (entry < 0 || exit <= entry) continue
+    const maxLength = (exit - entry + 1) * TRACK_MAX_RATIO
+    const route = provisional.slice(a, b + 1)
+    if (route.length > maxLength || !route.some(touchesDark)) continue
+    let track = route
+    if (track.some((i) => tiles[i] === "water")) {
+      const dry = routeOverLand(
+        { x: track[0] % width, z: Math.floor(track[0] / width) },
+        { x: track[track.length - 1] % width, z: Math.floor(track[track.length - 1] / width) },
+        width,
+        depth,
+        groundWander,
+        kind,
+        passKind,
+        0,
+        elevation,
+      )
+      if (!dry || dry.length > maxLength || !dry.some(touchesDark)) continue
+      track = dry
+    }
+    for (const i of track) {
+      if (tiles[i] !== "path" && tiles[i] !== "bridge") tiles[i] = "track"
+    }
+    shortcuts.push({
+      entry,
+      exit,
+      tiles: track.map((i) => ({ x: i % width, z: Math.floor(i / width) })),
+    })
+  }
 
   // --- Tie the trail network into the road -----------------------------------
   // One trail from the road's nearest centre keeps the network joined to the
@@ -590,73 +767,14 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     relicDistance,
     trailWander,
     rngSite,
-    walkable,
-    Uint8Array.from(walkable, (v, i) => tiles[i] === "bridge" ? 0 : v),
+    kind,
+    passKind,
     roadLand,
     elevation,
     shortcuts,
   )
 
   gradeCrossings()
-
-  // Main clearings are destinations: finish their connections across rivers
-  // with the same bank-to-bank bridge rules as the road. Optional spurs still fade.
-  const connectedClearings = reachableFrom(tiles, roadTiles, width, depth, elevation)
-  for (const center of centers) {
-    const index = center.z * width + center.x
-    if (connectedClearings[index]) continue
-    const pass = Uint8Array.from(walkable, (v, i) => tiles[i] === "bridge" ? 0 : v)
-    const sources = roadTiles.filter(i => !kind[i]).sort((a, b) =>
-      Math.abs(a % width - center.x) + Math.abs(Math.floor(a / width) - center.z)
-      - Math.abs(b % width - center.x) - Math.abs(Math.floor(b / width) - center.z))
-    connectClearing: for (const keepInset of [true, false]) for (const target of sources.filter((_, i) => i % 12 === 0)) {
-      const to = { x: target % width, z: Math.floor(target / width) }
-      // Cropped clearings can sit near the boundary. Their local footpaths
-      // may use that ground when no inland connection fits.
-      const route = routeOverLand(center, to, width, depth, trailWander, walkable, pass, MAX_BRIDGE_SPAN, elevation, keepInset)
-      if (!route) continue
-      const crossing = straightenRoad({ width, depth, tiles, buildings: [hovel, shelter], elevation }, route, routeBounds(center, to, width, depth), "elbows")
-      for (const [step, i] of crossing.entries()) {
-        if (kind[i]) { tiles[i] = "bridge"; passKind[i] = 0 }
-        else if (crossing.slice(Math.max(0, step - 2), step + 3).some(n => kind[n]) && tiles[i] !== "path") tiles[i] = "track"
-        else if (tiles[i] === "forest") tiles[i] = "clearing"
-      }
-      expandReachable(tiles, crossing, connectedClearings, width, depth, elevation)
-      break connectClearing
-    }
-  }
-  gradeCrossings()
-
-  // Reserve ordinary lumber near the founding church, without occupying its
-  // foundation, gate, paths, shoreline, or the neighboring shelter. Prefer
-  // existing canopy; a sparse start gets branching saplings at the meadow edge.
-  const lumberCandidates: number[] = []
-  const protectedSite = (x: number, z: number) => [hovel, shelter].some(b =>
-    x >= b.x - 2 && x < b.x + b.w + 2 && z >= b.z - 2 && z < b.z + b.d + 2)
-  const cx = hovel.x + Math.floor(hovel.w / 2), cz = hovel.z + Math.floor(hovel.d / 2)
-  let nearbyTrees = 0
-  for (let z = Math.max(1, cz - 12); z <= Math.min(depth - 2, cz + 12); z++) for (let x = Math.max(1, cx - 12); x <= Math.min(width - 2, cx + 12); x++) {
-    const i = z * width + x
-    if (protectedSite(x, z) || Math.hypot(x - cx, z - cz) > 12) continue
-    if (tiles[i] === "forest") nearbyTrees++
-    else if (tiles[i] === "grass" && !kind[i] && !centers.some(c => c.x === x && c.z === z)
-      && ROUTE_DIRS.every(([dx, dz]) => Number.isFinite(elevationStep(elevation, i, i + dz * width + dx)))) lumberCandidates.push(i)
-  }
-  while (nearbyTrees < 24 && lumberCandidates.length) {
-    lumberCandidates.sort((a, b) => {
-      const score = (i: number) => Math.hypot(i % width - cx, Math.floor(i / width) - cz)
-        - ROUTE_DIRS.filter(([dx, dz]) => tiles[i + dz * width + dx] === "forest").length * 3
-        + trailWander[i]
-      return score(a) - score(b) || a - b
-    })
-    tiles[lumberCandidates.shift()!] = "forest"; nearbyTrees++
-  }
-
-  const startingLumber = new Set<number>()
-  for (let z = Math.max(1, cz - 12); z <= Math.min(depth - 2, cz + 12); z++) for (let x = Math.max(1, cx - 12); x <= Math.min(width - 2, cx + 12); x++) {
-    const i = z * width + x
-    if (tiles[i] === "forest" && !protectedSite(x, z) && Math.hypot(x - cx, z - cz) <= 12) startingLumber.add(i)
-  }
 
   // --- Join same-bank pockets to the network ---------------------------------
   // Rivers, lakes, and dark forests divide the world, and trails cross none of
@@ -665,11 +783,11 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   // reachable ground should not sit walled off by plain forest alone: each
   // such pocket gets a trail to the nearest reachable tile. Pockets with water
   // or old growth between them and everything reachable are left as they are.
-  const reached = reachableFrom(tiles, roadTiles, width, depth, elevation)
+  let reached = reachableFrom(tiles, roadTiles, width, depth, elevation)
   const settled = new Uint8Array(tiles.length)
-  // Repairs only add reachable tiles, so earlier indices never need another scan.
-  for (let orphan = 0; orphan < tiles.length; orphan++) {
-    if (!TERRAIN[tiles[orphan]].passable || reached[orphan] || settled[orphan]) continue
+  for (let repair = 0; repair < tiles.length; repair++) {
+    const orphan = tiles.findIndex((t, i) => TERRAIN[t].passable && !reached[i] && !settled[i])
+    if (orphan === -1) break
     const pocket = passableComponent(tiles, orphan, width, depth, elevation)
     for (const i of pocket) settled[i] = 1
     const link = nearestReachedByLand(pocket, reached, tiles, walkable, width, depth, elevation)
@@ -688,7 +806,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     )
     if (!route) continue
     carveRoute(route)
-    expandReachable(tiles, route, reached, width, depth, elevation)
+    reached = reachableFrom(tiles, roadTiles, width, depth, elevation)
   }
 
   // --- Open the ancient hearts and cut their woodland approaches ------------
@@ -696,53 +814,41 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   // without adding them to `shortcuts` or spawning encounter contents.
   const darkForests: DarkForest[] = []
   const approachWalls = kind.slice()
-  for (const i of startingLumber) approachWalls[i] = WATER_KIND_LAKE
   for (const building of [hovel, shelter]) {
     for (let z = Math.max(0, building.z - 1); z <= Math.min(depth - 1, building.z + building.d); z++)
       for (let x = Math.max(0, building.x - 1); x <= Math.min(width - 1, building.x + building.w); x++) approachWalls[z * width + x] = WATER_KIND_LAKE
   }
   const toPos = (i: number): TilePos => ({ x: i % width, z: Math.floor(i / width) })
   for (const heart of darkHearts) {
-    if (tiles[heart] !== "darkwood") continue
     const center = toPos(heart)
-    const clearing = heartShapes.get(heart)!
-    // Route through one boundary gate. The outside leg treats all old growth
-    // as a wall; the inside leg cannot leave this component, so a jagged bay
-    // can never turn the approach into two separate entrances.
-    const own = new Uint8Array(tiles.length), component = [heart]; own[heart] = 1
-    for (let head = 0; head < component.length; head++) for (const [dx, dz] of ROUTE_DIRS) {
-      const i = component[head], x = i % width + dx, z = Math.floor(i / width) + dz, n = z * width + x
-      if (x >= 0 && z >= 0 && x < width && z < depth && tiles[n] === "darkwood" && !own[n]) { own[n] = 1; component.push(n) }
+    const clearing: number[] = []
+    const radiusX = 3.5 + rngDark() * 0.7, radiusZ = 3.3 + rngDark() * 0.7
+    for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) {
+      if ((dx / radiusX) ** 2 + (dz / radiusZ) ** 2 > 1) continue
+      const i = (center.z + dz) * width + center.x + dx
+      if (approachWalls[i] !== 0) continue
+      clearing.push(i)
     }
-    const outside = approachWalls.slice(), sources: number[] = []
-    for (let i = 0; i < tiles.length; i++) {
-      if (tiles[i] === "darkwood") outside[i] = WATER_KIND_LAKE
-      if (reached[i] && outside[i] === 0) sources.push(i)
-    }
-    const network = landDistanceField(sources, outside, width, depth, elevation)
-    const gates: { inside: number; outside: number; score: number }[] = []
-    for (const i of component) for (const [dx, dz] of ROUTE_DIRS) {
-      const x = i % width + dx, z = Math.floor(i / width) + dz, n = z * width + x
-      if (x < 0 || z < 0 || x >= width || z >= depth || own[n] || outside[n] || network.dist[n] < 0 || !Number.isFinite(elevationStep(elevation, i, n))) continue
-      gates.push({ inside: i, outside: n, score: network.dist[n] + Math.abs(x - center.x) + Math.abs(z - center.z) })
-    }
-    gates.sort((a, b) => a.score - b.score || a.inside - b.inside)
-    const inside = new Uint8Array(tiles.length).fill(WATER_KIND_LAKE)
-    for (const i of component) if (!approachWalls[i]) inside[i] = 0
-    let approach: number[] | null = null
-    for (const gate of gates) {
-      const inner = routeOverLand(toPos(gate.inside), center, width, depth, groundWander, inside, inside, 0, elevation)
-      if (!inner) continue
-      const outer = routeOverLand(toPos(network.origin[gate.outside]), toPos(gate.outside), width, depth, groundWander, outside, outside, 0, elevation)
-      if (!outer) continue
-      approach = [...outer, ...inner]; break
-    }
+    reached = reachableFrom(tiles, roadTiles, width, depth, elevation)
+    const sources = Array.from(reached.keys()).filter(i => reached[i] && approachWalls[i] === 0 && darkShade[i] < 0.1)
+    const network = landDistanceField(sources, approachWalls, width, depth, elevation)
+    const entry = network.origin[heart]
+    if (entry < 0 || !clearing.includes(heart)) continue
+    const approach = routeOverLand(toPos(entry), center, width, depth, groundWander,
+      approachWalls, approachWalls, 0, elevation)
     if (!approach) continue
     for (const i of approach) {
       if (tiles[i] !== "path" && tiles[i] !== "bridge") tiles[i] = "track"
+      // A forest-floor shoulder keeps overhanging crowns from hiding the
+      // narrow dirt line. Leave water, buildings and existing surfaces intact.
+      for (const [dx, dz] of ROUTE_DIRS) {
+        const x = i % width + dx, z = Math.floor(i / width) + dz
+        if (x < 0 || z < 0 || x >= width || z >= depth) continue
+        const n = z * width + x
+        if (approachWalls[n] === 0 && isWoods(tiles[n]) && Number.isFinite(elevationStep(elevation, i, n))) tiles[n] = "clearing"
+      }
     }
     for (const i of clearing) if (isWoods(tiles[i])) tiles[i] = "clearing"
-    expandReachable(tiles, [...approach, ...clearing], reached, width, depth, elevation)
     darkForests.push({ center, clearing: clearing.map(toPos), approach: approach.map(toPos) })
   }
 
@@ -757,8 +863,6 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     tiles,
     buildings: [hovel, shelter],
     seed,
-    woodlandMethod,
-    mainClearings,
     road,
     shortcuts,
     darkForests,
@@ -773,7 +877,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   // Bridge grading and founding can raise a formerly low beach; classify sand last.
   const sandy = beachAccess(map.elevation!, width, depth, kind, waterInfo)
   for (let i = 0; i < tiles.length; i++) if (tiles[i] === "sand" && !sandy[i]) tiles[i] = "grass"
-  addFoundingWell(map, true)
+  addFoundingWell(map)
   addPathSprings(map)
   addRoadsideTowns(map)
   createCrossroads(map)
@@ -824,8 +928,8 @@ function landDistanceField(
 /**
  * Choose where the relic lives and cut the way to it.
  *
- * The site is scored over every possible hovel origin: prefer the central
- * area and then the requested road-distance band, and among those it
+ * The site is scored over every possible hovel origin: it must sit within the
+ * road-distance band (or as near to it as the map allows), and among those it
  * prefers open grass around it — room for the settlement to grow — with a
  * seeded jitter so the pick varies between worlds that look alike. Water
  * rules it out entirely: the footprint and ring must be dry land on the main
@@ -916,7 +1020,7 @@ function foundSite(
           const inFootprint = dx >= 0 && dx < HOVEL_WIDTH && dz >= 0 && dz < HOVEL_DEPTH
           // Footprint and ring must be dry, reachable land — no water, no
           // bridges, no lake-locked pockets.
-          if (roadLand[i] !== 1 || tiles[i] === "darkwood") grounded = false
+          if (roadLand[i] !== 1) grounded = false
           if (inFootprint && reservedTracks.has(i)) overlapsShortcut = true
           low = Math.min(low, elevation.height[i]); high = Math.max(high, elevation.height[i])
           if (inFootprint) {
@@ -941,8 +1045,8 @@ function foundSite(
       const siteJitter = rng() * SITE_SCORE_JITTER
       if (overlapsShortcut) continue
 
-      // Prefer the road-distance band within the central settlement area.
-      // A distant edge glade must not win just because its road gap is exact.
+      // Outside the band, every step of shortfall or excess costs more than any
+      // amount of open ground can buy back — in-band sites always win if any exist.
       const bandPenalty =
         nearest < bandMin ? (bandMin - nearest) * 50 : nearest > bandMax ? (nearest - bandMax) * 50 : 0
       // Needing a bridge outweighs any band shortfall a dry site could have.
@@ -963,10 +1067,8 @@ function foundSite(
 
       const edgeDist = Math.min(x, z, width - HOVEL_WIDTH - x, depth - HOVEL_DEPTH - z)
       const edgePenalty = Math.max(0, SITE_EDGE_MARGIN - edgeDist) * SITE_EDGE_PENALTY
-      const dx = Math.abs(x + HOVEL_WIDTH / 2 - width / 2), dz = Math.abs(z + HOVEL_DEPTH / 2 - depth / 2)
-      const centerPenalty = Math.max(0, dx - width * .2, dz - depth * .2) * 500 + Math.hypot(dx, dz) * 2
 
-      const score = room - bandPenalty - bridgePenalty - edgePenalty - centerPenalty + siteJitter
+      const score = room - bandPenalty - bridgePenalty - edgePenalty + siteJitter
       if (score > bestScore) {
         bestScore = score
         best = { x, z }
@@ -1069,15 +1171,12 @@ function foundSite(
   // itself); then the road merely avoided; a bridge only when no dry way
   // exists at all; and blind as a last resort.
   offRoad[road[junction].z * width + road[junction].x] = 0
-  const rawBranch =
+  const branchRoute =
     routeOverLand(road[junction], door, width, depth, branchWander, offRoad, offRoad, 0, elevation) ??
     routeOverLand(road[junction], door, width, depth, branchWander, kind, passKind, 0, elevation) ??
     routeOverLand(road[junction], door, width, depth, branchWander, kind, passKind, MAX_BRIDGE_SPAN, elevation) ??
     routeOverLand(road[junction], door, width, depth, branchWander, kind, passKind, Infinity, elevation) ??
     routeBlind(road[junction], door, width, depth, branchWander, elevation, routeBounds(road[junction], door, width, depth))
-  const branchRoute = straightenRoad({ width, depth, tiles, buildings: [shelter,
-    { ...shelter, x: best.x, z: best.z, w: HOVEL_WIDTH, d: HOVEL_DEPTH }], elevation }, rawBranch,
-    (x, z) => !onRoad[z * width + x] || (x === road[junction].x && z === road[junction].z), "elbows")
   const branch: TilePos[] = []
   for (const i of branchRoute) {
     if (tiles[i] === "water") {
@@ -1162,7 +1261,7 @@ function clearJunction(
       if (distance > r) continue
       if (distance > r - 1 && rng() < JUNCTION_CLEARING_RAGGED) continue
       const i = z * width + x
-      if (tiles[i] === "forest") tiles[i] = "clearing"
+      if (isWoods(tiles[i])) tiles[i] = "clearing"
     }
   }
 }
@@ -1217,6 +1316,63 @@ function growBlob(
   return { center: { x: cx, z: cz }, added }
 }
 
+/**
+ * Grow a full wooded core around the future clearing, extend a north/south
+ * spine, then spread organically until `target` tiles are old growth. Only
+ * forest converts; existing trails survive and growth respects glades/water.
+ */
+function growDarkForest(
+  tiles: TerrainId[],
+  width: number,
+  depth: number,
+  heart: number,
+  target: number,
+  rng: () => number,
+  canEnter: (i: number) => boolean,
+): void {
+  let painted = 0
+  const blob: number[] = []
+  const inBlob = new Set<number>()
+  const add = (i: number) => {
+    inBlob.add(i)
+    blob.push(i)
+    if (tiles[i] === "forest") {
+      tiles[i] = "darkwood"
+      painted++
+    }
+  }
+
+  add(heart)
+  const hx = heart % width
+  const hz = Math.floor(heart / width)
+  for (let dz = -DARK_CORE_RADIUS; dz <= DARK_CORE_RADIUS; dz++) {
+    for (let dx = -DARK_CORE_RADIUS; dx <= DARK_CORE_RADIUS; dx++) {
+      if (dx * dx + dz * dz > DARK_CORE_RADIUS ** 2) continue
+      const i = (hz + dz) * width + hx + dx
+      if (!inBlob.has(i) && canEnter(i)) add(i)
+    }
+  }
+  for (const dz of [1, -1]) {
+    for (let k = 1; k <= DARK_BAR_HALF; k++) {
+      const z = hz + dz * k
+      if (z < 0 || z >= depth || !canEnter(z * width + hx)) break
+      if (!inBlob.has(z * width + hx)) add(z * width + hx)
+    }
+  }
+
+  let attempts = target * 40
+  while (painted < target && attempts-- > 0) {
+    const from = blob[Math.floor(rng() * blob.length)]
+    const [dx, dz] = ROUTE_DIRS[Math.floor(rng() * 4)]
+    const nx = (from % width) + dx
+    const nz = Math.floor(from / width) + dz
+    if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
+    const n = nz * width + nx
+    if (inBlob.has(n) || !canEnter(n)) continue
+    add(n)
+  }
+}
+
 /** Mask of every passable tile reachable from the road over passable tiles. */
 function reachableFrom(
   tiles: TerrainId[],
@@ -1226,8 +1382,28 @@ function reachableFrom(
   elevation: ElevationInfo,
 ): Uint8Array {
   const seen = new Uint8Array(tiles.length)
-  for (const i of roadTiles) if (TERRAIN[tiles[i]].passable) seen[i] = 1
-  expandReachable(tiles, roadTiles, seen, width, depth, elevation)
+  const queue: number[] = []
+  for (const i of roadTiles) {
+    if (!seen[i] && TERRAIN[tiles[i]].passable) {
+      seen[i] = 1
+      queue.push(i)
+    }
+  }
+  for (let q = 0; q < queue.length; q++) {
+    const x = queue[q] % width
+    const z = Math.floor(queue[q] / width)
+    for (const [dx, dz] of ROUTE_DIRS) {
+      const nx = x + dx
+      const nz = z + dz
+      if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
+      const n = nz * width + nx
+      if (tiles[queue[q]] !== "bridge" && tiles[n] !== "bridge" && !Number.isFinite(elevationStep(elevation, queue[q], n))) continue
+      if (!seen[n] && TERRAIN[tiles[n]].passable) {
+        seen[n] = 1
+        queue.push(n)
+      }
+    }
+  }
   return seen
 }
 
@@ -1275,7 +1451,13 @@ function nearestReachedByLand(
   depth: number,
   elevation: ElevationInfo,
 ): { from: number; to: number } | null {
-  return nearestReachableLand(pocket, reached, tiles, walls, width, depth, elevation)
+  const { dist, origin } = landDistanceField(pocket, walls, width, depth, elevation)
+  let best = -1
+  for (let i = 0; i < dist.length; i++) {
+    if (dist[i] === -1 || !reached[i] || !TERRAIN[tiles[i]].passable) continue
+    if (best === -1 || dist[i] < dist[best]) best = i
+  }
+  return best === -1 ? null : { from: origin[best], to: best }
 }
 
 /**

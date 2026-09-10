@@ -26,7 +26,7 @@ import { DEFAULT_DISPLAY_SETTINGS, DEFAULT_WORLD_SETTINGS, WATER_COUNT_AUTO, typ
  * Bump SAVE_VERSION when the shape changes, and add a migration in
  * `parseGameSave` rather than rejecting older saves.
  */
-export const SAVE_VERSION = 1
+export const SAVE_VERSION = 2
 
 const finite = z.number().finite()
 const count = z.number().int().min(0)
@@ -42,6 +42,7 @@ export const elevationSettingsSchema = z
   .describe("Terrain shaping inputs for the hills, cliffs and bridges")
 
 export const worldSettingsSchema = z.object({
+  generation: z.union([z.literal(1), z.literal(2)]).default(1).describe("Terrain generator version; older saves retain their original land"),
   seed: uint32.describe("World seed. With the settings below it fully determines the generated land"),
   size: z.number().int().min(MIN_MAP_SIZE).max(MAX_MAP_SIZE).describe("Map edge length in tiles; maps are square"),
   coverage: finite.min(0).max(100).describe("Percent of the map left as forest after glades are carved"),
@@ -247,7 +248,8 @@ export function parseGameSave(input: unknown): { save: GameSave; error: null } |
   if (typeof input !== "object" || input === null) return { save: null, error: "Save is not an object." }
   const version = (input as { version?: unknown }).version
   if (typeof version !== "number" || version > SAVE_VERSION) return { save: null, error: `Unsupported save version ${String(version)}.` }
-  const result = gameSaveSchema.safeParse(input)
+  const migrated = version === 1 ? { ...input, version: SAVE_VERSION } : input
+  const result = gameSaveSchema.safeParse(migrated)
   return result.success ? { save: result.data, error: null } : { save: null, error: describeIssue(result.error) }
 }
 

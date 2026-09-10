@@ -9,6 +9,35 @@ const index = (x: number, z: number) => z * 12 + x
 const detour = [index(2, 5), index(3, 5), index(3, 4), index(4, 4), index(5, 4), index(5, 5), index(6, 5), index(7, 5)]
 
 describe("initial roads through open land", () => {
+  it.each([[1, 1], [-1, 1], [1, -1], [-1, -1]])("groups shallow zigzags into long 45-degree elbows (%i, %i)", (sx, sz) => {
+    const width = 96, map: GameMap = { width, depth: width, tiles: Array(width * width).fill("grass"), buildings: [] }
+    let x = sx > 0 ? 8 : 80, z = sz > 0 ? 8 : 80
+    const route = [z * width + x]
+    for (let n = 0; n < 12; n++) {
+      for (let step = 0; step < 4; step++) { x += sx; route.push(z * width + x) }
+      z += sz; route.push(z * width + x)
+    }
+    const line = straightenRoad(map, route, undefined, "elbows")
+    expect(line).toHaveLength(route.length)
+    expect(line[0]).toBe(route[0]); expect(line.at(-1)).toBe(route.at(-1))
+    expect(new Set(line).size).toBe(line.length)
+    const steps = line.slice(1).map((p, i) => p - line[i])
+    for (const step of steps) expect([sx, sz * width]).toContain(step)
+    const diagonals = steps.flatMap((step, i) => step === sz * width ? [i] : [])
+    // All twelve minor-axis steps belong to one sustained 45-degree run;
+    // the former route sprinkled them along the entire road every fifth step.
+    for (let i = 1; i < diagonals.length; i++) expect(diagonals[i] - diagonals[i - 1]).toBe(2)
+    expect(diagonals[0]).toBeGreaterThanOrEqual(16)
+    expect(steps.length - diagonals.at(-1)!).toBeGreaterThanOrEqual(16)
+  })
+
+  it("keeps long elbows clear of obstacles and restricted land", () => {
+    const map = fixture(); map.tiles[index(4, 5)] = "darkwood"
+    const line = straightenRoad(map, detour, (x, z) => x > 0 && z > 0, "elbows")
+    expect(line).not.toContain(index(4, 5))
+    expect(line[0]).toBe(detour[0]); expect(line.at(-1)).toBe(detour.at(-1))
+  })
+
   it("draws a straight line across a clear glade instead of inheriting zigzags", () => {
     expect(straightenRoad(fixture(), detour)).toEqual(Array.from({ length: 6 }, (_, i) => index(i + 2, 5)))
   })
