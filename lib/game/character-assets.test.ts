@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest"
+import { Matrix4, Vector3 } from "three"
+import { CART } from "./transport/assets"
 import { CHARACTER_ASSETS, characterVisual, selectionPlaybackRate, spriteFrame, spriteRow } from "./character-assets"
 import { validateCharacterAssets } from "./character-asset-store"
 
@@ -14,6 +16,19 @@ describe("camera-relative sprite facing", () => {
     expect(spriteRow(0, -Math.PI / 4)).toBe(7)
     expect(spriteRow(0, Math.PI / 8 - 0.001)).toBe(0)
     expect(spriteRow(0, Math.PI / 8 + 0.001)).toBe(1)
+  })
+  it.each([8, CART.directions])("matches baked geometry through forward and reverse camera turns with %i directions", directions => {
+    const step = 2 * Math.PI / directions
+    // An asymmetric landmark makes reversed rotations detectable.
+    const landmark = new Vector3(.43, .57, .39)
+    for (let facing = 0; facing < directions; facing++) for (let view = -directions; view <= directions; view++) {
+      const heading = facing * step, yaw = view * step
+      const row = spriteRow(heading, yaw, directions)
+      const actual = landmark.clone().applyMatrix4(new Matrix4().makeRotationY(heading))
+        .applyMatrix4(new Matrix4().makeRotationY(-yaw))
+      const baked = landmark.clone().applyMatrix4(new Matrix4().makeRotationY(-row * step))
+      expect(actual.distanceTo(baked)).toBeLessThan(1e-12)
+    }
   })
   it("loops walking frames and holds a passing pose when stationary", () => {
     expect([0, 0.25, 0.5, 0.75, 1].map((s) => spriteFrame(s, 4))).toEqual([0, 1, 2, 3, 0])
