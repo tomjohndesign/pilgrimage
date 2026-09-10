@@ -1617,15 +1617,6 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
       continue
     }
     const head = members[0]
-    if (cart && !party.diversion) {
-      const check = Math.floor(cart.progress) * 2 + (party.direction === 1 ? 1 : 0)
-      if (cart.diversionCheck !== check || cart.diversionBuildings !== map.buildings) {
-        cart.diversionCheck = check
-        cart.diversionBuildings = map.buildings
-        party.diversion = cartRoadDiversion(map, cart.pose, cart.progress, party.direction,
-          cart.animal, characterScale, () => parkingContext(sim, head, characterScale)) ?? undefined
-      }
-    }
     const ahead = map.site ? party.direction * partyRoadDelta(map.site.junction, party.progress, length) : Infinity
     if (party.formed && party.cooldown <= 0 && ahead >= 0 && ahead <= 7) {
       party.cooldown = 45; party.decisions++
@@ -1699,7 +1690,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
         party.reason = "Turning back together"
       }
       party.singleFile = bridgeInColumn(map, party.progress, party.direction, span, length)
-      if (!cart && !party.diversion) party.diversion = findRoadDiversion(map, blockedRoad(map), head, party.progress, party.direction,
+      if (!party.diversion) party.diversion = findRoadDiversion(map, blockedRoad(map), head, party.progress, party.direction,
         p => roadWorldPoint(map, p, 0)) ?? undefined
     }
     const direction = party.direction, travel = party.speed * dt
@@ -1878,6 +1869,8 @@ export function stepSim(
   const deployedStall = (state: SimTraveler) => state.stallRoute &&
     (state.activity === "openingShop" || state.activity === "vending" || state.activity === "packingShop") ? state.stallRoute : undefined
   let pastureObstacles: StallRoute["obstacles"] | undefined
+  // Open taverns, read once: the per-person check below must not allocate.
+  const tavernCounters = counters.filter(b => b.buildType === "tavern")
 
   for (const t of travelers) {
     const ordinal = t.type.id !== "vendor" && t.type.id !== "knight" ? explorerRank++ : -1
@@ -1896,7 +1889,7 @@ export function stepSim(
     const processionNearby = nearProcession(sim.procession, s, s.praying)
     s.praying = !riding && processionNearby
     const socialBreak = s.happiness < HAPPINESS_THRESHOLD && s.gold >= DRINK_PRICE
-      && counters.some(b => b.buildType === "tavern" && b.id !== s.employer)
+      && (tavernCounters.length > 1 || (tavernCounters.length === 1 && tavernCounters[0].id !== s.employer))
     const inChurch = s.activity === "visiting" || s.activity === "offering"
     stepDevotion(s, dt, inChurch, !processionNearby && s.activity === "visiting" && !s.shrineSeat?.startsWith("queue-"), sim.balance)
     const socializing = s.activity === "sitting" && (s.tavernVisit?.meal || s.tavernVisit?.drink)
@@ -1925,7 +1918,7 @@ export function stepSim(
     if (abed) s.stamina = Math.min(100, s.stamina + CAMP_STAMINA_REGEN * hours)
     // Travelling on the road costs no stamina, and standing at a stall, a post
     // or a performance neither drains nor restores the legs.
-    else if (!s.partyWaiting && !s.partyCarried && !TRAVEL_ACTIVITIES.includes(s.activity) &&
+    else if (!s.partyCarried && !s.partyWaiting && !TRAVEL_ACTIVITIES.includes(s.activity) &&
       !["vending", "performing", "listening", "begging", "givingAlms", "posted", "sitting", "buying", "drinking", "drinkingLow"].includes(s.activity)) {
       s.stamina = Math.max(0, s.stamina - sim.balance.rules.staminaDecay * hours)
     }
@@ -1944,17 +1937,17 @@ export function stepSim(
       }
     }
 
-    const knightSpeed = t.type.id === "knight" ? (knightMounted(s.activity, s.horseRest)
-      ? knightTravelSpeed(characterScale, knightLoadout(t.id).squire)
-      : knightWalkStride(travelerAppearance(map.seed ?? 0, t.id).variant) * characterScale * DEFAULT_WALK_CADENCE) / DEFAULT_WALK_SPEED : undefined
-    const job = settlementJob(s.employer, sim.buildings)
-    const residentSpeed = job ? jobSpeedScale(job, travelerAppearance(map.seed ?? 0, t.id).variant, characterScale) : undefined
-    const pace = s.beggar ? TRAVELER_TYPES.beggar.paceMin + roll(t.id, 901) * (TRAVELER_TYPES.beggar.paceMax - TRAVELER_TYPES.beggar.paceMin) : t.pace
-    const beggarSpeed = s.beggar ? beggarSpeedScales?.get(t.id) ?? 1 : undefined
     // A company sets its members' pace; only everyone else eases toward their own.
     let targetSpeed = 0
     if (s.partyCarried) s.moveSpeed = s.partySpeed ?? 0
     else {
+      const knightSpeed = t.type.id === "knight" ? (knightMounted(s.activity, s.horseRest)
+        ? knightTravelSpeed(characterScale, knightLoadout(t.id).squire)
+        : knightWalkStride(travelerAppearance(map.seed ?? 0, t.id).variant) * characterScale * DEFAULT_WALK_CADENCE) / DEFAULT_WALK_SPEED : undefined
+      const job = settlementJob(s.employer, sim.buildings)
+      const residentSpeed = job ? jobSpeedScale(job, travelerAppearance(map.seed ?? 0, t.id).variant, characterScale) : undefined
+      const pace = s.beggar ? TRAVELER_TYPES.beggar.paceMin + roll(t.id, 901) * (TRAVELER_TYPES.beggar.paceMax - TRAVELER_TYPES.beggar.paceMin) : t.pace
+      const beggarSpeed = s.beggar ? beggarSpeedScales?.get(t.id) ?? 1 : undefined
       targetSpeed = pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (beggarSpeed ?? residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
       s.moveSpeed = sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
         easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
