@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "f4e081eacc7de745d431d1c0366e633c6f710fba",
-  "releaseCount": 174,
+  "lastProcessedCommit": "c7efe5ab00b2944c101a9bc888a0ce9cd16f1668",
+  "releaseCount": 175,
   "releases": [
+    {
+      "version": "0.0.189",
+      "title": "Release 0.0.189",
+      "summary": "Cache route vertex heights for road point sampling (#208)",
+      "commit": "c7efe5ab00b2944c101a9bc888a0ce9cd16f1668"
+    },
     {
       "version": "0.0.188",
       "title": "Release 0.0.188",
