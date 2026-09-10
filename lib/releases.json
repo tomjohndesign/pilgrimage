@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "2cd7208dd6642e71ff7dd78a3a25318e3e507cc4",
-  "releaseCount": 198,
+  "lastProcessedCommit": "fe6c93f8769224104fc7ab058c2d672eaca0e160",
+  "releaseCount": 199,
   "releases": [
+    {
+      "version": "0.0.213",
+      "title": "Release 0.0.213",
+      "summary": "Move New map to the header and share the landing form; visibility switches (#232)",
+      "commit": "fe6c93f8769224104fc7ab058c2d672eaca0e160"
+    },
     {
       "version": "0.0.212",
       "title": "Release 0.0.212",
