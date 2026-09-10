@@ -194,6 +194,10 @@ export function shrineParking(map: GameMap, progress: number, direction: 1 | -1,
 /** Roadside shops need convoy clearance on either verge; animals graze without a tether. */
 export function stallParking(map: GameMap, from: Point, progress: number, direction: 1 | -1, wheelbase: number, scale: number, puller: Puller, context: ParkingContext) {
   return roadsideStall(map, from, progress, direction, wheelbase, scale, puller, pitch => {
+    // The unfolded display and sign need space too, not just the arriving cart.
+    if (pitch.obstacles.some(box => (context.obstacles ?? []).some(other => overlaps(box, other))) ||
+      context.trees.some(tree => !pastureSegmentClear(tree, tree, pitch.obstacles, (tree.shape?.trunkRadius ?? .18) * (tree.scale ?? 1) + .08)) ||
+      (context.people ?? []).some(person => !pastureSegmentClear(person, person, pitch.obstacles, .2))) return false
     const parked = alignCart(pitch.park, pitch.heading, wheelbase)
     if (!parkingClear(map, parked, puller, scale, context, true)) return false
     let pose = alignCart(from, pitch.heading, wheelbase)

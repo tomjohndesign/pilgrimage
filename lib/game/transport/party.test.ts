@@ -11,7 +11,7 @@ import { poseDriver } from "./driver"
 import { createSim, stepSim, GAME_DAY_SECONDS } from "../sim"
 import { TRAVELER_TYPES, type Traveler } from "../travelers"
 import { BUILD_CATALOG, DEFAULT_BALANCE } from "../balance"
-import type { GameMap } from "../map/types"
+import { worldToTileX, worldToTileZ, type GameMap } from "../map/types"
 import { jobBuildings } from "../settlement"
 import { partyFormation, partyRoadDelta } from "../travel-parties"
 import { BASE_CHARACTER_SCALE } from "../base-person/gait"
@@ -35,6 +35,23 @@ function fixture(id = 0, count = 8, direction: 1 | -1 = 1) {
 }
 
 describe("party transport", () => {
+  it.each([1, -1] as const)("recovers the passenger wagon after construction covers it in direction %s", direction => {
+    const id = Array.from({ length: 100 }, (_, i) => i).find(i => partyLoadout(i, 4).cart)!
+    const { map, travelers, sim, party, run } = fixture(id, 4, direction)
+    ensurePartyTransport(party, [...sim.travelers.values()], map, BASE_CHARACTER_SCALE)
+    const cart = party.transport!, start = cart.progress
+    map.buildings = [{ id: "new", label: "New", x: worldToTileX(map, cart.pose.hitch.x), z: worldToTileZ(map, cart.pose.hitch.z),
+      w: 2, d: 2, height: 1, color: "", roofColor: "" }]
+    for (let i = 0; i < 200; i++) {
+      stepSim(sim, travelers, map, 1, .1)
+      if (cart.recovery === false) break
+    }
+    expect(cart.recovery).toBe(false)
+    expect(convoyBuildingsClear(map, cart.pose, cart.animal, BASE_CHARACTER_SCALE)).toBe(true)
+    run(10)
+    expect(Math.abs(cart.progress - start)).toBeGreaterThan(2)
+  })
+
   it.each((["donkey", "horse", "ox"] as const).flatMap(animal =>
     ([1, -1] as const).flatMap(direction => [.1, 1.25].flatMap(dt => [false, true].map(stopped => ({ animal, direction, dt, stopped }))))))(
     "takes the whole company past an inside bend with $animal, direction $direction, dt $dt, already stopped $stopped", ({ animal, direction, dt, stopped }) => {

@@ -43,7 +43,10 @@ export function driveRouteSegment(pose: CartPose, route: readonly Point[], start
 export function cartPath(map: GameMap, initial: CartPose, goal: Point, puller: Puller, scale: number,
   context: ParkingContext, goalHeading?: number): { entry: Point[]; parked: CartPose } | null {
   const wheelbase = -cartOffset(puller) * scale
-  const clear = (pose: CartPose, heading: number) => parkingClear(map, pose, puller, scale, context, false, heading)
+  // Playback also checks the animal aligned with the shafts after each tick.
+  // A route that only clears its instantaneous travel heading can jam mid-turn.
+  const clear = (pose: CartPose, heading: number) => parkingClear(map, pose, puller, scale, context, false, heading) &&
+    parkingClear(map, pose, puller, scale, context)
   if (!clear(initial, initial.heading)) return null
   const headings = goalHeading === undefined ? Array.from({ length: 8 }, (_, i) => i * Math.PI / 4) : [goalHeading]
   if (!headings.some(heading => clear(alignCart(goal, heading, wheelbase), heading))) return null
