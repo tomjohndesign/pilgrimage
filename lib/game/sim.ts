@@ -21,6 +21,7 @@ import type { WildlifeWorld } from "./wildlife/simulation"
 import { cartPath, driveSegment, driveRouteSegment, marketParking, type MarketParking } from "./transport/building-parking"
 import { roadCartPose } from "./transport/bridge-guide"
 import { cartRoadDiversion } from "./transport/road-diversion"
+import { recoverCart } from "./transport/recovery"
 import { blockedRoad, findRoadDiversion, takeRoadShortcut, retireBypassedRoad, exploresRoadShortcut, type WalkingShortcut } from "./walking-shortcuts"
 import { createFootpaths, HEAVY_PATH_WEAR, recordWalkingPath, regrowFootpaths, type Footpaths } from "./footpaths"
 import { knightMounted, knightLoadout, knightTravelSpeed, knightWalkStride, type HorseRest } from "./knights"
@@ -337,6 +338,8 @@ export interface SimTraveler {
   shrineParking?: ShrineParking
   marketParking?: MarketParking
   cartPose?: CartPose
+  cartRecovery?: boolean
+  cartRecoveryRetry?: number
   marketCheck?: number
   cartRouteBlocked?: { x: number; z: number; buildings: GameMap["buildings"] }
   /** Wagons use their own road clearance profile instead of pedestrian lanes. */
@@ -665,7 +668,8 @@ function finishConvoyMove(s: SimTraveler, transportBefore: SimTraveler | null, m
   else {
     const check = s.diversionCheck, buildings = s.diversionBuildings
     Object.assign(s, transportBefore)
-    s.moveSpeed = 0; s.diversionCheck = check; s.diversionBuildings = buildings
+    s.moveSpeed = 0; s.cartRecovery = true
+    s.diversionCheck = check; s.diversionBuildings = buildings
   }
 }
 
@@ -720,7 +724,7 @@ function shrineWorldPoint(map: GameMap, s: SimTraveler): WorldPoint {
 }
 
 /** Nearby live obstacles and reservations are shared by shrine and market parking. */
-function parkingContext(sim: SimState, s: SimTraveler, scale: number): ParkingContext {
+function parkingContext(sim: SimState, s: SimTraveler, scale: number, traffic = false): ParkingContext {
   const nearby = (p: { x: number; z: number }) => Math.hypot(p.x - s.x, p.z - s.z) < 16 + scale * 4
   const trees: Array<{ tree: TreePlacement; index: number }> = []
   treeSpatialIndex(sim.trees).forEachWithin(s.x, s.z, 16 + scale * 4, (tree, index) => {
@@ -736,8 +740,20 @@ function parkingContext(sim: SimState, s: SimTraveler, scale: number): ParkingCo
       const puller = cartLoadout(other.id).puller
       if (puller !== "hand") add(convoyBounds(alignCart(other.stallRoute.park, other.stallRoute.heading, 0), puller, scale))
     }
+    if (other.pasture) {
+      const animal = other.pasture
+      for (const point of [animal, animal.home]) add([{ ...point, heading: 0,
+        halfWidth: animal.clearance, halfLength: animal.clearance }])
+    }
     if (other.shrineParking) add(convoyBounds(other.shrineParking.parked, other.convoy ? cartLoadout(other.id).puller : "horse", scale))
     if (other.marketParking) add(convoyBounds(other.marketParking.parked, cartLoadout(other.id).puller, scale))
+    if (traffic && other.convoy && other.cartPose && !other.stallRoute && !other.shrineParking && !other.marketParking)
+      add(convoyBounds(other.cartPose, cartLoadout(other.id).puller, scale))
+  }
+  for (const party of sim.parties.values()) {
+    if (party.id === s.partyId || !party.transport) continue
+    const cart = party.transport
+    if (traffic || cart.phase === "parked" || cart.phase === "boarding") add(convoyBounds(cart.pose, cart.animal, scale))
   }
   return { trees: trees.sort((a, b) => a.index - b.index).map(entry => entry.tree), obstacles, people }
 }
@@ -1529,6 +1545,25 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
     if (cart) {
       cart.distance = cart.animalDistance = 0
       cart.retry = Math.max(0, cart.retry - dt)
+      cart.recoveryRetry = Math.max(0, (cart.recoveryRetry ?? 0) - dt)
+      if (cart.recovery && !cart.recoveryRetry && dt > 0) {
+        cart.recoveryRetry = 3
+        const context = parkingContext(sim, members[0], characterScale, true)
+        const recovery = recoverCart(map, cart.pose, cart.progress, party.direction, cart.animal, characterScale, context)
+        if (recovery) {
+          cart.pose = recovery.pose; cart.progress = recovery.progress; cart.phase = "road"
+          cart.parking = undefined; cart.intent = undefined; cart.recovery = false
+          party.progress = recovery.progress; party.diversion = recovery.route; party.formed = false
+        }
+      }
+      if (cart.phase === "road" && !party.diversion && dt > 0) {
+        const check = Math.floor(cart.progress) * 2 + (party.direction === 1 ? 1 : 0)
+        if (cart.diversionCheck !== check || cart.diversionBuildings !== map.buildings) {
+          cart.diversionCheck = check; cart.diversionBuildings = map.buildings
+          party.diversion = cartRoadDiversion(map, cart.pose, cart.progress, party.direction, cart.animal, characterScale,
+            () => parkingContext(sim, members[0], characterScale)) ?? undefined
+        }
+      }
       if (cart.seats.some(id => !party.members.includes(id))) cart.seats = cart.seats.filter(id => party.members.includes(id))
       if (!cart.seats.length) cart.seats = [members[0].id]
       if (cart.phase === "parking" || cart.phase === "leaving") {
@@ -1928,6 +1963,26 @@ export function stepSim(
     if (s.herding && !["toSheep", "herding"].includes(s.activity)) releaseSheep(s, sim.wildlife)
     s.herdingRetry = Math.max(0, (s.herdingRetry ?? 0) - dt)
     s.convoyScale = characterScale
+    s.cartRecoveryRetry = Math.max(0, (s.cartRecoveryRetry ?? 0) - dt)
+    if (s.convoy && dt > 0 && (s.cartRecovery || s.pasture?.stranded) && !s.cartRecoveryRetry) {
+      s.cartRecoveryRetry = 3
+      const puller = cartLoadout(s.id).puller
+      const initial = s.cartPose ?? roadCartPose(map, s.progress, s.direction, -cartOffset(puller) * characterScale, characterScale)
+      const recovery = recoverCart(map, initial, s.progress, s.direction, puller, characterScale, parkingContext(sim, s, characterScale, true))
+      if (recovery) {
+        // Release the invalid stop and its reservations before taking the new route.
+        if (s.marketParking) { s.employer = null; s.buildingTask = undefined; s.home = null }
+        s.cartPose = recovery.pose; s.progress = recovery.progress
+        s.x = recovery.pose.hitch.x; s.z = recovery.pose.hitch.z
+        s.y = walkingSurface(map, s.x, s.z).height
+        s.roadShortcut = recovery.route; s.cartRecovery = false
+        pastureObstacles = undefined
+        s.shrineParking = undefined; s.marketParking = undefined; s.stallRoute = undefined; s.pasture = undefined
+        s.shrineRoute = null; s.shrineSeat = undefined; s.spot = null; s.walkFrom = null; s.offRoadRoute = null; s.track = null
+        s.diversionCheck = undefined; s.cartRouteBlocked = undefined
+        s.activity = "walking"; s.timer = 30; s.visitCooldown = 30
+      }
+    }
     // Riders wait for a passing procession; prayer poses begin once on foot.
     // A vendor who has taken over a stall has left the wagon for good.
     const riding = s.partyRiding || (t.type.id === "knight" ? knightMounted(s.activity, s.horseRest) :
@@ -2022,7 +2077,13 @@ export function stepSim(
             if (stall) pastureObstacles.push(...stall.obstacles)
           }
         }
-        s.pasture.obstacles = pastureObstacles
+        s.pasture.obstacles = [...pastureObstacles]
+        for (const other of vendors) {
+          if (other === s || !other.pasture) continue
+          const animal = other.pasture
+          s.pasture.obstacles.push({ x: animal.x, z: animal.z, heading: 0,
+            halfWidth: animal.clearance, halfLength: animal.clearance })
+        }
       }
       stepPasture(map, s.pasture, dt, Math.max(0.01, targetSpeed), s.activity === "packingShop")
     }
@@ -2043,7 +2104,7 @@ export function stepSim(
           }
           parking.pose = next
         }
-        if (parking.distance < 0) { Object.assign(s, transportBefore); s.moveSpeed = 0; break }
+        if (parking.distance < 0) { Object.assign(s, transportBefore); s.moveSpeed = 0; s.cartRecovery = true; break }
         const point = parking.pose.hitch
         s.x = point.x; s.z = point.z; s.y = surfaceHeight(map, worldToTileX(map, s.x), worldToTileZ(map, s.z))
         if (parking.distance >= length) {

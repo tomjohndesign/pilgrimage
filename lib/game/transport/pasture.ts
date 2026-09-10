@@ -2,13 +2,16 @@ import { tileAt, tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type Ga
 import { animalTravel } from "./animal-travel"
 import { buildingAt } from "../settlement"
 
-import { pastureSegmentClear, type StallObstacle } from "./stall"
+import { pastureEscapeClear, pastureSegmentClear, type StallObstacle } from "./stall"
 
 export interface PastureAnimal {
   tether?: import("../trees/placement").TreePlacement
   obstacles: StallObstacle[]; clearance: number
   x: number; z: number; heading: number; reversing: boolean; moving: boolean; distance: number; rest: number; visits: number
   home: { x: number; z: number }; route: Array<{ x: number; z: number }>; returning: boolean; ready: boolean
+  /** The old hitch can no longer be reached; the merchant must abandon this pitch. */
+  stranded?: boolean
+  blockedSeconds?: number
 }
 const key = (t: TilePos) => `${t.x},${t.z}`
 function safe(map: GameMap, t: TilePos) {
@@ -52,6 +55,39 @@ export function stepPasture(map: GameMap, animal: PastureAnimal, dt: number, spe
     return
   }
   const blocked = [...animal.obstacles, ...buildingObstacles(map)]
+  animal.stranded = false
+  const cannotReturn = () => {
+    animal.blockedSeconds = recall ? (animal.blockedSeconds ?? 0) + Math.max(0, dt) : 0
+    animal.stranded = animal.blockedSeconds >= 3
+  }
+  // A new stall or footprint can cover an animal that was already grazing.
+  // Walk out to the nearest clear grass, checking all previously clear obstacles.
+  if (!pastureSegmentClear(animal, animal, blocked, animal.clearance)) {
+    for (let radius = .25; radius <= 4; radius += .25) for (let i = 0; i < 16; i++) {
+      const angle = Math.atan2(animal.home.x - animal.x, animal.home.z - animal.z) + i * Math.PI / 8
+      const target = { x: animal.x + Math.sin(angle) * radius, z: animal.z + Math.cos(angle) * radius }
+      if (!safe(map, { x: worldToTileX(map, target.x), z: worldToTileZ(map, target.z) }) ||
+        !pastureSegmentClear(target, target, blocked, animal.clearance) ||
+        !pastureEscapeClear(animal, target, blocked, animal.clearance)) continue
+      const steps = Math.ceil(radius / .1)
+      let groundClear = true
+      for (let j = 0; j <= steps; j++) {
+        const terrain = tileAt(map, worldToTileX(map, animal.x + (target.x - animal.x) * j / steps),
+          worldToTileZ(map, animal.z + (target.z - animal.z) * j / steps))
+        if (!["grass", "clearing", "dirt"].includes(terrain ?? "")) { groundClear = false; break }
+      }
+      if (!groundClear) continue
+      const step = Math.min(radius, Math.max(0, speed * dt))
+      Object.assign(animal, animalTravel(animal.heading, target.x - animal.x, target.z - animal.z))
+      animal.x += Math.sin(angle) * step; animal.z += Math.cos(angle) * step
+      animal.distance = step; animal.moving = step > 0
+      animal.blockedSeconds = 0
+      animal.route = []; animal.returning = false; animal.ready = false
+      return
+    }
+    cannotReturn()
+    return
+  }
   const hx = worldToTileX(map, animal.home.x), hz = worldToTileZ(map, animal.home.z)
   const centre = (tile: TilePos) => tile.x === hx && tile.z === hz ? animal.home : ({ x: tileToWorldX(map, tile.x), z: tileToWorldZ(map, tile.z) })
   if (recall && !animal.returning) {
@@ -60,7 +96,7 @@ export function stepPasture(map: GameMap, animal: PastureAnimal, dt: number, spe
     // Replan from the actual position; every edge must clear the whole animal.
     const route = routes.find(path => path.at(-1)!.x === hx && path.at(-1)!.z === hz)
     if (!route && (worldToTileX(map, animal.x) !== hx || worldToTileZ(map, animal.z) !== hz)) {
-      animal.returning = false; return
+      animal.returning = false; cannotReturn(); return
     }
     animal.route = [...(route ?? []).map(centre), animal.home]
   }
@@ -76,7 +112,9 @@ export function stepPasture(map: GameMap, animal: PastureAnimal, dt: number, spe
     const target = animal.route[0], dx = target.x - animal.x, dz = target.z - animal.z, distance = Math.hypot(dx, dz)
     if (distance < 1e-6) { animal.x = target.x; animal.z = target.z; animal.route.shift(); continue }
     if (!pastureSegmentClear(animal, target, blocked, animal.clearance)) {
-      animal.route = []; animal.returning = false; animal.ready = false; return
+      animal.route = []; animal.returning = false; animal.ready = false
+      cannotReturn()
+      return
     }
     const step = Math.min(distance, remaining)
     Object.assign(animal, animalTravel(animal.heading, dx, dz))
@@ -85,5 +123,6 @@ export function stepPasture(map: GameMap, animal: PastureAnimal, dt: number, spe
     if (step === distance) { animal.x = target.x; animal.z = target.z; animal.route.shift() }
   }
   animal.moving = animal.distance > 1e-6
+  if (animal.moving || !animal.route.length) animal.blockedSeconds = 0
   if (!animal.route.length) { animal.rest = 3 + animal.visits % 4; animal.ready = recall }
 }

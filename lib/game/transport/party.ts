@@ -25,6 +25,8 @@ export interface PartyTransport {
   animalDistance: number
   animalHeading: number
   retry: number
+  recovery?: boolean
+  recoveryRetry?: number
   /** Check the whole convoy ahead once per road tile/direction or building edit. */
   diversionCheck?: number
   diversionBuildings?: GameMap["buildings"]
@@ -104,6 +106,7 @@ export function movePartyCart(party: TravelParty, map: GameMap, scale: number, s
   cart.distance = cart.animalDistance = 0
   if (dt <= 0 || !["road", "parking", "leaving"].includes(cart.phase)) return false
   const wheelbase = -cartOffset(cart.animal) * scale, previous = cart.pose
+  const blocked = () => { cart.recovery = true; return false }
   let pose: CartPose, progress = cart.progress, done = false, routeDistance = 0
   const travel = Math.min(speed, animalWalkSpeed(cart.animal, scale)) * dt
   if (travel <= 0 && cart.phase === "road") return true
@@ -123,7 +126,7 @@ export function movePartyCart(party: TravelParty, map: GameMap, scale: number, s
           axleDistance += p.distance
           return convoyBuildingsClear(map, p, cart.animal, scale, heading)
         })
-      if (!next || !convoyBuildingsClear(map, next, cart.animal, scale)) return false
+      if (!next || !convoyBuildingsClear(map, next, cart.animal, scale)) return blocked()
       pose = { ...next, distance: axleDistance }
       progress = distance >= cut.length ? ((cut.end % length) + length) % length
         : ((cut.start + party.direction * distance / cut.length * span) % length + length) % length
@@ -132,14 +135,14 @@ export function movePartyCart(party: TravelParty, map: GameMap, scale: number, s
       const wrapped = progress < 0 || progress >= length
       progress = ((progress % length) + length) % length
       pose = roadCartPose(map, progress, party.direction, wheelbase, scale, wrapped ? undefined : previous)
-      if (!convoyBuildingsClear(map, pose, cart.animal, scale)) return false
+      if (!convoyBuildingsClear(map, pose, cart.animal, scale)) return blocked()
     }
   } else {
     const parking = cart.parking!, route = cart.phase === "parking" ? parking.entry : parking.exit
     routeDistance = Math.min(routeLength(route), parking.distance + travel)
     pose = followCart(previous, routePoint(route, routeDistance), wheelbase)
     done = routeDistance >= routeLength(route) - 1e-6
-    if (!parkingClear(map, pose, cart.animal, scale, { trees: [] })) return false
+    if (!parkingClear(map, pose, cart.animal, scale, { trees: [] })) return blocked()
   }
   const animalDistance = Math.hypot(pose.hitch.x - previous.hitch.x, pose.hitch.z - previous.hitch.z)
   cart.animalHeading = animalDistance > 1e-7 ? Math.atan2(pose.hitch.x - previous.hitch.x, pose.hitch.z - previous.hitch.z) : cart.animalHeading
