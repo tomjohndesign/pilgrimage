@@ -422,7 +422,7 @@ export function GameShell({
         }}
         onSeedChange={setSeed}
       />
-      {revealPhase === "complete" && <CheatBar blasterPastor={blasterPastor} onBlasterPastor={() => setBlasterPastor(active => !active)} onLastMarch={() => setLastMarch(true)} />}
+      {revealPhase === "complete" && <CheatBar blasterPastor={blasterPastor} lastMarch={lastMarch} onBlasterPastor={() => setBlasterPastor(active => !active)} onLastMarch={() => setLastMarch(active => !active)} />}
     </div>
   )
 }
