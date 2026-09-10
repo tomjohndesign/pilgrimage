@@ -4,7 +4,7 @@ import { freezeAssetUpdates } from "./asset-browser.mjs"
 
 const args = process.argv.slice(2), urlIndex = args.indexOf("--url")
 const origin = urlIndex < 0 ? "http://localhost:3000" : args[urlIndex + 1]
-const directory = "public/textures/water-sources/v1"
+const directory = "public/textures/water-sources/v2"
 if (existsSync(directory)) throw new Error("This version exists. Increment the asset version; published bakes are immutable.")
 const browser = await chromium.launch({ headless: true, args: ["--use-angle=metal"] })
 try {

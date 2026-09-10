@@ -1,5 +1,6 @@
 import * as THREE from "three"
 import { makeRng } from "../rng"
+import { WATER_DEPTH_COLORS } from "../map/terrain"
 import type { WaterSourceKind } from "./assets"
 
 /** Early medieval Britain: timber lining and stave buckets are attested;
@@ -7,6 +8,8 @@ import type { WaterSourceKind } from "./assets"
 export function waterSourceModel(kind: WaterSourceKind, seed = 42, unlit = false) {
   const root = new THREE.Group(), geometries: THREE.BufferGeometry[] = [], materials: THREE.Material[] = []
   const rng = makeRng(seed)
+  const water = WATER_DEPTH_COLORS[0]
+  const ripple = new THREE.Color(water).lerp(new THREE.Color("#ffffff"), .25).getStyle()
   const add = (geometry: THREE.BufferGeometry, color: string, x: number, y: number, z: number) => {
     geometries.push(geometry)
     const material = unlit ? new THREE.MeshBasicMaterial({ color }) : new THREE.MeshLambertMaterial({ color, flatShading: true })
@@ -24,6 +27,10 @@ export function waterSourceModel(kind: WaterSourceKind, seed = 42, unlit = false
   if (kind === "well") {
     // Dark shaft inside a low, accessible stacked-timber curb. No roof or pump.
     box(0, .012, 0, .95, .024, .95, "#222e2a")
+    // Keep the surface close enough to the rim to read through the opening.
+    box(0, .42, 0, .85, .016, .85, water)
+    box(-.14, .432, -.12, .23, .008, .018, ripple)
+    box(.16, .432, .12, .14, .008, .018, ripple)
     const timber = ["#756047", "#877152", "#7d674b", "#95805d"]
     for (let course = 0; course < 4; course++) {
       const y = .075 + course * .125
@@ -76,11 +83,10 @@ export function waterSourceModel(kind: WaterSourceKind, seed = 42, unlit = false
     }
     patch(1.1, .012, "#847657")
     patch(1, .02, "#5f6550")
-    patch(.86, .028, "#526e67")
-    patch(.7, .03, "#46615c")
+    patch(.86, .03, water)
     for (let i = 0; i < 7; i++) {
       const x = (rng() - .5) * 1.1, z = (rng() - .5) * .6
-      box(x, .035, z, .10 + rng() * .15, .008, .018, i % 2 ? "#77928a" : "#67847b")
+      box(x, .035, z, .10 + rng() * .15, .008, .018, ripple)
     }
     // Leave the near bank clear so a person can crouch to dip a vessel.
     for (let i = 0; i < 7; i++) {
