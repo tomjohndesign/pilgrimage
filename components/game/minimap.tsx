@@ -52,8 +52,8 @@ function mapTransform(map: GameMap, viewIndex: number): DOMMatrix {
 
 const VIEWPORT_STROKE = "#f2e8d5"
 const INFLUENCE_COLOR = "#e4c77f"
-const PLAYER_BUILDING_COLOR = "#ffe291"
-const MARKER_OUTLINE = "#30271c"
+const BUILDING_COLOR = "#ef4444"
+const INFLUENCE_OUTLINE = "#30271c"
 
 function terrainPalette(): Record<TerrainId, [number, number, number]> {
   const palette = {} as Record<TerrainId, [number, number, number]>
@@ -139,16 +139,12 @@ export function Minimap({ map }: { map: GameMap }) {
       ctx.globalAlpha = 0.35
       ctx.drawImage(influenceCanvas, -map.width / 2, -map.depth / 2)
       ctx.globalAlpha = 1
-      for (const building of map.buildings) {
-        ctx.fillStyle = building.owner === "independent" ? "#b6b4a1" : PLAYER_BUILDING_COLOR
-        ctx.fillRect(building.x - map.width / 2, building.z - map.depth / 2, building.w, building.d)
-      }
       ctx.restore()
 
       // Stroke in screen space so the boundary stays legible on large maps.
       const projectedBoundary = new Path2D()
       projectedBoundary.addPath(boundary, transform)
-      ctx.strokeStyle = MARKER_OUTLINE
+      ctx.strokeStyle = INFLUENCE_OUTLINE
       ctx.lineWidth = 4
       ctx.stroke(projectedBoundary)
       ctx.strokeStyle = INFLUENCE_COLOR
@@ -200,17 +196,15 @@ export function Minimap({ map }: { map: GameMap }) {
       ctx.stroke()
       ctx.restore()
 
-      // Fixed-size markers keep even one-tile player buildings easy to find.
-      // Draw after the viewport so it cannot obscure buildings or the relic.
+      // Draw actual building footprints at the terrain's scale, above the viewport.
+      ctx.save()
+      ctx.setTransform(transform)
+      ctx.fillStyle = BUILDING_COLOR
       for (const building of map.buildings) {
-        if (building.owner === "independent") continue
-        const point = project(building.x + building.w / 2 - map.width / 2, building.z + building.d / 2 - map.depth / 2)
-        const x = Math.round(point.x), y = Math.round(point.y)
-        ctx.fillStyle = MARKER_OUTLINE
-        ctx.fillRect(x - 5, y - 5, 10, 10)
-        ctx.fillStyle = PLAYER_BUILDING_COLOR
-        ctx.fillRect(x - 3, y - 3, 6, 6)
+        ctx.fillRect(building.x - map.width / 2, building.z - map.depth / 2, building.w, building.d)
       }
+      ctx.restore()
+
       if (shrine && altarOffset) {
         const sim = useBuildStore.getState().simulation
         const procession = sim?.world.road === map.road ? sim?.procession : null
