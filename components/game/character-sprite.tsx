@@ -75,8 +75,8 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
   const asset = useCharacterAssetStore((s) => s.assets[type])
   const custom = usePersonDesignStore((s) => s.atlas)
   const population = usePopulationStore(s => s.pack)
-  const varied = (characterModel === "base" || type === "beggar") && !!appearance
-  const visual = useMemo(() => visualOverride ?? (varied || type === "beggar" ? populationVisual(type, appearance?.variant ?? 0, population, age) :
+  const varied = (characterModel === "base" || type === "beggar" || type === "nun") && !!appearance
+  const visual = useMemo(() => visualOverride ?? (varied || type === "beggar" || type === "nun" ? populationVisual(type, appearance?.variant ?? 0, population, age) :
     { ...characterVisual(asset, characterModel, custom), rowOffset: 0, strideRatio: 1, reservedTones: false }),
     [visualOverride, asset, characterModel, custom, varied, appearance?.variant, population, type, age])
   const individualScale = characterScale * (varied ? appearance.scale : 1)

@@ -43,7 +43,12 @@ export function waterVisitPlan(map: GameMap, source: BuildingDef, from: WaterPoi
   const placement = waterSourcePlacement(map, source)
   const access = waterSourceAccessPoints(placement)[0]
   const entry = buildingEntry(source)
-  const route = workerRoute(map, from, entry)
+  // The founding source is approached through the church forecourt.
+  const door = source.id === "founding-well" ? map.site?.door : undefined
+  const forecourt = door ? { x: tileToWorldX(map, door.x), y: surfaceHeight(map, door.x, door.z), z: tileToWorldZ(map, door.z) } : undefined
+  const approachRoute = door ? workerRoute(map, from, door) : undefined
+  const onward = workerRoute(map, forecourt ?? from, entry)
+  const route = door ? approachRoute && onward && [...approachRoute, ...onward] : onward
   if (!route) return null
   const front = { x: tileToWorldX(map, entry.x), y: surfaceHeight(map, entry.x, entry.z), z: tileToWorldZ(map, entry.z) }
   // First align with the water point while outside the footprint, then enter

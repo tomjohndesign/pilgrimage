@@ -124,8 +124,8 @@ export function relicDraw(who: TravelerAttributes, stats: RelicStats, shrineReno
 }
 
 /**
- * The draw at which a traveler is as likely as not to turn aside; the chance
- * runs from nothing at VISIT_DRAW_FLOOR to certain at VISIT_DRAW_CEILING.
+ * Relic interest rises from zero at VISIT_DRAW_FLOOR to one at
+ * VISIT_DRAW_CEILING, amplifying the continuous piety contribution to visits.
  */
 export const VISIT_DRAW_FLOOR = DEFAULT_BALANCE.rules.turnAsideDraw - 25
 export const VISIT_DRAW_CEILING = DEFAULT_BALANCE.rules.turnAsideDraw + 25
@@ -143,8 +143,8 @@ export function hospitalityNeedThreshold(shrineRenown: number, balance: GameBala
 
 /**
  * The chance, 0–1, that this traveler turns down the branch when they reach
- * the junction. Early visitors are exceptionally pious or desperate for food
- * or water. Renown broadens those motives, but never creates a motive by itself.
+ * the junction. The baseline is one in ten; every point of piety and
+ * urgent needs can raise that chance. Renown broadens those motives, but never creates a motive by itself.
  * Evangelism gives those who decline one independent second chance. The sim
  * rolls each decision separately (see sim.ts); the HUD rounds their combined chance.
  */
@@ -152,8 +152,10 @@ export function visitChance(who: TravelerAttributes, stats: RelicStats, shrineRe
   const draw = relicDraw(who, stats, shrineRenown, balance)
   const r = balance.rules
   const reputation = reputationModifier(shrineRenown, balance)
-  const willingness = Math.max(0, Math.min(1, (who.piety + 100 * reputation - r.earlyVisitPiety) / (100 - r.earlyVisitPiety)))
-  const devotion = Math.max(0, Math.min(1, (draw - (r.turnAsideDraw - 25)) / 50)) * willingness
+  const piety = Math.max(0, Math.min(1, who.piety / 100))
+  const relicInterest = Math.max(0, Math.min(1, (draw - (r.turnAsideDraw - 25)) / 50))
+  // Faith itself is a reason to visit a modest church; the relic adds to it.
+  const devotion = piety * (0.5 + 0.5 * relicInterest)
   // Tired travelers can camp along their own route. Only food and water create
   // hospitality draw; neither a job vacancy nor renown alone is a destination.
   const need = Math.min(who.hunger, who.thirst)
@@ -161,7 +163,7 @@ export function visitChance(who: TravelerAttributes, stats: RelicStats, shrineRe
   const hospitalityReach = Math.min(1, r.hospitalityBaseChance + r.hospitalityRenownBonus * reputation)
   const hospitality = Math.max(0, Math.min(1, (threshold - need) / threshold)) * hospitalityReach
   // Traveling brothers seek the enclave even before its relic is well known.
-  const ordinary = Math.max(devotion, hospitality, calling === "friar" ? MONK_VISIT_CHANCE : 0)
+  const ordinary = Math.max(0.1 + 0.9 * devotion, hospitality, calling === "friar" ? MONK_VISIT_CHANCE : 0)
   return ordinary + (1 - ordinary) * Math.max(0, Math.min(1, evangelism))
 }
 

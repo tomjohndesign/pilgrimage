@@ -1,3 +1,4 @@
+import { isWaterTerrain } from "./terrain"
 import { elevationStep } from "./elevation"
 import { buildingApproaches } from "../building-rotation"
 import { isRoadTerrain } from "./road"
@@ -66,7 +67,9 @@ function around(route: TilePos[], center: TilePos, start?: TilePos, end?: TilePo
 export function createCrossroads(map: GameMap): void {
   if (map.crossroads) return
   const buildingAccess = new Set((map.buildingAccessTiles ?? []).map(p => key(map, p)))
-  const routeTerrain = (x: number, z: number) => buildingAccess.has(z * map.width + x) ? null : tileAt(map, x, z)
+  const roadFords = new Set((map.road ?? []).filter(p => tileAt(map, p.x, p.z) === "ford").map(p => key(map, p)))
+  const routeTerrain = (x: number, z: number) => buildingAccess.has(z * map.width + x) ? null
+    : roadFords.has(z * map.width + x) ? "path" : tileAt(map, x, z)
   const shrine = destinationDistances(map, map.site ? [map.site.door] : [])
   const candidates: Crossroad[] = []
   // Door tracks are building approaches, not destinations needing a waymarker.
@@ -90,7 +93,7 @@ export function createCrossroads(map: GameMap): void {
     candidates.push({ center, shrineFork: !!map.site && same(center, map.site.branch[0]), arms: directions.map(([dx, dz]) => {
       const n = (z + dz) * map.width + x + dx
       const toward = (field: Int32Array) => field[n] >= 0 && field[n] < field[index]
-      return { direction: { x: dx, z: dz }, mark: map.tiles[n] === "path" || map.tiles[n] === "bridge" ? "road" : toward(shrine) ? "shrine" : "trail" }
+      return { direction: { x: dx, z: dz }, mark: map.tiles[n] === "path" || map.tiles[n] === "bridge" || roadFords.has(n) ? "road" : toward(shrine) ? "shrine" : "trail" }
     }) })
   }
   // The founding choice takes priority when several nearby tracks meet.
@@ -105,7 +108,7 @@ export function createCrossroads(map: GameMap): void {
       const [dx, dz] = ROUTE_DIRS.find(([x, z]) => !crossroad.arms.some(a => a.direction.x === x && a.direction.z === z))!
       const center = { x: junction.x + dx, z: junction.z + dz }
       const terrain = tileAt(map, center.x, center.z)
-      if (!terrain || isRoadTerrain(terrain) || ["water", "bridge", "darkwood"].includes(terrain)) continue
+      if (!terrain || isRoadTerrain(terrain) || isWaterTerrain(terrain) || terrain === "darkwood") continue
       if (nearTavern(center) || map.crossroads.some(c => distance(c.center, center) <= 2)) continue
       if (map.buildings.some(b => center.x >= b.x - 1 && center.x <= b.x + b.w && center.z >= b.z - 1 && center.z <= b.z + b.d)) continue
       if (map.site && same(map.site.door, center)) continue
@@ -125,7 +128,7 @@ export function createCrossroads(map: GameMap): void {
       const patch = [center, ...RING.map(([x, z]) => ({ x: center.x + x, z: center.z + z }))]
       return patch.every(p => {
         const terrain = tileAt(map, p.x, p.z)
-        if (!terrain || terrain === "water" || terrain === "bridge" || terrain === "darkwood") return false
+        if (!terrain || isWaterTerrain(terrain) || terrain === "darkwood") return false
         if (map.buildings.some(b => p.x >= b.x - 1 && p.x <= b.x + b.w && p.z >= b.z - 1 && p.z <= b.z + b.d)) return false
         return ROUTE_DIRS.every(([dx, dz]) => {
           const next = { x: p.x + dx, z: p.z + dz }
@@ -162,7 +165,7 @@ export function createCrossroads(map: GameMap): void {
     map.road = rerouted.route
     const surface = oldRoad.some(p => distance(p, center) <= 1) ? "path" : "track"
     for (const p of patch) map.tiles[key(map, p)] = same(p, center) ? "clearing" : surface
-    for (const p of map.road) if (map.tiles[key(map, p)] !== "bridge") map.tiles[key(map, p)] = "path"
+    for (const p of map.road) if (!isWaterTerrain(map.tiles[key(map, p)])) map.tiles[key(map, p)] = "path"
     map.crossroads.push({ ...crossroad, center, junction })
   }
   // Branch triggers live at the last shared road tile, including the new ring.

@@ -7,8 +7,8 @@ export const WATER_SOURCE_FRAME = {
   directions: 8, variants: 1, rows: WATER_SOURCE_KINDS.length,
 }
 export const WATER_SOURCE_ATLAS = {
-  color: "/textures/water-sources/v1/color.png",
-  depth: "/textures/water-sources/v1/depth.png",
+  color: "/textures/water-sources/v2/color.png",
+  depth: "/textures/water-sources/v2/depth.png",
 }
 
 /** Local-space ground contacts shared by navigation and drinking previews.

@@ -1,6 +1,7 @@
 import { expandReachable, nearestReachableLand } from "./connectivity"
 import { generateLegacyMap } from "./legacy-generate-map"
 import { DEFAULT_SETTINGS, PLAYABLE_SEED_REGION_SIZE, sampleWoodland, seedingMethodForSeed } from "./woodland"
+import { MAIN_ROAD_WIDTH, clearMainRoadVerge } from "./road-width"
 import { routeBounds, ROUTE_EDGE_INSET } from "./route-bounds"
 import { createCrossroads } from "./crossroads"
 import { straightenRoad } from "./straighten-road"
@@ -9,6 +10,7 @@ import { addFoundingWell, addPathSprings } from "./seeded-water"
 import { beachAccess } from "./beaches"
 import { taperRiverBanks, gradeBridgeApproaches } from "./river-banks"
 import { bridgeLayout } from "./bridges"
+import { seedFords } from "./fords"
 import { generateElevation, finishElevation, levelBuildingGround, elevationStep, type ElevationInfo, type ElevationSettings } from "./elevation"
 import { drainWater } from "./hydrology"
 import { makeRng } from "../rng"
@@ -21,7 +23,7 @@ import { generateWater, WATER_KIND_LAKE, WATER_KIND_RIVER } from "./water"
 /** Seed-selected wind-spread or cellular woodland, sampled at fixed tile scale.
  * Jagged ancient forests sit inside normal canopy, with large irregular hearts
  * and one narrow destination approach. Main clearings connect to the road;
- * rivers use bank-to-bank bridges and lakes remain barriers. Founding reserves
+ * rivers use bank-to-bank fords or bridges and lakes remain barriers. Founding reserves
  * a church, shelter, dry gate path, and nearby ordinary lumber. Independent
  * random streams keep terrain and route tuning reproducible. */
 
@@ -659,6 +661,11 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   }
 
   // --- Join same-bank pockets to the network ---------------------------------
+  // Finish the shallow shelves and their bank descents before connecting land;
+  // erosion can open a dry route through a formerly steep part of the bank.
+  const crossingMap: GameMap = { width, depth, tiles, buildings: [hovel, shelter], seed, road, shortcuts, site, elevation, water: waterInfo }
+  seedFords(crossingMap, bridgeLayout({ ...crossingMap }).spans)
+
   // Rivers, lakes, and dark forests divide the world, and trails cross none of
   // them, so land the road cannot reach without a crossing stays cut off —
   // that is the point. But a glade or clearing that shares a bank with
@@ -667,28 +674,34 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   // or old growth between them and everything reachable are left as they are.
   const reached = reachableFrom(tiles, roadTiles, width, depth, elevation)
   const settled = new Uint8Array(tiles.length)
-  // Repairs only add reachable tiles, so earlier indices never need another scan.
-  for (let orphan = 0; orphan < tiles.length; orphan++) {
-    if (!TERRAIN[tiles[orphan]].passable || reached[orphan] || settled[orphan]) continue
-    const pocket = passableComponent(tiles, orphan, width, depth, elevation)
-    for (const i of pocket) settled[i] = 1
-    const link = nearestReachedByLand(pocket, reached, tiles, walkable, width, depth, elevation)
-    if (!link) continue
-    const route = routeOverLand(
-      { x: link.from % width, z: Math.floor(link.from / width) },
-      { x: link.to % width, z: Math.floor(link.to / width) },
-      width,
-      depth,
-      trailWander,
-      walkable,
-      walkable,
-      0,
-      elevation,
-      false, // Open forest floor for stranded pockets; these repairs never stamp a road or track.
-    )
-    if (!route) continue
-    carveRoute(route)
-    expandReachable(tiles, route, reached, width, depth, elevation)
+  // A newly reached ford shelf can expose an earlier pocket on another bank.
+  // Revisit after an expanding pass, while retaining linear scans and incremental floods.
+  let expanded = true
+  while (expanded) {
+    expanded = false
+    settled.fill(0)
+    for (let orphan = 0; orphan < tiles.length; orphan++) {
+      if (!TERRAIN[tiles[orphan]].passable || reached[orphan] || settled[orphan]) continue
+      const pocket = passableComponent(tiles, orphan, width, depth, elevation)
+      for (const i of pocket) settled[i] = 1
+      const link = nearestReachedByLand(pocket, reached, tiles, walkable, width, depth, elevation)
+      if (!link) continue
+      const route = routeOverLand(
+        { x: link.from % width, z: Math.floor(link.from / width) },
+        { x: link.to % width, z: Math.floor(link.to / width) },
+        width,
+        depth,
+        trailWander,
+        walkable,
+        walkable,
+        0,
+        elevation,
+        false, // Open forest floor for stranded pockets; these repairs never stamp a road or track.
+      )
+      if (!route) continue
+      carveRoute(route)
+      expanded = expandReachable(tiles, route, reached, width, depth, elevation) > 0 || expanded
+    }
   }
 
   // --- Open the ancient hearts and cut their woodland approaches ------------
@@ -760,6 +773,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     woodlandMethod,
     mainClearings,
     road,
+    mainRoadWidth: MAIN_ROAD_WIDTH,
     shortcuts,
     darkForests,
     darkForestFloor,
@@ -773,10 +787,11 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   // Bridge grading and founding can raise a formerly low beach; classify sand last.
   const sandy = beachAccess(map.elevation!, width, depth, kind, waterInfo)
   for (let i = 0; i < tiles.length; i++) if (tiles[i] === "sand" && !sandy[i]) tiles[i] = "grass"
-  addFoundingWell(map, true)
+  addFoundingWell(map)
   addPathSprings(map)
   addRoadsideTowns(map)
   createCrossroads(map)
+  clearMainRoadVerge(map)
   return map
 }
 

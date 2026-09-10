@@ -87,18 +87,25 @@ export interface WoodPile {
   wood: number
 }
 
-/** Four stack locations inside the yard; keep adding to the smallest stack. */
+/** Spread the stock across all four rows, including older unevenly filled saves. */
 export function stackWood(piles: Map<string, WoodPile>, campId: string, wood: number): void {
   if (wood <= 0) return
   const stacks = Array.from(piles.values()).filter((pile) => pile.campId === campId)
-  let pile = stacks.find((p) => p.wood < 24 * WOOD_PER_LOG)
-  if (!pile && stacks.length < 4) {
-    const slot = [0, 1, 2, 3].find((candidate) => !stacks.some((p) => p.slot === candidate))!
-    pile = { id: `${campId}:pile:${slot}`, campId, slot, wood: 0 }
-    piles.set(pile.id, pile)
+  const total = stacks.reduce((sum, pile) => sum + pile.wood, wood)
+  const perRow = Math.floor(total / (4 * WOOD_PER_LOG)) * WOOD_PER_LOG
+  let remainder = total - perRow * 4
+  for (let slot = 0; slot < 4; slot++) {
+    const extra = Math.min(WOOD_PER_LOG, remainder)
+    remainder -= extra
+    const amount = perRow + extra
+    const old = stacks.find(pile => pile.slot === slot)
+    if (!amount) {
+      if (old) piles.delete(old.id)
+      continue
+    }
+    const pile = old ?? { id: `${campId}:pile:${slot}`, campId, slot, wood: 0 }
+    piles.set(pile.id, { ...pile, wood: amount })
   }
-  pile ??= stacks.reduce((a, b) => a.wood < b.wood ? a : b)
-  pile.wood += wood
 }
 
 /** World offset from the yard centre; all logs stay within the footprint. */

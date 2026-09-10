@@ -105,7 +105,7 @@ export function cliffCorner(map: GameMap, x: number, z: number): CliffCorner | u
     let protectedSite = false
     for (let oz = -1; oz <= 1; oz++) for (let ox = -1; ox <= 1; ox++) {
       const tx = x + ox, tz = z + oz
-      if (tx >= 0 && tz >= 0 && tx < map.width && tz < map.depth && ["path", "track", "bridge"].includes(map.tiles[tz * map.width + tx])) protectedSite = true
+      if (tx >= 0 && tz >= 0 && tx < map.width && tz < map.depth && ["path", "track", "bridge", "ford"].includes(map.tiles[tz * map.width + tx])) protectedSite = true
     }
     if (protectedSite || map.buildings.some(b => x >= b.x - 1 && x < b.x + b.w + 1 && z >= b.z - 1 && z < b.z + b.d + 1)) return
     const lower: CliffCorner["lower"] = [0, 0, 0, 0]

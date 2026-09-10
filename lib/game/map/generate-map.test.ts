@@ -48,7 +48,7 @@ function countTerrain(map: GameMap, id: string): number {
 /** True for tiles that carry water — bridges keep the water beneath them. */
 function carriesWater(map: GameMap, x: number, z: number): boolean {
   const t = tileAt(map, x, z)
-  return t === "water" || t === "bridge"
+  return t === "water" || t === "bridge" || t === "ford"
 }
 
 /** Tiles that aren't open water — the denominator for land-share thresholds. */
@@ -68,7 +68,7 @@ function reachablePath(map: GameMap): Set<string> {
   const queue: Array<[number, number]> = []
   const isRoad = (x: number, z: number) => {
     const t = tileAt(map, x, z)
-    return t === "path" || t === "bridge"
+    return t === "path" || t === "bridge" || t === "ford"
   }
   for (let z = 0; z < map.depth; z++) {
     if (isRoad(0, z)) queue.push([0, z])
@@ -164,7 +164,8 @@ describe("generateMap", () => {
             const onApproach = map.site!.branch.some(p => p.x === hovel.x + dx && p.z === hovel.z + dz)
             const onShelterPath = (dz === -1 && dx >= (door.z < hovel.z ? 0 : -1) && dx <= (door.z < hovel.z ? 1 : 0)) ||
               (door.z >= hovel.z && ((dx === -1 && dz >= -1) || (dz === hovel.d && dx <= 1)))
-            expect(onApproach || onShelterPath, `seed ${seed} only the approach and shelter connection are paved`).toBe(true)
+            const onWaterPath = map.buildingAccessTiles?.some(p => p.x === hovel.x + dx && p.z === hovel.z + dz)
+            expect(onApproach || onShelterPath || onWaterPath, `seed ${seed} only the approach, shelter and rear well connections are paved`).toBe(true)
           }
         }
       }
@@ -269,7 +270,7 @@ describe("generateMap", () => {
           // A branch can share the public crossroads loop before becoming a track.
           const onLoop = map.crossroads?.some(c => Math.max(Math.abs(branch[i].x - c.center.x), Math.abs(branch[i].z - c.center.z)) === 1)
           expect(
-            onLoop ? ["path", "track", "bridge"] : ["track", "bridge"],
+            onLoop ? ["path", "track", "bridge", "ford"] : ["track", "bridge", "ford"],
             `seed ${seed} branch is track past the junction`,
           ).toContain(terrain)
         }
@@ -362,7 +363,7 @@ describe("generateMap", () => {
       for (let i = 0; i < road.length; i++) {
         // River crossings ride on bridge tiles; everything else is path.
         expect(
-          ["path", "bridge"],
+          ["path", "bridge", "ford"],
           `seed ${seed} route is on road`,
         ).toContain(tileAt(map, road[i].x, road[i].z))
         if (i > 0) {
@@ -605,7 +606,7 @@ describe("generateMap", () => {
         expect(forest.approach.at(-1)).toEqual(forest.center)
         expect(forest.approach.length).toBeGreaterThan(4)
         for (const [i, p] of forest.approach.entries()) {
-          expect(["track", "path", "bridge"]).toContain(at(p))
+          expect(["track", "path", "bridge", "ford"]).toContain(at(p))
           if (i === 0) continue
           const prev = forest.approach[i - 1]
           expect(Math.abs(p.x - prev.x) + Math.abs(p.z - prev.z)).toBe(1)
@@ -657,7 +658,7 @@ describe("generateMap", () => {
     for (const p of map.road!) {
       for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const t = tileAt(map, p.x + dx, p.z + dz)
-        if (t === null || t === "path" || t === "bridge" || t === "track" || t === "water") continue
+        if (t === null || t === "path" || t === "bridge" || t === "ford" || t === "track" || t === "water") continue
         beside++
         if (isWoods(t)) forest++
       }
@@ -741,7 +742,7 @@ describe("generateMap", () => {
   it("keeps water from dominating the map", () => {
     for (const seed of SEEDS) {
       const map = mapFor(seed)
-      const wet = map.tiles.filter((t) => t === "water" || t === "bridge").length
+      const wet = map.tiles.filter((t) => t === "water" || t === "bridge" || t === "ford").length
       expect(wet / map.tiles.length, `seed ${seed} water stays modest`).toBeLessThan(0.16)
     }
   }, SWEEP_TIMEOUT)

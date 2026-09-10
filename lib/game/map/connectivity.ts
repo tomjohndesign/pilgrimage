@@ -3,12 +3,14 @@ import { ROUTE_DIRS } from "./route"
 import { TERRAIN, type TerrainId } from "./terrain"
 
 /** Extend an existing flood after opening paths. Only new ground is visited;
- * callers must rebuild the flood after blocking tiles or changing elevation. */
+ * callers must rebuild the flood after blocking tiles or changing elevation.
+ * Returns the number of newly reached tiles, so ford repairs can detect progress. */
 export function expandReachable(
   tiles: TerrainId[], changed: readonly number[], seen: Uint8Array,
   width: number, depth: number, elevation: ElevationInfo,
-): void {
+): number {
   const queue: number[] = []
+  let added = 0
   const canStep = (a: number, b: number) => tiles[a] === "bridge" || tiles[b] === "bridge"
     || Number.isFinite(elevationStep(elevation, a, b))
   for (const i of changed) {
@@ -18,7 +20,7 @@ export function expandReachable(
     for (const [dx, dz] of ROUTE_DIRS) {
       const nx = x + dx, nz = z + dz, n = nz * width + nx
       if (nx < 0 || nz < 0 || nx >= width || nz >= depth || !seen[n] || !canStep(n, i)) continue
-      seen[i] = 1; queue.push(i); break
+      seen[i] = 1; added++; queue.push(i); break
     }
   }
   for (let head = 0; head < queue.length; head++) {
@@ -26,9 +28,10 @@ export function expandReachable(
     for (const [dx, dz] of ROUTE_DIRS) {
       const nx = x + dx, nz = z + dz, n = nz * width + nx
       if (nx < 0 || nz < 0 || nx >= width || nz >= depth || seen[n] || !TERRAIN[tiles[n]].passable || !canStep(i, n)) continue
-      seen[n] = 1; queue.push(n)
+      seen[n] = 1; added++; queue.push(n)
     }
   }
+  return added
 }
 
 /** Stop the dry-land search at the nearest reachable frontier. Complete that

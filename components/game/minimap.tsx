@@ -3,9 +3,14 @@
 import { useEffect, useRef } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
+import { useBalanceStore } from "@/lib/game/balance-store"
+import { getBuildInfluence } from "@/lib/game/build-influence"
+import { useBuildStore } from "@/lib/game/build-store"
 import { TERRAIN, type TerrainId } from "@/lib/game/map/terrain"
 import type { GameMap } from "@/lib/game/map/types"
 import { ISO_PITCH, screenBasis, yawForView } from "@/lib/game/render/iso"
+import { relicIsCarried } from "@/lib/game/relic-procession"
+import { shrineLayout } from "@/lib/game/shrine-layout"
 
 /**
  * Overview map drawn from tile data, one texel per tile — never from the 3D
@@ -14,8 +19,8 @@ import { ISO_PITCH, screenBasis, yawForView } from "@/lib/game/render/iso"
  * frame in the camera: click or drag to move the focus there.
  *
  * Drawing is imperative: the terrain is rasterised once per map into an
- * offscreen canvas, and camera changes only re-blit it and stroke the view
- * rectangle via a store subscription — no React re-renders on pan or zoom.
+ * offscreen canvas, and camera and simulation updates redraw the overlays
+ * via store subscriptions — no React re-renders on pan or zoom.
  */
 
 /** CSS size of the widget; the backing store is 2× for crisp 1px-per-tile texels. */
@@ -46,6 +51,9 @@ function mapTransform(map: GameMap, viewIndex: number): DOMMatrix {
 }
 
 const VIEWPORT_STROKE = "#f2e8d5"
+const INFLUENCE_COLOR = "#e4c77f"
+const BUILDING_COLOR = "#ef4444"
+const INFLUENCE_OUTLINE = "#30271c"
 
 function terrainPalette(): Record<TerrainId, [number, number, number]> {
   const palette = {} as Record<TerrainId, [number, number, number]>
@@ -82,6 +90,7 @@ function renderBase(map: GameMap): HTMLCanvasElement {
  */
 export function Minimap({ map }: { map: GameMap }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const balance = useBalanceStore((s) => s.balance)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -90,6 +99,32 @@ export function Minimap({ map }: { map: GameMap }) {
 
     // Built here, not in render: the HUD server-renders, and canvas needs DOM.
     const base = renderBase(map)
+    const influence = getBuildInfluence(map, balance).radiated
+    const influenceCanvas = document.createElement("canvas")
+    influenceCanvas.width = map.width
+    influenceCanvas.height = map.depth
+    const influenceCtx = influenceCanvas.getContext("2d")
+    const boundary = new Path2D()
+    if (influenceCtx) {
+      influenceCtx.fillStyle = INFLUENCE_COLOR
+      for (let z = 0; z < map.depth; z++) {
+        for (let x = 0; x < map.width; x++) {
+          if (!influence[z * map.width + x]) continue
+          influenceCtx.fillRect(x, z, 1, 1)
+          for (const [dx, dz, ax, az, bx, bz] of [
+            [-1, 0, 0, 0, 0, 1], [1, 0, 1, 0, 1, 1],
+            [0, -1, 0, 0, 1, 0], [0, 1, 0, 1, 1, 1],
+          ]) {
+            const nx = x + dx, nz = z + dz
+            if (nx >= 0 && nz >= 0 && nx < map.width && nz < map.depth && influence[nz * map.width + nx]) continue
+            boundary.moveTo(x + ax - map.width / 2, z + az - map.depth / 2)
+            boundary.lineTo(x + bx - map.width / 2, z + bz - map.depth / 2)
+          }
+        }
+      }
+    }
+    const shrine = map.buildings.find((building) => building.id === map.site?.hovelId)
+    const altarOffset = shrine ? shrineLayout(shrine, map.site?.door).offset : null
 
     const draw = () => {
       const { targetX, targetZ, viewIndex, viewSize } = useCameraStore.getState()
@@ -101,11 +136,20 @@ export function Minimap({ map }: { map: GameMap }) {
       ctx.save()
       ctx.setTransform(transform)
       ctx.drawImage(base, -map.width / 2, -map.depth / 2)
-      for (const building of map.buildings) {
-        ctx.fillStyle = building.id === map.site?.hovelId ? "#e1c777" : building.owner === "independent" ? "#b6b4a1" : "#d4975b"
-        ctx.fillRect(building.x - map.width / 2, building.z - map.depth / 2, building.w, building.d)
-      }
+      ctx.globalAlpha = 0.35
+      ctx.drawImage(influenceCanvas, -map.width / 2, -map.depth / 2)
+      ctx.globalAlpha = 1
       ctx.restore()
+
+      // Stroke in screen space so the boundary stays legible on large maps.
+      const projectedBoundary = new Path2D()
+      projectedBoundary.addPath(boundary, transform)
+      ctx.strokeStyle = INFLUENCE_OUTLINE
+      ctx.lineWidth = 4
+      ctx.stroke(projectedBoundary)
+      ctx.strokeStyle = INFLUENCE_COLOR
+      ctx.lineWidth = 2
+      ctx.stroke(projectedBoundary)
 
       // Keep the viewport outline inside the projected map's diamond.
       ctx.save()
@@ -151,16 +195,42 @@ export function Minimap({ map }: { map: GameMap }) {
       ctx.closePath()
       ctx.stroke()
       ctx.restore()
+
+      // Draw actual building footprints at the terrain's scale, above the viewport.
+      ctx.save()
+      ctx.setTransform(transform)
+      ctx.fillStyle = BUILDING_COLOR
+      for (const building of map.buildings) {
+        ctx.fillRect(building.x - map.width / 2, building.z - map.depth / 2, building.w, building.d)
+      }
+      ctx.restore()
+
+      if (shrine && altarOffset) {
+        const sim = useBuildStore.getState().simulation
+        const procession = sim?.world.road === map.road ? sim?.procession : null
+        const position = procession && relicIsCarried(procession) ? procession.position : null
+        const point = project(
+          position?.x ?? shrine.x + shrine.w / 2 - map.width / 2 + altarOffset.x,
+          position?.z ?? shrine.z + shrine.d / 2 - map.depth / 2 + altarOffset.z,
+        )
+        const x = Math.round(point.x), y = Math.round(point.y)
+        ctx.fillStyle = "#ffffff"
+        ctx.fillRect(x - 6, y - 6, 12, 12)
+        ctx.fillStyle = "#000000"
+        ctx.fillRect(x - 4, y - 4, 8, 8)
+      }
     }
 
     draw()
     const unsubscribe = useCameraStore.subscribe(draw)
+    const unsubscribeSimulation = useBuildStore.subscribe(draw)
     window.addEventListener("resize", draw)
     return () => {
       unsubscribe()
+      unsubscribeSimulation()
       window.removeEventListener("resize", draw)
     }
-  }, [map])
+  }, [map, balance])
 
   // Click or drag anywhere on the map to send the camera focus there.
   useEffect(() => {

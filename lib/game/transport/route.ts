@@ -1,3 +1,4 @@
+import { mainRoadWidthAt } from "../map/road-width"
 import { crossroadIslandAt } from "../map/crossroads"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, tileAt, type GameMap } from "../map/types"
 import { bridgeLayout, bridgeCornerAt, surfaceHeight } from "../map/bridges"
@@ -26,7 +27,7 @@ function clearCorridor(map: GameMap, a: Point, b: Point, width: number, onDeck =
     for(let z=worldToTileZ(map,cz-width);z<=worldToTileZ(map,cz+width);z++)for(let x=worldToTileX(map,cx-width);x<=worldToTileX(map,cx+width);x++) {
       const dx=Math.max(0,Math.abs(tileToWorldX(map,x)-cx)-0.5), dz=Math.max(0,Math.abs(tileToWorldZ(map,z)-cz)-0.5)
       if(Math.hypot(dx,dz)>=width)continue
-      if(crossroadIslandAt(map,x,z) || !["grass","clearing","dirt","path","track","bridge"].includes(tileAt(map,x,z)??"") ||
+      if(crossroadIslandAt(map,x,z) || !["grass","clearing","dirt","path","track","bridge","ford"].includes(tileAt(map,x,z)??"") ||
         map.buildings.some(b=>x>=b.x&&x<b.x+b.w&&z>=b.z&&z<b.z+b.d) || Math.abs(surfaceHeight(map,x,z)-height)>=0.3)return false
     }
   }
@@ -104,6 +105,17 @@ export function cartRoutePoint(map:GameMap,progress:number,radius=DEFAULT_CART_T
   const {a,b,t}=segment(route,progress,"progress")
   return {x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t}
 }
+/** Keep left relative to travel, matching pedestrians. Narrow ramps and tight
+ * corners merge toward the existing cart line before the timber crossing. */
+export function cartTrafficPoint(map: GameMap, progress: number, direction: 1 | -1, radius = DEFAULT_CART_TURN_RADIUS): Point {
+  const centre = cartRoutePoint(map, progress, radius)
+  const lane = direction * .5 * Math.max(0, mainRoadWidthAt(map, progress, true) - 1)
+  if (!lane) return centre
+  const before = cartRoutePoint(map, progress - .05, radius), after = cartRoutePoint(map, progress + .05, radius)
+  const dx = after.x - before.x, dz = after.z - before.z, length = Math.hypot(dx, dz)
+  return length > 1e-8 ? { x: centre.x + dz / length * lane, z: centre.z - dx / length * lane } : centre
+}
+
 /** Advance by physical travel so the cart does not speed up at a tile boundary. */
 export function advanceCartProgress(map:GameMap,progress:number,distance:number,radius=DEFAULT_CART_TURN_RADIUS) {
   const route=cartRoute(map,radius);if(route.length<2)return progress

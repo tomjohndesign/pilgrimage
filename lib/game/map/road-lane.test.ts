@@ -80,8 +80,8 @@ describe("curved road lanes", () => {
 describe("bridge walking lanes", () => {
   it("joins bridge lanes without jumps on generated maps", () => {
     let crossings = 0
-    // Include the inland multi-bridge seed after removing redundant road loops.
-    for (const seed of [0,2,7,42,84]) {
+    // Cover enough raised crossings now that quiet river spans can become fords.
+    for (const seed of [0,2,7,13,21,42,84]) {
       const map=generateMap({seed}),route=map.road!,layout=bridgeLayout(map)
       for (let i=1;i<route.length-1;i++) {
         const tile=route[i]

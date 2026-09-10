@@ -1,3 +1,4 @@
+import { isWaterTerrain } from "./terrain"
 import { ROUTE_EDGE_INSET } from "./route-bounds"
 import { addTownWells } from "./seeded-water"
 import { settlementRoute } from "../settlement-route"
@@ -69,7 +70,7 @@ function townPlan(map: GameMap, junction: number, rotation: BuildingRotation, or
   // Keep the shrine, ancient groves, waterways and existing routes intact.
   if (patch.some(p => {
     const terrain = tileAt(map, p.x, p.z)
-    return terrain === null || terrain === "water" || terrain === "bridge" || terrain === "darkwood"
+    return terrain === null || isWaterTerrain(terrain) || terrain === "darkwood"
       || !!map.water?.depth[p.z * map.width + p.x]
       || map.buildings.some(b => occupied(p, b, 2))
       || map.site?.branch.some(b => b.x === p.x && b.z === p.z)
@@ -107,8 +108,8 @@ export function addRoadsideTowns(map: GameMap): void {
         if (!route || route.some(p => Math.min(p.x, p.z, map.width - 1 - p.x, map.depth - 1 - p.z) < ROUTE_EDGE_INSET)) { accessible = false; break }
         for (const p of route) {
           const i = p.z * map.width + p.x
-          if (candidate.tiles[i] !== "path" && candidate.tiles[i] !== "track" && candidate.tiles[i] !== "bridge") accessTiles.push(p)
-          if (candidate.tiles[i] !== "path" && candidate.tiles[i] !== "bridge") candidate.tiles[i] = "track"
+          if (candidate.tiles[i] !== "path" && candidate.tiles[i] !== "track" && !isWaterTerrain(candidate.tiles[i])) accessTiles.push(p)
+          if (candidate.tiles[i] !== "path" && !isWaterTerrain(candidate.tiles[i])) candidate.tiles[i] = "track"
         }
       }
       if (!accessible) continue

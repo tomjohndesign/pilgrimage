@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { BUILD_CATALOG } from "../balance"
 import { buildingEntry } from "../building-rotation"
+import { shrineLayout } from "../shrine-layout"
 import { settlementRoute } from "../settlement-route"
 import { createSim, stepSim } from "../sim"
 import { townResidents } from "../town-residents"
@@ -111,6 +112,11 @@ describe("generated drinking water", () => {
     const map = generateMap({ seed, width, depth: width })
     const well = map.buildings.find(b => b.id === FOUNDING_WELL_ID)!
     expect(well).toBeDefined()
+    const shrine = map.buildings.find(b => b.id === map.site!.hovelId)!
+    const layout = shrineLayout(shrine, map.site!.door)
+    const dx = well.x + (well.w - 1) / 2 - shrine.x - Math.floor(shrine.w / 2)
+    const dz = well.z + (well.d - 1) / 2 - shrine.z - Math.floor(shrine.d / 2)
+    expect(dx * Math.round(Math.sin(layout.rotation)) + dz * Math.round(Math.cos(layout.rotation))).toBeLessThan(-layout.depth / 2)
     const paths: GameMap = { ...map, tiles: map.tiles.map(t => ["track", "path", "bridge"].includes(t) ? t : "forest") }
     expect(settlementRoute(paths, paths.buildings, map.site!.door, buildingEntry(well))).not.toBeNull()
     for (let z = well.z - 1; z <= well.z + well.d; z++) for (let x = well.x - 1; x <= well.x + well.w; x++) {
@@ -118,7 +124,9 @@ describe("generated drinking water", () => {
     }
     const p = map.site!.branch.reduce((best, p) => Math.hypot(p.x - well.x, p.z - well.z) < Math.hypot(best.x - well.x, best.z - well.z) ? p : best)
     const point = { x: tileToWorldX(map, p.x), z: tileToWorldZ(map, p.z), y: .2 }
-    expect(waterVisitPlan(map, well, point, point)).not.toBeNull()
+    const visit = waterVisitPlan(map, well, point, point)!
+    expect(visit).not.toBeNull()
+    expect(visit.route.some(p => p.x === tileToWorldX(map, map.site!.door.x) && p.z === tileToWorldZ(map, map.site!.door.z))).toBe(true)
     expect(well.owner).toBeUndefined()
   }, 20000)
 })

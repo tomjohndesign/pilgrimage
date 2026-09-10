@@ -1,3 +1,4 @@
+import { isWaterTerrain } from "./terrain"
 import type { SideFlags } from "./road"
 import { tileAt, type GameMap } from "./types"
 
@@ -6,7 +7,7 @@ export const SHORE_CORNERS = [[1, 1], [1, -1], [-1, 1], [-1, -1]] as const
 
 export function isWaterTile(map: GameMap, x: number, z: number): boolean {
   const terrain = tileAt(map, x, z)
-  return terrain === "water" || terrain === "bridge"
+  return isWaterTerrain(terrain)
 }
 
 /** Small bank lips can share paint; cliffs and waterfall levels cannot. */

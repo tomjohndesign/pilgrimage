@@ -8,6 +8,9 @@
 /** World-space height of the zero-elevation base surface. */
 export const TILE_HEIGHT = 0.2
 
+/** Shoreline, medium and deep water share these colours across all water terrain. */
+export const WATER_DEPTH_COLORS = ["#6ba6c8", "#5893b9", "#4581aa"] as const
+
 export type TerrainId =
   | "grass"
   | "dirt"
@@ -20,6 +23,7 @@ export type TerrainId =
   | "water"
   | "sand"
   | "bridge"
+  | "ford"
 
 /** Woods of either kind — what the forest-shade field and the tree line count. */
 export function isWoods(id: TerrainId): boolean {
@@ -28,7 +32,13 @@ export function isWoods(id: TerrainId): boolean {
 
 /** A modest detour along a road beats crossing open ground; off-road goals stay reachable. */
 export function walkingRouteCost(id: TerrainId): number {
+  if (id === "ford") return 2
   return id === "path" || id === "track" || id === "bridge" ? 1 : 3
+}
+
+/** Crossings keep their river water for shorelines, flow and ground paint. */
+export function isWaterTerrain(id: TerrainId | null): boolean {
+  return id === "water" || id === "bridge" || id === "ford"
 }
 
 export interface TerrainDef {
@@ -159,13 +169,21 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
     buildable: false,
     passable: true,
   },
+  ford: {
+    id: "ford",
+    label: "Stony shallows",
+    color: WATER_DEPTH_COLORS[0],
+    jitter: 0.013,
+    shadeBlend: 0.15,
+    buildable: false,
+    passable: true,
+  },
 }
 
 /**
  * Water renders by depth, not by its single TERRAIN entry: index 0 is shallow
  * shoreline water (depth 1), index 2 is deep water (depth 3). The elevation field stores the bed below the water surface separately.
  */
-export const WATER_DEPTH_COLORS = ["#6ba6c8", "#5893b9", "#4581aa"] as const
 export const MAX_WATER_DEPTH = 3
 
 /** Characters used in the ASCII map source. */
@@ -181,4 +199,5 @@ export const TERRAIN_CHARS: Record<string, TerrainId> = {
   "~": "water",
   "%": "sand",
   "#": "bridge",
+  ":": "ford",
 }

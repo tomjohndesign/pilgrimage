@@ -1,11 +1,13 @@
 "use client"
 
+import { fordSpeedAt } from "@/lib/game/map/fords"
+
 import { SceneAssetBoundary } from "./scene-assets"
 
 import { stepDevotion } from "@/lib/game/wellbeing"
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { simRegistry } from "@/lib/game/sim"
-import { shrineLayout, shrineStations } from "@/lib/game/shrine-layout"
+import { shrineLayout, shrineStations, isRelicViewingSeat } from "@/lib/game/shrine-layout"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import { monkBeds } from "@/lib/game/housing"
 import { recordWalkingPath } from "@/lib/game/footpaths"
@@ -229,7 +231,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         const sim = simRegistry.current
         const sameWorld = sim && sim.world.road === map.road
         const showing = sameWorld && world.procession.stage === "idle" && [...sim.travelers.values()]
-          .some(visitor => visitor.activity === "visiting" && visitor.shrineSeat?.startsWith("queue-"))
+          .some(visitor => visitor.activity === "visiting" && isRelicViewingSeat(visitor.shrineSeat))
         s.activity = showing ? "showingRelic" : "keepingRelic"
         group.userData.activity = s.activity
         group.userData.moving = false
@@ -308,11 +310,12 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       }
       group.rotation.x = 0
 
-      const evangelizing = stepMonkEvangelism(s, map, evangelismRequested, monkWalkSpeed(characterScale), dt,
+      const groundSpeed = monkWalkSpeed(characterScale) * fordSpeedAt(map, s.x, s.z)
+      const evangelizing = stepMonkEvangelism(s, map, evangelismRequested, groundSpeed, dt,
         world.states.filter(other => other !== s && other.preachingTask).map(other => other.preachingTask!.tile))
       if (evangelismRequested && !evangelizing) useMonkEvangelismStore.getState().recall(monks[i].id)
-      if (!evangelizing && !stepMonkWork(s, map, monkWalkSpeed(characterScale), dt))
-        stepMonkRoutine(s, world.wander, world.rng, monkWalkSpeed(characterScale), dt)
+      if (!evangelizing && !stepMonkWork(s, map, groundSpeed, dt))
+        stepMonkRoutine(s, world.wander, world.rng, groundSpeed, dt)
       if (map.footpaths && !wasFlying) recordWalkingPath(map.footpaths, map, { x: previousX, z: previousZ }, s)
       world.stamina.set(monks[i].id, s.stamina)
       if (s.buildingTask && (s.activity === "building" || s.activity === "sleeping")) group.rotation.y = s.buildingTask.heading

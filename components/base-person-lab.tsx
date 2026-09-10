@@ -54,7 +54,7 @@ import { SETTLEMENT_JOBS, jobDesign, type SettlementJob } from "@/lib/game/jobs/
 
 const JOB_DESIGNS = (Object.keys(SETTLEMENT_JOBS) as SettlementJob[]).flatMap(job => POPULATION_PROFILES.map((profile, variant) => ({ id: `job/${job}/${profile.id}`, label: `${SETTLEMENT_JOBS[job].label} · ${profile.id.replaceAll("-", " ")}`, design: jobDesign(job, variant) })))
 
-const ROAD_DESIGNS = Object.values(TRAVELER_TYPES).flatMap(type => POPULATION_PROFILES.map((profile, variant) => ({ id: `${type.id}/${profile.id}`, label: `${type.label} · ${profile.id.replaceAll("-", " ")}`, design: populationDesign(type, variant) })))
+const ROAD_DESIGNS = Object.values(TRAVELER_TYPES).flatMap(type => POPULATION_PROFILES.map((profile, variant) => ({ id: `${type.id}/${profile.id}`, label: `${type.label} · ${type.id === "nun" ? `sister ${variant + 1}` : profile.id.replaceAll("-", " ")}`, design: populationDesign(type, variant) })))
 
 const DRAFT_KEY = "pilgrimage-rig-editor-v1"
 const button = "hud-action"

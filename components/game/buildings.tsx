@@ -127,7 +127,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
               {piles.filter((pile) => pile.campId === building.id).map((pile) => {
                 const store = building.buildType === "storehouse"
                 const [x, z] = store ? pileOffset(pile.slot) : workshopPileOffset(pile.slot, local.w, local.d, building.layoutSeed)
-                return <group key={pile.id} position={[x, store ? 0.35 : 0.08, store ? z * 0.5 - 0.1 : z]}><WoodPile pile={pile} objectId={pileObjectId(piles.indexOf(pile))} /></group>
+                return <group key={pile.id} position={[x, store ? 0.35 : 0.08, store ? z * 0.5 - 0.1 : z]}><WoodPile pile={pile} objectId={pileObjectId(piles.indexOf(pile))} availableWidth={store ? local.w / 2 - .2 : local.w / 3 - .16} /></group>
               })}</CloseScenery>
             </group>
           )

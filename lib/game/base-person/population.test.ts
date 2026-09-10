@@ -27,8 +27,8 @@ describe("road character population", () => {
         const design = populationDesign(type, variant, base)
         expect(validatePersonDesign(design)).toEqual(design)
         expect(design.tunicColor).toBe(populationDesign(type, variant).tunicColor)
-        expect(design.bodyType).toBe(variant < 3 ? "Male" : "Female")
-        if (variant >= 3) { expect(design.beard).toBe(false); expect(design.hairStyle).toBe(POPULATION_PROFILES[variant].hair) }
+        expect(design.bodyType).toBe(type.id === "nun" ? "Female" : variant < 3 ? "Male" : "Female")
+        if (variant >= 3) { expect(design.beard).toBe(false); expect(design.hairStyle).toBe(type.id === "nun" ? "Cropped" : POPULATION_PROFILES[variant].hair) }
       }
     }
     const profiles = POPULATION_PROFILES.map((_, i) => populationDesign(TRAVELER_TYPES.peasant, i))
@@ -100,5 +100,15 @@ it("dresses all beggar profiles in patched rags with the shared editable rig", (
     expect(design.hat).toBe("None")
     expect(design.satchel).toBe(false)
     expect(validatePersonDesign(design)).toEqual(design)
+  }
+})
+
+it("dresses every nun profile in a veiled habit with a matching depth atlas", () => {
+  for (let variant = 0; variant < 6; variant++) {
+    const visual = populationVisual("nun", variant, null)
+    expect(visual.design).toMatchObject({ bodyType: "Female", garment: "Robe", hat: "Coif", beard: false, beltStyle: "Rope" })
+    for (const clip of [visual.walk, visual.idle, ...Object.values(visual.actions)]) {
+      expect(clip.depth).toContain("nun-depth-")
+    }
   }
 })

@@ -114,9 +114,11 @@ export interface GameMap {
   /**
    * The road as an ordered walk, west edge to east edge, each step to a
    * 4-neighbour. The tile grid only says *where* road is; this says in what
-   * order a traveller crosses it. Steps over rivers are bridge tiles.
+   * order a traveller crosses it. Steps over rivers are shallow fords or existing bridges.
    */
   road?: TilePos[]
+  /** Physical width around the main centreline; omitted on legacy authored maps. */
+  mainRoadWidth?: number
   /**
    * Secondary tracks: each a shorter, more dangerous walk through a dark
    * forest between two points on the road. Present on generated maps that

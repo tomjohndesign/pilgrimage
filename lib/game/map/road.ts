@@ -88,7 +88,7 @@ export const MAX_ROAD_TIER = ROAD_TIERS.length - 1
  * same tier surface, and where the two meet no verge is eroded between them.
  */
 type RoadTerrainId = Extract<TerrainId, "path" | "track">
-type RoadContinuationId = RoadTerrainId | "bridge" | null
+type RoadContinuationId = RoadTerrainId | "bridge" | "ford" | null
 
 export function isRoadTerrain(terrain: TerrainId | null): terrain is RoadTerrainId {
   return terrain === "path" || terrain === "track"
@@ -124,15 +124,16 @@ export const WEAR_PAVED: RoadWear = { edge: 0, inner: 1 }
 /**
  * The rut edges for a stretch of road carrying `traffic` travelers. The main
  * road and the track to the relic carry different crowds, so each is worn by
- * its own count. Paved tiers ignore traffic (see RoadTierDef.paved).
+ * its own count. Wide main roads retain their median; paving covers it.
  */
-export function roadWear(traffic: number, tier: number = DEFAULT_ROAD_TIER): RoadWear {
+export function roadWear(traffic: number, tier: number = DEFAULT_ROAD_TIER, keepMedian = false): RoadWear {
   if (ROAD_TIERS[clampRoadTier(tier)].paved) return WEAR_PAVED
   const t = Math.min(1, Math.max(0, (Number.isFinite(traffic) ? traffic : 0) / TRAFFIC_FOR_BARE_ROAD))
   const k = t * t * (3 - 2 * t)
   return {
     edge: WEAR_UNTRODDEN.edge + (WEAR_TRODDEN.edge - WEAR_UNTRODDEN.edge) * k,
-    inner: WEAR_UNTRODDEN.inner + (WEAR_TRODDEN.inner - WEAR_UNTRODDEN.inner) * k,
+    // Opposing lanes widen outward on the main road, preserving its grassy spine.
+    inner: keepMedian ? .32 : WEAR_UNTRODDEN.inner + (WEAR_TRODDEN.inner - WEAR_UNTRODDEN.inner) * k,
   }
 }
 
@@ -232,7 +233,7 @@ const EDGE_DIRS: ReadonlyArray<readonly [number, number]> = [
  * (the way runs straight over it), or the edge of the world.
  */
 export function roadContinues(terrain: TerrainId | null): terrain is RoadContinuationId {
-  return terrain === null || isRoadTerrain(terrain) || terrain === "bridge"
+  return terrain === null || isRoadTerrain(terrain) || terrain === "bridge" || terrain === "ford"
 }
 
 /**

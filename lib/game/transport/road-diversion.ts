@@ -21,7 +21,7 @@ export function cartRoadDiversion(map: GameMap, initial: CartPose, progress: num
   for (let distance = .1; distance <= lookahead; distance += .1) {
     const next = advanceCartProgress(map, at, direction * .1)
     if (next < 0 || next > last) break
-    const hitch = convoyPoint(map, next)
+    const hitch = convoyPoint(map, next, scale, direction)
     const heading = Math.atan2(hitch.x - pose.hitch.x, hitch.z - pose.hitch.z)
     pose = roadCartPose(map, next, direction, wheelbase, scale, pose)
     if (!convoyBuildingsClear(map, pose, puller, scale, heading) || !convoyBuildingsClear(map, pose, puller, scale)) {
@@ -41,7 +41,7 @@ export function cartRoadDiversion(map: GameMap, initial: CartPose, progress: num
   for (let beyond = wheelbase + 2; beyond <= wheelbase + 12; beyond += 2) {
     const end = advanceCartProgress(map, blocked, direction * beyond)
     if (end < 0 || end > last) break
-    const to = convoyPoint(map, end), ahead = convoyPoint(map, advanceCartProgress(map, end, direction * .1))
+    const to = convoyPoint(map, end, scale, direction), ahead = convoyPoint(map, advanceCartProgress(map, end, direction * .1), scale, direction)
     const heading = Math.atan2(ahead.x - to.x, ahead.z - to.z)
     const drive = cartPath(map, initial, to, puller, scale, context, heading)
     if (!drive) continue

@@ -31,9 +31,10 @@ describe("travelerCountForMap", () => {
 })
 
 describe("generateTravelers", () => {
-  it("includes a monk and a vendor in normal road crowds", () => {
+  it("includes a nun, a monk and a vendor in normal road crowds", () => {
     for (const seed of [0, 1, 42, 12345]) for (const count of [6, 12, 30]) {
       const travelers = generateTravelers(seed, count)
+      expect(travelers.some(t => t.type.id === "nun" && t.name.startsWith("Sister "))).toBe(true)
       expect(travelers.some(t => t.type.id === "friar" && t.type.label === "Monk")).toBe(true)
       expect(travelers.some(t => t.type.id === "vendor")).toBe(true)
     }
@@ -65,6 +66,11 @@ describe("generateTravelers", () => {
     const callings = { Male: new Set<string>(), Female: new Set<string>() }
     for (const seed of [0, 7, 12345, 31337]) {
       for (const traveler of generateTravelers(seed, 500)) {
+        if (traveler.type.id === "nun") {
+          expect(traveler.name).toMatch(/^Sister /)
+          expect(women.has(traveler.name.split(" ")[1])).toBe(true)
+          continue
+        }
         if (traveler.type.id === "friar") {
           expect(traveler.name).toMatch(/^Brother /)
           continue
@@ -76,7 +82,7 @@ describe("generateTravelers", () => {
       }
     }
     for (const seen of Object.values(callings)) {
-      expect([...seen].sort()).toEqual(Object.keys(TRAVELER_TYPES).filter(id => id !== "friar" && id !== "beggar").sort())
+      expect([...seen].sort()).toEqual(Object.keys(TRAVELER_TYPES).filter(id => id !== "friar" && id !== "nun" && id !== "beggar").sort())
     }
   })
 
@@ -144,10 +150,10 @@ describe("generateTravelers", () => {
     expect(jobless).toBeLessThan(pilgrims.length * 0.7)
   })
 
-  it("weights callings as percent shares of the road, peasants at 62.5", () => {
+  it("weights callings as percent shares of the road, peasants at 60.5", () => {
     const total = Object.values(TRAVELER_TYPES).reduce((sum, t) => sum + t.weight, 0)
     expect(total).toBeCloseTo(100, 10)
-    expect(TRAVELER_TYPES.peasant.weight).toBe(62.5)
+    expect(TRAVELER_TYPES.peasant.weight).toBe(60.5)
   })
 
   it("fills roughly six in ten places on the road with peasants", () => {

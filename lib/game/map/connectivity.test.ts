@@ -35,8 +35,11 @@ describe("incremental generation connectivity", () => {
     for (const i of [4, 13, 22, 31, 40]) { tiles[i] = "water"; elevation.height[i] = 10 }
     for (const opening of [[8, 7, 6, 5], [3, 2, 1], [4], [17, 26, 25, 24]]) {
       for (const i of opening) tiles[i] = i === 4 ? "bridge" : "clearing"
-      expandReachable(tiles, opening, seen, width, depth, elevation)
+      const before = seen.reduce((sum, value) => sum + value, 0)
+      const added = expandReachable(tiles, opening, seen, width, depth, elevation)
       expect(seen).toEqual(fullFlood(tiles, roots, width, depth, elevation))
+      expect(added).toBe(seen.reduce((sum, value) => sum + value, 0) - before)
+      expect(expandReachable(tiles, opening, seen, width, depth, elevation)).toBe(0)
       if (opening[0] === 8) expect(seen[8]).toBe(0)
     }
     expect(seen[8]).toBe(1)

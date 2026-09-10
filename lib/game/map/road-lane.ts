@@ -1,3 +1,4 @@
+import { mainRoadWidthAt } from "./road-width"
 import { bridgeLayout } from "./bridges"
 import { diagonalRoadBend, isRoadTerrain, sampleRoadBend } from "./road"
 import { tileAt, type GameMap, type TilePos } from "./types"
@@ -24,13 +25,14 @@ function laneTile(map: GameMap, route: readonly TilePos[], i: number): LaneTile 
   const ix = i === 0 ? b.x - p.x : p.x - a.x, iz = i === 0 ? b.z - p.z : p.z - a.z
   const ox = i === route.length - 1 ? ix : b.x - p.x, oz = i === route.length - 1 ? iz : b.z - p.z
   const dot = ix * ox + iz * oz
-  const ok = (onDeck || isRoadTerrain(tileAt(map, p.x, p.z))) && Math.abs(ix) + Math.abs(iz) === 1 && Math.abs(ox) + Math.abs(oz) === 1 && dot >= 0
+  const ok = (onDeck || tileAt(map, p.x, p.z) === "ford" || isRoadTerrain(tileAt(map, p.x, p.z))) && Math.abs(ix) + Math.abs(iz) === 1 && Math.abs(ox) + Math.abs(oz) === 1 && dot >= 0
   const tile: LaneTile = { ok, ix, iz, ox, oz, straight: dot === 1, bend: ok && dot !== 1 && !onDeck ? diagonalRoadBend(map, p.x, p.z) : null }
   cache.tiles[i] = tile
   return tile
 }
 
 /** Sample a road tile's rendered curve, offset along its local left normal.
+ * Main-road lane offsets expand with usable width and tighten at bends/bridges.
  * Progress still counts tile centres so junctions and arrival triggers retain
  * their indices; half-integers are the shared entrances between tiles. */
 export function roadLanePoint(map: GameMap, route: readonly TilePos[], progress: number, lane: number): TilePos | null {
@@ -70,6 +72,7 @@ export function roadLanePoint(map: GameMap, route: readonly TilePos[], progress:
       dz = iz * cos + oz * sin
     }
   }
+  if (route === map.road) lane *= mainRoadWidthAt(map, progress, true)
   const length = Math.hypot(dx, dz)
   return { x: x + dz / length * lane, z: z - dx / length * lane }
 }

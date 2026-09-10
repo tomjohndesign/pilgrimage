@@ -1,7 +1,8 @@
+import { FORD_DEPTH } from "./fords"
 import { cartCornerEnvelope } from "../transport/corner-envelope"
 import { groundHeight } from "./elevation"
 import { isRoadTerrain } from "./road"
-import { TILE_HEIGHT } from "./terrain"
+import { isWaterTerrain, TILE_HEIGHT } from "./terrain"
 import { tileAt, type GameMap, type TilePos } from "./types"
 import { BRIDGE_CORNER_RADIUS, BRIDGE_DECK_HALF_WIDTH, insideBridgeCorner, type BridgeCorner } from "./bridge-corners"
 
@@ -88,7 +89,7 @@ function isBridge(map: GameMap, x: number, z: number): boolean {
 /** Water, or a bridge with water still running beneath it. */
 function isWet(map: GameMap, x: number, z: number): boolean {
   const t = tileAt(map, x, z)
-  return t === "water" || t === "bridge"
+  return isWaterTerrain(t)
 }
 
 /** Which way a span runs, for the tile at (x, z). */
@@ -329,6 +330,7 @@ export function bridgeCornerAt(map: GameMap, wx: number, wz: number) {
  */
 export function surfaceHeight(map: GameMap, x: number, z: number): number {
   if (x < 0 || z < 0 || x >= map.width || z >= map.depth) return TILE_HEIGHT
+  if (tileAt(map, x, z) === "ford") return TILE_HEIGHT + (map.water?.surface?.[z * map.width + x] ?? 0) - FORD_DEPTH
   const hanging = ropeHeightAt(map, x, z)
   if (hanging !== undefined) return hanging
   const rise = bridgeLayout(map).rise[z * map.width + x]

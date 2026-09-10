@@ -31,6 +31,29 @@ export function stallObstacles(axle: Point, heading: number, side: number, scale
   ]
 }
 export function animalClearance(puller: Puller, scale: number) { return (puller === "horse" ? 2 : 1.9) * RIG_TO_WORLD * scale }
+
+/** Signed distance to a body: negative inside, positive outside. */
+export function obstacleDistance(point: Point, box: StallObstacle) {
+  const dx = point.x - box.x, dz = point.z - box.z
+  const x = Math.abs(dx * Math.cos(box.heading) - dz * Math.sin(box.heading)) - box.halfWidth
+  const z = Math.abs(dx * Math.sin(box.heading) + dz * Math.cos(box.heading)) - box.halfLength
+  return Math.hypot(Math.max(0, x), Math.max(0, z)) + Math.min(0, Math.max(x, z))
+}
+
+/** Existing overlaps may only shrink while escaping a newly placed obstacle. */
+export function pastureEscapeClear(a: Point, b: Point, obstacles: readonly StallObstacle[], clearance: number) {
+  const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / .04))
+  return obstacles.every(box => {
+    let previous = obstacleDistance(a, box)
+    if (previous > clearance) return pastureSegmentClear(a, b, [box], clearance)
+    for (let i = 1; i <= steps; i++) {
+      const distance = obstacleDistance({ x: a.x + (b.x - a.x) * i / steps, z: a.z + (b.z - a.z) * i / steps }, box)
+      if (distance < previous - 1e-8) return false
+      previous = distance
+    }
+    return previous > clearance
+  })
+}
 /** Segment vs expanded oriented boxes: check the whole body sweep, including
  * its head while grazing, rather than only the destination tile or hoof. */
 export function pastureSegmentClear(a: Point, b: Point, obstacles: readonly StallObstacle[], clearance: number) {

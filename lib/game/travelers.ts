@@ -19,6 +19,7 @@ export type TravelerTypeId =
   | "pilgrim"
   | "merchant"
   | "friar"
+  | "nun"
   | "knight"
   | "minstrel"
   | "vendor"
@@ -64,7 +65,7 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     id: "peasant",
     label: "Peasant",
     color: "#9c8b66",
-    weight: 62.5,
+    weight: 60.5,
     paceMin: 0.8,
     paceMax: 1.1,
     gold: { min: 10, max: 35 },
@@ -116,6 +117,14 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     joblessChance: 0,
     skillCount: { min: 1, max: 2 },
     skills: ["letters", "healing", "brewing", "chant"],
+  },
+  nun: {
+    id: "nun", label: "Nun", color: "#45413b", weight: 2,
+    paceMin: 0.75, paceMax: 1,
+    gold: { min: 10, max: 25 }, status: { min: 30, max: 60 },
+    piety: { min: 70, max: 100 }, joblessChance: 0,
+    skillCount: { min: 1, max: 2 },
+    skills: ["letters", "healing", "weaving", "chant"],
   },
   knight: {
     id: "knight",
@@ -306,6 +315,8 @@ export function generateTravelers(seed: number, count: number): Traveler[] {
   const travelers: Traveler[] = []
   for (let i = 0; i < count; i++) {
     let type = pickType(rng)
+    // Include a sister on normal roads, alongside the brother and vendor.
+    if (i === count - 3 && count >= 6 && !travelers.some(t => t.type.id === "nun")) type = TRAVELER_TYPES.nun
     // A normal crowd includes a traveling brother, even on a quiet road.
     if (i === count - 2 && count >= 6 && !travelers.some(t => t.type.id === "friar")) type = TRAVELER_TYPES.friar
     // Any real crowd includes someone selling to it: if the weighted rolls
@@ -316,10 +327,10 @@ export function generateTravelers(seed: number, count: number): Traveler[] {
     }
     // Match the body's seeded assignment used by the scene without consuming
     // another roll from the stream that determines attributes and movement.
-    const firstNames = FIRST_NAMES[type.id === "friar" ? "Male" : travelerAppearance(seed, i).bodyType]
+    const firstNames = FIRST_NAMES[type.id === "friar" ? "Male" : type.id === "nun" ? "Female" : travelerAppearance(seed, i).bodyType]
     travelers.push({
       id: i,
-      name: `${type.id === "friar" ? "Brother " : ""}${firstNames[Math.floor(rng() * firstNames.length)]} ${
+      name: `${type.id === "friar" ? "Brother " : type.id === "nun" ? "Sister " : ""}${firstNames[Math.floor(rng() * firstNames.length)]} ${
         BYNAMES[Math.floor(rng() * BYNAMES.length)]
       }`,
       type,

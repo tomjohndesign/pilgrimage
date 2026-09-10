@@ -19,7 +19,7 @@ import {
   settlementRenown,
 } from "./settlement"
 import { generateMonks } from "./monks"
-import { generateRelic, relicDraw, turnsAside } from "./relic"
+import { generateRelic, relicDraw, visitChance } from "./relic"
 import { generateTravelers } from "./travelers"
 import type { GameMap } from "./map/types"
 
@@ -47,6 +47,17 @@ function map(): GameMap {
 }
 
 describe("balance presets", () => {
+  it("moves the old guard-post default to 80 renown while preserving custom unlocks", () => {
+    const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
+    old.version = 6
+    old.balance.buildings["guard-post"].requiredRenown = 15
+    expect(importBalance(JSON.stringify(old)).balance?.buildings["guard-post"].requiredRenown).toBe(80)
+    old.balance.buildings["guard-post"].requiredRenown = 55
+    expect(importBalance(JSON.stringify(old)).balance?.buildings["guard-post"].requiredRenown).toBe(55)
+    const current = fresh()
+    current.buildings["guard-post"].requiredRenown = 15
+    expect(importBalance(exportBalance(current)).balance).toEqual(current)
+  })
   it("round-trips all defaults without sharing mutable objects", () => {
     const result = importBalance(exportBalance(DEFAULT_BALANCE))
     expect(result.balance).toEqual(DEFAULT_BALANCE)
@@ -96,14 +107,14 @@ describe("balance presets", () => {
     old.balance.rules.thirstDecay = 10
     expect(importBalance(JSON.stringify(old)).balance?.rules).toMatchObject({ hungerDecay: 8, thirstDecay: 10 })
   })
-  it("halves previous default rates in saved presets while preserving custom tuning", () => {
+  it("updates previous default rates in saved presets while preserving custom tuning", () => {
     const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
     old.version = 4
     Object.assign(old.balance.rules, { hungerDecay: 3, staminaDecay: 2.1, thirstDecay: 25 })
     old.balance.buildings.tavern.goldIncome = 10
     const result = importBalance(JSON.stringify(old))
     expect(result.error).toBeNull()
-    expect(result.balance?.rules).toMatchObject({ hungerDecay: 1.5, staminaDecay: 1.05, thirstDecay: 25 })
+    expect(result.balance?.rules).toMatchObject({ hungerDecay: 0.375, staminaDecay: 1.05, thirstDecay: 25 })
     expect(result.balance?.buildings.tavern.goldIncome).toBe(10)
     Object.assign(old.balance.rules, { hungerDecay: 8, staminaDecay: 7 })
     expect(importBalance(JSON.stringify(old)).balance?.rules).toMatchObject({ hungerDecay: 8, staminaDecay: 7 })
@@ -111,15 +122,28 @@ describe("balance presets", () => {
     Object.assign(current.rules, { hungerDecay: 3, staminaDecay: 2.1 })
     expect(importBalance(exportBalance(current)).balance).toEqual(current)
   })
-  it("halves the previous default thirst rate in version 5 presets", () => {
+  it("updates the previous default thirst rate in version 5 presets", () => {
     const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
     old.version = 5
     old.balance.rules.thirstDecay = 6
-    expect(importBalance(JSON.stringify(old)).balance?.rules.thirstDecay).toBe(3)
+    expect(importBalance(JSON.stringify(old)).balance?.rules.thirstDecay).toBe(0.75)
     old.balance.rules.thirstDecay = 9
     expect(importBalance(JSON.stringify(old)).balance?.rules.thirstDecay).toBe(9)
     const current = fresh()
     current.rules.thirstDecay = 6
+    expect(importBalance(exportBalance(current)).balance).toEqual(current)
+  })
+  it("quarters version 6 need defaults and updates attraction without losing custom settings", () => {
+    const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
+    old.version = 6
+    old.balance.rules.earlyVisitPiety = 90
+    Object.assign(old.balance.rules, { hungerDecay: 1.5, thirstDecay: 3, hospitalityBaseChance: 0.1 })
+    expect(importBalance(JSON.stringify(old)).balance?.rules).toEqual(DEFAULT_BALANCE.rules)
+    delete old.balance.rules.earlyVisitPiety
+    Object.assign(old.balance.rules, { hungerDecay: 2, thirstDecay: 4, hospitalityBaseChance: 0.4 })
+    expect(importBalance(JSON.stringify(old)).balance?.rules).toEqual(old.balance.rules)
+    const current = fresh()
+    Object.assign(current.rules, { hungerDecay: 1.5, thirstDecay: 3, hospitalityBaseChance: 0.1 })
     expect(importBalance(exportBalance(current)).balance).toEqual(current)
   })
   it.each([NaN, Infinity, -1, 1.5, 100001, "200", null])(
@@ -168,6 +192,16 @@ describe("balance presets", () => {
 })
 
 describe("tuned gameplay", () => {
+  it("locks guard posts until 80 renown without charging for a locked purchase", () => {
+    const world = map(), settlement = createSettlement()
+    // The founding shrine supplies 5 renown; each completed visit adds 0.5.
+    const locked = purchaseStructure(settlement, world, [], [], "guard-post", { x: 22, z: 18 }, undefined, 149)
+    expect(locked.error).toBe("Requires 80 shrine renown.")
+    expect(locked.settlement).toBe(settlement)
+    const unlocked = purchaseStructure(settlement, world, [], [], "guard-post", { x: 22, z: 18 }, undefined, 150)
+    expect(unlocked.error).toBeNull()
+    expect(unlocked.settlement.structures[0].buildType).toBe("guard-post")
+  })
   it("uses starting funds, costs and unlocks from the supplied balance", () => {
     const balance = fresh()
     balance.rules.startingGold = 12
@@ -192,15 +226,15 @@ describe("tuned gameplay", () => {
   })
   it("revalues structures but ignores legacy passive-income tuning", () => {
     const world = map()
-    const existing = purchaseStructure(createSettlement(), world, [], [], "shelter", {
+    const existing = purchaseStructure(createSettlement(), world, [], [], "monk-shelter", {
       x: 22,
       z: 18,
     }).settlement
     existing.structures[0].construction!.work = existing.structures[0].construction!.required
     const before = structuredClone(existing)
     const balance = fresh()
-    balance.buildings.shelter.renown = 50
-    balance.buildings.shelter.goldIncome = 9
+    balance.buildings["monk-shelter"].renown = 50
+    balance.buildings["monk-shelter"].goldIncome = 9
     balance.rules.residentGold = 3
     balance.rules.residentWood = 5
     balance.rules.incomeSeconds = 6
@@ -215,7 +249,7 @@ describe("tuned gameplay", () => {
     expect(paid.resources.gold - existing.resources.gold).toBe(0)
     expect(paid.resources.wood - existing.resources.wood).toBe(0)
     expect(existing).toEqual(before)
-    expect(buildingIncomeLabel(buildCatalog(balance).find(b => b.id === "shelter")!, balance)).toBe("Adds monk housing when complete")
+    expect(buildingIncomeLabel(buildCatalog(balance).find(b => b.id === "monk-shelter")!, balance)).toBe("Adds monk housing when complete")
   })
   it("applies the tuned influence radius across the full footprint", () => {
     const balance = fresh()
@@ -247,7 +281,11 @@ describe("tuned gameplay", () => {
     const base = relicDraw(pilgrim.attributes, relic.stats, 0, balance)
     expect(relicDraw(pilgrim.attributes, relic.stats, 200, balance)).toBeCloseTo(base * 2)
     expect(relicDraw(pilgrim.attributes, relic.stats, 500, balance)).toBeCloseTo(base * 2)
+    const attributes = { ...pilgrim.attributes, hunger: 100, thirst: 100, stamina: 100 }
+    const before = visitChance(attributes, relic.stats, 200, balance)
     balance.rules.turnAsideDraw = 1000
-    expect(turnsAside({ ...pilgrim, attributes: { ...pilgrim.attributes, hunger: 100, thirst: 100, stamina: 100 } }, relic, 200, balance)).toBe(false)
+    const after = visitChance(attributes, relic.stats, 200, balance)
+    expect(after).toBeLessThan(before)
+    expect(after).toBeGreaterThan(0.1) // Faith still motivates a visit without relic interest.
   })
 })

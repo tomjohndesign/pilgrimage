@@ -27,6 +27,9 @@ export interface TravelParty {
   retry: number
   elapsed: number
   decisions: number
+  viewingTogether?: boolean
+  waterCarrier?: number
+  waterRetry?: number
   visitPending: number[]
   visitStarted: number[]
   /** Road progress of the formation's head. Every place in the company derives from it. */

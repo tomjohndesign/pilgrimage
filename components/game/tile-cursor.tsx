@@ -45,7 +45,7 @@ export function TileCursor({
     return new Float32Array([[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]].flatMap(([x, z]) =>
       [x, onBridge ? (ropeHeightAt(map, hovered.x + x * 0.999, hovered.z + z * 0.999) ?? centre) - centre : groundHeight(map, hovered.x + x * 0.999, hovered.z + z * 0.999) - centre, z]))
   }, [map, hovered])
-  const build = useMemo(() => buildCatalog(balance).find((item) => item.id === buildType), [balance, buildType])
+  const build = useMemo(() => buildCatalog(balance).find((item) => item.id === buildType && !item.retired), [balance, buildType])
   const rotation=useMemo(()=>build && hovered ? placementRoofRotation(map,build,hovered,requestedRotation) : requestedRotation,[map,build,hovered,requestedRotation])
   const {layoutSeed,hearthZ,fireplace,supportId,floorHeight,tavernFlue} = build && hovered ? placementBuildingLayout(map,{...build,...rotatedFootprint(build,rotation),...hovered,rotation,buildType:build.id,id:"construction-preview"}) : {}
   const parts = useMemo(() => build ? structureParts({ ...build, buildType: build.id, layoutSeed, hearthZ, fireplace, supportId, floorHeight, tavernFlue }) : [], [build, layoutSeed, hearthZ, fireplace, supportId, floorHeight, tavernFlue])

@@ -1,6 +1,7 @@
 import * as THREE from "three"
 import { applySpriteDepth } from "../../render/sprite-depth"
 import { FOLIAGE_FRAME } from "./design"
+import { spriteRow } from "../../character-assets"
 
 export interface FoliageSpriteFrame {
   directions: number
@@ -15,7 +16,13 @@ export function foliageMaterial(color: THREE.Texture, depth: THREE.Texture, view
   worldTexel: { value: number }, ids = false, frame: FoliageSpriteFrame = FOLIAGE_FRAME, crop?: THREE.DataTexture) {
   const viewport = new THREE.Vector4()
   const material = new THREE.MeshBasicMaterial({ map: color, alphaTest: 0.5, transparent: false, toneMapped: false, side: THREE.DoubleSide })
-  material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
+  material.onBeforeRender = (renderer, _scene, camera) => {
+    renderer.getCurrentViewport(viewport)
+    // Use the camera drawing this pass, including immediate editor renders.
+    // A frame callback can still hold the previous camera pose after Rotate.
+    const m = camera.matrixWorld.elements
+    view.value = spriteRow(0, Math.atan2(m[8], m[10]), frame.directions)
+  }
   material.onBeforeCompile = shader => {
     shader.uniforms.foliageView = view
     shader.uniforms.foliageCrop = { value: crop ?? null }

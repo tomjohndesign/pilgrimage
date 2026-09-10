@@ -374,6 +374,7 @@ export function purchaseStructure(
 ): { settlement: Settlement; error: string | null } {
   const def = buildCatalog(balance).find((item) => item.id === type)
   if (!def) return { settlement, error: "Unknown structure." }
+  if (def.retired) return { settlement, error: "This structure is no longer available to build." }
   const map = settlementMap(baseMap, settlement)
   if (settlementRenown(map, residents, relics, balance, completedVisits).total < def.requiredRenown)
     return { settlement, error: `Requires ${def.requiredRenown} shrine renown.` }
