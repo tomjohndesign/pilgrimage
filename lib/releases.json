@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "c580f23049c33c1effc74b19b2d7d1321585c75a",
-  "releaseCount": 197,
+  "lastProcessedCommit": "2cd7208dd6642e71ff7dd78a3a25318e3e507cc4",
+  "releaseCount": 198,
   "releases": [
+    {
+      "version": "0.0.212",
+      "title": "Release 0.0.212",
+      "summary": "Generate organic woodland worlds with connected clearings (#231)",
+      "commit": "2cd7208dd6642e71ff7dd78a3a25318e3e507cc4"
+    },
     {
       "version": "0.0.211",
       "title": "Release 0.0.211",
