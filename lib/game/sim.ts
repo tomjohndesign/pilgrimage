@@ -525,6 +525,26 @@ interface WorldPoint {
  * Bridge height follows the rendered ramp at the actual lane point; ground
  * routes retain their tile-centre interpolation.
  */
+// Surface heights and bridge proximity per route vertex never change for a map;
+// every walker samples them each step, so they are resolved once per vertex.
+const routeSurfaces = new WeakMap<ReadonlyArray<{ x: number; z: number }>, { map: GameMap; heights: Float64Array; nearBridge: Uint8Array }>()
+function routeSurface(map: GameMap, route: ReadonlyArray<{ x: number; z: number }>) {
+  let cache = routeSurfaces.get(route)
+  if (!cache || cache.map !== map) {
+    cache = { map, heights: new Float64Array(route.length).fill(NaN), nearBridge: new Uint8Array(route.length) }
+    routeSurfaces.set(route, cache)
+  }
+  return cache
+}
+function routeHeight(map: GameMap, route: ReadonlyArray<{ x: number; z: number }>, i: number, cache = routeSurface(map, route)): number {
+  let height = cache.heights[i]
+  if (Number.isNaN(height)) {
+    height = cache.heights[i] = surfaceHeight(map, route[i].x, route[i].z)
+    cache.nearBridge[i] = bridgeLayout(map).rise[route[i].z * map.width + route[i].x] > 0 ? 2 : 1
+  }
+  return height
+}
+
 function routeWorldPoint(
   map: GameMap,
   route: ReadonlyArray<{ x: number; z: number }>,
@@ -547,8 +567,9 @@ function routeWorldPoint(
     }
     return laneVertex(map, route, i, lane)
   }
-  const ay = surfaceHeight(map, route[i0].x, route[i0].z)
-  const by = surfaceHeight(map, route[i0 + 1].x, route[i0 + 1].z)
+  const surfaces = routeSurface(map, route)
+  const ay = routeHeight(map, route, i0, surfaces)
+  const by = routeHeight(map, route, i0 + 1, surfaces)
   const curved = roadLanePoint(map, route, p, lane)
   // Preserve a shortcut's shared road-lane endpoint, blending to its own
   // tangent entrance over the first/last half tile.
@@ -568,8 +589,8 @@ function routeWorldPoint(
     const a = vertex(i0), b = vertex(i0 + 1)
     tx = a.x + (b.x - a.x) * frac; tz = a.z + (b.z - a.z) * frac
   }
-  const x = tileToWorldX(map, tx), z = tileToWorldZ(map, tz), bridges = bridgeLayout(map)
-  const nearBridge = bridges.rise[route[i0].z * map.width + route[i0].x] > 0 || bridges.rise[route[i0 + 1].z * map.width + route[i0 + 1].x] > 0
+  const x = tileToWorldX(map, tx), z = tileToWorldZ(map, tz)
+  const nearBridge = surfaces.nearBridge[i0] === 2 || surfaces.nearBridge[i0 + 1] === 2
   const point = { x, z, y: nearBridge ? walkingSurface(map,x,z).height : ay + (by-ay)*frac }
   return point
 }
