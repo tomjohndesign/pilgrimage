@@ -11,7 +11,7 @@ import { playCharacterSound, stopCharacterSound } from "@/lib/game/character-aud
 
 const CharacterPreview = dynamic(() => import("./character-preview").then((m) => m.CharacterPreview), { ssr: false })
 // Archived four-frame drafts; new callings live in the shared rig playground.
-const TYPES = Object.values(TRAVELER_TYPES).filter(type => type.id !== "beggar")
+const TYPES = Object.values(TRAVELER_TYPES).filter(type => type.id !== "beggar" && type.id !== "nun")
 const button = "inline-flex items-center justify-center gap-2 border border-rule px-3 py-2 text-xs text-ink transition hover:bg-parchment-dark focus-visible:outline-2 focus-visible:outline-gold disabled:opacity-40"
 const label = "font-display text-[10px] uppercase tracking-[2px] text-ink-light"
 
@@ -67,7 +67,7 @@ export function CharacterLab() {
 
   useEffect(() => {
     const requested = new URLSearchParams(window.location.search).get("character")
-    if (requested && requested in TRAVELER_TYPES) setId(requested as TravelerTypeId)
+    if (requested && TYPES.some(type => type.id === requested)) setId(requested as TravelerTypeId)
   }, [])
   useEffect(() => { setSheetPath(asset.sheet); setSoundPath(asset.sound) }, [id, asset.sheet, asset.sound])
   useEffect(() => {
@@ -93,7 +93,7 @@ export function CharacterLab() {
     try {
       if (file.size > 100_000) throw new Error("Settings must be a JSON file smaller than 100 KB.")
       const next = validateCharacterAssets(JSON.parse(await file.text()))
-      await Promise.all(Object.values(next).map(checkFiles))
+      await Promise.all(TYPES.map(type => checkFiles(next[type.id])))
       replace(next); setMessage("Settings imported for all seven characters.")
     } catch (error) { setMessage(error instanceof Error ? error.message : "Could not import settings.") }
     finally { setBusy(false) }

@@ -40,7 +40,14 @@ describe("character settings", () => {
     expect(Array.from({ length: 21 }, (_, i) => spriteFrame((i + 0.01) / visual.fps, visual.fps, true, visual.walk.columns))).toEqual([...Array.from({ length: 20 }, (_, i) => i), 0])
     expect(spriteFrame(12, visual.fps, false, visual.idle.columns, visual.idle.stillFrame)).toBe(0)
   })
-  it("roundtrips all seven defaults", () => {
+  it("preserves older character settings when adding nuns", () => {
+    const { nun: _, ...saved } = CHARACTER_ASSETS
+    saved.peasant = { ...saved.peasant, volume: 0.2 }
+    const restored = validateCharacterAssets(saved)
+    expect(restored.nun).toEqual(CHARACTER_ASSETS.nun)
+    expect(restored.peasant.volume).toBe(0.2)
+  })
+  it("roundtrips all defaults", () => {
     expect(validateCharacterAssets(JSON.parse(JSON.stringify(CHARACTER_ASSETS)))).toEqual(CHARACTER_ASSETS)
   })
   it.each([

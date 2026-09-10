@@ -11,7 +11,7 @@ import { MONK_VISUAL, monkVisual, monkWalkSpeed, MONK_WALK_TUNING } from "./monk
 
 const WALKING_DESIGNS = [
   ...(Object.keys(SETTLEMENT_JOBS) as SettlementJob[]).flatMap(job => POPULATION_PROFILES.map((_, variant) => jobDesign(job, variant))),
-  ...DEFAULT_POPULATION.callings.peasant.designs, ...DEFAULT_POPULATION.callings.beggar.designs, ...Object.values(PERSON_PRESETS),
+  ...DEFAULT_POPULATION.callings.nun.designs, ...DEFAULT_POPULATION.callings.peasant.designs, ...DEFAULT_POPULATION.callings.beggar.designs, ...Object.values(PERSON_PRESETS),
 ]
 
 describe("walking at the rendered person's scale", () => {

@@ -1,6 +1,6 @@
 import sharp from "sharp"
 import { readFileSync } from "node:fs"
-const version = process.argv[2] ?? "v33"
+const version = process.argv[2] ?? "v34"
 const jobs = process.argv.includes("--jobs")
 if (!/^v\d+$/.test(version)) throw new Error("Expected a population version such as v1")
 const pack = JSON.parse(readFileSync(`public/textures/characters/${jobs ? "jobs" : "population"}/${version}/manifest.json`, "utf8"))
@@ -20,7 +20,7 @@ for (const [type, entry] of Object.entries({ ...pack.callings, ...Object.fromEnt
     const { data, info } = await sharp(`public${url}`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
     const columns = pack.frameCounts?.[clip] ?? pack.actionFrames?.[clip] ?? (clip === "idle" ? 1 : 8)
     if (info.width !== size * columns || info.height !== pack.rows * size) throw new Error(`Wrong dimensions: ${type}/${clip}`)
-    if (jobs) {
+    if (jobs || pack.depthEncoding) {
       const depthUrl = entry.depths?.[clip]
       if (!depthUrl) throw new Error(`Missing depth: ${type}/${clip}`)
       const depth = await sharp(`public${depthUrl}`).metadata()
