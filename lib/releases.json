@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "7bbdd9c0e482d3d47226acb07b1aa82815d760ae",
-  "releaseCount": 195,
+  "lastProcessedCommit": "f8d7c432ef4bfb45b84fe15c8a57fc76a2d81fa6",
+  "releaseCount": 196,
   "releases": [
+    {
+      "version": "0.0.210",
+      "title": "Release 0.0.210",
+      "summary": "Make map orientation spins settle faster (#229)",
+      "commit": "f8d7c432ef4bfb45b84fe15c8a57fc76a2d81fa6"
+    },
     {
       "version": "0.0.209",
       "title": "Release 0.0.209",
