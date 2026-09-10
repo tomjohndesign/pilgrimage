@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "c232a11a124aadf8fd72d83c1386535c60ff8f89",
-  "releaseCount": 181,
+  "lastProcessedCommit": "e7b69695ee60f568c9036eb8a0853dfe9c756bf5",
+  "releaseCount": 183,
   "releases": [
+    {
+      "version": "0.0.197",
+      "title": "Release 0.0.197",
+      "summary": "Make minimap influence and player buildings clearer and track the relic (#215)",
+      "commit": "e7b69695ee60f568c9036eb8a0853dfe9c756bf5"
+    },
+    {
+      "version": "0.0.196",
+      "title": "Release 0.0.196",
+      "summary": "Rework enclave visits, recruitment, water access and happiness (#216)",
+      "commit": "ca41d65521ed5e43089cb2419714b4d82f66fafa"
+    },
     {
       "version": "0.0.195",
       "title": "Release 0.0.195",
