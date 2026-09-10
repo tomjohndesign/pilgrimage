@@ -192,18 +192,17 @@ export default function GameSpecsPage() {
         </p>
         <p className="mt-3">
           Defaults range from ×{r.drawBase} at zero renown to ×{r.drawBase + r.drawBonus} at{" "}
-          {r.drawCap} renown. The faith chance rises linearly from 0 to 100% across draw scores{" "}
-          {r.turnAsideDraw - 25}–{r.turnAsideDraw + 25}, then scales by willingness to detour.
-          At zero renown, willingness starts above {r.earlyVisitPiety} piety and reaches full strength
-          at 100. Let q = (clamp(renown, 0, draw cap) ÷ draw cap)²: renown adds 100 × q to effective
-          piety before willingness is calculated.
+          {r.drawCap} renown. Relic interest rises linearly from 0 to 100% across draw scores{" "}
+          {r.turnAsideDraw - 25}–{r.turnAsideDraw + 25}. Faith attraction is p × (0.5 + 0.5 × relic interest),
+          contributing to a visit chance of 0.1 + 0.9 × faith attraction. Piety scales attraction smoothly
+          across its full range, with no cutoff. Let q = (clamp(renown, 0, draw cap) ÷ draw cap)².
         </p>
         <p className="mt-3">
-          Hospitality requires an open counter — a tavern with someone serving, or a market stall a
-          vendor has settled into — and fullness or hydration below {r.hospitalityNeedThreshold} + (60 −{" "}
+          Thirst attracts travelers to the church even without an open counter. Hunger contributes only
+          when a tavern or market stall has someone serving. Fullness or hydration must be below {r.hospitalityNeedThreshold} + (60 −{" "}
           {r.hospitalityNeedThreshold}) × q. Its chance grows from zero at that threshold to a maximum
           of {r.hospitalityBaseChance} + {r.hospitalityRenownBonus} × q at an empty meter, capped at 100%.
-          With no counter open, hunger and thirst draw nobody in: the shrine itself keeps no table.
+          The church itself does not refill hunger. Available food service can feed visitors before they see the relic.
           Tiredness and job vacancies alone do not attract visitors. Travelers roll the higher of faith
           and hospitality chances when crossing the junction; they do not turn back to seek the shrine.
           If that roll fails, a completed carved cross grants one independent 5% Evangelism roll.

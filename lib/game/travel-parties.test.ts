@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { withTravelParties, partyRoadDelta, partyNeedDrain, PARTY_NEED_FLOOR, ANIMAL_NEED_DRAIN } from "./travel-parties"
 import { generateTravelers, TRAVELER_TYPES, type Traveler } from "./travelers"
 import { createSim, stepSim, type SimState } from "./sim"
+import { GAME_HOUR_SECONDS } from "./calendar"
 import { BUILD_CATALOG, DEFAULT_BALANCE } from "./balance"
 import { jobBuildings } from "./settlement"
 import { roadLanePoint } from "./map/road-lane"
@@ -110,6 +111,23 @@ describe("coordinated travel", () => {
 })
 
 describe("shared stops", () => {
+  it.each([1, -1] as const)("draws thirsty companions to an unstaffed church (%i)", direction => {
+    const { map, travelers, sim } = fixture(5, direction)
+    sim.shrineRenown = 0
+    map.site = { hovelId: "shrine", door: { x: 24, z: 9 }, junction: 24,
+      branch: Array.from({ length: 5 }, (_, i) => ({ x: 24, z: 5 + i })) }
+    map.buildings.push({ id: "shrine", label: "Shrine", x: 23, z: 10, w: 3, d: 3, height: 1, color: "tan", roofColor: "brown" })
+    for (const s of sim.travelers.values()) Object.assign(s, { piety: 88, happiness: 38, hunger: 2, thirst: 0, gold: 36 })
+    const party = sim.parties.get(0)!
+    party.progress = 24
+    run(sim, travelers, map, 1)
+    expect(party.stage).toBe("visiting")
+    run(sim, travelers, map, 400, () => sim.visits === 5 && party.stage === "traveling")
+    expect(sim.visits).toBe(5)
+    expect(party.stage).toBe("traveling")
+    expect([...sim.travelers.values()].every(s => s.hunger === 2)).toBe(true)
+  })
+
   it("lets one partner stay for a job without settling their companion", () => {
     const { map, travelers, sim } = fixture(2)
     travelers[0].party!.partnerId = 1; travelers[1].party!.partnerId = 0
@@ -230,6 +248,15 @@ describe("shared provisions and purse", () => {
     expect(partyNeedDrain(4)).toBeLessThan(1)
     expect(partyNeedDrain(8, 1)).toBeCloseTo(partyNeedDrain(8) + ANIMAL_NEED_DRAIN, 9)
     expect(partyNeedDrain(8, 2)).toBeGreaterThan(1)
+  })
+
+  it("drains shared provisions at one quarter of the previous default rates", () => {
+    const { map, travelers, sim } = fixture(5)
+    sim.balance = structuredClone(DEFAULT_BALANCE)
+    stepSim(sim, travelers, map, 1, GAME_HOUR_SECONDS)
+    const party = sim.parties.get(0)!
+    expect(100 - party.hunger).toBeCloseTo(1.5 / 4 * partyNeedDrain(5))
+    expect(100 - party.thirst).toBeCloseTo(3 / 4 * partyNeedDrain(5))
   })
 
   it("holds one purse and one store, fed by individual meals and paid by individual costs", () => {

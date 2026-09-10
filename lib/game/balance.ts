@@ -421,16 +421,11 @@ export const RULE_FIELDS = [
     key: "turnAsideDraw",
     group: "Traveler attraction",
     label: "Turn-aside draw threshold",
-    description: "Attraction score giving a fully willing traveler a 50% faith visit chance. Early visits also require exceptional piety.",
+    description: "Attraction score giving half of the relic-specific faith bonus. Devout travelers also seek a modest shrine before its relic is famous.",
     default: 40,
     min: 0,
     max: 1000,
     step: 1,
-  },
-  {
-    key: "earlyVisitPiety", group: "Traveler attraction", label: "Piety needed at zero renown",
-    description: "Faith visits begin above this piety and reach full willingness at 100. Renown adds up to 100 to effective piety, scaled by the square of renown / draw cap.",
-    default: 90, min: 0, max: 99, step: 1,
   },
   {
     key: "hospitalityNeedThreshold", group: "Traveler attraction", label: "Food or water threshold at zero renown",
@@ -440,7 +435,7 @@ export const RULE_FIELDS = [
   {
     key: "hospitalityBaseChance", group: "Traveler attraction", label: "Hospitality chance at zero renown",
     description: "Maximum chance of visiting an unknown shrine for food or water, reached only with an empty meter. Scales down to zero at the food or water threshold.",
-    default: 0.1, min: 0, max: 1, step: 0.01,
+    default: 1, min: 0, max: 1, step: 0.01,
   },
   {
     key: "hospitalityRenownBonus", group: "Traveler attraction", label: "Maximum renown hospitality bonus",
@@ -464,13 +459,13 @@ export const RULE_FIELDS = [
   },
   {
     key: "hungerDecay", group: "Traveler needs", label: "Hunger drain per game hour",
-    description: "Fullness lost per game hour. Default: 36 points per day, with a full bar lasting about 67 hours. Camping halves this rate; shrine hospitality restores it.",
-    default: 1.5, min: 0, max: 50, step: 0.1,
+    description: "Fullness lost per game hour. Default: 9 points per day, with a full bar lasting about 267 hours. Camping halves this rate; food service restores it.",
+    default: 0.375, min: 0, max: 50, step: 0.025,
   },
   {
     key: "thirstDecay", group: "Traveler needs", label: "Thirst drain per game hour",
-    description: "Hydration lost per game hour. Default: 72 points per day, with a full bar lasting about 33 hours. Camping halves this rate; shrine hospitality restores it.",
-    default: 3, min: 0, max: 50, step: 0.1,
+    description: "Hydration lost per game hour. Default: 18 points per day, with a full bar lasting about 133 hours. Camping halves this rate; shrine hospitality restores it.",
+    default: 0.75, min: 0, max: 50, step: 0.025,
   },
   {
     key: "staminaDecay", group: "Traveler needs", label: "Stamina drain per game hour",
@@ -637,7 +632,7 @@ export function validateBalance(
   }
   return { balance: clean, error: null }
 }
-export const BALANCE_VERSION = 6
+export const BALANCE_VERSION = 7
 export function exportBalance(balance: GameBalance): string {
   return JSON.stringify({ version: BALANCE_VERSION, balance }, null, 2)
 }
@@ -645,8 +640,8 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
   try {
     const preset = record(JSON.parse(json))
     const version = preset?.version
-    if (version !== 1 && version !== 2 && version !== 3 && version !== 4 && version !== 5 && version !== BALANCE_VERSION)
-      return { balance: null, error: "Unsupported preset version. Expected version 1, 2, 3, 4, 5 or 6." }
+    if (version !== 1 && version !== 2 && version !== 3 && version !== 4 && version !== 5 && version !== 6 && version !== BALANCE_VERSION)
+      return { balance: null, error: "Unsupported preset version. Expected version 1, 2, 3, 4, 5, 6 or 7." }
     // Add defaults for new structures while retaining all authored settings.
     const saved = record(preset?.balance)
     const rules = record(saved?.rules)
@@ -659,13 +654,13 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
         hungerDecay: DEFAULT_BALANCE.rules.hungerDecay,
         thirstDecay: DEFAULT_BALANCE.rules.thirstDecay,
         staminaDecay: DEFAULT_BALANCE.rules.staminaDecay,
-        earlyVisitPiety: DEFAULT_BALANCE.rules.earlyVisitPiety,
         hospitalityNeedThreshold: DEFAULT_BALANCE.rules.hospitalityNeedThreshold,
         hospitalityRenownBonus: DEFAULT_BALANCE.rules.hospitalityRenownBonus,
         ...rules,
         // Adopt slower defaults in old saves without overwriting custom rates.
-        ...((version < 4 && rules.hungerDecay === 12.5 || version < 5 && rules.hungerDecay === 3) ? { hungerDecay: DEFAULT_BALANCE.rules.hungerDecay } : {}),
-        ...((version < 4 && rules.thirstDecay === 25 || version < 6 && rules.thirstDecay === 6) ? { thirstDecay: DEFAULT_BALANCE.rules.thirstDecay } : {}),
+        ...((version < 4 && rules.hungerDecay === 12.5 || version < 5 && rules.hungerDecay === 3 || version < 7 && rules.hungerDecay === 1.5) ? { hungerDecay: DEFAULT_BALANCE.rules.hungerDecay } : {}),
+        ...((version < 4 && rules.thirstDecay === 25 || version < 6 && rules.thirstDecay === 6 || version < 7 && rules.thirstDecay === 3) ? { thirstDecay: DEFAULT_BALANCE.rules.thirstDecay } : {}),
+        ...(version < 7 && rules.hospitalityBaseChance === 0.1 ? { hospitalityBaseChance: DEFAULT_BALANCE.rules.hospitalityBaseChance } : {}),
         ...(version < 5 && rules.staminaDecay === 2.1 ? { staminaDecay: DEFAULT_BALANCE.rules.staminaDecay } : {}),
       },
       buildings: {
