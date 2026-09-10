@@ -44,7 +44,7 @@ export function openingAssetUrls(characterModel: CharacterModel = "base") {
   visual(monkVisual(18)); visual(monkVisual(GREY_HAIR_AGE))
   const pack = usePopulationStore.getState().pack
   for (const type of Object.keys(TRAVELER_TYPES) as (keyof typeof TRAVELER_TYPES)[]) {
-    if (characterModel === "base" || type === "beggar") {
+    if (characterModel === "base" || (type === "beggar" || type === "nun")) {
       visual(populationVisual(type, 0, pack))
       visual(populationVisual(type, 0, pack, GREY_HAIR_AGE))
     } else urls.add((useCharacterAssetStore.getState().assets[type] ?? CHARACTER_ASSETS[type]).sheet)

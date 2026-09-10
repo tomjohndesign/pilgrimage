@@ -33,6 +33,7 @@ const PIOUS_AND_WEARY_TRACK_CHANCE = 0.75
 const BASE_NERVE: Record<TravelerTypeId, number> = {
   pilgrim: 0.35,
   friar: 0.4,
+  nun: 0.4,
   merchant: 0.3,
   vendor: 0.3,
   minstrel: 0.25,
@@ -71,6 +72,7 @@ export function trackChance({ type, piety, stamina }: RouteState): number {
     case "knight":
       return KNIGHT_TRACK_CHANCE
     case "pilgrim":
+    case "nun":
     case "friar": {
       const pious = isPious(piety)
       const weary = isWeary(stamina)

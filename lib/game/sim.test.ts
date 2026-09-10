@@ -1,5 +1,7 @@
 import { TILES_PER_DAY } from "./calendar"
 import { MIN_WEARY_SPEED } from "./traveler-weariness"
+import { populationVisual } from "./base-person/population-assets"
+import { walkSpeedScale } from "./base-person/gait"
 import { DEFAULT_WALK_SPEED, BASE_CHARACTER_SCALE } from "./base-person/gait"
 import { knightLoadout, knightTravelSpeed, knightMounted } from "./knights"
 import { describe, expect, it } from "vitest"
@@ -1245,4 +1247,20 @@ describe("natural water stops", () => {
     expect(s.thirst).toBe(0)
     expect(s.progress).toBeGreaterThan(progress)
   })
+})
+
+it.each([1, -1] as const)("walks nuns along the road at their rig's speed and resumes after pause (direction %i)", direction => {
+  const map = makeMap(), traveler = { ...makeTraveler(0, "nun"), direction, pace: 1 }
+  const sim = createSim([traveler], map), state = sim.travelers.get(traveler.id)!
+  const scale = walkSpeedScale(populationVisual("nun", 0, null).walkStride, BASE_CHARACTER_SCALE)
+  const speeds = new Map([[traveler.id, scale]])
+  const before = state.progress
+  stepSim(sim, [traveler], map, DEFAULT_WALK_SPEED, 0.1, LINEAR_MOVEMENT, speeds)
+  expect((state.progress - before) * direction).toBeCloseTo(DEFAULT_WALK_SPEED * scale * 0.1)
+  expect(tileAt(map, worldToTileX(map, state.x), worldToTileZ(map, state.z))).toBe("path")
+  const paused = { x: state.x, z: state.z, progress: state.progress }
+  stepSim(sim, [traveler], map, DEFAULT_WALK_SPEED, 0, LINEAR_MOVEMENT, speeds)
+  expect({ x: state.x, z: state.z, progress: state.progress }).toEqual(paused)
+  stepSim(sim, [traveler], map, DEFAULT_WALK_SPEED, 0.1, LINEAR_MOVEMENT, speeds)
+  expect((state.progress - paused.progress) * direction).toBeGreaterThan(0)
 })

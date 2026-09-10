@@ -154,7 +154,7 @@ export function GameCanvas({
   const assets = useCharacterAssetStore(s => s.assets)
   const speedScales = useMemo(() => new Map(travelers.map(traveler => {
     const appearance = travelerAppearance(map.seed ?? 0, traveler.id)
-    const visual = characterModel === "base" || traveler.type.id === "beggar" ? populationVisual(traveler.type.id, appearance.variant, population, traveler.attributes.age)
+    const visual = characterModel === "base" || (traveler.type.id === "beggar" || traveler.type.id === "nun") ? populationVisual(traveler.type.id, appearance.variant, population, traveler.attributes.age)
       : characterVisual(assets[traveler.type.id], "callings")
     const scale = characterScale * (characterModel === "base" ? appearance.scale : 1)
     const personSpeedScale = walkSpeedScale(visual.walkStride, scale)

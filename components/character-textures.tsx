@@ -15,7 +15,7 @@ export function CharacterTextures() {
     </header>
     <div className="mb-8" aria-label="Current road character sprites">
       <h3 className="mb-3 font-display text-lg text-parchment">On the road</h3>
-      <p className="mb-5 text-sm text-[#b9ad92]">Three male and three female profiles per calling, with individual size variation on the map.</p>
+      <p className="mb-5 text-sm text-[#b9ad92]">Six body profiles per calling at a shared map scale. Nuns wear a veiled habit in every profile.</p>
       <OutfitCards types={Object.values(TRAVELER_TYPES)} pack={DEFAULT_POPULATION} />
     </div>
     <div className="mb-8" aria-label="Settlement job sprites">
@@ -34,7 +34,7 @@ export function CharacterTextures() {
       </div>
     </article>
     <p className="mb-5 text-center text-sm text-[#b9ad92]">Earlier image-generated drafts · retained for comparison</p>
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{Object.values(TRAVELER_TYPES).filter(type => type.id !== "beggar").map((type) => {
+    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{Object.values(TRAVELER_TYPES).filter(type => type.id !== "beggar" && type.id !== "nun").map((type) => {
       const asset = CHARACTER_ASSETS[type.id]
       return <article key={type.id} className="border border-rule bg-parchment p-4 text-ink">
         <h3 className="font-display text-base">{type.label}</h3>
@@ -58,7 +58,7 @@ function OutfitCards<Calling extends string>({ types, pack }: { types: { id: Cal
         const atlas = pack.callings[type.id]
         return <article key={type.id} className="border border-rule bg-parchment p-4 text-ink">
           <h4 className="font-display text-sm"><span className="mr-2 inline-block h-2 w-2" style={{ background: type.color }} />{type.label}</h4>
-          <div className="my-3 grid grid-cols-3 justify-items-center bg-[#62724d]">{POPULATION_PROFILES.map((profile, i) => <span key={profile.id} role="img" aria-label={`${type.label}, ${profile.id}`} style={{ width: 64, height: 64, imageRendering: "pixelated", backgroundImage: `url(${atlas.walk})`, backgroundSize: `${(pack.frameCounts?.walk ?? 8) * 64}px ${pack.rows * 64}px`, backgroundPosition: `0px ${-i * 8 * 64}px` }} />)}</div>
+          <div className="my-3 grid grid-cols-3 justify-items-center bg-[#62724d]">{POPULATION_PROFILES.map((profile, i) => <span key={profile.id} role="img" aria-label={`${type.label}, ${atlas.designs[i].bodyType.toLowerCase()} profile ${i + 1}`} style={{ width: 64, height: 64, imageRendering: "pixelated", backgroundImage: `url(${atlas.walk})`, backgroundSize: `${(pack.frameCounts?.walk ?? 8) * 64}px ${pack.rows * 64}px`, backgroundPosition: `0px ${-i * 8 * 64}px` }} />)}</div>
           <div className="flex gap-4 text-xs underline underline-offset-4"><a href={atlas.walk} download>Walk sheet</a><a href={atlas.idle} download>Idle sheet</a></div>
         </article>
       })}</div>

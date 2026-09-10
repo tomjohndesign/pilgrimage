@@ -2,7 +2,7 @@ import type { ActionClip } from "./pose"
 import { rollComplexion, type Complexion } from "./complexion"
 import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
 import type { TravelerTypeDef, TravelerTypeId } from "../travelers"
-import { DEFAULT_DESIGN, DESIGN_CONTROLS, validatePersonDesign, type DesignKey, type PersonDesign } from "./design"
+import { DEFAULT_DESIGN, DESIGN_CONTROLS, PERSON_PRESETS, validatePersonDesign, type DesignKey, type PersonDesign } from "./design"
 
 /** Six authored variations share the editor's skeleton, joints and bounded controls. */
 export const POPULATION_PROFILES = [
@@ -54,6 +54,15 @@ export function populationDesign(type: Pick<TravelerTypeDef, "id" | "color">, va
   if (type.id === "beggar") Object.assign(design, {
     tunicStyle: "Ragged", accentColor: "#a49476", shirtColor: "#958a74", trouserColor: "#635a4b",
     beltStyle: "Rope", footwear: "Sandals", hat: "None", satchel: false, lute: false,
+  })
+  // Keep all atlas slots compatible with existing seeded appearances. Sisters
+  // use the same female habit and covered hair across the six body variations.
+  if (type.id === "nun") Object.assign(design, {
+    bodyType: "Female", garment: "Robe", tunicLength: 1.4, beltStyle: "Rope",
+    tunicColor: type.color, coveringColor: PERSON_PRESETS.Nun.coveringColor,
+    shirtColor: PERSON_PRESETS.Nun.shirtColor, trouserColor: type.color,
+    hat: "Coif", hairStyle: "Cropped", beard: false, satchel: false,
+    walkingStick: false, lute: false, handTool: "None", tunicStyle: "Plain",
   })
   if (minstrel) { design.hem = 1.2; design.tunicLength = 1.15 }
   return validatePersonDesign(design)
