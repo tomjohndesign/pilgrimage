@@ -116,7 +116,7 @@ export function LoadingChurch({ showChurch, phase, overlayRef, idle = false, gen
   if (!showChurch && phase === "complete") return null
   const scale = 100 / viewSize
   return <div ref={overlayRef} className="loading-church" data-loading-church data-phase={phase} data-idle={idle}
-    style={{ "--ground-offset": `${groundOffset * scale}dvh`, "--church-caption-offset": `${3.5 * scale}dvh`, "--church-roof-offset": `${3.6 * scale}dvh`, "--loading-pixel": `${CHARACTER_PIXEL_SIZE * scale}dvh` } as CSSProperties}>
+    style={{ "--ground-offset": `${groundOffset * scale}dvh`, "--church-caption-offset": `${3.5 * scale}dvh` } as CSSProperties}>
     {phase !== "complete" && <div className="loading-church-ground" aria-hidden="true"><div className="loading-church-wipe">
     <svg ref={tilesRef} className="loading-church-tiles" width="100%" height="100%"
       style={{ transform: `translate(${gridShift.x * scale}dvh, ${gridShift.y * scale}dvh)` }}>
