@@ -7,7 +7,7 @@ import { structureParts, visibleStructureParts } from "./structure"
 import type { BuildingPart } from "./geometry"
 import { workshopLayout, workshopPileOffset } from "../workshop-layout"
 import { roofProfile, singlePlaneRoofRise, hasFrontAwning } from "./dimensions"
-import { WOOD_LOG, woodLogScale } from "../wood-log"
+import { WOOD_PILE_LAYOUT } from "../wood-pile"
 
 function bounds(part: BuildingPart) {
   const geometry = part.size ? new BoxGeometry(...part.size)
@@ -109,12 +109,12 @@ describe("settlement construction", () => {
     expect(parts.some(p => /-(side)$/.test(p.name) && p.layer === "roof")).toBe(false)
     const layout = workshopLayout(hut.w, hut.d)
     expect(layout.bayWidth * layout.bayDepth * 2).toBe(2)
-    const scale = woodLogScale(), radius = WOOD_LOG.radius * scale
+    const { width, length, height } = WOOD_PILE_LAYOUT
     const occupied: Box3[] = []
     for (let slot=0;slot<4;slot++) {
       const [x,z] = workshopPileOffset(slot,hut.w,hut.d)
-      const stack = new Box3(new Vector3(x-1.5*radius*2.05-radius,0,z-WOOD_LOG.length*scale/2),
-        new Vector3(x+2*radius*2.05+radius,.8,z+WOOD_LOG.length*scale/2))
+      const stack = new Box3(new Vector3(x-width/2,.08,z-length/2),
+        new Vector3(x+width/2,.08+height,z+length/2))
       expect(stack.min.x).toBeGreaterThan(layout.storageX-layout.bayWidth/2)
       expect(stack.max.x).toBeLessThan(layout.storageX+layout.bayWidth/2)
       expect(covered(stack.min.x, stack.min.z)).toBe(true)
