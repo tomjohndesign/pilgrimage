@@ -235,7 +235,7 @@ export function roadBlockError(map: GameMap, buildings: readonly BuildingDef[]):
 // The cursor validates a tile as it is hovered and the purchase validates the
 // same tile again on the click; each validation routes to every building. The
 // answer only depends on the map object, the structure, the tile and rotation.
-const placementVerdicts = new WeakMap<GameMap, Map<string, { buildings: readonly unknown[]; count: number; revision: number; verdict: string | null }>>()
+const placementVerdicts = new WeakMap<GameMap, WeakMap<GameBalance, Map<string, { buildings: readonly unknown[]; count: number; revision: number; verdict: string | null }>>>()
 
 /** Validate the entire footprint; the shrine approach and water stay clear. */
 export function placementError(
@@ -245,9 +245,14 @@ export function placementError(
   balance: GameBalance = DEFAULT_BALANCE,
   rotation: BuildingRotation = 0,
 ): string | null {
-  let verdicts = placementVerdicts.get(map)
-  if (!verdicts) { verdicts = new Map(); placementVerdicts.set(map, verdicts) }
-  const key = `${def.id}:${at.x}:${at.z}:${rotation}:${balance.rules.buildRadius}`
+  // The cursor validates with the roof rotation already resolved; the purchase
+  // passes the requested one. Resolve first so both land on the same verdict.
+  rotation = placementRoofRotation(map, def, at, rotation)
+  let byBalance = placementVerdicts.get(map)
+  if (!byBalance) { byBalance = new WeakMap(); placementVerdicts.set(map, byBalance) }
+  let verdicts = byBalance.get(balance)
+  if (!verdicts) { verdicts = new Map(); byBalance.set(balance, verdicts) }
+  const key = `${def.id}:${at.x}:${at.z}:${rotation}`
   // Tests and editors mutate a map in place; the game replaces it. Either way a
   // verdict only holds while the same buildings and footpath wear are in force.
   const known = verdicts.get(key), revision = map.footpaths?.revision ?? 0
