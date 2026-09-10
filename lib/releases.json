@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "fe6c93f8769224104fc7ab058c2d672eaca0e160",
-  "releaseCount": 199,
+  "lastProcessedCommit": "e20575b1c6920c06ad22f5ff0c63aa87dd80bd2d",
+  "releaseCount": 200,
   "releases": [
+    {
+      "version": "0.0.214",
+      "title": "Release 0.0.214",
+      "summary": "Switch background music video",
+      "commit": "e20575b1c6920c06ad22f5ff0c63aa87dd80bd2d"
+    },
     {
       "version": "0.0.213",
       "title": "Release 0.0.213",
