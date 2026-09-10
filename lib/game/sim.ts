@@ -1629,6 +1629,11 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
         }
       }
       if (!party.visitPending.length && members.every(s => s.activity === "visiting")) party.viewingTogether = true
+      // Walking the track or fetching water on the way is not waiting: the
+      // timeout counts only time the whole company stands still, so a long
+      // branch is walked to its end.
+      if (members.some(s => (s.activity === "toRelic" && s.moveSpeed > 0) ||
+        ["toWater", "drinking", "drinkingLow", "fromWater"].includes(s.activity))) party.elapsed = 0
       // A closed or saturated enclave cannot keep unadmitted companions forever.
       if (party.elapsed > 120) {
         party.visitPending = []

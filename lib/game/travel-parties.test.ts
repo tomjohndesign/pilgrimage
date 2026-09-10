@@ -3,6 +3,7 @@ import { withTravelParties, partyRoadDelta, partyNeedDrain, PARTY_NEED_FLOOR, AN
 import { generateTravelers, TRAVELER_TYPES, type Traveler } from "./travelers"
 import { createSim, stepSim, type SimState } from "./sim"
 import { GAME_HOUR_SECONDS } from "./calendar"
+import { DEFAULT_WALK_SPEED } from "./base-person/gait"
 import { BUILD_CATALOG, DEFAULT_BALANCE } from "./balance"
 import { jobBuildings } from "./settlement"
 import { roadLanePoint } from "./map/road-lane"
@@ -178,6 +179,28 @@ describe("shared stops", () => {
     const before = sim.travelers.get(0)!.progress
     run(sim, travelers, map, 10)
     expect(sim.travelers.get(0)!.progress).toBeGreaterThan(before)
+  })
+
+  it("walks a track longer than the waiting timeout to its end instead of turning back", () => {
+    const count = 6
+    const { travelers, sim } = fixture(count)
+    // A branch of default relic distance takes well over two minutes to walk.
+    const map: GameMap = { width: 80, depth: 80, seed: 42, tiles: Array(6400).fill("grass"), buildings: [],
+      road: Array.from({ length: 80 }, (_, x) => ({ x, z: 5 })), shortcuts: [] }
+    for (const p of map.road!) map.tiles[p.z * map.width + p.x] = "path"
+    map.site = { hovelId: "shrine", door: { x: 28, z: 69 }, junction: 28,
+      branch: Array.from({ length: 65 }, (_, i) => ({ x: 28, z: 5 + i })) }
+    for (const p of map.site.branch) map.tiles[p.z * map.width + p.x] = "track"
+    map.buildings.push({ id: "shrine", label: "Shrine", x: 27, z: 70, w: 3, d: 3, height: 1, color: "tan", roofColor: "brown" })
+    const party = sim.parties.get(0)!
+    // Step at the game's reference pace: the fixture's unit speed walks the branch too fast to time out.
+    const step = () => stepSim(sim, travelers, map, DEFAULT_WALK_SPEED, .1)
+    for (let i = 0; i < 10; i++) step()
+    expect(party.stage).toBe("visiting")
+    for (let i = 0; i < 12000 && party.stage !== "traveling"; i++) step()
+    expect(sim.visits).toBe(count)
+    expect([...sim.travelers.values()].some(s => s.partyVisitAborted)).toBe(false)
+    expect(party.stage).toBe("traveling")
   })
 
   it("times out an inaccessible enclave without splitting or teleporting", () => {
