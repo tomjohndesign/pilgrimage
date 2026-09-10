@@ -3,7 +3,7 @@
 import { SceneAssetBoundary } from "./scene-assets"
 
 import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react"
-import { useFrame, useLoader } from "@react-three/fiber"
+import { useLoader } from "@react-three/fiber"
 import * as THREE from "three"
 import { usePixelWorldTexel } from "@/components/pixel-canvas"
 import { BOULDER_SIZES, ENVIRONMENT_KINDS, type EnvironmentPlacement } from "@/lib/game/environment/elements"
@@ -12,6 +12,7 @@ import { foliageMaterial } from "@/lib/game/trees/foliage/material"
 import { configureSpriteDepthTexture } from "@/lib/game/render/sprite-depth"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 import { blockKey } from "@/lib/game/render/blocks"
+import { spriteRow } from "@/lib/game/character-assets"
 
 export function EnvironmentField({ placements }: { placements: EnvironmentPlacement[] }) {
   const [small, large] = useMemo(() => [placements.filter(p => !p.boulderSize), placements.filter(p => p.boulderSize)], [placements])
@@ -38,7 +39,9 @@ function SpriteField({ placements, large = false }: { placements: EnvironmentPla
 }
 
 export interface ScenerySpritePlacement {
-  x: number; y: number; z: number; yaw: number; brightness: number; row: number
+  x: number; y: number; z: number; brightness: number; row: number
+  /** World-space yaw, with the same sign as Object3D.rotation.y. */
+  yaw: number
   idColor?: readonly [number, number, number]
 }
 
@@ -70,10 +73,6 @@ export function ScenerySpriteField({ placements, atlas, frame }: {
     previous.current = out
     return [...out]
   }, [placements])
-  useFrame(({ camera }) => {
-    const yaw = Math.atan2(camera.matrixWorld.elements[8], camera.matrixWorld.elements[10])
-    view.value = (Math.round(yaw / (Math.PI * 2 / frame.directions)) + frame.directions) % frame.directions
-  })
   useEffect(() => () => { color.dispose(); depth.dispose(); materials.forEach(m => m.dispose()) }, [color, depth, materials])
   return <group name="environment-sprites">
     {blocks.map(([key, block]) => <SpriteBlock key={key} placements={block} materials={materials} frame={frame} />)}
@@ -86,7 +85,7 @@ const SpriteBlock = memo(function SpriteBlock({ placements, materials, frame }: 
     const g = new THREE.PlaneGeometry(1, 1)
     g.translate(0, frame.anchor[1] / frame.cellSize - .5, 0)
     g.setAttribute("foliageFrame", new THREE.InstancedBufferAttribute(new Float32Array(placements.flatMap(p => [
-      Math.round(p.yaw / (Math.PI * 2 / frame.directions)) % frame.directions,
+      spriteRow(p.yaw, 0, frame.directions),
       p.row,
     ])), 2))
     // Small scenery occludes hidden outlines without adding a contour of its own.

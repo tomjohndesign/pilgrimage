@@ -16,6 +16,7 @@ function Camera({ view, footprint }: { view: number; footprint: number }) {
     camera.lookAt(0, 1.3, 0)
     if ("zoom" in camera) camera.zoom = Math.min(size.width, size.height) / (footprint * 1.3 + 1.5)
     camera.updateProjectionMatrix()
+    camera.updateMatrixWorld()
   }, [camera, size, view, footprint])
   return null
 }

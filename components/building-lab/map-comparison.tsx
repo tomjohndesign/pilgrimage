@@ -48,6 +48,7 @@ function SceneCamera({ recipe, zoom }: { recipe: BuildingRecipe; zoom: number })
     camera.lookAt(0, TILE_HEIGHT + 0.6, 0)
     if (camera instanceof THREE.OrthographicCamera) camera.zoom = Math.min(size.width, size.height) / (Math.max(buildingDimensions(recipe).width, buildingDimensions(recipe).depth) * 1.42 + 5) * zoom
     camera.updateProjectionMatrix()
+    camera.updateMatrixWorld()
     invalidate()
   }, [camera, size, recipe.width, recipe.depth, recipe.view, zoom, invalidate])
   return null

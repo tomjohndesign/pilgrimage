@@ -63,6 +63,8 @@ function CameraAim({ view, zoom }: { view: number; zoom: number }) {
     camera.lookAt(0, 0, 0)
     camera.zoom = zoom
     camera.updateProjectionMatrix()
+    // Sprite animation and culling read the matrix before Three renders.
+    camera.updateMatrixWorld()
   }, [camera, view, zoom])
   return null
 }
