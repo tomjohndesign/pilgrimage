@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "a50e58dc1c8650fae21d5aeedb500c2342f58bf7",
-  "releaseCount": 179,
+  "lastProcessedCommit": "f9ebe2a643f669c3afd6b9a9575bb8edc1255d94",
+  "releaseCount": 180,
   "releases": [
+    {
+      "version": "0.0.194",
+      "title": "Release 0.0.194",
+      "summary": "Add nun sprites and path-walking travelers (#213)",
+      "commit": "f9ebe2a643f669c3afd6b9a9575bb8edc1255d94"
+    },
     {
       "version": "0.0.193",
       "title": "Release 0.0.193",
