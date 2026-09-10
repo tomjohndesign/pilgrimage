@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "aba73ba5648e78d68f8aecdd3eec01df62d8b669",
-  "releaseCount": 178,
+  "lastProcessedCommit": "a50e58dc1c8650fae21d5aeedb500c2342f58bf7",
+  "releaseCount": 179,
   "releases": [
+    {
+      "version": "0.0.193",
+      "title": "Release 0.0.193",
+      "summary": "Cheaper building placement: one map per settlement, cached access verdicts, and a crowd that does not re-render on placement (#212)",
+      "commit": "a50e58dc1c8650fae21d5aeedb500c2342f58bf7"
+    },
     {
       "version": "0.0.192",
       "title": "Release 0.0.192",
