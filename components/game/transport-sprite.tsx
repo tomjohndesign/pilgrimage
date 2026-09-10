@@ -4,6 +4,7 @@ import { spriteTextureView } from "@/lib/game/render/sprite-texture"
 
 import { withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
 import { isWorldVisible } from "@/lib/game/render/visibility"
+import { markPerson } from "@/lib/game/selection"
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
@@ -184,8 +185,11 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
   }, clock))
   const size = manifest.scale * characterScale
   const center = useMemo(() => new THREE.Vector2(manifest.anchor[0] / manifest.cellSize, 1 - manifest.anchor[1] / manifest.cellSize), [])
-  return <group ref={root} position={position}>
+  return <group ref={group => { root.current = group; markPerson(group) }} position={position}>
+    {/* Batching hides this source sprite only for drawing. Keep its full click
+        area active, including for passenger carts without a walker hit target. */}
     <sprite ref={body} name={kind} renderOrder={renderOrder} material={materials[0]} center={center} scale={[size, size, 1]} onClick={onClick}
+      userData-batchedPickTarget={true}
       layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} />
     {outlineColor && <sprite ref={ids} renderOrder={renderOrder} material={materials[1]} center={center} scale={[size, size, 1]} layers-mask={OUTLINE_ID_LAYER_MASK} />}
   </group>
