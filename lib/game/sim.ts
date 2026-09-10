@@ -1596,6 +1596,15 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
       continue
     }
     const head = members[0]
+    if (cart && !party.diversion) {
+      const check = Math.floor(cart.progress) * 2 + (party.direction === 1 ? 1 : 0)
+      if (cart.diversionCheck !== check || cart.diversionBuildings !== map.buildings) {
+        cart.diversionCheck = check
+        cart.diversionBuildings = map.buildings
+        party.diversion = cartRoadDiversion(map, cart.pose, cart.progress, party.direction,
+          cart.animal, characterScale, () => parkingContext(sim, head, characterScale)) ?? undefined
+      }
+    }
     const ahead = map.site ? party.direction * partyRoadDelta(map.site.junction, party.progress, length) : Infinity
     if (party.formed && party.cooldown <= 0 && ahead >= 0 && ahead <= 7) {
       party.cooldown = 45; party.decisions++
@@ -1669,7 +1678,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
         party.reason = "Turning back together"
       }
       party.singleFile = bridgeInColumn(map, party.progress, party.direction, span, length)
-      if (!party.diversion) party.diversion = findRoadDiversion(map, blockedRoad(map), head, party.progress, party.direction,
+      if (!cart && !party.diversion) party.diversion = findRoadDiversion(map, blockedRoad(map), head, party.progress, party.direction,
         p => roadWorldPoint(map, p, 0)) ?? undefined
     }
     const direction = party.direction, travel = party.speed * dt

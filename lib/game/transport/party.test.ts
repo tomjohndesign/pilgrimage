@@ -17,10 +17,11 @@ import { partyFormation, partyRoadDelta } from "../travel-parties"
 import { BASE_CHARACTER_SCALE } from "../base-person/gait"
 import { LINEAR_MOVEMENT } from "../motion"
 import { COATS } from "./coats"
-import { partyLoadout } from "./party"
+import { ensurePartyTransport, movePartyCart, partyLoadout } from "./party"
 import { createAnimalRig } from "./animal-rig"
 import { animalStride, RIG_TO_WORLD } from "./assets"
 import { animalLeg } from "./animal-pose"
+import { convoyBuildingsClear } from "./navigation"
 
 function fixture(id = 0, count = 8, direction: 1 | -1 = 1) {
   const map: GameMap = { width: 100, depth: 30, seed: 42, tiles: Array(3000).fill("grass"), buildings: [], road: Array.from({ length: 100 }, (_, x) => ({ x, z: 10 })), shortcuts: [] }
@@ -34,6 +35,49 @@ function fixture(id = 0, count = 8, direction: 1 | -1 = 1) {
 }
 
 describe("party transport", () => {
+  it.each((["donkey", "horse", "ox"] as const).flatMap(animal =>
+    ([1, -1] as const).flatMap(direction => [.1, 1.25].flatMap(dt => [false, true].map(stopped => ({ animal, direction, dt, stopped }))))))(
+    "takes the whole company past an inside bend with $animal, direction $direction, dt $dt, already stopped $stopped", ({ animal, direction, dt, stopped }) => {
+    const id = Array.from({ length: 100 }, (_, id) => id).find(id => partyLoadout(id, 4).cart?.animal === animal)!
+    const { map, travelers } = fixture(id, 4, direction)
+    map.road = [
+      ...Array.from({ length: 41 }, (_, x) => ({ x, z: 10 })),
+      ...Array.from({ length: 10 }, (_, z) => ({ x: 40, z: z + 11 })),
+      ...Array.from({ length: 59 }, (_, x) => ({ x: x + 41, z: 20 })),
+    ]
+    for (const p of map.road) map.tiles[p.z * map.width + p.x] = "path"
+    map.buildings = [{ id: "tavern", buildType: "tavern", label: "Tavern", x: 37, z: 11, w: 3, d: 3,
+      height: 1, color: "tan", roofColor: "brown" }]
+    for (const t of travelers) t.offset = (direction === 1 ? 30 : 49) / (map.road.length - 1)
+    const sim = createSim(travelers, map)
+    sim.balance = { ...DEFAULT_BALANCE, rules: { ...DEFAULT_BALANCE.rules, hungerDecay: 0, thirstDecay: 0, staminaDecay: 0 } }
+    const party = sim.parties.get(id)!
+    if (stopped) {
+      // Resume a wagon already stranded by the old road-only movement.
+      ensurePartyTransport(party, [...sim.travelers.values()], map, BASE_CHARACTER_SCALE)
+      let blocked = false
+      for (let tick = 0; tick < 500 && !blocked; tick++) {
+        blocked = !movePartyCart(party, map, BASE_CHARACTER_SCALE, 1, .1)
+      }
+      expect(blocked).toBe(true)
+      party.progress = party.transport!.progress
+      party.formed = false
+    }
+    let diverted = false, passed = false
+    for (let tick = 0; tick < Math.ceil(100 / dt); tick++) {
+      stepSim(sim, travelers, map, 1, dt)
+      const cart = party.transport!
+      expect(cart).toBeDefined()
+      expect(convoyBuildingsClear(map, cart.pose, animal, BASE_CHARACTER_SCALE)).toBe(true)
+      diverted ||= !!party.diversion
+      passed = travelers.every(t => direction * (sim.travelers.get(t.id)!.progress - 40) > 8)
+      if (passed && !party.diversion) break
+    }
+    expect(passed, party.reason).toBe(true)
+    expect(diverted).toBe(true)
+    expect(party.diversion).toBeUndefined()
+  })
+
   it("keeps riders separate, moves the cart and leaves room for walkers", () => {
     const { sim, run, party } = fixture()
     run(.1)
