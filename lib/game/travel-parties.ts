@@ -48,6 +48,8 @@ export interface TravelParty {
   /** The company's pace, re-read from its members a few times per game second. */
   pace: number
   paceAt: number
+  /** Steps since a far company last refreshed its members' world positions. */
+  positionAge: number
   /** One purse and one store of food and water for the whole company. Stamina stays personal. */
   provisioned: boolean
   gold: number
@@ -187,7 +189,7 @@ function createParty(id: number, people: Traveler[], leader: SimTraveler): Trave
     stage: "traveling", reason: "Traveling together", direction: leader.direction,
     singleFile: false, cooldown: 0, retry: 0, elapsed: 0, decisions: 0, visitPending: [], visitStarted: [],
     progress: leader.progress, speed: 0, formed: true, headTile: Math.floor(leader.progress), carried: 0, roster: 0, pace: 0, paceAt: -Infinity,
-    provisioned: false, gold: 0, hunger: 0, thirst: 0 }
+    positionAge: 0, provisioned: false, gold: 0, hunger: 0, thirst: 0 }
 }
 
 function leaveParty(s: SimTraveler) {

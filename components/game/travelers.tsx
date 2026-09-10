@@ -239,6 +239,9 @@ export const Travelers = memo(function Travelers({
         routeBenchmarkCity(sim, map)
         frameProfile.end("routePlanning", planning)
         const stepping = frameProfile.start()
+        // Companies beyond the view refresh their followers' positions less often.
+        const view = useCameraStore.getState()
+        sim.focus = { x: view.targetX, z: view.targetZ, radius: view.viewSize * 1.5 + 12 }
         stepSim(sim, travelers, map, speed, dt, movement, speedScales, characterScale, beggarSpeedScales)
         frameProfile.end("simulationStep", stepping)
         })
