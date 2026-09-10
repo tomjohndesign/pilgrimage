@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react"
 
 /** Return opens the console without stealing Enter from existing HUD controls. */
-export function CheatBar({ onBlasterPastor, onLastMarch, blasterPastor = false }: {
+export function CheatBar({ onBlasterPastor, onLastMarch, blasterPastor = false, lastMarch = false }: {
   blasterPastor?: boolean
+  lastMarch?: boolean
   onBlasterPastor: () => void
   onLastMarch: () => void
 }) {
@@ -76,7 +77,9 @@ export function CheatBar({ onBlasterPastor, onLastMarch, blasterPastor = false }
               close()
             } else if (/^(the)?lastmarchoftheents$/i.test(code.trim())) {
               onLastMarch()
-              setMessage("The Ents are waking… About 1 in 100 trees will stroll, resting a minute between walks.")
+              setMessage(lastMarch
+                ? "The Ents are sleeping — the trees are rooted once more."
+                : "The Ents are waking… About 1 in 100 trees will stroll, resting a minute between walks.")
               close()
             } else {
               setMessage("Unknown cheat code. Try again.")
