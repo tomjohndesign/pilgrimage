@@ -21,8 +21,10 @@ import {
   yawForView,
 } from "@/lib/game/render/iso"
 
-/** How fast the yaw and zoom tweens converge. Higher = snappier. */
-const TWEEN_LAMBDA = 9
+/** Settle turns quickly and cut off the tiny yaw changes that make pixels flicker. */
+const YAW_TWEEN_LAMBDA = 30
+const YAW_SNAP_THRESHOLD = 0.005
+const ZOOM_TWEEN_LAMBDA = 9
 
 /** Keyboard and edge pan speed, in world units per second at the default zoom. */
 const KEY_PAN_SPEED = 18
@@ -322,16 +324,20 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     // A background tab can hand us a huge delta; clamp so tweens don't overshoot.
     const dt = Math.min(delta, 0.1)
 
+    const targetYaw = yawForView(viewIndex)
     displayYaw.current = THREE.MathUtils.damp(
       displayYaw.current,
-      yawForView(viewIndex),
-      TWEEN_LAMBDA,
+      targetYaw,
+      YAW_TWEEN_LAMBDA,
       dt,
     )
+    if (Math.abs(targetYaw - displayYaw.current) < YAW_SNAP_THRESHOLD) {
+      displayYaw.current = targetYaw
+    }
     displayViewSize.current = THREE.MathUtils.damp(
       displayViewSize.current,
       viewSize,
-      TWEEN_LAMBDA,
+      ZOOM_TWEEN_LAMBDA,
       dt,
     )
 
