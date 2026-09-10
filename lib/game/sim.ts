@@ -1656,8 +1656,9 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
     if (party.formed && party.cooldown <= 0 && ahead >= 0 && ahead <= 7) {
       party.cooldown = 45; party.decisions++
       const renown = sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown
+      const shrineCounters = counters.filter(b => b.owner !== "independent")
       const chance = members.reduce((sum, s) => sum + visitChance({ ...identities.get(s.id)!.attributes,
-        piety: s.piety, hunger: counters.length ? s.hunger : 100, thirst: counters.length ? s.thirst : 100, stamina: s.stamina },
+        piety: s.piety, hunger: shrineCounters.length ? s.hunger : 100, thirst: s.thirst, stamina: s.stamina },
         sim.relic, renown, sim.balance, 0, identities.get(s.id)!.type.id), 0) / members.length
       const rng = makeRng(deriveSeed(sim.seed ^ party.id, 0x56495349 + party.decisions))
       const persuaded = chance + (1 - chance) * roadsideEvangelism(map)
@@ -1777,15 +1778,15 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   characterScale: number, from?: TilePos, partyVisit = false): boolean {
   const isVendor = t.type.id === "vendor", needsParking = isVendor || t.type.id === "knight"
   const renown = sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown
-  // Hunger and thirst only draw anyone in while a counter is open:
-  // the shrine itself keeps no table (see the tavern and the stall).
+  // Thirst draws travelers to the church even without an open counter.
+  // Hunger only draws them when food service is available.
   const shrineCounters = counters.filter(b => b.owner !== "independent")
   const served = shrineCounters.length > 0
   const socialNeed = !needsParking && shrineCounters.some(b => b.buildType === "tavern") && s.gold >= DRINK_PRICE
     && s.happiness < HAPPINESS_THRESHOLD
   const socialChance = socialNeed ? (HAPPINESS_THRESHOLD - s.happiness) / HAPPINESS_THRESHOLD : 0
   const ordinaryChance = visitChance({ ...t.attributes, piety: s.piety,
-    hunger: served ? s.hunger : 100, thirst: served ? s.thirst : 100, stamina: s.stamina },
+    hunger: served ? s.hunger : 100, thirst: s.thirst, stamina: s.stamina },
     sim.relic, renown, sim.balance, 0, t.type.id)
   s.visitCooldown = 5
   const decision = nextRoll(s)

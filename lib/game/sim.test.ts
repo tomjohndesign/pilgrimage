@@ -221,11 +221,11 @@ describe("stepSim", () => {
     const s = sim.travelers.get(0)!
     const hour = GAME_DAY_SECONDS / 24
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([78.5, 77, 80])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([79.625, 79.25, 80])
 
     Object.assign(sim.balance.rules, { hungerDecay: 2, thirstDecay: 6, staminaDecay: 10 })
     stepSim(sim, travelers, map, 1, hour)
-    expect([s.hunger, s.thirst, s.stamina]).toEqual([76.5, 71, 80])
+    expect([s.hunger, s.thirst, s.stamina]).toEqual([77.625, 73.25, 80])
   })
 
   it("keeps food and water supplied longer over an active day", () => {
@@ -272,7 +272,7 @@ describe("stepSim", () => {
   it("buys food from a vendor when starving; gold changes hands", () => {
     const map = makeMap()
     const travelers = [
-      makeTraveler(0, "pilgrim", { hunger: 0.1, thirst: 100, gold: 10 }, 0.5),
+      makeTraveler(0, "pilgrim", { hunger: 0, thirst: 100, gold: 10 }, 0.5),
       makeTraveler(1, "vendor", { gold: 50 }, 0.5),
     ]
     const sim = createSim(travelers, map)
@@ -302,7 +302,7 @@ describe("stepSim", () => {
     expect(buyer.hunger).toBeLessThan(50)
   })
 
-  it("needs only one drink in the first two days when starting fully supplied", () => {
+  it("keeps its provisions through the first two days when starting fully supplied", () => {
     const map = makeMap()
     const travelers = [
       makeTraveler(0, "pilgrim", { hunger: 100, thirst: 100, gold: 100 }),
@@ -320,15 +320,15 @@ describe("stepSim", () => {
       if (buyer.hunger > hunger) meals++
       if (buyer.thirst > thirst) drinks++
     }
-    expect({ meals, drinks }).toEqual({ meals: 0, drinks: 1 })
-    expect(buyer.gold).toBe(100 - WINE_PRICE)
-    expect(vendor.gold).toBe(WINE_PRICE)
+    expect({ meals, drinks }).toEqual({ meals: 0, drinks: 0 })
+    expect(buyer.gold).toBe(100)
+    expect(vendor.gold).toBe(0)
   })
 
   it("chases down a vendor further along the road", () => {
     const map = makeMap()
     const travelers = [
-      makeTraveler(0, "pilgrim", { hunger: 0.1, thirst: 100 }, 0.2),
+      makeTraveler(0, "pilgrim", { hunger: 0, thirst: 100 }, 0.2),
       makeTraveler(1, "vendor", {}, 0.7),
     ]
     const sim = createSim(travelers, map)
@@ -450,7 +450,7 @@ describe("stepSim", () => {
   it("sells from a parked stall to a starving passer-by", () => {
     const map = makeMap()
     const travelers = [
-      makeTraveler(0, "pilgrim", { hunger: 0.1, thirst: 100, gold: 10 }, 0.4),
+      makeTraveler(0, "pilgrim", { hunger: 0, thirst: 100, gold: 10 }, 0.4),
       makeTraveler(1, "vendor", { gold: 0 }, 0.6),
     ]
     const sim = createSim(travelers, map)
@@ -495,7 +495,7 @@ describe("stepSim", () => {
 
   it("lets vendors eat from their own stock for free", () => {
     const map = makeMap()
-    const travelers = [makeTraveler(0, "vendor", { hunger: 0.1, gold: 50 })]
+    const travelers = [makeTraveler(0, "vendor", { hunger: 0, gold: 50 })]
     const sim = createSim(travelers, map)
     const s = sim.travelers.get(0)!
 
@@ -506,7 +506,7 @@ describe("stepSim", () => {
   it("serves the penniless without payment", () => {
     const map = makeMap()
     const travelers = [
-      makeTraveler(0, "pilgrim", { hunger: 0.1, thirst: 100, gold: 0 }, 0.5),
+      makeTraveler(0, "pilgrim", { hunger: 0, thirst: 100, gold: 0 }, 0.5),
       makeTraveler(1, "vendor", { gold: 50 }, 0.5),
     ]
     const sim = createSim(travelers, map)
