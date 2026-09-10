@@ -1,3 +1,4 @@
+import { isWaterTerrain } from "./terrain"
 import type { GameMap } from "./types"
 import type { TerrainId } from "./terrain"
 import { SHORE_CORNERS, shorelineCorners } from "./shoreline"
@@ -17,7 +18,7 @@ export function groundQuadConnected(map: GameMap, x: number, z: number): boolean
     tx = Math.max(0, Math.min(map.width - 1, tx))
     tz = Math.max(0, Math.min(map.depth - 1, tz))
     const i = tz * map.width + tx
-    if ((map.tiles[i] === "water" || map.tiles[i] === "bridge") && map.water?.surface) return map.water.surface[i]
+    if ((isWaterTerrain(map.tiles[i])) && map.water?.surface) return map.water.surface[i]
     return map.elevation?.corners[i * 4 + corner] ?? 0
   }
   const meet = (ax: number, az: number, ac: number, bx: number, bz: number, bc: number) =>
@@ -54,7 +55,7 @@ export function groundCornerTiles(map: GameMap, terrain: readonly TerrainId[] = 
       // Water has its own shoreline geometry and depth; never extend ground
       // halves through a wet neighbour merely because its bank has this colour.
       if ([z * map.width + nx, nz * map.width + x, nz * map.width + nx].some(i =>
-        protectedTiles.has(i) || map.tiles[i] === "water" || map.tiles[i] === "bridge")) return
+        protectedTiles.has(i) || isWaterTerrain(map.tiles[i]))) return
       if (groundQuadConnected(map, Math.min(x, nx), Math.min(z, nz))) candidates.push({ index, corner })
     })
   }

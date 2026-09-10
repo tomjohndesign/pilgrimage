@@ -69,13 +69,13 @@ describe("coordinated travel", () => {
     for (const [id, s] of a.sim.travelers) expect(b.sim.travelers.get(id)!.progress).toBeCloseTo(s.progress, 8)
   })
 
-  it("follows a bent route, narrows for a bridge, and reforms after the tail clears", () => {
+  it.each(["bridge", "ford"] as const)("follows a bent route, narrows for a %s, and reforms after the tail clears", crossing => {
     const { map, travelers } = fixture(6)
     map.road = [...Array.from({ length: 25 }, (_, x) => ({ x, z: 5 })),
       ...Array.from({ length: 9 }, (_, i) => ({ x: 24, z: 6 + i })),
       ...Array.from({ length: 45 }, (_, i) => ({ x: 25 + i, z: 14 }))]
     for (const p of map.road) map.tiles[p.z * map.width + p.x] = "path"
-    map.tiles[10 * map.width + 24] = "bridge"
+    map.tiles[10 * map.width + 24] = crossing
     const sim = createSim(travelers, map)
     for (const party of sim.parties.values()) party.transportInitialized = true
     sim.balance = { ...DEFAULT_BALANCE, rules: { ...DEFAULT_BALANCE.rules, staminaDecay: 0, hungerDecay: 0, thirstDecay: 0 } }

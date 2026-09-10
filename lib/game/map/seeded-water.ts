@@ -6,7 +6,7 @@ import { settlementRoute } from "../settlement-route"
 import { isWaterSource } from "../water-sources/navigation"
 import { levelBuildingGround } from "./elevation"
 import { ROUTE_EDGE_INSET } from "./route-bounds"
-import { isWoods } from "./terrain"
+import { isWaterTerrain, isWoods } from "./terrain"
 import { tileAt, type BuildingDef, type GameMap, type TilePos } from "./types"
 
 export const TOWN_WATER_RADIUS = 124
@@ -53,7 +53,7 @@ function placeSource(map: GameMap, anchor: TilePos, kind: "well" | "watering-hol
     if (patch.some(p => {
       const terrain = tileAt(map, p.x, p.z)
       return Math.min(p.x, p.z, map.width - 1 - p.x, map.depth - 1 - p.z) < ROUTE_EDGE_INSET
-        || !terrain || terrain === "water" || terrain === "bridge" || terrain === "darkwood"
+        || !terrain || isWaterTerrain(terrain) || terrain === "darkwood"
         || !!map.water?.depth[p.z * map.width + p.x]
         || map.buildings.some(b => distanceToBuilding(p, b) < 1)
         || map.darkForests?.some(f => f.clearing.some(q => q.x === p.x && q.z === p.z))
@@ -77,7 +77,7 @@ function placeSource(map: GameMap, anchor: TilePos, kind: "well" | "watering-hol
     const route = settlementRoute(candidate, candidate.buildings, anchor, entry, true)
     if (!route || route.length > 12 || route.some(p => {
       const terrain = tileAt(map, p.x, p.z)
-      return terrain === "water" || terrain === "bridge" || terrain === "darkwood" ||
+      return isWaterTerrain(terrain) || terrain === "darkwood" ||
         Math.min(p.x, p.z, map.width - 1 - p.x, map.depth - 1 - p.z) < ROUTE_EDGE_INSET
     })) continue
     for (const p of route) {

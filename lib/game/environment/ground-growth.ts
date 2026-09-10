@@ -1,5 +1,5 @@
 import { computeForestShade } from "../map/forest-field"
-import { isWoods } from "../map/terrain"
+import { isWaterTerrain, isWoods } from "../map/terrain"
 import type { GameMap } from "../map/types"
 import { CHARACTER_PIXEL_SIZE } from "../render/pixel-scale"
 import { deriveSeed, SEED_STREAM } from "../rng"
@@ -49,7 +49,7 @@ export function groundGrowthField(map: GameMap): GroundGrowthField {
   const height = Math.ceil(map.depth / 2 / GROWTH_CELL_SIZE) - origin[1]
   const data = new Uint8Array(width * height * 4)
   const woods = computeForestShade(map)
-  const water = computeForestShade(map, 3, t => t === "water" || t === "bridge")
+  const water = computeForestShade(map, 3, t => isWaterTerrain(t))
   const blocked = new Uint8Array(map.tiles.length)
   for (const b of map.buildings) for (let z = b.z; z < b.z + b.d; z++) for (let x = b.x; x < b.x + b.w; x++) {
     if (x >= 0 && z >= 0 && x < map.width && z < map.depth) blocked[z * map.width + x] = 1

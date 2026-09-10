@@ -24,7 +24,7 @@ function clearCorridor(map: GameMap, a: Point, b: Point, width: number, onDeck =
     for(let z=worldToTileZ(map,cz-width);z<=worldToTileZ(map,cz+width);z++)for(let x=worldToTileX(map,cx-width);x<=worldToTileX(map,cx+width);x++) {
       const dx=Math.max(0,Math.abs(tileToWorldX(map,x)-cx)-0.5), dz=Math.max(0,Math.abs(tileToWorldZ(map,z)-cz)-0.5)
       if(Math.hypot(dx,dz)>=width)continue
-      if(crossroadIslandAt(map,x,z) || !["grass","clearing","dirt","path","track","bridge"].includes(tileAt(map,x,z)??"") ||
+      if(crossroadIslandAt(map,x,z) || !["grass","clearing","dirt","path","track","bridge","ford"].includes(tileAt(map,x,z)??"") ||
         map.buildings.some(b=>x>=b.x&&x<b.x+b.w&&z>=b.z&&z<b.z+b.d) || Math.abs(surfaceHeight(map,x,z)-height)>=0.3)return false
     }
   }

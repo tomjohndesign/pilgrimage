@@ -1,6 +1,6 @@
 import { terrainCorner, cliffCornerHeight, cliffUpperHeight, inCliffCorner } from "./cliff-corners"
 import { makeRng } from "../rng"
-import { TILE_HEIGHT } from "./terrain"
+import { isWaterTerrain, TILE_HEIGHT } from "./terrain"
 import type { BuildingDef, GameMap } from "./types"
 import { ROUTE_DIRS } from "./route"
 
@@ -203,7 +203,7 @@ export function levelBuildingGround(map: GameMap, building: Pick<BuildingDef, "x
     elevation[field][index] = foundation
   }
   const inside = (tx: number, tz: number) => tx >= x && tx < x + w && tz >= z && tz < z + d
-  const wet = (i: number) => map.water ? map.water.depth[i] > 0 : map.tiles[i] === "water" || map.tiles[i] === "bridge"
+  const wet = (i: number) => map.water ? map.water.depth[i] > 0 : isWaterTerrain(map.tiles[i])
   for (let tz = z; tz < z + d; tz++) for (let tx = x; tx < x + w; tx++) {
     write("height", tz * map.width + tx)
   }

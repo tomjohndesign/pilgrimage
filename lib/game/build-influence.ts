@@ -49,7 +49,7 @@ export function buildInfluence(map: GameMap, balance: GameBalance = DEFAULT_BALA
     if (x < 0 || z < 0 || x >= map.width || z >= map.depth) return
     const i = z * map.width + x
     if (!radiated[i] || connected[i] || !TERRAIN[map.tiles[i]].passable) return
-    if (map.water?.depth[i] && map.tiles[i] !== "bridge") return
+    if (map.water?.depth[i] && map.tiles[i] !== "bridge" && map.tiles[i] !== "ford") return
     connected[i] = 1
     queue.push(i)
   }

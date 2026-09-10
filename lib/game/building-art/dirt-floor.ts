@@ -1,5 +1,5 @@
 import type { GameMap } from "../map/types"
-import { TILE_HEIGHT } from "../map/terrain"
+import { isWaterTerrain, TILE_HEIGHT } from "../map/terrain"
 
 /** Raised platforms, paving and water sources keep their authored ground. */
 export function hasDirtFloor(variant: string | undefined): boolean {
@@ -24,7 +24,7 @@ export function dirtFloorMask(map: GameMap) {
   const height = map.elevation?.height ?? []
   for (let z=0;z<map.depth;z++) for (let x=0;x<map.width;x++) {
     const index=z*map.width+x
-    if (map.tiles[index] === "water" || map.tiles[index] === "bridge" || (map.water?.depth[index] ?? 0)>0) continue
+    if (isWaterTerrain(map.tiles[index]) || (map.water?.depth[index] ?? 0)>0) continue
     let neighbours=0
     FLOOR_NEIGHBOURS.forEach(([dx,dz],bit)=>{
       const nx=x+dx,nz=z+dz,other=nz*map.width+nx

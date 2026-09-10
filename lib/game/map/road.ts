@@ -88,7 +88,7 @@ export const MAX_ROAD_TIER = ROAD_TIERS.length - 1
  * same tier surface, and where the two meet no verge is eroded between them.
  */
 type RoadTerrainId = Extract<TerrainId, "path" | "track">
-type RoadContinuationId = RoadTerrainId | "bridge" | null
+type RoadContinuationId = RoadTerrainId | "bridge" | "ford" | null
 
 export function isRoadTerrain(terrain: TerrainId | null): terrain is RoadTerrainId {
   return terrain === "path" || terrain === "track"
@@ -232,7 +232,7 @@ const EDGE_DIRS: ReadonlyArray<readonly [number, number]> = [
  * (the way runs straight over it), or the edge of the world.
  */
 export function roadContinues(terrain: TerrainId | null): terrain is RoadContinuationId {
-  return terrain === null || isRoadTerrain(terrain) || terrain === "bridge"
+  return terrain === null || isRoadTerrain(terrain) || terrain === "bridge" || terrain === "ford"
 }
 
 /**

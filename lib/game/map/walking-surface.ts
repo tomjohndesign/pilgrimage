@@ -1,3 +1,4 @@
+import { FORD_DEPTH } from "./fords"
 import { BRIDGE_RISE, bridgeLayout, bridgeCornerAt, ropeDeckHeight } from "./bridges"
 import { groundHeight } from "./elevation"
 import { TILE_HEIGHT } from "./terrain"
@@ -10,6 +11,7 @@ export function walkingSurface(map: GameMap, wx: number, wz: number) {
   const tx = Math.max(0, Math.min(map.width - 1, Math.floor(x + 0.5)))
   const tz = Math.max(0, Math.min(map.depth - 1, Math.floor(z + 0.5)))
   const index = tz * map.width + tx, layout = bridgeLayout(map)
+  if (map.tiles[index] === "ford") return { height: TILE_HEIGHT + (map.water?.surface?.[index] ?? 0) - FORD_DEPTH, dx: 0, dz: 0 }
   const span = layout.ropeAt.get(index)
   if (span) {
     const first = span.tiles[0], last = span.tiles[span.tiles.length - 1]
