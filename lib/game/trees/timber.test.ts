@@ -3,7 +3,7 @@ import { makeRng } from "../rng"
 import { growTreePlacements } from "./dimensions"
 import { TREE_SPECIES, TREE_SPECIES_ORDER, generateTree } from "./species"
 import type { TreePlacement } from "./placement"
-import { fallenTimberDimensions, pileLogCount, treeResource, WOOD_PER_LOG, TIMBER_LOAD } from "./timber"
+import { fallenTimberDimensions, pileLogCount, treeResource, WOOD_PER_LOG, TIMBER_LOAD, stackWood, type WoodPile } from "./timber"
 
 const base: TreePlacement = { x: 0, y: 0.2, z: 0, species: "oak" }
 
@@ -67,12 +67,36 @@ describe("timber tuning and dimensions", () => {
     }
   })
 
-  it("renders one log per ten wood without the old 48-log cap", () => {
+  it("counts every stored log independently of the visual fullness cap", () => {
     expect(pileLogCount(0)).toBe(0)
     expect(pileLogCount(10)).toBe(1)
     expect(pileLogCount(40)).toBe(4)
     expect(pileLogCount(240)).toBe(24)
     expect(pileLogCount(600)).toBe(60)
     expect(pileLogCount(15)).toBe(2) // One full log and one visibly short partial log.
+  })
+
+  it("fills all rows evenly from the first deliveries and preserves overflow", () => {
+    const piles = new Map<string, WoodPile>()
+    for (let delivery = 1; delivery <= 200; delivery++) {
+      stackWood(piles, "hut", TIMBER_LOAD)
+      const amounts = Array.from(piles.values(), pile => pile.wood)
+      expect(amounts.reduce((sum, wood) => sum + wood, 0)).toBe(delivery * TIMBER_LOAD)
+      expect(amounts).toHaveLength(Math.min(4, delivery))
+      expect(Math.max(...amounts) - Math.min(...amounts)).toBeLessThanOrEqual(WOOD_PER_LOG)
+    }
+  })
+
+  it("levels old uneven stock, retaining row identities and partial loads", () => {
+    const old = { id: "old-pile", campId: "hut", slot: 2, wood: 243 }
+    const other = { id: "other-pile", campId: "store", slot: 0, wood: 50 }
+    const piles = new Map([[old.id, old], [other.id, other]])
+    stackWood(piles, "hut", 10)
+    expect(piles.get(old.id)?.wood).toBe(60)
+    expect(piles.get(other.id)).toEqual(other)
+    const stock = Array.from(piles.values()).filter(pile => pile.campId === "hut")
+    expect(stock.map(pile => pile.slot).sort()).toEqual([0, 1, 2, 3])
+    expect(stock.reduce((sum, pile) => sum + pile.wood, 0)).toBe(253)
+    expect(Math.max(...stock.map(pile => pile.wood)) - Math.min(...stock.map(pile => pile.wood))).toBeLessThanOrEqual(WOOD_PER_LOG)
   })
 })
