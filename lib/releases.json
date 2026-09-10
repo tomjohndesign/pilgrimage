@@ -1,7 +1,25 @@
 {
-  "lastProcessedCommit": "142c26170387973b63386cbad889fa07ac2f83f8",
-  "releaseCount": 192,
+  "lastProcessedCommit": "7bbdd9c0e482d3d47226acb07b1aa82815d760ae",
+  "releaseCount": 195,
   "releases": [
+    {
+      "version": "0.0.209",
+      "title": "Release 0.0.209",
+      "summary": "Retire redundant build options and gate guard posts at 80 renown (#226)",
+      "commit": "7bbdd9c0e482d3d47226acb07b1aa82815d760ae"
+    },
+    {
+      "version": "0.0.208",
+      "title": "Release 0.0.208",
+      "summary": "Show minimap buildings as red footprints at map scale (#227)",
+      "commit": "915af456cc0dea315891ea10ca560f5304f13ffa"
+    },
+    {
+      "version": "0.0.207",
+      "title": "Release 0.0.207",
+      "summary": "Fix wildlife animation freezing between simulation updates (#228)",
+      "commit": "59b3f2d5900e3c68ffbfbda9b65a484e2a6e99d2"
+    },
     {
       "version": "0.0.206",
       "title": "Release 0.0.206",
