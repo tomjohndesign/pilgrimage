@@ -13,7 +13,7 @@ export type ShopState = "travel" | "opening" | "trading" | "packing"
 export type CartMode = typeof CART_MODES[number] | "ox"
 export type Animal = "donkey" | "horse" | "ox"
 /** Additive transport art; existing equine and merchant bakes stay immutable. */
-export const PARTY_TRANSPORT_VERSION = "v28"
+export const PARTY_TRANSPORT_VERSION = "v30"
 export const PACK_ANIMAL_VERSION = "v29"
 export const HORSE_VARIANTS = ["common", "noble"] as const
 export type HorseVariant = typeof HORSE_VARIANTS[number]

@@ -19,14 +19,14 @@ describe("road character population", () => {
     }
     expect(Array.from({ length: 200 }, (_, id) => travelerAppearance(54321, id))).not.toEqual(people)
   })
-  it("uses calling colors and keeps every varied property within editor bounds", () => {
+  it("keeps outfits stable through body edits and every varied property within editor bounds", () => {
     for (const type of Object.values(TRAVELER_TYPES)) for (let variant = 0; variant < 6; variant++) {
       for (const bound of ["min", "max"] as const) {
         const base = { ...DEFAULT_DESIGN }
         for (const key of Object.keys(DESIGN_CONTROLS) as DesignKey[]) base[key] = DESIGN_CONTROLS[key][bound]
         const design = populationDesign(type, variant, base)
         expect(validatePersonDesign(design)).toEqual(design)
-        expect(design.tunicColor).toBe(type.color)
+        expect(design.tunicColor).toBe(populationDesign(type, variant).tunicColor)
         expect(design.bodyType).toBe(variant < 3 ? "Male" : "Female")
         if (variant >= 3) { expect(design.beard).toBe(false); expect(design.hairStyle).toBe(POPULATION_PROFILES[variant].hair) }
       }
