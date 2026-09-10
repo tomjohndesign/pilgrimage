@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "7a29b98ceaa91cd36daad9d0f93a28036bdf07b3",
-  "releaseCount": 177,
+  "lastProcessedCommit": "aba73ba5648e78d68f8aecdd3eec01df62d8b669",
+  "releaseCount": 178,
   "releases": [
+    {
+      "version": "0.0.192",
+      "title": "Release 0.0.192",
+      "summary": "Vary clothing colors within traveling groups (#211)",
+      "commit": "aba73ba5648e78d68f8aecdd3eec01df62d8b669"
+    },
     {
       "version": "0.0.191",
       "title": "Release 0.0.191",
