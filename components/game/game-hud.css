@@ -122,6 +122,12 @@
 .hud-world { position: absolute; top: calc(var(--hud-space) * 2 + var(--hud-bar-height)); right: var(--hud-space); width: var(--hud-dock-width); max-height: calc(100% - var(--hud-map-height) - var(--hud-bar-height) - var(--hud-space) * 4); padding: var(--hud-space); overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; z-index: 20; }
 .hud-world-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 0 var(--hud-space); font-family: var(--font-cinzel), serif; font-size: 14px; }
 .hud-world-heading button { cursor: pointer; }
+/* The shared switch in the HUD's dark parchment: gold when on, a rule-coloured rim when off. */
+.hud-switch { pointer-events: auto; border-color: #8c784c; background: #423725; box-shadow: none; }
+.hud-switch[data-state="checked"] { border-color: #f0d598; background: #d4b57a; }
+.hud-switch:focus-visible { border-color: #f0d598; box-shadow: 0 0 0 2px rgba(212, 181, 122, .4); }
+.hud-switch [data-slot="switch-thumb"] { background: #f2e8d5; box-shadow: 0 1px 2px #000; }
+.hud-switch[data-state="checked"] [data-slot="switch-thumb"] { background: #30210c; }
 .hud-inspector { min-height: 0; overflow-y: auto; overscroll-behavior: contain; border-bottom: 1px solid #8c784c; }
 .hud-inspector, .hud-world, .hud-menu, .hud-report, .hud-landing-setup {
   --parchment: #211e16;
@@ -216,7 +222,8 @@
   .hud-world-heading { min-height: 44px; }
   .hud-world-heading button, .hud-inspector button { min-width: 44px; min-height: 44px; }
   .hud-choice-track { min-height: 44px; }
-  .hud-world :is(button, select), .hud-report button { min-height: 44px; }
+  .hud-world :is(button, select):not(.hud-switch), .hud-report button { min-height: 44px; }
+  .hud-switch-row { min-height: 44px; }
   .hud-world :is(input, select), .hud-report :is(input, select, textarea) { font-size: 16px; }
   .hud-inspector summary { min-height: 44px; padding-block: 12px; }
 }
@@ -248,7 +255,9 @@
   padding: 20px;
   pointer-events: auto;
 }
-.hud-landing-setup > label { margin-bottom: -8px; }
+/* The saved world's Continue sits apart from the new-world inputs beneath it. */
+.hud-landing-divider { display: flex; align-items: center; gap: 10px; margin: 2px 0; font-family: var(--font-cinzel), serif; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #d4c297; }
+.hud-landing-divider::before, .hud-landing-divider::after { content: ""; flex: 1; height: 1px; background: #5c4e32; }
 .hud-landing-play { height: 42px; margin-top: 4px; font-size: 14px; }
 @media (max-width: 1024px) {
   .game-hud[data-landing="true"] .hud-header { display: flex; }
