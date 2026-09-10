@@ -56,10 +56,20 @@ export function createSettlement(balance: GameBalance = DEFAULT_BALANCE): Settle
 }
 
 /** Preserve generated IDs and residents; ownership is a session overlay on the base map. */
+// The same world and settlement always describe the same map. Handing back one
+// object lets the cursor's placement verdicts serve the purchase, and keeps every
+// per-map cache (routes, lanes, spatial indexes) warm across the two.
+const settlementMaps = new WeakMap<GameMap, WeakMap<Settlement, GameMap>>()
 export function settlementMap(baseMap: GameMap, settlement: Settlement): GameMap {
+  let perSettlement = settlementMaps.get(baseMap)
+  if (!perSettlement) { perSettlement = new WeakMap(); settlementMaps.set(baseMap, perSettlement) }
+  const cached = perSettlement.get(settlement)
+  if (cached) return cached
   const claimed = new Set(settlement.claimedBuildings)
-  return { ...baseMap, elevation: settlement.elevation ?? baseMap.elevation,
+  const map = { ...baseMap, elevation: settlement.elevation ?? baseMap.elevation,
     buildings: [...baseMap.buildings.map(b => claimed.has(b.id) ? { ...b, owner: undefined } : b), ...settlement.structures] }
+  perSettlement.set(settlement, map)
+  return map
 }
 
 /** A footprint touching connected influence joins immediately; its renown can reach neighbours. */
@@ -234,8 +244,9 @@ export function roadBlockError(map: GameMap, buildings: readonly BuildingDef[]):
 
 // The cursor validates a tile as it is hovered and the purchase validates the
 // same tile again on the click; each validation routes to every building. The
-// answer only depends on the map object, the structure, the tile and rotation.
-const placementVerdicts = new WeakMap<GameMap, WeakMap<GameBalance, Map<string, { buildings: readonly unknown[]; count: number; revision: number; verdict: string | null }>>>()
+// cheap footprint checks always run against live terrain; only the access
+// verdict, which depends on the buildings and footpaths in force, is reused.
+const accessVerdicts = new WeakMap<GameMap, WeakMap<GameBalance, Map<string, { buildings: readonly unknown[]; count: number; revision: number; verdict: string | null }>>>()
 
 /** Validate the entire footprint; the shrine approach and water stay clear. */
 export function placementError(
@@ -245,26 +256,23 @@ export function placementError(
   balance: GameBalance = DEFAULT_BALANCE,
   rotation: BuildingRotation = 0,
 ): string | null {
-  // The cursor validates with the roof rotation already resolved; the purchase
-  // passes the requested one. Resolve first so both land on the same verdict.
   rotation = placementRoofRotation(map, def, at, rotation)
-  let byBalance = placementVerdicts.get(map)
-  if (!byBalance) { byBalance = new WeakMap(); placementVerdicts.set(map, byBalance) }
+  const footprintError = validateFootprint(map, def, at, balance, rotation)
+  if (footprintError || !map.site) return footprintError
+  let byBalance = accessVerdicts.get(map)
+  if (!byBalance) { byBalance = new WeakMap(); accessVerdicts.set(map, byBalance) }
   let verdicts = byBalance.get(balance)
   if (!verdicts) { verdicts = new Map(); byBalance.set(balance, verdicts) }
   const key = `${def.id}:${at.x}:${at.z}:${rotation}`
-  // Tests and editors mutate a map in place; the game replaces it. Either way a
-  // verdict only holds while the same buildings and footpath wear are in force.
   const known = verdicts.get(key), revision = map.footpaths?.revision ?? 0
   if (known && known.buildings === map.buildings && known.count === map.buildings.length && known.revision === revision) return known.verdict
   if (verdicts.size >= 512) verdicts.clear()
-  const verdict = validatePlacement(map, def, at, balance, rotation)
+  const verdict = validateAccess(map, def, at, rotation)
   verdicts.set(key, { buildings: map.buildings, count: map.buildings.length, revision, verdict })
   return verdict
 }
 
-function validatePlacement(map: GameMap, def: BuildDefinition, at: TilePos, balance: GameBalance, rotation: BuildingRotation): string | null {
-  rotation=placementRoofRotation(map,def,at,rotation)
+function validateFootprint(map: GameMap, def: BuildDefinition, at: TilePos, balance: GameBalance, rotation: BuildingRotation): string | null {
   const footprint = rotatedFootprint(def, rotation)
   const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
   if (!hovel) return "A founding shrine is needed before building."
@@ -283,7 +291,12 @@ function validatePlacement(map: GameMap, def: BuildDefinition, at: TilePos, bala
     const problem = placementProblem(map, map.buildings, "workshop", at.x, at.z, rotation)
     if (problem) return PLACEMENT_PROBLEM_LABELS[problem]
   }
-  // Reserve construction frontage and preserve access to every existing building.
+  return null
+}
+
+/** Reserve construction frontage and preserve access to every existing building. */
+function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, rotation: BuildingRotation): string | null {
+  const footprint = rotatedFootprint(def, rotation)
   if (map.site) {
     const candidate = { buildType: def.id, ...def, ...footprint, rotation, ...at, ...placementBuildingLayout(map,{...def,...footprint,rotation,...at,buildType:def.id,id:"construction-preview"}), id: "construction-preview", construction: { work: 0, required: 1 } }
     const approaches=buildingApproaches(map,candidate)
