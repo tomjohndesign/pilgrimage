@@ -7,6 +7,7 @@ import { addFoundingWell, addPathSprings } from "./seeded-water"
 import { beachAccess } from "./beaches"
 import { taperRiverBanks, gradeBridgeApproaches } from "./river-banks"
 import { bridgeLayout } from "./bridges"
+import { seedFords } from "./fords"
 import { generateElevation, finishElevation, levelBuildingGround, elevationStep, type ElevationInfo, type ElevationSettings } from "./elevation"
 import { drainWater } from "./hydrology"
 import { makeRng } from "../rng"
@@ -41,7 +42,9 @@ import { generateWater, WATER_KIND_LAKE, WATER_KIND_RIVER } from "./water"
  *
  * Water routes around everything else's guarantees rather than breaking them:
  * lakes get sand beaches, rivers get point bars, and the road crosses rivers
- * only on straight bridges of at most MAX_BRIDGE_SPAN tiles — never lakes.
+ * only at straight crossings of at most MAX_BRIDGE_SPAN tiles — never lakes.
+ * Quiet crossings become shallow fords; occasional old bridges and crossings
+ * at waterfalls retain their decks. Player bridge construction comes later.
  * Bridges belong to the road alone. Trails are desire lines, not engineering:
  * they never bridge, so a trail bound for the far bank runs down to the water
  * and stops there, and some simply peter out in the woods or branch off to
@@ -777,6 +780,11 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   gradeCrossings()
 
   // --- Join same-bank pockets to the network ---------------------------------
+  // Finish the shallow shelves and their bank descents before connecting land;
+  // erosion can open a dry route through a formerly steep part of the bank.
+  const crossingMap: GameMap = { width, depth, tiles, buildings: [hovel, shelter], seed, road, shortcuts, site, elevation, water: waterInfo }
+  seedFords(crossingMap, bridgeLayout({ ...crossingMap }).spans)
+
   // Rivers, lakes, and dark forests divide the world, and trails cross none of
   // them, so land the road cannot reach without a crossing stays cut off —
   // that is the point. But a glade or clearing that shares a bank with
@@ -785,9 +793,15 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   // or old growth between them and everything reachable are left as they are.
   let reached = reachableFrom(tiles, roadTiles, width, depth, elevation)
   const settled = new Uint8Array(tiles.length)
+  let expanded = false
   for (let repair = 0; repair < tiles.length; repair++) {
     const orphan = tiles.findIndex((t, i) => TERRAIN[t].passable && !reached[i] && !settled[i])
-    if (orphan === -1) break
+    if (orphan === -1) {
+      if (!expanded) break
+      settled.fill(0)
+      expanded = false
+      continue
+    }
     const pocket = passableComponent(tiles, orphan, width, depth, elevation)
     for (const i of pocket) settled[i] = 1
     const link = nearestReachedByLand(pocket, reached, tiles, walkable, width, depth, elevation)
@@ -806,7 +820,11 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     )
     if (!route) continue
     carveRoute(route)
-    reached = reachableFrom(tiles, roadTiles, width, depth, elevation)
+    const connected = reachableFrom(tiles, roadTiles, width, depth, elevation)
+    // A newly reached shallow shelf can expose another bank to an earlier
+    // stranded pocket. Revisit those pockets together after finishing this pass.
+    expanded ||= connected.some((value, i) => value && !reached[i])
+    reached = connected
   }
 
   // --- Open the ancient hearts and cut their woodland approaches ------------

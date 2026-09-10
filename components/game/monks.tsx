@@ -1,5 +1,7 @@
 "use client"
 
+import { fordSpeedAt } from "@/lib/game/map/fords"
+
 import { SceneAssetBoundary } from "./scene-assets"
 
 import { stepDevotion } from "@/lib/game/wellbeing"
@@ -308,11 +310,12 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       }
       group.rotation.x = 0
 
-      const evangelizing = stepMonkEvangelism(s, map, evangelismRequested, monkWalkSpeed(characterScale), dt,
+      const groundSpeed = monkWalkSpeed(characterScale) * fordSpeedAt(map, s.x, s.z)
+      const evangelizing = stepMonkEvangelism(s, map, evangelismRequested, groundSpeed, dt,
         world.states.filter(other => other !== s && other.preachingTask).map(other => other.preachingTask!.tile))
       if (evangelismRequested && !evangelizing) useMonkEvangelismStore.getState().recall(monks[i].id)
-      if (!evangelizing && !stepMonkWork(s, map, monkWalkSpeed(characterScale), dt))
-        stepMonkRoutine(s, world.wander, world.rng, monkWalkSpeed(characterScale), dt)
+      if (!evangelizing && !stepMonkWork(s, map, groundSpeed, dt))
+        stepMonkRoutine(s, world.wander, world.rng, groundSpeed, dt)
       if (map.footpaths && !wasFlying) recordWalkingPath(map.footpaths, map, { x: previousX, z: previousZ }, s)
       world.stamina.set(monks[i].id, s.stamina)
       if (s.buildingTask && (s.activity === "building" || s.activity === "sleeping")) group.rotation.y = s.buildingTask.heading

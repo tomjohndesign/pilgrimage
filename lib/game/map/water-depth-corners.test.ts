@@ -10,6 +10,12 @@ function water(rows: string[]) {
 }
 
 describe("water depth corners", () => {
+  it("keeps a ford shallow across its full walkable width", () => {
+    const map = water(["222", "211", "211"])
+    map.tiles[4] = "ford"
+    expect(waterDepthCorners(map)[4]).toBe(-1)
+  })
+
   it("splits deeper water corners into equal halves in every orientation", () => {
     let rows = ["111", "122", "122"]
     for (const corner of [3, 1, 0, 2]) {

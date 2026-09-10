@@ -58,7 +58,7 @@ function sheepSegment(world: WildlifeWorld, map: GameMap, from: Point, to: Point
     const p = { x: from.x + (to.x - from.x) * i / steps, z: from.z + (to.z - from.z) * i / steps }
     for (const [dx, dz] of [[0, 0], [clearance, 0], [-clearance, 0], [0, clearance], [0, -clearance]]) {
       const tile = tileAt(map, worldToTileX(map, p.x + dx), worldToTileZ(map, p.z + dz))
-      if (!tile || !["grass", "clearing", "dirt", "hills", "path", "track", "bridge"].includes(tile)) return false
+      if (!tile || !["grass", "clearing", "dirt", "hills", "path", "track", "bridge", "ford"].includes(tile)) return false
     }
     if (map.buildings.some(b => {
       const c = buildingCentre(map, b)

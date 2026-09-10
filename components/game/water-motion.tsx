@@ -1,5 +1,7 @@
 "use client"
 
+import { isWaterTerrain } from "@/lib/game/map/terrain"
+
 import { useContext, useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
@@ -34,16 +36,16 @@ export function WaterMotion({ map: suppliedMap, waterPalette, edgeGrain, bounds,
     ripples.minFilter = THREE.NearestMipmapLinearFilter
   }, [ripples])
   const geometry = useMemo(() => {
-    const positions: number[] = [], uv: number[] = [], falling: number[] = [], turbulence: number[] = [], shores: number[] = [], modes: number[] = []
+    const positions: number[] = [], uv: number[] = [], falling: number[] = [], turbulence: number[] = [], shores: number[] = [], modes: number[] = [], fordFlows: number[] = []
     const field = turbulenceField ?? waterfallTurbulence(map.water, map.tiles.length, map.elevation?.settings.turbulenceReach ?? DEFAULT_ELEVATION.turbulenceReach)
-    const quad = (a: number[], b: number[], c: number[], d: number[], fall = 0, current = [0, 0, 0], shore = [0, 0, 0, 0], mode = 1) => {
-      for (const p of [a, b, c, c, b, d]) { positions.push(...p); falling.push(fall); turbulence.push(...current); shores.push(...shore); modes.push(mode) }
+    const quad = (a: number[], b: number[], c: number[], d: number[], fall = 0, current = [0, 0, 0], shore = [0, 0, 0, 0], mode = 1, fordFlow: readonly number[] = [0, 0]) => {
+      for (const p of [a, b, c, c, b, d]) { positions.push(...p); falling.push(fall); turbulence.push(...current); shores.push(...shore); modes.push(mode); fordFlows.push(...fordFlow) }
       uv.push(0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1)
     }
     const water = map.water
     for (let tz = bounds?.z ?? 0; tz < (bounds?.endZ ?? map.depth); tz++) for (let tx = bounds?.x ?? 0; tx < (bounds?.endX ?? map.width); tx++) {
       const i = tz * map.width + tx
-      const wet = !!(water?.depth[i] || map.tiles[i] === "water" || map.tiles[i] === "bridge")
+      const wet = !!(water?.depth[i] || isWaterTerrain(map.tiles[i]))
       const cut = terrainCorner(map, tx, tz)
       const shore = cut ? [0, 0, 0, 0] : shorelineCorners(map, tx, tz)
       if (cut && (wet || map.tiles[cut.donor] === "water")) shore[cut.corner] = 1
@@ -53,7 +55,7 @@ export function WaterMotion({ map: suppliedMap, waterPalette, edgeGrain, bounds,
       // Full tile coverage lets the shader's noise cross boundaries without a repeated border.
       const top = (c: number) => TILE_HEIGHT + (wet ? water?.surface?.[i] ?? map.elevation?.corners[i * 4 + c] ?? 0 : cut?.lower[c] ?? map.elevation?.corners[i * 4 + c] ?? 0) + .012
       const current = wet ? i : cut?.donor ?? i
-      quad([x - 0.5, top(0), z - 0.5], [x + 0.5, top(1), z - 0.5], [x - 0.5, top(2), z + 0.5], [x + 0.5, top(3), z + 0.5], 0, Array.from(field.subarray(current * 3, current * 3 + 3)), shore, wet ? 1 : -1)
+      quad([x - 0.5, top(0), z - 0.5], [x + 0.5, top(1), z - 0.5], [x - 0.5, top(2), z + 0.5], [x + 0.5, top(3), z + 0.5], 0, Array.from(field.subarray(current * 3, current * 3 + 3)), shore, wet ? 1 : -1, map.tiles[i] === "ford" ? water?.flow[i] ?? [0, 0] : [0, 0])
       if (!wet) continue
       const n = water?.downstream?.[i] ?? -1
       if (water?.motion?.[i] !== "waterfall" || n < 0 || !water.surface || !water.flow[i]) continue
@@ -67,6 +69,7 @@ export function WaterMotion({ map: suppliedMap, waterPalette, edgeGrain, bounds,
     g.setAttribute("aTurbulence", new THREE.Float32BufferAttribute(turbulence, 3))
     g.setAttribute("aShoreCorners", new THREE.Float32BufferAttribute(shores, 4))
     g.setAttribute("aShoreMode", new THREE.Float32BufferAttribute(modes, 1))
+    g.setAttribute("aFordFlow", new THREE.Float32BufferAttribute(fordFlows, 2))
     g.setAttribute("aFall", new THREE.Float32BufferAttribute(falling, 1))
     return g
   }, [revision, bounds, turbulenceField])
@@ -90,10 +93,10 @@ export function WaterMotion({ map: suppliedMap, waterPalette, edgeGrain, bounds,
   })
   return <mesh ref={mesh} name="water-shimmer" geometry={geometry} frustumCulled={false}>
     <shaderMaterial ref={material} uniforms={uniforms} transparent depthWrite={false} side={THREE.DoubleSide}
-      vertexShader={`attribute float aShoreMode; varying float vShoreMode; attribute vec4 aShoreCorners; varying vec4 vShoreCorners; attribute float aFall; attribute vec3 aTurbulence; varying vec3 vTurbulence; varying float vFall; varying float vHeight; varying vec2 vUv; varying vec2 vWorld;
-        void main() { vShoreMode = aShoreMode; vShoreCorners = aShoreCorners; vFall = aFall; vTurbulence = aTurbulence; vUv = uv; vWorld = position.xz; vHeight = position.y;
+      vertexShader={`attribute vec2 aFordFlow; varying vec2 vFordFlow; attribute float aShoreMode; varying float vShoreMode; attribute vec4 aShoreCorners; varying vec4 vShoreCorners; attribute float aFall; attribute vec3 aTurbulence; varying vec3 vTurbulence; varying float vFall; varying float vHeight; varying vec2 vUv; varying vec2 vWorld;
+        void main() { vFordFlow = aFordFlow; vShoreMode = aShoreMode; vShoreCorners = aShoreCorners; vFall = aFall; vTurbulence = aTurbulence; vUv = uv; vWorld = position.xz; vHeight = position.y;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`}
-      fragmentShader={`varying float vShoreMode; varying vec4 vShoreCorners; ${SHORELINE_SHAPE_GLSL}
+      fragmentShader={`varying vec2 vFordFlow; varying float vShoreMode; varying vec4 vShoreCorners; ${SHORELINE_SHAPE_GLSL}
         ${TERRAIN_EDGE_GLSL}
         ${TERRAIN_WATER_GLSL}
         uniform sampler2D rippleMap;
@@ -119,6 +122,17 @@ export function WaterMotion({ map: suppliedMap, waterPalette, edgeGrain, bounds,
           float drift = floor(t * 3.0) * ${CHARACTER_PIXEL_SIZE};
           vec4 ripple = sampleTiled(rippleMap, (world + vec2(drift, 0.0)) * ${GROUND_UV_SCALE}, world);
           float alpha = strength * ripple.r * mix(0.6, 1.0, grouped * ebb) * min(1.0, coverage * 2.0);
+          if (dot(vFordFlow, vFordFlow) > 0.01) {
+            vec2 direction = normalize(vFordFlow);
+            // Thin, faint streaks move downstream between exposed stones.
+            // Snap both the current and its shapes to the character pixel grid.
+            float travel = floor(time * 0.16 / ${CHARACTER_PIXEL_SIZE}) * ${CHARACTER_PIXEL_SIZE};
+            vec2 flowWorld = world - direction * travel;
+            vec2 current = vec2(dot(flowWorld, direction), dot(flowWorld, vec2(-direction.y, direction.x)));
+            float streaks = noise(current * vec2(6.0, 24.0) + seed);
+            float flecks = smoothstep(0.68, 0.86, streaks);
+            alpha = max(alpha, 0.12 * flecks);
+          }
           if (vTurbulence.x > 0.0) {
             vec2 direction = vTurbulence.yz;
             vec2 current = vec2(dot(world, direction), dot(world, vec2(-direction.y, direction.x)));

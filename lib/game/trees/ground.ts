@@ -4,7 +4,7 @@ import { worldToTileX, worldToTileZ } from "../map/types"
 import { CHARACTER_PIXEL_SIZE } from "../render/pixel-scale"
 import { inwardTileDepth, depthBandCorners } from "../map/depth-field"
 import { SHORE_CORNERS } from "../map/shoreline"
-import { isWoods } from "../map/terrain"
+import { isWaterTerrain, isWoods } from "../map/terrain"
 import type { TreePlacement } from "./placement"
 
 /** Prebuilt, palette-limited masks; shared by every forest tile without extra draw calls. */
@@ -67,7 +67,7 @@ export function treeShadowDepth(map: GameMap, trees: readonly TreePlacement[], f
   const depths = canopy.slice()
   for (let z = 0; z < map.depth; z++) for (let x = 0; x < map.width; x++) {
     const i = z * map.width + x
-    if (canopy[i] || map.tiles[i] === "water" || map.tiles[i] === "bridge") continue
+    if (canopy[i] || isWaterTerrain(map.tiles[i])) continue
     if ((x > 0 && canopy[i - 1]) || (x + 1 < map.width && canopy[i + 1]) ||
       (z > 0 && canopy[i - map.width]) || (z + 1 < map.depth && canopy[i + map.width])) depths[i] = 1
   }
@@ -95,7 +95,7 @@ export function treeGroundField(map: GameMap, trees: readonly TreePlacement[], f
   const corners = depthBandCorners(map, Array.from(depths), true)
   const data = new Uint8Array(map.width * map.depth * 4)
   for (let i = 0; i < depths.length; i++) {
-    if (map.tiles[i] === "water" || map.tiles[i] === "bridge") continue
+    if (isWaterTerrain(map.tiles[i])) continue
     if (!depths[i]) {
       if (dark.has(i)) data.set([0, 255, 0, 255], i * 4)
       continue

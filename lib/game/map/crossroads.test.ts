@@ -28,6 +28,25 @@ function continuous(route: TilePos[]) {
 }
 
 describe("crossroads network", () => {
+  it("preserves stony shallows when rerouting the road around a junction", () => {
+    const map = fixture()
+    map.tiles[7 * map.width + 2] = "ford"
+    createCrossroads(map)
+    expect(map.crossroads).toHaveLength(1)
+    expect(map.tiles[7 * map.width + 2]).toBe("ford")
+    continuous(map.road!)
+  })
+
+  it("does not put a roadside post in natural shallows", () => {
+    const map = fixture()
+    for (const p of map.darkForests![0].approach.slice(1)) map.tiles[p.z * map.width + p.x] = "grass"
+    map.darkForests = []
+    map.tiles[6 * map.width + 7] = "ford"
+    createCrossroads(map)
+    expect(map.tiles[6 * map.width + 7]).toBe("ford")
+    expect(map.crossroads?.some(c => c.center.x === 7 && c.center.z === 6)).toBe(false)
+  })
+
   it("leaves a well access spur as a simple path without a marked island", () => {
     const map = fixture()
     for (const p of map.site!.branch.slice(1)) map.tiles[p.z * map.width + p.x] = "grass"
@@ -165,15 +184,15 @@ describe("crossroads network", () => {
     continuous(map.road); continuous(map.site!.branch)
     for (const p of [...map.road, ...map.site!.branch]) expect(crossroadIslandAt(map, p.x, p.z)).toBe(false)
   })
-  it("recognizes a bridge as a T arm and places the post across from the incoming path", () => {
+  it.each(["bridge", "ford"] as const)("recognizes a road %s as a T arm and places the post across from the incoming path", crossing => {
     const map = fixture()
-    map.tiles[7 * 15 + 6] = "bridge"
+    map.tiles[7 * 15 + 6] = crossing
     for (const p of map.darkForests![0].approach.slice(1)) map.tiles[p.z * map.width + p.x] = "grass"
     map.darkForests = []
     createCrossroads(map)
     expect(map.crossroads).toHaveLength(1)
     expect(map.crossroads![0].arms.filter(a => a.mark === "road")).toHaveLength(2)
-    expect(map.tiles[7 * 15 + 6]).toBe("bridge")
+    expect(map.tiles[7 * 15 + 6]).toBe(crossing)
     expect(map.crossroads![0].center).toEqual({ x: 7, z: 6 })
     expect(map.site!.branch[0]).toEqual(map.road![map.site!.junction])
     continuous(map.road!); continuous(map.site!.branch)

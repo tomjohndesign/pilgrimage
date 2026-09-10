@@ -27,6 +27,7 @@ import { dirtFloorMask, DIRT_FLOOR_GLSL } from "@/lib/game/building-art/dirt-flo
 import { GROUND_SURFACE_GLSL, ROAD_UV_SCALE, GRASS_TEXTURE_URL } from "@/lib/game/render/ground-surface"
 import { ElevationEdges } from "./elevation-edges"
 import { WaterMotion } from "./water-motion"
+import { FordStones } from "./ford-stones"
 import { StaticBlock } from "./static-block"
 import { deriveSeed, makeRng, SEED_STREAM } from "@/lib/game/rng"
 import { SHORE_CORNERS, shorelineCorners } from "@/lib/game/map/shoreline"
@@ -48,6 +49,7 @@ import {
   type RoadLook,
 } from "@/lib/game/map/road"
 import {
+  isWaterTerrain,
   MAX_WATER_DEPTH,
   TERRAIN,
   TILE_HEIGHT,
@@ -592,7 +594,7 @@ function paintLand(
 ): LandPaint {
   // A bridge tile is the water still running beneath it; the deck above is
   // its own mesh (see bridges.tsx).
-  const def = TERRAIN[terrain === "bridge" ? "water" : isWoods(terrain) ? "grass" : terrain]
+  const def = TERRAIN[isWaterTerrain(terrain) ? "water" : isWoods(terrain) ? "grass" : terrain]
   const index = z * map.width + x
   const overlay = SWARD_OVERLAY[terrain]
   if (overlay === undefined) {
@@ -768,7 +770,7 @@ export function TerrainTiles(props: TerrainProps) {
       const x = i % map.width, z = Math.floor(i / map.width)
       if (coveredLand.has(i) || isRoadTerrain(original)) return "grass"
       // Wet records supply bank colours for the existing shoreline insets.
-      if (original === "water" || original === "bridge") {
+      if (isWaterTerrain(original)) {
         const corner = shorelineCorners(map, x, z).findIndex(Boolean)
         if (corner >= 0) return map.tiles[z * map.width + x + SHORE_CORNERS[corner][0]]
         return AROUND.some(([dx, dz]) => tileAt(map, x + dx, z + dz) === "sand") ? "sand" : "grass"
@@ -803,7 +805,7 @@ export function TerrainTiles(props: TerrainProps) {
       tint.copy(OPEN_MEADOW_TINT)
       paintLand(map, "water", i % map.width, Math.floor(i / map.width), tint, paint)
       paint.color.multiplyScalar(1 + (rng() - .5) * TERRAIN.water.jitter)
-      const wet = map.tiles[i] === "water" || map.tiles[i] === "bridge"
+      const wet = isWaterTerrain(map.tiles[i])
       const shore = shorelineCorners(map, i % map.width, Math.floor(i / map.width)).reduce((bits, flag, c) => bits + flag * 2 ** c, 0)
       data.set([paint.color.r, paint.color.g, paint.color.b, corners[i] + 1 + (wet ? 8 : 0) + shore * 16], i * 4)
     }
@@ -1139,7 +1141,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
         const cut = cliffCuts.get(index)
         const terrain = coveredLand.has(index) ? "grass" : map.tiles[index]
         // A bridge tile draws the water still running beneath it (see paintLand).
-        const def = TERRAIN[terrain === "bridge" ? "water" : isWoods(terrain) ? "grass" : terrain]
+        const def = TERRAIN[isWaterTerrain(terrain) ? "water" : isWoods(terrain) ? "grass" : terrain]
         const grain = grains[index]
         const jitter = 1 + grain * def.jitter
         const corners = map.elevation?.corners.slice(index * 4, index * 4 + 4) ?? [0, 0, 0, 0]
@@ -1221,7 +1223,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
         {
           const target = groundTargets[0]
           const i = target.next++
-          target.surface.setY(i, hiddenFaces[index] * 2 + (map.water?.depth[index] || terrain === "water" || terrain === "bridge" ? 1 : 0))
+          target.surface.setY(i, hiddenFaces[index] * 2 + (map.water?.depth[index] || isWaterTerrain(terrain) ? 1 : 0))
           target.corners.setXYZW(i, corners[0], corners[1], corners[2], corners[3])
           target.mesh.setMatrixAt(i, matrix)
           target.mesh.setColorAt(i, color)
@@ -1330,6 +1332,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
   return (
     <StaticBlock>
       <ElevationEdges bounds={bounds} revision={revision} />
+      <FordStones bounds={bounds} revision={revision} />
       <WaterMotion bounds={bounds} revision={revision} waterPalette={waterPalette} edgeGrain={treeGround!.grain} turbulenceField={shared.turbulence} />
       <instancedMesh
         frustumCulled

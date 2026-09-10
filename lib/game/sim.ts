@@ -1,3 +1,4 @@
+import { fordSpeedAt } from "./map/fords"
 import { ensurePartyTransport, stepPartyPacks, seatParty, parkParty, movePartyCart, turnPartyCart } from "./transport/party"
 import { seatPoint } from "./transport/party-assets"
 import { animalWalkSpeed } from "./transport/assets"
@@ -549,7 +550,7 @@ function routeHeight(map: GameMap, route: ReadonlyArray<{ x: number; z: number }
   let height = cache.heights[i]
   if (Number.isNaN(height)) {
     height = cache.heights[i] = surfaceHeight(map, route[i].x, route[i].z)
-    cache.nearBridge[i] = bridgeLayout(map).rise[route[i].z * map.width + route[i].x] > 0 ? 2 : 1
+    cache.nearBridge[i] = bridgeLayout(map).rise[route[i].z * map.width + route[i].x] > 0 || map.tiles[route[i].z * map.width + route[i].x] === "ford" ? 2 : 1
   }
   return height
 }
@@ -1468,11 +1469,11 @@ function partyPathPoint(map: GameMap, party: TravelParty, progress: number, lane
   return roadWorldPoint(map, progress, lane)
 }
 
-/** Collapse before the head reaches a bridge; expand once the tail has cleared it. */
+/** Collapse before narrow river crossings; expand once the tail has cleared. */
 function bridgeInColumn(map: GameMap, head: number, direction: 1 | -1, span: number, length: number): boolean {
   for (let d = -Math.ceil(span) - 2; d <= 5; d++) {
     const p = map.road![Math.round(((head + direction * d) % length + length) % length)]
-    if (p && tileAt(map, p.x, p.z) === "bridge") return true
+    if (p && (tileAt(map, p.x, p.z) === "bridge" || tileAt(map, p.x, p.z) === "ford")) return true
   }
   return false
 }
@@ -1697,7 +1698,8 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
     }
     const tail = column[column.length - 1]
     const paused = nearProcession(sim.procession, head, false) || nearProcession(sim.procession, tail, false)
-    const target = paused || lagging ? 0 : companyPace(party, members, naturalSpeed, characterScale, seconds)
+    const fordPoint = roadWorldPoint(map, party.progress, 0)
+    const target = paused || lagging ? 0 : companyPace(party, members, naturalSpeed, characterScale, seconds) * fordSpeedAt(map, fordPoint.x, fordPoint.z)
     party.speed = easeSpeed(party.speed, target, dt, movement.acceleration)
     if (party.speed < 1e-6) party.speed = 0
     let blocked = false
@@ -1996,6 +1998,7 @@ export function stepSim(
       const pace = s.beggar ? TRAVELER_TYPES.beggar.paceMin + roll(t.id, 901) * (TRAVELER_TYPES.beggar.paceMax - TRAVELER_TYPES.beggar.paceMin) : t.pace
       const beggarSpeed = s.beggar ? beggarSpeedScales?.get(t.id) ?? 1 : undefined
       targetSpeed = pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (beggarSpeed ?? residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+      targetSpeed *= fordSpeedAt(map, s.x, s.z)
       s.moveSpeed = sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
         easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     }

@@ -25,7 +25,7 @@ function laneTile(map: GameMap, route: readonly TilePos[], i: number): LaneTile 
   const ix = i === 0 ? b.x - p.x : p.x - a.x, iz = i === 0 ? b.z - p.z : p.z - a.z
   const ox = i === route.length - 1 ? ix : b.x - p.x, oz = i === route.length - 1 ? iz : b.z - p.z
   const dot = ix * ox + iz * oz
-  const ok = (onDeck || isRoadTerrain(tileAt(map, p.x, p.z))) && Math.abs(ix) + Math.abs(iz) === 1 && Math.abs(ox) + Math.abs(oz) === 1 && dot >= 0
+  const ok = (onDeck || tileAt(map, p.x, p.z) === "ford" || isRoadTerrain(tileAt(map, p.x, p.z))) && Math.abs(ix) + Math.abs(iz) === 1 && Math.abs(ox) + Math.abs(oz) === 1 && dot >= 0
   const tile: LaneTile = { ok, ix, iz, ox, oz, straight: dot === 1, bend: ok && dot !== 1 && !onDeck ? diagonalRoadBend(map, p.x, p.z) : null }
   cache.tiles[i] = tile
   return tile

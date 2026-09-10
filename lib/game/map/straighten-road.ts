@@ -1,3 +1,4 @@
+import { isWaterTerrain } from "./terrain"
 import { elevationStep } from "./elevation"
 import type { GameMap } from "./types"
 
@@ -30,7 +31,7 @@ export function straightenRoad(map: GameMap, original: readonly number[], allowe
   // A ramp must leave the river along its axis, with one level tile after
   // it. Otherwise a diagonal staircase promotes every bend into more deck.
   const pinned = new Set<number>()
-  const wet = (i: number) => map.tiles[i] === "water" || map.tiles[i] === "bridge"
+  const wet = (i: number) => isWaterTerrain(map.tiles[i])
   // Road generation already carves ordinary forest. Reserve the same small
   // clearance at a bank before trees are placed, without crossing old growth.
   const approachOpen = (i: number) => open(i) || (!occupied.has(i) && allowed(i % map.width, Math.floor(i / map.width)) && map.tiles[i] === "forest")
