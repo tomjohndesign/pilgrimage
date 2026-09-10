@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "5fde89ad52abe11f0c689c89805e2fe23f52db4a",
-  "releaseCount": 184,
+  "lastProcessedCommit": "7c77271f37fc31d40bfc85153e5cb8e37c6ed63b",
+  "releaseCount": 185,
   "releases": [
+    {
+      "version": "0.0.199",
+      "title": "Release 0.0.199",
+      "summary": "Widen main roads and separate opposing traffic (#218)",
+      "commit": "7c77271f37fc31d40bfc85153e5cb8e37c6ed63b"
+    },
     {
       "version": "0.0.198",
       "title": "Release 0.0.198",
