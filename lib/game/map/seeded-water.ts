@@ -2,6 +2,7 @@ import { BUILD_CATALOG } from "../balance"
 import { buildingApproaches, buildingEntry, rotatedFootprint, rotateBuildingPoint } from "../building-rotation"
 import { isComplete } from "../construction"
 import { makeRng } from "../rng"
+import { shrineLayout, shrinePoint } from "../shrine-layout"
 import { settlementRoute } from "../settlement-route"
 import { isWaterSource } from "../water-sources/navigation"
 import { levelBuildingGround } from "./elevation"
@@ -32,7 +33,7 @@ export function hasNearbyWater(map: GameMap, from: TilePos, radius = TOWN_WATER_
 
 /** Try a small side clearing without covering routes, entrances, water or ancient hearts. */
 function placeSource(map: GameMap, anchor: TilePos, kind: "well" | "watering-hole",
-  id: string, label: string, rotationStart = 0, townId?: string): BuildingDef | null {
+  id: string, label: string, rotationStart = 0, townId?: string, accessFrom?: TilePos, accepts = (_source: BuildingDef) => true): BuildingDef | null {
   const def = BUILD_CATALOG.find(b => b.id === kind)!
   for (let gap = 2; gap <= 4; gap++) for (let turn = 0; turn < 4; turn++) {
     const rotation = ((rotationStart + turn) % 4) as 0 | 1 | 2 | 3
@@ -45,6 +46,7 @@ function placeSource(map: GameMap, anchor: TilePos, kind: "well" | "watering-hol
       height: def.height, color: def.color, roofColor: def.roofColor,
       ...(townId || kind === "watering-hole" ? { owner: "independent" as const } : {}),
       ...(townId ? { townId } : {}) }
+    if (!accepts(source)) continue
     const patch: TilePos[] = []
     for (let z = source.z - CLEARING_MARGIN; z < source.z + source.d + CLEARING_MARGIN; z++)
       for (let x = source.x - CLEARING_MARGIN; x < source.x + source.w + CLEARING_MARGIN; x++) {
@@ -52,7 +54,7 @@ function placeSource(map: GameMap, anchor: TilePos, kind: "well" | "watering-hol
       }
     if (patch.some(p => {
       const terrain = tileAt(map, p.x, p.z)
-      return Math.min(p.x, p.z, map.width - 1 - p.x, map.depth - 1 - p.z) < ROUTE_EDGE_INSET
+      return Math.min(p.x, p.z, map.width - 1 - p.x, map.depth - 1 - p.z) < (accessFrom ? CLEARING_MARGIN : ROUTE_EDGE_INSET)
         || !terrain || isWaterTerrain(terrain) || terrain === "darkwood"
         || !!map.water?.depth[p.z * map.width + p.x]
         || map.buildings.some(b => distanceToBuilding(p, b) < 1)
@@ -74,11 +76,11 @@ function placeSource(map: GameMap, anchor: TilePos, kind: "well" | "watering-hol
     for (const p of patch) if (isWoods(candidate.tiles[p.z * map.width + p.x])) candidate.tiles[p.z * map.width + p.x] = "clearing"
     for (const p of footprint) candidate.tiles[p.z * map.width + p.x] = kind === "well" ? "grass" : "clearing"
     candidate.elevation = levelBuildingGround(candidate, source)
-    const route = settlementRoute(candidate, candidate.buildings, anchor, entry, true)
-    if (!route || route.length > 12 || route.some(p => {
+    const route = settlementRoute(candidate, candidate.buildings, accessFrom ?? anchor, entry, true)
+    if (!route || route.length > (accessFrom ? 60 : 12) || route.some(p => {
       const terrain = tileAt(map, p.x, p.z)
       return isWaterTerrain(terrain) || terrain === "darkwood" ||
-        Math.min(p.x, p.z, map.width - 1 - p.x, map.depth - 1 - p.z) < ROUTE_EDGE_INSET
+        Math.min(p.x, p.z, map.width - 1 - p.x, map.depth - 1 - p.z) < (accessFrom ? CLEARING_MARGIN : ROUTE_EDGE_INSET)
     })) continue
     for (const p of route) {
       const i = p.z * map.width + p.x
@@ -96,13 +98,22 @@ function placeSource(map: GameMap, anchor: TilePos, kind: "well" | "watering-hol
   return null
 }
 
-/** Keep the well near the enclave, beside the final stretch approaching the chapel. */
+/** The water path continues past the church door and around to its rear. */
 export function addFoundingWell(map: GameMap): void {
-  const branch = map.site?.branch ?? []
-  const preferred = Math.max(0, branch.length - 10)
-  const anchors = branch.map((p, i) => ({ p, score: Math.abs(i - preferred) }))
-    .sort((a, b) => a.score - b.score)
-  for (const { p } of anchors) if (placeSource(map, p, "well", FOUNDING_WELL_ID, "Enclave well")) return
+  const site = map.site, shrine = map.buildings.find(b => b.id === site?.hovelId)
+  if (!site || !shrine || map.buildings.some(b => b.id === FOUNDING_WELL_ID)) return
+  const { depth, rotation } = shrineLayout(shrine, site.door)
+  const sin = Math.round(Math.sin(rotation)), cos = Math.round(Math.cos(rotation))
+  const behind = (b: BuildingDef) => {
+    for (const x of [b.x, b.x + b.w - 1]) for (const z of [b.z, b.z + b.d - 1]) {
+      if ((x - shrine.x - Math.floor(shrine.w / 2)) * sin + (z - shrine.z - Math.floor(shrine.d / 2)) * cos >= -depth / 2 - 1) return false
+    }
+    return true
+  }
+  for (let distance = 3; distance <= 30; distance++) for (const side of [0, -4, 4, -8, 8, -12, 12, -16, 16]) {
+    const anchor = shrinePoint(shrine, site.door, side, -Math.ceil(depth / 2) - distance)
+    if (placeSource(map, anchor, "well", FOUNDING_WELL_ID, "Enclave well", 0, undefined, site.door, behind)) return
+  }
 }
 
 /** Seeded chance encounters, with spacing but no regular interval or guaranteed count. */

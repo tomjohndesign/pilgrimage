@@ -1,7 +1,31 @@
 {
-  "lastProcessedCommit": "c232a11a124aadf8fd72d83c1386535c60ff8f89",
-  "releaseCount": 181,
+  "lastProcessedCommit": "7c77271f37fc31d40bfc85153e5cb8e37c6ed63b",
+  "releaseCount": 185,
   "releases": [
+    {
+      "version": "0.0.199",
+      "title": "Release 0.0.199",
+      "summary": "Widen main roads and separate opposing traffic (#218)",
+      "commit": "7c77271f37fc31d40bfc85153e5cb8e37c6ed63b"
+    },
+    {
+      "version": "0.0.198",
+      "title": "Release 0.0.198",
+      "summary": "Distribute lumber evenly in low rows with capped visual fullness (#217)",
+      "commit": "5fde89ad52abe11f0c689c89805e2fe23f52db4a"
+    },
+    {
+      "version": "0.0.197",
+      "title": "Release 0.0.197",
+      "summary": "Make minimap influence and player buildings clearer and track the relic (#215)",
+      "commit": "e7b69695ee60f568c9036eb8a0853dfe9c756bf5"
+    },
+    {
+      "version": "0.0.196",
+      "title": "Release 0.0.196",
+      "summary": "Rework enclave visits, recruitment, water access and happiness (#216)",
+      "commit": "ca41d65521ed5e43089cb2419714b4d82f66fafa"
+    },
     {
       "version": "0.0.195",
       "title": "Release 0.0.195",

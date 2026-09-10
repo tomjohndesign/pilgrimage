@@ -96,9 +96,11 @@ export const ROAD_SHAPE_GLSL = /* glsl */ `
           localWear = wear;
         }
       } else if (wear.z < 0.5) {
-        distanceToTrack.x = min(distanceToTrack.x, distance);
-        mainWear = wear.xy;
-        mainOpacity = wear.w;
+        if (distance < distanceToTrack.x) {
+          distanceToTrack.x = distance;
+          mainWear = wear.xy;
+          mainOpacity = wear.w;
+        }
       } else {
         distanceToTrack.y = min(distanceToTrack.y, distance);
         trackWear = wear.xy;

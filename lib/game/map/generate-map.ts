@@ -1,3 +1,4 @@
+import { MAIN_ROAD_WIDTH, clearMainRoadVerge } from "./road-width"
 import { routeBounds, ROUTE_EDGE_INSET } from "./route-bounds"
 import { createCrossroads } from "./crossroads"
 import { straightenRoad } from "./straighten-road"
@@ -881,6 +882,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     buildings: [hovel, shelter],
     seed,
     road,
+    mainRoadWidth: MAIN_ROAD_WIDTH,
     shortcuts,
     darkForests,
     darkForestFloor,
@@ -898,6 +900,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   addPathSprings(map)
   addRoadsideTowns(map)
   createCrossroads(map)
+  clearMainRoadVerge(map)
   return map
 }
 

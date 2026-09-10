@@ -2,7 +2,7 @@ import { fordSpeedAt } from "./map/fords"
 import { ensurePartyTransport, stepPartyPacks, seatParty, parkParty, movePartyCart, turnPartyCart } from "./transport/party"
 import { seatPoint } from "./transport/party-assets"
 import { animalWalkSpeed } from "./transport/assets"
-import { stepDevotion, HAPPINESS_THRESHOLD, TAVERN_HAPPINESS_GAIN } from "./wellbeing"
+import { stepDevotion, stepHappiness, RELIC_HAPPINESS_GAIN, HAPPINESS_THRESHOLD, TAVERN_HAPPINESS_GAIN } from "./wellbeing"
 import { isWaterSource, waterVisitPlan, WATER_SEEK_THRESHOLD, WATER_SEEK_RADIUS, WATER_VISIT_SECONDS, type WaterVisit } from "./water-sources/navigation"
 import { naturalWaterStop, WATER_THIRST_THRESHOLD, WATER_DRINK_SECONDS } from "./natural-water"
 import { tavernWalkingRoute } from "./tavern-navigation"
@@ -84,7 +84,7 @@ import { TRAVELER_TYPES, type Traveler } from "./travelers"
  *  - At the shrine junction, faith, hospitality and evangelism draw visitors
  *    down the branch. The brothers restore their needs and bestow piety before
  *    they return to the road; each visit spreads the shrine's renown.
- *  - Jobless visitors may settle into a woodcutter hut slot, walk to a reserved
+ *  - Visitors may settle into a woodcutter hut slot, walk to a reserved
  *    tree, fell it and haul logs home. Legs never tire on the road.
  *  - Stamina below 20 → leave the road for the nearest open ground (grass, dirt,
  *    or a forest-floor clearing — never solid woods or the road itself) and
@@ -377,6 +377,10 @@ export interface SimTraveler {
   /** Reserved until the visitor has left the shrine approach. */
   shrineSeat?: string
   shrineQueueOrder?: number
+  shrineGroupPoint?: TilePos
+  enclaveVisitPending?: boolean
+  /** A vendor considers keeping a stall only after seeing the relic. */
+  marketInterest?: boolean
   offeringProgress?: number
   offeringMade?: boolean
   /** Road lane used when entering the shrine, including a reversed approach for shelter. */
@@ -597,7 +601,7 @@ function routeWorldPoint(
   }
   const x = tileToWorldX(map, tx), z = tileToWorldZ(map, tz)
   const nearBridge = surfaces.nearBridge[i0] === 2 || surfaces.nearBridge[i0 + 1] === 2
-  const point = { x, z, y: nearBridge ? walkingSurface(map,x,z).height : ay + (by-ay)*frac }
+  const point = { x, z, y: (nearBridge || (route === map.road && (map.mainRoadWidth ?? 1) > 1)) ? walkingSurface(map,x,z).height : ay + (by-ay)*frac }
   return point
 }
 
@@ -606,10 +610,10 @@ function roadWorldPoint(map: GameMap, p: number, lane: number): WorldPoint {
 }
 
 /** Where someone stands when set down on the road at `progress`; wagons keep to the cart line. */
-export function roadPosition(map: GameMap, t: Pick<Traveler, "type">, progress: number, lane: number): WorldPoint {
+export function roadPosition(map: GameMap, t: Pick<Traveler, "type"> & Partial<Pick<Traveler, "direction">>, progress: number, lane: number): WorldPoint {
   const at = roadWorldPoint(map, progress, lane)
   if (t.type.id === "vendor") {
-    Object.assign(at, convoyPoint(map, progress))
+    Object.assign(at, convoyPoint(map, progress, BASE_CHARACTER_SCALE, t.direction ?? 1))
     at.y = walkingSurface(map, at.x, at.z).height
   }
   return at
@@ -674,7 +678,7 @@ function currentRoutePoint(map: GameMap, s: SimTraveler): WorldPoint {
   }
   const point = roadWorldPoint(map, s.progress, s.lane)
   if (!s.convoy) return point
-  const cart = convoyPoint(map, s.progress, s.convoyScale)
+  const cart = convoyPoint(map, s.progress, s.convoyScale, s.direction)
   return { ...cart, y: walkingSurface(map, cart.x, cart.z).height }
 }
 
@@ -698,6 +702,12 @@ function shrineWorldPoint(map: GameMap, s: SimTraveler): WorldPoint {
   const diverted = route[0].x !== site.branch[0].x || route[0].z !== site.branch[0].z
   const lane = diverted ? 0 : s.lane * laneBlend
   const point = routeWorldPoint(map, route, s.branchProgress, lane)
+  if (s.shrineGroupPoint) {
+    const end = route.at(-1)!
+    const blend = Math.max(0, s.branchProgress - (route.length - 2))
+    point.x += (s.shrineGroupPoint.x - end.x) * blend
+    point.z += (s.shrineGroupPoint.z - end.z) * blend
+  }
   if (s.branchProgress < 1) {
     const start = routeWorldPoint(map, route, 0, lane)
     const roadLane = s.activity === "toRelic" ? s.branchEntryLane : s.direction * s.laneOffset
@@ -841,8 +851,8 @@ export function createSim(
       const place = slots[slot]
       member.progress = ((origin - party.direction * place.behind) % length + length) % length
       member.direction = party.direction
-      member.laneOffset = place.lane
-      member.lane = party.direction * place.lane
+      member.laneOffset = (map.mainRoadWidth ?? 1) > 1 ? .28 + place.lane * .28 : place.lane
+      member.lane = party.direction * member.laneOffset
       Object.assign(member, roadWorldPoint(map, member.progress, member.lane))
     }
     party.formed = true
@@ -1095,7 +1105,7 @@ function openSlot(sim: SimState, building: PlacedBuilding): number | null {
 
 /** Unskilled applicants can fill any open slot; only a vendor keeps a stall. */
 function findJob(sim: SimState, s: SimTraveler, map: GameMap): { building: PlacedBuilding; slot: number } | undefined {
-  if (!s.jobless || s.employer) return undefined
+  if (s.employer) return undefined
   for (const building of sim.buildings) {
     if (building.owner === "independent") continue
     const def = BUILDING_KINDS[building.kind]
@@ -1173,6 +1183,7 @@ function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
     if (!physicalNeed && building?.buildType !== "tavern") continue
     const plan = building && tavernVisitPlan(map, building, from, occupied, s)
     if (!plan) continue
+    if (!s.employer && s.partyId === undefined && map.buildings.find(b => b.id === plan.buildingId)?.owner !== "independent") s.enclaveVisitPending = true
     s.tavernVisit = { plan, served: false, returnTo }
     s.walkFrom = { x: s.x, y: s.y, z: s.z }; s.walkT = 0; s.targetId = null
     s.offRoadRoute = [...plan.route, plan.counter.point]
@@ -1219,11 +1230,23 @@ function startWaterTrip(sim: SimState, s: SimTraveler, map: GameMap,
     const plan = waterVisitPlan(map, source, s, back)
     if (!plan) continue
     if (s.activity === "toRelic" || s.activity === "fromRelic") plan.visit.resumeActivity = s.activity
+    if (!s.employer && s.partyId === undefined && s.activity === "walking" && source.owner !== "independent") s.enclaveVisitPending = true
     s.waterVisit = plan.visit; s.offRoadRoute = plan.route; s.walkT = 0; s.targetId = null
     s.activity = "toWater"
     return true
   }
   return false
+}
+
+function refillWater(sim: SimState, s: SimTraveler): void {
+  s.thirst = 100
+  const party = s.partyId === undefined ? undefined : sim.parties.get(s.partyId)
+  if (!party) return
+  party.thirst = 100
+  for (const id of party.members) {
+    const member = sim.travelers.get(id)
+    if (member) member.thirst = 100
+  }
 }
 
 function leaveWater(s: SimTraveler) {
@@ -1371,34 +1394,15 @@ function finishVisit(sim: SimState, s: SimTraveler, map: GameMap): void {
   s.visits++
   sim.visits++
   s.piety = Math.min(100, s.piety + 4 + sim.relic.sanctity / 25)
+  s.happiness = Math.min(100, s.happiness + RELIC_HAPPINESS_GAIN)
+  if (s.convoy) s.marketInterest = nextRoll(s) < .1
   s.shrineRoute = exit.route
   s.branchProgress = exit.route.length - 1
   s.offeringProgress = exit.offeringProgress
   s.activity = "fromRelic"
 }
 
-function settleAfterVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
-  travelers: readonly Traveler[] = [], householdHome?: string): void {
-  if (!householdHome && t.party?.partnerId !== undefined && s.partyId !== undefined) {
-    const partner = sim.travelers.get(t.party.partnerId)
-    const identity = travelers.find(other => other.id === t.party!.partnerId)
-    const party = sim.parties.get(s.partyId)
-    if (!partner || !identity || partner.activity !== "walking" || partner.partyVisitAborted ||
-      !party?.visitStarted.includes(partner.id)) return
-    const home = findHome(sim, s, map, 2)
-    const house = map.buildings.find(b => b.id === home)
-    if (!home || !house || ![s, partner].every(person => settlementRoute(map, map.buildings,
-      { x: worldToTileX(map, person.x), z: worldToTileZ(map, person.z) }, buildingEntry(house), false, true))) return
-    // Check both people's opportunities; either partner can get the first job.
-    for (const [applicant, person, companion] of [[s, t, partner], [partner, identity, s]] as const) {
-      settleAfterVisit(sim, applicant, person, map, travelers, home)
-      if (!applicant.employer) continue
-      companion.home = home; companion.jobless = true; companion.activity = "idle"; companion.timer = 0
-      for (const member of [applicant, companion]) { member.partyId = undefined; member.partyWaiting = false; member.partySpeed = undefined }
-      return
-    }
-    return
-  }
+function settleAfterVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): void {
   if (t.type.id === "friar") {
     const bed = vacantMonkBed(map, sim.joinedMonks.values())
     if (bed && nextRoll(s) < MONK_JOIN_CHANCE) {
@@ -1416,9 +1420,9 @@ function settleAfterVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameM
     }
     return
   }
-  const home = householdHome ?? s.home ?? findHome(sim, s, map)
+  const home = s.home ?? findHome(sim, s, map)
   const job = s.shrineParking || !home ? undefined : findJob(sim, s, map)
-  if (job && nextRoll(s) < (t.attributes.skills.some((skill) => BUILDING_KINDS[job.building.kind].trades.includes(skill)) ? 0.9 : 0.65)) {
+  if (job && nextRoll(s) < 0.1) {
     const route = settlementRoute(map, [...map.buildings, ...sim.buildings],
       { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
       buildingEntry(job.building), false, true, s.shrineSeat)
@@ -1539,7 +1543,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
       }
       if (cart.phase === "parked" && cart.intent) {
         party.stage = "visiting"; party.elapsed = 0; party.retry = 0
-        party.visitPending = [...party.members]; party.visitStarted = []; cart.intent = undefined
+        party.visitPending = [...party.members]; party.visitStarted = []; party.viewingTogether = false; cart.intent = undefined
       }
       if ((cart.phase === "parked" && !cart.intent && party.stage === "traveling") || cart.phase === "boarding") {
         if (cart.phase === "parked" && party.retry <= 0) {
@@ -1574,11 +1578,10 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
     }
     if (party.stage === "visiting") {
       if (party.visitPending.some(id => !party.members.includes(id))) party.visitPending = party.visitPending.filter(id => party.members.includes(id))
-      // Admission is asked for a few companions at a time; every attempt plans
-      // real routes, so a large company files in over several seconds.
+      // Reserve the whole company in one pass, then wait for everyone at the relic.
       if (party.retry <= 0 && party.visitPending.length) {
         party.retry = 2
-        for (const id of party.visitPending.slice(0, 3)) {
+        for (const id of [...party.visitPending]) {
           const s = sim.travelers.get(id)!
           if (tryRoadVisit(sim, s, identities.get(id)!, map, counters, s.direction, s.progress, characterScale,
             { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, true)) {
@@ -1588,6 +1591,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
           }
         }
       }
+      if (!party.visitPending.length && members.every(s => s.activity === "visiting")) party.viewingTogether = true
       // A closed or saturated enclave cannot keep unadmitted companions forever.
       if (party.elapsed > 120) {
         party.visitPending = []
@@ -1599,15 +1603,12 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
       }
       for (const s of members) if (s.activity === "walking") hold(s)
       if (!party.visitPending.length && members.every(s => s.activity === "walking")) {
-        const considered = new Set<number>()
         for (const s of members) {
-          if (considered.has(s.id) || s.home || s.employer || s.partyVisitAborted || !party.visitStarted.includes(s.id)) continue
+          if (s.home || s.employer || s.partyVisitAborted || !party.visitStarted.includes(s.id)) continue
           const t = identities.get(s.id)!
-          considered.add(s.id)
-          if (t.party?.partnerId !== undefined) considered.add(t.party.partnerId)
-          settleAfterVisit(sim, s, t, map, travelers)
+          settleAfterVisit(sim, s, t, map)
         }
-        // Recruitment may convert a traveler to a monk or admit a household.
+        // Recruitment removes each new resident from the departing company.
         syncTravelParties(sim.parties, travelers, sim.travelers)
         if (!sim.parties.has(party.id)) continue
         party.stage = "traveling"; party.cooldown = 45; party.elapsed = 0
@@ -1616,6 +1617,32 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
         regroupParty(party, members.filter(s => s.partyId === party.id), length, seconds, characterScale)
         continue
       } else { party.reason = party.visitPending.length ? "Waiting for room at the enclave" : "Waiting for companions to finish visiting"; continue }
+    }
+    if (party.waterCarrier !== undefined) {
+      const carrier = sim.travelers.get(party.waterCarrier)
+      if (carrier && carrier.activity !== "walking") {
+        for (const s of members) if (s !== carrier) hold(s)
+        party.reason = "Refilling the company’s water"
+        continue
+      }
+      if (carrier && carrier.thirst > party.thirst) {
+        party.thirst = carrier.thirst
+        for (const s of members) s.thirst = party.thirst
+      }
+      party.waterCarrier = undefined
+      regroupParty(party, members, length, seconds, characterScale)
+    }
+    party.waterRetry = Math.max(0, (party.waterRetry ?? 0) - dt)
+    if (party.thirst < WATER_SEEK_THRESHOLD && !party.waterRetry && members.every(s => s.activity === "walking")) {
+      party.waterRetry = 5
+      const carrier = members.find(s => !s.partyRiding)
+      const sources = map.buildings.filter(isWaterSource)
+      if (carrier && (startWaterTrip(sim, carrier, map, sources, { x: carrier.x, y: carrier.y, z: carrier.z }) || startNaturalWaterTrip(carrier, map))) {
+        party.waterCarrier = carrier.id
+        for (const s of members) if (s !== carrier) hold(s)
+        party.reason = "Refilling the company’s water"
+        continue
+      }
     }
     const onRoad = members.every(s => s.partyRiding || (s.activity === "walking" && !s.roadShortcut && !s.track))
     if (!onRoad) {
@@ -1646,7 +1673,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
           continue
         }
         party.stage = "visiting"; party.elapsed = 0; party.retry = 0
-        party.visitPending = [...party.members]; party.visitStarted = []
+        party.visitPending = [...party.members]; party.visitStarted = []; party.viewingTogether = false
         party.reason = "Visiting the enclave together"
         for (const s of members) hold(s)
         continue
@@ -1724,7 +1751,8 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
         if (gap > 0) { moved = Math.min(gap, naturalSpeed(s) * dt); s.progress = gap - moved <= 1e-9 ? place : wrap(s.progress + direction * moved) }
       }
       s.direction = direction
-      s.laneOffset = slots[i].lane
+      s.laneOffset = (map.mainRoadWidth ?? 1) > 1 && !party.singleFile && !(cart && i === 0)
+        ? .28 + slots[i].lane * .28 : slots[i].lane
       s.partySpeed = moved / dt
       s.partyWaiting = !party.formed && moved <= 1e-9
       if (i > 0 && !refreshFollowers) continue
@@ -1766,7 +1794,7 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   const persuaded = evangelism > 0 && nextRoll(s) < evangelism
   // A traveler drawn by need heads for the counter, not the relic.
   // Wagons and horses stay on the road; only walkers turn aside for a meal.
-  if ((ordinaryVisit || persuaded) && served && !needsParking &&
+  if (!partyVisit && (ordinaryVisit || persuaded) && served && !needsParking &&
     (socialNeed || Math.min(s.hunger, s.thirst) < hospitalityNeedThreshold(renown, sim.balance)) &&
     startTavernTrip(sim, s, map, shrineCounters, null)) {
     s.partyVisitAborted = false
@@ -1776,7 +1804,9 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   const occupiedSeats = new Set([...sim.travelers.values()].flatMap(other =>
     other.shrineSeat && (["toParking","toRelic","visiting","fromRelic","offering"].includes(other.activity) ||
       other.waterVisit?.resumeActivity) ? [other.shrineSeat] : []))
-  const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats, from) : null
+  const otherCompany = partyVisit && s.partyId !== undefined && [...sim.travelers.values()].some(other =>
+    other.partyId !== s.partyId && other.shrineSeat?.startsWith("group-"))
+  const visit = wantsVisit && !otherCompany ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats, from, partyVisit ? false : undefined, partyVisit && s.partyId !== undefined) : null
   let visitRoute = visit?.route ?? null
   let parking: ShrineParking | null = null
   if (visitRoute && needsParking) {
@@ -1792,6 +1822,7 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
     s.branchProgress = 0
     s.shrineRoute = visitRoute
     s.shrineSeat = visit!.seat
+    s.shrineGroupPoint = visit!.point
     s.admissionPaid = 0
     s.offeringMade = false
     s.offeringProgress = undefined
@@ -1909,9 +1940,9 @@ export function stepSim(
     const socialBreak = s.happiness < HAPPINESS_THRESHOLD && s.gold >= DRINK_PRICE
       && (tavernCounters.length > 1 || (tavernCounters.length === 1 && tavernCounters[0].id !== s.employer))
     const inChurch = s.activity === "visiting" || s.activity === "offering"
-    stepDevotion(s, dt, inChurch, !processionNearby && s.activity === "visiting" && !s.shrineSeat?.startsWith("queue-"), sim.balance)
+    stepDevotion(s, dt, inChurch, !processionNearby && s.activity === "visiting" && !!s.shrineSeat?.startsWith("prayer-"), sim.balance)
     const socializing = s.activity === "sitting" && (s.tavernVisit?.meal || s.tavernVisit?.drink)
-    if (!socializing) s.happiness = Math.max(0, s.happiness - sim.balance.rules.happinessDecay * hours)
+    stepHappiness(s, hours, !!s.employer, !!socializing, sim.balance)
     if (processionNearby) {
       if (dt > 0 && sim.procession) blessByProcession(sim.procession, `traveler:${s.id}`, s)
       s.moveSpeed = 0; continue
@@ -2063,9 +2094,9 @@ export function stepSim(
         s.y = at.y
         s.z = at.z
         if (inbound && s.branchProgress >= branch.length - 1) {
-          if (!s.shrineSeat?.startsWith("queue-") || (sim.shrineKeeperReady && (!sim.procession || sim.procession.stage === "idle"))) {
+          if (s.shrineSeat?.startsWith("prayer-") || (sim.shrineKeeperReady && (!sim.procession || sim.procession.stage === "idle"))) {
             s.activity = "visiting"
-            s.timer = s.shrineSeat?.startsWith("queue-") ? 6 : 2 * GAME_HOUR_SECONDS
+            s.timer = s.shrineSeat?.startsWith("prayer-") ? 2 * GAME_HOUR_SECONDS : 6
           }
         } else if (!inbound && !s.offeringMade && s.offeringProgress !== undefined && s.branchProgress <= s.offeringProgress) {
           s.activity = "offering"
@@ -2074,18 +2105,20 @@ export function stepSim(
           s.lane = s.direction * s.laneOffset
           s.horseRest = undefined
           s.shrineSeat = undefined
+          s.shrineGroupPoint = undefined
           if (s.shrineParking) {
             s.shrineParking.walking = false; s.shrineParking.distance = 0
             s.activity = "fromParking"
           } else {
             s.activity = "walking"; s.shrineRoute = null; s.visitCooldown = 30; s.diversionCheck = undefined
-            if (!s.partyVisitAborted && s.partyId === undefined) settleAfterVisit(sim, s, t, map, travelers)
+            if (!s.partyVisitAborted && s.partyId === undefined) settleAfterVisit(sim, s, t, map)
           }
         }
         break
       }
       case "visiting": {
-        if (s.shrineSeat?.startsWith("queue-") && (!sim.shrineKeeperReady || (sim.procession && sim.procession.stage !== "idle"))) break
+        if (s.shrineSeat?.startsWith("group-") && (s.partyId === undefined || !sim.parties.get(s.partyId)?.viewingTogether)) break
+        if (!s.shrineSeat?.startsWith("prayer-") && (!sim.shrineKeeperReady || (sim.procession && sim.procession.stage !== "idle"))) break
         s.timer -= dt
         if (s.timer <= 0) finishVisit(sim, s, map)
         break
@@ -2181,7 +2214,7 @@ export function stepSim(
       case "idle": {
         s.workScale = characterScale
         if (dt > 0 && s.home && !s.employer && s.jobless && s.timer <= 0) {
-          settleAfterVisit(sim, s, t, map, travelers, s.home)
+          settleAfterVisit(sim, s, t, map)
           if (s.employer) break
           s.timer = GAME_HOUR_SECONDS
         }
@@ -2311,7 +2344,7 @@ export function stepSim(
         if (s.naturalWaterVisit) {
           s.timer -= dt
           if (s.timer < 1e-8) {
-            s.thirst = 100
+            refillWater(sim, s)
             const visit = s.naturalWaterVisit
             startOffRoadWalk(s, "fromWater")
             if (visit.buildings === map.buildings) s.offRoadRoute = [...visit.route]
@@ -2323,7 +2356,7 @@ export function stepSim(
         // Water answers thirst only; no money, food or stamina changes hands.
         s.thirst = Math.min(100, s.thirst + 100 * Math.min(dt, s.timer) / WATER_VISIT_SECONDS)
         s.timer = Math.max(0, s.timer - dt)
-        if (s.timer < 1e-8) { s.timer = 0; s.thirst = 100; leaveWater(s) }
+        if (s.timer < 1e-8) { s.timer = 0; refillWater(sim, s); leaveWater(s) }
         break
       }
       case "fromWater": {
@@ -2405,6 +2438,11 @@ export function stepSim(
       case "fleeing": {
         // The company already placed them on its shared path this step.
         if (s.partyCarried) break
+        if (s.enclaveVisitPending) {
+          s.enclaveVisitPending = false
+          if (map.site && nextRoll(s) < .95 && tryRoadVisit(sim, s, t, map, [], s.direction, s.progress, characterScale,
+            { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, true)) break
+        }
         const grouped = s.partyId !== undefined
         // A hungry traveler may consider a shrine ahead on their own route.
         // Never turn them back toward a junction they have already passed.
@@ -2436,9 +2474,9 @@ export function stepSim(
         if (dt > 0 && (s.activity === "walking" || s.activity === "seeking") && !isVendor && startNaturalWaterTrip(s, map)) break
         if (townCounter && Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD &&
           startTavernTrip(sim, s, map, [townCounter], null)) break
-        // An empty market stall on the shrine's ground draws a passing vendor
-        // to settle: they leave the road, take the stall, and keep it for good.
-        if (isVendor && !s.employer && !s.track && ahead >= 0 && ahead <= 6 && !s.shrineParking &&
+        // A vendor who chose to stay after viewing the relic can claim an
+        // empty market stall, parking their cart before taking the post.
+        if (isVendor && s.visits > 0 && s.marketInterest && !s.employer && !s.track && ahead >= 0 && ahead <= 6 && !s.shrineParking &&
           s.marketCheck !== Math.floor(s.progress)) {
           s.marketCheck = Math.floor(s.progress)
           const home = findHome(sim, s, map)

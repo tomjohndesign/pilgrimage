@@ -143,8 +143,8 @@ export function hospitalityNeedThreshold(shrineRenown: number, balance: GameBala
 
 /**
  * The chance, 0–1, that this traveler turns down the branch when they reach
- * the junction. Early visitors are exceptionally pious or desperate for food
- * or water. Renown broadens those motives, but never creates a motive by itself.
+ * the junction. About one in ten early passersby visits; exceptional piety and
+ * urgent needs can raise that chance. Renown broadens those motives, but never creates a motive by itself.
  * Evangelism gives those who decline one independent second chance. The sim
  * rolls each decision separately (see sim.ts); the HUD rounds their combined chance.
  */
@@ -161,7 +161,7 @@ export function visitChance(who: TravelerAttributes, stats: RelicStats, shrineRe
   const hospitalityReach = Math.min(1, r.hospitalityBaseChance + r.hospitalityRenownBonus * reputation)
   const hospitality = Math.max(0, Math.min(1, (threshold - need) / threshold)) * hospitalityReach
   // Traveling brothers seek the enclave even before its relic is well known.
-  const ordinary = Math.max(devotion, hospitality, calling === "friar" ? MONK_VISIT_CHANCE : 0)
+  const ordinary = Math.max(0.1, devotion, hospitality, calling === "friar" ? MONK_VISIT_CHANCE : 0)
   return ordinary + (1 - ordinary) * Math.max(0, Math.min(1, evangelism))
 }
 
