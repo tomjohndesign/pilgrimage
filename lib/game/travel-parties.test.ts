@@ -49,6 +49,20 @@ describe("travel party generation", () => {
 })
 
 describe("coordinated travel", () => {
+  it.each([1, -1] as const)("uses its own half of a wide road with room between companions (%i)", direction => {
+    const { map, travelers } = fixture(12, direction)
+    map.mainRoadWidth = 2
+    const sim = createSim(travelers, map)
+    for (const party of sim.parties.values()) party.transportInitialized = true
+    for (const elapsed of [0, 10]) {
+      if (elapsed) run(sim, travelers, map, elapsed)
+      const offsets = [...sim.travelers.values()].map(s => (tileToWorldZ(map, 5) - s.z) * direction)
+      expect(Math.min(...offsets)).toBeGreaterThan(.3)
+      expect(Math.max(...offsets)).toBeLessThan(.85)
+      expect(Math.max(...offsets) - Math.min(...offsets)).toBeGreaterThan(.2)
+    }
+  })
+
   it.each([1, -1] as const)("keeps different personal paces together across the edge seam (%i)", direction => {
     const { map, travelers, sim } = fixture(8, direction)
     const starts = [...sim.travelers.values()].map(s => s.progress)

@@ -48,7 +48,7 @@ export interface TerrainBlockState {
 export function terrainBlockState(map: TerrainBlockState["map"], blocks: readonly TerrainBlockBounds[], previous?: TerrainBlockState): TerrainBlockState {
   const old = previous?.map
   const reset = !old || old.tiles !== map.tiles || old.width !== map.width || old.depth !== map.depth
-    || old.water !== map.water || old.seed !== map.seed || old.road !== map.road || old.site !== map.site
+    || old.water !== map.water || old.seed !== map.seed || old.road !== map.road || old.mainRoadWidth !== map.mainRoadWidth || old.site !== map.site
     || old.shortcuts !== map.shortcuts || old.elevation?.settings !== map.elevation?.settings
   const footprints = blocks.map(b => JSON.stringify(map.buildings.filter(building =>
     building.x < b.endX + 2 && building.x + building.w > b.x - 2
