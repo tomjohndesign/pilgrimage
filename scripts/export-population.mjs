@@ -1,13 +1,14 @@
 import { chromium } from "playwright"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { isDeepStrictEqual } from "node:util"
 const args = process.argv.slice(2), version = args.find(arg => /^v\d+$/.test(arg))
 const urlIndex = args.indexOf("--url"), origin = urlIndex < 0 ? "http://localhost:55010" : args[urlIndex + 1]
 if (!version) throw new Error("Usage: npm run assets:population -- v1 [--jobs] [--url http://localhost:55010]")
 const jobs = args.includes("--jobs")
 const onlyIndex = args.indexOf("--only"), fromIndex = args.indexOf("--from")
-const only = onlyIndex < 0 ? undefined : args[onlyIndex + 1]
+const only = onlyIndex < 0 ? undefined : args[onlyIndex + 1]?.split(",")
 const from = fromIndex < 0 ? undefined : args[fromIndex + 1]
-if ((only || from) && (jobs || !only || !/^v\d+$/.test(from ?? ""))) throw new Error("Partial exports require --only CALLING --from vPREVIOUS.")
+if ((only || from) && (jobs || !only || !/^v\d+$/.test(from ?? ""))) throw new Error("Partial exports require --only CALLING[,CALLING...] --from vPREVIOUS.")
 const previous = from ? JSON.parse(readFileSync(`public/textures/characters/population/${from}/manifest.json`, "utf8")) : null
 const prefix = `public/textures/characters/${jobs ? "jobs" : "population"}/${version}`
 if (existsSync(prefix)) throw new Error("This population version already exists; use a new version.")
@@ -34,9 +35,10 @@ try {
   })
   exporting = true
   const pack = await page.evaluate(({ jobs, only }) => jobs ? window.__jobBake(window.__reportPopulationProgress) : window.__bakePersonPopulation(window.__reportPopulationProgress, only), { jobs, only })
-  if (only && !pack.callings[only]) throw new Error(`Unknown calling: ${only}`)
+  if (only) for (const calling of only) if (!pack.callings[calling]) throw new Error(`Unknown calling: ${calling}`)
+  // Additive clip exports can reorder metadata keys without changing the layout.
   if (previous) for (const key of ["templateVersion", "cellSize", "anchor", "rows", "frameCounts", "depthEncoding", "walkStrides", "reservedTones", "strideRatios"]) {
-    if (JSON.stringify(previous[key]) !== JSON.stringify(pack[key])) throw new Error(`Cannot reuse population with different ${key}; export the full pack.`)
+    if (!isDeepStrictEqual(previous[key], pack[key])) throw new Error(`Cannot reuse population with different ${key}; export the full pack.`)
   }
   mkdirSync(prefix, { recursive: true })
   const save = (name, data) => { writeFileSync(`${prefix}/${name}.png`, Buffer.from(data.split(",")[1], "base64")); return `/${prefix.replace(/^public\//, "")}/${name}.png` }

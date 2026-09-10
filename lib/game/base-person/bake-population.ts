@@ -8,10 +8,11 @@ import { SPRITE_DEPTH_ENCODING } from "../render/bake-depth"
 
 /** Runs once per edited foundation, never once per traveler or frame. */
 export async function bakePopulation(base: PersonDesign = DEFAULT_DESIGN,
-  progress: (done: number) => void = () => {}, cancelled: () => boolean = () => false, only?: TravelerTypeId): Promise<PopulationPack> {
+  progress: (done: number) => void = () => {}, cancelled: () => boolean = () => false, only?: TravelerTypeId | TravelerTypeId[]): Promise<PopulationPack> {
   const types = [...Object.values(TRAVELER_TYPES).map(type => ({ id: type.id, grey: false })),
     ...OLDER_TRAVELER_TYPES.map(id => ({ id, grey: true }))]
-  return bakeOutfits(only ? types.filter(type => type.id === only) : types, (id, variant, grey) => populationDesign(TRAVELER_TYPES[id], variant,
+  const selected = only ? (Array.isArray(only) ? only : [only]) : undefined
+  return bakeOutfits(selected ? types.filter(type => selected.includes(type.id)) : types, (id, variant, grey) => populationDesign(TRAVELER_TYPES[id], variant,
     grey ? { ...base, hairColor: GREY_HAIR_COLOR } : base), base, progress, cancelled)
 }
 

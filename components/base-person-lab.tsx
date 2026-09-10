@@ -129,7 +129,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   }, [])
   useEffect(() => {
     if (process.env.NODE_ENV !== "development") return
-    const target = window as unknown as { __bakePersonPopulation?: (progress?: (done: number) => void, only?: import("@/lib/game/travelers").TravelerTypeId) => Promise<unknown> }
+    const target = window as unknown as { __bakePersonPopulation?: (progress?: (done: number) => void, only?: Parameters<typeof import("@/lib/game/base-person/bake-population").bakePopulation>[3]) => Promise<unknown> }
     target.__bakePersonPopulation = async (progress, only) => (await import("@/lib/game/base-person/bake-population")).bakePopulation(undefined, progress, undefined, only)
     window.__jobBake = async progress => (await import("@/lib/game/jobs/bake")).bakeJobs(progress)
     window.__minstrelBake = async () => (await import("@/lib/game/minstrel/bake")).bakeMinstrels()
@@ -492,8 +492,8 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
           </>}
         </div>
         {isPerson && <footer className="person-panel-footer">
-          <p className="person-hint">Apply these proportions to the mixed crowd. Clothing keeps each calling’s color.</p>
-          <button className={`${button} person-apply`} disabled={!ready} onClick={() => { if (bake) { applyDesign(design, bake); void usePopulationStore.getState().prepare(design); setMessage("Foundation saved. Road characters keep their calling colors and varied bodies.") } }}><Check size={14} />Apply to road</button>
+          <p className="person-hint">Apply these proportions to the mixed crowd. Each person keeps their clothing colors.</p>
+          <button className={`${button} person-apply`} disabled={!ready} onClick={() => { if (bake) { applyDesign(design, bake); void usePopulationStore.getState().prepare(design); setMessage("Foundation saved. Road characters keep their clothing colors and varied bodies.") } }}><Check size={14} />Apply to road</button>
           <button className={button} onClick={() => { usePersonDesignStore.getState().reset(); void usePopulationStore.getState().prepare(null); setDesign({ ...DEFAULT_DESIGN }); setMessage("Project default restored on the road.") }}><RotateCcw size={12} />Restore project default</button>
         </footer>}
       </aside>

@@ -16,6 +16,16 @@ export const POPULATION_PROFILES = [
 
 export interface TravelerAppearance { variant: number; scale: number; bodyType: PersonDesign["bodyType"]; complexion: Complexion }
 
+/** Wool and linen outfits for the callings that travel in companies. A person's
+ * seeded profile owns their dye, so companions vary without changing clothes
+ * between walking, leading an animal and riding. Brothers retain earth tones. */
+const CLOTHING_COLORS: Partial<Record<TravelerTypeId, readonly string[]>> = {
+  peasant: ["#9c8b66", "#657b50", "#866044", "#507186", "#8b493c", "#a49476"],
+  pilgrim: ["#8a7f9e", "#657b50", "#866044", "#507186", "#9c8b66", "#8b493c"],
+  merchant: ["#b3762f", "#507186", "#7b4969", "#8b493c", "#657b50", "#866044"],
+  friar: ["#6d5638", "#786c58", "#514638", "#866044", "#958a74", "#65584a"],
+}
+
 /** Independent of crowd order/count and the simulation's random stream. Pairs mix both bodies. */
 export function travelerAppearance(seed: number, id: number): TravelerAppearance {
   const root = deriveSeed(seed, SEED_STREAM.characterAppearance)
@@ -30,7 +40,7 @@ export function travelerAppearance(seed: number, id: number): TravelerAppearance
 export function populationDesign(type: Pick<TravelerTypeDef, "id" | "color">, variant: number, base: PersonDesign = DEFAULT_DESIGN): PersonDesign {
   const profile = POPULATION_PROFILES[variant]
   const minstrel = type.id === "minstrel"
-  const design: PersonDesign = { ...base, footwear: type.id === "peasant" ? "Sandals" as const : "Boots" as const, bodyType: profile.bodyType, tunicColor: type.color,
+  const design: PersonDesign = { ...base, footwear: type.id === "peasant" ? "Sandals" as const : "Boots" as const, bodyType: profile.bodyType, tunicColor: CLOTHING_COLORS[type.id]?.[variant] ?? type.color,
     hat: minstrel ? "Cloth cap" : base.hat !== "None" ? base.hat : variant === 0 || variant === 4 ? "Wool cap" : variant === 3 ? "Coif" : "None",
     satchel: base.satchel || (!minstrel && variant % 3 !== 1),
     walkingStick: base.walkingStick || (type.id === "peasant" && profile.bodyType === "Male"),

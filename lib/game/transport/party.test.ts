@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
 import sharp from "sharp"
-import manifest from "../../../public/textures/transport/v28/manifest.json"
+import manifest from "../../../public/textures/transport/v30/manifest.json"
 import { ANIMAL_PROFILES, ANIMAL_COLUMNS, TRANSPORT, CART, PARTY_TRANSPORT_VERSION, PACK_ANIMAL_VERSION, animalUrl } from "./assets"
 import { PASSENGER_CALLINGS, PASSENGER_COLUMNS, PASSENGER_SEATS } from "./party-assets"
 import { createBasePersonRig } from "../base-person/rig"
@@ -218,7 +218,7 @@ describe("party sprite contract", () => {
       expect(url).toContain(`/transport/${PACK_ANIMAL_VERSION}/`)
       return [url.slice(1, -4), ANIMAL_COLUMNS, 8, TRANSPORT.cellSize] as [string,number,number,number]
     })
-    for(const [name,columns,rows,size] of [...sheets.map(([name,...layout])=>[`textures/transport/v28/${name}`,...layout] as [string,number,number,number]),...activePacks]) {
+    for(const [name,columns,rows,size] of [...sheets.map(([name,...layout])=>[`textures/transport/${PARTY_TRANSPORT_VERSION}/${name}`,...layout] as [string,number,number,number]),...activePacks]) {
       const color=await sharp(`public/${name}.png`).ensureAlpha().raw().toBuffer({resolveWithObject:true})
       const depth=await sharp(`public/${name.replace(/([^/]+)$/, "depth-$1")}.png`).metadata()
       expect([color.info.width,color.info.height]).toEqual([columns*size,rows*size])
