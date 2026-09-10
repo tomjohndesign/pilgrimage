@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "f8d7c432ef4bfb45b84fe15c8a57fc76a2d81fa6",
-  "releaseCount": 196,
+  "lastProcessedCommit": "c580f23049c33c1effc74b19b2d7d1321585c75a",
+  "releaseCount": 197,
   "releases": [
+    {
+      "version": "0.0.211",
+      "title": "Release 0.0.211",
+      "summary": "Raise loading indicators and keep the progress bar size fixed (#230)",
+      "commit": "c580f23049c33c1effc74b19b2d7d1321585c75a"
+    },
     {
       "version": "0.0.210",
       "title": "Release 0.0.210",
