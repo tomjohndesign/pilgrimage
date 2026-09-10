@@ -2,6 +2,8 @@ import { mainRoadWidthAt } from "../map/road-width"
 import { crossroadIslandAt } from "../map/crossroads"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, tileAt, type GameMap } from "../map/types"
 import { bridgeLayout, bridgeCornerAt, surfaceHeight } from "../map/bridges"
+import { diagonalRoadBend } from "../map/road"
+import { roadLanePoint } from "../map/road-lane"
 import type { Point } from "./roadside"
 
 export const DEFAULT_CART_TURN_RADIUS = 1.5
@@ -38,7 +40,16 @@ export function cartRoute(map: GameMap, turnRadius = DEFAULT_CART_TURN_RADIUS): 
   let cache=routes.get(map);if(!cache){cache=new Map();routes.set(map,cache)}
   const old=cache.get(turnRadius),road=map.road??[]
   if(old&&old.tiles===map.tiles&&old.road===road&&old.buildings===map.buildings&&old.count===map.buildings.length)return old.points
-  const source=road.map((p,progress)=>({x:tileToWorldX(map,p.x),z:tileToWorldZ(map,p.z),progress}))
+  const bridges=bridgeLayout(map)
+  const source=road.map((p,progress)=>{
+    // A ground staircase is painted as a diagonal ribbon. Tile centres weave
+    // across that ribbon and make animals travel farther than the road itself.
+    // Start from the shared diagonal centreline before fitting convoy corners;
+    // bridge landings retain their supported tile-centre route.
+    const lane=bridges.rise[p.z*map.width+p.x]===0 && diagonalRoadBend(map,p.x,p.z)
+      ? roadLanePoint(map,road,progress,0) : null
+    return {x:tileToWorldX(map,lane?.x??p.x),z:tileToWorldZ(map,lane?.z??p.z),progress}
+  })
   // Collapse straight runs only: radius controls the corner, not a new global
   // path simplifier that cuts across several successive bends.
   const knots=source.filter((b,i)=>{
@@ -54,7 +65,6 @@ export function cartRoute(map: GameMap, turnRadius = DEFAULT_CART_TURN_RADIUS): 
   }
   if(!source.length)return []
   add(source[0],0)
-  const bridges=bridgeLayout(map)
   for(let i=1;i<knots.length-1;i++){
     const a=knots[i-1],b=knots[i],c=knots[i+1]
     const incoming=Math.hypot(b.x-a.x,b.z-a.z),outgoing=Math.hypot(c.x-b.x,c.z-b.z)

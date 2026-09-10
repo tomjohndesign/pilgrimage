@@ -5,12 +5,41 @@ import { BASE_CHARACTER_SCALE, personWalkStride } from "../base-person/gait"
 import { cartOffset, merchantWalkSpeed, pullingDesign, animalStride } from "./assets"
 import { advanceWalkPhase } from "../motion"
 import { tileAt, worldToTileX, worldToTileZ, type GameMap } from "../map/types"
+import { roadLanePoint } from "../map/road-lane"
+import { advanceCartProgress, cartRoutePoint } from "./route"
+import { roadCartPose } from "./bridge-guide"
 
 const stride = personWalkStride(pullingDesign(0)) * BASE_CHARACTER_SCALE
 function roadMap(): GameMap {
   return { width: 20, depth: 9, buildings: [], road: Array.from({ length: 20 }, (_, x) => ({ x, z: 4 })), tiles: Array.from({ length: 180 }, (_, i) => Math.floor(i / 20) === 4 ? "path" : "grass") }
 }
 describe("shared merchant movement", () => {
+  it.each([[1, 1], [-1, 1], [1, -1], [-1, -1]])("keeps animals on the direct diagonal at a constant physical speed (%i, %i)", (sx, sz) => {
+    const width = 64, road = [], tiles: GameMap["tiles"] = Array(width * width).fill("grass")
+    let x = sx > 0 ? 8 : 55, z = sz > 0 ? 8 : 55
+    road.push({ x, z })
+    for (let i = 0; i < 40; i++) { x += sx; road.push({ x, z }); z += sz; road.push({ x, z }) }
+    for (const p of road) tiles[p.z * width + p.x] = "path"
+    const map: GameMap = { width, depth: width, road, tiles, buildings: [] }
+    for (const direction of [1, -1] as const) {
+      let progress = direction === 1 ? 8 : 64
+      const start = cartRoutePoint(map, progress)
+      let previous = start, distance = 0
+      for (let step = 0; step < 100; step++) {
+        progress = advanceCartProgress(map, progress, direction * .05)
+        const pose = roadCartPose(map, progress, direction, 0, BASE_CHARACTER_SCALE)
+        const lane = roadLanePoint(map, road, progress, 0)!
+        expect(pose.hitch.x + (width - 1) / 2).toBeCloseTo(lane.x, 8)
+        expect(pose.hitch.z + (width - 1) / 2).toBeCloseTo(lane.z, 8)
+        const dx = pose.hitch.x - previous.x, dz = pose.hitch.z - previous.z
+        expect(Math.hypot(dx, dz)).toBeCloseTo(.05, 8)
+        expect(dx * sx * direction).toBeCloseTo(dz * sz * direction, 8)
+        distance += Math.hypot(dx, dz); previous = pose.hitch
+      }
+      expect(Math.hypot(previous.x - start.x, previous.z - start.z)).toBeCloseTo(distance, 8)
+    }
+  })
+
   it("uses actual distance at every frame rate, playback rate, and authored stride", () => {
     for (const fps of [15, 30, 60, 144]) for (const rate of [1, 2, 4]) for (const reach of [stride, animalStride("donkey", 1.5), animalStride("horse", 1.5)]) {
       let phase = 0

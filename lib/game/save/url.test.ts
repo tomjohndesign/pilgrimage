@@ -5,14 +5,20 @@ import { DEFAULT_WORLD_SETTINGS } from "./settings"
 import { parsePlayQuery, playQuery } from "./url"
 
 describe("play URL", () => {
-  it("names a default world by seed and size alone", () => {
-    expect(playQuery(42, DEFAULT_WORLD_SETTINGS)).toBe(`seed=42&size=${DEFAULT_WORLD_SETTINGS.size}`)
+  it("retains the generator when sharing an older saved world", () => {
+    const query = playQuery(12, { ...DEFAULT_WORLD_SETTINGS, generation: 1 })
+    expect(query).toContain("generation=1")
+    expect(parsePlayQuery(Object.fromEntries(new URLSearchParams(query))).world.generation).toBe(1)
+  })
+
+  it("names a default world by seed, size and generator version", () => {
+    expect(playQuery(42, DEFAULT_WORLD_SETTINGS)).toBe(`seed=42&size=${DEFAULT_WORLD_SETTINGS.size}&generation=2`)
   })
 
   it("writes only the generation inputs that differ from their defaults", () => {
     const query = playQuery(7, { ...DEFAULT_WORLD_SETTINGS, size: 256, coverage: 45, rivers: 2,
       elevation: { ...DEFAULT_ELEVATION, maxHeight: 3 } }, "routing-stress")
-    expect(query).toBe("seed=7&size=256&forest=45&rivers=2&e_maxHeight=3&benchmark=city-stress")
+    expect(query).toBe("seed=7&size=256&generation=2&forest=45&rivers=2&e_maxHeight=3&benchmark=city-stress")
   })
 
   it("round-trips a world through the query string", () => {

@@ -149,6 +149,8 @@ export interface GenerateWaterOptions {
   depth: number
   /** Max fraction of the map under water. */
   coverage: number
+  /** Reference area for lake footprints; defaults to the generated area. */
+  landmarkArea?: number
   /** Overrides for the seeded layout roll (tests and tuning). */
   riverCount?: number
   lakeCount?: number
@@ -197,7 +199,7 @@ export function generateWater(options: GenerateWaterOptions): WaterField {
   for (let l = 0; l < lakes; l++) {
     const target = Math.max(
       30,
-      Math.min(Math.round(area * (0.025 + rng() * 0.02)), Math.floor(budget * 0.6)),
+      Math.min(Math.round((options.landmarkArea ?? area) * (0.025 + rng() * 0.02)), Math.floor(budget * 0.6)),
     )
     if (waterCount + target > budget * 1.1) break
     const blob = growWaterBlob(kind, width, mapDepth, target, rng)

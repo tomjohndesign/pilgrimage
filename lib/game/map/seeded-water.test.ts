@@ -108,8 +108,8 @@ describe("generated drinking water", () => {
     }
   })
 
-  it.each([1, 7919, 42])("connects the enclave well to the chapel path and clears its trees (%s)", seed => {
-    const map = generateMap({ seed })
+  it.each([...[1, 7919, 42].map(seed => ({ seed, width: 192 })), { seed: 110867, width: 128 }])("connects the enclave well to the chapel path and clears its trees ($seed, $width)", ({ seed, width }) => {
+    const map = generateMap({ seed, width, depth: width })
     const well = map.buildings.find(b => b.id === FOUNDING_WELL_ID)!
     expect(well).toBeDefined()
     const shrine = map.buildings.find(b => b.id === map.site!.hovelId)!

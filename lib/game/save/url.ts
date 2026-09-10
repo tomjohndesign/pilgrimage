@@ -5,7 +5,7 @@ import type { CityBenchmarkMode } from "../city-benchmark"
 import { DEFAULT_WORLD_SETTINGS, type DisplaySettings, type WorldSettings } from "./settings"
 
 /**
- * The play URL names a world, nothing more: `?seed=` and `size=` always, plus
+ * The play URL names a world: `seed`, `size`, and the generator version, plus
  * whichever generation inputs differ from their defaults. Anyone opening the
  * link gets the same land. Display tuning stays out of it, though older links
  * that carried it are still read.
@@ -20,7 +20,7 @@ export interface PlayQuery {
 type Params = Record<string, string | undefined>
 
 const WORLD_PARAMS: Array<[query: string, key: Exclude<keyof WorldSettings, "elevation">, integer: boolean]> = [
-  ["size", "size", true], ["forest", "coverage", true], ["glades", "glades", true], ["clearings", "clearings", true],
+  ["generation", "generation", true], ["size", "size", true], ["forest", "coverage", true], ["glades", "glades", true], ["clearings", "clearings", true],
   ["dark", "darkForests", true], ["relic", "relicDistance", true], ["traffic", "traffic", true],
   ["water", "water", true], ["rivers", "rivers", true], ["lakes", "lakes", true], ["ponds", "ponds", true],
 ]
@@ -41,6 +41,7 @@ export function parsePlayQuery(params: Params): PlayQuery {
   const world: Partial<WorldSettings> = {}
   for (const [query, key, isInteger] of WORLD_PARAMS) {
     const value = isInteger ? integer(params[query]) : decimal(params[query])
+    if (key === "generation" && value !== 1 && value !== 2) continue
     if (value !== undefined) world[key] = value
   }
   const elevation: { -readonly [K in keyof ElevationSettings]?: number } = {}
@@ -84,9 +85,9 @@ export function parsePlayQuery(params: Params): PlayQuery {
   return { seed: integer(params.seed), world, display, benchmark }
 }
 
-/** The query string for a world: seed and size always, other inputs only when changed. */
+/** The query string for a world: seed, size and generator version always, other inputs only when changed. */
 export function playQuery(seed: number, world: WorldSettings, benchmark?: false | CityBenchmarkMode): string {
-  const query = new URLSearchParams({ seed: String(seed), size: String(world.size) })
+  const query = new URLSearchParams({ seed: String(seed), size: String(world.size), generation: String(world.generation) })
   for (const [name, key] of WORLD_PARAMS) {
     if (key !== "size" && world[key] !== DEFAULT_WORLD_SETTINGS[key]) query.set(name, String(world[key]))
   }

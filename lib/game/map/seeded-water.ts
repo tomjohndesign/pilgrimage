@@ -33,9 +33,9 @@ export function hasNearbyWater(map: GameMap, from: TilePos, radius = TOWN_WATER_
 
 /** Try a small side clearing without covering routes, entrances, water or ancient hearts. */
 function placeSource(map: GameMap, anchor: TilePos, kind: "well" | "watering-hole",
-  id: string, label: string, rotationStart = 0, townId?: string, accessFrom?: TilePos, accepts = (_source: BuildingDef) => true): BuildingDef | null {
+  id: string, label: string, rotationStart = 0, townId?: string, accessFrom?: TilePos, accepts = (_source: BuildingDef) => true, maxGap = 4): BuildingDef | null {
   const def = BUILD_CATALOG.find(b => b.id === kind)!
-  for (let gap = 2; gap <= 4; gap++) for (let turn = 0; turn < 4; turn++) {
+  for (let gap = 2; gap <= maxGap; gap++) for (let turn = 0; turn < 4; turn++) {
     const rotation = ((rotationStart + turn) % 4) as 0 | 1 | 2 | 3
     const outward = rotateBuildingPoint(0, -1, rotation)
     const entry = { x: anchor.x + outward.x * gap, z: anchor.z + outward.z * gap }
@@ -98,6 +98,15 @@ function placeSource(map: GameMap, anchor: TilePos, kind: "well" | "watering-hol
   return null
 }
 
+/** Keep the well near the enclave, beside the final stretch approaching the chapel. */
+export function addLegacyFoundingWell(map: GameMap): void {
+  const branch = map.site?.branch ?? []
+  const preferred = Math.max(0, branch.length - 10)
+  const anchors = branch.map((p, i) => ({ p, score: Math.abs(i - preferred) }))
+    .sort((a, b) => a.score - b.score)
+  for (const { p } of anchors) if (placeSource(map, p, "well", FOUNDING_WELL_ID, "Enclave well")) return
+}
+
 /** The water path continues past the church door and around to its rear. */
 export function addFoundingWell(map: GameMap): void {
   const site = map.site, shrine = map.buildings.find(b => b.id === site?.hovelId)
@@ -110,9 +119,9 @@ export function addFoundingWell(map: GameMap): void {
     }
     return true
   }
-  for (let distance = 3; distance <= 30; distance++) for (const side of [0, -4, 4, -8, 8, -12, 12, -16, 16]) {
+  for (const maxGap of [4, 8]) for (let distance = 3; distance <= 30; distance++) for (const side of [0, -4, 4, -8, 8, -12, 12, -16, 16]) {
     const anchor = shrinePoint(shrine, site.door, side, -Math.ceil(depth / 2) - distance)
-    if (placeSource(map, anchor, "well", FOUNDING_WELL_ID, "Enclave well", 0, undefined, site.door, behind)) return
+    if (placeSource(map, anchor, "well", FOUNDING_WELL_ID, "Enclave well", 0, undefined, site.door, behind, maxGap)) return
   }
 }
 

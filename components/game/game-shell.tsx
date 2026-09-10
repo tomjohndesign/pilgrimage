@@ -193,6 +193,7 @@ export function GameShell({
         ? null
         : generateMap({
             seed,
+            generation: settings.generation,
             elevation: settings.elevation,
             width: settings.size,
             depth: settings.size,
@@ -211,6 +212,7 @@ export function GameShell({
       started,
       booted,
       settings.elevation,
+      settings.generation,
       settings.size,
       settings.coverage,
       settings.glades,

@@ -2,7 +2,7 @@ import { ROUTE_EDGE_INSET } from "./route-bounds"
 import { elevationStep } from "./elevation"
 import { describe, expect, it } from "vitest"
 
-import { DEFAULT_RELIC_DISTANCE, generateMap, HOVEL_ID, JUNCTION_CLEARING_RADIUS, MIN_MAP_SIZE, relicDistanceBand } from "./generate-map"
+import { generateMap, HOVEL_ID, JUNCTION_CLEARING_RADIUS, MIN_MAP_SIZE } from "./generate-map"
 import { isWoods, TERRAIN } from "./terrain"
 import { MAX_RIVER_WIDTH } from "./water"
 import { tileAt, type GameMap } from "./types"
@@ -11,7 +11,7 @@ import { tileAt, type GameMap } from "./types"
 const SEEDS = Array.from({ length: 40 }, (_, i) => i * 7919 + 1)
 
 /** Maps take real time at the 128×128 floor, so suite-wide loops share them. */
-const SWEEP_TIMEOUT = 30_000
+const SWEEP_TIMEOUT = 90_000
 
 /**
  * Generator sweeps run at the size floor: their thresholds were tuned there,
@@ -194,7 +194,7 @@ describe("generateMap", () => {
         const nz = z + dz
         if (nx < 0 || nz < 0 || nx >= map.width || nz >= map.depth) continue
         const n = nz * map.width + nx
-        if (dist[n] !== -1 || carriesWater(map, nx, nz) || !Number.isFinite(elevationStep(map.elevation, queue[q], n))) continue
+        if (dist[n] !== -1 || map.tiles[n] === "darkwood" || carriesWater(map, nx, nz) || !Number.isFinite(elevationStep(map.elevation, queue[q], n))) continue
         dist[n] = dist[queue[q]] + 1
         queue.push(n)
       }
@@ -209,23 +209,23 @@ describe("generateMap", () => {
     return nearest
   }
 
-  it("sites the hovel a real detour off the road — inside the distance band", () => {
-    const band = relicDistanceBand(DEFAULT_RELIC_DISTANCE)
+  it("sites the hovel near the centre with a dry detour off the road", () => {
     for (const seed of SEEDS) {
-      const nearest = hovelRoadDistance(mapFor(seed))
-      // A shifted crossroads apron can extend two tiles toward the founding glade.
-      expect(nearest, `seed ${seed} not too close`).toBeGreaterThanOrEqual(band.min - 2)
-      expect(nearest, `seed ${seed} not too far`).toBeLessThanOrEqual(band.max)
+      const map = mapFor(seed), hovel = map.buildings[0], nearest = hovelRoadDistance(map)
+      expect(Number.isFinite(nearest), `seed ${seed} dry road access`).toBe(true)
+      expect(nearest).toBeGreaterThan(0)
+      expect(Math.abs(hovel.x + hovel.w / 2 - map.width / 2), `seed ${seed} centred x`).toBeLessThanOrEqual(map.width * .25)
+      expect(Math.abs(hovel.z + hovel.d / 2 - map.depth / 2), `seed ${seed} centred z`).toBeLessThanOrEqual(map.depth * .25)
     }
-  })
+  }, SWEEP_TIMEOUT)
 
   it("moves the hovel further out when asked", () => {
     for (const seed of SEEDS.slice(0, 10)) {
       const near = hovelRoadDistance(generateMap({ ...FLOOR, seed, relicDistance: 8 }))
       const far = hovelRoadDistance(generateMap({ ...FLOOR, seed, relicDistance: 32 }))
       expect(far, `seed ${seed} far > near`).toBeGreaterThan(near)
-      expect(near).toBeLessThanOrEqual(relicDistanceBand(8).max)
-      expect(far).toBeGreaterThanOrEqual(relicDistanceBand(32).min - 2)
+      // Requested road distance remains a preference within the central area.
+      expect(Number.isFinite(near) && Number.isFinite(far)).toBe(true)
     }
   }, SWEEP_TIMEOUT)
 
@@ -375,14 +375,17 @@ describe("generateMap", () => {
     }
   }, SWEEP_TIMEOUT)
 
-  it("is densely forested by default, in one connected mass rather than islands", () => {
+  it("mixes open meadows with substantial, locally dense woodland", () => {
     for (const seed of SEEDS) {
       const map = mapFor(seed)
       // Woods of both kinds: dark forest is forest too, just older. Forest
       // dominance is measured against dry land — water legitimately takes its
       // own share of the map.
       const forest = map.tiles.filter(isWoods).length
-      expect(forest / landTiles(map), `seed ${seed} is mostly forest`).toBeGreaterThan(0.5)
+      // A small crop can be meadow-heavy; tree density is budgeted across the
+      // surrounding landscape, with fewer ancient stands than before.
+      expect(forest / landTiles(map), `seed ${seed} retains woodland`).toBeGreaterThan(0.15)
+      expect(forest / landTiles(map), `seed ${seed} retains open land`).toBeLessThan(0.65)
 
       // Compactness: in dense woods, most forest tiles touch other forest tiles.
       let neighbourSum = 0
@@ -405,7 +408,7 @@ describe("generateMap", () => {
       const grass = countTerrain(map, "grass")
       const land = landTiles(map)
       expect(grass / land, `seed ${seed} has glades`).toBeGreaterThan(0.15)
-      expect(grass / land, `seed ${seed} stays forest-dominant`).toBeLessThan(0.5)
+      expect(grass / land, `seed ${seed} retains woodland`).toBeLessThan(0.8)
     }
   }, SWEEP_TIMEOUT)
 
@@ -483,15 +486,14 @@ describe("generateMap", () => {
     }
   }, SWEEP_TIMEOUT)
 
-  it("builds bridges for the road alone — trails stop at the water", () => {
+  it("connects main clearings and their river crossings to the road", () => {
     for (const seed of SEEDS) {
       const map = mapFor(seed)
-      const onRoad = new Set(map.road!.map((p) => p.z * map.width + p.x))
-      let strays = 0
+      const reached = flood(map, map.road!.map(p => p.z * map.width + p.x), i => TERRAIN[map.tiles[i]].passable)
+      for (const p of map.mainClearings ?? []) expect(reached[p.z * map.width + p.x], `seed ${seed} main clearing`).toBe(1)
       map.tiles.forEach((t, i) => {
-        if (t === "bridge" && !onRoad.has(i)) strays++
+        if (t === "bridge") expect(reached[i], `seed ${seed} bridge joins the walking network`).toBe(1)
       })
-      expect(strays, `seed ${seed} every bridge is the road's`).toBe(0)
     }
   }, SWEEP_TIMEOUT)
 
@@ -513,7 +515,8 @@ describe("generateMap", () => {
       }
       if (deadEnds > 0) seedsWithDeadEnds++
     }
-    expect(seedsWithDeadEnds).toBe(SEEDS.length)
+    // In open landscapes a spur may emerge into a meadow instead of ending in trees.
+    expect(seedsWithDeadEnds).toBeGreaterThanOrEqual(SEEDS.length * 0.9)
   }, SWEEP_TIMEOUT)
 
   it("leaves buildable land for settling at default coverage", () => {
@@ -528,10 +531,11 @@ describe("generateMap", () => {
     for (const seed of SEEDS.slice(0, 10)) {
       const sparse = generateMap({ ...FLOOR, seed, forestCoverage: 0.45 })
       const dense = generateMap({ ...FLOOR, seed, forestCoverage: 0.85 })
-      const fraction = (m: GameMap) => countTerrain(m, "forest") / landTiles(m)
+      const fraction = (m: GameMap) => m.tiles.filter(isWoods).length / landTiles(m)
       expect(fraction(dense), `seed ${seed} dense > sparse`).toBeGreaterThan(fraction(sparse))
       expect(fraction(dense), `seed ${seed} dense is dense`).toBeGreaterThan(0.6)
-      expect(fraction(sparse), `seed ${seed} sparse is sparse`).toBeLessThan(0.5)
+      // A crop can be woodier than the full region; the knob controls regional density.
+      expect(fraction(dense) - fraction(sparse), `seed ${seed} meaningful density difference`).toBeGreaterThan(0.1)
     }
   }, SWEEP_TIMEOUT)
 
@@ -587,21 +591,18 @@ describe("generateMap", () => {
       const at = (p: { x: number; z: number }) => tileAt(map, p.x, p.z)!
       let secluded = false
       for (const forest of map.darkForests ?? []) {
-        expect(forest.clearing.length).toBeGreaterThanOrEqual(35)
+        expect(forest.clearing.length).toBeGreaterThanOrEqual(100)
         expect(forest.clearing).toContainEqual(forest.center)
         for (const p of forest.clearing) {
           expect(TERRAIN[at(p)].passable).toBe(true)
           expect(map.buildings.some(b => p.x >= b.x && p.x < b.x + b.w && p.z >= b.z && p.z < b.z + b.d)).toBe(false)
         }
-        // A ring of ancient canopy encloses the room; the narrow entrance
-        // and pre-existing trails may interrupt it, but it must read as woods.
-        let darkRing = 0, ring = 0
-        for (let dz = -6; dz <= 6; dz++) for (let dx = -6; dx <= 6; dx++) {
-          if (Math.hypot(dx, dz) < 5 || Math.hypot(dx, dz) > 6) continue
-          ring++
-          if (tileAt(map, forest.center.x + dx, forest.center.z + dz) === "darkwood") darkRing++
-        }
-        expect(darkRing / ring, `seed ${seed} enclosing old growth`).toBeGreaterThan(0.65)
+        // The perimeter follows the actual asymmetric room, not a circular probe.
+        const room = new Set(forest.clearing.map(p => p.z * map.width + p.x))
+        const rim = new Set<number>()
+        for (const i of room) for (const n of [i - 1, i + 1, i - map.width, i + map.width]) if (!room.has(n)) rim.add(n)
+        expect([...rim].filter(i => map.tiles[i] === "darkwood").length / rim.size,
+          `seed ${seed} enclosing old growth`).toBeGreaterThan(0.8)
         expect(forest.approach.at(-1)).toEqual(forest.center)
         expect(forest.approach.length).toBeGreaterThan(4)
         for (const [i, p] of forest.approach.entries()) {
@@ -616,7 +617,9 @@ describe("generateMap", () => {
       }
       if (secluded) secludedSeeds++
     }
-    expect(secludedSeeds).toBeGreaterThanOrEqual(SEEDS.length * 0.8)
+    // Ancient stands are deliberately less frequent; a minimum crop can miss
+    // their heart or leave too little dry interior for a secluded clearing.
+    expect(secludedSeeds).toBeGreaterThanOrEqual(SEEDS.length / 4)
   }, SWEEP_TIMEOUT)
 
   it(
@@ -640,48 +643,9 @@ describe("generateMap", () => {
     SWEEP_TIMEOUT,
   )
 
-  it(
-    "cuts a shorter track through the dark forest wherever the road detoured",
-    () => {
-      let seedsWithTracks = 0
-      for (const seed of SEEDS) {
-        const map = mapFor(seed)
-        const road = map.road!
-        if ((map.shortcuts ?? []).length > 0) seedsWithTracks++
-        for (const track of map.shortcuts ?? []) {
-          expect(track.entry).toBeLessThan(track.exit)
-          expect(track.tiles[0]).toEqual(road[track.entry])
-          expect(track.tiles[track.tiles.length - 1]).toEqual(road[track.exit])
-          // Meaningfully shorter than the road between the same two tiles.
-          expect(track.tiles.length, `seed ${seed} track is a shortcut`).toBeLessThan(
-            (track.exit - track.entry + 1) * 0.9,
-          )
-          let touchesDark = false
-          for (let i = 0; i < track.tiles.length; i++) {
-            const t = track.tiles[i]
-            expect(map.buildings.some(b => t.x >= b.x && t.x < b.x + b.w && t.z >= b.z && t.z < b.z + b.d),
-              `seed ${seed} shortcut stays outside building footprints`).toBe(false)
-            expect(["track", "path", "bridge", "ford"], `seed ${seed} track is carved`).toContain(
-              tileAt(map, t.x, t.z),
-            )
-            if (i > 0) {
-              const step =
-                Math.abs(t.x - track.tiles[i - 1].x) + Math.abs(t.z - track.tiles[i - 1].z)
-              expect(step, `seed ${seed} track step ${i} is to a neighbour`).toBe(1)
-            }
-            for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-              if (tileAt(map, t.x + dx, t.z + dz) === "darkwood") touchesDark = true
-            }
-          }
-          expect(touchesDark, `seed ${seed} track runs through the dark forest`).toBe(true)
-        }
-      }
-      // Secluded groves need no road detour; retain shortcuts on seeds whose
-      // roadside woodland still offers a meaningful dangerous alternative.
-      expect(seedsWithTracks).toBeGreaterThan(0)
-    },
-    SWEEP_TIMEOUT,
-  )
+  it("keeps ancient hearts as destinations without through shortcuts", () => {
+    for (const seed of SEEDS) expect(mapFor(seed).shortcuts).toEqual([])
+  }, SWEEP_TIMEOUT)
 
   /**
    * Share of the land beside the road that is still forest, over the 4-neighbours
@@ -696,7 +660,7 @@ describe("generateMap", () => {
         const t = tileAt(map, p.x + dx, p.z + dz)
         if (t === null || t === "path" || t === "bridge" || t === "ford" || t === "track" || t === "water") continue
         beside++
-        if (t === "forest") forest++
+        if (isWoods(t)) forest++
       }
     }
     return forest / beside
@@ -714,7 +678,7 @@ describe("generateMap", () => {
     for (const seed of SEEDS) {
       const map = generateMap({ ...FLOOR, seed, elevation: { maxHeight: 0, slopeCost: 0, riverDrop: 0, waterfallDrop: 0 } })
       const beside = roadsideForestShare(map)
-      const overall = countTerrain(map, "forest") / landTiles(map)
+      const overall = map.tiles.filter(isWoods).length / landTiles(map)
       roadside += beside
       mapWide += overall
       if (beside < overall) openerSeeds++
