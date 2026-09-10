@@ -14,7 +14,7 @@ function buyAnything(world: ReturnType<typeof generateMap>) {
   const monks = generateMonks(world.seed!), relic = generateRelic(world.seed!)
   let settlement = createSettlement(balance)
   const hovel = world.buildings.find(b => b.id === world.site?.hovelId)!
-  const def = [...BUILD_CATALOG].sort((a, b) => a.requiredRenown - b.requiredRenown)[0]
+  const def = BUILD_CATALOG.filter(b => !b.retired).sort((a, b) => a.requiredRenown - b.requiredRenown || a.cost.gold - b.cost.gold)[0]
   for (let r = 2; r < 14; r++) for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
     const result = purchaseStructure(settlement, world, monks, [relic], def.id, { x: hovel.x + dx, z: hovel.z + dz }, balance, 0, 0)
     if (!result.error) { settlement = result.settlement; if (settlement.structures.length === 2) return settlement }

@@ -47,6 +47,17 @@ function map(): GameMap {
 }
 
 describe("balance presets", () => {
+  it("moves the old guard-post default to 80 renown while preserving custom unlocks", () => {
+    const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
+    old.version = 6
+    old.balance.buildings["guard-post"].requiredRenown = 15
+    expect(importBalance(JSON.stringify(old)).balance?.buildings["guard-post"].requiredRenown).toBe(80)
+    old.balance.buildings["guard-post"].requiredRenown = 55
+    expect(importBalance(JSON.stringify(old)).balance?.buildings["guard-post"].requiredRenown).toBe(55)
+    const current = fresh()
+    current.buildings["guard-post"].requiredRenown = 15
+    expect(importBalance(exportBalance(current)).balance).toEqual(current)
+  })
   it("round-trips all defaults without sharing mutable objects", () => {
     const result = importBalance(exportBalance(DEFAULT_BALANCE))
     expect(result.balance).toEqual(DEFAULT_BALANCE)
@@ -181,6 +192,16 @@ describe("balance presets", () => {
 })
 
 describe("tuned gameplay", () => {
+  it("locks guard posts until 80 renown without charging for a locked purchase", () => {
+    const world = map(), settlement = createSettlement()
+    // The founding shrine supplies 5 renown; each completed visit adds 0.5.
+    const locked = purchaseStructure(settlement, world, [], [], "guard-post", { x: 22, z: 18 }, undefined, 149)
+    expect(locked.error).toBe("Requires 80 shrine renown.")
+    expect(locked.settlement).toBe(settlement)
+    const unlocked = purchaseStructure(settlement, world, [], [], "guard-post", { x: 22, z: 18 }, undefined, 150)
+    expect(unlocked.error).toBeNull()
+    expect(unlocked.settlement.structures[0].buildType).toBe("guard-post")
+  })
   it("uses starting funds, costs and unlocks from the supplied balance", () => {
     const balance = fresh()
     balance.rules.startingGold = 12
@@ -205,15 +226,15 @@ describe("tuned gameplay", () => {
   })
   it("revalues structures but ignores legacy passive-income tuning", () => {
     const world = map()
-    const existing = purchaseStructure(createSettlement(), world, [], [], "shelter", {
+    const existing = purchaseStructure(createSettlement(), world, [], [], "monk-shelter", {
       x: 22,
       z: 18,
     }).settlement
     existing.structures[0].construction!.work = existing.structures[0].construction!.required
     const before = structuredClone(existing)
     const balance = fresh()
-    balance.buildings.shelter.renown = 50
-    balance.buildings.shelter.goldIncome = 9
+    balance.buildings["monk-shelter"].renown = 50
+    balance.buildings["monk-shelter"].goldIncome = 9
     balance.rules.residentGold = 3
     balance.rules.residentWood = 5
     balance.rules.incomeSeconds = 6
@@ -228,7 +249,7 @@ describe("tuned gameplay", () => {
     expect(paid.resources.gold - existing.resources.gold).toBe(0)
     expect(paid.resources.wood - existing.resources.wood).toBe(0)
     expect(existing).toEqual(before)
-    expect(buildingIncomeLabel(buildCatalog(balance).find(b => b.id === "shelter")!, balance)).toBe("Adds monk housing when complete")
+    expect(buildingIncomeLabel(buildCatalog(balance).find(b => b.id === "monk-shelter")!, balance)).toBe("Adds monk housing when complete")
   })
   it("applies the tuned influence radius across the full footprint", () => {
     const balance = fresh()

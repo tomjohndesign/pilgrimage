@@ -13,6 +13,8 @@ export interface Resources {
 
 export interface BuildDefinition {
   id: BuildId
+  /** Retained for existing worlds and artwork, but unavailable for new construction. */
+  retired?: boolean
   label: string
   category: "buildings" | "scenery"
   description: string
@@ -32,6 +34,7 @@ export interface BuildDefinition {
 export const BUILD_CATALOG: readonly BuildDefinition[] = [
   {
     id: "shelter",
+    retired: true,
     label: "Pilgrim shelter",
     category: "buildings",
     description: "A place for pilgrims to rest.",
@@ -129,6 +132,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "wood-shelter", label: "Wood shelter", category: "buildings",
+    retired: true,
     description: "An open lean-to that keeps split wood and spare poles dry.",
     cost: { gold: 20, wood: 20 }, renown: 0, requiredRenown: 0,
     income: { gold: 0, wood: 0 }, w: 2, d: 1, height: 0.62,
@@ -136,6 +140,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "lumberCamp", label: "Timber yard", category: "buildings",
+    retired: true,
     description: "An open yard for stacking felled timber. No doorway, so it reserves no entrance tile.",
     cost: { gold: 40, wood: 30 }, renown: 0, requiredRenown: 0,
     income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.65,
@@ -151,7 +156,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   {
     id: "guard-post", label: "Guard post", category: "buildings",
     description: "A sheltered watch post that reassures travelers on the approach.",
-    cost: { gold: 70, wood: 50 }, renown: 4, requiredRenown: 15,
+    cost: { gold: 70, wood: 50 }, renown: 4, requiredRenown: 80,
     income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.65,
     color: "#8c7658", roofColor: "#a59164",
   },
@@ -184,6 +189,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "watering-hole", label: "Watering hole", category: "scenery",
+    retired: true,
     description: "A shallow earthen pool with an open dipping edge. Thirsty walkers and settlers take turns drinking here for free.",
     cost: { gold: 10, wood: 0 }, renown: 0, requiredRenown: 0,
     income: { gold: 0, wood: 0 }, w: 3, d: 2, height: .1, color: "#847657", roofColor: "#526e67",
@@ -668,6 +674,10 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
         // The shepherd’s hut became the house; keep its authored tuning.
         ...(record(buildings["shepherd-hut"]) ? { house: buildings["shepherd-hut"] } : {}),
         ...buildings,
+        // Move the former default unlock later without replacing custom tuning.
+        ...(version < 7 && record(buildings["guard-post"])?.requiredRenown === 15 ? {
+          "guard-post": { ...record(buildings["guard-post"]), requiredRenown: DEFAULT_BALANCE.buildings["guard-post"].requiredRenown },
+        } : {}),
         // The hut now earns wood through deliveries; retire its old passive payment.
         ...(version === 1 && record(buildings.workshop) ? {
           workshop: { ...record(buildings.workshop), woodIncome: 0 },

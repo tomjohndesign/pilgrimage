@@ -109,7 +109,7 @@ export default function GameSpecsPage() {
               </tr>
             </thead>
             <tbody>
-              {BUILD_CATALOG.map((def) => (
+              {BUILD_CATALOG.filter(def => !def.retired).map((def) => (
                 <tr key={def.id}>
                   <th scope="row">
                     {def.label}
