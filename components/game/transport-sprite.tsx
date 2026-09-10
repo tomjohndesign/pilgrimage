@@ -147,12 +147,20 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
     for (const material of materials) material.map = active
     const cell = knight ? KNIGHT.cellSize : kind === "merchant" ? manifest.puller.cellSize : kind === "passenger" ? CART.cellSize : kind === "cart" ? shop ? SHOP.cellSize : CART.cellSize : manifest.cellSize
     const anchor = knight ? KNIGHT.anchor : kind === "merchant" ? manifest.puller.anchor : kind === "passenger" ? CART.anchor : kind === "cart" ? shop ? SHOP.anchor : CART.anchor : manifest.anchor
-    group.children.forEach(child => { if (child instanceof THREE.Sprite) {
-      Object.assign(child.userData, { walkPhase: phase.current, walkStride: stride, distance, heading, row, moving, reversing: data.reversing, hitched: data.hitched, keeperPose: data.keeperPose, riding: data.riding, column })
+    const spriteSize = cell * manifest.scale / manifest.cellSize * characterScale
+    for (const child of group.children) {
+      if (!(child instanceof THREE.Sprite)) continue
+      const u = child.userData
+      u.walkPhase = phase.current; u.walkStride = stride; u.distance = distance; u.heading = heading; u.row = row; u.moving = moving
+      u.reversing = data.reversing; u.hitched = data.hitched; u.keeperPose = data.keeperPose; u.riding = data.riding; u.column = column
       child.center.set(anchor[0] / cell, 1 - anchor[1] / cell)
-      child.scale.set(cell * manifest.scale / manifest.cellSize * characterScale, cell * manifest.scale / manifest.cellSize * characterScale, 1)
-    } })
-    group.position.set(...position)
+      child.scale.set(spriteSize, spriteSize, 1)
+    }
+    group.position.set(position[0], position[1], position[2])
+    // The parent was placed this frame; derive world positions from its matrix
+    // rather than walking the ancestor chain twice per figure.
+    parent.updateWorldMatrix(true, false)
+    vectors.corrected.copy(group.position).applyMatrix4(parent.matrixWorld)
     if (animal && moving) {
       const displayed = edited ? phase.current : Math.floor(phase.current * walk.frames) / walk.frames
       const side = displayed >= WALK_STANCE_FRACTION - 0.5 && displayed < WALK_STANCE_FRACTION ? "left" : "right"
@@ -162,14 +170,13 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
       const x = (foot[0] * Math.cos(angle) + foot[2] * Math.sin(angle)) * scale
       const z = (-foot[0] * Math.sin(angle) + foot[2] * Math.cos(angle)) * scale * Math.sin(BASE_PERSON.camera.pitch * Math.PI / 180) / Math.sin(pitch)
       vectors.foot.set(x * Math.cos(yaw) + z * Math.sin(yaw), 0, -x * Math.sin(yaw) + z * Math.cos(yaw))
-      group.getWorldPosition(vectors.origin)
+      vectors.origin.copy(vectors.corrected)
       const contact = plantFoot(plant.current, `${kind}:${horseVariant}:${side}:${row}:${yaw.toFixed(4)}:${pitch.toFixed(4)}:${characterScale}`, vectors.origin, vectors.foot, groundAt)
       plant.current = contact.plant
       vectors.corrected.set(vectors.origin.x + contact.offset.x, vectors.origin.y + contact.offset.y, vectors.origin.z + contact.offset.z)
       group.position.copy(parent.worldToLocal(vectors.corrected))
     } else plant.current = null
     if (terrain) {
-      group.getWorldPosition(vectors.corrected)
       const surface = walkingSurface(terrain, vectors.corrected.x, vectors.corrected.z)
       groundPlane.value.set(-surface.dx, 1, -surface.dz,
         surface.dx * vectors.corrected.x + surface.dz * vectors.corrected.z - surface.height)
