@@ -351,7 +351,8 @@ export function GameShell({
         phase={revealPhase} overlayRef={loadingOverlay} view={openingView} resuming={resuming}
         viewSize={resumeWorld ? resumeWorld.camera.viewSize : !booted && expectResume && resumeViewSize ? resumeViewSize : openingViewSize}
         groundOffset={resuming ? 0 : undefined}
-        focus={resuming && resumeWorld ? { camera: resumeWorld.camera, size: resumeWorld.world.size } : null} />
+        focus={resuming && resumeWorld ? { camera: resumeWorld.camera, size: resumeWorld.world.size } : null}
+        onStop={() => router.push("/")} />
       {map && relic ? (
         <GameCanvas
           {...pixelationSettings}

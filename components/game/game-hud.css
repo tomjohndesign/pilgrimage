@@ -1,6 +1,6 @@
 /* Contextual game chrome, adapted from Paper with left actions and a right details dock.
    @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1GB-0 */
-.game-hud, .game-hud-tooltip {
+.game-hud, .game-hud-tooltip, .loading-church {
   --hud-space: 12px;
   --hud-control-gap: 4px;
 }
@@ -11,15 +11,18 @@
   --hud-map-height: 182px;
   --hud-left: var(--hud-space);
   --hud-right: calc(var(--hud-space) * 2 + var(--hud-dock-width));
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: #f2e8d5;
+}
+/* One button palette for the HUD and the loading overlay's Stop control. */
+.game-hud, .loading-church {
   --hud-button-face: #30291c;
   --hud-button-edge: #726242;
   --hud-button-hover: #423725;
   --hud-button-selected: #594b31;
   --hud-button-highlight: #bea067;
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  color: #f2e8d5;
 }
 .game-hud button:focus-visible, .game-hud a:focus-visible {
   outline: 2px solid #f4d991;
