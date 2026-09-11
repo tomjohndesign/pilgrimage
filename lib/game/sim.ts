@@ -39,6 +39,7 @@ import { RoadsideReservations } from "./roadside-reservations"
 import { SpatialPoints } from "./spatial-points"
 import { walkingSurface } from "./map/walking-surface"
 import { convoyPoint, convoyBounds, convoyBuildingsClear, stallParking, shrineParking, type ParkingContext, type ShrineParking } from "./transport/navigation"
+import { enclaveParking } from "./transport/enclave-parking"
 import { alignCart, followCart, type CartPose } from "./transport/follow"
 import { keeperRoutine } from "./transport/keeper"
 import { populationDesign, travelerAppearance } from "./base-person/population"
@@ -724,11 +725,12 @@ function shrineWorldPoint(map: GameMap, s: SimTraveler): WorldPoint {
   return point
 }
 
-/** Nearby live obstacles and reservations are shared by shrine and market parking. */
-function parkingContext(sim: SimState, s: SimTraveler, scale: number, traffic = false): ParkingContext {
-  const nearby = (p: { x: number; z: number }) => Math.hypot(p.x - s.x, p.z - s.z) < 16 + scale * 4
+/** Nearby live obstacles and reservations are shared by shrine and market parking.
+ * The stop can lie well away from the traveler, up the branch by the shrine. */
+function parkingContext(sim: SimState, s: SimTraveler, scale: number, traffic = false, centre: { x: number; z: number } = s): ParkingContext {
+  const nearby = (p: { x: number; z: number }) => Math.hypot(p.x - centre.x, p.z - centre.z) < 16 + scale * 4
   const trees: Array<{ tree: TreePlacement; index: number }> = []
-  treeSpatialIndex(sim.trees).forEachWithin(s.x, s.z, 16 + scale * 4, (tree, index) => {
+  treeSpatialIndex(sim.trees).forEachWithin(centre.x, centre.z, 16 + scale * 4, (tree, index) => {
     if (!sim.felled.has(index) && !tree.walking) trees.push({ tree, index })
   })
   const obstacles: StallRoute["obstacles"] = [], people: SimTraveler[] = []
@@ -1854,8 +1856,13 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   let parking: ShrineParking | null = null
   if (visitRoute && needsParking) {
     const puller = isVendor ? cartLoadout(s.id).puller : "horse"
-    parking = shrineParking(map, parkingProgress, direction, isVendor ? -cartOffset(puller) * characterScale : 0, puller, characterScale,
-      [...sim.travelers.values()].flatMap(other => other.shrineParking ? [other.shrineParking.parked] : []), parkingContext(sim, s, characterScale))
+    const wheelbase = isVendor ? -cartOffset(puller) * characterScale : 0
+    const occupied = [...sim.travelers.values()].flatMap(other => other.shrineParking ? [other.shrineParking.parked] : [])
+    // Ride up to the shrine and leave the horse in the field beside it. Only
+    // when that field is full does a rider settle for the verge at the fork.
+    const door = { x: tileToWorldX(map, map.site!.door.x), z: tileToWorldZ(map, map.site!.door.z) }
+    parking = enclaveParking(map, parkingProgress, direction, wheelbase, puller, characterScale, occupied, parkingContext(sim, s, characterScale, false, door))
+      ?? shrineParking(map, parkingProgress, direction, wheelbase, puller, characterScale, occupied, parkingContext(sim, s, characterScale))
     const footRoute = parking ? settlementRoute(map, map.buildings,
       { x: worldToTileX(map, parking.parked.hitch.x), z: worldToTileZ(map, parking.parked.hitch.z) }, visitRoute.at(-1)!, false, true, visit!.seat) : null
     visitRoute = footRoute
@@ -2746,8 +2753,9 @@ export function stepSim(
           const crossingTile = Math.floor(s.progress) !== Math.floor(s.progress + direction * worldSpeed * haste * dt)
           const bypassesJunction = diversion !== null && direction * (site.junction - s.progress) >= 0
             && direction * (site.junction - diversion.end) < 0
-          // Convoys seek a parking verge in advance. Pedestrians whose detour
-          // bypasses the turning leave from this clear road tile and return here.
+          // Riders and convoys plan their stop in advance: the field by the shrine
+          // first, else a verge before the fork. Pedestrians whose detour bypasses
+          // the turning leave from this clear road tile and return here.
           if (distance <= worldSpeed * haste * dt || bypassesJunction || (needsParking && distance <= 12 && crossingTile)) {
             const leaveHere = needsParking || bypassesJunction
             const from = leaveHere ? { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) } : undefined
