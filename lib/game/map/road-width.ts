@@ -1,5 +1,6 @@
 import { elevationStep } from "./elevation"
 import { bridgeLayout } from "./bridges"
+import { diagonalRoadBend } from "./road"
 import { tileAt, type GameMap } from "./types"
 
 /** Main roads have two tiles of usable ground; tracks and bridge decks retain one. */
@@ -32,6 +33,10 @@ function profile(map: GameMap) {
   for (let i = 1; i < road.length - 1; i++) {
     const a = road[i - 1], p = road[i], b = road[i + 1]
     if ((p.x - a.x) * (b.z - p.z) === (p.z - a.z) * (b.x - p.x)) continue
+    // Inside a diagonal ribbon the alternating bends render as one 45-degree
+    // line, so walkers spread across it exactly as they do on a straight.
+    // Bridge decks keep their quarter-turn lanes and stay narrow.
+    if (!bridges.rise[p.z * map.width + p.x] && tileAt(map, p.x, p.z) !== "bridge" && diagonalRoadBend(map, p.x, p.z)?.straight) continue
     // The authored Bezier's tightest radius is smaller than half a tile.
     // Narrow through the whole bend, then ease back out on either straight.
     for (let j = i - 1; j <= i + 1; j++) walking[j] = Math.min(walking[j], .7)
