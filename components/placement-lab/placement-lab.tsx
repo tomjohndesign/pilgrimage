@@ -7,7 +7,7 @@ import { LabSelect, LabSlider, labButton, labInput } from "@/components/lab-cont
 import { buildCatalog, DEFAULT_BALANCE, RULE_FIELDS } from "@/lib/game/balance"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
-import { placementRoofRotation } from "@/lib/game/building-placement-layout"
+import { placementSite } from "@/lib/game/building-placement-layout"
 import { rotatedFootprint } from "@/lib/game/building-rotation"
 import { footprintGrading } from "@/lib/game/map/elevation"
 import { parseSeed, randomSeed } from "@/lib/game/rng"
@@ -46,8 +46,8 @@ export function PlacementLab() {
   }, [])
   const candidate = useMemo(() => {
     if (!def || !hovered) return null
-    const snapped = placementRoofRotation(map, def, hovered, rotation)
-    return { grading: footprintGrading(map, { ...hovered, ...rotatedFootprint(def, snapped) }), error: placementError(map, def, hovered, balance, rotation) }
+    const site = placementSite(map, def, hovered, rotation)
+    return { grading: footprintGrading(map, { ...site, ...rotatedFootprint(def, site.rotation) }), error: placementError(map, def, hovered, balance, rotation) }
   }, [map, def, hovered, rotation, balance])
   const seed = parseSeed(seedDraft)
   const pending = seed !== settings.seed || draft.relief !== settings.relief || draft.wavelength !== settings.wavelength

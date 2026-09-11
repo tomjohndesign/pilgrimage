@@ -1,4 +1,3 @@
-import { INN_OVERHANG } from "../inn"
 import { innLadderParts, innParts } from "./inn"
 import { innLayout } from "../inn-layout"
 import { waterSourceParts } from "../water-sources/model"
@@ -8,7 +7,7 @@ import type { BuildingDef } from "../map/types"
 import { buildingParts, type BuildingPart } from "./geometry"
 import { earlyBuildingParts, type SettlementBuildingType } from "./early-geometry"
 import { EARLY_BUILDINGS, earlyBuildingRecipe } from "./style"
-import { singlePlaneRoofRise } from "./dimensions"
+import { INN_OVERHANG, singlePlaneRoofRise } from "./dimensions"
 import type { RoofJoin } from "./roof-joins"
 
 export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor" | "layoutSeed" | "hearthZ" | "fireplace" | "floorHeight" | "supportId" | "tavernFlue">

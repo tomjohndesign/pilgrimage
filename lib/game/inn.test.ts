@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { BUILD_CATALOG, DEFAULT_BALANCE } from "./balance"
 import { rotatedFootprint, rotateBuildingPoint, buildingEntry, type BuildingRotation } from "./building-rotation"
 import { innPlacementLayout, innPlacementError } from "./inn"
-import { placementBuildingLayout, placementRoofRotation, placementClearance } from "./building-placement-layout"
+import { placementBuildingLayout, placementRoofRotation, placementClearance, placementSite } from "./building-placement-layout"
 import { structureParts } from "./building-art/structure"
 import { tavernStackParts } from "./building-art/stacked"
 import { buildingHearth } from "./building-art/furnishings"
@@ -100,6 +100,21 @@ describe("inn upper floors",()=> {
       expect(settlementRoute(stacked,stacked.buildings,buildingEntry(host),buildingEntry(host,true),false,true)).toEqual(before)
       expect(innPlacementError(stacked,candidate)).toMatch(/already/)
   })
+  it.each([0,1,2,3] as const)("snaps onto the tavern from any of its tiles at rotation %i",rotation=> {
+    const {map,host}=fixture(rotation)
+    for(let z=host.z;z<host.z+host.d;z++) for(let x=host.x;x<host.x+host.w;x++) {
+      expect(placementSite(map,inn,{x,z},0),`${x},${z}`).toEqual({x:host.x,z:host.z,rotation})
+      expect(placementError(map,inn,{x,z},DEFAULT_BALANCE,0),`${x},${z}`).toBeNull()
+    }
+    const clear={x:host.x+host.w+2,z:host.z}
+    expect(placementSite(map,inn,clear,0)).toMatchObject(clear)
+    const balance={...DEFAULT_BALANCE,buildings:{...DEFAULT_BALANCE.buildings,inn:{...DEFAULT_BALANCE.buildings.inn,requiredRenown:0}}}
+    const settlement={...createSettlement(balance),resources:{gold:1000,wood:1000}}
+    const inside={x:host.x+1,z:host.z+1}
+    const bought=purchaseStructure(settlement,map,[],[],"inn",inside,balance)
+    expect(bought.error).toBeNull()
+    expect(bought.settlement.structures[0]).toMatchObject({x:host.x,z:host.z,rotation,supportId:host.id})
+  })
   it("rejects partial overlaps, unsupported buildings, independent taverns and unfinished hosts",()=> {
     const {map,host,candidate}=fixture()
     expect(innPlacementError(map,{...candidate,x:candidate.x+1})).toMatch(/full footprint/)
@@ -176,9 +191,24 @@ describe("inn upper floors",()=> {
     const ground=structureParts({...inn,buildType:"inn"}).find(p=>p.name==="inn-plaster-x-1-1")!
     expect(ground.size![1]).toBeLessThan(upper.height)
     expect(front.position[2]).toBeGreaterThan(upper.d/2)
+  })
+  it("clears a neighbour's own roofline but not what rises into the upper storey",()=>{
     const {map,candidate,host}=fixture()
-    const neighbor={...host,id:"neighbor",x:host.x+host.w}
-    expect(innPlacementError({...map,buildings:[...map.buildings,neighbor]},candidate)).toMatch(/overhanging/)
+    const beside=(id:string,extra:Partial<BuildingDef>={}):BuildingDef=>{
+      const def=BUILD_CATALOG.find(b=>b.id===id)!
+      return {...def,id:"neighbor",buildType:id,rotation:0,x:host.x+host.w,z:host.z,...extra}
+    }
+    const error=(neighbor:BuildingDef)=>innPlacementError({...map,buildings:[...map.buildings,neighbor]},candidate)
+    // Low eaves, thatch and gable ends pass beneath the jetty on either side,
+    // and so does a party-wall chimney adopted from the tavern's own hearth.
+    for(const id of ["house","market","well","tavern"]) for(const fireplace of [false,undefined])
+      expect(error(beside(id,{fireplace})),`${id} ${fireplace}`).toBeNull()
+    for(const patch of [{rotation:2 as const,fireplace:true},{x:host.x-2,fireplace:true}])
+      expect(error(beside("house",patch)),JSON.stringify(patch)).toBeNull()
+    // A raised store, a gable cross or a second upper floor all reach into it.
+    expect(error(beside("storehouse"))).toMatch(/overhanging/)
+    expect(error(beside("hall"))).toMatch(/overhanging/)
+    expect(error(beside("inn"))).toMatch(/overhanging/)
   })
   it("runs the upper roof perpendicular to the tavern, with its ridge along Z",()=> {
     const {upper}=fixture()

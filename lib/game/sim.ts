@@ -27,6 +27,7 @@ import { blockedRoad, findRoadDiversion, takeRoadShortcut, retireBypassedRoad, e
 import { createFootpaths, HEAVY_PATH_WEAR, recordWalkingPath, regrowFootpaths, type Footpaths } from "./footpaths"
 import { knightMounted, knightLoadout, knightTravelSpeed, knightWalkStride, type HorseRest } from "./knights"
 import { DEFAULT_WALK_SPEED, DEFAULT_WALK_CADENCE, personWalkStride } from "./base-person/gait"
+import { builderRate } from "./build-labour"
 import { assignBuildingTask, buildingEntrance, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
 import { buildingEntry } from "./building-rotation"
 import { timberDestination, type FoodStock } from "./storage"
@@ -332,6 +333,8 @@ export interface SimTraveler {
   horseRest?: HorseRest & { progress: number; lane: number }
   workScale?: number
   workSlot?: number
+  /** Worker-seconds this settler adds per second at a site; their trades set it. */
+  buildRate?: number
   buildingTask?: BuildingTask
   constructionReturn?: import("./monk-wander").WanderSpot[]
   /** Prayer interrupts travel/work without discarding its route or reservations. */
@@ -1208,6 +1211,16 @@ function homeBedSlot(sim: SimState, s: SimTraveler): number {
   const housemates = [...sim.travelers.values()].filter(other => other.home === s.home)
     .map(other => other.id).sort((a, b) => a - b)
   return Math.max(0, housemates.indexOf(s.id))
+}
+
+/**
+ * Whether a settler belongs to the shrine's own settlement rather than to a
+ * roadside town, which keeps its founding household to itself. Someone with no
+ * place of their own is loose at the enclave and counts as one of its hands.
+ */
+function ofTheEnclave(map: GameMap, workplace: PlacedBuilding | undefined, home: string | null): boolean {
+  if (workplace) return workplace.owner !== "independent"
+  return !home || map.buildings.find(b => b.id === home)?.owner !== "independent"
 }
 
 /** Complete counters with a keeper working, including patrols inside a tavern. */
@@ -2510,11 +2523,26 @@ export function stepSim(
           if (s.employer) break
           s.timer = GAME_HOUR_SECONDS
         }
-        // Standing behind a counter or in a fold asks little; a settler keeps
-        // that post until they are genuinely hungry or tired.
         const hungry = Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD
+        // Fed enough not to want supper, and rested enough for a day's work.
+        const fitForWork = !hungry && s.stamina >= SETTLER_FED_AT
         const unhappy = socialBreak
         const workplace = sim.buildings.find(b => b.id === s.employer)
+        // Raising a building is the whole enclave's business, not the brothers'
+        // alone: a keeper leaves the counter for it as readily as a woodcutter
+        // leaves the woods. The first slot of a posted house stays behind so a
+        // counter never closes for a site, and the site's own crew limit keeps
+        // everyone else at their usual work. A town down the road keeps its own
+        // household, and a vendor's stall is nobody's but the vendor's.
+        const sparedFromPost = !workplace || !isPostedWork(workplace.kind) || s.jobSlot > 0
+        if (!isVendor && sparedFromPost && !unhappy && fitForWork
+          && ofTheEnclave(map, workplace, s.home)) {
+          s.workSlot = s.id
+          s.buildRate = builderRate(t.attributes.skills)
+          if (assignBuildingTask(s, map, "build")) { s.activity = "toBuild"; break }
+        }
+        // Standing behind a counter or in a fold asks little; a settler keeps
+        // that post until they are genuinely hungry or tired.
         if (workplace && isPostedWork(workplace.kind) && !hungry && !unhappy && s.stamina > SETTLER_TIRED_AT) {
           if (workplace.kind === "sheep-pen" && dt > 0 && !s.herdingRetry) {
             s.herdingRetry = 5
@@ -2539,12 +2567,6 @@ export function stepSim(
             s.activity = "toHome"
             break
           }
-        }
-        s.workSlot = s.id
-        const fitForWork = !hungry && s.stamina >= SETTLER_FED_AT
-        if (fitForWork && assignBuildingTask(s, map, "build")) {
-          s.activity = "toBuild"
-          break
         }
         s.timer -= dt
         if (s.timer <= 0 && fitForWork) {

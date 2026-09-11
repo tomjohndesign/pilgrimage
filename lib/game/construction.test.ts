@@ -7,6 +7,7 @@ import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } 
 import { monkWander } from "./monk-wander"
 import { createMonkRoutine, stepMonkRoutine } from "./monk-routine"
 import { createMonkNeeds, MONK_WAKE_AT, stepMonkWork } from "./monk-work"
+import { builderRate, MAX_BUILD_RATE, MONK_BUILD_RATE, SETTLER_BUILD_RATE } from "./build-labour"
 import { settlementRoute } from "./settlement-route"
 import { makeRng } from "./rng"
 import { woodcutterHuts } from "./settlement"
@@ -194,6 +195,58 @@ describe("resident construction", () => {
     expect(site.construction!.work).toBe(0)
   })
 
+  it("pays a brother, a plain settler and a trained one at their own rates", () => {
+    expect(builderRate([])).toBe(SETTLER_BUILD_RATE)
+    expect(builderRate(["carpentry"])).toBeGreaterThan(SETTLER_BUILD_RATE)
+    expect(builderRate(["chant", "letters"])).toBe(SETTLER_BUILD_RATE)
+    expect(builderRate(["carpentry", "masonry", "labour", "thatching"])).toBe(MAX_BUILD_RATE)
+    expect(MONK_BUILD_RATE).toBeLessThan(SETTLER_BUILD_RATE)
+    const work = (rate?: number) => {
+      const map = fixture(), site = map.buildings[2], actor = { ...worker(map), buildRate: rate }
+      assignBuildingTask(actor, map, "build")
+      while (actor.buildingTask!.route.length) stepBuildingTask(actor, map, 1, 0.1)
+      for (let i = 0; i < 10; i++) stepBuildingTask(actor, map, 1, 0.1)
+      return site.construction!.work
+    }
+    expect(work(MONK_BUILD_RATE)).toBeCloseTo(MONK_BUILD_RATE)
+    expect(work()).toBeCloseTo(SETTLER_BUILD_RATE)
+    expect(work(builderRate(["carpentry"]))).toBeCloseTo(builderRate(["carpentry"]))
+  })
+
+  it("hands a full site's place from the slowest builder to a faster one", () => {
+    const map = fixture(), site = map.buildings[2]
+    const brother = { ...worker(map), buildRate: MONK_BUILD_RATE }
+    const settler = { ...worker(map), buildRate: SETTLER_BUILD_RATE }
+    const wright = { ...worker(map), buildRate: builderRate(["carpentry"]) }
+    expect(constructionBuilders(site.w, site.d)).toBe(1)
+    expect(assignBuildingTask(brother, map, "build")).toBe(true)
+    // A settler outbuilds him, so the brother steps back and the place is theirs.
+    expect(assignBuildingTask(settler, map, "build")).toBe(true)
+    expect(brother.buildingTask).toBeUndefined()
+    expect(settler.buildingTask!.buildingId).toBe(site.id)
+    // Equals never trade places, but a trained wright takes over in turn.
+    const equal = { ...worker(map), buildRate: SETTLER_BUILD_RATE }
+    expect(assignBuildingTask(equal, map, "build")).toBe(false)
+    expect(settler.buildingTask).toBeDefined()
+    expect(assignBuildingTask(wright, map, "build")).toBe(true)
+    expect(settler.buildingTask).toBeUndefined()
+    // Nobody is slower than the brother, so he cannot win the place back.
+    expect(assignBuildingTask(brother, map, "build")).toBe(false)
+  })
+
+  it("keeps the crew whole when the faster builder cannot reach the site", () => {
+    const map = fixture(), site = map.buildings[2]
+    const brother = { ...worker(map), buildRate: MONK_BUILD_RATE }
+    expect(assignBuildingTask(brother, map, "build")).toBe(true)
+    const task = brother.buildingTask
+    // Stranded across water: the place is only released once a route is found.
+    const wright = { ...worker(map, 16, 16), buildRate: MAX_BUILD_RATE }
+    for (let z = 0; z < map.depth; z++) map.tiles[z * map.width + 12] = "water"
+    expect(assignBuildingTask(wright, map, "build")).toBe(false)
+    expect(brother.buildingTask).toBe(task)
+    expect(stepBuildingTask(brother, map, 1, 0.1)).not.toBeNull()
+  })
+
   it("shows foundations, scaffolding, walls, then the complete building", () => {
     const site = fixture().buildings[1]
     site.construction = { work: 0, required: 30 }
@@ -219,10 +272,11 @@ describe("monk fatigue and rest", () => {
       for (let i = 0; i < 300 && monk.activity !== "building"; i++) stepMonkWork(monk, map, 1, 0.1)
       expect(monk.activity).toBe("building")
     }
-    const task = monk.buildingTask, spare = worker(map)
+    // Another brother builds no faster, so he cannot take the place over.
+    const task = monk.buildingTask, spare = { ...worker(map), buildRate: MONK_BUILD_RATE }
     expect(task?.purpose).toBe("build")
     monk.stamina = 0
-    for (let i = 0; i < 1500 && !isComplete(site); i++) {
+    for (let i = 0; i < 3000 && !isComplete(site); i++) {
       stepMonkWork(monk, map, 1, 0.1)
       expect(monk.buildingTask).toBe(task)
       expect(assignBuildingTask(spare, map, "build")).toBe(false)

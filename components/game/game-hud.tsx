@@ -1,5 +1,6 @@
 "use client"
 
+import { builderPaceLabel, builderRate, MONK_BUILD_RATE } from "@/lib/game/build-labour"
 import { isComplete, isHouse, isMonkShelter } from "@/lib/game/construction"
 import { BUILDING_KINDS, buildingKind } from "@/lib/game/buildings"
 import { housingBeds, monkBeds } from "@/lib/game/housing"
@@ -379,6 +380,7 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
             {a.skills.length > 0 ? a.skills.join(", ") : "none"}
           </span>
         </div>
+        <BuilderPace rate={builderRate(a.skills)} />
       </div>
     </Panel>
   )
@@ -503,6 +505,14 @@ function RelicPanel({ relic }: { relic: Relic }) {
   )
 }
 
+/** How fast this pair of hands raises a building, against a plain untrained one. */
+function BuilderPace({ rate }: { rate: number }) {
+  return <div className="flex items-baseline justify-between gap-4">
+    <span className="text-[11px] italic text-ink-light">Building</span>
+    <span className="font-display text-[10px] text-ink">{builderPaceLabel(rate)} ×{rate}</span>
+  </div>
+}
+
 function ConstructionStatus({ building }: { building: BuildingDef }) {
   const read = () => building.construction ? Math.round(100 * building.construction.work / building.construction.required) : 100
   const [progress, setProgress] = useState(read)
@@ -514,7 +524,7 @@ function ConstructionStatus({ building }: { building: BuildingDef }) {
   if (progress >= 100) return null
   return <div className="mt-2">
     <StatBar label="Construction" value={progress} />
-    <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">Idle residents build this site. Benefits begin when construction finishes.</p>
+    <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">Anyone at the enclave with hands free helps raise this, the trades fastest and the brothers slowest. Benefits begin when construction finishes.</p>
   </div>
 }
 
@@ -604,6 +614,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
             {a.skills.join(", ")}
           </span>
         </div>
+        <BuilderPace rate={MONK_BUILD_RATE} />
       </div>
     </Panel>
   )
