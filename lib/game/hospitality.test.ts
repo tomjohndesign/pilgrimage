@@ -1,3 +1,5 @@
+import { builderRate } from "./build-labour"
+import { isComplete } from "./construction"
 import { naturalWaterStop } from "./natural-water"
 import { settlementJob, SETTLEMENT_JOBS } from "./jobs/design"
 import { shrineSeats, shrineStations, shrineLayout } from "./shrine-layout"
@@ -523,6 +525,54 @@ describe("woodcutter huts", () => {
       expect(["toHome", "sleeping"]).toContain(actor.activity)
       expect(actor[need]).toBeGreaterThan(depleted)
     }
+  })
+
+  it("sends every citizen but the head keeper to a new site, at their own pace", () => {
+    const { map, camp, traveler } = fixture()
+    const def = BUILD_CATALOG.find(b => b.id === "tavern")!
+    const tavern = { ...def, id: "tavern-0", buildType: "tavern", label: def.label, x: 13, z: 11, rotation: 0 as const }
+    const site = { ...camp, id: "construction-site", x: 5, z: 6, construction: { work: 0, required: 96 } }
+    map.buildings.push(tavern, site)
+    const people = [traveler(0), traveler(1)]
+    people[1].attributes.skills = ["carpentry"]
+    const sim = createSim(people, map)
+    sim.buildings = jobBuildings(map)
+    const keepers = people.map((t, jobSlot) => {
+      const s = sim.travelers.get(t.id)!
+      Object.assign(s, { employer: tavern.id, jobSlot, jobless: false, activity: "idle", moveSpeed: 0,
+        x: tileToWorldX(map, tavern.x + jobSlot), z: tileToWorldZ(map, tavern.z + tavern.d) })
+      return s
+    })
+    stepSim(sim, people, map, 1.5, 0.1)
+    // The counter keeps its first slot; the second keeper is free to lend a hand.
+    expect(keepers[0].activity).toBe("toPost")
+    expect(keepers[1].activity).toBe("toBuild")
+    expect(keepers[1].buildRate).toBe(builderRate(["carpentry"]))
+    run(sim, people, map, 300, () => isComplete(site))
+    expect(isComplete(site)).toBe(true)
+    expect(keepers[0].employer).toBe(tavern.id)
+    expect(keepers[1].employer).toBe(tavern.id)
+  })
+
+  it("leaves a roadside town's household to its own counter", () => {
+    const { map, camp, traveler } = fixture()
+    const def = BUILD_CATALOG.find(b => b.id === "tavern")!
+    const tavern = { ...def, id: "town-tavern", buildType: "tavern", label: def.label, owner: "independent" as const,
+      x: 13, z: 11, rotation: 0 as const }
+    const site = { ...camp, id: "construction-site", x: 5, z: 6, construction: { work: 0, required: 96 } }
+    map.buildings.push(tavern, site)
+    const people = [traveler(0), traveler(1)]
+    const sim = createSim(people, map)
+    sim.buildings = jobBuildings(map, true)
+    const keepers = people.map((t, jobSlot) => {
+      const s = sim.travelers.get(t.id)!
+      Object.assign(s, { employer: tavern.id, jobSlot, jobless: false, activity: "idle", moveSpeed: 0,
+        x: tileToWorldX(map, tavern.x + jobSlot), z: tileToWorldZ(map, tavern.z + tavern.d) })
+      return s
+    })
+    run(sim, people, map, 60)
+    for (const keeper of keepers) expect(["toPost", "posted"]).toContain(keeper.activity)
+    expect(site.construction.work).toBe(0)
   })
 
   it("sends an idle settled worker to build, then returns them to camp", () => {

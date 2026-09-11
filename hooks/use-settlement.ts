@@ -146,7 +146,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
         ...current,
         settlement: instantBuild ? completeConstruction(result.settlement) : result.settlement,
         buildType: result.error ? current.buildType : null,
-        message: result.error ?? (instantBuild ? "Building placed." : "Construction planned. Idle residents will build it."),
+        message: result.error ?? (instantBuild ? "Building placed." : "Construction planned. The enclave will raise it."),
       }
     }))
   }

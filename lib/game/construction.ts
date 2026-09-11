@@ -11,6 +11,7 @@ import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type BuildingDe
 import { settlementRoute } from "./settlement-route"
 import type { WanderSpot } from "./monk-wander"
 import { buildingSupports } from "./character-support"
+import { SETTLER_BUILD_RATE } from "./build-labour"
 import { workPost } from "./work-posts"
 import { rememberedWorkerCorridor, rememberedWorkerRoute } from "./worker-route-memory"
 
@@ -50,7 +51,15 @@ export interface BuildingTask {
   /** Reroute when placement changes the obstacles. */
   buildings: readonly BuildingDef[]
 }
-export interface Worker extends WanderSpot { buildingTask?: BuildingTask; workSlot?: number; workScale?: number }
+export interface Worker extends WanderSpot {
+  buildingTask?: BuildingTask
+  workSlot?: number
+  workScale?: number
+  /** Worker-seconds added per second at a site; see build-labour.ts. Absent means plain hands. */
+  buildRate?: number
+}
+/** Every builder counts as a plain pair of hands until their trades say otherwise. */
+function buildRate(worker: Worker): number { return worker.buildRate ?? SETTLER_BUILD_RATE }
 // Construction survives map publications and is shared by monks and settlers.
 // Keep reservations out of saved game data; a cancelled/replaced task frees its place.
 const buildingCrews = new WeakMap<Construction, Map<Worker, BuildingTask>>()
@@ -122,6 +131,16 @@ function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask
     heading: (bed?.heading ?? (purpose === "work" ? 0 : Math.PI)) + buildingYaw(building.rotation) }
 }
 
+/** The slowest builder on a crew that a faster pair of hands may take over from. */
+function slowestBuilderUnder(crew: readonly Worker[], rate: number): Worker | null {
+  let slowest: Worker | null = null
+  for (const worker of crew) {
+    if (buildRate(worker) >= rate) continue
+    if (!slowest || buildRate(worker) < buildRate(slowest)) slowest = worker
+  }
+  return slowest
+}
+
 /** Reserve a place before walking so en-route builders count toward the site's crew. */
 export function assignBuildingTask(actor: Worker, map: GameMap, purpose: BuildingTask["purpose"], focusedBuildingId?: string): boolean {
   // Only a named building can be rested or worked in: a settler's own house,
@@ -133,8 +152,14 @@ export function assignBuildingTask(actor: Worker, map: GameMap, purpose: Buildin
       Math.hypot(tileToWorldX(map, b.x) - actor.x, tileToWorldZ(map, b.z) - actor.z))
   for (const building of candidates) {
     const crew = purpose === "build" ? constructionCrew(building) : null
-    const others = crew ? [...crew.keys()].filter(worker => worker !== actor) : []
-    if (others.length >= constructionBuilders(building.w, building.d)) continue
+    const full = crew ? [...crew.keys()].filter(worker => worker !== actor) : []
+    // A full site still takes a better builder: the slowest hand on it steps
+    // back, which is how a brother gives up the mallet once a wright turns up.
+    // Only a strictly faster rate displaces, so equals never trade places.
+    const crowded = full.length >= constructionBuilders(building.w, building.d)
+    const displaced = crowded ? slowestBuilderUnder(full, buildRate(actor)) : null
+    if (crowded && !displaced) continue
+    const others = displaced ? full.filter(worker => worker !== displaced) : full
     for (let attempt = 0; attempt < (purpose === "build" ? 4 : 1); attempt++) {
       const slot = (actor.workSlot ?? 0) + attempt
       if (others.some(worker => worker.buildingTask!.slot % 4 === slot % 4)) continue
@@ -144,6 +169,8 @@ export function assignBuildingTask(actor: Worker, map: GameMap, purpose: Buildin
       const route = purpose === "build" ? workerRoute(map, actor, frontage) : routeToDestination(map, actor, destination)
       if (!route) continue
       if (purpose === "build") route.push(destination)
+      // Only release the place once this builder can actually reach it.
+      if (displaced) { displaced.buildingTask = undefined; crew!.delete(displaced) }
       actor.buildingTask = { buildingId: building.id, purpose, slot, heading, route,
         destination: { ...destination }, buildings: map.buildings }
       crew?.set(actor, actor.buildingTask)
@@ -181,7 +208,7 @@ export function walkWorker(actor: WanderSpot, route: WanderSpot[], speed: number
   return true
 }
 
-/** Progress is paid in worker-seconds, only while standing at the site's entrance. */
+/** Progress is paid in worker-seconds at the builder's own rate, only while standing at the site's entrance. */
 export function stepBuildingTask(actor: Worker, map: GameMap, speed: number, dt: number): "walking" | "building" | "sleeping" | "posted" | null {
   const task = actor.buildingTask
   if (!task || dt <= 0) return null
@@ -231,6 +258,6 @@ export function stepBuildingTask(actor: Worker, map: GameMap, speed: number, dt:
     return "posted"
   }
   const construction = building.construction!
-  construction.work = Math.min(construction.required, construction.work + dt)
+  construction.work = Math.min(construction.required, construction.work + dt * buildRate(actor))
   return "building"
 }
