@@ -85,6 +85,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.185.4",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.2.0",
     "playwright": "^1.63.0",
     "postcss": "^8.5",
     "sharp": "^0.34.5",
