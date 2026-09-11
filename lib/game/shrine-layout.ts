@@ -47,7 +47,7 @@ export function shrineStations(building: Pick<BuildingDef,"x"|"z"|"w"|"d">, door
   }
 }
 
-/** Queue visitors and gathered companies both ask the keeper to uncover the relic. */
+/** A place in the line asks the keeper to uncover the relic; private prayer does not. */
 export function isRelicViewingSeat(seat?: string): boolean {
-  return !!seat && (seat.startsWith("queue-") || seat.startsWith("group-"))
+  return !!seat && seat.startsWith("queue-")
 }

@@ -9,6 +9,7 @@ import { markPerson } from "@/lib/game/selection"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useFrame, useLoader } from "@react-three/fiber"
 import * as THREE from "three"
+import { prepareSpritePicking, spriteTexelRaycast } from "@/lib/game/render/sprite-picking"
 import type { GameMap } from "@/lib/game/map/types"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 import { usePixelWorldTexel } from "@/components/pixel-canvas"
@@ -83,6 +84,7 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
   }), [map, maps, kind, passengerCart, driverFrame, driverVisible, viewport, worldTexel, groundPlane, poseDepth, depthBias, depths, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => { materials.forEach(m => m.dispose()) }, [materials])
   useEffect(() => () => maps.forEach(map => map.dispose()), [maps])
+  useEffect(() => prepareSpritePicking(maps), [maps])
   const body = useRef<THREE.Sprite>(null), ids = useRef<THREE.Sprite>(null)
   const batchEntries = useCharacterBatches()
   useLayoutEffect(() => {
@@ -189,9 +191,9 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
   const size = manifest.scale * characterScale
   const center = useMemo(() => new THREE.Vector2(manifest.anchor[0] / manifest.cellSize, 1 - manifest.anchor[1] / manifest.cellSize), [])
   return <group ref={group => { root.current = group; markPerson(group) }} position={position}>
-    {/* Batching hides this source sprite only for drawing. Keep its full click
-        area active, including for passenger carts without a walker hit target. */}
-    <sprite ref={body} name={kind} renderOrder={renderOrder} material={materials[0]} center={center} scale={[size, size, 1]} onClick={onClick}
+    {/* Batching hides this source sprite only for drawing. Its drawn texels stay
+        clickable, including for passenger carts without a walker hit target. */}
+    <sprite ref={body} name={kind} renderOrder={renderOrder} material={materials[0]} center={center} scale={[size, size, 1]} onClick={onClick} raycast={spriteTexelRaycast}
       userData-batchedPickTarget={true}
       layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} />
     {outlineColor && <sprite ref={ids} renderOrder={renderOrder} material={materials[1]} center={center} scale={[size, size, 1]} layers-mask={OUTLINE_ID_LAYER_MASK} />}

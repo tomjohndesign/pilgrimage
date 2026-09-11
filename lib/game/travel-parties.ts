@@ -27,7 +27,6 @@ export interface TravelParty {
   retry: number
   elapsed: number
   decisions: number
-  viewingTogether?: boolean
   waterCarrier?: number
   waterRetry?: number
   visitPending: number[]

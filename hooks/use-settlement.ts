@@ -7,7 +7,7 @@ import type { GameMap, TilePos } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
 import { useBuildStore } from "@/lib/game/build-store"
-import { claimTownBuildings, settlementMap, createSettlement, purchaseStructure, creditTimber, creditAdmission, creditTrade, syncTimberSpending, settlementRenown } from "@/lib/game/settlement"
+import { claimTownBuildings, settlementMap, createSettlement, purchaseStructure, creditTimber, creditAdmission, creditTrade, syncTimberSpending, settlementRenown, grantResources, grantRenown, completeConstruction, type Resources } from "@/lib/game/settlement"
 
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { BUILDING_PREVIEW, buildingPreviewBalance, buildingPreviewSettlement } from "@/lib/game/building-preview"
@@ -17,8 +17,9 @@ import { restoreSettlement } from "@/lib/game/save/settlement"
 /**
  * A generated world owns one economy. Cosmetic settings keep it; regeneration
  * resets it. A save for the same world seeds the economy instead of a fresh one.
+ * The master builder cheat finishes every site the moment it is planned.
  */
-export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Relic | null, restore: SettlementSave | null = null) {
+export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Relic | null, restore: SettlementSave | null = null, masterBuilder = false) {
   const savedBalance = useBalanceStore((s) => s.balance)
   const balance = useMemo(() => BUILDING_PREVIEW ? buildingPreviewBalance(savedBalance) : savedBalance, [savedBalance])
   const ready = useBalanceStore((s) => s.ready)
@@ -98,9 +99,20 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     if (sameWorld && simulation) syncTimberSpending(simulation, session.settlement.spentWood)
   }, [sameWorld, simulation, session.settlement.spentWood])
 
+  // Sites already under way finish when the cheat is switched on; later sites finish at purchase.
+  const instantBuild = BUILDING_PREVIEW || masterBuilder
+  useEffect(() => {
+    if (!instantBuild) return
+    setSession(current => {
+      const settlement = completeConstruction(current.settlement)
+      return settlement === current.settlement ? current : { ...current, settlement }
+    })
+  }, [instantBuild, session.settlement.structures])
+
+  const granted = session.settlement.grantedRenown
   const renown = useMemo(() => map && relic
-    ? settlementRenown(map, residents, [relic], balance, visits) : null,
-    [map, residents, relic, balance, visits])
+    ? settlementRenown(map, residents, [relic], balance, visits, granted) : null,
+    [map, residents, relic, balance, visits, granted])
 
   useEffect(() => {
     const cancel = (event: KeyboardEvent) => {
@@ -130,18 +142,19 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
         visits,
         rotation,
       )
-      if (BUILDING_PREVIEW && !result.error) {
-        result.settlement = { ...result.settlement, structures: result.settlement.structures.map(building =>
-          building.construction ? { ...building, construction: { ...building.construction, work: building.construction.required } } : building) }
-      }
       return {
         ...current,
-        settlement: result.settlement,
+        settlement: instantBuild ? completeConstruction(result.settlement) : result.settlement,
         buildType: result.error ? current.buildType : null,
-        message: result.error ?? (BUILDING_PREVIEW ? "Building placed." : "Construction planned. Idle residents will build it."),
+        message: result.error ?? (instantBuild ? "Building placed." : "Construction planned. Idle residents will build it."),
       }
     }))
   }
+  /** Cheat codes: the treasury and renown gifts apply to the current world only. */
+  const grant = useCallback((gift: Partial<Resources>) =>
+    setSession(current => ({ ...current, settlement: grantResources(current.settlement, gift) })), [])
+  const bless = useCallback((renown: number) =>
+    setSession(current => ({ ...current, settlement: grantRenown(current.settlement, renown) })), [])
 
   return {
     map,
@@ -155,5 +168,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     message: session.message,
     chooseBuild,
     place,
+    grant,
+    bless,
   }
 }

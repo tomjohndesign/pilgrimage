@@ -35,9 +35,9 @@ const ROAD_TIER_NOTES: Record<string, string> = {
 export const TEXTURES: TextureEntry[] = [
   {
     id: "dirt-side",
-    label: "Dirt Cliff",
+    label: "Cliff face",
     url: "/textures/dirt-side.png",
-    appliedTo: "Sides of the map slab — the block of earth the world sits on.",
+    appliedTo: "Every exposed drop: tile sides at height steps, diagonal cut corners and the slab under the map. Humus and packed earth over bedded stone, measured down from each rim, at the character pixel size.",
     source: "Generated — node scripts/generate-dirt-texture.mjs",
     preview: "map-edge",
   },

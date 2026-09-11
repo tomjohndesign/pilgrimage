@@ -9,6 +9,7 @@ import { addRoadsideTowns } from "./roadside-towns"
 import { addFoundingWell, addPathSprings } from "./seeded-water"
 import { beachAccess } from "./beaches"
 import { taperRiverBanks, gradeBridgeApproaches } from "./river-banks"
+import { cliffVergeCost, clearCliffsBesideRoads } from "./road-cliffs"
 import { bridgeLayout } from "./bridges"
 import { seedFords } from "./fords"
 import { generateElevation, finishElevation, levelBuildingGround, elevationStep, type ElevationInfo, type ElevationSettings } from "./elevation"
@@ -231,6 +232,8 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   const elevation = generateElevation(seed, width, depth, kind, options.elevation, water.flow)
   const waterInfo = drainWater(kind, water.depth, width, depth, elevation)
   taperRiverBanks(elevation, width, depth, kind, waterInfo, water.flow, seed)
+  // Roads and tracks keep a cliff-free verge; routing pays to hug a cliff face.
+  const cliffVerge = cliffVergeCost(elevation, width, depth, kind)
   for (let i = 0; i < kind.length; i++) {
     if (kind[i] !== 0) tiles[i] = "water"
   }
@@ -502,7 +505,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     return surface + vergeShade[i] * ROAD_CLEARING_COST
   }
   const groundWander = new Float64Array(roadWander)
-  for (let i = 0; i < groundWander.length; i++) groundWander[i] += groundCost(i)
+  for (let i = 0; i < groundWander.length; i++) groundWander[i] += groundCost(i) + cliffVerge[i]
 
 
   // Keep the road outside old growth and prefer open land beyond its canopy.
@@ -514,8 +517,8 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   const roadCost = new Float64Array(width * depth)
   for (let i = 0; i < roadCost.length; i++) {
     // Prefer economical lines through open ground.
-    roadCost[i] = roadWander[i] * .175 + groundCost(i) + darkPenalty(i)
-    trailWander[i] += darkPenalty(i)
+    roadCost[i] = roadWander[i] * .175 + groundCost(i) + darkPenalty(i) + cliffVerge[i]
+    trailWander[i] += darkPenalty(i) + cliffVerge[i]
     // Trails, unlike the road, never enter old growth at all.
     if (tiles[i] === "darkwood") walkable[i] = WATER_KIND_LAKE
   }
@@ -780,6 +783,8 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     site,
     water: waterInfo,
   }
+  // Whatever the routing could not avoid, cut back: no cliff face within the clearance of a road edge.
+  clearCliffsBesideRoads(elevation, width, depth, kind, tiles, map.buildings, waterInfo.surface)
   finishElevation(elevation, width, depth, kind, waterInfo.surface!)
   // Corner averaging can pull surrounding slopes back through founding floors.
   // Pin every footprint with the same cut-and-fill used for player purchases.
@@ -792,6 +797,11 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   addRoadsideTowns(map)
   createCrossroads(map)
   clearMainRoadVerge(map)
+  // Wells, springs and towns lay their own tracks; keep those clear of cliffs too.
+  for (let round = 0; round < 3 && clearCliffsBesideRoads(map.elevation!, width, depth, kind, map.tiles, map.buildings, waterInfo.surface) > 0; round++) {
+    finishElevation(map.elevation!, width, depth, kind, waterInfo.surface!)
+    for (const building of map.buildings) map.elevation = levelBuildingGround(map, building)
+  }
   return map
 }
 

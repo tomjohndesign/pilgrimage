@@ -30,6 +30,7 @@ export default async function PlayPage({
       expectResume={expectResume}
       resumeViewSize={expectResume ? saved.viewSize : null}
       benchmarkCity={process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" && (query.benchmark ?? false)}
+      lab={query.lab ?? false}
       initialSeed={query.seed}
       initialWorld={query.world}
       initialDisplay={query.display} />

@@ -103,17 +103,17 @@ function chunk(type, data) {
   return out
 }
 
-/** Write `size`×`size` RGBA pixels to `path` as a PNG, creating directories. */
-export function writePng(path, size, pixels) {
+/** Write `width`×`height` RGBA pixels to `path` as a PNG, creating directories. Square by default. */
+export function writePng(path, width, pixels, height = width) {
   const ihdr = Buffer.alloc(13)
-  ihdr.writeUInt32BE(size, 0)
-  ihdr.writeUInt32BE(size, 4)
+  ihdr.writeUInt32BE(width, 0)
+  ihdr.writeUInt32BE(height, 4)
   ihdr[8] = 8 // bit depth
   ihdr[9] = 6 // colour type: RGBA
-  const scanlines = Buffer.alloc(size * (size * 4 + 1))
-  for (let y = 0; y < size; y++) {
-    scanlines[y * (size * 4 + 1)] = 0 // filter: none
-    Buffer.from(pixels.buffer, y * size * 4, size * 4).copy(scanlines, y * (size * 4 + 1) + 1)
+  const scanlines = Buffer.alloc(height * (width * 4 + 1))
+  for (let y = 0; y < height; y++) {
+    scanlines[y * (width * 4 + 1)] = 0 // filter: none
+    Buffer.from(pixels.buffer, y * width * 4, width * 4).copy(scanlines, y * (width * 4 + 1) + 1)
   }
   const png = Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),

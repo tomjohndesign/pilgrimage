@@ -76,6 +76,18 @@ describe("diagonal cliff geometry", () => {
     expect(cliffCornerHeight(cut, .25, .25)).toBe(0)
   })
 
+  it("cuts a bank beside a river that falls gently, but not beside a waterfall step", () => {
+    // Water surfaces fall a little every tile downstream; the shelf still joins.
+    const map = shelf(true)
+    map.water = { depth: map.tiles.map(t => t === "water" ? 1 : 0), flow: {}, surface: map.tiles.map((_, i) => -0.05 - (i % 5) * 0.002 - Math.floor(i / 5) * 0.002) }
+    const cut = cliffCorner(map, 2, 2)!
+    expect(cut).toBeDefined()
+    expect(map.tiles[cut.donor]).toBe("water")
+    expect(Math.max(...cut.lower) - Math.min(...cut.lower)).toBeLessThan(0.01)
+    map.water.surface![1 * 5 + 2] = -0.85
+    expect(cliffCorner(map, 2, 2)).toBeUndefined()
+  })
+
   it("preserves roads, building aprons and incompatible lower water levels", () => {
     const map = shelf()
     map.tiles[2 * 5 + 3] = "path"

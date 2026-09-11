@@ -39,6 +39,7 @@ import { RoadsideReservations } from "./roadside-reservations"
 import { SpatialPoints } from "./spatial-points"
 import { walkingSurface } from "./map/walking-surface"
 import { convoyPoint, convoyBounds, convoyBuildingsClear, stallParking, shrineParking, type ParkingContext, type ShrineParking } from "./transport/navigation"
+import { enclaveParking } from "./transport/enclave-parking"
 import { alignCart, followCart, type CartPose } from "./transport/follow"
 import { keeperRoutine } from "./transport/keeper"
 import { populationDesign, travelerAppearance } from "./base-person/population"
@@ -56,7 +57,8 @@ import { BUILDING_KINDS, buildingCentre, isPostedWork, type PlacedBuilding } fro
 import { DRINK_PRICE, MEAL_PRICE, SERVING_THRESHOLD, SEAT_REST_THRESHOLD, SEAT_STAMINA_PER_HOUR, TABLE_HOURS, servingHouses, tavernVisitPlan, seatRestPlan, type TavernPlan } from "./tavern"
 import { generateRelic, hospitalityNeedThreshold, visitChance, type RelicStats } from "./relic"
 import { settlementRoute } from "./settlement-route"
-import { shrineDonation, shrineExitPlan, shrineVisitPlan } from "./shrine-visit"
+import { relicQueueSpacing, shrineDonation, shrineExitPlan, shrineVisitPlan } from "./shrine-visit"
+import { isRelicViewingSeat } from "./shrine-layout"
 import type { TreePlacement } from "./trees/placement"
 import { TREE_SPECIES } from "./trees/species"
 import type { TilePos } from "./map/types"
@@ -377,10 +379,11 @@ export interface SimTraveler {
   }
   branchProgress: number
   shrineRoute: TilePos[] | null
+  /** The last step of the arrival route still outside the church, cached with the route. */
+  shrineDoor?: number
   /** Reserved until the visitor has left the shrine approach. */
   shrineSeat?: string
   shrineQueueOrder?: number
-  shrineGroupPoint?: TilePos
   enclaveVisitPending?: boolean
   /** A vendor considers keeping a stall only after seeing the relic. */
   marketInterest?: boolean
@@ -674,6 +677,25 @@ function finishConvoyMove(s: SimTraveler, transportBefore: SimTraveler | null, m
   }
 }
 
+/** Standing within the church footprint, whether in line, viewing or on the way out. */
+function insideShrine(map: GameMap, who: { x: number; z: number }): boolean {
+  const hovel = map.site?.hovelId
+  return !!hovel && buildingAt(map, worldToTileX(map, who.x), worldToTileZ(map, who.z))?.id === hovel
+}
+
+/** Tiles covered by the route step under a position, so spacing reads in tiles on diagonals too. */
+function routeStep(route: readonly TilePos[], at: number): number {
+  const i = Math.max(0, Math.min(route.length - 2, Math.floor(at)))
+  return route.length < 2 ? 1 : Math.max(1, Math.hypot(route[i + 1].x - route[i].x, route[i + 1].z - route[i].z))
+}
+
+/** The last step of a relic approach that is still outside the church door. */
+function shrineDoorIndex(map: GameMap, route: readonly TilePos[]): number {
+  const hovel = map.site?.hovelId
+  const inside = route.findIndex(p => buildingAt(map, p.x, p.z)?.id === hovel)
+  return inside > 0 ? inside - 1 : route.length - 1
+}
+
 /** Where on their route — road or track — the traveler currently belongs. */
 function currentRoutePoint(map: GameMap, s: SimTraveler): WorldPoint {
   if (s.track) {
@@ -706,12 +728,6 @@ function shrineWorldPoint(map: GameMap, s: SimTraveler): WorldPoint {
   const diverted = route[0].x !== site.branch[0].x || route[0].z !== site.branch[0].z
   const lane = diverted ? 0 : s.lane * laneBlend
   const point = routeWorldPoint(map, route, s.branchProgress, lane)
-  if (s.shrineGroupPoint) {
-    const end = route.at(-1)!
-    const blend = Math.max(0, s.branchProgress - (route.length - 2))
-    point.x += (s.shrineGroupPoint.x - end.x) * blend
-    point.z += (s.shrineGroupPoint.z - end.z) * blend
-  }
   if (s.branchProgress < 1) {
     const start = routeWorldPoint(map, route, 0, lane)
     const roadLane = s.activity === "toRelic" ? s.branchEntryLane : s.direction * s.laneOffset
@@ -724,11 +740,12 @@ function shrineWorldPoint(map: GameMap, s: SimTraveler): WorldPoint {
   return point
 }
 
-/** Nearby live obstacles and reservations are shared by shrine and market parking. */
-function parkingContext(sim: SimState, s: SimTraveler, scale: number, traffic = false): ParkingContext {
-  const nearby = (p: { x: number; z: number }) => Math.hypot(p.x - s.x, p.z - s.z) < 16 + scale * 4
+/** Nearby live obstacles and reservations are shared by shrine and market parking.
+ * The stop can lie well away from the traveler, up the branch by the shrine. */
+function parkingContext(sim: SimState, s: SimTraveler, scale: number, traffic = false, centre: { x: number; z: number } = s): ParkingContext {
+  const nearby = (p: { x: number; z: number }) => Math.hypot(p.x - centre.x, p.z - centre.z) < 16 + scale * 4
   const trees: Array<{ tree: TreePlacement; index: number }> = []
-  treeSpatialIndex(sim.trees).forEachWithin(s.x, s.z, 16 + scale * 4, (tree, index) => {
+  treeSpatialIndex(sim.trees).forEachWithin(centre.x, centre.z, 16 + scale * 4, (tree, index) => {
     if (!sim.felled.has(index) && !tree.walking) trees.push({ tree, index })
   })
   const obstacles: StallRoute["obstacles"] = [], people: SimTraveler[] = []
@@ -1580,7 +1597,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
       }
       if (cart.phase === "parked" && cart.intent) {
         party.stage = "visiting"; party.elapsed = 0; party.retry = 0
-        party.visitPending = [...party.members]; party.visitStarted = []; party.viewingTogether = false; cart.intent = undefined
+        party.visitPending = [...party.members]; party.visitStarted = []; cart.intent = undefined
       }
       if ((cart.phase === "parked" && !cart.intent && party.stage === "traveling") || cart.phase === "boarding") {
         if (cart.phase === "parked" && party.retry <= 0) {
@@ -1628,16 +1645,12 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
           }
         }
       }
-      if (!party.visitPending.length && members.every(s => s.activity === "visiting")) party.viewingTogether = true
+      // Members in the line, at the relic or fetching water on the way are on
+      // their errand, not waiting: the line moves as the keeper shows the relic.
+      // Only companions who could not get a place count as waiting.
+      if (members.some(s => ["toRelic", "visiting", "offering", "fromRelic", "toWater", "drinking", "drinkingLow", "fromWater"].includes(s.activity))) party.elapsed = 0
       // A closed or saturated enclave cannot keep unadmitted companions forever.
-      if (party.elapsed > 120) {
-        party.visitPending = []
-        // A missing keeper must not strand a party inside the queue. Walk back
-        // along the already validated arrival route, without counting a visit.
-        for (const s of members) if (s.shrineRoute && ["toRelic", "visiting"].includes(s.activity)) {
-          s.activity = "fromRelic"; s.offeringMade = true; s.offeringProgress = undefined; s.partyVisitAborted = true
-        }
-      }
+      if (party.elapsed > 120) party.visitPending = []
       for (const s of members) if (s.activity === "walking") hold(s)
       if (!party.visitPending.length && members.every(s => s.activity === "walking")) {
         for (const s of members) {
@@ -1711,7 +1724,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
           continue
         }
         party.stage = "visiting"; party.elapsed = 0; party.retry = 0
-        party.visitPending = [...party.members]; party.visitStarted = []; party.viewingTogether = false
+        party.visitPending = [...party.members]; party.visitStarted = []
         party.reason = "Visiting the enclave together"
         for (const s of members) hold(s)
         continue
@@ -1842,25 +1855,41 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   const occupiedSeats = new Set([...sim.travelers.values()].flatMap(other =>
     other.shrineSeat && (["toParking","toRelic","visiting","fromRelic","offering"].includes(other.activity) ||
       other.waterVisit?.resumeActivity) ? [other.shrineSeat] : []))
-  const otherCompany = partyVisit && s.partyId !== undefined && [...sim.travelers.values()].some(other =>
-    other.partyId !== s.partyId && other.shrineSeat?.startsWith("group-"))
-  const visit = wantsVisit && !otherCompany ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats, from, partyVisit ? false : undefined, partyVisit && s.partyId !== undefined) : null
+  // Companies share the nave: each member takes any free place, and a company
+  // still waiting for places gives up after its bounded wait. Nobody else's
+  // lingering place may bar the door.
+  const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats, from, partyVisit ? false : undefined, sim.shrineKeeperReady) : null
   let visitRoute = visit?.route ?? null
   let parking: ShrineParking | null = null
   if (visitRoute && needsParking) {
     const puller = isVendor ? cartLoadout(s.id).puller : "horse"
-    parking = shrineParking(map, parkingProgress, direction, isVendor ? -cartOffset(puller) * characterScale : 0, puller, characterScale,
-      [...sim.travelers.values()].flatMap(other => other.shrineParking ? [other.shrineParking.parked] : []), parkingContext(sim, s, characterScale))
-    const footRoute = parking ? settlementRoute(map, map.buildings,
-      { x: worldToTileX(map, parking.parked.hitch.x), z: worldToTileZ(map, parking.parked.hitch.z) }, visitRoute.at(-1)!, false, true, visit!.seat) : null
+    const wheelbase = isVendor ? -cartOffset(puller) * characterScale : 0
+    const occupied = [...sim.travelers.values()].flatMap(other => other.shrineParking ? [other.shrineParking.parked] : [])
+    // Ride up to the shrine and leave the horse in the field beside it. Only
+    // when that field is full does a rider settle for the verge at the fork.
+    const door = { x: tileToWorldX(map, map.site!.door.x), z: tileToWorldZ(map, map.site!.door.z) }
+    parking = enclaveParking(map, parkingProgress, direction, wheelbase, puller, characterScale, occupied, parkingContext(sim, s, characterScale, false, door))
+      ?? shrineParking(map, parkingProgress, direction, wheelbase, puller, characterScale, occupied, parkingContext(sim, s, characterScale))
+    // From the horse or wagon, walk to the tail of the line on the track and
+    // follow the shared approach with everyone else, instead of cutting across
+    // the field to stand about beside the church.
+    let footRoute: TilePos[] | null = null
+    if (parking) {
+      const hitch = { x: worldToTileX(map, parking.parked.hitch.x), z: worldToTileZ(map, parking.parked.hitch.z) }
+      const waiting = [...sim.travelers.values()].filter(other => other !== s && isRelicViewingSeat(other.shrineSeat)
+        && other.activity === "toRelic" && !insideShrine(map, other)).length
+      const join = Math.max(0, shrineDoorIndex(map, visitRoute) - Math.ceil(waiting * relicQueueSpacing(characterScale)))
+      const toLine = settlementRoute(map, map.buildings, hitch, visitRoute[join], false, true)
+      if (toLine) footRoute = [...toLine, ...visitRoute.slice(join + 1)]
+    }
     visitRoute = footRoute
   }
   if (visitRoute) {
     s.progress = parkingProgress
     s.branchProgress = 0
     s.shrineRoute = visitRoute
+    s.shrineDoor = shrineDoorIndex(map, visitRoute)
     s.shrineSeat = visit!.seat
-    s.shrineGroupPoint = visit!.point
     s.admissionPaid = 0
     s.offeringMade = false
     s.offeringProgress = undefined
@@ -1944,6 +1973,15 @@ export function stepSim(
     .filter(state => state.activity === "begging" || state.activity === "toBegging")
     .map(state => { const point = state.activity === "toBegging" ? state.spot ?? state : state; return { x: point.x, z: point.z, state } }))
   const reservations = new RoadsideReservations(sim.travelers.values())
+  const queueSpacing = relicQueueSpacing(characterScale)
+  // Everyone holding a place for the relic, read once: where they stand relative
+  // to the church door decides who lines up behind whom.
+  const relicLine = [...sim.travelers.values()].flatMap(other => {
+    if (!isRelicViewingSeat(other.shrineSeat) || !other.shrineRoute) return []
+    if (other.activity !== "toRelic" && other.activity !== "visiting") return []
+    other.shrineDoor ??= shrineDoorIndex(map, other.shrineRoute)
+    return [{ s: other, remaining: other.shrineDoor - other.branchProgress }]
+  })
   const listeners = new Map<number, number>()
   for (const state of sim.travelers.values()) if (state.musicVisit) {
     const id = state.musicVisit.performerId
@@ -2137,16 +2175,21 @@ export function stepSim(
         const branch = s.shrineRoute ?? map.site!.branch
         const inbound = s.activity === "toRelic"
         let limit = branch.length - 1
-        if (inbound && s.shrineSeat?.startsWith("queue-")) {
-          const ahead = [...sim.travelers.values()].filter(other => other !== s && other.shrineSeat?.startsWith("queue-")
-            && (other.shrineQueueOrder ?? 0) < (s.shrineQueueOrder ?? 0)
-            && ["toParking", "toRelic", "visiting"].includes(other.activity))
-          limit -= ahead.length * .75
-          for (const other of ahead) {
-            // Shared approach: a faster walker must never overtake the person ahead.
-            if (other.shrineRoute?.length === branch.length && other.shrineRoute.every((p, i) => p.x === branch[i].x && p.z === branch[i].z))
-              limit = Math.min(limit, other.branchProgress - .75)
+        if (inbound && isRelicViewingSeat(s.shrineSeat)) {
+          // A real line: places go by where people stand, never by who decided
+          // first. Everyone keeps a short step behind whoever is directly ahead
+          // on the way to the door, whether on the track or walking in from the
+          // parking field. Nobody waits for someone still on the road or at
+          // their horse.
+          const door = s.shrineDoor ?? shrineDoorIndex(map, branch)
+          const remaining = door - s.branchProgress, order = s.shrineQueueOrder ?? 0
+          let ahead = -Infinity
+          for (const other of relicLine) {
+            if (other.s === s) continue
+            const closer = other.remaining < remaining || (other.remaining === remaining && (other.s.shrineQueueOrder ?? 0) < order)
+            if (closer) ahead = Math.max(ahead, other.remaining)
           }
+          if (ahead > -Infinity) limit = Math.min(limit, door - ahead - queueSpacing / routeStep(branch, door - ahead))
         }
         const previous = s.branchProgress
         s.branchProgress = inbound ? Math.max(previous, Math.min(Math.max(0, limit), previous + worldSpeed * dt))
@@ -2169,7 +2212,7 @@ export function stepSim(
           s.lane = s.direction * s.laneOffset
           s.horseRest = undefined
           s.shrineSeat = undefined
-          s.shrineGroupPoint = undefined
+          s.shrineDoor = undefined
           if (s.shrineParking) {
             s.shrineParking.walking = false; s.shrineParking.distance = 0
             s.activity = "fromParking"
@@ -2181,7 +2224,6 @@ export function stepSim(
         break
       }
       case "visiting": {
-        if (s.shrineSeat?.startsWith("group-") && (s.partyId === undefined || !sim.parties.get(s.partyId)?.viewingTogether)) break
         if (!s.shrineSeat?.startsWith("prayer-") && (!sim.shrineKeeperReady || (sim.procession && sim.procession.stage !== "idle"))) break
         s.timer -= dt
         if (s.timer <= 0) finishVisit(sim, s, map)
@@ -2741,8 +2783,9 @@ export function stepSim(
           const crossingTile = Math.floor(s.progress) !== Math.floor(s.progress + direction * worldSpeed * haste * dt)
           const bypassesJunction = diversion !== null && direction * (site.junction - s.progress) >= 0
             && direction * (site.junction - diversion.end) < 0
-          // Convoys seek a parking verge in advance. Pedestrians whose detour
-          // bypasses the turning leave from this clear road tile and return here.
+          // Riders and convoys plan their stop in advance: the field by the shrine
+          // first, else a verge before the fork. Pedestrians whose detour bypasses
+          // the turning leave from this clear road tile and return here.
           if (distance <= worldSpeed * haste * dt || bypassesJunction || (needsParking && distance <= 12 && crossingTile)) {
             const leaveHere = needsParking || bypassesJunction
             const from = leaveHere ? { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) } : undefined

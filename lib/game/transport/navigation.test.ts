@@ -6,11 +6,17 @@ import { createSim, stepSim } from "../sim"
 import { generateTravelers, TRAVELER_TYPES } from "../travelers"
 import { DEFAULT_ELEVATION } from "../map/elevation"
 import { shrineStations } from "../shrine-layout"
-import { buildingStepAllowed } from "../building-navigation"
-import { tileToWorldX, tileToWorldZ, type GameMap } from "../map/types"
+import { buildingStepAllowed, shrineGates } from "../building-navigation"
+import { shrineVisitPlan } from "../shrine-visit"
+import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "../map/types"
 
 function trees(map: GameMap) {
   return [1, -1].map(side => ({ x: tileToWorldX(map, 10 + side * 3), y: 0.2, z: tileToWorldZ(map, 1), species: "oak" as const }))
+}
+
+function insideStub(map: GameMap, s: { x: number; z: number }) {
+  const b = map.buildings[0], x = worldToTileX(map, s.x), z = worldToTileZ(map, s.z)
+  return x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d
 }
 
 function fixture(): GameMap {
@@ -20,6 +26,53 @@ function fixture(): GameMap {
     buildings: [{ id: "shrine", label: "Shrine", x: 12, z: 10, w: 3, d: 3, height: 1, color: "#888", roofColor: "#888" }],
     site: { hovelId: "shrine", junction: 10, branch: [...Array.from({ length: 8 }, (_, i) => ({ x: 10, z: 4 + i })), { x: 11, z: 11 }], door: { x: 11, z: 11 } } }
 }
+
+describe("joining the relic line from the parking field", () => {
+  it("walks a parked knight to the tail of the line on the track, not across the field", () => {
+    const map = fixture(), cast = generateTravelers(1, 3)
+    // A worn track from the fork to the door, as generated maps have, so every approach shares it.
+    for (const p of map.site!.branch) map.tiles[p.z * map.width + p.x] = "track"
+    const [t, first, second] = cast
+    t.id = 0; t.type = TRAVELER_TYPES.knight; t.offset = 6 / 29; t.direction = 1; t.pace = 1
+    Object.assign(t.attributes, { piety: 100, status: 0, hunger: 100, thirst: 100, stamina: 100, gold: 100 })
+    for (const other of [first, second]) other.type = TRAVELER_TYPES.peasant
+    const sim = createSim(cast, map, [], { sanctity: 100, spectacle: 100, doubt: 0 }), s = sim.travelers.get(0)!
+    sim.trees = trees(map)
+    sim.shrineRenown = sim.balance.rules.drawCap
+    s.timer = 10000
+    // One person views the relic and another is still walking up from the fork.
+    const inside = sim.travelers.get(first.id)!, plan = shrineVisitPlan(map, first.id, 0)!
+    Object.assign(inside, { shrineSeat: plan.seat, shrineRoute: plan.route, branchProgress: plan.route.length - 1, activity: "visiting", timer: 10000,
+      shrineQueueOrder: ++sim.shrineQueueSequence, x: tileToWorldX(map, plan.route.at(-1)!.x), z: tileToWorldZ(map, plan.route.at(-1)!.z), offeringMade: false })
+    const walking = sim.travelers.get(second.id)!, next = shrineVisitPlan(map, second.id, 0, new Set([plan.seat]))!
+    Object.assign(walking, { shrineSeat: next.seat, shrineRoute: next.route, branchProgress: 0, activity: "toRelic", timer: 0, offeringMade: false,
+      shrineQueueOrder: ++sim.shrineQueueSequence, x: tileToWorldX(map, next.route[0].x), z: tileToWorldZ(map, next.route[0].z) })
+    const gate = shrineGates(map.buildings[0], map.site!.door)[0]
+    // The shared approach from the fork: the branch, the walk to the door and the door itself.
+    const shared = next.route.slice(0, next.route.findIndex(p => p.x === gate.outside.x && p.z === gate.outside.z) + 1)
+    const onTrack = (p: { x: number; z: number }) => shared.some(b => b.x === p.x && b.z === p.z)
+    let joined = false, waited = 0, sawVisit = false
+    for (let i = 0; i < 6000 && !sawVisit; i++) {
+      stepSim(sim, cast, map, 1, 0.1)
+      if (s.activity === "toRelic" && s.shrineRoute && !joined) {
+        joined = true
+        // The foot route reaches the track behind the line before the door, then follows the shared approach.
+        expect(s.shrineRoute.some(p => p.x === gate.outside.x && p.z === gate.outside.z)).toBe(true)
+        const door = s.shrineRoute.findIndex(p => p.x === gate.outside.x && p.z === gate.outside.z)
+        expect(onTrack(s.shrineRoute[door - 1])).toBe(true)
+      }
+      if (s.activity === "toRelic" && s.moveSpeed === 0 && s.branchProgress > 0 && !insideStub(map, s)) {
+        expect(onTrack({ x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) })).toBe(true)
+        waited++
+      }
+      if (waited > 50 && inside.timer > 0) inside.timer = 0
+      sawVisit ||= s.activity === "visiting"
+    }
+    expect(joined).toBe(true)
+    expect(waited).toBeGreaterThan(0)
+    expect(sawVisit).toBe(true)
+  })
+})
 
 describe("merchant shrine parking", () => {
   it.each([0, 4, 8, "knight"] as const)("keeps parking and shrine access around a covered junction (%s)", loadout => {

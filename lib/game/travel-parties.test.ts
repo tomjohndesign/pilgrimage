@@ -3,10 +3,12 @@ import { withTravelParties, partyRoadDelta, partyNeedDrain, PARTY_NEED_FLOOR, AN
 import { generateTravelers, TRAVELER_TYPES, type Traveler } from "./travelers"
 import { createSim, stepSim, type SimState } from "./sim"
 import { GAME_HOUR_SECONDS } from "./calendar"
+import { DEFAULT_WALK_SPEED } from "./base-person/gait"
 import { BUILD_CATALOG, DEFAULT_BALANCE } from "./balance"
 import { jobBuildings } from "./settlement"
 import { roadLanePoint } from "./map/road-lane"
-import { tileToWorldX, tileToWorldZ, type GameMap } from "./map/types"
+import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
+import { shrineVisitPlan } from "./shrine-visit"
 
 function fixture(count = 6, direction: 1 | -1 = 1) {
   const map: GameMap = { width: 80, depth: 20, seed: 42, tiles: Array(1600).fill("grass"), buildings: [],
@@ -150,7 +152,7 @@ describe("shared stops", () => {
     expect(party.members).not.toContain(settled[0].id)
   })
 
-  it.each([8, 20])("views the relic together without overbooking (%i companions)", count => {
+  it.each([8, 20])("breaks a company apart at the enclave and shows its members one by one (%i companions)", count => {
     const { map, travelers, sim } = fixture(count)
     map.site = { hovelId: "shrine", door: { x: 28, z: 9 }, junction: 28,
       branch: Array.from({ length: 5 }, (_, i) => ({ x: 28, z: 5 + i })) }
@@ -159,11 +161,12 @@ describe("shared stops", () => {
     const party = sim.parties.get(0)!
     run(sim, travelers, map, 1)
     expect(party.stage).toBe("visiting")
-    for (let i = 0; i < 3500 && (party.stage !== "traveling" || !sim.visits); i++) {
+    for (let i = 0; i < 6000 && (party.stage !== "traveling" || sim.visits < count); i++) {
       stepSim(sim, travelers, map, 1, .1)
-      // No one completes a viewing before their companions have gathered.
-      expect([0, count]).toContain(sim.visits)
+      // Every member lines up as a single visitor: one at the relic at a time, no place shared.
+      expect([...sim.travelers.values()].filter(s => s.activity === "visiting").length).toBeLessThanOrEqual(1)
       const seats = [...sim.travelers.values()].flatMap(s => s.shrineSeat ? [s.shrineSeat] : [])
+      expect(seats.every(seat => seat.startsWith("queue-"))).toBe(true)
       expect(new Set(seats).size).toBe(seats.length)
     }
     expect(sim.visits).toBe(count)
@@ -179,6 +182,104 @@ describe("shared stops", () => {
     run(sim, travelers, map, 10)
     expect(sim.travelers.get(0)!.progress).toBeGreaterThan(before)
   })
+
+  it("admits a second company while another still holds places in the nave", () => {
+    const { map, travelers, sim } = fixture(8)
+    // Two companies of four, the second a little further from the junction.
+    for (const t of travelers) t.party = { id: t.id < 4 ? 0 : 1, name: t.id < 4 ? "First company" : "Second company", slot: t.id % 4 }
+    sim.parties.clear()
+    for (const s of sim.travelers.values()) s.partyId = undefined
+    const cast = createSim(travelers, map, [], { sanctity: 100, spectacle: 100, doubt: 0 })
+    for (const [id, party] of cast.parties) { party.transportInitialized = true; sim.parties.set(id, party) }
+    for (const s of sim.travelers.values()) s.partyId = travelers[s.id].party!.id
+    map.site = { hovelId: "shrine", door: { x: 28, z: 9 }, junction: 28,
+      branch: Array.from({ length: 5 }, (_, i) => ({ x: 28, z: 5 + i })) }
+    for (const p of map.site.branch) map.tiles[p.z * map.width + p.x] = "track"
+    map.buildings.push({ id: "shrine", label: "Shrine", x: 27, z: 10, w: 3, d: 3, height: 1, color: "tan", roofColor: "brown" })
+    const first = sim.parties.get(0)!, second = sim.parties.get(1)!
+    first.progress = 28; second.progress = 26
+    for (const s of sim.travelers.values()) s.progress = s.partyId === 0 ? 28 : 26
+    run(sim, travelers, map, 1)
+    expect(first.stage).toBe("visiting")
+    // The second company joins the same line while the first still holds places in it.
+    run(sim, travelers, map, 60, () => second.visitStarted.length > 0)
+    expect(second.visitStarted.length).toBeGreaterThan(0)
+    const holding = first.members.filter(id => sim.travelers.get(id)!.shrineSeat?.startsWith("queue-"))
+    expect(holding.length).toBeGreaterThan(0)
+    const seats = [...sim.travelers.values()].flatMap(s => s.shrineSeat ? [s.shrineSeat] : [])
+    expect(new Set(seats).size).toBe(seats.length)
+    run(sim, travelers, map, 600, () => sim.visits === 8 && first.stage === "traveling" && second.stage === "traveling")
+    expect(sim.visits).toBe(8)
+    expect(first.stage).toBe("traveling")
+    expect(second.stage).toBe("traveling")
+  })
+
+  const SHRINE = { id: "shrine", label: "Shrine", x: 27, z: 10, w: 3, d: 3, height: 1, color: "tan", roofColor: "brown" }
+  const withShrine = (map: GameMap) => {
+    map.site = { hovelId: "shrine", door: { x: 28, z: 9 }, junction: 28,
+      branch: Array.from({ length: 5 }, (_, i) => ({ x: 28, z: 5 + i })) }
+    for (const p of map.site.branch) map.tiles[p.z * map.width + p.x] = "track"
+    map.buildings.push({ ...SHRINE })
+  }
+  const insideShrine = (map: GameMap, s: { x: number; z: number }) => {
+    const x = worldToTileX(map, s.x), z = worldToTileZ(map, s.z)
+    return x >= SHRINE.x && x < SHRINE.x + SHRINE.w && z >= SHRINE.z && z < SHRINE.z + SHRINE.d
+  }
+
+  it("lines a company up behind a single visitor at the relic and shows everyone in turn", () => {
+    const { map, travelers, sim } = fixture(5)
+    withShrine(map)
+    // The fifth person is alone, already inside at the relic.
+    travelers[4].party = undefined
+    const lone = sim.travelers.get(4)!
+    sim.parties.get(0)!.members = [0, 1, 2, 3]; lone.partyId = undefined
+    const plan = shrineVisitPlan(map, 4, 0)!
+    Object.assign(lone, { shrineSeat: plan.seat, shrineRoute: plan.route, branchProgress: plan.route.length - 1, activity: "visiting", timer: 10000,
+      shrineQueueOrder: ++sim.shrineQueueSequence, x: tileToWorldX(map, plan.route.at(-1)!.x), z: tileToWorldZ(map, plan.route.at(-1)!.z), offeringMade: false })
+    expect(insideShrine(map, lone)).toBe(true)
+    const party = sim.parties.get(0)!
+    party.progress = 28
+    for (const id of party.members) sim.travelers.get(id)!.progress = 28
+    run(sim, travelers, map, 60, () => party.members.every(id => sim.travelers.get(id)!.activity === "toRelic"))
+    expect(party.stage).toBe("visiting")
+    // Everyone takes a place in the line and stands a person's width apart behind the visitor.
+    run(sim, travelers, map, 60)
+    const line = party.members.map(id => sim.travelers.get(id)!).sort((a, b) => a.branchProgress - b.branchProgress)
+    for (const s of line) { expect(s.activity).toBe("toRelic"); expect(s.shrineSeat).toMatch(/^queue-/) }
+    for (let i = 1; i < line.length; i++) expect(Math.hypot(line[i].x - line[i - 1].x, line[i].z - line[i - 1].z)).toBeGreaterThanOrEqual(.35)
+    // Standing in line is not being stranded: well past the give-up, nobody turns back.
+    run(sim, travelers, map, 200)
+    expect(party.stage).toBe("visiting")
+    for (const id of party.members) expect(sim.travelers.get(id)!.partyVisitAborted).toBeFalsy()
+    // Once the visitor has been shown the relic the line moves and everyone is shown in turn.
+    lone.timer = 0
+    run(sim, travelers, map, 600, () => sim.visits === 5 && party.stage === "traveling")
+    expect(sim.visits).toBe(5)
+    expect(party.stage).toBe("traveling")
+  })
+
+  it("walks a track longer than the waiting timeout to its end instead of turning back", () => {
+    const count = 6
+    const { travelers, sim } = fixture(count)
+    // A branch of default relic distance takes well over two minutes to walk.
+    const map: GameMap = { width: 80, depth: 80, seed: 42, tiles: Array(6400).fill("grass"), buildings: [],
+      road: Array.from({ length: 80 }, (_, x) => ({ x, z: 5 })), shortcuts: [] }
+    for (const p of map.road!) map.tiles[p.z * map.width + p.x] = "path"
+    map.site = { hovelId: "shrine", door: { x: 28, z: 69 }, junction: 28,
+      branch: Array.from({ length: 65 }, (_, i) => ({ x: 28, z: 5 + i })) }
+    for (const p of map.site.branch) map.tiles[p.z * map.width + p.x] = "track"
+    map.buildings.push({ id: "shrine", label: "Shrine", x: 27, z: 70, w: 3, d: 3, height: 1, color: "tan", roofColor: "brown" })
+    const party = sim.parties.get(0)!
+    // Step at the game's reference pace: the fixture's unit speed walks the branch too fast to time out.
+    const step = () => stepSim(sim, travelers, map, DEFAULT_WALK_SPEED, .1)
+    for (let i = 0; i < 10; i++) step()
+    expect(party.stage).toBe("visiting")
+    for (let i = 0; i < 12000 && party.stage !== "traveling"; i++) step()
+    expect(sim.visits).toBe(count)
+    expect([...sim.travelers.values()].some(s => s.partyVisitAborted)).toBe(false)
+    expect(party.stage).toBe("traveling")
+  })
+
 
   it("times out an inaccessible enclave without splitting or teleporting", () => {
     const { map, travelers, sim } = fixture(4)

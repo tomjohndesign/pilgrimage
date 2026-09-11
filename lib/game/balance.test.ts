@@ -146,6 +146,19 @@ describe("balance presets", () => {
     Object.assign(current.rules, { hungerDecay: 1.5, thirstDecay: 3, hospitalityBaseChance: 0.1 })
     expect(importBalance(exportBalance(current)).balance).toEqual(current)
   })
+  it("raises the old starting supplies in version 7 presets while keeping custom amounts", () => {
+    const old = JSON.parse(exportBalance(DEFAULT_BALANCE))
+    old.version = 7
+    Object.assign(old.balance.rules, { startingGold: 200, startingWood: 160 })
+    expect(importBalance(JSON.stringify(old)).balance?.rules).toEqual(DEFAULT_BALANCE.rules)
+    Object.assign(old.balance.rules, { startingGold: 250, startingWood: 160 })
+    const custom = importBalance(JSON.stringify(old)).balance?.rules
+    expect(custom?.startingGold).toBe(250)
+    expect(custom?.startingWood).toBe(DEFAULT_BALANCE.rules.startingWood)
+    const current = fresh()
+    Object.assign(current.rules, { startingGold: 200, startingWood: 160 })
+    expect(importBalance(exportBalance(current)).balance).toEqual(current)
+  })
   it.each([NaN, Infinity, -1, 1.5, 100001, "200", null])(
     "rejects invalid starting supplies: %s",
     (value) => {

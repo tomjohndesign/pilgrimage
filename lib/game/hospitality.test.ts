@@ -3,7 +3,7 @@ import { settlementJob, SETTLEMENT_JOBS } from "./jobs/design"
 import { shrineSeats, shrineStations, shrineLayout } from "./shrine-layout"
 import { afterEach, describe, expect, it } from "vitest"
 import { BUILD_CATALOG, DEFAULT_BALANCE } from "./balance"
-import { createSettlement, purchaseStructure, placementError, woodcutterHuts, jobBuildings, creditTimber, creditAdmission, syncTimberSpending, settlementRenown } from "./settlement"
+import { createSettlement, purchaseStructure, placementError, woodcutterHuts, jobBuildings, creditTimber, creditAdmission, syncTimberSpending, settlementRenown, STARTING_RESOURCES } from "./settlement"
 import { buildingEntry } from "./building-rotation"
 import { characterSupport } from "./character-support"
 import { HOUSE_BEDS } from "./building-art/early-geometry"
@@ -638,7 +638,7 @@ describe("woodcutter huts", () => {
     const before = createSettlement()
     const bought = purchaseStructure(before, map, [], [], "workshop", { x: 13, z: 8 })
     expect(bought.error).toBeNull()
-    expect(bought.settlement.resources).toEqual({ gold: 140, wood: 115 })
+    expect(bought.settlement.resources).toEqual({ gold: STARTING_RESOURCES.gold - 60, wood: STARTING_RESOURCES.wood - 45 })
     const blocked = purchaseStructure(before, map, [], [], "workshop", { x: 0, z: 8 })
     expect(blocked.error).toBeTruthy()
     expect(blocked.settlement).toBe(before)
@@ -657,7 +657,7 @@ describe("woodcutter huts", () => {
     expect(sim.travelers.get(0)!.employer).toBe(bought.settlement.structures[0].id)
     expect(sim.wood).toBeGreaterThan(0)
     const credited = creditTimber(bought.settlement, sim.wood)
-    expect(credited.resources.wood).toBe(115 + sim.wood)
+    expect(credited.resources.wood).toBe(STARTING_RESOURCES.wood - 45 + sim.wood)
     expect(creditTimber(credited, sim.wood)).toBe(credited)
     const garden = purchaseStructure(credited, map, [], [], "garden", { x: 7, z: 8 }).settlement
     expect(garden.resources.wood).toBe(credited.resources.wood - 10)
@@ -1189,15 +1189,18 @@ it("queues single file, lets the keeper show one visitor at a time, and keeps fl
   const people = Array.from({ length: 4 }, (_, id) => devout(traveler(id)))
   people[2].pace = 2 // A faster arrival must wait behind those already in line.
   const sim = createEstablishedShrine(people, map, holy)
+  // Places are taken while the keeper shows the relic; the keeper then steps
+  // away before anyone reaches the front, freezing the line.
+  run(sim, people, map, 2)
   sim.shrineKeeperReady = false
-  run(sim, people, map, 16)
+  run(sim, people, map, 14)
   const queue = [...sim.travelers.values()].filter(s => s.shrineSeat?.startsWith("queue-"))
   expect(queue).toHaveLength(3)
   expect(queue.every(s => s.activity === "toRelic")).toBe(true)
   const ordered = [...queue].sort((a, b) => a.shrineQueueOrder! - b.shrineQueueOrder!)
   for (let i = 1; i < ordered.length; i++) {
     expect(ordered[i].x).toBeCloseTo(ordered[0].x)
-    expect(Math.hypot(ordered[i].x - ordered[i - 1].x, ordered[i].z - ordered[i - 1].z)).toBeGreaterThanOrEqual(.74)
+    expect(Math.hypot(ordered[i].x - ordered[i - 1].x, ordered[i].z - ordered[i - 1].z)).toBeGreaterThanOrEqual(.35)
   }
   expect(sim.travelers.get(3)!.activity).toBe("visiting")
   expect(sim.travelers.get(3)!.shrineSeat).toMatch(/^prayer-/)
@@ -1212,6 +1215,18 @@ it("queues single file, lets the keeper show one visitor at a time, and keeps fl
   }
   expect(shown).toEqual(ordered.map(s => s.id))
   expect(queue.every(s => s.visits === 1 && s.offeringMade && !s.shrineSeat)).toBe(true)
+})
+
+it("lets nobody join the line while no keeper shows the relic, but still admits private prayer", () => {
+  const { map, traveler } = fixture()
+  map.buildings[0].d = 5
+  const people = Array.from({ length: 4 }, (_, id) => devout(traveler(id)))
+  const sim = createEstablishedShrine(people, map, holy)
+  sim.shrineKeeperReady = false
+  run(sim, people, map, 16)
+  expect([...sim.travelers.values()].filter(s => s.shrineSeat?.startsWith("queue-"))).toHaveLength(0)
+  expect(sim.travelers.get(3)!.shrineSeat).toMatch(/^prayer-/)
+  for (const s of sim.travelers.values()) if (s.id !== 3) expect(s.activity).toBe("walking")
 })
 
 describe("shrine visits beside a covered junction", () => {

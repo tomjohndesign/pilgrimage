@@ -112,6 +112,23 @@ describe("two-tile main road", () => {
     }
   })
 
+  it("spreads walkers across a diagonal ribbon as widely as on a straight", () => {
+    const map = fixture()
+    // Straight run, then a long staircase that renders as one 45-degree line.
+    map.road = [...Array.from({ length: 8 }, (_, x) => ({ x, z: 2 }))]
+    for (let i = 0; i < 12; i++) map.road.push({ x: 8 + Math.floor(i / 2), z: 2 + Math.ceil(i / 2) })
+    map.tiles.fill("grass")
+    for (const p of map.road) map.tiles[p.z * map.width + p.x] = "path"
+    expect(mainRoadWidthAt(map, 3, true)).toBe(2)
+    // The tight transition into the diagonal still pinches, then eases back out.
+    expect(mainRoadWidthAt(map, 8, true)).toBeLessThan(1)
+    expect(mainRoadWidthAt(map, 14, true)).toBe(2)
+    for (const lane of [-.28, .28]) {
+      const centre = roadLanePoint(map, map.road, 14, 0)!, offset = roadLanePoint(map, map.road, 14, lane)!
+      expect(Math.hypot(offset.x - centre.x, offset.z - centre.z)).toBeCloseTo(Math.abs(lane) * 2, 8)
+    }
+  })
+
   it("clears trees beside the route without changing its centreline, water, or bridge tiles", () => {
     const map = fixture(), road = map.road!.map(p => ({ ...p }))
     map.tiles[7 * map.width + 10] = "forest"
