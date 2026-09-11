@@ -2,6 +2,8 @@ import { shrineLayout, shrineSeats, shrineStations, shrinePoint } from "./shrine
 import { buildingStepAllowed, shrineFurnitureClear, shrineGates } from "./building-navigation"
 import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 import { settlementRoute, shrineApproach } from "./settlement-route"
+import { BASE_CHARACTER_SCALE } from "./base-person/gait"
+import { PERSON_WIDTH } from "./world-scale"
 
 /** Kept at zero for older saved economy/debug fields. Entry is always free. */
 export const DEFAULT_ADMISSION_FEE = 0
@@ -14,15 +16,18 @@ export function shrineDonation(piety: number, gold: number, rng: () => number): 
   return Math.min(Math.max(0, Math.floor(gold)), 1 + Math.floor(rng() * (1 + Math.floor(devotion * 9))))
 }
 
-/** Spacing along the approach between people lined up for the relic, in route steps. */
-export const QUEUE_SPACING = .75
+/** Spacing between people lined up for the relic: shoulder to shoulder with a
+ * little room, scaled with the rendered character. */
+export function relicQueueSpacing(characterScale = BASE_CHARACTER_SCALE): number {
+  return PERSON_WIDTH * 1.2 * characterScale / BASE_CHARACTER_SCALE
+}
 
 /** Single-file places for the relic: the nave holds a few, and the line continues
  * out of the door and back along the branch, as far as the branch can hold. */
 export function shrineQueuePlaces(map: GameMap): number {
   const site = map.site, shrine = map.buildings.find(b => b.id === site?.hovelId)
   if (!site || !shrine) return 0
-  return shrineStations(shrine, site.door).queueCapacity + Math.floor(site.branch.length / QUEUE_SPACING)
+  return shrineStations(shrine, site.door).queueCapacity + Math.floor(site.branch.length / relicQueueSpacing())
 }
 
 /** Reserve a queue place, private prayer spot, or place in a company’s shared viewing. */

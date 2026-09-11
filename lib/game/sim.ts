@@ -57,7 +57,7 @@ import { BUILDING_KINDS, buildingCentre, isPostedWork, type PlacedBuilding } fro
 import { DRINK_PRICE, MEAL_PRICE, SERVING_THRESHOLD, SEAT_REST_THRESHOLD, SEAT_STAMINA_PER_HOUR, TABLE_HOURS, servingHouses, tavernVisitPlan, seatRestPlan, type TavernPlan } from "./tavern"
 import { generateRelic, hospitalityNeedThreshold, visitChance, type RelicStats } from "./relic"
 import { settlementRoute } from "./settlement-route"
-import { QUEUE_SPACING, shrineDonation, shrineExitPlan, shrineVisitPlan } from "./shrine-visit"
+import { relicQueueSpacing, shrineDonation, shrineExitPlan, shrineVisitPlan } from "./shrine-visit"
 import { isRelicViewingSeat } from "./shrine-layout"
 import type { TreePlacement } from "./trees/placement"
 import { TREE_SPECIES } from "./trees/species"
@@ -381,6 +381,8 @@ export interface SimTraveler {
   shrineRoute: TilePos[] | null
   /** Held outside the church door until the other kind of visitor has had their turn. */
   shrineTurnWait?: boolean
+  /** The last step of the arrival route still outside the church, cached with the route. */
+  shrineDoor?: number
   /** Reserved until the visitor has left the shrine approach. */
   shrineSeat?: string
   shrineQueueOrder?: number
@@ -682,6 +684,12 @@ function finishConvoyMove(s: SimTraveler, transportBefore: SimTraveler | null, m
 function insideShrine(map: GameMap, who: { x: number; z: number }): boolean {
   const hovel = map.site?.hovelId
   return !!hovel && buildingAt(map, worldToTileX(map, who.x), worldToTileZ(map, who.z))?.id === hovel
+}
+
+/** Tiles covered by the route step under a position, so spacing reads in tiles on diagonals too. */
+function routeStep(route: readonly TilePos[], at: number): number {
+  const i = Math.max(0, Math.min(route.length - 2, Math.floor(at)))
+  return route.length < 2 ? 1 : Math.max(1, Math.hypot(route[i + 1].x - route[i].x, route[i + 1].z - route[i].z))
 }
 
 /** The last step of a relic approach that is still outside the church door. */
@@ -1890,7 +1898,7 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
       const hitch = { x: worldToTileX(map, parking.parked.hitch.x), z: worldToTileZ(map, parking.parked.hitch.z) }
       const waiting = [...sim.travelers.values()].filter(other => other !== s && isRelicViewingSeat(other.shrineSeat)
         && (other.activity === "toParking" || other.activity === "toRelic") && !insideShrine(map, other)).length
-      const join = Math.max(0, shrineDoorIndex(map, visitRoute) - Math.ceil(waiting * QUEUE_SPACING))
+      const join = Math.max(0, shrineDoorIndex(map, visitRoute) - Math.ceil(waiting * relicQueueSpacing(characterScale)))
       const toLine = settlementRoute(map, map.buildings, hitch, visitRoute[join], false, true)
       if (toLine) footRoute = [...toLine, ...visitRoute.slice(join + 1)]
     }
@@ -1900,6 +1908,7 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
     s.progress = parkingProgress
     s.branchProgress = 0
     s.shrineRoute = visitRoute
+    s.shrineDoor = shrineDoorIndex(map, visitRoute)
     s.shrineSeat = visit!.seat
     s.shrineGroupPoint = visit!.point
     s.admissionPaid = 0
@@ -1985,6 +1994,15 @@ export function stepSim(
     .filter(state => state.activity === "begging" || state.activity === "toBegging")
     .map(state => { const point = state.activity === "toBegging" ? state.spot ?? state : state; return { x: point.x, z: point.z, state } }))
   const reservations = new RoadsideReservations(sim.travelers.values())
+  const queueSpacing = relicQueueSpacing(characterScale)
+  // Everyone holding a place for the relic, read once: where they stand relative
+  // to the church door decides who lines up behind whom.
+  const relicLine = [...sim.travelers.values()].flatMap(other => {
+    if (!isRelicViewingSeat(other.shrineSeat) || !other.shrineRoute) return []
+    const inside = insideShrine(map, other), inLine = other.activity === "toRelic" || other.activity === "visiting"
+    other.shrineDoor ??= shrineDoorIndex(map, other.shrineRoute)
+    return [{ s: other, grouped: other.shrineSeat!.startsWith("group-"), inside, inLine, remaining: other.shrineDoor - other.branchProgress }]
+  })
   const listeners = new Map<number, number>()
   for (const state of sim.travelers.values()) if (state.musicVisit) {
     const id = state.musicVisit.performerId
@@ -2179,32 +2197,26 @@ export function stepSim(
         const inbound = s.activity === "toRelic"
         let limit = branch.length - 1
         if (inbound && isRelicViewingSeat(s.shrineSeat)) {
-          // Companies and single visitors take the nave in turns. Whoever finds
-          // the other kind inside lines up outside the door in order of arrival.
-          // Otherwise the queue stands single file from the relic, spilling out
-          // of the door when it is long; companies walk straight to their places.
-          // Turns go by arrival: nobody enters while the other kind is inside,
-          // nor ahead of the other kind still waiting with an earlier place.
-          const grouped = s.shrineSeat!.startsWith("group-"), order = s.shrineQueueOrder ?? 0
-          let turnWait = false, outsideAhead = 0
-          const queueAhead: SimTraveler[] = []
-          for (const other of sim.travelers.values()) {
-            if (other === s || !isRelicViewingSeat(other.shrineSeat)) continue
-            const inside = insideShrine(map, other), earlier = (other.shrineQueueOrder ?? 0) < order
-            const waiting = ["toParking", "toRelic", "visiting"].includes(other.activity)
-            if (other.shrineSeat!.startsWith("group-") !== grouped && (inside || (earlier && waiting))) turnWait = true
-            if (!earlier || !waiting) continue
-            if (!inside) outsideAhead++
-            if (other.shrineSeat!.startsWith("queue-")) queueAhead.push(other)
+          // A real line: places go by where people stand, never by who decided
+          // first. Everyone keeps a short step behind whoever is nearer the door,
+          // whether on the track or walking in from the parking field. Companies
+          // and single visitors take the nave in turns, the later kind waiting
+          // outside the door; a company's own members spread to their places once
+          // inside. Nobody waits for someone still on the road or at their horse.
+          const grouped = s.shrineSeat!.startsWith("group-"), door = s.shrineDoor ?? shrineDoorIndex(map, branch)
+          const remaining = door - s.branchProgress, order = s.shrineQueueOrder ?? 0
+          let turnWait = false, ahead = -Infinity
+          for (const other of relicLine) {
+            if (other.s === s) continue
+            if (other.inside && other.grouped !== grouped) turnWait = true
+            if (!other.inLine || (grouped && other.grouped && other.inside)) continue
+            // The person directly ahead: nearer the door than me, and furthest from it among those.
+            const closer = other.remaining < remaining || (other.remaining === remaining && (other.s.shrineQueueOrder ?? 0) < order)
+            if (closer) ahead = Math.max(ahead, other.remaining)
           }
           s.shrineTurnWait = turnWait
-          if (turnWait) limit = Math.min(limit, shrineDoorIndex(map, branch) - outsideAhead * QUEUE_SPACING)
-          else if (!grouped) limit -= queueAhead.length * QUEUE_SPACING
-          if (!grouped) for (const other of queueAhead) {
-            // Shared approach: a faster walker must never overtake the person ahead.
-            if (other.shrineRoute?.length === branch.length && other.shrineRoute.every((p, i) => p.x === branch[i].x && p.z === branch[i].z))
-              limit = Math.min(limit, other.branchProgress - QUEUE_SPACING)
-          }
+          if (turnWait) limit = Math.min(limit, door)
+          if (ahead > -Infinity) limit = Math.min(limit, door - ahead - queueSpacing / routeStep(branch, door - ahead))
         }
         const previous = s.branchProgress
         s.branchProgress = inbound ? Math.max(previous, Math.min(Math.max(0, limit), previous + worldSpeed * dt))
@@ -2229,6 +2241,7 @@ export function stepSim(
           s.shrineSeat = undefined
           s.shrineGroupPoint = undefined
           s.shrineTurnWait = undefined
+          s.shrineDoor = undefined
           if (s.shrineParking) {
             s.shrineParking.walking = false; s.shrineParking.distance = 0
             s.activity = "fromParking"

@@ -1200,7 +1200,7 @@ it("queues single file, lets the keeper show one visitor at a time, and keeps fl
   const ordered = [...queue].sort((a, b) => a.shrineQueueOrder! - b.shrineQueueOrder!)
   for (let i = 1; i < ordered.length; i++) {
     expect(ordered[i].x).toBeCloseTo(ordered[0].x)
-    expect(Math.hypot(ordered[i].x - ordered[i - 1].x, ordered[i].z - ordered[i - 1].z)).toBeGreaterThanOrEqual(.74)
+    expect(Math.hypot(ordered[i].x - ordered[i - 1].x, ordered[i].z - ordered[i - 1].z)).toBeGreaterThanOrEqual(.35)
   }
   expect(sim.travelers.get(3)!.activity).toBe("visiting")
   expect(sim.travelers.get(3)!.shrineSeat).toMatch(/^prayer-/)
