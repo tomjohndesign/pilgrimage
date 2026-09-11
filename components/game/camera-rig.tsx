@@ -4,8 +4,7 @@ import { useEffect, useMemo, useRef } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
-import { groundHeight } from "@/lib/game/map/elevation"
-import { surfaceHeight, ropeHeightAt } from "@/lib/game/map/bridges"
+import { marchToGround } from "@/lib/game/map/ground-pick"
 import { CameraGesture } from "@/lib/game/camera-gesture"
 import { cameraEdgePan } from "@/lib/game/camera-edge-pan"
 import { useBuildStore } from "@/lib/game/build-store"
@@ -73,30 +72,8 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
       const ray = raycaster.current.ray
       const hit = ray.intersectPlane(pickPlane.current, hitPoint.current)
       if (!hit) { setHovered(null); return }
-      const start = hit.clone()
-      const minY = minPickY
-      const clearance = (p: THREE.Vector3) => {
-        const x = p.x + map.width / 2 - 0.5, z = p.z + map.depth / 2 - 0.5
-        const tx = Math.floor(x + 0.5), tz = Math.floor(z + 0.5)
-        if (tx < 0 || tz < 0 || tx >= map.width || tz >= map.depth) return Infinity
-        const y = ropeHeightAt(map, x, z) ?? surfaceHeight(map, tx, tz)
-        const ground = groundHeight(map, tx, tz)
-        return p.y - (Math.abs(y - ground) > 0.001 ? y : groundHeight(map, x, z))
-      }
-      for (let distance = 0; start.y + ray.direction.y * distance >= minY; distance += 0.15) {
-        hit.copy(start).addScaledVector(ray.direction, distance)
-        if (clearance(hit) > 0) continue
-        let lo = Math.max(0, distance - 0.15), hi = distance
-        for (let k = 0; k < 10; k++) {
-          const mid = (lo + hi) / 2
-          hit.copy(start).addScaledVector(ray.direction, mid)
-          if (clearance(hit) > 0) lo = mid; else hi = mid
-        }
-        hit.copy(start).addScaledVector(ray.direction, hi)
-        setHovered({ x: worldToTileX(map, hit.x), z: worldToTileZ(map, hit.z) })
-        return
-      }
-      setHovered(null)
+      const ground = marchToGround(map, hit.clone(), ray.direction, minPickY, hit)
+      setHovered(ground ? { x: worldToTileX(map, ground.x), z: worldToTileZ(map, ground.z) } : null)
     }
     refreshHover.current = updateHover
 

@@ -190,10 +190,7 @@ export function levelBuildingGround(map: GameMap, building: Pick<BuildingDef, "x
   const original = map.elevation
   if (!original) return undefined
   const { x, z, w, d } = building
-  let foundation = groundHeight(map, x + (w - 1) / 2, z + (d - 1) / 2) - TILE_HEIGHT
-  const corner = original.corners[(z * map.width + x) * 4]
-  // Adding/subtracting TILE_HEIGHT can round an already flat foundation.
-  if (Math.abs(foundation - corner) < 1e-12) foundation = corner
+  const foundation = padFoundation(map, building)
   // Most shrine plots are already level. Keep their buffers (and all readers'
   // caches) intact; copy only the arrays that grading actually changes.
   const elevation = { ...original }
@@ -245,6 +242,55 @@ export function levelBuildingGround(map: GameMap, building: Pick<BuildingDef, "x
     }
   }
   return elevation
+}
+
+/** The pad height a footprint grades to: the ground under its centre, where the placement ghost floats. */
+function padFoundation(map: GameMap, { x, z, w, d }: Pick<BuildingDef, "x" | "z" | "w" | "d">): number {
+  const foundation = groundHeight(map, x + (w - 1) / 2, z + (d - 1) / 2) - TILE_HEIGHT
+  const corner = map.elevation!.corners[(z * map.width + x) * 4]
+  // Adding/subtracting TILE_HEIGHT can round an already flat foundation.
+  return Math.abs(foundation - corner) < 1e-12 ? corner : foundation
+}
+
+export interface FootprintGrading {
+  /** Pad height relative to base, as `levelBuildingGround` would set it. */
+  foundation: number
+  /** Deepest cut: how far the highest tile or corner stands above the pad. */
+  cut: number
+  /** Tallest fill: how far the lowest tile or corner lies below the pad. */
+  fill: number
+  /** The graded pad would meet a neighbouring tile at a cliff step. */
+  cliff: boolean
+}
+
+/**
+ * What levelling a footprint would do before it is done: the earth to move
+ * and whether the pad edge would break off as a cliff. Level ground reports
+ * no cut or fill, and a map without elevation is level everywhere.
+ */
+export function footprintGrading(map: GameMap, building: Pick<BuildingDef, "x" | "z" | "w" | "d">): FootprintGrading {
+  const e = map.elevation
+  if (!e) return { foundation: 0, cut: 0, fill: 0, cliff: false }
+  const { x, z, w, d } = building
+  const foundation = padFoundation(map, building)
+  const wet = (i: number) => map.water ? map.water.depth[i] > 0 : isWaterTerrain(map.tiles[i])
+  const surface = (i: number) => wet(i) ? (map.water?.surface ?? e.height)[i] : e.height[i]
+  let cut = 0, fill = 0, cliff = false
+  for (let tz = z; tz < z + d; tz++) for (let tx = x; tx < x + w; tx++) {
+    if (tx < 0 || tz < 0 || tx >= map.width || tz >= map.depth) continue
+    const i = tz * map.width + tx
+    for (let k = 0; k < 5; k++) {
+      const h = k === 0 ? e.height[i] : e.corners[i * 4 + k - 1]
+      cut = Math.max(cut, h - foundation); fill = Math.max(fill, foundation - h)
+    }
+    for (const [dx, dz] of ROUTE_DIRS) {
+      const nx = tx + dx, nz = tz + dz
+      if (nx < 0 || nz < 0 || nx >= map.width || nz >= map.depth) continue
+      if (nx >= x && nx < x + w && nz >= z && nz < z + d) continue
+      if (Math.abs(surface(nz * map.width + nx) - foundation) >= e.settings.cliffThreshold) cliff = true
+    }
+  }
+  return { foundation, cut, fill, cliff }
 }
 
 export function elevationStep(e: ElevationInfo | undefined, a: number, b: number): number {

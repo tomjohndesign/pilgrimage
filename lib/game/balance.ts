@@ -254,6 +254,17 @@ export const RULE_FIELDS = [
     step: 1,
   },
   {
+    key: "levellingLimit",
+    group: "Treasury & construction",
+    label: "Ground levelling limit (height units)",
+    description:
+      "Placing a building cuts and fills its footprint to the ground height under its centre, where the placement ghost sits. Construction is refused where any footprint tile or corner would move more than this, where the graded pad would break off as a cliff, or where an entrance tile differs from the floor by more than this.",
+    default: 0.4,
+    min: 0,
+    max: 1,
+    step: 0.05,
+  },
+  {
     key: "residentGold",
     group: "Resident income",
     label: "Gold per resident",
@@ -662,6 +673,7 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
         staminaDecay: DEFAULT_BALANCE.rules.staminaDecay,
         hospitalityNeedThreshold: DEFAULT_BALANCE.rules.hospitalityNeedThreshold,
         hospitalityRenownBonus: DEFAULT_BALANCE.rules.hospitalityRenownBonus,
+        levellingLimit: DEFAULT_BALANCE.rules.levellingLimit,
         ...rules,
         // Adopt slower defaults in old saves without overwriting custom rates.
         ...((version < 4 && rules.hungerDecay === 12.5 || version < 5 && rules.hungerDecay === 3 || version < 7 && rules.hungerDecay === 1.5) ? { hungerDecay: DEFAULT_BALANCE.rules.hungerDecay } : {}),

@@ -2,13 +2,13 @@ import { innPlacementError } from "./inn"
 import { buildingEntrance, constructionWork, isComplete } from "./construction"
 import { placementBuildingLayout, placementRoofRotation } from "./building-placement-layout"
 import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
-import { groundHeight, levelBuildingGround } from "./map/elevation"
+import { footprintGrading, groundHeight, levelBuildingGround } from "./map/elevation"
 import { buildingKind, placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
 import { settlementRoute, shrineRoadHead } from "./settlement-route"
 import { buildInfluence, getBuildInfluence, type BuildInfluence } from "./build-influence"
 import type { SimState } from "./sim"
 import { DEFAULT_ADMISSION_FEE } from "./shrine-visit"
-import { TERRAIN } from "./map/terrain"
+import { TERRAIN, TILE_HEIGHT } from "./map/terrain"
 import { establishedFootpath } from "./footpaths"
 import { tileAt, type BuildingDef, type GameMap, type TilePos } from "./map/types"
 import type { Monk } from "./monks"
@@ -291,7 +291,7 @@ export function placementError(
   const known = verdicts.get(key), revision = map.footpaths?.revision ?? 0
   if (known && known.buildings === map.buildings && known.count === map.buildings.length && known.revision === revision) return known.verdict
   if (verdicts.size >= 512) verdicts.clear()
-  const verdict = validateAccess(map, def, at, rotation)
+  const verdict = validateAccess(map, def, at, balance, rotation)
   verdicts.set(key, { buildings: map.buildings, count: map.buildings.length, revision, verdict })
   return verdict
 }
@@ -308,9 +308,12 @@ function validateFootprint(map: GameMap, def: BuildDefinition, at: TilePos, bala
     for (let x = at.x; x < at.x + footprint.w; x++) {
       const error = buildTileError(map, x, z, influence)
       if (error) return error
-      if (map.elevation && Math.abs(groundHeight(map, x, z) - groundHeight(map, at.x, at.z)) > 0.2) return "Choose level ground away from cliffs."
     }
   }
+  // Uneven ground is cut and filled on purchase, up to the tuned limit.
+  const grading = footprintGrading(map, { ...at, ...footprint })
+  if (grading.cliff) return "Levelling here would leave a cliff at the edge; choose gentler ground."
+  if (Math.max(grading.cut, grading.fill) > balance.rules.levellingLimit + 1e-9) return "Too much earth to move; choose gentler ground."
   if (def.id === "workshop") {
     const problem = placementProblem(map, map.buildings, "workshop", at.x, at.z, rotation)
     if (problem) return PLACEMENT_PROBLEM_LABELS[problem]
@@ -319,9 +322,11 @@ function validateFootprint(map: GameMap, def: BuildDefinition, at: TilePos, bala
 }
 
 /** Reserve construction frontage and preserve access to every existing building. */
-function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, rotation: BuildingRotation): string | null {
+function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, balance: GameBalance, rotation: BuildingRotation): string | null {
   const footprint = rotatedFootprint(def, rotation)
   if (map.site) {
+    // The threshold is measured against the graded floor, not today's ground.
+    const floor = footprintGrading(map, { ...at, ...footprint }).foundation + TILE_HEIGHT
     const candidate = { buildType: def.id, ...def, ...footprint, rotation, ...at, ...placementBuildingLayout(map,{...def,...footprint,rotation,...at,buildType:def.id,id:"construction-preview"}), id: "construction-preview", construction: { work: 0, required: 1 } }
     const approaches=buildingApproaches(map,candidate)
     for(const approach of approaches) {
@@ -329,7 +334,7 @@ function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, rotatio
       if(!terrain || !TERRAIN[terrain].passable || buildingAt(map,approach.x,approach.z)
         || (map.water?.depth[approach.z*map.width+approach.x] ?? 0)>0)
         return "Keep access clear with a path tile outside the entrance."
-      if(Math.abs(groundHeight(map,approach.x,approach.z)-groundHeight(map,at.x,at.z))>.2)
+      if(Math.abs(groundHeight(map,approach.x,approach.z)-floor)>balance.rules.levellingLimit+1e-9)
         return "The entrance path needs level ground."
     }
     const occupied = [...map.buildings, candidate]
