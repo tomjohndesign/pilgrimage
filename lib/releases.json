@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "00f2a96e31a8da7c49e3156c981641adb011abdf",
-  "releaseCount": 219,
+  "lastProcessedCommit": "767eefe5bebab7db40f451ec1cfd0816b1c4f258",
+  "releaseCount": 220,
   "releases": [
+    {
+      "version": "0.0.234",
+      "title": "Release 0.0.234",
+      "summary": "Reveal the map when an asset boundary never settles (#253)",
+      "commit": "767eefe5bebab7db40f451ec1cfd0816b1c4f258"
+    },
     {
       "version": "0.0.233",
       "title": "Release 0.0.233",
