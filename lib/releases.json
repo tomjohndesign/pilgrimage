@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "627c524022ac0be4c5a66ba8bd1a26543276efd1",
-  "releaseCount": 207,
+  "lastProcessedCommit": "02787e4ca5c119094c1a7dd484760fa9c49c6c2f",
+  "releaseCount": 208,
   "releases": [
+    {
+      "version": "0.0.222",
+      "title": "Release 0.0.222",
+      "summary": "Restore the previous medieval background music track (#243)",
+      "commit": "02787e4ca5c119094c1a7dd484760fa9c49c6c2f"
+    },
     {
       "version": "0.0.221",
       "title": "Release 0.0.221",
