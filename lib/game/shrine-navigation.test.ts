@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { buildingStepAllowed, shrineFurnitureClear } from "./building-navigation"
 import { monkWander, type WanderSpot } from "./monk-wander"
 import { shrineLayout, shrineSeats, shrineStations, isRelicViewingSeat } from "./shrine-layout"
-import { shrineExitPlan, shrineVisitPlan } from "./shrine-visit"
+import { shrineExitPlan, shrineQueuePlaces, shrineVisitPlan } from "./shrine-visit"
 import { processionGrounds } from "./relic-procession"
 import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 
@@ -28,7 +28,9 @@ describe("church circulation", () => {
     }
     expect(occupied.size).toBe(20)
     expect(points.size).toBe(20)
-    expect(shrineVisitPlan(map, 30, 0, occupied)).toBeNull()
+    // A single visitor still gets a place in line while a company holds the nave;
+    // the simulation keeps them outside the door until the company has left.
+    expect(shrineVisitPlan(map, 30, 0, occupied)?.seat).toBe("queue-0")
     expect(isRelicViewingSeat("prayer-0")).toBe(false)
   })
 
@@ -51,7 +53,11 @@ describe("church circulation", () => {
     expect(exit.route[exit.offeringProgress]).toEqual(stations.offering)
     for (let i = 1; i < exit.route.length; i++)
       expect(buildingStepAllowed(map, map.buildings, exit.route[i - 1], exit.route[i], true)).toBe(true)
-    expect(shrineVisitPlan(map, 0, 0, new Set(Array.from({ length: stations.queueCapacity }, (_, i) => `queue-${i}`)))).toBeNull()
+    // The line continues outside the door along the branch; only a full branch turns people away.
+    const inside = new Set(Array.from({ length: stations.queueCapacity }, (_, i) => `queue-${i}`))
+    expect(shrineQueuePlaces(map)).toBeGreaterThan(stations.queueCapacity)
+    expect(shrineVisitPlan(map, 0, 0, inside)?.seat).toBe(`queue-${stations.queueCapacity}`)
+    expect(shrineVisitPlan(map, 0, 0, new Set(Array.from({ length: shrineQueuePlaces(map) }, (_, i) => `queue-${i}`)))).toBeNull()
   })
 
   it.each([0, 1, 2, 3])("keeps every altar position reachable without crossing the altar (view %i)", direction => {

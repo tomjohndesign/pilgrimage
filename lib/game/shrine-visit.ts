@@ -14,13 +14,26 @@ export function shrineDonation(piety: number, gold: number, rng: () => number): 
   return Math.min(Math.max(0, Math.floor(gold)), 1 + Math.floor(rng() * (1 + Math.floor(devotion * 9))))
 }
 
+/** Spacing along the approach between people lined up for the relic, in route steps. */
+export const QUEUE_SPACING = .75
+
+/** Single-file places for the relic: the nave holds a few, and the line continues
+ * out of the door and back along the branch, as far as the branch can hold. */
+export function shrineQueuePlaces(map: GameMap): number {
+  const site = map.site, shrine = map.buildings.find(b => b.id === site?.hovelId)
+  if (!site || !shrine) return 0
+  return shrineStations(shrine, site.door).queueCapacity + Math.floor(site.branch.length / QUEUE_SPACING)
+}
+
 /** Reserve a queue place, private prayer spot, or place in a company’s shared viewing. */
 export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, occupied: ReadonlySet<string> = new Set(), from?: TilePos, prayer = (visitor + visits) % 4 === 3, group = false) {
   const site = map.site
   const shrine = map.buildings.find(b => b.id === site?.hovelId)
   if (!site || !shrine) return null
   const gate = shrineGates(shrine, site.door)[0]
-  // A full enclave turns visitors away before any route is planned for them.
+  // Only a line longer than the branch turns visitors away before any route is
+  // planned for them. Companies and single visitors take the nave in turns,
+  // waiting outside the door for each other; see the relic approach in the sim.
   const stations = shrineStations(shrine, site.door)
   // One company occupies the nave together. Subtile places keep the largest
   // twenty-person companies inside even the small founding church.
@@ -35,8 +48,7 @@ export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, o
   }
   groupPlaces.sort((a, b) => Math.hypot(a.point.x - stations.viewing.x, a.point.z - stations.viewing.z)
     - Math.hypot(b.point.x - stations.viewing.x, b.point.z - stations.viewing.z))
-  if (group ? [...occupied].some(id => !id.startsWith("group-")) : [...occupied].some(id => id.startsWith("group-"))) return null
-  const places = group ? groupPlaces : prayer ? shrineSeats(shrine, site.door) : Array.from({ length: stations.queueCapacity }, (_, i) => ({ id: `queue-${i}`, tile: stations.viewing }))
+  const places = group ? groupPlaces : prayer ? shrineSeats(shrine, site.door) : Array.from({ length: shrineQueuePlaces(map) }, (_, i) => ({ id: `queue-${i}`, tile: stations.viewing }))
   const place = places.find(p => !occupied.has(p.id))
   if (!place || !buildingStepAllowed(map, map.buildings, gate.outside, gate.inside, true)) return null
   const branch = shrineApproach(map, from)
