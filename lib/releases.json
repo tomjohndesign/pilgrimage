@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "02787e4ca5c119094c1a7dd484760fa9c49c6c2f",
-  "releaseCount": 208,
+  "lastProcessedCommit": "d9dc18ecd1e0590fe1a628851a61f25b336d345e",
+  "releaseCount": 209,
   "releases": [
+    {
+      "version": "0.0.223",
+      "title": "Release 0.0.223",
+      "summary": "Spread walkers across diagonal roads and keep cliffs clear of road edges (#241)",
+      "commit": "d9dc18ecd1e0590fe1a628851a61f25b336d345e"
+    },
     {
       "version": "0.0.222",
       "title": "Release 0.0.222",
