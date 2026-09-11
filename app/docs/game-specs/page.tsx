@@ -49,10 +49,17 @@ export default function GameSpecsPage() {
           generate no automatic gold or timber.
         </p>
         <p className="mt-3">
-          Woodcutter’s huts hire up to three jobless visitors each; workers fell nearby trees and
+          Woodcutter’s huts hire up to six jobless visitors each; workers fell nearby trees and
           deliver timber to storage. Tavern and market takings come from actual NPC purchases.
           Each delivery or receipt enters the shared treasury once.
-          Construction uses available stacked timber first, then other treasury wood. There are no wages, upkeep, refunds or demolition yet.
+          Construction uses available stacked timber first, then other treasury wood. There are no upkeep, refunds or demolition yet.
+        </p>
+        <p className="mt-3">
+          Wages are the treasury’s one standing cost. Every settler working one of your own places
+          draws {r.dailyWage} gold at the turn of each game day — more than their own food and drink
+          cost, so a paid household never falls into poverty. A treasury that cannot make payroll
+          pays what it can and the day still passes. Independent town households are paid by their
+          own town and never touch your books. Much of the coin comes back over your counter.
         </p>
 
         <h2 className={heading}>Construction</h2>
@@ -223,10 +230,20 @@ export default function GameSpecsPage() {
           stamina alone.
         </p>
         <p className="mt-3">
-          Settlers who take work move into a house, six to a house. They come home to sleep, and the
-          household’s own hearth restores them slowly and for nothing; the counter is the quick
-          answer and the only one open to a traveler off the road. A settler with no house camps
-          beside their work once their legs give out.
+          Work is offered at the end of a relic viewing, and only to a visitor who can be given both
+          an open place and a free house bed. A visitor out of work takes it{" "}
+          {Math.round(r.joblessHireChance * 100)}% of the time; one who already holds a trade
+          elsewhere gives it up {Math.round(r.employedHireChance * 100)}% of the time. Monks may ask
+          for a shelter bed instead, while nuns and vendors keep their own callings. Someone who is
+          housed but out of work asks again every game hour.
+        </p>
+        <p className="mt-3">
+          Settlers who take work move into a house, six to a house. They come home to sleep, and an
+          hour by the household hearth is worth {r.hearthHours} hours of bread and small beer for
+          nothing. Nights are short, so the larder stretches what a resident buys rather than
+          replacing it: a working settler comes to the counter for supper every week or so, and one
+          who cannot pay stays abed until the house has fed them back to work. A settler with no
+          house camps beside their work once their legs give out.
         </p>
 
         <h2 className={heading}>Tuning while playing</h2>

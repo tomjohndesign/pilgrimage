@@ -124,6 +124,7 @@ export const settlementSaveSchema = z.object({
   shrineAdmission: finite.min(0).describe("Gold asked of each visitor to the relic"),
   collectedAdmission: finite.min(0).describe("Cumulative donations credited"),
   collectedTrade: finite.min(0).describe("Cumulative counter takings credited"),
+  paidWages: finite.min(0).default(0).describe("Cumulative wages debited from the treasury"),
   grantedRenown: finite.min(0).default(0).describe("Renown bestowed by cheat codes"),
   structures: z.array(structureSchema).describe("Player-built structures in purchase order"),
 }).describe("The player's settlement layered over the generated map. Ground levelling is replayed from the structures")
@@ -140,6 +141,7 @@ export const travelerSaveSchema = z.object({
   stamina: finite,
   hoursSinceChurch: finite.optional(),
   jobless: z.boolean().describe("Whether they would take settlement work"),
+  wageDay: finite.optional().describe("Game day their last wage was paid"),
   employer: z.string().nullable().describe("Building they work at, or null while travelling"),
   jobSlot: count,
   home: z.string().nullable().describe("House they sleep in"),
@@ -187,6 +189,7 @@ export const simulationSaveSchema = z.object({
   wood: finite.min(0).describe("Cumulative timber delivered"),
   shrineGold: finite.min(0).describe("Cumulative donations"),
   tradeGold: finite.min(0).describe("Cumulative counter takings"),
+  wagesPaid: finite.min(0).default(0).describe("Cumulative wages handed to the settlement's workers"),
   constructionWood: finite.min(0).describe("Timber already taken from the piles for building"),
   shrineQueueSequence: count,
   admissionSequence: count,

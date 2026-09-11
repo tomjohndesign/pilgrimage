@@ -20,8 +20,8 @@ afterEach(() => vi.unstubAllGlobals())
 const save = (): GameSave => ({
   version: SAVE_VERSION, savedAt: "2026-09-09T00:00:00.000Z", world: worldIdentity(3, DEFAULT_WORLD_SETTINGS),
   settlement: { claimedBuildings: [], resources: { gold: 1, wood: 1 }, deliveredWood: 0, spentWood: 0,
-    shrineAdmission: 1, collectedAdmission: 0, collectedTrade: 0, grantedRenown: 0, structures: [] },
-  simulation: { time: 0, treeModel: "sprites" as const, visits: 0, wood: 0, shrineGold: 0, tradeGold: 0, constructionWood: 0,
+    shrineAdmission: 1, collectedAdmission: 0, collectedTrade: 0, paidWages: 0, grantedRenown: 0, structures: [] },
+  simulation: { time: 0, treeModel: "sprites" as const, visits: 0, wood: 0, shrineGold: 0, tradeGold: 0, wagesPaid: 0, constructionWood: 0,
     shrineQueueSequence: 0, admissionSequence: 0, relic: { sanctity: 1, spectacle: 1, doubt: 1 },
     felled: [], treeResources: [], foodStores: [], piles: [], travelers: [], joinedMonks: [] },
   camera: { targetX: 0, targetZ: 0, viewIndex: 0, viewSize: 24 },

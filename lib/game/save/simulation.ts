@@ -25,6 +25,7 @@ export function captureSimulation(sim: SimState, treeModel: TreeModel): Simulati
     wood: sim.wood,
     shrineGold: sim.shrineGold,
     tradeGold: sim.tradeGold,
+    wagesPaid: sim.wagesPaid,
     constructionWood: sim.constructionWood,
     shrineQueueSequence: sim.shrineQueueSequence,
     admissionSequence: sim.admissionSequence,
@@ -44,7 +45,7 @@ function captureTraveler(s: SimTraveler): TravelerSave {
     gold: s.gold, piety: s.piety, happiness: s.happiness,
     hunger: s.hunger, thirst: s.thirst, stamina: s.stamina,
     hoursSinceChurch: s.hoursSinceChurch,
-    jobless: s.jobless,
+    jobless: s.jobless, wageDay: s.wageDay,
     employer: s.employer, jobSlot: s.jobSlot, home: s.home,
     deliveryBuilding: s.deliveryBuilding ?? undefined,
     beggar: s.beggar, goldlessSeconds: s.goldlessSeconds,
@@ -82,6 +83,7 @@ export function restoreSimulation(sim: SimState, save: SimulationSave, travelers
   sim.wood = save.wood
   sim.shrineGold = save.shrineGold
   sim.tradeGold = save.tradeGold
+  sim.wagesPaid = save.wagesPaid
   sim.constructionWood = save.constructionWood
   sim.shrineQueueSequence = save.shrineQueueSequence
   sim.admissionSequence = save.admissionSequence
@@ -141,6 +143,7 @@ function restoreTraveler(
   s.stamina = record.stamina
   s.hoursSinceChurch = record.hoursSinceChurch
   s.jobless = record.jobless
+  s.wageDay = record.wageDay
   s.beggar = record.beggar
   s.goldlessSeconds = record.goldlessSeconds
   s.carrying = record.carrying

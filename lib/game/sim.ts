@@ -241,13 +241,6 @@ const STALL_TRADE_RANGE = 2.6
 /** Settlers knock off to sleep below this stamina, and rise again above it. */
 const SETTLER_TIRED_AT = 25
 const SETTLER_WAKE_AT = 95
-/**
- * A household keeps its own hearth, bread and small beer: sleeping at home
- * restores a settler slowly and for nothing. The counter is the quick answer,
- * and the only one open to a traveler off the road — for coin.
- */
-const HOME_MEAL_PER_HOUR = 30
-const HOME_DRINK_PER_HOUR = 40
 /** Rested and fed enough to go back to work. */
 const SETTLER_FED_AT = 80
 /** An exhausted traveler anchors to a stall or camp within this many tiles. */
@@ -378,6 +371,10 @@ export interface SimTraveler {
   jobSlot: number
   /** The house they sleep in. Settlers move in when they take work. */
   home: string | null
+  /** Went home to eat rather than only to sleep; they stay abed until fed. */
+  homeLarder?: boolean
+  /** Game day their last wage was paid, so each worker is paid once a day. */
+  wageDay?: number
   /** Bound repeated searches while passing inaccessible water. */
   naturalWaterRetry?: number
   naturalWaterVisit?: { heading: number; spot: WorldPoint; back: WorldPoint; route: WorldPoint[]; buildings: GameMap["buildings"] }
@@ -492,6 +489,10 @@ export interface SimState {
   shrineGold: number
   /** Cumulative counter takings from the tavern and any kept market stall. */
   tradeGold: number
+  /** Cumulative wages handed to the settlement's own workers; the economy debits each payment once. */
+  wagesPaid: number
+  /** Treasury gold the payroll may still draw on, mirrored from the settlement. */
+  treasuryGold: number
   constructionWood: number
   felled: Set<number>
   treeResources: Map<number, TreeResource>
@@ -823,6 +824,8 @@ export function createSim(
     wood: 0,
     shrineGold: 0,
     tradeGold: 0,
+    wagesPaid: 0,
+    treasuryGold: 0,
     constructionWood: 0,
     felled: new Set(),
     treeResources: new Map(),
@@ -1002,6 +1005,26 @@ function stepPoverty(s: SimTraveler, t: Traveler, dt: number): void {
       s.timer = 0
     }
   }
+}
+
+/**
+ * Wages fall due at the turn of each game day. The settlement pays its own
+ * workers out of the treasury, so a settler's coin is the player's coin moved
+ * into a purse — part of it comes back over the counter. An empty treasury
+ * pays what it can and the day still passes; independent town households are
+ * paid by their own town and never touch these books.
+ */
+function payWage(sim: SimState, s: SimTraveler): void {
+  const day = Math.floor(sim.time)
+  if (s.wageDay === day) return
+  const workplace = sim.buildings.find(b => b.id === s.employer)
+  if (!workplace || workplace.owner === "independent") return
+  if (s.wageDay === undefined) { s.wageDay = day; return }
+  const wage = Math.max(0, Math.min(sim.balance.rules.dailyWage, sim.treasuryGold))
+  s.gold += wage
+  s.wageDay = day
+  sim.wagesPaid += wage
+  sim.treasuryGold -= wage
 }
 
 function donate(sim: SimState, giver: SimTraveler, recipient: SimTraveler): void {
@@ -1481,7 +1504,10 @@ function settleAfterVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameM
   }
   const home = s.home ?? findHome(sim, s, map)
   const job = s.shrineParking || !home ? undefined : findJob(sim, s, map)
-  if (job && nextRoll(s) < 0.1) {
+  // Someone out of work has every reason to stay: the place is open, the bed is
+  // free and they are already standing in the enclave. A traveler who holds a
+  // trade elsewhere rarely gives it up.
+  if (job && nextRoll(s) < (s.jobless ? sim.balance.rules.joblessHireChance : sim.balance.rules.employedHireChance)) {
     const route = settlementRoute(map, [...map.buildings, ...sim.buildings],
       { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
       buildingEntry(job.building), false, true, s.shrineSeat)
@@ -2167,6 +2193,7 @@ export function stepSim(
     const ordinal = t.type.id !== "vendor" && t.type.id !== "knight" ? explorerRank++ : -1
     const s = sim.travelers.get(t.id)
     if (!s || sim.joinedMonks.has(t.id)) continue
+    if (dt > 0 && s.employer) payWage(sim, s)
     stepPoverty(s, t, dt)
     const previousStall = deployedStall(s)
     if (s.herding && !["toSheep", "herding"].includes(s.activity)) releaseSheep(s, sim.wildlife)
@@ -2235,9 +2262,15 @@ export function stepSim(
     }
 
     if (sheltered) s.stamina = Math.min(100, s.stamina + 65 * hours)
+    // A household keeps its own hearth, bread and small beer, and an hour abed
+    // is worth `hearthHours` of both. Nights are short, so the larder stretches
+    // what a settler buys rather than replacing it: a working resident still
+    // comes to the counter for supper every week or so. The counter is the
+    // quick answer, and the only one open to a traveler off the road — for coin.
     if (abed) {
-      s.hunger = Math.min(100, s.hunger + HOME_MEAL_PER_HOUR * hours)
-      s.thirst = Math.min(100, s.thirst + HOME_DRINK_PER_HOUR * hours)
+      const larder = sim.balance.rules.hearthHours * hours
+      s.hunger = Math.min(100, s.hunger + sim.balance.rules.hungerDecay * larder)
+      s.thirst = Math.min(100, s.thirst + sim.balance.rules.thirstDecay * larder)
     }
 
     // Vendors eat and drink from their own stock, on the move.
@@ -2491,6 +2524,8 @@ export function stepSim(
           s.timer = GAME_HOUR_SECONDS
         }
         const hungry = Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD
+        // Fed enough not to want supper, and rested enough for a day's work.
+        const fitForWork = !hungry && s.stamina >= SETTLER_FED_AT
         const unhappy = socialBreak
         const workplace = sim.buildings.find(b => b.id === s.employer)
         // Raising a building is the whole enclave's business, not the brothers'
@@ -2500,7 +2535,7 @@ export function stepSim(
         // everyone else at their usual work. A town down the road keeps its own
         // household, and a vendor's stall is nobody's but the vendor's.
         const sparedFromPost = !workplace || !isPostedWork(workplace.kind) || s.jobSlot > 0
-        if (!isVendor && sparedFromPost && !unhappy && Math.min(s.hunger, s.thirst, s.stamina) >= SETTLER_FED_AT
+        if (!isVendor && sparedFromPost && !unhappy && fitForWork
           && ofTheEnclave(map, workplace, s.home)) {
           s.workSlot = s.id
           s.buildRate = builderRate(t.attributes.skills)
@@ -2522,13 +2557,19 @@ export function stepSim(
           startNaturalWaterTrip(s, map))) break
         if (hungry && startTavernTrip(sim, s, map, counters, workplaceReturn(sim, s, map))) break
         if (!hungry && startSeatRest(sim, s, map, workplaceReturn(sim, s, map))) break
-        if (Math.min(s.hunger, s.thirst, s.stamina) < SETTLER_FED_AT) {
+        // Home covers both errands: a tired settler sleeps, and one who could
+        // not buy supper makes do with the household's own bread and beer.
+        if (s.stamina < SETTLER_FED_AT || hungry) {
           if (!s.home) s.home = findHome(sim, s, map)
           s.workSlot = homeBedSlot(sim, s)
-          if (s.home && assignBuildingTask(s, map, "rest", s.home)) { s.activity = "toHome"; break }
+          if (s.home && assignBuildingTask(s, map, "rest", s.home)) {
+            s.homeLarder = hungry
+            s.activity = "toHome"
+            break
+          }
         }
         s.timer -= dt
-        if (s.timer <= 0 && Math.min(s.hunger, s.thirst, s.stamina) >= SETTLER_FED_AT) {
+        if (s.timer <= 0 && fitForWork) {
           if (!chooseTree(sim, s, map)) s.timer = GAME_HOUR_SECONDS
         }
         break
@@ -2539,11 +2580,14 @@ export function stepSim(
         const state = stepBuildingTask(s, map, targetSpeed, dt)
         if (!state) { s.activity = "idle"; s.timer = GAME_HOUR_SECONDS; break }
         s.activity = state === "walking" ? "toHome" : "sleeping"
-        // Rise fully rested and fed, so a night at home is worth the walk.
+        // Rise rested, so a night at home is worth the walk. Anyone who came
+        // home hungry stays until the larder has fed them back to work.
         // Step outside before looking for work: routes to a tree or a site
         // cannot cross the house wall.
-        if (state === "sleeping" && Math.min(s.stamina, s.hunger, s.thirst) >= SETTLER_WAKE_AT) {
+        if (state === "sleeping" && s.stamina >= SETTLER_WAKE_AT
+          && (!s.homeLarder || Math.min(s.hunger, s.thirst) >= SETTLER_FED_AT)) {
           const home = map.buildings.find(b => b.id === s.buildingTask!.buildingId)
+          s.homeLarder = false
           s.buildingTask = undefined
           s.constructionReturn = home ? workerRoute(map, s, buildingEntrance(home)) ?? [] : []
           s.activity = "fromHome"

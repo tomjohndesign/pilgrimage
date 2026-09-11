@@ -28,6 +28,7 @@ export function SettlementPanel({
   onClose: () => void
 }) {
   const { map, settlement, balance } = economy
+  const payroll = economy.workers * balance.rules.dailyWage
   if (!map || !relic) return null
   const tiers = renownTiers(balance)
   const renown = economy.renown!
@@ -81,6 +82,7 @@ export function SettlementPanel({
       <p className="mb-2 text-[11px] text-ink-light">
         {economy.visits} visits · {economy.residents.length - monks.length} settlers · {Math.max(0, jobBuildings(map)
           .reduce((jobs, b) => jobs + BUILDING_KINDS[b.kind].jobs, 0) - (economy.residents.length - monks.length))} open jobs
+        {payroll > 0 ? ` · ${payroll} gold a day in wages` : ""}
       </p>
       <div className="my-3 grid grid-cols-2 gap-2" aria-label="Enclave housing">
         {(["people", "monks"] as const).map(kind => {

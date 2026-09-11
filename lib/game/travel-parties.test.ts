@@ -135,7 +135,9 @@ describe("shared stops", () => {
   it("lets one partner stay for a job without settling their companion", () => {
     const { map, travelers, sim } = fixture(2)
     travelers[0].party!.partnerId = 1; travelers[1].party!.partnerId = 0
-    for (const id of [0, 1]) sim.travelers.get(id)!.jobless = true
+    // Only one of the pair is looking for work; the other keeps their own trade.
+    sim.travelers.get(0)!.jobless = true
+    sim.travelers.get(1)!.jobless = false
     map.site = { hovelId: "shrine", door: { x: 28, z: 9 }, junction: 28,
       branch: Array.from({ length: 5 }, (_, i) => ({ x: 28, z: 5 + i })) }
     map.buildings.push({ id: "shrine", label: "Shrine", x: 27, z: 10, w: 3, d: 3, height: 1, color: "tan", roofColor: "brown" },
