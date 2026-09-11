@@ -49,7 +49,7 @@ export const diagnosticsSchema = z.object({
     construction: numericFields(["work", "required"]).nullable(),
   })).max(100),
   omittedBuildings: count,
-  cheats: z.object({ blasterPastor: z.boolean(), lastMarch: z.boolean() }),
+  cheats: z.object({ blasterPastor: z.boolean(), lastMarch: z.boolean(), masterBuilder: z.boolean() }),
 })
 export type BugReportDiagnostics = z.infer<typeof diagnosticsSchema>
 export const bugReportSchema = z.object({

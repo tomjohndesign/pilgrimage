@@ -44,7 +44,8 @@ import { BENCHMARK_SIMULATION_SPEEDS, useSimulationStore } from "@/lib/game/simu
  * Development only, unless a local benchmark build explicitly enables it.
  */
 export function DebugHandle({ map, trees, travelers, speed, movement, speedScales, beggarSpeedScales, characterScale }: { map: GameMap; trees?: readonly TreePlacement[]; travelers: Traveler[]; speed: number; movement: MovementTuning; speedScales?: ReadonlyMap<number, number>; beggarSpeedScales?: ReadonlyMap<number, number>; characterScale?: number }) {
-  const { gl, camera, scene, setDpr } = useThree()
+  const { gl, camera, scene, setDpr, raycaster } = useThree()
+  const getState = useThree(state => state.get)
 
   useEffect(() => {
     if (process.env.NODE_ENV === "production" && process.env.NEXT_PUBLIC_GAME_BENCHMARK !== "1") return
@@ -157,6 +158,22 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
       },
       playback: () => useSimulationStore.getState(),
       selectObject: (selection: Selection | null) => useCameraStore.getState().select(selection),
+      /** Fiber's pointer picking under a client point: interactive-object hits before and after the shared filter. */
+      pickAt: (clientX: number, clientY: number) => {
+        const state = getState(), rect = gl.domElement.getBoundingClientRect()
+        raycaster.setFromCamera(new THREE.Vector2((clientX - rect.left) / rect.width * 2 - 1, 1 - (clientY - rect.top) / rect.height * 2), camera)
+        const describe = (hit: THREE.Intersection) => {
+          let travelerId: unknown, visible = true
+          for (let node: THREE.Object3D | null = hit.object; node; node = node.parent) {
+            travelerId ??= node.userData.travelerId
+            visible &&= node.visible
+          }
+          return { name: hit.object.name, type: hit.object.type, distance: +hit.distance.toFixed(3), travelerId, visible, uv: hit.uv?.toArray().map(v => +v.toFixed(3)) }
+        }
+        const raw = raycaster.intersectObjects(state.internal.interaction, true)
+        const filtered = state.events.filter ? state.events.filter(raw, state) : raw
+        return { raw: raw.slice(0, 12).map(describe), filtered: filtered.slice(0, 8).map(describe) }
+      },
       selectTraveler: (id: number) => useCameraStore.getState().select({ kind: "traveler", id }),
       selectionVisuals: () => {
         let shadows = 0, sprites = 0, reducedWalking = 0

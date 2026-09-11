@@ -38,6 +38,8 @@ export interface Settlement {
   collectedAdmission: number
   /** Counter takings already credited; sales never credit the same coin twice. */
   collectedTrade: number
+  /** Renown bestowed by cheat codes, on top of what the establishment earns. */
+  grantedRenown: number
   /** Only player-built additions. The founding hovel stays on the base map. */
   structures: BuildingDef[]
 }
@@ -52,7 +54,27 @@ export function createSettlement(balance: GameBalance = DEFAULT_BALANCE): Settle
     shrineAdmission: DEFAULT_ADMISSION_FEE,
     collectedAdmission: 0,
     collectedTrade: 0,
+    grantedRenown: 0,
   }
+}
+
+/** Cheat codes add to the treasury directly; deliveries and receipts stay untouched. */
+export function grantResources(settlement: Settlement, grant: Partial<Resources>): Settlement {
+  return { ...settlement, resources: {
+    gold: settlement.resources.gold + (grant.gold ?? 0),
+    wood: settlement.resources.wood + (grant.wood ?? 0),
+  } }
+}
+
+export function grantRenown(settlement: Settlement, renown: number): Settlement {
+  return { ...settlement, grantedRenown: settlement.grantedRenown + renown }
+}
+
+/** Finish every planned site at once. Returns the same settlement when nothing is pending. */
+export function completeConstruction(settlement: Settlement): Settlement {
+  if (settlement.structures.every(isComplete)) return settlement
+  return { ...settlement, structures: settlement.structures.map(building => isComplete(building) ? building
+    : { ...building, construction: { ...building.construction!, work: building.construction!.required } }) }
 }
 
 /** Preserve generated IDs and residents; ownership is a session overlay on the base map. */
@@ -150,6 +172,7 @@ export function settlementRenown(
   relics: readonly Relic[],
   balance: GameBalance = DEFAULT_BALANCE,
   completedVisits = 0,
+  granted = 0,
 ) {
   let buildings = 0
   let scenery = 0
@@ -169,7 +192,8 @@ export function settlementRenown(
     individuals,
     scenery,
     relics: relicContribution,
-    total: buildings + individuals + scenery + relicContribution + visits,
+    granted,
+    total: buildings + individuals + scenery + relicContribution + visits + granted,
   }
 }
 
@@ -376,7 +400,7 @@ export function purchaseStructure(
   if (!def) return { settlement, error: "Unknown structure." }
   if (def.retired) return { settlement, error: "This structure is no longer available to build." }
   const map = settlementMap(baseMap, settlement)
-  if (settlementRenown(map, residents, relics, balance, completedVisits).total < def.requiredRenown)
+  if (settlementRenown(map, residents, relics, balance, completedVisits, settlement.grantedRenown).total < def.requiredRenown)
     return { settlement, error: `Requires ${def.requiredRenown} shrine renown.` }
   if (!canAfford(settlement.resources, def.cost))
     return { settlement, error: "Not enough gold or wood." }

@@ -116,11 +116,20 @@ with a backrest. Knees stay below the hips and boots hang over the front; both
 hands hold reins that follow the animated bridle through turns. Driver and cart
 share one sprite anchor, scale and turning frame; there is no separate seated
 body depth plane. Rein sockets use that same displayed cart heading.
-Hand carts retain the shared walking/pulling rig. Shrine visitors first pull
-off onto a grass clearing near the road junction, leave the hitched convoy
-parked, and walk through a shrine gate alone. They return before rejoining
-the road. Arrival and departure check the complete convoy against terrain,
-buildings and elevation; unavailable parking means continuing along the road.
+Hand carts retain the shared walking/pulling rig. Shrine visitors plan their
+stop a few tiles before the fork, turn up the branch, ride the track to the
+enclave and pull off onto open grass in the field beside the shrine
+(`transport/enclave-parking.ts`), standing parallel to the track or nose-in
+where the field is a narrow pocket. They leave the hitched convoy or the
+knight's horse standing there and walk through a shrine gate alone. A tree
+within reach gets a tether, but none is required.
+Leaving is a forward loop back onto the track and down to the road just past
+the fork; a wagon never reverses. The turn into the field and back checks the
+complete convoy against terrain, buildings, trunks and other stops; the track
+itself is checked for buildings only, like the road. When the field is full
+or the fork is covered, riders fall back to the roadside verge stop at the
+fork (`shrineParking`), which still needs a tether tree; with no stop at all
+they continue along the road.
 `transport/route.ts` rounds cart turns independently of the painted paths and
 pedestrian lanes. The radius is 1.5 tiles where the verge permits it; tight
 spaces and bridge decks constrain the curve. Supported bridge elbows add a

@@ -9,9 +9,9 @@ import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/eleva
 
 import Link from "next/link"
 import * as Tooltip from "@radix-ui/react-tooltip"
-import { Menu, RefreshCw, Settings, X } from "lucide-react"
+import { Menu, Settings, X } from "lucide-react"
 import "./game-hud.css"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useId, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import {
@@ -24,7 +24,6 @@ import { clampRoadTier, ROAD_TIERS } from "@/lib/game/map/road"
 import { TERRAIN } from "@/lib/game/map/terrain"
 import { tileAt, type BuildingDef, type GameMap } from "@/lib/game/map/types"
 import { nerve } from "@/lib/game/route-choice"
-import { parseSeed, randomSeed } from "@/lib/game/rng"
 import { CHANGELOG, CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, BEGGAR_RECOVERY_GOLD, simRegistry, type SimTraveler } from "@/lib/game/sim"
@@ -50,7 +49,10 @@ import { MusicPlayer } from "./music-player"
 import { HudButton } from "./hud-button"
 import { BugReportDialog } from "./bug-report-dialog"
 import { MapSizeControl } from "./map-size-control"
-import { NewMapDialog } from "./new-map-dialog"
+import { NewMapDialog, type NewWorld } from "./new-map-dialog"
+import { NewWorldFields } from "./new-world-fields"
+import { SeedField } from "./seed-field"
+import { Switch } from "@/components/ui/switch"
 import { browserDiagnostics, diagnosticsSchema, type BugReportDiagnostics } from "@/lib/bug-report"
 import { useBugReportRuntime } from "@/hooks/use-bug-report-runtime"
 import { useSimulationStore } from "@/lib/game/simulation-store"
@@ -154,6 +156,27 @@ function Chooser({
   )
 }
 
+/** An on/off preference as the shared switch, recoloured for the HUD's dark parchment. */
+function ToggleRow({
+  label,
+  checked,
+  disabled = false,
+  onChange,
+}: {
+  label: string
+  checked: boolean
+  disabled?: boolean
+  onChange: (checked: boolean) => void
+}) {
+  const id = useId()
+  return (
+    <div className="hud-switch-row flex items-center justify-between gap-3 py-0.5">
+      <label htmlFor={id} className={`text-[13px] font-medium text-ink-light ${disabled ? "opacity-50" : ""}`}>{label}</label>
+      <Switch id={id} className="hud-switch" checked={checked} disabled={disabled} onCheckedChange={onChange} />
+    </div>
+  )
+}
+
 /** Top-level navigation, folded into the play view. Controls live in here too. */
 function MenuPanel({ onClose, playing }: { onClose: () => void; playing: boolean }) {
   const [showControls, setShowControls] = useState(false)
@@ -206,83 +229,6 @@ function MenuPanel({ onClose, playing }: { onClose: () => void; playing: boolean
           </dl>
         )}
       </nav>
-    </div>
-  )
-}
-
-/**
- * The seed as an editable field: paste a value or refresh for a random world.
- * The shell owns the seed; this only reports.
- */
-function SeedField({
-  seed,
-  onSeedChange,
-  onValidityChange,
-}: {
-  onValidityChange?: (valid: boolean) => void
-  seed: number | null
-  onSeedChange: (seed: number) => void
-}) {
-  const [input, setInput] = useState(seed === null ? "" : String(seed))
-  const [invalid, setInvalid] = useState(false)
-
-  // Follow the shell when the seed changes elsewhere (reroll, URL load).
-  useEffect(() => {
-    if (seed !== null) setInput(String(seed))
-  }, [seed])
-
-  const apply = () => {
-    const parsed = parseSeed(input)
-    if (parsed === null) {
-      setInvalid(true)
-      return
-    }
-    setInvalid(false)
-    onSeedChange(parsed)
-  }
-
-  const refresh = () => {
-    const rolled = randomSeed()
-    const next = rolled === seed ? (rolled + 1) % 2 ** 31 : rolled
-    setInput(String(next))
-    setInvalid(false)
-    onValidityChange?.(true)
-    onSeedChange(next)
-  }
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-stretch gap-1.5">
-        <input
-        id={onValidityChange ? "landing-seed" : undefined}
-        value={input}
-        onChange={(event) => {
-          const value = event.target.value
-          setInput(value)
-          const parsed = parseSeed(value)
-          setInvalid(onValidityChange ? parsed === null : false)
-          if (onValidityChange) {
-            onValidityChange(parsed !== null)
-            if (parsed !== null) onSeedChange(parsed)
-          }
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !onValidityChange) apply()
-        }}
-        inputMode="numeric"
-        spellCheck={false}
-        aria-label="World seed"
-        aria-invalid={invalid}
-        className={`pointer-events-auto min-w-0 flex-1 border bg-parchment px-2 py-1 text-[13px] text-ink outline-none ${
-          invalid ? "border-red" : "border-rule focus:border-gold"
-        }`}
-        />
-        <HudButton onClick={refresh} aria-label="Randomize world seed" title="Randomize world seed">
-          <RefreshCw size={14} aria-hidden="true" />
-        </HudButton>
-        {!onValidityChange && <HudButton onClick={apply}>Apply</HudButton>}
-      </div>
-      {invalid && <div className="text-[11px] italic text-red">Digits only</div>}
     </div>
   )
 }
@@ -680,9 +626,6 @@ export function GameHud({
   economy,
   pixelation,
   onPixelationChange,
-  defaultMapSize,
-  mapSizeSaved,
-  onDefaultMapSizeChange,
   onNewMap,
   onSeedChange,
   cheats,
@@ -694,7 +637,7 @@ export function GameHud({
   starting: boolean
   canStart: boolean
   onPlay: () => void
-  cheats: { blasterPastor: boolean; lastMarch: boolean }
+  cheats: { blasterPastor: boolean; lastMarch: boolean; masterBuilder: boolean }
   economy: ReturnType<typeof useSettlement>
   map: GameMap | null
   seed: number | null
@@ -707,10 +650,8 @@ export function GameHud({
   onSettingsChange: (settings: MapSettings) => void
   pixelation: Required<PixelationProps>
   onPixelationChange: (patch: PixelationProps) => void
-  defaultMapSize: number
-  mapSizeSaved: boolean
-  onDefaultMapSizeChange: (size: number) => void
-  onNewMap: (size: number) => void
+  /** Replace the current map with a fresh world of this size and seed. */
+  onNewMap: (world: NewWorld) => void
   onSeedChange: (seed: number) => void
 }) {
   const [seedValid, setSeedValid] = useState(true)
@@ -861,6 +802,7 @@ export function GameHud({
         </div>
         <div className="hud-header-right">
         <div className="hud-header-actions">
+          {playing && <NewMapDialog defaultSize={settings.size} onCreate={onNewMap} />}
           <MusicPlayer className="hud-header-button" compact />
           {playing && <button type="button" className="hud-header-button" aria-label="World settings" title="World settings"
             aria-expanded={panel === "world"} aria-controls="world-settings" onClick={() => {
@@ -897,10 +839,12 @@ export function GameHud({
         event.preventDefault()
         if (canStart && seedValid) onPlay()
       }}>
-        <MapSizeControl value={settings.size} onChange={size => set({ size })} />
-        <label className="text-[13px] text-ink-light" htmlFor="landing-seed">World seed</label>
-        <SeedField seed={seed} onSeedChange={onSeedChange} onValidityChange={setSeedValid} />
-        {continueHref && <Link href={continueHref} className="hud-action hud-action-primary hud-landing-play">Continue</Link>}
+        {continueHref && <>
+          <Link href={continueHref} className="hud-action hud-action-primary hud-landing-play">Continue</Link>
+          <div className="hud-landing-divider" role="separator">or</div>
+        </>}
+        <NewWorldFields seedId="landing-seed" size={settings.size} seed={seed}
+          onSizeChange={size => set({ size })} onSeedChange={onSeedChange} onSeedValidityChange={setSeedValid} />
         <button type="submit" className={`hud-action hud-landing-play${continueHref ? "" : " hud-action-primary"}`} disabled={!canStart || !seedValid}>
           {continueHref ? "New world" : "Play"}
         </button>
@@ -915,24 +859,18 @@ export function GameHud({
       {playing && panel === "world" && <aside id="world-settings" className="hud-world hud-well" aria-label="World settings">
         <div className="hud-world-heading"><span>World</span><button type="button" aria-label="Close world settings" onClick={() => setPanel(null)}><X size={16} /></button></div>
         <div className="mb-4 flex flex-wrap gap-2">
-          <NewMapDialog defaultSize={defaultMapSize} onCreate={onNewMap} />
           <HudButton id="bug-report-button" onClick={openBugReport}>Report a bug</HudButton>
         </div>
         {reportError && <p role="alert" className="mb-4 text-sm text-red">{reportError}</p>}
-        <div className="mb-4 space-y-1">
-          <MapSizeControl label="Default size" value={defaultMapSize} onChange={onDefaultMapSizeChange} />
-          <p className="text-[11px] italic text-ink-light">Used for new maps and visits without a map size in the link. Your current map stays the same.</p>
-          {!mapSizeSaved && <p role="status" className="text-[11px] text-red">Could not save this preference. It will apply for this session only.</p>}
-        </div>
         <Section {...section("Visibility")}>
           {VISIBILITY_TOGGLES.map(([key, label]) => (
-            <Chooser key={key} label={label} labelClassName="w-24" value={settings[key] ? 1 : 0}
-              options={["Hidden", "Shown"]} onChange={(index) => set({ [key]: index === 1 })} />
+            <ToggleRow key={key} label={label} checked={settings[key]} onChange={(shown) => set({ [key]: shown })} />
           ))}
-          <Chooser label="Buildings" labelClassName="w-24" value={["auto", "interiors", "hidden"].indexOf(settings.buildingVisibility)}
-            options={["Automatic interiors", "Show all interiors", "Hidden"]}
-            onChange={(index) => set({ buildingVisibility: (["auto", "interiors", "hidden"] as const)[index] })} />
-          <p className="py-1 text-[11px] italic text-ink-light">Automatic interiors open when you select a building or someone inside. Scenery includes rocks, plants and the signpost. Hidden objects keep working.</p>
+          <ToggleRow label="Buildings" checked={settings.buildingVisibility !== "hidden"}
+            onChange={(shown) => set({ buildingVisibility: shown ? "auto" : "hidden" })} />
+          <ToggleRow label="All interiors" checked={settings.buildingVisibility === "interiors"} disabled={settings.buildingVisibility === "hidden"}
+            onChange={(all) => set({ buildingVisibility: all ? "interiors" : "auto" })} />
+          <p className="py-1 text-[11px] italic text-ink-light">Interiors open on their own when you select a building or someone inside; All interiors keeps every roof off. Scenery includes rocks, plants and the signpost. Hidden objects keep working.</p>
           <HudButton onClick={() => set(DEFAULT_SCENE_VISIBILITY)}>Reset visibility</HudButton>
         </Section>
         {SHOW_PROPERTY_PANELS && <>

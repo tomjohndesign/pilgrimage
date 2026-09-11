@@ -70,10 +70,12 @@ const GRID_LINES = LOADING_TILES.map(tile => `M${tile.points}Z`).join(" ")
  * resume script before hydration and by the shell once the save is read.
  */
 export function LoadingChurch({ showChurch, phase, overlayRef, idle = false, generating = false, resuming = false, view = 0, viewSize = DEFAULT_VIEW_SIZE,
-  groundOffset = GROUND_OFFSET, focus = null }: {
+  groundOffset = GROUND_OFFSET, focus = null, onStop }: {
   idle?: boolean; generating?: boolean
   /** A saved world is coming back: no church, no pulse, and its last view where the land will appear. */
   resuming?: boolean
+  /** Abandon the map being generated. Offers a Stop button beneath the indicators while a new world generates. */
+  onStop?: () => void
   showChurch: boolean; phase: MapRevealPhase; overlayRef: RefObject<HTMLDivElement | null>; view?: number; viewSize?: number
   /** Screen-down offset of the ground plane from centre, world units. Zero when the camera targets open ground. */
   groundOffset?: number
@@ -159,6 +161,7 @@ export function LoadingChurch({ showChurch, phase, overlayRef, idle = false, gen
         <rect x={1} y={1} width={46} height={4} fill="#5b4d2f" />
         <rect className="loading-church-progress-fill" x={2} y={2} width={12} height={2} fill="#dab767" />
       </svg>
+      {!resuming && onStop && <button type="button" className="hud-action loading-church-stop" onClick={onStop}>Stop</button>}
     </>}
   </div>
 }

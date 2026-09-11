@@ -170,4 +170,19 @@ describe("shared selection", () => {
     layer.visible = true
     expect(prioritizePeople(hits)).toEqual(hits)
   })
+
+  it("lets a figure's drawn texels beat another figure's click volume in front", () => {
+    const figure = (name: string) => { const root = { userData: {} }; markPerson(root); return { name, userData: {}, parent: root } }
+    const volumeA = { object: figure("character-hit-target"), distance: 1 }
+    const spriteB = { object: figure("traveler"), distance: 2 }
+    const wall = { object: { userData: {} }, distance: 1.5 }
+    const volumeC = { object: figure("character-hit-target"), distance: 3 }
+    const cart = { object: figure("cart"), distance: 4 }
+    expect(prioritizePeople([volumeA, spriteB])).toEqual([spriteB, volumeA])
+    expect(prioritizePeople([volumeA, spriteB, volumeC, cart])).toEqual([spriteB, cart, volumeA, volumeC])
+    // Surfaces between them still occlude, and volumes alone keep their order.
+    expect(prioritizePeople([volumeA, wall, spriteB])).toEqual([volumeA, wall, spriteB])
+    expect(prioritizePeople([volumeA, volumeC])).toEqual([volumeA, volumeC])
+    expect(prioritizePeople([spriteB, volumeC])).toEqual([spriteB, volumeC])
+  })
 })
