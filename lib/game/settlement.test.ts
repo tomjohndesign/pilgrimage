@@ -15,7 +15,10 @@ import {
   BUILD_CATALOG,
   buildTileError,
   collectIncome,
+  completeConstruction,
   createSettlement,
+  grantRenown,
+  grantResources,
   individualRenown,
   placementError,
   purchaseStructure,
@@ -398,6 +401,43 @@ describe("build and buy", () => {
     const hall = purchaseStructure(settlement, map, [], [], "hall", { x: 18, z: 14 }, undefined, 70)
     expect(hall.error).toBeNull()
     expect(hall.settlement.structures.at(-1)?.buildType).toBe("hall")
+  })
+
+  it("counts granted renown toward unlocks and reports it separately", () => {
+    const map = testMap()
+    const settlement = grantRenown({ ...createSettlement(), resources: { gold: 1000, wood: 1000 } }, 1000)
+    expect(settlement.grantedRenown).toBe(1000)
+    const earned = settlementRenown(map, [], [])
+    expect(earned.granted).toBe(0)
+    const renown = settlementRenown(map, [], [], undefined, 0, settlement.grantedRenown)
+    expect(renown.granted).toBe(1000)
+    expect(renown.total).toBe(earned.total + 1000)
+    const hall = purchaseStructure(settlement, map, [], [], "hall", { x: 18, z: 14 })
+    expect(hall.error).toBeNull()
+  })
+
+  it("grants resources on top of the treasury without touching deliveries", () => {
+    const before = createSettlement()
+    const richer = grantResources(grantResources(before, { wood: 1000 }), { gold: 1000 })
+    expect(richer.resources).toEqual({ gold: STARTING_RESOURCES.gold + 1000, wood: STARTING_RESOURCES.wood + 1000 })
+    expect(richer.deliveredWood).toBe(0)
+    expect(richer.spentWood).toBe(0)
+    expect(before.resources).toEqual(STARTING_RESOURCES)
+  })
+
+  it("finishes every pending site at once and leaves finished settlements alone", () => {
+    const map = testMap()
+    const purchase = purchaseStructure(createSettlement(), map, [], [], "house", { x: 9, z: 10 })
+    expect(purchase.error).toBeNull()
+    const planned = purchase.settlement
+    expect(planned.structures[0].construction?.work).toBe(0)
+    const finished = completeConstruction(planned)
+    expect(finished).not.toBe(planned)
+    expect(finished.structures[0].construction?.work).toBe(finished.structures[0].construction?.required)
+    expect(finished.resources).toEqual(planned.resources)
+    expect(planned.structures[0].construction?.work).toBe(0)
+    expect(completeConstruction(finished)).toBe(finished)
+    expect(completeConstruction(createSettlement())).toEqual(createSettlement())
   })
 
   it("offers buildable land on generated shrine maps", () => {

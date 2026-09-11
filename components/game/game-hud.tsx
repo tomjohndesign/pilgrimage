@@ -637,7 +637,7 @@ export function GameHud({
   starting: boolean
   canStart: boolean
   onPlay: () => void
-  cheats: { blasterPastor: boolean; lastMarch: boolean }
+  cheats: { blasterPastor: boolean; lastMarch: boolean; masterBuilder: boolean }
   economy: ReturnType<typeof useSettlement>
   map: GameMap | null
   seed: number | null

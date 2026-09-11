@@ -127,6 +127,7 @@
   "omittedBuildings": 0,
   "cheats": {
     "blasterPastor": false,
-    "lastMarch": false
+    "lastMarch": false,
+    "masterBuilder": false
   }
 }

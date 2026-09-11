@@ -3,7 +3,7 @@ import { settlementJob, SETTLEMENT_JOBS } from "./jobs/design"
 import { shrineSeats, shrineStations, shrineLayout } from "./shrine-layout"
 import { afterEach, describe, expect, it } from "vitest"
 import { BUILD_CATALOG, DEFAULT_BALANCE } from "./balance"
-import { createSettlement, purchaseStructure, placementError, woodcutterHuts, jobBuildings, creditTimber, creditAdmission, syncTimberSpending, settlementRenown } from "./settlement"
+import { createSettlement, purchaseStructure, placementError, woodcutterHuts, jobBuildings, creditTimber, creditAdmission, syncTimberSpending, settlementRenown, STARTING_RESOURCES } from "./settlement"
 import { buildingEntry } from "./building-rotation"
 import { characterSupport } from "./character-support"
 import { HOUSE_BEDS } from "./building-art/early-geometry"
@@ -638,7 +638,7 @@ describe("woodcutter huts", () => {
     const before = createSettlement()
     const bought = purchaseStructure(before, map, [], [], "workshop", { x: 13, z: 8 })
     expect(bought.error).toBeNull()
-    expect(bought.settlement.resources).toEqual({ gold: 140, wood: 115 })
+    expect(bought.settlement.resources).toEqual({ gold: STARTING_RESOURCES.gold - 60, wood: STARTING_RESOURCES.wood - 45 })
     const blocked = purchaseStructure(before, map, [], [], "workshop", { x: 0, z: 8 })
     expect(blocked.error).toBeTruthy()
     expect(blocked.settlement).toBe(before)
@@ -657,7 +657,7 @@ describe("woodcutter huts", () => {
     expect(sim.travelers.get(0)!.employer).toBe(bought.settlement.structures[0].id)
     expect(sim.wood).toBeGreaterThan(0)
     const credited = creditTimber(bought.settlement, sim.wood)
-    expect(credited.resources.wood).toBe(115 + sim.wood)
+    expect(credited.resources.wood).toBe(STARTING_RESOURCES.wood - 45 + sim.wood)
     expect(creditTimber(credited, sim.wood)).toBe(credited)
     const garden = purchaseStructure(credited, map, [], [], "garden", { x: 7, z: 8 }).settlement
     expect(garden.resources.wood).toBe(credited.resources.wood - 10)

@@ -124,6 +124,7 @@ export const settlementSaveSchema = z.object({
   shrineAdmission: finite.min(0).describe("Gold asked of each visitor to the relic"),
   collectedAdmission: finite.min(0).describe("Cumulative donations credited"),
   collectedTrade: finite.min(0).describe("Cumulative counter takings credited"),
+  grantedRenown: finite.min(0).default(0).describe("Renown bestowed by cheat codes"),
   structures: z.array(structureSchema).describe("Player-built structures in purchase order"),
 }).describe("The player's settlement layered over the generated map. Ground levelling is replayed from the structures")
 

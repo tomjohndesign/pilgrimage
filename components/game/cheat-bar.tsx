@@ -2,13 +2,41 @@
 
 import { useEffect, useRef, useState } from "react"
 
-/** Return opens the console without stealing Enter from existing HUD controls. */
-export function CheatBar({ onBlasterPastor, onLastMarch, blasterPastor = false, lastMarch = false }: {
+export const CHEAT_GOLD = 1000
+export const CHEAT_WOOD = 1000
+export const CHEAT_RENOWN = 1000
+
+export interface CheatActions {
   blasterPastor?: boolean
   lastMarch?: boolean
+  masterBuilder?: boolean
   onBlasterPastor: () => void
   onLastMarch: () => void
-}) {
+  onMasterBuilder: () => void
+  /** Adds to the treasury of the current world. */
+  onGrant: (gift: { gold?: number; wood?: number }) => void
+  /** Adds permanent renown to the current settlement. */
+  onGrantRenown: (renown: number) => void
+}
+
+/** Every code, its effect, and the line shown once it has run. */
+const CHEAT_CODES: readonly { match: RegExp; run: (cheats: CheatActions) => string }[] = [
+  { match: /^blasterpastor$/, run: ({ blasterPastor, onBlasterPastor }) => { onBlasterPastor(); return blasterPastor
+    ? "Blaster Pastor recalled — the brothers are returning to the shrine and putting away their rocket packs."
+    : "Blaster Pastor activated — the brothers will take rocket trips and return to the shrine!" } },
+  { match: /^(the)?lastmarchoftheents$/, run: ({ lastMarch, onLastMarch }) => { onLastMarch(); return lastMarch
+    ? "The Ents are sleeping — the trees are rooted once more."
+    : "The Ents are waking… About 1 in 100 trees will stroll, resting a minute between walks." } },
+  { match: /^woodplease$/, run: ({ onGrant }) => { onGrant({ wood: CHEAT_WOOD }); return `A cart of timber arrives — ${CHEAT_WOOD} wood added to the stores.` } },
+  { match: /^thatsthepoorbox$/, run: ({ onGrant }) => { onGrant({ gold: CHEAT_GOLD }); return `The poor box is emptied — ${CHEAT_GOLD} gold added to the treasury.` } },
+  { match: /^thegreatcommission$/, run: ({ onGrantRenown }) => { onGrantRenown(CHEAT_RENOWN); return `Word spreads across the land — ${CHEAT_RENOWN} renown granted to the shrine.` } },
+  { match: /^masterbuilder$/, run: ({ masterBuilder, onMasterBuilder }) => { onMasterBuilder(); return masterBuilder
+    ? "The master builder departs — new sites wait for idle residents again."
+    : "The master builder arrives — every planned site stands finished at once." } },
+]
+
+/** Return opens the console without stealing Enter from existing HUD controls. */
+export function CheatBar(cheats: CheatActions) {
   const [open, setOpen] = useState(false)
   const [code, setCode] = useState("")
   const [message, setMessage] = useState("")
@@ -67,19 +95,12 @@ export function CheatBar({ onBlasterPastor, onLastMarch, blasterPastor = false, 
           }}
           onSubmit={(event) => {
             event.preventDefault()
-            if (!code.trim()) {
+            const entered = code.trim().toLowerCase().replace(/[\s'’]/g, "")
+            const cheat = CHEAT_CODES.find(({ match }) => match.test(entered))
+            if (!entered) {
               close()
-            } else if (code.trim().toLowerCase() === "blasterpastor") {
-              onBlasterPastor()
-              setMessage(blasterPastor
-                ? "Blaster Pastor recalled — the brothers are returning to the shrine and putting away their rocket packs."
-                : "Blaster Pastor activated — the brothers will take rocket trips and return to the shrine!")
-              close()
-            } else if (/^(the)?lastmarchoftheents$/i.test(code.trim())) {
-              onLastMarch()
-              setMessage(lastMarch
-                ? "The Ents are sleeping — the trees are rooted once more."
-                : "The Ents are waking… About 1 in 100 trees will stroll, resting a minute between walks.")
+            } else if (cheat) {
+              setMessage(cheat.run(cheats))
               close()
             } else {
               setMessage("Unknown cheat code. Try again.")
