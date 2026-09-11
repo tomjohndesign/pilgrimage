@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "1156d95ae7b1beb03fbf19e201e9ba7b368d2fea",
-  "releaseCount": 212,
+  "lastProcessedCommit": "88d186ef1cbc29d64779af4f80688d7c1cb15b56",
+  "releaseCount": 214,
   "releases": [
+    {
+      "version": "0.0.228",
+      "title": "Release 0.0.228",
+      "summary": "Raise house capacity to six and widen woodcutter and tavern jobs (#247)",
+      "commit": "88d186ef1cbc29d64779af4f80688d7c1cb15b56"
+    },
+    {
+      "version": "0.0.227",
+      "title": "Release 0.0.227",
+      "summary": "Add a follow toggle to the character inspectors (#246)",
+      "commit": "c8d5c736ae19aefeebecd3e443120d75b7dac6cb"
+    },
     {
       "version": "0.0.226",
       "title": "Release 0.0.226",
