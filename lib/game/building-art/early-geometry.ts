@@ -2,7 +2,7 @@ import { innParts } from "./inn"
 import { furnishFloorplan } from "./floorplan"
 import { turnFurniture } from "./furniture-placement"
 import { tavernLayout } from "../tavern-layout"
-import { marketLayout } from "../market-layout"
+import { marketLayout, MARKET_STALL_WIDTH } from "../market-layout"
 import { EARLY_MATERIALS as palette } from "./materials"
 import type { BuildingPart, Vec3 } from "./geometry"
 import type { BuildingRecipe } from "./style"
@@ -34,6 +34,8 @@ type ConstructionRecipe = Omit<BuildingRecipe, "variant"> & {
   /** The shrine's raised nave retains its bespoke gabled construction. */
   roofForm?: "single-plane" | "gable"
   roofJoins?: RoofJoin[]
+  /** A market stall only carries wares and its cloth while a keeper works it. */
+  stocked?: boolean
 }
 
 /** Small early medieval structures built directly in tile units. No plot padding. */
@@ -62,22 +64,25 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
 
 function authoredBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
   const parts: BuildingPart[] = [], { width, depth, variant } = recipe
-  if (variant === "market" && depth > 2) {
+  if (variant === "market" && width > MARKET_STALL_WIDTH) {
+    // Author the original two-column stall, then set it beside the open bay.
+    // The wrapper mirrors the whole layout, so the bay's hand is resolved there.
     const layout = marketLayout(width, depth)
-    const stall = authoredBuildingParts({ ...recipe, depth: layout.stallDepth }).map(part => ({
-      ...part, position: [part.position[0], part.position[1], part.position[2] + layout.stallZ] as Vec3,
+    const stall = authoredBuildingParts({ ...recipe, width: layout.stallWidth }).map(part => ({
+      ...part, position: [part.position[0] + layout.stallX, part.position[1], part.position[2]] as Vec3,
     }))
-    // Open sides let the wagon pull through. The low rear rail marks the bay
-    // without enclosing the horse under the cloth or obstructing its shafts.
+    // Both ends stay open so the team pulls straight in and out. Hitching
+    // posts on the outer corners mark the bay and tie the animal at either end
+    // without a rail the cart's wheels would run through.
     const box = (name: string, position: Vec3, size: Vec3, color: string): BuildingPart =>
       ({ name, layer: "base", position, size, color, outline: false })
+    const post = layout.bayX + layout.bayWidth / 2 - .08
     return [...stall,
-      { ...box("cart-yard", [0, BUILDING_FLOOR_TOP - .025, layout.yardZ], [width - .04, .05, layout.yardDepth - .04], "#ffffff"), surface: "trail" },
-      ...[-1, 1].map(side => box(`hitching-post-${side}`, [side * (width / 2 - .2), .28, -depth / 2 + .12], [.09, .56, .09], palette.wood)),
-      box("hitching-rail", [0, .42, -depth / 2 + .12], [width - .3, .075, .075], palette.wood),
+      { ...box("cart-bay", [layout.bayX, BUILDING_FLOOR_TOP - .025, 0], [layout.bayWidth - .04, .05, depth - .04], "#ffffff"), surface: "trail" },
+      ...[-1, 1].map(end => box(`hitching-post-${end}`, [post, .28, end * (depth / 2 - .1)], [.09, .56, .09], palette.wood)),
     ]
   }
-  const floor = variant === "storehouse" ? 0.3 : 0
+  const floor = variant === "storehouse" ? 0.3 : 0, stocked = recipe.stocked !== false
   const h=recipe.wallHeight, rise=recipe.roofRise
   const w = width / 2, d = depth / 2, rampStart = depth / 2 - Math.min(.65, depth * .43)
   const lean = recipe.roofForm !== "gable", eave = floor + h
@@ -573,7 +578,8 @@ function authoredBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       }
     } else if (variant === "market") {
       bench("stall-counter",0,depth*.23,width*.72,.38)
-      for (let i=0;i<3;i++) box(`market-sack-${i}`,"base",[(i-1)*width*.2,floor+.15,-depth*.16],[width*.16,.3,depth*.25],[palette.strawDark,"#8b8067",palette.earth][i],undefined,false)
+      // Wares arrive with the keeper; an unkept stall is a bare counter.
+      if (stocked) for (let i=0;i<3;i++) box(`market-sack-${i}`,"base",[(i-1)*width*.2,floor+.15,-depth*.16],[width*.16,.3,depth*.25],[palette.strawDark,"#8b8067",palette.earth][i],undefined,false)
     } else if (variant === "guard-post") {
       bench("watch-seat",0,-depth*.16,width*.6,.24,0)
       pole("watch-staff",[x-.08,floor,-z+.06],[x-.08,eave+.1,-z+.06],.02)
@@ -594,8 +600,8 @@ function authoredBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     parts.push(...thatchSurface(at(0,0),at(0,1),at(1,0),at(1,1),recipe.seed,String(sign)))
   }
   if(variant === "market" && lean) {
-    parts.push(...marketCanopyParts(width,depth,eave+.48))
-
+    // The keeper rigs the cloth when they take the stall; until then the frame stands open to the sky.
+    if (stocked) parts.push(...marketCanopyParts(width,depth,eave+.48))
   } else if(closed) {
     // Leave a real opening in the low roof for the long arched door brow.
     const cuts=[...new Set([-w,w,doorX-browHalf,doorX+browHalf,...(variant === "tavern" ? [rearDoorX-rearBrowHalf,rearDoorX+rearBrowHalf] : [])])].sort((a,b)=>a-b)

@@ -25,6 +25,6 @@ export function workPost(type: string | undefined, slot: number, w: number, d: n
   const posts = type ? WORK_POSTS[type] : undefined
   if (!posts?.length) return null
   const [x, z] = posts[((slot % posts.length) + posts.length) % posts.length]
-  const layout = type === "market" ? marketLayout(w, d) : null
-  return { x: x * w * layoutHand(type,layoutSeed), z: layout ? layout.stallZ + z * layout.stallDepth : z * d }
+  const layout = type === "market" ? marketLayout(w, d, layoutSeed) : null
+  return { x: layout ? layout.stallX + x * layout.stallWidth * layout.hand : x * w * layoutHand(type,layoutSeed), z: z * d }
 }

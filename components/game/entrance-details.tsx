@@ -11,9 +11,10 @@ import { groundHeight } from "@/lib/game/map/elevation"
 import { tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } from "@/lib/game/map/types"
 import { selectElement } from "@/lib/game/selection"
 
-/** Props belong to the reserved approach square, outside the shell's occupied tiles. */
-export function EntranceDetails({map,idColors,onSelect,variationSeed}:{map:GameMap;idColors:Color[];variationSeed?:(building:BuildingDef)=>number;onSelect:(building:BuildingDef,event:Parameters<typeof selectElement>[1])=>void}) {
-  const models=useMemo(()=>map.buildings.map(b=>entranceParts(b.id===map.site?.hovelId ? "shrine" : b.buildType ?? "house",b.height,variationSeed?.(b) ?? 17)),[map.buildings,map.site?.hovelId,variationSeed])
+/** Props belong to the reserved approach square, outside the shell's occupied tiles.
+ * A market's produce only stands out front while a keeper works the stall. */
+export function EntranceDetails({map,idColors,onSelect,variationSeed,stocked}:{map:GameMap;idColors:Color[];variationSeed?:(building:BuildingDef)=>number;stocked?:(building:BuildingDef)=>boolean;onSelect:(building:BuildingDef,event:Parameters<typeof selectElement>[1])=>void}) {
+  const models=useMemo(()=>map.buildings.map(b=>entranceParts(b.id===map.site?.hovelId ? "shrine" : b.buildType ?? "house",b.height,variationSeed?.(b) ?? 17,stocked?.(b) ?? true)),[map.buildings,map.site?.hovelId,variationSeed,stocked])
   return <group name="entrance-details">
     {map.buildings.map((building,index)=>{
       const at=buildingApproach(map,building)

@@ -11,6 +11,7 @@ import { ConstructionCostEffects, type ConstructionCostHandle } from "./construc
 import { PixelCharacters } from "@/components/pixel-canvas"
 import { buildingYaw, rotatedFootprint } from "@/lib/game/building-rotation"
 import { useUnitInterior } from "./use-unit-interior"
+import { useOccupiedBuildings } from "./use-building-occupancy"
 
 import { StructureModel } from "@/components/building-lab/building-model"
 import { constructionParts } from "@/lib/game/building-art/construction"
@@ -18,7 +19,7 @@ import { constructionStage, isComplete } from "@/lib/game/construction"
 
 import { groundHeight } from "@/lib/game/map/elevation"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useCallback, useEffect, useMemo, useRef } from "react"
 import * as THREE from "three"
 
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
@@ -49,6 +50,9 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
     if (selectElement({ kind: "building", id: building.id }, event)) costs.current?.show(building)
   }
   const unitInterior = useUnitInterior(map)
+  // Hearths only smoke for someone; a market stall carries wares and cloth only under a keeper.
+  const occupied = useOccupiedBuildings(map)
+  const stocked = useCallback((building: BuildingDef) => building.buildType !== "market" || occupied.has(building.id), [occupied])
   const selection = useCameraStore(s => s.selection)
   const foodStores = useBuildStore(s => s.foodStores)
   const piles = useBuildStore((s) => s.piles)
@@ -66,16 +70,16 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
       const footprint = rotatedFootprint(building, building.rotation)
       const joins = roofJoins.get(building.id)
       const inns = supported.get(building.id) ?? []
-      const key = JSON.stringify([index, building.buildType, footprint.w, footprint.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, building.floorHeight, building.supportId, building.tavernFlue, inns.map(b=>[b.id,b.x,b.z,b.floorHeight]), joins, constructionStage(building)])
+      const key = JSON.stringify([index, building.buildType, footprint.w, footprint.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, building.floorHeight, building.supportId, building.tavernFlue, inns.map(b=>[b.id,b.x,b.z,b.floorHeight]), joins, constructionStage(building), stocked(building)])
       const old = modelCache.current.get(building.id)
       const model = old?.key === key ? old : { key,
-        parts: tavernStackParts(constructionParts({ ...building, ...footprint }, joins), building, inns), idColor: new THREE.Color(...encodeObjectId(buildingObjectId(index))) }
+        parts: tavernStackParts(constructionParts({ ...building, ...footprint, stocked: stocked(building) }, joins), building, inns), idColor: new THREE.Color(...encodeObjectId(buildingObjectId(index))) }
       next.set(building.id, model)
       return model
     })
     modelCache.current = next
     return result
-  }, [buildings, roofJoins])
+  }, [buildings, roofJoins, stocked])
   const idColors = useMemo(
     // Component tuples straight into the working colour space — an ID is data,
     // not a colour, so it must dodge sRGB conversion to survive readback.
@@ -89,7 +93,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
   return (
     <group>
       {waterPlacements.length > 0 && <WaterSources placements={waterPlacements} />}
-      <EntranceDetails map={map} idColors={idColors} onSelect={selectSite} />
+      <EntranceDetails map={map} idColors={idColors} onSelect={selectSite} stocked={stocked} />
       <PixelCharacters><ConstructionCostEffects ref={costs} map={map} characterScale={characterScale} /></PixelCharacters>
       {buildings.map((building, index) => {
         // The hovel has its own geometry (see shrine.tsx); its ID slot stays reserved.
@@ -136,9 +140,9 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
         return (
           <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
             <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
-            {isComplete(building) && building.supportId && <InnFlueSmoke width={local.w} depth={local.d} height={building.height} flue={building.tavernFlue} cutaway={cutaway} />}
+            {isComplete(building) && building.supportId && <InnFlueSmoke width={local.w} depth={local.d} height={building.height} flue={building.tavernFlue} cutaway={cutaway} smoke={occupied.has(building.supportId)} />}
             {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
-            {isComplete(building) && !building.supportId && hasDomesticHearth(building.buildType,building.layoutSeed,building.fireplace) && <ShelterFire smoke={!map.buildings.some(b=>b.supportId===building.id)} buildType={building.buildType} layoutSeed={building.layoutSeed} hearthZ={building.hearthZ} sharedChimney={roofJoins.get(building.id)?.find(join=>join.chimney)?.chimney} width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
+            {isComplete(building) && !building.supportId && hasDomesticHearth(building.buildType,building.layoutSeed,building.fireplace) && <ShelterFire smoke={occupied.has(building.id) && !map.buildings.some(b=>b.supportId===building.id)} buildType={building.buildType} layoutSeed={building.layoutSeed} hearthZ={building.hearthZ} sharedChimney={roofJoins.get(building.id)?.find(join=>join.chimney)?.chimney} width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
           </group>
         )
       })}

@@ -65,7 +65,7 @@ export const EARLY_BUILDINGS = [
   { id: "shelter", name: "Pilgrim shelter", description: "An open resting shelter with straw beds, a bench and a domestic hearth.", width: 2, depth: 2, wallHeight: 0.62, roofRise: singlePlaneRoofRise(2) },
   { id: "workshop", name: "Woodcutter’s hut", description: "An open work court beside covered timber bays and a rear workbench.", width: 3, depth: 2, wallHeight: 0.68, roofRise: singlePlaneRoofRise(2) },
   { id: "hall", name: "Shrine hall", description: "An enclosed gathering hall with a sheltered doorway, timber benches and wooden crosses.", width: 2, depth: 3, wallHeight: 0.78, roofRise: singlePlaneRoofRise(3) },
-  { id: "market", name: "Market stall", description: "A cloth-covered counter with wares and an open cart yard behind it.", width: 4, depth: 4, wallHeight: 0.65, roofRise: singlePlaneRoofRise(4) },
+  { id: "market", name: "Market stall", description: "A cloth-covered counter with wares and an open cart bay beside it.", width: 3, depth: 2, wallHeight: 0.65, roofRise: singlePlaneRoofRise(2) },
   { id: "guard-post", name: "Guard post", description: "A small sheltered watch post with a bench and staff.", width: 2, depth: 2, wallHeight: 0.65, roofRise: singlePlaneRoofRise(2) },
   { id: "sheep-pen", name: "Sheep pen", description: "A hut and hearth beside an open railed fold with a gate and trough.", width: 3, depth: 2, wallHeight: 0.70, roofRise: singlePlaneRoofRise(2) },
   { id: "lumberCamp", name: "Timber yard", description: "An open timber yard with low boundary rails and space for live timber stacks.", width: 2, depth: 2, wallHeight: 0.65, roofRise: 0 },
