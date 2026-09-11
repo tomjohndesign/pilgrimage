@@ -38,6 +38,8 @@ export interface Settlement {
   collectedAdmission: number
   /** Counter takings already credited; sales never credit the same coin twice. */
   collectedTrade: number
+  /** Wages already debited; a day's pay never leaves the treasury twice. */
+  paidWages: number
   /** Renown bestowed by cheat codes, on top of what the establishment earns. */
   grantedRenown: number
   /** Only player-built additions. The founding hovel stays on the base map. */
@@ -54,6 +56,7 @@ export function createSettlement(balance: GameBalance = DEFAULT_BALANCE): Settle
     shrineAdmission: DEFAULT_ADMISSION_FEE,
     collectedAdmission: 0,
     collectedTrade: 0,
+    paidWages: 0,
     grantedRenown: 0,
   }
 }
@@ -131,6 +134,25 @@ export function creditAdmission(settlement: Settlement, receipts: number): Settl
     collectedAdmission: receipts,
     resources: { ...settlement.resources, gold: settlement.resources.gold + receipts - settlement.collectedAdmission },
   }
+}
+
+/**
+ * Wages are handed over in the simulation and debited once. The treasury can go
+ * no lower than empty: a settlement that cannot make payroll simply pays less.
+ */
+export function payWages(settlement: Settlement, wagesPaid: number): Settlement {
+  if (wagesPaid <= settlement.paidWages) return settlement
+  return {
+    ...settlement,
+    paidWages: wagesPaid,
+    resources: { ...settlement.resources,
+      gold: Math.max(0, settlement.resources.gold - (wagesPaid - settlement.paidWages)) },
+  }
+}
+
+/** What the payroll may still draw on: gold on the books, less wages not yet debited. */
+export function syncWages(sim: SimState, settlement: Settlement): void {
+  sim.treasuryGold = Math.max(0, settlement.resources.gold - (sim.wagesPaid - settlement.paidWages))
 }
 
 export function relicRenown(relic: Relic, balance: GameBalance = DEFAULT_BALANCE): number {

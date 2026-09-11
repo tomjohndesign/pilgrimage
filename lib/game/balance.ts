@@ -203,6 +203,7 @@ export const RULE_GROUPS = [
   "Relic renown",
   "Progression",
   "Traveler attraction",
+  "Settlement work",
   "Traveler needs",
 ] as const
 export const RULE_FIELDS = [
@@ -460,6 +461,26 @@ export const RULE_FIELDS = [
     default: 0.5, min: 0, max: 1, step: 0.01,
   },
   {
+    key: "joblessHireChance", group: "Settlement work", label: "Hiring chance without a trade",
+    description: "Chance a visitor out of work takes an open place after seeing the relic. They still need a free house bed and a vacancy they can reach; a woodcutter also needs standing timber in range.",
+    default: 0.9, min: 0, max: 1, step: 0.01,
+  },
+  {
+    key: "employedHireChance", group: "Settlement work", label: "Hiring chance already in a trade",
+    description: "Chance a visitor who already has work elsewhere gives it up for an open place. Monks, nuns and vendors keep their own callings whatever this is set to.",
+    default: 0.05, min: 0, max: 1, step: 0.01,
+  },
+  {
+    key: "dailyWage", group: "Settlement work", label: "Daily wage per worker",
+    description: "Gold paid from the treasury to each settler working a player-owned place, once a game day. A settler eats and drinks about two thirds of a gold a day at the counter, so keep this above that or households slide into poverty. Much of it comes back over your own counter. Independent town households are paid by their own town.",
+    default: 2, min: 0, max: 100, step: 1,
+  },
+  {
+    key: "hearthHours", group: "Settlement work", label: "Hearth hours per hour at home",
+    description: "A settler asleep at home eats and drinks their own bread and small beer, restoring this many hours’ worth of food and drink for every hour abed. Nights are short, so raising this much further lets the household larder replace the counter and no resident ever buys supper.",
+    default: 12, min: 0, max: 1000, step: 1,
+  },
+  {
     key: "happinessDecay", group: "Traveler needs", label: "Happiness drain per game hour",
     description: "Happiness lost while away from tavern tables. Low happiness draws customers to staffed taverns.",
     default: 0.5, min: 0, max: 10, step: 0.1,
@@ -674,6 +695,10 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
         hospitalityNeedThreshold: DEFAULT_BALANCE.rules.hospitalityNeedThreshold,
         hospitalityRenownBonus: DEFAULT_BALANCE.rules.hospitalityRenownBonus,
         levellingLimit: DEFAULT_BALANCE.rules.levellingLimit,
+        joblessHireChance: DEFAULT_BALANCE.rules.joblessHireChance,
+        employedHireChance: DEFAULT_BALANCE.rules.employedHireChance,
+        dailyWage: DEFAULT_BALANCE.rules.dailyWage,
+        hearthHours: DEFAULT_BALANCE.rules.hearthHours,
         ...rules,
         // Adopt slower defaults in old saves without overwriting custom rates.
         ...((version < 4 && rules.hungerDecay === 12.5 || version < 5 && rules.hungerDecay === 3 || version < 7 && rules.hungerDecay === 1.5) ? { hungerDecay: DEFAULT_BALANCE.rules.hungerDecay } : {}),

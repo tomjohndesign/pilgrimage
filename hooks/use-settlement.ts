@@ -7,7 +7,7 @@ import type { GameMap, TilePos } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
 import { useBuildStore } from "@/lib/game/build-store"
-import { claimTownBuildings, settlementMap, createSettlement, purchaseStructure, creditTimber, creditAdmission, creditTrade, syncTimberSpending, settlementRenown, grantResources, grantRenown, completeConstruction, type Resources } from "@/lib/game/settlement"
+import { claimTownBuildings, settlementMap, createSettlement, purchaseStructure, creditTimber, creditAdmission, creditTrade, payWages, syncWages, syncTimberSpending, settlementRenown, grantResources, grantRenown, completeConstruction, type Resources } from "@/lib/game/settlement"
 
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { BUILDING_PREVIEW, buildingPreviewBalance, buildingPreviewSettlement } from "@/lib/game/building-preview"
@@ -28,8 +28,10 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   const wood = useBuildStore((s) => s.wood)
   const shrineGold = useBuildStore((s) => s.shrineGold)
   const tradeGold = useBuildStore((s) => s.tradeGold)
+  const wagesPaid = useBuildStore((s) => s.wagesPaid)
   const visitCount = useBuildStore((s) => s.visits)
   const settlers = useBuildStore((s) => s.settlers)
+  const workforce = useBuildStore((s) => s.workers)
   const sameWorld = !!world && simulation?.world.road === world.road
   const visits = sameWorld ? visitCount : 0
   const residents = useMemo(() => [...monks, ...(sameWorld ? settlers : [])], [monks, sameWorld, settlers])
@@ -90,14 +92,19 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     if (!sameWorld) return
     setSession((current) => {
       if (current.world !== world) return current
-      const settlement = creditTrade(creditAdmission(creditTimber(current.settlement, wood), shrineGold), tradeGold)
+      const settlement = payWages(creditTrade(creditAdmission(creditTimber(current.settlement, wood), shrineGold), tradeGold), wagesPaid)
       return settlement === current.settlement ? current : { ...current, settlement }
     })
-  }, [sameWorld, wood, shrineGold, tradeGold, world])
+  }, [sameWorld, wood, shrineGold, tradeGold, wagesPaid, world])
 
   useEffect(() => {
     if (sameWorld && simulation) syncTimberSpending(simulation, session.settlement.spentWood)
   }, [sameWorld, simulation, session.settlement.spentWood])
+
+  // The payroll may only draw on gold the treasury actually holds.
+  useEffect(() => {
+    if (sameWorld && simulation) syncWages(simulation, session.settlement)
+  }, [sameWorld, simulation, session.settlement])
 
   // Sites already under way finish when the cheat is switched on; later sites finish at purchase.
   const instantBuild = BUILDING_PREVIEW || masterBuilder
@@ -162,6 +169,8 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     residents,
     housing: map ? enclaveHousing(map, residents.length - monks.length, monks.length) : null,
     visits,
+    /** Settlers on the payroll; every one of them draws the daily wage. */
+    workers: sameWorld ? workforce : 0,
     balance,
     settlement: session.settlement,
     buildType: session.buildType,

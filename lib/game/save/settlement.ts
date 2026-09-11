@@ -18,6 +18,7 @@ export function captureSettlement(settlement: Settlement): SettlementSave {
     shrineAdmission: settlement.shrineAdmission,
     collectedAdmission: settlement.collectedAdmission,
     collectedTrade: settlement.collectedTrade,
+    paidWages: settlement.paidWages,
     grantedRenown: settlement.grantedRenown,
     structures: settlement.structures.map(captureStructure),
   }
@@ -96,6 +97,7 @@ export function restoreSettlement(world: GameMap, save: SettlementSave): Settlem
     shrineAdmission: save.shrineAdmission,
     collectedAdmission: save.collectedAdmission,
     collectedTrade: save.collectedTrade,
+    paidWages: save.paidWages,
     grantedRenown: save.grantedRenown,
     structures,
   }
