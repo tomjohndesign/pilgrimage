@@ -48,6 +48,15 @@ expansion limit, camp pitches come from one cluster, admissions are asked for
 a few companions at a time, and stalled attempts retry on a timer. The shrine
 planner now checks for a free place before planning any route.
 
+While a company visits, whoever is not at the relic waits in one group on the
+grass at the corner where the branch leaves the road, on the side the company
+came from. The standing places are listed once per attempt from the corner
+outward, each companion takes the nearest free one with a bounded route, and
+companions still on the road ask again on a timer. Someone called up from the
+grass starts their approach where they stand and walks back to the same place;
+once the visit is over everyone walks to the nearest road tile before the
+company regroups.
+
 Formations and the company pace are cached and refreshed a few times per game
 second; the eased company speed hides the steps. Party transport figures stay
 mounted until they are well outside the view instead of remounting at the

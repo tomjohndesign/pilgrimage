@@ -29,6 +29,8 @@ export interface TravelParty {
   decisions: number
   waterCarrier?: number
   waterRetry?: number
+  /** Seconds before waiting companions still on the road look for standing room again. */
+  gatherRetry?: number
   visitPending: number[]
   visitStarted: number[]
   /** Road progress of the formation's head. Every place in the company derives from it. */
@@ -196,7 +198,7 @@ function createParty(id: number, people: Traveler[], leader: SimTraveler): Trave
 
 function leaveParty(s: SimTraveler) {
   s.partyId = undefined; s.partyWaiting = undefined; s.partySpeed = undefined
-  s.partyRiding = false; s.partyBoarding = false; s.partyCarried = false
+  s.partyRiding = false; s.partyBoarding = false; s.partyCarried = false; s.partyGathering = undefined
 }
 
 /** Full roster rebuild for a new simulation and after companions settle. */

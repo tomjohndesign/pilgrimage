@@ -9,6 +9,8 @@ import { jobBuildings } from "./settlement"
 import { roadLanePoint } from "./map/road-lane"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import { shrineVisitPlan } from "./shrine-visit"
+import { generateMap } from "./map/generate-map"
+import type { TravelParty } from "./travel-parties"
 
 function fixture(count = 6, direction: 1 | -1 = 1) {
   const map: GameMap = { width: 80, depth: 20, seed: 42, tiles: Array(1600).fill("grass"), buildings: [],
@@ -257,6 +259,75 @@ describe("shared stops", () => {
     expect(sim.visits).toBe(5)
     expect(party.stage).toBe("traveling")
   })
+
+  it.each([8, 20])("waits in one group on the grass beside the entrance and walks back to the road afterwards (%i companions)", count => {
+    const { map, travelers, sim } = fixture(count)
+    withShrine(map)
+    const party = sim.parties.get(0)!
+    run(sim, travelers, map, 1)
+    expect(party.stage).toBe("visiting")
+    const members = party.members.map(id => sim.travelers.get(id)!)
+    const onRoad = (s: { z: number }) => worldToTileZ(map, s.z) === 5
+    const onGrass = (s: { x: number; z: number }) => map.tiles[worldToTileZ(map, s.z) * map.width + worldToTileX(map, s.x)] === "grass"
+    const entrance = { x: tileToWorldX(map, 28), z: tileToWorldZ(map, 5) }
+    let gathered = 0, longestStep = 0, calledFromGrass = false
+    let previous = members.map(s => ({ x: s.x, z: s.z }))
+    for (let i = 0; i < 12000 && !(party.stage === "traveling" && sim.visits === count); i++) {
+      stepSim(sim, travelers, map, 1, .1)
+      members.forEach((s, j) => { longestStep = Math.max(longestStep, Math.hypot(s.x - previous[j].x, s.z - previous[j].z)) })
+      previous = members.map(s => ({ x: s.x, z: s.z }))
+      if (members.some(s => s.activity === "toRelic" && s.shrineOrigin)) calledFromGrass = true
+      // Whoever is not at the relic stands off the road on the grass by the entrance, apart from each other.
+      const waiting = members.filter(s => s.activity === "walking" && s.partyGathering?.arrived)
+      for (const s of waiting) {
+        expect(onGrass(s)).toBe(true)
+        expect(onRoad(s)).toBe(false)
+        expect(Math.hypot(s.x - entrance.x, s.z - entrance.z)).toBeLessThan(6)
+      }
+      for (let a = 0; a < waiting.length; a++) for (let b = a + 1; b < waiting.length; b++)
+        expect(Math.hypot(waiting[a].x - waiting[b].x, waiting[a].z - waiting[b].z)).toBeGreaterThan(.8)
+      gathered = Math.max(gathered, waiting.length)
+    }
+    expect(sim.visits).toBe(count)
+    expect(party.stage).toBe("traveling")
+    expect(gathered).toBeGreaterThanOrEqual(3)
+    // A full line means later companions are called up from the grass, not from the road.
+    if (count === 20) expect(calledFromGrass).toBe(true)
+    // Nobody jumped between the road, the grass and the branch: every move was a walking step.
+    expect(longestStep).toBeLessThan(.5)
+    // Everyone is back on the road and the company moves on together.
+    for (const s of members) { expect(s.partyGathering).toBeUndefined(); expect(onRoad(s)).toBe(true) }
+    const before = party.progress
+    run(sim, travelers, map, 30)
+    expect(party.progress).toBeGreaterThan(before)
+    expect(party.formed).toBe(true)
+  })
+
+  it("finds standing room by the entrance of a generated world and brings everyone back to the road", () => {
+    const seed = 42
+    const map = generateMap({ seed })
+    const travelers = withTravelParties(generateTravelers(seed, 40), seed)
+    const sim = createSim(travelers, map, [], { sanctity: 100, spectacle: 100, doubt: 0 })
+    sim.balance = { ...DEFAULT_BALANCE, rules: { ...DEFAULT_BALANCE.rules, hungerDecay: 0, thirstDecay: 0, staminaDecay: 0 } }
+    sim.shrineRenown = 10000
+    const gatheredAt = (s: { x: number; z: number }) => map.tiles[worldToTileZ(map, s.z) * map.width + worldToTileX(map, s.x)]
+    const roadTiles = new Set(map.road!.map(p => p.z * map.width + p.x))
+    const junction = map.road![map.site!.junction]
+    let party: TravelParty | undefined
+    run(sim, travelers, map, 900, () => {
+      for (const s of sim.travelers.values()) if (s.partyGathering?.arrived && s.activity === "walking") { party = sim.parties.get(s.partyId!); return true }
+      return false
+    })
+    expect(party).toBeDefined()
+    const waiting = party!.members.map(id => sim.travelers.get(id)!).filter(s => s.partyGathering?.arrived)
+    for (const s of waiting) {
+      expect(["grass", "dirt", "clearing"]).toContain(gatheredAt(s))
+      expect(roadTiles.has(worldToTileZ(map, s.z) * map.width + worldToTileX(map, s.x))).toBe(false)
+      expect(Math.hypot(worldToTileX(map, s.x) - junction.x, worldToTileZ(map, s.z) - junction.z)).toBeLessThan(7)
+    }
+    run(sim, travelers, map, 900, () => party!.stage === "traveling" || !sim.parties.has(party!.id))
+    for (const id of party!.members) expect(sim.travelers.get(id)?.partyGathering).toBeUndefined()
+  }, 30000)
 
   it("walks a track longer than the waiting timeout to its end instead of turning back", () => {
     const count = 6
