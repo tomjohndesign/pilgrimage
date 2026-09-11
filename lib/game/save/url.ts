@@ -15,7 +15,15 @@ export interface PlayQuery {
   world: Partial<WorldSettings>
   display: Partial<DisplaySettings>
   benchmark?: CityBenchmarkMode
+  lab?: PlayLab
 }
+
+/** Test worlds for watching one system at work. `relic-line`: everyone on the
+ * road is devout enough to turn in for the relic every time, so the line at the
+ * church, companies and singles together, can be watched at leisure. Pair it
+ * with a small, open map and a short branch. */
+export type PlayLab = "relic-line"
+export const RELIC_LINE_LAB_WORLD: Partial<WorldSettings> = { size: 128, coverage: 0, water: 0, relicDistance: 4, traffic: 60 }
 
 type Params = Record<string, string | undefined>
 
@@ -82,11 +90,12 @@ export function parsePlayQuery(params: Params): PlayQuery {
 
   const benchmark: CityBenchmarkMode | undefined =
     params.benchmark === "city" ? "gameplay" : params.benchmark === "city-stress" ? "routing-stress" : undefined
-  return { seed: integer(params.seed), world, display, benchmark }
+  const lab: PlayLab | undefined = params.lab === "relic-line" ? "relic-line" : undefined
+  return { seed: integer(params.seed), world: lab ? { ...RELIC_LINE_LAB_WORLD, ...world } : world, display, benchmark, lab }
 }
 
 /** The query string for a world: seed, size and generator version always, other inputs only when changed. */
-export function playQuery(seed: number, world: WorldSettings, benchmark?: false | CityBenchmarkMode): string {
+export function playQuery(seed: number, world: WorldSettings, benchmark?: false | CityBenchmarkMode, lab?: false | PlayLab): string {
   const query = new URLSearchParams({ seed: String(seed), size: String(world.size), generation: String(world.generation) })
   for (const [name, key] of WORLD_PARAMS) {
     if (key !== "size" && world[key] !== DEFAULT_WORLD_SETTINGS[key]) query.set(name, String(world[key]))
@@ -96,5 +105,6 @@ export function playQuery(seed: number, world: WorldSettings, benchmark?: false 
     if (value !== DEFAULT_WORLD_SETTINGS.elevation[key as keyof ElevationSettings]) query.set(`e_${key}`, String(value))
   }
   if (benchmark) query.set("benchmark", benchmark === "routing-stress" ? "city-stress" : "city")
+  if (lab) query.set("lab", lab)
   return query.toString()
 }
