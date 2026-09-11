@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "49dc25af8a3d320040cc0b739f057203c793cab7",
-  "releaseCount": 216,
+  "lastProcessedCommit": "3ab7b0341d57d0c7673ffe4591525033ebbec14c",
+  "releaseCount": 217,
   "releases": [
+    {
+      "version": "0.0.231",
+      "title": "Release 0.0.231",
+      "summary": "Fill the open jobs, and pay and feed the settlers who take them (#248)",
+      "commit": "3ab7b0341d57d0c7673ffe4591525033ebbec14c"
+    },
     {
       "version": "0.0.230",
       "title": "Release 0.0.230",
