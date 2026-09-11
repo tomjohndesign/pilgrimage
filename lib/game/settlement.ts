@@ -1,6 +1,6 @@
 import { innPlacementError } from "./inn"
 import { buildingEntrance, constructionWork, isComplete } from "./construction"
-import { placementBuildingLayout, placementRoofRotation } from "./building-placement-layout"
+import { placementBuildingLayout, placementSite } from "./building-placement-layout"
 import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
 import { footprintGrading, groundHeight, levelBuildingGround } from "./map/elevation"
 import { buildingKind, placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
@@ -280,7 +280,9 @@ export function placementError(
   balance: GameBalance = DEFAULT_BALANCE,
   rotation: BuildingRotation = 0,
 ): string | null {
-  rotation = placementRoofRotation(map, def, at, rotation)
+  const site = placementSite(map, def, at, rotation)
+  rotation = site.rotation
+  at = site
   const footprintError = validateFootprint(map, def, at, balance, rotation)
   if (footprintError || !map.site) return footprintError
   let byBalance = accessVerdicts.get(map)
@@ -409,7 +411,9 @@ export function purchaseStructure(
     return { settlement, error: `Requires ${def.requiredRenown} shrine renown.` }
   if (!canAfford(settlement.resources, def.cost))
     return { settlement, error: "Not enough gold or wood." }
-  rotation=placementRoofRotation(map,def,at,rotation)
+  const site=placementSite(map,def,at,rotation)
+  rotation=site.rotation
+  at=site
   const error = placementError(map, def, at, balance, rotation)
   if (error) return { settlement, error }
   const building: BuildingDef = {
