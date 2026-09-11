@@ -35,7 +35,7 @@ import { sceneryDetailStatus } from "@/lib/game/render/scenery-detail"
 import { batchedSourceRoots } from "@/lib/game/render/batch-source-visibility"
 import { characterBatchEntry } from "@/lib/game/render/character-batch"
 import { workerRouteMemoryStats } from "@/lib/game/worker-route-memory"
-import { BENCHMARK_SIMULATION_SPEEDS, useSimulationStore } from "@/lib/game/simulation-store"
+import { BENCHMARK_SIMULATION_SPEEDS, simulationSpeedControl, useSimulationStore } from "@/lib/game/simulation-store"
 
 /**
  * Exposes a small handle on `window` so the scene can be driven deterministically
@@ -154,6 +154,9 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
       setSpeed: (label: number) => {
         const speed = BENCHMARK_SIMULATION_SPEEDS.find(speed => speed.label === label)
         if (!speed) throw new Error(`Unknown playback speed: ${label}`)
+        // Measurements ask for a speed at a crowd size on purpose, including the
+        // 6× the HUD withholds; the request lifts the crowd limit for this run.
+        simulationSpeedControl.crowdLimit = false
         useSimulationStore.setState({ speed: speed.rate })
       },
       playback: () => useSimulationStore.getState(),
@@ -190,6 +193,7 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
       },
       setAdaptiveQuality: (enabled: boolean) => { frameQualityControl.enabled = enabled },
       setCrowdThinning: (enabled: boolean) => { crowdRenderControl.enabled = enabled },
+      setCrowdSpeedLimit: (enabled: boolean) => { simulationSpeedControl.crowdLimit = enabled },
       figureStatus: () => ({ ...crowdRenderStatus, quality: frameQuality(scene),
         pendingUnits: namedRoot("travelers")?.userData.pendingUnits ?? 0,
         missingVisibleUnits: namedRoot("travelers")?.userData.missingVisibleUnits ?? 0 }),

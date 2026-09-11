@@ -50,10 +50,10 @@ describe("game save schema", () => {
 
   it("snaps a retired playback speed to the nearest one offered", () => {
     const input = minimal()
-    input.playback.speed = 12
-    expect(parseGameSave(input).save?.playback.speed).toBe(6)
     input.playback.speed = 4
-    expect(parseGameSave(input).save?.playback.speed).toBe(4)
+    expect(parseGameSave(input).save?.playback.speed).toBe(2)
+    input.playback.speed = 12
+    expect(parseGameSave(input).save?.playback.speed).toBe(12)
   })
 
   it("keeps world identity to the generation inputs", () => {
