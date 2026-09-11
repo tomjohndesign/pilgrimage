@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "6f5afe39e89ad5c30501ec3239ef8f6ec2289748",
-  "releaseCount": 203,
+  "lastProcessedCommit": "f7c89f4b3954f1c780ea38d08b7b865dae26f501",
+  "releaseCount": 204,
   "releases": [
+    {
+      "version": "0.0.218",
+      "title": "Release 0.0.218",
+      "summary": "Park knights' horses and merchants' wagons in the field beside the shrine (#238)",
+      "commit": "f7c89f4b3954f1c780ea38d08b7b865dae26f501"
+    },
     {
       "version": "0.0.217",
       "title": "Release 0.0.217",
