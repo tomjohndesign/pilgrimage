@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "e20575b1c6920c06ad22f5ff0c63aa87dd80bd2d",
-  "releaseCount": 200,
+  "lastProcessedCommit": "ec8af1d2aefc558d8e5be805a211f6e187732fc8",
+  "releaseCount": 201,
   "releases": [
+    {
+      "version": "0.0.215",
+      "title": "Release 0.0.215",
+      "summary": "Let companies walk the full chapel track instead of turning back (#234)",
+      "commit": "ec8af1d2aefc558d8e5be805a211f6e187732fc8"
+    },
     {
       "version": "0.0.214",
       "title": "Release 0.0.214",
