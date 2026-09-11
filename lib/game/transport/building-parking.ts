@@ -2,7 +2,7 @@ import { buildingYaw, rotateBuildingPoint, rotatedFootprint } from "../building-
 import { marketLayout } from "../market-layout"
 import { MinHeap } from "../map/route"
 import { tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } from "../map/types"
-import { cartOffset, type Puller } from "./assets"
+import { cartOffset, RIG_TO_WORLD, type Puller } from "./assets"
 import { alignCart, followCart, type CartPose } from "./follow"
 import { parkingClear, type ParkingContext, type ShrineParking } from "./navigation"
 import { routePoint, type Point } from "./roadside"
@@ -38,6 +38,10 @@ export function driveRouteSegment(pose: CartPose, route: readonly Point[], start
   return driveSegment(pose, routePoint(route, end), wheelbase, clear)
 }
 
+/** Heuristic weights for reaching a goal at a set heading, per radian of turn,
+ * unit of sideways offset and unit the goal lies behind the hitch. */
+const GUIDE = { turn: 2, lateral: 2, behind: 4 }
+
 /** Bounded forward-only search. Heading is part of the state: a pedestrian
  * route around a corner is not necessarily traversable with a trailing axle. */
 export function cartPath(map: GameMap, initial: CartPose, goal: Point, puller: Puller, scale: number,
@@ -53,6 +57,15 @@ export function cartPath(map: GameMap, initial: CartPose, goal: Point, puller: P
   const turn = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)))
   const key = (p: CartPose, heading: number) => `${Math.round(p.hitch.x * 2)}:${Math.round(p.hitch.z * 2)}:${Math.round(heading * 8 / Math.PI)}:${Math.round(p.heading * 8 / Math.PI)}`
   const heuristic = (p: Point) => Math.hypot(p.x - goal.x, p.z - goal.z)
+  // Arriving at a fixed heading also costs the turn, any sideways offset from
+  // the goal's line, and a loop back when the goal lies behind the cart. Without
+  // these the search burns its budget on near-goal poses that cannot straighten.
+  const guide = (p: Point, heading: number) => {
+    if (goalHeading === undefined) return 0
+    const dx = goal.x - p.x, dz = goal.z - p.z, sx = Math.sin(goalHeading), cz = Math.cos(goalHeading)
+    const along = dx * sx + dz * cz, lateral = Math.abs(dx * cz - dz * sx)
+    return turn(heading, goalHeading) * GUIDE.turn + lateral * GUIDE.lateral + Math.max(0, -along) * GUIDE.behind
+  }
   const nodes = [{ pose: initial, heading: initial.heading, parent: -1, cost: 0 }]
   const costs = new Map<string, number>([[key(initial, initial.heading), 0]])
   const queue = new MinHeap(); queue.push(0, heuristic(initial.hitch))
@@ -80,30 +93,39 @@ export function cartPath(map: GameMap, initial: CartPose, goal: Point, puller: P
       if (cost >= (costs.get(id) ?? Infinity)) continue
       costs.set(id, cost)
       nodes.push({ pose: next, heading: nextHeading, parent: index, cost })
-      queue.push(nodes.length - 1, cost + heuristic(to) * 1.15)
+      queue.push(nodes.length - 1, cost + heuristic(to) * 1.15 + guide(to, nextHeading))
     }
   }
   return null
 }
 
-/** Park lengthwise across the open rear yard, approaching from either side.
+/** The parked cart keeps this much off the stall's side, toward the open
+ * ground, so a team that is still settling straight clears the counter. */
+const MARKET_BAY_OUTWARD = .15
+
+/** Pull nose-first into the open bay beside the stall from whichever end is
+ * nearer, and stop with the convoy centred on it: a long team may overhang the
+ * open ground at either end, which the clearance checks keep free of buildings.
  * The parked pose is the actual arrival pose, never a snapped replacement. */
 export function marketParking(map: GameMap, building: BuildingDef, initial: CartPose, puller: Puller, scale: number,
   context: ParkingContext): MarketParking | null {
-  const size = rotatedFootprint(building, building.rotation), layout = marketLayout(size.w, size.d)
-  if (layout.yardDepth < 2 || size.w < 4) return null
+  const size = rotatedFootprint(building, building.rotation), layout = marketLayout(size.w, size.d, building.layoutSeed)
+  if (!layout.bayWidth) return null
   const local = (x: number, z: number) => {
     const p = rotateBuildingPoint(x, z, building.rotation)
     return { x: tileToWorldX(map, building.x) + (building.w - 1) / 2 + p.x,
       z: tileToWorldZ(map, building.z) + (building.d - 1) / 2 + p.z }
   }
-  const sides = [1, -1].sort((a, b) => {
-    const x = local(-a * size.w / 2, layout.yardZ), y = local(-b * size.w / 2, layout.yardZ)
-    return Math.hypot(x.x - initial.hitch.x, x.z - initial.hitch.z) - Math.hypot(y.x - initial.hitch.x, y.z - initial.hitch.z)
-  })
-  for (const side of sides) {
-    const goal = local(side * .6, layout.yardZ), heading = side * Math.PI / 2 + buildingYaw(building.rotation)
-    if (!parkingClear(map, alignCart(goal, heading, -cartOffset(puller) * scale), puller, scale, context)) continue
+  // The convoy's reach ahead of and behind the hitch, as convoyBounds measures it.
+  const unit = RIG_TO_WORLD * scale, wheelbase = -cartOffset(puller) * scale
+  const ahead = puller === "hand" ? 0 : 1.75 * unit, behind = wheelbase + 1.02 * unit
+  const bayX = layout.bayX + layout.hand * MARKET_BAY_OUTWARD
+  const distance = (end: number) => { const p = local(bayX, end * size.d / 2); return Math.hypot(p.x - initial.hitch.x, p.z - initial.hitch.z) }
+  for (const end of [1, -1].sort((a, b) => distance(a) - distance(b))) {
+    // Entering from the front end means driving toward the rear, and vice versa.
+    const heading = (end === 1 ? Math.PI : 0) + buildingYaw(building.rotation)
+    const goal = local(bayX, -end * (behind - ahead) / 2)
+    if (!parkingClear(map, alignCart(goal, heading, wheelbase), puller, scale, context)) continue
     const route = cartPath(map, initial, goal, puller, scale, context, heading)
     if (route) return { ...route, buildingId: building.id, pose: initial, exit: [], returnProgress: 0, distance: 0, walking: false }
   }

@@ -1,6 +1,6 @@
 import { mapBuildingQuery } from "../building-spatial"
 import { buildingYaw, rotateBuildingPoint, rotatedFootprint } from "../building-rotation"
-import { marketLayout, marketYardContains } from "../market-layout"
+import { marketLayout, marketBayContains } from "../market-layout"
 import type { TreePlacement } from "../trees/placement"
 import { pastureSegmentClear, type StallObstacle } from "./stall"
 import { cartGroundContacts, onBridgeDeck } from "./bridge-guide"
@@ -87,7 +87,7 @@ export function convoyClear(map: GameMap, pose: CartPose, puller: Puller, scale:
         }
         if (!(terrain === "grass" || terrain === "clearing" || (!grassOnly && (terrain === "dirt" || terrain === "path" || terrain === "track" || terrain === "bridge" || terrain === "ford")))) return false
         const building = nearby({ x, z }).find(b => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d)
-        if ((building && !marketYardContains(building, { x, z })) || (!layout.rise[z * map.width + x] && Math.abs(groundHeight(map, x, z) - height) >= 0.3)) return false
+        if ((building && !marketBayContains(building, { x, z })) || (!layout.rise[z * map.width + x] && Math.abs(groundHeight(map, x, z) - height) >= 0.3)) return false
       }
     }
   }
@@ -124,11 +124,11 @@ export function convoyBuildingsClear(map: GameMap, pose: CartPose, puller: Pulle
   const nearby = mapBuildingQuery(map, padding)
   return bounds.every(body => nearby({ x: body.x + (map.width - 1) / 2, z: body.z + (map.depth - 1) / 2 }).every(building => {
     const size = rotatedFootprint(building, building.rotation)
-    const market = building.buildType === "market" ? marketLayout(size.w, size.d) : null
-    const offset = rotateBuildingPoint(0, market?.stallZ ?? 0, building.rotation)
+    const market = building.buildType === "market" ? marketLayout(size.w, size.d, building.layoutSeed) : null
+    const offset = rotateBuildingPoint(market?.stallX ?? 0, 0, building.rotation)
     const box = { x: tileToWorldX(map, building.x) + (building.w - 1) / 2 + offset.x,
       z: tileToWorldZ(map, building.z) + (building.d - 1) / 2 + offset.z,
-      heading: buildingYaw(building.rotation), halfWidth: size.w / 2, halfLength: (market?.stallDepth ?? size.d) / 2 }
+      heading: buildingYaw(building.rotation), halfWidth: (market?.stallWidth ?? size.w) / 2, halfLength: size.d / 2 }
     return !overlaps(body, box, 0)
   }))
 }

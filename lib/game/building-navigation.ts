@@ -3,7 +3,7 @@ import { crossroadIslandAt } from "./map/crossroads"
 import { tavernFurnitureClear } from "./tavern-layout"
 import { sheepPenLayout } from "./workshop-layout"
 import { buildingEntry, buildingFoldEntry, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
-import { marketYardContains } from "./market-layout"
+import { marketBayContains } from "./market-layout"
 import { isComplete, isEnterable } from "./construction"
 import { shrineLayout } from "./shrine-layout"
 import type { BuildingDef, GameMap, TilePos } from "./map/types"
@@ -58,7 +58,7 @@ export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDe
   if (crossroadIslandAt(map, to.x, to.z)) return false
   for (const building of buildings) {
     if (building.supportId) continue
-    const a = containsTile(building, from) && !marketYardContains(building, from), b = containsTile(building, to) && !marketYardContains(building, to)
+    const a = containsTile(building, from) && !marketBayContains(building, from), b = containsTile(building, to) && !marketBayContains(building, to)
     if (!a && !b) continue
     if (enterShrine && isEnterable(building) && isComplete(building)) {
       if (building.buildType === "sheep-pen") {

@@ -89,7 +89,7 @@ export const BUILDING_KINDS: Record<BuildingKind, BuildingKindDef> = {
   market: {
     id: "market",
     label: "Market stall",
-    blurb: "A stall for one keeper, with a rear yard for their cart and animal.",
+    blurb: "A stall for one keeper, with an open bay beside it for their cart and animal.",
     w: MARKET_WIDTH,
     d: MARKET_DEPTH,
     height: 0.65,

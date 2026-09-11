@@ -11,8 +11,8 @@ import { innHearthRoofRise, singlePlaneRoofRise } from "@/lib/game/building-art/
 import { sharedChimneyMouth, type SharedChimney } from "@/lib/game/building-art/shared-chimney"
 
 /** Smoke from the downstairs fire, with no fire or light on the sleeping floor. */
-export function InnFlueSmoke({width,depth,height,flue,cutaway=false}: {width:number;depth:number;height:number;flue?: {x:number;z:number};cutaway?:boolean}) {
-  return flue && !cutaway ? <BuildingSmoke position={[flue.x,height+innHearthRoofRise(width,depth)+.345,flue.z]} /> : null
+export function InnFlueSmoke({width,depth,height,flue,cutaway=false,smoke=true}: {width:number;depth:number;height:number;flue?: {x:number;z:number};cutaway?:boolean;smoke?:boolean}) {
+  return flue && !cutaway && smoke ? <BuildingSmoke position={[flue.x,height+innHearthRoofRise(width,depth)+.345,flue.z]} /> : null
 }
 
 /** Reusable billboard smoke emitter, positioned at any building's chimney mouth. */

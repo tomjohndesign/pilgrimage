@@ -3,8 +3,9 @@ import { reflectBuildingParts } from "../building-layout"
 import { BUILDING_DOOR_HEIGHT } from "./dimensions"
 import type { BuildingPart, Vec3 } from "./geometry"
 
-/** Furniture against the building edge of the reserved path tile; the middle stays wide enough to walk through. */
-export function entranceParts(type: string, wallHeight = .78, seed = 17): BuildingPart[] {
+/** Furniture against the building edge of the reserved path tile; the middle stays wide enough to walk through.
+ * A market's produce basket belongs to its keeper and is left out of an unkept stall. */
+export function entranceParts(type: string, wallHeight = .78, seed = 17, stocked = true): BuildingPart[] {
   const random = makeRng(seed), hand = random() < .5 ? -1 : 1, furnishing = (Math.floor(random()*3)+2)%3
   const wood = ["#806b4c", "#947b55", "#71634c"][Math.floor(random()*3)]
   const parts:BuildingPart[]=[]
@@ -25,7 +26,7 @@ export function entranceParts(type: string, wallHeight = .78, seed = 17): Buildi
     for(const side of [-1,1]) box(`chair-back-post-${side}`,[x+side*.085,.36,z-.085],[.028,.27,.028],"#806b4c")
     box("chair-back",[x,.45,z-.085],[.20,.08,.025],"#968058")
     }
-  } else if(type==="market" || type==="storehouse") {
+  } else if((type==="market" && stocked) || type==="storehouse") {
     box("basket",[x,.10,z],[.20,.20,.22],"#967e58")
     for(let i=0;i<3;i++) box(`produce-${i}`,[x+(i-1)*.05,.215,z],[.055,.055,.09],type==="market" ? ["#98634f","#899157","#ac8657"][i] : "#b29a6e")
   } else if(type==="sheep-pen") {

@@ -4,29 +4,34 @@ import { describe, expect, it } from "vitest"
 import { BUILDING_KINDS } from "../buildings"
 import { buildingYaw, rotateBuildingPoint, rotatedFootprint, type BuildingRotation } from "../building-rotation"
 import { structureParts } from "../building-art/structure"
-import { marketYardContains } from "../market-layout"
+import { entranceParts } from "../building-art/entrance"
+import { marketBayContains } from "../market-layout"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "../map/types"
 import { alignCart } from "./follow"
 import { cartOffset } from "./assets"
 import { cartPath, driveSegment, marketParking } from "./building-parking"
 import { convoyBuildingsClear, convoyClear } from "./navigation"
 
-function fixture(rotation: BuildingRotation = 0) {
+function fixture(rotation: BuildingRotation = 0, layoutSeed?: number) {
   const building = { ...BUILDING_KINDS.market, ...rotatedFootprint(BUILDING_KINDS.market, rotation),
-    id: "market", buildType: "market", x: 12, z: 12, rotation }
+    id: "market", buildType: "market", x: 12, z: 12, rotation, layoutSeed }
   const map: GameMap = { width: 30, depth: 30, tiles: Array(900).fill("grass"), buildings: [building] }
   const local = (x: number, z: number) => {
     const p = rotateBuildingPoint(x, z, rotation)
-    return { x: tileToWorldX(map, building.x) + 1.5 + p.x, z: tileToWorldZ(map, building.z) + 1.5 + p.z }
+    return { x: tileToWorldX(map, building.x) + (building.w - 1) / 2 + p.x, z: tileToWorldZ(map, building.z) + (building.d - 1) / 2 + p.z }
   }
   return { map, building, local }
 }
 
-describe("market cart yard", () => {
-  it.each([0, 1, 2, 3] as const)("parks the entire convoy behind the stall at rotation %s", rotation => {
+describe("market cart bay", () => {
+  it("keeps the two-column stall with a one-tile bay beside it", () => {
+    expect([BUILDING_KINDS.market.w, BUILDING_KINDS.market.d]).toEqual([3, 2])
+  })
+
+  it.each([0, 1, 2, 3] as const)("parks the cart and hitch inside the bay beside the stall at rotation %s", rotation => {
     for (const puller of ["hand", "donkey", "horse"] as const) {
       const { map, building, local } = fixture(rotation), wheelbase = -cartOffset(puller) * 1.5
-      const initial = alignCart(local(-5, -1), Math.PI / 2 + buildingYaw(rotation), wheelbase)
+      const initial = alignCart(local(-5, -3.5), Math.PI / 2 + buildingYaw(rotation), wheelbase)
       const plan = marketParking(map, building, initial, puller, 1.5, { trees: [] })
       expect(plan).not.toBeNull()
       let pose = initial
@@ -37,27 +42,53 @@ describe("market cart yard", () => {
         pose = next!
       }
       expect(pose).toEqual(plan!.parked)
-      expect(marketYardContains(building, { x: pose.x + 14.5, z: pose.z + 14.5 })).toBe(true)
-      expect(marketYardContains(building, { x: pose.hitch.x + 14.5, z: pose.hitch.z + 14.5 })).toBe(true)
+      expect(marketBayContains(building, { x: pose.x + 14.5, z: pose.z + 14.5 })).toBe(true)
+      expect(marketBayContains(building, { x: pose.hitch.x + 14.5, z: pose.hitch.z + 14.5 })).toBe(true)
+      // Parked along the bay, in line with the stall's depth.
+      const along = rotateBuildingPoint(0, 1, rotation)
+      expect(Math.abs(Math.sin(pose.heading) * along.x + Math.cos(pose.heading) * along.z)).toBeGreaterThan(.97)
     }
   })
 
+  it("parks on the mirrored layout's bay", () => {
+    const { map, building: mirrored, local } = fixture(0, 1)
+    const initial = alignCart(local(-5, -3.5), Math.PI / 2, -cartOffset("horse") * 1.5)
+    const plan = marketParking(map, mirrored, initial, "horse", 1.5, { trees: [] })
+    expect(plan).not.toBeNull()
+    expect(marketBayContains(mirrored, { x: plan!.parked.hitch.x + 14.5, z: plan!.parked.hitch.z + 14.5 })).toBe(true)
+    expect(plan!.parked.hitch.x).toBeLessThan(local(0, 0).x)
+  })
+
   it("rejects occupied bays and old stalls without space for a cart", () => {
-    const { map, building, local } = fixture(), initial = alignCart(local(-5, -1), Math.PI / 2, -cartOffset("horse") * 1.5)
-    const blocked = { trees: [], obstacles: [{ ...local(0, -1), heading: 0, halfWidth: 2, halfLength: 1 }] }
+    const { map, building, local } = fixture(), initial = alignCart(local(-5, -3.5), Math.PI / 2, -cartOffset("horse") * 1.5)
+    const blocked = { trees: [], obstacles: [{ ...local(1, 0), heading: 0, halfWidth: .5, halfLength: 1 }] }
     expect(marketParking(map, building, initial, "horse", 1.5, blocked)).toBeNull()
     expect(marketParking(map, { ...building, w: 2, d: 2 }, initial, "horse", 1.5, { trees: [] })).toBeNull()
   })
 
-  it("leaves the yard open to the sky with a rear hitching rail", () => {
+  it("leaves the bay open to the sky with hitching posts on its outer corners", () => {
     const { building } = fixture(), parts = structureParts(building)
-    expect(parts.some(p => p.name === "cart-yard")).toBe(true)
-    expect(parts.some(p => p.name === "hitching-rail")).toBe(true)
+    expect(parts.find(p => p.name === "cart-bay")?.position[0]).toBe(1)
+    const posts = parts.filter(p => p.name.startsWith("hitching-post-"))
+    expect(posts).toHaveLength(2)
+    for (const post of posts) { expect(post.position[0]).toBeGreaterThan(1.3); expect(Math.abs(post.position[2])).toBeGreaterThan(.8) }
     for (const roof of parts.filter(p => p.layer === "roof")) {
-      const zs = roof.vertices ? roof.vertices.filter((_, i) => i % 3 === 2).map(z => z + roof.position[2])
-        : [roof.position[2] - (roof.size?.[2] ?? 0) / 2]
-      expect(Math.min(...zs)).toBeGreaterThanOrEqual(-.05)
+      const xs = roof.vertices ? roof.vertices.filter((_, i) => i % 3 === 0).map(x => x + roof.position[0])
+        : [roof.position[0] + (roof.size?.[0] ?? 0) / 2]
+      expect(Math.max(...xs)).toBeLessThanOrEqual(.55)
     }
+  })
+
+  it("only stocks and covers a kept stall", () => {
+    const { building } = fixture()
+    const kept = structureParts(building), empty = structureParts({ ...building, stocked: false })
+    expect(kept.some(p => p.name.startsWith("market-cloth-"))).toBe(true)
+    expect(kept.some(p => p.name.startsWith("market-sack-"))).toBe(true)
+    expect(empty.some(p => p.name.startsWith("market-cloth-") || p.name.startsWith("market-sack-"))).toBe(false)
+    expect(empty.some(p => p.layer === "roof")).toBe(false)
+    for (const name of ["stall-counter", "cart-bay", "hitching-post-"]) expect(empty.some(p => p.name.startsWith(name))).toBe(true)
+    expect(entranceParts("market", .65, 17).some(p => p.name === "entry-basket")).toBe(true)
+    expect(entranceParts("market", .65, 17, false).some(p => p.name.startsWith("entry-basket") || p.name.startsWith("entry-produce"))).toBe(false)
   })
 })
 

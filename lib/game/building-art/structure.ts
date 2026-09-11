@@ -11,7 +11,10 @@ import { EARLY_BUILDINGS, earlyBuildingRecipe } from "./style"
 import { singlePlaneRoofRise } from "./dimensions"
 import type { RoofJoin } from "./roof-joins"
 
-export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor" | "layoutSeed" | "hearthZ" | "fireplace" | "floorHeight" | "supportId" | "tavernFlue">
+export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor" | "layoutSeed" | "hearthZ" | "fireplace" | "floorHeight" | "supportId" | "tavernFlue"> & {
+  /** A market stall shows its cloth and wares only while a keeper works it; previews assume one. */
+  stocked?: boolean
+}
 
 const SETTLEMENT_TYPES: readonly SettlementBuildingType[] = [
   "shelter", "workshop", "hall", "garden", "cross", "lumberCamp", "market", "guard-post", "sheep-pen",
@@ -28,7 +31,7 @@ export function structureParts(building: StructureAppearance, roofJoins: RoofJoi
   if (preset) {
     const parts = building.buildType === "inn" && building.supportId
       ? innParts(building.w,building.d,building.height,false,17+(building.layoutSeed ?? 0),true,building.tavernFlue)
-      : earlyBuildingParts({ ...earlyBuildingRecipe(preset.id), layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins, width: building.w, depth: building.d, wallHeight: building.height,
+      : earlyBuildingParts({ ...earlyBuildingRecipe(preset.id), layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins, stocked: building.stocked, width: building.w, depth: building.d, wallHeight: building.height,
       roofRise: preset.id === "enclosure" ? 0 : singlePlaneRoofRise(building.d) })
     if (building.buildType === "inn" && building.supportId && building.floorHeight) {
       // The ladder opens into the right aisle beside the middle row of beds.
@@ -65,7 +68,7 @@ export function structureParts(building: StructureAppearance, roofJoins: RoofJoi
   if (isSettlementType(building.buildType)) return earlyBuildingParts({
     ...earlyBuildingRecipe("house"),
     variant: building.buildType,
-    layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins,
+    layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins, stocked: building.stocked,
     width: building.w,
     depth: building.d,
     wallHeight: building.height,
