@@ -35,6 +35,7 @@ import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import { generateRelic, visitChance } from "@/lib/game/relic"
 import { roadsideEvangelism } from "@/lib/game/monk-evangelism"
 import { generateTravelers, travelerCountForMap } from "@/lib/game/travelers"
+import type { PlayLab } from "@/lib/game/save/url"
 import { generateMap } from "@/lib/game/map/generate-map"
 
 import { useAutosave } from "@/hooks/use-autosave"
@@ -77,12 +78,15 @@ export function GameShell({
   initialDisplay = {},
   pixelation,
   benchmarkCity = false,
+  lab = false,
   expectResume = false,
   resumeViewSize = null,
   mode = "play",
 }: {
   initialSeed?: number
   benchmarkCity?: false | CityBenchmarkMode
+  /** A test world for one system; never resumes or overwrites the saved game. */
+  lab?: false | PlayLab
   /** The server saw the resume cookie: a saved world is expected on this browser. */
   expectResume?: boolean
   /** The zoom the cookie names, so the loading overlay is at scale before the save is read. */
@@ -156,7 +160,7 @@ export function GameShell({
     const size = loadDefaultMapSize()
     const { save } = loadGameSave()
     // The landing page keeps the save only to offer "Continue"; its own seed is a fresh roll.
-    const resuming = playing && save && !benchmarkCity && saveResumesQuery(save, initialSeed, initialWorld) ? save : null
+    const resuming = playing && save && !benchmarkCity && !lab && saveResumesQuery(save, initialSeed, initialWorld) ? save : null
     setSettings(current => ({
       ...current,
       ...loadDisplaySettings(),
@@ -177,8 +181,8 @@ export function GameShell({
   // Keep the world's identity in the URL so any map can be bookmarked and revisited.
   useEffect(() => {
     if (!started || seed === null || !booted) return
-    window.history.replaceState(null, "", `?${playQuery(seed, settings, benchmarkCity)}`)
-  }, [seed, settings, benchmarkCity, booted, started])
+    window.history.replaceState(null, "", `?${playQuery(seed, settings, benchmarkCity, lab)}`)
+  }, [seed, settings, benchmarkCity, lab, booted, started])
 
   // Display tuning is this browser's preference, kept across new maps.
   useEffect(() => {
@@ -241,11 +245,18 @@ export function GameShell({
     [settings.paceVariation, settings.pathEase, settings.acceleration])
   const walkTuning = useMemo(() => ({ sync: settings.walkSync, stride: settings.stride }), [settings.walkSync, settings.stride])
 
+  // A famous relic for the lab, so its draw never holds anyone back.
+  const labRenown = lab === "relic-line" ? 100000 : 0
   // Identities live outside the canvas so the HUD can name whoever is selected.
   const travelerCount = baseMap ? travelerCountForMap(baseMap, settings.traffic) : 0
   const roadTravelers = useMemo(
-    () => (!baseMap || seed === null ? [] : withTravelParties(generateTravelers(seed, travelerCount), seed)),
-    [seed, travelerCount, baseMap],
+    () => {
+      if (!baseMap || seed === null) return []
+      const cast = generateTravelers(seed, travelerCount)
+      // The relic-line lab: everyone devout enough to turn in every time.
+      return withTravelParties(lab === "relic-line" ? cast.map(t => ({ ...t, attributes: { ...t.attributes, piety: 100 } })) : cast, seed)
+    },
+    [seed, travelerCount, baseMap, lab],
   )
 
   // The relic and the brothers who keep it, fixed per seed like the travelers.
@@ -333,7 +344,7 @@ export function GameShell({
   useLayoutEffect(() => () => { useCameraStore.setState({ inputLocked: false }) }, [])
 
   useAutosave({
-    enabled: revealPhase === "complete" && !benchmarkCity && !BUILDING_PREVIEW,
+    enabled: revealPhase === "complete" && !benchmarkCity && !lab && !BUILDING_PREVIEW,
     seed,
     settings,
     settlement: economy.settlement,
@@ -386,8 +397,8 @@ export function GameShell({
           roadTier={settings.road}
           relicTraffic={relicTraffic}
           roadLook={roadLook}
-          shrineRenown={renown?.total ?? 0}
-          baseRenown={(renown?.total ?? 0) - (renown?.visits ?? 0)}
+          shrineRenown={(renown?.total ?? 0) + labRenown}
+          baseRenown={(renown?.total ?? 0) - (renown?.visits ?? 0) + labRenown}
           buildType={economy.buildType}
           resources={economy.settlement.resources}
           onPlace={economy.place}
