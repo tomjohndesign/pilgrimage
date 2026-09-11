@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "5213c5916b4b1b90326c7ff1c01c679726c66867",
-  "releaseCount": 211,
+  "lastProcessedCommit": "1156d95ae7b1beb03fbf19e201e9ba7b368d2fea",
+  "releaseCount": 212,
   "releases": [
+    {
+      "version": "0.0.226",
+      "title": "Release 0.0.226",
+      "summary": "Gather waiting companions on the grass by the enclave entrance (#244)",
+      "commit": "1156d95ae7b1beb03fbf19e201e9ba7b368d2fea"
+    },
     {
       "version": "0.0.225",
       "title": "Release 0.0.225",
