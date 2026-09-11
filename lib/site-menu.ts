@@ -20,6 +20,7 @@ export const SITE_MENU: SiteMenuItem[] = [
       { label: "Playground", description: "Characters, animals & buildings", href: "/assets/characters" },
       { label: "Path playgrounds", description: "Traffic, regrowth & settlement paths", href: "/assets/paths" },
       { label: "Map playground", description: "Compare meadows, groves & connected clearings", href: "/assets/maps" },
+      { label: "Placement playground", description: "Level hillsides under new buildings", href: "/assets/placement" },
       { label: "Pixel workshop", description: "Compare rendering methods in motion", href: "/assets/rendering" },
     ],
   },

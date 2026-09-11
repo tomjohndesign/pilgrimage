@@ -4,6 +4,7 @@ import { useEffect, useMemo } from "react"
 import * as THREE from "three"
 import { getBuildInfluence } from "@/lib/game/build-influence"
 import { useBalanceStore } from "@/lib/game/balance-store"
+import type { GameBalance } from "@/lib/game/balance"
 import { groundHeight } from "@/lib/game/map/elevation"
 import { surfaceHeight, bridgeLayout, ropeHeightAt } from "@/lib/game/map/bridges"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -15,8 +16,9 @@ import { buildTileError } from "@/lib/game/settlement"
  * The cursor separately validates the selected footprint, supplies and camp access.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0
  */
-export function BuildInfluenceOverlay({ map, buildMode }: { map: GameMap; buildMode: boolean }) {
-  const balance = useBalanceStore((s) => s.balance)
+export function BuildInfluenceOverlay({ map, buildMode, balance: labBalance }: { map: GameMap; buildMode: boolean; balance?: GameBalance }) {
+  const savedBalance = useBalanceStore((s) => s.balance)
+  const balance = labBalance ?? savedBalance
   const geometry = useMemo(() => {
     const field = getBuildInfluence(map, balance)
     const positions: number[] = [], colors: number[] = [], edges: number[] = []

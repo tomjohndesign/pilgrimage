@@ -2,9 +2,10 @@ import { placementBuildingLayout } from "./building-placement-layout"
 import { settlementRoute } from "./settlement-route"
 import { buildingApproaches, buildingEntry, rotatedFootprint, type BuildingRotation } from "./building-rotation"
 import { getBuildInfluence } from "./build-influence"
-import { DEFAULT_ELEVATION, finishElevation, generateElevation, groundHeight } from "./map/elevation"
+import { DEFAULT_ELEVATION, finishElevation, footprintGrading, generateElevation, groundHeight } from "./map/elevation"
 import { describe, expect, it } from "vitest"
 import { generateMap } from "./map/generate-map"
+import { DEFAULT_BALANCE } from "./balance"
 import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 import { createFootpaths, recordWalkingPath } from "./footpaths"
 import { generateMonks } from "./monks"
@@ -241,7 +242,37 @@ describe("build and buy", () => {
     expect(placementError(map, house, { x: 11, z: 14 })).toMatch(/cliffs/)
     map.elevation.cliffs[i] = 0
     map.elevation.corners.fill(0.4, (i + 1) * 4, (i + 2) * 4)
-    expect(placementError(map, house, { x: 11, z: 14 })).toMatch(/level ground/)
+    expect(placementError(map, house, { x: 11, z: 14 })).toBeNull()
+    map.elevation.corners.fill(0.9, (i + 1) * 4, (i + 2) * 4)
+    expect(placementError(map, house, { x: 11, z: 14 })).toMatch(/earth to move/)
+  })
+
+  it("levels sloping ground within the tuned limit and refuses steeper pads or cliff edges", () => {
+    const map = testMap(), water = new Uint8Array(map.tiles.length)
+    map.elevation = generateElevation(1, map.width, map.depth, water)
+    // A steady grade across the map: a 2 × 2 home's outer corners sit 0.12 above and below its centre.
+    map.elevation.height = map.elevation.height.map((_, i) => (i % map.width) * 0.12)
+    finishElevation(map.elevation, map.width, map.depth, water, [])
+    const at = { x: 8, z: 14 }
+    const grading = footprintGrading(map, { ...at, ...house })
+    expect(grading.cut).toBeCloseTo(0.12); expect(grading.fill).toBeCloseTo(0.12); expect(grading.cliff).toBe(false)
+    const tuned = (levellingLimit: number) => ({ ...DEFAULT_BALANCE, rules: { ...DEFAULT_BALANCE.rules, levellingLimit } })
+    expect(placementError(map, house, at, tuned(0.15))).toBeNull()
+    expect(placementError(map, house, at, tuned(0.1))).toMatch(/earth to move/)
+    const bought = purchaseStructure({ ...createSettlement(), resources: { gold: 1000, wood: 1000 } }, map, monks, [relic], house.id, at, tuned(0.15))
+    expect(bought.error).toBeNull()
+    const placedMap = { ...map, elevation: bought.settlement.elevation }
+    for (let z = at.z; z < at.z + house.d; z++) for (let x = at.x; x < at.x + house.w; x++)
+      expect(groundHeight(placedMap, x, z)).toBeCloseTo(grading.foundation + 0.2)
+    expect(footprintGrading(placedMap, { ...at, ...house })).toMatchObject({ cut: 0, fill: 0 })
+    // Terraces just under the cliff cutoff: cutting the pad down to its centre
+    // height would leave the upper terrace standing over it as a cliff.
+    const steep = testMap(), steepWater = new Uint8Array(steep.tiles.length)
+    steep.elevation = generateElevation(1, steep.width, steep.depth, steepWater)
+    steep.elevation.height = steep.elevation.height.map((_, i) => (i % steep.width) >= 13 ? 0.95 : (i % steep.width) === 12 ? 0.35 : 0)
+    finishElevation(steep.elevation, steep.width, steep.depth, steepWater, [])
+    expect(footprintGrading(steep, { x: 11, z: 14, ...house }).cliff).toBe(true)
+    expect(placementError(steep, house, { x: 11, z: 14 }, tuned(1))).toMatch(/cliff at the edge/)
   })
 
   it("pays once on successful placement, retaining the base map and founding supplies", () => {

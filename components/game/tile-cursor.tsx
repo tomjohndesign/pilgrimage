@@ -12,7 +12,7 @@ import { groundHeight } from "@/lib/game/map/elevation"
 
 import { canAfford, placementError, type Resources } from "@/lib/game/settlement"
 import { useBalanceStore } from "@/lib/game/balance-store"
-import { buildCatalog } from "@/lib/game/balance"
+import { buildCatalog, type GameBalance } from "@/lib/game/balance"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { surfaceHeight, ropeHeightAt } from "@/lib/game/map/bridges"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
@@ -29,13 +29,17 @@ export function TileCursor({
   buildType,
   resources,
   shrineRenown = 0,
+  balance: labBalance,
 }: {
   map: GameMap
   buildType?: string | null
   resources?: Resources
   shrineRenown?: number
+  /** Playgrounds validate against their own rules instead of the saved tuning. */
+  balance?: GameBalance
 }) {
-  const balance = useBalanceStore((s) => s.balance)
+  const savedBalance = useBalanceStore((s) => s.balance)
+  const balance = labBalance ?? savedBalance
   const requestedRotation = useBuildStore((s) => s.rotation)
   const hovered = useCameraStore((s) => s.hovered)
   const highlight = useMemo(() => {

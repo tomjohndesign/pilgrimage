@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { DEFAULT_ELEVATION, elevationSettings, elevationStep, finishElevation, generateElevation, groundHeight, levelBuildingGround } from "./elevation"
+import { DEFAULT_ELEVATION, elevationSettings, elevationStep, finishElevation, footprintGrading, generateElevation, groundHeight, levelBuildingGround } from "./elevation"
 import { drainWater } from "./hydrology"
 import { generateMap } from "./generate-map"
 import { routeBlind } from "./route"
@@ -71,6 +71,29 @@ describe("topography", () => {
       expect(graded.elevation.slope[building.z * width + building.x]).not.toBe(elevation.slope[building.z * width + building.x])
     },
   )
+
+  it("previews the cut, fill and cliff risk of grading a footprint, matching what levelling then does", () => {
+    const width = 8, depth = 8, water = new Uint8Array(width * depth)
+    const flat: GameMap = { width, depth, tiles: Array(64).fill("grass"), buildings: [] }
+    expect(footprintGrading(flat, { x: 2, z: 2, w: 2, d: 2 })).toEqual({ foundation: 0, cut: 0, fill: 0, cliff: false })
+    const elevation = generateElevation(1, width, depth, water)
+    elevation.height = elevation.height.map((_, i) => (i % width) * 0.1)
+    finishElevation(elevation, width, depth, water, [])
+    const map: GameMap = { width, depth, tiles: Array(64).fill("grass"), buildings: [], elevation }
+    const plot = { x: 2, z: 2, w: 3, d: 2 }
+    const grading = footprintGrading(map, plot)
+    expect(grading.foundation).toBeCloseTo(0.3)
+    // Corners reach half a tile beyond the outer tile centres: 0.1 to the tile, 0.05 more to its corner.
+    expect(grading.cut).toBeCloseTo(0.15); expect(grading.fill).toBeCloseTo(0.15); expect(grading.cliff).toBe(false)
+    const graded = { ...map, elevation: levelBuildingGround(map, plot)! }
+    expect(footprintGrading(graded, plot)).toMatchObject({ foundation: 0.3, cut: 0, fill: 0, cliff: false })
+    expect(footprintGrading(graded, plot).cut).toBe(0)
+    // The neighbouring column to the east stands 0.7 above the pad once graded: a cliff.
+    elevation.height = elevation.height.map((_, i) => (i % width) >= 5 ? 1 : 0.3)
+    finishElevation(elevation, width, depth, water, [])
+    expect(footprintGrading(map, plot).cliff).toBe(true)
+    expect(footprintGrading(map, { ...plot, x: 1 }).cliff).toBe(false)
+  })
 
   it("preserves water, distant terrain, and an existing foundation beside a later purchase", () => {
     const width = 8, depth = 8, water = new Uint8Array(64)
