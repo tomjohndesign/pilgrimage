@@ -35,7 +35,7 @@ import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import { generateRelic, visitChance } from "@/lib/game/relic"
 import { roadsideEvangelism } from "@/lib/game/monk-evangelism"
 import { generateTravelers, travelerCountForMap } from "@/lib/game/travelers"
-import { DEFAULT_MAP_WIDTH, generateMap } from "@/lib/game/map/generate-map"
+import { generateMap } from "@/lib/game/map/generate-map"
 
 import { useAutosave } from "@/hooks/use-autosave"
 import { useSettlement } from "@/hooks/use-settlement"
@@ -114,8 +114,6 @@ export function GameShell({
   const [blasterPastor, setBlasterPastor] = useState(false)
   const [lastMarch, setLastMarch] = useState(false)
   const [masterBuilder, setMasterBuilder] = useState(false)
-  const [defaultMapSize, setDefaultMapSize] = useState(DEFAULT_MAP_WIDTH)
-  const [mapSizeSaved, setMapSizeSaved] = useState(true)
   const [settings, setSettings] = useState<MapSettings>({
     ...DEFAULT_SETTINGS,
     ...initialDisplay,
@@ -156,7 +154,6 @@ export function GameShell({
     // Resolve the browser's preferences and save before generating terrain or
     // writing the URL. A link that names a different world wins over the save.
     const size = loadDefaultMapSize()
-    setDefaultMapSize(size)
     const { save } = loadGameSave()
     // The landing page keeps the save only to offer "Continue"; its own seed is a fresh roll.
     const resuming = playing && save && !benchmarkCity && saveResumesQuery(save, initialSeed, initialWorld) ? save : null
@@ -355,7 +352,8 @@ export function GameShell({
         phase={revealPhase} overlayRef={loadingOverlay} view={openingView} resuming={resuming}
         viewSize={resumeWorld ? resumeWorld.camera.viewSize : !booted && expectResume && resumeViewSize ? resumeViewSize : openingViewSize}
         groundOffset={resuming ? 0 : undefined}
-        focus={resuming && resumeWorld ? { camera: resumeWorld.camera, size: resumeWorld.world.size } : null} />
+        focus={resuming && resumeWorld ? { camera: resumeWorld.camera, size: resumeWorld.world.size } : null}
+        onStop={() => router.push("/")} />
       {map && relic ? (
         <GameCanvas
           {...pixelationSettings}
@@ -399,7 +397,12 @@ export function GameShell({
         playing={revealPhase === "complete"}
         starting={starting}
         canStart={seed !== null && booted}
-        onPlay={() => { if (seed !== null) router.push(`/play?${playQuery(seed, settings)}`) }}
+        onPlay={() => {
+          if (seed === null) return
+          // The last size chosen becomes the default for links that name none.
+          saveDefaultMapSize(settings.size)
+          router.push(`/play?${playQuery(seed, settings)}`)
+        }}
         continueHref={!playing && booted && restore ? "/play" : null}
         cheats={{ blasterPastor, lastMarch, masterBuilder }}
         map={map}
@@ -413,15 +416,10 @@ export function GameShell({
         onSettingsChange={setSettings}
         pixelation={pixelationSettings}
         onPixelationChange={(patch) => setPixelationOverrides((current) => ({ ...current, ...patch }))}
-        defaultMapSize={defaultMapSize}
-        mapSizeSaved={mapSizeSaved}
-        onDefaultMapSizeChange={size => {
-          setDefaultMapSize(size)
-          setMapSizeSaved(saveDefaultMapSize(size))
-        }}
-        onNewMap={size => {
+        onNewMap={({ size, seed }) => {
+          saveDefaultMapSize(size)
           setSettings(current => ({ ...current, size }))
-          setSeed(randomSeed())
+          setSeed(seed)
         }}
         onSeedChange={setSeed}
       />

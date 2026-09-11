@@ -33,6 +33,7 @@ import { strikeTree } from "@/lib/game/trees/impact"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useLoader, type RootState } from "@react-three/fiber"
 import * as THREE from "three"
+import { prepareSpritePicking, spriteTexelRaycast } from "@/lib/game/render/sprite-picking"
 import { usePixelWorldTexel } from "@/components/pixel-canvas"
 import { characterVisual, spriteRow, type SpriteClip, type CharacterModel } from "@/lib/game/character-assets"
 import { usePopulationStore } from "@/lib/game/base-person/population-store"
@@ -117,6 +118,7 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
   const depthTextures = useMemo(() => new Map(depthEntries.map((entry, index) =>
     [entry.index, configureSpriteDepthTexture(sources[textureEntries.length + index])])), [sources, textureEntries])
   const poseDepth = useMemo<SpritePoseDepth>(() => ({ map: { value: null }, enabled: { value: false } }), [])
+  useEffect(() => prepareSpritePicking(sources.slice(0, textureEntries.length)), [sources, textureEntries])
   // Each traveler owns UV state only for clips they have actually played.
   // Eager views for every possible job/prayer/sleep animation left hundreds of
   // thousands of unused Texture objects in the heap at large populations.
@@ -408,7 +410,7 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
         walk: crowdWalk, pose: poseRoot, entry: batchEntry, control: characterBatchControl, publish: batchEntries.publish,
       } : undefined} />
       {(type === "minstrel" || type === "beggar") && !visualOverride && <RoadsideSignals type={type} size={size} pixelSize={size / 64} />}
-      <sprite renderOrder={renderOrder} ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name={name} material={material} onClick={onClick} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync !== false }} />
+      <sprite renderOrder={renderOrder} ref={sprite} layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} name={name} material={material} onClick={onClick} raycast={spriteTexelRaycast} scale={[size, size, 1]} center={center} userData={{ characterModel, calling: type, variant: varied ? appearance.variant : null, appearanceScale: varied ? appearance.scale : 1, bodyType: visual.design?.bodyType, design: visual.design, fps, sync: walkTuning?.sync !== false }} />
       {attachment && <group ref={attachmentRoot} visible={false}>{attachment.content}</group>}
       {outlineMaterial && <sprite ref={idSprite} renderOrder={renderOrder} layers-mask={OUTLINE_ID_LAYER_MASK} material={outlineMaterial}
         scale={[size, size, 1]} center={center} />}

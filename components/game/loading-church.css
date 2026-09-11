@@ -1,6 +1,8 @@
 .loading-church {
   /* The loading UI keeps a fixed pixel size independently of the world zoom. */
   --loading-pixel: 1px;
+  /* The caption's line box, so the Stop button can mirror the indicators' extent. */
+  --loading-caption-line: 14px;
   /* Clear the clipped preview, including saved tree canopies, while keeping
      the caption on screen when a close zoom fills the viewport. */
   --loading-indicator-top: max(48px, min(20%, calc(50% + var(--ground-offset) + var(--resume-view-y, 0dvh) - var(--resume-view-height, 50dvh) / 2 - 16px)));
@@ -103,6 +105,7 @@
   color: #d4c297;
   font-family: var(--font-cinzel), serif;
   font-size: 11px;
+  line-height: var(--loading-caption-line);
   letter-spacing: .12em;
   white-space: nowrap;
 }
@@ -149,6 +152,19 @@
 }
 .loading-church-progress-fill { animation: loading-church-progress 1.2s steps(32) infinite alternate; }
 @keyframes loading-church-progress { to { transform: translateX(32px); } }
+/* Stop sits as far from the bottom edge as the caption's top sits from the top edge. */
+.loading-church-stop {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: calc(var(--loading-indicator-top) - 10 * var(--loading-pixel) - var(--loading-caption-line));
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+.loading-church-stop:focus-visible {
+  outline: 2px solid #f4d991;
+  outline-offset: 3px;
+}
 @media (max-width: 640px) {
   .loading-church[data-idle="true"] { transform: translateY(-19dvh) scale(.78); transform-origin: 50% 50%; }
 }

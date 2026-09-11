@@ -8,6 +8,7 @@ import { travelerAppearance } from "./base-person/population"
 import { TRAVELER_TYPES, type Traveler } from "./travelers"
 import { animalWalkSpeed } from "./transport/assets"
 import { tileAt, worldToTileX, worldToTileZ, tileToWorldX, tileToWorldZ } from "./map/types"
+import { ENCLAVE_FIELD_RADIUS } from "./transport/enclave-parking"
 import type { GameMap } from "./map/types"
 
 function fixture(direction: 1 | -1) {
@@ -19,7 +20,10 @@ function fixture(direction: 1 | -1) {
   const t: Traveler = { id: 0, type: TRAVELER_TYPES.knight, name: "Knight", pace: 1, direction, offset: (14 - direction * 0.03) / 29,
     attributes: { happiness: 80, gold: 100, piety: 100, hunger: 100, thirst: 100, stamina: 100, status: 100, jobless: false, skills: [], age: 30 } }
   const sim = createSim([t], map); sim.shrineRenown = 10000
-  sim.trees = [1, -1].map(side => ({ x: tileToWorldX(map, 14 + side * 2), y: 0.2, z: tileToWorldZ(map, 17), species: "oak" as const }))
+  // Tether trees on either side of the field beside the shrine, clear of the
+  // track, and a pair on the far verge of the road for stops at the fork.
+  sim.trees = [1, -1].flatMap(side => [{ x: tileToWorldX(map, 14 + side * 4), y: 0.2, z: tileToWorldZ(map, 8), species: "oak" as const },
+    { x: tileToWorldX(map, 14 + side * 2), y: 0.2, z: tileToWorldZ(map, 17), species: "oak" as const }])
   return { map, t, sim, s: sim.travelers.get(0)! }
 }
 
@@ -39,6 +43,9 @@ describe("mounted knight journeys", () => {
     expect(s.branchProgress).toBe(0)
     expect(s.horseRest?.tree).toBeDefined()
     expect(tileAt(map, worldToTileX(map, s.horseRest!.x), worldToTileZ(map, s.horseRest!.z))).toBe("grass")
+    // The horse waits in the field beside the shrine, not on the verge of the road.
+    expect(Math.hypot(s.horseRest!.x - tileToWorldX(map, 14), s.horseRest!.z - tileToWorldZ(map, 10))).toBeLessThanOrEqual(ENCLAVE_FIELD_RADIUS)
+    expect(Math.abs(s.horseRest!.z - tileToWorldZ(map, 14))).toBeGreaterThan(2)
     const horse = { ...s.horseRest! }
     expect(horse.x).toBeCloseTo(s.x); expect(horse.z).toBeCloseTo(s.z)
     let prayed = false, walkedOut = false
@@ -71,13 +78,13 @@ describe("mounted knight journeys", () => {
     expect(knightMounted(s.activity, s.horseRest)).toBe(false)
   })
 
-  it("continues on the road when there is no standing tree to tie to", () => {
+  it("leaves the horse standing loose in the field when no tree is within reach", () => {
     const { map, t, sim, s } = fixture(1)
     sim.trees = []
-    for (let i = 0; i < 200; i++) stepSim(sim, [t], map, DEFAULT_WALK_SPEED, 0.1)
-    expect(s.horseRest).toBeUndefined()
-    expect(s.shrineParking).toBeUndefined()
-    expect(s.visits).toBe(0)
+    for (let i = 0; i < 3000 && !s.horseRest; i++) stepSim(sim, [t], map, DEFAULT_WALK_SPEED, 0.1)
+    expect(s.horseRest).toBeDefined()
+    expect(s.horseRest?.tree).toBeUndefined()
+    expect(s.activity).toBe("toRelic")
   })
 
   it("uses the horse's stride on the road and the knight's own legs after dismounting", () => {
