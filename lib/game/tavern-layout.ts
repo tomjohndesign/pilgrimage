@@ -91,9 +91,13 @@ export function tavernFurnitureClear(building: BuildingDef, from: TilePos, to: T
 
 /** Pauses at the counter, in the service aisle and near the drinking tables. */
 export function tavernWorkStop(slot: number, stop: number, w: number, d: number, layoutSeed?: number, hearthZ?: number): TilePos {
-  const stops = slot % 2 === 0
-    ? [[.06, -.30], [0, -.39], [0, 0], [.17, .25]]
-    : [[.34, -.30], [.41, -.23], [.32, .10], [.10, .36]]
+  const rounds = [
+    [[.06, -.30], [0, -.39], [0, 0], [.17, .25]],
+    [[.34, -.30], [.41, -.23], [.32, .10], [.10, .36]],
+    [[.20, -.30], [.20, -.42], [-.10, -.12], [.26, .34]],
+    [[.20, -.42], [.12, -.20], [0, .18], [.36, .02]],
+  ]
+  const stops = rounds[((slot % rounds.length) + rounds.length) % rounds.length]
   const [x, z] = stops[stop % stops.length]
   const point={ x: x*w*layoutHand("tavern",layoutSeed), z: z*d }
   const {obstacles}=tavernLayout(w,d,layoutSeed,hearthZ)

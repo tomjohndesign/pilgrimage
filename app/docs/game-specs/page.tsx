@@ -223,7 +223,7 @@ export default function GameSpecsPage() {
           stamina alone.
         </p>
         <p className="mt-3">
-          Settlers who take work move into a house, two to a house. They come home to sleep, and the
+          Settlers who take work move into a house, six to a house. They come home to sleep, and the
           household’s own hearth restores them slowly and for nothing; the counter is the quick
           answer and the only one open to a traveler off the road. A settler with no house camps
           beside their work once their legs give out.

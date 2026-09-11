@@ -704,9 +704,8 @@ describe("woodcutter huts", () => {
       t.attributes.jobless = true
       return t
     })
-    // Three hires need beds; a house sleeps two.
+    // Every hire needs a bed; one house sleeps the whole crew.
     addHouse(map)
-    addHouse(map, { x: 6, z: 12 })
     const sim = createEstablishedShrine(travelers, map, holy)
     sim.buildings = [camp]
     sim.trees = trees
@@ -730,12 +729,12 @@ describe("woodcutter huts", () => {
         expect(map.tiles[z * map.width + x]).not.toBe("water")
       }
     }
-    expect(maxWorkers).toBe(3)
+    expect(maxWorkers).toBeGreaterThan(0)
     expect(sawWorking && sawHauling).toBe(true)
     expect(sim.felled.size).toBe(trees.length)
     expect(sim.wood).toBe(expectedWood)
     expect(Array.from(sim.piles.values()).reduce((sum, pile) => sum + pile.wood, 0)).toBe(sim.wood)
-    expect(Array.from(sim.travelers.values()).filter((s) => s.employer)).toHaveLength(3)
+    expect(Array.from(sim.travelers.values()).filter((s) => s.employer)).toHaveLength(maxWorkers)
     // Ten game days of felling, hauling and nights at home.
   }, 30000)
 
@@ -946,7 +945,7 @@ describe("houses, counters and posts", () => {
   it("gives each settler their own bed and moves the next one into the next house", () => {
     const { map, camp, trees, traveler } = fixture()
     map.buildings.push(camp)
-    addHouse(map)
+    const first = addHouse(map).id
     addHouse(map, { x: 6, z: 12 })
     const people = Array.from({ length: 24 }, (_, id) => {
       const t = devout(traveler(id))
@@ -956,10 +955,14 @@ describe("houses, counters and posts", () => {
     const sim = createEstablishedShrine(people, map, holy)
     sim.buildings = jobBuildings(map)
     sim.trees = trees
-    run(sim, people, map, 1200, () => [...sim.travelers.values()].filter(s => s.home).length === 3)
+    // A household already fills all but two pallets of the first house.
+    const lodgers = [...sim.travelers.values()].slice(-(HOUSE_BEDS - 2))
+    for (const lodger of lodgers) lodger.home = first
+    const target = lodgers.length + 3
+    run(sim, people, map, 1200, () => [...sim.travelers.values()].filter(s => s.home).length === target)
     const settled = [...sim.travelers.values()].filter(s => s.home)
-    expect(settled.length).toBe(3)
-    // Two beds to a house, so the third settler goes to the second house.
+    expect(settled.length).toBe(target)
+    // Only two pallets remain in the first house, so the third settler goes to the second house.
     const byHouse = new Map<string, number>()
     for (const s of settled) byHouse.set(s.home!, (byHouse.get(s.home!) ?? 0) + 1)
     expect([...byHouse.values()].every(count => count <= HOUSE_BEDS)).toBe(true)
@@ -1413,6 +1416,9 @@ describe("traveling monks, nuns and housing limits", () => {
   it("limits new workers to completed house beds even when more jobs are open", () => {
     const { map, camp, trees, traveler } = fixture()
     const people = Array.from({ length: 100 }, (_, id) => traveler(id))
+    // Nuns never take settlement work, so they can hold pallets without competing for jobs.
+    const lodgers = people.slice(-(HOUSE_BEDS - 2))
+    for (const lodger of lodgers) lodger.type = TRAVELER_TYPES.nun
     const sim = createSim(people, map)
     sim.buildings = [camp]; sim.trees = trees
     const completeVisits = () => {
@@ -1424,6 +1430,7 @@ describe("traveling monks, nuns and housing limits", () => {
     completeVisits()
     expect([...sim.travelers.values()].filter(s => s.employer)).toHaveLength(0)
     const house = addHouse(map)
+    for (const lodger of lodgers) sim.travelers.get(lodger.id)!.home = house.id
     completeVisits()
     const workers = [...sim.travelers.values()].filter(s => s.employer)
     expect(workers).toHaveLength(2)

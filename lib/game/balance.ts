@@ -52,7 +52,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     id: "workshop",
     label: "Woodcutter’s hut",
     category: "buildings",
-    description: "Three jobs felling nearby trees. Workers carry timber to a storehouse or back to the hut.",
+    description: "Six jobs felling nearby trees. Workers carry timber to a storehouse or back to the hut.",
     cost: { gold: 60, wood: 45 },
     renown: 0,
     requiredRenown: 0,
@@ -125,7 +125,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "house", label: "House", category: "buildings",
-    description: "A log hut with a hearth and two straw beds. Settlers who take work here move in, and come home to sleep when they tire.",
+    description: "A log hut with a hearth and six straw pallets, three on the floor and three on a sleeping shelf above. Settlers who take work here move in, and come home to sleep when they tire.",
     cost: { gold: 40, wood: 30 }, renown: 1, requiredRenown: 0,
     income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.70,
     color: "#8c7658", roofColor: "#a59164",
@@ -162,7 +162,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "tavern", label: "Tavern", category: "buildings",
-    description: "Two jobs behind the counter. Low happiness draws travelers and settlers here for company, even when free water is nearby. They buy food and drink and recover happiness at the tables. Chairs and outdoor benches offer a free short rest, restoring up to 8 stamina. Keep both entrances and the benches clear.",
+    description: "Four jobs behind the counter. Low happiness draws travelers and settlers here for company, even when free water is nearby. They buy food and drink and recover happiness at the tables. Chairs and outdoor benches offer a free short rest, restoring up to 8 stamina. Keep both entrances and the benches clear.",
     cost: { gold: 150, wood: 110 }, renown: 12, requiredRenown: 25,
     income: { gold: 0, wood: 0 }, w: 3, d: 4, height: 0.78,
     color: "#8c7658", roofColor: "#a59164",
@@ -569,11 +569,11 @@ export function buildCatalog(balance: GameBalance = DEFAULT_BALANCE): BuildDefin
 }
 
 export function buildingIncomeLabel(def: BuildDefinition, balance: GameBalance): string {
-  return def.id === "workshop" ? "3 woodcutting jobs"
-    : def.id === "tavern" ? "2 jobs · food & drink for gold"
+  return def.id === "workshop" ? "6 woodcutting jobs"
+    : def.id === "tavern" ? "4 jobs · food & drink for gold"
     : def.id === "sheep-pen" ? "2 herding jobs"
     : def.id === "inn" ? "4 jobs · bunks & beds"
-    : def.id === "house" ? "Homes 2 settlers"
+    : def.id === "house" ? "Homes 6 settlers"
     : def.id === "monk-shelter" || def.id === "shelter" ? "Adds monk housing when complete"
     : def.id === "market" ? "Draws a vendor to keep it"
     : def.id === "storehouse" ? `Timber storage · ${STOREHOUSE_FOOD_CAPACITY} food capacity` : "No resource income"

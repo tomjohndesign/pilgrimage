@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { BUILD_CATALOG } from "./balance"
+import { HOUSE_BEDS } from "./building-art/early-geometry"
 import { housingBeds, enclaveHousing, monkBeds, vacantMonkBed } from "./housing"
 import { MONK_COUNT } from "./monks"
 import type { BuildingDef, GameMap } from "./map/types"
@@ -14,14 +15,14 @@ describe("enclave housing", () => {
     const house = building("house"), shelter = building("monk-shelter")
     const site = { ...house, construction: { work: 0, required: 10 } }
     const world = map([house, shelter, site])
-    expect(housingBeds(house)).toBe(2)
+    expect(housingBeds(house)).toBe(HOUSE_BEDS)
     expect(enclaveHousing(world, 1, MONK_COUNT)).toEqual({
-      people: { occupied: 1, capacity: 2, available: 1 },
+      people: { occupied: 1, capacity: HOUSE_BEDS, available: HOUSE_BEDS - 1 },
       monks: { occupied: MONK_COUNT, capacity: housingBeds(shelter), available: Math.max(0, housingBeds(shelter) - MONK_COUNT) },
     })
     site.construction.work = 10
-    expect(enclaveHousing(world, 1, MONK_COUNT).people.capacity).toBe(4)
-    expect(housingBeds({ ...house, w: house.d, d: house.w, rotation: 1 })).toBe(2)
+    expect(enclaveHousing(world, 1, MONK_COUNT).people.capacity).toBe(HOUSE_BEDS * 2)
+    expect(housingBeds({ ...house, w: house.d, d: house.w, rotation: 1 })).toBe(HOUSE_BEDS)
   })
 
   it("reserves founding beds and never allocates the same place twice", () => {

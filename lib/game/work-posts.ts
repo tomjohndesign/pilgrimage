@@ -10,8 +10,9 @@ import { marketLayout } from "./market-layout"
  * resized or rotated building keeps its posts.
  */
 export const WORK_POSTS: Record<string, readonly (readonly [number, number])[]> = {
-  // Either side of the serving counter, which stands at (width×.2, -depth×.14).
-  tavern: [[0.06, -0.30], [0.34, -0.30]],
+  // Along the back of the serving counter, which stands at (width×.2, -depth×.14),
+  // with a fourth keeper at the rear wall behind it, clear of the service door.
+  tavern: [[0.06, -0.30], [0.34, -0.30], [0.20, -0.30], [0.20, -0.42]],
   // Both aisles, clear of the central beds, reception furniture and ladder.
   inn: [[-.215,-.225],[.215,-.225],[-.215,.225],[.215,.225]],
   // Out in the open fold, clear of the water trough and the gate.
