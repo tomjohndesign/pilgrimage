@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "3ab7b0341d57d0c7673ffe4591525033ebbec14c",
-  "releaseCount": 217,
+  "lastProcessedCommit": "00f2a96e31a8da7c49e3156c981641adb011abdf",
+  "releaseCount": 219,
   "releases": [
+    {
+      "version": "0.0.233",
+      "title": "Release 0.0.233",
+      "summary": "Bring back 6× playback, drop 2×, and withhold 6× in a crowd (#251)",
+      "commit": "00f2a96e31a8da7c49e3156c981641adb011abdf"
+    },
+    {
+      "version": "0.0.232",
+      "title": "Release 0.0.232",
+      "summary": "Set the market stall at 3×2 with a side cart bay, bare when unkept, and smoke only for occupied buildings (#252)",
+      "commit": "20861b41a88560418fa5528c9c61a69dca6f947a"
+    },
     {
       "version": "0.0.231",
       "title": "Release 0.0.231",
