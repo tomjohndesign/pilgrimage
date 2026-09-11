@@ -10,7 +10,7 @@ import { Music2, Slash } from "lucide-react"
  * whole component out.
  */
 
-const VIDEO_ID = "xERuXyDeVqc"
+const VIDEO_ID = "5F5dgg1eeGE"
 /** 0–100. Quiet enough to sit under the game rather than in front of it. */
 const VOLUME = 20
 const MUSIC_STORAGE_KEY = "pilgrimage.music"
