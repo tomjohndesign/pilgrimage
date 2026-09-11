@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
-import { prioritizePeople, SELECTION_OUTLINE_COLOR, SELECTION_OUTLINE_OPACITY } from "@/lib/game/selection"
+import { CHARACTER_HIT_TARGET, prioritizePeople, SELECTION_OUTLINE_COLOR, SELECTION_OUTLINE_OPACITY } from "@/lib/game/selection"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { BASE_CHARACTER_SCALE } from "@/lib/game/base-person/gait"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
@@ -32,9 +32,10 @@ export function PersonPicking() {
   return null
 }
 
-/** A generous click volume shared by monks and travelers, without visible geometry. */
+/** A generous click volume shared by monks and travelers, without visible geometry.
+ * It yields to any figure's drawn texels behind it (see `prioritizePeople`). */
 export function CharacterHitTarget({ onClick }: { onClick: FigureClickHandler }) {
-  return <mesh name="character-hit-target" position={[0, 0.4, 0]} onClick={onClick}>
+  return <mesh name={CHARACTER_HIT_TARGET} position={[0, 0.4, 0]} onClick={onClick}>
     <boxGeometry args={[0.8, 1, 0.8]} />
     <meshBasicMaterial visible={false} />
   </mesh>
@@ -155,7 +156,7 @@ export function CharacterSelectionOutline({ flying = false }: { flying?: boolean
     // Sprites manage their own layer so selection also works after async loading.
     // The click volume and flat ID copies must never enlarge its silhouette.
     anchor.current?.parent?.traverse((object) => {
-      if ((object instanceof THREE.Mesh || object instanceof THREE.Sprite) && object.layers.isEnabled(0) && object.name !== "character-hit-target") include(object)
+      if ((object instanceof THREE.Mesh || object instanceof THREE.Sprite) && object.layers.isEnabled(0) && object.name !== CHARACTER_HIT_TARGET) include(object)
     })
     scene.traverse((object) => {
       if (object instanceof THREE.Light) include(object)

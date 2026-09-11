@@ -44,11 +44,15 @@ export function selectionObjectId(selection: Selection | null, objects: {
       : selection.kind === "monk" ? residentObjectId(index) : pileObjectId(index)
 }
 
+/** The invisible click volume every walking figure shares. */
+export const CHARACTER_HIT_TARGET = "character-hit-target"
+
 /** Marks a rendered subtree as a person, for `prioritizePeople`. */
 const PERSON_PICK = "person"
 const SCENERY_PICK = "selectionScenery"
 
 interface PickObject {
+  name?: string
   visible?: boolean
   userData?: Record<string, unknown>
   parent?: PickObject | null
@@ -89,5 +93,28 @@ export function prioritizePeople<T extends { object: PickObject }>(hits: readonl
     const passThrough = hasPickTag(hit.object, SCENERY_PICK) && !hasPickTag(hit.object, PERSON_PICK)
     ;(passThrough ? scenery : solid).push(hit)
   }
-  return scenery.length ? [...solid, ...scenery] : hits as T[]
+  return preferDrawnFigures(scenery.length ? [...solid, ...scenery] : hits as T[])
+}
+
+/**
+ * Figure sprites only report their drawn texels, so one figure's opaque pixel
+ * beats another figure's invisible click volume in front of it: a crowd's
+ * boxes never swallow the cart, animal or walker seen behind them. Only
+ * neighbouring person hits reorder; any surface between them keeps its place.
+ */
+function preferDrawnFigures<T extends { object: PickObject }>(hits: T[]): T[] {
+  let result: T[] | null = null
+  for (let start = 0; start < hits.length;) {
+    if (!hasPickTag(hits[start].object, PERSON_PICK)) { start++; continue }
+    let end = start + 1
+    while (end < hits.length && hasPickTag(hits[end].object, PERSON_PICK)) end++
+    const run = hits.slice(start, end)
+    const volumes = run.filter(hit => hit.object.name === CHARACTER_HIT_TARGET)
+    if (volumes.length && volumes.length < run.length) {
+      result ??= [...hits]
+      result.splice(start, run.length, ...run.filter(hit => hit.object.name !== CHARACTER_HIT_TARGET), ...volumes)
+    }
+    start = end
+  }
+  return result ?? hits
 }
