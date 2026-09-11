@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "5ca3b6f7d16083c6e6933a9c4372f7d08712240f",
-  "releaseCount": 210,
+  "lastProcessedCommit": "5213c5916b4b1b90326c7ff1c01c679726c66867",
+  "releaseCount": 211,
   "releases": [
+    {
+      "version": "0.0.225",
+      "title": "Release 0.0.225",
+      "summary": "Level uneven ground under new buildings, within a tunable limit (#245)",
+      "commit": "5213c5916b4b1b90326c7ff1c01c679726c66867"
+    },
     {
       "version": "0.0.224",
       "title": "Release 0.0.224",
