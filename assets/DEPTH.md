@@ -42,6 +42,16 @@ The terrain/support plane still protects ground contacts from enlarged scenery
 texels. Airborne sprites use their geometry depth without that ground clamp.
 Keep the existing world/character render passes and bounded pixel resolution.
 
+Relief alone cannot order two figures standing on one spot: their folds and
+limbs win alternately, texel by texel, and the overlap ink hatches the whole
+body. `render/overlap-order` therefore gives each figure a painter's bias toward
+the camera, one body-thickness step per neighbour behind it within a fraction
+of its sprite size, so nearer anchors cover farther ones completely. The bias
+reaches batches as a per-instance attribute and standalone sprites as a
+uniform, applies equally to the colour and ID passes, and is zero for anyone
+standing alone. A passenger cart and its seated passengers share one anchor by
+design and are exempt (`shared` entries); their baked relief orders them.
+
 ## Furniture contact
 
 Correct depth does not decide where someone should stand or lie. A usable
@@ -57,6 +67,6 @@ Unfinished buildings do not offer usable support surfaces.
 Run `npm test`, `npm run typecheck`, the character asset checkers from
 [WALKING.md](WALKING.md), and `node --test scripts/test-sprite-depth.mjs`.
 The checks cover paired active assets, ink registration, encoded range, geometry
-clipping, surfaces intersecting every pose, enlarged floors, overlap order and
-selection outlines. Inspect the real game beside buildings at multiple views
+clipping, surfaces intersecting every pose, enlarged floors, overlap order,
+two figures on one spot and selection outlines. Inspect the real game beside buildings at multiple views
 and zoom levels after changing the depth or contact contract.

@@ -5,6 +5,7 @@ import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 import { PixelCharacters, usePixelWorldTexel } from "@/components/pixel-canvas"
 import { CharacterBatch, type CharacterBatchEntry } from "@/lib/game/render/character-batch"
+import { overlapBiases, type OverlapParticipant } from "@/lib/game/render/overlap-order"
 import { SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import { batchSourceRoot, updateBatchSourceVisibility, clearBatchSourceVisibility } from "@/lib/game/render/batch-source-visibility"
 import { isWorldVisible } from "@/lib/game/render/visibility"
@@ -60,6 +61,7 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
   }), [groups, membership, candidates])
   const root = useRef<THREE.Group>(null)
   const worldTexel = usePixelWorldTexel()
+  const overlap = useMemo(() => ({ participants: [] as OverlapParticipant[], entries: [] as CharacterBatchEntry[], biases: new Float32Array(0), anchor: new THREE.Vector3() }), [])
   const phaseStart = useRef(0)
   useFrame(() => { phaseStart.current = frameProfile.start() }, -2.5)
   useFrame(() => {
@@ -102,6 +104,7 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
       group.entries.sort((a, b) => a.sprite.renderOrder - b.sprite.renderOrder)
       batch?.write(group.entries, camera, true)
     }
+    orderCoincidentFigures(entries, groups, camera, overlap)
     updateBatchSourceVisibility(scene, candidates, clock.elapsedTime)
     frameProfile.end("characterBatches", started)
   }, .5)
@@ -118,4 +121,34 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
     <SpriteFrames visibleRoot={root}>{children}</SpriteFrames>
     <PixelCharacters><group name="character-batches" ref={root} /></PixelCharacters>
   </Context.Provider>
+}
+
+/** Figures standing on one spot resolve by painter's order instead of texel
+ * noise. Batched entries carry this frame's anchors from their write; the few
+ * standalone sprites (selected figures, edited animals) resolve their own. */
+function orderCoincidentFigures(entries: CharacterEntries, groups: Map<string, AtlasGroup>, camera: THREE.Camera,
+  scratch: { participants: OverlapParticipant[]; entries: CharacterBatchEntry[]; biases: Float32Array; anchor: THREE.Vector3 }) {
+  const { participants, anchor } = scratch
+  participants.length = 0; scratch.entries.length = 0
+  const admit = (entry: CharacterBatchEntry) => {
+    participants.push({ x: entry.anchorX!, z: entry.anchorZ!, distance: entry.anchorDistance!, size: entry.anchorSize!, order: entry.sprite.renderOrder })
+    scratch.entries.push(entry)
+  }
+  for (const group of groups.values()) for (const entry of group.entries) if (!entry.shared && entry.depthBias) admit(entry)
+  const view = camera.matrixWorldInverse.elements
+  for (const entry of entries) {
+    const sprite = entry.sprite
+    if (entry.shared || !entry.depthBias || !sprite.visible) continue
+    if (!isWorldVisible(sprite.parent)) { entry.depthBias.value = 0; continue }
+    sprite.getWorldPosition(anchor)
+    entry.anchorX = anchor.x; entry.anchorZ = anchor.z
+    entry.anchorDistance = -(view[2] * anchor.x + view[6] * anchor.y + view[10] * anchor.z + view[14])
+    const world = sprite.matrixWorld.elements
+    entry.anchorSize = Math.hypot(world[0], world[1], world[2])
+    admit(entry)
+  }
+  if (scratch.biases.length < participants.length) scratch.biases = new Float32Array(Math.max(64, 2 ** Math.ceil(Math.log2(participants.length))))
+  const biases = overlapBiases(participants, scratch.biases)
+  for (let i = 0; i < scratch.entries.length; i++) scratch.entries[i].depthBias!.value = biases[i]
+  for (const group of groups.values()) group.batch?.writeBiases(group.entries)
 }

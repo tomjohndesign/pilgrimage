@@ -24,6 +24,19 @@ export interface CharacterBatchEntry {
   ground: { value: THREE.Vector4 }
   depth: SpritePoseDepth
   id: THREE.Vector3
+  /** Painter's bias toward the camera (world units) from render/overlap-order.
+   * Standalone materials read the same object as a uniform. */
+  depthBias?: { value: number }
+  /** Shares its anchor with another sprite by design (a cart and its seated
+   * passengers); exempt from coincidence ordering. */
+  shared?: boolean
+  /** This frame's resolved anchor, written by CharacterBatch.write for the
+   * overlap ordering pass. */
+  anchorX?: number
+  anchorZ?: number
+  /** Camera distance along the view axis, larger is farther. */
+  anchorDistance?: number
+  anchorSize?: number
 }
 
 const sourceEntries = new WeakMap<THREE.Sprite, CharacterBatchEntry>()
@@ -88,17 +101,17 @@ export class CharacterBatch {
           vec4 characterWorldAnchor = modelMatrix * characterAnchor;
           vec3 characterWorldX = (modelMatrix * vec4(characterAxisX, 0.0)).xyz;
           vec3 characterWorldY = (modelMatrix * vec4(characterAxisY, 0.0)).xyz;
-          vec4 mvPosition = characterView;
+          vec4 mvPosition = vec4(characterView.xyz, 1.0);
           vec2 characterScale = vec2(length(characterWorldX), length(characterWorldY));
           mvPosition.xy += (position.xy - (characterCenter - vec2(.5))) * characterScale;
           gl_Position = projectionMatrix * mvPosition;` : `#include <project_vertex>
           mat4 characterWorld = modelMatrix * instanceMatrix;
-          mvPosition = characterView;
+          mvPosition = vec4(characterView.xyz, 1.0);
           vec2 characterScale = vec2(length(characterWorld[0].xyz), length(characterWorld[1].xyz));
           mvPosition.xy += (position.xy - (characterCenter - vec2(.5))) * characterScale;
           gl_Position = projectionMatrix * mvPosition;`)
         applySpriteDepth(shader, this.viewport, worldTexel, { value: new THREE.Vector4(0, 1, 0, 0) }, { map: { value: entry.depth.map.value }, enabled: { value: true } },
-          { anchor: compact ? "characterWorldAnchor" : "(modelMatrix * instanceMatrix[3])", viewAnchor: "characterView", size: compact ? "length(characterWorldX)" : "length(characterWorld[0].xyz)", ground: "characterGround" })
+          { anchor: compact ? "characterWorldAnchor" : "(modelMatrix * instanceMatrix[3])", viewAnchor: "vec4(characterView.xyz, 1.0)", size: compact ? "length(characterWorldX)" : "length(characterWorld[0].xyz)", ground: "characterGround", bias: "characterView.w" })
         shader.fragmentShader = `flat varying vec3 vCharacterId;
           flat varying float vCharacterIndex;
           uniform sampler2D characterPalette;
@@ -116,7 +129,7 @@ export class CharacterBatch {
             }`}`)
       }
       material.onBeforeRender = renderer => { renderer.getCurrentViewport(this.viewport) }
-      material.customProgramCacheKey = () => `character-batch-v4-${compact}-${ids}-${!!entry.complexion}`
+      material.customProgramCacheKey = () => `character-batch-v5-${compact}-${ids}-${!!entry.complexion}`
       return material
     })
     this.root.name = "character-atlas-batch"
@@ -183,13 +196,18 @@ export class CharacterBatch {
       const x = world[12], y = world[13], z = world[14], w = world[15]
       // Only the translation column is consumed. Preserve Matrix4's exact
       // multiply/add order without computing twelve unused matrix entries.
+      // The view anchor is affine (w = 1), so its fourth component carries the
+      // painter's bias instead; a new attribute would exceed 16 vertex slots.
+      const viewZ = cameraView[2] * x + cameraView[6] * y + cameraView[10] * z + cameraView[14] * w
       view.setXYZW(i,
         cameraView[0] * x + cameraView[4] * y + cameraView[8] * z + cameraView[12] * w,
         cameraView[1] * x + cameraView[5] * y + cameraView[9] * z + cameraView[13] * w,
-        cameraView[2] * x + cameraView[6] * y + cameraView[10] * z + cameraView[14] * w,
-        cameraView[3] * x + cameraView[7] * y + cameraView[11] * z + cameraView[15] * w)
+        viewZ, entry.depthBias?.value ?? 0)
+      const sx = compactParent ? sprite.scale.x : 1, sy = compactParent ? sprite.scale.y : 1
+      // The overlap ordering pass runs once every batch has resolved its anchors.
+      entry.anchorX = x; entry.anchorZ = z; entry.anchorDistance = -viewZ
+      entry.anchorSize = Math.hypot(world[0] * sx, world[1] * sx, world[2] * sx)
       if (this.compact) {
-        const sx = compactParent ? sprite.scale.x : 1, sy = compactParent ? sprite.scale.y : 1
         anchor.setXYZW(i, x, y, z, w)
         axisX.setXYZ(i, world[0] * sx + 0, world[1] * sx + 0, world[2] * sx + 0)
         axisY.setXYZ(i, world[4] * sy + 0, world[5] * sy + 0, world[6] * sy + 0)
@@ -240,6 +258,15 @@ export class CharacterBatch {
     preparation.entries = entries.length; preparation.direct = direct
     preparation.dynamicBytes = this.capacity * (this.compact ? 22 : 28) * 4
     if (paletteChanged) this.palette.needsUpdate = true
+  }
+
+  /** Painter's biases resolved after every batch wrote its anchors. The view
+   * attribute is already queued for this frame's upload. */
+  writeBiases(entries: CharacterBatchEntry[]): void {
+    if (!entries.length || !this.geometry) return
+    const view = this.geometry.getAttribute("characterView")
+    for (let i = 0; i < entries.length; i++) view.setW(i, entries[i].depthBias?.value ?? 0)
+    view.needsUpdate = true
   }
 
   dispose() {
