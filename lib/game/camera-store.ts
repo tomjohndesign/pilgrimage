@@ -45,6 +45,11 @@ interface CameraState {
   mapDepth: number
   /** What the player clicked — a traveler, a monk, or the relic. Not part of reset(). */
   selection: Selection | null
+  /**
+   * The camera tracks the selection each frame (a traveler's whole party when
+   * they have one). Any player pan releases it, as does changing the selection.
+   */
+  following: boolean
 
   pan: (dx: number, dz: number) => void
   /** Jump the focus straight to a world point — the minimap's click-to-travel. */
@@ -55,6 +60,9 @@ interface CameraState {
   cycleOutlineMode: () => void
   setMapSize: (width: number, depth: number) => void
   select: (selection: Selection | null) => void
+  setFollowing: (following: boolean) => void
+  /** The per-frame follow step: moves the focus without releasing the follow. */
+  follow: (x: number, z: number) => void
   reset: () => void
 }
 
@@ -87,11 +95,12 @@ export const useCameraStore = create<CameraState>((set) => ({
   mapWidth: DEFAULT_MAP_WIDTH,
   mapDepth: DEFAULT_MAP_DEPTH,
   selection: null,
+  following: false,
   inputLocked: false,
 
-  pan: (dx, dz) => set((s) => s.inputLocked ? s : clampTarget(s, s.targetX + dx, s.targetZ + dz)),
+  pan: (dx, dz) => set((s) => s.inputLocked ? s : { following: false, ...clampTarget(s, s.targetX + dx, s.targetZ + dz) }),
 
-  panTo: (x, z) => set((s) => s.inputLocked ? s : clampTarget(s, x, z)),
+  panTo: (x, z) => set((s) => s.inputLocked ? s : { following: false, ...clampTarget(s, x, z) }),
 
   rotate: (direction) => set((s) => s.inputLocked ? s : ({ viewIndex: s.viewIndex + direction })),
 
@@ -120,7 +129,11 @@ export const useCameraStore = create<CameraState>((set) => ({
       ...clampTarget({ mapWidth: width, mapDepth: depth }, s.targetX, s.targetZ),
     })),
 
-  select: (selection) => set({ selection }),
+  select: (selection) => set({ selection, following: false }),
+
+  setFollowing: (following) => set((s) => s.selection ? { following } : { following: false }),
+
+  follow: (x, z) => set((s) => s.following ? clampTarget(s, x, z) : s),
 
   // Deliberately leaves mapWidth/mapDepth alone — reset is a camera action.
   reset: () =>
