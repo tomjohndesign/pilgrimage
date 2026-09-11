@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "f7c89f4b3954f1c780ea38d08b7b865dae26f501",
-  "releaseCount": 204,
+  "lastProcessedCommit": "957ef0e852d943878f7de18c398b0177e8faa52b",
+  "releaseCount": 205,
   "releases": [
+    {
+      "version": "0.0.219",
+      "title": "Release 0.0.219",
+      "summary": "Raise starting resources and add resource, renown and master builder cheats (#237)",
+      "commit": "957ef0e852d943878f7de18c398b0177e8faa52b"
+    },
     {
       "version": "0.0.218",
       "title": "Release 0.0.218",
