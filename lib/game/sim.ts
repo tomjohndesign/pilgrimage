@@ -379,6 +379,8 @@ export interface SimTraveler {
   }
   branchProgress: number
   shrineRoute: TilePos[] | null
+  /** Held outside the church door until the other kind of visitor has had their turn. */
+  shrineTurnWait?: boolean
   /** Reserved until the visitor has left the shrine approach. */
   shrineSeat?: string
   shrineQueueOrder?: number
@@ -1648,7 +1650,9 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
       // Walking the track or fetching water on the way is not waiting: the
       // timeout counts only time the whole company stands still, so a long
       // branch is walked to its end.
-      if (members.some(s => (s.activity === "toRelic" && s.moveSpeed > 0) ||
+      // Waiting in line for a turn in the nave is not waiting either: the line
+      // moves as those inside leave, so only a stalled company gives up.
+      if (members.some(s => (s.activity === "toRelic" && (s.moveSpeed > 0 || s.shrineTurnWait)) ||
         ["toWater", "drinking", "drinkingLow", "fromWater"].includes(s.activity))) party.elapsed = 0
       // A closed or saturated enclave cannot keep unadmitted companions forever.
       if (party.elapsed > 120) {
@@ -1866,7 +1870,7 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   // Companies share the nave: each member takes any free place, and a company
   // still waiting for places gives up after its bounded wait. Nobody else's
   // lingering place may bar the door.
-  const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats, from, partyVisit ? false : undefined, partyVisit && s.partyId !== undefined) : null
+  const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats, from, partyVisit ? false : undefined, partyVisit && s.partyId !== undefined, sim.shrineKeeperReady) : null
   let visitRoute = visit?.route ?? null
   let parking: ShrineParking | null = null
   if (visitRoute && needsParking) {
@@ -1878,8 +1882,18 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
     const door = { x: tileToWorldX(map, map.site!.door.x), z: tileToWorldZ(map, map.site!.door.z) }
     parking = enclaveParking(map, parkingProgress, direction, wheelbase, puller, characterScale, occupied, parkingContext(sim, s, characterScale, false, door))
       ?? shrineParking(map, parkingProgress, direction, wheelbase, puller, characterScale, occupied, parkingContext(sim, s, characterScale))
-    const footRoute = parking ? settlementRoute(map, map.buildings,
-      { x: worldToTileX(map, parking.parked.hitch.x), z: worldToTileZ(map, parking.parked.hitch.z) }, visitRoute.at(-1)!, false, true, visit!.seat) : null
+    // From the horse or wagon, walk to the tail of the line on the track and
+    // follow the shared approach with everyone else, instead of cutting across
+    // the field to stand about beside the church.
+    let footRoute: TilePos[] | null = null
+    if (parking) {
+      const hitch = { x: worldToTileX(map, parking.parked.hitch.x), z: worldToTileZ(map, parking.parked.hitch.z) }
+      const waiting = [...sim.travelers.values()].filter(other => other !== s && isRelicViewingSeat(other.shrineSeat)
+        && (other.activity === "toParking" || other.activity === "toRelic") && !insideShrine(map, other)).length
+      const join = Math.max(0, shrineDoorIndex(map, visitRoute) - Math.ceil(waiting * QUEUE_SPACING))
+      const toLine = settlementRoute(map, map.buildings, hitch, visitRoute[join], false, true)
+      if (toLine) footRoute = [...toLine, ...visitRoute.slice(join + 1)]
+    }
     visitRoute = footRoute
   }
   if (visitRoute) {
@@ -2169,18 +2183,22 @@ export function stepSim(
           // the other kind inside lines up outside the door in order of arrival.
           // Otherwise the queue stands single file from the relic, spilling out
           // of the door when it is long; companies walk straight to their places.
+          // Turns go by arrival: nobody enters while the other kind is inside,
+          // nor ahead of the other kind still waiting with an earlier place.
           const grouped = s.shrineSeat!.startsWith("group-"), order = s.shrineQueueOrder ?? 0
-          let othersInside = false, outsideAhead = 0
+          let turnWait = false, outsideAhead = 0
           const queueAhead: SimTraveler[] = []
           for (const other of sim.travelers.values()) {
             if (other === s || !isRelicViewingSeat(other.shrineSeat)) continue
-            const inside = insideShrine(map, other)
-            if (inside && other.shrineSeat!.startsWith("group-") !== grouped) othersInside = true
-            if ((other.shrineQueueOrder ?? 0) >= order || !["toParking", "toRelic", "visiting"].includes(other.activity)) continue
+            const inside = insideShrine(map, other), earlier = (other.shrineQueueOrder ?? 0) < order
+            const waiting = ["toParking", "toRelic", "visiting"].includes(other.activity)
+            if (other.shrineSeat!.startsWith("group-") !== grouped && (inside || (earlier && waiting))) turnWait = true
+            if (!earlier || !waiting) continue
             if (!inside) outsideAhead++
             if (other.shrineSeat!.startsWith("queue-")) queueAhead.push(other)
           }
-          if (othersInside) limit = Math.min(limit, shrineDoorIndex(map, branch) - outsideAhead * QUEUE_SPACING)
+          s.shrineTurnWait = turnWait
+          if (turnWait) limit = Math.min(limit, shrineDoorIndex(map, branch) - outsideAhead * QUEUE_SPACING)
           else if (!grouped) limit -= queueAhead.length * QUEUE_SPACING
           if (!grouped) for (const other of queueAhead) {
             // Shared approach: a faster walker must never overtake the person ahead.
@@ -2210,6 +2228,7 @@ export function stepSim(
           s.horseRest = undefined
           s.shrineSeat = undefined
           s.shrineGroupPoint = undefined
+          s.shrineTurnWait = undefined
           if (s.shrineParking) {
             s.shrineParking.walking = false; s.shrineParking.distance = 0
             s.activity = "fromParking"

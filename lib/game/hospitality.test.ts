@@ -1189,8 +1189,11 @@ it("queues single file, lets the keeper show one visitor at a time, and keeps fl
   const people = Array.from({ length: 4 }, (_, id) => devout(traveler(id)))
   people[2].pace = 2 // A faster arrival must wait behind those already in line.
   const sim = createEstablishedShrine(people, map, holy)
+  // Places are taken while the keeper shows the relic; the keeper then steps
+  // away before anyone reaches the front, freezing the line.
+  run(sim, people, map, 2)
   sim.shrineKeeperReady = false
-  run(sim, people, map, 16)
+  run(sim, people, map, 14)
   const queue = [...sim.travelers.values()].filter(s => s.shrineSeat?.startsWith("queue-"))
   expect(queue).toHaveLength(3)
   expect(queue.every(s => s.activity === "toRelic")).toBe(true)
@@ -1212,6 +1215,18 @@ it("queues single file, lets the keeper show one visitor at a time, and keeps fl
   }
   expect(shown).toEqual(ordered.map(s => s.id))
   expect(queue.every(s => s.visits === 1 && s.offeringMade && !s.shrineSeat)).toBe(true)
+})
+
+it("lets nobody join the line while no keeper shows the relic, but still admits private prayer", () => {
+  const { map, traveler } = fixture()
+  map.buildings[0].d = 5
+  const people = Array.from({ length: 4 }, (_, id) => devout(traveler(id)))
+  const sim = createEstablishedShrine(people, map, holy)
+  sim.shrineKeeperReady = false
+  run(sim, people, map, 16)
+  expect([...sim.travelers.values()].filter(s => s.shrineSeat?.startsWith("queue-"))).toHaveLength(0)
+  expect(sim.travelers.get(3)!.shrineSeat).toMatch(/^prayer-/)
+  for (const s of sim.travelers.values()) if (s.id !== 3) expect(s.activity).toBe("walking")
 })
 
 describe("shrine visits beside a covered junction", () => {

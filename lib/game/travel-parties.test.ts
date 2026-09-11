@@ -257,11 +257,60 @@ describe("shared stops", () => {
     }
     const line = party.members.map(id => sim.travelers.get(id)!).sort((a, b) => a.shrineQueueOrder! - b.shrineQueueOrder!)
     for (let i = 1; i < line.length; i++) expect(Math.hypot(line[i].x - line[i - 1].x, line[i].z - line[i - 1].z)).toBeGreaterThanOrEqual(.74)
+    // Waiting for a turn is not being stranded: well past the give-up, nobody turns back.
+    run(sim, travelers, map, 200)
+    expect(party.stage).toBe("visiting")
+    for (const id of party.members) {
+      const s = sim.travelers.get(id)!
+      expect(s.activity).toBe("toRelic")
+      expect(s.partyVisitAborted).toBeFalsy()
+      expect(insideShrine(map, s)).toBe(false)
+    }
     // Once the visitor has left the nave the company walks in and views the relic together.
     lone.timer = 0
     run(sim, travelers, map, 600, () => sim.visits === 5 && party.stage === "traveling")
     expect(sim.visits).toBe(5)
     expect(party.stage).toBe("traveling")
+  })
+
+  it("lets a waiting company in before single visitors who arrived after it", () => {
+    const { map, travelers, sim } = fixture(6)
+    withShrine(map)
+    for (const id of [4, 5]) { travelers[id].party = undefined; sim.travelers.get(id)!.partyId = undefined }
+    const party = sim.parties.get(0)!
+    party.members = [0, 1, 2, 3]
+    // One person views the relic; the company arrives and waits at the door.
+    const first = sim.travelers.get(4)!, plan = shrineVisitPlan(map, 4, 0)!
+    Object.assign(first, { shrineSeat: plan.seat, shrineRoute: plan.route, branchProgress: plan.route.length - 1, activity: "visiting", timer: 10000,
+      shrineQueueOrder: ++sim.shrineQueueSequence, x: tileToWorldX(map, plan.route.at(-1)!.x), z: tileToWorldZ(map, plan.route.at(-1)!.z), offeringMade: false })
+    const later = sim.travelers.get(5)!
+    Object.assign(later, { progress: 0, activity: "idle", timer: 1e9 })
+    party.progress = 28
+    for (const id of party.members) sim.travelers.get(id)!.progress = 28
+    run(sim, travelers, map, 60, () => party.members.every(id => sim.travelers.get(id)!.activity === "toRelic"))
+    run(sim, travelers, map, 30)
+    // A second single visitor joins the line behind the company.
+    const second = shrineVisitPlan(map, 5, 0, new Set([first.shrineSeat!]))!
+    Object.assign(later, { shrineSeat: second.seat, shrineRoute: second.route, branchProgress: 0, activity: "toRelic", timer: 0, offeringMade: false,
+      shrineQueueOrder: ++sim.shrineQueueSequence, progress: 28, x: tileToWorldX(map, second.route[0].x), z: tileToWorldZ(map, second.route[0].z) })
+    run(sim, travelers, map, 60)
+    expect(later.activity).toBe("toRelic")
+    expect(insideShrine(map, later)).toBe(false)
+    const doorLine = [...party.members.map(id => sim.travelers.get(id)!), later].sort((a, b) => a.shrineQueueOrder! - b.shrineQueueOrder!)
+    for (let i = 1; i < doorLine.length; i++) expect(doorLine[i].branchProgress).toBeLessThan(doorIndex(map, doorLine[i].shrineRoute!) - .5)
+    // When the nave frees, the company goes in first and the latecomer only after it has left.
+    first.timer = 0
+    let companyIn = -1, laterIn = -1
+    for (let i = 0; i < 6000 && sim.visits < 6; i++) {
+      stepSim(sim, travelers, map, 1, .1)
+      const companyInside = party.members.some(id => insideShrine(map, sim.travelers.get(id)!))
+      if (companyInside && companyIn < 0) companyIn = i
+      if (insideShrine(map, later) && laterIn < 0) laterIn = i
+      if (insideShrine(map, later)) expect(companyInside).toBe(false)
+    }
+    expect(companyIn).toBeGreaterThanOrEqual(0)
+    expect(laterIn).toBeGreaterThan(companyIn)
+    expect(sim.visits).toBe(6)
   })
 
   it("lines single visitors up outside the door while a company holds the nave", () => {

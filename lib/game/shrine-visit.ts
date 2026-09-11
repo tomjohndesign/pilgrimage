@@ -26,10 +26,13 @@ export function shrineQueuePlaces(map: GameMap): number {
 }
 
 /** Reserve a queue place, private prayer spot, or place in a company’s shared viewing. */
-export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, occupied: ReadonlySet<string> = new Set(), from?: TilePos, prayer = (visitor + visits) % 4 === 3, group = false) {
+export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, occupied: ReadonlySet<string> = new Set(), from?: TilePos, prayer = (visitor + visits) % 4 === 3, group = false, relicShown = true) {
   const site = map.site
   const shrine = map.buildings.find(b => b.id === site?.hovelId)
   if (!site || !shrine) return null
+  // Nobody joins the line while no keeper shows the relic; it would only stand
+  // there. Private prayer needs no keeper.
+  if (!relicShown && (group || !prayer)) return null
   const gate = shrineGates(shrine, site.door)[0]
   // Only a line longer than the branch turns visitors away before any route is
   // planned for them. Companies and single visitors take the nave in turns,
