@@ -117,6 +117,7 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
   const depthTextures = useMemo(() => new Map(depthEntries.map((entry, index) =>
     [entry.index, configureSpriteDepthTexture(sources[textureEntries.length + index])])), [sources, textureEntries])
   const poseDepth = useMemo<SpritePoseDepth>(() => ({ map: { value: null }, enabled: { value: false } }), [])
+  const depthBias = useMemo(() => ({ value: 0 }), [])
   // Each traveler owns UV state only for clips they have actually played.
   // Eager views for every possible job/prayer/sleep animation left hundreds of
   // thousands of unused Texture objects in the heap at large populations.
@@ -154,13 +155,13 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
     const material = new THREE.SpriteMaterial({ map: textures.get(1), alphaTest: 0.5, transparent: false, toneMapped: false })
     const uniforms = complexionValues
     material.onBeforeCompile = (shader) => {
-      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth)
+      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth, undefined, depthBias)
       applyComplexionSwap(shader, uniforms)
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "person-complexion-v1"
+    material.customProgramCacheKey = () => "person-complexion-v2"
     return material
-  }, [textures, viewport, worldTexel, groundPlane, poseDepth, complexionValues])
+  }, [textures, viewport, worldTexel, groundPlane, poseDepth, depthBias, complexionValues])
   useEffect(() => () => material.dispose(), [material])
   const center = useMemo(() => new THREE.Vector2(...visual.center), [visual])
   const sprite = useRef<THREE.Sprite>(null)
@@ -175,15 +176,15 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
     const id = new THREE.Vector3(...outlineColor)
     material.userData.objectId = id
     material.onBeforeCompile = (shader) => {
-      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth)
+      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth, undefined, depthBias)
       shader.uniforms.travelerId = { value: id }
       shader.fragmentShader = "uniform vec3 travelerId;\n" + shader.fragmentShader.replace("#include <map_fragment>",
         "#include <map_fragment>\ndiffuseColor.rgb = travelerId;")
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "traveler-id-v7"
+    material.customProgramCacheKey = () => "traveler-id-v8"
     return material
-  }, [textures, viewport, worldTexel, groundPlane, poseDepth, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [textures, viewport, worldTexel, groundPlane, poseDepth, depthBias, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => outlineMaterial?.dispose(), [outlineMaterial])
   const idSprite = useRef<THREE.Sprite>(null)
   const batchEntries = useCharacterBatches()
@@ -192,13 +193,13 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
   useLayoutEffect(() => {
     if (!batchEntries || !sprite.current || !idSprite.current || !outlineColor || name !== "traveler") return
     const entry = { sprite: sprite.current, ids: idSprite.current, publishesPose: true, complexion: complexionValues, palette: characterPalette(complexionValues), ground: groundPlane,
-      fixedAttributes: Float32Array.from([center.x, center.y, ...outlineColor]), depth: poseDepth, id: new THREE.Vector3(...outlineColor) }
+      fixedAttributes: Float32Array.from([center.x, center.y, ...outlineColor]), depth: poseDepth, depthBias, id: new THREE.Vector3(...outlineColor) }
     batchEntry.current = entry
     const unregisterEntry = registerCharacterBatchEntry(entry)
     batchEntries.add(entry)
     const unregister = registerSimpleBatchSource(entry.sprite, entry.ids)
     return () => { batchEntry.current = null; unregisterEntry(); unregister(); batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
-  }, [batchEntries, complexionValues, groundPlane, poseDepth, name, center, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [batchEntries, complexionValues, groundPlane, poseDepth, depthBias, name, center, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
 
   const crowdWalk = useMemo<CrowdWalk | null>(() => map && rig && !attachment && walkTuning?.sync !== false ? {
     map, rig, walk: visual.walk, weary: visual.actions.wearyWalk, wearyIndex: actionIndices.wearyWalk,

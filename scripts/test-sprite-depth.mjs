@@ -32,7 +32,10 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     foliageModules[name] = ts.transpileModule(await readFile(new URL(`../lib/game/trees/foliage/${name}.ts`, import.meta.url), "utf8"), {
       compilerOptions: { module: ts.ModuleKind.ESNext },
     }).outputText.replace('"../../render/sprite-depth"', '"/shader.js"').replace('"./design"', '"/foliage-design.js"')
+      .replace('"../../character-assets"', '"/sprite-row.js"')
   }
+  const spriteRowSource = (await readFile(new URL("../lib/game/character-assets.ts", import.meta.url), "utf8")).match(/export function spriteRow[\s\S]*?\n}/)[0]
+  const spriteRow = ts.transpileModule(spriteRowSource, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText
   const batchModules = {}
   batchModules.wildlife = ts.transpileModule(await readFile(new URL("../lib/game/wildlife/batch.ts", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.ESNext },
@@ -59,6 +62,8 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       response.setHeader("Content-Type", "text/javascript"); response.end(complexionSlots)
     } else if (name.startsWith("batch-") && name.endsWith(".js")) {
       response.setHeader("Content-Type", "text/javascript"); response.end(batchModules[name.slice(6, -3)])
+    } else if (name === "sprite-row.js") {
+      response.setHeader("Content-Type", "text/javascript"); response.end(spriteRow)
     } else if (name === "foliage-design.js") {
       response.setHeader("Content-Type", "text/javascript"); response.end(`export const FOLIAGE_FRAME = ${JSON.stringify(foliageManifest.frame)}`)
     } else if (name.startsWith("foliage-") && name.endsWith(".js")) {
@@ -345,6 +350,53 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       if (driverCompared < 100) throw new Error("Driver depth occlusion was not exercised")
       driverVisible.value = 0; driverColor.dispose(); driverDepth.dispose()
       scene.remove(wall); wall.geometry.dispose(); wall.material.dispose(); poseTarget.dispose()
+      // Two different figures on one spot: their reliefs disagree texel by
+      // texel, so without help the overlap alternates and the ink hatches it.
+      // One painter's step (render/overlap-order) must lift the front figure
+      // clear of the other in both passes.
+      const coincidence = { overlap: 0, hatchedFront: 0, hatchedBack: 0, coveredFront: 0, coveredBack: 0 }
+      {
+        const coincidentTarget = new THREE.WebGLRenderTarget(256, 256, { depthBuffer: true })
+        const figures = []
+        for (const [clip, order, color] of [["walk", 1, 0x00ff00], ["idle", 2, 0xff0000]]) {
+          const map = await new THREE.TextureLoader().loadAsync(`/pose-${clip}.png`)
+          const depth = await new THREE.TextureLoader().loadAsync(`/depth-${clip}.png`)
+          for (const texture of [map, depth]) { texture.minFilter = texture.magFilter = THREE.NearestFilter; texture.generateMipmaps = false }
+          const columns = poseClips[clip]
+          map.repeat.set(1 / columns, 1 / 8); map.offset.set(0, 7 / 8)
+          const bias = { value: 0 }, pose = { map: { value: depth }, enabled: { value: true } }
+          const material = new THREE.SpriteMaterial({ color, map, alphaTest: .5, transparent: false, toneMapped: false })
+          material.onBeforeCompile = shader => {
+            applySpriteDepth(shader, viewport, worldTexel, groundPlane, pose, undefined, bias)
+            shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\ndiffuseColor.rgb = diffuse;")
+          }
+          material.onBeforeRender = renderer => renderer.getCurrentViewport(viewport)
+          material.customProgramCacheKey = () => `coincident-${clip}`
+          const sprite = new THREE.Sprite(material)
+          sprite.renderOrder = order; sprite.center.set(.5, 1 - 48.5 / 64); sprite.position.set(0, 2, 0)
+          scene.add(sprite); figures.push({ sprite, bias, map, depth })
+        }
+        front.visible = back.visible = false
+        gl.setRenderTarget(coincidentTarget)
+        const read = () => { const pixels = new Uint8Array(256 * 256 * 4); gl.render(scene, camera); gl.readRenderTargetPixels(coincidentTarget, 0, 0, 256, 256, pixels); return pixels }
+        figures[1].sprite.visible = false; const maskFront = read()
+        figures[1].sprite.visible = true; figures[0].sprite.visible = false; const maskBack = read()
+        figures[0].sprite.visible = true
+        const overlap = []
+        for (let i = 0; i < maskFront.length; i += 4) if (maskFront[i + 1] > 200 && maskBack[i] > 200) overlap.push(i)
+        coincidence.overlap = overlap.length
+        const count = (pixels, channel) => overlap.reduce((sum, i) => sum + (pixels[i + channel] > 200 ? 1 : 0), 0)
+        const both = read()
+        coincidence.hatchedFront = count(both, 1); coincidence.hatchedBack = count(both, 0)
+        // The walker is nearer by one step: the idle figure must vanish under it.
+        figures[0].bias.value = .2
+        coincidence.coveredBack = count(read(), 0)
+        figures[0].bias.value = 0; figures[1].bias.value = .2
+        coincidence.coveredFront = count(read(), 1)
+        for (const { sprite, map, depth } of figures) { scene.remove(sprite); sprite.material.dispose(); map.dispose(); depth.dispose() }
+        front.visible = back.visible = true
+        gl.setRenderTarget(null); coincidentTarget.dispose()
+      }
       // Independently verify the baker against ray/mesh intersections, including
       // local garment-style clipping. This catches wrong depth units or anchors.
       const { spriteDepthBaker } = await import("/baker.js")
@@ -502,7 +554,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       copyMaterial.dispose()
       gl.dispose()
       return { cases, compared, mismatches, occlusionFailures, floorCompared, floorClipped, supportCompared, supportClipped, poseCompared, poseMismatches, poseVisible, poseHidden, bakeCompared, bakeError,
-        outlineCompared, outlineMismatches, selectionMismatches, fadeCompared, fadeMismatches }
+        outlineCompared, outlineMismatches, selectionMismatches, fadeCompared, fadeMismatches, coincidence }
     }, { outlineFragment, presentationFragment, poseClips })
     const foliageResults = []
     for (const rowOffset of [0, foliageManifest.frame.rows / 2]) {
@@ -1115,6 +1167,10 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     assert.ok(result.poseVisible > 10000 && result.poseHidden > 10000, "must test both sides of surfaces intersecting actual poses")
     assert.equal(result.poseMismatches, 0, `pose depth must match the atlas through scenery intersections: ${JSON.stringify(result)}`)
     assert.ok(result.bakeCompared > 500 && result.bakeError < 4 / 64 / 16, `baked depth must match clipped rig geometry: ${JSON.stringify(result)}`)
+    assert.ok(result.coincidence.overlap > 500 && result.coincidence.hatchedFront > 0 && result.coincidence.hatchedBack > 0,
+      `two figures on one spot must overlap and interleave without a bias: ${JSON.stringify(result.coincidence)}`)
+    assert.equal(result.coincidence.coveredBack, 0, `one painter's step must hide the figure behind: ${JSON.stringify(result.coincidence)}`)
+    assert.equal(result.coincidence.coveredFront, 0, `the step must work for either figure: ${JSON.stringify(result.coincidence)}`)
     assert.ok(result.outlineCompared > 10000, "must compare outlines at multiple zooms and sprite offsets")
     assert.equal(result.outlineMismatches, 0, "overlap outlines must touch the visible sprite and respect foreground occlusion")
     assert.equal(result.selectionMismatches, 0, "selected silhouettes and borders must track the actual character pixels")

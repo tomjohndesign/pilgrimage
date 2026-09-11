@@ -51,6 +51,7 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
     : kind === "merchant" ? [`/textures/transport/${TRANSPORT.version}/merchant-setup.png`, `/textures/transport/${TRANSPORT.version}/merchant-selling.png`] : [animalUrl(kind, animalCoat(kind, pack ? undefined : coat).id, false, pack), animalUrl(kind, animalCoat(kind, pack ? undefined : coat).id, true, pack)]
   const sources = useLoader(THREE.TextureLoader, [...urls, ...urls.map(url => url.replace(/([^/]+)$/, "depth-$1"))])
   const poseDepth = useMemo<SpritePoseDepth>(() => ({ map: { value: null }, enabled: { value: true } }), [])
+  const depthBias = useMemo(() => ({ value: 0 }), [])
   const depths = useMemo(() => sources.slice(urls.length).map(configureSpriteDepthTexture), [sources, urls.length])
   const rows = knight ? knight === "mounted" ? KNIGHT.variants * 8 : 8 : kind === "cart" || kind === "passenger" ? CART.directions : kind === "merchant" ? manifest.puller.rows : kind === "horse" && !pack ? manifest.animalRows.horse : 8
   const rowOffset = knight ? knight === "mounted" ? (variant % KNIGHT.variants) * 8 : 0 : kind === "merchant" ? variant * 8 : kind === "horse" && !pack ? manifest.horseVariants[horseVariant].rowOffset : 0
@@ -69,7 +70,7 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
     const material = new THREE.SpriteMaterial({ map, alphaTest: 0.5, transparent: false, toneMapped: false })
     if (idPass) material.userData.objectId = new THREE.Vector3(...(outlineColor ?? [0, 0, 0]))
     material.onBeforeCompile = shader => {
-      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth)
+      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth, undefined, depthBias)
       if (kind === "cart" && !passengerCart) applyDriverLayer(shader, maps[3], driverFrame, driverVisible, depths[3])
       if (idPass) {
         shader.uniforms.transportId = { value: new THREE.Vector3(...(outlineColor ?? [0, 0, 0])) }
@@ -77,9 +78,9 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
       }
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => `transport-${kind}-${passengerCart ?? "vendor"}-${idPass ? "id" : "color"}-v4`
+    material.customProgramCacheKey = () => `transport-${kind}-${passengerCart ?? "vendor"}-${idPass ? "id" : "color"}-v5`
     return material
-  }), [map, maps, kind, passengerCart, driverFrame, driverVisible, viewport, worldTexel, groundPlane, poseDepth, depths, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }), [map, maps, kind, passengerCart, driverFrame, driverVisible, viewport, worldTexel, groundPlane, poseDepth, depthBias, depths, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => { materials.forEach(m => m.dispose()) }, [materials])
   useEffect(() => () => maps.forEach(map => map.dispose()), [maps])
   const body = useRef<THREE.Sprite>(null), ids = useRef<THREE.Sprite>(null)
@@ -89,11 +90,13 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
     // intact. Passenger carts are plain sheets and batch like the animals.
     // Edited animal frames also retain their live canvas rendering path.
     if (!batchEntries || !body.current || !ids.current || !outlineColor || (kind === "cart" && !passengerCart) || edited) return
-    const entry = { sprite: body.current, ids: ids.current, ground: groundPlane, depth: poseDepth,
-      id: new THREE.Vector3(...outlineColor) }
+    // A passenger cart and its seated passengers share one anchor on purpose;
+    // their baked relief orders them, so the coincidence pass leaves them out.
+    const entry = { sprite: body.current, ids: ids.current, ground: groundPlane, depth: poseDepth, depthBias,
+      shared: kind === "cart" || kind === "passenger", id: new THREE.Vector3(...outlineColor) }
     batchEntries.add(entry)
     return () => { batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
-  }, [batchEntries, groundPlane, poseDepth, kind, passengerCart, edited, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [batchEntries, groundPlane, poseDepth, depthBias, kind, passengerCart, edited, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   const root = useRef<THREE.Group>(null), phase = useRef(0), grazingTime = useRef(0), plant = useRef<FootPlant | null>(null)
   const vectors = useMemo(() => ({ facing: new THREE.Vector3(), origin: new THREE.Vector3(), foot: new THREE.Vector3(), corrected: new THREE.Vector3() }), [])
   // A standing figure whose pose, facing, place and shop state did not change
