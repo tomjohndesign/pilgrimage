@@ -1,3 +1,4 @@
+import { MONK_BUILD_RATE } from "./build-labour"
 import { assignBuildingTask, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
 import { worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import type { MonkRoutine } from "./monk-routine"
@@ -6,8 +7,8 @@ import { buildingAt } from "./settlement"
 
 export const MONK_TIRED_AT = 25
 export const MONK_WAKE_AT = 95
-export interface MonkNeeds { home?: string; bedSlot?: number; workSlot: number; stamina: number; buildingTask?: BuildingTask; jobSearch: number }
-export function createMonkNeeds(index: number): MonkNeeds { return { workSlot: index, stamina: 100 - index * 6, jobSearch: 0 } }
+export interface MonkNeeds { home?: string; bedSlot?: number; workSlot: number; stamina: number; buildingTask?: BuildingTask; jobSearch: number; buildRate: number }
+export function createMonkNeeds(index: number): MonkNeeds { return { workSlot: index, stamina: 100 - index * 6, jobSearch: 0, buildRate: MONK_BUILD_RATE } }
 
 /** Finish assigned construction before resting; tired monks cannot take new work. */
 export function stepMonkWork(s: MonkRoutine & MonkNeeds, map: GameMap, speed: number, dt: number): boolean {
