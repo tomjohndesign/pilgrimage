@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { BUILD_CATALOG } from "./balance"
+import { BUILDING_KINDS } from "./buildings"
 import { rotatedFootprint, type BuildingRotation, buildingEntry, rotateBuildingPoint } from "./building-rotation"
 import { tavernLayout, tavernLocalPoint, tavernSegmentClear, tavernWorkStop } from "./tavern-layout"
 import { tavernInteriorRoute, tavernWalkingRoute, tavernWorldPoint } from "./tavern-navigation"
@@ -163,7 +164,7 @@ describe("tavern aisles", () => {
       })
     }
     for (let i = 0; i < 2; i++) { expect(distance[i]).toBeGreaterThan(2); expect(pauses[i]).toBeGreaterThan(20) }
-    for (let slot = 0; slot < 2; slot++) for (let stop = 0; stop < 4; stop++) {
+    for (let slot = 0; slot < BUILDING_KINDS.tavern.jobs; slot++) for (let stop = 0; stop < 4; stop++) {
       expect(tavernWalkingRoute(map, tavernWorldPoint(map, tavern, tavernWorkStop(slot, stop, 3, 4)), servingCounter(map, tavern).point)).toBeTruthy()
     }
   })

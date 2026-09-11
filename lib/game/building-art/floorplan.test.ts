@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { buildingParts } from "./geometry"
 import { earlyBuildingRecipe } from "./style"
+import { HOUSE_BEDS } from "./early-geometry"
 import { furnitureBounds, insideRoom, overlapsFloor } from "./furniture-placement"
 import { partSupports } from "../character-support"
 import { tavernLayout, tavernSegmentClear } from "../tavern-layout"
@@ -8,12 +9,12 @@ import { tavernInteriorRoute } from "../tavern-navigation"
 import { entranceParts } from "./entrance"
 
 describe("furnished procedural rooms", () => {
-  it("rotates complete beds and sleeping contacts while retaining the two house beds", () => {
+  it("rotates complete beds and sleeping contacts while retaining the six house pallets", () => {
     const headings=new Set<number>()
     for(const seed of [4,8,12,16,32,64]) {
       const recipe={...earlyBuildingRecipe("house"),width:3,depth:4,layoutSeed:seed}
       const parts=buildingParts(recipe),supports=partSupports(parts).filter(p=>p.clips.includes("sleeping"))
-      expect(supports).toHaveLength(2)
+      expect(supports).toHaveLength(HOUSE_BEDS)
       for(const support of supports) {
         headings.add(Math.round(support.heading*2/Math.PI))
         const index=support.id.slice("wool-cover-".length),bed=parts.find(p=>p.name===`straw-bed-${index}`)!

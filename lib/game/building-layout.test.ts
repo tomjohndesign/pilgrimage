@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { BUILD_CATALOG } from "./balance"
 import { buildingEntry, rotatedFootprint, rotateBuildingPoint, type BuildingRotation } from "./building-rotation"
 import { placementLayoutSeed } from "./building-layout"
+import { HOUSE_BEDS, HOUSE_BED_TIERS } from "./building-art/early-geometry"
 import { structureParts } from "./building-art/structure"
 import { buildingSupports } from "./character-support"
 import { tavernLayout, tavernWorkStop } from "./tavern-layout"
@@ -37,10 +38,14 @@ describe("repeatable building layouts", () => {
     expect(hearths[0].position[0]).toBe(-hearths[1].position[0])
     const windows=parts.map(list=>list.find(p=>p.name.startsWith("window-rear-jamb-0"))!)
     expect(windows[0].vertices).not.toEqual(windows[2].vertices)
-    for(const seed of [0,1,2,3]) expect(buildingSupports(building("house",seed)).filter(s=>s.clips.includes("sleeping"))).toHaveLength(2)
-    const beds=[0,2].map(seed=>buildingSupports(building("house",seed)))
+    for(const seed of [0,1,2,3]) expect(buildingSupports(building("house",seed)).filter(s=>s.clips.includes("sleeping"))).toHaveLength(HOUSE_BEDS)
+    const beds=[0,2].map(seed=>buildingSupports(building("house",seed)).filter(s=>s.clips.includes("sleeping")))
+    // The alternate layout staggers the pallets and turns every sleeper around.
     expect(beds[0][0].anchor.z).not.toBe(beds[1][0].anchor.z)
-    expect(Math.abs(beds[1][0].heading)).toBe(Math.PI)
+    expect(beds[0].every(bed=>bed.heading===0)).toBe(true)
+    expect(beds[1].every(bed=>Math.abs(bed.heading)===Math.PI)).toBe(true)
+    // Half the household sleeps on the floor and half on the shelf above.
+    for(const list of beds) expect(new Set(list.map(bed=>bed.height.toFixed(2))).size).toBe(HOUSE_BED_TIERS)
   })
 
   it.each([0,1,2,3,4,5,9,10,18,19,26,32,64,96,128,160,255,4096,65535])("keeps tavern seats and both entrances reachable in layout %i", seed => {
@@ -111,7 +116,7 @@ it("omits house fireplaces, chimneys and shared-stack adoption for hearth-free l
   const house=building("house",81), parts=structureParts(house)
   expect(hasDomesticHearth("house",81)).toBe(false)
   expect(parts.some(p=>p.name.startsWith("hearth-") || p.name.startsWith("chimney-"))).toBe(false)
-  expect(buildingSupports(house).filter(s=>s.clips.includes("sleeping"))).toHaveLength(2)
+  expect(buildingSupports(house).filter(s=>s.clips.includes("sleeping"))).toHaveLength(HOUSE_BEDS)
   expect(structureParts({...house,fireplace:true}).some(p=>p.name==="hearth-slab")).toBe(true)
   expect(structureParts({...house,layoutSeed:0,fireplace:false}).some(p=>p.name==="hearth-slab")).toBe(false)
   const older={...house,id:"older",layoutSeed:18,x:8}

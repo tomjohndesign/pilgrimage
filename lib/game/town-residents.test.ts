@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { BUILD_CATALOG } from "./balance"
+import { BUILDING_KINDS } from "./buildings"
+import { HOUSE_BEDS } from "./building-art/early-geometry"
 import { type GameMap, tileToWorldX, tileToWorldZ } from "./map/types"
 import { townResidents } from "./town-residents"
 import { createSim, stepSim, GAME_DAY_SECONDS } from "./sim"
@@ -32,11 +34,12 @@ function fixture(): GameMap {
 afterEach(() => useBuildStore.getState().reset())
 
 describe("town households", () => {
-  it("starts with two employed residents in distinct posts and a shared home, without adding player settlers", () => {
+  it("starts with the tavern staff employed in distinct posts and a shared home, without adding player settlers", () => {
     const map = fixture(), residents = townResidents(map), travelers = residents.map(r => r.traveler)
     const sim = createSim(travelers, map)
-    expect(residents).toHaveLength(2)
-    expect(new Set(travelers.map(t => t.id)).size).toBe(2)
+    expect(residents).toHaveLength(BUILDING_KINDS.tavern.jobs)
+    expect(new Set(travelers.map(t => t.id)).size).toBe(BUILDING_KINDS.tavern.jobs)
+    expect(new Set(travelers.map(t => t.name)).size).toBe(BUILDING_KINDS.tavern.jobs)
     for (const resident of residents) {
       expect(resident.traveler.attributes).toMatchObject({ hunger: 100, thirst: 100, stamina: 100 })
       expect(sim.travelers.get(resident.traveler.id)).toMatchObject({
@@ -61,10 +64,10 @@ describe("town households", () => {
     for (let elapsed = 0; elapsed < GAME_DAY_SECONDS; elapsed += .2) {
       stepSim(sim, travelers, map, 1, .2)
       for (const s of sim.travelers.values()) if (s.activity === "sleeping") { slept.add(s.id); beds.add(s.workSlot!) }
-      if (slept.size === 2 && [...sim.travelers.values()].every(s => s.activity === "posted")) break
+      if (slept.size === BUILDING_KINDS.tavern.jobs && [...sim.travelers.values()].every(s => s.activity === "posted")) break
     }
-    expect(slept.size).toBe(2)
-    expect(beds.size).toBe(2)
+    expect(slept.size).toBe(BUILDING_KINDS.tavern.jobs)
+    expect(beds.size).toBe(BUILDING_KINDS.tavern.jobs)
     for (const s of sim.travelers.values()) expect(s).toMatchObject({ activity: "posted", employer: "town-tavern", home: "town-house" })
   })
 })
@@ -87,13 +90,13 @@ describe("acquiring town buildings", () => {
     expect(claimTownBuildings(acquired, base)).toBe(acquired)
     expect(claimTownBuildings({ ...acquired, structures: [] }, base).claimedBuildings).toEqual(acquired.claimedBuildings)
     expect(jobBuildings(map)).toHaveLength(1)
-    expect(enclaveHousing(map, 2, 0).people.capacity).toBe(2)
+    expect(enclaveHousing(map, 2, 0).people.capacity).toBe(HOUSE_BEDS)
     expect(settlementRenown(map, [], []).total).toBeGreaterThan(settlementRenown(before, [], []).total)
     const travelers = townResidents(base).map(r => r.traveler), sim = createSim(travelers, base)
     const people = [...sim.travelers.values()]
     sim.buildings = jobBuildings(map, true)
     useBuildStore.getState().syncResources(sim, travelers)
-    expect(useBuildStore.getState().settlers).toHaveLength(2)
+    expect(useBuildStore.getState().settlers).toHaveLength(BUILDING_KINDS.tavern.jobs)
     expect([...sim.travelers.values()]).toEqual(people)
   })
 

@@ -20,8 +20,12 @@ import { joinedRoofHeight, type RoofJoin } from "./roof-joins"
 /** The relic rests on the same slab in the game and in the workshop. */
 export const RELIC_TABLE_TOP = 0.44
 
-/** A house sleeps this many settlers; the beds themselves decide the residency. */
-export const HOUSE_BEDS = 2
+/** A house sleeps this many settlers; the pallets themselves decide the residency. */
+export const HOUSE_BEDS = 6
+/** Half the household sleeps on the floor and half on a plank shelf above them. */
+export const HOUSE_BED_TIERS = 2
+/** Top of the sleeping shelf above the floor, low enough to clear the roof's front slope. */
+const HOUSE_SHELF_HEIGHT = .5
 
 export type SettlementBuildingType = "shelter" | "workshop" | "hall" | "garden" | "cross" | "lumberCamp" | "market" | "guard-post" | "sheep-pen"
 type ConstructionRecipe = Omit<BuildingRecipe, "variant"> & {
@@ -255,14 +259,14 @@ function authoredBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       panel(`${name}-front`,middle,b,true)
     } else panel(name,a,b,(a[2]+b[2])/2>=0)
   }
-  function bedding(x: number,z: number,index: number, length: number) {
+  function bedding(x: number,z: number,index: number, length: number, base = floor, width = .38) {
     const alternate = hasBuildingLayouts(variant) && ((recipe.layoutSeed ?? 0) & 2) !== 0
     if (alternate && variant === "house") z += index % 2 ? .12 : -.12
     const facing = alternate && variant !== "shelter" ? -1 : 1
-    box(`straw-bed-${index}`,"base",[x,floor+.035,z],[.38,.07,length],palette.strawDark,undefined,false)
-    box(`wool-cover-${index}`,"base",[x,floor+.08,z+facing*.06],[.34,.035,length*.65],index%2?"#817864":"#716e57",undefined,false)
+    box(`straw-bed-${index}`,"base",[x,base+.035,z],[width,.07,length],palette.strawDark,undefined,false)
+    box(`wool-cover-${index}`,"base",[x,base+.08,z+facing*.06],[width-.04,.035,length*.65],index%2?"#817864":"#716e57",undefined,false)
     parts[parts.length - 1].support = { clips: ["sleeping"], anchorOffset: [0, -facing*.06], heading: facing===1 ? 0 : Math.PI }
-    box(`rolled-blanket-${index}`,"base",[x,floor+.1,z-facing*length*.32],[.3,.11,.12],"#a3987a",undefined,false)
+    box(`rolled-blanket-${index}`,"base",[x,base+.1,z-facing*length*.32],[.3,.11,.12],"#a3987a",undefined,false)
   }
   /** `facing` is the heading a seated person takes; omit it for a counter nobody sits on. */
   function bench(name: string, x: number, z: number, length: number, top = .3, facing?: number) {
@@ -519,12 +523,25 @@ function authoredBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       parts.splice(first,parts.length-first,...turnFurniture(parts.slice(first),counterX,counterZ,counter.yaw))
     }
     if(variant === "house") {
-      // One bed per resident, laid left of the hearth and clear of the door.
+      // One full-length straw pallet per resident: a row on the floor left of
+      // the hearth and clear of the door, and a second row on a plank sleeping
+      // shelf carried on posts above it, reached by a few pegged rungs.
       const hearth = shelterHearth(width,depth,h,rise,recipe.layoutSeed,recipe.hearthZ)
       const heated=hasDomesticHearth(variant,recipe.layoutSeed,recipe.fireplace)
-      const bedLeft = -w+(heated ? .24 : .34), bedRight = heated ? hearth.x-.285*hearth.scale-.24 : w-.34
-      const beds = Math.max(1,Math.min(HOUSE_BEDS,Math.floor((bedRight-bedLeft)/.42)+1))
-      for(let i=0;i<beds;i++) bedding(beds === 1 ? (bedLeft+bedRight)/2 : bedLeft+(bedRight-bedLeft)*i/(beds-1),-depth*.15,i,Math.min(.9,depth*.6))
+      const bedLeft = -w+(heated ? .22 : .36), bedRight = heated ? hearth.x-.285*hearth.scale-.22 : w-.36
+      const bedWidth=.34, perTier=Math.ceil(HOUSE_BEDS/HOUSE_BED_TIERS)
+      const columns = Math.max(1,Math.min(perTier,Math.floor((bedRight-bedLeft)/(bedWidth+.04))+1))
+      const bedZ=-depth*.18, length=Math.min(.9,depth*.6)
+      const bedX=(col: number)=>columns === 1 ? (bedLeft+bedRight)/2 : bedLeft+(bedRight-bedLeft)*col/(columns-1)
+      for(let tier=0;tier<HOUSE_BED_TIERS;tier++) for(let col=0;col<columns;col++)
+        bedding(bedX(col),bedZ,tier*columns+col,length,floor+tier*HOUSE_SHELF_HEIGHT,bedWidth)
+      if(HOUSE_BED_TIERS>1) {
+        const left=bedX(0)-bedWidth/2-.03, right=bedX(columns-1)+bedWidth/2+.03, shelfY=floor+HOUSE_SHELF_HEIGHT
+        box("sleeping-shelf","base",[(left+right)/2,shelfY-.025,bedZ],[right-left,.05,length],palette.paleWood,undefined,false)
+        for(const px of [left+.04,right-.04]) for(const pz of [bedZ-length/2+.05,bedZ+length/2-.05])
+          pole(`shelf-post-${px<0 ? "left" : "right"}-${pz<bedZ ? "rear" : "front"}`,[px,floor,pz],[px,shelfY,pz],.04,"base")
+        for(let rung=0;rung<3;rung++) box(`shelf-rung-${rung}`,"base",[right-.14,floor+.13+rung*.13,bedZ+length/2+.06],[.2,.03,.03],palette.wood,undefined,false)
+      }
     }
     if(variant === "hall") {
       bench("hall-bench",0,-depth*.25,width*.65,.3,0)
