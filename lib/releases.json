@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "957ef0e852d943878f7de18c398b0177e8faa52b",
-  "releaseCount": 205,
+  "lastProcessedCommit": "9e3830309f774ab4c5cddc4c6c20b1e9e62fee30",
+  "releaseCount": 206,
   "releases": [
+    {
+      "version": "0.0.220",
+      "title": "Release 0.0.220",
+      "summary": "Pixel-art English bank cliff texture and diagonal cuts on river bends (#239)",
+      "commit": "9e3830309f774ab4c5cddc4c6c20b1e9e62fee30"
+    },
     {
       "version": "0.0.219",
       "title": "Release 0.0.219",
