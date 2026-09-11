@@ -75,6 +75,13 @@ function computeTerrainCorner(map: GameMap, x: number, z: number): CliffCorner |
   return { corner, donor, low: h, lower }
 }
 
+/**
+ * How far the three lower vertices under a cut may disagree and still count
+ * as one shelf. A river falls about 0.002 a tile, so its bends still cut; a
+ * waterfall step or a real height step does not.
+ */
+const SHELF_TOLERANCE = 0.05
+
 /** Two lower adjoining shelves replace half a projecting cliff tile. */
 export function cliffCorner(map: GameMap, x: number, z: number): CliffCorner | undefined {
   const heights = map.elevation?.corners
@@ -87,18 +94,21 @@ export function cliffCorner(map: GameMap, x: number, z: number): CliffCorner | u
     const [dx, dz] = CORNERS[corner]
     const nx = x + dx, nz = z + dz
     if (nx < 0 || nx >= map.width || nz < 0 || nz >= map.depth) continue
-    const donor = z * map.width + nx, across = nz * map.width + x, diagonal = nz * map.width + nx
-    const a = map.tiles[donor], b = map.tiles[across], d = map.tiles[diagonal]
+    const beside = z * map.width + nx, across = nz * map.width + x, diagonal = nz * map.width + nx
+    const a = map.tiles[beside], b = map.tiles[across], d = map.tiles[diagonal]
     if ((!BANKS.has(a) && a !== "water") || (!BANKS.has(b) && b !== "water") || (!BANKS.has(d) && d !== "water")) continue
+    // A shelf is all water or all bank; a half-and-half shelf would float a
+    // scrap of turf on the river or push water up onto the beach.
     const wet = a === "water"
     if ((b === "water") !== wet || (d === "water") !== wet) continue
     const c = (dx > 0 ? 1 : 0) + (dz > 0 ? 2 : 0)
-    const fromX = height(donor, c ^ 1)
+    const fromX = height(beside, c ^ 1)
     const fromZ = height(across, c ^ 2)
     const fromDiagonal = height(diagonal, c ^ 3)
-    if (Math.max(fromX, fromZ, fromDiagonal) - Math.min(fromX, fromZ, fromDiagonal) > .001) continue
+    if (Math.max(fromX, fromZ, fromDiagonal) - Math.min(fromX, fromZ, fromDiagonal) > SHELF_TOLERANCE) continue
+    const donor = beside
     const h = (fromX + fromZ) / 2
-    const hx = height(across, c ^ 3), hz = height(donor, c ^ 3)
+    const hx = height(across, c ^ 3), hz = height(beside, c ^ 3)
     const drop = heights[index * 4 + c] - h, dropX = heights[index * 4 + (c ^ 1)] - hx, dropZ = heights[index * 4 + (c ^ 2)] - hz
     if (Math.max(drop, dropX, dropZ) < .08 || Math.min(drop, dropX, dropZ) < -.001) continue
     // Preserve bridge approaches, road junction shoulders and building aprons.
