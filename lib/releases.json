@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "9e3830309f774ab4c5cddc4c6c20b1e9e62fee30",
-  "releaseCount": 206,
+  "lastProcessedCommit": "627c524022ac0be4c5a66ba8bd1a26543276efd1",
+  "releaseCount": 207,
   "releases": [
+    {
+      "version": "0.0.221",
+      "title": "Release 0.0.221",
+      "summary": "Queue relic visitors outside the church, one line for companies and singles (#240)",
+      "commit": "627c524022ac0be4c5a66ba8bd1a26543276efd1"
+    },
     {
       "version": "0.0.220",
       "title": "Release 0.0.220",
