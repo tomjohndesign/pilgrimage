@@ -40,6 +40,15 @@ describe("settlement save", () => {
     expect(settlementMap(world, restored).buildings.map(b => b.id)).toEqual(settlementMap(world, settlement).buildings.map(b => b.id))
   })
 
+  it("keeps granted renown and defaults it for saves made before cheats", () => {
+    const world = generateMap({ seed: 31 })
+    const settlement = { ...buyAnything(world), grantedRenown: 1000 }
+    const saved = settlementSaveSchema.parse(JSON.parse(JSON.stringify(captureSettlement(settlement))))
+    expect(restoreSettlement(world, saved).grantedRenown).toBe(1000)
+    const { grantedRenown: _dropped, ...older } = saved
+    expect(restoreSettlement(world, settlementSaveSchema.parse(older)).grantedRenown).toBe(0)
+  })
+
   it("drops structures that cannot belong to this world", () => {
     const world = generateMap({ seed: 31 })
     const saved = captureSettlement(buyAnything(world))

@@ -216,7 +216,7 @@ export const RULE_FIELDS = [
     group: "Treasury & construction",
     label: "Starting gold",
     description: "Treasury when a new settlement is founded. New settlements only.",
-    default: 200,
+    default: 500,
     min: 0,
     max: 100000,
     step: 1,
@@ -226,7 +226,7 @@ export const RULE_FIELDS = [
     group: "Treasury & construction",
     label: "Starting wood",
     description: "Timber when a new settlement is founded. New settlements only.",
-    default: 160,
+    default: 400,
     min: 0,
     max: 100000,
     step: 1,
@@ -638,7 +638,7 @@ export function validateBalance(
   }
   return { balance: clean, error: null }
 }
-export const BALANCE_VERSION = 7
+export const BALANCE_VERSION = 8
 export function exportBalance(balance: GameBalance): string {
   return JSON.stringify({ version: BALANCE_VERSION, balance }, null, 2)
 }
@@ -646,8 +646,8 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
   try {
     const preset = record(JSON.parse(json))
     const version = preset?.version
-    if (version !== 1 && version !== 2 && version !== 3 && version !== 4 && version !== 5 && version !== 6 && version !== BALANCE_VERSION)
-      return { balance: null, error: "Unsupported preset version. Expected version 1, 2, 3, 4, 5, 6 or 7." }
+    if (typeof version !== "number" || ![1, 2, 3, 4, 5, 6, 7, BALANCE_VERSION].includes(version))
+      return { balance: null, error: "Unsupported preset version. Expected version 1 to 8." }
     // Add defaults for new structures while retaining all authored settings.
     const saved = record(preset?.balance)
     const rules = record(saved?.rules)
@@ -668,6 +668,9 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
         ...((version < 4 && rules.thirstDecay === 25 || version < 6 && rules.thirstDecay === 6 || version < 7 && rules.thirstDecay === 3) ? { thirstDecay: DEFAULT_BALANCE.rules.thirstDecay } : {}),
         ...(version < 7 && rules.hospitalityBaseChance === 0.1 ? { hospitalityBaseChance: DEFAULT_BALANCE.rules.hospitalityBaseChance } : {}),
         ...(version < 5 && rules.staminaDecay === 2.1 ? { staminaDecay: DEFAULT_BALANCE.rules.staminaDecay } : {}),
+        // Found new settlements with the larger treasury unless the player tuned it.
+        ...(version < 8 && rules.startingGold === 200 ? { startingGold: DEFAULT_BALANCE.rules.startingGold } : {}),
+        ...(version < 8 && rules.startingWood === 160 ? { startingWood: DEFAULT_BALANCE.rules.startingWood } : {}),
       },
       buildings: {
         ...DEFAULT_BALANCE.buildings,

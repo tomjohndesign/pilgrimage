@@ -98,7 +98,7 @@ export function SettlementPanel({
           <span className="font-display">{renown.total} renown</span> · {tier.label}
         </summary>
         <dl className="mt-2 space-y-1 text-[11px]">
-          {(["buildings", "individuals", "scenery", "relics", "visits"] as const).map((source) => (
+          {(["buildings", "individuals", "scenery", "relics", "visits", "granted"] as const).filter(source => source !== "granted" || renown.granted > 0).map((source) => (
             <div key={source} className="flex justify-between">
               <dt className="capitalize">{source}</dt>
               <dd>+{renown[source]}</dd>
