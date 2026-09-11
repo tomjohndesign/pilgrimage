@@ -16,7 +16,7 @@ import { rotatedFootprint } from "@/lib/game/building-rotation"
 import { canAfford, placementError } from "@/lib/game/settlement"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { formatGameTime, simRegistry } from "@/lib/game/sim"
-import { SIMULATION_SPEEDS, useSimulationStore } from "@/lib/game/simulation-store"
+import { CROWD_SPEED_LIMIT, SIMULATION_SPEEDS, crowdSafeSpeed, speedBlockedByCrowd, useSimulationStore } from "@/lib/game/simulation-store"
 
 /** Hover and keyboard-focus help, positioned inside the viewport by Radix.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1N5-0
@@ -165,10 +165,21 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
  */
 export function HudClock() {
   const [time, setTime] = useState<number | null>(null)
+  const [population, setPopulation] = useState(0)
   const paused = useSimulationStore((s) => s.paused)
   const speed = useSimulationStore((s) => s.speed)
   useEffect(() => {
-    const read = () => setTime(simRegistry.current?.time ?? null)
+    // The same poll that shows the date watches the crowd, so a settlement that
+    // grows past the limit while running at 6× drops to the fastest speed left.
+    const read = () => {
+      const sim = simRegistry.current
+      setTime(sim?.time ?? null)
+      const crowd = (sim?.travelers.size ?? 0) + (sim?.joinedMonks.size ?? 0)
+      setPopulation(crowd)
+      const playback = useSimulationStore.getState()
+      const allowed = crowdSafeSpeed(playback.speed, crowd)
+      if (allowed !== playback.speed) playback.setSpeed(allowed)
+    }
     read()
     const timer = setInterval(read, 250)
     return () => clearInterval(timer)
@@ -186,11 +197,15 @@ export function HudClock() {
         const choice = SIMULATION_SPEEDS.find((item) => item.rate === Number(event.target.value))
         if (choice) useSimulationStore.getState().setSpeed(choice.rate)
       }}>
-      {SIMULATION_SPEEDS.map(({ label, rate }) => <option key={rate} value={rate}>{label}×</option>)}
+      {SIMULATION_SPEEDS.map(({ label, rate }) => <option key={rate} value={rate} disabled={speedBlockedByCrowd(rate, population)}>{label}×</option>)}
     </select>
     <div className="hud-speeds" aria-label="Simulation speed">
-      {SIMULATION_SPEEDS.map(({ label, rate }) => <button type="button" key={rate} aria-label={`${label}× simulation speed`} aria-pressed={speed === rate}
-        onClick={() => useSimulationStore.getState().setSpeed(rate)}>{label}×</button>)}
+      {SIMULATION_SPEEDS.map(({ label, rate }) => {
+        const blocked = speedBlockedByCrowd(rate, population)
+        return <button type="button" key={rate} aria-label={`${label}× simulation speed`} aria-pressed={speed === rate}
+          disabled={blocked} title={blocked ? `${label}× is unavailable above ${CROWD_SPEED_LIMIT.population.toLocaleString()} people` : undefined}
+          onClick={() => useSimulationStore.getState().setSpeed(rate)}>{label}×</button>
+      })}
     </div>
   </section>
 }
