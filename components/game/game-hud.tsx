@@ -37,6 +37,7 @@ import type { PixelationProps } from "@/components/pixel-canvas"
 
 import type { MapSettings } from "./game-shell"
 import { AnimalInspector } from "./animal-inspector"
+import { FollowButton } from "./follow-button"
 import { ResourceInspector } from "./resource-inspector"
 import { Minimap } from "./minimap"
 import { SettlementPanel } from "./settlement-panel"
@@ -283,16 +284,19 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
   const named = (id: string | null | undefined) => map?.buildings.find(b => b.id === id)?.label
   return (
     <Panel>
-      <div className="flex items-baseline justify-between gap-4">
+      <div className="flex items-center justify-between gap-4">
         <Label>Traveler</Label>
-        <button
-          type="button"
-          onClick={() => useCameraStore.getState().select(null)}
-          aria-label="Dismiss traveler"
-          className="pointer-events-auto font-display text-[10px] text-ink-light hover:text-red"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-2">
+          <FollowButton subject={party ? "party" : "traveler"} />
+          <button
+            type="button"
+            onClick={() => useCameraStore.getState().select(null)}
+            aria-label="Dismiss traveler"
+            className="pointer-events-auto font-display text-[10px] text-ink-light hover:text-red"
+          >
+            ✕
+          </button>
+        </div>
       </div>
       <div className="pt-1">
         <div className="font-display text-xs text-ink">{traveler.name}</div>
@@ -544,16 +548,19 @@ function MonkPanel({ monk }: { monk: Monk }) {
   const evangelizing = evangelism.assigned.has(monk.id)
   return (
     <Panel>
-      <div className="flex items-baseline justify-between gap-4">
+      <div className="flex items-center justify-between gap-4">
         <Label>Brother</Label>
-        <button
-          type="button"
-          onClick={() => useCameraStore.getState().select(null)}
-          aria-label="Dismiss monk"
-          className="pointer-events-auto font-display text-[10px] text-ink-light hover:text-red"
-        >
-          ✕
-        </button>
+        <div className="flex items-center gap-2">
+          <FollowButton subject="monk" />
+          <button
+            type="button"
+            onClick={() => useCameraStore.getState().select(null)}
+            aria-label="Dismiss monk"
+            className="pointer-events-auto font-display text-[10px] text-ink-light hover:text-red"
+          >
+            ✕
+          </button>
+        </div>
       </div>
       <div className="pt-1">
         <div className="font-display text-xs text-ink">{monk.name}</div>

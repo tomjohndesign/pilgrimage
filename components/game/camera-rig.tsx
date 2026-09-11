@@ -10,6 +10,7 @@ import { CameraGesture } from "@/lib/game/camera-gesture"
 import { cameraEdgePan } from "@/lib/game/camera-edge-pan"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
+import { followPoint } from "@/lib/game/camera-follow"
 import { worldToTileX, worldToTileZ, type GameMap, type TilePos } from "@/lib/game/map/types"
 import {
   CAM_FAR,
@@ -25,6 +26,8 @@ import {
 const YAW_TWEEN_LAMBDA = 30
 const YAW_SNAP_THRESHOLD = 0.005
 const ZOOM_TWEEN_LAMBDA = 9
+/** Following eases towards the selection so a party's centre never snaps when members join or leave. */
+const FOLLOW_TWEEN_LAMBDA = 8
 
 /** Keyboard and edge pan speed, in world units per second at the default zoom. */
 const KEY_PAN_SPEED = 18
@@ -340,6 +343,18 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
       ZOOM_TWEEN_LAMBDA,
       dt,
     )
+
+    // Following runs before player panning, so a pan in the same frame wins
+    // and also releases the follow through the store.
+    const store = useCameraStore.getState()
+    if (store.following) {
+      const point = followPoint(store.selection)
+      if (point) store.follow(
+        THREE.MathUtils.damp(store.targetX, point.x, FOLLOW_TWEEN_LAMBDA, dt),
+        THREE.MathUtils.damp(store.targetZ, point.z, FOLLOW_TWEEN_LAMBDA, dt),
+      )
+      else store.setFollowing(false)
+    }
 
     // Edge and keyboard panning follow the current camera rotation.
     let edge = { strafe: 0, forward: 0 }
