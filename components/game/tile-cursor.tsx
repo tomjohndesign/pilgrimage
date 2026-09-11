@@ -1,7 +1,7 @@
 "use client"
 
 import { StructureModel } from "@/components/building-lab/building-model"
-import { placementBuildingLayout, placementRoofRotation } from "@/lib/game/building-placement-layout"
+import { placementBuildingLayout, placementSite } from "@/lib/game/building-placement-layout"
 import { structureParts } from "@/lib/game/building-art/structure"
 
 import { useMemo } from "react"
@@ -50,27 +50,30 @@ export function TileCursor({
       [x, onBridge ? (ropeHeightAt(map, hovered.x + x * 0.999, hovered.z + z * 0.999) ?? centre) - centre : groundHeight(map, hovered.x + x * 0.999, hovered.z + z * 0.999) - centre, z]))
   }, [map, hovered])
   const build = useMemo(() => buildCatalog(balance).find((item) => item.id === buildType && !item.retired), [balance, buildType])
-  const rotation=useMemo(()=>build && hovered ? placementRoofRotation(map,build,hovered,requestedRotation) : requestedRotation,[map,build,hovered,requestedRotation])
-  const {layoutSeed,hearthZ,fireplace,supportId,floorHeight,tavernFlue} = build && hovered ? placementBuildingLayout(map,{...build,...rotatedFootprint(build,rotation),...hovered,rotation,buildType:build.id,id:"construction-preview"}) : {}
+  // An inn hovered over its tavern snaps onto the roof, so the ghost stands
+  // where the click will actually build rather than under the cursor.
+  const site=useMemo(()=>build && hovered ? placementSite(map,build,hovered,requestedRotation) : null,[map,build,hovered,requestedRotation])
+  const rotation=site?.rotation ?? requestedRotation
+  const {layoutSeed,hearthZ,fireplace,supportId,floorHeight,tavernFlue} = build && site ? placementBuildingLayout(map,{...build,...rotatedFootprint(build,rotation),...site,rotation,buildType:build.id,id:"construction-preview"}) : {}
   const parts = useMemo(() => build ? structureParts({ ...build, buildType: build.id, layoutSeed, hearthZ, fireplace, supportId, floorHeight, tavernFlue }) : [], [build, layoutSeed, hearthZ, fireplace, supportId, floorHeight, tavernFlue])
   if (!hovered) return null
 
   if (!tileAt(map, hovered.x, hovered.z)) return null
 
-  if (build) {
+  if (build && site) {
     const footprint = rotatedFootprint(build, rotation)
     const valid =
       shrineRenown >= build.requiredRenown &&
-      !placementError(map, build, hovered, balance, rotation) &&
+      !placementError(map, build, site, balance, rotation) &&
       !!resources &&
       canAfford(resources, build.cost)
     const color = valid ? "#93bc6c" : "#db6656"
     return (
       <group
         position={[
-          tileToWorldX(map, hovered.x) + (footprint.w - 1) / 2,
-          groundHeight(map, hovered.x + (footprint.w - 1) / 2, hovered.z + (footprint.d - 1) / 2) + (floorHeight ?? 0),
-          tileToWorldZ(map, hovered.z) + (footprint.d - 1) / 2,
+          tileToWorldX(map, site.x) + (footprint.w - 1) / 2,
+          groundHeight(map, site.x + (footprint.w - 1) / 2, site.z + (footprint.d - 1) / 2) + (floorHeight ?? 0),
+          tileToWorldZ(map, site.z) + (footprint.d - 1) / 2,
         ]}
       >
         <mesh position={[0, 0.04, 0]} renderOrder={4}>

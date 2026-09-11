@@ -1,10 +1,10 @@
-import { innPlacementError, innPlacementLayout, innPlacementRotation } from "./inn"
+import { innPlacementError, innPlacementLayout, innPlacementRotation, innStackSite } from "./inn"
 import { layoutHand, placementLayoutSeed } from "./building-layout"
 import { buildingRoofJoins } from "./building-art/roof-joins"
 import { hasDomesticHearth, shelterHearth } from "./building-art/furnishings"
 import { rotateBuildingPoint, rotatedFootprint, buildingApproaches } from "./building-rotation"
 import { singlePlaneRoofRise } from "./building-art/dimensions"
-import type { BuildingDef, GameMap } from "./map/types"
+import type { BuildingDef, GameMap, TilePos } from "./map/types"
 
 /** New neighbours adopt an existing fireplace's position; older homes never move.
  * Persist the result so demolition and later additions cannot reshuffle a layout.
@@ -77,6 +77,17 @@ export function placementClearance(map: GameMap, candidate: BuildingDef): string
   if(map.buildings.some(b=>buildingApproaches(map,b).some(p=>covers(candidate,p)))) return "Keep the neighboring doors clear."
   if(buildingApproaches(map,candidate).some(p=>p.x<0 || p.z<0 || p.x>=map.width || p.z>=map.depth || map.buildings.some(b=>covers(b,p)))) return "Leave a clear tile outside each door."
   return null
+}
+
+/** Resolve the hovered tile into the site that is actually built. An upper
+ * floor only fits one host, so hovering any of that host's tiles snaps the
+ * whole footprint and its rotation onto it; ordinary buildings keep the tile
+ * and merely turn to meet a touching roof. The ghost, the placement error and
+ * the purchase all resolve the cursor through here, so they never disagree.
+ */
+export function placementSite(map: GameMap, def: Pick<BuildingDef,"id"|"label"|"w"|"d"|"height"|"color"|"roofColor">,
+  at: TilePos, rotation: import("./building-rotation").BuildingRotation): TilePos & {rotation: import("./building-rotation").BuildingRotation} {
+  return innStackSite(map,def.id,at) ?? {x:at.x,z:at.z,rotation:placementRoofRotation(map,def,at,rotation)}
 }
 
 /** Resolve a catalogue placement before validating, drawing or buying it. */

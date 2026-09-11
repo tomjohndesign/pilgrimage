@@ -1,6 +1,6 @@
 "use client"
 
-import { placementRoofRotation } from "@/lib/game/building-placement-layout"
+import { placementSite } from "@/lib/game/building-placement-layout"
 
 import Image from "next/image"
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react"
@@ -91,7 +91,7 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
     return map && hovered ? placementError(map, selected, hovered, balance, rotation) : null
   }, [selected, renown, settlement.resources, map, hovered, balance, rotation])
 
-  const alignedRotation=useMemo(()=>map && selected && hovered ? placementRoofRotation(map,selected,hovered,rotation) : rotation,[map,selected,hovered,rotation])
+  const alignedRotation=useMemo(()=>map && selected && hovered ? placementSite(map,selected,hovered,rotation).rotation : rotation,[map,selected,hovered,rotation])
   const footprint = selected && rotatedFootprint(selected, alignedRotation)
 
   return <div className="hud-bottom-center">
