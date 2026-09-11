@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "88d186ef1cbc29d64779af4f80688d7c1cb15b56",
-  "releaseCount": 214,
+  "lastProcessedCommit": "49dc25af8a3d320040cc0b739f057203c793cab7",
+  "releaseCount": 216,
   "releases": [
+    {
+      "version": "0.0.230",
+      "title": "Release 0.0.230",
+      "summary": "Measure the inn's real overhang and snap it onto the tavern (#249)",
+      "commit": "49dc25af8a3d320040cc0b739f057203c793cab7"
+    },
+    {
+      "version": "0.0.229",
+      "title": "Release 0.0.229",
+      "summary": "Let every citizen build, with monks the slowest hands (#250)",
+      "commit": "8324be73cfc167cc87e2d8b8b6d164130d7af70d"
+    },
     {
       "version": "0.0.228",
       "title": "Release 0.0.228",
