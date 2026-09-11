@@ -1,5 +1,5 @@
 import { shrineLayout, shrineSeats, shrineStations, shrinePoint } from "./shrine-layout"
-import { buildingStepAllowed, shrineFurnitureClear, shrineGates } from "./building-navigation"
+import { buildingStepAllowed, shrineGates } from "./building-navigation"
 import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 import { settlementRoute, shrineApproach } from "./settlement-route"
 import { BASE_CHARACTER_SCALE } from "./base-person/gait"
@@ -30,40 +30,27 @@ export function shrineQueuePlaces(map: GameMap): number {
   return shrineStations(shrine, site.door).queueCapacity + Math.floor(site.branch.length / relicQueueSpacing())
 }
 
-/** Reserve a queue place, private prayer spot, or place in a company’s shared viewing. */
-export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, occupied: ReadonlySet<string> = new Set(), from?: TilePos, prayer = (visitor + visits) % 4 === 3, group = false, relicShown = true) {
+/** Reserve a place in the line for the relic or a private prayer spot. Companies
+ * are broken apart at the enclave: every member lines up as a single visitor. */
+export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, occupied: ReadonlySet<string> = new Set(), from?: TilePos, prayer = (visitor + visits) % 4 === 3, relicShown = true) {
   const site = map.site
   const shrine = map.buildings.find(b => b.id === site?.hovelId)
   if (!site || !shrine) return null
   // Nobody joins the line while no keeper shows the relic; it would only stand
   // there. Private prayer needs no keeper.
-  if (!relicShown && (group || !prayer)) return null
+  if (!relicShown && !prayer) return null
   const gate = shrineGates(shrine, site.door)[0]
   // Only a line longer than the branch turns visitors away before any route is
-  // planned for them. Companies and single visitors take the nave in turns,
-  // waiting outside the door for each other; see the relic approach in the sim.
+  // planned for them.
   const stations = shrineStations(shrine, site.door)
-  // One company occupies the nave together. Subtile places keep the largest
-  // twenty-person companies inside even the small founding church.
-  const groupPlaces: { id: string; tile: TilePos; point: TilePos }[] = []
-  if (group) for (let z = shrine.z; z < shrine.z + shrine.d; z++) for (let x = shrine.x; x < shrine.x + shrine.w; x++) {
-    const tile = { x, z }
-    if (!buildingStepAllowed(map, map.buildings, tile, tile, true) || (x === stations.keeper.x && z === stations.keeper.z)) continue
-    for (const dx of [-.2, .2]) for (const dz of [-.2, .2]) {
-      const point = { x: x + dx, z: z + dz }
-      if (shrineFurnitureClear(shrine, site.door, tile, point)) groupPlaces.push({ id: `group-${x}-${z}-${dx}-${dz}`, tile, point })
-    }
-  }
-  groupPlaces.sort((a, b) => Math.hypot(a.point.x - stations.viewing.x, a.point.z - stations.viewing.z)
-    - Math.hypot(b.point.x - stations.viewing.x, b.point.z - stations.viewing.z))
-  const places = group ? groupPlaces : prayer ? shrineSeats(shrine, site.door) : Array.from({ length: shrineQueuePlaces(map) }, (_, i) => ({ id: `queue-${i}`, tile: stations.viewing }))
+  const places = prayer ? shrineSeats(shrine, site.door) : Array.from({ length: shrineQueuePlaces(map) }, (_, i) => ({ id: `queue-${i}`, tile: stations.viewing }))
   const place = places.find(p => !occupied.has(p.id))
   if (!place || !buildingStepAllowed(map, map.buildings, gate.outside, gate.inside, true)) return null
   const branch = shrineApproach(map, from)
   if (!branch.length) return null
   const inside = settlementRoute(map, map.buildings, gate.inside, place.tile, false, true)
   const approach = settlementRoute(map, map.buildings, site.door, gate.outside)
-  return inside && approach ? { seat: place.id, point: group ? groupPlaces.find(p => p.id === place.id)!.point : undefined, route: [...branch, ...approach.slice(1), ...inside] } : null
+  return inside && approach ? { seat: place.id, route: [...branch, ...approach.slice(1), ...inside] } : null
 }
 
 /** Exit by the side of the nave, visiting the wall box before the single door.
