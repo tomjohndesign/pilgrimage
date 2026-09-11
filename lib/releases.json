@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "d9dc18ecd1e0590fe1a628851a61f25b336d345e",
-  "releaseCount": 209,
+  "lastProcessedCommit": "5ca3b6f7d16083c6e6933a9c4372f7d08712240f",
+  "releaseCount": 210,
   "releases": [
+    {
+      "version": "0.0.224",
+      "title": "Release 0.0.224",
+      "summary": "Resolve figures sharing a spot by painter's order instead of texel noise (#242)",
+      "commit": "5ca3b6f7d16083c6e6933a9c4372f7d08712240f"
+    },
     {
       "version": "0.0.223",
       "title": "Release 0.0.223",
