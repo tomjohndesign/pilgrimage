@@ -8,8 +8,9 @@ import { marchToGround } from "@/lib/game/map/ground-pick"
 import { CameraGesture } from "@/lib/game/camera-gesture"
 import { cameraEdgePan } from "@/lib/game/camera-edge-pan"
 import { useBuildStore } from "@/lib/game/build-store"
-import { useCameraStore } from "@/lib/game/camera-store"
+import { useCameraStore, type Selection } from "@/lib/game/camera-store"
 import { followPoint } from "@/lib/game/camera-follow"
+import { blendAngle, walkPoint, walkTarget, walkViewIndex } from "@/lib/game/pilgrim-walk"
 import { worldToTileX, worldToTileZ, type GameMap, type TilePos } from "@/lib/game/map/types"
 import {
   CAM_FAR,
@@ -27,6 +28,12 @@ const YAW_SNAP_THRESHOLD = 0.005
 const ZOOM_TWEEN_LAMBDA = 9
 /** Following eases towards the selection so a party's centre never snaps when members join or leave. */
 const FOLLOW_TWEEN_LAMBDA = 8
+/** A walk holds its person far tighter: at that range any lag reads as drift across the screen. */
+const WALK_TWEEN_LAMBDA = 14
+/** Their heading settles over a stride or so, so a step around a stone does not swing the view. */
+const WALK_TURN_LAMBDA = 3
+/** Below this much ground covered in a frame there is no step to take a heading from. */
+const WALK_STEP = 1e-4
 
 /** Keyboard and edge pan speed, in world units per second at the default zoom. */
 const KEY_PAN_SPEED = 18
@@ -39,6 +46,8 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
   const displayYaw = useRef(yawForView(useCameraStore.getState().viewIndex))
   const displayViewSize = useRef(useCameraStore.getState().viewSize)
   const heldKeys = useRef(new Set<string>())
+  /** Where the walked-with person stood last frame, and the heading the camera has settled on. */
+  const walkTrail = useRef<{ selection: Selection; x: number; z: number; heading: number } | null>(null)
   const edgePointer = useRef<PointerEvent | null>(null)
   const refreshHover = useRef<((event: PointerEvent) => void) | null>(null)
 
@@ -247,7 +256,9 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
       if (event.repeat) return
       switch (key) {
         case "escape":
-          useBuildStore.getState().setTool(null)
+          // The walk is the more immediate thing to step out of.
+          if (useCameraStore.getState().walkWith) useCameraStore.getState().setWalkWith(false)
+          else useBuildStore.getState().setTool(null)
           break
         case "q":
         case ",":
@@ -324,13 +335,38 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
     // Following runs before player panning, so a pan in the same frame wins
     // and also releases the follow through the store.
     const store = useCameraStore.getState()
-    if (store.following) {
-      const point = followPoint(store.selection)
-      if (point) store.follow(
-        THREE.MathUtils.damp(store.targetX, point.x, FOLLOW_TWEEN_LAMBDA, dt),
-        THREE.MathUtils.damp(store.targetZ, point.z, FOLLOW_TWEEN_LAMBDA, dt),
-      )
-      else store.setFollowing(false)
+    if (store.walkWith) {
+      const selection = store.selection
+      const walker = walkPoint(selection)
+      if (!selection || !walker) store.setWalkWith(false)
+      else {
+        // A new selection starts the walk from the view already on screen, so
+        // nothing turns until the walker themselves has taken a step.
+        const trail = walkTrail.current?.selection === selection ? walkTrail.current : null
+        const step = trail ? Math.hypot(walker.x - trail.x, walker.z - trail.z) : 0
+        const heading = !trail ? yawForView(store.viewIndex) + Math.PI
+          : step <= WALK_STEP ? trail.heading
+          : blendAngle(trail.heading, Math.atan2(walker.x - trail.x, walker.z - trail.z),
+            1 - Math.exp(-WALK_TURN_LAMBDA * dt))
+        walkTrail.current = { selection, x: walker.x, z: walker.z, heading }
+        const aim = walkTarget(walker, heading)
+        store.follow(
+          THREE.MathUtils.damp(store.targetX, aim.x, WALK_TWEEN_LAMBDA, dt),
+          THREE.MathUtils.damp(store.targetZ, aim.z, WALK_TWEEN_LAMBDA, dt),
+        )
+        // The yaw tween carries the quarter turn; this only chooses the view.
+        store.steer(walkViewIndex(store.viewIndex, heading))
+      }
+    } else {
+      walkTrail.current = null
+      if (store.following) {
+        const point = followPoint(store.selection)
+        if (point) store.follow(
+          THREE.MathUtils.damp(store.targetX, point.x, FOLLOW_TWEEN_LAMBDA, dt),
+          THREE.MathUtils.damp(store.targetZ, point.z, FOLLOW_TWEEN_LAMBDA, dt),
+        )
+        else store.setFollowing(false)
+      }
     }
 
     // Edge and keyboard panning follow the current camera rotation.

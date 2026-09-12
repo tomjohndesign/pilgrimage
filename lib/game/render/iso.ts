@@ -36,6 +36,13 @@ export const MAX_VIEW_SIZE = 140
 export const DEFAULT_VIEW_SIZE = 32 / 1.5
 
 /**
+ * The close view the camera drops to when it walks the road with someone. Well
+ * inside the range the player can already reach by hand, so walking beside a
+ * pilgrim needs no render pass or pixel size of its own — only a nearer frustum.
+ */
+export const WALK_VIEW_SIZE = 10
+
+/**
  * The ratio that framed a 128-tile map at MAX_VIEW_SIZE — the tuning the cap
  * was originally sized against. Smaller maps cap proportionally lower so
  * zooming out never shows a sliver of world adrift in the void.

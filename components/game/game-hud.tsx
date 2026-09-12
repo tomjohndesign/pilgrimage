@@ -39,6 +39,7 @@ import type { PixelationProps } from "@/components/pixel-canvas"
 import type { MapSettings } from "./game-shell"
 import { AnimalInspector } from "./animal-inspector"
 import { FollowButton } from "./follow-button"
+import { WalkButton } from "./walk-button"
 import { ResourceInspector } from "./resource-inspector"
 import { Minimap } from "./minimap"
 import { SettlementPanel } from "./settlement-panel"
@@ -288,6 +289,7 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
       <div className="flex items-center justify-between gap-4">
         <Label>Traveler</Label>
         <div className="flex items-center gap-2">
+          <WalkButton subject="this traveler" />
           <FollowButton subject={party ? "party" : "traveler"} />
           <button
             type="button"
@@ -561,6 +563,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
       <div className="flex items-center justify-between gap-4">
         <Label>Brother</Label>
         <div className="flex items-center gap-2">
+          <WalkButton subject="this monk" />
           <FollowButton subject="monk" />
           <button
             type="button"
