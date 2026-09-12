@@ -375,6 +375,21 @@ describe("generateMap", () => {
     }
   }, SWEEP_TIMEOUT)
 
+  it("routes seed 7920 around an inset that disconnects the road portals", () => {
+    const map = generateMap({ seed: 7920 })
+    expect(roadReachesEast(map)).toBe(true)
+    expect(map.road![0].x).toBe(0)
+    expect(map.road!.at(-1)!.x).toBe(map.width - 1)
+    expect(map.site!.branch.length).toBeGreaterThan(1)
+    for (let i = 1; i < map.road!.length; i++) {
+      const a = map.road![i - 1], b = map.road![i]
+      expect(Math.abs(a.x - b.x) + Math.abs(a.z - b.z)).toBe(1)
+      if (!carriesWater(map, a.x, a.z) && !carriesWater(map, b.x, b.z)) {
+        expect(Number.isFinite(elevationStep(map.elevation, a.z * map.width + a.x, b.z * map.width + b.x))).toBe(true)
+      }
+    }
+  })
+
   it("mixes open meadows with substantial, locally dense woodland", () => {
     for (const seed of SEEDS) {
       const map = mapFor(seed)

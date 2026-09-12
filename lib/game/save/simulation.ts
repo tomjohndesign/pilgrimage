@@ -4,6 +4,7 @@ import { MONK_COUNT, type Monk } from "../monks"
 import { roadPosition, type SimState, type SimTraveler } from "../sim"
 import { emptyFoodStock, type FoodStock } from "../storage"
 import type { Traveler } from "../travelers"
+import { pruneTravelParties, sharePartyNeeds, syncTravelParties } from "../travel-parties"
 import type { TreeModel } from "../trees/render-model"
 import type { SimulationSave, TravelerSave } from "./schema"
 
@@ -18,6 +19,16 @@ import type { SimulationSave, TravelerSave } from "./schema"
  * the seed; only their effects on the economy are kept.
  */
 export function captureSimulation(sim: SimState, treeModel: TreeModel): SimulationSave {
+  // A companion may have settled since the last party update. Finish the purse
+  // accounting on copies so their saved share belongs to them, without changing
+  // the live simulation or charging their companions again after a reload.
+  const travelers = new Map([...sim.travelers].map(([id, s]) => [id, { ...s }]))
+  const parties = new Map([...sim.parties].map(([id, party]) => [id, { ...party, members: [...party.members] }]))
+  for (const party of parties.values()) if (party.provisioned) {
+    const members = party.members.flatMap(id => travelers.has(id) ? [travelers.get(id)!] : [])
+    sharePartyNeeds(party, members, 0, 0, 0, 0)
+  }
+  pruneTravelParties(parties, travelers, sim.joinedMonks)
   return {
     time: sim.time,
     treeModel,
@@ -34,7 +45,8 @@ export function captureSimulation(sim: SimState, treeModel: TreeModel): Simulati
     treeResources: [...sim.treeResources].map(([index, tree]) => [index, { ...tree }]),
     foodStores: [...sim.foodStores].map(([id, stock]) => [id, { ...stock }]),
     piles: [...sim.piles.values()].map(pile => ({ ...pile })),
-    travelers: [...sim.travelers.values()].map(captureTraveler),
+    travelers: [...travelers.values()].map(captureTraveler),
+    partyGold: [...parties.values()].filter(party => party.provisioned).map(party => [party.id, party.gold]),
     joinedMonks: [...sim.joinedMonks].map(([travelerId, monk]) => ({ travelerId, monk: captureMonk(monk) })),
   }
 }
@@ -116,14 +128,47 @@ export function restoreSimulation(sim: SimState, save: SimulationSave, travelers
     if (!s || !t) continue
     restoreTraveler(sim, s, t, record, map, roadLength, workplaceIds, buildingIds)
   }
+  // Saved residents and joined brothers no longer belong to their seeded party.
+  // Rebuild before choosing the leader, without taking a second share from a
+  // resident's already saved purse.
+  syncTravelParties(sim.parties, travelers, sim.travelers)
+  const partyGold = new Map(save.partyGold)
   // Companies pick up from where their leader resumed and walk back into formation.
   for (const party of sim.parties.values()) {
     const leader = sim.travelers.get(party.members[0])
     if (!leader) continue
+    const members = party.members.map(id => sim.travelers.get(id)!)
     party.progress = leader.progress; party.direction = leader.direction
     party.headTile = Math.floor(leader.progress); party.speed = 0; party.formed = false
     party.diversion = undefined; party.provisioned = false
+    const gold = partyGold.get(party.id) ?? (save.partyGold === undefined && save.time > 0
+      ? legacyPartyGold(members) : undefined)
+    if (gold !== undefined) {
+      party.gold = gold
+      party.provisioned = true
+      party.hunger = members.reduce((sum, s) => sum + s.hunger, 0) / members.length
+      party.thirst = members.reduce((sum, s) => sum + s.thirst, 0) / members.length
+    }
   }
+}
+
+/** Older saves mirrored the purse onto every member without recording its
+ * baseline. Recover the most common balance, preferring the larger in a tie
+ * (one companion may just have paid for food). This preserves the usual shared
+ * purse; an old snapshot in which everyone transacted is inherently ambiguous.
+ * New saves carry the exact baseline, including an empty list before pooling.
+ */
+function legacyPartyGold(members: readonly SimTraveler[]): number {
+  const counts = new Map<number, number>()
+  let gold = 0, frequency = 0
+  for (const member of members) {
+    const count = (counts.get(member.gold) ?? 0) + 1
+    counts.set(member.gold, count)
+    if (count > frequency || (count === frequency && member.gold > gold)) {
+      gold = member.gold; frequency = count
+    }
+  }
+  return gold
 }
 
 function pickFood(stock: Record<string, number>): Partial<FoodStock> {
@@ -165,7 +210,7 @@ function restoreTraveler(
   s.progress = Math.min(roadLength, Math.max(0, record.progress))
   s.lane = record.lane
 
-  if (employer) {
+  if (employer || s.home) {
     // A settler resumes on the spot and asks their workplace for a task.
     s.x = record.position.x; s.y = record.position.y; s.z = record.position.z
     s.activity = "idle"
