@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "767eefe5bebab7db40f451ec1cfd0816b1c4f258",
-  "releaseCount": 220,
+  "lastProcessedCommit": "4e91dd5e239e01367bc0950ec7a8277723df454d",
+  "releaseCount": 221,
   "releases": [
+    {
+      "version": "0.0.235",
+      "title": "Release 0.0.235",
+      "summary": "Fix worker duties, party save accounting, and blocked map generation (#254)",
+      "commit": "4e91dd5e239e01367bc0950ec7a8277723df454d"
+    },
     {
       "version": "0.0.234",
       "title": "Release 0.0.234",
