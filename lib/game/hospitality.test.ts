@@ -582,6 +582,31 @@ describe("woodcutter huts", () => {
     expect(site.construction.work).toBe(0)
   })
 
+  it("recruits a spare keeper already at their post when a site appears", () => {
+    const { map, camp, traveler } = fixture()
+    const def = BUILD_CATALOG.find(b => b.id === "tavern")!
+    const tavern = { ...def, id: "tavern-0", buildType: "tavern", x: 13, z: 11, rotation: 0 as const }
+    map.buildings.push(tavern)
+    const people = [traveler(0), traveler(1)]
+    people[1].attributes.skills = ["carpentry"]
+    const sim = createSim(people, map)
+    sim.buildings = jobBuildings(map)
+    const keepers = people.map((t, jobSlot) => {
+      const s = sim.travelers.get(t.id)!
+      Object.assign(s, { employer: tavern.id, jobSlot, jobless: false, activity: "idle", moveSpeed: 0,
+        x: tileToWorldX(map, tavern.x + jobSlot), z: tileToWorldZ(map, tavern.z + tavern.d) })
+      return s
+    })
+    run(sim, people, map, 60, () => keepers.every(s => s.activity === "posted"))
+    expect(keepers.every(s => s.activity === "posted")).toBe(true)
+    const site = { ...camp, id: "construction-site", x: 5, z: 6, construction: { work: 0, required: 96 } }
+    map.buildings = [...map.buildings, site]
+    run(sim, people, map, 10, () => keepers[1].activity === "toBuild")
+    expect(keepers[1].activity).toBe("toBuild")
+    expect(keepers[1].buildRate).toBe(builderRate(["carpentry"]))
+    expect(["toPost", "posted"]).toContain(keepers[0].activity)
+  })
+
   it("sends an idle settled worker to build, then returns them to camp", () => {
     const { map, camp, traveler } = fixture()
     const t = traveler(0), sim = createSim([t], map), actor = sim.travelers.get(0)!
@@ -1042,6 +1067,8 @@ describe("houses, counters and posts", () => {
     run(sim, people, map, 2 * GAME_DAY_SECONDS)
     expect(sim.wagesPaid).toBe(0)
     expect(sim.treasuryGold).toBe(100)
+    expect(keeper.wageDay).toBe(Math.floor(sim.time))
+    expect(keeper.gold).toBe(Math.floor(sim.time) * sim.balance.rules.dailyWage)
   }, 20000)
 
   it("sends a fed resident to the counter for supper, and home to the larder when they cannot pay", () => {

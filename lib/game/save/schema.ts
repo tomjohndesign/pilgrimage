@@ -199,6 +199,8 @@ export const simulationSaveSchema = z.object({
   foodStores: z.array(z.tuple([z.string(), z.record(z.string(), finite.min(0))])).describe("Stored food by building id"),
   piles: z.array(z.object({ id: z.string(), campId: z.string(), slot: count, wood: finite.min(0) })).describe("Timber stacked at the camps"),
   travelers: z.array(travelerSaveSchema),
+  partyGold: z.array(z.tuple([count, finite.min(0)])).optional()
+    .describe("Shared purse baselines by party id; member balances include unreconciled transactions"),
   joinedMonks: z.array(joinedMonkSchema).describe("Friars who joined the brotherhood; they are no longer travelers"),
 }).describe("Progress of the living world on top of the settlement")
 

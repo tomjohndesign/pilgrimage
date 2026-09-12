@@ -11,6 +11,8 @@ import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } 
 import { shrineVisitPlan } from "./shrine-visit"
 import { generateMap } from "./map/generate-map"
 import type { TravelParty } from "./travel-parties"
+import { captureSimulation, restoreSimulation } from "./save/simulation"
+import { simulationSaveSchema } from "./save/schema"
 
 function fixture(count = 6, direction: 1 | -1 = 1) {
   const map: GameMap = { width: 80, depth: 20, seed: 42, tiles: Array(1600).fill("grass"), buildings: [],
@@ -414,6 +416,86 @@ describe("tireless travel", () => {
 })
 
 describe("shared provisions and purse", () => {
+  it.each([0, 3])("resumes an older mirrored purse with a pending expense of %i", expense => {
+    const { map, travelers, sim } = fixture(4)
+    stepSim(sim, travelers, map, 1, .1)
+    const total = sim.parties.get(0)!.gold
+    const saved = captureSimulation(sim, "sprites")
+    delete saved.partyGold
+    saved.travelers[0].gold -= expense
+    const fresh = createSim(travelers, map)
+    restoreSimulation(fresh, simulationSaveSchema.parse(saved), travelers, map)
+    fresh.parties.get(0)!.transportInitialized = true
+    stepSim(fresh, travelers, map, 1, .1)
+    expect(fresh.parties.get(0)!.gold).toBe(total - expense)
+  })
+
+  it("pools individual purses once when resuming before the first simulation step", () => {
+    const { map, travelers, sim } = fixture(4)
+    const total = [...sim.travelers.values()].reduce((sum, s) => sum + s.gold, 0)
+    const saved = simulationSaveSchema.parse(JSON.parse(JSON.stringify(captureSimulation(sim, "sprites"))))
+    const fresh = createSim(travelers, map)
+    restoreSimulation(fresh, saved, travelers, map)
+    fresh.parties.get(0)!.transportInitialized = true
+    stepSim(fresh, travelers, map, 1, .1)
+    expect(fresh.parties.get(0)!.gold).toBe(total)
+  })
+
+  it("saves a departing companion's share without changing the live party", () => {
+    const { map, travelers, sim } = fixture(4)
+    const def = BUILD_CATALOG.find(b => b.id === "house")!
+    map.buildings.push({ ...def, id: "house-0", buildType: "house", x: 20, z: 9 })
+    stepSim(sim, travelers, map, 1, .1)
+    const party = sim.parties.get(0)!, resident = sim.travelers.get(0)!
+    const total = party.gold
+    // Recruitment happens after party upkeep; autosave can run before the next tick.
+    resident.home = "house-0"
+    resident.gold -= 4
+    const saved = simulationSaveSchema.parse(JSON.parse(JSON.stringify(captureSimulation(sim, "sprites"))))
+    expect(party.members).toEqual([0, 1, 2, 3])
+    expect(party.gold).toBe(total)
+    expect(resident.gold).toBe(total - 4)
+    const fresh = createSim(travelers, map)
+    restoreSimulation(fresh, saved, travelers, map)
+    expect(fresh.travelers.get(0)!.gold).toBe((total - 4) / 4)
+    expect(fresh.parties.get(0)!.gold).toBe((total - 4) * 3 / 4)
+  })
+
+  it("preserves the shared purse across repeated save and resume cycles", () => {
+    const { map, travelers, sim } = fixture(4)
+    stepSim(sim, travelers, map, 1, .1)
+    const gold = sim.parties.get(0)!.gold
+    // Include a transaction since the last reconciliation of the shared purse.
+    sim.travelers.get(1)!.gold -= 3
+    let current = sim
+    for (let reload = 0; reload < 3; reload++) {
+      const save = simulationSaveSchema.parse(JSON.parse(JSON.stringify(captureSimulation(current, "sprites"))))
+      current = createSim(travelers, map)
+      restoreSimulation(current, save, travelers, map)
+      current.parties.get(0)!.transportInitialized = true
+      stepSim(current, travelers, map, 1, .1)
+      expect(current.parties.get(0)!.gold).toBeCloseTo(gold - 3)
+    }
+  })
+
+  it("resumes a housed companion without a job as a resident outside the traveling party", () => {
+    const { map, travelers, sim } = fixture(4)
+    const def = BUILD_CATALOG.find(b => b.id === "house")!
+    const house = { ...def, id: "house-0", buildType: "house", x: 20, z: 9 }
+    map.buildings.push(house)
+    const resident = sim.travelers.get(0)!
+    Object.assign(resident, { home: house.id, employer: null, jobless: true, activity: "idle",
+      x: tileToWorldX(map, house.x), z: tileToWorldZ(map, house.z + house.d) })
+    stepSim(sim, travelers, map, 1, .1)
+    const saved = simulationSaveSchema.parse(JSON.parse(JSON.stringify(captureSimulation(sim, "sprites"))))
+    const fresh = createSim(travelers, map)
+    restoreSimulation(fresh, saved, travelers, map)
+    expect(fresh.travelers.get(0)).toMatchObject({ home: house.id, employer: null, activity: "idle",
+      partyId: undefined, x: resident.x, y: resident.y, z: resident.z })
+    expect(fresh.parties.get(0)!.members).toEqual([1, 2, 3])
+    expect(fresh.parties.get(0)!.progress).toBe(fresh.travelers.get(1)!.progress)
+  })
+
   it("eases the drain with company size and charges every animal", () => {
     expect(partyNeedDrain(1)).toBe(1)
     expect(partyNeedDrain(20)).toBeCloseTo(PARTY_NEED_FLOOR, 9)

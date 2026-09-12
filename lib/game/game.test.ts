@@ -366,7 +366,7 @@ describe("site menu", () => {
 
   it("lists the asset workshops and path playgrounds under assets", () => {
     const assets = SITE_MENU.find((item) => item.label === "Assets")
-    expect(assets?.children?.map((c) => c.label)).toEqual(["Textures", "Playground", "Path playgrounds", "Map playground", "Pixel workshop"])
+    expect(assets?.children?.map((c) => c.label)).toEqual(["Textures", "Playground", "Path playgrounds", "Map playground", "Placement playground", "Pixel workshop"])
   })
 })
 

@@ -1018,13 +1018,16 @@ function payWage(sim: SimState, s: SimTraveler): void {
   const day = Math.floor(sim.time)
   if (s.wageDay === day) return
   const workplace = sim.buildings.find(b => b.id === s.employer)
-  if (!workplace || workplace.owner === "independent") return
+  if (!workplace) return
   if (s.wageDay === undefined) { s.wageDay = day; return }
-  const wage = Math.max(0, Math.min(sim.balance.rules.dailyWage, sim.treasuryGold))
+  const independent = workplace.owner === "independent"
+  const wage = Math.max(0, independent ? sim.balance.rules.dailyWage : Math.min(sim.balance.rules.dailyWage, sim.treasuryGold))
   s.gold += wage
   s.wageDay = day
-  sim.wagesPaid += wage
-  sim.treasuryGold -= wage
+  if (!independent) {
+    sim.wagesPaid += wage
+    sim.treasuryGold -= wage
+  }
 }
 
 function donate(sim: SimState, giver: SimTraveler, recipient: SimTraveler): void {
@@ -1221,6 +1224,19 @@ function homeBedSlot(sim: SimState, s: SimTraveler): number {
 function ofTheEnclave(map: GameMap, workplace: PlacedBuilding | undefined, home: string | null): boolean {
   if (workplace) return workplace.owner !== "independent"
   return !home || map.buildings.find(b => b.id === home)?.owner !== "independent"
+}
+
+/** Keep the head keeper at work while other rested citizens help raise new sites. */
+function startCitizenBuild(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): boolean {
+  const workplace = sim.buildings.find(b => b.id === s.employer)
+  if (t.type.id === "vendor" || (workplace && isPostedWork(workplace.kind) && s.jobSlot === 0)
+    || !ofTheEnclave(map, workplace, s.home) || (s.happiness < HAPPINESS_THRESHOLD && s.gold >= DRINK_PRICE)
+    || Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD || s.stamina < SETTLER_FED_AT) return false
+  s.workSlot = s.id
+  s.buildRate = builderRate(t.attributes.skills)
+  if (!assignBuildingTask(s, map, "build")) return false
+  s.activity = "toBuild"
+  return true
 }
 
 /** Complete counters with a keeper working, including patrols inside a tavern. */
@@ -2528,19 +2544,7 @@ export function stepSim(
         const fitForWork = !hungry && s.stamina >= SETTLER_FED_AT
         const unhappy = socialBreak
         const workplace = sim.buildings.find(b => b.id === s.employer)
-        // Raising a building is the whole enclave's business, not the brothers'
-        // alone: a keeper leaves the counter for it as readily as a woodcutter
-        // leaves the woods. The first slot of a posted house stays behind so a
-        // counter never closes for a site, and the site's own crew limit keeps
-        // everyone else at their usual work. A town down the road keeps its own
-        // household, and a vendor's stall is nobody's but the vendor's.
-        const sparedFromPost = !workplace || !isPostedWork(workplace.kind) || s.jobSlot > 0
-        if (!isVendor && sparedFromPost && !unhappy && fitForWork
-          && ofTheEnclave(map, workplace, s.home)) {
-          s.workSlot = s.id
-          s.buildRate = builderRate(t.attributes.skills)
-          if (assignBuildingTask(s, map, "build")) { s.activity = "toBuild"; break }
-        }
+        if (dt > 0 && startCitizenBuild(sim, s, t, map)) break
         // Standing behind a counter or in a fold asks little; a settler keeps
         // that post until they are genuinely hungry or tired.
         if (workplace && isPostedWork(workplace.kind) && !hungry && !unhappy && s.stamina > SETTLER_TIRED_AT) {
@@ -2625,6 +2629,9 @@ export function stepSim(
           s.timer = 0
         } else if (state === "posted" && !s.herdingRetry) {
           s.herdingRetry = 5
+          // A staffed counter may predate the site. Reconsider construction on
+          // the existing work poll instead of waiting for hunger or exhaustion.
+          if (startCitizenBuild(sim, s, t, map)) break
           seekSheep(s, sim.wildlife, map, characterScale)
         }
         break

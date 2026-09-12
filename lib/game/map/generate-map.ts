@@ -475,9 +475,15 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   const routeRoad = (a: TilePos, b: TilePos, wander: Float64Array): number[] => {
     const around = routeOverLand(a, b, width, depth, wander, walkable, walkable, MAX_BRIDGE_SPAN, elevation)
     if (around) return around
-    const route = routeOverLand(a, b, width, depth, wander, kind, passKind, MAX_BRIDGE_SPAN, elevation) ??
+    const bounded = routeOverLand(a, b, width, depth, wander, kind, passKind, MAX_BRIDGE_SPAN, elevation) ??
       routeOverLand(a, b, width, depth, wander, kind, passKind, Infinity, elevation) ??
       routeBlind(a, b, width, depth, wander, elevation, routeBounds(a, b, width, depth))
+    // The inset can cut a portal off from the interior even when its inward
+    // approach is clear. Relax the border only after every bounded route fails;
+    // keep the water and cliff checks so founding always receives a real road.
+    const route = bounded.length ? bounded :
+      routeOverLand(a, b, width, depth, wander, kind, passKind, Infinity, elevation, false) ??
+      routeBlind(a, b, width, depth, wander, elevation)
     // If an ancient stand seals the only legal river pass, it remains ordinary
     // woodland in this world. Never cut a through-road into its dark heart.
     const removed = new Set<number>()
