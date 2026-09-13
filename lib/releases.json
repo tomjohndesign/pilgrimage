@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "5e9d24f0118e7ee7132c68c9727a6faff8f1852c",
-  "releaseCount": 231,
+  "lastProcessedCommit": "f30ac306a2c2e7151b764bb40ffbf1640193c3d0",
+  "releaseCount": 232,
   "releases": [
+    {
+      "version": "0.0.246",
+      "title": "Release 0.0.246",
+      "summary": "Start with a relic chapel and construct the church upgrade (#265)",
+      "commit": "f30ac306a2c2e7151b764bb40ffbf1640193c3d0"
+    },
     {
       "version": "0.0.245",
       "title": "Release 0.0.245",
