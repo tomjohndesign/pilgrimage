@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "d5a30dd03979207268d7859e6987ff8987fd2140",
-  "releaseCount": 224,
+  "lastProcessedCommit": "3d4f1e4655716f4716a5257fa3fb0207c070889a",
+  "releaseCount": 225,
   "releases": [
+    {
+      "version": "0.0.239",
+      "title": "Release 0.0.239",
+      "summary": "Fix road monks to use the monk character model (#257)",
+      "commit": "3d4f1e4655716f4716a5257fa3fb0207c070889a"
+    },
     {
       "version": "0.0.238",
       "title": "Release 0.0.238",
