@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "57258f6b668062d4142642310f363fde01bb17eb",
-  "releaseCount": 234,
+  "lastProcessedCommit": "87b3efeee4d5d6e496c8ecc13d56b58b09025b3a",
+  "releaseCount": 235,
   "releases": [
+    {
+      "version": "0.0.249",
+      "title": "Release 0.0.249",
+      "summary": "Allow well access from every side and guide NPCs along invisible paths (#268)",
+      "commit": "87b3efeee4d5d6e496c8ecc13d56b58b09025b3a"
+    },
     {
       "version": "0.0.248",
       "title": "Release 0.0.248",
