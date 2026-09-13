@@ -468,7 +468,8 @@ function makeTileMaterial({
             // through the median at a fork instead of leaving a square seam.
             // Noise over world position frays the verges continuously.
             float tuft = tileNoise(world * 7.0) * 0.6 + tileNoise(world * 15.0) * 0.4;
-            vec2 shape = roadShape(vTileLocal, clamp(1.0 - vRoadOpen, 0.0, 1.0), max(-vRoadOpen, 0.0), vRoadCorners,
+            vec2 pathPoint = buildingPathPoint(world, vTileLocal);
+            vec2 shape = roadShape(pathPoint, clamp(1.0 - vRoadOpen, 0.0, 1.0), max(-vRoadOpen, 0.0), vRoadCorners,
               edge, vInner, (tuft - 0.5) * 0.2 * roadEdgeWear);
             // Land instances carry only the adjoining shoulders and diagonals.
             if (vGrass > 0.5) shape = vec2(0.0, -1.0);
@@ -478,7 +479,7 @@ function makeTileMaterial({
             shape.x *= vLand.w;
             shape.y = mix(-100.0, shape.y, step(0.001, vLand.w));
             float segmentOpacity, grassWear;
-            shape = max(shape, diagonalRoadShape(vTileLocal, vRoadSegments,
+            shape = max(shape, diagonalRoadShape(pathPoint, vRoadSegments,
               edge - vEdge, edge, (tuft - 0.5) * 0.2 * roadEdgeWear, segmentOpacity, grassWear));
             segmentOpacity = max(segmentOpacity, originalOpacity);
             // First repeat visits only dull the existing grass. Keep its texture
