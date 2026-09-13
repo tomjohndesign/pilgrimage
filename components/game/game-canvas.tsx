@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { terrainMapSnapshot } from "@/lib/game/render/terrain-blocks"
 import { travelerAppearance } from "@/lib/game/base-person/population"
 import { populationVisual } from "@/lib/game/base-person/population-assets"
+import { monkVisual } from "@/lib/game/base-person/monk-assets"
 import { walkSpeedScale } from "@/lib/game/base-person/gait"
 import { characterVisual } from "@/lib/game/character-assets"
 import { useCharacterAssetStore } from "@/lib/game/character-asset-store"
@@ -154,9 +155,11 @@ export function GameCanvas({
   const assets = useCharacterAssetStore(s => s.assets)
   const speedScales = useMemo(() => new Map(travelers.map(traveler => {
     const appearance = travelerAppearance(map.seed ?? 0, traveler.id)
-    const visual = characterModel === "base" || (traveler.type.id === "beggar" || traveler.type.id === "nun") ? populationVisual(traveler.type.id, appearance.variant, population, traveler.attributes.age)
+    const monk = traveler.type.id === "friar"
+    const visual = monk ? monkVisual(traveler.attributes.age)
+      : characterModel === "base" || (traveler.type.id === "beggar" || traveler.type.id === "nun") ? populationVisual(traveler.type.id, appearance.variant, population, traveler.attributes.age)
       : characterVisual(assets[traveler.type.id], "callings")
-    const scale = characterScale * (characterModel === "base" ? appearance.scale : 1)
+    const scale = characterScale * (!monk && characterModel === "base" ? appearance.scale : 1)
     const personSpeedScale = walkSpeedScale(visual.walkStride, scale)
     return [traveler.id, traveler.type.id === "vendor" ? vendorSpeedScale(traveler.id, scale, personSpeedScale) : personSpeedScale]
   })), [travelers, map.seed, characterModel, characterScale, population, assets])
