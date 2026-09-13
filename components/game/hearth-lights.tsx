@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react"
+import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode, type RefObject } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
@@ -12,15 +12,15 @@ const MAX_HEARTH_LIGHTS = 16
 const HearthContext = createContext<{ register: (light: THREE.PointLight) => () => void } | null>(null)
 
 /** Local lights otherwise enter every terrain vertex shader, even when their
- * building is miles outside the view. Reuse a bounded set near the view centre;
- * its size stays constant during camera movement to avoid shader recompiles. */
+ * building is miles outside the view. Reuse a bounded set near the view centre.
+ * Allocate every slot at mount: adding or demolishing a hearth must not change
+ * NUM_POINT_LIGHTS and recompile every lit material during gameplay. */
 export function HearthLights({ children, enabled = true }: { children: ReactNode; enabled?: boolean }) {
   const root = useRef<THREE.Group>(null)
   const sources = useMemo(() => new Set<THREE.PointLight>(), [])
-  const [count, setCount] = useState(0)
   const context = useMemo(() => ({ register: (light: THREE.PointLight) => {
-    sources.add(light); setCount(Math.min(MAX_HEARTH_LIGHTS, sources.size))
-    return () => { sources.delete(light); setCount(Math.min(MAX_HEARTH_LIGHTS, sources.size)) }
+    sources.add(light)
+    return () => { sources.delete(light) }
   } }), [sources])
   const slots = useRef<Array<THREE.PointLight | null>>([])
   const scratch = useMemo(() => ({ point: new THREE.Vector3(), projected: new THREE.Vector3(),
@@ -55,7 +55,7 @@ export function HearthLights({ children, enabled = true }: { children: ReactNode
   }, .5)
   return <HearthContext.Provider value={context}>
     {children}
-    <group ref={root} name="hearth-light-pool">{Array.from({ length: count }, (_, i) =>
+    <group ref={root} name="hearth-light-pool">{Array.from({ length: MAX_HEARTH_LIGHTS }, (_, i) =>
       <pointLight key={i} ref={light => { slots.current[i] = light }} intensity={0} />)}</group>
   </HearthContext.Provider>
 }

@@ -7,7 +7,7 @@ import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotat
 import { footprintGrading, groundHeight, levelBuildingGround } from "./map/elevation"
 import { buildingKind, placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
 import { settlementRoute, shrineRoadHead } from "./settlement-route"
-import { buildInfluence, getBuildInfluence, type BuildInfluence } from "./build-influence"
+import { buildInfluence } from "./build-influence"
 import type { SimState } from "./sim"
 import { DEFAULT_ADMISSION_FEE } from "./shrine-visit"
 import { TERRAIN, TILE_HEIGHT } from "./map/terrain"
@@ -251,8 +251,8 @@ export function buildingAt(map: GameMap, x: number, z: number): BuildingDef | un
   return map.buildings.find((b) => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d)
 }
 
-/** Shared terrain feedback for the influence overlay and the full footprint check. */
-export function buildTileError(map: GameMap, x: number, z: number, influence: BuildInfluence, churchAddition = false): string | null {
+/** Shared terrain feedback for the placement overlay and the full footprint check. */
+export function buildTileError(map: GameMap, x: number, z: number, churchAddition = false): string | null {
   const terrain = tileAt(map, x, z)
   if (!terrain) return "The whole structure must fit on the map."
   if (buildingAt(map, x, z)) return "Another structure occupies this space."
@@ -269,8 +269,6 @@ export function buildTileError(map: GameMap, x: number, z: number, influence: Bu
     return "Keep the forest track clear: the old growth leaves no way around it."
   if (map.elevation?.cliffs[z * map.width + x]) return "Choose level ground away from cliffs."
   if (map.water?.depth[z * map.width + x]) return "Structures need dry ground."
-  if (!influence.connected[z * map.width + x])
-    return "Build beside the shrine approach or within connected influence from a renown source."
   return null
 }
 
@@ -335,10 +333,9 @@ function validateFootprint(map: GameMap, def: BuildDefinition, at: TilePos, bala
   if (additionError) return additionError
   const stacked=innPlacementError(map,{...def,...footprint,...at,rotation,buildType:def.id})
   if (stacked !== undefined) return stacked
-  const influence = getBuildInfluence(map, balance)
   for (let z = at.z; z < at.z + footprint.d; z++) {
     for (let x = at.x; x < at.x + footprint.w; x++) {
-      const error = buildTileError(map, x, z, influence, def.id === "monk-shelter")
+      const error = buildTileError(map, x, z, def.id === "monk-shelter")
       if (error) return error
     }
   }

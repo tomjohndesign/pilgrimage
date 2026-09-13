@@ -640,6 +640,8 @@ try {
       { label: "character-visuals-frozen-running", hidden: [], paused: false, work: { characterVisuals: false } },
       { label: "characters-hidden-path-work-off", hidden: ["characters"], paused: false, work: { pathDrawing: false, pathUpdates: false, pathWear: false, replayRoutes: true }, warmup: 15000 },
       { label: "full-paused", hidden: [], paused: true },
+      { label: "half-trees-paused", hidden: [], paused: true, work: { treeThinning: true } },
+      { label: "restored-trees-paused", hidden: [], paused: true, work: { treeThinning: false } },
       { label: "character-visuals-frozen-paused", hidden: [], paused: true, work: { characterVisuals: false } },
       { label: "resolution-50-paused", hidden: [], paused: true, resolution: .5, warmup: 3000 },
       { label: "paths-off-paused", hidden: [], paused: true, work: { pathDrawing: false, pathUpdates: false } },
@@ -668,8 +670,7 @@ try {
         // Exercise the player controls, not a separate debug visibility override.
         await page.getByRole("button", { name: "World settings", exact: true }).click()
         for (const [key, label] of Object.entries(layers)) {
-          await page.getByRole("combobox", { name: label, exact: true }).selectOption(
-            condition.hidden.includes(key) ? key === "buildings" ? "2" : "0" : key === "buildings" ? "0" : "1")
+          await page.getByRole("switch", { name: label, exact: true }).setChecked(!condition.hidden.includes(key))
         }
         await page.getByRole("button", { name: "Close world settings", exact: true }).click()
         await page.evaluate(({ paused, terrain, speed, work, resolution, adaptive }) => {
@@ -719,6 +720,16 @@ try {
         assert.equal(sample.population, expectedPopulation); assert.equal(sample.retained, expectedPopulation)
         if (condition.paused) assert.equal(sample.timeAfter, sample.timeBefore)
         else assert.ok(sample.timeAfter > sample.timeBefore, "hidden actors must keep simulating")
+        if (condition.work?.treeThinning !== undefined) {
+          assert.equal(sample.after.treeDensity, condition.work.treeThinning ? .5 : 1)
+          const full = results.find(result => result.viewSize === viewSize && result.label === "full-paused")
+          if (full) {
+            assert.equal(sample.timeBefore, full.timeBefore, "tree comparisons must hold world age fixed")
+            if (condition.work.treeThinning) assert.ok(sample.after.visibleTrees < full.after.visibleTrees)
+            else assert.equal(sample.after.visibleTrees, full.after.visibleTrees, "restoring density must restore every visible tree")
+          }
+          await page.screenshot({ path: `${output}/${condition.label}-zoom${viewSize}.png` })
+        }
         for (const name of Object.keys(layers)) {
           assert.equal(sample.layers[name], !condition.hidden.includes(name))
           if (condition.hidden.includes(name)) assert.equal(sample.submissions.draws[name]?.calls ?? 0, 0, `hidden ${name} must submit zero draws`)

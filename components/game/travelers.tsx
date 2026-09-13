@@ -544,8 +544,9 @@ const TravelerUnit = memo(function TravelerUnit({ packHandler, index, traveler, 
     selectElement({ kind: "traveler", id: traveler.id }, event), [traveler.id])
   const leading = useMemo(() => packHandler ? handlerVisual(traveler.type.id, appearance.variant, traveler.attributes.age) : undefined, [packHandler, traveler.type.id, appearance.variant, traveler.attributes.age])
   const register = useCallback((node: THREE.Group | null) => { markPerson(node); if (node) node.userData.travelerId = traveler.id; groups.current[index] = node }, [groups, index, traveler.id])
+  // Friars need the Monk preset and its gait, just as they do in the gallery.
   return <group name="traveler-unit" visible={false} ref={register} userData={motion}>
-    {!beggar && (job || traveler.type.id === "vendor" || traveler.type.id === "knight") ?
+    {!beggar && (job || traveler.type.id === "friar" || traveler.type.id === "vendor" || traveler.type.id === "knight") ?
       <TravelerFigure {...figure} job={job} age={traveler.attributes.age}
         {...(traveler.type.id === "knight" ? knightLoadout(traveler.id) : cartLoadout(traveler.id))}
         appearance={appearance} selected={selected} type={traveler.type} onClick={select} idColor={idColor} /> :

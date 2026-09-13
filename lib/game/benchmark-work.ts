@@ -7,8 +7,9 @@ export const benchmarkWork = {
   pathWear: true,
   replayRoutes: false,
   characterVisuals: true,
+  treeThinning: null as boolean | null,
 }
 export type BenchmarkWork = typeof benchmarkWork
 export function resetBenchmarkWork() {
-  Object.assign(benchmarkWork, { pathDrawing: true, pathUpdates: true, pathWear: true, replayRoutes: false, characterVisuals: true })
+  Object.assign(benchmarkWork, { pathDrawing: true, pathUpdates: true, pathWear: true, replayRoutes: false, characterVisuals: true, treeThinning: null })
 }

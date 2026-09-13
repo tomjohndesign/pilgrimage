@@ -58,6 +58,8 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
       if (!root?.parent) { root = scene.getObjectByName(name); if (root) roots.set(name, root) }
       return root
     }
+    const foliageMesh = () => namedRoot("foliage-prototype")?.children.find(
+      (child): child is THREE.InstancedMesh => child instanceof THREE.InstancedMesh && child.layers.isEnabled(0))
     const handle = {
       map,
       trees,
@@ -198,7 +200,7 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
         pendingUnits: namedRoot("travelers")?.userData.pendingUnits ?? 0,
         missingVisibleUnits: namedRoot("travelers")?.userData.missingVisibleUnits ?? 0 }),
       adaptiveStatus: () => ({ ...crowdRenderStatus, quality: frameQuality(scene), detail: sceneryDetailStatus(scene)?.current,
-        treeDensity: namedRoot("foliage-prototype")?.children[0]?.userData.treeDensity,
+        treeDensity: foliageMesh()?.userData.treeDensity,
         wildlife: namedRoot("wildlife")?.visible, waterDetail: namedRoot("water-shimmer")?.visible }),
       hiddenTraveler: () => {
         const root = namedRoot("travelers")
@@ -231,7 +233,7 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
         })
         scene.traverseVisible(object => { visible++; if (object instanceof THREE.Sprite) sprites++ })
         const figures = scene.getObjectByName("travelers")?.userData
-        const foliage = scene.getObjectByName("foliage-prototype")?.children[0] as THREE.InstancedMesh | undefined
+        const foliage = foliageMesh()
         return { objects, visible, sprites, units, prunedCharacterRoots: [...batchedSourceRoots(scene)].length, treeRenderer: foliage ? "sprites" : "procedural",
           totalTrees: foliage?.userData.totalTrees, visibleTrees: foliage?.count, loadedUnits: loaded.size, requestedUnits: figures?.requestedUnits,
           pendingUnits: figures?.pendingUnits, missingVisibleUnits: figures?.missingVisibleUnits,

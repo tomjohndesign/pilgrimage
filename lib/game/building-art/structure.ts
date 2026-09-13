@@ -33,7 +33,7 @@ export function structureParts(building: StructureAppearance, roofJoins: RoofJoi
     const parts = building.buildType === "inn" && building.supportId
       ? innParts(building.w,building.d,building.height,false,17+(building.layoutSeed ?? 0),true,building.tavernFlue)
       : earlyBuildingParts({ ...earlyBuildingRecipe(preset.id), churchWing: building.churchWing, layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins, stocked: building.stocked, width: building.w, depth: building.d, wallHeight: building.height,
-      roofRise: preset.id === "enclosure" ? 0 : singlePlaneRoofRise(building.d) })
+      roofRise: ["enclosure", "storehouse"].includes(preset.id) ? 0 : singlePlaneRoofRise(building.d) })
     if (building.buildType === "inn" && building.supportId && building.floorHeight) {
       // The ladder opens into the right aisle beside the middle row of beds.
       const {x:hatchX,z:hatchZ}=innLayout(building.w,building.d,true).hatch

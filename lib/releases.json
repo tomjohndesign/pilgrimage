@@ -1,7 +1,37 @@
 {
-  "lastProcessedCommit": "d5a30dd03979207268d7859e6987ff8987fd2140",
-  "releaseCount": 224,
+  "lastProcessedCommit": "60ce40921a80d66fb71ca9d57cbc216de743b3be",
+  "releaseCount": 229,
   "releases": [
+    {
+      "version": "0.0.243",
+      "title": "Release 0.0.243",
+      "summary": "Reverse woodcutter hut roof pitch and remove storehouse roof (#262)",
+      "commit": "60ce40921a80d66fb71ca9d57cbc216de743b3be"
+    },
+    {
+      "version": "0.0.242",
+      "title": "Release 0.0.242",
+      "summary": "Prevent shader recompilation when construction finishes (#261)",
+      "commit": "acaa5f2ae245a681aa97c2e246e49ee71537611b"
+    },
+    {
+      "version": "0.0.241",
+      "title": "Release 0.0.241",
+      "summary": "Remove renown influence restrictions on building placement (#260)",
+      "commit": "f307b90bc1240deb335dfe4bc030828de3c3de76"
+    },
+    {
+      "version": "0.0.240",
+      "title": "Release 0.0.240",
+      "summary": "Limit tree thinning to distant views under sustained frame pressure (#259)",
+      "commit": "742952f50c3633f51fde2e7b1a7ef1ab1965b2d9"
+    },
+    {
+      "version": "0.0.239",
+      "title": "Release 0.0.239",
+      "summary": "Fix road monks to use the monk character model (#257)",
+      "commit": "3d4f1e4655716f4716a5257fa3fb0207c070889a"
+    },
     {
       "version": "0.0.238",
       "title": "Release 0.0.238",
