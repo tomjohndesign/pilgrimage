@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "acaa5f2ae245a681aa97c2e246e49ee71537611b",
-  "releaseCount": 228,
+  "lastProcessedCommit": "60ce40921a80d66fb71ca9d57cbc216de743b3be",
+  "releaseCount": 229,
   "releases": [
+    {
+      "version": "0.0.243",
+      "title": "Release 0.0.243",
+      "summary": "Reverse woodcutter hut roof pitch and remove storehouse roof (#262)",
+      "commit": "60ce40921a80d66fb71ca9d57cbc216de743b3be"
+    },
     {
       "version": "0.0.242",
       "title": "Release 0.0.242",
