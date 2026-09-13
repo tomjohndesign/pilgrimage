@@ -6,6 +6,7 @@ import type { BuildingPart, Vec3 } from "./geometry"
 /** Furniture against the building edge of the reserved path tile; the middle stays wide enough to walk through.
  * A market's produce basket belongs to its keeper and is left out of an unkept stall. */
 export function entranceParts(type: string, wallHeight = .78, seed = 17, stocked = true): BuildingPart[] {
+  if (type === "well") return []
   const random = makeRng(seed), hand = random() < .5 ? -1 : 1, furnishing = (Math.floor(random()*3)+2)%3
   const wood = ["#806b4c", "#947b55", "#71634c"][Math.floor(random()*3)]
   const parts:BuildingPart[]=[]

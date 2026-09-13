@@ -3,7 +3,7 @@ import { innPlacementError } from "./inn"
 import { churchAdditionError } from "./church-additions"
 import { buildingEntrance, constructionWork, isComplete } from "./construction"
 import { placementBuildingLayout, placementSite } from "./building-placement-layout"
-import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
+import { rotatedFootprint, buildingEntry, buildingApproaches, wellApproaches, type BuildingRotation } from "./building-rotation"
 import { footprintGrading, groundHeight, levelBuildingGround } from "./map/elevation"
 import { buildingKind, placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
 import { settlementRoute, shrineRoadHead } from "./settlement-route"
@@ -408,6 +408,14 @@ function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, balance
         return "Keep a clear passage through the church to the residence."
       if (!settlementRoute(map, occupied, map.site.door, buildingEntry(candidate, false, -1)))
         return "Leave room outside the residence for its builders."
+    } else if (candidate.buildType === "well") {
+      if (!wellApproaches(candidate).some(entry => {
+        const terrain = tileAt(map, entry.x, entry.z)
+        return terrain && TERRAIN[terrain].passable && !buildingAt(map, entry.x, entry.z)
+          && !(map.water?.depth[entry.z * map.width + entry.x] ?? 0)
+          && Math.abs(groundHeight(map, entry.x, entry.z) - floor) <= balance.rules.levellingLimit + 1e-9
+          && settlementRoute(map, occupied, map.site!.door, entry)
+      })) return "Keep a clear route to at least one side of the well."
     } else if ((approaches.length ? approaches : [buildingEntrance(candidate)]).some(entry=>!settlementRoute(map, occupied, map.site!.door, entry)))
       return "Keep access to the construction entrance clear."
     const roadBlock = roadBlockError(map, occupied)
@@ -418,6 +426,11 @@ function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, balance
     if (junction && !settlementRoute(map, occupied, junction, map.site.door))
       return "Leave a way through from the road to the shrine door."
     for (const camp of map.buildings.filter(b => b.buildType && !b.supportId && !b.churchId)) {
+      if (camp.buildType === "well") {
+        if (!wellApproaches(camp).some(entry => settlementRoute(map, occupied, map.site!.door, entry)))
+          return "Keep access to existing wells clear."
+        continue
+      }
       const entries=buildingApproaches(map,camp)
       if ((entries.length ? entries : [buildingEntry(camp)]).some(entry=>!settlementRoute(map, occupied, map.site!.door, entry)))
         return "Keep access to existing buildings clear."

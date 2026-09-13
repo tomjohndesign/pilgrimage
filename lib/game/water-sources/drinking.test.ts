@@ -157,7 +157,7 @@ describe("NPC drinking", () => {
     until(() => state.activity === "walking")
   })
 
-  it.each([0, 1, 2, 3] as const)("routes to the clear front of rotation %i", rotation => {
+  it.each([0, 1, 2, 3] as const)("reaches the curb at rotation %i", rotation => {
     const { source, state, map } = setup()
     source.rotation = rotation
     const plan = waterVisitPlan(map, source, state, state)
@@ -165,5 +165,28 @@ describe("NPC drinking", () => {
     const { approach } = plan!.visit
     expect(approach.at(-1)).toEqual(plan!.visit.stand)
     expect(plan!.route.at(-1)).toEqual(plan!.visit.stand)
+  })
+})
+
+
+describe("well sides", () => {
+  it.each([0, 1, 2, 3] as const)("approaches directly from side %i without crossing the shaft", side => {
+    const { source, map } = setup()
+    const cx = source.x + .5 - (map.width - 1) / 2, cz = source.z + .5 - (map.depth - 1) / 2
+    const [dx, dz] = [[0, 1], [-1, 0], [0, -1], [1, 0]][side]
+    const from = { x: cx + dx * 3, y: .2, z: cz + dz * 3 }
+    const plan = waterVisitPlan(map, source, from, from)!
+    expect(plan).not.toBeNull()
+    expect(plan.visit.stand.x).toBeCloseTo(cx + dx * .83)
+    expect(plan.visit.stand.z).toBeCloseTo(cz + dz * .83)
+    for (const p of plan.visit.approach) expect((p.x - cx) * dx + (p.z - cz) * dz).toBeGreaterThanOrEqual(.83 - 1e-8)
+  })
+
+  it("uses another side when the old front entrance is blocked", () => {
+    const { source, map, state } = setup()
+    for (let x = source.x; x < source.x + source.w; x++) map.tiles[(source.z + source.d) * map.width + x] = "water"
+    const plan = waterVisitPlan(map, source, state, state)
+    expect(plan).not.toBeNull()
+    expect(plan!.visit.stand.z).toBeLessThanOrEqual(source.z + .5 - (map.depth - 1) / 2)
   })
 })
