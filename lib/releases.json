@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "f30ac306a2c2e7151b764bb40ffbf1640193c3d0",
-  "releaseCount": 232,
+  "lastProcessedCommit": "4fa29b76a0a4a904a36709af3188becfd6620e5a",
+  "releaseCount": 233,
   "releases": [
+    {
+      "version": "0.0.247",
+      "title": "Release 0.0.247",
+      "summary": "Add instant building demolition with confirmation (#266)",
+      "commit": "4fa29b76a0a4a904a36709af3188becfd6620e5a"
+    },
     {
       "version": "0.0.246",
       "title": "Release 0.0.246",
