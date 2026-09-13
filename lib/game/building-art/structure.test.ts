@@ -65,10 +65,10 @@ describe("settlement construction", () => {
     for (const parts of [shelter, workshop]) expect(parts.some(part => part.name.includes("cross-"))).toBe(false)
   })
 
-  it("keeps scenery roofless and provides a covered store with room for live stocks", () => {
+  it("keeps scenery and the raised store roofless with room for live stocks", () => {
     for (const id of ["garden", "cross"]) expect(partsFor(id).some(part => part.layer === "roof")).toBe(false)
     const store = partsFor("storehouse")
-    expect(store.some(p => p.layer === "roof")).toBe(true)
+    expect(store.some(p => p.layer === "roof")).toBe(false)
     expect(store.some(p => /^(rear-|side-|front-|door-|woven-gable)/.test(p.name))).toBe(false)
     expect(store.some(p => p.name === "entry-ramp")).toBe(true)
     expect(store.some(p => p.name === "grain-sack" || p.name.startsWith("firewood-"))).toBe(false)
@@ -76,7 +76,7 @@ describe("settlement construction", () => {
 
   it("keeps a gentle pitch across houses and toward the rear of open awnings", () => {
     // The market stall carries a level cloth canopy and the timber yard is open to the sky.
-    for (const def of catalogue.filter(b => b.category === "buildings" && !["inn", "market", "lumberCamp", "monk-shelter"].includes(b.id))) {
+    for (const def of catalogue.filter(b => b.category === "buildings" && !["inn", "market", "lumberCamp", "monk-shelter", "storehouse"].includes(b.id))) {
       for (const [w, d] of [[2, 2], [3, 2], [3, 4]]) {
         const parts = structureParts({ ...def, w, d })
         expect(parts.some(p => /ridge-pole|rafter-left|rafter-right|woven-gable/.test(p.name))).toBe(false)
