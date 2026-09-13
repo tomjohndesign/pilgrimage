@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "f3f0fa85ac6dc66d7a41bbc3f783fdf2408db13c",
-  "releaseCount": 222,
+  "lastProcessedCommit": "ab3533274e842d8fc2cbbb2bf421d9a5d679bb3d",
+  "releaseCount": 223,
   "releases": [
+    {
+      "version": "0.0.237",
+      "title": "Release 0.0.237",
+      "summary": "Stage visiting animals off the church approach and keep squires with knights (#256)",
+      "commit": "ab3533274e842d8fc2cbbb2bf421d9a5d679bb3d"
+    },
     {
       "version": "0.0.236",
       "title": "Release 0.0.236",
