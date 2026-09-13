@@ -85,7 +85,8 @@ export function convoyClear(map: GameMap, pose: CartPose, puller: Puller, scale:
           }
           continue
         }
-        if (!(terrain === "grass" || terrain === "clearing" || (!grassOnly && (terrain === "dirt" || terrain === "path" || terrain === "track" || terrain === "bridge" || terrain === "ford")))) return false
+        // Open ground to stand on is grass, forest floor or the bare earth of a yard.
+        if (!(terrain === "grass" || terrain === "clearing" || terrain === "dirt" || (!grassOnly && (terrain === "path" || terrain === "track" || terrain === "bridge" || terrain === "ford")))) return false
         const building = nearby({ x, z }).find(b => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d)
         if ((building && !marketYardContains(building, { x, z })) || (!layout.rise[z * map.width + x] && Math.abs(groundHeight(map, x, z) - height) >= 0.3)) return false
       }
@@ -150,7 +151,7 @@ export function parkingTree(map: GameMap, pose: CartPose, trees: readonly TreePl
     for (let d = 0; d < distance - 0.35; d += 0.1) {
       const x = worldToTileX(map, pose.hitch.x + (tree.x - pose.hitch.x) * d / distance)
       const z = worldToTileZ(map, pose.hitch.z + (tree.z - pose.hitch.z) * d / distance)
-      if (!["grass", "clearing", "forest", "darkwood"].includes(tileAt(map, x, z) ?? "") || buildingAt(map, x, z)) return false
+      if (!["grass", "clearing", "dirt", "forest", "darkwood"].includes(tileAt(map, x, z) ?? "") || buildingAt(map, x, z)) return false
     }
     return true
   }).sort((a, b) => Math.hypot(a.x - pose.hitch.x, a.z - pose.hitch.z) - Math.hypot(b.x - pose.hitch.x, b.z - pose.hitch.z))[0]
