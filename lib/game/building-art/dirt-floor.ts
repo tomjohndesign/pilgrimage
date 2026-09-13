@@ -1,5 +1,6 @@
 import type { GameMap } from "../map/types"
 import { isWaterTerrain, TILE_HEIGHT } from "../map/terrain"
+import { buildingApproach, buildingEntry, buildingFoldEntry } from "../building-rotation"
 
 /** Raised platforms, paving and water sources keep their authored ground. */
 export function hasDirtFloor(variant: string | undefined): boolean {
@@ -10,17 +11,34 @@ export function hasDirtFloor(variant: string | undefined): boolean {
 export const DIRT_FLOOR_OVERLAP = .18
 export const FLOOR_NEIGHBOURS = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]] as const
 
-/** One texture lookup identifies the union of adjacent dirt plots, without internal seams. */
+/** Shared terrain mask: adjacent dirt plots in RG, doorway directions in B. */
 export function dirtFloorMask(map: GameMap) {
   const occupied = new Uint8Array(map.width * map.depth)
   for (const building of map.buildings) {
-    // The floor stops at the walls: no worn approach in front of the door.
+    // Only the occupied plot supplies a floor; existing paths cover approaches.
     if (building.id === map.site?.hovelId || !hasDirtFloor(building.buildType)) continue
     for (let z=building.z;z<building.z+building.d;z++) for (let x=building.x;x<building.x+building.w;x++) {
       if (x>=0 && z>=0 && x<map.width && z<map.depth) occupied[z*map.width+x]=1
     }
   }
   const data = new Uint8Array(occupied.length * 4), tiles = new Set<number>()
+  // The unused blue channel records which edge leads into a real entrance.
+  // Keep benches and doorless plots out: only paths reaching a doorway extend.
+  for (const building of map.buildings) {
+    const front = buildingApproach(map, building)
+    if (!front || ["well", "watering-hole"].includes(building.buildType ?? "")) continue
+    const entries = [front]
+    if (building.id !== map.site?.hovelId) {
+      if (building.buildType === "tavern") entries.push(buildingEntry(building, false, -1))
+      if (building.buildType === "sheep-pen") entries.push(buildingFoldEntry(building))
+    }
+    for (const entry of entries) {
+      if (entry.x < 0 || entry.z < 0 || entry.x >= map.width || entry.z >= map.depth) continue
+      const side = entry.x === building.x - 1 ? 0 : entry.x === building.x + building.w ? 1
+        : entry.z === building.z - 1 ? 2 : entry.z === building.z + building.d ? 3 : -1
+      if (side >= 0) data[(entry.z * map.width + entry.x) * 4 + 2] |= 1 << side
+    }
+  }
   const height = map.elevation?.height ?? []
   for (let z=0;z<map.depth;z++) for (let x=0;x<map.width;x++) {
     const index=z*map.width+x
@@ -41,6 +59,19 @@ export function dirtFloorMask(map: GameMap) {
 
 /** Noise and anti-aliasing use the paths' world-space sampling and rendered pixel size. */
 export const DIRT_FLOOR_GLSL = `
+// Carry the path's existing cross-section from the arrival point to the wall.
+// Sampling the same road/contact shape preserves its wear, lanes and opacity;
+// an untouched entrance stays grassy, and ordinary dead ends stay rounded.
+vec2 buildingPathPoint(vec2 world, vec2 p) {
+  vec2 cell = floor(world + dirtFloorMapSize * .5);
+  float bits = floor(texture2D(dirtFloorMap, (cell + .5) / dirtFloorMapSize).b * 255.0 + .5);
+  if (mod(bits, 2.0) > .5) p.x = min(p.x, .5);
+  if (mod(floor(bits / 2.0), 2.0) > .5) p.x = max(p.x, .5);
+  if (mod(floor(bits / 4.0), 2.0) > .5) p.y = min(p.y, .5);
+  if (mod(floor(bits / 8.0), 2.0) > .5) p.y = max(p.y, .5);
+  return p;
+}
+
 float dirtFloorCover(vec2 world, vec2 tileLocal) {
   vec2 cell = floor(world + dirtFloorMapSize * .5);
   vec2 mask = texture2D(dirtFloorMap, (cell + .5) / dirtFloorMapSize).rg;
