@@ -288,9 +288,10 @@ export function GameShell({
     syncBuildingFootpaths(connected)
     return connected
   }, [economy.map, footpaths])
-  const travelers = useMemo(() => map ? [...roadTravelers, ...townResidents(map).map(resident => resident.traveler),
+  // Demolishing a town home or workplace must not remove its people from the cast.
+  const travelers = useMemo(() => map ? [...roadTravelers, ...townResidents(baseMap ?? map).map(resident => resident.traveler),
       ...(JOB_PREVIEW ? previewResidents(map).map(resident => resident.traveler) : [])] : roadTravelers,
-    [roadTravelers, map])
+    [roadTravelers, map, baseMap])
   const renown = economy.renown
   const [evangelism, setEvangelism] = useState(0)
   useEffect(() => {

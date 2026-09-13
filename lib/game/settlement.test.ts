@@ -18,6 +18,9 @@ import {
   collectIncome,
   completeConstruction,
   createSettlement,
+  demolishStructure,
+  demolitionTargets,
+  settlementMap,
   grantRenown,
   grantResources,
   individualRenown,
@@ -96,6 +99,48 @@ function wearPath(map: GameMap, from: TilePos, to: TilePos, passes = 20) {
   }
 }
 const garden = BUILD_CATALOG.find((item) => item.id === "garden")!
+
+describe("demolition", () => {
+  it("removes unfinished construction immediately without a refund and permits rebuilding", () => {
+    const map = testMap()
+    const at = { x: 10, z: 14 }
+    const bought = purchaseStructure(createSettlement(), map, monks, [relic], "cross", at)
+    expect(bought.error).toBeNull()
+    const building = bought.settlement.structures[0]
+    const removed = demolishStructure(bought.settlement, map, building.id)
+    expect(removed.structures).toEqual([])
+    expect(removed.resources).toEqual(bought.settlement.resources)
+    expect(removed.spentWood).toBe(bought.settlement.spentWood)
+    expect(bought.settlement.structures).toHaveLength(1)
+    const rebuilt = purchaseStructure(removed, map, monks, [relic], "cross", at)
+    expect(rebuilt.error).toBeNull()
+    expect(rebuilt.settlement.structures[0].id).not.toBe(building.id)
+  })
+
+  it("removes dependent floors but keeps the ground floor when only upstairs is demolished", () => {
+    const map = testMap()
+    const ground = { ...map.buildings[0], id: "ground", buildType: "tavern" }
+    const upper = { ...ground, id: "upper", buildType: "inn", supportId: "ground" }
+    const top = { ...upper, id: "top", supportId: "upper" }
+    const settlement = { ...createSettlement(), structures: [ground, upper, top] }
+    expect(demolitionTargets(settlementMap(map, settlement), ground.id).map(b => b.id)).toEqual(["ground", "upper", "top"])
+    expect(demolishStructure(settlement, map, ground.id).structures).toEqual([])
+    expect(demolishStructure(settlement, map, upper.id).structures).toEqual([ground])
+  })
+
+  it("protects the shrine and independent property, and removes claimed generated buildings", () => {
+    const map = testMap()
+    const town = { ...map.buildings[0], id: "town", owner: "independent" as const }
+    map.buildings.push(town)
+    const settlement = createSettlement()
+    for (const id of ["hovel", "town", "missing"]) expect(demolishStructure(settlement, map, id)).toBe(settlement)
+    const claimed = { ...settlement, claimedBuildings: [town.id] }
+    const removed = demolishStructure(claimed, map, town.id)
+    expect(settlementMap(map, removed).buildings.map(b => b.id)).toEqual(["hovel"])
+    expect(removed.claimedBuildings).toEqual([])
+    expect(map.buildings).toHaveLength(2)
+  })
+})
 
 describe("build and buy", () => {
   it.each([0, 1, 2, 3] as BuildingRotation[])("builds a residence against the church at rotation %i, with beds only after completion", rotation => {

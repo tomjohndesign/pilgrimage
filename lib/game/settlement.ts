@@ -30,6 +30,8 @@ export const SETTLEMENT_RADIUS = DEFAULT_BALANCE.rules.buildRadius
 export interface Settlement {
   /** Generated buildings permanently acquired when connected influence reaches them. */
   claimedBuildings: string[]
+  /** Removed IDs stay reserved and hide demolished generated buildings on reload. */
+  demolishedBuildings: string[]
   /** Terrain after successful purchases; the generated base map stays immutable. */
   elevation?: GameMap["elevation"]
   resources: Resources
@@ -52,6 +54,7 @@ export interface Settlement {
 export function createSettlement(balance: GameBalance = DEFAULT_BALANCE): Settlement {
   return {
     claimedBuildings: [],
+    demolishedBuildings: [],
     resources: { gold: balance.rules.startingGold, wood: balance.rules.startingWood },
     structures: [],
     deliveredWood: 0,
@@ -85,6 +88,34 @@ export function completeConstruction(settlement: Settlement): Settlement {
     structures: settlement.structures.map(finish) }
 }
 
+/** The founding shrine anchors the settlement; independent property is not ours. */
+export function demolitionTargets(map: GameMap, id: string): BuildingDef[] {
+  const building = map.buildings.find(b => b.id === id)
+  if (!building || building.owner === "independent" || id === map.site?.hovelId) return []
+  const removed = new Set([id])
+  let previousSize = 0
+  while (previousSize !== removed.size) {
+    previousSize = removed.size
+    for (const b of map.buildings) {
+      if ((b.supportId && removed.has(b.supportId)) || (b.churchId && removed.has(b.churchId))) removed.add(b.id)
+    }
+  }
+  return [building, ...map.buildings.filter(b => b.id !== id && removed.has(b.id))]
+}
+
+/** Demolition is immediate and does not refund construction costs. */
+export function demolishStructure(settlement: Settlement, baseMap: GameMap, id: string): Settlement {
+  const targets = demolitionTargets(settlementMap(baseMap, settlement), id)
+  if (!targets.length) return settlement
+  const removed = new Set(targets.map(b => b.id))
+  return {
+    ...settlement,
+    structures: settlement.structures.filter(b => !removed.has(b.id)),
+    claimedBuildings: settlement.claimedBuildings.filter(id => !removed.has(id)),
+    demolishedBuildings: [...settlement.demolishedBuildings, ...removed],
+  }
+}
+
 /** Preserve generated IDs and residents; ownership is a session overlay on the base map. */
 // The same world and settlement always describe the same map. Handing back one
 // object lets the cursor's placement verdicts serve the purchase, and keeps every
@@ -96,8 +127,9 @@ export function settlementMap(baseMap: GameMap, settlement: Settlement): GameMap
   const cached = perSettlement.get(settlement)
   if (cached) return cached
   const claimed = new Set(settlement.claimedBuildings)
+  const demolished = new Set(settlement.demolishedBuildings)
   const map = { ...baseMap, elevation: settlement.elevation ?? baseMap.elevation,
-    buildings: [...baseMap.buildings.map(b => b.id === baseMap.site?.hovelId && settlement.church ? settlement.church : claimed.has(b.id) ? { ...b, owner: undefined } : b), ...settlement.structures] }
+    buildings: [...baseMap.buildings.filter(b => !demolished.has(b.id)).map(b => b.id === baseMap.site?.hovelId && settlement.church ? settlement.church : claimed.has(b.id) ? { ...b, owner: undefined } : b), ...settlement.structures] }
   perSettlement.set(settlement, map)
   return map
 }
@@ -465,8 +497,12 @@ export function purchaseStructure(
   at=site
   const error = placementError(map, def, at, balance, rotation)
   if (error) return { settlement, error }
+  const prefix = def.id === "workshop" ? "workshop" : "settlement"
+  const reserved = new Set([...map.buildings.map(b => b.id), ...settlement.demolishedBuildings])
+  let sequence = settlement.structures.length
+  while (reserved.has(`${prefix}-${sequence}`)) sequence++
   const building: BuildingDef = {
-    id: `${def.id === "workshop" ? "workshop" : "settlement"}-${settlement.structures.length}`,
+    id: `${prefix}-${sequence}`,
     buildType: def.id,
     label: def.label,
     x: at.x,

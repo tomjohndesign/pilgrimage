@@ -14,7 +14,8 @@ import { influenceRadius } from "@/lib/game/build-influence"
 import { useBuildStore } from "@/lib/game/build-store"
 import { rotatedFootprint } from "@/lib/game/building-rotation"
 import { churchDevelopmentPlot } from "@/lib/game/shrine-upgrade"
-import { canAfford, placementError } from "@/lib/game/settlement"
+import { canAfford, demolitionTargets, placementError } from "@/lib/game/settlement"
+import { DemolishBuildingDialog } from "./demolish-building-dialog"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { formatGameTime, simRegistry } from "@/lib/game/sim"
 import { CROWD_SPEED_LIMIT, SIMULATION_SPEEDS, crowdSafeSpeed, speedBlockedByCrowd, useSimulationStore } from "@/lib/game/simulation-store"
@@ -81,6 +82,8 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
   const rotation = useBuildStore((s) => s.rotation)
   const rotateBuilding = useBuildStore((s) => s.rotateBuilding)
   const hovered = useCameraStore((s) => s.hovered)
+  const selection = useCameraStore((s) => s.selection)
+  const demolition = map && selection?.kind === "building" ? demolitionTargets(map, selection.id) : []
   const catalog = useMemo(() => buildCatalog(balance).filter(item => !item.retired).sort((a, b) =>
     a.id === "workshop" ? -1 : b.id === "workshop" ? 1 : 0), [balance])
   const renown = economy.renown?.total ?? 0
@@ -155,9 +158,12 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
       <HudHelp content={<><div className="hud-help-title">Paths</div><p>Path construction is not available yet.</p></>}>
         <button type="button" className="hud-action hud-future-tool" aria-disabled="true"><Footprints size={17} aria-hidden />Paths</button>
       </HudHelp>
-      <HudHelp content={<><div className="hud-help-title">Demolish</div><p>Building demolition is not available yet.</p></>}>
-        <button type="button" className="hud-action hud-future-tool" aria-disabled="true"><Hammer size={17} aria-hidden />Demolish</button>
-      </HudHelp>
+      {demolition.length > 0 ? <DemolishBuildingDialog key={demolition[0].id} targets={demolition}
+        trigger={<button type="button" className="hud-action" title={`Demolish ${demolition[0].label}`}><Hammer size={17} aria-hidden />Demolish</button>}
+        onDemolish={() => { economy.demolish(demolition[0].id); useCameraStore.getState().select(null) }} />
+        : <HudHelp content={<><div className="hud-help-title">Demolish</div><p>Select a settlement-owned building to demolish it. You’ll confirm before it is removed. The founding shrine is protected.</p></>}>
+          <button type="button" className="hud-action" aria-disabled="true"><Hammer size={17} aria-hidden />Demolish</button>
+        </HudHelp>}
       <div className="hud-mobile-camera" role="group" aria-label="Camera controls">
         <button type="button" className="hud-action" aria-label="Zoom out" onClick={() => useCameraStore.getState().zoomBy(1.25)}><Minus size={18} /></button>
         <button type="button" className="hud-action" aria-label="Zoom in" onClick={() => useCameraStore.getState().zoomBy(1 / 1.25)}><Plus size={18} /></button>

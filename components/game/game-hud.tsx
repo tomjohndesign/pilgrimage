@@ -45,7 +45,8 @@ import { ResourceInspector } from "./resource-inspector"
 import { Minimap } from "./minimap"
 import { SettlementPanel } from "./settlement-panel"
 import type { useSettlement } from "@/hooks/use-settlement"
-import { individualRenown, relicRenown } from "@/lib/game/settlement"
+import { demolitionTargets, individualRenown, relicRenown } from "@/lib/game/settlement"
+import { DemolishBuildingDialog } from "./demolish-building-dialog"
 
 import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
 import { useBalanceStore } from "@/lib/game/balance-store"
@@ -790,6 +791,7 @@ export function GameHud({
     selection?.kind === "monk" ? (monks.find((m) => m.id === selection.id) ?? null) : null
   const piles = useBuildStore((s) => s.piles)
   const selectedBuilding = selection?.kind === "building" ? map?.buildings.find((b) => b.id === selection.id) : null
+  const demolition = map && selectedBuilding ? demolitionTargets(map, selectedBuilding.id) : []
   const selectedDefinition = buildCatalog(economy.balance).find((item) => item.id === selectedBuilding?.buildType)
   const foodStores = useBuildStore(s => s.foodStores)
   const foodStock = foodStores.get(selectedBuilding?.id ?? "") ?? emptyFoodStock()
@@ -1223,6 +1225,12 @@ export function GameHud({
               <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">{selectedDefinition.description}</p>
               <p className="mt-1 text-[11px] text-ink-light">{buildingIncomeLabel(selectedDefinition, economy.balance)}</p>
             </>}
+            {demolition.length > 0 && <DemolishBuildingDialog key={selectedBuilding.id}
+              targets={[selectedBuilding, ...demolition.filter(b => b.id !== selectedBuilding.id)]}
+              onDemolish={() => {
+                economy.demolish(selectedBuilding.id)
+                useCameraStore.getState().select(null)
+              }} />}
           </Panel>
           )}
           {selection?.kind === "animal" && <AnimalInspector id={selection.id} />}

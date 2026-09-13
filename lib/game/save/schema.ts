@@ -118,6 +118,7 @@ export const structureSchema = z.object({
 })
 
 export const settlementSaveSchema = z.object({
+  demolishedBuildings: z.array(z.string()).default([]).describe("Removed buildings and reserved structure IDs"),
   claimedBuildings: z.array(z.string()).describe("Generated roadside buildings that have joined the settlement"),
   resources: resourcesSchema,
   deliveredWood: finite.min(0).describe("Cumulative timber credited from the camps"),

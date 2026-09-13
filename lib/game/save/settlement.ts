@@ -12,6 +12,7 @@ import type { SettlementSave, StructureSave } from "./schema"
 export function captureSettlement(settlement: Settlement): SettlementSave {
   return {
     claimedBuildings: [...settlement.claimedBuildings],
+    demolishedBuildings: [...settlement.demolishedBuildings],
     resources: { ...settlement.resources },
     deliveredWood: settlement.deliveredWood,
     spentWood: settlement.spentWood,
@@ -60,6 +61,8 @@ function fitsWorld(world: GameMap, structure: StructureSave, seen: Set<string>):
 
 export function restoreSettlement(world: GameMap, save: SettlementSave): Settlement {
   const seen = new Set(world.buildings.map(building => building.id))
+  const demolishedBuildings = save.demolishedBuildings.filter(id => id !== world.site?.hovelId)
+  for (const id of demolishedBuildings) seen.add(id)
   const structures: BuildingDef[] = []
   let elevation = world.elevation
   for (const structure of save.structures) {
@@ -97,6 +100,7 @@ export function restoreSettlement(world: GameMap, save: SettlementSave): Settlem
   const known = new Set(world.buildings.map(building => building.id))
   return {
     claimedBuildings: save.claimedBuildings.filter(id => known.has(id)),
+    demolishedBuildings,
     elevation: elevation === world.elevation ? undefined : elevation,
     resources: { ...save.resources },
     deliveredWood: save.deliveredWood,
