@@ -1,7 +1,7 @@
 import { expect, it } from "vitest"
 import { Scene, OrthographicCamera } from "three"
 import { FrameQualityController, frameQuality, frameQualityControl, updateFrameQuality } from "./frame-quality"
-import { buildingDetail, updateSceneryDetail, sceneryDetailStatus } from "./scenery-detail"
+import { buildingDetail, thinTrees, updateSceneryDetail, sceneryDetailStatus } from "./scenery-detail"
 
 it("reduces sustained slow frames, holds in background tabs, and recovers slowly", () => {
   const control = new FrameQualityController()
@@ -56,10 +56,36 @@ it("keeps buildings and interior access at close detail through sustained low FP
     const quality = updateFrameQuality(scene, delta, false)
     updateSceneryDetail(scene, camera, 900, time, 36, "desktop", quality)
     expect(buildingDetail(scene)).toBe(0)
+    expect(thinTrees(scene)).toBe(false)
   }
   for (let i = 0; i < 75; i++) frame(1 / 25)
   expect(frameQuality(scene)).toBe(2)
   expect(sceneryDetailStatus(scene)).toMatchObject({ current: 2, building: 0 })
   for (let i = 0; i < 660; i++) frame(1 / 60)
   expect(frameQuality(scene)).toBe(0)
+})
+
+it("only thins distant forests under sustained pressure and restores them after zoom or FPS recovery", () => {
+  const scene = new Scene(), camera = new OrthographicCamera(-18, 18, 18, -18)
+  expect(thinTrees(scene)).toBe(false)
+  for (let i = 0; i < 75; i++) updateFrameQuality(scene, 1 / 25, false)
+  expect(thinTrees(scene)).toBe(false) // Previews have no game zoom state.
+  const zoom = (view: number, time: number) => {
+    camera.top = view / 2; camera.bottom = -view / 2
+    updateSceneryDetail(scene, camera, 900, time, view, "desktop", frameQuality(scene))
+    return thinTrees(scene)
+  }
+  expect(zoom(36, 0)).toBe(false)
+  expect(zoom(60, .3)).toBe(false)
+  expect(zoom(60, .5)).toBe(false)
+  expect(zoom(140, .8)).toBe(false) // Hold density through the zoom gesture.
+  expect(zoom(140, 1)).toBe(true)
+  expect(zoom(36, 1.3)).toBe(true)
+  expect(zoom(36, 1.5)).toBe(false)
+  expect(frameQuality(scene)).toBe(2)
+  expect(zoom(140, 1.8)).toBe(false)
+  expect(zoom(140, 2)).toBe(true)
+  for (let i = 0; i < 660; i++) updateFrameQuality(scene, 1 / 60, false)
+  expect(frameQuality(scene)).toBe(0)
+  expect(thinTrees(scene)).toBe(false)
 })

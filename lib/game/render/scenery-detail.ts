@@ -1,5 +1,6 @@
 import * as THREE from "three"
 import { indexFlatGeometry } from "./flat-geometry"
+import { frameQuality } from "./frame-quality"
 
 export type SceneryDetail = 0 | 1 | 2
 export type SceneryProfile = "desktop" | "mobile"
@@ -70,6 +71,9 @@ export function updateSceneryDetail(scene: THREE.Scene, camera: THREE.Camera, he
 export function sceneryDetail(scene: THREE.Scene): SceneryDetail { return details.get(scene)?.current ?? 0 }
 /** Authored building surfaces and interior access only simplify with zoom. */
 export function buildingDetail(scene: THREE.Scene): SceneryDetail { return details.get(scene)?.zoom ?? 0 }
+/** Halve distant forests only under sustained frame pressure. Use the settled
+ * zoom level so slow close views and standalone previews keep every tree. */
+export function thinTrees(scene: THREE.Scene): boolean { return details.get(scene)?.zoom === 2 && frameQuality(scene) === 2 }
 export function sceneryFadeProgress(scene: THREE.Scene): number { return details.get(scene)?.fade ?? 1 }
 export function sceneryZooming(scene: THREE.Scene): boolean { return details.get(scene)?.zooming ?? false }
 export function sceneryCloseOpacity(scene: THREE.Scene): number {
