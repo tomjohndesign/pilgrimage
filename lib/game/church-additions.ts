@@ -1,5 +1,6 @@
 import { buildingEntry, normalizeBuildingRotation, rotateBuildingPoint, type BuildingRotation } from "./building-rotation"
-import { shrineLayout } from "./shrine-layout"
+import { isComplete } from "./construction"
+import { isChapel, shrineLayout } from "./shrine-layout"
 import type { BuildingDef, GameMap, TilePos } from "./map/types"
 
 export interface ChurchWing {
@@ -39,6 +40,8 @@ export function churchWingRotation(map: GameMap, at: TilePos, fallback: Building
 
 export function churchAdditionError(map: GameMap, building: Pick<BuildingDef, "buildType" | "x" | "z" | "w" | "d">): string | null {
   if (building.buildType !== "monk-shelter") return null
+  const church = map.buildings.find(b => b.id === map.site?.hovelId)
+  if (church && (isChapel(church) || !isComplete(church))) return "Finish upgrading the chapel to a church before adding a monks’ residence."
   return churchWing(map, building) ? null : "Build the monks’ residence directly against a side wall of the church, within its length."
 }
 

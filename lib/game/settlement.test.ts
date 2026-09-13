@@ -2,7 +2,6 @@ import { placementBuildingLayout } from "./building-placement-layout"
 import { housingBeds } from "./housing"
 import { settlementRoute } from "./settlement-route"
 import { buildingApproaches, buildingEntry, rotatedFootprint, type BuildingRotation } from "./building-rotation"
-import { getBuildInfluence } from "./build-influence"
 import { DEFAULT_ELEVATION, finishElevation, footprintGrading, generateElevation, groundHeight } from "./map/elevation"
 import { describe, expect, it } from "vitest"
 import { generateMap } from "./map/generate-map"
@@ -161,13 +160,13 @@ describe("build and buy", () => {
 
   it.each([{ x: 10, z: 13 }, { x: 11, z: 12 }])("rejects detached or corner-only residences at %o without spending resources", at => {
     const before = createSettlement()
-    const result = purchaseStructure(before, testMap(), monks, [relic], "monk-shelter", at)
+    const result = purchaseStructure(before, trackMap(), monks, [relic], "monk-shelter", at)
     expect(result.error).toMatch(/against a side wall/)
     expect(result.settlement).toBe(before)
   })
 
   it("keeps the church entrance clear when placing a residence", () => {
-    expect(placementError(testMap(), BUILD_CATALOG.find(b => b.id === "monk-shelter")!, { x: 14, z: 16 })).toMatch(/access|entrance|door|approach|side wall/)
+    expect(placementError(trackMap(), BUILD_CATALOG.find(b => b.id === "monk-shelter")!, { x: 14, z: 16 })).toMatch(/access|entrance|door|approach|side wall/)
   })
 
   it.each(["shelter", "wood-shelter", "lumberCamp", "watering-hole"])("retires %s without deleting existing structures or charging for new ones", type => {
@@ -198,7 +197,7 @@ describe("build and buy", () => {
     expect(settlementEvangelism(map)).toBe(0)
   })
   it.each([0, 1, 2, 3] as BuildingRotation[])("buys and reserves a rectangular building at rotation %i", rotation => {
-    const map = testMap(), at = { x: 10, z: 14 }
+    const map = testMap(), at = { x: 9, z: 14 }
     const def = BUILD_CATALOG.find(item => item.id === "hall")!
     const water = new Uint8Array(map.tiles.length)
     map.elevation = generateElevation(1, map.width, map.depth, water)
@@ -234,7 +233,7 @@ describe("build and buy", () => {
   })
 
   it("checks the turned footprint rather than the catalogue dimensions", () => {
-    const map = testMap(), at = { x: 10, z: 14 }
+    const map = testMap(), at = { x: 9, z: 14 }
     const def = BUILD_CATALOG.find(item => item.id === "hall")!
     map.tiles[(at.z + 2) * map.width + at.x] = "water"
     expect(placementError(map, def, at)).toBeTruthy()
@@ -248,14 +247,14 @@ describe("build and buy", () => {
       expect(purchaseStructure(createSettlement(), testMap(), monks, [relic], type, { x: 10, z: 14 }).error).toBe("Unknown structure.")
   })
 
-  it("buys a roofed storehouse away from woods using its full footprint", () => {
+  it("buys an open storehouse away from woods using its full footprint", () => {
     const map = testMap(), def = BUILD_CATALOG.find(b => b.id === "storehouse")!
     const result = purchaseStructure(createSettlement(), map, monks, [relic], def.id, { x: 10, z: 14 })
     expect(result.error).toBeNull()
     const placed = result.settlement.structures[0]
     expect([placed.w, placed.d]).toEqual([2, 2])
     expect(structureParts(placed)).toEqual(structureParts({ ...def, buildType: def.id, layoutSeed: placed.layoutSeed, fireplace: placed.fireplace, hearthZ: placed.hearthZ }))
-    expect(structureParts(placed).some(p => p.layer === "roof")).toBe(true)
+    expect(structureParts(placed).some(p => p.layer === "roof")).toBe(false)
     expect(placementError({ ...map, buildings: [...map.buildings, placed] }, def, { x: 11, z: 15 })).toMatch(/occupies/)
   })
 
@@ -304,13 +303,12 @@ describe("build and buy", () => {
     expect(before.elevation).toBeUndefined()
   })
 
-  it("keeps influence feedback and footprint checks aware of cliffs and uneven ground", () => {
+  it("keeps placement feedback and footprint checks aware of cliffs and uneven ground", () => {
     const map = testMap(), i = 14 * map.width + 11
     map.elevation = { settings: DEFAULT_ELEVATION, height: Array(900).fill(0), corners: Array(3600).fill(0), cliffs: Array(900).fill(0), slope: Array(900).fill(0) }
-    const influence = getBuildInfluence(map)
-    expect(buildTileError(map, 11, 14, influence)).toBeNull()
+    expect(buildTileError(map, 11, 14)).toBeNull()
     map.elevation.cliffs[i] = 1
-    expect(buildTileError(map, 11, 14, influence)).toMatch(/cliffs/)
+    expect(buildTileError(map, 11, 14)).toMatch(/cliffs/)
     expect(placementError(map, house, { x: 11, z: 14 })).toMatch(/cliffs/)
     map.elevation.cliffs[i] = 0
     map.elevation.corners.fill(0.4, (i + 1) * 4, (i + 2) * 4)
@@ -452,7 +450,7 @@ describe("build and buy", () => {
     expect(placementError(map, cross, { x: 11, z: 14 })).toMatch(/worn path/)
     wearPath(map, { x: 11, z: 11 }, { x: 11, z: 16 })
     expect(placementError(map, cross, { x: 11, z: 14 })).toBeNull()
-    expect(placementError(map, cross, { x: 13, z: 14 })).toMatch(/worn path/)
+    expect(placementError(map, cross, { x: 9, z: 14 })).toMatch(/worn path/)
   })
 
   it("builds on the shrine track while the door can still be reached", () => {
@@ -477,8 +475,8 @@ describe("build and buy", () => {
     expect(placementError(testMap(), house, { x: 13, z: 16 })).toMatch(/approach/)
   })
 
-  it("rejects distant sites, partial off-map footprints and fractional coordinates", () => {
-    expect(placementError(testMap(), house, { x: 0, z: 0 })).toBeTruthy()
+  it("accepts distant sites but rejects partial off-map footprints and fractional coordinates", () => {
+    expect(placementError(testMap(), house, { x: 0, z: 0 })).toBeNull()
     expect(placementError(testMap(), house, { x: 29, z: 14 })).toBeTruthy()
     expect(placementError(testMap(), house, { x: 11.5, z: 14 })).toBeTruthy()
   })
@@ -492,8 +490,8 @@ describe("build and buy", () => {
     for (const at of [
       { x: 9, z: 10 },
       { x: 11, z: 10 },
-      { x: 13, z: 10 },
-      { x: 15, z: 10 },
+      { x: 13, z: 17 },
+      { x: 16, z: 14 },
       { x: 17, z: 10 },
     ]) {
       const purchase = purchaseStructure(settlement, map, [], [], "house", at)
@@ -611,7 +609,7 @@ describe("shrine renown and income", () => {
     const map = testMap()
     map.tiles[12 * map.width + 10] = "forest"
     const purchase = purchaseStructure(before, map, monks, [relic], "workshop", {
-      x: 11,
+      x: 10,
       z: 14,
     })
     expect(purchase.error).toBeNull()

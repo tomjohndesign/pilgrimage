@@ -1,5 +1,7 @@
 "use client"
 
+import { isChapel } from "@/lib/game/shrine-layout"
+import { CHURCH_COST, CHURCH_RENOWN_BONUS, CHAPEL_MONKS, CHURCH_MONKS } from "@/lib/game/shrine-upgrade"
 import { builderPaceLabel, builderRate, MONK_BUILD_RATE } from "@/lib/game/build-labour"
 import { isComplete, isHouse, isMonkShelter } from "@/lib/game/construction"
 import { BUILDING_KINDS, buildingKind } from "@/lib/game/buildings"
@@ -1180,15 +1182,29 @@ export function GameHud({
               {staff} of {BUILDING_KINDS[selectedKind].jobs} {BUILDING_KINDS[selectedKind].vendorKept ? "kept by a settled vendor" : "jobs taken"}
               {selectedBuilding.buildType === "tavern" && staff === 0 ? " · nobody is serving yet" : ""}
             </p>}
-            {selectedBuilding.id === map?.site?.hovelId && (
+            {selectedBuilding.id === map?.site?.hovelId && !isComplete(selectedBuilding) && (
+              <p className="mt-3 max-w-56 text-[11px] text-ink-light">Relic visits are paused while the chapel is expanded. The church’s two kneeling places, larger donations, visitor draw and capacity for 8 monks become available when the work is complete.</p>
+            )}
+            {selectedBuilding.id === map?.site?.hovelId && isComplete(selectedBuilding) && (
               <div className="mt-3 flex flex-col gap-1.5">
-                <p className="max-w-56 text-[11px] text-ink-light">Entry is free. The keeper reveals the relic to one visitor at a time. Visitors may leave a donation in the offering box by the door; greater piety encourages larger gifts.</p>
+                <p className="max-w-56 text-[11px] text-ink-light">Entry is free. The keeper reveals the relic to {isChapel(selectedBuilding) ? "one visitor" : "two kneeling visitors"} at a time. Visitors may leave a donation in the offering box {isChapel(selectedBuilding) ? "outside beside the door" : "by the door"}; greater piety encourages larger gifts.</p>
+                <p className="max-w-56 text-[11px] text-ink-light">{isChapel(selectedBuilding)
+                  ? `A 2 × 2 relic chapel. One visitor kneels at the altar; others queue outside. Modest donations. Supports up to ${CHAPEL_MONKS} monks with shelter beds.`
+                  : `Two places at the rails; the queue waits four person-spaces behind. Larger donations${selectedBuilding.buildType === "church" ? `, with +${CHURCH_RENOWN_BONUS} renown to draw visitors` : ""}. Supports up to ${CHURCH_MONKS} monks with shelter beds.`}</p>
+                {isChapel(selectedBuilding) && <>
+                  <button type="button" onClick={economy.upgradeShrine} disabled={!!economy.churchUpgradeError}
+                    className="rounded border border-rule bg-parchment-dark px-2 py-1.5 text-left text-[11px] text-ink hover:text-red disabled:opacity-50">
+                    Upgrade to church · {CHURCH_COST.gold} gold · {CHURCH_COST.wood} wood
+                  </button>
+                  <p className="max-w-56 text-[10px] text-ink-light">{economy.churchUpgradeError ?? `The church and side-wing plots are marked in gold while building. Construction adds two kneeling places, larger gifts, +${CHURCH_RENOWN_BONUS} renown and capacity for ${CHURCH_MONKS} monks.`}</p>
+                </>}
                 <p className="text-[11px] text-ink-light">Donated · {economy.settlement.collectedAdmission} gold</p>
                 {map.buildings.filter(b => b.churchId === selectedBuilding.id).map(wing => <button key={wing.id} type="button" className="mt-2 block text-left text-[11px] text-ink underline underline-offset-2"
                   onClick={() => useCameraStore.getState().select({ kind: "building", id: wing.id })}>
                   Inspect {wing.label.toLowerCase()}
                 </button>)}
-                <button type="button" className="mt-2 block text-left text-[11px] text-ink underline underline-offset-2" onClick={() => {
+                <button type="button" disabled={isChapel(selectedBuilding)} title={isChapel(selectedBuilding) ? "Complete the church upgrade before adding a residence." : undefined}
+                  className="mt-2 block text-left text-[11px] text-ink underline underline-offset-2 disabled:opacity-50" onClick={() => {
                   useCameraStore.getState().select(null)
                   setPanel("build")
                   setMenuOpen(false)

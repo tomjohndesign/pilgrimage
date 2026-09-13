@@ -22,21 +22,22 @@ const shelter = buildCatalog().find((def) => def.id === "shelter")!
 const cross = buildCatalog().find((def) => def.id === "cross")!
 const inside = (map: GameMap, x: number, z: number) => !!buildInfluence(map).connected[z * map.width + x]
 
-describe("construction influence", () => {
-  it("allows frontage along the approach beyond the shrine radius, without claiming the main road", () => {
+describe("influence and unrestricted placement", () => {
+  it("allows buildings along the approach and the main road beyond shrine influence", () => {
     const map = world()
     expect(placementError(map, shelter, { x: 11, z: 36 })).toBeNull()
-    expect(placementError(map, shelter, { x: 35, z: 39 })).toMatch(/influence/)
+    expect(inside(map, 35, 39)).toBe(false)
+    expect(placementError(map, shelter, { x: 35, z: 39 })).toBeNull()
     // The approach track is walkable ground: a footprint may stand astride it
     // while the shrine door can still be reached around the outside.
     expect(placementError(map, shelter, { x: 9, z: 35 })).toBeNull()
   })
 
-  it("keeps the approach as a starting area even when the shrine has no renown", () => {
+  it("allows distant placement even when the shrine has no renown", () => {
     const map = world(), balance = structuredClone(DEFAULT_BALANCE)
     balance.rules.hovelRenown = 0
     expect(placementError(map, shelter, { x: 11, z: 36 }, balance)).toBeNull()
-    expect(placementError(map, shelter, { x: 18, z: 20 }, balance)).toMatch(/influence/)
+    expect(placementError(map, shelter, { x: 50, z: 20 }, balance)).toBeNull()
   })
 
   it.each(["shelter", "workshop", "storehouse"])("%s contributes neither renown nor further influence", (id) => {
@@ -52,23 +53,29 @@ describe("construction influence", () => {
     const purchase = purchaseStructure(createSettlement(), map, [], [], "cross", { x: 21, z: 20 })
     expect(purchase.error).toBeNull()
     const built = { ...map, buildings: [...map.buildings, ...purchase.settlement.structures] }
-    expect(placementError(built, shelter, { x: 26, z: 20 })).not.toBeNull()
+    expect(inside(built, 26, 20)).toBe(false)
+    expect(placementError(built, shelter, { x: 26, z: 20 })).toBeNull()
     purchase.settlement.structures[0].construction!.work = purchase.settlement.structures[0].construction!.required
+    expect(inside(built, 26, 20)).toBe(true)
     expect(placementError({ ...built }, shelter, { x: 26, z: 20 })).toBeNull()
     expect(settlementRenown(built, [], []).total).toBe(7)
   })
 
-  it("does not let a prospective renown source supply its own placement influence", () => {
+  it("purchases a renown source outside influence and charges its normal cost", () => {
     const before = createSettlement()
     const purchase = purchaseStructure(before, world(), [], [], "cross", { x: 26, z: 20 })
-    expect(purchase.error).toMatch(/influence/)
-    expect(purchase.settlement).toBe(before)
+    expect(purchase.error).toBeNull()
+    expect(purchase.settlement.structures).toHaveLength(1)
+    expect(purchase.settlement.resources).toEqual({
+      gold: before.resources.gold - cross.cost.gold,
+      wood: before.resources.wood - cross.cost.wood,
+    })
   })
 
-  it("checks every footprint tile at an influence boundary", () => {
+  it("allows a footprint to straddle an influence boundary", () => {
     const map = world()
     expect(placementError(map, cross, { x: 22, z: 20 })).toBeNull()
-    expect(placementError(map, shelter, { x: 22, z: 20 })).toMatch(/influence/)
+    expect(placementError(map, shelter, { x: 22, z: 20 })).toBeNull()
   })
 
   it.each(["water", "forest"] as const)("%s prevents influence reaching disconnected land", (terrain) => {
@@ -77,7 +84,7 @@ describe("construction influence", () => {
     const field = buildInfluence(map)
     expect(field.radiated[20 * map.width + 18]).toBe(1)
     expect(field.connected[20 * map.width + 18]).toBe(0)
-    expect(placementError(map, shelter, { x: 18, z: 20 })).toMatch(/influence/)
+    expect(placementError(map, shelter, { x: 18, z: 20 })).toMatch(/access/)
   })
 
   it("an isolated existing source does not establish disconnected territory", () => {
@@ -95,7 +102,8 @@ describe("construction influence", () => {
     expect(placementError(map, shelter, { x: 26, z: 20 })).toBeNull()
     const balance = structuredClone(DEFAULT_BALANCE)
     balance.buildings.cross.renown = 0
-    expect(placementError(map, shelter, { x: 26, z: 20 }, balance)).toMatch(/influence/)
+    expect(buildInfluence(map, balance).connected[20 * map.width + 26]).toBe(0)
+    expect(placementError(map, shelter, { x: 26, z: 20 }, balance)).toBeNull()
     expect(map.buildings).toHaveLength(2)
   })
 })

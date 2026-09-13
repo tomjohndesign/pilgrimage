@@ -13,6 +13,7 @@ import { BuildThumbnail } from "./build-thumbnail"
 import { influenceRadius } from "@/lib/game/build-influence"
 import { useBuildStore } from "@/lib/game/build-store"
 import { rotatedFootprint } from "@/lib/game/building-rotation"
+import { churchDevelopmentPlot } from "@/lib/game/shrine-upgrade"
 import { canAfford, demolitionTargets, placementError } from "@/lib/game/settlement"
 import { DemolishBuildingDialog } from "./demolish-building-dialog"
 import { useCameraStore } from "@/lib/game/camera-store"
@@ -117,7 +118,7 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
               <p className="hud-help-secondary">{locked ? `Requires ${item.requiredRenown} shrine renown.`
                 : unavailable ? "Not enough supplies or the world is still loading."
                 : item.id === "monk-shelter" ? "Build against a side wall of the church. Monks enter through the church."
-                : "Place inside shrine influence or beside the approach; the whole footprint must fit."}</p>
+                : "Place anywhere on suitable ground; the whole footprint and entrances must stay clear."}</p>
             </>}>
               <button type="button" className="hud-building-tile" aria-label={`Build ${item.label.toLowerCase()}`}
                 aria-pressed={buildType === item.id} aria-disabled={unavailable}
@@ -140,15 +141,15 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
           <button type="button" className="hud-action" aria-label="Rotate building clockwise" aria-keyshortcuts="R" title="Rotate clockwise (R)" onClick={() => rotateBuilding(1)}>
             <RotateCw size={15} aria-hidden /> <kbd>R</kbd>
           </button>
-          <span className="hud-entry-key">Gold arrows mark entrances</span>
+          <span className="hud-entry-key">Gold arrows mark entrances{map && churchDevelopmentPlot(map) ? " · Gold grid reserves the church and side wings" : ""}</span>
         </div>)}
       </div>
       <button type="button" className="hud-close" aria-label="Close build options" onClick={onClose}><X size={14} /></button>
     </section>}
     {open && (selected || economy.message) && <div className={`hud-placement-status ${problem ? "hud-placement-error" : ""}`} role="status">
       {problem ?? (selected ? selected.id === "monk-shelter"
-        ? "Place against a church side wall · Entrance through the church"
-        : `Place ${selected.label.toLowerCase()} inside influence · Tap or click the map to build` : economy.message)}
+        ? "Place in the gold side-wing space against a completed church · Entrance through the church"
+        : `Place ${selected.label.toLowerCase()} on suitable ground · Tap or click the map to build` : economy.message)}
     </div>}
     <nav className="hud-bottom-actions" aria-label="Building tools">
       <button id="build-menu-button" type="button" className="hud-action" aria-expanded={open} aria-controls="build-tray" onClick={onToggle}>

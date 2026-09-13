@@ -248,7 +248,7 @@ export const RULE_FIELDS = [
     group: "Treasury & construction",
     label: "Influence radius at 5 renown (tiles)",
     description:
-      "Renown sources radiate this far at 5 renown, scaled by the square root of their renown / 5. Connected influence and land beside the approach allow construction. Existing structures stay.",
+      "Renown sources radiate this far at 5 renown, scaled by the square root of their renown / 5. Connected influence claims independent town buildings and enriches scenery colors; it does not restrict construction.",
     default: 12,
     min: 2,
     max: 128,

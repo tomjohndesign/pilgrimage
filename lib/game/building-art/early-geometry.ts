@@ -473,7 +473,6 @@ function authoredBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
   if(variant === "storehouse") {
     for(const a of [-x,x]) for(const b of [-z,rampStart-.06]) {
       pole(`raised-leg-${a}-${b}`,[a,0,b],[a,floor,b],.045,"base")
-      pole(`raised-post-${a}-${b}`,[a,floor,b],[a,lean?roofY(a,b)+.21:eave,b],.045)
     }
     for(let i=0;i<Math.ceil(width/.12);i++) box(`floor-board-${i}`,"base",[-w+.07+i*(width-.14)/Math.max(1,Math.ceil(width/.12)-1),floor+.025,(rampStart-d+.06)/2],[.085,.045,rampStart+d-.06],palette.paleWood,undefined,false)
     box("grain-sack","base",[0,floor+.16,-depth*.12],[Math.min(.3,width*.3),.27,Math.min(.25,depth*.3)],"#a29978",undefined,false)
@@ -486,10 +485,8 @@ function authoredBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       const t=i/6
       box(`ramp-cleat-${i}`,"base",[0,top*(1-t)+.018*t+.01,rampStart+(front-rampStart)*t],[rampWidth,.022,.035],palette.wood,undefined,false)
     }
-    for(const side of [-1,1]) {
-      const breaks=[-z,...(lean ? profile.breaks.filter(v=>v>-z && v<z) : []),z]
-      for(let i=0;i<breaks.length-1;i++) pole(`store-side-beam-${side}-${i}`,[side*x,lean?roofY(side*x,breaks[i]):eave,breaks[i]],[side*x,lean?roofY(side*x,breaks[i+1]):eave,breaks[i+1]],.04)
-    }
+    parts.push(...buildingWeathering(width,depth,h,variant,recipe.seed))
+    return parts
   } else if(variant === "house" || variant === "hall" || variant === "tavern") {
     const door=Math.min(.44,width*.5), left=(width-.26-door)/2
     if(variant === "tavern") {
@@ -627,14 +624,6 @@ function authoredBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
       roofRectangle(`strip-${i}`,a,b,back,front)
     }
   } else if(lean) roofRectangle("1",-w,w,-d,d); else {roofSide(-1);roofSide(1)}
-  if(lean && variant === "storehouse") {
-    // Hold-down battens follow each pitch of the thin straw roof.
-    for(const side of [-1,1]) {
-      const x = side*width*.22
-      const breaks=[-roofZ+.07,...profile.breaks.filter(v=>v>-roofZ+.07 && v<roofZ-.07),roofZ-.07]
-      for(let i=0;i<breaks.length-1;i++) pole(`store-roof-batten-${side}${breaks.length===2 ? "" : `-${i}`}`,[x,roofY(x,breaks[i])+.12,breaks[i]],[x,roofY(x,breaks[i+1])+.12,breaks[i+1]],.03,"roof",palette.wood)
-    }
-  }
   for(const side of variant === "market" ? [] : [-1,1]) {
     if(lean) {
       const breaks=[-d+.025,...profile.breaks.filter(z=>z>-d+.025 && z<d-.025),d-.025]

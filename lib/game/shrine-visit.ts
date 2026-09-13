@@ -1,4 +1,5 @@
-import { shrineLayout, shrineSeats, shrineStations, shrinePoint } from "./shrine-layout"
+import { isComplete } from "./construction"
+import { isChapel, shrineLayout, shrineSeats, shrineStations, shrinePoint, shrineViewingPlaces } from "./shrine-layout"
 import { buildingStepAllowed, shrineGates } from "./building-navigation"
 import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 import { settlementRoute, shrineApproach } from "./settlement-route"
@@ -10,10 +11,10 @@ export const DEFAULT_ADMISSION_FEE = 0
 
 /** A voluntary whole-coin gift: anyone may give nothing, and piety raises both
  * willingness and the range of gifts. Never spend coins the visitor lacks. */
-export function shrineDonation(piety: number, gold: number, rng: () => number): number {
+export function shrineDonation(piety: number, gold: number, rng: () => number, multiplier = 1): number {
   const devotion = Math.max(0, Math.min(100, piety)) / 100
   if (rng() >= .15 + devotion * .75) return 0
-  return Math.min(Math.max(0, Math.floor(gold)), 1 + Math.floor(rng() * (1 + Math.floor(devotion * 9))))
+  return Math.min(Math.max(0, Math.floor(gold)), Math.floor((1 + Math.floor(rng() * (1 + Math.floor(devotion * 9)))) * multiplier))
 }
 
 /** Spacing between people lined up for the relic: shoulder to shoulder with a
@@ -32,10 +33,10 @@ export function shrineQueuePlaces(map: GameMap): number {
 
 /** Reserve a place in the line for the relic or a private prayer spot. Companies
  * are broken apart at the enclave: every member lines up as a single visitor. */
-export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, occupied: ReadonlySet<string> = new Set(), from?: TilePos, prayer = (visitor + visits) % 4 === 3, relicShown = true) {
+export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, occupied: ReadonlySet<string> = new Set(), from?: TilePos, prayer = false, relicShown = true) {
   const site = map.site
   const shrine = map.buildings.find(b => b.id === site?.hovelId)
-  if (!site || !shrine) return null
+  if (!site || !shrine || !isComplete(shrine)) return null
   // Nobody joins the line while no keeper shows the relic; it would only stand
   // there. Private prayer needs no keeper.
   if (!relicShown && !prayer) return null
@@ -48,18 +49,97 @@ export function shrineVisitPlan(map: GameMap, visitor: number, visits: number, o
   if (!place || !buildingStepAllowed(map, map.buildings, gate.outside, gate.inside, true)) return null
   const branch = shrineApproach(map, from)
   if (!branch.length) return null
-  const inside = settlementRoute(map, map.buildings, gate.inside, place.tile, false, true)
+  const inside = prayer ? settlementRoute(map, map.buildings, gate.inside, place.tile, false, true)
+    : shrineViewingRoute(map, 0)
   const approach = settlementRoute(map, map.buildings, site.door, gate.outside)
   return inside && approach ? { seat: place.id, route: [...branch, ...approach.slice(1), ...inside] } : null
 }
 
-/** Exit by the side of the nave, visiting the wall box before the single door.
+/** Continuous interior lanes join the integer approach only at the gate. */
+export function shrineViewingRoute(map: GameMap, place: number): TilePos[] | null {
+  const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
+  if (!shrine || !map.site || !isComplete(shrine)) return null
+  const gate = shrineGates(shrine, map.site.door)[0]
+  const places = shrineViewingPlaces(shrine, map.site.door)
+  const destination = places[place]
+  if (!destination) return null
+  const route = isChapel(shrine) ? [gate.inside, destination]
+    : [gate.inside, { x: (places[0].x + places[1].x) / 2,
+      z: (places[0].z + places[1].z) / 2 }, destination]
+  return route.every((p, i) => !i || buildingStepAllowed(map, map.buildings, route[i - 1], p, true)) ? route : null
+}
+
+/** Move back a physical distance along a route, including partial steps. */
+export function shrineRouteBehind(route: readonly TilePos[], progress: number, distance: number): number {
+  let cursor = Math.max(0, Math.min(route.length - 1, progress))
+  for (let i = Math.min(route.length - 2, Math.ceil(cursor) - 1); i >= 0; i--) {
+    const length = Math.hypot(route[i + 1].x - route[i].x, route[i + 1].z - route[i].z)
+    const available = (cursor - i) * length
+    if (length > 0 && distance <= available) return cursor - distance / length
+    distance -= available
+    cursor = i
+  }
+  return 0
+}
+
+/** Stop the church line four person-spaces behind the kneeling row, measured
+ * along the central aisle rather than around the final turn toward a rail. */
+export function shrineQueueStop(map: GameMap, route: readonly TilePos[], door: number, characterScale = BASE_CHARACTER_SCALE): number {
+  const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
+  return !shrine || isChapel(shrine)
+    ? shrineRouteBehind(route, door, relicQueueSpacing(characterScale))
+    : shrineRouteBehind(route, route.length - 2, 4 * relicQueueSpacing(characterScale))
+}
+
+/** Leave a gift at the chapel’s exterior box or the church’s interior wall box.
  * Stored in reverse because the simulation walks departure routes backwards. */
-export function shrineExitPlan(map: GameMap, from: TilePos, arrival: TilePos[]) {
+export function shrineExitPlan(map: GameMap, from: TilePos, arrival: TilePos[]): { route: TilePos[]; offeringProgress: number } | null {
   const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
   if (!shrine || !map.site) return null
   const { offering } = shrineStations(shrine, map.site.door)
+  if (isChapel(shrine)) {
+    const gate = shrineGates(shrine, map.site.door)[0]
+    const outside = settlementRoute(map, map.buildings, gate.outside, offering)
+    const toBox = outside && buildingStepAllowed(map, map.buildings, from, gate.inside, true)
+      ? [from, gate.inside, ...outside] : null
+    // Step aside to donate, then rejoin the approach beyond the doorway.
+    // Keep each visitor's original route back to the road or their parked cart.
+    const gateIndex = arrival.findIndex(p => p.x === gate.outside.x && p.z === gate.outside.z)
+    const rejoinIndex = Math.max(0, gateIndex - 1)
+    const fromBox = settlementRoute(map, map.buildings, offering, arrival[rejoinIndex])
+    if (!toBox || !fromBox) return null
+    const exit = [...toBox, ...fromBox.slice(1), ...arrival.slice(0, rejoinIndex).reverse()]
+    return { route: exit.reverse(), offeringProgress: exit.length - toBox.length }
+  }
   const layout = shrineLayout(shrine, map.site.door)
+  const viewing = shrineViewingPlaces(shrine, map.site.door)
+  const rail = viewing.findIndex(p => Math.abs(p.x - from.x) < .001 && Math.abs(p.z - from.z) < .001)
+  if (rail >= 0) {
+    const front = shrinePoint(shrine, map.site.door, rail === 0 ? -1 : 1, Math.floor(layout.depth / 2))
+    const sin = Math.round(Math.sin(layout.rotation)), cos = Math.round(Math.cos(layout.rotation))
+    const along = { x: from.x + sin * ((front.x - from.x) * sin + (front.z - from.z) * cos),
+      z: from.z + cos * ((front.x - from.x) * sin + (front.z - from.z) * cos) }
+    const toBox = settlementRoute(map, map.buildings, front, offering, false, true)
+    const gate = shrineGates(shrine, map.site.door)[0]
+    const toDoor = settlementRoute(map, map.buildings, offering, gate.inside, false, true)
+    const gateIndex = arrival.findIndex(p => p.x === gate.inside.x && p.z === gate.inside.z)
+    if (!toBox || !toDoor || gateIndex < 0) return null
+    const exit = [from, along, ...toBox, ...toDoor.slice(1), ...arrival.slice(0, gateIndex).reverse()]
+    if (!exit.every((p, i) => !i || buildingStepAllowed(map, map.buildings, exit[i - 1], p, true))) return null
+    const route = exit.reverse()
+    return { route, offeringProgress: route.findIndex(p => p.x === offering.x && p.z === offering.z) }
+  }
+  // A chapel can be upgraded while a visitor is kneeling at its old centered
+  // position. Join a clear integer lane before using the church exit planner.
+  if (!Number.isInteger(from.x) || !Number.isInteger(from.z)) {
+    for (const x of new Set([Math.floor(from.x), Math.ceil(from.x)])) for (const z of new Set([Math.floor(from.z), Math.ceil(from.z)])) {
+      const lane = { x, z }
+      if (!buildingStepAllowed(map, map.buildings, from, lane, true)) continue
+      const exit = shrineExitPlan(map, lane, arrival)
+      if (exit) return { ...exit, route: [...exit.route, from] }
+    }
+    return null
+  }
   const dx = from.x - shrine.x - Math.floor(shrine.w / 2), dz = from.z - shrine.z - Math.floor(shrine.d / 2)
   const localZ = dx * Math.round(Math.sin(layout.rotation)) + dz * Math.round(Math.cos(layout.rotation))
   const side = shrinePoint(shrine, map.site.door, 1, localZ)

@@ -5,9 +5,9 @@ import { addSurfaceLighting } from "./lighting"
 import { cameraOffset, yawForView } from "./iso"
 
 /** Asset export only, called through the existing /play development handle.
- * Bake the actual church geometry; no terrain or character assets are needed.
+ * Bake the actual chapel or church geometry; no terrain or character assets are needed.
  */
-export function bakeLoadingChurch(renderer: THREE.WebGLRenderer) {
+export function bakeLoadingChurch(renderer: THREE.WebGLRenderer, chapel = true) {
   const size = 256, worldSize = 8, centreY = 1.15
   const scene = new THREE.Scene()
   const yaw = yawForView(0)
@@ -26,8 +26,7 @@ export function bakeLoadingChurch(renderer: THREE.WebGLRenderer) {
     renderer.autoClear = true
     renderer.setClearColor(0, 0)
     for (let view = 0; view < 4; view++) {
-      const sideways = view % 2 === 1
-      const parts = shrineStructureParts(sideways ? 5 : 3, sideways ? 3 : 5)
+      const parts = shrineStructureParts(chapel ? 2 : 3, chapel ? 2 : 5, [], view === 1 || view === 2 ? -.5 : .5)
       const geometry = mergedBuildingGeometry(parts.filter(part => !part.surface))
       const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })
       const mesh = new THREE.Mesh(geometry, material)

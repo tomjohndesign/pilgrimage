@@ -24,6 +24,13 @@ export function MapReveal({ map, state, onPhase, onProgress, onLandmarkReady, la
 }) {
   const lastReport = useRef<{ state: MapRevealState; phase: MapRevealPhase }>({ state, phase: "loading" })
   const reducedMotion = useRef(false)
+  const loadingClock = useRef<number | null>(null)
+  useEffect(() => {
+    // Hidden tabs must not consume the timeout; slow visible frames must.
+    const resetClock = () => { loadingClock.current = null }
+    document.addEventListener("visibilitychange", resetClock)
+    return () => document.removeEventListener("visibilitychange", resetClock)
+  }, [])
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)")
     const update = () => { reducedMotion.current = media.matches }
@@ -50,13 +57,17 @@ export function MapReveal({ map, state, onPhase, onProgress, onLandmarkReady, la
       world.current = state
       frame.current = null
       landmarkFrames.current = 0
+      loadingClock.current = null
     }
     if (++landmarkFrames.current === 3) onLandmarkReady()
     scene.userData.mapRevealDirect = materials.uniforms.mapRevealDirect
     scene.userData.mapRevealActive = state.phase !== "complete"
     if (state.phase === "complete") return
     if (materials.prepare(scene) && state.phase === "loading") state.begin()()
-    const phase = state.advance(delta, usePopulationStore.getState().building, reducedMotion.current)
+    const now = performance.now()
+    const loadingElapsed = document.hidden || loadingClock.current === null ? 0 : (now - loadingClock.current) / 1000
+    loadingClock.current = now
+    const phase = state.advance(delta, usePopulationStore.getState().building, reducedMotion.current, loadingElapsed)
     scene.userData.mapRevealActive = phase !== "complete"
     const uniforms = materials.uniforms
     uniforms.mapRevealExtent.value.set(map.width, map.depth)

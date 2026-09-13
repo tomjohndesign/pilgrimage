@@ -1,6 +1,6 @@
 import { GREY_HAIR_COLOR, OLDER_TRAVELER_TYPES } from "../character-age"
 import { TRAVELER_TYPES, type TravelerTypeId } from "../travelers"
-import { bakeBasePerson } from "./bake"
+import { bakePersonProgressively } from "./bake"
 import { ACTION_CLIPS, BASE_PERSON, PERSON_CLIPS, WALK_CLIP_STRIDES } from "./pose"
 import { DEFAULT_DESIGN, personRecipe, type PersonDesign } from "./design"
 import { POPULATION_PROFILES, populationDesign, type PopulationPack } from "./population"
@@ -48,7 +48,12 @@ export async function bakeOutfits<Calling extends string>(types: { id: Calling; 
       if (cancelled()) throw new DOMException("Superseded character design", "AbortError")
       const design = designFor(id, variant, grey)
       let bake
-      try { bake = bakeBasePerson(design, false) }
+      try {
+        bake = await bakePersonProgressively(design, step => {
+          progress((typeIndex * count + variant + step.done / step.total) / (types.length * count))
+        }, { diagnostics: false, budgetMs: 4, cancelled }).promise
+        if (!bake) throw new DOMException("Superseded character design", "AbortError")
+      }
       catch (error) { throw new Error(`${id}, profile ${variant + 1}: ${error instanceof Error ? error.message : error}`) }
       designs.push(design)
       await draw(walk, bake.walk, variant); await draw(idle, bake.idle, variant)

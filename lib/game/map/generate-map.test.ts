@@ -1,3 +1,4 @@
+import { churchUpgradeError, churchPlan, CHURCH_COST } from "../shrine-upgrade"
 import { ROUTE_EDGE_INSET } from "./route-bounds"
 import { BUILD_CATALOG } from "../balance"
 import { placementError } from "../settlement"
@@ -149,18 +150,21 @@ describe("generateMap", () => {
     expect(map.buildings.filter(b => b.owner !== "independent").map(b => b.id)).toEqual([HOVEL_ID, "founding-well"])
     expect(map.buildings.some(b => b.buildType === "monk-shelter")).toBe(false)
     const hovel = map.buildings[0]
+    expect([hovel.w, hovel.d]).toEqual([2, 2])
+    expect(churchUpgradeError(map, CHURCH_COST), `seed ${seed} reserves room for the church`).toBeNull()
+    const church = churchPlan(map)!
+    const expanded = { ...map, buildings: map.buildings.map(b => b.id === church.id ? church : b) }
     const residence = BUILD_CATALOG.find(b => b.id === "monk-shelter")!
     let canBuild = false
     for (const rotation of [0, 1, 2, 3] as BuildingRotation[]) {
       const size = rotatedFootprint(residence, rotation)
-      for (let z = hovel.z - size.d; !canBuild && z <= hovel.z + hovel.d; z++) {
-        for (let x = hovel.x - size.w; !canBuild && x <= hovel.x + hovel.w; x++) {
-          if (placementError(map, residence, { x, z }, undefined, rotation) === null) canBuild = true
+      for (let z = church.z - size.d; !canBuild && z <= church.z + church.d; z++) {
+        for (let x = church.x - size.w; !canBuild && x <= church.x + church.w; x++) {
+          if (placementError(expanded, residence, { x, z }, undefined, rotation) === null) canBuild = true
         }
       }
     }
-    expect(canBuild, `seed ${seed} has room to build the church residence`).toBe(true)
-    expect([hovel.w, hovel.d]).toEqual([3, 5])
+    expect(canBuild, `seed ${seed} has room for a residence after upgrading`).toBe(true)
     const door = map.site!.door
     const centred = door.x === hovel.x + Math.floor(hovel.w / 2) || door.z === hovel.z + Math.floor(hovel.d / 2)
     expect(centred, `seed ${seed} track meets the middle of an entrance wall`).toBe(true)

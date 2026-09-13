@@ -107,11 +107,12 @@ describe("early medieval building kit", () => {
     }
   })
 
-  it("identifies stores by roof battens and keeps utility buildings free of chimneys", () => {
+  it("keeps stores open to the sky and utility buildings free of chimneys", () => {
     for(const variant of ["storehouse", "wood-shelter", "enclosure"] as const) {
       const parts = buildingParts(earlyBuildingRecipe(variant))
       expect(parts.some(p => p.name.startsWith("chimney-") || p.name.startsWith("hearth-"))).toBe(false)
-      expect(parts.filter(p => p.name.startsWith("store-roof-batten-"))).toHaveLength(variant === "storehouse" ? 2 : 0)
+      expect(parts.filter(p => p.name.startsWith("store-roof-batten-"))).toHaveLength(0)
+      if (variant === "storehouse") expect(parts.some(p => p.layer === "roof" || p.name.startsWith("raised-post-") || p.name.startsWith("store-side-beam-"))).toBe(false)
     }
   })
 
@@ -162,11 +163,11 @@ it("gives the tavern an unobstructed rear doorway and a taller front brow",()=>{
 })
 
 
-it("slopes the raised store roof down toward its front entrance",()=>{
-  const parts=buildingParts(earlyBuildingRecipe("storehouse"))
+it("slopes the woodcutter hut roof down toward the front like the houses",()=>{
+  const parts=buildingParts(earlyBuildingRecipe("workshop"))
   const vertices=parts.filter(p=>p.name.startsWith("thatch-bundle-")).flatMap(p=>p.vertices ?? [])
   const front:number[]=[],back:number[]=[]
   for(let i=0;i<vertices.length;i+=3) (vertices[i+2]>0 ? front : back).push(vertices[i+1])
   expect(Math.max(...back)).toBeGreaterThan(Math.max(...front))
-  expect(parts.some(p=>p.name==="entry-ramp")).toBe(true)
+  expect(parts.some(p=>p.name==="workbench-seat")).toBe(true)
 })

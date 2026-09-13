@@ -1,3 +1,4 @@
+import { shrineDonationMultiplier } from "./shrine-upgrade"
 import { fordSpeedAt } from "./map/fords"
 import { ensurePartyTransport, stepPartyPacks, stepPackParking, seatParty, parkParty, parkPartyPacks, movePartyCart, turnPartyCart } from "./transport/party"
 import { currentStanding, standingCentre, type StandingCache } from "./horse-standing"
@@ -59,8 +60,8 @@ import { BUILDING_KINDS, buildingCentre, isPostedWork, type PlacedBuilding } fro
 import { DRINK_PRICE, MEAL_PRICE, SERVING_THRESHOLD, SEAT_REST_THRESHOLD, SEAT_STAMINA_PER_HOUR, TABLE_HOURS, servingHouses, tavernVisitPlan, seatRestPlan, type TavernPlan } from "./tavern"
 import { generateRelic, hospitalityNeedThreshold, visitChance, type RelicStats } from "./relic"
 import { settlementRoute } from "./settlement-route"
-import { relicQueueSpacing, shrineDonation, shrineExitPlan, shrineVisitPlan } from "./shrine-visit"
-import { isRelicViewingSeat } from "./shrine-layout"
+import { relicQueueSpacing, shrineDonation, shrineExitPlan, shrineVisitPlan, shrineViewingRoute, shrineQueueStop, shrineRouteBehind } from "./shrine-visit"
+import { isChapel, isRelicViewingSeat, shrineViewingPlaces } from "./shrine-layout"
 import type { TreePlacement } from "./trees/placement"
 import { TREE_SPECIES } from "./trees/species"
 import type { TilePos } from "./map/types"
@@ -395,10 +396,10 @@ export interface SimTraveler {
   shrineDoor?: number
   /** Reserved until the visitor has left the shrine approach. */
   shrineSeat?: string
+  /** The kneeling place reserved on leaving the waiting line. */
+  shrinePlace?: number
   shrineQueueOrder?: number
   enclaveVisitPending?: boolean
-  /** A vendor considers keeping a stall only after seeing the relic. */
-  marketInterest?: boolean
   offeringProgress?: number
   offeringMade?: boolean
   /** Road lane used when entering the shrine, including a reversed approach for shelter. */
@@ -675,7 +676,8 @@ function finishConvoyMove(s: SimTraveler, transportBefore: SimTraveler | null, m
   const cut = transportBefore.roadShortcut ?? s.roadShortcut
   let pose: CartPose | null
   if (wrapped) pose = roadCartPose(map, s.progress, s.direction, wheelbase, characterScale)
-  else if (parking && !parking.walking) pose = parking.pose
+  // Dismounting may start a foot route in this tick; the convoy ends at its bay.
+  else if (parking && (!parking.walking || transportBefore.activity === "toParking")) pose = parking.pose
   else if (cut) pose = driveRouteSegment(previous, [cut.from, ...(cut.via ?? []), cut.to],
     transportBefore.roadShortcut?.distance ?? 0, s.roadShortcut?.distance ?? cut.length, wheelbase,
     (p, heading) => convoyBuildingsClear(map, p, puller, characterScale, heading))
@@ -699,12 +701,6 @@ function finishConvoyMove(s: SimTraveler, transportBefore: SimTraveler | null, m
 function insideShrine(map: GameMap, who: { x: number; z: number }): boolean {
   const hovel = map.site?.hovelId
   return !!hovel && buildingAt(map, worldToTileX(map, who.x), worldToTileZ(map, who.z))?.id === hovel
-}
-
-/** Tiles covered by the route step under a position, so spacing reads in tiles on diagonals too. */
-function routeStep(route: readonly TilePos[], at: number): number {
-  const i = Math.max(0, Math.min(route.length - 2, Math.floor(at)))
-  return route.length < 2 ? 1 : Math.max(1, Math.hypot(route[i + 1].x - route[i].x, route[i + 1].z - route[i].z))
 }
 
 /** The last step of a relic approach that is still outside the church door. */
@@ -1492,14 +1488,13 @@ function chooseTree(sim: SimState, s: SimTraveler, map: GameMap): boolean {
 }
 
 function finishVisit(sim: SimState, s: SimTraveler, map: GameMap): void {
-  const exit = shrineExitPlan(map, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, s.shrineRoute ?? map.site!.branch)
+  const exit = shrineExitPlan(map, s.shrineRoute?.at(-1) ?? { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, s.shrineRoute ?? map.site!.branch)
   if (!exit) return
   s.hoursSinceChurch = 0
   s.visits++
   sim.visits++
   s.piety = Math.min(100, s.piety + 4 + sim.relic.sanctity / 25)
   s.happiness = Math.min(100, s.happiness + RELIC_HAPPINESS_GAIN)
-  if (s.convoy) s.marketInterest = nextRoll(s) < .1
   s.shrineRoute = exit.route
   s.branchProgress = exit.route.length - 1
   s.offeringProgress = exit.offeringProgress
@@ -2078,7 +2073,9 @@ const tickPositions = new WeakMap<SimState, Float64Array>()
 function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   counters: ReturnType<typeof openCounters>, direction: 1 | -1, parkingProgress: number,
   characterScale: number, from?: TilePos, partyVisit = false): boolean {
-  const isVendor = t.type.id === "vendor", needsParking = isVendor || t.type.id === "knight"
+  const isVendor = t.type.id === "vendor", needsParking = (isVendor && s.convoy) || t.type.id === "knight"
+  // Cart vendors enter for an available market, then visit on foot from its bay.
+  if (isVendor && s.convoy) return false
   const renown = sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown
   // Thirst draws travelers to the church even without an open counter.
   // Hunger only draws them when food service is available.
@@ -2110,8 +2107,16 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   // Companies share the nave: each member takes any free place, and a company
   // still waiting for places gives up after its bounded wait. Nobody else's
   // lingering place may bar the door.
-  const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats, from, partyVisit ? false : undefined, sim.shrineKeeperReady) : null
+  const marketBay = isVendor && s.marketParking?.walking ? {
+    x: worldToTileX(map, s.marketParking.parked.hitch.x), z: worldToTileZ(map, s.marketParking.parked.hitch.z),
+  } : undefined
+  const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats, marketBay ?? from, partyVisit ? false : undefined, sim.shrineKeeperReady) : null
   let visitRoute = visit?.route ?? null
+  if (visitRoute && marketBay && from) {
+    // A keeper already at the counter leaves through the stall's entrance.
+    const toBay = settlementRoute(map, map.buildings, from, marketBay, false, true)
+    visitRoute = toBay ? [...toBay, ...visitRoute.slice(1)] : null
+  }
   let parking: ShrineParking | null = null
   if (visitRoute && needsParking) {
     const puller = isVendor ? cartLoadout(s.id).puller : "horse"
@@ -2144,6 +2149,7 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
     s.shrineRoute = visitRoute
     s.shrineDoor = shrineDoorIndex(map, visitRoute)
     s.shrineSeat = visit!.seat
+    s.shrinePlace = undefined
     s.admissionPaid = 0
     s.offeringMade = false
     s.offeringProgress = undefined
@@ -2242,6 +2248,24 @@ export function stepSim(
     other.shrineDoor ??= shrineDoorIndex(map, other.shrineRoute)
     return [{ s: other, remaining: other.shrineDoor - other.branchProgress, space: queueSpacing + (squires.has(other.id) ? squireFollowGap(characterScale) : 0) }]
   })
+  const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
+  const singleVisitor = !!shrine && isChapel(shrine)
+  const viewingPlaces = shrine ? shrineViewingPlaces(shrine, map.site?.door) : []
+  const occupiedPlaces = new Map<number, number>()
+  for (const s of sim.travelers.values()) {
+    const entering = s.activity === "toRelic" && s.shrinePlace !== undefined
+    const leaving = s.activity === "fromRelic" && s.shrineRoute && (singleVisitor
+      ? s.branchProgress > s.shrineRoute.findLastIndex(p => p.x === map.site!.door.x && p.z === map.site!.door.z)
+      : insideShrine(map, s))
+    if (!entering && s.activity !== "visiting" && !leaving) continue
+    if (!isRelicViewingSeat(s.shrineSeat)) continue
+    // Also recover the reservation when resuming a visitor already at the altar.
+    s.shrinePlace ??= Math.max(0, viewingPlaces.findIndex(p => {
+      const end = s.shrineRoute?.at(-1)
+      return end && p.x === end.x && p.z === end.z
+    }))
+    occupiedPlaces.set(s.shrinePlace, s.id)
+  }
   const listeners = new Map<number, number>()
   for (const state of sim.travelers.values()) if (state.musicVisit) {
     const id = state.musicVisit.performerId
@@ -2398,6 +2422,12 @@ export function stepSim(
       }
       stepPasture(map, s.pasture, dt, Math.max(0.01, targetSpeed), s.activity === "packingShop")
     }
+    if (shrine && !isComplete(shrine) && (s.activity === "toRelic" || s.activity === "visiting")) {
+      // Retrace the arrival path when an upgrade closes the shrine. Neither a
+      // cancelled viewing nor leaving a building site counts as a donation.
+      s.activity = "fromRelic"; s.shrinePlace = undefined
+      s.offeringMade = true; s.offeringProgress = undefined
+    }
     switch (s.activity) {
       case "toParking":
       case "fromParking": {
@@ -2426,6 +2456,8 @@ export function stepSim(
             if (s.marketParking) {
               s.convoy = false
               s.activity = "toPost"
+              if (s.visits === 0) tryRoadVisit(sim, s, t, map, [], s.direction, s.progress, characterScale,
+                { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, true)
             } else { s.activity = "toRelic"; s.branchProgress = 0 }
           } else {
             s.progress = parking.returnProgress; s.shrineParking = undefined; s.shrineRoute = null
@@ -2439,7 +2471,7 @@ export function stepSim(
         // Detour on the outdoor approach; finish crossing the chapel gate first.
         if (dt > 0 && !buildingAt(map, worldToTileX(map, s.x), worldToTileZ(map, s.z)) &&
           startWaterTrip(sim, s, map, waterSources, { x: s.x, y: s.y, z: s.z })) break
-        const branch = s.shrineRoute ?? map.site!.branch
+        let branch = s.shrineRoute ?? map.site!.branch
         const inbound = s.activity === "toRelic"
         let limit = branch.length - 1
         if (inbound && isRelicViewingSeat(s.shrineSeat)) {
@@ -2452,11 +2484,26 @@ export function stepSim(
           const remaining = door - s.branchProgress, order = s.shrineQueueOrder ?? 0
           let ahead = -Infinity, space = queueSpacing
           for (const other of relicLine) {
-            if (other.s === s) continue
+            if (other.s === s || other.s.shrinePlace !== undefined) continue
             const closer = other.remaining < remaining || (other.remaining === remaining && (other.s.shrineQueueOrder ?? 0) < order)
             if (closer && other.remaining > ahead) { ahead = other.remaining; space = other.space }
           }
-          if (ahead > -Infinity) limit = Math.min(limit, door - ahead - space / routeStep(branch, door - ahead))
+          if (s.shrinePlace === undefined) {
+            if (ahead > -Infinity) limit = Math.min(limit, shrineRouteBehind(branch, door - ahead, space))
+            const stop = shrineQueueStop(map, branch, door, characterScale)
+            const place = viewingPlaces.findIndex((_, i) => !occupiedPlaces.has(i))
+            if (place < 0 || ahead > -Infinity || !sim.shrineKeeperReady || (sim.procession && sim.procession.stage !== "idle")) {
+              limit = Math.min(limit, stop)
+            } else if (Math.min(limit, s.branchProgress + worldSpeed * dt) > stop) {
+              const interior = shrineViewingRoute(map, place)
+              if (interior) {
+                s.shrinePlace = place
+                occupiedPlaces.set(place, s.id)
+                branch = s.shrineRoute = [...branch.slice(0, door + 1), ...interior]
+                limit = branch.length - 1
+              } else limit = Math.min(limit, stop)
+            }
+          }
         }
         const previous = s.branchProgress
         s.branchProgress = inbound ? Math.max(previous, Math.min(Math.max(0, limit), previous + worldSpeed * dt))
@@ -2479,10 +2526,14 @@ export function stepSim(
           s.lane = s.direction * s.laneOffset
           s.horseRest = undefined
           s.shrineSeat = undefined
+          s.shrinePlace = undefined
           s.shrineDoor = undefined
           if (s.shrineParking) {
             s.shrineParking.walking = false; s.shrineParking.distance = 0
             s.activity = "fromParking"
+          } else if (s.marketParking && s.employer) {
+            s.shrineRoute = null; s.visitCooldown = 30
+            s.activity = assignBuildingTask(s, map, "work", s.employer) ? "toPost" : "idle"
           } else {
             s.activity = "walking"; s.shrineRoute = null; s.visitCooldown = 30; s.diversionCheck = undefined
             if (!s.partyVisitAborted && s.partyId === undefined) settleAfterVisit(sim, s, t, map)
@@ -2501,7 +2552,7 @@ export function stepSim(
         s.timer -= dt
         if (s.timer > 0) break
         if (!s.offeringMade) {
-          const amount = shrineDonation(s.piety, s.gold, () => nextRoll(s))
+          const amount = shrineDonation(s.piety, s.gold, () => nextRoll(s), shrineDonationMultiplier(map))
           s.gold -= amount
           sim.shrineGold += amount
           s.admissionPaid = amount
@@ -2673,6 +2724,10 @@ export function stepSim(
         const state = stepBuildingTask(s, map, targetSpeed, dt)
         if (!state) { s.activity = "idle"; s.timer = GAME_HOUR_SECONDS; break }
         s.activity = state === "walking" ? "toPost" : "posted"
+        // If the relic was unavailable on arrival, keep trading and try again.
+        if (state === "posted" && s.marketParking && s.visits === 0 && s.visitCooldown <= 0 &&
+          tryRoadVisit(sim, s, t, map, [], s.direction, s.progress, characterScale,
+            { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, true)) break
         // Step away to sleep or eat; the slot stays theirs while they are gone.
         if (state === "posted" && (s.stamina <= SETTLER_TIRED_AT || Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD
           || socialBreak)) {
@@ -2857,15 +2912,16 @@ export function stepSim(
         if (dt > 0 && (s.activity === "walking" || s.activity === "seeking") && !isVendor && startNaturalWaterTrip(s, map)) break
         if (townCounter && Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD &&
           startTavernTrip(sim, s, map, [townCounter], null)) break
-        // A vendor who chose to stay after viewing the relic can claim an
-        // empty market stall, parking their cart before taking the post.
-        if (isVendor && s.visits > 0 && s.marketInterest && !s.employer && !s.track && ahead >= 0 && ahead <= 6 && !s.shrineParking &&
+        // A completed, unclaimed stall draws a vendor even before the shrine
+        // has a reputation or the enclave has houses. Reserve its cart bay and
+        // counter together, then let the keeper visit the shrine on foot.
+        if (isVendor && s.activity !== "fleeing" && !s.employer && !s.track && ahead >= 0 && ahead <= 6 && !s.shrineParking &&
           s.marketCheck !== Math.floor(s.progress)) {
           s.marketCheck = Math.floor(s.progress)
           const home = findHome(sim, s, map)
           const puller = cartLoadout(s.id).puller
           const initial = s.cartPose ?? roadCartPose(map, s.progress, s.direction, -cartOffset(puller) * characterScale, characterScale)
-          for (const stall of sim.buildings.filter(b => home && BUILDING_KINDS[b.kind].vendorKept && isComplete(b) && staffOf(sim, b.id).length === 0)) {
+          for (const stall of sim.buildings.filter(b => b.owner !== "independent" && BUILDING_KINDS[b.kind].vendorKept && isComplete(b) && staffOf(sim, b.id).length === 0)) {
             const parking = marketParking(map, stall, initial, puller, characterScale, parkingContext(sim, s, characterScale))
             if (!parking) continue
             // Reserve the walking job only after both the drive and the walk

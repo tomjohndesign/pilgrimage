@@ -4,7 +4,8 @@ import { createSim, stepSim } from "./sim"
 import { TRAVELER_TYPES, type Traveler } from "./travelers"
 import { generateMap } from "./map/generate-map"
 import { currentStanding, findHorseStanding, standingGround, STANDING_LANE_LENGTH, type HorseStanding } from "./horse-standing"
-import { tileAt, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
+import { shrineVisitPlan } from "./shrine-visit"
+import { tileAt, tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import { knightLoadout, squireFollowGap } from "./knights"
 import { PACK_LEAD, partyLoadout } from "./transport/party"
 import { BASE_CHARACTER_SCALE } from "./base-person/gait"
@@ -19,7 +20,7 @@ function standingRoad(travelers: Traveler[]) {
   const branch = Array.from({ length: 22 }, (_, i) => ({ x: 30, z: 5 + i }))
   map.site = { hovelId: "shrine", door: { x: 30, z: 26 }, junction: 30, branch }
   for (const p of branch.slice(1)) map.tiles[p.z * map.width + p.x] = "track"
-  map.buildings.push({ id: "shrine", label: "Shrine", x: 29, z: 27, w: 3, d: 3, height: 1, color: "tan", roofColor: "brown" })
+  map.buildings.push({ id: "shrine", label: "Shrine", x: 29, z: 27, w: 3, d: 5, height: 1, color: "tan", roofColor: "brown" })
   const sim = createSim(travelers, map, [], { sanctity: 100, spectacle: 100, doubt: 0 })
   sim.balance = { ...DEFAULT_BALANCE, rules: { ...DEFAULT_BALANCE.rules, hungerDecay: 0, thirstDecay: 0, staminaDecay: 0 } }
   sim.shrineRenown = 10000
@@ -118,19 +119,27 @@ describe("a company's pack animal at the enclave", () => {
 })
 
 describe("a knight's squire in the line", () => {
-  /** How far behind the knight at the relic the next visitor stops. */
+  /** A squire leaves extra space behind a knight waiting for admission. */
   function gapBehindKnight(knightId: number) {
     const travelers: Traveler[] = [
       { id: knightId, name: "Knight", type: TRAVELER_TYPES.knight, direction: 1, offset: 24 / 59, pace: 1, attributes: { ...devout, gold: 100, status: 100 } },
       { id: 1000, name: "Pilgrim", type: TRAVELER_TYPES.pilgrim, direction: 1, offset: 8 / 59, pace: 1, attributes: { ...devout } }]
     const { map, sim } = standingRoad(travelers)
     const knight = sim.travelers.get(knightId)!, pilgrim = sim.travelers.get(1000)!
+    const reserved = new Set<string>()
+    for (const [order, traveler] of travelers.entries()) {
+      const plan = shrineVisitPlan(map, traveler.id, 0, reserved)!
+      reserved.add(plan.seat)
+      Object.assign(sim.travelers.get(traveler.id)!, { activity: "toRelic", shrineRoute: plan.route,
+        shrineSeat: plan.seat, shrineQueueOrder: order, branchProgress: 0, lane: 0, branchEntryLane: 0,
+        x: tileToWorldX(map, plan.route[0].x), z: tileToWorldZ(map, plan.route[0].z) })
+    }
+    sim.shrineKeeperReady = false
     let still = 0
     for (let tick = 0; tick < 8000 && still < 30; tick++) {
       stepSim(sim, travelers, map, 1, .1)
-      // The knight is kept at the relic while the pilgrim lines up behind him.
-      if (knight.activity === "visiting") knight.timer = 1000
-      still = knight.activity === "visiting" && pilgrim.activity === "toRelic" && pilgrim.moveSpeed === 0 ? still + 1 : 0
+      // Hold the line after both visitors have joined.
+      still = knight.activity === "toRelic" && knight.moveSpeed === 0 && pilgrim.activity === "toRelic" && pilgrim.moveSpeed === 0 ? still + 1 : 0
     }
     expect(still).toBe(30)
     return pilgrim.shrineDoor! - pilgrim.branchProgress

@@ -5,9 +5,8 @@ import { structureParts, type StructureAppearance } from "./structure"
 import type { RoofJoin } from "./roof-joins"
 
 /** Staged site artwork uses the same geometry, pixel grid and ID pass as finished buildings. */
-export function constructionParts(building: BuildingDef & Pick<StructureAppearance, "stocked" | "churchWing">, roofJoins: RoofJoin[] = []): BuildingPart[] {
+export function constructionParts(building: BuildingDef & Pick<StructureAppearance, "stocked" | "churchWing">, roofJoins: RoofJoin[] = [], finished = structureParts(building, roofJoins)): BuildingPart[] {
   const stage = constructionStage(building)
-  const finished = structureParts(building, roofJoins)
   if (stage === 3) return finished
   const parts: BuildingPart[] = stage === 2 ? finished.filter(p => p.layer !== "roof") : finished.filter(p => p.layer === "base")
   const w = building.w - 0.3, d = building.d - 0.3, h = Math.max(0.65, building.height)

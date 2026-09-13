@@ -1,11 +1,17 @@
 import { footpathRouteCost } from "./footpaths"
 import { walkingRouteQueries } from "./walking-route-queries"
 import { buildingSpatialQuery } from "./building-spatial"
-import { buildingStepAllowed } from "./building-navigation"
+import { buildingStepAllowed, containsTile } from "./building-navigation"
 import { elevationStep } from "./map/elevation"
 import { MinHeap, ROUTE_DIRS } from "./map/route"
 import { isWoods, TERRAIN } from "./map/terrain"
 import { tileAt, type BuildingDef, type GameMap, type TilePos } from "./map/types"
+
+const INTERIOR_DIRS = [...ROUTE_DIRS, [1, 1], [1, -1], [-1, 1], [-1, -1]] as const
+function routeDirections(map: GameMap, p: TilePos, enterShrine: boolean) {
+  const church = enterShrine && map.buildings.find(b => b.id === map.site?.hovelId)
+  return church && containsTile(church, p) ? INTERIOR_DIRS : ROUTE_DIRS
+}
 
 // Searches are synchronous. Generation stamps reuse the grid without clearing
 // it, or allocating map/set entries for every tile in a failed search.
@@ -29,9 +35,10 @@ function isolatedGoal(map: GameMap, buildings: readonly BuildingDef[], origin: n
     const p = { x: current % map.width, z: Math.floor(current / map.width) }
     const terrain = map.tiles[current]
     if (!(TERRAIN[terrain].passable || (logging && isWoods(terrain)))) continue
-    for (const [dx, dz] of ROUTE_DIRS) {
+    for (const [dx, dz] of routeDirections(map, p, enterShrine)) {
       const next = { x: p.x + dx, z: p.z + dz }, ground = tileAt(map, next.x, next.z)
       if (!ground) continue
+      if (dx && dz && !map.buildings.some(b => b.id === map.site?.hovelId && containsTile(b, next))) continue
       const index = next.z * map.width + next.x
       if (visited.has(index)) continue
       if (index !== origin && !(TERRAIN[ground].passable || (logging && isWoods(ground)))) continue
@@ -57,6 +64,9 @@ export function settlementRoute(
   /** Give up after expanding this many tiles; callers with many fallbacks stay bounded. */
   limit = Infinity,
 ): TilePos[] | null {
+  // This search stores parents by integer tile index. Fractional interior poses
+  // must be joined to a tile route by the caller, never indexed into this grid.
+  if (![start.x, start.z, goal.x, goal.z].every(Number.isInteger)) return null
   if (!tileAt(map, start.x, start.z) || !tileAt(map, goal.x, goal.z)) return null
   const routeCost = walkingRouteQueries(map)?.edgeCost ?? footpathRouteCost
   const nearby = buildingSpatialQuery(buildings)
@@ -127,15 +137,16 @@ export function settlementRoute(
     }
     if (++expanded === 256 && isolatedGoal(map, buildings, origin, end, allowed, seen, generation, logging, enterShrine, seat)) return null
     if (expanded > limit) return null
-    for (const [dx, dz] of ROUTE_DIRS) {
+    for (const [dx, dz] of routeDirections(map, p, enterShrine)) {
       const next = { x: p.x + dx, z: p.z + dz }
       const terrain = tileAt(map, next.x, next.z)
       if (!terrain || !(TERRAIN[terrain].passable || (logging && isWoods(terrain)))) continue
+      if (dx && dz && !map.buildings.some(b => b.id === map.site?.hovelId && containsTile(b, next))) continue
       const seatAccess = current === origin || (next.x === goal.x && next.z === goal.z) ? seat : undefined
       if (!allowed(p, next, seatAccess)) continue
       const index = key(next)
       if (map.tiles[current] !== "bridge" && terrain !== "bridge" && !Number.isFinite(elevationStep(map.elevation, current, index))) continue
-      const cost = costs[current] + routeCost(map, p, next)
+      const cost = costs[current] + routeCost(map, p, next) * (dx && dz ? 2 : 1)
       if (seen[index] === generation && cost >= costs[index]) continue
       seen[index] = generation; costs[index] = cost
       parents[index] = current
