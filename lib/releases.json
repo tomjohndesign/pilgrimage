@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "f307b90bc1240deb335dfe4bc030828de3c3de76",
-  "releaseCount": 227,
+  "lastProcessedCommit": "acaa5f2ae245a681aa97c2e246e49ee71537611b",
+  "releaseCount": 228,
   "releases": [
+    {
+      "version": "0.0.242",
+      "title": "Release 0.0.242",
+      "summary": "Prevent shader recompilation when construction finishes (#261)",
+      "commit": "acaa5f2ae245a681aa97c2e246e49ee71537611b"
+    },
     {
       "version": "0.0.241",
       "title": "Release 0.0.241",
