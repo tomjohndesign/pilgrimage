@@ -13,7 +13,7 @@ export interface CharacterBatchEntry {
   /** Direct atlas/UV state for batched poses; ordinary source sprites may omit it. */
   color?: THREE.Texture
   uv?: THREE.Vector4
-  /** This source publishes its ready pose directly during the animation phase. */
+  /** This source publishes its ready pose and world transform during animation. */
   publishesPose?: boolean
   /** Immutable center/ID snapshot; omit for mutable editor/test sprites. */
   fixedAttributes?: Float32Array
@@ -184,11 +184,14 @@ export class CharacterBatch {
       // A normal billboard has no local offset/rotation. Its ready pose parent
       // supplies the anchor; only two scaled basis columns reach the shaders.
       // Retain the general path for editor transforms and manual matrices.
-      const compactParent = this.compact && parentsReady && parent && sprite.matrixAutoUpdate && sprite.matrixWorldAutoUpdate &&
+      const poseReady = parentsReady && entry.publishesPose === true
+      const compactParent = this.compact && poseReady && parent && sprite.matrixAutoUpdate && sprite.matrixWorldAutoUpdate &&
         position.x === 0 && position.y === 0 && position.z === 0 && q.x === 0 && q.y === 0 && q.z === 0 && q.w === 1
-      // Game figures have already resolved their pose root for ground contact.
+      // Published humanoid poses already resolved their world transforms.
+      // Transport still needs its pose root updated, especially when a parked
+      // horse switches back to the mounted sprite after a shrine visit.
       if (compactParent) direct++
-      else if (parentsReady) updateBillboardWorld(sprite)
+      else if (poseReady) updateBillboardWorld(sprite)
       else sprite.updateWorldMatrix(true, false)
       // Match Three's CPU model-view multiply before conversion to float. Doing
       // this in the vertex shader rounds differently at coincident pose depths.

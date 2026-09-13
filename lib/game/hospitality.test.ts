@@ -1151,21 +1151,77 @@ describe("houses, counters and posts", () => {
     expect(byHouse.size).toBe(2)
   }, 20000)
 
-  it.each([0, 4, 8])("parks vendor %s's transport before they keep an empty market stall", id => {
+  it.each(["unfinished", "occupied", "blocked"] as const)("passes a %s market without entering the enclave", state => {
+    const { map, traveler } = fixture()
+    const def = BUILD_CATALOG.find(b => b.id === "market")!
+    const stall = { ...def, id: "market-0", buildType: "market", x: 13, z: 6,
+      ...(state === "unfinished" ? { construction: { work: 0, required: 100 } } : {}),
+    }
+    map.buildings.push(stall)
+    if (state === "blocked") {
+      map.buildings.push({ id: "wall", label: "Wall", x: 12, z: 5, w: 7, d: 5, height: 1, color: "tan", roofColor: "brown" })
+    }
+    const vendor = { ...devout(traveler(8)), type: TRAVELER_TYPES.vendor, offset: 6 / 29 }
+    const people = state === "occupied" ? [vendor, traveler(1)] : [vendor]
+    const sim = createSim(people, map, [], holy), s = sim.travelers.get(8)!
+    sim.buildings = jobBuildings(map)
+    sim.shrineRenown = sim.balance.rules.drawCap
+    if (state === "occupied") {
+      Object.assign(sim.travelers.get(1)!, { employer: stall.id, activity: "posted", timer: 10000 })
+    }
+    s.timer = 10000
+    run(sim, people, map, 30, () => s.progress > 16)
+    expect(s.progress).toBeGreaterThan(16)
+    expect(s.employer).toBeNull()
+    expect(s.marketParking).toBeUndefined()
+    expect(s.shrineParking).toBeUndefined()
+    expect(s.visits).toBe(0)
+  })
+
+  it("keeps trading until the shrine keeper is ready, then visits and returns to the same stall", () => {
+    const { map, traveler } = fixture()
+    const def = BUILD_CATALOG.find(b => b.id === "market")!
+    map.buildings.push({ ...def, id: "market-0", buildType: "market", x: 13, z: 6 })
+    const vendor = { ...traveler(8), type: TRAVELER_TYPES.vendor, offset: 8 / 29 }
+    const sim = createSim([vendor], map, [], obscure), s = sim.travelers.get(8)!
+    sim.buildings = jobBuildings(map)
+    sim.shrineKeeperReady = false
+    run(sim, [vendor], map, 300, () => s.activity === "posted")
+    expect(s.activity).toBe("posted")
+    expect(s.visits).toBe(0)
+    const parked = structuredClone(s.marketParking!.pose)
+    sim.shrineKeeperReady = true
+    run(sim, [vendor], map, 300, () => s.activity === "visiting")
+    expect(s.activity).toBe("visiting")
+    run(sim, [vendor], map, 300, () => s.activity === "posted")
+    expect(s.activity).toBe("posted")
+    expect(s.visits).toBe(1)
+    expect(s.employer).toBe("market-0")
+    expect(s.marketParking!.pose).toEqual(parked)
+  })
+
+  it.each([[0, 1], [4, 1], [8, 1], [0, -1], [4, -1], [8, -1]] as const)("draws vendor %s from direction %s to park, visit the shrine and keep a market without a house", (id, direction) => {
     const { map } = fixture()
     const def = BUILD_CATALOG.find(b => b.id === "market")!
     const stall = { ...def, id: "market-0", buildType: "market", label: def.label, x: 13, z: 6, rotation: 0 as const }
     map.buildings.push(stall)
-    addHouse(map, { x: 6, z: 12 })
     const vendor: Traveler = {
-      id, name: "Vendor", type: TRAVELER_TYPES.vendor, direction: 1, pace: 1, offset: 8 / 29,
+      id, name: "Vendor", type: TRAVELER_TYPES.vendor, direction, pace: 1, offset: (10 - direction * 2) / 29,
       attributes: { happiness: 80, age: 30, gold: 60, piety: 0, status: 20, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: ["haggling"] },
     }
     const sim = createSim([vendor], map, [], obscure)
     sim.buildings = jobBuildings(map)
     const s = sim.travelers.get(id)!
-    Object.assign(s, { visits: 1, marketInterest: true })
+    run(sim, [vendor], map, 300, () => s.activity === "visiting")
+    expect(s.activity).toBe("visiting")
+    expect(s.marketParking?.walking).toBe(true)
+    expect(s.shrineParking).toBeUndefined()
+    expect(s.convoy).toBe(false)
+    const visitingCart = structuredClone(s.marketParking!.pose)
     run(sim, [vendor], map, 300, () => s.activity === "posted")
+    expect(s.visits).toBe(1)
+    expect(s.home).toBeNull()
+    expect(s.marketParking!.pose).toEqual(visitingCart)
     expect(s.employer).toBe(stall.id)
     expect(s.activity).toBe("posted")
     expect(s.convoy).toBe(false)
@@ -1190,7 +1246,7 @@ describe("houses, counters and posts", () => {
     const sim = createSim([vendor], map, [], obscure)
     sim.buildings = jobBuildings(map)
     const keeper = sim.travelers.get(vendor.id)!
-    Object.assign(keeper, { visits: 1, marketInterest: true })
+    Object.assign(keeper, { visits: 1 })
     run(sim, [vendor], map, 300, () => keeper.activity === "posted")
     expect(keeper.activity).toBe("posted")
 
