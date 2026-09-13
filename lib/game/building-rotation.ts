@@ -59,7 +59,7 @@ export function buildingFoldEntry(building: BuildingDef, inside = false): TilePo
 export function buildingApproach(map: Pick<GameMap,"site">,building: BuildingDef): TilePos | null {
   if(building.supportId || building.churchId) return null
   if(building.id === map.site?.hovelId) return map.site.door
-  if(["garden","cross","lumberCamp"].includes(building.buildType ?? "")) return null
+  if(["garden","cross","lumberCamp","well"].includes(building.buildType ?? "")) return null
   return buildingEntry(building)
 }
 
@@ -77,4 +77,9 @@ export function buildingApproaches(map: Pick<GameMap,"site">, building: Building
     return [front, buildingEntry(building, false, -1), ...benches]
   }
   return building.buildType === "sheep-pen" ? [front, buildingFoldEntry(building)] : [front]
+}
+
+/** Wells have no doorway: each side offers an independent outdoor approach. */
+export function wellApproaches(building: BuildingDef): TilePos[] {
+  return ([0, 1, 2, 3] as const).map(rotation => buildingEntry({ ...building, rotation }))
 }

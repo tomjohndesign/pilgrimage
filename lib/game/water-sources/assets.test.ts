@@ -12,7 +12,7 @@ describe("water-source access", () => {
       expect(size.x).toBeLessThanOrEqual(definition.footprint[0])
       expect(size.z).toBeLessThanOrEqual(definition.footprint[1])
       for (const point of definition.access) {
-        expect(Math.abs(point.stand[2])).toBeGreaterThan(definition.footprint[1] / 2)
+        expect(Math.abs(point.stand[0]) > definition.footprint[0] / 2 || Math.abs(point.stand[2]) > definition.footprint[1] / 2).toBe(true)
         expect(Math.abs(point.water[2])).toBeLessThan(definition.footprint[1] / 2)
       }
     } finally { model.dispose() }

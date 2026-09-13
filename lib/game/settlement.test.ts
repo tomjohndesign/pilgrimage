@@ -616,3 +616,16 @@ it("buys the same roof-snapped rotation shown by the placement preview", async()
   expect(result.error).toBeNull()
   expect(result.settlement.structures[0]).toMatchObject({...at,rotation,w:2,d:2})
 })
+
+it("places a well without reserving a front door, but preserves a reachable side", () => {
+  const map = testMap(), well = BUILD_CATALOG.find(b => b.id === "well")!
+  const at = { x: 19, z: 16 }
+  for (let x = at.x; x < at.x + well.w; x++) map.tiles[(at.z + well.d) * map.width + x] = "water"
+  expect(placementError(map, well, at)).toBeNull()
+  expect(buildingApproaches(map, { ...well, ...at, buildType: "well" })).toEqual([])
+  const blocked = { ...map, tiles: [...map.tiles] }
+  for (let z = at.z - 1; z <= at.z + well.d; z++) for (let x = at.x - 1; x <= at.x + well.w; x++) {
+    if (z === at.z - 1 || z === at.z + well.d || x === at.x - 1 || x === at.x + well.w) blocked.tiles[z * map.width + x] = "water"
+  }
+  expect(placementError(blocked, well, at)).toMatch(/side of the well/)
+})

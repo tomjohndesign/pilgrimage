@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { createBenchmarkCity, benchmarkCity as cityFixture, type CityBenchmarkMode } from "@/lib/game/city-benchmark"
+import { syncBuildingFootpaths } from "@/lib/game/building-footpaths"
 import { createFootpaths } from "@/lib/game/footpaths"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
@@ -281,7 +282,12 @@ export function GameShell({
   const footpaths = useMemo(() => createFootpaths(baseMap ?? undefined), [baseMap])
   useEffect(() => { footpaths.paved = ROAD_TIERS[settings.road]?.paved ?? false }, [footpaths, settings.road])
   // Keep one live map for the canvas and HUD readers, including roadside preaching.
-  const map = useMemo(() => economy.map ? { ...economy.map, footpaths } : null, [economy.map, footpaths])
+  const map = useMemo(() => {
+    if (!economy.map) return null
+    const connected = { ...economy.map, footpaths }
+    syncBuildingFootpaths(connected)
+    return connected
+  }, [economy.map, footpaths])
   const travelers = useMemo(() => map ? [...roadTravelers, ...townResidents(map).map(resident => resident.traveler),
       ...(JOB_PREVIEW ? previewResidents(map).map(resident => resident.traveler) : [])] : roadTravelers,
     [roadTravelers, map])

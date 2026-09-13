@@ -183,7 +183,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "well", label: "Timber well", category: "scenery",
-    description: "Free drinking water for thirsty walkers and settlers. One person draws water at a time; keep its front approach clear.",
+    description: "Free drinking water for thirsty walkers and settlers. One person draws water at a time, approaching from any clear side.",
     cost: { gold: 20, wood: 15 }, renown: 0, requiredRenown: 0,
     income: { gold: 0, wood: 0 }, w: 2, d: 2, height: .58, color: "#877152", roofColor: "#95805c",
   },
