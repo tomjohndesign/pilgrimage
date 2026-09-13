@@ -1,5 +1,6 @@
 import { fordSpeedAt } from "./map/fords"
-import { ensurePartyTransport, stepPartyPacks, seatParty, parkParty, movePartyCart, turnPartyCart } from "./transport/party"
+import { ensurePartyTransport, stepPartyPacks, stepPackParking, seatParty, parkParty, parkPartyPacks, movePartyCart, turnPartyCart } from "./transport/party"
+import { currentStanding, standingCentre, type StandingCache } from "./horse-standing"
 import { seatPoint } from "./transport/party-assets"
 import { animalWalkSpeed } from "./transport/assets"
 import { stepDevotion, stepHappiness, RELIC_HAPPINESS_GAIN, HAPPINESS_THRESHOLD, TAVERN_HAPPINESS_GAIN } from "./wellbeing"
@@ -25,7 +26,7 @@ import { cartRoadDiversion } from "./transport/road-diversion"
 import { recoverCart } from "./transport/recovery"
 import { blockedRoad, findRoadDiversion, takeRoadShortcut, retireBypassedRoad, exploresRoadShortcut, type WalkingShortcut } from "./walking-shortcuts"
 import { createFootpaths, HEAVY_PATH_WEAR, recordWalkingPath, regrowFootpaths, type Footpaths } from "./footpaths"
-import { knightMounted, knightLoadout, knightTravelSpeed, knightWalkStride, type HorseRest } from "./knights"
+import { knightMounted, knightLoadout, knightTravelSpeed, knightWalkStride, squireFollowGap, type HorseRest } from "./knights"
 import { DEFAULT_WALK_SPEED, DEFAULT_WALK_CADENCE, personWalkStride } from "./base-person/gait"
 import { builderRate } from "./build-labour"
 import { assignBuildingTask, buildingEntrance, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
@@ -465,6 +466,8 @@ export interface SimState {
   focus?: SimFocus
   wildlife?: WildlifeWorld | null
   footpaths: Footpaths
+  /** Where visitors leave their animals, found as the game is played; see {@link currentStanding}. */
+  standing?: StandingCache
   procession?: RelicProcession | null
   shrineQueueSequence: number
   /** Scene publishes whether the keeper is at his station. Pure simulations start staffed. */
@@ -743,7 +746,10 @@ function shrineWorldPoint(map: GameMap, s: SimTraveler): WorldPoint {
   const diverted = route[0].x !== site.branch[0].x || route[0].z !== site.branch[0].z
   const lane = diverted ? 0 : s.lane * laneBlend
   const point = routeWorldPoint(map, route, s.branchProgress, lane)
-  if (s.branchProgress < 1) {
+  // A visit begun beside an animal at the horse-standing or at a wagon's seat
+  // starts and ends there; only a route from the road joins the road lane.
+  const fromRoad = !diverted || ["path", "bridge", "ford"].includes(tileAt(map, route[0].x, route[0].z) ?? "")
+  if (s.branchProgress < 1 && fromRoad) {
     const start = routeWorldPoint(map, route, 0, lane)
     const roadLane = s.activity === "toRelic" ? s.branchEntryLane : s.direction * s.laneOffset
     const road = s.shrineOrigin ?? roadWorldPoint(map, s.progress, roadLane)
@@ -784,8 +790,10 @@ function parkingContext(sim: SimState, s: SimTraveler, scale: number, traffic = 
       add(convoyBounds(other.cartPose, cartLoadout(other.id).puller, scale))
   }
   for (const party of sim.parties.values()) {
-    if (party.id === s.partyId || !party.transport) continue
+    if (party.id === s.partyId) continue
+    for (const pack of party.packs ?? []) if (pack.parking && pack.phase) add(convoyBounds(pack.parking.parked, pack.kind, scale))
     const cart = party.transport
+    if (!cart) continue
     if (traffic || cart.phase === "parked" || cart.phase === "boarding") add(convoyBounds(cart.pose, cart.animal, scale))
   }
   return { trees: trees.sort((a, b) => a.index - b.index).map(entry => entry.tree), obstacles, people }
@@ -1663,6 +1671,17 @@ function leaveGathering(s: SimTraveler, map: GameMap, speed: number, dt: number)
 // Identities keyed by ID, reused across steps while the cast is unchanged.
 const identityIndexes = new WeakMap<readonly Traveler[], Map<number, Traveler>>()
 const syncedCasts = new WeakSet<readonly Traveler[]>()
+/** Knights attended by a squire, read once per cast; the cast only grows, so
+ * the set is rebuilt when its length changes. */
+const squireCasts = new WeakMap<readonly Traveler[], { length: number; ids: Set<number> }>()
+function squireKnights(travelers: readonly Traveler[]): ReadonlySet<number> {
+  let cached = squireCasts.get(travelers)
+  if (!cached || cached.length !== travelers.length) {
+    cached = { length: travelers.length, ids: new Set(travelers.filter(t => t.type.id === "knight" && knightLoadout(t.id).squire).map(t => t.id)) }
+    squireCasts.set(travelers, cached)
+  }
+  return cached.ids
+}
 function travelerIdentities(travelers: readonly Traveler[]): Map<number, Traveler> {
   let index = identityIndexes.get(travelers)
   if (!index) { index = new Map(travelers.map(t => [t.id, t])); identityIndexes.set(travelers, index) }
@@ -1742,6 +1761,19 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
       ensurePartyTransport(party, members, map, characterScale)
       // A wagon or pack animal changes everyone's place; walk into the new formation.
       if (party.transport || party.packs?.length) party.formed = false
+    }
+    // Pack animals on their way to or from the standing hold the whole company:
+    // their handlers walk the lead, everyone else waits where they stand.
+    if (party.packs?.some(p => p.phase === "parking" || p.phase === "leaving")) {
+      for (const s of members) hold(s)
+      party.reason = party.packs.some(p => p.phase === "leaving") ? "Leading the animals back to the road" : "Leading the animals to the standing"
+      party.elapsed = 0
+      // Led animals wear the ground like a rider's horse: a path to the standing emerges from use.
+      const wore = (from: { x: number; z: number }, to: { x: number; z: number }) => recordWalkingPath(sim.footpaths, map, from, to, HEAVY_PATH_WEAR)
+      if (stepPackParking(party, sim.travelers, map, characterScale, dt, wore) && party.packs.every(p => !p.phase) && (!party.transport || party.transport.phase === "road")) {
+        regroupParty(party, members, length, seconds, characterScale)
+      }
+      continue
     }
     const cart = party.transport
     if (cart) {
@@ -1866,7 +1898,12 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
         party.stage = "traveling"; party.cooldown = 45; party.elapsed = 0
         party.reason = "Regrouping after the visit"
         for (const s of members) { s.visitCooldown = 45; s.partyWaiting = false }
-        regroupParty(party, members.filter(s => s.partyId === party.id), length, seconds, characterScale)
+        // The handlers fetch the animals from the standing before the column forms again.
+        let leaving = false
+        for (const pack of party.packs ?? []) if (pack.phase === "parked" && pack.parking) {
+          pack.phase = "leaving"; pack.parking.walking = false; pack.parking.distance = 0; leaving = true
+        }
+        if (!leaving) regroupParty(party, members.filter(s => s.partyId === party.id), length, seconds, characterScale)
         continue
       } else {
         party.reason = done ? "Walking back to the road" : party.visitPending.length ? "Waiting for room at the enclave" : "Waiting for companions to finish visiting"
@@ -1922,11 +1959,21 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
           const occupied = [...sim.parties.values()].filter(p => p.id !== party.id && p.transport).map(p => p.transport!.pose)
           const driver = members.find(s => s.id === cart.seats[0]) ?? head
           // Companions walking behind the wagon are not obstacles to its own parking.
-          const context = parkingContext(sim, driver, characterScale)
-          context.people = context.people?.filter(person => !party.members.includes((person as { id?: number }).id ?? -1))
-          if (!parkParty(party, map, characterScale, context, occupied, "visit")) party.cooldown = 8
+          const context = parkingContext(sim, driver, characterScale), standing = currentStanding(sim, map)
+          const yard = standing ? parkingContext(sim, driver, characterScale, false, standingCentre(map, standing)) : context
+          for (const c of [context, yard]) c.people = c.people?.filter(person => !party.members.includes((person as { id?: number }).id ?? -1))
+          if (!parkParty(party, map, characterScale, context, occupied, "visit", standing, yard)) party.cooldown = 8
           for (const s of members) hold(s)
           continue
+        }
+        // The pack animals are led to the standing first; a company that can
+        // find no stand for them keeps to the road, as a wagon does.
+        if (party.packs?.length) {
+          const occupied = [...sim.travelers.values()].flatMap(other => other.shrineParking ? [other.shrineParking.parked] : [])
+          const context = parkingContext(sim, head, characterScale), standing = currentStanding(sim, map)
+          const yard = standing ? parkingContext(sim, head, characterScale, false, standingCentre(map, standing)) : context
+          for (const c of [context, yard]) c.people = c.people?.filter(person => !party.members.includes((person as { id?: number }).id ?? -1))
+          if (!parkPartyPacks(party, map, characterScale, context, occupied, standing, yard)) { party.cooldown = 8; for (const s of members) hold(s); continue }
         }
         party.stage = "visiting"; party.elapsed = 0; party.retry = 0
         party.visitPending = [...party.members]; party.visitStarted = []
@@ -2070,10 +2117,12 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
     const puller = isVendor ? cartLoadout(s.id).puller : "horse"
     const wheelbase = isVendor ? -cartOffset(puller) * characterScale : 0
     const occupied = [...sim.travelers.values()].flatMap(other => other.shrineParking ? [other.shrineParking.parked] : [])
-    // Ride up to the shrine and leave the horse in the field beside it. Only
-    // when that field is full does a rider settle for the verge at the fork.
-    const door = { x: tileToWorldX(map, map.site!.door.x), z: tileToWorldZ(map, map.site!.door.z) }
-    parking = enclaveParking(map, parkingProgress, direction, wheelbase, puller, characterScale, occupied, parkingContext(sim, s, characterScale, false, door))
+    // Ride up to the horse-standing below the shrine and leave the horse or
+    // wagon beside its lane. Only when the standing is full does a rider settle
+    // for the verge at the fork.
+    const standing = currentStanding(sim, map)
+    parking = (standing && enclaveParking(map, standing, parkingProgress, direction, wheelbase, puller, characterScale, occupied,
+      parkingContext(sim, s, characterScale, false, standingCentre(map, standing))))
       ?? shrineParking(map, parkingProgress, direction, wheelbase, puller, characterScale, occupied, parkingContext(sim, s, characterScale))
     // From the horse or wagon, walk to the tail of the line on the track and
     // follow the shared approach with everyone else, instead of cutting across
@@ -2184,11 +2233,14 @@ export function stepSim(
   const queueSpacing = relicQueueSpacing(characterScale)
   // Everyone holding a place for the relic, read once: where they stand relative
   // to the church door decides who lines up behind whom.
+  // A knight's squire stands behind him in the line, so the next person keeps
+  // a squire's step further back.
+  const squires = squireKnights(travelers)
   const relicLine = [...sim.travelers.values()].flatMap(other => {
     if (!isRelicViewingSeat(other.shrineSeat) || !other.shrineRoute) return []
     if (other.activity !== "toRelic" && other.activity !== "visiting") return []
     other.shrineDoor ??= shrineDoorIndex(map, other.shrineRoute)
-    return [{ s: other, remaining: other.shrineDoor - other.branchProgress }]
+    return [{ s: other, remaining: other.shrineDoor - other.branchProgress, space: queueSpacing + (squires.has(other.id) ? squireFollowGap(characterScale) : 0) }]
   })
   const listeners = new Map<number, number>()
   for (const state of sim.travelers.values()) if (state.musicVisit) {
@@ -2398,13 +2450,13 @@ export function stepSim(
           // their horse.
           const door = s.shrineDoor ?? shrineDoorIndex(map, branch)
           const remaining = door - s.branchProgress, order = s.shrineQueueOrder ?? 0
-          let ahead = -Infinity
+          let ahead = -Infinity, space = queueSpacing
           for (const other of relicLine) {
             if (other.s === s) continue
             const closer = other.remaining < remaining || (other.remaining === remaining && (other.s.shrineQueueOrder ?? 0) < order)
-            if (closer) ahead = Math.max(ahead, other.remaining)
+            if (closer && other.remaining > ahead) { ahead = other.remaining; space = other.space }
           }
-          if (ahead > -Infinity) limit = Math.min(limit, door - ahead - queueSpacing / routeStep(branch, door - ahead))
+          if (ahead > -Infinity) limit = Math.min(limit, door - ahead - space / routeStep(branch, door - ahead))
         }
         const previous = s.branchProgress
         s.branchProgress = inbound ? Math.max(previous, Math.min(Math.max(0, limit), previous + worldSpeed * dt))

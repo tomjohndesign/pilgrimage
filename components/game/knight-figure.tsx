@@ -8,7 +8,7 @@ import { useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import type { GameMap } from "@/lib/game/map/types"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
-import { followKnight, knightMounted, type TrailPoint, type HorseRest } from "@/lib/game/knights"
+import { followKnight, knightMounted, squireFollowGap, type TrailPoint, type HorseRest } from "@/lib/game/knights"
 import { knightVisual, squireVisual } from "@/lib/game/knight/visual"
 import type { TravelerAppearance } from "@/lib/game/base-person/population"
 import type { WalkTuning } from "@/lib/game/motion"
@@ -16,7 +16,8 @@ import { CharacterSprite } from "./character-sprite"
 import { TransportSprite } from "./transport-sprite"
 import type { FigureClickHandler } from "./traveler-figure"
 
-/** The mount and attendant remain outdoors while their knight visits the shrine. */
+/** The mount remains outdoors while its knight visits the shrine; the squire is
+ * one of the company and goes wherever the knight walks, mounted or not. */
 export function KnightFigure({ map, appearance, coat, squire = false, characterScale = 1, characterFps, walkTuning, selected, outlineColor, onClick }: {
   map?: GameMap; appearance?: TravelerAppearance; coat?: string; squire?: boolean; characterScale?: number
   characterFps?: number; walkTuning?: WalkTuning; selected?: boolean; outlineColor?: [number, number, number]; onClick?: FigureClickHandler
@@ -48,7 +49,7 @@ export function KnightFigure({ map, appearance, coat, squire = false, characterS
     horse.current.position.copy(parent.worldToLocal(vector.set(outside.x, map ? walkingSurface(map, outside.x, outside.z).height : outside.y, outside.z)))
     horse.current.userData = { ...data, tether: rest.current?.tree, heading: outside.heading, activity: "idle", moving: false, distance: 0, motionReset: reset || switched, hitched: false, grazing: false }
     if (attendant.current) {
-      const following = followKnight(trail.current, outside, 0.75 * characterScale, reset)
+      const following = followKnight(trail.current, point, squireFollowGap(characterScale), reset)
       const before = lastSquire.current
       const distance = before && !reset && !paused ? Math.hypot(following.x - before.x, following.z - before.z) : 0
       attendant.current.position.copy(parent.worldToLocal(vector.set(following.x, map ? walkingSurface(map, following.x, following.z).height : point.y, following.z)))

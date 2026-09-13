@@ -8,22 +8,24 @@ import { travelerAppearance } from "./base-person/population"
 import { TRAVELER_TYPES, type Traveler } from "./travelers"
 import { animalWalkSpeed } from "./transport/assets"
 import { tileAt, worldToTileX, worldToTileZ, tileToWorldX, tileToWorldZ } from "./map/types"
-import { ENCLAVE_FIELD_RADIUS } from "./transport/enclave-parking"
+import { findHorseStanding, standingGround } from "./horse-standing"
 import type { GameMap } from "./map/types"
 
 function fixture(direction: 1 | -1) {
-  const map: GameMap = { width: 30, depth: 20, seed: 1, tiles: Array(600).fill("grass"),
-    road: Array.from({ length: 30 }, (_, x) => ({ x, z: 14 })),
+  const map: GameMap = { width: 30, depth: 24, seed: 1, tiles: Array(720).fill("grass"),
+    road: Array.from({ length: 30 }, (_, x) => ({ x, z: 18 })),
     buildings: [{ id: "shrine", x: 13, z: 5, w: 3, d: 5, height: 2, label: "Shrine", color: "", roofColor: "" }],
-    site: { hovelId: "shrine", door: { x: 14, z: 10 }, junction: 14, branch: Array.from({ length: 5 }, (_, i) => ({ x: 14, z: 14 - i })) } }
+    site: { hovelId: "shrine", door: { x: 14, z: 10 }, junction: 14, branch: Array.from({ length: 9 }, (_, i) => ({ x: 14, z: 18 - i })) } }
   for (const p of [...map.road!, ...map.site!.branch]) map.tiles[p.z * map.width + p.x] = "path"
   const t: Traveler = { id: 0, type: TRAVELER_TYPES.knight, name: "Knight", pace: 1, direction, offset: (14 - direction * 0.03) / 29,
     attributes: { happiness: 80, gold: 100, piety: 100, hunger: 100, thirst: 100, stamina: 100, status: 100, jobless: false, skills: [], age: 30 } }
   const sim = createSim([t], map); sim.shrineRenown = 10000
-  // Tether trees on either side of the field beside the shrine, clear of the
-  // track, and a pair on the far verge of the road for stops at the fork.
-  sim.trees = [1, -1].flatMap(side => [{ x: tileToWorldX(map, 14 + side * 4), y: 0.2, z: tileToWorldZ(map, 8), species: "oak" as const },
-    { x: tileToWorldX(map, 14 + side * 2), y: 0.2, z: tileToWorldZ(map, 17), species: "oak" as const }])
+  // Tether trees two tiles off the standing's lane on either side, clear of
+  // its verges, and a pair on the far verge of the road for stops at the fork.
+  const standing = findHorseStanding(map)!
+  const lane = standing.lane, u = { x: lane[1].x - lane[0].x, z: lane[1].z - lane[0].z }
+  sim.trees = [...[1, -1].map(side => ({ x: tileToWorldX(map, lane[2].x + u.z * 2 * side), y: 0.2, z: tileToWorldZ(map, lane[2].z - u.x * 2 * side), species: "oak" as const })),
+    ...[1, -1].map(side => ({ x: tileToWorldX(map, 14 + side * 2), y: 0.2, z: tileToWorldZ(map, 21), species: "oak" as const }))]
   return { map, t, sim, s: sim.travelers.get(0)! }
 }
 
@@ -43,9 +45,10 @@ describe("mounted knight journeys", () => {
     expect(s.branchProgress).toBe(0)
     expect(s.horseRest?.tree).toBeDefined()
     expect(tileAt(map, worldToTileX(map, s.horseRest!.x), worldToTileZ(map, s.horseRest!.z))).toBe("grass")
-    // The horse waits in the field beside the shrine, not on the verge of the road.
-    expect(Math.hypot(s.horseRest!.x - tileToWorldX(map, 14), s.horseRest!.z - tileToWorldZ(map, 10))).toBeLessThanOrEqual(ENCLAVE_FIELD_RADIUS)
-    expect(Math.abs(s.horseRest!.z - tileToWorldZ(map, 14))).toBeGreaterThan(2)
+    // The horse waits beside the lane of the horse-standing, not on the verge of the road.
+    const ground = standingGround(findHorseStanding(map)!), horseTile = { x: worldToTileX(map, s.horseRest!.x), z: worldToTileZ(map, s.horseRest!.z) }
+    expect(ground.some(p => p.x === horseTile.x && p.z === horseTile.z)).toBe(true)
+    expect(Math.abs(s.horseRest!.z - tileToWorldZ(map, 18))).toBeGreaterThanOrEqual(2)
     const horse = { ...s.horseRest! }
     expect(horse.x).toBeCloseTo(s.x); expect(horse.z).toBeCloseTo(s.z)
     let prayed = false, walkedOut = false
@@ -69,9 +72,9 @@ describe("mounted knight journeys", () => {
 
   it("dismounts immediately on a short approach beside the road", () => {
     const { map, t, sim, s } = fixture(1)
-    map.buildings[0].z = 8
-    map.site!.door = { x: 14, z: 13 }
-    map.site!.branch = [{ x: 14, z: 14 }, map.site!.door]
+    map.buildings[0].z = 12
+    map.site!.door = { x: 14, z: 17 }
+    map.site!.branch = [{ x: 14, z: 18 }, map.site!.door]
     for (let i = 0; i < 3000 && !s.horseRest; i++) stepSim(sim, [t], map, DEFAULT_WALK_SPEED, 0.1)
     expect(s.activity).toBe("toRelic")
     expect(s.horseRest?.progress).toBe(0)

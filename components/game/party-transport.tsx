@@ -16,6 +16,7 @@ import { encodeObjectId, travelerObjectId } from "@/lib/game/render/outline"
 import { selectElement, markPerson } from "@/lib/game/selection"
 import { TransportSprite } from "./transport-sprite"
 import { CartReins } from "./cart-reins"
+import { AnimalTether } from "./animal-tether"
 import { CharacterHitTarget } from "./character-selection"
 
 /** Additional layers share the existing character renderer, depth and individual
@@ -83,7 +84,11 @@ function PartyFigure({ handlers, party, sim, map, travelers, characterScale }: {
     }
     party.packs?.forEach((pack, i) => {
       place(packs.current[i], pack.pose.hitch, pack.pose.heading, pack.distance > 1e-7)
-      if (packs.current[i]) packs.current[i]!.userData.grazing = false
+      const group = packs.current[i]
+      if (!group) return
+      group.userData.grazing = false
+      // Tied to a tree within reach while it stands beside the lane of the horse-standing.
+      group.userData.tether = pack.phase === "parked" ? pack.parking?.tree : undefined
     })
   }, -2.8)
   return <group name="party-transport">
@@ -110,6 +115,9 @@ function PartyFigure({ handlers, party, sim, map, travelers, characterScale }: {
         selected={selection?.kind === "traveler" && selection.id === pack.handler}
         outlineColor={color(pack.handler)} onClick={click(pack.handler)} />
     </group>)}
+    {party.packs?.map((pack, i) => <PackTether key={`tether:${pack.kind}:${i}`} animalRefs={packs} index={i} kind={pack.kind}
+      characterScale={characterScale} selected={selection?.kind === "traveler" && selection.id === pack.handler}
+      outlineColor={color(pack.handler)} onClick={click(pack.handler)} />)}
     {party.packs?.map((pack, index) => {
       const person = travelers[indices.get(pack.handler)!]
       return person && <PackLead key={`lead:${index}:${pack.handler}`} animalRefs={packs} index={index}
@@ -119,6 +127,14 @@ function PartyFigure({ handlers, party, sim, map, travelers, characterScale }: {
         selected={selection?.kind === "traveler" && selection.id === pack.handler} onClick={click(pack.handler)} />
     })}
   </group>
+}
+
+function PackTether({ animalRefs, index, kind, ...props }: {
+  animalRefs: RefObject<Array<THREE.Group | null>>; index: number; kind: PackAnimal; characterScale: number
+  outlineColor: [number, number, number]; selected: boolean; onClick: Parameters<typeof AnimalTether>[0]["onClick"]
+}) {
+  const animal = useMemo(() => ({ get current() { return animalRefs.current[index] ?? null } }), [animalRefs, index])
+  return <AnimalTether {...props} animal={animal} kind={kind} horseVariant="common" />
 }
 
 function PackLead({ animalRefs, index, handlerRefs, handlerIndex, calling, variant, ...props }: {
