@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "4fa29b76a0a4a904a36709af3188becfd6620e5a",
-  "releaseCount": 233,
+  "lastProcessedCommit": "57258f6b668062d4142642310f363fde01bb17eb",
+  "releaseCount": 234,
   "releases": [
+    {
+      "version": "0.0.248",
+      "title": "Release 0.0.248",
+      "summary": "Connect path ends to building entrances (#267)",
+      "commit": "57258f6b668062d4142642310f363fde01bb17eb"
+    },
     {
       "version": "0.0.247",
       "title": "Release 0.0.247",
