@@ -1,6 +1,7 @@
 "use client"
 
 import { CharacterMapContext } from "./character-map-context"
+import { clearDemolishedBuildings } from "@/lib/game/demolition"
 import { SceneAssetBoundary } from "./scene-assets"
 
 import { travelerWeariness } from "@/lib/game/traveler-weariness"
@@ -191,6 +192,15 @@ export const Travelers = memo(function Travelers({
   }, [sim, travelers, map, relic, restore, trees])
 
   const camps = useMemo(() => jobBuildings(map, true), [map])
+  const previousBuildings = useRef(map.buildings)
+  useEffect(() => {
+    const present = new Set(map.buildings.map(b => b.id))
+    const removed = new Set(previousBuildings.current.filter(b => !present.has(b.id)).map(b => b.id))
+    previousBuildings.current = map.buildings
+    if (!removed.size) return
+    clearDemolishedBuildings(sim, removed, map)
+    useBuildStore.getState().syncResources(sim, travelers)
+  }, [map, sim, travelers])
 
   // Publish the running sim so the HUD's traveler panel can poll live stats.
   useEffect(() => {

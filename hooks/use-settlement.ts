@@ -8,7 +8,7 @@ import type { GameMap, TilePos } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
 import { useBuildStore } from "@/lib/game/build-store"
-import { upgradeChurch, claimTownBuildings, settlementMap, createSettlement, purchaseStructure, creditTimber, creditAdmission, creditTrade, payWages, syncWages, syncTimberSpending, settlementRenown, grantResources, grantRenown, completeConstruction, type Resources } from "@/lib/game/settlement"
+import { upgradeChurch, claimTownBuildings, settlementMap, createSettlement, purchaseStructure, demolishStructure, creditTimber, creditAdmission, creditTrade, payWages, syncWages, syncTimberSpending, settlementRenown, grantResources, grantRenown, completeConstruction, type Resources } from "@/lib/game/settlement"
 
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { BUILDING_PREVIEW, buildingPreviewBalance, buildingPreviewSettlement } from "@/lib/game/building-preview"
@@ -74,7 +74,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
       world
         ? settlementMap(world, session.settlement)
         : null,
-    [world, session.settlement.elevation, session.settlement.structures, session.settlement.claimedBuildings, session.settlement.church],
+    [world, session.settlement.elevation, session.settlement.structures, session.settlement.claimedBuildings, session.settlement.demolishedBuildings, session.settlement.church],
   )
 
   useEffect(() => {
@@ -135,6 +135,13 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
 
   const chooseBuild = useCallback((buildType: string | null) =>
     setSession((current) => ({ ...current, buildType, message: "" })), [])
+  const demolish = (id: string) => setSession(current => {
+    if (!world || current.world !== world) return current
+    const settlement = demolishStructure(current.settlement, world, id)
+    return settlement === current.settlement ? current : {
+      ...current, settlement, buildType: null, message: "Building demolished.",
+    }
+  })
   const place = (at: TilePos) => {
     const rotation = useBuildStore.getState().rotation
     // Placement renders several nearby scenery blocks. Let React yield between
@@ -192,6 +199,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     message: session.message,
     chooseBuild,
     place,
+    demolish,
     grant,
     bless,
   }

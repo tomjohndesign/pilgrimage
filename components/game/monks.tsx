@@ -115,7 +115,8 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       destination: "home", pause: 0 })
   }
   for (let index = 0; index < world.states.length; index++) {
-    const monk = monks[index], bed = monk.home ? { home: monk.home, slot: monk.bedSlot ?? 0 } : beds[index]
+    const monk = monks[index], bed = monk.home && map.buildings.some(b => b.id === monk.home)
+      ? { home: monk.home, slot: monk.bedSlot ?? 0 } : beds[index]
     world.states[index].home = bed?.home
     world.states[index].bedSlot = bed?.slot
   }
@@ -129,6 +130,13 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
   // resting spots a new footprint now blocks get re-planned.
   useEffect(() => {
     for (const state of world.states) {
+      if (state.buildingTask && !map.buildings.some(b => b.id === state.buildingTask!.buildingId)) {
+        state.buildingTask = undefined
+        state.route = []
+        state.activity = "resting"
+        state.destination = "home"
+        state.pause = 0
+      }
       if (state.buildingTask || state.flight || state.preachingTask) continue
       replanMonkAfterMapChange(state, map, navigation)
     }

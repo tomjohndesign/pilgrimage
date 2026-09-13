@@ -78,7 +78,8 @@ export const useBuildStore = create<BuildState>((set) => ({
     })
     return {
       simulation: sim,
-      joinedMonks: s.simulation === sim && s.joinedMonks.length === sim.joinedMonks.size ? s.joinedMonks : [...sim.joinedMonks.values()],
+      joinedMonks: s.simulation === sim && s.joinedMonks.length === sim.joinedMonks.size
+        && s.joinedMonks.every(monk => sim.joinedMonks.get(monk.id) === monk) ? s.joinedMonks : [...sim.joinedMonks.values()],
       wood: sim.wood,
       shrineGold: sim.shrineGold,
       tradeGold: sim.tradeGold,
