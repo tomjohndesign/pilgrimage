@@ -1,4 +1,5 @@
 import { layoutHand } from "./building-layout"
+import { churchWingGates } from "./church-additions"
 import { crossroadIslandAt } from "./map/crossroads"
 import { tavernFurnitureClear } from "./tavern-layout"
 import { sheepPenLayout } from "./workshop-layout"
@@ -12,7 +13,7 @@ export function containsTile(building: BuildingDef, p: TilePos): boolean {
   return p.x >= building.x - .5 && p.x < building.x + building.w - .5 && p.z >= building.z - .5 && p.z < building.z + building.d - .5
 }
 
-/** The only gate faces the founding approach; +Z is the standalone default. */
+/** The exterior gate faces the founding approach; +Z is the standalone default. */
 export function shrineGates(building: BuildingDef, door?: TilePos): Array<{ outside: TilePos; inside: TilePos }> {
   const x = building.x + Math.floor(building.w / 2), z = building.z + Math.floor(building.d / 2)
   const gates = [
@@ -94,7 +95,7 @@ export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDe
     const onPassage = (p: TilePos, gate: { inside: TilePos; outside: TilePos }) =>
       p.x >= Math.min(gate.inside.x, gate.outside.x) && p.x <= Math.max(gate.inside.x, gate.outside.x)
       && p.z >= Math.min(gate.inside.z, gate.outside.z) && p.z <= Math.max(gate.inside.z, gate.outside.z)
-    if (!shrineGates(building, map.site?.door).some(g => onPassage(from, g) && onPassage(to, g))) return false
+    if (![...shrineGates(building, map.site?.door), ...churchWingGates(map)].some(g => onPassage(from, g) && onPassage(to, g))) return false
   }
   return true
 }

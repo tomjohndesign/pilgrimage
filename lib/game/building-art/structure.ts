@@ -9,10 +9,12 @@ import { earlyBuildingParts, type SettlementBuildingType } from "./early-geometr
 import { EARLY_BUILDINGS, earlyBuildingRecipe } from "./style"
 import { INN_OVERHANG, singlePlaneRoofRise } from "./dimensions"
 import type { RoofJoin } from "./roof-joins"
+import type { ChurchWing } from "../church-additions"
 
 export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor" | "layoutSeed" | "hearthZ" | "fireplace" | "floorHeight" | "supportId" | "tavernFlue"> & {
   /** A market stall shows its cloth and wares only while a keeper works it; previews assume one. */
   stocked?: boolean
+  churchWing?: ChurchWing
 }
 
 const SETTLEMENT_TYPES: readonly SettlementBuildingType[] = [
@@ -30,7 +32,7 @@ export function structureParts(building: StructureAppearance, roofJoins: RoofJoi
   if (preset) {
     const parts = building.buildType === "inn" && building.supportId
       ? innParts(building.w,building.d,building.height,false,17+(building.layoutSeed ?? 0),true,building.tavernFlue)
-      : earlyBuildingParts({ ...earlyBuildingRecipe(preset.id), layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins, stocked: building.stocked, width: building.w, depth: building.d, wallHeight: building.height,
+      : earlyBuildingParts({ ...earlyBuildingRecipe(preset.id), churchWing: building.churchWing, layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins, stocked: building.stocked, width: building.w, depth: building.d, wallHeight: building.height,
       roofRise: preset.id === "enclosure" ? 0 : singlePlaneRoofRise(building.d) })
     if (building.buildType === "inn" && building.supportId && building.floorHeight) {
       // The ladder opens into the right aisle beside the middle row of beds.

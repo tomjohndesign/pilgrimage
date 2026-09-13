@@ -23,6 +23,29 @@ const inside = (map: GameMap, p: { x: number; z: number }, b: BuildingDef) =>
   Math.floor(p.x + map.width / 2) === b.x && Math.floor(p.z + map.depth / 2) === b.z
 
 describe("replanning brothers after the map changes", () => {
+  it("lets exhausted founders recover without beds and resume construction", () => {
+    const map = shrineMap()
+    const monk = { ...createMonkRoutine(monkWander(map), 0, makeRng(1)), ...createMonkNeeds(0),
+      ...spot(map, 5, 7), stamina: 0 }
+    for (let i = 0; i < 100; i++) stepMonkWork(monk, map, 1, 1)
+    expect(monk.stamina).toBeGreaterThan(90)
+    map.buildings.push(site("residence", 1, 5))
+    for (let i = 0; i < 4; i++) stepMonkWork(monk, map, 1, .5)
+    expect(monk.buildingTask).toMatchObject({ purpose: "build", buildingId: "residence" })
+  })
+
+  it("moves outdoor rest into a residence once its beds are completed", () => {
+    const map = shrineMap()
+    const monk = { ...createMonkRoutine(monkWander(map), 0, makeRng(1)), ...createMonkNeeds(0),
+      ...spot(map, 5, 7), stamina: 10 }
+    stepMonkWork(monk, map, 1, .1)
+    expect(monk.activity).toBe("resting")
+    map.buildings.push({ id: "residence", buildType: "monk-shelter", x: 1, z: 4, w: 3, d: 2,
+      height: .62, label: "Residence", color: "tan", roofColor: "brown" })
+    for (let i = 0; i < 7; i++) stepMonkWork(monk, map, 1, .5)
+    expect(monk.buildingTask).toMatchObject({ purpose: "rest", buildingId: "residence" })
+  })
+
   it("leaves a brother alone when the new building is off his route", () => {
     const map = shrineMap(), wander = monkWander(map)
     const monk = createMonkRoutine(wander, 0, makeRng(1))

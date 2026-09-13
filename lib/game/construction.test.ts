@@ -322,8 +322,8 @@ describe("monk fatigue and rest", () => {
     expect(assignBuildingTask(monk, map, "rest")).toBe(false)
   })
 
-  it.each([1, 42, 12345, 99817])("connects the founding shelter to shrine gates on seed %s", seed => {
-    const map = generateMap({ seed }), shelter = map.buildings.find(b => b.id === "founding-shelter")!
+  it.each([1, 42, 12345, 99817])("retains access to the founding shelter in older worlds on seed %s", seed => {
+    const map = generateMap({ seed, generation: 2 }), shelter = map.buildings.find(b => b.id === "founding-shelter")!
     expect(shelter).toBeDefined()
     expect(isComplete(shelter)).toBe(true)
     expect(settlementRoute(map, map.buildings, map.site!.door, buildingEntrance(shelter), false, true)).not.toBeNull()

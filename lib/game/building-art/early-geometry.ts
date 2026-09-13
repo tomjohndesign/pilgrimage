@@ -1,4 +1,7 @@
 import { innParts } from "./inn"
+import { monkResidenceWalls } from "./monk-residence"
+import { churchAisleHeight, churchWingRoof } from "./church-roof"
+import type { ChurchWing } from "../church-additions"
 import { furnishFloorplan } from "./floorplan"
 import { turnFurniture } from "./furniture-placement"
 import { tavernLayout } from "../tavern-layout"
@@ -36,6 +39,7 @@ type ConstructionRecipe = Omit<BuildingRecipe, "variant"> & {
   roofJoins?: RoofJoin[]
   /** A market stall only carries wares and its cloth while a keeper works it. */
   stocked?: boolean
+  churchWing?: ChurchWing
 }
 
 /** Small early medieval structures built directly in tile units. No plot padding. */
@@ -44,7 +48,16 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
   const mirrored = layoutHand(recipe.variant, recipe.layoutSeed) === -1
   const local = mirrored ? { ...recipe, roofJoins: recipe.roofJoins?.map(join => ({ ...join, side: -join.side as -1 | 1,
     chimney: join.chimney ? { ...join.chimney, side: -join.chimney.side as -1 | 1, x: -join.chimney.x } : undefined })) } : recipe
-  let parts = furnishFloorplan(authoredBuildingParts(local), local)
+  // The shrine explicitly requests its roof-only gable source. Residences
+  // enclose the beds in plaster, extending the church aisle when attached.
+  const residence = local.variant === "monk-shelter" && local.roofForm !== "gable"
+  const shell = residence ? { ...local, roofForm: "gable" as const,
+    roofRise: local.churchWing ? churchAisleHeight(local.churchWing.churchWidth, local.churchWing.reach, local.churchWing.churchWidth / 2) - local.wallHeight : local.roofRise } : local
+  const authored = authoredBuildingParts(shell)
+  let parts = furnishFloorplan(residence
+    ? [...authored.filter(p => (p.layer !== "wall" || p.name.startsWith("chimney-")) && (!local.churchWing || p.layer !== "roof")),
+      ...monkResidenceWalls(shell), ...(local.churchWing ? churchWingRoof(local.churchWing) : [])]
+    : authored, local)
   const seed=recipe.layoutSeed ?? 0
   if (seed && ["cross","wood-shelter","storehouse"].includes(recipe.variant)) {
     const dx=((Math.floor(seed/2)%3)-1)*Math.min(.1,recipe.width*.08)
@@ -184,7 +197,7 @@ function authoredBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     return parts
   }
   // Bury slab thickness below the walking plane; inset the store platform for its ramp.
-  box("floor","base",[0,(variant === "storehouse" ? floor : BUILDING_FLOOR_TOP)-.025,variant === "storehouse" ? (rampStart-d+.02)/2 : 0],[width-.04,.05,variant === "storehouse" ? rampStart+d-.02 : depth-.04],variant === "enclosure" ? "#686857" : "#817052",undefined,false)
+  box("floor","base",[0,(variant === "storehouse" ? floor : BUILDING_FLOOR_TOP)-.025,variant === "storehouse" ? (rampStart-d+.02)/2 : 0],[width-.04,.05,variant === "storehouse" ? rampStart+d-.02 : depth-.04],variant === "enclosure" || variant === "monk-shelter" ? "#686857" : "#817052",undefined,false)
   if (hasDirtFloor(variant)) {
     parts[0].surface = "trail"
     parts[0].color = "#ffffff"
@@ -315,13 +328,15 @@ function authoredBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
     for (let i=0;i<3;i++) box(`yard-offcut-${i}`,"base",[-w+.16+i*.06,.09,-d+.19],[.04,.035,.25],palette.paleWood,[0,.25+(recipe.seed%3-2)*.025,0],false)
     return parts
   }
-  if(variant === "enclosure") {
+  if(variant === "enclosure" || variant === "monk-shelter") {
     // Keep stone tops only 0.002–0.003 above terrain, including their unevenness.
     const nx=Math.ceil(width/.36),nz=Math.ceil(depth/.38)
     for(let row=0;row<nz;row++) for(let col=0;col<nx;col++) {
       const sx=(width-.1)/nx,sz=(depth-.1)/nz
       flag(`paving-${row}-${col}`,-w+.05+(col+.5)*sx,-d+.05+(row+.5)*sz,sx-.018-random()*.02,sz-.018-random()*.025,-.03,.032+random()*.001,["#8f9083","#a19f90","#838779","#969485"][Math.floor(random()*4)])
     }
+  }
+  if(variant === "enclosure") {
     // Four genuine gaps; gate leaves stand open inwards along the jambs.
     const opening=Math.min(.62,Math.min(width,depth)*.58)
     for(let side=0;side<4;side++) {

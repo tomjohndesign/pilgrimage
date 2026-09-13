@@ -1,4 +1,5 @@
 import { innPlacementError } from "./inn"
+import { churchAdditionError } from "./church-additions"
 import { buildingEntrance, constructionWork, isComplete } from "./construction"
 import { placementBuildingLayout, placementSite } from "./building-placement-layout"
 import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
@@ -325,6 +326,8 @@ function validateFootprint(map: GameMap, def: BuildDefinition, at: TilePos, bala
   const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
   if (!hovel) return "A founding shrine is needed before building."
   if (!Number.isInteger(at.x) || !Number.isInteger(at.z)) return "Choose a tile on the map."
+  const additionError = churchAdditionError(map, { ...at, ...footprint, buildType: def.id })
+  if (additionError) return additionError
   const stacked=innPlacementError(map,{...def,...footprint,...at,rotation,buildType:def.id})
   if (stacked !== undefined) return stacked
   const influence = getBuildInfluence(map, balance)
@@ -335,7 +338,7 @@ function validateFootprint(map: GameMap, def: BuildDefinition, at: TilePos, bala
     }
   }
   // Uneven ground is cut and filled on purchase, up to the tuned limit.
-  const grading = footprintGrading(map, { ...at, ...footprint })
+  const grading = footprintGrading(map, { ...at, ...footprint, churchId: def.id === "monk-shelter" ? map.site?.hovelId : undefined })
   if (grading.cliff) return "Levelling here would leave a cliff at the edge; choose gentler ground."
   if (Math.max(grading.cut, grading.fill) > balance.rules.levellingLimit + 1e-9) return "Too much earth to move; choose gentler ground."
   if (def.id === "workshop") {
@@ -350,7 +353,7 @@ function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, balance
   const footprint = rotatedFootprint(def, rotation)
   if (map.site) {
     // The threshold is measured against the graded floor, not today's ground.
-    const floor = footprintGrading(map, { ...at, ...footprint }).foundation + TILE_HEIGHT
+    const floor = footprintGrading(map, { ...at, ...footprint, churchId: def.id === "monk-shelter" ? map.site?.hovelId : undefined }).foundation + TILE_HEIGHT
     const candidate = { buildType: def.id, ...def, ...footprint, rotation, ...at, ...placementBuildingLayout(map,{...def,...footprint,rotation,...at,buildType:def.id,id:"construction-preview"}), id: "construction-preview", construction: { work: 0, required: 1 } }
     const approaches=buildingApproaches(map,candidate)
     for(const approach of approaches) {
@@ -362,7 +365,14 @@ function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, balance
         return "The entrance path needs level ground."
     }
     const occupied = [...map.buildings, candidate]
-    if ((approaches.length ? approaches : [buildingEntrance(candidate)]).some(entry=>!settlementRoute(map, occupied, map.site!.door, entry)))
+    if (candidate.churchId) {
+      const finished = { ...candidate, construction: undefined }
+      const connected = { ...map, buildings: [...map.buildings, finished] }
+      if (!settlementRoute(connected, connected.buildings, map.site.door, buildingEntry(finished, true), false, true))
+        return "Keep a clear passage through the church to the residence."
+      if (!settlementRoute(map, occupied, map.site.door, buildingEntry(candidate, false, -1)))
+        return "Leave room outside the residence for its builders."
+    } else if ((approaches.length ? approaches : [buildingEntrance(candidate)]).some(entry=>!settlementRoute(map, occupied, map.site!.door, entry)))
       return "Keep access to the construction entrance clear."
     const roadBlock = roadBlockError(map, occupied)
     if (roadBlock) return roadBlock
@@ -371,7 +381,7 @@ function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, balance
     const junction = shrineRoadHead(map, occupied)
     if (junction && !settlementRoute(map, occupied, junction, map.site.door))
       return "Leave a way through from the road to the shrine door."
-    for (const camp of map.buildings.filter(b => b.buildType && !b.supportId)) {
+    for (const camp of map.buildings.filter(b => b.buildType && !b.supportId && !b.churchId)) {
       const entries=buildingApproaches(map,camp)
       if ((entries.length ? entries : [buildingEntry(camp)]).some(entry=>!settlementRoute(map, occupied, map.site!.door, entry)))
         return "Keep access to existing buildings clear."

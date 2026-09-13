@@ -94,7 +94,7 @@ export function SettlementPanel({
           </div>
         })}
       </div>
-      <p className="mb-3 text-[11px] text-ink-light">Complete houses for settlers and shelters for monks. Visiting monks may join the brotherhood when a bed is free.</p>
+      <p className="mb-3 text-[11px] text-ink-light">Complete houses for settlers and a residence against the church for monks. Visiting monks may join the brotherhood when a bed is free.</p>
       <details>
         <summary className="cursor-pointer text-xs">
           <span className="font-display">{renown.total} renown</span> · {tier.label}

@@ -429,7 +429,7 @@ export function GameShell({
         onPixelationChange={(patch) => setPixelationOverrides((current) => ({ ...current, ...patch }))}
         onNewMap={({ size, seed }) => {
           saveDefaultMapSize(size)
-          setSettings(current => ({ ...current, size }))
+          setSettings(current => ({ ...current, size, generation: DEFAULT_WORLD_SETTINGS.generation }))
           setSeed(seed)
         }}
         onSeedChange={setSeed}

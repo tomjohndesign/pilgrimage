@@ -48,8 +48,8 @@ export function HudResources({ economy, settlers, open, onToggle }: {
     <span title="Stored timber" aria-label={`${wood} timber`}><Image src="/game-icons/timber.svg" width={30} height={28} alt="" />{wood}</span>
     <HudHelp content={<><div className="hud-help-title">Enclave housing</div>
       <p>People: {settlers} / {economy.housing?.people.capacity ?? 0} · {economy.housing?.people.available ?? 0} spaces available in houses.</p>
-      <p>Monks: {economy.housing?.monks.occupied ?? 0} / {economy.housing?.monks.capacity ?? 0} · {economy.housing?.monks.available ?? 0} spaces available in shelters.</p>
-      <p>Complete houses and monk shelters to welcome more residents.</p></>}>
+      <p>Monks: {economy.housing?.monks.occupied ?? 0} / {economy.housing?.monks.capacity ?? 0} · {economy.housing?.monks.available ?? 0} spaces available in residences.</p>
+      <p>Complete houses and a monks’ residence beside the church to welcome more residents.</p></>}>
       <button type="button" className="hud-resource-button" aria-label={`Enclave housing: ${economy.residents.length} residents, ${(economy.housing?.people.available ?? 0) + (economy.housing?.monks.available ?? 0)} spaces available`}
         aria-expanded={open} aria-controls="settlement-details" onClick={onToggle}>
         <Users aria-hidden size={21} />{economy.residents.length}/{(economy.housing?.people.capacity ?? 0) + (economy.housing?.monks.capacity ?? 0)}
@@ -84,6 +84,8 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
     a.id === "workshop" ? -1 : b.id === "workshop" ? 1 : 0), [balance])
   const renown = economy.renown?.total ?? 0
   const selected = catalog.find((item) => item.id === buildType)
+  const churchAddition = selected?.id === "monk-shelter"
+  const options = catalog.filter(item => churchAddition ? item.id === "monk-shelter" : item.id !== "monk-shelter")
   const problem = useMemo(() => {
     if (!selected) return null
     if (renown < selected.requiredRenown) return `Requires ${selected.requiredRenown} shrine renown.`
@@ -95,10 +97,10 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
   const footprint = selected && rotatedFootprint(selected, alignedRotation)
 
   return <div className="hud-bottom-center">
-    {open && <section id="build-tray" className="hud-well hud-build-tray" aria-label="Build options">
+    {open && <section id="build-tray" className="hud-well hud-build-tray" aria-label={churchAddition ? "Church additions" : "Build options"}>
       <div className="hud-build-content">
         <div className="hud-building-tiles">
-          {catalog.map((item) => {
+          {options.map((item) => {
             const locked = renown < item.requiredRenown
             const unavailable = !map || locked || !canAfford(settlement.resources, item.cost)
             return <HudHelp key={item.id} content={<>
@@ -111,11 +113,12 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
                 : "Does not extend influence"}</p>
               <p className="hud-help-secondary">{locked ? `Requires ${item.requiredRenown} shrine renown.`
                 : unavailable ? "Not enough supplies or the world is still loading."
+                : item.id === "monk-shelter" ? "Build against a side wall of the church. Monks enter through the church."
                 : "Place inside shrine influence or beside the approach; the whole footprint must fit."}</p>
             </>}>
               <button type="button" className="hud-building-tile" aria-label={`Build ${item.label.toLowerCase()}`}
                 aria-pressed={buildType === item.id} aria-disabled={unavailable}
-                onClick={() => { if (!unavailable) chooseBuild(buildType === item.id ? null : item.id) }}>
+                onClick={() => { if (!unavailable) chooseBuild(buildType === item.id && !churchAddition ? null : item.id) }}>
                 <BuildThumbnail id={item.id} />
                 <span className="hud-building-label">{item.label}</span>
                 <span className="hud-building-cost">{locked ? `${item.requiredRenown} renown` : `${item.cost.gold} gold · ${item.cost.wood} wood`}</span>
@@ -124,7 +127,9 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
             </HudHelp>
           })}
         </div>
-        {selected && footprint && <div className="hud-build-rotation" role="group" aria-label="Building rotation">
+        {selected && footprint && (churchAddition ? <div className="hud-build-rotation">
+          <span>{footprint.w} × {footprint.d} tiles · Turns automatically to meet the church</span>
+        </div> : <div className="hud-build-rotation" role="group" aria-label="Building rotation">
           <button type="button" className="hud-action" aria-label="Rotate building counterclockwise" aria-keyshortcuts="Meta+R" title="Rotate counterclockwise (Cmd+R)" onClick={() => rotateBuilding(-1)}>
             <RotateCcw size={15} aria-hidden /> <kbd>⌘ R</kbd>
           </button>
@@ -133,12 +138,14 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
             <RotateCw size={15} aria-hidden /> <kbd>R</kbd>
           </button>
           <span className="hud-entry-key">Gold arrows mark entrances</span>
-        </div>}
+        </div>)}
       </div>
       <button type="button" className="hud-close" aria-label="Close build options" onClick={onClose}><X size={14} /></button>
     </section>}
     {open && (selected || economy.message) && <div className={`hud-placement-status ${problem ? "hud-placement-error" : ""}`} role="status">
-      {problem ?? (selected ? `Place ${selected.label.toLowerCase()} inside influence · Tap or click the map to build` : economy.message)}
+      {problem ?? (selected ? selected.id === "monk-shelter"
+        ? "Place against a church side wall · Entrance through the church"
+        : `Place ${selected.label.toLowerCase()} inside influence · Tap or click the map to build` : economy.message)}
     </div>}
     <nav className="hud-bottom-actions" aria-label="Building tools">
       <button id="build-menu-button" type="button" className="hud-action" aria-expanded={open} aria-controls="build-tray" onClick={onToggle}>

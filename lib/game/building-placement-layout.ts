@@ -1,4 +1,5 @@
 import { innPlacementError, innPlacementLayout, innPlacementRotation, innStackSite } from "./inn"
+import { churchAdditionError, churchWingRotation } from "./church-additions"
 import { layoutHand, placementLayoutSeed } from "./building-layout"
 import { buildingRoofJoins } from "./building-art/roof-joins"
 import { hasDomesticHearth, shelterHearth } from "./building-art/furnishings"
@@ -32,7 +33,8 @@ export function adoptNeighborChimney(map: GameMap, building: BuildingDef, riseFo
   return layout
 }
 
-export function placementBuildingLayout(map: GameMap, building: BuildingDef): Pick<BuildingDef,"layoutSeed"|"hearthZ"|"fireplace"|"supportId"|"floorHeight"|"tavernFlue"> {
+export function placementBuildingLayout(map: GameMap, building: BuildingDef): Pick<BuildingDef,"layoutSeed"|"hearthZ"|"fireplace"|"supportId"|"floorHeight"|"tavernFlue"|"churchId"> {
+  if (building.buildType === "monk-shelter") return { churchId: map.site?.hovelId, layoutSeed: 0 }
   if (building.buildType === "inn") return innPlacementLayout(map,{...building,layoutSeed:placementLayoutSeed("inn",building,map.seed)})
   return adoptNeighborChimney(map,{...building,layoutSeed:placementLayoutSeed(building.buildType ?? "",building,map.seed)})
 }
@@ -45,6 +47,7 @@ export function roofAlignedRotation(map: GameMap, building: BuildingDef,
   allowed: (candidate: BuildingDef) => boolean = candidate => placementClearance(map,candidate) === null,
 ): import("./building-rotation").BuildingRotation {
   const requested=building.rotation ?? 0
+  if (building.buildType === "monk-shelter") return churchWingRotation(map, building, requested)
   if (building.buildType === "inn") return innPlacementRotation(map,building)
   if(!["house","hall","tavern"].includes(building.buildType ?? "")) return requested
   const local=rotatedFootprint(building,requested)
@@ -70,12 +73,14 @@ export function placementClearance(map: GameMap, candidate: BuildingDef): string
   const covers=(b: BuildingDef,p:{x:number;z:number})=>p.x>=b.x && p.x<b.x+b.w && p.z>=b.z && p.z<b.z+b.d
   if(!Number.isInteger(candidate.x) || !Number.isInteger(candidate.z)) return "Choose a tile."
   if(candidate.x<0 || candidate.z<0 || candidate.x+candidate.w>map.width || candidate.z+candidate.d>map.depth) return "Keep the building on the map."
+  const additionError = churchAdditionError(map, candidate)
+  if (additionError) return additionError
   const stacked=innPlacementError(map,candidate)
   if(stacked !== undefined) return stacked
   if(map.buildings.some(b=>overlaps(candidate,b))) return "Another building occupies these tiles."
   if(map.road?.some(p=>covers(candidate,p))) return "Keep the road clear."
   if(map.buildings.some(b=>buildingApproaches(map,b).some(p=>covers(candidate,p)))) return "Keep the neighboring doors clear."
-  if(buildingApproaches(map,candidate).some(p=>p.x<0 || p.z<0 || p.x>=map.width || p.z>=map.depth || map.buildings.some(b=>covers(b,p)))) return "Leave a clear tile outside each door."
+  if(!candidate.churchId && candidate.buildType !== "monk-shelter" && buildingApproaches(map,candidate).some(p=>p.x<0 || p.z<0 || p.x>=map.width || p.z>=map.depth || map.buildings.some(b=>covers(b,p)))) return "Leave a clear tile outside each door."
   return null
 }
 

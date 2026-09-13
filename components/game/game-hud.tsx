@@ -1182,6 +1182,16 @@ export function GameHud({
               <div className="mt-3 flex flex-col gap-1.5">
                 <p className="max-w-56 text-[11px] text-ink-light">Entry is free. The keeper reveals the relic to one visitor at a time. Visitors may leave a donation in the offering box by the door; greater piety encourages larger gifts.</p>
                 <p className="text-[11px] text-ink-light">Donated · {economy.settlement.collectedAdmission} gold</p>
+                {map.buildings.filter(b => b.churchId === selectedBuilding.id).map(wing => <button key={wing.id} type="button" className="mt-2 block text-left text-[11px] text-ink underline underline-offset-2"
+                  onClick={() => useCameraStore.getState().select({ kind: "building", id: wing.id })}>
+                  Inspect {wing.label.toLowerCase()}
+                </button>)}
+                <button type="button" className="mt-2 block text-left text-[11px] text-ink underline underline-offset-2" onClick={() => {
+                  useCameraStore.getState().select(null)
+                  setPanel("build")
+                  setMenuOpen(false)
+                  economy.chooseBuild("monk-shelter")
+                }}>Build monks’ residence</button>
               </div>
             )}
             {(selectedBuilding.buildType === "workshop" || selectedBuilding.buildType === "storehouse") && (

@@ -3,7 +3,7 @@ import { isWaterTerrain, TILE_HEIGHT } from "../map/terrain"
 
 /** Raised platforms, paving and water sources keep their authored ground. */
 export function hasDirtFloor(variant: string | undefined): boolean {
-  return variant !== "inn" && variant !== "storehouse" && variant !== "enclosure" && variant !== "well" && variant !== "watering-hole"
+  return variant !== "inn" && variant !== "storehouse" && variant !== "enclosure" && variant !== "monk-shelter" && variant !== "well" && variant !== "watering-hole"
 }
 
 /** A small worn apron outside the occupied tiles; never changes placement or routes. */

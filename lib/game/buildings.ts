@@ -14,7 +14,7 @@ import { WORK_POSTS } from "./work-posts"
  * A building is a change to the world that travelers react to (see sim.ts):
  * a woodcutter’s hut is a place with work in it, and a jobless traveler who hears
  * of an open place at the junction may settle and take it. The generator
- * places the shrine and monk shelter; lumber camps are the player's doing.
+ * places the shrine; residences and lumber camps are the player's doing.
  */
 
 export type BuildingKind = "workshop" | "tavern" | "inn" | "sheep-pen" | "market"

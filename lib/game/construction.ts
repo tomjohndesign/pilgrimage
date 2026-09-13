@@ -120,15 +120,16 @@ function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask
   if (purpose === "work" && !post) return null
   const x = purpose === "build" ? (slot % 4 - 1.5) * Math.min(0.45, (local.w - 0.5) / 3)
     : purpose === "work" ? post!.x : bed.anchor.x
-  const z = purpose === "build" ? local.d / 2 - 0.055 + constructionStandOff(scale)
+  const buildSide = building.churchId ? -1 : 1
+  const z = purpose === "build" ? buildSide * (local.d / 2 - 0.055 + constructionStandOff(scale))
     : purpose === "work" ? post!.z : bed.anchor.z
   const offset = rotateBuildingPoint(x, z, building.rotation)
-  const approach = rotateBuildingPoint(x, (local.d + 1) / 2, building.rotation)
+  const approach = rotateBuildingPoint(x, (purpose === "build" ? buildSide : 1) * (local.d + 1) / 2, building.rotation)
   const cx = tileToWorldX(map, building.x) + (building.w - 1) / 2
   const cz = tileToWorldZ(map, building.z) + (building.d - 1) / 2
   const frontage = { x: worldToTileX(map, cx + approach.x), z: worldToTileZ(map, cz + approach.z) }
   return { destination: { x: cx + offset.x, z: cz + offset.z, y: building.buildType === "inn" && purpose !== "build" ? surfaceHeight(map, building.x, building.z)+(building.floorHeight ?? 0)+(purpose === "rest" ? bed.height : 0) : surfaceHeight(map, frontage.x, frontage.z) }, frontage,
-    heading: (bed?.heading ?? (purpose === "work" ? 0 : Math.PI)) + buildingYaw(building.rotation) }
+    heading: (bed?.heading ?? (purpose === "work" || purpose === "build" && building.churchId ? 0 : Math.PI)) + buildingYaw(building.rotation) }
 }
 
 /** The slowest builder on a crew that a faster pair of hands may take over from. */

@@ -1,4 +1,6 @@
 import { shrineStructureParts } from "./shrine-geometry"
+import { buildingDoorOffset } from "../building-rotation"
+import { CHURCH_PLASTER } from "./church-wall"
 import { describe, expect, it } from "vitest"
 import { Box3, BoxGeometry, BufferGeometry, Euler, Float32BufferAttribute, Matrix4, Quaternion, Vector3 } from "three"
 import { BUILD_CATALOG } from "../balance"
@@ -74,7 +76,7 @@ describe("settlement construction", () => {
 
   it("keeps a gentle pitch across houses and toward the rear of open awnings", () => {
     // The market stall carries a level cloth canopy and the timber yard is open to the sky.
-    for (const def of catalogue.filter(b => b.category === "buildings" && b.id !== "inn" && b.id !== "market" && b.id !== "lumberCamp")) {
+    for (const def of catalogue.filter(b => b.category === "buildings" && !["inn", "market", "lumberCamp", "monk-shelter"].includes(b.id))) {
       for (const [w, d] of [[2, 2], [3, 2], [3, 4]]) {
         const parts = structureParts({ ...def, w, d })
         expect(parts.some(p => /ridge-pole|rafter-left|rafter-right|woven-gable/.test(p.name))).toBe(false)
@@ -90,6 +92,24 @@ describe("settlement construction", () => {
         }
       }
     }
+  })
+
+  it.each([0, 1, 2, 19, 40130])("encloses the residence in church masonry with a clear arched entrance and four beds, layout %i", layoutSeed => {
+    const residence = catalogue.find(b => b.id === "monk-shelter")!
+    const parts = structureParts({ ...residence, layoutSeed })
+    expect(parts.some(p => p.color === CHURCH_PLASTER && p.layer === "wall")).toBe(true)
+    expect(parts.some(p => p.name.includes("residence-side-") && p.name.includes("-stone-"))).toBe(true)
+    expect(parts.some(p => p.name.includes("windbreak") || p.name.startsWith("earthfast-post"))).toBe(false)
+    expect(parts.some(p => p.name === "ridge-pole")).toBe(true)
+    expect(parts.filter(p => p.name.startsWith("straw-bed-"))).toHaveLength(4)
+    expect(parts.some(p => p.name === "hearth-embers")).toBe(true)
+    const door = buildingDoorOffset(residence.w, "monk-shelter", layoutSeed)
+    const passage = new Box3(new Vector3(door - .16, .02, residence.d / 2 - .2),
+      new Vector3(door + .16, .78, residence.d / 2))
+    expect(parts.filter(p => p.layer === "wall" && bounds(p).intersectsBox(passage)).map(p => p.name)).toEqual([])
+    const cutaway = visibleStructureParts(parts, true, [1, 1])
+    expect(cutaway.some(p => p.layer === "roof" || p.name.startsWith("residence-entrance") || p.name === "residence-gable-1")).toBe(false)
+    expect(cutaway.filter(p => p.name.startsWith("straw-bed-"))).toHaveLength(4)
   })
 
   it("shelters the hut's bench and two timber bays without beds, leaving the work yard open", () => {
