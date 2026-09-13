@@ -43,7 +43,7 @@ import type { Relic } from "@/lib/game/relic"
 import type { TreePlacement } from "@/lib/game/trees/placement"
 import { tileAt, worldToTileX, worldToTileZ, type GameMap } from "@/lib/game/map/types"
 import { GAME_DAY_SECONDS, createSim, simRegistry, stepSim, type SimState } from "@/lib/game/sim"
-import { shrineLayout } from "@/lib/game/shrine-layout"
+import { shrineLayout, isChapel } from "@/lib/game/shrine-layout"
 import type { Traveler } from "@/lib/game/travelers"
 import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
@@ -132,6 +132,7 @@ export const Travelers = memo(function Travelers({
   movement?: MovementTuning
 }) {
   const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
+  const chapel = !!shrine && isChapel(shrine)
   const kneelingHeading = shrine ? shrineLayout(shrine,map.site?.door).rotation + Math.PI : Math.PI
   const appearances = useMemo(() => travelers.map(t => travelerAppearance(map.seed ?? 0, t.id)), [travelers, map.seed])
   const ranks = useMemo(() => crowdRanks(travelers.map(t => t.id)), [travelers])
@@ -365,6 +366,7 @@ export const Travelers = memo(function Travelers({
       if ((s.activity === "visiting" || (s.activity === "toRelic" && !moving)) && !!s.shrineSeat) {
         group.rotation.y = kneelingHeading
       }
+      if (chapel && s.activity === "offering") group.rotation.y = kneelingHeading
       if ((s.activity === "performing" || s.activity === "begging") && s.walkFrom) {
         group.rotation.y = Math.atan2(s.walkFrom.x - s.x, s.walkFrom.z - s.z)
       }

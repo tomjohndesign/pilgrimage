@@ -9,7 +9,7 @@ import { walkingSurface } from "../map/walking-surface"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "../map/types"
 import { deriveSeed, makeRng, SEED_STREAM } from "../rng"
 import type { TreePlacement } from "../trees/placement"
-import { habitatAllows, wildlifeHabitat, wildlifeSegmentClear, type Point } from "./habitat"
+import { buildingDistance, habitatAllows, wildlifeHabitat, wildlifeSegmentClear, type Point } from "./habitat"
 import { birdGlide, easeWing } from "./motion"
 import { gaitSpeed, gaitStride, type WildlifeGait, type WildlifeAction } from "./gait"
 import type { AnimalRigEdits } from "./rig-edits"
@@ -181,10 +181,59 @@ export function startleWildlife(world: WildlifeWorld, tree: TreePlacement, map: 
   disturbance.flushed ||= flushed
 }
 
+const blockedRelocations = new WeakMap<WildlifeAnimal, { map: GameMap; age: number; x: number; z: number; scale: number }>()
+
+/** Instant construction must not leave a grazing animal inside its new walls.
+ * Place it on the nearest clear ground along a traversable retreat, preserving
+ * its identity and herd. The same reconciliation also repairs an older save.
+ */
+export function clearWildlifeFootprints(world: WildlifeWorld, map: GameMap, scale = 1,
+  nearbyAnimals?: SpatialPoints<WildlifeAnimal>) {
+  const clearance = .2 * scale
+  const nearbyBuildings = buildingSpatialQuery(map.buildings, Math.max(3, clearance + .25))
+  for (const animal of world.animals) {
+    if (isBird(animal.kind) || animal.reserve || animal.fold || animal.burrowState !== "outside") continue
+    if (buildingDistance(map, animal, clearance, nearbyBuildings) >= clearance) continue
+    const blocked = blockedRelocations.get(animal)
+    if (blocked?.map === map && blocked.scale === scale && blocked.x === animal.x && blocked.z === animal.z && animal.age - blocked.age < 1) continue
+    let destination: Point | undefined
+    // A bounded search runs only for animals overtaken by a footprint. Sampling
+    // outward in rings prefers nearby ground and never crosses water or cliffs.
+    for (let radius = .5; radius <= 12 && !destination; radius += .5) {
+      const samples = Math.ceil(Math.PI * 2 * radius / .4)
+      for (let i = 0; i < samples; i++) {
+        const angle = i * Math.PI * 2 / samples
+        const point = { x: animal.x + Math.sin(angle) * radius, z: animal.z + Math.cos(angle) * radius }
+        if (!habitatAllows(world.habitat, animal.kind, point, map, clearance, undefined, nearbyBuildings)) continue
+        if (world.animals.some(other => other !== animal && !isBird(other.kind) && !other.concealed
+          && Math.hypot(other.x - point.x, other.z - point.z) < .85 * scale)) continue
+        if (!wildlifeSegmentClear(world.habitat, animal.kind, animal, point, map, clearance, nearbyBuildings)) continue
+        destination = point; break
+      }
+    }
+    if (!destination) {
+      // A sealed plot should not repeat the full search every animation tick.
+      blockedRelocations.set(animal, { map, age: animal.age, x: animal.x, z: animal.z, scale })
+      continue
+    }
+    blockedRelocations.delete(animal)
+    const x = animal.x, z = animal.z
+    animal.x = destination.x; animal.z = destination.z
+    animal.y = walkingSurface(map, animal.x, animal.z).height
+    animal.heading = Math.atan2(animal.x - x, animal.z - z)
+    animal.target = null; animal.rest = 0; animal.lying = 0; animal.grazing = 0
+    animal.action = "idle"; animal.actionAge = 0; animal.moving = false
+    animal.speed = 0; animal.drive = 0; animal.distance = 0
+    if (buildingDistance(map, animal.home, clearance, nearbyBuildings) < clearance) animal.home = { ...destination }
+    nearbyAnimals?.relocate(animal, x, z)
+  }
+}
+
 export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, scale = 1, felled: ReadonlySet<number> = new Set(), people: readonly Point[] = [], edits: Record<string, AnimalRigEdits> = {}, peopleSnapshot?: SpatialPoints<Point>, animalSnapshot?: SpatialPoints<WildlifeAnimal>) {
   return withTerrainCornerQueries(map, () => {
   if (dt <= 0) return
   dt = Math.min(dt, 0.1)
+  clearWildlifeFootprints(world, map, scale, animalSnapshot)
   const { rng, habitat } = world
   const nearbyBuildings = buildingSpatialQuery(map.buildings, Math.max(3, .2 * scale + .25))
   const nearbyPeople = peopleSnapshot ?? new SpatialPoints(people)
@@ -273,7 +322,11 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
       if (animal.regrouping && separation < 3 * scale) animal.regrouping = false
       if (animal.regrouping) animal.rest = 0
     }
-    if (!habitatAllows(habitat, animal.kind, animal, map, 0.2 * scale, undefined, nearbyBuildings)) { animal.rest = 0; animal.target = null }
+    if (!habitatAllows(habitat, animal.kind, animal, map, 0.2 * scale, undefined, nearbyBuildings)) {
+      animal.rest = 0
+      // Keep a valid retreat long enough to turn and walk toward it.
+      if (animal.target && !wildlifeSegmentClear(habitat, animal.kind, animal, animal.target, map, .2 * scale, nearbyBuildings)) animal.target = null
+    }
     animal.rest -= dt
     const settle = animal.rest > 1.6 && !animal.target && !animal.frightened
     const lieTarget = settle && animal.action === "lie" ? 1 : 0

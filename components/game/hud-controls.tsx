@@ -13,6 +13,7 @@ import { BuildThumbnail } from "./build-thumbnail"
 import { influenceRadius } from "@/lib/game/build-influence"
 import { useBuildStore } from "@/lib/game/build-store"
 import { rotatedFootprint } from "@/lib/game/building-rotation"
+import { churchDevelopmentPlot } from "@/lib/game/shrine-upgrade"
 import { canAfford, placementError } from "@/lib/game/settlement"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { formatGameTime, simRegistry } from "@/lib/game/sim"
@@ -137,14 +138,14 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
           <button type="button" className="hud-action" aria-label="Rotate building clockwise" aria-keyshortcuts="R" title="Rotate clockwise (R)" onClick={() => rotateBuilding(1)}>
             <RotateCw size={15} aria-hidden /> <kbd>R</kbd>
           </button>
-          <span className="hud-entry-key">Gold arrows mark entrances</span>
+          <span className="hud-entry-key">Gold arrows mark entrances{map && churchDevelopmentPlot(map) ? " · Gold grid reserves the church and side wings" : ""}</span>
         </div>)}
       </div>
       <button type="button" className="hud-close" aria-label="Close build options" onClick={onClose}><X size={14} /></button>
     </section>}
     {open && (selected || economy.message) && <div className={`hud-placement-status ${problem ? "hud-placement-error" : ""}`} role="status">
       {problem ?? (selected ? selected.id === "monk-shelter"
-        ? "Place against a church side wall · Entrance through the church"
+        ? "Place in the gold side-wing space against a completed church · Entrance through the church"
         : `Place ${selected.label.toLowerCase()} on suitable ground · Tap or click the map to build` : economy.message)}
     </div>}
     <nav className="hud-bottom-actions" aria-label="Building tools">

@@ -25,7 +25,7 @@ describe("game save schema", () => {
     expect(result.save?.version).toBe(SAVE_VERSION)
     expect(result.save?.world.generation).toBe(1)
     expect(result.save?.settlement).toEqual(parseGameSave(input).save?.settlement)
-    expect(parseGameSave(input).save?.world.generation).toBe(3)
+    expect(parseGameSave(input).save?.world.generation).toBe(4)
     expect(parseGameSave({ ...input, world: { ...input.world, generation: 2 } }).save?.world.generation).toBe(2)
   })
 

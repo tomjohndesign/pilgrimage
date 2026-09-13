@@ -1,9 +1,10 @@
+import { isComplete } from "./construction"
 import { walkingSurface } from "./map/walking-surface"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "./map/types"
 import { monkWander, type WanderSpot } from "./monk-wander"
 import type { MonkRoutine } from "./monk-routine"
 import { shrineApproach } from "./settlement-route"
-import { shrineLayout } from "./shrine-layout"
+import { shrineStations } from "./shrine-layout"
 import { BASE_PERSON, PERSON_CLIPS } from "./base-person/pose"
 
 export const RELIC_PRAYER_RADIUS = 3
@@ -64,12 +65,12 @@ export function processionGrounds(map: GameMap, wander = monkWander(map)) {
   if (!door) return null
   const centre = wander.centre
   const shrine = map.buildings.find(b => b.id === map.site!.hovelId)
-  if (!shrine) return null
-  const { rotation } = shrineLayout(shrine, map.site.door)
-  // Collect from behind the altar, regardless of which way the shrine faces.
-  const altar = wander.prayerSpots.find(spot =>
-    (spot.x - centre.x) * -Math.sin(rotation) + (spot.z - centre.z) * -Math.cos(rotation) > 0.5)
-  if (!altar) return null
+  if (!shrine || !isComplete(shrine)) return null
+  // Collect behind the altar, regardless of which way the shrine faces.
+  const keeper = shrineStations(shrine, map.site.door).keeper
+  const kx = tileToWorldX(map, keeper.x), kz = tileToWorldZ(map, keeper.z)
+  const altar = wander.prayerSpots.find(spot => Math.abs(spot.x - kx) < .01 && Math.abs(spot.z - kz) < .01)
+    ?? { x: kx, z: kz, y: walkingSurface(map, kx, kz).height }
   const branch = [...shrineApproach(map)].reverse().map(tile => {
     const x = tileToWorldX(map, tile.x), z = tileToWorldZ(map, tile.z)
     return { x, z, y: walkingSurface(map, x, z).height }

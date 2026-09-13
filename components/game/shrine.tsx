@@ -1,5 +1,7 @@
 "use client"
 
+import { constructionStage, isComplete } from "@/lib/game/construction"
+import { constructionParts } from "@/lib/game/building-art/construction"
 import { buildingDetail } from "@/lib/game/render/scenery-detail"
 import { completedChurchWings } from "@/lib/game/church-additions"
 import { useUnitInterior } from "./use-unit-interior"
@@ -20,14 +22,14 @@ import { RelicDisplay } from "./relic-display"
 import { shrineStructureParts } from "@/lib/game/building-art/structure"
 import { simRegistry } from "@/lib/game/sim"
 import { RELIC_TABLE_TOP } from "@/lib/game/building-art/early-geometry"
-import { shrineLayout, isRelicViewingSeat } from "@/lib/game/shrine-layout"
+import { shrineLayout, shrineAltarRise, isRelicViewingSeat } from "@/lib/game/shrine-layout"
 import {
   buildingObjectId,
   encodeObjectId,
   RELIC_OBJECT_ID,
 } from "@/lib/game/render/outline"
 
-/** A timber upper nave and lower thatched aisles shelter the rear altar. */
+/** The founding gabled chapel grows into a church with a raised nave. */
 export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; relic: Relic; showInteriors?: boolean }) {
   const unitInterior = useUnitInterior(map)
   const relicGroup = useRef<THREE.Group>(null)
@@ -49,20 +51,24 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
     if (relicGroup.current) relicGroup.current.visible = near && available && !!showing
     if (veilGroup.current) {
       veilGroup.current.scale.y = showing ? .16 : 1
-      veilGroup.current.position.y = RELIC_TABLE_TOP * (1 - veilGroup.current.scale.y)
+      veilGroup.current.position.y = (RELIC_TABLE_TOP + (layout?.altarRise ?? 0)) * (1 - veilGroup.current.scale.y)
     }
   })
   const hovelIndex = map.buildings.findIndex((b) => b.id === map.site?.hovelId)
   const hovel = hovelIndex >= 0 ? map.buildings[hovelIndex] : null
 
+  const stage = hovel ? constructionStage(hovel) : 3
   const layout = useMemo(() => {
     if (!hovel || !map.site) return null
     const shape = shrineLayout(hovel, map.site.door)
-    const parts = shrineStructureParts(shape.width, shape.depth, completedChurchWings(map))
+    const finished = shrineStructureParts(shape.width, shape.depth, completedChurchWings(map), shape.entranceX)
+    const parts = stage === 3 ? finished : constructionParts({ ...hovel, w: shape.width, d: shape.depth }, [],
+      finished.filter(p => p.layer !== "interior" && !p.name.startsWith("sanctuary-crucifix")))
     const isAltar = (name: string) => name === "relic-table" || name === "relic-shelf"
       || name === "altar-linen-top" || name.startsWith("table-trestle-")
     return {
       ...shape,
+      altarRise: shrineAltarRise(shape.depth),
       parts: parts.filter(p => !p.name.startsWith("relic-veil-") && !isAltar(p.name)),
       altar: parts.filter(p => isAltar(p.name)),
       veil: parts.filter(p => p.name.startsWith("relic-veil-")),
@@ -70,7 +76,7 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
       centreZ: tileToWorldZ(map, hovel.z) + (hovel.d - 1) / 2,
       baseY: groundHeight(map, hovel.x + (hovel.w - 1) / 2, hovel.z + (hovel.d - 1) / 2),
     }
-  }, [map, hovel])
+  }, [map, hovel, stage])
 
   const shrineId = useMemo(
     () => new THREE.Color(...encodeObjectId(buildingObjectId(Math.max(0, hovelIndex)))),
@@ -86,13 +92,13 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
     <group position={[layout.centreX, layout.baseY, layout.centreZ]}>
       <group rotation={[0, layout.rotation, 0]} onClick={event => selectElement({ kind: "building", id: hovel.id }, event)}>
         <StructureModel terrainFloors parts={layout.parts} cutaway={showInteriors || relicSelected || buildingSelected || wingSelected || unitInterior === hovel.id || map.buildings.some(b => b.id === unitInterior && b.churchId === hovel.id)} idColor={shrineId} ink={false} />
-        <group name="relic-altar">
+        {isComplete(hovel) && <group name="relic-altar">
           <StructureModel parts={layout.altar} cutaway idColor={relicId} onClick={select} ink={false} />
           <group ref={veilGroup}><StructureModel parts={layout.veil} cutaway dynamic idColor={relicId} onClick={select} ink={false} /></group>
-        </group>
-        <group ref={lights} name="shrine-lights">{[-1,1].map(side => <pointLight key={side} position={[side*.73,.8,layout.altarZ+.08]} color="#ffd184" intensity={.18} distance={1.8} decay={2} />)}</group>
+        </group>}
+        {isComplete(hovel) && <group ref={lights} name="shrine-lights">{[-1,1].map(side => <pointLight key={side} position={[side*.73,.8+layout.altarRise,layout.altarZ+.08]} color="#ffd184" intensity={.18} distance={1.8} decay={2} />)}</group>}
       </group>
-      <group ref={relicGroup} position={[layout.offset.x,0,layout.offset.z]}><RelicDisplay groundGlow={false} color={relic.color} idColor={relicId} onClick={select} /></group>
+      {isComplete(hovel) && <group ref={relicGroup} position={[layout.offset.x,layout.altarRise,layout.offset.z]}><RelicDisplay groundGlow={false} color={relic.color} idColor={relicId} onClick={select} /></group>}
 
     </group>
   )

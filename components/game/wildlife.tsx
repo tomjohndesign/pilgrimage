@@ -21,7 +21,7 @@ import { burrowMotion } from "@/lib/game/wildlife/burrow-motion"
 import { createBurrowRig } from "@/lib/game/wildlife/burrow"
 import { birdGlide, easeWing } from "@/lib/game/wildlife/motion"
 import { RIG_TO_WORLD } from "@/lib/game/transport/assets"
-import { createWildlife, startleWildlife, stepWildlife, type WildlifeAnimal } from "@/lib/game/wildlife/simulation"
+import { clearWildlifeFootprints, createWildlife, startleWildlife, stepWildlife, type WildlifeAnimal } from "@/lib/game/wildlife/simulation"
 import { selectElement } from "@/lib/game/selection"
 import { wildlifeAppearance } from "@/lib/game/wildlife/appearance"
 import { wildlifeGeometry } from "@/lib/game/wildlife/batch"
@@ -48,6 +48,8 @@ export function Wildlife({ map, trees, characterScale }: { map: GameMap; trees: 
   // Building placement updates map.buildings without resetting every animal's life.
   const world = useMemo(() => createWildlife(map, trees, characterScale), [map.tiles, map.seed, trees])
   useEffect(() => { wildlifeRegistry.current = world; return () => { if (wildlifeRegistry.current === world) wildlifeRegistry.current = null } }, [world])
+  // Building upgrades are immediate even while playback is paused.
+  useEffect(() => { clearWildlifeFootprints(world, map, characterScale) }, [world, map.buildings, characterScale])
   const strikes = useRef<TreePlacement[]>([])
   const accumulator = useRef(0)
   useEffect(() => onTreeStrike(tree => { if (world.trees.includes(tree)) strikes.current.push(tree) }), [world])

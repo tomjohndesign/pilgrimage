@@ -169,8 +169,14 @@ export function GameCanvas({
     return [traveler.id, walkSpeedScale(visual.walkStride, characterScale * appearance.scale)]
   })), [travelers, map.seed, characterScale, population])
   const foundation = usePersonDesignStore(s => s.design)
-  useEffect(() => { void usePersonDesignStore.getState().hydrate() }, [])
-  useEffect(() => { void usePopulationStore.getState().prepare(foundation) }, [foundation])
+  useEffect(() => {
+    if (phase === "complete") void usePersonDesignStore.getState().hydrate()
+  }, [phase])
+  useEffect(() => {
+    // Rebuilding an edited crowd is optional work; published sprites can open
+    // the map immediately while the new pack is prepared afterwards.
+    if (phase === "complete") void usePopulationStore.getState().prepare(foundation)
+  }, [foundation, phase])
   const species = useTreeTuningStore((s) => s.species)
   const variance = useTreeTuningStore((s) => s.variance)
   const treeModel = treeModelForGame(requestedTreeModel)

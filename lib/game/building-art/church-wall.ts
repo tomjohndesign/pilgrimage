@@ -6,7 +6,7 @@ const plaster = CHURCH_PLASTER, plasterShade = "#a59d83"
 export type ChurchOpening = { centre: number; sill: number; shoulder: number; radius: number }
 
 /** Shared rubble, plaster and open arches for the church and its residential wing. */
-export function churchWallBuilder(parts: BuildingPart[]) {
+export function churchWallBuilder(parts: BuildingPart[], stoneHeight = .4) {
   const box = (name: string, layer: BuildingPart["layer"], position: Vec3, size: Vec3, color: string) =>
     parts.push({ name, layer, position, size, color, outline: false })
   const face = (name: string, layer: BuildingPart["layer"], vertices: number[], color: string) =>
@@ -29,7 +29,7 @@ export function churchWallBuilder(parts: BuildingPart[]) {
         return
       }
       const noise=(i:number)=>{const n=Math.sin(i*127.1+a*93.7+edge*31.9)*43758.5453;return n-Math.floor(n)}
-      const stoneTop=Math.min(.4,hi)
+      const stoneTop=Math.min(stoneHeight,hi)
       if(lo<stoneTop) {
         block("mortar",(a+b)/2,(lo+stoneTop)/2,b-a,stoneTop-lo,thickness,"#77796c")
         const rows=Math.ceil((stoneTop-lo)/.105),course=(stoneTop-lo)/rows
@@ -42,7 +42,7 @@ export function churchWallBuilder(parts: BuildingPart[]) {
           }
         }
       }
-      const base=Math.max(lo,.4)
+      const base=Math.max(lo,stoneHeight)
       if(hi<=base) return
       block("plaster",(a+b)/2,(base+hi)/2,b-a,hi-base,thickness,plaster)
       const cols=Math.max(1,Math.ceil((b-a)/.21)),rows=Math.max(1,Math.ceil((hi-base)/.17))

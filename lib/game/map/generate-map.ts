@@ -35,7 +35,7 @@ export const DEFAULT_MAP_WIDTH = 192
 export const DEFAULT_MAP_DEPTH = 192
 
 export interface GenerateMapOptions {
-  /** Saved-world compatibility; new worlds use generation 3 without a starting residence. */
+  /** Saved-world compatibility; new worlds use generation 4 with a chapel and no starting residence. */
   generation?: number
   elevation?: Partial<ElevationSettings>
   seed: number
@@ -124,7 +124,7 @@ export const DARK_ROAD_COST = 25
 // --- Founding site -----------------------------------------------------------
 
 export const HOVEL_ID = "hovel"
-/** Footprint of the hovel in tiles. */
+/** Reserved church footprint; new worlds begin with a chapel inside this plot. */
 export const HOVEL_WIDTH = 3
 export const HOVEL_DEPTH = 5
 
@@ -835,6 +835,13 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   for (let round = 0; round < 3 && clearCliffsBesideRoads(map.elevation!, width, depth, kind, map.tiles, map.buildings, waterInfo.surface) > 0; round++) {
     finishElevation(map.elevation!, width, depth, kind, waterInfo.surface!)
     for (const building of map.buildings) map.elevation = levelBuildingGround(map, building)
+  }
+  if (options.generation !== 2 && options.generation !== 3) {
+    // Preserve the generated land and door, reserving the former church plot.
+    const chapel = { ...hovel, z: site.door.z < hovel.z ? hovel.z : hovel.z + hovel.d - 2,
+      w: 2, d: 2, height: .9, label: "Relic chapel" }
+    return { ...map, site: { ...site, churchPlot: { x: hovel.x - 2, z: hovel.z, w: hovel.w + 4, d: hovel.d } },
+      buildings: map.buildings.map(b => b.id === hovel.id ? chapel : b) }
   }
   return map
 }

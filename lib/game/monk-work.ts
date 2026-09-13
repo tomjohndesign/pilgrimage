@@ -1,5 +1,5 @@
 import { MONK_BUILD_RATE } from "./build-labour"
-import { assignBuildingTask, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
+import { isComplete, assignBuildingTask, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
 import { worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import type { MonkRoutine } from "./monk-routine"
 import type { monkWander, WanderSpot } from "./monk-wander"
@@ -70,7 +70,7 @@ export function stepMonkWork(s: MonkRoutine & MonkNeeds, map: GameMap, speed: nu
 export function replanMonkAfterMapChange(s: MonkRoutine, map: GameMap, wander: Pick<ReturnType<typeof monkWander>, "route">): void {
   const blocked = (p: WanderSpot) => {
     const building = buildingAt(map, worldToTileX(map, p.x), worldToTileZ(map, p.z))
-    return !!building && building.id !== map.site?.hovelId
+    return !!building && (building.id !== map.site?.hovelId || !isComplete(building))
   }
   const goHome = () => {
     if (!map.site) return

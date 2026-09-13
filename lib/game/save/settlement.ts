@@ -20,6 +20,7 @@ export function captureSettlement(settlement: Settlement): SettlementSave {
     collectedTrade: settlement.collectedTrade,
     paidWages: settlement.paidWages,
     grantedRenown: settlement.grantedRenown,
+    church: settlement.church ? captureStructure(settlement.church) : undefined,
     structures: settlement.structures.map(captureStructure),
   }
 }
@@ -89,6 +90,10 @@ export function restoreSettlement(world: GameMap, save: SettlementSave): Settlem
     if (!building.supportId) elevation = levelBuildingGround({ ...world, elevation, buildings: [...world.buildings, ...structures] }, building) ?? elevation
     structures.push(building)
   }
+  const church = save.church && save.church.id === world.site?.hovelId
+    && save.church.x + save.church.w <= world.width && save.church.z + save.church.d <= world.depth
+    ? { ...save.church, buildType: "church" } : undefined
+  if (church) elevation = levelBuildingGround({ ...world, elevation }, church) ?? elevation
   const known = new Set(world.buildings.map(building => building.id))
   return {
     claimedBuildings: save.claimedBuildings.filter(id => known.has(id)),
@@ -101,6 +106,7 @@ export function restoreSettlement(world: GameMap, save: SettlementSave): Settlem
     collectedTrade: save.collectedTrade,
     paidWages: save.paidWages,
     grantedRenown: save.grantedRenown,
+    church,
     structures,
   }
 }

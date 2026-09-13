@@ -37,10 +37,11 @@ export const usePersonDesignStore = create<DesignState>((set, get) => ({
       const stored = JSON.parse(saved)
       const design = restoreCharacterDesign(stored, stored?.templateVersion ?? 20)
       set({ design })
-      const { cachedPersonBake } = await import("./bake")
-      const atlas = cachedPersonBake(design)
+      const { bakePersonProgressively } = await import("./bake")
+      const atlas = await bakePersonProgressively(design, () => {}, { diagnostics: false, budgetMs: 4,
+        cancelled: () => get().design !== design }).promise
       // Applying or resetting while the module loads takes precedence.
-      if (get().design === design) set({ atlas })
+      if (atlas && get().design === design) set({ atlas })
     } catch { set({ design: null, atlas: null, error: "The saved design could not load. Using the project default." }) }
   },
 }))

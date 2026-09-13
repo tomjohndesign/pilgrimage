@@ -1,5 +1,6 @@
 "use client"
 
+import { churchUpgradeError } from "@/lib/game/shrine-upgrade"
 import { enclaveHousing } from "@/lib/game/housing"
 import { constructionStage } from "@/lib/game/construction"
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -7,7 +8,7 @@ import type { GameMap, TilePos } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
 import { useBuildStore } from "@/lib/game/build-store"
-import { claimTownBuildings, settlementMap, createSettlement, purchaseStructure, creditTimber, creditAdmission, creditTrade, payWages, syncWages, syncTimberSpending, settlementRenown, grantResources, grantRenown, completeConstruction, type Resources } from "@/lib/game/settlement"
+import { upgradeChurch, claimTownBuildings, settlementMap, createSettlement, purchaseStructure, creditTimber, creditAdmission, creditTrade, payWages, syncWages, syncTimberSpending, settlementRenown, grantResources, grantRenown, completeConstruction, type Resources } from "@/lib/game/settlement"
 
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { BUILDING_PREVIEW, buildingPreviewBalance, buildingPreviewSettlement } from "@/lib/game/building-preview"
@@ -52,26 +53,28 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   // Workers own live progress. Publish only stage/completion changes to React.
   useEffect(() => {
     const structures = session.settlement.structures
-    const stages = structures.map(constructionStage)
+    const church = session.settlement.church
+    const sites = church ? [...structures, church] : structures
+    const stages = sites.map(constructionStage)
     const timer = setInterval(() => {
       setSession(current => {
-        if (current.world !== world || current.settlement.structures !== structures) return current
-        const next = structures.map(constructionStage)
+        if (current.world !== world || current.settlement.structures !== structures || current.settlement.church !== church) return current
+        const next = sites.map(constructionStage)
         if (next.every((stage, i) => stage === stages[i])) return current
-        const completed = structures.find((_, i) => next[i] === 3 && stages[i] !== 3)
+        const completed = sites.find((_, i) => next[i] === 3 && stages[i] !== 3)
         return { ...current, message: completed ? `${completed.label} completed.` : current.message,
-          settlement: { ...current.settlement, structures: [...structures] } }
+          settlement: { ...current.settlement, structures: [...structures], church: church ? { ...church } : undefined } }
       })
     }, 250)
     return () => clearInterval(timer)
-  }, [world, session.settlement.structures])
+  }, [world, session.settlement.structures, session.settlement.church])
 
   const map = useMemo(
     () =>
       world
         ? settlementMap(world, session.settlement)
         : null,
-    [world, session.settlement.elevation, session.settlement.structures, session.settlement.claimedBuildings],
+    [world, session.settlement.elevation, session.settlement.structures, session.settlement.claimedBuildings, session.settlement.church],
   )
 
   useEffect(() => {
@@ -114,7 +117,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
       const settlement = completeConstruction(current.settlement)
       return settlement === current.settlement ? current : { ...current, settlement }
     })
-  }, [instantBuild, session.settlement.structures])
+  }, [instantBuild, session.settlement.structures, session.settlement.church])
 
   const granted = session.settlement.grantedRenown
   const renown = useMemo(() => map && relic
@@ -163,7 +166,19 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   const bless = useCallback((renown: number) =>
     setSession(current => ({ ...current, settlement: grantRenown(current.settlement, renown) })), [])
 
+  const upgradeShrine = () => setSession(current => {
+    if (!baseMap || current.world !== baseMap) return current
+    const result = upgradeChurch(current.settlement, baseMap)
+    return { ...current, settlement: instantBuild ? completeConstruction(result.settlement) : result.settlement,
+      message: result.error ?? (instantBuild ? "Church completed." : "Church upgrade planned. Relic visits resume when construction finishes.") }
+  })
+
+  const upgradeError = useMemo(() => map ? churchUpgradeError(map, session.settlement.resources) : null,
+    [map, session.settlement.resources])
+
   return {
+    upgradeShrine,
+    churchUpgradeError: upgradeError,
     map,
     renown,
     residents,

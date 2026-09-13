@@ -1,3 +1,4 @@
+import { churchPlan } from "../shrine-upgrade"
 import * as THREE from "three"
 import { SpatialPoints } from "../spatial-points"
 import { buildingSpatialQuery } from "../building-spatial"
@@ -8,8 +9,8 @@ import { RIG_TO_WORLD } from "../transport/assets"
 import { WALK_STANCE_FRACTION } from "../base-person/pose"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "../map/types"
 import type { TreePlacement } from "../trees/placement"
-import { habitatAllows, wildlifeHabitat, wildlifeSegmentClear } from "./habitat"
-import { createWildlife, startleWildlife, stepWildlife } from "./simulation"
+import { buildingDistance, habitatAllows, wildlifeHabitat, wildlifeSegmentClear } from "./habitat"
+import { clearWildlifeFootprints, createWildlife, startleWildlife, stepWildlife } from "./simulation"
 import { burrowApproach } from "./burrow-motion"
 import { isBird, isDomestic, WILDLIFE_PROFILES, wildlifeStride } from "./species"
 import { createWildlifeRig } from "./rig"
@@ -61,6 +62,50 @@ describe("wildlife habitats and social groups", () => {
     expect(wildlifeSegmentClear(habitat, "deer", from, away, map, .18, nearby)).toBe(true)
     expect(wildlifeSegmentClear(habitat, "deer", from, toward, map, .18, nearby)).toBe(false)
   })
+  it.each([0, 1, 2, 3])("clears grazing goats when the chapel expands, even before a simulation tick (direction %i)", direction => {
+    const { map, trees } = fixture()
+    const chapel = { id: "chapel", x: 30, z: 22, w: 2, d: 2, height: 1, label: "Chapel", color: "", roofColor: "" }
+    const door = [{ x: 31, z: 24 }, { x: 32, z: 23 }, { x: 31, z: 21 }, { x: 29, z: 23 }][direction]
+    map.buildings = [chapel]
+    map.site = { hovelId: chapel.id, door, branch: [door], junction: 0 }
+    const world = createWildlife(map, trees), goats = world.animals.filter(a => a.kind === "goat").slice(0, 2)
+    const church = churchPlan(map)!
+    const centre = { x: tileToWorldX(map, church.x + (church.w - 1) / 2), z: tileToWorldZ(map, church.z + (church.d - 1) / 2) }
+    for (const [i, goat] of goats.entries()) Object.assign(goat, { x: centre.x + (direction % 2 ? 0 : i * .2), z: centre.z + (direction % 2 ? i * .2 : 0),
+      home: { ...centre }, target: { ...centre }, rest: 100, moving: false })
+    expect(goats.every(goat => habitatAllows(world.habitat, "goat", goat, map))).toBe(true)
+    const upgraded = { ...map, buildings: [church] }
+    expect(goats.every(goat => buildingDistance(upgraded, goat) < 0)).toBe(true)
+    const identity = goats.map(goat => ({ id: goat.id, leader: goat.leader, phase: goat.phase }))
+    const original = goats.map(goat => ({ x: goat.x, z: goat.z }))
+    clearWildlifeFootprints(world, upgraded)
+    for (const [i, goat] of goats.entries()) {
+      expect(habitatAllows(world.habitat, "goat", goat, upgraded)).toBe(true)
+      expect(wildlifeSegmentClear(world.habitat, "goat", original[i], goat, upgraded, .2)).toBe(true)
+      expect(goat).toMatchObject(identity[i])
+      expect(goat.target).toBeNull()
+      expect(goat.rest).toBe(0)
+    }
+    expect(Math.hypot(goats[0].x - goats[1].x, goats[0].z - goats[1].z)).toBeGreaterThanOrEqual(.85)
+    for (let tick = 0; tick < 100; tick++) stepWildlife(world, upgraded, .1)
+    expect(goats.every(goat => buildingDistance(upgraded, goat) > 0)).toBe(true)
+  })
+
+  it("repairs an already trapped goat on the next tick without placing it across water", () => {
+    const { map, trees } = fixture(), world = createWildlife(map, trees)
+    map.buildings = [{ id: "church", x: 30, z: 20, w: 3, d: 5, height: 1, label: "Church", color: "", roofColor: "" }]
+    for (let z = 18; z < 27; z++) map.tiles[z * map.width + 29] = "water"
+    const goat = world.animals.find(a => a.kind === "goat")!
+    const from = { x: tileToWorldX(map, 31), z: tileToWorldZ(map, 22) }
+    Object.assign(goat, from, { home: { ...from }, target: null, rest: 100 })
+    const spatial = new SpatialPoints(world.animals.filter(a => !isBird(a.kind)))
+    stepWildlife(world, map, .1, 1, new Set(), [], {}, undefined, spatial)
+    expect(habitatAllows(world.habitat, "goat", goat, map)).toBe(true)
+    expect(wildlifeSegmentClear(world.habitat, "goat", from, goat, map, .2)).toBe(true)
+    expect(goat.x).toBeGreaterThan(tileToWorldX(map, 29))
+    expect(spatial.firstWithin(goat.x, goat.z, .01, a => a === goat)).toBe(goat)
+  })
+
   it("checks the whole route against water, paths and cliffs", () => {
     const { map, trees } = fixture(), habitat = wildlifeHabitat(map, trees)
     expect(wildlifeSegmentClear(habitat, "deer", { x: -4, z: 0 }, { x: 4, z: 0 })).toBe(false)

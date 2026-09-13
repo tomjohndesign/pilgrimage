@@ -70,7 +70,7 @@ describe("map reveal readiness", () => {
     expect(state.phase).toBe("loading")
     expect(state.timedOut).toBe(false)
     for (let frame = 0; frame < 120; frame++) state.advance(1 / 60, true, false)
-    expect(state.phase).toBe("revealing")
+    expect(state.phase).toBe("complete")
     expect(state.timedOut).toBe(true)
     expect(state.pending).toBe(1)
   })
@@ -83,17 +83,27 @@ describe("map reveal readiness", () => {
     expect(state.progress).toBe(1)
   })
 
-  it("does not let a stall between frames trip the timeout on its own", () => {
+  it("does not count time in a hidden tab toward the timeout", () => {
     const state = new MapRevealState()
     const finish = state.begin()
-    // A backgrounded tab reports one enormous delta; it must not count as the whole wait.
-    state.advance(600, true, false)
+    // The renderer resets its visible clock when the tab changes visibility.
+    state.advance(600, true, false, 0)
     expect(state.phase).toBe("loading")
     expect(state.timedOut).toBe(false)
     finish()
     warm(state)
     expect(state.phase).toBe("revealing")
     expect(state.timedOut).toBe(false)
+  })
+
+  it("times out after twenty visible seconds even when character baking makes frames slow", () => {
+    const state = new MapRevealState()
+    state.begin()
+    // At one frame per second, capping each frame to .25 would wait 80 seconds.
+    for (let second = 0; second < REVEAL_TIMEOUT; second++) state.advance(1, true, false)
+    expect(state.phase).toBe("complete")
+    expect(state.timedOut).toBe(true)
+    expect(state.waited).toBe(REVEAL_TIMEOUT)
   })
 
   it("runs the ordinary reveal to completion without the timeout interfering", () => {
