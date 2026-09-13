@@ -2,7 +2,6 @@ import { placementBuildingLayout } from "./building-placement-layout"
 import { housingBeds } from "./housing"
 import { settlementRoute } from "./settlement-route"
 import { buildingApproaches, buildingEntry, rotatedFootprint, type BuildingRotation } from "./building-rotation"
-import { getBuildInfluence } from "./build-influence"
 import { DEFAULT_ELEVATION, finishElevation, footprintGrading, generateElevation, groundHeight } from "./map/elevation"
 import { describe, expect, it } from "vitest"
 import { generateMap } from "./map/generate-map"
@@ -259,13 +258,12 @@ describe("build and buy", () => {
     expect(before.elevation).toBeUndefined()
   })
 
-  it("keeps influence feedback and footprint checks aware of cliffs and uneven ground", () => {
+  it("keeps placement feedback and footprint checks aware of cliffs and uneven ground", () => {
     const map = testMap(), i = 14 * map.width + 11
     map.elevation = { settings: DEFAULT_ELEVATION, height: Array(900).fill(0), corners: Array(3600).fill(0), cliffs: Array(900).fill(0), slope: Array(900).fill(0) }
-    const influence = getBuildInfluence(map)
-    expect(buildTileError(map, 11, 14, influence)).toBeNull()
+    expect(buildTileError(map, 11, 14)).toBeNull()
     map.elevation.cliffs[i] = 1
-    expect(buildTileError(map, 11, 14, influence)).toMatch(/cliffs/)
+    expect(buildTileError(map, 11, 14)).toMatch(/cliffs/)
     expect(placementError(map, house, { x: 11, z: 14 })).toMatch(/cliffs/)
     map.elevation.cliffs[i] = 0
     map.elevation.corners.fill(0.4, (i + 1) * 4, (i + 2) * 4)
@@ -432,8 +430,8 @@ describe("build and buy", () => {
     expect(placementError(testMap(), house, { x: 13, z: 16 })).toMatch(/approach/)
   })
 
-  it("rejects distant sites, partial off-map footprints and fractional coordinates", () => {
-    expect(placementError(testMap(), house, { x: 0, z: 0 })).toBeTruthy()
+  it("accepts distant sites but rejects partial off-map footprints and fractional coordinates", () => {
+    expect(placementError(testMap(), house, { x: 0, z: 0 })).toBeNull()
     expect(placementError(testMap(), house, { x: 29, z: 14 })).toBeTruthy()
     expect(placementError(testMap(), house, { x: 11.5, z: 14 })).toBeTruthy()
   })
