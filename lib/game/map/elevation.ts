@@ -130,18 +130,42 @@ export function generateElevation(seed: number, width: number, depth: number, wa
   return { settings, height, corners: [], slope: [], cliffs: [] }
 }
 
+/** Visit every in-bounds edge of a tile with its height difference, water measured at its surface. */
+function forEachEdge(
+  e: ElevationInfo, width: number, depth: number, water: Uint8Array, surface: number[], i: number,
+  visit: (n: number, side: number, delta: number) => void,
+): void {
+  const x = i % width, z = Math.floor(i / width), h = water[i] ? surface[i] : e.height[i]
+  ROUTE_DIRS.forEach(([dx, dz], side) => {
+    const nx = x + dx, nz = z + dz, n = nz * width + nx
+    if (nx < 0 || nz < 0 || nx >= width || nz >= depth) return
+    visit(n, side, Math.abs(h - (water[n] ? surface[n] : e.height[n])))
+  })
+}
+
 function updateElevationEdges(e: ElevationInfo, width: number, depth: number, water: Uint8Array, surface: number[]): void {
   e.slope = e.height.map(() => 0); e.cliffs = e.height.map(() => 0)
-  for (let z = 0; z < depth; z++) for (let x = 0; x < width; x++) {
-    const i = z * width + x, h = water[i] ? surface[i] : e.height[i]
-    ROUTE_DIRS.forEach(([dx, dz], side) => {
-      const nx = x + dx, nz = z + dz, n = nz * width + nx
-      if (nx < 0 || nz < 0 || nx >= width || nz >= depth) return
-      const delta = Math.abs(h - (water[n] ? surface[n] : e.height[n]))
+  for (let i = 0; i < e.height.length; i++) {
+    forEachEdge(e, width, depth, water, surface, i, (n, side, delta) => {
       if (!water[i] && !water[n]) e.slope[i] = Math.max(e.slope[i], delta)
       if (delta >= e.settings.cliffThreshold) e.cliffs[i] |= 1 << side
     })
   }
+}
+
+/**
+ * Tiles with at least one cliff edge, by the same cutoff `cliffs` uses once
+ * the map is finished. Usable before then — founding sites are chosen while
+ * the edge masks are still empty.
+ */
+export function cliffMask(e: ElevationInfo, width: number, depth: number, water: Uint8Array, surface: number[]): Uint8Array {
+  const mask = new Uint8Array(e.height.length)
+  for (let i = 0; i < mask.length; i++) {
+    forEachEdge(e, width, depth, water, surface, i, (_n, _side, delta) => {
+      if (delta >= e.settings.cliffThreshold) mask[i] = 1
+    })
+  }
+  return mask
 }
 
 /** Rebuild after grading a founding footprint. Water corners retain their channel levels. */

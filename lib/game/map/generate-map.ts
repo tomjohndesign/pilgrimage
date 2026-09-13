@@ -1,6 +1,6 @@
 import { expandReachable, nearestReachableLand } from "./connectivity"
 import { generateLegacyMap } from "./legacy-generate-map"
-import { DEFAULT_SETTINGS, PLAYABLE_SEED_REGION_SIZE, sampleWoodland, seedingMethodForSeed } from "./woodland"
+import { DEFAULT_SETTINGS, PLAYABLE_SEED_REGION_SIZE, distanceToMask, sampleWoodland, seedingMethodForSeed } from "./woodland"
 import { MAIN_ROAD_WIDTH, clearMainRoadVerge } from "./road-width"
 import { routeBounds, ROUTE_EDGE_INSET } from "./route-bounds"
 import { createCrossroads } from "./crossroads"
@@ -11,7 +11,7 @@ import { beachAccess } from "./beaches"
 import { taperRiverBanks, gradeBridgeApproaches } from "./river-banks"
 import { bridgeLayout } from "./bridges"
 import { seedFords } from "./fords"
-import { generateElevation, finishElevation, levelBuildingGround, elevationStep, type ElevationInfo, type ElevationSettings } from "./elevation"
+import { generateElevation, finishElevation, levelBuildingGround, elevationStep, cliffMask, type ElevationInfo, type ElevationSettings } from "./elevation"
 import { drainWater } from "./hydrology"
 import { makeRng } from "../rng"
 import { computeDarkShade, computeForestShade } from "./forest-field"
@@ -155,15 +155,41 @@ const JUNCTION_MARGIN = 0.1
 const SITE_ROOM_RADIUS = 2
 
 /**
- * A site this close to the map edge loses score per tile of shortfall — soft,
- * so tiny maps still found, but enough that a hovel never hugs the boundary
- * when there's any interior glade to be had.
+ * A site this close to the map edge falls short of the founding rules by the
+ * shortfall in tiles: a hovel never hugs the boundary, where its well has no
+ * ground to stand on, when there's any interior site to be had.
  */
 const SITE_EDGE_MARGIN = 10
-const SITE_EDGE_PENALTY = 4
 
 /** Random jitter on the site score, so equally good spots don't always tie the same way. */
 const SITE_SCORE_JITTER = 6
+
+/**
+ * Founding rules. The shrine stands in the middle of the map, in a glade —
+ * the treeline held back from it and its shelter — well back from any river
+ * and any cliff, on level ground, SITE_EDGE_MARGIN inside the map, and the
+ * requested road distance from the road.
+ * Distances are in tiles, eight-neighbour, from the nearest tile of either
+ * building. The glade is the one rule founding can keep by itself: whatever
+ * woods stand inside the clearance once the site is chosen are felled.
+ */
+export const SITE_TREE_CLEARANCE = 5
+export const SITE_RIVER_CLEARANCE = 20
+export const SITE_CLIFF_CLEARANCE = 10
+/** The middle of the map: this share of each side either way of the centre. */
+export const SITE_CENTRE_BAND = 0.2
+/** Level ground: this far beyond the footprint, dry land rises and falls no more than the relief. */
+export const SITE_FLAT_RADIUS = 6
+export const SITE_FLAT_RELIEF = 0.6
+/**
+ * Score lost per founding rule, times the square of its shortfall in tiles.
+ * Squared, so the rules bend a little each rather than one of them a lot:
+ * a site two tiles short of one rule beats a site eight tiles short of
+ * another, and a site keeping every rule beats both.
+ */
+const SITE_RULE_PENALTY = 1500
+/** Chance a tile on the felled glade's outer ring keeps its trees, ragging the rim. */
+const GLADE_RAGGED = 0.45
 
 /** Grid-step cost added to tiles the branch must avoid (the road, the hovel). */
 const BRANCH_AVOID_COST = 100
@@ -596,6 +622,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     Uint8Array.from(walkable, (v, i) => tiles[i] === "bridge" ? 0 : v),
     roadLand,
     elevation,
+    waterInfo.surface!,
     shortcuts,
   )
 
@@ -634,7 +661,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   // existing canopy; a sparse start gets branching saplings at the meadow edge.
   const lumberCandidates: number[] = []
   const protectedSite = (x: number, z: number) => [hovel, shelter].some(b =>
-    x >= b.x - 2 && x < b.x + b.w + 2 && z >= b.z - 2 && z < b.z + b.d + 2)
+    x >= b.x - SITE_TREE_CLEARANCE && x < b.x + b.w + SITE_TREE_CLEARANCE && z >= b.z - SITE_TREE_CLEARANCE && z < b.z + b.d + SITE_TREE_CLEARANCE)
   const cx = hovel.x + Math.floor(hovel.w / 2), cz = hovel.z + Math.floor(hovel.d / 2)
   let nearbyTrees = 0
   for (let z = Math.max(1, cz - 12); z <= Math.min(depth - 2, cz + 12); z++) for (let x = Math.max(1, cx - 12); x <= Math.min(width - 2, cx + 12); x++) {
@@ -845,7 +872,11 @@ function landDistanceField(
  * seeded jitter so the pick varies between worlds that look alike. Water
  * rules it out entirely: the footprint and ring must be dry land on the main
  * reachable landmass, never open water, a bridge, or a pocket walled in by a
- * lake. The footprint and a one-tile ring are then guaranteed to be grass, so
+ * lake. Above all of that sit the founding rules — the middle of the map,
+ * the road band, the tree, river, cliff and edge clearances, and level
+ * ground out to SITE_FLAT_RADIUS — each scored by the square of its
+ * shortfall, so a cramped map bends several of them a little rather than one
+ * a lot. The footprint and a one-tile ring are then guaranteed to be grass, so
  * the hovel always stands on buildable ground with breathing space, even on a
  * map whose knobs left no glade to be had.
  *
@@ -872,9 +903,18 @@ function foundSite(
   passKind: Uint8Array,
   roadLand: Uint8Array,
   elevation: ElevationInfo,
+  surface: number[],
   shortcuts: readonly Shortcut[],
 ): { hovel: BuildingDef; shelter: BuildingDef; site: FoundingSite } {
   const { min: bandMin, max: bandMax } = relicDistanceBand(relicDistance)
+  // Founding rules measure from the nearest river tile and the nearest tile
+  // with a cliff edge, eight-neighbour, so a diagonal gap counts the same as
+  // a straight one.
+  const fromRiver = distanceToMask(Uint8Array.from(kind, k => Number(k === WATER_KIND_RIVER)), width, depth)
+  const fromCliff = distanceToMask(cliffMask(elevation, width, depth, kind, surface), width, depth)
+  const fromTrees = distanceToMask(Uint8Array.from(tiles, t => Number(isWoods(t))), width, depth)
+  // Old growth is never felled for the glade, so it may not stand inside it.
+  const fromDark = distanceToMask(Uint8Array.from(tiles, t => Number(t === "darkwood")), width, depth)
   // Founding must not build over the newly routed forest alternatives.
   const reservedTracks = new Set(shortcuts.flatMap(s => s.tiles.map(p => p.z * width + p.x)))
 
@@ -925,18 +965,20 @@ function foundSite(
       let grounded = true
       let dryTrack = false
       let nearest = Infinity
+      let riverGap = Infinity, cliffGap = Infinity, treeGap = Infinity
       for (let dz = -1; dz <= HOVEL_DEPTH; dz++) {
         for (let dx = -1; dx <= HOVEL_WIDTH; dx++) {
           const i = (z + dz) * width + (x + dx)
           const inFootprint = dx >= 0 && dx < HOVEL_WIDTH && dz >= 0 && dz < HOVEL_DEPTH
           // Footprint and ring must be dry, reachable land — no water, no
           // bridges, no lake-locked pockets.
-          if (roadLand[i] !== 1 || tiles[i] === "darkwood") grounded = false
+          if (roadLand[i] !== 1 || fromDark[i] < SITE_TREE_CLEARANCE) grounded = false
           if (inFootprint && reservedTracks.has(i)) overlapsShortcut = true
           low = Math.min(low, elevation.height[i]); high = Math.max(high, elevation.height[i])
           if (inFootprint) {
             if (tiles[i] === "path") onRoad = true
             nearest = Math.min(nearest, walkFromRoad(i))
+            riverGap = Math.min(riverGap, fromRiver[i]); cliffGap = Math.min(cliffGap, fromCliff[i]); treeGap = Math.min(treeGap, fromTrees[i])
           } else if (dist[i] !== -1) {
             // A ring tile the gate walk reaches means the track can arrive dry.
             dryTrack = true
@@ -946,20 +988,40 @@ function foundSite(
       // Reserve a three-tile shelter north of the gate path, on the same level.
       for (let dz = -3; dz <= -2; dz++) for (let dx = 0; dx < 3; dx++) {
         const i = (z + dz) * width + x + dx
-        if (z + dz < 0 || roadLand[i] !== 1 || tiles[i] === "path") grounded = false
+        if (z + dz < 0 || roadLand[i] !== 1 || tiles[i] === "path" || fromDark[i] < SITE_TREE_CLEARANCE) grounded = false
         if (reservedTracks.has(i)) overlapsShortcut = true
         low = Math.min(low, elevation.height[i]); high = Math.max(high, elevation.height[i])
+        riverGap = Math.min(riverGap, fromRiver[i]); cliffGap = Math.min(cliffGap, fromCliff[i]); treeGap = Math.min(treeGap, fromTrees[i])
       }
       if (onRoad || !grounded || high - low > 0.18) continue
+
+      // --- Founding rules, each as tiles of shortfall --------------------------
+      // Level ground: dry land out to SITE_FLAT_RADIUS rises and falls within the relief.
+      let flatLow = Infinity, flatHigh = -Infinity
+      for (let nz = Math.max(0, z - SITE_FLAT_RADIUS); nz < Math.min(depth, z + HOVEL_DEPTH + SITE_FLAT_RADIUS); nz++) {
+        for (let nx = Math.max(0, x - SITE_FLAT_RADIUS); nx < Math.min(width, x + HOVEL_WIDTH + SITE_FLAT_RADIUS); nx++) {
+          const i = nz * width + nx
+          if (kind[i] !== 0) continue
+          flatLow = Math.min(flatLow, elevation.height[i]); flatHigh = Math.max(flatHigh, elevation.height[i])
+        }
+      }
+      const edgeDist = Math.min(x, z, width - HOVEL_WIDTH - x, depth - HOVEL_DEPTH - z)
+      const dx = Math.abs(x + HOVEL_WIDTH / 2 - width / 2), dz = Math.abs(z + HOVEL_DEPTH / 2 - depth / 2)
+      const shortfalls = [
+        SITE_TREE_CLEARANCE - treeGap,
+        SITE_EDGE_MARGIN - edgeDist,
+        SITE_RIVER_CLEARANCE - riverGap,
+        SITE_CLIFF_CLEARANCE - cliffGap,
+        Math.max(dx - width * SITE_CENTRE_BAND, dz - depth * SITE_CENTRE_BAND),
+        Math.max(bandMin - nearest, nearest - bandMax), // the requested road distance, either way
+        (flatHigh - flatLow - SITE_FLAT_RELIEF) * 10, // a tenth of relief counts as a tile
+      ]
+      const rulePenalty = shortfalls.reduce((sum, short) => sum + Math.max(0, short) ** 2, 0) * SITE_RULE_PENALTY
       // Keep the original candidate dice so reserving a shortcut only moves
       // a founding site when the winning footprint actually overlaps it.
       const siteJitter = rng() * SITE_SCORE_JITTER
       if (overlapsShortcut) continue
 
-      // Prefer the road-distance band within the central settlement area.
-      // A distant edge glade must not win just because its road gap is exact.
-      const bandPenalty =
-        nearest < bandMin ? (bandMin - nearest) * 50 : nearest > bandMax ? (nearest - bandMax) * 50 : 0
       // Needing a bridge outweighs any band shortfall a dry site could have.
       const bridgePenalty = dryTrack ? 0 : (width + depth) * 50
 
@@ -976,12 +1038,10 @@ function foundSite(
         }
       }
 
-      const edgeDist = Math.min(x, z, width - HOVEL_WIDTH - x, depth - HOVEL_DEPTH - z)
-      const edgePenalty = Math.max(0, SITE_EDGE_MARGIN - edgeDist) * SITE_EDGE_PENALTY
-      const dx = Math.abs(x + HOVEL_WIDTH / 2 - width / 2), dz = Math.abs(z + HOVEL_DEPTH / 2 - depth / 2)
-      const centerPenalty = Math.max(0, dx - width * .2, dz - depth * .2) * 500 + Math.hypot(dx, dz) * 2
+      // Within the middle of the map, nearer the centre still edges it.
+      const centerPenalty = Math.hypot(dx, dz) * 2
 
-      const score = room - bandPenalty - bridgePenalty - edgePenalty - centerPenalty + siteJitter
+      const score = room - rulePenalty - bridgePenalty - centerPenalty + siteJitter
       if (score > bestScore) {
         bestScore = score
         best = { x, z }
@@ -1014,6 +1074,20 @@ function foundSite(
       ) {
         tiles[i] = "grass"
       }
+    }
+  }
+
+  // The glade: fell the woods back to the tree clearance around both
+  // buildings, on a ragged rim, so the site reads as an opening in the
+  // forest rather than a rectangle cut from it. Old growth never stands this
+  // close: the site filter keeps the shrine out of its reach.
+  const glade = { x: best.x, z: shelter.z, w: HOVEL_WIDTH, d: HOVEL_DEPTH + 3 }
+  for (let z = Math.max(0, glade.z - SITE_TREE_CLEARANCE); z < Math.min(depth, glade.z + glade.d + SITE_TREE_CLEARANCE); z++) {
+    for (let x = Math.max(0, glade.x - SITE_TREE_CLEARANCE); x < Math.min(width, glade.x + glade.w + SITE_TREE_CLEARANCE); x++) {
+      const gap = Math.hypot(Math.max(glade.x - x, x - (glade.x + glade.w - 1), 0), Math.max(glade.z - z, z - (glade.z + glade.d - 1), 0))
+      if (gap > SITE_TREE_CLEARANCE || (gap > SITE_TREE_CLEARANCE - 1 && rng() < GLADE_RAGGED)) continue
+      const i = z * width + x
+      if (tiles[i] === "forest") tiles[i] = "grass"
     }
   }
 

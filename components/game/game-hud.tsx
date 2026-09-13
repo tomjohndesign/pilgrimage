@@ -9,7 +9,7 @@ import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/eleva
 
 import Link from "next/link"
 import * as Tooltip from "@radix-ui/react-tooltip"
-import { Menu, Settings, X } from "lucide-react"
+import { Dices, Menu, Settings, X } from "lucide-react"
 import "./game-hud.css"
 import { useEffect, useId, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
@@ -50,6 +50,7 @@ import { HudButton } from "./hud-button"
 import { BugReportDialog } from "./bug-report-dialog"
 import { MapSizeControl } from "./map-size-control"
 import { NewMapDialog, type NewWorld } from "./new-map-dialog"
+import { randomSeed } from "@/lib/game/rng"
 import { NewWorldFields } from "./new-world-fields"
 import { SeedField } from "./seed-field"
 import { Switch } from "@/components/ui/switch"
@@ -802,6 +803,8 @@ export function GameHud({
         </div>
         <div className="hud-header-right">
         <div className="hud-header-actions">
+          {playing && <button type="button" className="hud-header-button" aria-label="Random map" title="Random map: regenerate at this size with a random seed"
+            onClick={() => onNewMap({ size: settings.size, seed: randomSeed() })}><Dices size={16} /></button>}
           {playing && <NewMapDialog defaultSize={settings.size} onCreate={onNewMap} />}
           <MusicPlayer className="hud-header-button" compact />
           {playing && <button type="button" className="hud-header-button" aria-label="World settings" title="World settings"

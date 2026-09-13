@@ -2,7 +2,7 @@ import { ROUTE_EDGE_INSET } from "./route-bounds"
 import { elevationStep } from "./elevation"
 import { describe, expect, it } from "vitest"
 
-import { generateMap, HOVEL_ID, JUNCTION_CLEARING_RADIUS, MIN_MAP_SIZE } from "./generate-map"
+import { generateMap, HOVEL_ID, JUNCTION_CLEARING_RADIUS, MIN_MAP_SIZE, SITE_CLIFF_CLEARANCE, SITE_FLAT_RADIUS, SITE_FLAT_RELIEF, SITE_RIVER_CLEARANCE, SITE_TREE_CLEARANCE } from "./generate-map"
 import { isWoods, TERRAIN } from "./terrain"
 import { MAX_RIVER_WIDTH } from "./water"
 import { tileAt, type GameMap } from "./types"
@@ -214,19 +214,68 @@ describe("generateMap", () => {
       const map = mapFor(seed), hovel = map.buildings[0], nearest = hovelRoadDistance(map)
       expect(Number.isFinite(nearest), `seed ${seed} dry road access`).toBe(true)
       expect(nearest).toBeGreaterThan(0)
-      expect(Math.abs(hovel.x + hovel.w / 2 - map.width / 2), `seed ${seed} centred x`).toBeLessThanOrEqual(map.width * .25)
-      expect(Math.abs(hovel.z + hovel.d / 2 - map.depth / 2), `seed ${seed} centred z`).toBeLessThanOrEqual(map.depth * .25)
+      // The middle of the map is a founding rule; the others can bend it by a few tiles.
+      expect(Math.abs(hovel.x + hovel.w / 2 - map.width / 2), `seed ${seed} centred x`).toBeLessThanOrEqual(map.width * .3)
+      expect(Math.abs(hovel.z + hovel.d / 2 - map.depth / 2), `seed ${seed} centred z`).toBeLessThanOrEqual(map.depth * .3)
     }
   }, SWEEP_TIMEOUT)
 
+  it("founds in a felled glade, clear of rivers and cliffs, on level ground", () => {
+    // A floor-size map can lack any site that keeps every clearance; the
+    // least broken site wins there, so the clearances are checked as a share
+    // of seeds with a floor beneath. The glade is felled, so it always holds.
+    let kept = 0
+    for (const seed of SEEDS) {
+      const map = mapFor(seed), { width, depth, tiles } = map
+      const hovel = map.buildings[0], shelter = map.buildings[1]
+      const buildingTiles: number[] = []
+      for (const b of [hovel, shelter]) for (let z = b.z; z < b.z + b.d; z++) for (let x = b.x; x < b.x + b.w; x++) buildingTiles.push(z * width + x)
+      const gap = (i: number) => Math.min(...buildingTiles.map(b =>
+        Math.max(Math.abs(i % width - b % width), Math.abs(Math.floor(i / width) - Math.floor(b / width)))))
+      let river = Infinity, cliff = Infinity
+      for (let i = 0; i < tiles.length; i++) {
+        if (carriesWater(map, i % width, Math.floor(i / width)) && map.water!.flow[i]) river = Math.min(river, gap(i))
+        if (map.elevation!.cliffs[i]) cliff = Math.min(cliff, gap(i))
+      }
+      expect(river, `seed ${seed} river clearance`).toBeGreaterThanOrEqual(SITE_RIVER_CLEARANCE - 8)
+      expect(cliff, `seed ${seed} cliff clearance`).toBeGreaterThanOrEqual(SITE_CLIFF_CLEARANCE - 4)
+      // No woods stand within the felled glade, bar its ragged outer ring.
+      const glade = { x: hovel.x, z: shelter.z, w: hovel.w, d: hovel.d + 3 }
+      for (let z = 0; z < depth; z++) for (let x = 0; x < width; x++) {
+        const gap = Math.hypot(Math.max(glade.x - x, x - (glade.x + glade.w - 1), 0), Math.max(glade.z - z, z - (glade.z + glade.d - 1), 0))
+        if (gap <= SITE_TREE_CLEARANCE - 1) expect(isWoods(tileAt(map, x, z)!), `seed ${seed} woods at ${x},${z} inside the glade`).toBe(false)
+      }
+      for (const i of buildingTiles) expect(tileAt(map, i % width, Math.floor(i / width)), `seed ${seed} buildings on grass`).toBe("grass")
+      let low = Infinity, high = -Infinity
+      for (let z = Math.max(0, hovel.z - SITE_FLAT_RADIUS); z < Math.min(depth, hovel.z + hovel.d + SITE_FLAT_RADIUS); z++) {
+        for (let x = Math.max(0, hovel.x - SITE_FLAT_RADIUS); x < Math.min(width, hovel.x + hovel.w + SITE_FLAT_RADIUS); x++) {
+          if (carriesWater(map, x, z)) continue
+          const h = map.elevation!.height[z * width + x]
+          low = Math.min(low, h); high = Math.max(high, h)
+        }
+      }
+      expect(high - low, `seed ${seed} level ground`).toBeLessThanOrEqual(SITE_FLAT_RELIEF + 0.4)
+      if (river >= SITE_RIVER_CLEARANCE && cliff >= SITE_CLIFF_CLEARANCE && high - low <= SITE_FLAT_RELIEF) kept++
+    }
+    // Floor-size maps are cramped: the middle of the map and the road band
+    // leave about half of them a clearance short by a tile or two.
+    expect(kept / SEEDS.length, "share of seeds keeping every clearance").toBeGreaterThanOrEqual(0.45)
+  }, SWEEP_TIMEOUT)
+
   it("moves the hovel further out when asked", () => {
-    for (const seed of SEEDS.slice(0, 10)) {
+    // The founding rules leave a floor-size map few sites; a seed with one
+    // compliant site founds it whatever distance was asked for.
+    const seeds = SEEDS.slice(0, 10)
+    let further = 0
+    for (const seed of seeds) {
       const near = hovelRoadDistance(generateMap({ ...FLOOR, seed, relicDistance: 8 }))
       const far = hovelRoadDistance(generateMap({ ...FLOOR, seed, relicDistance: 32 }))
-      expect(far, `seed ${seed} far > near`).toBeGreaterThan(near)
+      expect(far, `seed ${seed} far >= near`).toBeGreaterThanOrEqual(near)
+      if (far > near) further++
       // Requested road distance remains a preference within the central area.
       expect(Number.isFinite(near) && Number.isFinite(far)).toBe(true)
     }
+    expect(further / seeds.length, "share of seeds founded further out").toBeGreaterThanOrEqual(0.7)
   }, SWEEP_TIMEOUT)
 
   it("cuts one unbroken track from a mid-road junction to the hovel's door", () => {
