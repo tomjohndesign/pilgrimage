@@ -25,7 +25,7 @@ import { generateWater, WATER_KIND_LAKE, WATER_KIND_RIVER } from "./water"
  * Jagged ancient forests sit inside normal canopy, with large irregular hearts
  * and one narrow destination approach. Main clearings connect to the road;
  * rivers use bank-to-bank fords or bridges and lakes remain barriers. Founding reserves
- * a church, shelter, dry gate path, and nearby ordinary lumber. Independent
+ * a church, room for its residence, dry gate path, and nearby ordinary lumber. Independent
  * random streams keep terrain and route tuning reproducible. */
 
 /** Worlds are big; nothing generates smaller than this on a side. */
@@ -35,7 +35,7 @@ export const DEFAULT_MAP_WIDTH = 192
 export const DEFAULT_MAP_DEPTH = 192
 
 export interface GenerateMapOptions {
-  /** Saved-world compatibility; new worlds use generation 2. */
+  /** Saved-world compatibility; new worlds use generation 3 without a starting residence. */
   generation?: number
   elevation?: Partial<ElevationSettings>
   seed: number
@@ -633,6 +633,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     elevation,
     waterInfo.surface!,
     shortcuts,
+    options.generation === 2,
   )
 
   gradeCrossings()
@@ -795,7 +796,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     darkForests.push({ center, clearing: clearing.map(toPos), approach: approach.map(toPos) })
   }
 
-  // Trail repairs must leave the shelter foundation clear.
+  // Keep the reserved founding plot clear, including in older worlds with a shelter.
   for (let z = shelter.z; z < shelter.z + shelter.d; z++)
     for (let x = shelter.x; x < shelter.x + shelter.w; x++) tiles[z * width + x] = "grass"
 
@@ -804,7 +805,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     width,
     depth,
     tiles,
-    buildings: [hovel, shelter],
+    buildings: options.generation === 2 ? [hovel, shelter] : [hovel],
     seed,
     woodlandMethod,
     mainClearings,
@@ -921,6 +922,7 @@ function foundSite(
   elevation: ElevationInfo,
   surface: number[],
   shortcuts: readonly Shortcut[],
+  startingShelter: boolean,
 ): { hovel: BuildingDef; shelter: BuildingDef; site: FoundingSite } {
   const { min: bandMin, max: bandMax } = relicDistanceBand(relicDistance)
   // Founding rules measure from the nearest river tile and the nearest tile
@@ -1208,12 +1210,12 @@ function foundSite(
 
   clearJunction(tiles, width, depth, road[junction], rng)
 
-  // Connect the shelter to the chosen shrine entrance, around the wall when
-  // the approach is on the far side of the longer shrine.
+  // Older worlds retain their shelter connection. New settlements leave the
+  // glade empty until the player builds a residence against the church.
   const shelterPath = [{ x: shelter.x, z: shelter.z + shelter.d }]
   if (door.z >= best.z) shelterPath.push({ x: best.x - 1, z: best.z - 1 }, { x: best.x - 1, z: door.z })
   shelterPath.push(door)
-  for (let i = 1; i < shelterPath.length; i++) {
+  for (let i = 1; startingShelter && i < shelterPath.length; i++) {
     const p = { ...shelterPath[i - 1] }, end = shelterPath[i]
     for (;;) {
       const index = p.z * width + p.x

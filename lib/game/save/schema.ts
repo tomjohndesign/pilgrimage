@@ -42,7 +42,7 @@ export const elevationSettingsSchema = z
   .describe("Terrain shaping inputs for the hills, cliffs and bridges")
 
 export const worldSettingsSchema = z.object({
-  generation: z.union([z.literal(1), z.literal(2)]).default(1).describe("Terrain generator version; older saves retain their original land"),
+  generation: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(1).describe("Terrain generator version; older saves retain their original land"),
   seed: uint32.describe("World seed. With the settings below it fully determines the generated land"),
   size: z.number().int().min(MIN_MAP_SIZE).max(MAX_MAP_SIZE).describe("Map edge length in tiles; maps are square"),
   coverage: finite.min(0).max(100).describe("Percent of the map left as forest after glades are carved"),
@@ -111,6 +111,7 @@ export const structureSchema = z.object({
   layoutSeed: finite.optional().describe("Rolls the interior layout; kept so the rooms come back as built"),
   fireplace: z.boolean().optional().describe("Whether the building has a hearth; absent means the type's seeded choice"),
   supportId: z.string().optional(),
+  churchId: z.string().optional(),
   floorHeight: finite.min(0).optional(),
   tavernFlue: z.object({x:finite,z:finite}).optional(),
   hearthZ: finite.optional().describe("Row the hearth sits on"),

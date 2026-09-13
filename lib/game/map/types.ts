@@ -17,6 +17,8 @@ export interface BuildingDef {
   hearthZ?: number
   /** Independent upper storey supported by this tavern. */
   supportId?: string
+  /** Ground-floor residence entered through this church's shared side wall. */
+  churchId?: string
   /** Floor height above the levelled ground; zero for standalone buildings. */
   floorHeight?: number
   /** The tavern's flue passes through the upper floor without a second hearth. */

@@ -13,7 +13,7 @@ export const BUILDING_STYLE = {
     "Slightly irregular ink contours; broad, quiet colour washes.",
     "Early medieval rural construction: earthfast roundwood posts, wattle, muted earthen daub and lapped thatch.",
     "Small single-storey structures; no decorative half-timber grids, glazed windows or dressed-stone trim; rough stone chimneys belong on domestic hearths.",
-    "Plain wooden crosses mark religious buildings: gatepost crosses on the relic enclosure and roof crosses on the monks’ shelter. Keep utility huts unadorned.",
+    "Plain wooden crosses mark religious buildings: gatepost crosses on the relic enclosure and roof crosses on the monks’ residence. Keep utility huts unadorned.",
     "A clear entrance and a useful silhouette before surface detail.",
     "Long straw bundles follow the roof pitch, overlapping in thick courses with visible seams and ragged cut ends. Horizontal round logs and pale plastered masonry distinguish enclosed buildings.",
     "One orthographic camera, consistent scale, and the shared southeast light: elevated, below and right of the isometric view (see assets/LIGHTING.md).",
@@ -57,7 +57,7 @@ export const LEGACY_RECIPE: BuildingRecipe = {
 export const EARLY_BUILDINGS = [
   { id: "inn", name: "Inn", description: "An open dormitory of bunks and beds, with crossed timber framing, rough plaster and a partly shingled roof. Stands alone or covers a tavern’s full footprint, with the upper roof running perpendicular to the tavern’s roof.", width: 3, depth: 4, wallHeight: 1.2, roofRise: singlePlaneRoofRise(2) },
   { id: "enclosure", name: "Relic enclosure", description: "Four open timber gates with plain crosses, low paling walls and a glowing relic on a rough stone table under the sky.", width: 3, depth: 3, wallHeight: 0.42, roofRise: 0 },
-  { id: "monk-shelter", name: "Monks’ shelter", description: "An open-front thatched sleeping shelter with a rear-sloping awning, plain crosses, a stone chimney and fireplace, horizontal log windbreaks and straw bedrolls.", width: 3, depth: 2, wallHeight: 0.62, roofRise: singlePlaneRoofRise(2) },
+  { id: "monk-shelter", name: "Monks’ residence", description: "An enclosed church wing with pale plaster over rubble stonework, arched door and window openings, a gabled thatch roof, plain crosses, four straw beds and a stone fireplace and chimney.", width: 3, depth: 2, wallHeight: 1.18, roofRise: singlePlaneRoofRise(2) },
   { id: "house", name: "House", description: "A compact log-built home with a low single-plane thatched roof, a deep arched brow over the low-eave doorway, a stone chimney and fireplace, and straw beds for its household.", width: 2, depth: 2, wallHeight: 0.70, roofRise: singlePlaneRoofRise(2) },
   { id: "tavern", name: "Tavern", description: "A broad timber-and-rubble alehouse with a back-to-back thatched roof, an arched entrance, stone hearth and chimney, wooden drinking tables, benches and an ale-cup sign.", width: 3, depth: 4, wallHeight: 0.78, roofRise: singlePlaneRoofRise(4) },
   { id: "storehouse", name: "Raised store", description: "An open-sided store on timber legs, with a plank entry ramp and sacks beneath a thatched roof held by two plain timber battens.", width: 2, depth: 2, wallHeight: 0.62, roofRise: singlePlaneRoofRise(2) },

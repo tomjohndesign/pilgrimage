@@ -1,4 +1,7 @@
 import { ROUTE_EDGE_INSET } from "./route-bounds"
+import { BUILD_CATALOG } from "../balance"
+import { placementError } from "../settlement"
+import { rotatedFootprint, type BuildingRotation } from "../building-rotation"
 import { elevationStep } from "./elevation"
 import { describe, expect, it } from "vitest"
 
@@ -135,18 +138,28 @@ describe("generateMap", () => {
     expect(mapFor(1).tiles).not.toEqual(mapFor(2).tiles)
   })
 
-  it.each(SEEDS)("founds the shrine and a completed monk shelter beside its gate path, seed %s", (seed) => {
+  it("retains the completed founding residence in generation 2 saves", () => {
+    const map = generateMap({ ...FLOOR, seed: 1, generation: 2 })
+    expect(map.buildings.find(b => b.id === "founding-shelter")).toMatchObject({ buildType: "monk-shelter" })
+    expect(map.buildings.find(b => b.id === "founding-shelter")!.construction).toBeUndefined()
+  })
+
+  it.each(SEEDS)("founds the shrine without a residence, seed %s", (seed) => {
     const map = mapFor(seed)
-    expect(map.buildings.filter(b => b.owner !== "independent").map((b) => b.id), `seed ${seed} has shrine, shelter and water`).toEqual([HOVEL_ID, "founding-shelter", "founding-well"])
-    const shelter = map.buildings[1]
-    expect(shelter.construction).toBeUndefined()
-    expect(shelter.buildType).toBe("monk-shelter")
-    expect(tileAt(map, shelter.x, shelter.z + shelter.d)).toBe("track")
-    for (let z = shelter.z; z < shelter.z + shelter.d; z++) for (let x = shelter.x; x < shelter.x + shelter.w; x++) {
-      expect(tileAt(map, x, z)).toBe("grass")
-      expect(map.site!.branch).not.toContainEqual({ x, z })
-    }
+    expect(map.buildings.filter(b => b.owner !== "independent").map(b => b.id)).toEqual([HOVEL_ID, "founding-well"])
+    expect(map.buildings.some(b => b.buildType === "monk-shelter")).toBe(false)
     const hovel = map.buildings[0]
+    const residence = BUILD_CATALOG.find(b => b.id === "monk-shelter")!
+    let canBuild = false
+    for (const rotation of [0, 1, 2, 3] as BuildingRotation[]) {
+      const size = rotatedFootprint(residence, rotation)
+      for (let z = hovel.z - size.d; !canBuild && z <= hovel.z + hovel.d; z++) {
+        for (let x = hovel.x - size.w; !canBuild && x <= hovel.x + hovel.w; x++) {
+          if (placementError(map, residence, { x, z }, undefined, rotation) === null) canBuild = true
+        }
+      }
+    }
+    expect(canBuild, `seed ${seed} has room to build the church residence`).toBe(true)
     expect([hovel.w, hovel.d]).toEqual([3, 5])
     const door = map.site!.door
     const centred = door.x === hovel.x + Math.floor(hovel.w / 2) || door.z === hovel.z + Math.floor(hovel.d / 2)
@@ -162,10 +175,8 @@ describe("generateMap", () => {
           expect(["grass", "path", "track"], `seed ${seed} shrine margin remains walkable`).toContain(terrain)
           if (terrain === "track") {
             const onApproach = map.site!.branch.some(p => p.x === hovel.x + dx && p.z === hovel.z + dz)
-            const onShelterPath = (dz === -1 && dx >= (door.z < hovel.z ? 0 : -1) && dx <= (door.z < hovel.z ? 1 : 0)) ||
-              (door.z >= hovel.z && ((dx === -1 && dz >= -1) || (dz === hovel.d && dx <= 1)))
             const onWaterPath = map.buildingAccessTiles?.some(p => p.x === hovel.x + dx && p.z === hovel.z + dz)
-            expect(onApproach || onShelterPath || onWaterPath, `seed ${seed} only the approach, shelter and rear well connections are paved`).toBe(true)
+            expect(onApproach || onWaterPath, `seed ${seed} only the approach and rear well connections are paved`).toBe(true)
           }
         }
       }
@@ -227,9 +238,9 @@ describe("generateMap", () => {
     let kept = 0
     for (const seed of SEEDS) {
       const map = mapFor(seed), { width, depth, tiles } = map
-      const hovel = map.buildings[0], shelter = map.buildings[1]
+      const hovel = map.buildings[0]
       const buildingTiles: number[] = []
-      for (const b of [hovel, shelter]) for (let z = b.z; z < b.z + b.d; z++) for (let x = b.x; x < b.x + b.w; x++) buildingTiles.push(z * width + x)
+      for (const b of [hovel]) for (let z = b.z; z < b.z + b.d; z++) for (let x = b.x; x < b.x + b.w; x++) buildingTiles.push(z * width + x)
       const gap = (i: number) => Math.min(...buildingTiles.map(b =>
         Math.max(Math.abs(i % width - b % width), Math.abs(Math.floor(i / width) - Math.floor(b / width)))))
       let river = Infinity, cliff = Infinity
@@ -240,7 +251,7 @@ describe("generateMap", () => {
       expect(river, `seed ${seed} river clearance`).toBeGreaterThanOrEqual(SITE_RIVER_CLEARANCE - 8)
       expect(cliff, `seed ${seed} cliff clearance`).toBeGreaterThanOrEqual(SITE_CLIFF_CLEARANCE - 4)
       // No woods stand within the felled glade, bar its ragged outer ring.
-      const glade = { x: hovel.x, z: shelter.z, w: hovel.w, d: hovel.d + 3 }
+      const glade = { x: hovel.x, z: hovel.z - 3, w: hovel.w, d: hovel.d + 3 }
       for (let z = 0; z < depth; z++) for (let x = 0; x < width; x++) {
         const gap = Math.hypot(Math.max(glade.x - x, x - (glade.x + glade.w - 1), 0), Math.max(glade.z - z, z - (glade.z + glade.d - 1), 0))
         if (gap <= SITE_TREE_CLEARANCE - 1) expect(isWoods(tileAt(map, x, z)!), `seed ${seed} woods at ${x},${z} inside the glade`).toBe(false)
@@ -367,7 +378,7 @@ describe("generateMap", () => {
   it("sites the hovel on small maps too, scaling the band down", () => {
     for (const seed of SEEDS.slice(0, 10)) {
       const map = generateMap({ seed, width: 32, depth: 32 })
-      expect(map.buildings.filter(b => b.owner !== "independent")).toHaveLength(3)
+      expect(map.buildings.filter(b => b.owner !== "independent")).toHaveLength(2)
       expect(map.site!.branch.length).toBeGreaterThan(1)
     }
   }, SWEEP_TIMEOUT)
@@ -390,7 +401,7 @@ describe("generateMap", () => {
     const map = generateMap({ seed: 99, width: 512, depth: 512 })
     expect(map.tiles).toHaveLength(512 * 512)
     expect(map.tiles.every((t) => t in TERRAIN)).toBe(true)
-    expect(map.buildings.filter(b => b.owner !== "independent").map((b) => b.id)).toEqual([HOVEL_ID, "founding-shelter", "founding-well"])
+    expect(map.buildings.filter(b => b.owner !== "independent").map((b) => b.id)).toEqual([HOVEL_ID, "founding-well"])
     const road = reachablePath(map)
     expect([...road].some((key) => key.startsWith(`${map.width - 1},`))).toBe(true)
   }, SWEEP_TIMEOUT)

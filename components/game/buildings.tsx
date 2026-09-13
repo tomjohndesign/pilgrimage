@@ -1,6 +1,8 @@
 "use client"
 
 import { tavernStackParts } from "@/lib/game/building-art/stacked"
+import { churchWing } from "@/lib/game/church-additions"
+import { churchAisleHeight } from "@/lib/game/building-art/church-roof"
 
 import { WaterSources } from "./water-sources"
 import { isWaterSource, waterSourcePlacement } from "@/lib/game/water-sources/navigation"
@@ -68,12 +70,13 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
     const next = new Map<string, { key: string; parts: ReturnType<typeof constructionParts>; idColor: THREE.Color }>()
     const result = buildings.map((building, index) => {
       const footprint = rotatedFootprint(building, building.rotation)
+      const wing = building.churchId ? churchWing(map, building) : undefined
       const joins = roofJoins.get(building.id)
       const inns = supported.get(building.id) ?? []
-      const key = JSON.stringify([index, building.buildType, footprint.w, footprint.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, building.floorHeight, building.supportId, building.tavernFlue, inns.map(b=>[b.id,b.x,b.z,b.floorHeight]), joins, constructionStage(building), stocked(building)])
+      const key = JSON.stringify([index, wing, building.buildType, footprint.w, footprint.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, building.floorHeight, building.supportId, building.tavernFlue, inns.map(b=>[b.id,b.x,b.z,b.floorHeight]), joins, constructionStage(building), stocked(building)])
       const old = modelCache.current.get(building.id)
       const model = old?.key === key ? old : { key,
-        parts: tavernStackParts(constructionParts({ ...building, ...footprint, stocked: stocked(building) }, joins), building, inns), idColor: new THREE.Color(...encodeObjectId(buildingObjectId(index))) }
+        parts: tavernStackParts(constructionParts({ ...building, ...footprint, churchWing: wing, stocked: stocked(building) }, joins), building, inns), idColor: new THREE.Color(...encodeObjectId(buildingObjectId(index))) }
       next.set(building.id, model)
       return model
     })
@@ -113,8 +116,10 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
           </group>
         }
         const local = rotatedFootprint(building, building.rotation)
+        const wing = building.churchId ? churchWing(map, building) : undefined
         const cutaway = models[index].parts.some(p => p.layer === "roof") && (
           showInteriors || unitInterior === building.id || isSelected(selection, { kind: "building", id: building.id }) ||
+          (!!building.churchId && (unitInterior === building.churchId || isSelected(selection, { kind: "building", id: building.churchId }))) ||
           (selection?.kind === "pile" && piles.some(p => p.id === selection.id && p.campId === building.id)))
         if (building.buildType === "storehouse" || building.buildType === "workshop") {
           return (
@@ -142,7 +147,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
             <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
             {isComplete(building) && building.supportId && <InnFlueSmoke width={local.w} depth={local.d} height={building.height} flue={building.tavernFlue} cutaway={cutaway} smoke={occupied.has(building.supportId)} />}
             {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
-            {isComplete(building) && !building.supportId && hasDomesticHearth(building.buildType,building.layoutSeed,building.fireplace) && <ShelterFire smoke={occupied.has(building.id) && !map.buildings.some(b=>b.supportId===building.id)} buildType={building.buildType} layoutSeed={building.layoutSeed} hearthZ={building.hearthZ} sharedChimney={roofJoins.get(building.id)?.find(join=>join.chimney)?.chimney} width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
+            {isComplete(building) && !building.supportId && hasDomesticHearth(building.buildType,building.layoutSeed,building.fireplace) && <ShelterFire roofRise={wing ? churchAisleHeight(wing.churchWidth, wing.reach, wing.churchWidth / 2) - building.height : undefined} smoke={occupied.has(building.id) && !map.buildings.some(b=>b.supportId===building.id)} buildType={building.buildType} layoutSeed={building.layoutSeed} hearthZ={building.hearthZ} sharedChimney={roofJoins.get(building.id)?.find(join=>join.chimney)?.chimney} width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
           </group>
         )
       })}

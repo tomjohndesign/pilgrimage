@@ -1,6 +1,7 @@
 "use client"
 
 import { StructureModel } from "@/components/building-lab/building-model"
+import { churchWing } from "@/lib/game/church-additions"
 import { placementBuildingLayout, placementSite } from "@/lib/game/building-placement-layout"
 import { structureParts } from "@/lib/game/building-art/structure"
 
@@ -54,8 +55,10 @@ export function TileCursor({
   // where the click will actually build rather than under the cursor.
   const site=useMemo(()=>build && hovered ? placementSite(map,build,hovered,requestedRotation) : null,[map,build,hovered,requestedRotation])
   const rotation=site?.rotation ?? requestedRotation
-  const {layoutSeed,hearthZ,fireplace,supportId,floorHeight,tavernFlue} = build && site ? placementBuildingLayout(map,{...build,...rotatedFootprint(build,rotation),...site,rotation,buildType:build.id,id:"construction-preview"}) : {}
-  const parts = useMemo(() => build ? structureParts({ ...build, buildType: build.id, layoutSeed, hearthZ, fireplace, supportId, floorHeight, tavernFlue }) : [], [build, layoutSeed, hearthZ, fireplace, supportId, floorHeight, tavernFlue])
+  const {layoutSeed,hearthZ,fireplace,supportId,floorHeight,tavernFlue,churchId} = build && site ? placementBuildingLayout(map,{...build,...rotatedFootprint(build,rotation),...site,rotation,buildType:build.id,id:"construction-preview"}) : {}
+  const wing = useMemo(() => build && site && churchId ? churchWing(map, { ...build, ...rotatedFootprint(build, rotation), ...site, buildType: build.id }) : undefined, [build, site, churchId, map, rotation])
+  const church = churchId && map.buildings.find(b => b.id === churchId)
+  const parts = useMemo(() => build ? structureParts({ ...build, churchWing: wing, buildType: build.id, layoutSeed, hearthZ, fireplace, supportId, floorHeight, tavernFlue }) : [], [build, wing, layoutSeed, hearthZ, fireplace, supportId, floorHeight, tavernFlue])
   if (!hovered) return null
 
   if (!tileAt(map, hovered.x, hovered.z)) return null
@@ -72,7 +75,7 @@ export function TileCursor({
       <group
         position={[
           tileToWorldX(map, site.x) + (footprint.w - 1) / 2,
-          groundHeight(map, site.x + (footprint.w - 1) / 2, site.z + (footprint.d - 1) / 2) + (floorHeight ?? 0),
+          (church ? groundHeight(map, church.x + (church.w - 1) / 2, church.z + (church.d - 1) / 2) : groundHeight(map, site.x + (footprint.w - 1) / 2, site.z + (footprint.d - 1) / 2)) + (floorHeight ?? 0),
           tileToWorldZ(map, site.z) + (footprint.d - 1) / 2,
         ]}
       >

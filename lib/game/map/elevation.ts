@@ -210,7 +210,7 @@ export function finishElevation(e: ElevationInfo, width: number, depth: number, 
  * sharing those corners meet the pad; existing foundations and water stay put.
  * Adjacent buildings at different heights retain a small terrace between them.
  */
-export function levelBuildingGround(map: GameMap, building: Pick<BuildingDef, "x" | "z" | "w" | "d">): ElevationInfo | undefined {
+export function levelBuildingGround(map: GameMap, building: Pick<BuildingDef, "x" | "z" | "w" | "d" | "churchId">): ElevationInfo | undefined {
   const original = map.elevation
   if (!original) return undefined
   const { x, z, w, d } = building
@@ -269,7 +269,9 @@ export function levelBuildingGround(map: GameMap, building: Pick<BuildingDef, "x
 }
 
 /** The pad height a footprint grades to: the ground under its centre, where the placement ghost floats. */
-function padFoundation(map: GameMap, { x, z, w, d }: Pick<BuildingDef, "x" | "z" | "w" | "d">): number {
+function padFoundation(map: GameMap, { x, z, w, d, churchId }: Pick<BuildingDef, "x" | "z" | "w" | "d" | "churchId">): number {
+  const church = churchId && map.buildings.find(b => b.id === churchId)
+  if (church) return padFoundation(map, church)
   const foundation = groundHeight(map, x + (w - 1) / 2, z + (d - 1) / 2) - TILE_HEIGHT
   const corner = map.elevation!.corners[(z * map.width + x) * 4]
   // Adding/subtracting TILE_HEIGHT can round an already flat foundation.
@@ -292,7 +294,7 @@ export interface FootprintGrading {
  * and whether the pad edge would break off as a cliff. Level ground reports
  * no cut or fill, and a map without elevation is level everywhere.
  */
-export function footprintGrading(map: GameMap, building: Pick<BuildingDef, "x" | "z" | "w" | "d">): FootprintGrading {
+export function footprintGrading(map: GameMap, building: Pick<BuildingDef, "x" | "z" | "w" | "d" | "churchId">): FootprintGrading {
   const e = map.elevation
   if (!e) return { foundation: 0, cut: 0, fill: 0, cliff: false }
   const { x, z, w, d } = building

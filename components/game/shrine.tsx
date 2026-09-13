@@ -1,6 +1,7 @@
 "use client"
 
 import { buildingDetail } from "@/lib/game/render/scenery-detail"
+import { completedChurchWings } from "@/lib/game/church-additions"
 import { useUnitInterior } from "./use-unit-interior"
 
 import { groundHeight } from "@/lib/game/map/elevation"
@@ -34,6 +35,10 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
   const lights = useRef<THREE.Group>(null)
   const relicSelected = useCameraStore(s => isSelected(s.selection, { kind: "relic" }))
   const buildingSelected = useCameraStore(s => isSelected(s.selection, { kind: "building", id: map.site?.hovelId ?? "" }))
+  const wingSelected = useCameraStore(s => {
+    const selection = s.selection
+    return selection?.kind === "building" && map.buildings.some(b => b.id === selection.id && !!b.churchId && b.churchId === map.site?.hovelId)
+  })
   useFrame(({ scene }) => {
     const near = buildingDetail(scene) === 0
     if (lights.current) lights.current.visible = near
@@ -53,7 +58,7 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
   const layout = useMemo(() => {
     if (!hovel || !map.site) return null
     const shape = shrineLayout(hovel, map.site.door)
-    const parts = shrineStructureParts(shape.width, shape.depth)
+    const parts = shrineStructureParts(shape.width, shape.depth, completedChurchWings(map))
     const isAltar = (name: string) => name === "relic-table" || name === "relic-shelf"
       || name === "altar-linen-top" || name.startsWith("table-trestle-")
     return {
@@ -80,7 +85,7 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
   return (
     <group position={[layout.centreX, layout.baseY, layout.centreZ]}>
       <group rotation={[0, layout.rotation, 0]} onClick={event => selectElement({ kind: "building", id: hovel.id }, event)}>
-        <StructureModel terrainFloors parts={layout.parts} cutaway={showInteriors || relicSelected || buildingSelected || unitInterior === hovel.id} idColor={shrineId} ink={false} />
+        <StructureModel terrainFloors parts={layout.parts} cutaway={showInteriors || relicSelected || buildingSelected || wingSelected || unitInterior === hovel.id || map.buildings.some(b => b.id === unitInterior && b.churchId === hovel.id)} idColor={shrineId} ink={false} />
         <group name="relic-altar">
           <StructureModel parts={layout.altar} cutaway idColor={relicId} onClick={select} ink={false} />
           <group ref={veilGroup}><StructureModel parts={layout.veil} cutaway dynamic idColor={relicId} onClick={select} ink={false} /></group>

@@ -12,7 +12,7 @@ describe("shared path dirt for building floors", () => {
   it("marks earth floors across the catalogue, preserving raised timber and paving", () => {
     for (const definition of BUILD_CATALOG) {
       const parts=structureParts({...definition,buildType:definition.id})
-      expect(parts.find(p=>p.name === "floor")?.surface === "trail").toBe(!["inn", "storehouse","well","watering-hole"].includes(definition.id))
+      expect(parts.find(p=>p.name === "floor")?.surface === "trail").toBe(!["inn", "storehouse","monk-shelter","well","watering-hole"].includes(definition.id))
     }
     expect(structureParts({...hut,buildType:"enclosure"}).find(p=>p.name === "floor")?.surface).toBeUndefined()
   })
@@ -55,7 +55,7 @@ describe("shared path dirt for building floors", () => {
     expect(dirtFloorMask(map).tiles.has(6*map.width+3)).toBe(false)
   })
 
-  it.each(["well", "watering-hole"])("preserves the authored ground around a %s", buildType => {
+  it.each(["well", "watering-hole", "monk-shelter"])("preserves the authored ground around a %s", buildType => {
     const mask=dirtFloorMask(mapWith([{...hut,buildType}]))
     expect(mask.tiles.size).toBe(0)
   })

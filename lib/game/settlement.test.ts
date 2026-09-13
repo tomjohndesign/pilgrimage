@@ -1,4 +1,5 @@
 import { placementBuildingLayout } from "./building-placement-layout"
+import { housingBeds } from "./housing"
 import { settlementRoute } from "./settlement-route"
 import { buildingApproaches, buildingEntry, rotatedFootprint, type BuildingRotation } from "./building-rotation"
 import { getBuildInfluence } from "./build-influence"
@@ -98,6 +99,32 @@ function wearPath(map: GameMap, from: TilePos, to: TilePos, passes = 20) {
 const garden = BUILD_CATALOG.find((item) => item.id === "garden")!
 
 describe("build and buy", () => {
+  it.each([0, 1, 2, 3] as BuildingRotation[])("builds a residence against the church at rotation %i, with beds only after completion", rotation => {
+    const map = trackMap(), def = BUILD_CATALOG.find(b => b.id === "monk-shelter")!
+    const alignedRotation = rotation % 2 ? 1 : 3
+    const footprint = rotatedFootprint(def, alignedRotation)
+    const at = { x: rotation % 2 ? 12 : 7, z: 9 }
+    const before = createSettlement()
+    const result = purchaseStructure(before, map, monks, [relic], def.id, at, undefined, 0, rotation)
+    expect(result.error).toBeNull()
+    const building = result.settlement.structures[0]
+    expect(building).toMatchObject({ ...at, ...footprint, rotation: alignedRotation, buildType: "monk-shelter", churchId: "hovel", layoutSeed: 0 })
+    expect(result.settlement.resources).toEqual({ gold: before.resources.gold - 50, wood: before.resources.wood - 40 })
+    expect(housingBeds(building)).toBe(0)
+    expect(housingBeds({ ...building, construction: undefined })).toBeGreaterThanOrEqual(monks.length)
+  })
+
+  it.each([{ x: 10, z: 13 }, { x: 11, z: 12 }])("rejects detached or corner-only residences at %o without spending resources", at => {
+    const before = createSettlement()
+    const result = purchaseStructure(before, testMap(), monks, [relic], "monk-shelter", at)
+    expect(result.error).toMatch(/against a side wall/)
+    expect(result.settlement).toBe(before)
+  })
+
+  it("keeps the church entrance clear when placing a residence", () => {
+    expect(placementError(testMap(), BUILD_CATALOG.find(b => b.id === "monk-shelter")!, { x: 14, z: 16 })).toMatch(/access|entrance|door|approach|side wall/)
+  })
+
   it.each(["shelter", "wood-shelter", "lumberCamp", "watering-hole"])("retires %s without deleting existing structures or charging for new ones", type => {
     const def = BUILD_CATALOG.find(b => b.id === type)!
     expect(def.retired).toBe(true)

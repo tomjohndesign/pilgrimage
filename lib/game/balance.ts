@@ -117,10 +117,10 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     color: "#7a5a3a", roofColor: "#54402c",
   },
   {
-    id: "monk-shelter", label: "Monks’ shelter", category: "buildings",
-    description: "An open-front sleeping shelter with a hearth. Tired monks rest here until their stamina recovers.",
+    id: "monk-shelter", label: "Monks’ residence", category: "buildings",
+    description: "A plastered sleeping wing built along a side wall of the church, beneath its extended thatch roof. Monks enter through the church and a doorway in the shared wall. Four beds and a hearth help tired monks recover.",
     cost: { gold: 50, wood: 40 }, renown: 2, requiredRenown: 0,
-    income: { gold: 0, wood: 0 }, w: 3, d: 2, height: 0.62,
+    income: { gold: 0, wood: 0 }, w: 3, d: 2, height: 1.18,
     color: "#8c7658", roofColor: "#a59164",
   },
   {
