@@ -197,8 +197,8 @@ export function personClipBakeKey(design: PersonDesign, clip: BaseClip) {
   return JSON.stringify([clip, { ...design, poseEdits: design.poseEdits?.[clip] ?? null }])
 }
 
-/** Bake directly at final pixel resolution, one sheet row per step so callers can paint progress or stop early. */
-export function* bakePersonSteps(design: PersonDesign = DEFAULT_DESIGN, diagnostics = true): Generator<BakeProgress, BasePersonBake> {
+/** Bake at final pixel resolution. Interactive callers yield each frame; exports step by sheet row. */
+export function* bakePersonSteps(design: PersonDesign = DEFAULT_DESIGN, diagnostics = true, interactive = false): Generator<BakeProgress, BasePersonBake> {
   const recipe = personRecipe(design), size = recipe.cellSize
   const passes = diagnostics ? 2 : 1, total = BAKE_ORDER.length * 8 * passes
   let done = 0, session: ReturnType<typeof personFrameRenderer> | undefined
@@ -227,6 +227,7 @@ export function* bakePersonSteps(design: PersonDesign = DEFAULT_DESIGN, diagnost
             if (rendered.depth) depth.context.drawImage(rendered.depth, frame * size, row * size)
             padding = Math.min(padding, rendered.padding)
             frames.push({ direction: recipe.directions[row], frame, phase: frame / columns, sockets: rendered.sockets })
+            if (interactive) yield { done: done + (frame + 1) / columns, total }
           }
           done++; yield { done, total }
         }
@@ -235,7 +236,10 @@ export function* bakePersonSteps(design: PersonDesign = DEFAULT_DESIGN, diagnost
       if (diagnostics) {
         const debug = sheet(columns)
         for (let row = 0; row < 8; row++) {
-          for (let frame = 0; frame < columns; frame++) debug.context.drawImage(session.render(clip, frame / columns, row, true).canvas, frame * size, row * size)
+          for (let frame = 0; frame < columns; frame++) {
+            debug.context.drawImage(session.render(clip, frame / columns, row, true).canvas, frame * size, row * size)
+            if (interactive) yield { done: done + (frame + 1) / columns, total }
+          }
           done++; yield { done, total }
         }
         entry = { ...entry, debug: debug.canvas.toDataURL("image/png") }
@@ -286,20 +290,22 @@ const paintFrame = () => new Promise<void>(resolve => requestAnimationFrame(() =
 const PAINT_BUDGET_MS = 40
 
 /** Bake with regular paint breaks so the editor can show progress; cancelling resolves null and releases the renderer. */
-export function bakePersonProgressively(design: PersonDesign, onProgress: (progress: BakeProgress) => void): { promise: Promise<BasePersonBake | null>; cancel: () => void } {
+export function bakePersonProgressively(design: PersonDesign, onProgress: (progress: BakeProgress) => void,
+  { diagnostics = true, budgetMs = PAINT_BUDGET_MS, cancelled: superseded = () => false }:
+    { diagnostics?: boolean; budgetMs?: number; cancelled?: () => boolean } = {}): { promise: Promise<BasePersonBake | null>; cancel: () => void } {
   const key = bakeKey(design), ready = cache.get(key)
   if (ready) return { promise: Promise.resolve(ready), cancel: () => {} }
-  const steps = bakePersonSteps(design)
+  const steps = bakePersonSteps(design, diagnostics, true)
   let cancelled = false
   const promise = (async () => {
     let painted = performance.now()
     for (;;) {
-      if (cancelled) { steps.return(undefined as unknown as BasePersonBake); return null }
+      if (cancelled || superseded()) { steps.return(undefined as unknown as BasePersonBake); return null }
       const next = steps.next()
-      if (next.done) return rememberBake(key, next.value)
+      if (next.done) return diagnostics ? rememberBake(key, next.value) : next.value
       onProgress(next.value)
       // Cached clips fly past; only real rendering earns a paint break, so the total stays close to a straight bake.
-      if (next.value.done === 0 || performance.now() - painted > PAINT_BUDGET_MS) { await paintFrame(); painted = performance.now() }
+      if (next.value.done === 0 || performance.now() - painted > budgetMs) { await paintFrame(); painted = performance.now() }
     }
   })()
   return { promise, cancel: () => { cancelled = true } }

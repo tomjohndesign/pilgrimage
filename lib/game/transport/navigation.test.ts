@@ -178,8 +178,8 @@ describe("merchant shrine parking", () => {
         expect(s.shrineSeat).toMatch(/^queue-/)
         expect(s.shrineRoute!.at(-1)).toEqual(shrineStations(map.buildings[0], map.site!.door).viewing)
         for (let j=1;j<s.shrineRoute!.length;j++) expect(buildingStepAllowed(map,map.buildings,s.shrineRoute![j-1],s.shrineRoute![j],true,j===s.shrineRoute!.length-1?s.shrineSeat:undefined)).toBe(true)
-        expect(s.x).toBeGreaterThanOrEqual(tileToWorldX(map, 12))
-        expect(s.z).toBeGreaterThanOrEqual(tileToWorldZ(map, 10))
+        expect(s.x).toBeCloseTo(tileToWorldX(map, s.shrineRoute!.at(-1)!.x))
+        expect(s.z).toBeCloseTo(tileToWorldZ(map, s.shrineRoute!.at(-1)!.z))
       }
       sawReturn ||= s.activity === "fromParking"
       if (sawReturn && s.activity === "walking") break

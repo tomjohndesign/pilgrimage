@@ -1,8 +1,10 @@
+import { walkingSurface } from "./map/walking-surface"
+import { TILE_HEIGHT } from "./map/terrain"
 import { describe, expect, it } from "vitest"
 import { buildingStepAllowed, shrineFurnitureClear } from "./building-navigation"
 import { monkWander, type WanderSpot } from "./monk-wander"
-import { shrineLayout, shrineSeats, shrineStations } from "./shrine-layout"
-import { shrineExitPlan, shrineQueuePlaces, shrineVisitPlan } from "./shrine-visit"
+import { shrineLayout, shrineSeats, shrineStations, shrinePoint, shrineViewingPlaces } from "./shrine-layout"
+import { shrineExitPlan, shrineQueuePlaces, shrineVisitPlan, shrineViewingRoute, shrineQueueStop, relicQueueSpacing } from "./shrine-visit"
 import { processionGrounds } from "./relic-procession"
 import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 
@@ -16,6 +18,42 @@ function fixture(direction: number): GameMap {
 }
 
 describe("church circulation", () => {
+  it.each([0, 1, 2, 3])("routes both rail places and their exits with four spaces behind the kneeling row (view %i)", direction => {
+    const map = fixture(direction), shrine = map.buildings[0], door = map.site!.door
+    const places = shrineViewingPlaces(shrine, door), layout = shrineLayout(shrine, door)
+    expect(places).toHaveLength(2)
+    for (let slot = 0; slot < places.length; slot++) {
+      const interior = shrineViewingRoute(map, slot)!
+      expect(interior.at(-1)).toEqual(places[slot])
+      const arrival = [door, ...interior]
+      const exit = shrineExitPlan(map, places[slot], arrival)!
+      expect(exit).not.toBeNull()
+      for (const route of [arrival, exit.route]) for (let i = 1; i < route.length; i++)
+        expect(buildingStepAllowed(map, map.buildings, route[i - 1], route[i], true)).toBe(true)
+      const stop = shrineQueueStop(map, arrival, 0), i = Math.floor(stop), t = stop - i
+      const point = { x: arrival[i].x + (arrival[i + 1].x - arrival[i].x) * t,
+        z: arrival[i].z + (arrival[i + 1].z - arrival[i].z) * t }
+      expect((point.x - places[slot].x) * Math.sin(layout.rotation) + (point.z - places[slot].z) * Math.cos(layout.rotation)).toBeCloseTo(4 * relicQueueSpacing())
+    }
+  })
+
+  it.each([0, 1, 2, 3])("keeps the divider's aisle open and supports the keeper on the raised sanctuary (view %i)", direction => {
+    const map = fixture(direction), shrine = map.buildings[0], door = map.site!.door
+    const local = (x: number, z: number) => shrinePoint(shrine, door, x, z)
+    expect(shrineFurnitureClear(shrine, door, local(1, 0), local(1, -2))).toBe(false)
+    expect(shrineFurnitureClear(shrine, door, local(0, 0), local(0, -.7))).toBe(true)
+    const keeper = shrineStations(shrine, door).keeper
+    const x = tileToWorldX(map, keeper.x), z = tileToWorldZ(map, keeper.z)
+    expect(walkingSurface(map, x, z).height).toBeCloseTo(TILE_HEIGHT + .12)
+    const grounds = processionGrounds(map)!
+    const route = grounds.wander.route(grounds.door, grounds.altar)
+    expect(route.at(-1)).toEqual({ x, z, y: TILE_HEIGHT + .12 })
+    for (let i = 1; i < route.length; i++) {
+      const tile = (p: typeof route[number]) => ({ x: p.x + map.width / 2 - .5, z: p.z + map.depth / 2 - .5 })
+      expect(shrineFurnitureClear(shrine, door, tile(route[i - 1]), tile(route[i]))).toBe(true)
+    }
+  })
+
   it.each([0, 1, 2, 3])("keeps prayer, queue and the offering-box exit reachable (view %i)", direction => {
     const map = fixture(direction), shrine = map.buildings[0], seats = shrineSeats(shrine, map.site!.door)
     const stations = shrineStations(shrine, map.site!.door)

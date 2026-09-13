@@ -18,6 +18,12 @@ function world(map: GameMap, p: TilePos) {
 }
 
 describe("characters prefer paths", () => {
+  it("rejects fractional poses before indexing the tile search", () => {
+    const map: GameMap = { width: 8, depth: 8, tiles: Array(64).fill("grass"), buildings: [] }
+    expect(settlementRoute(map, [], { x: 1.5, z: 1 }, { x: 6, z: 6 })).toBeNull()
+    expect(settlementRoute(map, [], { x: 1, z: 1 }, { x: 6, z: 6.5 })).toBeNull()
+  })
+
   it("reuses a proven shortest route while observing new obstacles and terrain costs", () => {
     const map: GameMap = { width: 24, depth: 24, tiles: Array(576).fill("path"), buildings: [] }
     const start = { x: 2, z: 2 }, goal = { x: 20, z: 20 }

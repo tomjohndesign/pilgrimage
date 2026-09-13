@@ -42,7 +42,7 @@ export const elevationSettingsSchema = z
   .describe("Terrain shaping inputs for the hills, cliffs and bridges")
 
 export const worldSettingsSchema = z.object({
-  generation: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(1).describe("Terrain generator version; older saves retain their original land"),
+  generation: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).default(1).describe("Terrain generator version; older saves retain their original land"),
   seed: uint32.describe("World seed. With the settings below it fully determines the generated land"),
   size: z.number().int().min(MIN_MAP_SIZE).max(MAX_MAP_SIZE).describe("Map edge length in tiles; maps are square"),
   coverage: finite.min(0).max(100).describe("Percent of the map left as forest after glades are carved"),
@@ -127,6 +127,7 @@ export const settlementSaveSchema = z.object({
   collectedTrade: finite.min(0).describe("Cumulative counter takings credited"),
   paidWages: finite.min(0).default(0).describe("Cumulative wages debited from the treasury"),
   grantedRenown: finite.min(0).default(0).describe("Renown bestowed by cheat codes"),
+  church: structureSchema.optional().describe("Purchased upgrade of the founding chapel"),
   structures: z.array(structureSchema).describe("Player-built structures in purchase order"),
 }).describe("The player's settlement layered over the generated map. Ground levelling is replayed from the structures")
 

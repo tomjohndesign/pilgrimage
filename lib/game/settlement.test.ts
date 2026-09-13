@@ -116,13 +116,13 @@ describe("build and buy", () => {
 
   it.each([{ x: 10, z: 13 }, { x: 11, z: 12 }])("rejects detached or corner-only residences at %o without spending resources", at => {
     const before = createSettlement()
-    const result = purchaseStructure(before, testMap(), monks, [relic], "monk-shelter", at)
+    const result = purchaseStructure(before, trackMap(), monks, [relic], "monk-shelter", at)
     expect(result.error).toMatch(/against a side wall/)
     expect(result.settlement).toBe(before)
   })
 
   it("keeps the church entrance clear when placing a residence", () => {
-    expect(placementError(testMap(), BUILD_CATALOG.find(b => b.id === "monk-shelter")!, { x: 14, z: 16 })).toMatch(/access|entrance|door|approach|side wall/)
+    expect(placementError(trackMap(), BUILD_CATALOG.find(b => b.id === "monk-shelter")!, { x: 14, z: 16 })).toMatch(/access|entrance|door|approach|side wall/)
   })
 
   it.each(["shelter", "wood-shelter", "lumberCamp", "watering-hole"])("retires %s without deleting existing structures or charging for new ones", type => {
@@ -153,7 +153,7 @@ describe("build and buy", () => {
     expect(settlementEvangelism(map)).toBe(0)
   })
   it.each([0, 1, 2, 3] as BuildingRotation[])("buys and reserves a rectangular building at rotation %i", rotation => {
-    const map = testMap(), at = { x: 10, z: 14 }
+    const map = testMap(), at = { x: 9, z: 14 }
     const def = BUILD_CATALOG.find(item => item.id === "hall")!
     const water = new Uint8Array(map.tiles.length)
     map.elevation = generateElevation(1, map.width, map.depth, water)
@@ -189,7 +189,7 @@ describe("build and buy", () => {
   })
 
   it("checks the turned footprint rather than the catalogue dimensions", () => {
-    const map = testMap(), at = { x: 10, z: 14 }
+    const map = testMap(), at = { x: 9, z: 14 }
     const def = BUILD_CATALOG.find(item => item.id === "hall")!
     map.tiles[(at.z + 2) * map.width + at.x] = "water"
     expect(placementError(map, def, at)).toBeTruthy()
@@ -407,7 +407,7 @@ describe("build and buy", () => {
     expect(placementError(map, cross, { x: 11, z: 14 })).toMatch(/worn path/)
     wearPath(map, { x: 11, z: 11 }, { x: 11, z: 16 })
     expect(placementError(map, cross, { x: 11, z: 14 })).toBeNull()
-    expect(placementError(map, cross, { x: 13, z: 14 })).toMatch(/worn path/)
+    expect(placementError(map, cross, { x: 9, z: 14 })).toMatch(/worn path/)
   })
 
   it("builds on the shrine track while the door can still be reached", () => {
@@ -447,8 +447,8 @@ describe("build and buy", () => {
     for (const at of [
       { x: 9, z: 10 },
       { x: 11, z: 10 },
-      { x: 13, z: 10 },
-      { x: 15, z: 10 },
+      { x: 13, z: 17 },
+      { x: 16, z: 14 },
       { x: 17, z: 10 },
     ]) {
       const purchase = purchaseStructure(settlement, map, [], [], "house", at)
@@ -566,7 +566,7 @@ describe("shrine renown and income", () => {
     const map = testMap()
     map.tiles[12 * map.width + 10] = "forest"
     const purchase = purchaseStructure(before, map, monks, [relic], "workshop", {
-      x: 11,
+      x: 10,
       z: 14,
     })
     expect(purchase.error).toBeNull()

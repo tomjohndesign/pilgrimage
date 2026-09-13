@@ -45,7 +45,7 @@ import { BUILDING_PREVIEW, JOB_PREVIEW } from "@/lib/game/building-preview"
 
 import { GAME_BACKGROUND } from "@/lib/game/render/background"
 import { LoadingChurch } from "./loading-church"
-import { shrineLayout } from "@/lib/game/shrine-layout"
+import { shrineLayout, isChapel } from "@/lib/game/shrine-layout"
 import { cameraOffset, yawForView } from "@/lib/game/render/iso"
 import type { MapRevealPhase } from "@/lib/game/render/map-reveal"
 import type { GameMap } from "@/lib/game/map/types"
@@ -140,11 +140,13 @@ export function GameShell({
     // Load the renderer and its published assets without creating a world/canvas.
     void loadGameCanvas().catch(() => { /* The dynamic component retries on Play. */ })
     void import("@/lib/game/render/preload-assets").then(async m => {
-      await m.prepareOpeningCharacters()
+      // Prepare saved edits during landing-page idle time. Direct play opens
+      // with published sprites and rebuilds edits after the map is visible.
+      if (!playing) await m.prepareOpeningCharacters()
       await m.preloadGameAssets(settings.characterModel)
     })
       .catch(() => { /* Ordinary scene loading remains available on Play. */ })
-  }, [settings.characterModel])
+  }, [settings.characterModel, playing])
 
   useEffect(() => {
     if (!starting || started) return
@@ -359,6 +361,7 @@ export function GameShell({
   return (
     <div className="fixed inset-0 overflow-hidden select-none" style={{ backgroundColor: GAME_BACKGROUND }}>
       <LoadingChurch showChurch={!resuming && (!openingMap || !map || landmarkRoad !== map.road || revealPhase === "loading")}
+        chapel={!openingHovel || isChapel(openingHovel)}
         generating={starting && revealPhase === "loading"} idle={!starting}
         phase={revealPhase} overlayRef={loadingOverlay} view={openingView} resuming={resuming}
         viewSize={resumeWorld ? resumeWorld.camera.viewSize : !booted && expectResume && resumeViewSize ? resumeViewSize : openingViewSize}

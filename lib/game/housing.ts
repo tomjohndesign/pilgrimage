@@ -1,3 +1,4 @@
+import { shrineMonkCapacity } from "./shrine-upgrade"
 import { buildingSupports } from "./character-support"
 import { isComplete, isHouse, isMonkShelter } from "./construction"
 import type { BuildingDef, GameMap } from "./map/types"
@@ -18,11 +19,12 @@ export function monkBeds(map: GameMap) {
 export function vacantMonkBed(map: GameMap, joined: Iterable<{ home?: string; bedSlot?: number }>) {
   const beds = monkBeds(map)
   const taken = [...joined]
+  if (MONK_COUNT + taken.length >= shrineMonkCapacity(map)) return undefined
   return beds.slice(MONK_COUNT).find(bed => !taken.some(monk => monk.home === bed.home && monk.bedSlot === bed.slot))
 }
 
 export function enclaveHousing(map: GameMap, settlers: number, monks: number) {
   const capacity = (test: (b: BuildingDef) => boolean) => map.buildings.filter(b => b.owner !== "independent" && test(b)).reduce((sum, b) => sum + housingBeds(b), 0)
   const places = (occupied: number, total: number) => ({ occupied, capacity: total, available: Math.max(0, total - occupied) })
-  return { people: places(settlers, capacity(isHouse)), monks: places(monks, capacity(isMonkShelter)) }
+  return { people: places(settlers, capacity(isHouse)), monks: places(monks, Math.min(capacity(isMonkShelter), shrineMonkCapacity(map))) }
 }

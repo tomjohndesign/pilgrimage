@@ -6,7 +6,7 @@ import { sheepPenLayout } from "./workshop-layout"
 import { buildingEntry, buildingFoldEntry, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
 import { marketBayContains } from "./market-layout"
 import { isComplete, isEnterable } from "./construction"
-import { shrineLayout } from "./shrine-layout"
+import { shrineLayout, isChapel, shrineDivider } from "./shrine-layout"
 import type { BuildingDef, GameMap, TilePos } from "./map/types"
 
 export function containsTile(building: BuildingDef, p: TilePos): boolean {
@@ -30,11 +30,12 @@ export function shrineFurnitureClear(building: BuildingDef, door: TilePos | unde
   const layout = shrineLayout(building, door)
   const sin = Math.round(Math.sin(layout.rotation)), cos = Math.round(Math.cos(layout.rotation))
   const local = (p: TilePos) => {
-    const x = p.x - building.x - Math.floor(building.w / 2), z = p.z - building.z - Math.floor(building.d / 2)
+    const x = p.x - building.x - (building.w - 1) / 2, z = p.z - building.z - (building.d - 1) / 2
     return { x: x * cos - z * sin, z: x * sin + z * cos }
   }
   const a = local(from), b = local(to), clearance = .1
   const obstacles = [
+    ...shrineDivider(layout.width, layout.depth),
     { id: "altar", x: 0, z: layout.altarZ, width: Math.min(.72, layout.width * .43), depth: Math.min(.46, layout.depth * .4) },
   ]
   return obstacles.every(p => {
@@ -86,11 +87,14 @@ export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDe
       return false
     }
     if (!enterShrine || building.id !== map.site?.hovelId) return false
+    // A construction site admits no worshippers; people already overtaken by
+    // the enlarged footprint may leave it before normal wall rules apply.
+    if (!isComplete(building)) { if (!a) return false; continue }
     if (!shrineFurnitureClear(building, map.site?.door, from, to, seat)) return false
     // Leave the relic table clear.
     const { altarTile: altar } = shrineLayout(building, map.site?.door)
     const cx = altar.x, cz = altar.z
-    if (to.x === cx && to.z === cz) return false
+    if (!isChapel(building) && to.x === cx && to.z === cz) return false
     if (a && b) continue
     const onPassage = (p: TilePos, gate: { inside: TilePos; outside: TilePos }) =>
       p.x >= Math.min(gate.inside.x, gate.outside.x) && p.x <= Math.max(gate.inside.x, gate.outside.x)

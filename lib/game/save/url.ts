@@ -49,7 +49,7 @@ export function parsePlayQuery(params: Params): PlayQuery {
   const world: Partial<WorldSettings> = {}
   for (const [query, key, isInteger] of WORLD_PARAMS) {
     const value = isInteger ? integer(params[query]) : decimal(params[query])
-    if (key === "generation" && value !== 1 && value !== 2 && value !== 3) continue
+    if (key === "generation" && value !== 1 && value !== 2 && value !== 3 && value !== 4) continue
     if (value !== undefined) world[key] = value
   }
   const elevation: { -readonly [K in keyof ElevationSettings]?: number } = {}

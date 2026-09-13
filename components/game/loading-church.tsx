@@ -63,14 +63,15 @@ const LOADING_TILES = Array.from({ length: (PATTERN_COLUMNS + 2) * (PATTERN_ROWS
 const GRID_LINES = LOADING_TILES.map(tile => `M${tile.points}Z`).join(" ")
 
 /** The opening landmark and tiled ground are ordinary page HTML, available
- * before game JavaScript. The priority image uses the actual church geometry.
+ * before game JavaScript. The priority image uses the actual chapel geometry.
  * A resumed world shows the saved picture of the player's last view instead
  * of the church, with the ground plane at screen centre. That picture is
  * placed by CSS properties on the document root, written by the play page's
  * resume script before hydration and by the shell once the save is read.
  */
-export function LoadingChurch({ showChurch, phase, overlayRef, idle = false, generating = false, resuming = false, view = 0, viewSize = DEFAULT_VIEW_SIZE,
+export function LoadingChurch({ showChurch, phase, overlayRef, chapel = true, idle = false, generating = false, resuming = false, view = 0, viewSize = DEFAULT_VIEW_SIZE,
   groundOffset = GROUND_OFFSET, focus = null, onStop }: {
+  chapel?: boolean
   idle?: boolean; generating?: boolean
   /** A saved world is coming back: no church, no pulse, and its last view where the land will appear. */
   resuming?: boolean
@@ -150,7 +151,7 @@ export function LoadingChurch({ showChurch, phase, overlayRef, idle = false, gen
     </div></div>}
     {idle && <div className="landing-scene" data-ready={sceneReady}><LandingScene viewSize={viewSize} onReady={onSceneReady} /></div>}
     {resuming && phase !== "complete" && <div className="loading-church-view" aria-hidden="true"><div className="loading-church-view-wipe" /></div>}
-    {showChurch && !(idle && sceneReady) && <img src={`/textures/ui/loading-church-v1/${view}.webp`} width={256} height={256}
+    {showChurch && !(idle && sceneReady) && <img src={`/textures/ui/${chapel ? "loading-chapel-v5" : "loading-church-v2"}/${view}.webp`} width={256} height={256}
       fetchPriority="high" loading="eager" decoding="sync" alt="" draggable={false}
       className="loading-church-image" style={{ width: `${8 * scale}dvh`, height: `${8 * scale}dvh` }} />}
     {generating && <>

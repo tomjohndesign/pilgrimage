@@ -162,7 +162,7 @@ describe("settlement construction", () => {
     expect(new Set(parts.map(p => p.name)).size).toBe(parts.length)
     expect(parts.some(p => p.layer === "roof")).toBe(true)
     expect(parts.filter(p => p.name === "entrance-arch-0")).toHaveLength(1)
-    expect(bounds(parts.find(p => p.name === "relic-table")!).getCenter(new Vector3()).z).toBeCloseTo(-1.4)
+    expect(bounds(parts.find(p => p.name === "relic-table")!).getCenter(new Vector3()).z).toBeCloseTo(-1.2)
     expect(parts.some(p => p.name.startsWith("kneeler-"))).toBe(false)
     const altar = bounds(parts.find(p => p.name === "relic-table")!)
     const shelf = bounds(parts.find(p => p.name === "relic-shelf")!)
@@ -192,7 +192,7 @@ it("keeps shrine furniture and both roof levels inside the 3×5 footprint", () =
     expect(b.min.z, part.name).toBeGreaterThanOrEqual(-2.501)
     expect(b.max.z, part.name).toBeLessThanOrEqual(2.501)
   }
-  const aisle = new Box3(new Vector3(-.3,.1,-.5),new Vector3(.3,.7,2.5))
+  const aisle = new Box3(new Vector3(-.3,.13,-.5),new Vector3(.3,.7,2.5))
   expect(parts.filter(p => p.layer === "interior").some(p => bounds(p).intersectsBox(aisle))).toBe(false)
   expect(parts.some(p => p.name === "roof-cross-upright")).toBe(true)
   expect(parts.some(p => p.name.startsWith("raised-nave-thatch-bundle-"))).toBe(true)

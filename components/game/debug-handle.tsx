@@ -67,7 +67,7 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
           activity: s.activity, riding: s.partyRiding, boarding: s.partyBoarding, stamina: s.stamina, waiting: s.partyWaiting, home: s.home, employer: s.employer,
         } }) })),
       expectedPopulation: travelers.length,
-      bakeLoadingChurch: async () => (await import("@/lib/game/render/loading-church-bake")).bakeLoadingChurch(gl),
+      bakeLoadingChurch: async (chapel = true) => (await import("@/lib/game/render/loading-church-bake")).bakeLoadingChurch(gl, chapel),
       benchmarkTarget: benchmarkCity(map)?.centre,
       cityStats: () => cityBenchmarkStats(simRegistry.current, map),
       populationStatus: () => ({ travelers: simRegistry.current?.travelers.size ?? 0,

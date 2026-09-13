@@ -1,3 +1,4 @@
+import { shrineBuildingRenown } from "./shrine-upgrade"
 import { isComplete } from "./construction"
 import { buildCatalog, DEFAULT_BALANCE, type GameBalance } from "./balance"
 import { TERRAIN } from "./map/terrain"
@@ -39,7 +40,7 @@ export function buildInfluence(map: GameMap, balance: GameBalance = DEFAULT_BALA
   const catalog = buildCatalog(balance)
   for (const building of map.buildings) {
     if (building.owner === "independent" || !isComplete(building)) continue
-    const renown = building.id === map.site.hovelId ? balance.rules.hovelRenown
+    const renown = building.id === map.site.hovelId ? shrineBuildingRenown(map, balance.rules.hovelRenown)
       : catalog.find((def) => def.id === building.buildType)?.renown ?? 0
     if (renown > 0) stamp(building.x + (building.w - 1) / 2,
       building.z + (building.d - 1) / 2, influenceRadius(renown, balance))
