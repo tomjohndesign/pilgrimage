@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "60ce40921a80d66fb71ca9d57cbc216de743b3be",
-  "releaseCount": 229,
+  "lastProcessedCommit": "5e9d24f0118e7ee7132c68c9727a6faff8f1852c",
+  "releaseCount": 231,
   "releases": [
+    {
+      "version": "0.0.245",
+      "title": "Release 0.0.245",
+      "summary": "Fix horses disappearing when knights remount after shrine visits (#263)",
+      "commit": "5e9d24f0118e7ee7132c68c9727a6faff8f1852c"
+    },
+    {
+      "version": "0.0.244",
+      "title": "Release 0.0.244",
+      "summary": "Require an available market stall for cart vendors to enter the enclave (#264)",
+      "commit": "a89addb84eb63726eb4a5908ab79c26cbe55ea3b"
+    },
     {
       "version": "0.0.243",
       "title": "Release 0.0.243",
