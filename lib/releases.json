@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "ab3533274e842d8fc2cbbb2bf421d9a5d679bb3d",
-  "releaseCount": 223,
+  "lastProcessedCommit": "d5a30dd03979207268d7859e6987ff8987fd2140",
+  "releaseCount": 224,
   "releases": [
+    {
+      "version": "0.0.238",
+      "title": "Release 0.0.238",
+      "summary": "Build monks' residences as church side wings (#258)",
+      "commit": "d5a30dd03979207268d7859e6987ff8987fd2140"
+    },
     {
       "version": "0.0.237",
       "title": "Release 0.0.237",
