@@ -264,11 +264,11 @@ describe("tuned gameplay", () => {
     expect(existing).toEqual(before)
     expect(buildingIncomeLabel(buildCatalog(balance).find(b => b.id === "monk-shelter")!, balance)).toBe("Adds monk housing when complete")
   })
-  it("applies the tuned influence radius across the full footprint", () => {
+  it("keeps placement independent of the tuned influence radius", () => {
     const balance = fresh()
     balance.rules.buildRadius = 20
     const at = { x: 34, z: 18 }
-    expect(placementError(map(), BUILD_CATALOG[0], at)).toMatch(/influence/)
+    expect(placementError(map(), BUILD_CATALOG[0], at)).toBeNull()
     expect(placementError(map(), BUILD_CATALOG[0], at, balance)).toBeNull()
   })
   it("uses tunable individual, relic and milestone rules", () => {

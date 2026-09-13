@@ -11,8 +11,8 @@ import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { buildTileError } from "@/lib/game/settlement"
 
 /**
- * A faint, persistent boundary of radiated influence, with stronger edges and
- * ground availability while building.
+ * A faint boundary of radiated influence outside build mode; while building,
+ * show ground availability across the whole map without a territory boundary.
  * The cursor separately validates the selected footprint, supplies and camp access.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0
  */
@@ -25,18 +25,19 @@ export function BuildInfluenceOverlay({ map, buildMode, balance: labBalance }: {
     const available = new THREE.Color("#93bc6c"), blocked = new THREE.Color("#db6656")
     for (let z = 0; z < map.depth; z++) {
       for (let x = 0; x < map.width; x++) {
-        if (!field.radiated[z * map.width + x]) continue
+        if (!buildMode && !field.radiated[z * map.width + x]) continue
         const wx = tileToWorldX(map, x), wz = tileToWorldZ(map, z)
         const onBridge = bridgeLayout(map).rise[z * map.width + x] > 0
         const y = (dx: number, dz: number) => (onBridge
           ? ropeHeightAt(map, x + dx * 0.999, z + dz * 0.999) ?? surfaceHeight(map, x, z)
           : groundHeight(map, x + dx * 0.999, z + dz * 0.999)) + 0.025
-        const color = buildTileError(map, x, z, field) ? blocked : available
+        const color = buildTileError(map, x, z) ? blocked : available
         // Leave a narrow gap between tiles so the construction grid stays legible.
-        for (const [dx, dz] of [[-.46, -.46], [-.46, .46], [.46, .46], [-.46, -.46], [.46, .46], [.46, -.46]]) {
+        for (const [dx, dz] of buildMode ? [[-.46, -.46], [-.46, .46], [.46, .46], [-.46, -.46], [.46, .46], [.46, -.46]] : []) {
           positions.push(wx + dx, y(dx, dz), wz + dz)
           colors.push(color.r, color.g, color.b)
         }
+        if (buildMode) continue
         for (const [dx, dz, ax, az, bx, bz] of [
           [-1, 0, -.5, -.5, -.5, .5], [1, 0, .5, -.5, .5, .5],
           [0, -1, -.5, -.5, .5, -.5], [0, 1, -.5, .5, .5, .5],
@@ -53,15 +54,15 @@ export function BuildInfluenceOverlay({ map, buildMode, balance: labBalance }: {
     const boundary = new THREE.BufferGeometry()
     boundary.setAttribute("position", new THREE.Float32BufferAttribute(edges, 3))
     return { tiles, boundary }
-  }, [map, balance])
+  }, [map, balance, buildMode])
   useEffect(() => () => { geometry.tiles.dispose(); geometry.boundary.dispose() }, [geometry])
   return (
     <group>
       <mesh geometry={geometry.tiles} visible={buildMode} renderOrder={2} raycast={() => {}}>
         <meshBasicMaterial vertexColors transparent opacity={0.28} depthWrite={false} />
       </mesh>
-      <lineSegments geometry={geometry.boundary} renderOrder={3} raycast={() => {}}>
-        <lineBasicMaterial color="#e4c77f" transparent opacity={buildMode ? 0.9 : 0.25} depthWrite={false} />
+      <lineSegments geometry={geometry.boundary} visible={!buildMode} renderOrder={3} raycast={() => {}}>
+        <lineBasicMaterial color="#e4c77f" transparent opacity={0.25} depthWrite={false} />
       </lineSegments>
     </group>
   )
