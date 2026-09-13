@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "3d4f1e4655716f4716a5257fa3fb0207c070889a",
-  "releaseCount": 225,
+  "lastProcessedCommit": "f307b90bc1240deb335dfe4bc030828de3c3de76",
+  "releaseCount": 227,
   "releases": [
+    {
+      "version": "0.0.241",
+      "title": "Release 0.0.241",
+      "summary": "Remove renown influence restrictions on building placement (#260)",
+      "commit": "f307b90bc1240deb335dfe4bc030828de3c3de76"
+    },
+    {
+      "version": "0.0.240",
+      "title": "Release 0.0.240",
+      "summary": "Limit tree thinning to distant views under sustained frame pressure (#259)",
+      "commit": "742952f50c3633f51fde2e7b1a7ef1ab1965b2d9"
+    },
     {
       "version": "0.0.239",
       "title": "Release 0.0.239",
