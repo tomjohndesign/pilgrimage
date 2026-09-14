@@ -14,6 +14,7 @@ import { waterfallTurbulence } from "@/lib/game/map/waterfall-turbulence"
 import { DEFAULT_ELEVATION } from "@/lib/game/map/elevation"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
+import { grassAppearanceUniforms } from "@/lib/game/render/appearance-uniforms"
 import { GROUND_SURFACE_GLSL, GROUND_UV_SCALE } from "@/lib/game/render/ground-surface"
 import { useTerrainTexture } from "./use-terrain-texture"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
@@ -92,7 +93,7 @@ export function WaterMotion({ map: suppliedMap, waterPalette, edgeGrain, bounds,
     if (detailed && material.current) material.current.uniforms.time.value += Math.min(dt, 0.1)
   })
   return <mesh ref={mesh} name="water-shimmer" geometry={geometry} frustumCulled={false}>
-    <shaderMaterial ref={material} uniforms={uniforms} transparent depthWrite={false} side={THREE.DoubleSide}
+    <shaderMaterial ref={material} uniforms={{ ...uniforms, ...grassAppearanceUniforms }} transparent depthWrite={false} side={THREE.DoubleSide}
       vertexShader={`attribute vec2 aFordFlow; varying vec2 vFordFlow; attribute float aShoreMode; varying float vShoreMode; attribute vec4 aShoreCorners; varying vec4 vShoreCorners; attribute float aFall; attribute vec3 aTurbulence; varying vec3 vTurbulence; varying float vFall; varying float vHeight; varying vec2 vUv; varying vec2 vWorld;
         void main() { vFordFlow = aFordFlow; vShoreMode = aShoreMode; vShoreCorners = aShoreCorners; vFall = aFall; vTurbulence = aTurbulence; vUv = uv; vWorld = position.xz; vHeight = position.y;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`}

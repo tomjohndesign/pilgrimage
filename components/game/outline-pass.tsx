@@ -439,17 +439,15 @@ export function OutlinePass({ objects, selection: previewSelection }: { selectio
     const detail = sceneryDetail(scene)
     const distant = detail > 0
     const closeOpacity = sceneryCloseOpacity(scene)
-    // At the farthest view, authored building lines and sprite colors are
-    // sufficient. Selection still requests its IDs, but ordinary overlap ink
-    // must not require another complete terrain/building/tree scene pass.
-    const mode = detail === 2 || (characterPass && closeOpacity === 0) ? "off" : outlineMode
+    // Building back edges remain part of the world at every zoom and frame
+    // quality level. Only the separate character ink fades with detail.
+    const mode = characterPass && closeOpacity === 0 ? "off" : outlineMode
     const selectionInOtherPass = (stage.phase === "world" && selectingCharacter) || (characterPass && !selectingCharacter)
     const selectedId = selectionInOtherPass ? 0 : requestedId
-    // Wide views use ordinary depth occlusion. Dropping the see-through masks
-    // removes the extra character colour and road-edge scene renders entirely.
+    // Wide views use ordinary depth occlusion for characters.
     const maskCharacters = closeOpacity > 0 && stage.hasCharacters
-    // Trees hide the roads under them in the same pass they are drawn in.
-    const roadEdgePass = !characterPass && !distant
+    // Keep the road verge readable through canopy at every detail level.
+    const roadEdgePass = !characterPass
     const maskPass = characterPass && maskCharacters
     const characterSelected = selectedId !== 0 && selectingCharacter
     const needsOutline = mode !== "off" || selectedId !== 0 || maskPass || roadEdgePass
