@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest"
-import { PERSON_PRESETS, DEFAULT_DESIGN, shade, personRecipe } from "./base-person/design"
+import { PERSON_PRESETS, DEFAULT_DESIGN, personRecipe } from "./base-person/design"
 import { complexionSwap } from "./base-person/complexion"
 import { jobDesign, SETTLEMENT_JOBS } from "./jobs/design"
 import { parseDisplaySettings } from "./save/schema"
 import { structureParts, shrineStructureParts } from "./building-art/structure"
-import { CHARACTER_PALETTE_SLOTS, DEFAULT_PLAYER_COLOR, isPlayerResident, mutedCloth, playerBuildingParts, playerClothingSwap } from "./player-color"
+import { CHARACTER_PALETTE_SLOTS, DEFAULT_PLAYER_COLOR, isPlayerResident, playerBuildingParts, playerClothingSwap } from "./player-color"
 import { characterPalette } from "./render/character-batch"
 import { complexionUniforms } from "./render/complexion-swap"
 
@@ -44,15 +44,12 @@ describe("settlement colors", () => {
     }
   })
 
-  it("keeps visitors muted and independent of the player's chosen color", () => {
-    const visitor = playerClothingSwap(empty, DEFAULT_DESIGN, DEFAULT_PLAYER_COLOR, false)
-    expect(visitor).toEqual(playerClothingSwap(empty, DEFAULT_DESIGN, "#427da6", false))
-    expect(visitor.to[visitor.from.indexOf(DEFAULT_DESIGN.tunicColor)]).toBe(mutedCloth(DEFAULT_DESIGN.tunicColor))
-    expect(visitor.from.length + 8).toBeLessThanOrEqual(CHARACTER_PALETTE_SLOTS)
-    expect(visitor.to[visitor.from.indexOf(shade(DEFAULT_DESIGN.tunicColor, .55))]).toBe(shade(mutedCloth(DEFAULT_DESIGN.tunicColor), .55))
-    expect(playerClothingSwap(empty, DEFAULT_DESIGN, null, false)).toBe(empty)
-    expect(mutedCloth("#ffffff")).toMatch(/^#[0-9a-f]{6}$/)
-    expect(mutedCloth("#000000")).toMatch(/^#[0-9a-f]{6}$/)
+  it("preserves visitors' original clothing and individual complexion for any player color", () => {
+    const skin = complexionSwap(DEFAULT_DESIGN, { skin: "#e0bb9c", hair: "#c6ab6d" })
+    for (const color of [DEFAULT_PLAYER_COLOR, "#427da6", null]) {
+      expect(playerClothingSwap(skin, DEFAULT_DESIGN, color, false)).toBe(skin)
+      expect(playerClothingSwap(empty, DEFAULT_DESIGN, color, false)).toBe(empty)
+    }
   })
 
   it("accepts saved custom colors and ignores malformed preferences in old saves", () => {

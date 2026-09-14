@@ -1,6 +1,4 @@
 "use client"
-import { usePlayerColor } from "./player-color"
-import { applySpriteSaturation } from "@/lib/game/render/sprite-saturation"
 import { useCharacterBatches } from "./character-batches"
 import { spriteTextureView } from "@/lib/game/render/sprite-texture"
 
@@ -44,8 +42,6 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
   map?: GameMap; kind: "cart" | "merchant" | "passenger" | Animal; coat?: string; variant?: number; horseVariant?: HorseVariant; cargo?: Cargo; puller?: Puller; awning?: boolean; characterScale?: number
   selected?: boolean; outlineColor?: [number, number, number]; onClick?: FigureClickHandler; position?: [number, number, number]; worldStall?: boolean
 }) {
-  const playerColor = usePlayerColor()
-  const saturation = playerColor && (kind === "cart" || kind === "passenger" || kind === "merchant" || knight === "mounted") ? .22 : 1
   const animal = kind === "donkey" || kind === "horse" || kind === "ox"
   const edits = useAnimalRigStore(state => state.designs[kind])
   const hasEdits = animal && !!edits && Object.keys(edits.clips).length > 0
@@ -77,16 +73,15 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
     material.onBeforeCompile = shader => {
       applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth, undefined, depthBias)
       if (kind === "cart" && !passengerCart) applyDriverLayer(shader, maps[3], driverFrame, driverVisible, depths[3])
-      if (!idPass) applySpriteSaturation(shader, saturation)
       if (idPass) {
         shader.uniforms.transportId = { value: new THREE.Vector3(...(outlineColor ?? [0, 0, 0])) }
         shader.fragmentShader = "uniform vec3 transportId;\n" + shader.fragmentShader.replace("#include <alphatest_fragment>", "#include <alphatest_fragment>\ndiffuseColor.rgb = transportId;")
       }
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => `transport-${kind}-${passengerCart ?? "vendor"}-${idPass ? "id" : "color"}-v6`
+    material.customProgramCacheKey = () => `transport-${kind}-${passengerCart ?? "vendor"}-${idPass ? "id" : "color"}-v7`
     return material
-  }), [saturation, map, maps, kind, passengerCart, driverFrame, driverVisible, viewport, worldTexel, groundPlane, poseDepth, depthBias, depths, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }), [map, maps, kind, passengerCart, driverFrame, driverVisible, viewport, worldTexel, groundPlane, poseDepth, depthBias, depths, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => { materials.forEach(m => m.dispose()) }, [materials])
   useEffect(() => () => maps.forEach(map => map.dispose()), [maps])
   useEffect(() => prepareSpritePicking(maps), [maps])
@@ -99,11 +94,11 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
     if (!batchEntries || !body.current || !ids.current || !outlineColor || (kind === "cart" && !passengerCart) || edited) return
     // A passenger cart and its seated passengers share one anchor on purpose;
     // their baked relief orders them, so the coincidence pass leaves them out.
-    const entry = { saturation, sprite: body.current, ids: ids.current, ground: groundPlane, depth: poseDepth, depthBias,
+    const entry = { sprite: body.current, ids: ids.current, ground: groundPlane, depth: poseDepth, depthBias,
       shared: kind === "cart" || kind === "passenger", id: new THREE.Vector3(...outlineColor) }
     batchEntries.add(entry)
     return () => { batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
-  }, [saturation, batchEntries, groundPlane, poseDepth, depthBias, kind, passengerCart, edited, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [batchEntries, groundPlane, poseDepth, depthBias, kind, passengerCart, edited, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   const root = useRef<THREE.Group>(null), phase = useRef(0), grazingTime = useRef(0), plant = useRef<FootPlant | null>(null)
   const vectors = useMemo(() => ({ facing: new THREE.Vector3(), origin: new THREE.Vector3(), foot: new THREE.Vector3(), corrected: new THREE.Vector3() }), [])
   // A standing figure whose pose, facing, place and shop state did not change

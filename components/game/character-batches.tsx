@@ -39,7 +39,7 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
   const scene = useThree(state => state.scene)
   const groups = useMemo(() => new Map<string, AtlasGroup>(), [])
   const membership = useMemo(() => new WeakMap<CharacterBatchEntry, {
-    color: THREE.Texture["source"]; depth: THREE.Texture["source"]; recolor: boolean; saturation: number; group: AtlasGroup
+    color: THREE.Texture["source"]; depth: THREE.Texture["source"]; recolor: boolean; group: AtlasGroup
   }>(), [])
   const candidates = useMemo(() => new Set<THREE.Object3D>(), [])
   const entries = useMemo(() => new CharacterEntries((entry, knownBatched) => {
@@ -50,11 +50,11 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
     if (!batched) return
     candidates.add(batchSourceRoot(sprite))
     let cached = membership.get(entry)
-    if (!cached || cached.color !== map!.source || cached.depth !== depth!.source || cached.recolor !== !!entry.complexion || cached.saturation !== (entry.saturation ?? 1)) {
-      const key = `${map!.source.uuid}:${depth!.source.uuid}:${!!entry.complexion}:${entry.saturation ?? 1}`
+    if (!cached || cached.color !== map!.source || cached.depth !== depth!.source || cached.recolor !== !!entry.complexion) {
+      const key = `${map!.source.uuid}:${depth!.source.uuid}:${!!entry.complexion}`
       let group = groups.get(key)
       if (!group) { group = { entries: [] }; groups.set(key, group) }
-      cached = { color: map!.source, depth: depth!.source, recolor: !!entry.complexion, saturation: entry.saturation ?? 1, group }
+      cached = { color: map!.source, depth: depth!.source, recolor: !!entry.complexion, group }
       membership.set(entry, cached)
     }
     cached.group.entries.push(entry)

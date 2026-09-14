@@ -1,5 +1,4 @@
 import * as THREE from "three"
-import { applySpriteSaturation } from "./sprite-saturation"
 import { spriteTextureView } from "./sprite-texture"
 import type { ComplexionUniforms } from "./complexion-swap"
 import { MATCH_TOLERANCE } from "./complexion-swap"
@@ -9,7 +8,6 @@ import { OUTLINE_ID_LAYER_MASK } from "./outline"
 import { updateBillboardWorld } from "./sprite-transforms"
 
 export interface CharacterBatchEntry {
-  saturation?: number
   sprite: THREE.Sprite
   ids: THREE.Sprite
   /** Direct atlas/UV state for batched poses; ordinary source sprites may omit it. */
@@ -129,10 +127,9 @@ export class CharacterBatch {
                 diffuseColor.rgb = texture2D(characterPalette, at + vec2(.5, 0.0)).rgb; break;
               }
             }`}`)
-        if (!ids) applySpriteSaturation(shader, entry.saturation ?? 1)
       }
       material.onBeforeRender = renderer => { renderer.getCurrentViewport(this.viewport) }
-      material.customProgramCacheKey = () => `character-batch-v6-${compact}-${ids}-${!!entry.complexion}`
+      material.customProgramCacheKey = () => `character-batch-v7-${compact}-${ids}-${!!entry.complexion}`
       return material
     })
     this.root.name = "character-atlas-batch"
