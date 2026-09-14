@@ -251,10 +251,6 @@
         "Male": {
           "voice": "Daniel",
           "rate": 155
-        },
-        "Female": {
-          "voice": "Moira",
-          "rate": 156
         }
       },
       "select": [
