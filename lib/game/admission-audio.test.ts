@@ -10,7 +10,7 @@ vi.mock("./character-asset-store", () => ({ useCharacterAssetStore: {
 afterEach(() => { vi.unstubAllGlobals(); sound.muted = false; sound.listener = undefined })
 
 describe("admission clinks", () => {
-  it("unlocks once, plays the existing coin sound, respects mute and releases audio on cleanup", async () => {
+  it("unlocks once, plays the new ElevenLabs coin sound, respects mute and releases audio on cleanup", async () => {
     const sources: Array<{ start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> }> = []
     const context = {
       state: "suspended", destination: {},
@@ -31,7 +31,7 @@ describe("admission clinks", () => {
     audio.unlock()
     await vi.waitFor(() => expect(context.decodeAudioData).toHaveBeenCalledOnce())
     audio.unlock()
-    expect(fetchAudio).toHaveBeenCalledExactlyOnceWith("/sounds/characters/merchant-select-v1.wav")
+    expect(fetchAudio).toHaveBeenCalledExactlyOnceWith("/sounds/elevenlabs/v1/coin-purse-1.wav")
     expect(audio.play()).toBe(true)
     expect(sources[0].start).toHaveBeenCalledOnce()
     sound.muted = true

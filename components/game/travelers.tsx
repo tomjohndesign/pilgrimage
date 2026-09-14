@@ -3,6 +3,8 @@ import { shepherdVisualActivity } from "@/lib/game/sheep-husbandry"
 
 import { useShallow } from "zustand/react/shallow"
 
+import { stopActorAudio } from "@/lib/game/scene-audio"
+
 import { CharacterMapContext } from "./character-map-context"
 import { clearDemolishedBuildings } from "@/lib/game/demolition"
 import { SceneAssetBoundary } from "./scene-assets"
@@ -33,7 +35,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 
-import { travelerAppearance } from "@/lib/game/base-person/population"
+import { travelerAppearance, travelerBodyType } from "@/lib/game/base-person/population"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { routeBenchmarkCity } from "@/lib/game/city-benchmark"
 import { simulationFrameStep, useSimulationStore } from "@/lib/game/simulation-store"
@@ -51,7 +53,7 @@ import { shrineLayout, isChapel } from "@/lib/game/shrine-layout"
 import type { Traveler } from "@/lib/game/travelers"
 import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/game/motion"
 import type { CharacterModel } from "@/lib/game/character-assets"
-import { playCharacterSound, stopCharacterSound } from "@/lib/game/character-audio"
+import { playCharacterSound, stopCharacterSound, warmCharacterVoices } from "@/lib/game/character-audio"
 import {
   encodeObjectId,
   travelerObjectId,
@@ -220,16 +222,25 @@ export const Travelers = memo(function Travelers({
   }, [sim])
 
   useEffect(() => {
+    warmCharacterVoices()
     // Synchronous subscription keeps playback in the user gesture and also
     // covers selections originating in other controls, not only the canvas.
     const unsubscribe = useCameraStore.subscribe((state, previous) => {
       const next = state.selection
-      if (!next || next.kind !== "traveler" || isSelected(previous.selection, next)) return
+      // select() produces a new object even when the player clicks the same person.
+      // Camera movement retains the reference and must not replay their voice.
+      if (next === previous.selection) return
+      if (next?.kind === "monk") return
+      if (!next || next.kind !== "traveler") { stopCharacterSound(); return }
       const traveler = travelers.find((t) => t.id === next.id)
-      if (traveler) void playCharacterSound(sim.travelers.get(traveler.id)?.beggar ? "beggar" : traveler.type.id, traveler.id)
+      if (traveler) {
+        // Resolve job, calling and body through the same profile as the editor.
+        const type = sim.travelers.get(traveler.id)?.beggar ? "beggar" : traveler.type.id
+        void playCharacterSound(type, traveler.id, travelerBodyType(map.seed ?? 0, traveler.type.id, traveler.id), currentJobs.current.get(traveler.id) ? `job/${currentJobs.current.get(traveler.id)}` : type)
+      }
     })
     return () => { unsubscribe(); stopCharacterSound() }
-  }, [travelers, sim])
+  }, [travelers, sim, map.seed])
 
   useFrame(({ camera, scene, clock: frameClock }, delta) => withTerrainCornerQueries(map, () => {
     const started = frameProfile.start()
@@ -362,7 +373,10 @@ export const Travelers = memo(function Travelers({
         if (logs && !onScreen) { logs.visible = false; setSubtreeMatrixAutoUpdate(logs, false) }
         else if (logs) setSubtreeMatrixAutoUpdate(logs, true)
       }
-      if (!onScreen) continue
+      if (!onScreen) { stopActorAudio(`traveler/${travelers[i].id}`); continue }
+      group.userData.audioActor = `traveler/${travelers[i].id}`
+      group.userData.audioProfile = currentJobs.current.get(travelers[i].id) ? `job/${currentJobs.current.get(travelers[i].id)}` : s.beggar ? "beggar" : travelers[i].type.id
+      group.userData.audioVisible = personOnScreen
       renderedUnits++
 
       const dx = s.x - group.position.x

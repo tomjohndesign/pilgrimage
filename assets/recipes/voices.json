@@ -1,0 +1,432 @@
+{
+  "version": 1,
+  "register": "old-english",
+  "sampleRate": 22050,
+  "note": "Selection barks in the tongues of the setting: Old English for the laity, Church Latin for the clergy, after Age of Empires II. Every character is rendered once per body type so a man sounds like a man and a woman like a woman; friars are always male and nuns always female, so they have one voice each. 'text' is the authentic line and is what a voice actor reads; 'phonetic' is a respelling for the placeholder macOS TTS render only; 'gloss' is the English meaning shown as a subtitle.",
+  "voices": {
+    "peasant": {
+      "label": "Field hand",
+      "tongue": "Old English",
+      "prototype": {
+        "Male": {
+          "voice": "Rocko",
+          "rate": 168
+        },
+        "Female": {
+          "voice": "Sandy",
+          "rate": 170
+        }
+      },
+      "select": [
+        {
+          "id": "peasant-1",
+          "text": "Hwæt wilt þū?",
+          "phonetic": "Hwat wilt thoo?",
+          "gloss": "What do you want?"
+        },
+        {
+          "id": "peasant-2",
+          "text": "Ic hæbbe weorc tō dōnne.",
+          "phonetic": "Ich habbeh werk toh donneh.",
+          "gloss": "I have work to do."
+        },
+        {
+          "id": "peasant-3",
+          "text": "Iā?",
+          "phonetic": "Yah?",
+          "gloss": "Aye?"
+        }
+      ],
+      "repeat": [
+        {
+          "id": "peasant-4",
+          "text": "Ic eom wērig.",
+          "phonetic": "Ich ayom wayree.",
+          "gloss": "I am weary."
+        },
+        {
+          "id": "peasant-5",
+          "text": "Lǣt mē bēon!",
+          "phonetic": "Lat may bayon!",
+          "gloss": "Leave me be!"
+        }
+      ]
+    },
+    "beggar": {
+      "label": "Beggar",
+      "tongue": "Old English",
+      "prototype": {
+        "Male": {
+          "voice": "Grandpa",
+          "rate": 150
+        },
+        "Female": {
+          "voice": "Grandma",
+          "rate": 148
+        }
+      },
+      "select": [
+        {
+          "id": "beggar-1",
+          "text": "Ǣnne pening, lēof?",
+          "phonetic": "Anneh penning, layof?",
+          "gloss": "A penny, kind one?"
+        },
+        {
+          "id": "beggar-2",
+          "text": "Ic hingrie.",
+          "phonetic": "Ich hingree-eh.",
+          "gloss": "I am hungry."
+        },
+        {
+          "id": "beggar-3",
+          "text": "Miltsa mē.",
+          "phonetic": "Miltsa may.",
+          "gloss": "Have mercy on me."
+        }
+      ],
+      "repeat": [
+        {
+          "id": "beggar-4",
+          "text": "Nāht? Nāht æt eallum?",
+          "phonetic": "Naht? Naht at ayallum?",
+          "gloss": "Nothing? Nothing at all?"
+        },
+        {
+          "id": "beggar-5",
+          "text": "God þē forgife.",
+          "phonetic": "God thay for-yiveh.",
+          "gloss": "God forgive you."
+        }
+      ]
+    },
+    "pilgrim": {
+      "label": "Pilgrim",
+      "tongue": "Old English",
+      "prototype": {
+        "Male": {
+          "voice": "Daniel",
+          "rate": 160
+        },
+        "Female": {
+          "voice": "Shelley",
+          "rate": 158
+        }
+      },
+      "select": [
+        {
+          "id": "pilgrim-1",
+          "text": "Tō þǣre hālgan stōwe.",
+          "phonetic": "Toh thaireh hahlgan stoh-weh.",
+          "gloss": "To the holy place."
+        },
+        {
+          "id": "pilgrim-2",
+          "text": "Ic gā on sīðe.",
+          "phonetic": "Ich gah on seetheh.",
+          "gloss": "I am on a journey."
+        },
+        {
+          "id": "pilgrim-3",
+          "text": "Mīne fēt sind sāre.",
+          "phonetic": "Meeneh fayt sind sahreh.",
+          "gloss": "My feet are sore."
+        }
+      ],
+      "repeat": [
+        {
+          "id": "pilgrim-4",
+          "text": "Se weg is lang.",
+          "phonetic": "Seh wey is lang.",
+          "gloss": "The road is long."
+        },
+        {
+          "id": "pilgrim-5",
+          "text": "Lǣt mē faran.",
+          "phonetic": "Lat may faran.",
+          "gloss": "Let me travel on."
+        }
+      ]
+    },
+    "merchant": {
+      "label": "Merchant",
+      "tongue": "Old English",
+      "prototype": {
+        "Male": {
+          "voice": "Reed",
+          "rate": 175
+        },
+        "Female": {
+          "voice": "Flo",
+          "rate": 174
+        }
+      },
+      "select": [
+        {
+          "id": "merchant-1",
+          "text": "Wilt þū cēapian?",
+          "phonetic": "Wilt thoo chayapian?",
+          "gloss": "Do you wish to trade?"
+        },
+        {
+          "id": "merchant-2",
+          "text": "Mīn waru is gōd.",
+          "phonetic": "Meen waroo is gohd.",
+          "gloss": "My goods are good."
+        },
+        {
+          "id": "merchant-3",
+          "text": "Seolfor, oþþe nāht.",
+          "phonetic": "Seolvor, oth-theh naht.",
+          "gloss": "Silver, or nothing."
+        }
+      ],
+      "repeat": [
+        {
+          "id": "merchant-4",
+          "text": "Ic hæbbe nā tīman.",
+          "phonetic": "Ich habbeh nah teeman.",
+          "gloss": "I have no time."
+        },
+        {
+          "id": "merchant-5",
+          "text": "Seolfor ǣrest.",
+          "phonetic": "Seolvor ayrest.",
+          "gloss": "Silver first."
+        }
+      ]
+    },
+    "vendor": {
+      "label": "Stall keeper",
+      "tongue": "Old English",
+      "prototype": {
+        "Male": {
+          "voice": "Eddy",
+          "rate": 180
+        },
+        "Female": {
+          "voice": "Sandy",
+          "rate": 182
+        }
+      },
+      "select": [
+        {
+          "id": "vendor-1",
+          "text": "Cum, cēap hēr!",
+          "phonetic": "Koom, chayap hayr!",
+          "gloss": "Come, buy here!"
+        },
+        {
+          "id": "vendor-2",
+          "text": "Nīwe and gōd!",
+          "phonetic": "Neeweh and gohd!",
+          "gloss": "Fresh and good!"
+        },
+        {
+          "id": "vendor-3",
+          "text": "Hwæt þearft þū?",
+          "phonetic": "Hwat thearft thoo?",
+          "gloss": "What do you need?"
+        }
+      ],
+      "repeat": [
+        {
+          "id": "vendor-4",
+          "text": "Nū, oþþe nǣfre.",
+          "phonetic": "Noo, oth-theh nayvreh.",
+          "gloss": "Now, or never."
+        },
+        {
+          "id": "vendor-5",
+          "text": "Ic stande hēr ealne dæg.",
+          "phonetic": "Ich standeh hayr ayalneh dag.",
+          "gloss": "I stand here all day."
+        }
+      ]
+    },
+    "knight": {
+      "label": "Knight",
+      "tongue": "Old English",
+      "prototype": {
+        "Male": {
+          "voice": "Daniel",
+          "rate": 155
+        },
+        "Female": {
+          "voice": "Moira",
+          "rate": 156
+        }
+      },
+      "select": [
+        {
+          "id": "knight-1",
+          "text": "Hēr ic eom.",
+          "phonetic": "Hayr ich ayom.",
+          "gloss": "Here I am."
+        },
+        {
+          "id": "knight-2",
+          "text": "Hlāford?",
+          "phonetic": "Hlahford?",
+          "gloss": "My lord?"
+        },
+        {
+          "id": "knight-3",
+          "text": "Mīn sweord is þīn.",
+          "phonetic": "Meen sweord is theen.",
+          "gloss": "My sword is yours."
+        }
+      ],
+      "repeat": [
+        {
+          "id": "knight-4",
+          "text": "Hū lange sceal ic bīdan?",
+          "phonetic": "Hoo langeh shal ich beedan?",
+          "gloss": "How long must I wait?"
+        },
+        {
+          "id": "knight-5",
+          "text": "Hæfst þū weorc for mē?",
+          "phonetic": "Havst thoo werk for may?",
+          "gloss": "Have you work for me?"
+        }
+      ]
+    },
+    "minstrel": {
+      "label": "Minstrel",
+      "tongue": "Old English",
+      "prototype": {
+        "Male": {
+          "voice": "Rocko",
+          "rate": 185
+        },
+        "Female": {
+          "voice": "Flo",
+          "rate": 184
+        }
+      },
+      "select": [
+        {
+          "id": "minstrel-1",
+          "text": "Wilt þū lēoþ?",
+          "phonetic": "Wilt thoo layoth?",
+          "gloss": "Would you care for a song?"
+        },
+        {
+          "id": "minstrel-2",
+          "text": "Ic singe for hlāfe.",
+          "phonetic": "Ich singeh for hlahveh.",
+          "gloss": "I sing for bread."
+        },
+        {
+          "id": "minstrel-3",
+          "text": "Ān pening, ān lēoþ.",
+          "phonetic": "Ahn penning, ahn layoth.",
+          "gloss": "A penny, a song."
+        }
+      ],
+      "repeat": [
+        {
+          "id": "minstrel-4",
+          "text": "Ealle men lufiaþ mīn lēoþ.",
+          "phonetic": "Ayalleh men loovee-ath meen layoth.",
+          "gloss": "Everyone loves my song."
+        },
+        {
+          "id": "minstrel-5",
+          "text": "Hlyste, hlāford!",
+          "phonetic": "Hlisteh, hlahford!",
+          "gloss": "Listen, my lord!"
+        }
+      ]
+    },
+    "friar": {
+      "label": "Friar",
+      "tongue": "Church Latin",
+      "prototype": {
+        "Male": {
+          "voice": "Daniel",
+          "rate": 145
+        }
+      },
+      "select": [
+        {
+          "id": "friar-1",
+          "text": "Pax tecum.",
+          "phonetic": "Pahks tay-koom.",
+          "gloss": "Peace be with you."
+        },
+        {
+          "id": "friar-2",
+          "text": "Deo gratias.",
+          "phonetic": "Day-oh grah-tsee-ahs.",
+          "gloss": "Thanks be to God."
+        },
+        {
+          "id": "friar-3",
+          "text": "Quid vis, fili?",
+          "phonetic": "Kwid wees, fee-lee?",
+          "gloss": "What do you wish, my son?"
+        }
+      ],
+      "repeat": [
+        {
+          "id": "friar-4",
+          "text": "Ora et labora.",
+          "phonetic": "Oh-rah et lah-boh-rah.",
+          "gloss": "Pray, and work."
+        },
+        {
+          "id": "friar-5",
+          "text": "Patientia, fili.",
+          "phonetic": "Pah-tsee-en-tsee-ah, fee-lee.",
+          "gloss": "Patience, my son."
+        }
+      ]
+    },
+    "nun": {
+      "label": "Nun",
+      "tongue": "Church Latin",
+      "prototype": {
+        "Female": {
+          "voice": "Moira",
+          "rate": 150
+        }
+      },
+      "select": [
+        {
+          "id": "nun-1",
+          "text": "Benedicite.",
+          "phonetic": "Beh-neh-dee-chee-teh.",
+          "gloss": "A blessing on you."
+        },
+        {
+          "id": "nun-2",
+          "text": "Dominus vobiscum.",
+          "phonetic": "Doh-mee-noos woh-bees-koom.",
+          "gloss": "The Lord be with you."
+        },
+        {
+          "id": "nun-3",
+          "text": "In silentio, quaeso.",
+          "phonetic": "In see-len-tsee-oh, kway-soh.",
+          "gloss": "In silence, I pray you."
+        }
+      ],
+      "repeat": [
+        {
+          "id": "nun-4",
+          "text": "Oremus.",
+          "phonetic": "Oh-ray-moos.",
+          "gloss": "Let us pray."
+        },
+        {
+          "id": "nun-5",
+          "text": "Deus te videt.",
+          "phonetic": "Day-oos tay wee-det.",
+          "gloss": "God sees you."
+        }
+      ]
+    }
+  }
+}

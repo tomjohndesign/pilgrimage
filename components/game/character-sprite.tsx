@@ -1,5 +1,6 @@
 "use client"
 
+import { tickCharacterSound } from "@/lib/game/character-sound-motion"
 import { usePlayerColor } from "./player-color"
 import { playerClothingSwap } from "@/lib/game/player-color"
 
@@ -284,6 +285,7 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
     let frame = special ? Math.floor(poseState.actionTime * special.fps) % special.columns : action ? (requested === "carrying" || requested === "procession" || requested === "wearyWalk") ? walkClipFrame(poseState.phase, clip.columns, clip.strides ?? 1) :
       Math.floor(poseState.actionTime * fps * (action.playbackRate ?? 1)) % clip.columns : moving ? walkClipFrame(poseState.phase, clip.columns, clip.strides ?? 1) : clip.stillFrame
     const walkingPose = !special && moving && (requested === "walk" || requested === "wearyWalk" || requested === "carrying" || requested === "procession")
+    tickCharacterSound(parent, camera, flight ? "flying" : playing ? "performing" : walkingPose ? "walk" : requested, walkingPose ? poseState.phase : poseState.actionTime * (special?.fps ?? fps * (action?.playbackRate ?? 1)) / clip.columns)
     const walkDetail = walkingPose && map && !selected ? sceneryDetail(scene) : 0
     if (walkingPose) frame = reducedWalkFrame(frame, clip.columns, clip.strides ?? 1, walkDetail)
     if (sprite.current) { sprite.current.userData.walkDetail = walkDetail; sprite.current.userData.displayedFrame = frame }

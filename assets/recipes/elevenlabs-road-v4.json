@@ -1,0 +1,111 @@
+{
+  "version": 4,
+  "output": ".context/elevenlabs-road-v4",
+  "maxSfxSeconds": 180,
+  "notes": "Six extended continuously looping ambience layers. Extra footsteps and sparse laughter have independent levels. Dialogue direction refers to distant ambience, not character selection voices.",
+  "jobs": [
+    {
+      "id": "forest-birds",
+      "kind": "sfx",
+      "label": "Birds & forest",
+      "layer": "forest-birds",
+      "defaultVolume": 0.4,
+      "loop": true,
+      "description": "Continuous road ambience \u00b7 30-second source",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Quiet temperate deciduous woodland beside a rural English track. Soft steady oak and hazel leaf rustle and gentle air movement, occasional distant robin and blackbird calls. Calm spacious natural daytime forest background. Continuous ambience with gentle variation across thirty seconds, seamless looping texture. No music, speech, traffic, tropical birds or machinery.",
+        "duration_seconds": 30,
+        "loop": true,
+        "prompt_influence": 0.65,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "road-people",
+      "kind": "sfx",
+      "label": "Conversation murmur",
+      "layer": "road-people",
+      "defaultVolume": 0.18,
+      "loop": true,
+      "description": "Continuous road ambience \u00b7 30-second source",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Very soft distant adult conversation outdoors on a rural road. Slow relaxed turns and long pauses, low muffled voices blended into a warm indistinct murmur. Diffuse background texture, not individual dialogue. No intelligible words, clear syllables, foreground speaker, close whispering, laughter or shouting. Natural quiet outdoor ambience with gentle variation. Seamless thirty-second loop. No music, vehicles or machinery.",
+        "duration_seconds": 30,
+        "loop": true,
+        "prompt_influence": 0.65,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "tempo": 0.9
+    },
+    {
+      "id": "road-footsteps",
+      "kind": "sfx",
+      "label": "Footsteps",
+      "layer": "road-footsteps",
+      "defaultVolume": 0.25,
+      "loop": true,
+      "description": "Continuous road ambience \u00b7 30-second source",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A few travelers walking at a relaxed steady pace along a dry earth path, wearing soft leather shoes. Soft uneven footfalls with fine grit and faint cloth rustle, natural middle-distance outdoor sound. Light traffic with space between passing walkers. Continuous gently varying thirty-second seamless loop. No voices, music, modern footwear, hard pavement or machinery.",
+        "duration_seconds": 30,
+        "loop": true,
+        "prompt_influence": 0.65,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "horse-walk",
+      "kind": "sfx",
+      "label": "Horse hooves",
+      "layer": "horse-walk",
+      "defaultVolume": 0.2,
+      "loop": true,
+      "description": "Continuous road ambience \u00b7 30-second source",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A calm horse walking at a natural slow four-beat gait on a firm earth track. Muted hoof clops in fine grit, faint leather bridle creak. Middle distance, restrained natural outdoor sound. A gently varying continuous thirty-second seamless loop. No trot, gallop, pavement, cart, voices, music or machinery.",
+        "duration_seconds": 30,
+        "loop": true,
+        "prompt_influence": 0.65,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "road-footsteps-extra",
+      "kind": "sfx",
+      "label": "Extra footsteps",
+      "layer": "road-footsteps-extra",
+      "defaultVolume": 0.12,
+      "loop": true,
+      "description": "Continuous road ambience \u00b7 30-second source",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Several small groups of travelers walking past on a dry compacted earth road, many overlapping soft leather-shoe footsteps at slightly different unhurried walking paces. A fuller layer of foot traffic with fine grit and subtle cloth rustle, diffuse middle distance, natural outdoors. Continuous seamless thirty-second loop, gently varying. No speech, laughter, music, marching in unison, running, modern shoes, pavement or machinery.",
+        "duration_seconds": 30,
+        "loop": true,
+        "prompt_influence": 0.65,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "road-laughter",
+      "kind": "sfx",
+      "label": "Occasional laughter",
+      "layer": "road-laughter",
+      "defaultVolume": 0.1,
+      "loop": true,
+      "description": "Continuous road ambience \u00b7 30-second source",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Quiet rural outdoor background, mostly gentle air. Only two brief soft chuckles from distant adults across thirty seconds, one male and one female, separated by long quiet gaps. Friendly understated laughter within a faraway group. Muffled, restrained and natural. Seamless looping ambience. No continuous laughing, loud laughter, cackling, laugh track, intelligible speech, music or machinery.",
+        "duration_seconds": 30,
+        "loop": true,
+        "prompt_influence": 0.65,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    }
+  ]
+}

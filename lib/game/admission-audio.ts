@@ -1,9 +1,9 @@
 "use client"
 
-import { CHARACTER_ASSETS } from "./character-assets"
+import { COIN_SOUND_URL } from "./sound-catalog"
 import { useCharacterAssetStore } from "./character-asset-store"
 
-/** The existing merchant coin-purse recording, unlocked by a game gesture. */
+/** The ElevenLabs silver-coin/purse recording, unlocked by a game gesture. */
 export function createAdmissionAudio() {
   let context: AudioContext | undefined
   let buffer: AudioBuffer | undefined
@@ -18,7 +18,7 @@ export function createAdmissionAudio() {
       context ??= new AudioContext()
       void context.resume().catch(() => {})
       const audio = context
-      loading ??= fetch(CHARACTER_ASSETS.merchant.sound)
+      loading ??= fetch(COIN_SOUND_URL)
         .then(response => { if (!response.ok) throw new Error("Coin audio unavailable"); return response.arrayBuffer() })
         .then(data => audio.decodeAudioData(data))
         .then(decoded => { if (!disposed) buffer = decoded })

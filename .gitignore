@@ -17,3 +17,6 @@ node_modules
 tsconfig.tsbuildinfo
 .vercel
 .env*
+
+# Placeholder TTS selection barks (regenerate with npm run assets:voices)
+public/sounds/voices/

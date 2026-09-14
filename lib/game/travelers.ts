@@ -1,6 +1,6 @@
 import { deriveSeed, makeRng, SEED_STREAM } from "./rng"
 import { OLDER_TRAVELER_TYPES, rollCharacterAge } from "./character-age"
-import { travelerAppearance } from "./base-person/population"
+import { travelerBodyType } from "./base-person/population"
 import type { GameMap } from "./map/types"
 
 /**
@@ -327,7 +327,7 @@ export function generateTravelers(seed: number, count: number): Traveler[] {
     }
     // Match the body's seeded assignment used by the scene without consuming
     // another roll from the stream that determines attributes and movement.
-    const firstNames = FIRST_NAMES[type.id === "friar" ? "Male" : type.id === "nun" ? "Female" : travelerAppearance(seed, i).bodyType]
+    const firstNames = FIRST_NAMES[travelerBodyType(seed, type.id, i)]
     travelers.push({
       id: i,
       name: `${type.id === "friar" ? "Brother " : type.id === "nun" ? "Sister " : ""}${firstNames[Math.floor(rng() * firstNames.length)]} ${

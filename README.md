@@ -63,6 +63,10 @@ in [Textures](http://localhost:3000/assets/textures#characters). See the
 [asset pipeline](assets/PIPELINE.md) for generation prompts, versioned imports,
 sound recipes, and validation commands.
 
+Selecting a person plays a spoken line in Old English or Church Latin, with an
+English gloss in the traveler panel. See [selection barks](assets/VOICES.md) for
+the line bank and for how to replace the placeholder audio.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 ## Building the shrine
