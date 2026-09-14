@@ -1,5 +1,6 @@
 import { GROWTH_CELL_PIXELS, GROWTH_CELL_SIZE, GROWTH_SPRITE_SIZE, GROWTH_ATLAS_COLUMNS, GROWTH_ATLAS_ROWS } from "../environment/ground-growth"
 import { CHARACTER_PIXEL_SIZE } from "./pixel-scale"
+import { SWARD_TEXTURE_REFERENCE } from "./ground-palette"
 
 /** Shared by terrain and building previews: one source texel per character pixel. */
 export const TERRAIN_SPRITE_SIZE = 128
@@ -73,7 +74,7 @@ export const GROUND_SURFACE_GLSL = `
 
   // Tint the whole plant palette together, preserving the contrast of its leaves.
   vec3 swardColor(vec3 texel, vec4 overlay) {
-    return texel * mix(vec3(1.0), overlay.rgb / vec3(0.184474994500441,0.238397573812271,0.07036009569659588), overlay.a);
+    return texel * mix(vec3(1.0), overlay.rgb / vec3(${SWARD_TEXTURE_REFERENCE.toArray().join(",")}), overlay.a);
   }
 
 // Soil grain uses the established character pixel grid in game and asset previews.

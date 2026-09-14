@@ -17,7 +17,7 @@ import { CHARACTER_PIXEL_SIZE, CHARACTER_PIXELS_PER_UNIT } from "@/lib/game/rend
 import { cliffCorner, terrainCorner, type CliffCorner } from "@/lib/game/map/cliff-corners"
 import { waterDepthCorners } from "@/lib/game/map/water-depth-corners"
 import { groundCornerTiles, groundPaintCode } from "@/lib/game/map/ground-transitions"
-import { OPEN_MEADOW_TINT } from "@/lib/game/render/ground-palette"
+import { OPEN_MEADOW_TINT, SWARD_TEXTURE_REFERENCE } from "@/lib/game/render/ground-palette"
 import { TERRAIN_EDGE_GLSL, TERRAIN_EDGE_GRAIN_URL } from "@/lib/game/render/terrain-edge-grain"
 import { TERRAIN_WATER_GLSL } from "@/lib/game/render/terrain-water"
 import { GROUND_TRANSITIONS_GLSL } from "@/lib/game/render/ground-transitions"
@@ -630,7 +630,6 @@ interface LandPaint {
 /** Scratch colours for paintLand. */
 const landScratch = {
   own: new THREE.Color(),
-  grass: new THREE.Color(TERRAIN.grass.color),
   water: WATER_DEPTH_COLORS.map((c) => new THREE.Color(c)),
 }
 
@@ -835,8 +834,10 @@ export function TerrainTiles(props: TerrainProps) {
       color.copy(paint.color)
       if (paint.sward) {
         const { x: r, y: g, z: b, w: a } = paint.overlay
-        color.setRGB(1 + (r / landScratch.grass.r - 1) * a,
-          1 + (g / landScratch.grass.g - 1) * a, 1 + (b / landScratch.grass.b - 1) * a)
+        // The palette also multiplies authored forest litter, so normalize to
+        // its fixed texture reference rather than the current turf color.
+        color.setRGB(1 + (r / SWARD_TEXTURE_REFERENCE.r - 1) * a,
+          1 + (g / SWARD_TEXTURE_REFERENCE.g - 1) * a, 1 + (b / SWARD_TEXTURE_REFERENCE.b - 1) * a)
       }
       color.multiplyScalar(1 + (rng() - .5) * TERRAIN[terrain].jitter)
       data.set([color.r, color.g, color.b, groundPaintCode(terrain, corners[i])], i * 4)
