@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "87b3efeee4d5d6e496c8ecc13d56b58b09025b3a",
-  "releaseCount": 235,
+  "lastProcessedCommit": "9101e24922255b0dbaff528ceebcaf862ee8715e",
+  "releaseCount": 236,
   "releases": [
+    {
+      "version": "0.0.250",
+      "title": "Release 0.0.250",
+      "summary": "Reduce NPC navigation overhead with shared spatial queries (#269)",
+      "commit": "9101e24922255b0dbaff528ceebcaf862ee8715e"
+    },
     {
       "version": "0.0.249",
       "title": "Release 0.0.249",
