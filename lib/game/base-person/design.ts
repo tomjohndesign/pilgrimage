@@ -60,8 +60,11 @@ export const PERSON_PRESETS: Record<string, PersonDesign> = {
   Monk: { ...DEFAULT_DESIGN, tunicStyle: "Trimmed", accentColor: "#508b9d", garment: "Robe", beltStyle: "Rope", tunicLength: 1.4, tunicColor: "#6b4932",
     trouserColor: "#6b4932", hairStyle: "Tonsure", sleeves: 1.15, hem: 1.1,
     feet: 0.75, footWidth: 0.7, stride: 0.75, armSwing: 0, walkStyle: "Devotional" },
+  // Plain white cloth over dark wool: a period-plausible palette, not a universal
+  // monastic uniform. Early veil colours varied (Ross, Dress pins, p. 420):
+  // https://ora.ox.ac.uk/objects/uuid%3A3976b772-fccd-41fe-b8c7-f4ae08ac0295
   Nun: { ...DEFAULT_DESIGN, bodyType: "Female", garment: "Robe", beltStyle: "Rope",
-    tunicLength: 1.4, tunicColor: "#45413b", coveringColor: "#45413b",
+    tunicLength: 1.4, tunicColor: "#45413b", coveringColor: "#eee9df",
     shirtColor: "#d6cab1", trouserColor: "#45413b", hat: "Coif",
     hairStyle: "Cropped", sleeves: 1.15, hem: 1.1, beard: false },
   Minstrel: { ...DEFAULT_DESIGN, tunicColor: "#7b4969", accentColor: "#d6b57b", tunicStyle: "Plain", hat: "Cloth cap", lute: true, hairStyle: "Wavy", hem: 1.15, tunicLength: 1.15 },

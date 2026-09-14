@@ -70,7 +70,7 @@ const soundLabels: Record<TravelerTypeId, string> = {
 
 export const CHARACTER_ASSETS = Object.fromEntries(
   Object.entries(soundLabels).map(([id, soundLabel]) => [id, {
-    sheet: id === "nun" ? "/textures/characters/population/v34/nun-walk.png" : id === "beggar" ? "/textures/characters/population/v29/beggar-walk.png" : `/textures/characters/${id}-v1.png`,
+    sheet: id === "nun" ? "/textures/characters/population/v36/nun-walk.png" : id === "beggar" ? "/textures/characters/population/v29/beggar-walk.png" : `/textures/characters/${id}-v1.png`,
     sound: `/sounds/characters/${id === "nun" ? "friar" : id === "beggar" ? "peasant" : id}-select-v1.wav`,
     soundLabel, fps: 6, scale: 0.74, volume: 0.65,
   }]),
