@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "bfaf0796b854bbb4bd8805b983d28c43d1334423",
-  "releaseCount": 243,
+  "lastProcessedCommit": "b1a70e7b42906c2f92e309263e5c4b9a90898298",
+  "releaseCount": 244,
   "releases": [
+    {
+      "version": "0.0.258",
+      "title": "Release 0.0.258",
+      "summary": "Add character sound authoring and gameplay audio (#278)",
+      "commit": "b1a70e7b42906c2f92e309263e5c4b9a90898298"
+    },
     {
       "version": "0.0.257",
       "title": "Release 0.0.257",
