@@ -1,14 +1,11 @@
 import * as THREE from "three"
-import { COMPLEXION_SLOTS, type ComplexionSwap } from "../base-person/complexion"
+import type { ComplexionSwap } from "../base-person/complexion"
+import { CHARACTER_PALETTE_SLOTS } from "../player-color"
 
 /**
- * Per-person skin and hair colour over shared sprite atlases.
- *
- * Every baked pixel was snapped to the design's own render palette, so a lit
- * skin or hair pixel is exactly one of its eight steps. Matching those steps in
- * the fragment shader recolours one character without a second atlas, and leaves
- * ink, cloth and equipment untouched. The match is exact: the nearest other
- * palette entry is more than five times the tolerance away in working space.
+ * Per-person skin, hair and clothing over shared sprite atlases. Palette steps
+ * are authored by the baker; matching them preserves lit folds and leaves
+ * unmatched pixels alone. Standalone and batched sprites use the same slots.
  */
 export const MATCH_TOLERANCE = 0.001
 
@@ -21,7 +18,7 @@ export interface ComplexionUniforms {
 }
 
 export function complexionUniforms(swap: ComplexionSwap): ComplexionUniforms {
-  const slots = (colors: string[], fallback: () => THREE.Color) => Array.from({ length: COMPLEXION_SLOTS },
+  const slots = (colors: string[], fallback: () => THREE.Color) => Array.from({ length: CHARACTER_PALETTE_SLOTS },
     (_, index) => index < colors.length ? new THREE.Color(colors[index]) : fallback())
   return { complexionFrom: { value: slots(swap.from, UNUSED) }, complexionTo: { value: slots(swap.to, () => new THREE.Color()) } }
 }
@@ -30,9 +27,9 @@ export function complexionUniforms(swap: ComplexionSwap): ComplexionUniforms {
 export function applyComplexionSwap(shader: Parameters<THREE.Material["onBeforeCompile"]>[0], uniforms: ComplexionUniforms) {
   shader.uniforms.complexionFrom = uniforms.complexionFrom
   shader.uniforms.complexionTo = uniforms.complexionTo
-  shader.fragmentShader = `uniform vec3 complexionFrom[${COMPLEXION_SLOTS}];\nuniform vec3 complexionTo[${COMPLEXION_SLOTS}];\n` +
+  shader.fragmentShader = `uniform vec3 complexionFrom[${CHARACTER_PALETTE_SLOTS}];\nuniform vec3 complexionTo[${CHARACTER_PALETTE_SLOTS}];\n` +
     shader.fragmentShader.replace("#include <map_fragment>", `#include <map_fragment>
-    for (int i = 0; i < ${COMPLEXION_SLOTS}; i++) {
+    for (int i = 0; i < ${CHARACTER_PALETTE_SLOTS}; i++) {
       if (all(lessThan(abs(diffuseColor.rgb - complexionFrom[i]), vec3(${MATCH_TOLERANCE})))) {
         diffuseColor.rgb = complexionTo[i];
         break;

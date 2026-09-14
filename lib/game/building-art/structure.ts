@@ -1,5 +1,6 @@
 import { innLadderParts, innParts } from "./inn"
 import { innLayout } from "../inn-layout"
+import { FOOD_TYPES } from "../storage"
 import { waterSourceParts } from "../water-sources/model"
 import type { CrossroadArm } from "../map/crossroads"
 import { wallSide } from "./cutaway"
@@ -52,9 +53,9 @@ export function structureParts(building: StructureAppearance, roofJoins: RoofJoi
     if (building.buildType !== "storehouse") return building.buildType === "workshop" ? parts.filter(p=>!p.name.startsWith("firewood-")) : parts
     const contents: BuildingPart[] = []
     // Empty food bins remain recognizable before the first delivery.
-    const binWidth = building.w * 0.18, binDepth = building.d * 0.16
-    for (let slot = 0; slot < 4; slot++) {
-      const x = (slot - 1.5) * building.w * 0.21, z = -building.d * 0.33
+    const binWidth = building.w * 0.14, binDepth = building.d * 0.16
+    for (let slot = 0; slot < FOOD_TYPES.length; slot++) {
+      const x = (slot - (FOOD_TYPES.length-1)/2) * building.w * .9 / FOOD_TYPES.length, z = -building.d * 0.33
       const box = (name: string, position: BuildingPart["position"], size: BuildingPart["size"]) =>
         contents.push({ name: `food-bin-${slot}-${name}`, layer: "interior", position, size, color: "#8c7658", outline: false })
       box("bottom", [x, 0.35, z], [binWidth, 0.04, binDepth])

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { generateMap } from "../map/generate-map"
 import { generateMonks } from "../monks"
 import { generateRelic } from "../relic"
-import { BUILD_CATALOG, createSettlement, purchaseStructure, settlementMap } from "../settlement"
+import { BUILD_CATALOG, createSettlement, demolishStructure, purchaseStructure, settlementMap } from "../settlement"
 import { DEFAULT_BALANCE } from "../balance"
 import { settlementSaveSchema } from "./schema"
 import { captureSettlement, restoreSettlement } from "./settlement"
@@ -23,6 +23,22 @@ function buyAnything(world: ReturnType<typeof generateMap>) {
 }
 
 describe("settlement save", () => {
+  it("keeps demolished buildings removed after loading and accepts older saves", () => {
+    const world = generateMap({ seed: 31 })
+    const settlement = buyAnything(world)
+    const removedId = settlement.structures[0].id
+    const removed = demolishStructure(settlement, world, removedId)
+    const saved = settlementSaveSchema.parse(JSON.parse(JSON.stringify(captureSettlement(removed))))
+    const restored = restoreSettlement(world, saved)
+    expect(restored.demolishedBuildings).toContain(removedId)
+    expect(settlementMap(world, restored).buildings.some(b => b.id === removedId)).toBe(false)
+    const { demolishedBuildings: _dropped, ...older } = saved
+    expect(settlementSaveSchema.parse(older).demolishedBuildings).toEqual([])
+    const generated = world.buildings.find(b => b.id !== world.site?.hovelId)!
+    const claimed = { ...settlement, claimedBuildings: [generated.id] }
+    const townSave = captureSettlement(demolishStructure(claimed, world, generated.id))
+    expect(settlementMap(world, restoreSettlement(world, townSave)).buildings.some(b => b.id === generated.id)).toBe(false)
+  })
   it("replays ground levelling instead of storing the terrain", () => {
     const world = generateMap({ seed: 31 })
     const settlement = buyAnything(world)

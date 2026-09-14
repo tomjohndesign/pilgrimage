@@ -1,16 +1,21 @@
+import { cutRoofEntrance } from "./church-roof"
+import { buildingDoorOffset } from "../building-rotation"
 import { makeRng } from "../rng"
-import { INN_OVERHANG, INN_ROOF_OVERHANG, INN_UPPER_ROOF_PITCH, innHearthRoofRise } from "./dimensions"
+import { BUILDING_DOOR_HEIGHT, INN_OVERHANG, INN_ROOF_OVERHANG, INN_UPPER_ROOF_PITCH, innHearthRoofRise } from "./dimensions"
 import type { BuildingPart, Vec3 } from "./geometry"
 import { Euler, Quaternion, Vector3 } from "three"
 import { EARLY_MATERIALS } from "./materials"
 import { hearthParts } from "./furnishings"
-import { thatchSurface } from "./thatch"
+import { roofOverhang } from "./roof-overhang"
+import { shingleSurface } from "./shingles"
+import { buildingIdentity } from "./identity"
 import { innLayout } from "../inn-layout"
 
 /** Open shared sleeping floor, with three bed rows and two clear aisles. */
 export function innParts(width: number, depth: number, height: number, fireplace = true, seed = 17, upper = false, flue?: {x:number;z:number}): BuildingPart[] {
   const overhang=upper ? INN_OVERHANG : 0, outerW=width+overhang*2,outerD=depth+overhang*2
   const layout=innLayout(width,depth,upper,flue)
+  const doorX=buildingDoorOffset(width,"inn"), doorWidth=Math.min(.44,width*.44), doorHeight=Math.min(BUILDING_DOOR_HEIGHT,height-.12)
   const parts:BuildingPart[]=[]
   const box = (name:string, position:Vec3,size:Vec3,color:string,layer:BuildingPart["layer"]="interior",rotation?:Vec3) => {
     parts.push({name,position,size,color,layer,rotation,outline:false})
@@ -32,12 +37,15 @@ export function innParts(width: number, depth: number, height: number, fireplace
     const bays=axis==="x" ? 3 : Math.max(3,Math.round(depth)),step=along/bays
     for(let i=0;i<bays;i++) {
       const left=-along/2+i*step,right=left+step,mid=(left+right)/2
-      const door=!upper && axis==="x" && side===1 && i===1
+      const door=!upper && axis==="x" && side===1 && right>doorX-doorWidth/2 && left<doorX+doorWidth/2
       const window=!door && (axis==="z" ? i%2===1 : i===1)
-      const panel=box(`inn-plaster-${axis}-${side}-${i}`,at(mid,door ? height-.10 : height/2),
-        axis==="x" ? [step,door ? .2 : height,.09] : [.09,door ? .2 : height,step],
+      const panel=box(`inn-plaster-${axis}-${side}-${i}`,at(mid,door ? (height+doorHeight)/2 : height/2),
+        axis==="x" ? [step,door ? height-doorHeight : height,.09] : [.09,door ? height-doorHeight : height,step],
         ["#b7ae94","#c3b79a","#bdb398"][(i+seed)%3],"wall")
       panel.cutawaySide=normal
+      if(door) for(const [end,a,b] of [["left",left,Math.min(right,doorX-doorWidth/2)],["right",Math.max(left,doorX+doorWidth/2),right]] as const) {
+        if(b-a>.001) box(`inn-door-infill-${i}-${end}`,at((a+b)/2,doorHeight/2),[b-a,doorHeight,.09],panel.color,"wall").cutawaySide=normal
+      }
       if(!door) {
         for(let fleck=0;fleck<3;fleck++) {
           const u=left+.13+random()*(step-.26),y=.16+random()*height*.22,sw=.08+random()*.1,sh=.045+random()*.07
@@ -61,8 +69,8 @@ export function innParts(width: number, depth: number, height: number, fireplace
           }
         }
       }
-      if(i===0) beam(`inn-post-${axis}-${side}-0`,at(left,0,.03),at(left,height,.03),.085,normal)
-      beam(`inn-post-${axis}-${side}-${i+1}`,at(right,0,.03),at(right,height,.03),.085,normal)
+      if(i===0 && (!door || Math.abs(left-doorX)>=doorWidth/2)) beam(`inn-post-${axis}-${side}-0`,at(left,0,.03),at(left,height,.03),.085,normal)
+      if(!door || Math.abs(right-doorX)>=doorWidth/2) beam(`inn-post-${axis}-${side}-${i+1}`,at(right,0,.03),at(right,height,.03),.085,normal)
     }
     for(const y of [.07,height-.04]) {
       if(!upper && axis==="x" && side===1 && y<.1) continue
@@ -83,12 +91,14 @@ export function innParts(width: number, depth: number, height: number, fireplace
     box(`inn-floorboard-${i}`,[-outerW/2+.06+(i+.5)*step,.018,0],[step-.008,.025,outerD-.12],i%3 ? "#987e58" : "#a58a62","base")
   }
   if(!upper) {
-    const front=depth/2-.12,doorHeight=height-.2
+    const front=depth/2-.12
     // An open plank door and a reception counter leave the central entrance clear.
-    const door=box("inn-front-door",[-.38,doorHeight/2,front-.36],[.055,doorHeight,.72],"#826545","wall")
+    const door=box("inn-front-door",[doorX-doorWidth/2-.025,doorHeight/2,front-doorWidth/2],[.045,doorHeight,doorWidth],"#826545","wall")
     door.cutawaySide=[0,1]
-    for(const y of [.18,doorHeight-.18]) box(`inn-door-strap-${y}`,[-.345,y,front-.36],[.02,.045,.64],"#4d4b40","wall").cutawaySide=[0,1]
-    box("inn-door-threshold",[0,.025,front],[.86,.05,.16],"#9c8b6f","base")
+    for(const y of [.18,doorHeight-.18]) box(`inn-door-strap-${y}`,[doorX-doorWidth/2,y,front-doorWidth/2],[.018,.035,doorWidth-.05],"#4d4b40","wall").cutawaySide=[0,1]
+    box("inn-door-threshold",[doorX,.025,front],[doorWidth+.1,.05,.16],"#9c8b6f","base")
+    for(const side of [-1,1]) box(`inn-door-jamb-${side}`,[doorX+side*(doorWidth/2+.023),doorHeight/2,front+.025],[.046,doorHeight,.10],"#534331","wall").cutawaySide=[0,1]
+    box("inn-door-lintel",[doorX,doorHeight+.025,front+.025],[doorWidth+.14,.05,.10],"#534331","wall").cutawaySide=[0,1]
     box("inn-reception-counter",[-width/2+.38,.4,front-.57],[.5,.075,.6],"#937654")
     for(const x of [-width/2+.19,-width/2+.57]) for(const z of [front-.79,front-.35])
       box(`inn-counter-leg-${x}-${z}`,[x,.19,z],[.055,.38,.055],timber)
@@ -113,28 +123,27 @@ export function innParts(width: number, depth: number, height: number, fireplace
   const cross=upper ? outerW : outerD,along=upper ? outerD : outerW
   const extension=upper ? INN_ROOF_OVERHANG : 0,pitch=upper ? INN_UPPER_ROOF_PITCH : .32
   const run=cross/2+extension,span=along+extension*2,ridge=height+.1+cross/2*pitch
+  const porchHalf=Math.min(.52,width/2-Math.abs(doorX)-.04),porchBack=depth/2-Math.min(.8,depth*.38)
   const roofY=(u:number)=>ridge-Math.abs(u)*pitch
   const at=(u:number,y:number,v:number):Vec3=>upper ? [u,y,v] : [v,y,u]
   const roofBox=(name:string,u:number,y:number,v:number,size:Vec3,color:string,angle=0)=>
     box(name,at(u,y,v),upper ? size : [size[2],size[1],size[0]],color,"roof",upper ? [0,0,-angle] : [angle,0,0])
-  parts.push(...thatchSurface(at(0,ridge,-span/2),at(0,ridge,span/2),
+  parts.push(...shingleSurface(at(0,ridge,-span/2),at(0,ridge,span/2),
     at(-run,roofY(run),-span/2),at(-run,roofY(run),span/2),seed,"inn-left"))
-  const courses=Math.ceil(run/.18),columns=Math.ceil(span/.2)
-  for(let row=0;row<courses;row++) for(let col=0;col<=columns;col++) {
-    const step=span/columns,back=row*run/courses,front=Math.min(run-.015,back+run/courses+.055)
-    const left=Math.max(-span/2,-span/2+(col-(row%2)*.5)*step),right=Math.min(span/2,-span/2+(col+1-(row%2)*.5)*step)
-    if(right-left<.02) continue
-    const u=(back+front)/2,v=(left+right)/2
-    roofBox(`inn-shingle-${row}-${col}`,u,roofY(u)+.035+(courses-row)*.007,v,[(front-back)*Math.sqrt(1+pitch**2),.035,right-left-.009],
-      ["#857657","#8c7b5c","#918161"][Math.floor(random()*3)],Math.atan(pitch))
-  }
+  const frontRoof=shingleSurface(at(0,ridge,span/2),at(0,ridge,-span/2),
+    at(run,roofY(run),span/2),at(run,roofY(run),-span/2),seed,"inn-right")
+  parts.push(...(upper ? frontRoof : cutRoofEntrance(frontRoof,doorX-porchHalf,doorX+porchHalf,porchBack)))
   for(const side of [-1,1]) {
     const v=side*(along/2-.085),u=cross/2-.06
     parts.push({name:`inn-gable-${side}`,layer:"roof",position:[0,0,0],color:"#b7ae94",outline:false,
       vertices:[...at(-u,height,v),...at(u,height,v),...at(u,roofY(u),v),
         ...at(-u,height,v),...at(u,roofY(u),v),...at(0,ridge,v),
         ...at(-u,height,v),...at(0,ridge,v),...at(-u,roofY(u),v)]})
-    roofBox(`inn-eave-${side}`,side*(run-.04),roofY(run)-.025,0,[.065,.08,span-.07],"#806647")
+    if(!upper && side===1) {
+      for(const [end,left,right] of [["left",-span/2+.035,doorX-porchHalf],["right",doorX+porchHalf,span/2-.035]] as const) {
+        if(right>left) roofBox(`inn-eave-front-${end}`,run-.04,roofY(run)-.025,(left+right)/2,[.065,.08,right-left],"#806647")
+      }
+    } else roofBox(`inn-eave-${side}`,side*(run-.04),roofY(run)-.025,0,[.065,.08,span-.07],"#806647")
     if(upper) {
       const normal:[number,number]=[0,side],face=v+side*.025
       beam(`inn-gable-post-${side}`,at(0,height,face),at(0,ridge-.04,face),.085,normal,"roof")
@@ -146,6 +155,21 @@ export function innParts(width: number, depth: number, height: number, fireplace
     }
   }
   roofBox("inn-ridge",0,ridge+.04,0,[.07,.065,span-.06],"#806647")
+  if(!upper) {
+    // A straight, two-plane entrance peak lifts the existing covering into an
+    // angular hood. The front fascia overhangs with the rest of the roof.
+    const half=porchHalf,back=porchBack,front=depth/2
+    const edgeY=height+.1,peakY=edgeY+.36,backRise=(front-back)*.32
+    // Two complete planar coverings keep the shingle courses continuous.
+    for(const side of [-1,1]) parts.push(...shingleSurface(
+      [doorX,peakY+backRise,back],[doorX,peakY,front],
+      [doorX+side*half,edgeY+backRise,back],[doorX+side*half,edgeY,front],seed,`inn-porch-${side}`))
+    for(const [end,z,offset] of [["front",front-.025,0],["rear",back,backRise]] as const)
+      parts.push({name:`inn-porch-end-${end}`,layer:"roof",position:[0,0,0],color:"#bdb398",outline:false,cutawaySide:[0,1],
+        vertices:[doorX-half,edgeY+offset,z,doorX+half,edgeY+offset,z,doorX,peakY+offset,z]})
+    for(const side of [-1,1]) beam(`inn-porch-verge-${side}`,[doorX+side*half,edgeY,front-.04],[doorX,peakY,front-.04],.055,[0,1],"roof")
+    box("inn-porch-fascia",[doorX,edgeY-.018,front-.04],[half*2+.06,.065,.07],"#66533b","roof").playerAccent=true
+  }
   if (!upper && fireplace) parts.push(...hearthParts(width,depth,height,innHearthRoofRise(width,depth,false),undefined,0,layout.hearthZ))
   if(upper && flue) {
     const shaft=hearthParts(width,depth,height,innHearthRoofRise(width,depth),undefined,0,flue.z)
@@ -157,7 +181,7 @@ export function innParts(width: number, depth: number, height: number, fireplace
     parts.push(...shaft)
     box("inn-flue-base",[flue.x,.315,flue.z],[.32,.71,.32],"#999788","wall").cutawaySide=[Math.sign(flue.x),0]
   }
-  return parts
+  return buildingIdentity(upper ? parts : roofOverhang(parts,width,depth), "inn", width, depth, height, seed)
 }
 
 /** The ladder connects the tavern to an open hatch in the Inn's right aisle. */

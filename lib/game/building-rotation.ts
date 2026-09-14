@@ -34,6 +34,7 @@ export function buildingDoorOffset(width: number, type?: string, layoutSeed?: nu
   // layout supplies both side doors, keeping the tavern's rear service door clear.
   const doorSeed = end === -1 ? Math.floor((layoutSeed ?? 0) / 3) : layoutSeed ?? 0
   if (width === 3 && ["house","tavern","hall","shelter","monk-shelter","storehouse"].includes(type ?? "")) return (doorSeed % 3 === 0 ? 0 : -1) * layoutHand(type, layoutSeed)
+  if (type === "sheep-pen" && width >= 5) return sheepPenLayout(width).coreX * layoutHand(type,layoutSeed)
   // The woodcutter opens onto its left-hand court; the sheep pen onto its hut door.
   return ((type === "workshop" || type === "sheep-pen" ? 0 : Math.floor((width-1)/2))-(width-1)/2) * layoutHand(type, layoutSeed)
 }
@@ -49,17 +50,22 @@ export function buildingEntry(building: Pick<BuildingDef, "x" | "z" | "w" | "d" 
 /** The open fold has its own gate beside the hut's separate doorway. */
 export function buildingFoldEntry(building: BuildingDef, inside = false): TilePos {
   const { w, d } = rotatedFootprint(building, building.rotation)
-  const gateX = sheepPenLayout(w).penLeft + Math.min(.62, d * .42) / 2
+  const layout = sheepPenLayout(w, d), gateX = layout.penLeft + layout.gateWidth / 2
   const tileX = Math.round(gateX + (w - 1) / 2) - (w - 1) / 2
   const offset = rotateBuildingPoint(tileX*layoutHand(building.buildType,building.layoutSeed), (d - 1) / 2 + (inside ? 0 : 1), building.rotation)
   return { x: building.x + (building.w - 1) / 2 + offset.x, z: building.z + (building.d - 1) / 2 + offset.z }
+}
+
+/** Food visitors enter the pen through its existing gate. */
+export function buildingFoodEntry(building: BuildingDef): TilePos {
+  return buildingFoldEntry(building)
 }
 
 /** Reserved, walkable frontage; decorative scenery has no doorway to protect. */
 export function buildingApproach(map: Pick<GameMap,"site">,building: BuildingDef): TilePos | null {
   if(building.supportId || building.churchId) return null
   if(building.id === map.site?.hovelId) return map.site.door
-  if(["garden","cross","lumberCamp"].includes(building.buildType ?? "")) return null
+  if(["garden","cross","lumberCamp","well"].includes(building.buildType ?? "")) return null
   return buildingEntry(building)
 }
 
@@ -78,4 +84,9 @@ export function buildingApproaches(map: Pick<GameMap,"site">, building: Building
     return [front, buildingEntry(building, false, -1), ...benches]
   }
   return building.buildType === "sheep-pen" ? [front, buildingFoldEntry(building)] : [front]
+}
+
+/** Wells have no doorway: each side offers an independent outdoor approach. */
+export function wellApproaches(building: BuildingDef): TilePos[] {
+  return ([0, 1, 2, 3] as const).map(rotation => buildingEntry({ ...building, rotation }))
 }

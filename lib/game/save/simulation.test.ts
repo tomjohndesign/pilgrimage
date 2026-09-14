@@ -35,7 +35,7 @@ describe("simulation save", () => {
       trunkHeight: 3, trunkRadius: .2, trunkTaper: .8, footprintRadius: .4, trunkVolume: 1, felledAt: null, stumpUntil: null })
     const camp = map.buildings[0].id
     sim.piles.set(`${camp}:pile:0`, { id: `${camp}:pile:0`, campId: camp, slot: 0, wood: 6 })
-    sim.foodStores.set(camp, { grain: 4, vegetables: 0, fruit: 1, fish: 0 })
+    sim.foodStores.set(camp, { grain: 4, vegetables: 0, fruit: 1, fish: 0, meat: 4, milk: 12 })
 
     const saved = simulationSaveSchema.parse(JSON.parse(JSON.stringify(captureSimulation(sim, "sprites"))))
     expect(saved.felled).toEqual([3, 7])
@@ -48,7 +48,7 @@ describe("simulation save", () => {
     expect([...fresh.felled]).toEqual([3, 7])
     expect(fresh.treeResources.get(7)).toEqual(sim.treeResources.get(7))
     expect(fresh.piles.get(`${camp}:pile:0`)).toEqual({ id: `${camp}:pile:0`, campId: camp, slot: 0, wood: 6 })
-    expect(fresh.foodStores.get(camp)).toEqual({ grain: 4, vegetables: 0, fruit: 1, fish: 0 })
+    expect(fresh.foodStores.get(camp)).toEqual({ grain: 4, vegetables: 0, fruit: 1, fish: 0, meat: 4, milk: 12 })
     for (const [id, before] of sim.travelers) {
       const after = fresh.travelers.get(id)!
       expect([after.gold, after.piety, after.happiness, after.hunger, after.thirst, after.stamina, after.visits, after.rolls, after.direction])

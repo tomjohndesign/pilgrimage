@@ -1,5 +1,5 @@
 import { almsStaffed, breadVisitPlan, type AlmsMonk } from "./alms-table"
-import { buildingEntry } from "./building-rotation"
+import { buildingEntry, wellApproaches } from "./building-rotation"
 import { isComplete } from "./construction"
 import type { Selection } from "./camera-store"
 import { openCounters, routeWorldPoint, simRegistry, type SimTraveler } from "./sim"
@@ -69,8 +69,9 @@ export function wayfindingJourneys(map: GameMap, selection: Selection | null): D
 export function wayfindingFields(map: GameMap, buildingId: string) {
   const building = map.buildings.find(b => b.id === buildingId)
   if (!building) return []
-  const goals = building.buildType === "tavern" ? [buildingEntry(building), buildingEntry(building, false, -1)]
-    : [building.id === "founding-well" && map.site ? map.site.door : buildingEntry(building)]
+  const goals = building.buildType === "well" ? wellApproaches(building)
+    : building.buildType === "tavern" ? [buildingEntry(building), buildingEntry(building, false, -1)]
+    : [buildingEntry(building)]
   return goals.map(goal => workerDestinationField(map, goal, wayfindingSettings().travelBudget))
 }
 

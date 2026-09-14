@@ -2,13 +2,15 @@
 
 import { WayfindingPanel, WayfindingSelection } from "./wayfinding-panel"
 import { almsStaffed } from "@/lib/game/alms-table"
+import { AppearancePanel } from "./appearance-panel"
+import { PlayerColorPicker } from "./player-color"
 
 import { isChapel } from "@/lib/game/shrine-layout"
 import { CHURCH_COST, CHURCH_RENOWN_BONUS, CHAPEL_MONKS, CHURCH_MONKS } from "@/lib/game/shrine-upgrade"
 import { builderPaceLabel, builderRate, MONK_BUILD_RATE } from "@/lib/game/build-labour"
 import { isComplete, isHouse, isMonkShelter } from "@/lib/game/construction"
 import { BUILDING_KINDS, buildingKind } from "@/lib/game/buildings"
-import { housingBeds, monkBeds } from "@/lib/game/housing"
+import { housingBeds, housingCapacity, monkBeds } from "@/lib/game/housing"
 import { FOOD_TYPES, FOOD_LABELS, STOREHOUSE_FOOD_CAPACITY, emptyFoodStock, storedFood } from "@/lib/game/storage"
 
 import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/elevation"
@@ -49,7 +51,8 @@ import { ResourceInspector } from "./resource-inspector"
 import { Minimap } from "./minimap"
 import { SettlementPanel } from "./settlement-panel"
 import type { useSettlement } from "@/hooks/use-settlement"
-import { individualRenown, relicRenown } from "@/lib/game/settlement"
+import { demolitionTargets, individualRenown, relicRenown } from "@/lib/game/settlement"
+import { DemolishBuildingDialog } from "./demolish-building-dialog"
 
 import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
 import { useBalanceStore } from "@/lib/game/balance-store"
@@ -187,7 +190,7 @@ function ToggleRow({
 }
 
 /** Top-level navigation, folded into the play view. Controls live in here too. */
-function MenuPanel({ onClose, playing }: { onClose: () => void; playing: boolean }) {
+function MenuPanel({ onClose, playing, playerColor, onColorChange }: { onClose: () => void; playing: boolean; playerColor: string; onColorChange: (color: string) => void }) {
   const [showControls, setShowControls] = useState(false)
 
   return (
@@ -195,6 +198,7 @@ function MenuPanel({ onClose, playing }: { onClose: () => void; playing: boolean
       className={`hud-menu pointer-events-auto absolute right-0 top-full mt-2 w-56 border border-rule bg-parchment/95 px-4 py-3 ${PANEL_SHADOW}`}
     >
       <div className="hud-world-heading"><span>Menu</span><button type="button" className="hud-close" aria-label="Close menu" onClick={onClose}><X size={16} /></button></div>
+      <div className="mb-3 border-b border-rule pb-3"><PlayerColorPicker value={playerColor} onChange={onColorChange} /></div>
       <nav className="flex flex-col gap-1.5">
         {SITE_MENU.map((item) => (
           <div key={item.href} className="flex flex-col gap-1">
@@ -800,6 +804,7 @@ export function GameHud({
     selection?.kind === "monk" ? (monks.find((m) => m.id === selection.id) ?? null) : null
   const piles = useBuildStore((s) => s.piles)
   const selectedBuilding = selection?.kind === "building" ? map?.buildings.find((b) => b.id === selection.id) : null
+  const demolition = map && selectedBuilding ? demolitionTargets(map, selectedBuilding.id) : []
   const selectedDefinition = buildCatalog(economy.balance).find((item) => item.id === selectedBuilding?.buildType)
   const foodStores = useBuildStore(s => s.foodStores)
   const foodStock = foodStores.get(selectedBuilding?.id ?? "") ?? emptyFoodStock()
@@ -851,7 +856,7 @@ export function GameHud({
               setPanel(null)
               economy.chooseBuild(null)
             }}><Menu size={16} /></button>}
-          {playing && menuOpen && <MenuPanel playing={playing} onClose={() => setMenuOpen(false)} />}
+          {playing && menuOpen && <MenuPanel playerColor={settings.playerColor} onColorChange={playerColor => set({ playerColor })} playing={playing} onClose={() => setMenuOpen(false)} />}
         </div>
         {playing && <HudClock />}
         </div>
@@ -876,6 +881,7 @@ export function GameHud({
           <Link href={continueHref} className="hud-action hud-action-primary hud-landing-play">Continue</Link>
           <div className="hud-landing-divider" role="separator">or</div>
         </>}
+        <PlayerColorPicker value={settings.playerColor} onChange={playerColor => set({ playerColor })} />
         <NewWorldFields seedId="landing-seed" size={settings.size} seed={seed}
           onSizeChange={size => set({ size })} onSeedChange={onSeedChange} onSeedValidityChange={setSeedValid} />
         <button type="submit" className={`hud-action hud-landing-play${continueHref ? "" : " hud-action-primary"}`} disabled={!canStart || !seedValid}>
@@ -908,6 +914,7 @@ export function GameHud({
         </Section>
         {SHOW_PROPERTY_PANELS && <>
         {map && <Section {...section("Wayfinding")}><WayfindingPanel map={map} travelers={travelers} monks={monks} /></Section>}
+        {map && <AppearancePanel map={map} />}
         <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />
           <MapSizeControl label="Size" value={settings.size} onChange={(size) => set({ size })} />
@@ -1187,7 +1194,7 @@ export function GameHud({
               <p className="mt-1 text-[11px] text-ink-light">{almsStaffed(map, selectedBuilding.id) ? "Open · A monk is serving free bread." : "Closed · Waiting for an available monk."}</p>}
             {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">{brothersAtHome} / {housingBeds(selectedBuilding)} monks · {Math.max(0, housingBeds(selectedBuilding) - brothersAtHome)} spaces available. Tired monks sleep here until their stamina recovers.</p>}
             {isHouse(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
-              {household} / {housingBeds(selectedBuilding)} settlers · {Math.max(0, housingBeds(selectedBuilding) - household)} spaces available. They come back here to sleep and eat.
+              {household} / {housingCapacity(selectedBuilding)} settlers · {housingBeds(selectedBuilding)} bunks. Residents take a free bunk when they need sleep.
             </p>}
             {selectedKind && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
               {staff} of {BUILDING_KINDS[selectedKind].jobs} {BUILDING_KINDS[selectedKind].vendorKept ? "kept by a settled vendor" : "jobs taken"}
@@ -1229,13 +1236,20 @@ export function GameHud({
             {selectedBuilding.buildType === "storehouse" && <div className="mt-2 text-[11px] text-ink-light">
               <p>Food stored · {storedFood(foodStock)} / {STOREHOUSE_FOOD_CAPACITY}</p>
               {FOOD_TYPES.map(type => <p key={type}>{FOOD_LABELS[type]} · {foodStock[type]}</p>)}
-              <p className="mt-1 italic">Food supplies start empty; food gathering is still to come.</p>
+              <p className="mt-1 italic">Food supplies start empty.</p>
             </div>}
+            {selectedBuilding.buildType === "sheep-pen" && <p className="mt-2 text-[11px] text-ink-light">Up to 8 sheep and goats · Food platform: {foodStock.meat} meat · {foodStock.milk} milk</p>}
             {selectedBuilding.owner !== "independent" && selectedDefinition && isComplete(selectedBuilding) && <>
               <p className="mt-2 text-[11px] text-ink-light">Contributes +{selectedDefinition.renown} shrine renown</p>
               <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">{selectedDefinition.description}</p>
               <p className="mt-1 text-[11px] text-ink-light">{buildingIncomeLabel(selectedDefinition, economy.balance)}</p>
             </>}
+            {demolition.length > 0 && <DemolishBuildingDialog key={selectedBuilding.id}
+              targets={[selectedBuilding, ...demolition.filter(b => b.id !== selectedBuilding.id)]}
+              onDemolish={() => {
+                economy.demolish(selectedBuilding.id)
+                useCameraStore.getState().select(null)
+              }} />}
           </Panel>
           )}
           {SHOW_PROPERTY_PANELS && map && <WayfindingSelection map={map} travelers={travelers} monks={monks} onSettings={() => setPanel("world")} />}

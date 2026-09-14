@@ -1,4 +1,9 @@
 "use client"
+import { PenFoodStock } from "./pen-food-stock"
+
+import { usePlayerColor } from "./player-color"
+import { waterMarkerParts } from "@/lib/game/building-art/water-markers"
+import { playerBuildingParts } from "@/lib/game/player-color"
 
 import { tavernStackParts } from "@/lib/game/building-art/stacked"
 import { churchWing } from "@/lib/game/church-additions"
@@ -7,6 +12,8 @@ import { churchAisleHeight } from "@/lib/game/building-art/church-roof"
 import { WaterSources } from "./water-sources"
 import { isWaterSource, waterSourcePlacement } from "@/lib/game/water-sources/navigation"
 import { CloseScenery } from "./close-scenery"
+import { BUILDING_PREVIEW } from "@/lib/game/building-preview"
+import { BuildingPreviewCarts } from "./building-preview-carts"
 import { EntranceDetails } from "./entrance-details"
 import { ConstructionProgress } from "./construction-progress"
 import { ConstructionCostEffects, type ConstructionCostHandle } from "./construction-cost-effects"
@@ -26,6 +33,7 @@ import * as THREE from "three"
 
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { FOOD_TYPES } from "@/lib/game/storage"
+import { wildlifeRegistry } from "@/lib/game/wildlife/registry"
 import { selectElement } from "@/lib/game/selection"
 import { useBuildStore } from "@/lib/game/build-store"
 import { workshopPileOffset } from "@/lib/game/workshop-layout"
@@ -43,6 +51,9 @@ import {
 
 /** Built structures share their geometry with the menu and placement preview. */
 export function Buildings({ map, characterScale = 1.5, showInteriors = false }: { map: GameMap; characterScale?: number; showInteriors?: boolean }) {
+  const playerColor = usePlayerColor()
+  const waterMarkers = useMemo(() => ({ well: waterMarkerParts("well"), "watering-hole": waterMarkerParts("watering-hole") }), [])
+  const ownedWaterMarkers = useMemo(() => ({ well: playerBuildingParts(waterMarkers.well, playerColor), "watering-hole": playerBuildingParts(waterMarkers["watering-hole"], playerColor) }), [waterMarkers, playerColor])
   // Authored colors live on the merged vertices. Share the otherwise identical
   // surface material so adjacent buildings reuse lighting and shader uniforms.
   const surfaceMaterial = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), [])
@@ -73,16 +84,16 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
       const wing = building.churchId ? churchWing(map, building) : undefined
       const joins = roofJoins.get(building.id)
       const inns = supported.get(building.id) ?? []
-      const key = JSON.stringify([index, wing, building.buildType, footprint.w, footprint.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, building.floorHeight, building.supportId, building.tavernFlue, inns.map(b=>[b.id,b.x,b.z,b.floorHeight]), joins, constructionStage(building), stocked(building)])
+      const key = JSON.stringify([playerColor, building.owner, index, wing, building.buildType, footprint.w, footprint.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, building.floorHeight, building.supportId, building.tavernFlue, inns.map(b=>[b.id,b.x,b.z,b.floorHeight]), joins, constructionStage(building), stocked(building)])
       const old = modelCache.current.get(building.id)
       const model = old?.key === key ? old : { key,
-        parts: tavernStackParts(constructionParts({ ...building, ...footprint, churchWing: wing, stocked: stocked(building) }, joins), building, inns), idColor: new THREE.Color(...encodeObjectId(buildingObjectId(index))) }
+        parts: playerBuildingParts(tavernStackParts(constructionParts({ ...building, ...footprint, churchWing: wing, stocked: stocked(building) }, joins), building, inns), building.owner === "independent" ? null : playerColor), idColor: new THREE.Color(...encodeObjectId(buildingObjectId(index))) }
       next.set(building.id, model)
       return model
     })
     modelCache.current = next
     return result
-  }, [buildings, roofJoins, stocked])
+  }, [buildings, roofJoins, stocked, playerColor])
   const idColors = useMemo(
     // Component tuples straight into the working colour space — an ID is data,
     // not a colour, so it must dodge sRGB conversion to survive readback.
@@ -97,7 +108,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
     <group>
       {waterPlacements.length > 0 && <WaterSources placements={waterPlacements} />}
       <EntranceDetails map={map} idColors={idColors} onSelect={selectSite} stocked={stocked} />
-      <PixelCharacters><ConstructionCostEffects ref={costs} map={map} characterScale={characterScale} /></PixelCharacters>
+      <PixelCharacters>{BUILDING_PREVIEW && <BuildingPreviewCarts map={map} characterScale={characterScale} idColors={idColors} />}<ConstructionCostEffects ref={costs} map={map} characterScale={characterScale} /></PixelCharacters>
       {buildings.map((building, index) => {
         // The hovel has its own geometry (see shrine.tsx); its ID slot stays reserved.
         if (building.id === map.site?.hovelId) return null
@@ -109,6 +120,10 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
 
         if (isWaterSource(building) && isComplete(building)) {
           return <group key={building.id}>
+            {(building.buildType === "well" || building.buildType === "watering-hole") &&
+              <group position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={event => selectSite(building, event)}>
+                <StructureModel parts={(building.owner === "independent" ? waterMarkers : ownedWaterMarkers)[building.buildType]} idColor={idColors[index]} appearanceIdColor={models[index].idColor} ink={false} surfaceMaterial={surfaceMaterial} />
+              </group>}
             <mesh position={[centreX, baseY + .25, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={event => selectSite(building, event)}>
               <boxGeometry args={[building.buildType === "well" ? 1.2 : 2.2, .5, building.buildType === "well" ? 1.2 : 1.6]} />
               <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />
@@ -124,13 +139,13 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
         if (building.buildType === "storehouse" || building.buildType === "workshop") {
           return (
             <group key={building.id} name={`storage-${building.id}`} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
-              <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
+              <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} appearanceIdColor={models[index].idColor} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
               {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
               <CloseScenery enabled={building.buildType === "storehouse"}>{building.buildType === "storehouse" && FOOD_TYPES.map((type, slot) => {
                 const amount = foodStores.get(building.id)?.[type] ?? 0
-                return amount > 0 && <mesh key={type} position={[(slot - 1.5) * local.w * 0.21, 0.43, -local.d * 0.33]}>
-                  <boxGeometry args={[local.w * 0.14, 0.12, local.d * 0.12]} />
-                  <meshLambertMaterial color={["#a29978", "#748153", "#a67c56", "#828a88"][slot]} />
+                return amount > 0 && <mesh key={type} position={[(slot - (FOOD_TYPES.length-1)/2) * local.w * .9 / FOOD_TYPES.length, 0.43, -local.d * 0.33]}>
+                  <boxGeometry args={[local.w * 0.11, 0.12, local.d * 0.12]} />
+                  <meshLambertMaterial color={["#a29978", "#748153", "#a67c56", "#828a88", "#986e58", "#ded4b3"][slot]} />
                 </mesh>
               })}
               {piles.filter((pile) => pile.campId === building.id).map((pile) => {
@@ -144,7 +159,8 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
 
         return (
           <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
-            <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
+            <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} appearanceIdColor={models[index].idColor} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} penGateOpen={()=>wildlifeRegistry.current?.penGates?.get(building.id)?.open ?? 0} />
+            {isComplete(building) && building.buildType === "sheep-pen" && <PenFoodStock width={local.w} depth={local.d} layoutSeed={building.layoutSeed} stock={()=>foodStores.get(building.id)} />}
             {isComplete(building) && building.supportId && <InnFlueSmoke width={local.w} depth={local.d} height={building.height} flue={building.tavernFlue} cutaway={cutaway} smoke={occupied.has(building.supportId)} />}
             {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
             {isComplete(building) && !building.supportId && hasDomesticHearth(building.buildType,building.layoutSeed,building.fireplace) && <ShelterFire roofRise={wing ? churchAisleHeight(wing.churchWidth, wing.reach, wing.churchWidth / 2) - building.height : undefined} smoke={occupied.has(building.id) && !map.buildings.some(b=>b.supportId===building.id)} buildType={building.buildType} layoutSeed={building.layoutSeed} hearthZ={building.hearthZ} sharedChimney={roofJoins.get(building.id)?.find(join=>join.chimney)?.chimney} width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}

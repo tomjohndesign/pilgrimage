@@ -2,7 +2,7 @@ import { innWalkingRoute } from "./inn-navigation"
 import { tavernWalkingRoute } from "./tavern-navigation"
 import { tavernWorkStop } from "./tavern-layout"
 import { exploresWorkerShortcut, smoothWalkingRoute, SHORTCUT_EXPLORERS } from "./walking-shortcuts"
-import { buildingEntry, buildingYaw, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
+import { buildingDoorOffset, buildingEntry, buildingYaw, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
 import { MALLET_CONTACT_REACH } from "./base-person/building"
 import { BASE_CHARACTER_SCALE, PERSON_SPRITE_SCALE } from "./base-person/gait"
 import { BASE_PERSON } from "./base-person/pose"
@@ -10,7 +10,7 @@ import { surfaceHeight } from "./map/bridges"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type BuildingDef, type GameMap, type TilePos } from "./map/types"
 import { settlementRoute } from "./settlement-route"
 import type { WanderSpot } from "./monk-wander"
-import { buildingSupports } from "./character-support"
+import { buildingSupports, placedSupport } from "./character-support"
 import { SETTLER_BUILD_RATE } from "./build-labour"
 import { workPost } from "./work-posts"
 import { destinationWorldRoute, rememberedWorkerCorridor, rememberedWorkerRoute } from "./worker-route-memory"
@@ -115,6 +115,8 @@ function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask
     if (!host) return null
     return taskPosition(map,host,purpose,slot,scale,workStop)
   }
+  // A well's construction positions rotate around its curb, without a front door.
+  if (purpose === "build" && building.buildType === "well") building = { ...building, rotation: (slot % 4) as 0 | 1 | 2 | 3 }
   const local = rotatedFootprint(building, building.rotation)
   const beds = purpose === "rest" ? buildingSupports(building).filter(s => s.clips.includes("sleeping")) : []
   const bed = beds[slot % beds.length]
@@ -122,7 +124,8 @@ function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask
   const post = purpose === "work" ? building.buildType === "tavern"
     ? tavernWorkStop(slot, workStop, local.w, local.d, building.layoutSeed, building.hearthZ) : buildingWorkPost(building, slot) : null
   if (purpose === "work" && !post) return null
-  const x = purpose === "build" ? (slot % 4 - 1.5) * Math.min(0.45, (local.w - 0.5) / 3)
+  const x = purpose === "build" && building.buildType === "well" ? buildingDoorOffset(local.w, "well")
+    : purpose === "build" ? (slot % 4 - 1.5) * Math.min(0.45, (local.w - 0.5) / 3)
     : purpose === "work" ? post!.x : bed.anchor.x
   const buildSide = building.churchId && building.buildType !== "alms-table" ? -1 : 1
   const z = purpose === "build" ? buildSide * (local.d / 2 - 0.055 + constructionStandOff(scale))
@@ -132,7 +135,7 @@ function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask
   const cx = tileToWorldX(map, building.x) + (building.w - 1) / 2
   const cz = tileToWorldZ(map, building.z) + (building.d - 1) / 2
   const frontage = { x: worldToTileX(map, cx + approach.x), z: worldToTileZ(map, cz + approach.z) }
-  return { destination: { x: cx + offset.x, z: cz + offset.z, y: building.buildType === "inn" && purpose !== "build" ? surfaceHeight(map, building.x, building.z)+(building.floorHeight ?? 0)+(purpose === "rest" ? bed.height : 0) : surfaceHeight(map, frontage.x, frontage.z) }, frontage,
+  return { destination: { x: cx + offset.x, z: cz + offset.z, y: purpose === "rest" ? placedSupport(map, building, bed).height : building.buildType === "inn" && purpose !== "build" ? surfaceHeight(map, building.x, building.z)+(building.floorHeight ?? 0) : surfaceHeight(map, frontage.x, frontage.z) }, frontage,
     heading: (bed?.heading ?? (purpose === "work" || purpose === "build" && building.churchId && building.buildType !== "alms-table" ? 0 : Math.PI)) + buildingYaw(building.rotation) }
 }
 

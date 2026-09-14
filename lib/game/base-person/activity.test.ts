@@ -14,6 +14,7 @@ describe("simulation sprite poses", () => {
     ["preaching", "preaching"], ["praying", "praying"], ["hoisting", "hoisting"], ["procession", "procession"], ["vigil", "praying"], ["resting", "praying"], ["walking", "idle"], ["flying", "idle"],
     ["begging", "sitting"], ["givingAlms", "idle"], ["camping", "sleeping"], ["idle", "sitting"], ["visiting", "praying"],
     ["drinking", "drinking"], ["drinkingLow", "drinkingLow"], ["working", "treeFelling"], ["gathering", "woodcutting"], ["vending", "idle"],
+    ["tendingSheep", "gathering"], ["feedingSheep", "gathering"], ["wateringSheep", "gathering"], ["slaughteringSheep", "gathering"],
   ] as const)("shows %s as %s", (activity, clip) => {
     expect(activityClip(activity, false)).toBe(clip)
   })

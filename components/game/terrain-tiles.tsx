@@ -9,7 +9,6 @@ import * as THREE from "three"
 import { waterfallTurbulence } from "@/lib/game/map/waterfall-turbulence"
 import { DEFAULT_ELEVATION } from "@/lib/game/map/elevation"
 import { RoadSegmentTexture } from "@/lib/game/render/road-segment-texture"
-import { sceneryDetail } from "@/lib/game/render/scenery-detail"
 import { elevationShader } from "@/lib/game/render/terrain-elevation"
 import { terrainHiddenFaces, compactTerrainFaces } from "@/lib/game/render/terrain-hidden-faces"
 import { TERRAIN_BLOCK, terrainBlockState, type TerrainBlockState, terrainBlocks, sameRoadSnapshot, type TerrainBlockBounds } from "@/lib/game/render/terrain-blocks"
@@ -17,13 +16,14 @@ import { CHARACTER_PIXEL_SIZE, CHARACTER_PIXELS_PER_UNIT } from "@/lib/game/rend
 import { cliffCorner, terrainCorner, type CliffCorner } from "@/lib/game/map/cliff-corners"
 import { waterDepthCorners } from "@/lib/game/map/water-depth-corners"
 import { groundCornerTiles, groundPaintCode } from "@/lib/game/map/ground-transitions"
-import { OPEN_MEADOW_TINT } from "@/lib/game/render/ground-palette"
+import { OPEN_MEADOW_TINT, SWARD_TEXTURE_REFERENCE } from "@/lib/game/render/ground-palette"
 import { TERRAIN_EDGE_GLSL, TERRAIN_EDGE_GRAIN_URL } from "@/lib/game/render/terrain-edge-grain"
 import { TERRAIN_WATER_GLSL } from "@/lib/game/render/terrain-water"
 import { GROUND_TRANSITIONS_GLSL } from "@/lib/game/render/ground-transitions"
 import { groundGrowthField } from "@/lib/game/environment/ground-growth"
 import { foundingRoadStrength, foundingRoadTraffic } from "@/lib/game/footpaths"
 import { dirtFloorMask, DIRT_FLOOR_GLSL } from "@/lib/game/building-art/dirt-floor"
+import { grassAppearanceUniforms } from "@/lib/game/render/appearance-uniforms"
 import { GROUND_SURFACE_GLSL, ROAD_UV_SCALE, GRASS_TEXTURE_URL } from "@/lib/game/render/ground-surface"
 import { ElevationEdges } from "./elevation-edges"
 import { WaterMotion } from "./water-motion"
@@ -259,6 +259,7 @@ function makeTileMaterial({
 }: TileMaterialOptions): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial({ transparent: !!tileCoverage })
   material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, grassAppearanceUniforms)
     elevationShader(shader, !road)
     if (tileCoverage) tileCoverageShader(shader, tileCoverage)
     shader.uniforms.forestFloorMap = { value: treeGround.floor }
@@ -468,7 +469,8 @@ function makeTileMaterial({
             // through the median at a fork instead of leaving a square seam.
             // Noise over world position frays the verges continuously.
             float tuft = tileNoise(world * 7.0) * 0.6 + tileNoise(world * 15.0) * 0.4;
-            vec2 shape = roadShape(vTileLocal, clamp(1.0 - vRoadOpen, 0.0, 1.0), max(-vRoadOpen, 0.0), vRoadCorners,
+            vec2 pathPoint = buildingPathPoint(world, vTileLocal);
+            vec2 shape = roadShape(pathPoint, clamp(1.0 - vRoadOpen, 0.0, 1.0), max(-vRoadOpen, 0.0), vRoadCorners,
               edge, vInner, (tuft - 0.5) * 0.2 * roadEdgeWear);
             // Land instances carry only the adjoining shoulders and diagonals.
             if (vGrass > 0.5) shape = vec2(0.0, -1.0);
@@ -478,7 +480,7 @@ function makeTileMaterial({
             shape.x *= vLand.w;
             shape.y = mix(-100.0, shape.y, step(0.001, vLand.w));
             float segmentOpacity, grassWear;
-            shape = max(shape, diagonalRoadShape(vTileLocal, vRoadSegments,
+            shape = max(shape, diagonalRoadShape(pathPoint, vRoadSegments,
               edge - vEdge, edge, (tuft - 0.5) * 0.2 * roadEdgeWear, segmentOpacity, grassWear));
             segmentOpacity = max(segmentOpacity, originalOpacity);
             // First repeat visits only dull the existing grass. Keep its texture
@@ -487,7 +489,7 @@ function makeTileMaterial({
             float floorBare = dirtFloorCover(world, vTileLocal);
             if (!roadIsDirt && floorBare > 0.0) {
               vec4 floorTex = sampleTiled(trailMap, world * ${ROAD_UV_SCALE}, world);
-              landTop = mix(landTop, roadSurfaceColor(floorTex, roadShade, vOverlay, roadColor),
+              landTop = mix(landTop, buildingDirtColor(roadSurfaceColor(floorTex, roadShade, vOverlay, roadColor), world),
                 floorBare * floorTex.a * roadOpacity * (1.0 - shore));
             }
             float bare = roadIsDirt ? max(shape.x, floorBare) : shape.x;
@@ -507,7 +509,8 @@ function makeTileMaterial({
             float line = (1.0 - smoothstep(halfLine - 0.5 * px, halfLine + 0.5 * px, abs(d - edge))) * roadEdgeLine * (1.0 - shore);
             ${edgeOnly ? "diffuseColor.a = line * roadOpacity * segmentOpacity * vGridTop;" : ""}
 
-            vec3 top = mix(landTop, road, cover) * (1.0 - 0.75 * line * roadOpacity * segmentOpacity);
+            vec3 floorRoad = mix(road, buildingDirtColor(road, world), floorBare);
+            vec3 top = mix(landTop, floorRoad, cover) * (1.0 - 0.75 * line * roadOpacity * segmentOpacity);
             vec3 surface = mix(${ROAD_SIDE_COLOR} * roadColor, top, vGridTop);
             diffuseColor.rgb *= surface;
           #else
@@ -518,7 +521,7 @@ function makeTileMaterial({
               diffuseColor.rgb = mix(land, waterSurface(world, vGroundDonor), terrainWaterCover(world, vGroundDonor));
             }
           #endif
-          diffuseColor.rgb *= 1.0 - treeCover.x;
+          diffuseColor.rgb *= 1.0 - clamp(treeCover.x * grassCanopyShade, 0.0, 1.0);
           // Exposed earth uses the slab texture with the same horizontal scale
           // and a topsoil-to-subsoil ramp measured down from the local rim.
           if (vGridTop < 0.5 && vWater < 0.5) diffuseColor.rgb = texture2D(cliffMap, vCliffUv).rgb;
@@ -628,7 +631,6 @@ interface LandPaint {
 /** Scratch colours for paintLand. */
 const landScratch = {
   own: new THREE.Color(),
-  grass: new THREE.Color(TERRAIN.grass.color),
   water: WATER_DEPTH_COLORS.map((c) => new THREE.Color(c)),
 }
 
@@ -833,8 +835,10 @@ export function TerrainTiles(props: TerrainProps) {
       color.copy(paint.color)
       if (paint.sward) {
         const { x: r, y: g, z: b, w: a } = paint.overlay
-        color.setRGB(1 + (r / landScratch.grass.r - 1) * a,
-          1 + (g / landScratch.grass.g - 1) * a, 1 + (b / landScratch.grass.b - 1) * a)
+        // The palette also multiplies authored forest litter, so normalize to
+        // its fixed texture reference rather than the current turf color.
+        color.setRGB(1 + (r / SWARD_TEXTURE_REFERENCE.r - 1) * a,
+          1 + (g / SWARD_TEXTURE_REFERENCE.g - 1) * a, 1 + (b / SWARD_TEXTURE_REFERENCE.b - 1) * a)
       }
       color.multiplyScalar(1 + (rng() - .5) * TERRAIN[terrain].jitter)
       data.set([color.r, color.g, color.b, groundPaintCode(terrain, corners[i])], i * 4)
@@ -1055,8 +1059,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
     lookUniforms.edgeWidth.value = look.edgeWidth
     lookUniforms.pixelRatio.value = dpr
   }, [lookUniforms, look, dpr])
-  useFrame(({ scene }) => {
-    lookUniforms.edgeLine.value = sceneryDetail(scene) === 0 ? look.edgeLine : 0
+  useFrame(() => {
     if (process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1") {
       const shown = benchmarkWork.pathDrawing
       if (roadMeshRef.current) {

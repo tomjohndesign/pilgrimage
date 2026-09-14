@@ -1,5 +1,8 @@
 "use client"
 
+import { SheepPenDemo } from "./sheep-pen-demo"
+import { sheepPenDemo } from "@/lib/game/building-art/sheep-pen-demo"
+import type { WildlifeWorld } from "@/lib/game/wildlife/simulation"
 import { structureParts } from "@/lib/game/building-art/structure"
 import { tavernStackParts } from "@/lib/game/building-art/stacked"
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
@@ -172,10 +175,12 @@ function Site({ recipe, grid, map: suppliedMap }: { recipe: BuildingRecipe; grid
 /** A single view of the same procedural asset used by the live hovel.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — Building workshop — procedural (214-0)
  */
-export function ProceduralMapScene({ recipe, grid, zoom, selectedId = null, onSelect, neighbor, placement = null, placementRotation = 0, snapRoofs = true, onPlace, onPlacementStatus, onGuideReady, embedded = false }: {
-  recipe: BuildingRecipe; grid: boolean; zoom: number; selectedId?: string | null; onSelect?: (id: string | null) => void; neighbor?: BuildingRecipe | PreviewPlacement[]; placement?: BuildingRecipe | null; placementRotation?: BuildingRotation; snapRoofs?: boolean; onPlace?: (placed: PreviewPlacement) => void; onPlacementStatus?: (status: string) => void; embedded?: boolean; onGuideReady?: (capture: CaptureMapGuide | null) => void
+export function ProceduralMapScene({ recipe, grid, zoom, playbackRate = 3, slaughterDemo = 0, selectedId = null, onSelect, neighbor, placement = null, placementRotation = 0, snapRoofs = true, onPlace, onPlacementStatus, onGuideReady, embedded = false }: {
+  recipe: BuildingRecipe; grid: boolean; zoom: number; playbackRate?: number; slaughterDemo?:number; selectedId?: string | null; onSelect?: (id: string | null) => void; neighbor?: BuildingRecipe | PreviewPlacement[]; placement?: BuildingRecipe | null; placementRotation?: BuildingRotation; snapRoofs?: boolean; onPlace?: (placed: PreviewPlacement) => void; onPlacementStatus?: (status: string) => void; embedded?: boolean; onGuideReady?: (capture: CaptureMapGuide | null) => void
 }) {
   const map = useMemo(() => buildingPreviewMap(recipe, neighbor), [recipe, neighbor])
+  const demo=useMemo(()=>recipe.variant === "sheep-pen" ? sheepPenDemo(map,slaughterDemo>0,slaughterDemo<0) : undefined,[map,recipe.variant,slaughterDemo])
+  const [meat,setMeat]=useState(0),[milk,setMilk]=useState(0)
   const study = useMemo(() => ({...recipe,width:map.width-12,depth:map.depth-12}), [recipe,map.width,map.depth])
   const recipes = useMemo(() => new Map([["workshop",recipe],...previewNeighbors(recipe,neighbor).map(p=>[p.id,p.recipe] as const)]), [recipe,neighbor])
   return <section className={embedded ? "asset-building-scene" : styles.mapPanel} aria-label={`${BUILDING_VIEWS[recipe.view].name} procedural building on game tiles`}>
@@ -189,19 +194,20 @@ export function ProceduralMapScene({ recipe, grid, zoom, selectedId = null, onSe
         <directionalLight name="workshop-sun" position={lightOffsetForYaw(yawForView(recipe.view))} intensity={SURFACE_LIGHT.sun} />
         <Suspense fallback={null}>
           <group onClick={event => { if (!placement && event.delta <= 6) onSelect?.(null) }}><Site recipe={study} grid={grid} map={map} /></group>
-          <PreviewBuildings recipes={recipes} map={map} selectedId={selectedId} onSelect={onSelect} placing={Boolean(placement)} />
+          {demo && <SheepPenDemo demo={demo} map={map} playbackRate={playbackRate} onMeatChange={setMeat} onMilkChange={setMilk} />}
+          <PreviewBuildings world={demo?.world} recipes={recipes} map={map} selectedId={selectedId} onSelect={onSelect} placing={Boolean(placement)} />
           {placement && <PlacementPreview map={map} recipes={recipes} recipe={placement} rotation={placementRotation} snap={snapRoofs} onPlace={onPlace} onStatus={onPlacementStatus} />}
           {onGuideReady && <GuideCapture recipe={study} onReady={onGuideReady} />}
         </Suspense>
         <OutlinePass objects={{ buildings: map.buildings, travelers: [], monks: [] }} selection={selectedId ? {kind:"building",id:selectedId} : null} />
       </Canvas>
-      {embedded && <span className="person-stage-caption">{BUILDING_VIEWS[recipe.view].name} · {recipe.width} × {recipe.depth} tiles</span>}
+      {embedded && <span className="person-stage-caption">{BUILDING_VIEWS[recipe.view].name} · {recipe.width} × {recipe.depth} tiles{demo ? ` · ${meat} meat · ${milk} milk stored` : ""}</span>}
     </div>
   </section>
 }
 
 /** The same side-edge joins and layout recipes as placed homes, on the existing preview map. */
-function PreviewBuildings({ recipes, map, selectedId, onSelect, placing }: { recipes: ReadonlyMap<string,BuildingRecipe>; map: GameMap; selectedId: string | null; onSelect?: (id: string | null) => void; placing?: boolean }) {
+function PreviewBuildings({ recipes, map, selectedId, onSelect, placing, world }: { recipes: ReadonlyMap<string,BuildingRecipe>; map: GameMap; selectedId: string | null; onSelect?: (id: string | null) => void; placing?: boolean; world?:WildlifeWorld }) {
   const { models, owners } = useMemo(() => {
     const joins = buildingRoofJoins(map, b => recipes.get(b.id)!.roofRise)
     const models = map.buildings.map(b => {
@@ -221,7 +227,7 @@ function PreviewBuildings({ recipes, map, selectedId, onSelect, placing }: { rec
   return <group name="preview-buildings">
     <EntranceDetails map={map} idColors={idColors} onSelect={(building,event)=>select(building.id,event)} variationSeed={building => models[map.buildings.indexOf(building)].recipe.seed} />
     {map.buildings.map((building,i)=>building.supportId===selectedId ? null : <group key={building.id} name={`preview-building-${building.id}`} userData={{buildingId:building.id}} onClick={event=>select(building.id,event)} rotation={[0,buildingYaw(building.rotation),0]} position={[tileToWorldX(map,building.x)+(building.w-1)/2,TILE_HEIGHT+(building.floorHeight ?? 0),tileToWorldZ(map,building.z)+(building.d-1)/2]}>
-      <StructureModel terrainFloors ink={false} parts={models[i].parts} idColor={idColors[i]} cutaway={building.id===selectedId} />
+      <StructureModel terrainFloors ink={false} parts={models[i].parts} idColor={idColors[i]} cutaway={building.id===selectedId} penGateOpen={()=>world?.penGates?.get(building.id)?.open ?? 0} />
       {building.supportId && <InnFlueSmoke width={models[i].recipe.width} depth={models[i].recipe.depth} height={building.height} flue={building.tavernFlue} cutaway={building.id===selectedId} />}
       {models[i].recipe.variant === "enclosure" && <RelicDisplay height={RELIC_TABLE_DISPLAY_HEIGHT} />}
       {!building.supportId && hasDomesticHearth(building.buildType,building.layoutSeed,building.fireplace) && <ShelterFire smoke={!map.buildings.some(b=>b.supportId===building.id)} buildType={models[i].recipe.variant} width={models[i].recipe.width} depth={models[i].recipe.depth} height={building.height} roofRise={models[i].recipe.roofRise} layoutSeed={building.layoutSeed} hearthZ={building.hearthZ} sharedChimney={models[i].chimney} cutaway={building.id===selectedId} />}

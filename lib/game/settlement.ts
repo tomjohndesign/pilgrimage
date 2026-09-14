@@ -3,7 +3,7 @@ import { innPlacementError } from "./inn"
 import { churchAdditionError } from "./church-additions"
 import { buildingEntrance, constructionWork, isComplete } from "./construction"
 import { placementBuildingLayout, placementSite } from "./building-placement-layout"
-import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
+import { rotatedFootprint, buildingEntry, buildingApproaches, wellApproaches, type BuildingRotation } from "./building-rotation"
 import { footprintGrading, groundHeight, levelBuildingGround } from "./map/elevation"
 import { buildingKind, placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
 import { settlementRoute, shrineRoadHead } from "./settlement-route"
@@ -30,6 +30,8 @@ export const SETTLEMENT_RADIUS = DEFAULT_BALANCE.rules.buildRadius
 export interface Settlement {
   /** Generated buildings permanently acquired when connected influence reaches them. */
   claimedBuildings: string[]
+  /** Removed IDs stay reserved and hide demolished generated buildings on reload. */
+  demolishedBuildings: string[]
   /** Terrain after successful purchases; the generated base map stays immutable. */
   elevation?: GameMap["elevation"]
   resources: Resources
@@ -52,6 +54,7 @@ export interface Settlement {
 export function createSettlement(balance: GameBalance = DEFAULT_BALANCE): Settlement {
   return {
     claimedBuildings: [],
+    demolishedBuildings: [],
     resources: { gold: balance.rules.startingGold, wood: balance.rules.startingWood },
     structures: [],
     deliveredWood: 0,
@@ -85,6 +88,34 @@ export function completeConstruction(settlement: Settlement): Settlement {
     structures: settlement.structures.map(finish) }
 }
 
+/** The founding shrine anchors the settlement; independent property is not ours. */
+export function demolitionTargets(map: GameMap, id: string): BuildingDef[] {
+  const building = map.buildings.find(b => b.id === id)
+  if (!building || building.owner === "independent" || id === map.site?.hovelId) return []
+  const removed = new Set([id])
+  let previousSize = 0
+  while (previousSize !== removed.size) {
+    previousSize = removed.size
+    for (const b of map.buildings) {
+      if ((b.supportId && removed.has(b.supportId)) || (b.churchId && removed.has(b.churchId))) removed.add(b.id)
+    }
+  }
+  return [building, ...map.buildings.filter(b => b.id !== id && removed.has(b.id))]
+}
+
+/** Demolition is immediate and does not refund construction costs. */
+export function demolishStructure(settlement: Settlement, baseMap: GameMap, id: string): Settlement {
+  const targets = demolitionTargets(settlementMap(baseMap, settlement), id)
+  if (!targets.length) return settlement
+  const removed = new Set(targets.map(b => b.id))
+  return {
+    ...settlement,
+    structures: settlement.structures.filter(b => !removed.has(b.id)),
+    claimedBuildings: settlement.claimedBuildings.filter(id => !removed.has(id)),
+    demolishedBuildings: [...settlement.demolishedBuildings, ...removed],
+  }
+}
+
 /** Preserve generated IDs and residents; ownership is a session overlay on the base map. */
 // The same world and settlement always describe the same map. Handing back one
 // object lets the cursor's placement verdicts serve the purchase, and keeps every
@@ -96,8 +127,9 @@ export function settlementMap(baseMap: GameMap, settlement: Settlement): GameMap
   const cached = perSettlement.get(settlement)
   if (cached) return cached
   const claimed = new Set(settlement.claimedBuildings)
+  const demolished = new Set(settlement.demolishedBuildings)
   const map = { ...baseMap, elevation: settlement.elevation ?? baseMap.elevation,
-    buildings: [...baseMap.buildings.map(b => b.id === baseMap.site?.hovelId && settlement.church ? settlement.church : claimed.has(b.id) ? { ...b, owner: undefined } : b), ...settlement.structures].map(b => b.buildType === "alms-table" && b.churchId ? { ...b, churchId: undefined } : b) }
+    buildings: [...baseMap.buildings.filter(b => !demolished.has(b.id)).map(b => b.id === baseMap.site?.hovelId && settlement.church ? settlement.church : claimed.has(b.id) ? { ...b, owner: undefined } : b), ...settlement.structures].map(b => b.buildType === "alms-table" && b.churchId ? { ...b, churchId: undefined } : b) }
   perSettlement.set(settlement, map)
   return map
 }
@@ -376,6 +408,14 @@ function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, balance
         return "Keep a clear passage through the church to the residence."
       if (!settlementRoute(map, occupied, map.site.door, buildingEntry(candidate, false, -1)))
         return "Leave room outside the residence for its builders."
+    } else if (candidate.buildType === "well") {
+      if (!wellApproaches(candidate).some(entry => {
+        const terrain = tileAt(map, entry.x, entry.z)
+        return terrain && TERRAIN[terrain].passable && !buildingAt(map, entry.x, entry.z)
+          && !(map.water?.depth[entry.z * map.width + entry.x] ?? 0)
+          && Math.abs(groundHeight(map, entry.x, entry.z) - floor) <= balance.rules.levellingLimit + 1e-9
+          && settlementRoute(map, occupied, map.site!.door, entry)
+      })) return "Keep a clear route to at least one side of the well."
     } else if ((approaches.length ? approaches : [buildingEntrance(candidate)]).some(entry=>!settlementRoute(map, occupied, map.site!.door, entry)))
       return "Keep access to the construction entrance clear."
     const roadBlock = roadBlockError(map, occupied)
@@ -386,6 +426,11 @@ function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, balance
     if (junction && !settlementRoute(map, occupied, junction, map.site.door))
       return "Leave a way through from the road to the shrine door."
     for (const camp of map.buildings.filter(b => b.buildType && !b.supportId && !b.churchId)) {
+      if (camp.buildType === "well") {
+        if (!wellApproaches(camp).some(entry => settlementRoute(map, occupied, map.site!.door, entry)))
+          return "Keep access to existing wells clear."
+        continue
+      }
       const entries=buildingApproaches(map,camp)
       if ((entries.length ? entries : [buildingEntry(camp)]).some(entry=>!settlementRoute(map, occupied, map.site!.door, entry)))
         return "Keep access to existing buildings clear."
@@ -452,8 +497,12 @@ export function purchaseStructure(
   at=site
   const error = placementError(map, def, at, balance, rotation)
   if (error) return { settlement, error }
+  const prefix = def.id === "workshop" ? "workshop" : "settlement"
+  const reserved = new Set([...map.buildings.map(b => b.id), ...settlement.demolishedBuildings])
+  let sequence = settlement.structures.length
+  while (reserved.has(`${prefix}-${sequence}`)) sequence++
   const building: BuildingDef = {
-    id: `${def.id === "workshop" ? "workshop" : "settlement"}-${settlement.structures.length}`,
+    id: `${prefix}-${sequence}`,
     buildType: def.id,
     label: def.label,
     x: at.x,

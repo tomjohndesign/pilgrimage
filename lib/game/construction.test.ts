@@ -327,3 +327,14 @@ describe("monk fatigue and rest", () => {
     expect(settlementRoute(map, map.buildings, map.site!.door, buildingEntrance(shelter), false, true)).not.toBeNull()
   })
 })
+
+
+it("completes well construction from another side when the front is blocked", () => {
+  const map = fixture(), site = map.buildings[2], actor = worker(map)
+  site.buildType = "well"
+  for (let x = site.x; x < site.x + site.w; x++) map.tiles[(site.z + site.d) * map.width + x] = "water"
+  expect(assignBuildingTask(actor, map, "build", site.id)).toBe(true)
+  expect(actor.buildingTask!.slot % 4).not.toBe(0)
+  for (let step = 0; step < 1000 && !isComplete(site); step++) stepBuildingTask(actor, map, 2, .1)
+  expect(isComplete(site)).toBe(true)
+})

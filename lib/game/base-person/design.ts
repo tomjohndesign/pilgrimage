@@ -29,7 +29,7 @@ export type DesignKey = keyof typeof DESIGN_CONTROLS
 export const HAIR_STYLES = ["Bald", "Cropped", "Bob", "Long", "Tonsure", "Wavy", "Ponytail", "Braids", "Bun"] as const
 export const HAT_STYLES = ["None", "Coif", "Wool cap", "Cloth cap"] as const
 export const HAND_TOOLS = ["None", "Shepherd crook", "Carried axe"] as const
-export const TUNIC_STYLES = ["Plain", "Particolour", "Ragged"] as const
+export const TUNIC_STYLES = ["Plain", "Particolour", "Ragged", "Trimmed"] as const
 export type PersonDesign = Record<DesignKey, number> & {
   poseEdits?: PoseEdits
   handTool: typeof HAND_TOOLS[number]
@@ -57,11 +57,14 @@ export const DEFAULT_DESIGN: PersonDesign = {
 export const PERSON_PRESETS: Record<string, PersonDesign> = {
   Storybook: DEFAULT_DESIGN,
   Female: { ...DEFAULT_DESIGN, bodyType: "Female", hat: "Coif", hem: 1.15, hairStyle: "Long", beard: false },
-  Monk: { ...DEFAULT_DESIGN, garment: "Robe", beltStyle: "Rope", tunicLength: 1.4, tunicColor: "#6b4932",
+  Monk: { ...DEFAULT_DESIGN, tunicStyle: "Trimmed", accentColor: "#508b9d", garment: "Robe", beltStyle: "Rope", tunicLength: 1.4, tunicColor: "#6b4932",
     trouserColor: "#6b4932", hairStyle: "Tonsure", sleeves: 1.15, hem: 1.1,
     feet: 0.75, footWidth: 0.7, stride: 0.75, armSwing: 0, walkStyle: "Devotional" },
+  // Plain white cloth over dark wool: a period-plausible palette, not a universal
+  // monastic uniform. Early veil colours varied (Ross, Dress pins, p. 420):
+  // https://ora.ox.ac.uk/objects/uuid%3A3976b772-fccd-41fe-b8c7-f4ae08ac0295
   Nun: { ...DEFAULT_DESIGN, bodyType: "Female", garment: "Robe", beltStyle: "Rope",
-    tunicLength: 1.4, tunicColor: "#45413b", coveringColor: "#45413b",
+    tunicLength: 1.4, tunicColor: "#45413b", coveringColor: "#eee9df",
     shirtColor: "#d6cab1", trouserColor: "#45413b", hat: "Coif",
     hairStyle: "Cropped", sleeves: 1.15, hem: 1.1, beard: false },
   Minstrel: { ...DEFAULT_DESIGN, tunicColor: "#7b4969", accentColor: "#d6b57b", tunicStyle: "Plain", hat: "Cloth cap", lute: true, hairStyle: "Wavy", hem: 1.15, tunicLength: 1.15 },
@@ -146,9 +149,10 @@ export const TIMBER_SHADES = [0.55, 0.8, 1, 1.25] as const
  * Which body colour owns a palette entry. Skin and hair steps are reserved: the
  * bake only lets skin pixels reach skin steps and hair pixels reach hair steps,
  * so a staff, a robe or a boot can never be repainted along with a complexion.
- * Shared entries — ink, timber, cloth, metal — stay open to every part.
+ * Woven trim has its own reserved tone as well. Shared entries — ink, timber,
+ * ordinary cloth, metal — stay open to every part.
  */
-export const PALETTE_TONES = { shared: 0, skin: 1, hair: 2 } as const
+export const PALETTE_TONES = { shared: 0, skin: 1, hair: 2, trim: 3 } as const
 export type PaletteTone = typeof PALETTE_TONES[keyof typeof PALETTE_TONES]
 export function personRecipe(input: PersonDesign = DEFAULT_DESIGN) {
   const design = validatePersonDesign(input)
@@ -165,7 +169,7 @@ export function personRecipe(input: PersonDesign = DEFAULT_DESIGN) {
   add(PALETTE_TONES.shared, [0.55, 0.8, 1, 1.3].map(f => shade(design.tunicColor, f)))
   add(PALETTE_TONES.hair, HAIR_SHADES.map(f => shade(design.hairColor, f)))
   add(PALETTE_TONES.shared, clothColors.flatMap(color => [0.55, 0.8, 1, 1.25].map(f => shade(color, f))))
-  for (const color of [design.accentColor, design.coveringColor]) add(PALETTE_TONES.shared, [0.55, 0.8, 1, 1.3].map(f => shade(color, f)))
+  for (const color of [design.accentColor, design.coveringColor]) add(design.tunicStyle === "Trimmed" && color === design.accentColor ? PALETTE_TONES.trim : PALETTE_TONES.shared, [0.55, 0.8, 1, 1.3].map(f => shade(color, f)))
   if (design.beltStyle === "Rope") add(PALETTE_TONES.shared, [0.65, 1, 1.25].map(f => shade(result.palette.belt, f)))
   result.renderPalette = entries.map(entry => entry[0])
   const paletteTones = entries.map(entry => entry[1])

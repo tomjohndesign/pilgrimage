@@ -1,5 +1,8 @@
 "use client"
 
+import { usePlayerColor } from "./player-color"
+import { playerClothingSwap } from "@/lib/game/player-color"
+
 import { useContext } from "react"
 import { CharacterMapContext } from "./character-map-context"
 
@@ -49,7 +52,8 @@ import { complexionSwap, type Complexion } from "@/lib/game/base-person/complexi
 import { OUTLINE_ID_LAYER_MASK, SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import type { FigureClickHandler } from "./traveler-figure"
 
-export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, complexion = appearance?.complexion, age = 18, visualOverride, attachment, flightClip, name = "traveler" }: {
+export function CharacterSprite({ resident, map: suppliedMap, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, complexion = appearance?.complexion, age = 18, visualOverride, attachment, flightClip, name = "traveler" }: {
+  resident?: boolean
   attachment?: { content: ReactNode; clips: Partial<Record<"hoisting" | "procession", FrameRegistration[]>>; cellSize: number; anchor: number[]; restPosition?: [number, number, number] }
   flightClip?: SpriteClip & { fps: number; reservedTones?: boolean }
   map?: GameMap
@@ -68,6 +72,7 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
   characterFps?: number
   walkTuning?: WalkTuning
 }) {
+  const playerColor = usePlayerColor()
   const contextMap = useContext(CharacterMapContext)
   const map = suppliedMap ?? contextMap
   const [renderOrder] = useState(spriteRenderOrder)
@@ -150,8 +155,11 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
   // older atlases share those colours with props and would bleed. One material
   // covers every clip a character can play, so they all have to qualify.
   const recolourable = visual.reservedTones && (playingClip?.reservedTones ?? true) && (flightClip?.reservedTones ?? true)
-  const swap = useMemo(() => complexionSwap(recolourable ? visual.design : undefined, complexion),
-    [recolourable, visual.design, complexion?.skin, complexion?.hair])
+  const owned = resident ?? name === "monk"
+  const clothingColor = owned ? playerColor : null
+  const swap = useMemo(() => playerClothingSwap(complexionSwap(recolourable ? visual.design : undefined, complexion),
+    visual.reservedTones ? visual.design : undefined, clothingColor, owned),
+    [recolourable, visual.reservedTones, visual.design, complexion?.skin, complexion?.hair, clothingColor, owned])
   const complexionValues = useMemo(() => complexionUniforms(swap), [swap])
   const material = useMemo(() => {
     const material = new THREE.SpriteMaterial({ map: textures.get(1), alphaTest: 0.5, transparent: false, toneMapped: false })
@@ -161,7 +169,7 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
       applyComplexionSwap(shader, uniforms)
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "person-complexion-v2"
+    material.customProgramCacheKey = () => "person-clothing-v4"
     return material
   }, [textures, viewport, worldTexel, groundPlane, poseDepth, depthBias, complexionValues])
   useEffect(() => () => material.dispose(), [material])
@@ -292,7 +300,7 @@ export function CharacterSprite({ map: suppliedMap, type, onClick, outlineColor,
     }
     if (sprite.current) sprite.current.userData.clip = flight ? "flying" : playing ? "performing" : action ? requested : moving ? "walk" : "idle"
     origin.setFromMatrixPosition(parent.matrixWorld)
-    const support = map && !moving && !special && action ? characterSupport(map, origin.x, origin.z, requested, origin.y) : undefined
+    const support = map && !moving && !special && action ? characterSupport(map, origin.x, origin.z, requested, requested === "sleeping" ? parent.userData.restHeight ?? origin.y : origin.y) : undefined
     if (support) heading = support.heading
     const direction = spriteRow(heading, yaw)
     if (sprite.current) sprite.current.userData.direction = direction

@@ -126,7 +126,7 @@ describe("generated drinking water", () => {
     const point = { x: tileToWorldX(map, p.x), z: tileToWorldZ(map, p.z), y: .2 }
     const visit = waterVisitPlan(map, well, point, point)!
     expect(visit).not.toBeNull()
-    expect(visit.route.some(p => p.x === tileToWorldX(map, map.site!.door.x) && p.z === tileToWorldZ(map, map.site!.door.z))).toBe(true)
+    expect(visit.route.at(-1)).toEqual(visit.visit.stand)
     expect(well.owner).toBeUndefined()
   }, 20000)
 })

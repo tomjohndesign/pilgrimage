@@ -1,14 +1,14 @@
 import { innPlacementLayout, innStackSite } from "../inn"
 import type { GameMap, BuildingDef, TilePos } from "../map/types"
 import type { TerrainId } from "../map/terrain"
-import { EARLY_BUILDINGS, earlyBuildingRecipe, type BuildingRecipe } from "./style"
+import { AVAILABLE_EARLY_BUILDINGS, earlyBuildingRecipe, type BuildingRecipe } from "./style"
 import { makeRng } from "../rng"
 import { adoptNeighborChimney, roofAlignedRotation, placementClearance } from "../building-placement-layout"
 import { buildingApproaches, rotatedFootprint, type BuildingRotation } from "../building-rotation"
 
 /** Choose a distinct neighbor with its own normal footprint and layout. */
 export function randomPreviewNeighbor(type: BuildingRecipe["variant"], seed: number): BuildingRecipe {
-  const random = makeRng(seed), choices = EARLY_BUILDINGS.filter(preset => preset.id !== type)
+  const random = makeRng(seed), choices = AVAILABLE_EARLY_BUILDINGS.filter(preset => preset.id !== type)
   return { ...earlyBuildingRecipe(choices[Math.floor(random() * choices.length)].id),
     layoutSeed: Math.floor(random() * 65536) }
 }

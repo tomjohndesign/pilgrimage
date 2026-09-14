@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { APPEARANCE_ENABLED } from "../appearance-store"
 
 /** Wide buildings use their authored colors without camera-linked dark faces.
  * One resident shader serves both levels; the distant branch skips lighting. */
@@ -33,18 +34,24 @@ export function mergedBuildingBlock(sources: readonly BuildingBatchSource[]) {
   const count = sources.reduce((sum, source) => sum + source.levels[0].getAttribute("position").count, 0)
   const positions = new Float32Array(count * 3), normals = new Float32Array(count * 3)
   const colors = new Float32Array(count * 3), ids = new Float32Array(count * 3)
+  const appearance = APPEARANCE_ENABLED ? new Float32Array(count * 3) : null
   const indices: number[][] = [[], [], []]
   const point = new THREE.Vector3(), normal = new THREE.Vector3(), normalMatrix = new THREE.Matrix3()
   let offset = 0
   for (const source of sources) {
     const geometry = source.levels[0], position = geometry.getAttribute("position"), n = geometry.getAttribute("normal")
     const color = geometry.getAttribute("color"), id = (source.ids.material as THREE.MeshBasicMaterial).color
+    const sourceId = geometry.getAttribute("appearanceObjectId")
     normalMatrix.getNormalMatrix(source.body.matrixWorld)
     for (let i = 0; i < position.count; i++) {
       point.fromBufferAttribute(position, i).applyMatrix4(source.body.matrixWorld).toArray(positions, (offset + i) * 3)
       normal.fromBufferAttribute(n, i).applyNormalMatrix(normalMatrix).toArray(normals, (offset + i) * 3)
       colors[(offset + i) * 3] = color.getX(i); colors[(offset + i) * 3 + 1] = color.getY(i); colors[(offset + i) * 3 + 2] = color.getZ(i)
       id.toArray(ids, (offset + i) * 3)
+      if (appearance) {
+        if (sourceId) appearance.set([sourceId.getX(i),sourceId.getY(i),sourceId.getZ(i)], (offset+i)*3)
+        else id.toArray(appearance,(offset+i)*3)
+      }
     }
     for (let level = 0; level < 3; level++) {
       const index = source.levels[level].index
@@ -58,7 +65,9 @@ export function mergedBuildingBlock(sources: readonly BuildingBatchSource[]) {
   const body = indices.map(index => {
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute("position", attributes.position); geometry.setAttribute("normal", attributes.normal)
-    geometry.setAttribute("color", color); geometry.setIndex(index); geometry.computeBoundingSphere()
+    geometry.setAttribute("color", color)
+    if (appearance) geometry.setAttribute("appearanceObjectId", new THREE.BufferAttribute(appearance,3))
+    geometry.setIndex(index); geometry.computeBoundingSphere()
     return geometry
   })
   const outline = body.map(original => {

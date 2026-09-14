@@ -3,7 +3,7 @@ import { cartOffset, type Puller } from "./assets"
 import { roadCartPose } from "./bridge-guide"
 import { cartPath, driveSegment } from "./building-parking"
 import type { CartPose } from "./follow"
-import { convoyBuildingsClear, parkingClear, type ParkingContext } from "./navigation"
+import { convoyBuildingsClear, parkingClearance, type ParkingContext } from "./navigation"
 import { advanceCartProgress } from "./route"
 import { routeLength } from "./roadside"
 import type { WalkingShortcut } from "../walking-shortcuts"
@@ -17,11 +17,12 @@ export function recoverCart(map: GameMap, initial: CartPose, progress: number, d
   const embedded = !convoyBuildingsClear(map, initial, puller, scale)
   // People can move away while a convoy rejoins. Parked assets cannot.
   const fixed = { trees: context.trees, obstacles: context.obstacles }
+  const clear = parkingClearance(map, puller, scale, fixed)
   const starts = [initial]
   if (!embedded) for (const back of [.5, 1, 2, 3]) {
     const pose = driveSegment(initial, { x: initial.hitch.x - Math.sin(initial.heading) * back,
       z: initial.hitch.z - Math.cos(initial.heading) * back }, wheelbase,
-    (p, heading) => parkingClear(map, p, puller, scale, fixed, false, heading) && parkingClear(map, p, puller, scale, fixed))
+    (p, heading) => clear(p, false, heading) && clear(p))
     if (!pose) break
     starts.push(pose)
   }
@@ -31,7 +32,7 @@ export function recoverCart(map: GameMap, initial: CartPose, progress: number, d
         const end = advanceCartProgress(map, progress, direction * distance * sign)
         if (end <= 0 || end >= (map.road?.length ?? 1) - 1) continue
         const pose = roadCartPose(map, end, direction, wheelbase, scale)
-        if (!parkingClear(map, pose, puller, scale, fixed)) continue
+        if (!clear(pose)) continue
         if (embedded) return { pose, progress: end }
         const drive = cartPath(map, start, pose.hitch, puller, scale, fixed, pose.heading)
         if (drive) {

@@ -205,49 +205,49 @@ describe("balance presets", () => {
 })
 
 describe("tuned gameplay", () => {
-  it("locks guard posts until 80 renown without charging for a locked purchase", () => {
+  it("locks market stalls until 10 renown without charging for a locked purchase", () => {
     const world = map(), settlement = createSettlement()
     // The founding shrine supplies 5 renown; each completed visit adds 0.5.
-    const locked = purchaseStructure(settlement, world, [], [], "guard-post", { x: 22, z: 18 }, undefined, 149)
-    expect(locked.error).toBe("Requires 80 shrine renown.")
+    const locked = purchaseStructure(settlement, world, [], [], "market", { x: 22, z: 18 }, undefined, 9)
+    expect(locked.error).toBe("Requires 10 shrine renown.")
     expect(locked.settlement).toBe(settlement)
-    const unlocked = purchaseStructure(settlement, world, [], [], "guard-post", { x: 22, z: 18 }, undefined, 150)
+    const unlocked = purchaseStructure(settlement, world, [], [], "market", { x: 22, z: 18 }, undefined, 10)
     expect(unlocked.error).toBeNull()
-    expect(unlocked.settlement.structures[0].buildType).toBe("guard-post")
+    expect(unlocked.settlement.structures[0].buildType).toBe("market")
   })
   it("uses starting funds, costs and unlocks from the supplied balance", () => {
     const balance = fresh()
     balance.rules.startingGold = 12
     balance.rules.startingWood = 9
-    balance.buildings.hall = {
-      ...balance.buildings.hall,
+    balance.buildings.house = {
+      ...balance.buildings.house,
       requiredRenown: 0,
       goldCost: 12,
       woodCost: 9,
     }
     const settlement = createSettlement(balance)
-    const bought = purchaseStructure(settlement, map(), [], [], "hall", { x: 22, z: 18 }, balance)
+    const bought = purchaseStructure(settlement, map(), [], [], "house", { x: 22, z: 18 }, balance)
     expect(bought.error).toBeNull()
     expect(bought.settlement.resources).toEqual({ gold: 0, wood: 0 })
     expect(settlement.resources).toEqual({ gold: 12, wood: 9 })
     const relocked = fresh()
-    relocked.buildings.hall.requiredRenown = 1000
+    relocked.buildings.house.requiredRenown = 1000
     expect(
-      purchaseStructure(bought.settlement, map(), [], [], "hall", { x: 22, z: 22 }, relocked).error,
+      purchaseStructure(bought.settlement, map(), [], [], "house", { x: 22, z: 22 }, relocked).error,
     ).toMatch(/1000/)
     expect(bought.settlement.structures).toHaveLength(1)
   })
   it("revalues structures but ignores legacy passive-income tuning", () => {
     const world = map()
-    const existing = purchaseStructure(createSettlement(), world, [], [], "monk-shelter", {
+    const existing = purchaseStructure(createSettlement(), world, [], [], "house", {
       x: 22,
       z: 18,
     }).settlement
     existing.structures[0].construction!.work = existing.structures[0].construction!.required
     const before = structuredClone(existing)
     const balance = fresh()
-    balance.buildings["monk-shelter"].renown = 50
-    balance.buildings["monk-shelter"].goldIncome = 9
+    balance.buildings["house"].renown = 50
+    balance.buildings["house"].goldIncome = 9
     balance.rules.residentGold = 3
     balance.rules.residentWood = 5
     balance.rules.incomeSeconds = 6
@@ -262,7 +262,7 @@ describe("tuned gameplay", () => {
     expect(paid.resources.gold - existing.resources.gold).toBe(0)
     expect(paid.resources.wood - existing.resources.wood).toBe(0)
     expect(existing).toEqual(before)
-    expect(buildingIncomeLabel(buildCatalog(balance).find(b => b.id === "monk-shelter")!, balance)).toBe("Adds monk housing when complete")
+    expect(buildingIncomeLabel(buildCatalog(balance).find(b => b.id === "house")!, balance)).toBe("Homes 8 settlers · 4 bunks")
   })
   it("keeps placement independent of the tuned influence radius", () => {
     const balance = fresh()

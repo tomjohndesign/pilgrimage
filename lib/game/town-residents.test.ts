@@ -1,12 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { BUILD_CATALOG } from "./balance"
 import { BUILDING_KINDS } from "./buildings"
-import { HOUSE_BEDS } from "./building-art/early-geometry"
 import { type GameMap, tileToWorldX, tileToWorldZ } from "./map/types"
 import { townResidents } from "./town-residents"
 import { createSim, stepSim, GAME_DAY_SECONDS } from "./sim"
 import { claimTownBuildings, createSettlement, jobBuildings, settlementMap, settlementRenown, creditTrade } from "./settlement"
-import { enclaveHousing } from "./housing"
+import { enclaveHousing, housingCapacity } from "./housing"
 import { buildInfluence } from "./build-influence"
 import { servingHouses } from "./tavern"
 import { useBuildStore } from "./build-store"
@@ -90,7 +89,7 @@ describe("acquiring town buildings", () => {
     expect(claimTownBuildings(acquired, base)).toBe(acquired)
     expect(claimTownBuildings({ ...acquired, structures: [] }, base).claimedBuildings).toEqual(acquired.claimedBuildings)
     expect(jobBuildings(map)).toHaveLength(1)
-    expect(enclaveHousing(map, 2, 0).people.capacity).toBe(HOUSE_BEDS)
+    expect(enclaveHousing(map, 2, 0).people.capacity).toBe(housingCapacity(map.buildings.find(b => b.id === "town-house")!))
     expect(settlementRenown(map, [], []).total).toBeGreaterThan(settlementRenown(before, [], []).total)
     const travelers = townResidents(base).map(r => r.traveler), sim = createSim(travelers, base)
     const people = [...sim.travelers.values()]

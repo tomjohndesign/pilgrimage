@@ -18,7 +18,12 @@ export const WATER_SOURCE_DEFINITIONS = {
     label: "Timber-lined well",
     description: "A low oak curb, wooden bucket and rope for drawing water by hand.",
     footprint: [1.4, 1.4],
-    access: [{ stand: [0, 0, .83], water: [0, .46, .25], action: "draw-water" }],
+    access: [
+      { stand: [0, 0, .83], water: [0, .46, .25], action: "draw-water" },
+      { stand: [-.83, 0, 0], water: [-.25, .46, 0], action: "draw-water" },
+      { stand: [0, 0, -.83], water: [0, .46, -.25], action: "draw-water" },
+      { stand: [.83, 0, 0], water: [.25, .46, 0], action: "draw-water" },
+    ],
   },
   "watering-hole": {
     label: "Natural watering hole",

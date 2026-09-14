@@ -3,6 +3,7 @@ import { wayfindingSettings } from "./wayfinding-settings"
 import { workerNavigationVersion } from "./worker-route-memory"
 import type { MonkJob } from "./monk-jobs"
 import { ALMS_HUNGER_GAIN, ALMS_HUNGER_CAP, ALMS_SERVING_SECONDS, almsStaffed, breadVisitPlan, type BreadVisit } from "./alms-table"
+import { seekPenFood, stepPenFood, type PenFoodVisit } from "./pen-food"
 import { shrineDonationMultiplier } from "./shrine-upgrade"
 import { fordSpeedAt } from "./map/fords"
 import { ensurePartyTransport, stepPartyPacks, stepPackParking, seatParty, parkParty, parkPartyPacks, movePartyCart, turnPartyCart } from "./transport/party"
@@ -18,13 +19,15 @@ import { placeResident } from "./jobs/residents"
 import { GAME_DAY_SECONDS, GAME_HOUR_SECONDS, START_TIME } from "./calendar"
 import { wearySpeedScale } from "./traveler-weariness"
 import { cachedFormation, diversionPoints, partyRoadDelta, sharePartyNeeds, partySlots, pruneTravelParties, regroupParty, syncTravelParties, type TravelParty } from "./travel-parties"
-import { housingBeds, vacantMonkBed } from "./housing"
+import { housingCapacity, vacantHouseBunk, vacantMonkBed } from "./housing"
 import { MONK_COUNT, MONK_JOIN_CHANCE, type Monk } from "./monks"
 import { monkWalkSpeed } from "./base-person/monk-assets"
 import { withTerrainCornerQueries } from "./map/cliff-corners"
 import { buildingSpatialQuery } from "./building-spatial"
 import { settlementJob, jobSpeedScale } from "./jobs/design"
 import { seekSheep, stepShepherd, releaseSheep, type HerdingTask } from "./herding"
+import { seekPenCare, stepShepherdCare, releasePenCare, type PenCareTask } from "./sheep-husbandry"
+import { penGatePassage } from "./pen-gate"
 import type { WildlifeWorld } from "./wildlife/simulation"
 import { cartPath, driveSegment, driveRouteSegment, marketParking, type MarketParking } from "./transport/building-parking"
 import { roadCartPose } from "./transport/bridge-guide"
@@ -63,6 +66,7 @@ import { isComplete, isHouse } from "./construction"
 import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
 import { BUILDING_KINDS, buildingCentre, isPostedWork, type PlacedBuilding } from "./buildings"
 import { DRINK_PRICE, MEAL_PRICE, SERVING_THRESHOLD, SEAT_REST_THRESHOLD, SEAT_STAMINA_PER_HOUR, TABLE_HOURS, servingHouses, tavernVisitPlan, seatRestPlan, type TavernPlan } from "./tavern"
+import { TavernReservations } from "./tavern-reservations"
 import { generateRelic, hospitalityNeedThreshold, visitChance, type RelicStats } from "./relic"
 import { settlementRoute } from "./settlement-route"
 import { relicQueueSpacing, shrineDonation, shrineExitPlan, shrineVisitPlan, shrineViewingRoute, shrineQueueStop, shrineRouteBehind } from "./shrine-visit"
@@ -117,6 +121,7 @@ import { TRAVELER_TYPES, type Traveler } from "./travelers"
 
 export type Activity =
   | "toBread" | "receivingBread" | "fromBread"
+  | "collectingFood"
   | "toWater" | "drinking" | "drinkingLow" | "fromWater"
   | "toParking"
   | "fromParking"
@@ -127,6 +132,7 @@ export type Activity =
   | "toWork"
   | "toSheep"
   | "herding"
+  | "tendingSheep" | "feedingSheep" | "wateringSheep" | "slaughteringSheep" | "deliveringMeat" | "replacingSheep" | "milkingSheep" | "deliveringMilk"
   | "toPost"
   | "posted"
   | "toHome"
@@ -172,6 +178,7 @@ export type Activity =
 
 export const ACTIVITY_LABELS: Record<Activity, string> = {
   toBread: "Going to the alms table", receivingBread: "Receiving bread from a monk", fromBread: "Returning from the alms table",
+  collectingFood: "Collecting food from the public platform",
   toWater: "Going to drink water", drinking: "Drinking at the well", drinkingLow: "Drinking at the water’s edge", fromWater: "Returning from water",
   toParking: "Parking outside the shrine",
   fromParking: "Returning the wagon to the road",
@@ -180,8 +187,12 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
   offering: "At the offering box",
   fromRelic: "Returning from the shrine",
   toWork: "Walking to work",
-  toSheep: "Going to gather a sheep",
-  herding: "Leading a sheep back to the pen",
+  toSheep: "Going to gather sheep or goats",
+  herding: "Herding sheep or goats back to the pen",
+  tendingSheep: "Tending the flock", feedingSheep: "Adding hay to the feed rack", wateringSheep: "Changing the trough water",
+  slaughteringSheep: "Preparing livestock for food", replacingSheep: "Bringing replacement livestock from the shed",
+  deliveringMeat: "Carrying meat to the food platform",
+  milkingSheep: "Milking a sheep or goat", deliveringMilk: "Carrying milk buckets to the food platform",
   toPost: "Going to their post",
   posted: "At work",
   toHome: "Tired — going home",
@@ -326,6 +337,8 @@ export interface SimTraveler {
   breadVisit?: BreadVisit
   breadRetry?: number
   lastBreadDay?: number
+  penFoodVisit?: PenFoodVisit
+  foodRetry?:number
   waterVisit?: WaterVisit
   waterRetry?: number
   /** A reversible progression; the original calling and personal attributes stay intact. */
@@ -378,6 +391,7 @@ export interface SimTraveler {
   deliveryBuilding?: string | null
   employer: string | null
   herding?: HerdingTask
+  penCare?: PenCareTask
   herdingRetry?: number
   /** Which of the employer's work slots is theirs; posts are one per slot. */
   jobSlot: number
@@ -1212,25 +1226,15 @@ function findJob(sim: SimState, s: SimTraveler, map: GameMap): { building: Place
   return undefined
 }
 
-/** Sleeping places actually built into the house; the artwork sets the capacity. */
-const houseBeds = housingBeds
-
-/** A new settler moves into the nearest house that still has a bed to spare. */
-function findHome(sim: SimState, s: SimTraveler, map: GameMap, beds = 1): string | null {
+/** A new settler moves into the nearest house that still has room for another resident. */
+function findHome(sim: SimState, s: SimTraveler, map: GameMap, residents = 1): string | null {
   const houses = map.buildings.filter(b => b.owner !== "independent" && isHouse(b) && isComplete(b))
     .sort((a, b) => Math.hypot(tileToWorldX(map, a.x) - s.x, tileToWorldZ(map, a.z) - s.z)
       - Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z))
   for (const house of houses) {
-    if ([...sim.travelers.values()].filter(other => other.home === house.id).length + beds <= houseBeds(house)) return house.id
+    if ([...sim.travelers.values()].filter(other => other.home === house.id).length + residents <= housingCapacity(house)) return house.id
   }
   return null
-}
-
-/** Housemates take the beds in a settled order, so two never share one. */
-function homeBedSlot(sim: SimState, s: SimTraveler): number {
-  const housemates = [...sim.travelers.values()].filter(other => other.home === s.home)
-    .map(other => other.id).sort((a, b) => a - b)
-  return Math.max(0, housemates.indexOf(s.id))
 }
 
 /**
@@ -1285,8 +1289,7 @@ function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
   if (!counters.length || !((s.hunger < SERVING_THRESHOLD && s.gold >= MEAL_PRICE)
     || ((s.thirst < SERVING_THRESHOLD || s.happiness < HAPPINESS_THRESHOLD) && s.gold >= DRINK_PRICE))) return false
   const from = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
-  const occupied = new Set([...sim.travelers.values()].flatMap(other => other.tavernVisit?.plan.seat
-    ? [`${other.tavernVisit.plan.buildingId}:${other.tavernVisit.plan.seat.id}`] : []))
+  const occupied = tavernReservations(sim)
   const physicalNeed = (s.hunger < SERVING_THRESHOLD && s.gold >= MEAL_PRICE)
     || (s.thirst < SERVING_THRESHOLD && s.gold >= DRINK_PRICE)
   const candidates = counters.flatMap(house => {
@@ -1300,6 +1303,7 @@ function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
   for (const { plan } of ranked) {
     if (!s.employer && s.partyId === undefined && map.buildings.find(b => b.id === plan.buildingId)?.owner !== "independent") s.enclaveVisitPending = true
     s.tavernVisit = { plan, navigation: workerNavigationVersion(map), served: false, returnTo }
+    occupied.update(s)
     s.walkFrom = { x: s.x, y: s.y, z: s.z }; s.walkT = 0; s.targetId = null
     s.offRoadRoute = plan.route
     s.activity = "toTavern"
@@ -1312,17 +1316,17 @@ function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
 function startSeatRest(sim: SimState, s: SimTraveler, map: GameMap, returnTo: WorldPoint | null): boolean {
   if (s.stamina > SEAT_REST_THRESHOLD || s.visitCooldown > 0 || (s.seatRestRetry ?? 0) > 0) return false
   s.seatRestRetry = 5
-  const occupied = new Set([...sim.travelers.values()].flatMap(other => other.tavernVisit?.plan.seat
-    ? [`${other.tavernVisit.plan.buildingId}:${other.tavernVisit.plan.seat.id}`] : []))
   const nearby = map.buildings.filter(b => ["tavern", "house", "shelter", "monk-shelter", "hall"].includes(b.buildType ?? "") &&
     Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z) < 6)
     .sort((a, b) => Math.hypot(tileToWorldX(map, a.x) - s.x, tileToWorldZ(map, a.z) - s.z)
       - Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z))
   if (!nearby.length) return false
+  const occupied = tavernReservations(sim)
   for (const building of nearby) {
     const plan = seatRestPlan(map, building, s, occupied)
     if (!plan) continue
     s.tavernVisit = { plan, navigation: workerNavigationVersion(map), served: true, returnTo }
+    occupied.update(s)
     s.walkFrom = { x: s.x, y: s.y, z: s.z }; s.walkT = 0; s.targetId = null
     s.offRoadRoute = plan.route
     s.activity = "toTavern"
@@ -2209,6 +2213,15 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   return false
 }
 
+// Build occupancy only when someone actually asks for a seat. Every step starts
+// fresh, including after saves/editor changes; callers update new reservations.
+const tavernSeatIndexes = new WeakMap<SimState, TavernReservations>()
+function tavernReservations(sim: SimState): TavernReservations {
+  let index = tavernSeatIndexes.get(sim)
+  if (!index) { index = new TavernReservations(sim.travelers); tavernSeatIndexes.set(sim, index) }
+  return index
+}
+
 export function stepSim(
   sim: SimState,
   travelers: Traveler[],
@@ -2224,11 +2237,18 @@ export function stepSim(
 ): void {
   return withTerrainCornerQueries(map, () => {
   if (!map.road || map.road.length < 2) return
+  tavernSeatIndexes.delete(sim)
   if (dt > 0) for (const animal of sim.wildlife?.animals ?? []) {
     const shepherd = animal.fold?.shepherd == null ? undefined : sim.travelers.get(animal.fold.shepherd)
     if (animal.fold && !animal.fold.arrived && (!shepherd || shepherd.herding?.animalId !== animal.id)) {
       animal.fold = undefined; animal.target = null; animal.rest = 0
     }
+    if(animal.fold?.tendedBy !== undefined && sim.travelers.get(animal.fold.tendedBy)?.penCare?.animalId !== animal.id) {
+      animal.fold.tendedBy=undefined;animal.fold.escort=undefined;animal.fold.slaughter=undefined;animal.fold.route=[]
+    }
+  }
+  if(dt>0) for(const [id,care] of sim.wildlife?.penCare ?? []) {
+    if(care.caretaker!==undefined && sim.travelers.get(care.caretaker)?.penCare?.penId!==id)care.caretaker=undefined
   }
   const length = map.road.length - 1
   sim.time += dt / GAME_DAY_SECONDS
@@ -2326,6 +2346,7 @@ export function stepSim(
     stepPoverty(s, t, dt)
     const previousStall = deployedStall(s)
     if (s.herding && !["toSheep", "herding"].includes(s.activity)) releaseSheep(s, sim.wildlife)
+    if (s.penCare && s.activity !== s.penCare.chore) releasePenCare(s, sim.wildlife)
     s.herdingRetry = Math.max(0, (s.herdingRetry ?? 0) - dt)
     s.convoyScale = characterScale
     s.cartRecoveryRetry = Math.max(0, (s.cartRecoveryRetry ?? 0) - dt)
@@ -2364,6 +2385,11 @@ export function stepSim(
     if (processionNearby) {
       if (dt > 0 && sim.procession) blessByProcession(sim.procession, `traveler:${s.id}`, s)
       s.moveSpeed = 0; continue
+    }
+    s.foodRetry=Math.max(0,(s.foodRetry ?? 0)-dt)
+    if(dt>0 && !s.foodRetry && !riding && t.type.id !== "vendor" && ["walking","idle"].includes(s.activity)) {
+      s.foodRetry=5
+      seekPenFood(s,map,sim.foodStores,characterScale)
     }
     s.naturalWaterRetry = Math.max(0, (s.naturalWaterRetry ?? 0) - dt)
     s.seatRestRetry = Math.max(0, (s.seatRestRetry ?? 0) - dt)
@@ -2428,6 +2454,10 @@ export function stepSim(
         easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     }
     if (s.partyRiding || s.partyBoarding) continue
+    const penRoute=s.herding?.route ?? s.penCare?.route ?? s.penFoodVisit?.route ?? s.buildingTask?.route ?? s.constructionReturn ?? s.offRoadRoute
+    if(penRoute?.length && sim.wildlife) for(const pen of map.buildings) {
+      if(pen.buildType === "sheep-pen" && !penGatePassage(sim.wildlife,map,pen,s,penRoute,dt)) {targetSpeed=0;s.moveSpeed=0;break}
+    }
     const worldSpeed = s.moveSpeed
     const transportBefore = isVendor && s.convoy && !s.shrineParking?.walking ? {
       ...s, offRoadRoute: s.offRoadRoute ? [...s.offRoadRoute] : null,
@@ -2692,7 +2722,7 @@ export function stepSim(
         if (workplace && isPostedWork(workplace.kind) && !hungry && !unhappy && s.stamina > SETTLER_TIRED_AT) {
           if (workplace.kind === "sheep-pen" && dt > 0 && !s.herdingRetry) {
             s.herdingRetry = 5
-            if (seekSheep(s, sim.wildlife, map, characterScale)) break
+            if (seekPenCare(s, sim.wildlife, map, characterScale,sim.foodStores) || seekSheep(s, sim.wildlife, map, characterScale)) break
           }
           s.workSlot = s.jobSlot
           if (assignBuildingTask(s, map, "work", workplace.id)) { s.activity = "toPost"; break }
@@ -2708,8 +2738,10 @@ export function stepSim(
         // not buy supper makes do with the household's own bread and beer.
         if (s.stamina < SETTLER_FED_AT || hungry) {
           if (!s.home) s.home = findHome(sim, s, map)
-          s.workSlot = homeBedSlot(sim, s)
-          if (s.home && assignBuildingTask(s, map, "rest", s.home)) {
+          const home = map.buildings.find(b => b.id === s.home)
+          const bunk = home ? vacantHouseBunk(home, sim.travelers.values(), s) : null
+          if (bunk !== null) s.workSlot = bunk
+          if (bunk !== null && s.home && assignBuildingTask(s, map, "rest", s.home)) {
             s.homeLarder = hungry
             s.activity = "toHome"
             break
@@ -2724,6 +2756,22 @@ export function stepSim(
       case "toHome":
       case "sleeping": {
         if (dt <= 0) break
+        const task = s.buildingTask
+        const house = map.buildings.find(b => b.id === task?.buildingId && isHouse(b))
+        if (house && task?.purpose === "rest") {
+          // Reconcile old saves and changed layouts against the four real bunks.
+          const bunk = vacantHouseBunk(house, sim.travelers.values(), s)
+          if (bunk !== task.slot) {
+            s.buildingTask = undefined
+            if (bunk !== null) s.workSlot = bunk
+            if (bunk === null || !assignBuildingTask(s, map, "rest", house.id)) {
+              s.constructionReturn = workerRoute(map, s, buildingEntrance(house)) ?? []
+              s.activity = "fromHome"
+              break
+            }
+            s.activity = "toHome"
+          }
+        }
         const state = stepBuildingTask(s, map, targetSpeed, dt)
         if (!state) { s.activity = "idle"; s.timer = GAME_HOUR_SECONDS; break }
         s.activity = state === "walking" ? "toHome" : "sleeping"
@@ -2747,6 +2795,10 @@ export function stepSim(
         }
         break
       }
+      case "collectingFood": {
+        if(!stepPenFood(s,map,sim.foodStores,targetSpeed,dt,sim.wildlife))finishErrand(s)
+        break
+      }
       case "toSheep":
       case "herding": {
         if (dt <= 0) break
@@ -2755,6 +2807,15 @@ export function stepSim(
           releaseSheep(s, sim.wildlife); s.activity = "idle"; s.timer = 0
         } else if (!stepShepherd(s, sim.wildlife, map, targetSpeed, dt, characterScale)) {
           s.activity = "idle"; s.timer = 0
+        }
+        break
+      }
+      case "tendingSheep": case "feedingSheep": case "wateringSheep": case "slaughteringSheep": case "deliveringMeat": case "replacingSheep": case "milkingSheep": case "deliveringMilk": {
+        if(dt<=0)break
+        if(s.stamina<=SETTLER_TIRED_AT || Math.min(s.hunger,s.thirst)<SERVING_THRESHOLD || socialBreak) {
+          releasePenCare(s,sim.wildlife);s.activity="idle";s.timer=0
+        } else if(!stepShepherdCare(s,sim.wildlife,map,targetSpeed,dt,characterScale,sim.foodStores)) {
+          s.activity="idle";s.timer=0
         }
         break
       }
@@ -2779,7 +2840,7 @@ export function stepSim(
           // A staffed counter may predate the site. Reconsider construction on
           // the existing work poll instead of waiting for hunger or exhaustion.
           if (startCitizenBuild(sim, s, t, map)) break
-          seekSheep(s, sim.wildlife, map, characterScale)
+          if(!seekPenCare(s, sim.wildlife, map, characterScale,sim.foodStores)) seekSheep(s, sim.wildlife, map, characterScale)
         }
         break
       }

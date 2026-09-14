@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { buildingDimensions } from "./dimensions"
 import { buildingPreviewMap, randomPreviewNeighbor, previewPlacement, tavernPreviewNeighbors, previewNeighbors } from "./map-preview"
 import { hidePreviewPaper } from "./preview-alpha"
-import { DEFAULT_RECIPE, EARLY_BUILDINGS, earlyBuildingRecipe } from "./style"
+import { DEFAULT_RECIPE, EARLY_BUILDINGS, AVAILABLE_EARLY_BUILDINGS, REMOVED_BUILDING_TYPES, earlyBuildingRecipe } from "./style"
 import { tileToWorldX, tileToWorldZ } from "../map/types"
 
 describe("building map comparison", () => {
@@ -89,4 +89,10 @@ it("commits the displayed snapped footprint and hearth, then restores the scene"
   expect(previewPlacement(map,house,at,1,false,recipes).building.rotation).toBe(1)
   expect(previewPlacement(map,house,{x:origin.x,z:origin.z},0,true,recipes).error).toMatch(/occupies/)
   expect(previewNeighbors({...recipe,width:5},tavernPreviewNeighbors())[1].x).toBe(5)
+})
+
+it("excludes removed forms from the editor and generated neighbors", () => {
+  expect(AVAILABLE_EARLY_BUILDINGS.every(b=>!REMOVED_BUILDING_TYPES.includes(b.id))).toBe(true)
+  expect(DEFAULT_RECIPE.variant).toBe("house")
+  for(let seed=0;seed<50;seed++) expect(REMOVED_BUILDING_TYPES).not.toContain(randomPreviewNeighbor("house",seed).variant)
 })

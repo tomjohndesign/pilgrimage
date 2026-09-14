@@ -3,6 +3,7 @@ import { generateTravelers, TRAVELER_TYPES } from "../travelers"
 import { describe, expect, it } from "vitest"
 import { BUILDING_KINDS } from "../buildings"
 import { buildingYaw, rotateBuildingPoint, rotatedFootprint, type BuildingRotation } from "../building-rotation"
+import { ROOF_OVERHANG } from "../building-art/roof-overhang"
 import { structureParts } from "../building-art/structure"
 import { entranceParts } from "../building-art/entrance"
 import { marketBayContains } from "../market-layout"
@@ -66,16 +67,15 @@ describe("market cart bay", () => {
     expect(marketParking(map, { ...building, w: 2, d: 2 }, initial, "horse", 1.5, { trees: [] })).toBeNull()
   })
 
-  it("leaves the bay open to the sky with hitching posts on its outer corners", () => {
+  it("leaves the bay open to the sky without corner hitching posts", () => {
     const { building } = fixture(), parts = structureParts(building)
     expect(parts.find(p => p.name === "cart-bay")?.position[0]).toBe(1)
     const posts = parts.filter(p => p.name.startsWith("hitching-post-"))
-    expect(posts).toHaveLength(2)
-    for (const post of posts) { expect(post.position[0]).toBeGreaterThan(1.3); expect(Math.abs(post.position[2])).toBeGreaterThan(.8) }
+    expect(posts).toHaveLength(0)
     for (const roof of parts.filter(p => p.layer === "roof")) {
       const xs = roof.vertices ? roof.vertices.filter((_, i) => i % 3 === 0).map(x => x + roof.position[0])
         : [roof.position[0] + (roof.size?.[0] ?? 0) / 2]
-      expect(Math.max(...xs)).toBeLessThanOrEqual(.55)
+      expect(Math.max(...xs)).toBeLessThanOrEqual(.5 + ROOF_OVERHANG + 1e-6)
     }
   })
 
@@ -86,7 +86,7 @@ describe("market cart bay", () => {
     expect(kept.some(p => p.name.startsWith("market-sack-"))).toBe(true)
     expect(empty.some(p => p.name.startsWith("market-cloth-") || p.name.startsWith("market-sack-"))).toBe(false)
     expect(empty.some(p => p.layer === "roof")).toBe(false)
-    for (const name of ["stall-counter", "cart-bay", "hitching-post-"]) expect(empty.some(p => p.name.startsWith(name))).toBe(true)
+    for (const name of ["stall-counter", "cart-bay", "earthfast-post-"]) expect(empty.some(p => p.name.startsWith(name))).toBe(true)
     expect(entranceParts("market", .65, 17).some(p => p.name === "entry-basket")).toBe(true)
     expect(entranceParts("market", .65, 17, false).some(p => p.name.startsWith("entry-basket") || p.name.startsWith("entry-produce"))).toBe(false)
   })

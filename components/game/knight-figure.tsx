@@ -18,7 +18,8 @@ import type { FigureClickHandler } from "./traveler-figure"
 
 /** The mount remains outdoors while its knight visits the shrine; the squire is
  * one of the company and goes wherever the knight walks, mounted or not. */
-export function KnightFigure({ map, appearance, coat, squire = false, characterScale = 1, characterFps, walkTuning, selected, outlineColor, onClick }: {
+export function KnightFigure({ resident = false, map, appearance, coat, squire = false, characterScale = 1, characterFps, walkTuning, selected, outlineColor, onClick }: {
+  resident?: boolean
   map?: GameMap; appearance?: TravelerAppearance; coat?: string; squire?: boolean; characterScale?: number
   characterFps?: number; walkTuning?: WalkTuning; selected?: boolean; outlineColor?: [number, number, number]; onClick?: FigureClickHandler
 }) {
@@ -62,10 +63,10 @@ export function KnightFigure({ map, appearance, coat, squire = false, characterS
   }, -2)
   const props = { map, selected, outlineColor, onClick, characterScale }
   return <>
-    <group ref={person} visible={false}><CharacterSprite {...props} type="knight" appearance={appearance} visualOverride={visual} characterFps={characterFps} walkTuning={walkTuning} /></group>
+    <group ref={person} visible={false}><CharacterSprite resident={resident} {...props} type="knight" appearance={appearance} visualOverride={visual} characterFps={characterFps} walkTuning={walkTuning} /></group>
     <group ref={mount}><TransportSprite {...props} kind="horse" knight="mounted" horseVariant="noble" coat={coat} variant={variant} /></group>
     <group ref={horse} visible={false}><TransportSprite {...props} kind="horse" knight="saddled" horseVariant="noble" coat={coat} /></group>
     <AnimalTether animal={horse} kind="horse" horseVariant="noble" characterScale={characterScale} selected={selected} outlineColor={outlineColor} onClick={onClick} />
-    {squire && <group ref={attendant} name="squire"><CharacterSprite {...props} type="merchant" visualOverride={attendantVisual} characterFps={characterFps} walkTuning={walkTuning} /></group>}
+    {squire && <group ref={attendant} name="squire"><CharacterSprite resident={resident} {...props} type="merchant" visualOverride={attendantVisual} characterFps={characterFps} walkTuning={walkTuning} /></group>}
   </>
 }
