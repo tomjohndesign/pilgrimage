@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest"
 import { generateMap } from "../map/generate-map"
 import { BUILD_CATALOG, DEFAULT_BALANCE } from "../balance"
 import { buildingPreviewBalance, buildingPreviewSettlement } from "../building-preview"
-import { jobBuildings } from "../settlement"
+import { jobBuildings, settlementMap } from "../settlement"
+import { REMOVED_BUILDING_TYPES } from "../building-art/style"
+import { completedChurchWings, churchWingGates } from "../church-additions"
 import { BUILDING_KINDS } from "../buildings"
 import { travelerAppearance } from "../base-person/population"
 import { createSim, stepSim } from "../sim"
@@ -10,11 +12,17 @@ import { previewResidents, placePreviewResident } from "./preview"
 
 const world = generateMap({ seed: 42 })
 const settlement = buildingPreviewSettlement(world, buildingPreviewBalance(DEFAULT_BALANCE), true)
-const map = { ...world, elevation: settlement.elevation ?? world.elevation, buildings: [...world.buildings, ...settlement.structures] }
+const map = settlementMap(world, settlement)
 
 describe("staffed settlement demo", () => {
+  it("shows the church with completed, connected monks’ quarters", () => {
+    expect(map.buildings.find(b => b.id === map.site?.hovelId)?.buildType).toBe("church")
+    expect(completedChurchWings(map)).toHaveLength(1)
+    expect(churchWingGates(map)).toHaveLength(1)
+    expect(map.buildings.find(b => b.id === "preview-monk-shelter")?.churchId).toBe(map.site?.hovelId)
+  })
   it("includes every purchasable building and staffs every workplace with both genders represented", () => {
-    for (const building of BUILD_CATALOG) expect(map.buildings.some(b => b.buildType === building.id)).toBe(true)
+    for (const building of BUILD_CATALOG) expect(map.buildings.some(b => b.buildType === building.id)).toBe(!REMOVED_BUILDING_TYPES.includes(building.id))
     const residents = previewResidents(map)
     expect(residents).toHaveLength(jobBuildings(map).filter(b=>b.id.startsWith("preview-")).reduce((total,b)=>total+BUILDING_KINDS[b.kind].jobs,0))
     expect(new Set(residents.map(r => r.traveler.id)).size).toBe(residents.length)

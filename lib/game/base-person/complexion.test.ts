@@ -1,3 +1,4 @@
+import { CHARACTER_PALETTE_SLOTS } from "../player-color"
 import { describe, expect, it } from "vitest"
 import { GREY_HAIR_COLOR } from "../character-age"
 import { complexionUniforms, MATCH_TOLERANCE } from "../render/complexion-swap"
@@ -60,8 +61,8 @@ describe("character complexion", () => {
   it("fills every shader slot, leaving unused ones outside the colours a texel can hold", () => {
     const uniforms = complexionUniforms(complexionSwap({ skinColor: "#c99a72", hairColor: GREY_HAIR_COLOR },
       { skin: SKIN_TONES[6].color, hair: HAIR_COLORS[2].color }))
-    expect(uniforms.complexionFrom.value.length).toBe(COMPLEXION_SLOTS)
-    expect(uniforms.complexionTo.value.length).toBe(COMPLEXION_SLOTS)
+    expect(uniforms.complexionFrom.value.length).toBe(CHARACTER_PALETTE_SLOTS)
+    expect(uniforms.complexionTo.value.length).toBe(CHARACTER_PALETTE_SLOTS)
     // Grey hair fills no slot, so the spare ones must never match a sampled pixel.
     for (const color of uniforms.complexionFrom.value.slice(SKIN_SHADES.length)) expect(color.r).toBeLessThan(0)
   })

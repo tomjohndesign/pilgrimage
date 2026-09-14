@@ -10,7 +10,7 @@ import { surfaceHeight } from "./map/bridges"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type BuildingDef, type GameMap, type TilePos } from "./map/types"
 import { settlementRoute } from "./settlement-route"
 import type { WanderSpot } from "./monk-wander"
-import { buildingSupports } from "./character-support"
+import { buildingSupports, placedSupport } from "./character-support"
 import { SETTLER_BUILD_RATE } from "./build-labour"
 import { workPost } from "./work-posts"
 import { rememberedWorkerCorridor, rememberedWorkerRoute } from "./worker-route-memory"
@@ -131,7 +131,7 @@ function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask
   const cx = tileToWorldX(map, building.x) + (building.w - 1) / 2
   const cz = tileToWorldZ(map, building.z) + (building.d - 1) / 2
   const frontage = { x: worldToTileX(map, cx + approach.x), z: worldToTileZ(map, cz + approach.z) }
-  return { destination: { x: cx + offset.x, z: cz + offset.z, y: building.buildType === "inn" && purpose !== "build" ? surfaceHeight(map, building.x, building.z)+(building.floorHeight ?? 0)+(purpose === "rest" ? bed.height : 0) : surfaceHeight(map, frontage.x, frontage.z) }, frontage,
+  return { destination: { x: cx + offset.x, z: cz + offset.z, y: purpose === "rest" ? placedSupport(map, building, bed).height : building.buildType === "inn" && purpose !== "build" ? surfaceHeight(map, building.x, building.z)+(building.floorHeight ?? 0) : surfaceHeight(map, frontage.x, frontage.z) }, frontage,
     heading: (bed?.heading ?? (purpose === "work" || purpose === "build" && building.churchId ? 0 : Math.PI)) + buildingYaw(building.rotation) }
 }
 

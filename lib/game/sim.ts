@@ -13,7 +13,7 @@ import { placeResident } from "./jobs/residents"
 import { GAME_DAY_SECONDS, GAME_HOUR_SECONDS, START_TIME } from "./calendar"
 import { wearySpeedScale } from "./traveler-weariness"
 import { cachedFormation, diversionPoints, partyRoadDelta, sharePartyNeeds, partySlots, pruneTravelParties, regroupParty, syncTravelParties, type TravelParty } from "./travel-parties"
-import { housingBeds, vacantMonkBed } from "./housing"
+import { housingCapacity, vacantHouseBunk, vacantMonkBed } from "./housing"
 import { MONK_COUNT, MONK_JOIN_CHANCE, type Monk } from "./monks"
 import { monkWalkSpeed } from "./base-person/monk-assets"
 import { withTerrainCornerQueries } from "./map/cliff-corners"
@@ -1199,25 +1199,15 @@ function findJob(sim: SimState, s: SimTraveler, map: GameMap): { building: Place
   return undefined
 }
 
-/** Sleeping places actually built into the house; the artwork sets the capacity. */
-const houseBeds = housingBeds
-
-/** A new settler moves into the nearest house that still has a bed to spare. */
-function findHome(sim: SimState, s: SimTraveler, map: GameMap, beds = 1): string | null {
+/** A new settler moves into the nearest house that still has room for another resident. */
+function findHome(sim: SimState, s: SimTraveler, map: GameMap, residents = 1): string | null {
   const houses = map.buildings.filter(b => b.owner !== "independent" && isHouse(b) && isComplete(b))
     .sort((a, b) => Math.hypot(tileToWorldX(map, a.x) - s.x, tileToWorldZ(map, a.z) - s.z)
       - Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z))
   for (const house of houses) {
-    if ([...sim.travelers.values()].filter(other => other.home === house.id).length + beds <= houseBeds(house)) return house.id
+    if ([...sim.travelers.values()].filter(other => other.home === house.id).length + residents <= housingCapacity(house)) return house.id
   }
   return null
-}
-
-/** Housemates take the beds in a settled order, so two never share one. */
-function homeBedSlot(sim: SimState, s: SimTraveler): number {
-  const housemates = [...sim.travelers.values()].filter(other => other.home === s.home)
-    .map(other => other.id).sort((a, b) => a - b)
-  return Math.max(0, housemates.indexOf(s.id))
 }
 
 /**
@@ -2668,8 +2658,10 @@ export function stepSim(
         // not buy supper makes do with the household's own bread and beer.
         if (s.stamina < SETTLER_FED_AT || hungry) {
           if (!s.home) s.home = findHome(sim, s, map)
-          s.workSlot = homeBedSlot(sim, s)
-          if (s.home && assignBuildingTask(s, map, "rest", s.home)) {
+          const home = map.buildings.find(b => b.id === s.home)
+          const bunk = home ? vacantHouseBunk(home, sim.travelers.values(), s) : null
+          if (bunk !== null) s.workSlot = bunk
+          if (bunk !== null && s.home && assignBuildingTask(s, map, "rest", s.home)) {
             s.homeLarder = hungry
             s.activity = "toHome"
             break
@@ -2684,6 +2676,22 @@ export function stepSim(
       case "toHome":
       case "sleeping": {
         if (dt <= 0) break
+        const task = s.buildingTask
+        const house = map.buildings.find(b => b.id === task?.buildingId && isHouse(b))
+        if (house && task?.purpose === "rest") {
+          // Reconcile old saves and changed layouts against the four real bunks.
+          const bunk = vacantHouseBunk(house, sim.travelers.values(), s)
+          if (bunk !== task.slot) {
+            s.buildingTask = undefined
+            if (bunk !== null) s.workSlot = bunk
+            if (bunk === null || !assignBuildingTask(s, map, "rest", house.id)) {
+              s.constructionReturn = workerRoute(map, s, buildingEntrance(house)) ?? []
+              s.activity = "fromHome"
+              break
+            }
+            s.activity = "toHome"
+          }
+        }
         const state = stepBuildingTask(s, map, targetSpeed, dt)
         if (!state) { s.activity = "idle"; s.timer = GAME_HOUR_SECONDS; break }
         s.activity = state === "walking" ? "toHome" : "sleeping"

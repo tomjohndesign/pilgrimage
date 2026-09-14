@@ -59,6 +59,7 @@ export const worldSettingsSchema = z.object({
 }).describe("Everything that decides which land is generated. Changing any of these makes a different world")
 
 export const displaySettingsSchema = z.object({
+  playerColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   showTrees: z.boolean(),
   showCharacters: z.boolean(),
   showWildlife: z.boolean(),

@@ -35,12 +35,14 @@ export function buildingHearth(variant: string | undefined, width: number, depth
 }
 
 /** One fireplace kit for homes and shelters, with a compact footprint in small huts. */
-export function hearthParts(width: number, depth: number, height: number, rise: number, shared?: SharedChimney, layoutSeed = 0, hearthZ?: number, variationSeed = 17): BuildingPart[] {
+export function hearthParts(width: number, depth: number, height: number, rise: number, shared?: SharedChimney, layoutSeed = 0, hearthZ?: number, variationSeed = 17, profile: "square" | "tapered" | "broad" = "square"): BuildingPart[] {
   const parts: BuildingPart[] = []
   const { x, z, chimneyTop, scale } = shelterHearth(width,depth,height,rise,layoutSeed,hearthZ)
-  const random = makeRng(variationSeed), stone = ["#a09b87", "#858a7d", "#999788", "#777d72"]
+  const random = makeRng(variationSeed), stone = profile === "tapered" ? ["#72766f", "#545b57", "#8a8b7b", "#636d69"] : profile === "broad" ? ["#807560", "#a7987d", "#625d50", "#908571"] : ["#a09b87", "#858a7d", "#999788", "#777d72"]
   const stoneColor = () => stone[Math.floor(random() * stone.length)]
   const shaftWidth = .28 + random() * .045
+  const rimX = profile === "broad" ? .205 : profile === "tapered" ? .13 : .16
+  const rimZ = profile === "broad" ? .13 : profile === "tapered" ? .13 : .16
   const alongWall = z > -depth/2+.36*scale+.01
   // Remove the chimney as one wall, including its differently shaped rim stones.
   const chimneySide: [number, number] = Math.abs(x) > Math.abs(z) ? [Math.sign(x),0] : [0,Math.sign(z)]
@@ -54,7 +56,7 @@ export function hearthParts(width: number, depth: number, height: number, rise: 
   // A corner supplies one enclosure wall; a fireplace farther along the wall
   // needs its own second stone cheek around the room-facing opening.
   if (alongWall) box("hearth-other-side", [x-.22,.24,z], [.12,.41,.46], stoneColor())
-  box("hearth-soot", [x,.22,z-.151], [.31,.28,.015], "#3d3b32")
+  box("hearth-soot", [x,.22,z-.151], [.31,.28,.015], "#272923")
   for(const sign of [-1,1]) box(`hearth-log-${sign}`, [x,.105,z], [.32,.07,.07], palette.darkWood, [0,sign*.5,0])
   box("hearth-embers", [x,.13,z], [.21,.035,.18], "#dc773b")
   if (alongWall) for (const part of parts) {
@@ -67,18 +69,24 @@ export function hearthParts(width: number, depth: number, height: number, rise: 
   const courses=Math.ceil((chimneyTop-.67)/(.10+random()*.065))
   for(let i=0;i<courses;i++) {
     const y=.67+(i+.5)*(chimneyTop-.67)/courses
-    box(`chimney-course-${i}`, [x,y,z], [shaftWidth+(i%2?.01:0),(chimneyTop-.67)/courses-.006,shaftWidth], stoneColor(),undefined,"wall")
+    const taper = profile === "tapered" ? .36 - .11 * (i / Math.max(1,courses-1)) : shaftWidth
+    const sx = profile === "broad" ? .40 : taper, sz = profile === "broad" ? .25 : taper
+    box(`chimney-course-${i}`, [x,y,z], [sx+(i%2?.01:0),(chimneyTop-.67)/courses-.004,sz], stoneColor(),undefined,"wall")
+    if (i >= courses-3) for (const side of [-1,1]) {
+      box(`chimney-soot-x-${i}-${side}`, [x+side*(sx/2+.007),y,z], [.008,(chimneyTop-.67)/courses,.09+(i%2)*.035], i===courses-1 ? "#282d29" : "#444a40",undefined,"wall")
+      box(`chimney-soot-z-${i}-${side}`, [x,y,z+side*(sz/2+.005)], [.10,(chimneyTop-.67)/courses,.008], "#3d4238",undefined,"wall")
+    }
   }
   // Some masons corbel a broad cap; others finish with a plain narrow shaft.
   // The mouth and smoke anchor retain the same height in either treatment.
-  if (variationSeed % 3 !== 0) box("chimney-cap-course", [x,chimneyTop-.11,z],
-    [variationSeed % 3 === 1 ? .43 : .37,.075,variationSeed % 3 === 1 ? .43 : .37],stoneColor(),undefined,"wall")
+  if (profile !== "tapered" && variationSeed % 3 !== 0) box("chimney-cap-course", [x,chimneyTop-.11,z],
+    [rimX*2+.09,.075,rimZ*2+.09],stoneColor(),undefined,"wall")
   // Open rim, so the smoke actually leaves a dark chimney mouth.
   for(const sign of [-1,1]) {
-    box(`chimney-rim-x-${sign}`, [x+sign*.16,chimneyTop,z], [.07,.08,.39], stoneColor(),undefined,"wall")
-    box(`chimney-rim-z-${sign}`, [x,chimneyTop,z+sign*.16], [.25,.08,.07], stoneColor(),undefined,"wall")
+    box(`chimney-rim-x-${sign}`, [x+sign*rimX,chimneyTop,z], [.07,.08,rimZ*2+.07], "#4b5045",undefined,"wall")
+    box(`chimney-rim-z-${sign}`, [x,chimneyTop,z+sign*rimZ], [rimX*2-.07,.08,.07], "#575b4d",undefined,"wall")
   }
-  box("chimney-mouth", [x,chimneyTop-.04,z], [.25,.015,.25], "#393b35",undefined,"wall")
+  box("chimney-mouth", [x,chimneyTop-.04,z], [rimX*2-.07,.015,rimZ*2-.07], "#20251f",undefined,"wall")
   return parts
 }
 

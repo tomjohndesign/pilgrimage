@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { BUILDING_STYLE, DEFAULT_RECIPE, EARLY_BUILDINGS, earlyBuildingRecipe, isEarlyBuilding, recipeSchema, type BuildingRecipe } from "@/lib/game/building-art/style"
+import { BUILDING_STYLE, DEFAULT_RECIPE, AVAILABLE_EARLY_BUILDINGS, REMOVED_BUILDING_TYPES, earlyBuildingRecipe, isEarlyBuilding, recipeSchema, type BuildingRecipe } from "@/lib/game/building-art/style"
 import { BUILDING_VIEWS } from "@/lib/game/building-art/projection"
 import { buildingDimensions } from "@/lib/game/building-art/dimensions"
 import { hasBuildingLayouts } from "@/lib/game/building-layout"
@@ -91,10 +91,10 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
       const saved = localStorage.getItem(STORAGE)
       if (saved) {
         const scene=JSON.parse(saved),result=recipeSchema.safeParse(scene.recipe)
-        if (result.success && isEarlyBuilding(result.data.variant)) {
+        if (result.success && isEarlyBuilding(result.data.variant) && !REMOVED_BUILDING_TYPES.includes(result.data.variant)) {
           setRecipe(result.data)
           if(Array.isArray(scene.neighbors)) setNeighbors(scene.neighbors.filter((p:PreviewPlacement)=>
-            typeof p.id==="string" && p.id!=="workshop" && recipeSchema.safeParse(p.recipe).success && Number.isInteger(p.x) && Number.isInteger(p.z) && [0,1,2,3].includes(p.rotation)))
+            typeof p.id==="string" && p.id!=="workshop" && !REMOVED_BUILDING_TYPES.includes(p.recipe?.variant) && recipeSchema.safeParse(p.recipe).success && Number.isInteger(p.x) && Number.isInteger(p.z) && [0,1,2,3].includes(p.rotation)))
         }
       }
     } catch { /* The workshop also works without browser storage. */ }
@@ -122,7 +122,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
         Object.assign(value, { variant: preset.variant, width: Math.max(1, Math.min(5, value.width)), depth: Math.max(1, Math.min(5, value.depth)), wallHeight: preset.wallHeight, roofRise: preset.roofRise })
       }
       const parsed = recipeSchema.parse(value)
-      if (!isEarlyBuilding(parsed.variant)) throw new Error()
+      if (!isEarlyBuilding(parsed.variant) || REMOVED_BUILDING_TYPES.includes(parsed.variant)) throw new Error()
       setRecipe({ ...parsed, roofRise: parsed.variant === "enclosure" ? 0 : parsed.roofRise }); setNotice(legacy ? "Earlier recipe adapted to early medieval construction and the 1–5 tile range." : "Building recipe restored.")
     } catch { setNotice("Choose a valid building recipe JSON file.") }
   }
@@ -146,7 +146,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
       <aside className={`person-controls hud-well ${controlsOpen ? "is-open" : ""}`} aria-label="Building controls">
         <div className="person-panel-heading"><span>Building</span><button className="hud-close person-controls-toggle" aria-label="Close building controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
         <div className="person-controls-scroll">
-          <Section {...section("Building forms")}><div className="person-presets">{EARLY_BUILDINGS.map(v => <button key={v.id} className="hud-action" aria-pressed={recipe.variant === v.id} onClick={() => { setRecipe({ ...earlyBuildingRecipe(v.id), view: recipe.view, seed: recipe.seed }); setSelectedId(null);setPlacement(null); setNotice(v.description) }}>{v.name}</button>)}</div></Section>
+          <Section {...section("Building forms")}><div className="person-presets">{AVAILABLE_EARLY_BUILDINGS.map(v => <button key={v.id} className="hud-action" aria-pressed={recipe.variant === v.id} onClick={() => { setRecipe({ ...earlyBuildingRecipe(v.id), view: recipe.view, seed: recipe.seed }); setSelectedId(null);setPlacement(null); setNotice(v.description) }}>{v.name}</button>)}</div></Section>
           <Section {...section("Dimensions")}>
             <label className="person-choice">Name<input aria-label="Building name" value={recipe.subject} maxLength={160} onChange={e => update("subject", e.target.value)} /></label>
             {(["width", "depth"] as const).map(key => <label key={key} className="person-choice">Building {key}<select aria-label={`Building ${key}`} value={recipe[key]} onChange={e => update(key, Number(e.target.value))}>{Array.from({ length: 6-minimumBuildingSize(recipe.variant)[key] }, (_, i) => i+minimumBuildingSize(recipe.variant)[key]).map(n => <option key={n} value={n}>{n} tiles</option>)}</select></label>)}
@@ -170,7 +170,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
             <button className="hud-action" onClick={showTavernExample}>Tavern + two houses</button>
             <button className="hud-action" onClick={showInnExample}>Tavern + Inn</button>
             <label className="person-choice">Building to place<select aria-label="Building to place" value={placeType} onChange={e=>{setPlaceType(e.target.value);setPlacement(null)}}>
-              <option value="current">Copy current recipe</option>{EARLY_BUILDINGS.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+              <option value="current">Copy current recipe</option>{AVAILABLE_EARLY_BUILDINGS.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
             </select></label>
             <button className="hud-action" disabled={!mapReady} aria-pressed={Boolean(placement)} onClick={()=>placement ? setPlacement(null) : startPlacement()}>{placement ? "Cancel placement" : "Place building"}</button>
             <button className="hud-action" onClick={rotatePlacement}>Rotate placement · {placementRotation*90}°</button>
@@ -198,11 +198,11 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
             </div>
           </Section>
         </div>
-        <footer className="person-panel-footer"><p className="person-hint">The relic enclosure uses this same model in the game. These drafts do not change the live game’s default recipe.</p><button className="hud-action" onClick={() => { setRecipe(DEFAULT_RECIPE);setNeighbors([]);setPlacement(null); setSelectedId(null); setNotice("Relic enclosure restored.") }}><RotateCcw size={12} />Restore relic enclosure</button></footer>
+        <footer className="person-panel-footer"><p className="person-hint">Buildings use these same models in the game. These drafts do not change the live game’s default recipe.</p><button className="hud-action" onClick={() => { setRecipe(DEFAULT_RECIPE);setNeighbors([]);setPlacement(null); setSelectedId(null); setNotice("House restored.") }}><RotateCcw size={12} />Restore house</button></footer>
       </aside>
       <div className="person-preview" aria-label="Building preview">
         <div className="person-preview-toolbar hud-well">
-          <div className="person-playback"><span className="person-hint">{EARLY_BUILDINGS.find(v => v.id === recipe.variant)?.name}{neighbor && neighbors.length ? ` + ${neighbors.length} buildings` : ""}</span><label>Zoom<select aria-label="Building preview zoom" value={zoom} onChange={e => setZoom(Number(e.target.value))}>{[0.75, 1, 1.15, 1.5, 1.7].map(n => <option key={n} value={n}>{n}×</option>)}</select></label></div>
+          <div className="person-playback"><span className="person-hint">{AVAILABLE_EARLY_BUILDINGS.find(v => v.id === recipe.variant)?.name}{neighbor && neighbors.length ? ` + ${neighbors.length} buildings` : ""}</span><label>Zoom<select aria-label="Building preview zoom" value={zoom} onChange={e => setZoom(Number(e.target.value))}>{[0.75, 1, 1.15, 1.5, 1.7].map(n => <option key={n} value={n}>{n}×</option>)}</select></label></div>
           <div className="person-view-buttons" aria-label="Building preview modes"><button className="hud-action" aria-pressed={!allViews} onClick={() => setAllViews(false)}>On the map</button><button className="hud-action" aria-pressed={allViews} onClick={() => setAllViews(true)}>All four</button></div>
         </div>
         <div className={`person-stage asset-building-stage ${allViews ? "asset-building-four" : ""}`}>

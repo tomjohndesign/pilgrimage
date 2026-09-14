@@ -46,7 +46,6 @@ import { DebugHandle } from "./debug-handle"
 import { Environment } from "./environment"
 import { Monks } from "./monks"
 import { OutlinePass } from "./outline-pass"
-import { RenownSaturation } from "./renown-saturation"
 import { vendorSpeedScale } from "@/lib/game/transport/assets"
 import { Shrine } from "./shrine"
 import { Signpost, ForestWarnings } from "./signpost"
@@ -206,7 +205,7 @@ export function GameCanvas({
       <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
       <CameraLight />
 
-      <HearthLights enabled={visibility.buildingVisibility !== "hidden"}><RenownSaturation map={map}>
+      <HearthLights enabled={visibility.buildingVisibility !== "hidden"}>
       <group name="map-reveal-church" userData={{ mapRevealLandmark: !restore }} visible={visibility.buildingVisibility !== "hidden"}>
         <Shrine map={map} relic={relic} showInteriors={visibility.buildingVisibility === "interiors"} />
       </group>
@@ -242,7 +241,7 @@ export function GameCanvas({
             characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} /></CharacterBatches>
         </group>
       </SceneAssetBoundary>
-      </RenownSaturation></HearthLights>
+      </HearthLights>
       <SceneAssetBoundary>
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
       <BuildInfluenceOverlay map={map} buildMode={!!buildType} />

@@ -19,14 +19,14 @@ export function churchAisleRoof(width: number, side: number, from: number, to: n
 }
 
 /** Clip triangles at the common boundary without adding an eave or ink seam. */
-export function clipRoof(source: BuildingPart[], boundary: number, side: number): BuildingPart[] {
+export function clipRoof(source: BuildingPart[], boundary: number, side: number, axis: 0 | 2 = 0): BuildingPart[] {
   return source.flatMap(part => {
     const vertices: number[] = [], original = part.vertices!
     for (let i = 0; i < original.length; i += 9) {
       const triangle: Vec3[] = [original.slice(i, i + 3), original.slice(i + 3, i + 6), original.slice(i + 6, i + 9)] as Vec3[]
       const polygon: Vec3[] = []
       for (let j = 0; j < 3; j++) {
-        const a = triangle[j], b = triangle[(j + 1) % 3], da = (a[0] - boundary) * side, db = (b[0] - boundary) * side
+        const a = triangle[j], b = triangle[(j + 1) % 3], da = (a[axis] - boundary) * side, db = (b[axis] - boundary) * side
         if (da >= 0) polygon.push(a)
         if ((da >= 0) !== (db >= 0)) {
           const t = da / (da - db)
@@ -35,6 +35,17 @@ export function clipRoof(source: BuildingPart[], boundary: number, side: number)
       }
       for (let j = 1; j < polygon.length - 1; j++) vertices.push(...polygon[0], ...polygon[j], ...polygon[j + 1])
     }
+    return vertices.length ? [{ ...part, vertices }] : []
+  })
+}
+
+/** Remove a front-opening rectangle from every roof layer, including underlay
+ * and fascia. Keep each source part together for batching and stable names. */
+export function cutRoofEntrance(source: BuildingPart[], left: number, right: number, back: number): BuildingPart[] {
+  return source.flatMap(part => {
+    const middle = clipRoof(clipRoof([part], left, 1), right, -1)
+    const fragments = [...clipRoof([part], left, -1), ...clipRoof([part], right, 1), ...clipRoof(middle, back, -1, 2)]
+    const vertices = fragments.flatMap(fragment => fragment.vertices!)
     return vertices.length ? [{ ...part, vertices }] : []
   })
 }

@@ -1,3 +1,4 @@
+import { isPlayerResident } from "./player-color"
 import { settlementJob, SETTLEMENT_JOBS } from "./jobs/design"
 import type { FoodStock } from "./storage"
 import { create } from "zustand"
@@ -69,7 +70,7 @@ export const useBuildStore = create<BuildState>((set) => ({
       // Town households work and sleep in independent buildings; only the player's own people are settlers.
       const townResident = !!live?.employer && sim.buildings.find(b => b.id === live.employer)?.owner === "independent"
       if (live?.employer && !townResident) workers++
-      return live && !townResident && (live.employer || live.home) ? [{
+      return live && (isPlayerResident(live, sim.buildings) || isPlayerResident(live, sim.world.buildings)) ? [{
         id: t.id,
         name: t.name,
         duty: sim.buildings.find(b=>b.id===live.employer)?.kind === "inn" ? "Inn worker" : job ? SETTLEMENT_JOBS[job].label : "Resident",

@@ -1,3 +1,4 @@
+import { waterMarkerParts } from "../building-art/water-markers"
 import * as THREE from "three"
 import { makeRng } from "../rng"
 import { WATER_DEPTH_COLORS } from "../map/terrain"
@@ -107,7 +108,7 @@ export function waterSourceParts(kind: WaterSourceKind): import("../building-art
   const model = waterSourceModel(kind, kind === "well" ? 42 : 73)
   try {
     model.root.updateMatrixWorld(true)
-    return model.root.children.map((object, index) => {
+    const parts: import("../building-art/geometry").BuildingPart[] = model.root.children.map((object, index) => {
       const mesh = object as THREE.Mesh<THREE.BufferGeometry, THREE.MeshLambertMaterial>
       const geometry = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone()
       geometry.applyMatrix4(mesh.matrixWorld)
@@ -116,5 +117,6 @@ export function waterSourceParts(kind: WaterSourceKind): import("../building-art
       return { name: `water-source-${index}`, layer: "base", position: [0, 0, 0], vertices,
         color: `#${mesh.material.color.getHexString()}`, outline: false }
     })
+    return [...parts, ...waterMarkerParts(kind)]
   } finally { model.dispose() }
 }

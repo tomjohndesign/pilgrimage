@@ -1,10 +1,12 @@
+import { roofOverhang } from "./roof-overhang"
+import { buildingIdentity } from "./identity"
 import { crucifixFigureVertices } from "./crucifix"
 import type { ChurchWing } from "../church-additions"
 import { CHURCH_EAVE, CHURCH_NAVE_BASE, churchAisleHeight, churchAisleRoof, churchNaveEdge, clipRoof } from "./church-roof"
 import { churchWallBuilder, CHURCH_PLASTER, type ChurchOpening } from "./church-wall"
 import { buildingParts, type BuildingPart, type Vec3 } from "./geometry"
 import { earlyBuildingParts, RELIC_TABLE_TOP } from "./early-geometry"
-import { DEFAULT_RECIPE, earlyBuildingRecipe } from "./style"
+import { earlyBuildingRecipe } from "./style"
 import { shrineAltarZ, shrineAltarRise, shrineChancelFront, shrineDivider } from "../shrine-layout"
 import { EARLY_MATERIALS as palette } from "./materials"
 
@@ -58,7 +60,7 @@ const plaster = CHURCH_PLASTER
 /** A plastered shrine with one door, arched openings and a timber upper nave. */
 function churchStructureParts(width: number, depth: number, wings: readonly ChurchWing[] = []): BuildingPart[] {
   const altarZ = shrineAltarZ(depth), altarRise = shrineAltarRise(depth)
-  const parts = buildingParts({ ...DEFAULT_RECIPE, width, depth })
+  const parts = buildingParts({ ...earlyBuildingRecipe("enclosure"), width, depth })
     .filter(p => p.name === "floor" || p.name.startsWith("paving-") || p.name === "relic-table" || p.name.startsWith("table-trestle-"))
   for (const p of parts) if (p.name === "relic-table" || p.name.startsWith("table-trestle-")) p.position = [0, altarRise, altarZ]
   const box = (name: string, layer: BuildingPart["layer"], position: Vec3, size: Vec3, color: string = palette.wood) =>
@@ -187,7 +189,7 @@ function churchStructureParts(width: number, depth: number, wings: readonly Chur
 
 /** A small daub chapel: one open timber doorway, gabled thatch and an altar with space for its keeper. */
 export function shrineStructureParts(width: number, depth: number, wings: readonly ChurchWing[] = [], entranceX = .5): BuildingPart[] {
-  if (width !== 2 || depth !== 2) return churchStructureParts(width, depth, wings)
+  if (width !== 2 || depth !== 2) return buildingIdentity(roofOverhang(churchStructureParts(width, depth, wings),width,depth,wings.map(w=>({side:w.side,from:w.from,to:w.to}))), "shrine", width, depth, CHURCH_EAVE)
   const parts = churchStructureParts(width, depth).filter(p => p.layer === "base" || p.name === "floor" || p.name.startsWith("paving-")
     || p.name === "relic-table" || p.name.startsWith("table-trestle-") || p.name === "relic-shelf"
     || p.name === "altar-linen-top" || p.name.startsWith("relic-veil-")
@@ -221,5 +223,5 @@ export function shrineStructureParts(width: number, depth: number, wings: readon
   box("offering-box-slot", "wall", [offeringX, .463, offeringZ], [.1, .005, .025], "#302c27", [0, 1])
   box("chapel-wall-cross-upright", "wall", [0, eave + .28, edge + .08], [.055, .34, .045], palette.darkWood, [0, 1])
   box("chapel-wall-cross-arm", "wall", [0, eave + .34, edge + .08], [.22, .055, .045], palette.darkWood, [0, 1])
-  return parts
+  return buildingIdentity(roofOverhang(parts,width,depth), "shrine", width, depth, eave)
 }

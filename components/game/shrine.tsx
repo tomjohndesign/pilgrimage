@@ -1,5 +1,8 @@
 "use client"
 
+import { usePlayerColor } from "./player-color"
+import { playerBuildingParts } from "@/lib/game/player-color"
+
 import { constructionStage, isComplete } from "@/lib/game/construction"
 import { constructionParts } from "@/lib/game/building-art/construction"
 import { buildingDetail } from "@/lib/game/render/scenery-detail"
@@ -31,6 +34,7 @@ import {
 
 /** The founding gabled chapel grows into a church with a raised nave. */
 export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; relic: Relic; showInteriors?: boolean }) {
+  const playerColor = usePlayerColor()
   const unitInterior = useUnitInterior(map)
   const relicGroup = useRef<THREE.Group>(null)
   const veilGroup = useRef<THREE.Group>(null)
@@ -61,7 +65,7 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
   const layout = useMemo(() => {
     if (!hovel || !map.site) return null
     const shape = shrineLayout(hovel, map.site.door)
-    const finished = shrineStructureParts(shape.width, shape.depth, completedChurchWings(map), shape.entranceX)
+    const finished = playerBuildingParts(shrineStructureParts(shape.width, shape.depth, completedChurchWings(map), shape.entranceX), playerColor)
     const parts = stage === 3 ? finished : constructionParts({ ...hovel, w: shape.width, d: shape.depth }, [],
       finished.filter(p => p.layer !== "interior" && !p.name.startsWith("sanctuary-crucifix")))
     const isAltar = (name: string) => name === "relic-table" || name === "relic-shelf"
@@ -76,7 +80,7 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
       centreZ: tileToWorldZ(map, hovel.z) + (hovel.d - 1) / 2,
       baseY: groundHeight(map, hovel.x + (hovel.w - 1) / 2, hovel.z + (hovel.d - 1) / 2),
     }
-  }, [map, hovel, stage])
+  }, [map, hovel, stage, playerColor])
 
   const shrineId = useMemo(
     () => new THREE.Color(...encodeObjectId(buildingObjectId(Math.max(0, hovelIndex)))),

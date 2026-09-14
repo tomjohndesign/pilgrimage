@@ -116,18 +116,27 @@ export function marketParking(map: GameMap, building: BuildingDef, initial: Cart
     return { x: tileToWorldX(map, building.x) + (building.w - 1) / 2 + p.x,
       z: tileToWorldZ(map, building.z) + (building.d - 1) / 2 + p.z }
   }
-  // The convoy's reach ahead of and behind the hitch, as convoyBounds measures it.
-  const unit = RIG_TO_WORLD * scale, wheelbase = -cartOffset(puller) * scale
-  const ahead = puller === "hand" ? 0 : 1.75 * unit, behind = wheelbase + 1.02 * unit
+  const wheelbase = -cartOffset(puller) * scale
   const bayX = layout.bayX + layout.hand * MARKET_BAY_OUTWARD
   const distance = (end: number) => { const p = local(bayX, end * size.d / 2); return Math.hypot(p.x - initial.hitch.x, p.z - initial.hitch.z) }
   for (const end of [1, -1].sort((a, b) => distance(a) - distance(b))) {
     // Entering from the front end means driving toward the rear, and vice versa.
     const heading = (end === 1 ? Math.PI : 0) + buildingYaw(building.rotation)
-    const goal = local(bayX, -end * (behind - ahead) / 2)
+    const goal = marketBayPose(map, building, puller, scale, end).hitch
     if (!parkingClear(map, alignCart(goal, heading, wheelbase), puller, scale, context)) continue
     const route = cartPath(map, initial, goal, puller, scale, context, heading)
     if (route) return { ...route, buildingId: building.id, pose: initial, exit: [], returnProgress: 0, distance: 0, walking: false }
   }
   return null
+}
+
+/** A centred parked team, shared by arrival planning and the building gallery. */
+export function marketBayPose(map: GameMap, building: BuildingDef, puller: Puller, scale: number, end = -1) {
+  const size = rotatedFootprint(building, building.rotation), layout = marketLayout(size.w, size.d, building.layoutSeed)
+  const unit = RIG_TO_WORLD * scale, wheelbase = -cartOffset(puller) * scale
+  const ahead = puller === "hand" ? 0 : 1.75 * unit, behind = wheelbase + 1.02 * unit
+  const point = rotateBuildingPoint(layout.bayX + layout.hand * MARKET_BAY_OUTWARD, -end * (behind-ahead)/2, building.rotation)
+  const hitch = { x: tileToWorldX(map, building.x) + (building.w-1)/2 + point.x,
+    z: tileToWorldZ(map, building.z) + (building.d-1)/2 + point.z }
+  return alignCart(hitch, (end === 1 ? Math.PI : 0) + buildingYaw(building.rotation), wheelbase)
 }

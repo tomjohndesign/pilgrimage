@@ -1,5 +1,9 @@
 "use client"
 
+import { usePlayerColor } from "./player-color"
+import { waterMarkerParts } from "@/lib/game/building-art/water-markers"
+import { playerBuildingParts } from "@/lib/game/player-color"
+
 import { tavernStackParts } from "@/lib/game/building-art/stacked"
 import { churchWing } from "@/lib/game/church-additions"
 import { churchAisleHeight } from "@/lib/game/building-art/church-roof"
@@ -7,6 +11,8 @@ import { churchAisleHeight } from "@/lib/game/building-art/church-roof"
 import { WaterSources } from "./water-sources"
 import { isWaterSource, waterSourcePlacement } from "@/lib/game/water-sources/navigation"
 import { CloseScenery } from "./close-scenery"
+import { BUILDING_PREVIEW } from "@/lib/game/building-preview"
+import { BuildingPreviewCarts } from "./building-preview-carts"
 import { EntranceDetails } from "./entrance-details"
 import { ConstructionProgress } from "./construction-progress"
 import { ConstructionCostEffects, type ConstructionCostHandle } from "./construction-cost-effects"
@@ -43,6 +49,9 @@ import {
 
 /** Built structures share their geometry with the menu and placement preview. */
 export function Buildings({ map, characterScale = 1.5, showInteriors = false }: { map: GameMap; characterScale?: number; showInteriors?: boolean }) {
+  const playerColor = usePlayerColor()
+  const waterMarkers = useMemo(() => ({ well: waterMarkerParts("well"), "watering-hole": waterMarkerParts("watering-hole") }), [])
+  const ownedWaterMarkers = useMemo(() => ({ well: playerBuildingParts(waterMarkers.well, playerColor), "watering-hole": playerBuildingParts(waterMarkers["watering-hole"], playerColor) }), [waterMarkers, playerColor])
   // Authored colors live on the merged vertices. Share the otherwise identical
   // surface material so adjacent buildings reuse lighting and shader uniforms.
   const surfaceMaterial = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), [])
@@ -73,16 +82,16 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
       const wing = building.churchId ? churchWing(map, building) : undefined
       const joins = roofJoins.get(building.id)
       const inns = supported.get(building.id) ?? []
-      const key = JSON.stringify([index, wing, building.buildType, footprint.w, footprint.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, building.floorHeight, building.supportId, building.tavernFlue, inns.map(b=>[b.id,b.x,b.z,b.floorHeight]), joins, constructionStage(building), stocked(building)])
+      const key = JSON.stringify([playerColor, building.owner, index, wing, building.buildType, footprint.w, footprint.d, building.height, building.color, building.roofColor, building.layoutSeed, building.hearthZ, building.fireplace, building.floorHeight, building.supportId, building.tavernFlue, inns.map(b=>[b.id,b.x,b.z,b.floorHeight]), joins, constructionStage(building), stocked(building)])
       const old = modelCache.current.get(building.id)
       const model = old?.key === key ? old : { key,
-        parts: tavernStackParts(constructionParts({ ...building, ...footprint, churchWing: wing, stocked: stocked(building) }, joins), building, inns), idColor: new THREE.Color(...encodeObjectId(buildingObjectId(index))) }
+        parts: playerBuildingParts(tavernStackParts(constructionParts({ ...building, ...footprint, churchWing: wing, stocked: stocked(building) }, joins), building, inns), building.owner === "independent" ? null : playerColor), idColor: new THREE.Color(...encodeObjectId(buildingObjectId(index))) }
       next.set(building.id, model)
       return model
     })
     modelCache.current = next
     return result
-  }, [buildings, roofJoins, stocked])
+  }, [buildings, roofJoins, stocked, playerColor])
   const idColors = useMemo(
     // Component tuples straight into the working colour space — an ID is data,
     // not a colour, so it must dodge sRGB conversion to survive readback.
@@ -97,7 +106,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
     <group>
       {waterPlacements.length > 0 && <WaterSources placements={waterPlacements} />}
       <EntranceDetails map={map} idColors={idColors} onSelect={selectSite} stocked={stocked} />
-      <PixelCharacters><ConstructionCostEffects ref={costs} map={map} characterScale={characterScale} /></PixelCharacters>
+      <PixelCharacters>{BUILDING_PREVIEW && <BuildingPreviewCarts map={map} characterScale={characterScale} idColors={idColors} />}<ConstructionCostEffects ref={costs} map={map} characterScale={characterScale} /></PixelCharacters>
       {buildings.map((building, index) => {
         // The hovel has its own geometry (see shrine.tsx); its ID slot stays reserved.
         if (building.id === map.site?.hovelId) return null
@@ -109,6 +118,10 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
 
         if (isWaterSource(building) && isComplete(building)) {
           return <group key={building.id}>
+            {(building.buildType === "well" || building.buildType === "watering-hole") &&
+              <group position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={event => selectSite(building, event)}>
+                <StructureModel parts={(building.owner === "independent" ? waterMarkers : ownedWaterMarkers)[building.buildType]} idColor={idColors[index]} ink={false} surfaceMaterial={surfaceMaterial} />
+              </group>}
             <mesh position={[centreX, baseY + .25, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={event => selectSite(building, event)}>
               <boxGeometry args={[building.buildType === "well" ? 1.2 : 2.2, .5, building.buildType === "well" ? 1.2 : 1.6]} />
               <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />

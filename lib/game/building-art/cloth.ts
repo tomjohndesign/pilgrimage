@@ -9,12 +9,13 @@ export function marketCanopyParts(width: number, depth: number, top: number): Bu
   })
   for(let row=0;row<4;row++) for(let col=0;col<4;col++) {
     const x=-w+col*width/4,z=-d+row*depth/4
-    face(`panel-${row}-${col}`,at(x,z),at(x+width/4,z),at(x+width/4,z+depth/4),at(x,z+depth/4),["#baae91","#b7ab8f","#bdb195"][(row+col*2)%3])
+    face(`panel-${row}-${col}`,at(x,z),at(x+width/4,z),at(x+width/4,z+depth/4),at(x,z+depth/4),["#c4b38e", "#d3c3a2", "#c9b995", "#d0bf9d"][col])
   }
-  // Only a folded thread-thin hem: the fabric is a surface, not a roof slab.
+  // A hanging woven valance carries the owner color without tinting the unbleached linen.
   for(const side of [-1,1]) for(let i=0;i<8;i++) {
     const a=-w+i*width/8,b=a+width/8
-    face(`hem-${side}-${i}`,at(a,side*d),at(b,side*d),at(b,side*d,-.009),at(a,side*d,-.009),"#a4987d")
+    face(`hem-${side}-${i}`,at(a,side*d),at(b,side*d),at(b,side*d,-.08),at(a,side*d,-.08),"#a4987d")
+    parts[parts.length - 1].playerAccent = true
   }
   for(const [i,[x,z,sx,sz,color]] of ([[-width*.23,-depth*.13,.25,.22,"#908f6c"],[width*.2,depth*.22,.28,.18,"#a47c65"],[-width*.07,depth*.33,.14,.13,"#c7b798"]] as [number,number,number,number,string][]).entries()) {
     const a=x-sx/2,b=x+sx/2,c=z-sz/2,e=z+sz/2

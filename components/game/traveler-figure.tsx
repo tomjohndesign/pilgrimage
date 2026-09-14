@@ -42,10 +42,11 @@ export const BLOCK_HEIGHT = 0.55
 export type FigureClickHandler = (event: { delta: number; stopPropagation: () => void }) => void
 
 /** The person, cart and draught animal share one selection in game and previews. */
-export function TravelerFigure({ map: suppliedMap, age, job, type, onClick, idColor, selected = false, awning = false, outlineColor,
+export function TravelerFigure({ resident = false, map: suppliedMap, age, job, type, onClick, idColor, selected = false, awning = false, outlineColor,
   characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance,
   squire = false, cargo = "produce", puller = "hand", horseVariant = "common", coat,
 }: {
+  resident?: boolean
   map?: GameMap; age?: number; job?: SettlementJob | null
   type: TravelerTypeDef; appearance?: TravelerAppearance; selected?: boolean; idColor?: THREE.Color
   onClick?: FigureClickHandler; awning?: boolean; outlineColor?: [number, number, number]
@@ -169,24 +170,24 @@ export function TravelerFigure({ map: suppliedMap, age, job, type, onClick, idCo
   const pulling = useMemo(() => pullingVisual(variant), [variant])
   const color = outlineColor ?? (idColor ? [idColor.r, idColor.g, idColor.b] as [number, number, number] : undefined)
   const workVisual = useMemo(() => job ? jobVisual(job, variant) : undefined, [job, variant])
-  if (workVisual) return <SceneAssetBoundary><CharacterSprite map={suppliedMap} age={age} appearance={appearance}
+  if (workVisual) return <SceneAssetBoundary><CharacterSprite resident={resident} map={suppliedMap} age={age} appearance={appearance}
     complexion={appearance && age !== undefined && age >= GREY_HAIR_AGE ? { ...appearance.complexion, hair: GREY_HAIR_COLOR } : appearance?.complexion}
     selected={selected} type={type.id} onClick={onClick} outlineColor={color} characterModel="base"
     characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} visualOverride={workVisual} /></SceneAssetBoundary>
-  if (type.id === "friar") return <SceneAssetBoundary><CharacterSprite map={suppliedMap} age={age}
+  if (type.id === "friar") return <SceneAssetBoundary><CharacterSprite resident={resident} map={suppliedMap} age={age}
     complexion={appearance?.complexion} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
     characterModel="base" characterScale={characterScale} characterFps={characterFps}
     walkTuning={MONK_WALK_TUNING} visualOverride={monkVisual(age ?? 18)} /></SceneAssetBoundary>
-  if (type.id === "knight") return <SceneAssetBoundary><KnightFigure map={map} appearance={appearance} coat={coat} squire={squire}
+  if (type.id === "knight") return <SceneAssetBoundary><KnightFigure resident={resident} map={map} appearance={appearance} coat={coat} squire={squire}
     selected={selected} outlineColor={color} onClick={onClick} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} /></SceneAssetBoundary>
   return <SceneAssetBoundary>
     <group ref={driver} position={[0, 0, 0]}>
-      <CharacterSprite map={suppliedMap} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
+      <CharacterSprite resident={resident} map={suppliedMap} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
         characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning}
         />
     </group>
     {vendor && !animal && characterModel === "base" && <group ref={pullingDriver}>
-      <CharacterSprite map={suppliedMap} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
+      <CharacterSprite resident={resident} map={suppliedMap} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
         characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} visualOverride={pulling} />
     </group>}
     {vendor && <>

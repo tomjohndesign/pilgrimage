@@ -1,3 +1,4 @@
+import { BUILDING_DOOR_HEIGHT } from "./building-art/dimensions"
 import { describe, expect, it } from "vitest"
 import { BUILD_CATALOG, DEFAULT_BALANCE } from "./balance"
 import { rotatedFootprint, rotateBuildingPoint, buildingEntry, type BuildingRotation } from "./building-rotation"
@@ -28,6 +29,14 @@ function fixture(rotation:BuildingRotation=0,heated=true) {
     site:{hovelId:"hovel",door:{x:4,z:6},branch:[{x:4,z:6}],junction:0}}
   const upper={...candidate,...innPlacementLayout(map,candidate)}
   return {map,host,candidate,upper}
+}
+
+/** Measure the actual covering plane, independent of box or vertex geometry. */
+function shinglePitch(parts: ReturnType<typeof structureParts>, axis: 0 | 2): number {
+  const points = parts.find(p => p.name === "shingle-underlay-inn-right")!.vertices!
+  for (let i=3;i<points.length;i+=3) if (Math.abs(points[i+axis]-points[axis]) > .001)
+    return Math.abs((points[i+1]-points[1])/(points[i+axis]-points[axis]))
+  throw new Error("Roof has no slope")
 }
 
 describe("inn upper floors",()=> {
@@ -205,9 +214,9 @@ describe("inn upper floors",()=> {
       expect(error(beside(id,{fireplace})),`${id} ${fireplace}`).toBeNull()
     for(const patch of [{rotation:2 as const,fireplace:true},{x:host.x-2,fireplace:true}])
       expect(error(beside("house",patch)),JSON.stringify(patch)).toBeNull()
-    // A raised store, a gable cross or a second upper floor all reach into it.
-    expect(error(beside("storehouse"))).toMatch(/overhanging/)
-    expect(error(beside("hall"))).toMatch(/overhanging/)
+    // The open raised store fits below the deck; a tall hall or second upper floor does not.
+    expect(error(beside("storehouse"))).toBeNull()
+    expect(error(beside("hall", { height: 1.4 }))).toMatch(/overhanging/)
     expect(error(beside("inn"))).toMatch(/overhanging/)
   })
   it("runs the upper roof perpendicular to the tavern, with its ridge along Z",()=> {
@@ -215,16 +224,12 @@ describe("inn upper floors",()=> {
     const parts=structureParts(upper)
     const ridge=parts.find(p=>p.name==="inn-ridge")!
     expect(ridge.size![2]).toBeGreaterThan(ridge.size![0])
-    const shingle=parts.find(p=>p.name.startsWith("inn-shingle-"))!
-    expect(shingle.rotation![0]).toBe(0)
-    expect(-shingle.rotation![2]).toBeGreaterThan(35*Math.PI/180)
-    expect(-shingle.rotation![2]).toBeLessThan(50*Math.PI/180)
+    expect(Math.atan(shinglePitch(parts, 0))).toBeGreaterThan(35*Math.PI/180)
+    expect(Math.atan(shinglePitch(parts, 0))).toBeLessThan(50*Math.PI/180)
     const ground=structureParts({...inn,buildType:"inn"})
     const groundRidge=ground.find(p=>p.name==="inn-ridge")!
     expect(groundRidge.size![0]).toBeGreaterThan(groundRidge.size![2])
-    const groundShingle=ground.find(p=>p.name.startsWith("inn-shingle-"))!
-    expect(groundShingle.rotation![0]).toBeCloseTo(Math.atan(.32))
-    expect(groundShingle.rotation![2]).toBe(0)
+    expect(shinglePitch(ground, 2)).toBeCloseTo(.32 * inn.d / (inn.d + .2))
   })
   it("projects the upstairs roof beyond all four walls and keeps the chimney mouth clear",()=> {
     const {upper}=fixture()
@@ -237,8 +242,7 @@ describe("inn upper floors",()=> {
     expect(eave.position[0]-side.position[0]).toBeGreaterThan(.25)
     expect(parts.filter(p=>p.name.startsWith("inn-roof-verge-"))).toHaveLength(4)
     const mouth=parts.find(p=>p.name==="chimney-mouth")!
-    const shingle=parts.find(p=>p.name.startsWith("inn-shingle-"))!
-    const pitch=Math.tan(-shingle.rotation![2])
+    const pitch=shinglePitch(parts, 0)
     const roofAtCap=ridge.position[1]-.04-(Math.abs(mouth.position[0])-.195)*pitch+.1
     expect(mouth.position[1]-roofAtCap).toBeGreaterThan(.15)
     expect(mouth.position[0]).toBe(upper.tavernFlue!.x)
@@ -247,13 +251,33 @@ describe("inn upper floors",()=> {
   it("keeps a front reception area and hearth beside thirteen beds in the standalone inn",()=> {
     const parts=structureParts({...inn,buildType:"inn"})
     expect(parts.filter(p=>p.support?.clips.includes("sleeping"))).toHaveLength(13)
-    expect(parts.some(p=>p.name==="inn-front-door")).toBe(true)
+    const door=parts.find(p=>p.name==="inn-front-door")!
+    expect(door.size![1]).toBeCloseTo(BUILDING_DOOR_HEIGHT)
+    expect(door.size![2]).toBeCloseTo(.44)
+    expect(parts.filter(p=>p.name.startsWith("inn-porch-verge-"))).toHaveLength(2)
+    expect(parts.some(p=>p.name==="identity-bed-frame")).toBe(false)
+    expect(parts.some(p=>p.name==="identity-bed-post")).toBe(false)
     expect(parts.some(p=>p.name==="inn-reception-counter")).toBe(true)
-    expect(parts.some(p=>p.name.startsWith("inn-shingle-"))).toBe(true)
-    expect(parts.some(p=>p.name.startsWith("thatch-bundle-"))).toBe(true)
+    expect(parts.some(p=>p.name.startsWith("shingle-course-"))).toBe(true)
+    expect(parts.some(p=>p.name.startsWith("thatch-bundle-"))).toBe(false)
     expect(parts.some(p=>p.name==="hearth-slab")).toBe(true)
     const mouth=parts.find(p=>p.name==="chimney-mouth")!,effects=buildingHearth("inn",inn.w,inn.d,inn.height,0)
     expect(mouth.position).toEqual([effects.x,effects.chimneyTop-.04,effects.z])
     expect(parts.some(p=>/partition|room-wall/.test(p.name))).toBe(false)
   })
+})
+
+
+it("cuts all main-roof layers away beneath the entrance peak", () => {
+  const parts=structureParts({...inn,buildType:"inn"})
+  const half=.52*(1+.1/(inn.w/2)), back=(inn.d/2-.8)*(1+.1/(inn.d/2))
+  for (const p of parts.filter(p=>p.name.includes("inn-right") && p.vertices)) {
+    const vs=p.vertices!
+    for(let i=0;i<vs.length;i+=9) {
+      const x=(vs[i]+vs[i+3]+vs[i+6])/3,z=(vs[i+2]+vs[i+5]+vs[i+8])/3
+      expect(Math.abs(x)>=half-1e-6 || z<=back+1e-6,p.name).toBe(true)
+    }
+  }
+  expect(parts.some(p=>p.name === "inn-eave-1")).toBe(false)
+  expect(parts.filter(p=>p.name.startsWith("inn-eave-front-"))).toHaveLength(2)
 })

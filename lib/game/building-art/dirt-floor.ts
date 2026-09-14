@@ -7,7 +7,7 @@ export function hasDirtFloor(variant: string | undefined): boolean {
   return variant !== "inn" && variant !== "storehouse" && variant !== "enclosure" && variant !== "monk-shelter" && variant !== "well" && variant !== "watering-hole"
 }
 
-/** A small worn apron outside the occupied tiles; never changes placement or routes. */
+/** Room for a feathered grassy edge; traffic alone wears approaches outside the plot. */
 export const DIRT_FLOOR_OVERLAP = .18
 export const FLOOR_NEIGHBOURS = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]] as const
 
@@ -75,8 +75,17 @@ vec2 buildingPathPoint(vec2 world, vec2 p) {
 float dirtFloorCover(vec2 world, vec2 tileLocal) {
   vec2 cell = floor(world + dirtFloorMapSize * .5);
   vec2 mask = texture2D(dirtFloorMap, (cell + .5) / dirtFloorMapSize).rg;
-  if (mask.g > .5) return 1.0;
   float bits = floor(mask.r * 255.0 + .5);
+  if (mask.g > .5) {
+    // Only exposed sides regrow. Touching floor tiles remain continuous.
+    float insideEdge = 2.0;
+    if (mod(bits, 2.0) < .5) insideEdge = min(insideEdge, 1.0 - tileLocal.x);
+    if (mod(floor(bits / 2.0), 2.0) < .5) insideEdge = min(insideEdge, tileLocal.x);
+    if (mod(floor(bits / 4.0), 2.0) < .5) insideEdge = min(insideEdge, 1.0 - tileLocal.y);
+    if (mod(floor(bits / 8.0), 2.0) < .5) insideEdge = min(insideEdge, tileLocal.y);
+    float growth = tileNoise(world * 7.3) * .12 + tileNoise(world * 17.0) * .05;
+    return smoothstep(.015, .13 + growth, insideEdge);
+  }
   if (bits < .5) return 0.0;
   float distanceToFloor = 2.0;
   ${FLOOR_NEIGHBOURS.map(([x,z],i)=>`if (mod(floor(bits / ${2**i}.0), 2.0) > .5) {
@@ -84,7 +93,7 @@ float dirtFloorCover(vec2 world, vec2 tileLocal) {
     distanceToFloor = min(distanceToFloor, length(max(q, 0.0)) + min(max(q.x,q.y),0.0));
   }`).join("\n")}
   float rough = tileNoise(world * 3.7) * .65 + tileNoise(world * 8.3) * .35;
-  float edge = .025 + ${DIRT_FLOOR_OVERLAP-.025} * rough;
+  float edge = .005 + .02 * rough;
   float aa = max(fwidth(distanceToFloor), .001);
-  return 1.0 - smoothstep(edge-aa*.5, edge+aa*.5, distanceToFloor);
+  return (1.0 - smoothstep(edge-aa*.5, edge+aa*.5, distanceToFloor)) * .12;
 }`
