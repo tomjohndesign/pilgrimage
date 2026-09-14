@@ -25,7 +25,7 @@ export const GROUND_TRANSITIONS_GLSL = /* glsl */ `
   }
   vec3 groundSprite(vec4 record, vec3 grass, vec3 mineral, vec3 sand) {
     float kind = mod(record.a, 8.0);
-    if (kind < .5) return grass * record.rgb;
+    if (kind < .5) return grass * max(vec3(0.0), mix(vec3(1.0), record.rgb, grassShading));
     if (kind > 2.5) return sand * record.rgb;
     return mineral * record.rgb;
   }

@@ -46,6 +46,7 @@ import { DebugHandle } from "./debug-handle"
 import { Environment } from "./environment"
 import { Monks } from "./monks"
 import { OutlinePass } from "./outline-pass"
+import { AppearanceScene } from "./appearance-scene"
 import { vendorSpeedScale } from "@/lib/game/transport/assets"
 import { Shrine } from "./shrine"
 import { Signpost, ForestWarnings } from "./signpost"
@@ -250,6 +251,7 @@ export function GameCanvas({
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <PersonPicking />
       <GroundSelection map={map} trees={trees} characterScale={characterScale} />
+      <AppearanceScene map={map} travelers={travelers} monks={monks} />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
       <DebugHandle characterScale={characterScale} map={map} trees={trees} travelers={travelers} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} movement={movement} />
       <ViewSnapshotCapture pixelsPerUnit={pixelation.pixelsPerUnit ?? CHARACTER_PIXELS_PER_UNIT} map={map} trees={trees} />

@@ -9,7 +9,6 @@ import * as THREE from "three"
 import { waterfallTurbulence } from "@/lib/game/map/waterfall-turbulence"
 import { DEFAULT_ELEVATION } from "@/lib/game/map/elevation"
 import { RoadSegmentTexture } from "@/lib/game/render/road-segment-texture"
-import { sceneryDetail } from "@/lib/game/render/scenery-detail"
 import { elevationShader } from "@/lib/game/render/terrain-elevation"
 import { terrainHiddenFaces, compactTerrainFaces } from "@/lib/game/render/terrain-hidden-faces"
 import { TERRAIN_BLOCK, terrainBlockState, type TerrainBlockState, terrainBlocks, sameRoadSnapshot, type TerrainBlockBounds } from "@/lib/game/render/terrain-blocks"
@@ -24,6 +23,7 @@ import { GROUND_TRANSITIONS_GLSL } from "@/lib/game/render/ground-transitions"
 import { groundGrowthField } from "@/lib/game/environment/ground-growth"
 import { foundingRoadStrength, foundingRoadTraffic } from "@/lib/game/footpaths"
 import { dirtFloorMask, DIRT_FLOOR_GLSL } from "@/lib/game/building-art/dirt-floor"
+import { grassAppearanceUniforms } from "@/lib/game/render/appearance-uniforms"
 import { GROUND_SURFACE_GLSL, ROAD_UV_SCALE, GRASS_TEXTURE_URL } from "@/lib/game/render/ground-surface"
 import { ElevationEdges } from "./elevation-edges"
 import { WaterMotion } from "./water-motion"
@@ -259,6 +259,7 @@ function makeTileMaterial({
 }: TileMaterialOptions): THREE.MeshLambertMaterial {
   const material = new THREE.MeshLambertMaterial({ transparent: !!tileCoverage })
   material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, grassAppearanceUniforms)
     elevationShader(shader, !road)
     if (tileCoverage) tileCoverageShader(shader, tileCoverage)
     shader.uniforms.forestFloorMap = { value: treeGround.floor }
@@ -520,7 +521,7 @@ function makeTileMaterial({
               diffuseColor.rgb = mix(land, waterSurface(world, vGroundDonor), terrainWaterCover(world, vGroundDonor));
             }
           #endif
-          diffuseColor.rgb *= 1.0 - treeCover.x;
+          diffuseColor.rgb *= 1.0 - clamp(treeCover.x * grassCanopyShade, 0.0, 1.0);
           // Exposed earth uses the slab texture with the same horizontal scale
           // and a topsoil-to-subsoil ramp measured down from the local rim.
           if (vGridTop < 0.5 && vWater < 0.5) diffuseColor.rgb = texture2D(cliffMap, vCliffUv).rgb;
@@ -1058,8 +1059,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
     lookUniforms.edgeWidth.value = look.edgeWidth
     lookUniforms.pixelRatio.value = dpr
   }, [lookUniforms, look, dpr])
-  useFrame(({ scene }) => {
-    lookUniforms.edgeLine.value = sceneryDetail(scene) === 0 ? look.edgeLine : 0
+  useFrame(() => {
     if (process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1") {
       const shown = benchmarkWork.pathDrawing
       if (roadMeshRef.current) {
