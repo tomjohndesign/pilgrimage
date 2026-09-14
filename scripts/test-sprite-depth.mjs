@@ -10,16 +10,18 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
   const metadata = JSON.parse(await readFile(new URL("../public/textures/characters/base/base-person-v36.json", import.meta.url), "utf8"))
   const poseClips = Object.fromEntries(Object.entries(metadata.clips).map(([clip, frames]) => [clip, frames.length / metadata.directions.length]))
   const shader = ts.transpileModule(await readFile(new URL("../lib/game/render/sprite-depth.ts", import.meta.url), "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.ESNext },
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   }).outputText
   const baker = ts.transpileModule(await readFile(new URL("../lib/game/render/bake-depth.ts", import.meta.url), "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.ESNext },
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   }).outputText
   const driverShader = ts.transpileModule(await readFile(new URL("../lib/game/transport/driver-layer.ts", import.meta.url), "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.ESNext },
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   }).outputText
   const transportSource = await readFile(new URL("../lib/game/transport/assets.ts", import.meta.url), "utf8")
   const transportVersion = transportSource.match(/version: "(v\d+)"/)[1]
+  const packVersion = transportSource.match(/PACK_ANIMAL_VERSION = "(v\d+)"/)[1]
+  const transport = JSON.parse(await readFile(new URL(`../public/textures/transport/${transportVersion}/manifest.json`, import.meta.url), "utf8"))
   const transportFiles = { "cart.png": "cart-produce-horse.png", "cart-depth.png": "depth-cart-produce-horse.png",
     "driver.png": "cart-produce-driver.png", "driver-depth.png": "depth-cart-produce-driver.png" }
   const outlineSource = await readFile(new URL("../components/game/outline-pass.tsx", import.meta.url), "utf8")
@@ -30,35 +32,46 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
   const foliageModules = {}
   for (const name of ["material", "raycast", "crop"]) {
     foliageModules[name] = ts.transpileModule(await readFile(new URL(`../lib/game/trees/foliage/${name}.ts`, import.meta.url), "utf8"), {
-      compilerOptions: { module: ts.ModuleKind.ESNext },
+      compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
     }).outputText.replace('"../../render/sprite-depth"', '"/shader.js"').replace('"./design"', '"/foliage-design.js"')
       .replace('"../../character-assets"', '"/sprite-row.js"')
   }
   const spriteRowSource = (await readFile(new URL("../lib/game/character-assets.ts", import.meta.url), "utf8")).match(/export function spriteRow[\s\S]*?\n}/)[0]
-  const spriteRow = ts.transpileModule(spriteRowSource, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText
+  const spriteRow = ts.transpileModule(spriteRowSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
   const batchModules = {}
   batchModules.wildlife = ts.transpileModule(await readFile(new URL("../lib/game/wildlife/batch.ts", import.meta.url), "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.ESNext },
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   }).outputText.replaceAll('"../render/outline"', '"/batch-outline.js"')
-  for (const name of ["building-batch", "road-segment-texture", "terrain-elevation", "terrain-hidden-faces", "character-batch", "sprite-texture", "sprite-transforms", "static-instances", "scenery-detail", "flat-geometry", "complexion-swap", "outline"]) {
+  for (const name of ["overlap-order", "frame-quality", "building-batch", "road-segment-texture", "terrain-elevation", "terrain-hidden-faces", "character-batch", "sprite-texture", "sprite-transforms", "static-instances", "scenery-detail", "flat-geometry", "complexion-swap", "outline"]) {
     batchModules[name] = ts.transpileModule(await readFile(new URL(`../lib/game/render/${name}.ts`, import.meta.url), "utf8"), {
-      compilerOptions: { module: ts.ModuleKind.ESNext },
+      compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
     }).outputText.replaceAll('"./sprite-depth"', '"/shader.js"')
       .replaceAll('"./sprite-texture"', '"/batch-sprite-texture.js"')
       .replaceAll('"./sprite-transforms"', '"/batch-sprite-transforms.js"')
       .replaceAll('"./complexion-swap"', '"/batch-complexion-swap.js"')
       .replaceAll('"./scenery-detail"', '"/batch-scenery-detail.js"')
       .replaceAll('"./flat-geometry"', '"/batch-flat-geometry.js"')
+      .replaceAll('"./frame-quality"', '"/batch-frame-quality.js"')
       .replaceAll('"./outline"', '"/batch-outline.js"')
       .replaceAll('"../base-person/complexion"', '"/complexion-slots.js"')
+      .replaceAll('"../player-color"', '"/palette-slots.js"')
+      // Exercise production materials without the optional development store.
+      .replace('import { APPEARANCE_ENABLED } from "../appearance-store";', 'const APPEARANCE_ENABLED = false;')
   }
+  const playerColorSource = await readFile(new URL("../lib/game/player-color.ts", import.meta.url), "utf8")
+  const paletteSlots = Number(playerColorSource.match(/CHARACTER_PALETTE_SLOTS = (\d+)/)[1])
   const designSource = await readFile(new URL("../lib/game/base-person/design.ts", import.meta.url), "utf8")
   const slots = ["SKIN_SHADES", "HAIR_SHADES"].reduce((sum, name) =>
     sum + JSON.parse(designSource.match(new RegExp(`export const ${name} = (\\[[^\\]]+\\])`))[1]).length, 0)
   const complexionSlots = `export const COMPLEXION_SLOTS = ${slots}`
   const server = createServer(async (request, response) => {
     const name = request.url.slice(1)
-    if (name === "complexion-slots.js") {
+    if (name === "palette-slots.js") {
+      response.setHeader("Content-Type", "text/javascript"); response.end(`export const CHARACTER_PALETTE_SLOTS = ${paletteSlots}`)
+    } else if (name === "horse.png" || name === "horse-depth.png") {
+      response.setHeader("Content-Type", "image/png")
+      response.end(await readFile(new URL(`../public/textures/transport/${packVersion}/${name.includes("depth") ? "depth-" : ""}horse-bay-pack.png`, import.meta.url)))
+    } else if (name === "complexion-slots.js") {
       response.setHeader("Content-Type", "text/javascript"); response.end(complexionSlots)
     } else if (name.startsWith("batch-") && name.endsWith(".js")) {
       response.setHeader("Content-Type", "text/javascript"); response.end(batchModules[name.slice(6, -3)])
@@ -103,7 +116,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     page.on("pageerror", error => errors.push(error.message))
     page.on("console", message => { if (message.type() === "error") errors.push(message.text()) })
     await page.goto(`http://127.0.0.1:${server.address().port}`)
-    const result = await page.evaluate(async ({ outlineFragment, presentationFragment, poseClips }) => {
+    const result = await page.evaluate(async ({ outlineFragment, presentationFragment, poseClips, transport }) => {
       const THREE = await import("/three.module.js")
       const { applySpriteDepth } = await import("/shader.js")
       const { applyDriverLayer } = await import("/driver.js")
@@ -374,7 +387,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
           material.customProgramCacheKey = () => `coincident-${clip}`
           const sprite = new THREE.Sprite(material)
           sprite.renderOrder = order; sprite.center.set(.5, 1 - 48.5 / 64); sprite.position.set(0, 2, 0)
-          scene.add(sprite); figures.push({ sprite, bias, map, depth })
+          scene.add(sprite); figures.push({ sprite, bias, map, depth, pose })
         }
         front.visible = back.visible = false
         gl.setRenderTarget(coincidentTarget)
@@ -393,6 +406,41 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         coincidence.coveredBack = count(read(), 0)
         figures[0].bias.value = 0; figures[1].bias.value = .2
         coincidence.coveredFront = count(read(), 1)
+        // A pack horse has twice a person's cell extent. Exercise the real
+        // crowd ordering, including the bias it inherits from a rear neighbour.
+        const { overlapBiases } = await import("/batch-overlap-order.js")
+        const horseMap = await new THREE.TextureLoader().loadAsync("/horse.png")
+        const horseDepth = await new THREE.TextureLoader().loadAsync("/horse-depth.png")
+        for (const texture of [horseMap, horseDepth]) { texture.minFilter = texture.magFilter = THREE.NearestFilter; texture.generateMipmaps = false }
+        const person = figures[0], horse = figures[1]
+        horse.sprite.material.map = horseMap; horse.pose.map.value = horseDepth
+        horse.sprite.center.set(transport.anchor[0] / transport.cellSize, 1 - transport.anchor[1] / transport.cellSize)
+        horse.sprite.scale.set(transport.scale, transport.scale, 1)
+        horseMap.repeat.set(1 / transport.animalColumns, 1 / 8)
+        coincidence.animalCompared = 0; coincidence.animalMismatches = 0
+        for (const zoom of [1, 1.5, 2]) for (let row = 0; row < 8; row++) for (const nearer of [0, 1]) {
+          camera.zoom = zoom; camera.updateProjectionMatrix()
+          person.map.offset.y = horseMap.offset.y = (7 - row) / 8
+          person.sprite.position.z = nearer === 0 ? .01 : 0
+          horse.sprite.position.z = nearer === 1 ? .01 : 0
+          const participants = figures.map(({ sprite }) => ({
+            x: sprite.position.x, z: sprite.position.z,
+            distance: -sprite.position.clone().applyMatrix4(camera.matrixWorldInverse).z,
+            size: sprite.scale.x, order: sprite.renderOrder,
+          }))
+          participants.push({ x: -.2, z: -.02, distance: Math.max(...participants.map(p => p.distance)) + .02, size: 1, order: 0 })
+          const biases = overlapBiases(participants)
+          figures.forEach((figure, i) => { figure.bias.value = biases[i]; figure.sprite.visible = i === nearer })
+          const expected = read()
+          figures.forEach(figure => { figure.sprite.visible = true })
+          const actual = read(), channel = nearer === 0 ? 1 : 0
+          for (let i = 0; i < expected.length; i += 4) if (expected[i + channel] > 200) {
+            coincidence.animalCompared++
+            if (actual[i + channel] < 200) coincidence.animalMismatches++
+          }
+        }
+        camera.zoom = 1; camera.updateProjectionMatrix()
+        horseMap.dispose(); horseDepth.dispose()
         for (const { sprite, map, depth } of figures) { scene.remove(sprite); sprite.material.dispose(); map.dispose(); depth.dispose() }
         front.visible = back.visible = true
         gl.setRenderTarget(null); coincidentTarget.dispose()
@@ -555,7 +603,9 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       gl.dispose()
       return { cases, compared, mismatches, occlusionFailures, floorCompared, floorClipped, supportCompared, supportClipped, poseCompared, poseMismatches, poseVisible, poseHidden, bakeCompared, bakeError,
         outlineCompared, outlineMismatches, selectionMismatches, fadeCompared, fadeMismatches, coincidence }
-    }, { outlineFragment, presentationFragment, poseClips })
+    }, { outlineFragment, presentationFragment, poseClips, transport })
+    assert.ok(result.coincidence.animalCompared > 10000, "must exercise pack horse/person overlaps across directions and zooms")
+    assert.equal(result.coincidence.animalMismatches, 0, `nearer people and animals must cover those behind: ${JSON.stringify(result.coincidence)}`)
     const foliageResults = []
     for (const rowOffset of [0, foliageManifest.frame.rows / 2]) {
       const foliage = await page.evaluate(async (rowOffset) => {

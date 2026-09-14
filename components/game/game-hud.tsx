@@ -1,15 +1,21 @@
 "use client"
 
+import { AppearancePanel } from "./appearance-panel"
+import { PlayerColorPicker } from "./player-color"
+
+import { isChapel } from "@/lib/game/shrine-layout"
+import { CHURCH_COST, CHURCH_RENOWN_BONUS, CHAPEL_MONKS, CHURCH_MONKS } from "@/lib/game/shrine-upgrade"
+import { builderPaceLabel, builderRate, MONK_BUILD_RATE } from "@/lib/game/build-labour"
 import { isComplete, isHouse, isMonkShelter } from "@/lib/game/construction"
 import { BUILDING_KINDS, buildingKind } from "@/lib/game/buildings"
-import { housingBeds, monkBeds } from "@/lib/game/housing"
+import { housingBeds, housingCapacity, monkBeds } from "@/lib/game/housing"
 import { FOOD_TYPES, FOOD_LABELS, STOREHOUSE_FOOD_CAPACITY, emptyFoodStock, storedFood } from "@/lib/game/storage"
 
 import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/elevation"
 
 import Link from "next/link"
 import * as Tooltip from "@radix-ui/react-tooltip"
-import { Menu, Settings, X } from "lucide-react"
+import { Dices, Menu, Settings, X } from "lucide-react"
 import "./game-hud.css"
 import { useEffect, useId, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
@@ -43,7 +49,8 @@ import { ResourceInspector } from "./resource-inspector"
 import { Minimap } from "./minimap"
 import { SettlementPanel } from "./settlement-panel"
 import type { useSettlement } from "@/hooks/use-settlement"
-import { individualRenown, relicRenown } from "@/lib/game/settlement"
+import { demolitionTargets, individualRenown, relicRenown } from "@/lib/game/settlement"
+import { DemolishBuildingDialog } from "./demolish-building-dialog"
 
 import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
 import { useBalanceStore } from "@/lib/game/balance-store"
@@ -53,6 +60,7 @@ import { HudButton } from "./hud-button"
 import { BugReportDialog } from "./bug-report-dialog"
 import { MapSizeControl } from "./map-size-control"
 import { NewMapDialog, type NewWorld } from "./new-map-dialog"
+import { randomSeed } from "@/lib/game/rng"
 import { NewWorldFields } from "./new-world-fields"
 import { SeedField } from "./seed-field"
 import { Switch } from "@/components/ui/switch"
@@ -181,7 +189,7 @@ function ToggleRow({
 }
 
 /** Top-level navigation, folded into the play view. Controls live in here too. */
-function MenuPanel({ onClose, playing }: { onClose: () => void; playing: boolean }) {
+function MenuPanel({ onClose, playing, playerColor, onColorChange }: { onClose: () => void; playing: boolean; playerColor: string; onColorChange: (color: string) => void }) {
   const [showControls, setShowControls] = useState(false)
 
   return (
@@ -189,6 +197,7 @@ function MenuPanel({ onClose, playing }: { onClose: () => void; playing: boolean
       className={`hud-menu pointer-events-auto absolute right-0 top-full mt-2 w-56 border border-rule bg-parchment/95 px-4 py-3 ${PANEL_SHADOW}`}
     >
       <div className="hud-world-heading"><span>Menu</span><button type="button" className="hud-close" aria-label="Close menu" onClick={onClose}><X size={16} /></button></div>
+      <div className="mb-3 border-b border-rule pb-3"><PlayerColorPicker value={playerColor} onChange={onColorChange} /></div>
       <nav className="flex flex-col gap-1.5">
         {SITE_MENU.map((item) => (
           <div key={item.href} className="flex flex-col gap-1">
@@ -389,6 +398,7 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
             {a.skills.length > 0 ? a.skills.join(", ") : "none"}
           </span>
         </div>
+        <BuilderPace rate={builderRate(a.skills)} />
       </div>
     </Panel>
   )
@@ -513,6 +523,14 @@ function RelicPanel({ relic }: { relic: Relic }) {
   )
 }
 
+/** How fast this pair of hands raises a building, against a plain untrained one. */
+function BuilderPace({ rate }: { rate: number }) {
+  return <div className="flex items-baseline justify-between gap-4">
+    <span className="text-[11px] italic text-ink-light">Building</span>
+    <span className="font-display text-[10px] text-ink">{builderPaceLabel(rate)} ×{rate}</span>
+  </div>
+}
+
 function ConstructionStatus({ building }: { building: BuildingDef }) {
   const read = () => building.construction ? Math.round(100 * building.construction.work / building.construction.required) : 100
   const [progress, setProgress] = useState(read)
@@ -524,7 +542,7 @@ function ConstructionStatus({ building }: { building: BuildingDef }) {
   if (progress >= 100) return null
   return <div className="mt-2">
     <StatBar label="Construction" value={progress} />
-    <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">Idle residents build this site. Benefits begin when construction finishes.</p>
+    <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">Anyone at the enclave with hands free helps raise this, the trades fastest and the brothers slowest. Benefits begin when construction finishes.</p>
   </div>
 }
 
@@ -614,6 +632,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
             {a.skills.join(", ")}
           </span>
         </div>
+        <BuilderPace rate={MONK_BUILD_RATE} />
       </div>
     </Panel>
   )
@@ -725,7 +744,7 @@ export function GameHud({
 
   useEffect(() => {
     if (!selection) return
-    setPanel(null)
+    setPanel(current => SHOW_PROPERTY_PANELS && current === "world" ? current : null)
     economy.chooseBuild(null)
   }, [selection, economy.chooseBuild])
 
@@ -786,6 +805,7 @@ export function GameHud({
     selection?.kind === "monk" ? (monks.find((m) => m.id === selection.id) ?? null) : null
   const piles = useBuildStore((s) => s.piles)
   const selectedBuilding = selection?.kind === "building" ? map?.buildings.find((b) => b.id === selection.id) : null
+  const demolition = map && selectedBuilding ? demolitionTargets(map, selectedBuilding.id) : []
   const selectedDefinition = buildCatalog(economy.balance).find((item) => item.id === selectedBuilding?.buildType)
   const foodStores = useBuildStore(s => s.foodStores)
   const foodStock = foodStores.get(selectedBuilding?.id ?? "") ?? emptyFoodStock()
@@ -820,6 +840,8 @@ export function GameHud({
         </div>
         <div className="hud-header-right">
         <div className="hud-header-actions">
+          {playing && <button type="button" className="hud-header-button" aria-label="Random map" title="Random map: regenerate at this size with a random seed"
+            onClick={() => onNewMap({ size: settings.size, seed: randomSeed() })}><Dices size={16} /></button>}
           {playing && <NewMapDialog defaultSize={settings.size} onCreate={onNewMap} />}
           <MusicPlayer className="hud-header-button" compact />
           {playing && <button type="button" className="hud-header-button" aria-label="World settings" title="World settings"
@@ -827,7 +849,7 @@ export function GameHud({
               setPanel((current) => current === "world" ? null : "world")
               setMenuOpen(false)
               economy.chooseBuild(null)
-              useCameraStore.getState().select(null)
+              if (!SHOW_PROPERTY_PANELS) useCameraStore.getState().select(null)
             }}><Settings size={16} /></button>}
           {playing && <button type="button" className="hud-header-button" aria-label="Menu" title="Menu"
             aria-expanded={menuOpen} onClick={() => {
@@ -836,7 +858,7 @@ export function GameHud({
               setPanel(null)
               economy.chooseBuild(null)
             }}><Menu size={16} /></button>}
-          {playing && menuOpen && <MenuPanel playing={playing} onClose={() => setMenuOpen(false)} />}
+          {playing && menuOpen && <MenuPanel playerColor={settings.playerColor} onColorChange={playerColor => set({ playerColor })} playing={playing} onClose={() => setMenuOpen(false)} />}
         </div>
         {playing && <HudClock />}
         </div>
@@ -861,6 +883,7 @@ export function GameHud({
           <Link href={continueHref} className="hud-action hud-action-primary hud-landing-play">Continue</Link>
           <div className="hud-landing-divider" role="separator">or</div>
         </>}
+        <PlayerColorPicker value={settings.playerColor} onChange={playerColor => set({ playerColor })} />
         <NewWorldFields seedId="landing-seed" size={settings.size} seed={seed}
           onSizeChange={size => set({ size })} onSeedChange={onSeedChange} onSeedValidityChange={setSeedValid} />
         <button type="submit" className={`hud-action hud-landing-play${continueHref ? "" : " hud-action-primary"}`} disabled={!canStart || !seedValid}>
@@ -892,6 +915,7 @@ export function GameHud({
           <HudButton onClick={() => set(DEFAULT_SCENE_VISIBILITY)}>Reset visibility</HudButton>
         </Section>
         {SHOW_PROPERTY_PANELS && <>
+        {map && <AppearancePanel map={map} />}
         <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />
           <MapSizeControl label="Size" value={settings.size} onChange={(size) => set({ size })} />
@@ -1169,16 +1193,40 @@ export function GameHud({
             {selectedBuilding.owner === "independent" && <p className="mt-2 max-w-56 text-[11px] text-ink-light">Independent roadside town. {selectedBuilding.buildType === "tavern" ? "Locally run tavern serving food and drink to passing travelers." : "Home to the townspeople."} Joins your settlement when your influence reaches this building; until then, it earns you no income or renown.</p>}
             {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">{brothersAtHome} / {housingBeds(selectedBuilding)} monks · {Math.max(0, housingBeds(selectedBuilding) - brothersAtHome)} spaces available. Tired monks sleep here until their stamina recovers.</p>}
             {isHouse(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
-              {household} / {housingBeds(selectedBuilding)} settlers · {Math.max(0, housingBeds(selectedBuilding) - household)} spaces available. They come back here to sleep and eat.
+              {household} / {housingCapacity(selectedBuilding)} settlers · {housingBeds(selectedBuilding)} bunks. Residents take a free bunk when they need sleep.
             </p>}
             {selectedKind && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
               {staff} of {BUILDING_KINDS[selectedKind].jobs} {BUILDING_KINDS[selectedKind].vendorKept ? "kept by a settled vendor" : "jobs taken"}
               {selectedBuilding.buildType === "tavern" && staff === 0 ? " · nobody is serving yet" : ""}
             </p>}
-            {selectedBuilding.id === map?.site?.hovelId && (
+            {selectedBuilding.id === map?.site?.hovelId && !isComplete(selectedBuilding) && (
+              <p className="mt-3 max-w-56 text-[11px] text-ink-light">Relic visits are paused while the chapel is expanded. The church’s two kneeling places, larger donations, visitor draw and capacity for 8 monks become available when the work is complete.</p>
+            )}
+            {selectedBuilding.id === map?.site?.hovelId && isComplete(selectedBuilding) && (
               <div className="mt-3 flex flex-col gap-1.5">
-                <p className="max-w-56 text-[11px] text-ink-light">Entry is free. The keeper reveals the relic to one visitor at a time. Visitors may leave a donation in the offering box by the door; greater piety encourages larger gifts.</p>
+                <p className="max-w-56 text-[11px] text-ink-light">Entry is free. The keeper reveals the relic to {isChapel(selectedBuilding) ? "one visitor" : "two kneeling visitors"} at a time. Visitors may leave a donation in the offering box {isChapel(selectedBuilding) ? "outside beside the door" : "by the door"}; greater piety encourages larger gifts.</p>
+                <p className="max-w-56 text-[11px] text-ink-light">{isChapel(selectedBuilding)
+                  ? `A 2 × 2 relic chapel. One visitor kneels at the altar; others queue outside. Modest donations. Supports up to ${CHAPEL_MONKS} monks with shelter beds.`
+                  : `Two places at the rails; the queue waits four person-spaces behind. Larger donations${selectedBuilding.buildType === "church" ? `, with +${CHURCH_RENOWN_BONUS} renown to draw visitors` : ""}. Supports up to ${CHURCH_MONKS} monks with shelter beds.`}</p>
+                {isChapel(selectedBuilding) && <>
+                  <button type="button" onClick={economy.upgradeShrine} disabled={!!economy.churchUpgradeError}
+                    className="rounded border border-rule bg-parchment-dark px-2 py-1.5 text-left text-[11px] text-ink hover:text-red disabled:opacity-50">
+                    Upgrade to church · {CHURCH_COST.gold} gold · {CHURCH_COST.wood} wood
+                  </button>
+                  <p className="max-w-56 text-[10px] text-ink-light">{economy.churchUpgradeError ?? `The church and side-wing plots are marked in gold while building. Construction adds two kneeling places, larger gifts, +${CHURCH_RENOWN_BONUS} renown and capacity for ${CHURCH_MONKS} monks.`}</p>
+                </>}
                 <p className="text-[11px] text-ink-light">Donated · {economy.settlement.collectedAdmission} gold</p>
+                {map.buildings.filter(b => b.churchId === selectedBuilding.id).map(wing => <button key={wing.id} type="button" className="mt-2 block text-left text-[11px] text-ink underline underline-offset-2"
+                  onClick={() => useCameraStore.getState().select({ kind: "building", id: wing.id })}>
+                  Inspect {wing.label.toLowerCase()}
+                </button>)}
+                <button type="button" disabled={isChapel(selectedBuilding)} title={isChapel(selectedBuilding) ? "Complete the church upgrade before adding a residence." : undefined}
+                  className="mt-2 block text-left text-[11px] text-ink underline underline-offset-2 disabled:opacity-50" onClick={() => {
+                  useCameraStore.getState().select(null)
+                  setPanel("build")
+                  setMenuOpen(false)
+                  economy.chooseBuild("monk-shelter")
+                }}>Build monks’ residence</button>
               </div>
             )}
             {(selectedBuilding.buildType === "workshop" || selectedBuilding.buildType === "storehouse") && (
@@ -1187,13 +1235,20 @@ export function GameHud({
             {selectedBuilding.buildType === "storehouse" && <div className="mt-2 text-[11px] text-ink-light">
               <p>Food stored · {storedFood(foodStock)} / {STOREHOUSE_FOOD_CAPACITY}</p>
               {FOOD_TYPES.map(type => <p key={type}>{FOOD_LABELS[type]} · {foodStock[type]}</p>)}
-              <p className="mt-1 italic">Food supplies start empty; food gathering is still to come.</p>
+              <p className="mt-1 italic">Food supplies start empty.</p>
             </div>}
+            {selectedBuilding.buildType === "sheep-pen" && <p className="mt-2 text-[11px] text-ink-light">Up to 8 sheep and goats · Food platform: {foodStock.meat} meat · {foodStock.milk} milk</p>}
             {selectedBuilding.owner !== "independent" && selectedDefinition && isComplete(selectedBuilding) && <>
               <p className="mt-2 text-[11px] text-ink-light">Contributes +{selectedDefinition.renown} shrine renown</p>
               <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">{selectedDefinition.description}</p>
               <p className="mt-1 text-[11px] text-ink-light">{buildingIncomeLabel(selectedDefinition, economy.balance)}</p>
             </>}
+            {demolition.length > 0 && <DemolishBuildingDialog key={selectedBuilding.id}
+              targets={[selectedBuilding, ...demolition.filter(b => b.id !== selectedBuilding.id)]}
+              onDemolish={() => {
+                economy.demolish(selectedBuilding.id)
+                useCameraStore.getState().select(null)
+              }} />}
           </Panel>
           )}
           {selection?.kind === "animal" && <AnimalInspector id={selection.id} />}

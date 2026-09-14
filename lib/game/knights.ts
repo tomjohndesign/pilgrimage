@@ -15,6 +15,10 @@ export function knightWalkStride(variant: number) {
   return stride
 }
 
+/** How far behind the knight the squire walks, in tiles per unit of character scale. */
+export const SQUIRE_FOLLOW = 0.75
+export function squireFollowGap(scale: number) { return SQUIRE_FOLLOW * scale }
+
 export interface HorseRest { x: number; y: number; z: number; heading: number; tree?: import("./trees/placement").TreePlacement }
 
 /** Stable entourage variety does not consume the simulation's random stream. */

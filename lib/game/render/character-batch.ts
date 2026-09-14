@@ -2,7 +2,7 @@ import * as THREE from "three"
 import { spriteTextureView } from "./sprite-texture"
 import type { ComplexionUniforms } from "./complexion-swap"
 import { MATCH_TOLERANCE } from "./complexion-swap"
-import { COMPLEXION_SLOTS } from "../base-person/complexion"
+import { CHARACTER_PALETTE_SLOTS } from "../player-color"
 import { applySpriteDepth, type SpritePoseDepth } from "./sprite-depth"
 import { OUTLINE_ID_LAYER_MASK } from "./outline"
 import { updateBillboardWorld } from "./sprite-transforms"
@@ -13,7 +13,7 @@ export interface CharacterBatchEntry {
   /** Direct atlas/UV state for batched poses; ordinary source sprites may omit it. */
   color?: THREE.Texture
   uv?: THREE.Vector4
-  /** This source publishes its ready pose directly during the animation phase. */
+  /** This source publishes its ready pose and world transform during animation. */
   publishesPose?: boolean
   /** Immutable center/ID snapshot; omit for mutable editor/test sprites. */
   fixedAttributes?: Float32Array
@@ -47,10 +47,10 @@ export function registerCharacterBatchEntry(entry: CharacterBatchEntry) {
 }
 
 export function characterPalette(complexion: ComplexionUniforms): Float32Array {
-  const values = new Float32Array(COMPLEXION_SLOTS * 8)
-  for (let slot = 0; slot < COMPLEXION_SLOTS; slot++) {
+  const values = new Float32Array(CHARACTER_PALETTE_SLOTS * 8)
+  for (let slot = 0; slot < CHARACTER_PALETTE_SLOTS; slot++) {
     const from = complexion.complexionFrom.value[slot], to = complexion.complexionTo.value[slot]
-    const at = slot * 4, target = at + COMPLEXION_SLOTS * 4
+    const at = slot * 4, target = at + CHARACTER_PALETTE_SLOTS * 4
     values[at] = from.r; values[at + 1] = from.g; values[at + 2] = from.b
     values[target] = to.r; values[target + 1] = to.g; values[target + 2] = to.b
   }
@@ -120,8 +120,8 @@ export class CharacterBatch {
           ? "#include <map_fragment>\ndiffuseColor.rgb = vCharacterId;"
           : `#include <map_fragment>
             ${!entry.complexion ? "" : `
-            for (int i = 0; i < ${COMPLEXION_SLOTS}; i++) {
-              vec2 at = vec2((float(i) + .5) / ${COMPLEXION_SLOTS * 2}.0, (vCharacterIndex + .5) / characterPaletteHeight);
+            for (int i = 0; i < ${CHARACTER_PALETTE_SLOTS}; i++) {
+              vec2 at = vec2((float(i) + .5) / ${CHARACTER_PALETTE_SLOTS * 2}.0, (vCharacterIndex + .5) / characterPaletteHeight);
               vec3 from = texture2D(characterPalette, at).rgb;
               if (all(lessThan(abs(diffuseColor.rgb - from), vec3(${MATCH_TOLERANCE})))) {
                 diffuseColor.rgb = texture2D(characterPalette, at + vec2(.5, 0.0)).rgb; break;
@@ -129,7 +129,7 @@ export class CharacterBatch {
             }`}`)
       }
       material.onBeforeRender = renderer => { renderer.getCurrentViewport(this.viewport) }
-      material.customProgramCacheKey = () => `character-batch-v5-${compact}-${ids}-${!!entry.complexion}`
+      material.customProgramCacheKey = () => `character-batch-v7-${compact}-${ids}-${!!entry.complexion}`
       return material
     })
     this.root.name = "character-atlas-batch"
@@ -156,7 +156,7 @@ export class CharacterBatch {
       const indices = this.geometry.getAttribute("characterIndex")
       for (let i = 0; i < this.capacity; i++) indices.setX(i, i)
       this.fixedRows.length = 0
-      this.palette = new THREE.DataTexture(new Float32Array(this.capacity * COMPLEXION_SLOTS * 8), COMPLEXION_SLOTS * 2, this.capacity, THREE.RGBAFormat, THREE.FloatType)
+      this.palette = new THREE.DataTexture(new Float32Array(this.capacity * CHARACTER_PALETTE_SLOTS * 8), CHARACTER_PALETTE_SLOTS * 2, this.capacity, THREE.RGBAFormat, THREE.FloatType)
       this.paletteRows.length = 0
       this.paletteUniform.value = this.palette; this.paletteHeight.value = this.capacity
       this.body = new THREE.InstancedMesh(this.geometry, this.materials[0], this.capacity)
@@ -184,11 +184,14 @@ export class CharacterBatch {
       // A normal billboard has no local offset/rotation. Its ready pose parent
       // supplies the anchor; only two scaled basis columns reach the shaders.
       // Retain the general path for editor transforms and manual matrices.
-      const compactParent = this.compact && parentsReady && parent && sprite.matrixAutoUpdate && sprite.matrixWorldAutoUpdate &&
+      const poseReady = parentsReady && entry.publishesPose === true
+      const compactParent = this.compact && poseReady && parent && sprite.matrixAutoUpdate && sprite.matrixWorldAutoUpdate &&
         position.x === 0 && position.y === 0 && position.z === 0 && q.x === 0 && q.y === 0 && q.z === 0 && q.w === 1
-      // Game figures have already resolved their pose root for ground contact.
+      // Published humanoid poses already resolved their world transforms.
+      // Transport still needs its pose root updated, especially when a parked
+      // horse switches back to the mounted sprite after a shrine visit.
       if (compactParent) direct++
-      else if (parentsReady) updateBillboardWorld(sprite)
+      else if (poseReady) updateBillboardWorld(sprite)
       else sprite.updateWorldMatrix(true, false)
       // Match Three's CPU model-view multiply before conversion to float. Doing
       // this in the vertex shader rounds differently at coincident pose depths.
@@ -227,15 +230,15 @@ export class CharacterBatch {
       }
       if (entry.palette) {
         if (this.paletteRows[i] !== entry.palette) {
-          palette.set(entry.palette, i * COMPLEXION_SLOTS * 8)
+          palette.set(entry.palette, i * CHARACTER_PALETTE_SLOTS * 8)
           this.paletteRows[i] = entry.palette; paletteChanged = true
         }
       } else {
         this.paletteRows[i] = undefined
-        for (let slot = 0; entry.complexion && slot < COMPLEXION_SLOTS; slot++) {
+        for (let slot = 0; entry.complexion && slot < CHARACTER_PALETTE_SLOTS; slot++) {
           const from = entry.complexion.complexionFrom.value[slot], to = entry.complexion.complexionTo.value[slot]
-          const offset = (i * COMPLEXION_SLOTS * 2 + slot) * 4
-          const target = offset + COMPLEXION_SLOTS * 4
+          const offset = (i * CHARACTER_PALETTE_SLOTS * 2 + slot) * 4
+          const target = offset + CHARACTER_PALETTE_SLOTS * 4
           const fr = Math.fround(from.r), fg = Math.fround(from.g), fb = Math.fround(from.b)
           const tr = Math.fround(to.r), tg = Math.fround(to.g), tb = Math.fround(to.b)
           if (palette[offset] !== fr || palette[offset + 1] !== fg || palette[offset + 2] !== fb ||

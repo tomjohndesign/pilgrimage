@@ -1,5 +1,7 @@
 "use client"
 
+import { PlayerColorContext } from "./player-color"
+
 import { withTravelParties } from "@/lib/game/travel-parties"
 import { townResidents } from "@/lib/game/town-residents"
 
@@ -9,6 +11,7 @@ import { useRouter } from "next/navigation"
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { createBenchmarkCity, benchmarkCity as cityFixture, type CityBenchmarkMode } from "@/lib/game/city-benchmark"
+import { syncBuildingFootpaths } from "@/lib/game/building-footpaths"
 import { createFootpaths } from "@/lib/game/footpaths"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
@@ -45,7 +48,7 @@ import { BUILDING_PREVIEW, JOB_PREVIEW } from "@/lib/game/building-preview"
 
 import { GAME_BACKGROUND } from "@/lib/game/render/background"
 import { LoadingChurch } from "./loading-church"
-import { shrineLayout } from "@/lib/game/shrine-layout"
+import { shrineLayout, isChapel } from "@/lib/game/shrine-layout"
 import { cameraOffset, yawForView } from "@/lib/game/render/iso"
 import type { MapRevealPhase } from "@/lib/game/render/map-reveal"
 import type { GameMap } from "@/lib/game/map/types"
@@ -140,11 +143,13 @@ export function GameShell({
     // Load the renderer and its published assets without creating a world/canvas.
     void loadGameCanvas().catch(() => { /* The dynamic component retries on Play. */ })
     void import("@/lib/game/render/preload-assets").then(async m => {
-      await m.prepareOpeningCharacters()
+      // Prepare saved edits during landing-page idle time. Direct play opens
+      // with published sprites and rebuilds edits after the map is visible.
+      if (!playing) await m.prepareOpeningCharacters()
       await m.preloadGameAssets(settings.characterModel)
     })
       .catch(() => { /* Ordinary scene loading remains available on Play. */ })
-  }, [settings.characterModel])
+  }, [settings.characterModel, playing])
 
   useEffect(() => {
     if (!starting || started) return
@@ -279,10 +284,16 @@ export function GameShell({
   const footpaths = useMemo(() => createFootpaths(baseMap ?? undefined), [baseMap])
   useEffect(() => { footpaths.paved = ROAD_TIERS[settings.road]?.paved ?? false }, [footpaths, settings.road])
   // Keep one live map for the canvas and HUD readers, including roadside preaching.
-  const map = useMemo(() => economy.map ? { ...economy.map, footpaths } : null, [economy.map, footpaths])
-  const travelers = useMemo(() => map ? [...roadTravelers, ...townResidents(map).map(resident => resident.traveler),
+  const map = useMemo(() => {
+    if (!economy.map) return null
+    const connected = { ...economy.map, footpaths }
+    syncBuildingFootpaths(connected)
+    return connected
+  }, [economy.map, footpaths])
+  // Demolishing a town home or workplace must not remove its people from the cast.
+  const travelers = useMemo(() => map ? [...roadTravelers, ...townResidents(baseMap ?? map).map(resident => resident.traveler),
       ...(JOB_PREVIEW ? previewResidents(map).map(resident => resident.traveler) : [])] : roadTravelers,
-    [roadTravelers, map])
+    [roadTravelers, map, baseMap])
   const renown = economy.renown
   const [evangelism, setEvangelism] = useState(0)
   useEffect(() => {
@@ -357,8 +368,9 @@ export function GameShell({
   }, [travelers])
 
   return (
-    <div className="fixed inset-0 overflow-hidden select-none" style={{ backgroundColor: GAME_BACKGROUND }}>
+    <PlayerColorContext.Provider value={settings.playerColor}><div className="fixed inset-0 overflow-hidden select-none" style={{ backgroundColor: GAME_BACKGROUND }}>
       <LoadingChurch showChurch={!resuming && (!openingMap || !map || landmarkRoad !== map.road || revealPhase === "loading")}
+        chapel={!openingHovel || isChapel(openingHovel)}
         generating={starting && revealPhase === "loading"} idle={!starting}
         phase={revealPhase} overlayRef={loadingOverlay} view={openingView} resuming={resuming}
         viewSize={resumeWorld ? resumeWorld.camera.viewSize : !booted && expectResume && resumeViewSize ? resumeViewSize : openingViewSize}
@@ -429,7 +441,7 @@ export function GameShell({
         onPixelationChange={(patch) => setPixelationOverrides((current) => ({ ...current, ...patch }))}
         onNewMap={({ size, seed }) => {
           saveDefaultMapSize(size)
-          setSettings(current => ({ ...current, size }))
+          setSettings(current => ({ ...current, size, generation: DEFAULT_WORLD_SETTINGS.generation }))
           setSeed(seed)
         }}
         onSeedChange={setSeed}
@@ -444,6 +456,6 @@ export function GameShell({
         onGrant={economy.grant}
         onGrantRenown={economy.bless}
       />}
-    </div>
+    </div></PlayerColorContext.Provider>
   )
 }

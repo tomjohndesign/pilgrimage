@@ -84,6 +84,8 @@ try {
   // the complete cast, including converts, rather than waiting for traffic alone.
   const expectedPopulation = await page.evaluate(() => window.__pilgrimage.expectedPopulation ?? window.__pilgrimage.populationStatus().total)
   assert.ok(expectedPopulation >= count, "the cast must include all requested travelers")
+  const simulationDaySeconds = await page.evaluate(() => window.__pilgrimage.simulationDaySeconds)
+  assert.ok(Number.isFinite(simulationDaySeconds) && simulationDaySeconds > 0, "benchmark build must expose its current simulation day length")
   // Simulation is ready before Suspense has mounted the sprite assets.
   await page.evaluate(({ zoom, target, adaptive, compactBatches }) => {
     const game = window.__pilgrimage, road = game.map.road
@@ -293,7 +295,7 @@ try {
     const batchPreparation = await page.evaluate(() => window.__pilgrimage.batchPreparation?.())
     if (compactBatches) assert.ok(batchPreparation?.compact && batchPreparation.direct > 0, "compact POC must actually prepare direct billboard inputs")
     const elapsedSeconds = measured.elapsedSeconds
-    const simulatedSeconds = (measured.timeAfter - measured.timeBefore) * 600
+    const simulatedSeconds = (measured.timeAfter - measured.timeBefore) * simulationDaySeconds
     const population = await page.evaluate(before => {
       const after = new Map(window.__pilgrimage.sim().map(s => [s.id, s]))
       return { count: after.size, ...window.__pilgrimage.populationStatus(), moved: before.filter(s => { const next = after.get(s.id); return next && Math.hypot(next.x - s.x, next.z - s.z) > .01 }).length }
@@ -316,7 +318,7 @@ try {
     }
     const occlusion = process.env.BENCH_OCCLUSION === "1" ? await page.evaluate(() => window.__pilgrimage.characterOcclusion()) : undefined
     const observedWalkPoses = Object.fromEntries([...poseFrames].map(([detail, frames]) => [detail, [...frames].sort((a, b) => a - b)]))
-    const result = { ...info, figureSamples: measured.figureSamples, zoom: viewSize, occlusion, city, scenario, trees, target, measuredAt: new Date().toISOString(), host: { cpu: cpus()[0]?.model, memoryGiB: totalmem() / 2 ** 30, loadAverage: loadavg() }, speed, gameTime: { elapsedSeconds, simulatedSeconds, effectiveSpeed: simulatedSeconds / elapsedSeconds / 2 }, population, timings, gpuTimings, characterMotion, observedWalkPoses, longTasks: measured.longTasks, seconds, motion, rotate, zoomMotion, inputMotion, sceneryDetails: measured.sceneryDetails, detailTransitions: measured.detailTransitions, detailChangesDuringZoom: measured.detailChangesDuringZoom, cameraMisalignedFrames: measured.misaligned, missingVisibleFigures: measured.missingFigures, frames: frames.length, fps: 1000 / mean, mean, p50: sorted[Math.floor(sorted.length * .5)], p95: sorted[Math.floor(sorted.length * .95)], p99: sorted[Math.floor(sorted.length * .99)], overBudgetPercent: frames.filter(ms => ms > 18).length / frames.length * 100, metrics, errors, browserWarnings: [...new Set(browserWarnings)] }
+    const result = { ...info, figureSamples: measured.figureSamples, zoom: viewSize, occlusion, city, scenario, trees, target, measuredAt: new Date().toISOString(), host: { cpu: cpus()[0]?.model, memoryGiB: totalmem() / 2 ** 30, loadAverage: loadavg() }, speed, gameTime: { daySeconds: simulationDaySeconds, startDays: measured.timeBefore, endDays: measured.timeAfter, elapsedSeconds, simulatedSeconds, effectiveSpeed: simulatedSeconds / elapsedSeconds / 2 }, population, timings, gpuTimings, characterMotion, observedWalkPoses, longTasks: measured.longTasks, seconds, motion, rotate, zoomMotion, inputMotion, sceneryDetails: measured.sceneryDetails, detailTransitions: measured.detailTransitions, detailChangesDuringZoom: measured.detailChangesDuringZoom, cameraMisalignedFrames: measured.misaligned, missingVisibleFigures: measured.missingFigures, frames: frames.length, fps: 1000 / mean, mean, p50: sorted[Math.floor(sorted.length * .5)], p95: sorted[Math.floor(sorted.length * .95)], p99: sorted[Math.floor(sorted.length * .99)], overBudgetPercent: frames.filter(ms => ms > 18).length / frames.length * 100, metrics, errors, browserWarnings: [...new Set(browserWarnings)] }
     result.batchPreparation = batchPreparation
     result.requestedTravelers = count
     await writeFile(`${output}/result-${tag}.json`, JSON.stringify(result, null, 2))
@@ -640,6 +642,8 @@ try {
       { label: "character-visuals-frozen-running", hidden: [], paused: false, work: { characterVisuals: false } },
       { label: "characters-hidden-path-work-off", hidden: ["characters"], paused: false, work: { pathDrawing: false, pathUpdates: false, pathWear: false, replayRoutes: true }, warmup: 15000 },
       { label: "full-paused", hidden: [], paused: true },
+      { label: "half-trees-paused", hidden: [], paused: true, work: { treeThinning: true } },
+      { label: "restored-trees-paused", hidden: [], paused: true, work: { treeThinning: false } },
       { label: "character-visuals-frozen-paused", hidden: [], paused: true, work: { characterVisuals: false } },
       { label: "resolution-50-paused", hidden: [], paused: true, resolution: .5, warmup: 3000 },
       { label: "paths-off-paused", hidden: [], paused: true, work: { pathDrawing: false, pathUpdates: false } },
@@ -668,8 +672,7 @@ try {
         // Exercise the player controls, not a separate debug visibility override.
         await page.getByRole("button", { name: "World settings", exact: true }).click()
         for (const [key, label] of Object.entries(layers)) {
-          await page.getByRole("combobox", { name: label, exact: true }).selectOption(
-            condition.hidden.includes(key) ? key === "buildings" ? "2" : "0" : key === "buildings" ? "0" : "1")
+          await page.getByRole("switch", { name: label, exact: true }).setChecked(!condition.hidden.includes(key))
         }
         await page.getByRole("button", { name: "Close world settings", exact: true }).click()
         await page.evaluate(({ paused, terrain, speed, work, resolution, adaptive }) => {
@@ -712,13 +715,23 @@ try {
         }) : undefined
         const frames = [...sample.frames].sort((a, b) => a - b)
         const result = { ...condition, viewSize, speed: speeds[0], gpu, ...sample,
-          effectiveSpeed: (sample.timeAfter - sample.timeBefore) * 600 / (sample.frames.reduce((a, b) => a + b, 0) / 1000) / 2,
+          effectiveSpeed: (sample.timeAfter - sample.timeBefore) * simulationDaySeconds / (sample.frames.reduce((a, b) => a + b, 0) / 1000) / 2,
           fps: sample.frames.length * 1000 / sample.frames.reduce((a, b) => a + b, 0), p95: frames[Math.floor(frames.length * .95)] }
         results.push(result)
         await writeFile(`${output}/isolation.json`, JSON.stringify(results, null, 2))
         assert.equal(sample.population, expectedPopulation); assert.equal(sample.retained, expectedPopulation)
         if (condition.paused) assert.equal(sample.timeAfter, sample.timeBefore)
         else assert.ok(sample.timeAfter > sample.timeBefore, "hidden actors must keep simulating")
+        if (condition.work?.treeThinning !== undefined) {
+          assert.equal(sample.after.treeDensity, condition.work.treeThinning ? .5 : 1)
+          const full = results.find(result => result.viewSize === viewSize && result.label === "full-paused")
+          if (full) {
+            assert.equal(sample.timeBefore, full.timeBefore, "tree comparisons must hold world age fixed")
+            if (condition.work.treeThinning) assert.ok(sample.after.visibleTrees < full.after.visibleTrees)
+            else assert.equal(sample.after.visibleTrees, full.after.visibleTrees, "restoring density must restore every visible tree")
+          }
+          await page.screenshot({ path: `${output}/${condition.label}-zoom${viewSize}.png` })
+        }
         for (const name of Object.keys(layers)) {
           assert.equal(sample.layers[name], !condition.hidden.includes(name))
           if (condition.hidden.includes(name)) assert.equal(sample.submissions.draws[name]?.calls ?? 0, 0, `hidden ${name} must submit zero draws`)

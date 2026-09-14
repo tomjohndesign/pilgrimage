@@ -14,7 +14,7 @@ import { cameraOffset, yawForView } from "@/lib/game/render/iso"
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 import { CameraLight } from "./camera-light"
 import { CharacterSprite } from "./character-sprite"
-import { LANDING_CHURCH, LANDING_TERRAIN, LANDING_TILES, LANDING_ROUTE_LENGTH, landingMonkPoint } from "@/lib/game/render/landing-layout"
+import { LANDING_CHAPEL, LANDING_TERRAIN, LANDING_TILES, LANDING_ROUTE_LENGTH, landingMonkPoint } from "@/lib/game/render/landing-layout"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { selectElement } from "@/lib/game/selection"
 import { buildingObjectId, encodeObjectId } from "@/lib/game/render/outline"
@@ -94,19 +94,19 @@ function Ready({ assets, onReady }: { assets: MapRevealState; onReady: () => voi
 /** A small scene of shared assets, with no generated terrain or settlement simulation. */
 export function LandingScene({ viewSize, onReady }: { viewSize: number; onReady: () => void }) {
   const assets = useMemo(() => new MapRevealState(), [])
-  const parts = useMemo(() => shrineStructureParts(LANDING_CHURCH.w, LANDING_CHURCH.d).filter(part => !part.surface), [])
-  const selected = useCameraStore(state => isSelected(state.selection, { kind: "building", id: LANDING_CHURCH.id }))
+  const parts = useMemo(() => shrineStructureParts(LANDING_CHAPEL.w, LANDING_CHAPEL.d).filter(part => !part.surface), [])
+  const selected = useCameraStore(state => isSelected(state.selection, { kind: "building", id: LANDING_CHAPEL.id }))
   const [hovered, setHovered] = useState(false)
   const idColor = useMemo(() => new THREE.Color(...encodeObjectId(buildingObjectId(0))), [])
-  const toggle = (event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "building", id: LANDING_CHURCH.id }, event)
+  const toggle = (event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "building", id: LANDING_CHAPEL.id }, event)
   useEffect(() => {
     const escape = (event: KeyboardEvent) => { if (event.key === "Escape") useCameraStore.getState().select(null) }
     window.addEventListener("keydown", escape)
     return () => { window.removeEventListener("keydown", escape); useCameraStore.getState().select(null) }
   }, [])
   return <>
-    <button type="button" className="landing-church-keyboard hud-action" aria-label="Inspect church" aria-pressed={selected}
-      onClick={event => toggle({ delta: 0, stopPropagation: () => event.stopPropagation() })}>{selected ? "Close church interior" : "Inspect church"}</button>
+    <button type="button" className="landing-church-keyboard hud-action" aria-label="Inspect chapel" aria-pressed={selected}
+      onClick={event => toggle({ delta: 0, stopPropagation: () => event.stopPropagation() })}>{selected ? "Close chapel interior" : "Inspect chapel"}</button>
     <PixelCanvas orthographic resize={{ offsetSize: true }} camera={{ manual: true, near: .1, far: 400 }} style={{ cursor: hovered ? "pointer" : "default" }} onPointerMissed={() => useCameraStore.getState().select(null)}>
     <LandingCamera viewSize={viewSize} />
     <ambientLight intensity={SURFACE_LIGHT.ambient} />
@@ -121,6 +121,6 @@ export function LandingScene({ viewSize, onReady }: { viewSize: number; onReady:
       <PixelCharacters>{[0, 1, 2].map(index => <LandingMonk key={index} index={index} />)}</PixelCharacters>
       <Ready assets={assets} onReady={onReady} />
     </Suspense></SceneAssetsContext.Provider>
-    <OutlinePass objects={{ buildings: [LANDING_CHURCH], travelers: [], monks: [] }} />
+    <OutlinePass objects={{ buildings: [LANDING_CHAPEL], travelers: [], monks: [] }} />
   </PixelCanvas></>
 }

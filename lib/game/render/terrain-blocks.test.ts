@@ -53,3 +53,14 @@ it("updates both sides of block boundaries and observes grading away from a new 
   const regenerated = { ...map, tiles: [...map.tiles] }, reset = terrainBlockState(regenerated, blocks, next)
   expect(reset.revisions.every((revision, i) => revision !== next.revisions[i])).toBe(true)
 })
+
+it("refreshes entrance masks when a layout moves the doorway", () => {
+  const building = { id: "house", label: "House", buildType: "house", x: 20, z: 20, w: 3, d: 3, height: 1, color: "tan", roofColor: "brown", layoutSeed: 0 }
+  const map: GameMap = { width: 96, depth: 96, tiles: Array(96 * 96).fill("grass"), buildings: [building] }
+  const blocks = terrainBlocks(map.width, map.depth), before = terrainBlockState(map, blocks)
+  const moved = { ...map, buildings: [{ ...building, layoutSeed: 1 }] }
+  expect(terrainMapSnapshot(moved, map)).toBe(moved)
+  const after = terrainBlockState(moved, blocks, before)
+  expect(after.revisions[0]).not.toBe(before.revisions[0])
+  expect(after.revisions.slice(1)).toEqual(before.revisions.slice(1))
+})

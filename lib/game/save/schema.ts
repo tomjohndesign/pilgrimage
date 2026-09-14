@@ -42,7 +42,7 @@ export const elevationSettingsSchema = z
   .describe("Terrain shaping inputs for the hills, cliffs and bridges")
 
 export const worldSettingsSchema = z.object({
-  generation: z.union([z.literal(1), z.literal(2)]).default(1).describe("Terrain generator version; older saves retain their original land"),
+  generation: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).default(1).describe("Terrain generator version; older saves retain their original land"),
   seed: uint32.describe("World seed. With the settings below it fully determines the generated land"),
   size: z.number().int().min(MIN_MAP_SIZE).max(MAX_MAP_SIZE).describe("Map edge length in tiles; maps are square"),
   coverage: finite.min(0).max(100).describe("Percent of the map left as forest after glades are carved"),
@@ -59,6 +59,7 @@ export const worldSettingsSchema = z.object({
 }).describe("Everything that decides which land is generated. Changing any of these makes a different world")
 
 export const displaySettingsSchema = z.object({
+  playerColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   showTrees: z.boolean(),
   showCharacters: z.boolean(),
   showWildlife: z.boolean(),
@@ -111,12 +112,14 @@ export const structureSchema = z.object({
   layoutSeed: finite.optional().describe("Rolls the interior layout; kept so the rooms come back as built"),
   fireplace: z.boolean().optional().describe("Whether the building has a hearth; absent means the type's seeded choice"),
   supportId: z.string().optional(),
+  churchId: z.string().optional(),
   floorHeight: finite.min(0).optional(),
   tavernFlue: z.object({x:finite,z:finite}).optional(),
   hearthZ: finite.optional().describe("Row the hearth sits on"),
 })
 
 export const settlementSaveSchema = z.object({
+  demolishedBuildings: z.array(z.string()).default([]).describe("Removed buildings and reserved structure IDs"),
   claimedBuildings: z.array(z.string()).describe("Generated roadside buildings that have joined the settlement"),
   resources: resourcesSchema,
   deliveredWood: finite.min(0).describe("Cumulative timber credited from the camps"),
@@ -124,7 +127,9 @@ export const settlementSaveSchema = z.object({
   shrineAdmission: finite.min(0).describe("Gold asked of each visitor to the relic"),
   collectedAdmission: finite.min(0).describe("Cumulative donations credited"),
   collectedTrade: finite.min(0).describe("Cumulative counter takings credited"),
+  paidWages: finite.min(0).default(0).describe("Cumulative wages debited from the treasury"),
   grantedRenown: finite.min(0).default(0).describe("Renown bestowed by cheat codes"),
+  church: structureSchema.optional().describe("Purchased upgrade of the founding chapel"),
   structures: z.array(structureSchema).describe("Player-built structures in purchase order"),
 }).describe("The player's settlement layered over the generated map. Ground levelling is replayed from the structures")
 
@@ -140,6 +145,7 @@ export const travelerSaveSchema = z.object({
   stamina: finite,
   hoursSinceChurch: finite.optional(),
   jobless: z.boolean().describe("Whether they would take settlement work"),
+  wageDay: finite.optional().describe("Game day their last wage was paid"),
   employer: z.string().nullable().describe("Building they work at, or null while travelling"),
   jobSlot: count,
   home: z.string().nullable().describe("House they sleep in"),
@@ -187,6 +193,7 @@ export const simulationSaveSchema = z.object({
   wood: finite.min(0).describe("Cumulative timber delivered"),
   shrineGold: finite.min(0).describe("Cumulative donations"),
   tradeGold: finite.min(0).describe("Cumulative counter takings"),
+  wagesPaid: finite.min(0).default(0).describe("Cumulative wages handed to the settlement's workers"),
   constructionWood: finite.min(0).describe("Timber already taken from the piles for building"),
   shrineQueueSequence: count,
   admissionSequence: count,
@@ -196,6 +203,8 @@ export const simulationSaveSchema = z.object({
   foodStores: z.array(z.tuple([z.string(), z.record(z.string(), finite.min(0))])).describe("Stored food by building id"),
   piles: z.array(z.object({ id: z.string(), campId: z.string(), slot: count, wood: finite.min(0) })).describe("Timber stacked at the camps"),
   travelers: z.array(travelerSaveSchema),
+  partyGold: z.array(z.tuple([count, finite.min(0)])).optional()
+    .describe("Shared purse baselines by party id; member balances include unreconciled transactions"),
   joinedMonks: z.array(joinedMonkSchema).describe("Friars who joined the brotherhood; they are no longer travelers"),
 }).describe("Progress of the living world on top of the settlement")
 

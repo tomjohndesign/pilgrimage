@@ -1,4 +1,5 @@
-import { assignBuildingTask, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
+import { MONK_BUILD_RATE } from "./build-labour"
+import { isComplete, assignBuildingTask, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
 import { worldToTileX, worldToTileZ, type GameMap } from "./map/types"
 import type { MonkRoutine } from "./monk-routine"
 import type { monkWander, WanderSpot } from "./monk-wander"
@@ -6,21 +7,29 @@ import { buildingAt } from "./settlement"
 
 export const MONK_TIRED_AT = 25
 export const MONK_WAKE_AT = 95
-export interface MonkNeeds { home?: string; bedSlot?: number; workSlot: number; stamina: number; buildingTask?: BuildingTask; jobSearch: number }
-export function createMonkNeeds(index: number): MonkNeeds { return { workSlot: index, stamina: 100 - index * 6, jobSearch: 0 } }
+export interface MonkNeeds { home?: string; bedSlot?: number; workSlot: number; stamina: number; buildingTask?: BuildingTask; jobSearch: number; buildRate: number; outdoorRest?: boolean }
+export function createMonkNeeds(index: number): MonkNeeds { return { workSlot: index, stamina: 100 - index * 6, jobSearch: 0, buildRate: MONK_BUILD_RATE } }
 
 /** Finish assigned construction before resting; tired monks cannot take new work. */
 export function stepMonkWork(s: MonkRoutine & MonkNeeds, map: GameMap, speed: number, dt: number): boolean {
   if (dt <= 0) return !!s.buildingTask
-  if (s.activity !== "sleeping") s.stamina = Math.max(0, s.stamina - dt * (s.activity === "building" ? 0.4 : 0.125))
+  if (s.activity !== "sleeping" && !s.outdoorRest) s.stamina = Math.max(0, s.stamina - dt * (s.activity === "building" ? 0.4 : 0.125))
   s.jobSearch = Math.max(0, s.jobSearch - dt)
-  if (s.stamina <= MONK_TIRED_AT && !s.buildingTask && s.jobSearch === 0) {
+  if ((s.stamina <= MONK_TIRED_AT || s.outdoorRest) && !s.buildingTask && s.jobSearch === 0) {
     const workSlot = s.workSlot
     s.workSlot = s.bedSlot ?? workSlot
     const assigned = assignBuildingTask(s, map, "rest", s.home)
     s.workSlot = workSlot
-    if (assigned) { s.route = []; s.pause = 0 }
-    else s.jobSearch = 3
+    if (assigned) { s.route = []; s.pause = 0; s.outdoorRest = false }
+    else { s.jobSearch = 3; s.outdoorRest = true }
+  }
+  // Before beds are built, recover slowly on the grounds so the founding
+  // brothers can always return to construction. A completed bed takes priority.
+  if (s.outdoorRest && !s.buildingTask) {
+    s.route = []; s.activity = "resting"; s.destination = "grounds"; s.pause = 0
+    s.stamina = Math.min(100, s.stamina + dt)
+    if (s.stamina >= MONK_WAKE_AT) { s.outdoorRest = false; s.jobSearch = 0 }
+    return true
   }
   if (!s.buildingTask && s.stamina > MONK_TIRED_AT && s.jobSearch === 0 && s.activity !== "praying") {
     if (assignBuildingTask(s, map, "build")) { s.route = []; s.pause = 0 }
@@ -61,7 +70,7 @@ export function stepMonkWork(s: MonkRoutine & MonkNeeds, map: GameMap, speed: nu
 export function replanMonkAfterMapChange(s: MonkRoutine, map: GameMap, wander: Pick<ReturnType<typeof monkWander>, "route">): void {
   const blocked = (p: WanderSpot) => {
     const building = buildingAt(map, worldToTileX(map, p.x), worldToTileZ(map, p.z))
-    return !!building && building.id !== map.site?.hovelId
+    return !!building && (building.id !== map.site?.hovelId || !isComplete(building))
   }
   const goHome = () => {
     if (!map.site) return

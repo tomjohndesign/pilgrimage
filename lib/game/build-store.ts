@@ -1,3 +1,4 @@
+import { isPlayerResident } from "./player-color"
 import { settlementJob, SETTLEMENT_JOBS } from "./jobs/design"
 import type { FoodStock } from "./storage"
 import { create } from "zustand"
@@ -27,7 +28,10 @@ interface BuildState {
   wood: number
   shrineGold: number
   tradeGold: number
+  wagesPaid: number
   visits: number
+  /** Settlers holding a job in one of the player's own places; the daily payroll. */
+  workers: number
   settlers: Monk[]
   joinedMonks: Monk[]
   syncResources: (sim: SimState, travelers?: readonly Traveler[]) => void
@@ -49,7 +53,9 @@ const emptyState = () => ({
   wood: 0,
   shrineGold: 0,
   tradeGold: 0,
+  wagesPaid: 0,
   visits: 0,
+  workers: 0,
   settlers: [] as Monk[],
   joinedMonks: [] as Monk[],
 })
@@ -57,12 +63,14 @@ const emptyState = () => ({
 export const useBuildStore = create<BuildState>((set) => ({
   ...emptyState(),
   syncResources: (sim, travelers = []) => set((s) => {
+    let workers = 0
     const settlers = travelers.flatMap((t) => {
       const live = sim.travelers.get(t.id)
       const job = settlementJob(live?.employer, sim.buildings)
       // Town households work and sleep in independent buildings; only the player's own people are settlers.
       const townResident = !!live?.employer && sim.buildings.find(b => b.id === live.employer)?.owner === "independent"
-      return live && !townResident && (live.employer || live.home) ? [{
+      if (live?.employer && !townResident) workers++
+      return live && (isPlayerResident(live, sim.buildings) || isPlayerResident(live, sim.world.buildings)) ? [{
         id: t.id,
         name: t.name,
         duty: sim.buildings.find(b=>b.id===live.employer)?.kind === "inn" ? "Inn worker" : job ? SETTLEMENT_JOBS[job].label : "Resident",
@@ -71,11 +79,14 @@ export const useBuildStore = create<BuildState>((set) => ({
     })
     return {
       simulation: sim,
-      joinedMonks: s.simulation === sim && s.joinedMonks.length === sim.joinedMonks.size ? s.joinedMonks : [...sim.joinedMonks.values()],
+      joinedMonks: s.simulation === sim && s.joinedMonks.length === sim.joinedMonks.size
+        && s.joinedMonks.every(monk => sim.joinedMonks.get(monk.id) === monk) ? s.joinedMonks : [...sim.joinedMonks.values()],
       wood: sim.wood,
       shrineGold: sim.shrineGold,
       tradeGold: sim.tradeGold,
+      wagesPaid: sim.wagesPaid,
       visits: sim.visits,
+      workers,
       settlers: JSON.stringify(s.settlers) === JSON.stringify(settlers) ? s.settlers : settlers,
       time: sim.time,
       ...(s.foodStores.size !== sim.foodStores.size || Array.from(sim.foodStores).some(([id, stock]) => s.foodStores.get(id) !== stock)

@@ -15,7 +15,8 @@ import { encodeObjectId, OUTLINE_ID_LAYER_MASK, treeObjectId } from "@/lib/game/
 import { makeRng } from "@/lib/game/rng"
 import { useBuildStore } from "@/lib/game/build-store"
 import { isWorldVisible } from "@/lib/game/render/visibility"
-import { frameQuality } from "@/lib/game/render/frame-quality"
+import { thinTrees } from "@/lib/game/render/scenery-detail"
+import { benchmarkWork } from "@/lib/game/benchmark-work"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { simRegistry } from "@/lib/game/sim"
@@ -115,9 +116,10 @@ export function FoliageField({ atlas, placements, seed = 1, idBase = 0, hidden, 
     const mesh = body.current, ids = idMesh.current
     if (mesh && ids) {
       mesh.updateWorldMatrix(true, false)
-      // Halving the forest is a last resort for sustained FPS pressure; zoom
-      // detail alone must preserve every tree.
-      const thin = frameQuality(scene) === 2, selection = useCameraStore.getState().selection
+      // Halving the forest is a last resort for sustained FPS pressure at far
+      // zoom; close and medium views keep every tree even when FPS is low.
+      const thin = (process.env.NEXT_PUBLIC_GAME_BENCHMARK === "1" ? benchmarkWork.treeThinning : null)
+        ?? thinTrees(scene), selection = useCameraStore.getState().selection
       data.instances.update(mesh, currentCamera, thin, selection?.kind === "tree" ? selection.id : -1)
       ids.count = mesh.count
       mesh.userData.totalTrees = entries.length

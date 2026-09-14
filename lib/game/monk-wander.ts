@@ -1,6 +1,7 @@
+import { isComplete } from "./construction"
 import { smoothWalkingRoute } from "./walking-shortcuts"
 import { footpathRouteCost } from "./footpaths"
-import { shrineLayout } from "./shrine-layout"
+import { shrineLayout, isChapel } from "./shrine-layout"
 import { buildingStepAllowed, containsTile, shrineFurnitureClear } from "./building-navigation"
 import { surfaceHeight } from "./map/bridges"
 import { walkingSurface } from "./map/walking-surface"
@@ -24,8 +25,8 @@ export function monkWander(map: GameMap, radius = 3) {
     const terrain = tileAt(map, tx, tz), building = buildingAt(map, tx, tz)
     if (!terrain || !TERRAIN[terrain].passable || (building && building.id !== hovel?.id)) return
     const inside = !!hovel && containsTile(hovel, tile)
-    if (inside && (!shrineFurnitureClear(hovel!, map.site?.door, tile, tile)
-      || (x === layout!.altarTile.x && z === layout!.altarTile.z))) return
+    if (inside && (!isComplete(hovel!) || !shrineFurnitureClear(hovel!, map.site?.door, tile, tile)
+      || (!isChapel(hovel!) && x === layout!.altarTile.x && z === layout!.altarTile.z))) return
     const wx = tileToWorldX(map, x), wz = tileToWorldZ(map, z)
     candidates.set(key(tile), { tile, inside, spot: { x: wx, z: wz,
       y: inside ? walkingSurface(map, wx, wz).height : surfaceHeight(map, tx, tz) } })
@@ -62,7 +63,7 @@ export function monkWander(map: GameMap, radius = 3) {
   const nodes = queue.map(id => candidates.get(id)!)
   const nodeIndices = new Map(queue.map((id, index) => [id, index]))
   const prayerSpots: WanderSpot[] = []
-  if (layout) for (const [dx, dz] of ROUTE_DIRS) {
+  if (layout && isComplete(hovel!) && !isChapel(hovel!)) for (const [dx, dz] of ROUTE_DIRS) {
     const target = { x: tileToWorldX(map, layout.altarTile.x + dx), z: tileToWorldZ(map, layout.altarTile.z + dz) }
     const choices = nodes.filter(n => n.inside && !prayerSpots.includes(n.spot))
       .sort((a, b) => Math.hypot(a.spot.x - target.x, a.spot.z - target.z) - Math.hypot(b.spot.x - target.x, b.spot.z - target.z))

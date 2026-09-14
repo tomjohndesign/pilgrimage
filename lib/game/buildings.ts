@@ -14,7 +14,7 @@ import { WORK_POSTS } from "./work-posts"
  * A building is a change to the world that travelers react to (see sim.ts):
  * a woodcutter’s hut is a place with work in it, and a jobless traveler who hears
  * of an open place at the junction may settle and take it. The generator
- * places the shrine and monk shelter; lumber camps are the player's doing.
+ * places the shrine; residences and lumber camps are the player's doing.
  */
 
 export type BuildingKind = "workshop" | "tavern" | "inn" | "sheep-pen" | "market"
@@ -76,9 +76,9 @@ export const BUILDING_KINDS: Record<BuildingKind, BuildingKindDef> = {
   "sheep-pen": {
     id: "sheep-pen",
     label: "Sheep pen",
-    blurb: "Two shepherds gather sheep and lead them home to the fold.",
-    w: 3,
-    d: 2,
+    blurb: "Two shepherds tend up to eight sheep and goats, delivering milk and meat to a public food platform and replenishing the flock from the shed.",
+    w: 5,
+    d: 4,
     height: 0.70,
     color: "#8c7658",
     roofColor: "#a59164",
@@ -89,7 +89,7 @@ export const BUILDING_KINDS: Record<BuildingKind, BuildingKindDef> = {
   market: {
     id: "market",
     label: "Market stall",
-    blurb: "A stall for one keeper, with a rear yard for their cart and animal.",
+    blurb: "A stall for one keeper, with an open bay beside it for their cart and animal.",
     w: MARKET_WIDTH,
     d: MARKET_DEPTH,
     height: 0.65,

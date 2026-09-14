@@ -26,9 +26,9 @@ export type FootpathObstacle = TilePos & { radius: number }
 export interface ObstacleIndex { source: readonly FootpathObstacle[]; reach: number; cells: Map<number, FootpathObstacle[]> }
 /** One stretch of road's answer to "is there a way across here?"; see lib/game/walking-shortcuts. */
 export interface RoadCut { end: number | null; atSeconds: number; ground: number; buildings: number }
-export interface Footpaths { rerouted: Set<number>; obstacles?: readonly FootpathObstacle[]; obstacleIndex?: ObstacleIndex; paved?: boolean; founding: Map<number, number>; edges: Map<number | string, Footpath>; contacts: Map<number | string, ContactTrack>; cuts?: Map<number, RoadCut>; ground: number; revision: number; elapsed: number }
+export interface Footpaths { planned: Set<number | string>; rerouted: Set<number>; obstacles?: readonly FootpathObstacle[]; obstacleIndex?: ObstacleIndex; paved?: boolean; founding: Map<number, number>; edges: Map<number | string, Footpath>; contacts: Map<number | string, ContactTrack>; cuts?: Map<number, RoadCut>; ground: number; revision: number; elapsed: number }
 export const createFootpaths = (map?: GameMap): Footpaths => ({
-  rerouted: new Set(),
+  planned: new Set(), rerouted: new Set(),
   founding: new Map(map?.tiles.flatMap((terrain, index) => isRoadTerrain(terrain) ? [[index, FOUNDING_ROAD_WEAR] as const] : []) ?? []),
   edges: new Map(), contacts: new Map(), ground: 0, revision: 0, elapsed: 0,
 })
@@ -281,14 +281,15 @@ export function establishedFootpath(map: GameMap, x: number, z: number): boolean
   return false
 }
 
-/** Worn corridors gradually approach the cost of an existing road; obstacles still govern access. */
+/** Planned building connections guide walkers before wear appears; worn corridors
+ * elsewhere gradually approach road cost. Neither overrides physical access. */
 export function footpathRouteCost(map: GameMap, from: TilePos, to: TilePos): number {
   const ax = Math.round(from.x), az = Math.round(from.z), bx = Math.round(to.x), bz = Math.round(to.z)
   const a = az * map.width + ax, b = bz * map.width + bx
   const terrain = tileAt(map, bx, bz)!
   const base = isRoadTerrain(terrain) && map.footpaths?.founding.has(b)
     ? 3 - 2 * foundingRoadStrength(map, b) : walkingRouteCost(terrain)
-  if (base === 1) return 1
+  if (base === 1 || map.footpaths?.planned.has(footpathEdgeKey(a, b))) return 1
   const wear = map.footpaths?.edges.get(footpathEdgeKey(a, b))?.wear ?? 0
   const strength = Math.min(1, Math.max(0, (wear - FOOTPATH_WEAR) / (FOOTPATH_ESTABLISHED_AT - FOOTPATH_WEAR)))
   return base - (base - 1) * strength * strength * (3 - 2 * strength)

@@ -1,11 +1,13 @@
+import { shrineBuildingRenown, churchExpansionContains, churchUpgradeError, churchPlan, CHURCH_COST } from "./shrine-upgrade"
 import { innPlacementError } from "./inn"
+import { churchAdditionError } from "./church-additions"
 import { buildingEntrance, constructionWork, isComplete } from "./construction"
-import { placementBuildingLayout, placementRoofRotation } from "./building-placement-layout"
-import { rotatedFootprint, buildingEntry, buildingApproaches, type BuildingRotation } from "./building-rotation"
+import { placementBuildingLayout, placementSite } from "./building-placement-layout"
+import { rotatedFootprint, buildingEntry, buildingApproaches, wellApproaches, type BuildingRotation } from "./building-rotation"
 import { footprintGrading, groundHeight, levelBuildingGround } from "./map/elevation"
 import { buildingKind, placementProblem, PLACEMENT_PROBLEM_LABELS, type PlacedBuilding } from "./buildings"
 import { settlementRoute, shrineRoadHead } from "./settlement-route"
-import { buildInfluence, getBuildInfluence, type BuildInfluence } from "./build-influence"
+import { buildInfluence } from "./build-influence"
 import type { SimState } from "./sim"
 import { DEFAULT_ADMISSION_FEE } from "./shrine-visit"
 import { TERRAIN, TILE_HEIGHT } from "./map/terrain"
@@ -28,6 +30,8 @@ export const SETTLEMENT_RADIUS = DEFAULT_BALANCE.rules.buildRadius
 export interface Settlement {
   /** Generated buildings permanently acquired when connected influence reaches them. */
   claimedBuildings: string[]
+  /** Removed IDs stay reserved and hide demolished generated buildings on reload. */
+  demolishedBuildings: string[]
   /** Terrain after successful purchases; the generated base map stays immutable. */
   elevation?: GameMap["elevation"]
   resources: Resources
@@ -38,15 +42,19 @@ export interface Settlement {
   collectedAdmission: number
   /** Counter takings already credited; sales never credit the same coin twice. */
   collectedTrade: number
+  /** Wages already debited; a day's pay never leaves the treasury twice. */
+  paidWages: number
   /** Renown bestowed by cheat codes, on top of what the establishment earns. */
   grantedRenown: number
   /** Only player-built additions. The founding hovel stays on the base map. */
+  church?: BuildingDef
   structures: BuildingDef[]
 }
 
 export function createSettlement(balance: GameBalance = DEFAULT_BALANCE): Settlement {
   return {
     claimedBuildings: [],
+    demolishedBuildings: [],
     resources: { gold: balance.rules.startingGold, wood: balance.rules.startingWood },
     structures: [],
     deliveredWood: 0,
@@ -54,6 +62,7 @@ export function createSettlement(balance: GameBalance = DEFAULT_BALANCE): Settle
     shrineAdmission: DEFAULT_ADMISSION_FEE,
     collectedAdmission: 0,
     collectedTrade: 0,
+    paidWages: 0,
     grantedRenown: 0,
   }
 }
@@ -72,9 +81,39 @@ export function grantRenown(settlement: Settlement, renown: number): Settlement 
 
 /** Finish every planned site at once. Returns the same settlement when nothing is pending. */
 export function completeConstruction(settlement: Settlement): Settlement {
-  if (settlement.structures.every(isComplete)) return settlement
-  return { ...settlement, structures: settlement.structures.map(building => isComplete(building) ? building
-    : { ...building, construction: { ...building.construction!, work: building.construction!.required } }) }
+  if (settlement.structures.every(isComplete) && (!settlement.church || isComplete(settlement.church))) return settlement
+  const finish = (building: BuildingDef) => isComplete(building) ? building
+    : { ...building, construction: { ...building.construction!, work: building.construction!.required } }
+  return { ...settlement, church: settlement.church ? finish(settlement.church) : undefined,
+    structures: settlement.structures.map(finish) }
+}
+
+/** The founding shrine anchors the settlement; independent property is not ours. */
+export function demolitionTargets(map: GameMap, id: string): BuildingDef[] {
+  const building = map.buildings.find(b => b.id === id)
+  if (!building || building.owner === "independent" || id === map.site?.hovelId) return []
+  const removed = new Set([id])
+  let previousSize = 0
+  while (previousSize !== removed.size) {
+    previousSize = removed.size
+    for (const b of map.buildings) {
+      if ((b.supportId && removed.has(b.supportId)) || (b.churchId && removed.has(b.churchId))) removed.add(b.id)
+    }
+  }
+  return [building, ...map.buildings.filter(b => b.id !== id && removed.has(b.id))]
+}
+
+/** Demolition is immediate and does not refund construction costs. */
+export function demolishStructure(settlement: Settlement, baseMap: GameMap, id: string): Settlement {
+  const targets = demolitionTargets(settlementMap(baseMap, settlement), id)
+  if (!targets.length) return settlement
+  const removed = new Set(targets.map(b => b.id))
+  return {
+    ...settlement,
+    structures: settlement.structures.filter(b => !removed.has(b.id)),
+    claimedBuildings: settlement.claimedBuildings.filter(id => !removed.has(id)),
+    demolishedBuildings: [...settlement.demolishedBuildings, ...removed],
+  }
 }
 
 /** Preserve generated IDs and residents; ownership is a session overlay on the base map. */
@@ -88,8 +127,9 @@ export function settlementMap(baseMap: GameMap, settlement: Settlement): GameMap
   const cached = perSettlement.get(settlement)
   if (cached) return cached
   const claimed = new Set(settlement.claimedBuildings)
+  const demolished = new Set(settlement.demolishedBuildings)
   const map = { ...baseMap, elevation: settlement.elevation ?? baseMap.elevation,
-    buildings: [...baseMap.buildings.map(b => claimed.has(b.id) ? { ...b, owner: undefined } : b), ...settlement.structures] }
+    buildings: [...baseMap.buildings.filter(b => !demolished.has(b.id)).map(b => b.id === baseMap.site?.hovelId && settlement.church ? settlement.church : claimed.has(b.id) ? { ...b, owner: undefined } : b), ...settlement.structures] }
   perSettlement.set(settlement, map)
   return map
 }
@@ -131,6 +171,25 @@ export function creditAdmission(settlement: Settlement, receipts: number): Settl
     collectedAdmission: receipts,
     resources: { ...settlement.resources, gold: settlement.resources.gold + receipts - settlement.collectedAdmission },
   }
+}
+
+/**
+ * Wages are handed over in the simulation and debited once. The treasury can go
+ * no lower than empty: a settlement that cannot make payroll simply pays less.
+ */
+export function payWages(settlement: Settlement, wagesPaid: number): Settlement {
+  if (wagesPaid <= settlement.paidWages) return settlement
+  return {
+    ...settlement,
+    paidWages: wagesPaid,
+    resources: { ...settlement.resources,
+      gold: Math.max(0, settlement.resources.gold - (wagesPaid - settlement.paidWages)) },
+  }
+}
+
+/** What the payroll may still draw on: gold on the books, less wages not yet debited. */
+export function syncWages(sim: SimState, settlement: Settlement): void {
+  sim.treasuryGold = Math.max(0, settlement.resources.gold - (sim.wagesPaid - settlement.paidWages))
 }
 
 export function relicRenown(relic: Relic, balance: GameBalance = DEFAULT_BALANCE): number {
@@ -178,7 +237,7 @@ export function settlementRenown(
   let scenery = 0
   for (const building of map.buildings) {
     if (building.owner === "independent" || !isComplete(building)) continue
-    if (building.id === map.site?.hovelId) buildings += balance.rules.hovelRenown
+    if (building.id === map.site?.hovelId) buildings += shrineBuildingRenown(map, balance.rules.hovelRenown)
     const def = buildCatalog(balance).find((item) => item.id === building.buildType)
     if (def?.category === "buildings") buildings += def.renown
     if (def?.category === "scenery") scenery += def.renown
@@ -224,11 +283,12 @@ export function buildingAt(map: GameMap, x: number, z: number): BuildingDef | un
   return map.buildings.find((b) => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d)
 }
 
-/** Shared terrain feedback for the influence overlay and the full footprint check. */
-export function buildTileError(map: GameMap, x: number, z: number, influence: BuildInfluence): string | null {
+/** Shared terrain feedback for the placement overlay and the full footprint check. */
+export function buildTileError(map: GameMap, x: number, z: number, churchAddition = false): string | null {
   const terrain = tileAt(map, x, z)
   if (!terrain) return "The whole structure must fit on the map."
   if (buildingAt(map, x, z)) return "Another structure occupies this space."
+  if (!churchAddition && churchExpansionContains(map, x, z)) return "Reserved for the church and its future side wings."
   if(map.site?.door.x===x && map.site.door.z===z) return "Keep the shrine approach clear."
   if(map.buildings.some(b => buildingApproaches(map,b).some(p=>p.x===x && p.z===z)))
     return "Keep access to existing buildings clear: reserve the entrance path tile."
@@ -241,8 +301,6 @@ export function buildTileError(map: GameMap, x: number, z: number, influence: Bu
     return "Keep the forest track clear: the old growth leaves no way around it."
   if (map.elevation?.cliffs[z * map.width + x]) return "Choose level ground away from cliffs."
   if (map.water?.depth[z * map.width + x]) return "Structures need dry ground."
-  if (!influence.connected[z * map.width + x])
-    return "Build beside the shrine approach or within connected influence from a renown source."
   return null
 }
 
@@ -280,7 +338,9 @@ export function placementError(
   balance: GameBalance = DEFAULT_BALANCE,
   rotation: BuildingRotation = 0,
 ): string | null {
-  rotation = placementRoofRotation(map, def, at, rotation)
+  const site = placementSite(map, def, at, rotation)
+  rotation = site.rotation
+  at = site
   const footprintError = validateFootprint(map, def, at, balance, rotation)
   if (footprintError || !map.site) return footprintError
   let byBalance = accessVerdicts.get(map)
@@ -301,17 +361,18 @@ function validateFootprint(map: GameMap, def: BuildDefinition, at: TilePos, bala
   const hovel = map.buildings.find((b) => b.id === map.site?.hovelId)
   if (!hovel) return "A founding shrine is needed before building."
   if (!Number.isInteger(at.x) || !Number.isInteger(at.z)) return "Choose a tile on the map."
+  const additionError = churchAdditionError(map, { ...at, ...footprint, buildType: def.id })
+  if (additionError) return additionError
   const stacked=innPlacementError(map,{...def,...footprint,...at,rotation,buildType:def.id})
   if (stacked !== undefined) return stacked
-  const influence = getBuildInfluence(map, balance)
   for (let z = at.z; z < at.z + footprint.d; z++) {
     for (let x = at.x; x < at.x + footprint.w; x++) {
-      const error = buildTileError(map, x, z, influence)
+      const error = buildTileError(map, x, z, def.id === "monk-shelter")
       if (error) return error
     }
   }
   // Uneven ground is cut and filled on purchase, up to the tuned limit.
-  const grading = footprintGrading(map, { ...at, ...footprint })
+  const grading = footprintGrading(map, { ...at, ...footprint, churchId: def.id === "monk-shelter" ? map.site?.hovelId : undefined })
   if (grading.cliff) return "Levelling here would leave a cliff at the edge; choose gentler ground."
   if (Math.max(grading.cut, grading.fill) > balance.rules.levellingLimit + 1e-9) return "Too much earth to move; choose gentler ground."
   if (def.id === "workshop") {
@@ -326,9 +387,11 @@ function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, balance
   const footprint = rotatedFootprint(def, rotation)
   if (map.site) {
     // The threshold is measured against the graded floor, not today's ground.
-    const floor = footprintGrading(map, { ...at, ...footprint }).foundation + TILE_HEIGHT
+    const floor = footprintGrading(map, { ...at, ...footprint, churchId: def.id === "monk-shelter" ? map.site?.hovelId : undefined }).foundation + TILE_HEIGHT
     const candidate = { buildType: def.id, ...def, ...footprint, rotation, ...at, ...placementBuildingLayout(map,{...def,...footprint,rotation,...at,buildType:def.id,id:"construction-preview"}), id: "construction-preview", construction: { work: 0, required: 1 } }
     const approaches=buildingApproaches(map,candidate)
+    if (!candidate.churchId && approaches.some(p => churchExpansionContains(map, p.x, p.z)))
+      return "Keep this entrance outside the church and side-wing plots."
     for(const approach of approaches) {
       const terrain=tileAt(map,approach.x,approach.z)
       if(!terrain || !TERRAIN[terrain].passable || buildingAt(map,approach.x,approach.z)
@@ -338,7 +401,22 @@ function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, balance
         return "The entrance path needs level ground."
     }
     const occupied = [...map.buildings, candidate]
-    if ((approaches.length ? approaches : [buildingEntrance(candidate)]).some(entry=>!settlementRoute(map, occupied, map.site!.door, entry)))
+    if (candidate.churchId) {
+      const finished = { ...candidate, construction: undefined }
+      const connected = { ...map, buildings: [...map.buildings, finished] }
+      if (!settlementRoute(connected, connected.buildings, map.site.door, buildingEntry(finished, true), false, true))
+        return "Keep a clear passage through the church to the residence."
+      if (!settlementRoute(map, occupied, map.site.door, buildingEntry(candidate, false, -1)))
+        return "Leave room outside the residence for its builders."
+    } else if (candidate.buildType === "well") {
+      if (!wellApproaches(candidate).some(entry => {
+        const terrain = tileAt(map, entry.x, entry.z)
+        return terrain && TERRAIN[terrain].passable && !buildingAt(map, entry.x, entry.z)
+          && !(map.water?.depth[entry.z * map.width + entry.x] ?? 0)
+          && Math.abs(groundHeight(map, entry.x, entry.z) - floor) <= balance.rules.levellingLimit + 1e-9
+          && settlementRoute(map, occupied, map.site!.door, entry)
+      })) return "Keep a clear route to at least one side of the well."
+    } else if ((approaches.length ? approaches : [buildingEntrance(candidate)]).some(entry=>!settlementRoute(map, occupied, map.site!.door, entry)))
       return "Keep access to the construction entrance clear."
     const roadBlock = roadBlockError(map, occupied)
     if (roadBlock) return roadBlock
@@ -347,7 +425,12 @@ function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, balance
     const junction = shrineRoadHead(map, occupied)
     if (junction && !settlementRoute(map, occupied, junction, map.site.door))
       return "Leave a way through from the road to the shrine door."
-    for (const camp of map.buildings.filter(b => b.buildType && !b.supportId)) {
+    for (const camp of map.buildings.filter(b => b.buildType && !b.supportId && !b.churchId)) {
+      if (camp.buildType === "well") {
+        if (!wellApproaches(camp).some(entry => settlementRoute(map, occupied, map.site!.door, entry)))
+          return "Keep access to existing wells clear."
+        continue
+      }
       const entries=buildingApproaches(map,camp)
       if ((entries.length ? entries : [buildingEntry(camp)]).some(entry=>!settlementRoute(map, occupied, map.site!.door, entry)))
         return "Keep access to existing buildings clear."
@@ -409,11 +492,17 @@ export function purchaseStructure(
     return { settlement, error: `Requires ${def.requiredRenown} shrine renown.` }
   if (!canAfford(settlement.resources, def.cost))
     return { settlement, error: "Not enough gold or wood." }
-  rotation=placementRoofRotation(map,def,at,rotation)
+  const site=placementSite(map,def,at,rotation)
+  rotation=site.rotation
+  at=site
   const error = placementError(map, def, at, balance, rotation)
   if (error) return { settlement, error }
+  const prefix = def.id === "workshop" ? "workshop" : "settlement"
+  const reserved = new Set([...map.buildings.map(b => b.id), ...settlement.demolishedBuildings])
+  let sequence = settlement.structures.length
+  while (reserved.has(`${prefix}-${sequence}`)) sequence++
   const building: BuildingDef = {
-    id: `${def.id === "workshop" ? "workshop" : "settlement"}-${settlement.structures.length}`,
+    id: `${prefix}-${sequence}`,
     buildType: def.id,
     label: def.label,
     x: at.x,
@@ -439,4 +528,16 @@ export function purchaseStructure(
     },
     error: null,
   }
+}
+
+/** A purchased replacement is saved separately from player-placed additions. */
+export function upgradeChurch(settlement: Settlement, baseMap: GameMap): { settlement: Settlement; error: string | null } {
+  const map = settlementMap(baseMap, settlement), error = churchUpgradeError(map, settlement.resources)
+  if (error) return { settlement, error }
+  const planned = churchPlan(map)!
+  const church = { ...planned, construction: { work: 0, required: constructionWork(planned.w, planned.d), cost: { ...CHURCH_COST } } }
+  return { error: null, settlement: { ...settlement, church,
+    elevation: levelBuildingGround(map, church) ?? settlement.elevation,
+    spentWood: settlement.spentWood + CHURCH_COST.wood,
+    resources: { gold: settlement.resources.gold - CHURCH_COST.gold, wood: settlement.resources.wood - CHURCH_COST.wood } } }
 }

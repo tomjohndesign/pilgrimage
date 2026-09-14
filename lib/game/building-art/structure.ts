@@ -1,6 +1,6 @@
-import { INN_OVERHANG } from "../inn"
 import { innLadderParts, innParts } from "./inn"
 import { innLayout } from "../inn-layout"
+import { FOOD_TYPES } from "../storage"
 import { waterSourceParts } from "../water-sources/model"
 import type { CrossroadArm } from "../map/crossroads"
 import { wallSide } from "./cutaway"
@@ -8,10 +8,15 @@ import type { BuildingDef } from "../map/types"
 import { buildingParts, type BuildingPart } from "./geometry"
 import { earlyBuildingParts, type SettlementBuildingType } from "./early-geometry"
 import { EARLY_BUILDINGS, earlyBuildingRecipe } from "./style"
-import { singlePlaneRoofRise } from "./dimensions"
+import { INN_OVERHANG, singlePlaneRoofRise } from "./dimensions"
 import type { RoofJoin } from "./roof-joins"
+import type { ChurchWing } from "../church-additions"
 
-export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor" | "layoutSeed" | "hearthZ" | "fireplace" | "floorHeight" | "supportId" | "tavernFlue">
+export type StructureAppearance = Pick<BuildingDef, "buildType" | "w" | "d" | "height" | "color" | "roofColor" | "layoutSeed" | "hearthZ" | "fireplace" | "floorHeight" | "supportId" | "tavernFlue"> & {
+  /** A market stall shows its cloth and wares only while a keeper works it; previews assume one. */
+  stocked?: boolean
+  churchWing?: ChurchWing
+}
 
 const SETTLEMENT_TYPES: readonly SettlementBuildingType[] = [
   "shelter", "workshop", "hall", "garden", "cross", "lumberCamp", "market", "guard-post", "sheep-pen",
@@ -28,8 +33,8 @@ export function structureParts(building: StructureAppearance, roofJoins: RoofJoi
   if (preset) {
     const parts = building.buildType === "inn" && building.supportId
       ? innParts(building.w,building.d,building.height,false,17+(building.layoutSeed ?? 0),true,building.tavernFlue)
-      : earlyBuildingParts({ ...earlyBuildingRecipe(preset.id), layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins, width: building.w, depth: building.d, wallHeight: building.height,
-      roofRise: preset.id === "enclosure" ? 0 : singlePlaneRoofRise(building.d) })
+      : earlyBuildingParts({ ...earlyBuildingRecipe(preset.id), churchWing: building.churchWing, layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins, stocked: building.stocked, width: building.w, depth: building.d, wallHeight: building.height,
+      roofRise: ["enclosure", "storehouse"].includes(preset.id) ? 0 : singlePlaneRoofRise(building.d) })
     if (building.buildType === "inn" && building.supportId && building.floorHeight) {
       // The ladder opens into the right aisle beside the middle row of beds.
       const {x:hatchX,z:hatchZ}=innLayout(building.w,building.d,true).hatch
@@ -48,9 +53,9 @@ export function structureParts(building: StructureAppearance, roofJoins: RoofJoi
     if (building.buildType !== "storehouse") return building.buildType === "workshop" ? parts.filter(p=>!p.name.startsWith("firewood-")) : parts
     const contents: BuildingPart[] = []
     // Empty food bins remain recognizable before the first delivery.
-    const binWidth = building.w * 0.18, binDepth = building.d * 0.16
-    for (let slot = 0; slot < 4; slot++) {
-      const x = (slot - 1.5) * building.w * 0.21, z = -building.d * 0.33
+    const binWidth = building.w * 0.14, binDepth = building.d * 0.16
+    for (let slot = 0; slot < FOOD_TYPES.length; slot++) {
+      const x = (slot - (FOOD_TYPES.length-1)/2) * building.w * .9 / FOOD_TYPES.length, z = -building.d * 0.33
       const box = (name: string, position: BuildingPart["position"], size: BuildingPart["size"]) =>
         contents.push({ name: `food-bin-${slot}-${name}`, layer: "interior", position, size, color: "#8c7658", outline: false })
       box("bottom", [x, 0.35, z], [binWidth, 0.04, binDepth])
@@ -65,7 +70,7 @@ export function structureParts(building: StructureAppearance, roofJoins: RoofJoi
   if (isSettlementType(building.buildType)) return earlyBuildingParts({
     ...earlyBuildingRecipe("house"),
     variant: building.buildType,
-    layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins,
+    layoutSeed: building.layoutSeed, hearthZ: building.hearthZ, fireplace: building.fireplace, roofJoins, stocked: building.stocked,
     width: building.w,
     depth: building.d,
     wallHeight: building.height,

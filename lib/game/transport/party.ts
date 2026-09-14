@@ -7,7 +7,10 @@ import { animalWalkSpeed, cartOffset, type Animal } from "./assets"
 import { roadCartPose } from "./bridge-guide"
 import { followCart, type CartPose } from "./follow"
 import { convoyBuildingsClear, parkingClear, shrineParking, type ParkingContext, type ShrineParking } from "./navigation"
+import { enclaveParking } from "./enclave-parking"
+import type { HorseStanding } from "../horse-standing"
 import { routeLength, routePoint } from "./roadside"
+import { walkingSurface } from "../map/walking-surface"
 import { advanceCartProgress } from "./route"
 import { driveRouteSegment } from "./building-parking"
 import { seatPoint, type PassengerCart, type PackAnimal } from "./party-assets"
@@ -31,7 +34,14 @@ export interface PartyTransport {
   diversionCheck?: number
   diversionBuildings?: GameMap["buildings"]
 }
-export interface PartyPack { kind: PackAnimal; handler: number; progress: number; pose: CartPose; distance: number }
+export interface PartyPack {
+  kind: PackAnimal; handler: number; progress: number; pose: CartPose; distance: number
+  /** Led to the horse-standing while the company visits the enclave; on the road otherwise. */
+  parking?: ShrineParking
+  phase?: "parking" | "parked" | "leaving"
+}
+/** How far ahead of a pack animal its handler walks on the lead, in tiles per unit of character scale. */
+export const PACK_LEAD = 1.1
 
 /** Personal IDs and appearance never change when allocating transport. Keep at
  * least one walker, and favor walking companies over a road full of wagons. */
@@ -77,18 +87,89 @@ export function boardParty(party: TravelParty, members: SimTraveler[], scale: nu
   for (const s of members) s.partyRiding = cart.seats.includes(s.id)
   seatParty(party, members, scale)
 }
-/** The context must hold only nearby trunks and obstacles, as the vendor parking
- * context does; the parking search samples clearance thousands of times. */
-export function parkParty(party: TravelParty, map: GameMap, scale: number, context: ParkingContext, occupied: CartPose[], intent: "visit") {
+/** The wagon goes up to the horse-standing like every other visitor's; only
+ * when the yard cannot take it does the company settle for the verge at the
+ * fork. Each context must hold only nearby trunks and obstacles, as the vendor
+ * parking context does; the parking search samples clearance thousands of
+ * times. `standingContext` is gathered around the yard, `context` around the wagon. */
+export function parkParty(party: TravelParty, map: GameMap, scale: number, context: ParkingContext, occupied: CartPose[], intent: "visit",
+  standing: HorseStanding | null = null, standingContext: ParkingContext = context) {
   const cart = party.transport!
   if (cart.retry > 0) return false
   cart.retry = 8
-  const parking = shrineParking(map, cart.progress, party.direction, -cartOffset(cart.animal) * scale,
-    cart.animal, scale, occupied, context, false)
+  const wheelbase = -cartOffset(cart.animal) * scale
+  const parking = enclaveParking(map, standing, cart.progress, party.direction, wheelbase, cart.animal, scale, occupied, standingContext)
+    ?? shrineParking(map, cart.progress, party.direction, wheelbase, cart.animal, scale, occupied, context, false)
   if (!parking) return false
   cart.parking = parking; cart.phase = "parking"; cart.intent = intent
   party.reason = "Pulling off the road together"
   return true
+}
+/** Plan a stand for every pack animal before anyone lines up: all or none, so
+ * the company never leaves one animal standing on the road. Stands are taken
+ * at the horse-standing first and on the verge at the fork when it is full. */
+export function parkPartyPacks(party: TravelParty, map: GameMap, scale: number, context: ParkingContext, occupied: readonly CartPose[],
+  standing: HorseStanding | null = null, standingContext: ParkingContext = context): boolean {
+  const packs = party.packs ?? []
+  const plans: ShrineParking[] = []
+  for (const pack of packs) {
+    const taken = [...occupied, ...plans.map(plan => plan.parked)]
+    const plan = enclaveParking(map, standing, pack.progress, party.direction, 0, pack.kind, scale, taken, standingContext)
+      ?? shrineParking(map, pack.progress, party.direction, 0, pack.kind, scale, taken, context, false)
+    if (!plan) return false
+    plans.push(plan)
+  }
+  packs.forEach((pack, i) => { pack.parking = plans[i]; pack.phase = "parking"; plans[i].distance = 0 })
+  return true
+}
+/** Lead every pack animal on its way along its planned route, to the stand or
+ * back to the road, at the animal's own pace with its handler a lead's length
+ * ahead. The handler is carried by the company for the walk, so no errand or
+ * road step moves them; `wore` hears each animal's step, so the ground it
+ * crosses wears like anyone's. Returns whether no animal is still on its way. */
+export function stepPackParking(party: TravelParty, states: ReadonlyMap<number, SimTraveler>, map: GameMap, scale: number, dt: number,
+  wore?: (from: { x: number; z: number }, to: { x: number; z: number }) => void): boolean {
+  const length = map.road!.length - 1, wrap = (p: number) => ((p % length) + length) % length
+  for (const pack of party.packs ?? []) {
+    pack.distance = 0
+    const parking = pack.parking
+    if (!parking || pack.phase !== "parking" && pack.phase !== "leaving") continue
+    const route = pack.phase === "parking" ? parking.entry : parking.exit, routeSpan = routeLength(route)
+    const previous = pack.pose
+    if (dt > 0) {
+      parking.distance = Math.min(routeSpan, parking.distance + animalWalkSpeed(pack.kind, scale) * dt)
+      const next = followCart(previous, routePoint(route, parking.distance), 0)
+      pack.distance = Math.hypot(next.hitch.x - previous.hitch.x, next.hitch.z - previous.hitch.z)
+      pack.pose = next
+      if (pack.distance > 1e-6) wore?.(previous.hitch, next.hitch)
+    }
+    const handler = states.get(pack.handler)
+    const arrived = parking.distance >= routeSpan - 1e-6
+    if (handler) {
+      // On the lead ahead of the animal; beside its head once it stands.
+      const ahead = arrived && pack.phase === "parking"
+        ? { x: parking.parked.hitch.x + Math.sin(parking.parked.heading) * PACK_LEAD * scale, z: parking.parked.hitch.z + Math.cos(parking.parked.heading) * PACK_LEAD * scale }
+        : routePoint(route, Math.min(routeSpan, parking.distance + PACK_LEAD * scale))
+      handler.x = ahead.x; handler.z = ahead.z; handler.y = walkingSurface(map, ahead.x, ahead.z).height
+      handler.offRoadRoute = null; handler.walkFrom = null
+      handler.partyCarried = true; handler.partyWaiting = false; handler.partySpeed = dt > 0 ? pack.distance / dt : 0
+    }
+    if (!arrived) continue
+    if (pack.phase === "parking") {
+      pack.phase = "parked"; pack.pose = parking.parked; parking.pose = parking.parked; parking.walking = true; parking.distance = 0
+    } else {
+      pack.phase = undefined; pack.parking = undefined
+      pack.progress = wrap(parking.returnProgress)
+      pack.pose = roadCartPose(map, pack.progress, party.direction, 0, scale)
+      if (handler) {
+        handler.progress = wrap(advanceCartProgress(map, pack.progress, party.direction * PACK_LEAD * scale))
+        const at = roadCartPose(map, handler.progress, party.direction, 0, scale).hitch
+        handler.x = at.x; handler.z = at.z; handler.y = walkingSurface(map, at.x, at.z).height
+        handler.direction = party.direction
+      }
+    }
+  }
+  return (party.packs ?? []).every(pack => pack.phase !== "parking" && pack.phase !== "leaving")
 }
 /** Turn the wagon on the spot to face the company's new direction. */
 export function turnPartyCart(party: TravelParty, map: GameMap, scale: number) {
@@ -165,7 +246,7 @@ export function stepPartyPacks(party: TravelParty, states: ReadonlyMap<number, S
     pack.distance = 0
     if (!party.members.includes(pack.handler)) pack.handler = party.members.find(id => !party.packs?.some(p => p !== pack && p.handler === id)) ?? party.members[0]
     const handler = states.get(pack.handler)
-    if (!handler || party.stage !== "traveling" || handler.activity !== "walking" || dt <= 0) continue
+    if (pack.phase || !handler || party.stage !== "traveling" || handler.activity !== "walking" || dt <= 0) continue
     const place = advanceCartProgress(map, handler.progress, -party.direction * 1.1 * scale)
     let progress = place
     if (!party.formed) {

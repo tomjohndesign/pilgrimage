@@ -25,7 +25,8 @@ describe("game save schema", () => {
     expect(result.save?.version).toBe(SAVE_VERSION)
     expect(result.save?.world.generation).toBe(1)
     expect(result.save?.settlement).toEqual(parseGameSave(input).save?.settlement)
-    expect(parseGameSave(input).save?.world.generation).toBe(2)
+    expect(parseGameSave(input).save?.world.generation).toBe(4)
+    expect(parseGameSave({ ...input, world: { ...input.world, generation: 2 } }).save?.world.generation).toBe(2)
   })
 
   it("accepts a well-formed document and fills elevation defaults", () => {
@@ -50,10 +51,10 @@ describe("game save schema", () => {
 
   it("snaps a retired playback speed to the nearest one offered", () => {
     const input = minimal()
-    input.playback.speed = 12
-    expect(parseGameSave(input).save?.playback.speed).toBe(6)
     input.playback.speed = 4
-    expect(parseGameSave(input).save?.playback.speed).toBe(4)
+    expect(parseGameSave(input).save?.playback.speed).toBe(2)
+    input.playback.speed = 12
+    expect(parseGameSave(input).save?.playback.speed).toBe(12)
   })
 
   it("keeps world identity to the generation inputs", () => {

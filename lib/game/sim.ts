@@ -1,5 +1,8 @@
+import { seekPenFood, stepPenFood, type PenFoodVisit } from "./pen-food"
+import { shrineDonationMultiplier } from "./shrine-upgrade"
 import { fordSpeedAt } from "./map/fords"
-import { ensurePartyTransport, stepPartyPacks, seatParty, parkParty, movePartyCart, turnPartyCart } from "./transport/party"
+import { ensurePartyTransport, stepPartyPacks, stepPackParking, seatParty, parkParty, parkPartyPacks, movePartyCart, turnPartyCart } from "./transport/party"
+import { currentStanding, standingCentre, type StandingCache } from "./horse-standing"
 import { seatPoint } from "./transport/party-assets"
 import { animalWalkSpeed } from "./transport/assets"
 import { stepDevotion, stepHappiness, RELIC_HAPPINESS_GAIN, HAPPINESS_THRESHOLD, TAVERN_HAPPINESS_GAIN } from "./wellbeing"
@@ -11,13 +14,15 @@ import { placeResident } from "./jobs/residents"
 import { GAME_DAY_SECONDS, GAME_HOUR_SECONDS, START_TIME } from "./calendar"
 import { wearySpeedScale } from "./traveler-weariness"
 import { cachedFormation, diversionPoints, partyRoadDelta, sharePartyNeeds, partySlots, pruneTravelParties, regroupParty, syncTravelParties, type TravelParty } from "./travel-parties"
-import { housingBeds, vacantMonkBed } from "./housing"
+import { housingCapacity, vacantHouseBunk, vacantMonkBed } from "./housing"
 import { MONK_COUNT, MONK_JOIN_CHANCE, type Monk } from "./monks"
 import { monkWalkSpeed } from "./base-person/monk-assets"
 import { withTerrainCornerQueries } from "./map/cliff-corners"
 import { buildingSpatialQuery } from "./building-spatial"
 import { settlementJob, jobSpeedScale } from "./jobs/design"
 import { seekSheep, stepShepherd, releaseSheep, type HerdingTask } from "./herding"
+import { seekPenCare, stepShepherdCare, releasePenCare, type PenCareTask } from "./sheep-husbandry"
+import { penGatePassage } from "./pen-gate"
 import type { WildlifeWorld } from "./wildlife/simulation"
 import { cartPath, driveSegment, driveRouteSegment, marketParking, type MarketParking } from "./transport/building-parking"
 import { roadCartPose } from "./transport/bridge-guide"
@@ -25,8 +30,9 @@ import { cartRoadDiversion } from "./transport/road-diversion"
 import { recoverCart } from "./transport/recovery"
 import { blockedRoad, findRoadDiversion, takeRoadShortcut, retireBypassedRoad, exploresRoadShortcut, type WalkingShortcut } from "./walking-shortcuts"
 import { createFootpaths, HEAVY_PATH_WEAR, recordWalkingPath, regrowFootpaths, type Footpaths } from "./footpaths"
-import { knightMounted, knightLoadout, knightTravelSpeed, knightWalkStride, type HorseRest } from "./knights"
+import { knightMounted, knightLoadout, knightTravelSpeed, knightWalkStride, squireFollowGap, type HorseRest } from "./knights"
 import { DEFAULT_WALK_SPEED, DEFAULT_WALK_CADENCE, personWalkStride } from "./base-person/gait"
+import { builderRate } from "./build-labour"
 import { assignBuildingTask, buildingEntrance, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
 import { buildingEntry } from "./building-rotation"
 import { timberDestination, type FoodStock } from "./storage"
@@ -55,10 +61,11 @@ import { isComplete, isHouse } from "./construction"
 import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
 import { BUILDING_KINDS, buildingCentre, isPostedWork, type PlacedBuilding } from "./buildings"
 import { DRINK_PRICE, MEAL_PRICE, SERVING_THRESHOLD, SEAT_REST_THRESHOLD, SEAT_STAMINA_PER_HOUR, TABLE_HOURS, servingHouses, tavernVisitPlan, seatRestPlan, type TavernPlan } from "./tavern"
+import { TavernReservations } from "./tavern-reservations"
 import { generateRelic, hospitalityNeedThreshold, visitChance, type RelicStats } from "./relic"
 import { settlementRoute } from "./settlement-route"
-import { relicQueueSpacing, shrineDonation, shrineExitPlan, shrineVisitPlan } from "./shrine-visit"
-import { isRelicViewingSeat } from "./shrine-layout"
+import { relicQueueSpacing, shrineDonation, shrineExitPlan, shrineVisitPlan, shrineViewingRoute, shrineQueueStop, shrineRouteBehind } from "./shrine-visit"
+import { isChapel, isRelicViewingSeat, shrineViewingPlaces } from "./shrine-layout"
 import type { TreePlacement } from "./trees/placement"
 import { TREE_SPECIES } from "./trees/species"
 import type { TilePos } from "./map/types"
@@ -108,6 +115,7 @@ import { TRAVELER_TYPES, type Traveler } from "./travelers"
  */
 
 export type Activity =
+  | "collectingFood"
   | "toWater" | "drinking" | "drinkingLow" | "fromWater"
   | "toParking"
   | "fromParking"
@@ -118,6 +126,7 @@ export type Activity =
   | "toWork"
   | "toSheep"
   | "herding"
+  | "tendingSheep" | "feedingSheep" | "wateringSheep" | "slaughteringSheep" | "deliveringMeat" | "replacingSheep" | "milkingSheep" | "deliveringMilk"
   | "toPost"
   | "posted"
   | "toHome"
@@ -162,6 +171,7 @@ export type Activity =
   | "fromShop"
 
 export const ACTIVITY_LABELS: Record<Activity, string> = {
+  collectingFood: "Collecting food from the public platform",
   toWater: "Going to drink water", drinking: "Drinking at the well", drinkingLow: "Drinking at the water’s edge", fromWater: "Returning from water",
   toParking: "Parking outside the shrine",
   fromParking: "Returning the wagon to the road",
@@ -170,8 +180,12 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
   offering: "At the offering box",
   fromRelic: "Returning from the shrine",
   toWork: "Walking to work",
-  toSheep: "Going to gather a sheep",
-  herding: "Leading a sheep back to the pen",
+  toSheep: "Going to gather sheep or goats",
+  herding: "Herding sheep or goats back to the pen",
+  tendingSheep: "Tending the flock", feedingSheep: "Adding hay to the feed rack", wateringSheep: "Changing the trough water",
+  slaughteringSheep: "Preparing livestock for food", replacingSheep: "Bringing replacement livestock from the shed",
+  deliveringMeat: "Carrying meat to the food platform",
+  milkingSheep: "Milking a sheep or goat", deliveringMilk: "Carrying milk buckets to the food platform",
   toPost: "Going to their post",
   posted: "At work",
   toHome: "Tired — going home",
@@ -240,13 +254,6 @@ const STALL_TRADE_RANGE = 2.6
 /** Settlers knock off to sleep below this stamina, and rise again above it. */
 const SETTLER_TIRED_AT = 25
 const SETTLER_WAKE_AT = 95
-/**
- * A household keeps its own hearth, bread and small beer: sleeping at home
- * restores a settler slowly and for nothing. The counter is the quick answer,
- * and the only one open to a traveler off the road — for coin.
- */
-const HOME_MEAL_PER_HOUR = 30
-const HOME_DRINK_PER_HOUR = 40
 /** Rested and fed enough to go back to work. */
 const SETTLER_FED_AT = 80
 /** An exhausted traveler anchors to a stall or camp within this many tiles. */
@@ -320,6 +327,8 @@ export interface SimTraveler {
   partyGathering?: PartyGathering
   /** Where a shrine route began off the road; the first tile of the approach blends from here rather than the road lane. */
   shrineOrigin?: WorldPoint
+  penFoodVisit?: PenFoodVisit
+  foodRetry?:number
   waterVisit?: WaterVisit
   waterRetry?: number
   /** A reversible progression; the original calling and personal attributes stay intact. */
@@ -339,6 +348,8 @@ export interface SimTraveler {
   horseRest?: HorseRest & { progress: number; lane: number }
   workScale?: number
   workSlot?: number
+  /** Worker-seconds this settler adds per second at a site; their trades set it. */
+  buildRate?: number
   buildingTask?: BuildingTask
   constructionReturn?: import("./monk-wander").WanderSpot[]
   /** Prayer interrupts travel/work without discarding its route or reservations. */
@@ -370,11 +381,16 @@ export interface SimTraveler {
   deliveryBuilding?: string | null
   employer: string | null
   herding?: HerdingTask
+  penCare?: PenCareTask
   herdingRetry?: number
   /** Which of the employer's work slots is theirs; posts are one per slot. */
   jobSlot: number
   /** The house they sleep in. Settlers move in when they take work. */
   home: string | null
+  /** Went home to eat rather than only to sleep; they stay abed until fed. */
+  homeLarder?: boolean
+  /** Game day their last wage was paid, so each worker is paid once a day. */
+  wageDay?: number
   /** Bound repeated searches while passing inaccessible water. */
   naturalWaterRetry?: number
   naturalWaterVisit?: { heading: number; spot: WorldPoint; back: WorldPoint; route: WorldPoint[]; buildings: GameMap["buildings"] }
@@ -394,10 +410,10 @@ export interface SimTraveler {
   shrineDoor?: number
   /** Reserved until the visitor has left the shrine approach. */
   shrineSeat?: string
+  /** The kneeling place reserved on leaving the waiting line. */
+  shrinePlace?: number
   shrineQueueOrder?: number
   enclaveVisitPending?: boolean
-  /** A vendor considers keeping a stall only after seeing the relic. */
-  marketInterest?: boolean
   offeringProgress?: number
   offeringMade?: boolean
   /** Road lane used when entering the shrine, including a reversed approach for shelter. */
@@ -465,6 +481,8 @@ export interface SimState {
   focus?: SimFocus
   wildlife?: WildlifeWorld | null
   footpaths: Footpaths
+  /** Where visitors leave their animals, found as the game is played; see {@link currentStanding}. */
+  standing?: StandingCache
   procession?: RelicProcession | null
   shrineQueueSequence: number
   /** Scene publishes whether the keeper is at his station. Pure simulations start staffed. */
@@ -489,6 +507,10 @@ export interface SimState {
   shrineGold: number
   /** Cumulative counter takings from the tavern and any kept market stall. */
   tradeGold: number
+  /** Cumulative wages handed to the settlement's own workers; the economy debits each payment once. */
+  wagesPaid: number
+  /** Treasury gold the payroll may still draw on, mirrored from the settlement. */
+  treasuryGold: number
   constructionWood: number
   felled: Set<number>
   treeResources: Map<number, TreeResource>
@@ -668,7 +690,8 @@ function finishConvoyMove(s: SimTraveler, transportBefore: SimTraveler | null, m
   const cut = transportBefore.roadShortcut ?? s.roadShortcut
   let pose: CartPose | null
   if (wrapped) pose = roadCartPose(map, s.progress, s.direction, wheelbase, characterScale)
-  else if (parking && !parking.walking) pose = parking.pose
+  // Dismounting may start a foot route in this tick; the convoy ends at its bay.
+  else if (parking && (!parking.walking || transportBefore.activity === "toParking")) pose = parking.pose
   else if (cut) pose = driveRouteSegment(previous, [cut.from, ...(cut.via ?? []), cut.to],
     transportBefore.roadShortcut?.distance ?? 0, s.roadShortcut?.distance ?? cut.length, wheelbase,
     (p, heading) => convoyBuildingsClear(map, p, puller, characterScale, heading))
@@ -692,12 +715,6 @@ function finishConvoyMove(s: SimTraveler, transportBefore: SimTraveler | null, m
 function insideShrine(map: GameMap, who: { x: number; z: number }): boolean {
   const hovel = map.site?.hovelId
   return !!hovel && buildingAt(map, worldToTileX(map, who.x), worldToTileZ(map, who.z))?.id === hovel
-}
-
-/** Tiles covered by the route step under a position, so spacing reads in tiles on diagonals too. */
-function routeStep(route: readonly TilePos[], at: number): number {
-  const i = Math.max(0, Math.min(route.length - 2, Math.floor(at)))
-  return route.length < 2 ? 1 : Math.max(1, Math.hypot(route[i + 1].x - route[i].x, route[i + 1].z - route[i].z))
 }
 
 /** The last step of a relic approach that is still outside the church door. */
@@ -739,7 +756,10 @@ function shrineWorldPoint(map: GameMap, s: SimTraveler): WorldPoint {
   const diverted = route[0].x !== site.branch[0].x || route[0].z !== site.branch[0].z
   const lane = diverted ? 0 : s.lane * laneBlend
   const point = routeWorldPoint(map, route, s.branchProgress, lane)
-  if (s.branchProgress < 1) {
+  // A visit begun beside an animal at the horse-standing or at a wagon's seat
+  // starts and ends there; only a route from the road joins the road lane.
+  const fromRoad = !diverted || ["path", "bridge", "ford"].includes(tileAt(map, route[0].x, route[0].z) ?? "")
+  if (s.branchProgress < 1 && fromRoad) {
     const start = routeWorldPoint(map, route, 0, lane)
     const roadLane = s.activity === "toRelic" ? s.branchEntryLane : s.direction * s.laneOffset
     const road = s.shrineOrigin ?? roadWorldPoint(map, s.progress, roadLane)
@@ -780,8 +800,10 @@ function parkingContext(sim: SimState, s: SimTraveler, scale: number, traffic = 
       add(convoyBounds(other.cartPose, cartLoadout(other.id).puller, scale))
   }
   for (const party of sim.parties.values()) {
-    if (party.id === s.partyId || !party.transport) continue
+    if (party.id === s.partyId) continue
+    for (const pack of party.packs ?? []) if (pack.parking && pack.phase) add(convoyBounds(pack.parking.parked, pack.kind, scale))
     const cart = party.transport
+    if (!cart) continue
     if (traffic || cart.phase === "parked" || cart.phase === "boarding") add(convoyBounds(cart.pose, cart.animal, scale))
   }
   return { trees: trees.sort((a, b) => a.index - b.index).map(entry => entry.tree), obstacles, people }
@@ -820,6 +842,8 @@ export function createSim(
     wood: 0,
     shrineGold: 0,
     tradeGold: 0,
+    wagesPaid: 0,
+    treasuryGold: 0,
     constructionWood: 0,
     felled: new Set(),
     treeResources: new Map(),
@@ -1001,6 +1025,29 @@ function stepPoverty(s: SimTraveler, t: Traveler, dt: number): void {
   }
 }
 
+/**
+ * Wages fall due at the turn of each game day. The settlement pays its own
+ * workers out of the treasury, so a settler's coin is the player's coin moved
+ * into a purse — part of it comes back over the counter. An empty treasury
+ * pays what it can and the day still passes; independent town households are
+ * paid by their own town and never touch these books.
+ */
+function payWage(sim: SimState, s: SimTraveler): void {
+  const day = Math.floor(sim.time)
+  if (s.wageDay === day) return
+  const workplace = sim.buildings.find(b => b.id === s.employer)
+  if (!workplace) return
+  if (s.wageDay === undefined) { s.wageDay = day; return }
+  const independent = workplace.owner === "independent"
+  const wage = Math.max(0, independent ? sim.balance.rules.dailyWage : Math.min(sim.balance.rules.dailyWage, sim.treasuryGold))
+  s.gold += wage
+  s.wageDay = day
+  if (!independent) {
+    sim.wagesPaid += wage
+    sim.treasuryGold -= wage
+  }
+}
+
 function donate(sim: SimState, giver: SimTraveler, recipient: SimTraveler): void {
   if (giver.gold < 1) return
   pay(giver, recipient, 1)
@@ -1166,25 +1213,38 @@ function findJob(sim: SimState, s: SimTraveler, map: GameMap): { building: Place
   return undefined
 }
 
-/** Sleeping places actually built into the house; the artwork sets the capacity. */
-const houseBeds = housingBeds
-
-/** A new settler moves into the nearest house that still has a bed to spare. */
-function findHome(sim: SimState, s: SimTraveler, map: GameMap, beds = 1): string | null {
+/** A new settler moves into the nearest house that still has room for another resident. */
+function findHome(sim: SimState, s: SimTraveler, map: GameMap, residents = 1): string | null {
   const houses = map.buildings.filter(b => b.owner !== "independent" && isHouse(b) && isComplete(b))
     .sort((a, b) => Math.hypot(tileToWorldX(map, a.x) - s.x, tileToWorldZ(map, a.z) - s.z)
       - Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z))
   for (const house of houses) {
-    if ([...sim.travelers.values()].filter(other => other.home === house.id).length + beds <= houseBeds(house)) return house.id
+    if ([...sim.travelers.values()].filter(other => other.home === house.id).length + residents <= housingCapacity(house)) return house.id
   }
   return null
 }
 
-/** Housemates take the beds in a settled order, so two never share one. */
-function homeBedSlot(sim: SimState, s: SimTraveler): number {
-  const housemates = [...sim.travelers.values()].filter(other => other.home === s.home)
-    .map(other => other.id).sort((a, b) => a - b)
-  return Math.max(0, housemates.indexOf(s.id))
+/**
+ * Whether a settler belongs to the shrine's own settlement rather than to a
+ * roadside town, which keeps its founding household to itself. Someone with no
+ * place of their own is loose at the enclave and counts as one of its hands.
+ */
+function ofTheEnclave(map: GameMap, workplace: PlacedBuilding | undefined, home: string | null): boolean {
+  if (workplace) return workplace.owner !== "independent"
+  return !home || map.buildings.find(b => b.id === home)?.owner !== "independent"
+}
+
+/** Keep the head keeper at work while other rested citizens help raise new sites. */
+function startCitizenBuild(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap): boolean {
+  const workplace = sim.buildings.find(b => b.id === s.employer)
+  if (t.type.id === "vendor" || (workplace && isPostedWork(workplace.kind) && s.jobSlot === 0)
+    || !ofTheEnclave(map, workplace, s.home) || (s.happiness < HAPPINESS_THRESHOLD && s.gold >= DRINK_PRICE)
+    || Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD || s.stamina < SETTLER_FED_AT) return false
+  s.workSlot = s.id
+  s.buildRate = builderRate(t.attributes.skills)
+  if (!assignBuildingTask(s, map, "build")) return false
+  s.activity = "toBuild"
+  return true
 }
 
 /** Complete counters with a keeper working, including patrols inside a tavern. */
@@ -1216,8 +1276,7 @@ function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
   if (!counters.length || !((s.hunger < SERVING_THRESHOLD && s.gold >= MEAL_PRICE)
     || ((s.thirst < SERVING_THRESHOLD || s.happiness < HAPPINESS_THRESHOLD) && s.gold >= DRINK_PRICE))) return false
   const from = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
-  const occupied = new Set([...sim.travelers.values()].flatMap(other => other.tavernVisit?.plan.seat
-    ? [`${other.tavernVisit.plan.buildingId}:${other.tavernVisit.plan.seat.id}`] : []))
+  const occupied = tavernReservations(sim)
   const nearest = [...counters].sort((a, b) => Math.hypot(tileToWorldX(map, a.x) - s.x, tileToWorldZ(map, a.z) - s.z)
     - Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z))
   for (const house of nearest) {
@@ -1229,6 +1288,7 @@ function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
     if (!plan) continue
     if (!s.employer && s.partyId === undefined && map.buildings.find(b => b.id === plan.buildingId)?.owner !== "independent") s.enclaveVisitPending = true
     s.tavernVisit = { plan, served: false, returnTo }
+    occupied.update(s)
     s.walkFrom = { x: s.x, y: s.y, z: s.z }; s.walkT = 0; s.targetId = null
     s.offRoadRoute = [...plan.route, plan.counter.point]
     s.activity = "toTavern"
@@ -1241,17 +1301,17 @@ function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
 function startSeatRest(sim: SimState, s: SimTraveler, map: GameMap, returnTo: WorldPoint | null): boolean {
   if (s.stamina > SEAT_REST_THRESHOLD || s.visitCooldown > 0 || (s.seatRestRetry ?? 0) > 0) return false
   s.seatRestRetry = 5
-  const occupied = new Set([...sim.travelers.values()].flatMap(other => other.tavernVisit?.plan.seat
-    ? [`${other.tavernVisit.plan.buildingId}:${other.tavernVisit.plan.seat.id}`] : []))
   const nearby = map.buildings.filter(b => ["tavern", "house", "shelter", "monk-shelter", "hall"].includes(b.buildType ?? "") &&
     Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z) < 6)
     .sort((a, b) => Math.hypot(tileToWorldX(map, a.x) - s.x, tileToWorldZ(map, a.z) - s.z)
       - Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z))
   if (!nearby.length) return false
+  const occupied = tavernReservations(sim)
   for (const building of nearby) {
     const plan = seatRestPlan(map, building, s, occupied)
     if (!plan) continue
     s.tavernVisit = { plan, served: true, returnTo }
+    occupied.update(s)
     s.walkFrom = { x: s.x, y: s.y, z: s.z }; s.walkT = 0; s.targetId = null
     s.offRoadRoute = plan.route
     s.activity = "toTavern"
@@ -1432,14 +1492,13 @@ function chooseTree(sim: SimState, s: SimTraveler, map: GameMap): boolean {
 }
 
 function finishVisit(sim: SimState, s: SimTraveler, map: GameMap): void {
-  const exit = shrineExitPlan(map, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, s.shrineRoute ?? map.site!.branch)
+  const exit = shrineExitPlan(map, s.shrineRoute?.at(-1) ?? { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, s.shrineRoute ?? map.site!.branch)
   if (!exit) return
   s.hoursSinceChurch = 0
   s.visits++
   sim.visits++
   s.piety = Math.min(100, s.piety + 4 + sim.relic.sanctity / 25)
   s.happiness = Math.min(100, s.happiness + RELIC_HAPPINESS_GAIN)
-  if (s.convoy) s.marketInterest = nextRoll(s) < .1
   s.shrineRoute = exit.route
   s.branchProgress = exit.route.length - 1
   s.offeringProgress = exit.offeringProgress
@@ -1468,7 +1527,10 @@ function settleAfterVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameM
   }
   const home = s.home ?? findHome(sim, s, map)
   const job = s.shrineParking || !home ? undefined : findJob(sim, s, map)
-  if (job && nextRoll(s) < 0.1) {
+  // Someone out of work has every reason to stay: the place is open, the bed is
+  // free and they are already standing in the enclave. A traveler who holds a
+  // trade elsewhere rarely gives it up.
+  if (job && nextRoll(s) < (s.jobless ? sim.balance.rules.joblessHireChance : sim.balance.rules.employedHireChance)) {
     const route = settlementRoute(map, [...map.buildings, ...sim.buildings],
       { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
       buildingEntry(job.building), false, true, s.shrineSeat)
@@ -1608,6 +1670,17 @@ function leaveGathering(s: SimTraveler, map: GameMap, speed: number, dt: number)
 // Identities keyed by ID, reused across steps while the cast is unchanged.
 const identityIndexes = new WeakMap<readonly Traveler[], Map<number, Traveler>>()
 const syncedCasts = new WeakSet<readonly Traveler[]>()
+/** Knights attended by a squire, read once per cast; the cast only grows, so
+ * the set is rebuilt when its length changes. */
+const squireCasts = new WeakMap<readonly Traveler[], { length: number; ids: Set<number> }>()
+function squireKnights(travelers: readonly Traveler[]): ReadonlySet<number> {
+  let cached = squireCasts.get(travelers)
+  if (!cached || cached.length !== travelers.length) {
+    cached = { length: travelers.length, ids: new Set(travelers.filter(t => t.type.id === "knight" && knightLoadout(t.id).squire).map(t => t.id)) }
+    squireCasts.set(travelers, cached)
+  }
+  return cached.ids
+}
 function travelerIdentities(travelers: readonly Traveler[]): Map<number, Traveler> {
   let index = identityIndexes.get(travelers)
   if (!index) { index = new Map(travelers.map(t => [t.id, t])); identityIndexes.set(travelers, index) }
@@ -1687,6 +1760,19 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
       ensurePartyTransport(party, members, map, characterScale)
       // A wagon or pack animal changes everyone's place; walk into the new formation.
       if (party.transport || party.packs?.length) party.formed = false
+    }
+    // Pack animals on their way to or from the standing hold the whole company:
+    // their handlers walk the lead, everyone else waits where they stand.
+    if (party.packs?.some(p => p.phase === "parking" || p.phase === "leaving")) {
+      for (const s of members) hold(s)
+      party.reason = party.packs.some(p => p.phase === "leaving") ? "Leading the animals back to the road" : "Leading the animals to the standing"
+      party.elapsed = 0
+      // Led animals wear the ground like a rider's horse: a path to the standing emerges from use.
+      const wore = (from: { x: number; z: number }, to: { x: number; z: number }) => recordWalkingPath(sim.footpaths, map, from, to, HEAVY_PATH_WEAR)
+      if (stepPackParking(party, sim.travelers, map, characterScale, dt, wore) && party.packs.every(p => !p.phase) && (!party.transport || party.transport.phase === "road")) {
+        regroupParty(party, members, length, seconds, characterScale)
+      }
+      continue
     }
     const cart = party.transport
     if (cart) {
@@ -1811,7 +1897,12 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
         party.stage = "traveling"; party.cooldown = 45; party.elapsed = 0
         party.reason = "Regrouping after the visit"
         for (const s of members) { s.visitCooldown = 45; s.partyWaiting = false }
-        regroupParty(party, members.filter(s => s.partyId === party.id), length, seconds, characterScale)
+        // The handlers fetch the animals from the standing before the column forms again.
+        let leaving = false
+        for (const pack of party.packs ?? []) if (pack.phase === "parked" && pack.parking) {
+          pack.phase = "leaving"; pack.parking.walking = false; pack.parking.distance = 0; leaving = true
+        }
+        if (!leaving) regroupParty(party, members.filter(s => s.partyId === party.id), length, seconds, characterScale)
         continue
       } else {
         party.reason = done ? "Walking back to the road" : party.visitPending.length ? "Waiting for room at the enclave" : "Waiting for companions to finish visiting"
@@ -1867,11 +1958,21 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
           const occupied = [...sim.parties.values()].filter(p => p.id !== party.id && p.transport).map(p => p.transport!.pose)
           const driver = members.find(s => s.id === cart.seats[0]) ?? head
           // Companions walking behind the wagon are not obstacles to its own parking.
-          const context = parkingContext(sim, driver, characterScale)
-          context.people = context.people?.filter(person => !party.members.includes((person as { id?: number }).id ?? -1))
-          if (!parkParty(party, map, characterScale, context, occupied, "visit")) party.cooldown = 8
+          const context = parkingContext(sim, driver, characterScale), standing = currentStanding(sim, map)
+          const yard = standing ? parkingContext(sim, driver, characterScale, false, standingCentre(map, standing)) : context
+          for (const c of [context, yard]) c.people = c.people?.filter(person => !party.members.includes((person as { id?: number }).id ?? -1))
+          if (!parkParty(party, map, characterScale, context, occupied, "visit", standing, yard)) party.cooldown = 8
           for (const s of members) hold(s)
           continue
+        }
+        // The pack animals are led to the standing first; a company that can
+        // find no stand for them keeps to the road, as a wagon does.
+        if (party.packs?.length) {
+          const occupied = [...sim.travelers.values()].flatMap(other => other.shrineParking ? [other.shrineParking.parked] : [])
+          const context = parkingContext(sim, head, characterScale), standing = currentStanding(sim, map)
+          const yard = standing ? parkingContext(sim, head, characterScale, false, standingCentre(map, standing)) : context
+          for (const c of [context, yard]) c.people = c.people?.filter(person => !party.members.includes((person as { id?: number }).id ?? -1))
+          if (!parkPartyPacks(party, map, characterScale, context, occupied, standing, yard)) { party.cooldown = 8; for (const s of members) hold(s); continue }
         }
         party.stage = "visiting"; party.elapsed = 0; party.retry = 0
         party.visitPending = [...party.members]; party.visitStarted = []
@@ -1976,7 +2077,9 @@ const tickPositions = new WeakMap<SimState, Float64Array>()
 function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   counters: ReturnType<typeof openCounters>, direction: 1 | -1, parkingProgress: number,
   characterScale: number, from?: TilePos, partyVisit = false): boolean {
-  const isVendor = t.type.id === "vendor", needsParking = isVendor || t.type.id === "knight"
+  const isVendor = t.type.id === "vendor", needsParking = (isVendor && s.convoy) || t.type.id === "knight"
+  // Cart vendors enter for an available market, then visit on foot from its bay.
+  if (isVendor && s.convoy) return false
   const renown = sim.shrineRenown + sim.visits * sim.balance.rules.visitRenown
   // Thirst draws travelers to the church even without an open counter.
   // Hunger only draws them when food service is available.
@@ -2008,17 +2111,27 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   // Companies share the nave: each member takes any free place, and a company
   // still waiting for places gives up after its bounded wait. Nobody else's
   // lingering place may bar the door.
-  const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats, from, partyVisit ? false : undefined, sim.shrineKeeperReady) : null
+  const marketBay = isVendor && s.marketParking?.walking ? {
+    x: worldToTileX(map, s.marketParking.parked.hitch.x), z: worldToTileZ(map, s.marketParking.parked.hitch.z),
+  } : undefined
+  const visit = wantsVisit ? shrineVisitPlan(map, s.id, s.visits, occupiedSeats, marketBay ?? from, partyVisit ? false : undefined, sim.shrineKeeperReady) : null
   let visitRoute = visit?.route ?? null
+  if (visitRoute && marketBay && from) {
+    // A keeper already at the counter leaves through the stall's entrance.
+    const toBay = settlementRoute(map, map.buildings, from, marketBay, false, true)
+    visitRoute = toBay ? [...toBay, ...visitRoute.slice(1)] : null
+  }
   let parking: ShrineParking | null = null
   if (visitRoute && needsParking) {
     const puller = isVendor ? cartLoadout(s.id).puller : "horse"
     const wheelbase = isVendor ? -cartOffset(puller) * characterScale : 0
     const occupied = [...sim.travelers.values()].flatMap(other => other.shrineParking ? [other.shrineParking.parked] : [])
-    // Ride up to the shrine and leave the horse in the field beside it. Only
-    // when that field is full does a rider settle for the verge at the fork.
-    const door = { x: tileToWorldX(map, map.site!.door.x), z: tileToWorldZ(map, map.site!.door.z) }
-    parking = enclaveParking(map, parkingProgress, direction, wheelbase, puller, characterScale, occupied, parkingContext(sim, s, characterScale, false, door))
+    // Ride up to the horse-standing below the shrine and leave the horse or
+    // wagon beside its lane. Only when the standing is full does a rider settle
+    // for the verge at the fork.
+    const standing = currentStanding(sim, map)
+    parking = (standing && enclaveParking(map, standing, parkingProgress, direction, wheelbase, puller, characterScale, occupied,
+      parkingContext(sim, s, characterScale, false, standingCentre(map, standing))))
       ?? shrineParking(map, parkingProgress, direction, wheelbase, puller, characterScale, occupied, parkingContext(sim, s, characterScale))
     // From the horse or wagon, walk to the tail of the line on the track and
     // follow the shared approach with everyone else, instead of cutting across
@@ -2040,6 +2153,7 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
     s.shrineRoute = visitRoute
     s.shrineDoor = shrineDoorIndex(map, visitRoute)
     s.shrineSeat = visit!.seat
+    s.shrinePlace = undefined
     s.admissionPaid = 0
     s.offeringMade = false
     s.offeringProgress = undefined
@@ -2063,6 +2177,15 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   return false
 }
 
+// Build occupancy only when someone actually asks for a seat. Every step starts
+// fresh, including after saves/editor changes; callers update new reservations.
+const tavernSeatIndexes = new WeakMap<SimState, TavernReservations>()
+function tavernReservations(sim: SimState): TavernReservations {
+  let index = tavernSeatIndexes.get(sim)
+  if (!index) { index = new TavernReservations(sim.travelers); tavernSeatIndexes.set(sim, index) }
+  return index
+}
+
 export function stepSim(
   sim: SimState,
   travelers: Traveler[],
@@ -2078,11 +2201,18 @@ export function stepSim(
 ): void {
   return withTerrainCornerQueries(map, () => {
   if (!map.road || map.road.length < 2) return
+  tavernSeatIndexes.delete(sim)
   if (dt > 0) for (const animal of sim.wildlife?.animals ?? []) {
     const shepherd = animal.fold?.shepherd == null ? undefined : sim.travelers.get(animal.fold.shepherd)
     if (animal.fold && !animal.fold.arrived && (!shepherd || shepherd.herding?.animalId !== animal.id)) {
       animal.fold = undefined; animal.target = null; animal.rest = 0
     }
+    if(animal.fold?.tendedBy !== undefined && sim.travelers.get(animal.fold.tendedBy)?.penCare?.animalId !== animal.id) {
+      animal.fold.tendedBy=undefined;animal.fold.escort=undefined;animal.fold.slaughter=undefined;animal.fold.route=[]
+    }
+  }
+  if(dt>0) for(const [id,care] of sim.wildlife?.penCare ?? []) {
+    if(care.caretaker!==undefined && sim.travelers.get(care.caretaker)?.penCare?.penId!==id)care.caretaker=undefined
   }
   const length = map.road.length - 1
   sim.time += dt / GAME_DAY_SECONDS
@@ -2129,12 +2259,33 @@ export function stepSim(
   const queueSpacing = relicQueueSpacing(characterScale)
   // Everyone holding a place for the relic, read once: where they stand relative
   // to the church door decides who lines up behind whom.
+  // A knight's squire stands behind him in the line, so the next person keeps
+  // a squire's step further back.
+  const squires = squireKnights(travelers)
   const relicLine = [...sim.travelers.values()].flatMap(other => {
     if (!isRelicViewingSeat(other.shrineSeat) || !other.shrineRoute) return []
     if (other.activity !== "toRelic" && other.activity !== "visiting") return []
     other.shrineDoor ??= shrineDoorIndex(map, other.shrineRoute)
-    return [{ s: other, remaining: other.shrineDoor - other.branchProgress }]
+    return [{ s: other, remaining: other.shrineDoor - other.branchProgress, space: queueSpacing + (squires.has(other.id) ? squireFollowGap(characterScale) : 0) }]
   })
+  const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
+  const singleVisitor = !!shrine && isChapel(shrine)
+  const viewingPlaces = shrine ? shrineViewingPlaces(shrine, map.site?.door) : []
+  const occupiedPlaces = new Map<number, number>()
+  for (const s of sim.travelers.values()) {
+    const entering = s.activity === "toRelic" && s.shrinePlace !== undefined
+    const leaving = s.activity === "fromRelic" && s.shrineRoute && (singleVisitor
+      ? s.branchProgress > s.shrineRoute.findLastIndex(p => p.x === map.site!.door.x && p.z === map.site!.door.z)
+      : insideShrine(map, s))
+    if (!entering && s.activity !== "visiting" && !leaving) continue
+    if (!isRelicViewingSeat(s.shrineSeat)) continue
+    // Also recover the reservation when resuming a visitor already at the altar.
+    s.shrinePlace ??= Math.max(0, viewingPlaces.findIndex(p => {
+      const end = s.shrineRoute?.at(-1)
+      return end && p.x === end.x && p.z === end.z
+    }))
+    occupiedPlaces.set(s.shrinePlace, s.id)
+  }
   const listeners = new Map<number, number>()
   for (const state of sim.travelers.values()) if (state.musicVisit) {
     const id = state.musicVisit.performerId
@@ -2154,9 +2305,11 @@ export function stepSim(
     const ordinal = t.type.id !== "vendor" && t.type.id !== "knight" ? explorerRank++ : -1
     const s = sim.travelers.get(t.id)
     if (!s || sim.joinedMonks.has(t.id)) continue
+    if (dt > 0 && s.employer) payWage(sim, s)
     stepPoverty(s, t, dt)
     const previousStall = deployedStall(s)
     if (s.herding && !["toSheep", "herding"].includes(s.activity)) releaseSheep(s, sim.wildlife)
+    if (s.penCare && s.activity !== s.penCare.chore) releasePenCare(s, sim.wildlife)
     s.herdingRetry = Math.max(0, (s.herdingRetry ?? 0) - dt)
     s.convoyScale = characterScale
     s.cartRecoveryRetry = Math.max(0, (s.cartRecoveryRetry ?? 0) - dt)
@@ -2196,6 +2349,11 @@ export function stepSim(
       if (dt > 0 && sim.procession) blessByProcession(sim.procession, `traveler:${s.id}`, s)
       s.moveSpeed = 0; continue
     }
+    s.foodRetry=Math.max(0,(s.foodRetry ?? 0)-dt)
+    if(dt>0 && !s.foodRetry && !riding && t.type.id !== "vendor" && ["walking","idle"].includes(s.activity)) {
+      s.foodRetry=5
+      seekPenFood(s,map,sim.foodStores,characterScale)
+    }
     s.naturalWaterRetry = Math.max(0, (s.naturalWaterRetry ?? 0) - dt)
     s.seatRestRetry = Math.max(0, (s.seatRestRetry ?? 0) - dt)
     s.visitCooldown = Math.max(0, s.visitCooldown - dt)
@@ -2222,9 +2380,15 @@ export function stepSim(
     }
 
     if (sheltered) s.stamina = Math.min(100, s.stamina + 65 * hours)
+    // A household keeps its own hearth, bread and small beer, and an hour abed
+    // is worth `hearthHours` of both. Nights are short, so the larder stretches
+    // what a settler buys rather than replacing it: a working resident still
+    // comes to the counter for supper every week or so. The counter is the
+    // quick answer, and the only one open to a traveler off the road — for coin.
     if (abed) {
-      s.hunger = Math.min(100, s.hunger + HOME_MEAL_PER_HOUR * hours)
-      s.thirst = Math.min(100, s.thirst + HOME_DRINK_PER_HOUR * hours)
+      const larder = sim.balance.rules.hearthHours * hours
+      s.hunger = Math.min(100, s.hunger + sim.balance.rules.hungerDecay * larder)
+      s.thirst = Math.min(100, s.thirst + sim.balance.rules.thirstDecay * larder)
     }
 
     // Vendors eat and drink from their own stock, on the move.
@@ -2252,6 +2416,10 @@ export function stepSim(
         easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     }
     if (s.partyRiding || s.partyBoarding) continue
+    const penRoute=s.herding?.route ?? s.penCare?.route ?? s.penFoodVisit?.route ?? s.buildingTask?.route ?? s.constructionReturn ?? s.offRoadRoute
+    if(penRoute?.length && sim.wildlife) for(const pen of map.buildings) {
+      if(pen.buildType === "sheep-pen" && !penGatePassage(sim.wildlife,map,pen,s,penRoute,dt)) {targetSpeed=0;s.moveSpeed=0;break}
+    }
     const worldSpeed = s.moveSpeed
     const transportBefore = isVendor && s.convoy && !s.shrineParking?.walking ? {
       ...s, offRoadRoute: s.offRoadRoute ? [...s.offRoadRoute] : null,
@@ -2284,6 +2452,12 @@ export function stepSim(
       }
       stepPasture(map, s.pasture, dt, Math.max(0.01, targetSpeed), s.activity === "packingShop")
     }
+    if (shrine && !isComplete(shrine) && (s.activity === "toRelic" || s.activity === "visiting")) {
+      // Retrace the arrival path when an upgrade closes the shrine. Neither a
+      // cancelled viewing nor leaving a building site counts as a donation.
+      s.activity = "fromRelic"; s.shrinePlace = undefined
+      s.offeringMade = true; s.offeringProgress = undefined
+    }
     switch (s.activity) {
       case "toParking":
       case "fromParking": {
@@ -2312,6 +2486,8 @@ export function stepSim(
             if (s.marketParking) {
               s.convoy = false
               s.activity = "toPost"
+              if (s.visits === 0) tryRoadVisit(sim, s, t, map, [], s.direction, s.progress, characterScale,
+                { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, true)
             } else { s.activity = "toRelic"; s.branchProgress = 0 }
           } else {
             s.progress = parking.returnProgress; s.shrineParking = undefined; s.shrineRoute = null
@@ -2325,7 +2501,7 @@ export function stepSim(
         // Detour on the outdoor approach; finish crossing the chapel gate first.
         if (dt > 0 && !buildingAt(map, worldToTileX(map, s.x), worldToTileZ(map, s.z)) &&
           startWaterTrip(sim, s, map, waterSources, { x: s.x, y: s.y, z: s.z })) break
-        const branch = s.shrineRoute ?? map.site!.branch
+        let branch = s.shrineRoute ?? map.site!.branch
         const inbound = s.activity === "toRelic"
         let limit = branch.length - 1
         if (inbound && isRelicViewingSeat(s.shrineSeat)) {
@@ -2336,13 +2512,28 @@ export function stepSim(
           // their horse.
           const door = s.shrineDoor ?? shrineDoorIndex(map, branch)
           const remaining = door - s.branchProgress, order = s.shrineQueueOrder ?? 0
-          let ahead = -Infinity
+          let ahead = -Infinity, space = queueSpacing
           for (const other of relicLine) {
-            if (other.s === s) continue
+            if (other.s === s || other.s.shrinePlace !== undefined) continue
             const closer = other.remaining < remaining || (other.remaining === remaining && (other.s.shrineQueueOrder ?? 0) < order)
-            if (closer) ahead = Math.max(ahead, other.remaining)
+            if (closer && other.remaining > ahead) { ahead = other.remaining; space = other.space }
           }
-          if (ahead > -Infinity) limit = Math.min(limit, door - ahead - queueSpacing / routeStep(branch, door - ahead))
+          if (s.shrinePlace === undefined) {
+            if (ahead > -Infinity) limit = Math.min(limit, shrineRouteBehind(branch, door - ahead, space))
+            const stop = shrineQueueStop(map, branch, door, characterScale)
+            const place = viewingPlaces.findIndex((_, i) => !occupiedPlaces.has(i))
+            if (place < 0 || ahead > -Infinity || !sim.shrineKeeperReady || (sim.procession && sim.procession.stage !== "idle")) {
+              limit = Math.min(limit, stop)
+            } else if (Math.min(limit, s.branchProgress + worldSpeed * dt) > stop) {
+              const interior = shrineViewingRoute(map, place)
+              if (interior) {
+                s.shrinePlace = place
+                occupiedPlaces.set(place, s.id)
+                branch = s.shrineRoute = [...branch.slice(0, door + 1), ...interior]
+                limit = branch.length - 1
+              } else limit = Math.min(limit, stop)
+            }
+          }
         }
         const previous = s.branchProgress
         s.branchProgress = inbound ? Math.max(previous, Math.min(Math.max(0, limit), previous + worldSpeed * dt))
@@ -2365,10 +2556,14 @@ export function stepSim(
           s.lane = s.direction * s.laneOffset
           s.horseRest = undefined
           s.shrineSeat = undefined
+          s.shrinePlace = undefined
           s.shrineDoor = undefined
           if (s.shrineParking) {
             s.shrineParking.walking = false; s.shrineParking.distance = 0
             s.activity = "fromParking"
+          } else if (s.marketParking && s.employer) {
+            s.shrineRoute = null; s.visitCooldown = 30
+            s.activity = assignBuildingTask(s, map, "work", s.employer) ? "toPost" : "idle"
           } else {
             s.activity = "walking"; s.shrineRoute = null; s.visitCooldown = 30; s.diversionCheck = undefined
             if (!s.partyVisitAborted && s.partyId === undefined) settleAfterVisit(sim, s, t, map)
@@ -2387,7 +2582,7 @@ export function stepSim(
         s.timer -= dt
         if (s.timer > 0) break
         if (!s.offeringMade) {
-          const amount = shrineDonation(s.piety, s.gold, () => nextRoll(s))
+          const amount = shrineDonation(s.piety, s.gold, () => nextRoll(s), shrineDonationMultiplier(map))
           s.gold -= amount
           sim.shrineGold += amount
           s.admissionPaid = amount
@@ -2477,15 +2672,18 @@ export function stepSim(
           if (s.employer) break
           s.timer = GAME_HOUR_SECONDS
         }
-        // Standing behind a counter or in a fold asks little; a settler keeps
-        // that post until they are genuinely hungry or tired.
         const hungry = Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD
+        // Fed enough not to want supper, and rested enough for a day's work.
+        const fitForWork = !hungry && s.stamina >= SETTLER_FED_AT
         const unhappy = socialBreak
         const workplace = sim.buildings.find(b => b.id === s.employer)
+        if (dt > 0 && startCitizenBuild(sim, s, t, map)) break
+        // Standing behind a counter or in a fold asks little; a settler keeps
+        // that post until they are genuinely hungry or tired.
         if (workplace && isPostedWork(workplace.kind) && !hungry && !unhappy && s.stamina > SETTLER_TIRED_AT) {
           if (workplace.kind === "sheep-pen" && dt > 0 && !s.herdingRetry) {
             s.herdingRetry = 5
-            if (seekSheep(s, sim.wildlife, map, characterScale)) break
+            if (seekPenCare(s, sim.wildlife, map, characterScale,sim.foodStores) || seekSheep(s, sim.wildlife, map, characterScale)) break
           }
           s.workSlot = s.jobSlot
           if (assignBuildingTask(s, map, "work", workplace.id)) { s.activity = "toPost"; break }
@@ -2496,18 +2694,21 @@ export function stepSim(
           startNaturalWaterTrip(s, map))) break
         if (hungry && startTavernTrip(sim, s, map, counters, workplaceReturn(sim, s, map))) break
         if (!hungry && startSeatRest(sim, s, map, workplaceReturn(sim, s, map))) break
-        if (Math.min(s.hunger, s.thirst, s.stamina) < SETTLER_FED_AT) {
+        // Home covers both errands: a tired settler sleeps, and one who could
+        // not buy supper makes do with the household's own bread and beer.
+        if (s.stamina < SETTLER_FED_AT || hungry) {
           if (!s.home) s.home = findHome(sim, s, map)
-          s.workSlot = homeBedSlot(sim, s)
-          if (s.home && assignBuildingTask(s, map, "rest", s.home)) { s.activity = "toHome"; break }
-        }
-        s.workSlot = s.id
-        if (Math.min(s.hunger, s.thirst, s.stamina) >= SETTLER_FED_AT && assignBuildingTask(s, map, "build")) {
-          s.activity = "toBuild"
-          break
+          const home = map.buildings.find(b => b.id === s.home)
+          const bunk = home ? vacantHouseBunk(home, sim.travelers.values(), s) : null
+          if (bunk !== null) s.workSlot = bunk
+          if (bunk !== null && s.home && assignBuildingTask(s, map, "rest", s.home)) {
+            s.homeLarder = hungry
+            s.activity = "toHome"
+            break
+          }
         }
         s.timer -= dt
-        if (s.timer <= 0 && Math.min(s.hunger, s.thirst, s.stamina) >= SETTLER_FED_AT) {
+        if (s.timer <= 0 && fitForWork) {
           if (!chooseTree(sim, s, map)) s.timer = GAME_HOUR_SECONDS
         }
         break
@@ -2515,14 +2716,33 @@ export function stepSim(
       case "toHome":
       case "sleeping": {
         if (dt <= 0) break
+        const task = s.buildingTask
+        const house = map.buildings.find(b => b.id === task?.buildingId && isHouse(b))
+        if (house && task?.purpose === "rest") {
+          // Reconcile old saves and changed layouts against the four real bunks.
+          const bunk = vacantHouseBunk(house, sim.travelers.values(), s)
+          if (bunk !== task.slot) {
+            s.buildingTask = undefined
+            if (bunk !== null) s.workSlot = bunk
+            if (bunk === null || !assignBuildingTask(s, map, "rest", house.id)) {
+              s.constructionReturn = workerRoute(map, s, buildingEntrance(house)) ?? []
+              s.activity = "fromHome"
+              break
+            }
+            s.activity = "toHome"
+          }
+        }
         const state = stepBuildingTask(s, map, targetSpeed, dt)
         if (!state) { s.activity = "idle"; s.timer = GAME_HOUR_SECONDS; break }
         s.activity = state === "walking" ? "toHome" : "sleeping"
-        // Rise fully rested and fed, so a night at home is worth the walk.
+        // Rise rested, so a night at home is worth the walk. Anyone who came
+        // home hungry stays until the larder has fed them back to work.
         // Step outside before looking for work: routes to a tree or a site
         // cannot cross the house wall.
-        if (state === "sleeping" && Math.min(s.stamina, s.hunger, s.thirst) >= SETTLER_WAKE_AT) {
+        if (state === "sleeping" && s.stamina >= SETTLER_WAKE_AT
+          && (!s.homeLarder || Math.min(s.hunger, s.thirst) >= SETTLER_FED_AT)) {
           const home = map.buildings.find(b => b.id === s.buildingTask!.buildingId)
+          s.homeLarder = false
           s.buildingTask = undefined
           s.constructionReturn = home ? workerRoute(map, s, buildingEntrance(home)) ?? [] : []
           s.activity = "fromHome"
@@ -2533,6 +2753,10 @@ export function stepSim(
         if (walkWorker(s, s.constructionReturn ?? [], targetSpeed, dt)) {
           s.activity = "idle"; s.timer = 0; s.constructionReturn = undefined
         }
+        break
+      }
+      case "collectingFood": {
+        if(!stepPenFood(s,map,sim.foodStores,targetSpeed,dt,sim.wildlife))finishErrand(s)
         break
       }
       case "toSheep":
@@ -2546,12 +2770,25 @@ export function stepSim(
         }
         break
       }
+      case "tendingSheep": case "feedingSheep": case "wateringSheep": case "slaughteringSheep": case "deliveringMeat": case "replacingSheep": case "milkingSheep": case "deliveringMilk": {
+        if(dt<=0)break
+        if(s.stamina<=SETTLER_TIRED_AT || Math.min(s.hunger,s.thirst)<SERVING_THRESHOLD || socialBreak) {
+          releasePenCare(s,sim.wildlife);s.activity="idle";s.timer=0
+        } else if(!stepShepherdCare(s,sim.wildlife,map,targetSpeed,dt,characterScale,sim.foodStores)) {
+          s.activity="idle";s.timer=0
+        }
+        break
+      }
       case "toPost":
       case "posted": {
         if (dt <= 0) break
         const state = stepBuildingTask(s, map, targetSpeed, dt)
         if (!state) { s.activity = "idle"; s.timer = GAME_HOUR_SECONDS; break }
         s.activity = state === "walking" ? "toPost" : "posted"
+        // If the relic was unavailable on arrival, keep trading and try again.
+        if (state === "posted" && s.marketParking && s.visits === 0 && s.visitCooldown <= 0 &&
+          tryRoadVisit(sim, s, t, map, [], s.direction, s.progress, characterScale,
+            { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, true)) break
         // Step away to sleep or eat; the slot stays theirs while they are gone.
         if (state === "posted" && (s.stamina <= SETTLER_TIRED_AT || Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD
           || socialBreak)) {
@@ -2560,7 +2797,10 @@ export function stepSim(
           s.timer = 0
         } else if (state === "posted" && !s.herdingRetry) {
           s.herdingRetry = 5
-          seekSheep(s, sim.wildlife, map, characterScale)
+          // A staffed counter may predate the site. Reconsider construction on
+          // the existing work poll instead of waiting for hunger or exhaustion.
+          if (startCitizenBuild(sim, s, t, map)) break
+          if(!seekPenCare(s, sim.wildlife, map, characterScale,sim.foodStores)) seekSheep(s, sim.wildlife, map, characterScale)
         }
         break
       }
@@ -2733,15 +2973,16 @@ export function stepSim(
         if (dt > 0 && (s.activity === "walking" || s.activity === "seeking") && !isVendor && startNaturalWaterTrip(s, map)) break
         if (townCounter && Math.min(s.hunger, s.thirst) < SERVING_THRESHOLD &&
           startTavernTrip(sim, s, map, [townCounter], null)) break
-        // A vendor who chose to stay after viewing the relic can claim an
-        // empty market stall, parking their cart before taking the post.
-        if (isVendor && s.visits > 0 && s.marketInterest && !s.employer && !s.track && ahead >= 0 && ahead <= 6 && !s.shrineParking &&
+        // A completed, unclaimed stall draws a vendor even before the shrine
+        // has a reputation or the enclave has houses. Reserve its cart bay and
+        // counter together, then let the keeper visit the shrine on foot.
+        if (isVendor && s.activity !== "fleeing" && !s.employer && !s.track && ahead >= 0 && ahead <= 6 && !s.shrineParking &&
           s.marketCheck !== Math.floor(s.progress)) {
           s.marketCheck = Math.floor(s.progress)
           const home = findHome(sim, s, map)
           const puller = cartLoadout(s.id).puller
           const initial = s.cartPose ?? roadCartPose(map, s.progress, s.direction, -cartOffset(puller) * characterScale, characterScale)
-          for (const stall of sim.buildings.filter(b => home && BUILDING_KINDS[b.kind].vendorKept && isComplete(b) && staffOf(sim, b.id).length === 0)) {
+          for (const stall of sim.buildings.filter(b => b.owner !== "independent" && BUILDING_KINDS[b.kind].vendorKept && isComplete(b) && staffOf(sim, b.id).length === 0)) {
             const parking = marketParking(map, stall, initial, puller, characterScale, parkingContext(sim, s, characterScale))
             if (!parking) continue
             // Reserve the walking job only after both the drive and the walk

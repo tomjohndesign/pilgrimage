@@ -129,6 +129,10 @@ export function roofOutlineOwners(buildings: readonly BuildingDef[], joins: Map<
   const indices = new Map(buildings.map((b, i) => [b.id, i]))
   const owners = buildings.map((_, i) => i)
   const root = (i: number): number => owners[i] === i ? i : (owners[i] = root(owners[i]))
+  for (const [i, building] of buildings.entries()) {
+    const church = building.churchId && indices.get(building.churchId)
+    if (typeof church === "number" && isComplete(building)) owners[i] = church
+  }
   for (const [id, edges] of joins) for (const edge of edges) {
     const a = indices.get(id), b = indices.get(edge.neighborId)
     if (a === undefined || b === undefined) continue

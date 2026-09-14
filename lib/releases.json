@@ -1,7 +1,181 @@
 {
-  "lastProcessedCommit": "88d186ef1cbc29d64779af4f80688d7c1cb15b56",
-  "releaseCount": 214,
+  "lastProcessedCommit": "bfaf0796b854bbb4bd8805b983d28c43d1334423",
+  "releaseCount": 243,
   "releases": [
+    {
+      "version": "0.0.257",
+      "title": "Release 0.0.257",
+      "summary": "Fix animal sprites covering nearer characters (#277)",
+      "commit": "bfaf0796b854bbb4bd8805b983d28c43d1334423"
+    },
+    {
+      "version": "0.0.256",
+      "title": "Release 0.0.256",
+      "summary": "Add appearance tuning, update palette, and restore edge details (#276)",
+      "commit": "540fe6a7860c7429ed3e1a4d4c07ee5a470bf280"
+    },
+    {
+      "version": "0.0.255",
+      "title": "Release 0.0.255",
+      "summary": "Restore original colors for people outside the enclave (#274)",
+      "commit": "d689eabbdb69e576e8f02f154330119d9fd5f2f0"
+    },
+    {
+      "version": "0.0.254",
+      "title": "Release 0.0.254",
+      "summary": "Expand sheep pens with flock care and food production (#273)",
+      "commit": "2ebd02e36129eacaac735d9f85ccdac0ee6534b9"
+    },
+    {
+      "version": "0.0.253",
+      "title": "Release 0.0.253",
+      "summary": "Restore forest floor colors after grass palette changes (#272)",
+      "commit": "b354dd0e9b3536ea3e1f4858391b4e8f39db2d7e"
+    },
+    {
+      "version": "0.0.252",
+      "title": "Release 0.0.252",
+      "summary": "Give nuns white cloth head coverings (#271)",
+      "commit": "d652d426715e49b37d8a0e12a6c6da9355411cc9"
+    },
+    {
+      "version": "0.0.251",
+      "title": "Release 0.0.251",
+      "summary": "Add player colors and improve building readability and housing (#270)",
+      "commit": "c52dd8486a5674ba9f9b0fd060bf04db6970f79d"
+    },
+    {
+      "version": "0.0.250",
+      "title": "Release 0.0.250",
+      "summary": "Reduce NPC navigation overhead with shared spatial queries (#269)",
+      "commit": "9101e24922255b0dbaff528ceebcaf862ee8715e"
+    },
+    {
+      "version": "0.0.249",
+      "title": "Release 0.0.249",
+      "summary": "Allow well access from every side and guide NPCs along invisible paths (#268)",
+      "commit": "87b3efeee4d5d6e496c8ecc13d56b58b09025b3a"
+    },
+    {
+      "version": "0.0.248",
+      "title": "Release 0.0.248",
+      "summary": "Connect path ends to building entrances (#267)",
+      "commit": "57258f6b668062d4142642310f363fde01bb17eb"
+    },
+    {
+      "version": "0.0.247",
+      "title": "Release 0.0.247",
+      "summary": "Add instant building demolition with confirmation (#266)",
+      "commit": "4fa29b76a0a4a904a36709af3188becfd6620e5a"
+    },
+    {
+      "version": "0.0.246",
+      "title": "Release 0.0.246",
+      "summary": "Start with a relic chapel and construct the church upgrade (#265)",
+      "commit": "f30ac306a2c2e7151b764bb40ffbf1640193c3d0"
+    },
+    {
+      "version": "0.0.245",
+      "title": "Release 0.0.245",
+      "summary": "Fix horses disappearing when knights remount after shrine visits (#263)",
+      "commit": "5e9d24f0118e7ee7132c68c9727a6faff8f1852c"
+    },
+    {
+      "version": "0.0.244",
+      "title": "Release 0.0.244",
+      "summary": "Require an available market stall for cart vendors to enter the enclave (#264)",
+      "commit": "a89addb84eb63726eb4a5908ab79c26cbe55ea3b"
+    },
+    {
+      "version": "0.0.243",
+      "title": "Release 0.0.243",
+      "summary": "Reverse woodcutter hut roof pitch and remove storehouse roof (#262)",
+      "commit": "60ce40921a80d66fb71ca9d57cbc216de743b3be"
+    },
+    {
+      "version": "0.0.242",
+      "title": "Release 0.0.242",
+      "summary": "Prevent shader recompilation when construction finishes (#261)",
+      "commit": "acaa5f2ae245a681aa97c2e246e49ee71537611b"
+    },
+    {
+      "version": "0.0.241",
+      "title": "Release 0.0.241",
+      "summary": "Remove renown influence restrictions on building placement (#260)",
+      "commit": "f307b90bc1240deb335dfe4bc030828de3c3de76"
+    },
+    {
+      "version": "0.0.240",
+      "title": "Release 0.0.240",
+      "summary": "Limit tree thinning to distant views under sustained frame pressure (#259)",
+      "commit": "742952f50c3633f51fde2e7b1a7ef1ab1965b2d9"
+    },
+    {
+      "version": "0.0.239",
+      "title": "Release 0.0.239",
+      "summary": "Fix road monks to use the monk character model (#257)",
+      "commit": "3d4f1e4655716f4716a5257fa3fb0207c070889a"
+    },
+    {
+      "version": "0.0.238",
+      "title": "Release 0.0.238",
+      "summary": "Build monks' residences as church side wings (#258)",
+      "commit": "d5a30dd03979207268d7859e6987ff8987fd2140"
+    },
+    {
+      "version": "0.0.237",
+      "title": "Release 0.0.237",
+      "summary": "Stage visiting animals off the church approach and keep squires with knights (#256)",
+      "commit": "ab3533274e842d8fc2cbbb2bf421d9a5d679bb3d"
+    },
+    {
+      "version": "0.0.236",
+      "title": "Release 0.0.236",
+      "summary": "Found the shrine in a felled glade near the map centre, clear of rivers and cliffs (#255)",
+      "commit": "f3f0fa85ac6dc66d7a41bbc3f783fdf2408db13c"
+    },
+    {
+      "version": "0.0.235",
+      "title": "Release 0.0.235",
+      "summary": "Fix worker duties, party save accounting, and blocked map generation (#254)",
+      "commit": "4e91dd5e239e01367bc0950ec7a8277723df454d"
+    },
+    {
+      "version": "0.0.234",
+      "title": "Release 0.0.234",
+      "summary": "Reveal the map when an asset boundary never settles (#253)",
+      "commit": "767eefe5bebab7db40f451ec1cfd0816b1c4f258"
+    },
+    {
+      "version": "0.0.233",
+      "title": "Release 0.0.233",
+      "summary": "Bring back 6× playback, drop 2×, and withhold 6× in a crowd (#251)",
+      "commit": "00f2a96e31a8da7c49e3156c981641adb011abdf"
+    },
+    {
+      "version": "0.0.232",
+      "title": "Release 0.0.232",
+      "summary": "Set the market stall at 3×2 with a side cart bay, bare when unkept, and smoke only for occupied buildings (#252)",
+      "commit": "20861b41a88560418fa5528c9c61a69dca6f947a"
+    },
+    {
+      "version": "0.0.231",
+      "title": "Release 0.0.231",
+      "summary": "Fill the open jobs, and pay and feed the settlers who take them (#248)",
+      "commit": "3ab7b0341d57d0c7673ffe4591525033ebbec14c"
+    },
+    {
+      "version": "0.0.230",
+      "title": "Release 0.0.230",
+      "summary": "Measure the inn's real overhang and snap it onto the tavern (#249)",
+      "commit": "49dc25af8a3d320040cc0b739f057203c793cab7"
+    },
+    {
+      "version": "0.0.229",
+      "title": "Release 0.0.229",
+      "summary": "Let every citizen build, with monks the slowest hands (#250)",
+      "commit": "8324be73cfc167cc87e2d8b8b6d164130d7af70d"
+    },
     {
       "version": "0.0.228",
       "title": "Release 0.0.228",

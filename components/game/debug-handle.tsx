@@ -16,6 +16,7 @@ import { surfaceHeight } from "@/lib/game/map/bridges"
 import { SELECTED_CHARACTER_LAYER, type OutlineMode } from "@/lib/game/render/outline"
 import type { Traveler } from "@/lib/game/travelers"
 import { simRegistry, stepSim } from "@/lib/game/sim"
+import { GAME_DAY_SECONDS } from "@/lib/game/calendar"
 import type { MovementTuning } from "@/lib/game/motion"
 import { strikeTree } from "@/lib/game/trees/impact"
 import type { TreePlacement } from "@/lib/game/trees/placement"
@@ -35,7 +36,7 @@ import { sceneryDetailStatus } from "@/lib/game/render/scenery-detail"
 import { batchedSourceRoots } from "@/lib/game/render/batch-source-visibility"
 import { characterBatchEntry } from "@/lib/game/render/character-batch"
 import { workerRouteMemoryStats } from "@/lib/game/worker-route-memory"
-import { BENCHMARK_SIMULATION_SPEEDS, useSimulationStore } from "@/lib/game/simulation-store"
+import { BENCHMARK_SIMULATION_SPEEDS, simulationSpeedControl, useSimulationStore } from "@/lib/game/simulation-store"
 
 /**
  * Exposes a small handle on `window` so the scene can be driven deterministically
@@ -58,6 +59,8 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
       if (!root?.parent) { root = scene.getObjectByName(name); if (root) roots.set(name, root) }
       return root
     }
+    const foliageMesh = () => namedRoot("foliage-prototype")?.children.find(
+      (child): child is THREE.InstancedMesh => child instanceof THREE.InstancedMesh && child.layers.isEnabled(0))
     const handle = {
       map,
       trees,
@@ -67,7 +70,8 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
           activity: s.activity, riding: s.partyRiding, boarding: s.partyBoarding, stamina: s.stamina, waiting: s.partyWaiting, home: s.home, employer: s.employer,
         } }) })),
       expectedPopulation: travelers.length,
-      bakeLoadingChurch: async () => (await import("@/lib/game/render/loading-church-bake")).bakeLoadingChurch(gl),
+      simulationDaySeconds: GAME_DAY_SECONDS,
+      bakeLoadingChurch: async (chapel = true) => (await import("@/lib/game/render/loading-church-bake")).bakeLoadingChurch(gl, chapel),
       benchmarkTarget: benchmarkCity(map)?.centre,
       cityStats: () => cityBenchmarkStats(simRegistry.current, map),
       populationStatus: () => ({ travelers: simRegistry.current?.travelers.size ?? 0,
@@ -154,6 +158,9 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
       setSpeed: (label: number) => {
         const speed = BENCHMARK_SIMULATION_SPEEDS.find(speed => speed.label === label)
         if (!speed) throw new Error(`Unknown playback speed: ${label}`)
+        // Measurements ask for a speed at a crowd size on purpose, including the
+        // 6× the HUD withholds; the request lifts the crowd limit for this run.
+        simulationSpeedControl.crowdLimit = false
         useSimulationStore.setState({ speed: speed.rate })
       },
       playback: () => useSimulationStore.getState(),
@@ -190,11 +197,12 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
       },
       setAdaptiveQuality: (enabled: boolean) => { frameQualityControl.enabled = enabled },
       setCrowdThinning: (enabled: boolean) => { crowdRenderControl.enabled = enabled },
+      setCrowdSpeedLimit: (enabled: boolean) => { simulationSpeedControl.crowdLimit = enabled },
       figureStatus: () => ({ ...crowdRenderStatus, quality: frameQuality(scene),
         pendingUnits: namedRoot("travelers")?.userData.pendingUnits ?? 0,
         missingVisibleUnits: namedRoot("travelers")?.userData.missingVisibleUnits ?? 0 }),
       adaptiveStatus: () => ({ ...crowdRenderStatus, quality: frameQuality(scene), detail: sceneryDetailStatus(scene)?.current,
-        treeDensity: namedRoot("foliage-prototype")?.children[0]?.userData.treeDensity,
+        treeDensity: foliageMesh()?.userData.treeDensity,
         wildlife: namedRoot("wildlife")?.visible, waterDetail: namedRoot("water-shimmer")?.visible }),
       hiddenTraveler: () => {
         const root = namedRoot("travelers")
@@ -227,7 +235,7 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
         })
         scene.traverseVisible(object => { visible++; if (object instanceof THREE.Sprite) sprites++ })
         const figures = scene.getObjectByName("travelers")?.userData
-        const foliage = scene.getObjectByName("foliage-prototype")?.children[0] as THREE.InstancedMesh | undefined
+        const foliage = foliageMesh()
         return { objects, visible, sprites, units, prunedCharacterRoots: [...batchedSourceRoots(scene)].length, treeRenderer: foliage ? "sprites" : "procedural",
           totalTrees: foliage?.userData.totalTrees, visibleTrees: foliage?.count, loadedUnits: loaded.size, requestedUnits: figures?.requestedUnits,
           pendingUnits: figures?.pendingUnits, missingVisibleUnits: figures?.missingVisibleUnits,

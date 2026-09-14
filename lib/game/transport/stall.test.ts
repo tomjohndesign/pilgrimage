@@ -26,6 +26,17 @@ describe("road-facing stalls and animal clearance", () => {
     expect(pastureSegmentClear({ x: -2, z: 0 }, { x: 2, z: 0 }, obstacles, 0.4)).toBe(false)
     expect(pastureSegmentClear({ x: -2, z: 2 }, { x: 2, z: 2 }, obstacles, 0.4)).toBe(true)
   })
+  it("checks stationary points inside, beside and diagonally outside a body", () => {
+    const obstacles = [{ x: 0, z: 0, heading: 0, halfWidth: 1, halfLength: 2 }]
+    for (const [point, clearance, expected] of [
+      [{ x: 0, z: 0 }, 0, false],
+      [{ x: 1, z: 1 }, 0, false],
+      [{ x: 1.5, z: 1 }, .5, false],
+      [{ x: 1.5, z: 1 }, .49, true],
+      [{ x: 1.3, z: 2.4 }, .51, false],
+      [{ x: 1.3, z: 2.4 }, .49, true],
+    ] as const) expect(pastureSegmentClear(point, { ...point }, obstacles, clearance)).toBe(expected)
+  })
   it("keeps the entire grazing animal clear of cart, wares and sign through wandering and recall", () => {
     for (const kind of ["horse", "donkey"] as const) for (const side of [1, -1]) {
       const map: GameMap = { width: 11, depth: 9, buildings: [], tiles: Array.from({ length: 99 }, (_, i) => Math.floor(i / 11) === 4 ? "path" : "grass") }

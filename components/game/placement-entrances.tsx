@@ -2,6 +2,7 @@ import { buildingDoorOffset, buildingEntry, buildingYaw } from "@/lib/game/build
 
 /** Gold thresholds and stepped inward arrows remain legible through the ghost roof. */
 export function PlacementEntrances({ type, w, d, layoutSeed, color = "#ffe5a0" }: { type: string; w: number; d: number; layoutSeed?: number; color?: string }) {
+  if (type === "well") return null
   const sides = type === "cross" ? [] : type === "enclosure" ? [0, 1, 2, 3] : (type === "garden" || type === "tavern") ? [0, 2] : [0]
   const entries=(type === "tavern" ? [1,-1] as const : [1] as const).map(end=>buildingEntry({x:0,z:0,w,d,buildType:type,layoutSeed},false,end))
   const reserved=!["cross","garden","lumberCamp"].includes(type)

@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { terrainMapSnapshot } from "@/lib/game/render/terrain-blocks"
 import { travelerAppearance } from "@/lib/game/base-person/population"
 import { populationVisual } from "@/lib/game/base-person/population-assets"
+import { monkVisual } from "@/lib/game/base-person/monk-assets"
 import { walkSpeedScale } from "@/lib/game/base-person/gait"
 import { characterVisual } from "@/lib/game/character-assets"
 import { useCharacterAssetStore } from "@/lib/game/character-asset-store"
@@ -45,7 +46,7 @@ import { DebugHandle } from "./debug-handle"
 import { Environment } from "./environment"
 import { Monks } from "./monks"
 import { OutlinePass } from "./outline-pass"
-import { RenownSaturation } from "./renown-saturation"
+import { AppearanceScene } from "./appearance-scene"
 import { vendorSpeedScale } from "@/lib/game/transport/assets"
 import { Shrine } from "./shrine"
 import { Signpost, ForestWarnings } from "./signpost"
@@ -154,9 +155,11 @@ export function GameCanvas({
   const assets = useCharacterAssetStore(s => s.assets)
   const speedScales = useMemo(() => new Map(travelers.map(traveler => {
     const appearance = travelerAppearance(map.seed ?? 0, traveler.id)
-    const visual = characterModel === "base" || (traveler.type.id === "beggar" || traveler.type.id === "nun") ? populationVisual(traveler.type.id, appearance.variant, population, traveler.attributes.age)
+    const monk = traveler.type.id === "friar"
+    const visual = monk ? monkVisual(traveler.attributes.age)
+      : characterModel === "base" || (traveler.type.id === "beggar" || traveler.type.id === "nun") ? populationVisual(traveler.type.id, appearance.variant, population, traveler.attributes.age)
       : characterVisual(assets[traveler.type.id], "callings")
-    const scale = characterScale * (characterModel === "base" ? appearance.scale : 1)
+    const scale = characterScale * (!monk && characterModel === "base" ? appearance.scale : 1)
     const personSpeedScale = walkSpeedScale(visual.walkStride, scale)
     return [traveler.id, traveler.type.id === "vendor" ? vendorSpeedScale(traveler.id, scale, personSpeedScale) : personSpeedScale]
   })), [travelers, map.seed, characterModel, characterScale, population, assets])
@@ -166,8 +169,14 @@ export function GameCanvas({
     return [traveler.id, walkSpeedScale(visual.walkStride, characterScale * appearance.scale)]
   })), [travelers, map.seed, characterScale, population])
   const foundation = usePersonDesignStore(s => s.design)
-  useEffect(() => { void usePersonDesignStore.getState().hydrate() }, [])
-  useEffect(() => { void usePopulationStore.getState().prepare(foundation) }, [foundation])
+  useEffect(() => {
+    if (phase === "complete") void usePersonDesignStore.getState().hydrate()
+  }, [phase])
+  useEffect(() => {
+    // Rebuilding an edited crowd is optional work; published sprites can open
+    // the map immediately while the new pack is prepared afterwards.
+    if (phase === "complete") void usePopulationStore.getState().prepare(foundation)
+  }, [foundation, phase])
   const species = useTreeTuningStore((s) => s.species)
   const variance = useTreeTuningStore((s) => s.variance)
   const treeModel = treeModelForGame(requestedTreeModel)
@@ -197,7 +206,7 @@ export function GameCanvas({
       <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
       <CameraLight />
 
-      <HearthLights enabled={visibility.buildingVisibility !== "hidden"}><RenownSaturation map={map}>
+      <HearthLights enabled={visibility.buildingVisibility !== "hidden"}>
       <group name="map-reveal-church" userData={{ mapRevealLandmark: !restore }} visible={visibility.buildingVisibility !== "hidden"}>
         <Shrine map={map} relic={relic} showInteriors={visibility.buildingVisibility === "interiors"} />
       </group>
@@ -233,7 +242,7 @@ export function GameCanvas({
             characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} /></CharacterBatches>
         </group>
       </SceneAssetBoundary>
-      </RenownSaturation></HearthLights>
+      </HearthLights>
       <SceneAssetBoundary>
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
       <BuildInfluenceOverlay map={map} buildMode={!!buildType} />
@@ -242,6 +251,7 @@ export function GameCanvas({
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <PersonPicking />
       <GroundSelection map={map} trees={trees} characterScale={characterScale} />
+      <AppearanceScene map={map} travelers={travelers} monks={monks} />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
       <DebugHandle characterScale={characterScale} map={map} trees={trees} travelers={travelers} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} movement={movement} />
       <ViewSnapshotCapture pixelsPerUnit={pixelation.pixelsPerUnit ?? CHARACTER_PIXELS_PER_UNIT} map={map} trees={trees} />

@@ -5,6 +5,9 @@ import { TERRAIN } from "../map/terrain"
 export const DEEP_WOOD_TINT = new THREE.Color("#36452a")
 export const OPEN_MEADOW_TINT = new THREE.Color("#94a158")
 
+/** Authored sward/forest texture reference; independent of the tunable turf color. */
+export const SWARD_TEXTURE_REFERENCE = new THREE.Color("#77864b")
+
 /** Extra dark-habitat tint for small pieces of turf-covered scenery. */
 export const DARK_WOOD_DARKEN = 0.4
 

@@ -28,6 +28,7 @@ export function SettlementPanel({
   onClose: () => void
 }) {
   const { map, settlement, balance } = economy
+  const payroll = economy.workers * balance.rules.dailyWage
   if (!map || !relic) return null
   const tiers = renownTiers(balance)
   const renown = economy.renown!
@@ -81,6 +82,7 @@ export function SettlementPanel({
       <p className="mb-2 text-[11px] text-ink-light">
         {economy.visits} visits · {economy.residents.length - monks.length} settlers · {Math.max(0, jobBuildings(map)
           .reduce((jobs, b) => jobs + BUILDING_KINDS[b.kind].jobs, 0) - (economy.residents.length - monks.length))} open jobs
+        {payroll > 0 ? ` · ${payroll} gold a day in wages` : ""}
       </p>
       <div className="my-3 grid grid-cols-2 gap-2" aria-label="Enclave housing">
         {(["people", "monks"] as const).map(kind => {
@@ -92,7 +94,7 @@ export function SettlementPanel({
           </div>
         })}
       </div>
-      <p className="mb-3 text-[11px] text-ink-light">Complete houses for settlers and shelters for monks. Visiting monks may join the brotherhood when a bed is free.</p>
+      <p className="mb-3 text-[11px] text-ink-light">Complete houses for settlers and residences against the completed church for monks. The chapel supports 4 monks; upgrading it to a church supports 8. Visiting monks may join when both a place and a bed are free.</p>
       <details>
         <summary className="cursor-pointer text-xs">
           <span className="font-display">{renown.total} renown</span> · {tier.label}

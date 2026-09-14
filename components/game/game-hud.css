@@ -107,7 +107,7 @@
   box-shadow: inset 0 0 0 1px #2b2417;
   color: #f9e5af;
 }
-:is(.hud-action, .hud-building-tile):is(:disabled, [aria-disabled="true"]) {
+:is(.hud-action, .hud-building-tile, .hud-speeds button):is(:disabled, [aria-disabled="true"]) {
   background: #262218;
   border-color: #514733;
   color: #9b907a;

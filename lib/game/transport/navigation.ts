@@ -1,6 +1,7 @@
 import { mapBuildingQuery } from "../building-spatial"
+import { SpatialPoints } from "../spatial-points"
 import { buildingYaw, rotateBuildingPoint, rotatedFootprint } from "../building-rotation"
-import { marketLayout, marketYardContains } from "../market-layout"
+import { marketLayout, marketBayContains } from "../market-layout"
 import type { TreePlacement } from "../trees/placement"
 import { pastureSegmentClear, type StallObstacle } from "./stall"
 import { cartGroundContacts, onBridgeDeck } from "./bridge-guide"
@@ -85,9 +86,10 @@ export function convoyClear(map: GameMap, pose: CartPose, puller: Puller, scale:
           }
           continue
         }
-        if (!(terrain === "grass" || terrain === "clearing" || (!grassOnly && (terrain === "dirt" || terrain === "path" || terrain === "track" || terrain === "bridge" || terrain === "ford")))) return false
+        // Open ground to stand on is grass, forest floor or the bare earth of a yard.
+        if (!(terrain === "grass" || terrain === "clearing" || terrain === "dirt" || (!grassOnly && (terrain === "path" || terrain === "track" || terrain === "bridge" || terrain === "ford")))) return false
         const building = nearby({ x, z }).find(b => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d)
-        if ((building && !marketYardContains(building, { x, z })) || (!layout.rise[z * map.width + x] && Math.abs(groundHeight(map, x, z) - height) >= 0.3)) return false
+        if ((building && !marketBayContains(building, { x, z })) || (!layout.rise[z * map.width + x] && Math.abs(groundHeight(map, x, z) - height) >= 0.3)) return false
       }
     }
   }
@@ -102,6 +104,34 @@ export interface ParkingContext {
   trees: readonly TreePlacement[]
   obstacles?: readonly StallObstacle[]
   people?: readonly Point[]
+}
+
+/** Share a spatial broad phase across a synchronous parking/recovery search.
+ * The caller must keep its obstacle positions fixed until the search returns;
+ * each new search rebuilds from live data, including moved trees and stalls. */
+export function parkingClearance(map: GameMap, puller: Puller, scale: number, context: ParkingContext) {
+  const obstacles = new SpatialPoints(context.obstacles ?? [])
+  const trees = new SpatialPoints(context.trees)
+  const people = new SpatialPoints(context.people ?? [])
+  let obstacleRadius = 0, treeRadius = 0
+  for (const box of context.obstacles ?? []) obstacleRadius = Math.max(obstacleRadius, Math.hypot(box.halfWidth, box.halfLength))
+  for (const tree of context.trees) treeRadius = Math.max(treeRadius, (tree.shape?.trunkRadius ?? .18) * (tree.scale ?? 1) + .08)
+  return (pose: CartPose, grassOnly = false, animalHeading = pose.heading): boolean => {
+    if (!convoyClear(map, pose, puller, scale, grassOnly, animalHeading)) return false
+    for (const box of convoyBounds(pose, puller, scale, animalHeading)) {
+      const radius = Math.hypot(box.halfWidth, box.halfLength)
+      // Include tangencies: SpatialPoints uses a strict radius comparison.
+      // SAT expands both separating axes by .12, so its corner envelope needs
+      // sqrt(2) times that margin, not merely the margin along one axis.
+      if (obstacles.firstWithin(box.x, box.z, radius + obstacleRadius + .12 * Math.SQRT2 + 1e-6,
+        other => overlaps(box, other))) return false
+      if (trees.firstWithin(box.x, box.z, radius + treeRadius + 1e-6,
+        tree => !pastureSegmentClear(tree, tree, [box], (tree.shape?.trunkRadius ?? .18) * (tree.scale ?? 1) + .08))) return false
+      if (people.firstWithin(box.x, box.z, radius + .2 + 1e-6,
+        person => !pastureSegmentClear(person, person, [box], .2))) return false
+    }
+    return true
+  }
 }
 
 function overlaps(a: StallObstacle, b: StallObstacle, clearance = .12) {
@@ -124,11 +154,11 @@ export function convoyBuildingsClear(map: GameMap, pose: CartPose, puller: Pulle
   const nearby = mapBuildingQuery(map, padding)
   return bounds.every(body => nearby({ x: body.x + (map.width - 1) / 2, z: body.z + (map.depth - 1) / 2 }).every(building => {
     const size = rotatedFootprint(building, building.rotation)
-    const market = building.buildType === "market" ? marketLayout(size.w, size.d) : null
-    const offset = rotateBuildingPoint(0, market?.stallZ ?? 0, building.rotation)
+    const market = building.buildType === "market" ? marketLayout(size.w, size.d, building.layoutSeed) : null
+    const offset = rotateBuildingPoint(market?.stallX ?? 0, 0, building.rotation)
     const box = { x: tileToWorldX(map, building.x) + (building.w - 1) / 2 + offset.x,
       z: tileToWorldZ(map, building.z) + (building.d - 1) / 2 + offset.z,
-      heading: buildingYaw(building.rotation), halfWidth: size.w / 2, halfLength: (market?.stallDepth ?? size.d) / 2 }
+      heading: buildingYaw(building.rotation), halfWidth: (market?.stallWidth ?? size.w) / 2, halfLength: size.d / 2 }
     return !overlaps(body, box, 0)
   }))
 }
@@ -150,7 +180,7 @@ export function parkingTree(map: GameMap, pose: CartPose, trees: readonly TreePl
     for (let d = 0; d < distance - 0.35; d += 0.1) {
       const x = worldToTileX(map, pose.hitch.x + (tree.x - pose.hitch.x) * d / distance)
       const z = worldToTileZ(map, pose.hitch.z + (tree.z - pose.hitch.z) * d / distance)
-      if (!["grass", "clearing", "forest", "darkwood"].includes(tileAt(map, x, z) ?? "") || buildingAt(map, x, z)) return false
+      if (!["grass", "clearing", "dirt", "forest", "darkwood"].includes(tileAt(map, x, z) ?? "") || buildingAt(map, x, z)) return false
     }
     return true
   }).sort((a, b) => Math.hypot(a.x - pose.hitch.x, a.z - pose.hitch.z) - Math.hypot(b.x - pose.hitch.x, b.z - pose.hitch.z))[0]

@@ -130,18 +130,42 @@ export function generateElevation(seed: number, width: number, depth: number, wa
   return { settings, height, corners: [], slope: [], cliffs: [] }
 }
 
+/** Visit every in-bounds edge of a tile with its height difference, water measured at its surface. */
+function forEachEdge(
+  e: ElevationInfo, width: number, depth: number, water: Uint8Array, surface: number[], i: number,
+  visit: (n: number, side: number, delta: number) => void,
+): void {
+  const x = i % width, z = Math.floor(i / width), h = water[i] ? surface[i] : e.height[i]
+  ROUTE_DIRS.forEach(([dx, dz], side) => {
+    const nx = x + dx, nz = z + dz, n = nz * width + nx
+    if (nx < 0 || nz < 0 || nx >= width || nz >= depth) return
+    visit(n, side, Math.abs(h - (water[n] ? surface[n] : e.height[n])))
+  })
+}
+
 function updateElevationEdges(e: ElevationInfo, width: number, depth: number, water: Uint8Array, surface: number[]): void {
   e.slope = e.height.map(() => 0); e.cliffs = e.height.map(() => 0)
-  for (let z = 0; z < depth; z++) for (let x = 0; x < width; x++) {
-    const i = z * width + x, h = water[i] ? surface[i] : e.height[i]
-    ROUTE_DIRS.forEach(([dx, dz], side) => {
-      const nx = x + dx, nz = z + dz, n = nz * width + nx
-      if (nx < 0 || nz < 0 || nx >= width || nz >= depth) return
-      const delta = Math.abs(h - (water[n] ? surface[n] : e.height[n]))
+  for (let i = 0; i < e.height.length; i++) {
+    forEachEdge(e, width, depth, water, surface, i, (n, side, delta) => {
       if (!water[i] && !water[n]) e.slope[i] = Math.max(e.slope[i], delta)
       if (delta >= e.settings.cliffThreshold) e.cliffs[i] |= 1 << side
     })
   }
+}
+
+/**
+ * Tiles with at least one cliff edge, by the same cutoff `cliffs` uses once
+ * the map is finished. Usable before then — founding sites are chosen while
+ * the edge masks are still empty.
+ */
+export function cliffMask(e: ElevationInfo, width: number, depth: number, water: Uint8Array, surface: number[]): Uint8Array {
+  const mask = new Uint8Array(e.height.length)
+  for (let i = 0; i < mask.length; i++) {
+    forEachEdge(e, width, depth, water, surface, i, (_n, _side, delta) => {
+      if (delta >= e.settings.cliffThreshold) mask[i] = 1
+    })
+  }
+  return mask
 }
 
 /** Rebuild after grading a founding footprint. Water corners retain their channel levels. */
@@ -186,7 +210,7 @@ export function finishElevation(e: ElevationInfo, width: number, depth: number, 
  * sharing those corners meet the pad; existing foundations and water stay put.
  * Adjacent buildings at different heights retain a small terrace between them.
  */
-export function levelBuildingGround(map: GameMap, building: Pick<BuildingDef, "x" | "z" | "w" | "d">): ElevationInfo | undefined {
+export function levelBuildingGround(map: GameMap, building: Pick<BuildingDef, "x" | "z" | "w" | "d" | "churchId">): ElevationInfo | undefined {
   const original = map.elevation
   if (!original) return undefined
   const { x, z, w, d } = building
@@ -245,7 +269,9 @@ export function levelBuildingGround(map: GameMap, building: Pick<BuildingDef, "x
 }
 
 /** The pad height a footprint grades to: the ground under its centre, where the placement ghost floats. */
-function padFoundation(map: GameMap, { x, z, w, d }: Pick<BuildingDef, "x" | "z" | "w" | "d">): number {
+function padFoundation(map: GameMap, { x, z, w, d, churchId }: Pick<BuildingDef, "x" | "z" | "w" | "d" | "churchId">): number {
+  const church = churchId && map.buildings.find(b => b.id === churchId)
+  if (church) return padFoundation(map, church)
   const foundation = groundHeight(map, x + (w - 1) / 2, z + (d - 1) / 2) - TILE_HEIGHT
   const corner = map.elevation!.corners[(z * map.width + x) * 4]
   // Adding/subtracting TILE_HEIGHT can round an already flat foundation.
@@ -268,7 +294,7 @@ export interface FootprintGrading {
  * and whether the pad edge would break off as a cliff. Level ground reports
  * no cut or fill, and a map without elevation is level everywhere.
  */
-export function footprintGrading(map: GameMap, building: Pick<BuildingDef, "x" | "z" | "w" | "d">): FootprintGrading {
+export function footprintGrading(map: GameMap, building: Pick<BuildingDef, "x" | "z" | "w" | "d" | "churchId">): FootprintGrading {
   const e = map.elevation
   if (!e) return { foundation: 0, cut: 0, fill: 0, cliff: false }
   const { x, z, w, d } = building

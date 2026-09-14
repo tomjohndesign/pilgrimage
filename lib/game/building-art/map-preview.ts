@@ -1,14 +1,14 @@
-import { innPlacementLayout } from "../inn"
+import { innPlacementLayout, innStackSite } from "../inn"
 import type { GameMap, BuildingDef, TilePos } from "../map/types"
 import type { TerrainId } from "../map/terrain"
-import { EARLY_BUILDINGS, earlyBuildingRecipe, type BuildingRecipe } from "./style"
+import { AVAILABLE_EARLY_BUILDINGS, earlyBuildingRecipe, type BuildingRecipe } from "./style"
 import { makeRng } from "../rng"
 import { adoptNeighborChimney, roofAlignedRotation, placementClearance } from "../building-placement-layout"
 import { buildingApproaches, rotatedFootprint, type BuildingRotation } from "../building-rotation"
 
 /** Choose a distinct neighbor with its own normal footprint and layout. */
 export function randomPreviewNeighbor(type: BuildingRecipe["variant"], seed: number): BuildingRecipe {
-  const random = makeRng(seed), choices = EARLY_BUILDINGS.filter(preset => preset.id !== type)
+  const random = makeRng(seed), choices = AVAILABLE_EARLY_BUILDINGS.filter(preset => preset.id !== type)
   return { ...earlyBuildingRecipe(choices[Math.floor(random() * choices.length)].id),
     layoutSeed: Math.floor(random() * 65536) }
 }
@@ -81,9 +81,12 @@ export function buildingPreviewMap(recipe: BuildingRecipe, neighbor?: BuildingRe
 /** Preview and commit exactly the same orientation, footprint and adopted flue. */
 export function previewPlacement(map: GameMap, recipe: BuildingRecipe, at: TilePos, rotation: BuildingRotation,
   snap: boolean, recipes: ReadonlyMap<string,BuildingRecipe>) {
-  let building=previewBuilding(recipe,at,"placement-ghost",rotation)
+  // An upper floor covers one host exactly, so it snaps onto the tavern under
+  // the cursor instead of demanding that corner tile.
+  const stacked=snap ? innStackSite(map,recipe.variant,at) : undefined
+  let building=previewBuilding(recipe,stacked ?? at,"placement-ghost",stacked?.rotation ?? rotation)
   const riseFor=(b:BuildingDef)=>b.id===building.id ? recipe.roofRise : recipes.get(b.id)!.roofRise
-  const aligned=snap ? roofAlignedRotation(map,building,riseFor) : rotation
+  const aligned=stacked?.rotation ?? (snap ? roofAlignedRotation(map,building,riseFor) : rotation)
   building={...building,...rotatedFootprint({w:recipe.width,d:recipe.depth},aligned),rotation:aligned}
   building={...building,...(building.buildType === "inn" ? innPlacementLayout(map,building) : adoptNeighborChimney(map,building,riseFor))}
   return {building,recipe:{...recipe,layoutSeed:building.layoutSeed,hearthZ:building.hearthZ,fireplace:building.fireplace},

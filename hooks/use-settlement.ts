@@ -1,5 +1,6 @@
 "use client"
 
+import { churchUpgradeError } from "@/lib/game/shrine-upgrade"
 import { enclaveHousing } from "@/lib/game/housing"
 import { constructionStage } from "@/lib/game/construction"
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react"
@@ -7,7 +8,7 @@ import type { GameMap, TilePos } from "@/lib/game/map/types"
 import type { Monk } from "@/lib/game/monks"
 import type { Relic } from "@/lib/game/relic"
 import { useBuildStore } from "@/lib/game/build-store"
-import { claimTownBuildings, settlementMap, createSettlement, purchaseStructure, creditTimber, creditAdmission, creditTrade, syncTimberSpending, settlementRenown, grantResources, grantRenown, completeConstruction, type Resources } from "@/lib/game/settlement"
+import { upgradeChurch, claimTownBuildings, settlementMap, createSettlement, purchaseStructure, demolishStructure, creditTimber, creditAdmission, creditTrade, payWages, syncWages, syncTimberSpending, settlementRenown, grantResources, grantRenown, completeConstruction, type Resources } from "@/lib/game/settlement"
 
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { BUILDING_PREVIEW, buildingPreviewBalance, buildingPreviewSettlement } from "@/lib/game/building-preview"
@@ -28,8 +29,10 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   const wood = useBuildStore((s) => s.wood)
   const shrineGold = useBuildStore((s) => s.shrineGold)
   const tradeGold = useBuildStore((s) => s.tradeGold)
+  const wagesPaid = useBuildStore((s) => s.wagesPaid)
   const visitCount = useBuildStore((s) => s.visits)
   const settlers = useBuildStore((s) => s.settlers)
+  const workforce = useBuildStore((s) => s.workers)
   const sameWorld = !!world && simulation?.world.road === world.road
   const visits = sameWorld ? visitCount : 0
   const residents = useMemo(() => [...monks, ...(sameWorld ? settlers : [])], [monks, sameWorld, settlers])
@@ -50,26 +53,28 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   // Workers own live progress. Publish only stage/completion changes to React.
   useEffect(() => {
     const structures = session.settlement.structures
-    const stages = structures.map(constructionStage)
+    const church = session.settlement.church
+    const sites = church ? [...structures, church] : structures
+    const stages = sites.map(constructionStage)
     const timer = setInterval(() => {
       setSession(current => {
-        if (current.world !== world || current.settlement.structures !== structures) return current
-        const next = structures.map(constructionStage)
+        if (current.world !== world || current.settlement.structures !== structures || current.settlement.church !== church) return current
+        const next = sites.map(constructionStage)
         if (next.every((stage, i) => stage === stages[i])) return current
-        const completed = structures.find((_, i) => next[i] === 3 && stages[i] !== 3)
+        const completed = sites.find((_, i) => next[i] === 3 && stages[i] !== 3)
         return { ...current, message: completed ? `${completed.label} completed.` : current.message,
-          settlement: { ...current.settlement, structures: [...structures] } }
+          settlement: { ...current.settlement, structures: [...structures], church: church ? { ...church } : undefined } }
       })
     }, 250)
     return () => clearInterval(timer)
-  }, [world, session.settlement.structures])
+  }, [world, session.settlement.structures, session.settlement.church])
 
   const map = useMemo(
     () =>
       world
         ? settlementMap(world, session.settlement)
         : null,
-    [world, session.settlement.elevation, session.settlement.structures, session.settlement.claimedBuildings],
+    [world, session.settlement.elevation, session.settlement.structures, session.settlement.claimedBuildings, session.settlement.demolishedBuildings, session.settlement.church],
   )
 
   useEffect(() => {
@@ -90,14 +95,19 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
     if (!sameWorld) return
     setSession((current) => {
       if (current.world !== world) return current
-      const settlement = creditTrade(creditAdmission(creditTimber(current.settlement, wood), shrineGold), tradeGold)
+      const settlement = payWages(creditTrade(creditAdmission(creditTimber(current.settlement, wood), shrineGold), tradeGold), wagesPaid)
       return settlement === current.settlement ? current : { ...current, settlement }
     })
-  }, [sameWorld, wood, shrineGold, tradeGold, world])
+  }, [sameWorld, wood, shrineGold, tradeGold, wagesPaid, world])
 
   useEffect(() => {
     if (sameWorld && simulation) syncTimberSpending(simulation, session.settlement.spentWood)
   }, [sameWorld, simulation, session.settlement.spentWood])
+
+  // The payroll may only draw on gold the treasury actually holds.
+  useEffect(() => {
+    if (sameWorld && simulation) syncWages(simulation, session.settlement)
+  }, [sameWorld, simulation, session.settlement])
 
   // Sites already under way finish when the cheat is switched on; later sites finish at purchase.
   const instantBuild = BUILDING_PREVIEW || masterBuilder
@@ -107,7 +117,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
       const settlement = completeConstruction(current.settlement)
       return settlement === current.settlement ? current : { ...current, settlement }
     })
-  }, [instantBuild, session.settlement.structures])
+  }, [instantBuild, session.settlement.structures, session.settlement.church])
 
   const granted = session.settlement.grantedRenown
   const renown = useMemo(() => map && relic
@@ -125,6 +135,13 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
 
   const chooseBuild = useCallback((buildType: string | null) =>
     setSession((current) => ({ ...current, buildType, message: "" })), [])
+  const demolish = (id: string) => setSession(current => {
+    if (!world || current.world !== world) return current
+    const settlement = demolishStructure(current.settlement, world, id)
+    return settlement === current.settlement ? current : {
+      ...current, settlement, buildType: null, message: "Building demolished.",
+    }
+  })
   const place = (at: TilePos) => {
     const rotation = useBuildStore.getState().rotation
     // Placement renders several nearby scenery blocks. Let React yield between
@@ -146,7 +163,7 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
         ...current,
         settlement: instantBuild ? completeConstruction(result.settlement) : result.settlement,
         buildType: result.error ? current.buildType : null,
-        message: result.error ?? (instantBuild ? "Building placed." : "Construction planned. Idle residents will build it."),
+        message: result.error ?? (instantBuild ? "Building placed." : "Construction planned. The enclave will raise it."),
       }
     }))
   }
@@ -156,18 +173,33 @@ export function useSettlement(baseMap: GameMap | null, monks: Monk[], relic: Rel
   const bless = useCallback((renown: number) =>
     setSession(current => ({ ...current, settlement: grantRenown(current.settlement, renown) })), [])
 
+  const upgradeShrine = () => setSession(current => {
+    if (!baseMap || current.world !== baseMap) return current
+    const result = upgradeChurch(current.settlement, baseMap)
+    return { ...current, settlement: instantBuild ? completeConstruction(result.settlement) : result.settlement,
+      message: result.error ?? (instantBuild ? "Church completed." : "Church upgrade planned. Relic visits resume when construction finishes.") }
+  })
+
+  const upgradeError = useMemo(() => map ? churchUpgradeError(map, session.settlement.resources) : null,
+    [map, session.settlement.resources])
+
   return {
+    upgradeShrine,
+    churchUpgradeError: upgradeError,
     map,
     renown,
     residents,
     housing: map ? enclaveHousing(map, residents.length - monks.length, monks.length) : null,
     visits,
+    /** Settlers on the payroll; every one of them draws the daily wage. */
+    workers: sameWorld ? workforce : 0,
     balance,
     settlement: session.settlement,
     buildType: session.buildType,
     message: session.message,
     chooseBuild,
     place,
+    demolish,
     grant,
     bless,
   }

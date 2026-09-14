@@ -79,7 +79,7 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
       }
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => `transport-${kind}-${passengerCart ?? "vendor"}-${idPass ? "id" : "color"}-v5`
+    material.customProgramCacheKey = () => `transport-${kind}-${passengerCart ?? "vendor"}-${idPass ? "id" : "color"}-v7`
     return material
   }), [map, maps, kind, passengerCart, driverFrame, driverVisible, viewport, worldTexel, groundPlane, poseDepth, depthBias, depths, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => { materials.forEach(m => m.dispose()) }, [materials])

@@ -9,6 +9,7 @@ import { SceneAssetBoundary } from "./scene-assets"
 import { stepDevotion } from "@/lib/game/wellbeing"
 import { useBalanceStore } from "@/lib/game/balance-store"
 import { simRegistry } from "@/lib/game/sim"
+import { isComplete } from "@/lib/game/construction"
 import { shrineLayout, shrineStations, isRelicViewingSeat } from "@/lib/game/shrine-layout"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import { monkBeds } from "@/lib/game/housing"
@@ -45,7 +46,7 @@ import { monkVisual, monkWalkSpeed, monkRelicAttachment, monkRelicTrayWidth, MON
 import { rocketMonkVisual, rocketFlightClip } from "@/lib/game/rocket/assets"
 
 /**
- * The keeper stays behind the altar and reveals the relic to individual visitors.
+ * The keeper stands behind the altar and reveals the relic to individual visitors.
  * Other brothers follow grid routes to work and prayer; players can send them in procession.
  * Blaster Pastor sends them
  * on occasional cruises across the map; they return to their life at the shrine
@@ -65,10 +66,11 @@ interface MonkState extends MonkRoutine, MonkNeeds {
 export function Monks({ map, monks, relic, flying = false, characterScale = 1 }: { map: GameMap; monks: Monk[]; relic: Relic; flying?: boolean; characterScale?: number }) {
   const keeperStation = useMemo(() => {
     const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
-    if (!shrine) return null
+    if (!shrine || !isComplete(shrine)) return null
     const { keeper } = shrineStations(shrine, map.site?.door)
     const x = tileToWorldX(map, keeper.x), z = tileToWorldZ(map, keeper.z)
-    return { x, z, y: walkingSurface(map, x, z).height, heading: shrineLayout(shrine, map.site?.door).rotation }
+    const { altar } = shrineLayout(shrine, map.site?.door)
+    return { x, z, y: walkingSurface(map, x, z).height, heading: Math.atan2(altar.x - keeper.x, altar.z - keeper.z) }
   }, [map])
   const selection = useCameraStore((s) => s.selection)
   const groupRefs = useRef<Array<THREE.Group | null>>([])
@@ -115,7 +117,8 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       destination: "home", pause: 0 })
   }
   for (let index = 0; index < world.states.length; index++) {
-    const monk = monks[index], bed = monk.home ? { home: monk.home, slot: monk.bedSlot ?? 0 } : beds[index]
+    const monk = monks[index], bed = monk.home && map.buildings.some(b => b.id === monk.home)
+      ? { home: monk.home, slot: monk.bedSlot ?? 0 } : beds[index]
     world.states[index].home = bed?.home
     world.states[index].bedSlot = bed?.slot
   }
@@ -129,6 +132,13 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
   // resting spots a new footprint now blocks get re-planned.
   useEffect(() => {
     for (const state of world.states) {
+      if (state.buildingTask && !map.buildings.some(b => b.id === state.buildingTask!.buildingId)) {
+        state.buildingTask = undefined
+        state.route = []
+        state.activity = "resting"
+        state.destination = "home"
+        state.pause = 0
+      }
       if (state.buildingTask || state.flight || state.preachingTask) continue
       replanMonkAfterMapChange(state, map, navigation)
     }
@@ -237,6 +247,8 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         && s.activity === "praying" && s.destination === "prayer" && i !== carrierIndex)
       stepDevotion(s, dt, inChurch, inChurch && s.activity === "praying", useBalanceStore.getState().balance)
       if (i === 0 && keeperStation) {
+        // An upgrade can move the altar without replacing the ongoing world.
+        s.x = keeperStation.x; s.y = keeperStation.y; s.z = keeperStation.z
         const sim = simRegistry.current
         const sameWorld = sim && sim.world.road === map.road
         const showing = sameWorld && world.procession.stage === "idle" && [...sim.travelers.values()]

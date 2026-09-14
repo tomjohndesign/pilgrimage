@@ -7,7 +7,7 @@ export function terrainMapSnapshot(map: GameMap, previous?: GameMap): GameMap {
   const keys = new Set([...Object.keys(map), ...Object.keys(previous)])
   for (const key of keys) if (key !== "buildings" && map[key as keyof GameMap] !== previous[key as keyof GameMap]) return map
   if (map.buildings.length !== previous.buildings.length) return map
-  const fields = ["id", "x", "z", "w", "d", "buildType", "rotation"] as const
+  const fields = ["id", "x", "z", "w", "d", "buildType", "rotation", "layoutSeed", "supportId", "churchId"] as const
   return map.buildings.every((b, i) => fields.every(field => b[field] === previous.buildings[i][field])) ? previous : map
 }
 
@@ -53,7 +53,7 @@ export function terrainBlockState(map: TerrainBlockState["map"], blocks: readonl
   const footprints = blocks.map(b => JSON.stringify(map.buildings.filter(building =>
     building.x < b.endX + 2 && building.x + building.w > b.x - 2
     && building.z < b.endZ + 2 && building.z + building.d > b.z - 2)
-    .map(({ id, x, z, w, d, buildType, rotation }) => [id, x, z, w, d, buildType, rotation])))
+    .map(({ id, x, z, w, d, buildType, rotation, layoutSeed, supportId, churchId }) => [id, x, z, w, d, buildType, rotation, layoutSeed, supportId, churchId])))
   const revisions = blocks.map((b, index) => {
     if (reset || footprints[index] !== previous!.footprints[index]) return {}
     if (old.elevation !== map.elevation) {

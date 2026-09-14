@@ -12,13 +12,16 @@ import type { SettlementSave, StructureSave } from "./schema"
 export function captureSettlement(settlement: Settlement): SettlementSave {
   return {
     claimedBuildings: [...settlement.claimedBuildings],
+    demolishedBuildings: [...settlement.demolishedBuildings],
     resources: { ...settlement.resources },
     deliveredWood: settlement.deliveredWood,
     spentWood: settlement.spentWood,
     shrineAdmission: settlement.shrineAdmission,
     collectedAdmission: settlement.collectedAdmission,
     collectedTrade: settlement.collectedTrade,
+    paidWages: settlement.paidWages,
     grantedRenown: settlement.grantedRenown,
+    church: settlement.church ? captureStructure(settlement.church) : undefined,
     structures: settlement.structures.map(captureStructure),
   }
 }
@@ -30,6 +33,7 @@ function captureStructure(building: BuildingDef): StructureSave {
     label: building.label,
     x: building.x, z: building.z, w: building.w, d: building.d,
     rotation: building.rotation,
+    churchId: building.churchId,
     height: building.height,
     color: building.color,
     roofColor: building.roofColor,
@@ -57,6 +61,8 @@ function fitsWorld(world: GameMap, structure: StructureSave, seen: Set<string>):
 
 export function restoreSettlement(world: GameMap, save: SettlementSave): Settlement {
   const seen = new Set(world.buildings.map(building => building.id))
+  const demolishedBuildings = save.demolishedBuildings.filter(id => id !== world.site?.hovelId)
+  for (const id of demolishedBuildings) seen.add(id)
   const structures: BuildingDef[] = []
   let elevation = world.elevation
   for (const structure of save.structures) {
@@ -67,6 +73,7 @@ export function restoreSettlement(world: GameMap, save: SettlementSave): Settlem
       label: structure.label,
       x: structure.x, z: structure.z, w: structure.w, d: structure.d,
       rotation: structure.rotation,
+      churchId: structure.churchId,
       height: structure.height,
       color: structure.color,
       roofColor: structure.roofColor,
@@ -86,9 +93,14 @@ export function restoreSettlement(world: GameMap, save: SettlementSave): Settlem
     if (!building.supportId) elevation = levelBuildingGround({ ...world, elevation, buildings: [...world.buildings, ...structures] }, building) ?? elevation
     structures.push(building)
   }
+  const church = save.church && save.church.id === world.site?.hovelId
+    && save.church.x + save.church.w <= world.width && save.church.z + save.church.d <= world.depth
+    ? { ...save.church, buildType: "church" } : undefined
+  if (church) elevation = levelBuildingGround({ ...world, elevation }, church) ?? elevation
   const known = new Set(world.buildings.map(building => building.id))
   return {
     claimedBuildings: save.claimedBuildings.filter(id => known.has(id)),
+    demolishedBuildings,
     elevation: elevation === world.elevation ? undefined : elevation,
     resources: { ...save.resources },
     deliveredWood: save.deliveredWood,
@@ -96,7 +108,9 @@ export function restoreSettlement(world: GameMap, save: SettlementSave): Settlem
     shrineAdmission: save.shrineAdmission,
     collectedAdmission: save.collectedAdmission,
     collectedTrade: save.collectedTrade,
+    paidWages: save.paidWages,
     grantedRenown: save.grantedRenown,
+    church,
     structures,
   }
 }

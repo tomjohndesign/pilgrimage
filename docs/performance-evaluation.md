@@ -587,10 +587,11 @@ measurements (`.context/city-rate-3x`, `-4x`, `-5x`):
 | 4× | 50.1 | 33.4 | 3 |
 | 5× | 36.3 | 50.1 | 11 |
 
-These comparisons initially motivated a 3× cap. The requested final controls
-are 0.5×, 1×, 2×, 3× and 6×; the benchmark also retains 4× and 5×. Normal
-playback remains 1×. Displayed multipliers
-remain honest: UI 3× uses internal rate 6, three times the normal rate 2.
+These comparisons initially motivated a 3× cap. The player controls are now
+0.5×, 1×, 3× and 6×, with 6× withheld above 2,000 people; the benchmark handle
+retains 2×, 4× and 5× and ignores that crowd limit. Normal playback remains 1×.
+Displayed multipliers remain honest: UI 3× uses internal rate 6, three times
+the normal rate 2.
 Characters keep their stable individual starting phases. Increasing playback
 never queues all skipped atlas frames for later rendering. Host desktop/browser
 activity still varied between the fresh runs, so these are measured comparisons

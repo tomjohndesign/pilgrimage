@@ -36,9 +36,10 @@ export function createBasePersonRig(recipe = personRecipe()) {
   const sleeveColor = female && !robe ? recipe.design.shirtColor : recipe.palette.tunic
   const palette = recipe.palette
   const skin = material(palette.skin, PALETTE_TONES.skin), tunic = material(palette.tunic)
-  const accent = material(recipe.design.accentColor)
+  const trimmed = recipe.design.tunicStyle === "Trimmed"
+  const accent = material(recipe.design.accentColor, trimmed ? PALETTE_TONES.trim : PALETTE_TONES.shared)
   const playful = recipe.design.tunicStyle === "Particolour"
-  const beltMaterial = material(palette.belt), hair = material(recipe.design.hairColor, PALETTE_TONES.hair)
+  const beltMaterial = trimmed ? accent : material(palette.belt), hair = material(recipe.design.hairColor, PALETTE_TONES.hair)
   const undershirt = material(recipe.design.shirtColor), covering = material(recipe.design.coveringColor)
   const leftDebug = material("#329bc2"), rightDebug = material("#db7540")
   const tracked: Array<{ mesh: THREE.Mesh; normal: THREE.Material | THREE.Material[]; side: BodySide }> = []
@@ -97,6 +98,16 @@ export function createBasePersonRig(recipe = personRecipe()) {
   }
   torso.name = robe ? "robe" : female ? "sleeveless-dress" : "shirt"
   torso.userData.inkPart = 3
+  if (trimmed) {
+    // The lowest ring is a narrow woven border, part of the deforming garment.
+    torso.material = [tunic, accent]
+    const geometry = torso.geometry, positions = geometry.getAttribute("position"), indices = geometry.index!
+    geometry.clearGroups()
+    for (let i = 0; i < indices.count; i += 3) {
+      const y = [0, 1, 2].reduce((sum, offset) => sum + positions.getY(indices.getX(i + offset)), 0) / 3
+      geometry.addGroup(i, 3, y < b.tunicHemUpper ? 1 : 0)
+    }
+  }
   if (female && !robe) {
     // The upper shirt and dress straps share a surface: no intersecting layers
     // or flickering at the neckline. Two broad straps cross front and back.
@@ -659,13 +670,17 @@ export function createBasePersonRig(recipe = personRecipe()) {
       root.traverse((object) => {
         if (!(object instanceof THREE.Mesh)) return
         const id = object.userData.inkPart ?? (baseParts.get(object.material as THREE.Material) ?? 1)
-        const tone = (object.material as THREE.Material).userData?.tone ?? PALETTE_TONES.shared
-        const key = `${id}:${tone}:${object.userData.clipAboveHem ? "clipped" : "full"}`
-        if (!masks.has(key)) masks.set(key, new THREE.MeshBasicMaterial({
-          color: new THREE.Color().setRGB(id / 255, tone / 255, 0, THREE.SRGBColorSpace), toneMapped: false,
-          clippingPlanes: object.userData.clipAboveHem ? [hemPlane] : null,
-        }))
-        masked.push({ mesh: object, material: object.material }); object.material = masks.get(key)!
+        const mask = (material: THREE.Material) => {
+          const tone = material.userData?.tone ?? PALETTE_TONES.shared
+          const key = `${id}:${tone}:${object.userData.clipAboveHem ? "clipped" : "full"}`
+          if (!masks.has(key)) masks.set(key, new THREE.MeshBasicMaterial({
+            color: new THREE.Color().setRGB(id / 255, tone / 255, 0, THREE.SRGBColorSpace), toneMapped: false,
+            clippingPlanes: object.userData.clipAboveHem ? [hemPlane] : null,
+          }))
+          return masks.get(key)!
+        }
+        masked.push({ mesh: object, material: object.material })
+        object.material = Array.isArray(object.material) ? object.material.map(mask) : mask(object.material)
 
       })
     },

@@ -2,17 +2,50 @@ import { describe, expect, it } from "vitest"
 import { dirtFloorMask, FLOOR_NEIGHBOURS } from "./dirt-floor"
 import { BUILD_CATALOG } from "../balance"
 import { structureParts } from "./structure"
-import { buildingApproaches, buildingApproach, rotatedFootprint, type BuildingRotation } from "../building-rotation"
+import { buildingApproaches, buildingApproach, buildingEntry, buildingFoldEntry, rotateBuildingPoint, rotatedFootprint, type BuildingRotation } from "../building-rotation"
 import type { GameMap } from "../map/types"
 
 const hut = { id: "hut", buildType: "workshop", label: "Hut", x: 3, z: 3, w: 3, d: 2, height: .85, color: "tan", roofColor: "tan" }
 const mapWith = (buildings = [hut]): GameMap => ({ width: 12, depth: 12, tiles: Array(144).fill("grass"), buildings })
 
+describe("paths meeting building entrances", () => {
+  const directionAt = (map: GameMap, entry: { x: number; z: number }) => dirtFloorMask(map).data[(entry.z * map.width + entry.x) * 4 + 2]
+
+  it.each([0, 1, 2, 3] as BuildingRotation[])("points into both tavern doors, without extending to benches (rotation %i)", rotation => {
+    const building = { ...hut, buildType: "tavern", ...rotatedFootprint({ w: 3, d: 4 }, rotation), rotation, layoutSeed: 1 }
+    const map = mapWith([building])
+    const [front, rear, ...benches] = buildingApproaches(map, building)
+    expect(directionAt(map, front)).toBe([8, 1, 4, 2][rotation])
+    expect(directionAt(map, rear)).toBe([4, 2, 8, 1][rotation])
+    for (const bench of benches) expect(directionAt(map, bench)).toBe(0)
+  })
+
+  it("uses the shrine's actual door and includes raised building thresholds", () => {
+    const map = mapWith([{ ...hut, id: "shrine" }, { ...hut, id: "store", buildType: "storehouse", x: 7 }])
+    map.site = { hovelId: "shrine", door: { x: 2, z: 3 }, junction: 0, branch: [] }
+    expect(directionAt(map, map.site.door)).toBe(1)
+    expect(directionAt(map, buildingEntry(map.buildings[1]))).toBe(8)
+  })
+
+  it("connects the fold gate and hut door without making a dirt floor outside them", () => {
+    const building = { ...hut, buildType: "sheep-pen", w: 4, d: 3 }, map = mapWith([building])
+    for (const entry of [buildingEntry(building), buildingFoldEntry(building)]) {
+      expect(directionAt(map, entry)).toBe(8)
+      expect(dirtFloorMask(map).data[(entry.z * map.width + entry.x) * 4 + 1]).toBe(0)
+    }
+  })
+
+  it.each(["garden", "cross", "lumberCamp", "well", "watering-hole"])("does not extend paths into a doorless %s", buildType => {
+    const mask = dirtFloorMask(mapWith([{ ...hut, buildType }]))
+    expect(mask.data.filter((_, i) => i % 4 === 2).some(Boolean)).toBe(false)
+  })
+})
+
 describe("shared path dirt for building floors", () => {
   it("marks earth floors across the catalogue, preserving raised timber and paving", () => {
     for (const definition of BUILD_CATALOG) {
       const parts=structureParts({...definition,buildType:definition.id})
-      expect(parts.find(p=>p.name === "floor")?.surface === "trail").toBe(!["inn", "storehouse","well","watering-hole"].includes(definition.id))
+      expect(parts.find(p=>p.name === "floor")?.surface === "trail").toBe(!["inn", "storehouse","monk-shelter","well","watering-hole"].includes(definition.id))
     }
     expect(structureParts({...hut,buildType:"enclosure"}).find(p=>p.name === "floor")?.surface).toBeUndefined()
   })
@@ -35,6 +68,19 @@ describe("shared path dirt for building floors", () => {
     expect(data[west] & 1<<FLOOR_NEIGHBOURS.findIndex(([x,z])=>x===1 && z===0)).not.toBe(0)
   })
 
+  it.each([0,1,2,3] as BuildingRotation[])("keeps the fold grassy around the hut at rotation %i", rotation => {
+    const building={...hut,buildType:"sheep-pen",...rotatedFootprint({w:5,d:4},rotation),rotation}
+    const map=mapWith([building]),{data,tiles}=dirtFloorMask(map)
+    for(let z=0;z<4;z++) for(let x=0;x<5;x++) {
+      const local=rotateBuildingPoint(x-2,z-1.5,rotation)
+      const tx=building.x+(building.w-1)/2+local.x,tz=building.z+(building.d-1)/2+local.z,index=tz*map.width+tx
+      const inHut=x===0 && z>=2
+      expect(data[index*4+1]).toBe(inHut ? 255 : 0)
+      expect(data[index*4+3]).toBe(inHut ? 0 : 255)
+      expect(tiles.has(index)).toBe(true)
+    }
+  })
+
   it("unions touching dirt floors without exposing an internal seam", () => {
     const map=mapWith([hut,{...hut,id:"next",x:6}]), {data}=dirtFloorMask(map)
     expect(data[(3*map.width+5)*4+1]).toBe(255)
@@ -55,7 +101,7 @@ describe("shared path dirt for building floors", () => {
     expect(dirtFloorMask(map).tiles.has(6*map.width+3)).toBe(false)
   })
 
-  it.each(["well", "watering-hole"])("preserves the authored ground around a %s", buildType => {
+  it.each(["well", "watering-hole", "monk-shelter"])("preserves the authored ground around a %s", buildType => {
     const mask=dirtFloorMask(mapWith([{...hut,buildType}]))
     expect(mask.tiles.size).toBe(0)
   })

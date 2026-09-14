@@ -1,3 +1,5 @@
+import { builderRate } from "./build-labour"
+import { isComplete, assignBuildingTask } from "./construction"
 import { naturalWaterStop } from "./natural-water"
 import { settlementJob, SETTLEMENT_JOBS } from "./jobs/design"
 import { shrineSeats, shrineStations, shrineLayout } from "./shrine-layout"
@@ -6,8 +8,8 @@ import { BUILD_CATALOG, DEFAULT_BALANCE } from "./balance"
 import { createSettlement, purchaseStructure, placementError, woodcutterHuts, jobBuildings, creditTimber, creditAdmission, syncTimberSpending, settlementRenown, STARTING_RESOURCES } from "./settlement"
 import { buildingEntry } from "./building-rotation"
 import { characterSupport } from "./character-support"
-import { HOUSE_BEDS } from "./building-art/early-geometry"
-import { DRINK_PRICE, MEAL_PRICE, servingHouses, tavernSeats } from "./tavern"
+import { housingCapacity } from "./housing"
+import { DRINK_PRICE, MEAL_PRICE, SERVING_THRESHOLD, servingHouses, tavernSeats } from "./tavern"
 import { buildingStepAllowed, containsTile, shrineGates } from "./building-navigation"
 import { relicHeading, shrineVisitRoute, shrineVisitPlan, shrineDonation } from "./shrine-visit"
 import { BUILDING_KINDS, placementProblem, planBuilding } from "./buildings"
@@ -202,6 +204,13 @@ function addHouse(map: GameMap, at = { x: 6, z: 9 }) {
   const house = { ...def, id: `house-${at.x}-${at.z}`, buildType: "house", label: def.label, ...at, rotation: 0 as const }
   map.buildings.push(house)
   return house
+}
+
+function staffTavernAt(map: GameMap, at = { x: 6, z: 12 }) {
+  const def = BUILD_CATALOG.find(b => b.id === "tavern")!
+  const tavern = { ...def, id: "tavern-1", buildType: "tavern", label: def.label, ...at, rotation: 0 as const }
+  map.buildings.push(tavern)
+  return tavern
 }
 
 function staffTavern(sim: SimState, map: GameMap, at = { x: 13, z: 9 }) {
@@ -525,6 +534,79 @@ describe("woodcutter huts", () => {
     }
   })
 
+  it("sends every citizen but the head keeper to a new site, at their own pace", () => {
+    const { map, camp, traveler } = fixture()
+    const def = BUILD_CATALOG.find(b => b.id === "tavern")!
+    const tavern = { ...def, id: "tavern-0", buildType: "tavern", label: def.label, x: 13, z: 11, rotation: 0 as const }
+    const site = { ...camp, id: "construction-site", x: 5, z: 6, construction: { work: 0, required: 96 } }
+    map.buildings.push(tavern, site)
+    const people = [traveler(0), traveler(1)]
+    people[1].attributes.skills = ["carpentry"]
+    const sim = createSim(people, map)
+    sim.buildings = jobBuildings(map)
+    const keepers = people.map((t, jobSlot) => {
+      const s = sim.travelers.get(t.id)!
+      Object.assign(s, { employer: tavern.id, jobSlot, jobless: false, activity: "idle", moveSpeed: 0,
+        x: tileToWorldX(map, tavern.x + jobSlot), z: tileToWorldZ(map, tavern.z + tavern.d) })
+      return s
+    })
+    stepSim(sim, people, map, 1.5, 0.1)
+    // The counter keeps its first slot; the second keeper is free to lend a hand.
+    expect(keepers[0].activity).toBe("toPost")
+    expect(keepers[1].activity).toBe("toBuild")
+    expect(keepers[1].buildRate).toBe(builderRate(["carpentry"]))
+    run(sim, people, map, 300, () => isComplete(site))
+    expect(isComplete(site)).toBe(true)
+    expect(keepers[0].employer).toBe(tavern.id)
+    expect(keepers[1].employer).toBe(tavern.id)
+  })
+
+  it("leaves a roadside town's household to its own counter", () => {
+    const { map, camp, traveler } = fixture()
+    const def = BUILD_CATALOG.find(b => b.id === "tavern")!
+    const tavern = { ...def, id: "town-tavern", buildType: "tavern", label: def.label, owner: "independent" as const,
+      x: 13, z: 11, rotation: 0 as const }
+    const site = { ...camp, id: "construction-site", x: 5, z: 6, construction: { work: 0, required: 96 } }
+    map.buildings.push(tavern, site)
+    const people = [traveler(0), traveler(1)]
+    const sim = createSim(people, map)
+    sim.buildings = jobBuildings(map, true)
+    const keepers = people.map((t, jobSlot) => {
+      const s = sim.travelers.get(t.id)!
+      Object.assign(s, { employer: tavern.id, jobSlot, jobless: false, activity: "idle", moveSpeed: 0,
+        x: tileToWorldX(map, tavern.x + jobSlot), z: tileToWorldZ(map, tavern.z + tavern.d) })
+      return s
+    })
+    run(sim, people, map, 60)
+    for (const keeper of keepers) expect(["toPost", "posted"]).toContain(keeper.activity)
+    expect(site.construction.work).toBe(0)
+  })
+
+  it("recruits a spare keeper already at their post when a site appears", () => {
+    const { map, camp, traveler } = fixture()
+    const def = BUILD_CATALOG.find(b => b.id === "tavern")!
+    const tavern = { ...def, id: "tavern-0", buildType: "tavern", x: 13, z: 11, rotation: 0 as const }
+    map.buildings.push(tavern)
+    const people = [traveler(0), traveler(1)]
+    people[1].attributes.skills = ["carpentry"]
+    const sim = createSim(people, map)
+    sim.buildings = jobBuildings(map)
+    const keepers = people.map((t, jobSlot) => {
+      const s = sim.travelers.get(t.id)!
+      Object.assign(s, { employer: tavern.id, jobSlot, jobless: false, activity: "idle", moveSpeed: 0,
+        x: tileToWorldX(map, tavern.x + jobSlot), z: tileToWorldZ(map, tavern.z + tavern.d) })
+      return s
+    })
+    run(sim, people, map, 60, () => keepers.every(s => s.activity === "posted"))
+    expect(keepers.every(s => s.activity === "posted")).toBe(true)
+    const site = { ...camp, id: "construction-site", x: 5, z: 6, construction: { work: 0, required: 96 } }
+    map.buildings = [...map.buildings, site]
+    run(sim, people, map, 10, () => keepers[1].activity === "toBuild")
+    expect(keepers[1].activity).toBe("toBuild")
+    expect(keepers[1].buildRate).toBe(builderRate(["carpentry"]))
+    expect(["toPost", "posted"]).toContain(keepers[0].activity)
+  })
+
   it("sends an idle settled worker to build, then returns them to camp", () => {
     const { map, camp, traveler } = fixture()
     const t = traveler(0), sim = createSim([t], map), actor = sim.travelers.get(0)!
@@ -580,10 +662,12 @@ describe("woodcutter huts", () => {
       } else {
         expect(s.activity).toBe("idle")
         expect(s.tree).toBeNull()
-        // They go home to sleep and eat before taking on another tree.
+        // They go home to sleep and eat from the household larder before taking
+        // on another tree: rested, and no longer hungry enough to want supper.
         run(sim, [t], map, 600, () => s.activity === "toWork")
         expect(s.activity).toBe("toWork")
-        expect(Math.min(s.hunger, s.thirst, s.stamina)).toBeGreaterThanOrEqual(80)
+        expect(s.stamina).toBeGreaterThan(80)
+        expect(Math.min(s.hunger, s.thirst)).toBeGreaterThan(SERVING_THRESHOLD)
       }
       run(sim, [t], map, GAME_DAY_SECONDS / 4, () => sim.wood > TIMBER_LOAD)
       expect(sim.wood).toBe(2 * TIMBER_LOAD)
@@ -687,9 +771,9 @@ describe("woodcutter huts", () => {
     expect(withVisits.total - without.total).toBe(40)
     expect(withVisits.relics).toBe(without.relics)
     expect(relic.stats).not.toHaveProperty("renown")
-    const locked = purchaseStructure(createSettlement(), map, [], [], "hall", { x: 12, z: 12 }, balance)
+    const locked = purchaseStructure(createSettlement(), map, [], [], "market", { x: 12, z: 12 }, balance)
     expect(locked.error).toMatch(/renown/)
-    const unlocked = purchaseStructure(createSettlement(), map, [], [], "hall", { x: 12, z: 12 }, balance, 20)
+    const unlocked = purchaseStructure(createSettlement(), map, [], [], "market", { x: 12, z: 12 }, balance, 20)
     expect(unlocked.error).toBeNull()
   })
 
@@ -911,11 +995,11 @@ describe("houses, counters and posts", () => {
     expect(sim.tradeGold).toBe(0)
   })
 
-  it("takes both tavern posts and both places in the fold, one settler each", () => {
+  it("fills every tavern post and both places in the fold, one settler each", () => {
     for (const type of ["tavern", "sheep-pen"] as const) {
       const { map, traveler } = fixture()
       const def = BUILD_CATALOG.find(b => b.id === type)!
-      const place = { ...def, id: `${type}-0`, buildType: type, label: def.label, x: 13, z: 9, rotation: 0 as const }
+      const place = { ...def, id: `${type}-0`, buildType: type, label: def.label, x: 13, z: 13, rotation: 0 as const }
       map.buildings.push(place)
       addHouse(map)
       const people = Array.from({ length: 24 }, (_, id) => {
@@ -925,15 +1009,16 @@ describe("houses, counters and posts", () => {
       })
       const sim = createEstablishedShrine(people, map, holy)
       sim.buildings = jobBuildings(map)
-      run(sim, people, map, 400, () => [...sim.travelers.values()].filter(s => s.activity === "posted").length === 2)
+      const posts = BUILDING_KINDS[type].jobs
+      run(sim, people, map, 400, () => [...sim.travelers.values()].filter(s => s.activity === "posted").length === posts)
       const staff = [...sim.travelers.values()].filter(s => s.employer === place.id)
-      expect(staff).toHaveLength(2)
+      expect(staff).toHaveLength(posts)
       useBuildStore.getState().syncResources(sim, people)
       expect(useBuildStore.getState().settlers.map(resident => resident.duty)).toEqual(
         staff.map(worker => SETTLEMENT_JOBS[settlementJob(worker.employer, sim.buildings)!].label))
       expect(staff.map(worker => settlementJob(worker.employer, sim.buildings))).toEqual(
-        [type === "tavern" ? "tavern" : "shepherd", type === "tavern" ? "tavern" : "shepherd"])
-      expect(new Set(staff.map(s => s.jobSlot))).toEqual(new Set([0, 1]))
+        staff.map(() => type === "tavern" ? "tavern" : "shepherd"))
+      expect(new Set(staff.map(s => s.jobSlot))).toEqual(new Set(staff.map((_, slot) => slot)))
       for (const worker of staff) {
         expect(worker.jobless).toBe(false)
         // Every post stands inside its own building, not on the doorstep.
@@ -942,7 +1027,157 @@ describe("houses, counters and posts", () => {
     }
   }, 20000)
 
-  it("gives each settler their own bed and moves the next one into the next house", () => {
+  it("pays every worker a daily wage from the treasury and nothing more than it holds", () => {
+    const { map, camp, traveler } = fixture()
+    map.buildings.push(camp)
+    addHouse(map)
+    const people = [traveler(0), traveler(1)]
+    const sim = createSim(people, map)
+    sim.buildings = [camp]
+    // No standing timber, so wages are the only coin these two can earn.
+    sim.trees = []
+    const wage = sim.balance.rules.dailyWage
+    const workers = people.map(t => sim.travelers.get(t.id)!)
+    for (const worker of workers) Object.assign(worker, { employer: camp.id, home: map.buildings.at(-1)!.id, gold: 0, activity: "idle", jobless: false })
+    // Three days of payroll for two workers, from a treasury that covers them.
+    sim.treasuryGold = 6 * wage
+    run(sim, people, map, 3.5 * GAME_DAY_SECONDS)
+    expect(sim.time).toBeGreaterThan(3)
+    expect(workers.map(w => w.wageDay)).toEqual([3, 3])
+    expect(sim.wagesPaid).toBe(6 * wage)
+    for (const worker of workers) expect(worker.gold).toBe(3 * wage)
+    // An empty treasury simply pays nothing; the day still passes.
+    sim.treasuryGold = 0
+    run(sim, people, map, 2 * GAME_DAY_SECONDS)
+    expect(workers.map(w => w.wageDay)).toEqual([5, 5])
+    expect(sim.wagesPaid).toBe(6 * wage)
+    for (const worker of workers) expect(worker.gold).toBe(3 * wage)
+  }, 20000)
+
+  it("keeps a town household off the player's payroll", () => {
+    const { map, traveler } = fixture()
+    const def = BUILD_CATALOG.find(b => b.id === "tavern")!
+    map.buildings.push({ ...def, id: "town-tavern", buildType: "tavern", label: def.label, x: 13, z: 9, rotation: 0, owner: "independent" })
+    const people = [traveler(0)]
+    const sim = createSim(people, map)
+    sim.buildings = jobBuildings(map, true)
+    const keeper = sim.travelers.get(0)!
+    Object.assign(keeper, { employer: "town-tavern", gold: 0, activity: "idle", jobless: false })
+    sim.treasuryGold = 100
+    run(sim, people, map, 2 * GAME_DAY_SECONDS)
+    expect(sim.wagesPaid).toBe(0)
+    expect(sim.treasuryGold).toBe(100)
+    expect(keeper.wageDay).toBe(Math.floor(sim.time))
+    expect(keeper.gold).toBe(Math.floor(sim.time) * sim.balance.rules.dailyWage)
+  }, 20000)
+
+  it("sends a fed resident to the counter for supper, and home to the larder when they cannot pay", () => {
+    for (const purse of [MEAL_PRICE + DRINK_PRICE, 0]) {
+      const { map, camp, trees, traveler } = fixture()
+      map.buildings.push(camp)
+      const house = addHouse(map)
+      const tavern = staffTavernAt(map)
+      const t = traveler(0)
+      const sim = createSim([t], map)
+      sim.buildings = jobBuildings(map)
+      sim.trees = trees
+      const keeper = { ...sim.travelers.get(0)!, id: -1, employer: tavern.id, activity: "posted" as const,
+        home: null, x: tileToWorldX(map, tavern.x + 1), z: tileToWorldZ(map, tavern.z + 1) }
+      sim.travelers.set(-1, keeper)
+      const s = sim.travelers.get(0)!
+      Object.assign(s, { employer: camp.id, home: house.id, gold: purse, activity: "idle", jobless: false,
+        hunger: SERVING_THRESHOLD - 1, thirst: 100, stamina: 100 })
+      // Nothing is free here, so hunger alone decides where supper comes from.
+      run(sim, [t], map, 4 * GAME_DAY_SECONDS, () => s.hunger > SERVING_THRESHOLD)
+      expect(s.hunger).toBeGreaterThan(SERVING_THRESHOLD)
+      if (purse) {
+        expect(s.gold).toBe(purse - MEAL_PRICE)
+        expect(sim.tradeGold).toBe(MEAL_PRICE)
+        expect(s.hunger).toBe(100)
+      } else {
+        // The household larder feeds them enough to go back to work, no more.
+        expect(sim.tradeGold).toBe(0)
+        expect(s.hunger).toBeLessThan(100)
+      }
+    }
+  }, 20000)
+
+  it("lets a resident's own hearth stretch supper without replacing the counter", () => {
+    const { map, camp, trees, traveler } = fixture()
+    map.buildings.push(camp)
+    const house = addHouse(map)
+    const t = traveler(0)
+    const sim = createSim([t], map)
+    sim.buildings = [camp]
+    sim.trees = trees
+    const s = sim.travelers.get(0)!
+    Object.assign(s, { employer: camp.id, home: house.id, gold: 0, activity: "idle", jobless: false })
+    // A fortnight of work, sleep and home meals, with no counter to buy from.
+    // The larder stretches a long way but never quite keeps up with the work,
+    // and a settler who cannot buy supper is never left to starve at home.
+    run(sim, [t], map, 7 * GAME_DAY_SECONDS)
+    const week = s.hunger
+    run(sim, [t], map, 7 * GAME_DAY_SECONDS)
+    expect(week).toBeLessThan(100)
+    expect(s.hunger).toBeLessThan(week)
+    expect(s.hunger).toBeGreaterThan(SERVING_THRESHOLD - 20)
+    expect(sim.wood).toBeGreaterThan(0)
+  }, 30000)
+
+  it("lets eight housemates use four bunks without overlapping and reuses a vacated bunk", () => {
+    const { map, camp, traveler } = fixture()
+    map.buildings.push(camp)
+    const house = addHouse(map)
+    const people = Array.from({ length: 8 }, (_, id) => traveler(id))
+    const sim = createSim(people, map)
+    sim.buildings = [camp]
+    const residents = [...sim.travelers.values()]
+    for (const resident of residents) Object.assign(resident, {
+      employer: camp.id, home: house.id, activity: "idle", jobless: false,
+      stamina: 0, hunger: 0, thirst: 0, gold: 0, timer: 0,
+      x: tileToWorldX(map, 7), z: tileToWorldZ(map, 11),
+    })
+    const resting = () => residents.filter(s => s.buildingTask?.purpose === "rest")
+    stepSim(sim, people, map, 1.5, .1)
+    expect(resting()).toHaveLength(4)
+    expect(new Set(resting().map(s => s.buildingTask!.slot)).size).toBe(4)
+    run(sim, people, map, 30, () => residents.filter(s => s.activity === "sleeping").length === 4)
+    const sleepers = residents.filter(s => s.activity === "sleeping")
+    expect(sleepers).toHaveLength(4)
+    expect(new Set(sleepers.map(s => characterSupport(map, s.x, s.z, "sleeping", s.y)?.id)).size).toBe(4)
+    const wake = sleepers[0], slot = wake.buildingTask!.slot
+    Object.assign(wake, { stamina: 100, hunger: 100, thirst: 100 })
+    stepSim(sim, people, map, 1.5, .1)
+    expect(wake.activity).toBe("fromHome")
+    run(sim, people, map, 2, () => resting().length === 4)
+    expect(resting()).toHaveLength(4)
+    expect(resting().find(s => s.buildingTask!.slot === slot)?.id).not.toBe(wake.id)
+    expect(new Set(resting().map(s => s.buildingTask!.slot)).size).toBe(4)
+  })
+
+  it("reassigns rest slots from an older six-bunk house without double occupancy", () => {
+    const { map, camp, traveler } = fixture()
+    map.buildings.push(camp)
+    const house = addHouse(map)
+    const people = Array.from({ length: 6 }, (_, id) => traveler(id))
+    const sim = createSim(people, map)
+    sim.buildings = [camp]
+    const residents = [...sim.travelers.values()]
+    for (const [slot, resident] of residents.entries()) {
+      Object.assign(resident, { home: house.id, employer: camp.id, activity: "sleeping", workSlot: slot,
+        stamina: 0, hunger: 0, thirst: 0, x: tileToWorldX(map, 7), z: tileToWorldZ(map, 11) })
+      expect(assignBuildingTask(resident, map, "rest", house.id)).toBe(true)
+      Object.assign(resident, resident.buildingTask!.destination)
+      resident.buildingTask!.route = []
+    }
+    stepSim(sim, people, map, 1.5, .1)
+    const resting = residents.filter(r => r.buildingTask?.purpose === "rest")
+    expect(resting).toHaveLength(4)
+    expect(new Set(resting.map(r => r.buildingTask!.slot))).toEqual(new Set([0, 1, 2, 3]))
+    expect(residents.filter(r => r.activity === "fromHome")).toHaveLength(2)
+  })
+
+  it("fills eight resident places before moving the next settler into another house", () => {
     const { map, camp, trees, traveler } = fixture()
     map.buildings.push(camp)
     const first = addHouse(map).id
@@ -955,35 +1190,91 @@ describe("houses, counters and posts", () => {
     const sim = createEstablishedShrine(people, map, holy)
     sim.buildings = jobBuildings(map)
     sim.trees = trees
-    // A household already fills all but two pallets of the first house.
-    const lodgers = [...sim.travelers.values()].slice(-(HOUSE_BEDS - 2))
+    // A household already fills all but two resident places of the first house.
+    const lodgers = [...sim.travelers.values()].slice(-(housingCapacity(map.buildings.find(b => b.id === first)!) - 2))
     for (const lodger of lodgers) lodger.home = first
     const target = lodgers.length + 3
     run(sim, people, map, 1200, () => [...sim.travelers.values()].filter(s => s.home).length === target)
     const settled = [...sim.travelers.values()].filter(s => s.home)
     expect(settled.length).toBe(target)
-    // Only two pallets remain in the first house, so the third settler goes to the second house.
+    // Only two resident places remain in the first house, so the third settler goes to the second house.
     const byHouse = new Map<string, number>()
     for (const s of settled) byHouse.set(s.home!, (byHouse.get(s.home!) ?? 0) + 1)
-    expect([...byHouse.values()].every(count => count <= HOUSE_BEDS)).toBe(true)
+    expect([...byHouse.values()].every(count => count <= 8)).toBe(true)
     expect(byHouse.size).toBe(2)
   }, 20000)
 
-  it.each([0, 4, 8])("parks vendor %s's transport before they keep an empty market stall", id => {
+  it.each(["unfinished", "occupied", "blocked"] as const)("passes a %s market without entering the enclave", state => {
+    const { map, traveler } = fixture()
+    const def = BUILD_CATALOG.find(b => b.id === "market")!
+    const stall = { ...def, id: "market-0", buildType: "market", x: 13, z: 6,
+      ...(state === "unfinished" ? { construction: { work: 0, required: 100 } } : {}),
+    }
+    map.buildings.push(stall)
+    if (state === "blocked") {
+      map.buildings.push({ id: "wall", label: "Wall", x: 12, z: 5, w: 7, d: 5, height: 1, color: "tan", roofColor: "brown" })
+    }
+    const vendor = { ...devout(traveler(8)), type: TRAVELER_TYPES.vendor, offset: 6 / 29 }
+    const people = state === "occupied" ? [vendor, traveler(1)] : [vendor]
+    const sim = createSim(people, map, [], holy), s = sim.travelers.get(8)!
+    sim.buildings = jobBuildings(map)
+    sim.shrineRenown = sim.balance.rules.drawCap
+    if (state === "occupied") {
+      Object.assign(sim.travelers.get(1)!, { employer: stall.id, activity: "posted", timer: 10000 })
+    }
+    s.timer = 10000
+    run(sim, people, map, 30, () => s.progress > 16)
+    expect(s.progress).toBeGreaterThan(16)
+    expect(s.employer).toBeNull()
+    expect(s.marketParking).toBeUndefined()
+    expect(s.shrineParking).toBeUndefined()
+    expect(s.visits).toBe(0)
+  })
+
+  it("keeps trading until the shrine keeper is ready, then visits and returns to the same stall", () => {
+    const { map, traveler } = fixture()
+    const def = BUILD_CATALOG.find(b => b.id === "market")!
+    map.buildings.push({ ...def, id: "market-0", buildType: "market", x: 13, z: 6 })
+    const vendor = { ...traveler(8), type: TRAVELER_TYPES.vendor, offset: 8 / 29 }
+    const sim = createSim([vendor], map, [], obscure), s = sim.travelers.get(8)!
+    sim.buildings = jobBuildings(map)
+    sim.shrineKeeperReady = false
+    run(sim, [vendor], map, 300, () => s.activity === "posted")
+    expect(s.activity).toBe("posted")
+    expect(s.visits).toBe(0)
+    const parked = structuredClone(s.marketParking!.pose)
+    sim.shrineKeeperReady = true
+    run(sim, [vendor], map, 300, () => s.activity === "visiting")
+    expect(s.activity).toBe("visiting")
+    run(sim, [vendor], map, 300, () => s.activity === "posted")
+    expect(s.activity).toBe("posted")
+    expect(s.visits).toBe(1)
+    expect(s.employer).toBe("market-0")
+    expect(s.marketParking!.pose).toEqual(parked)
+  })
+
+  it.each([[0, 1], [4, 1], [8, 1], [0, -1], [4, -1], [8, -1]] as const)("draws vendor %s from direction %s to park, visit the shrine and keep a market without a house", (id, direction) => {
     const { map } = fixture()
     const def = BUILD_CATALOG.find(b => b.id === "market")!
     const stall = { ...def, id: "market-0", buildType: "market", label: def.label, x: 13, z: 6, rotation: 0 as const }
     map.buildings.push(stall)
-    addHouse(map, { x: 6, z: 12 })
     const vendor: Traveler = {
-      id, name: "Vendor", type: TRAVELER_TYPES.vendor, direction: 1, pace: 1, offset: 8 / 29,
+      id, name: "Vendor", type: TRAVELER_TYPES.vendor, direction, pace: 1, offset: (10 - direction * 2) / 29,
       attributes: { happiness: 80, age: 30, gold: 60, piety: 0, status: 20, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: ["haggling"] },
     }
     const sim = createSim([vendor], map, [], obscure)
     sim.buildings = jobBuildings(map)
     const s = sim.travelers.get(id)!
-    Object.assign(s, { visits: 1, marketInterest: true })
+    run(sim, [vendor], map, 300, () => s.activity === "visiting")
+    expect(s.activity).toBe("visiting")
+    expect(s.marketParking?.walking).toBe(true)
+    expect(s.shrineParking).toBeUndefined()
+    expect(s.convoy).toBe(false)
+    const visitingCart = structuredClone(s.marketParking!.pose)
     run(sim, [vendor], map, 300, () => s.activity === "posted")
+    expect(s.visits).toBe(1)
+    expect(s.home).toBeNull()
+    expect(s.marketParking!.pose).toEqual(visitingCart)
     expect(s.employer).toBe(stall.id)
     expect(s.activity).toBe("posted")
     expect(s.convoy).toBe(false)
@@ -1008,7 +1299,7 @@ describe("houses, counters and posts", () => {
     const sim = createSim([vendor], map, [], obscure)
     sim.buildings = jobBuildings(map)
     const keeper = sim.travelers.get(vendor.id)!
-    Object.assign(keeper, { visits: 1, marketInterest: true })
+    Object.assign(keeper, { visits: 1 })
     run(sim, [vendor], map, 300, () => keeper.activity === "posted")
     expect(keeper.activity).toBe("posted")
 
@@ -1186,7 +1477,7 @@ describe("settlement route heights", () => {
 })
 
 
-it("queues single file, lets the keeper show one visitor at a time, and keeps floor prayer available", () => {
+it("queues single file and admits two visitors at the rails while the keeper is present", () => {
   const { map, traveler } = fixture()
   map.buildings[0].d = 5
   const people = Array.from({ length: 4 }, (_, id) => devout(traveler(id)))
@@ -1194,33 +1485,32 @@ it("queues single file, lets the keeper show one visitor at a time, and keeps fl
   const sim = createEstablishedShrine(people, map, holy)
   // Places are taken while the keeper shows the relic; the keeper then steps
   // away before anyone reaches the front, freezing the line.
-  run(sim, people, map, 2)
+  run(sim, people, map, .5)
   sim.shrineKeeperReady = false
   run(sim, people, map, 14)
   const queue = [...sim.travelers.values()].filter(s => s.shrineSeat?.startsWith("queue-"))
-  expect(queue).toHaveLength(3)
+  expect(queue).toHaveLength(4)
   expect(queue.every(s => s.activity === "toRelic")).toBe(true)
   const ordered = [...queue].sort((a, b) => a.shrineQueueOrder! - b.shrineQueueOrder!)
   for (let i = 1; i < ordered.length; i++) {
     expect(ordered[i].x).toBeCloseTo(ordered[0].x)
     expect(Math.hypot(ordered[i].x - ordered[i - 1].x, ordered[i].z - ordered[i - 1].z)).toBeGreaterThanOrEqual(.35)
   }
-  expect(sim.travelers.get(3)!.activity).toBe("visiting")
-  expect(sim.travelers.get(3)!.shrineSeat).toMatch(/^prayer-/)
   sim.shrineKeeperReady = true
   const shown: number[] = []
   for (let tick = 0; tick < 1500; tick++) {
     stepSim(sim, people, map, 1.5, .1)
     const viewing = queue.filter(s => s.activity === "visiting")
-    expect(viewing.length).toBeLessThanOrEqual(1)
-    if (viewing[0] && !shown.includes(viewing[0].id)) shown.push(viewing[0].id)
+    expect(viewing.length).toBeLessThanOrEqual(2)
+    for (const s of viewing) if (!shown.includes(s.id)) shown.push(s.id)
     if (queue.every(s => s.offeringMade && !s.shrineSeat)) break
   }
-  expect(shown).toEqual(ordered.map(s => s.id))
+  expect(shown.slice(0, 2).sort()).toEqual(ordered.slice(0, 2).map(s => s.id).sort())
+  expect(shown.sort()).toEqual(ordered.map(s => s.id).sort())
   expect(queue.every(s => s.visits === 1 && s.offeringMade && !s.shrineSeat)).toBe(true)
 })
 
-it("lets nobody join the line while no keeper shows the relic, but still admits private prayer", () => {
+it("lets nobody join the relic line while the keeper is away", () => {
   const { map, traveler } = fixture()
   map.buildings[0].d = 5
   const people = Array.from({ length: 4 }, (_, id) => devout(traveler(id)))
@@ -1228,8 +1518,10 @@ it("lets nobody join the line while no keeper shows the relic, but still admits 
   sim.shrineKeeperReady = false
   run(sim, people, map, 16)
   expect([...sim.travelers.values()].filter(s => s.shrineSeat?.startsWith("queue-"))).toHaveLength(0)
-  expect(sim.travelers.get(3)!.shrineSeat).toMatch(/^prayer-/)
-  for (const s of sim.travelers.values()) if (s.id !== 3) expect(s.activity).toBe("walking")
+  for (const s of sim.travelers.values()) {
+    expect(s.shrineSeat).toBeUndefined()
+    expect(s.activity).toBe("walking")
+  }
 })
 
 describe("shrine visits beside a covered junction", () => {
@@ -1413,11 +1705,11 @@ describe("traveling monks, nuns and housing limits", () => {
     }
   })
 
-  it("limits new workers to completed house beds even when more jobs are open", () => {
+  it("limits new workers to completed household capacity even when more jobs are open", () => {
     const { map, camp, trees, traveler } = fixture()
     const people = Array.from({ length: 100 }, (_, id) => traveler(id))
-    // Nuns never take settlement work, so they can hold pallets without competing for jobs.
-    const lodgers = people.slice(-(HOUSE_BEDS - 2))
+    // Nuns never take settlement work, so they can hold resident places without competing for jobs.
+    const lodgers = people.slice(-6)
     for (const lodger of lodgers) lodger.type = TRAVELER_TYPES.nun
     const sim = createSim(people, map)
     sim.buildings = [camp]; sim.trees = trees
@@ -1599,13 +1891,15 @@ describe("choosing tavern company or free water", () => {
   })
 })
 
-it("rewards every completed viewing and independently hires about ten percent when jobs and beds are available", () => {
-  let hired = 0, gifts = 0
+it("rewards every completed viewing and hires nearly every visitor out of work when jobs and beds are available", () => {
+  const hired = { jobless: 0, employed: 0 }
+  let gifts = 0
   for (let id = 0; id < 1000; id++) {
     const { map, camp, trees, traveler } = fixture()
     addHouse(map)
     const t = traveler(id)
-    Object.assign(t.attributes, { happiness: 40, piety: 40, gold: 20, jobless: id % 2 === 0 })
+    const jobless = id % 2 === 0
+    Object.assign(t.attributes, { happiness: 40, piety: 40, gold: 20, jobless })
     const sim = createSim([t], map, [], holy)
     Object.assign(sim.balance.rules, { hungerDecay: 0, thirstDecay: 0, staminaDecay: 0, happinessDecay: 0, pietyDecay: 0 })
     sim.buildings = [camp]; sim.trees = trees
@@ -1618,12 +1912,16 @@ it("rewards every completed viewing and independently hires about ten percent wh
     expect(s.piety).toBeGreaterThan(40)
     expect(s.employer).toBeNull()
     run(sim, [t], map, 60, () => s.activity === "walking" || !!s.employer)
-    if (s.employer) hired++
+    if (s.employer) hired[jobless ? "jobless" : "employed"]++
     if (sim.shrineGold > 0) gifts++
     expect(s.offeringMade).toBe(true)
   }
-  expect(hired).toBeGreaterThan(75)
-  expect(hired).toBeLessThan(125)
+  // Half the cast is out of work; almost all of them take the open place.
+  expect(hired.jobless).toBeGreaterThan(410)
+  expect(hired.jobless).toBeLessThanOrEqual(500)
+  // The other half already hold a trade and rarely give it up.
+  expect(hired.employed).toBeGreaterThan(5)
+  expect(hired.employed).toBeLessThan(60)
   expect(gifts).toBeGreaterThan(200)
   expect(gifts).toBeLessThan(800)
 }, 20000)

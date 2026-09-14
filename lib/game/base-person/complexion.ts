@@ -81,5 +81,5 @@ export function complexionSwap(design: Pick<PersonDesign, "skinColor" | "hairCol
   return swap
 }
 
-/** Fixed shader slots: five skin steps and three hair steps. */
+/** Skin/hair source slots; the renderer also reserves space for clothing. */
 export const COMPLEXION_SLOTS = SKIN_SHADES.length + HAIR_SHADES.length

@@ -3,8 +3,6 @@
 import { useEffect, useRef } from "react"
 
 import { useCameraStore } from "@/lib/game/camera-store"
-import { useBalanceStore } from "@/lib/game/balance-store"
-import { getBuildInfluence } from "@/lib/game/build-influence"
 import { useBuildStore } from "@/lib/game/build-store"
 import { TERRAIN, type TerrainId } from "@/lib/game/map/terrain"
 import type { GameMap } from "@/lib/game/map/types"
@@ -51,9 +49,7 @@ function mapTransform(map: GameMap, viewIndex: number): DOMMatrix {
 }
 
 const VIEWPORT_STROKE = "#f2e8d5"
-const INFLUENCE_COLOR = "#e4c77f"
 const BUILDING_COLOR = "#ef4444"
-const INFLUENCE_OUTLINE = "#30271c"
 
 function terrainPalette(): Record<TerrainId, [number, number, number]> {
   const palette = {} as Record<TerrainId, [number, number, number]>
@@ -90,7 +86,6 @@ function renderBase(map: GameMap): HTMLCanvasElement {
  */
 export function Minimap({ map }: { map: GameMap }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const balance = useBalanceStore((s) => s.balance)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -99,30 +94,6 @@ export function Minimap({ map }: { map: GameMap }) {
 
     // Built here, not in render: the HUD server-renders, and canvas needs DOM.
     const base = renderBase(map)
-    const influence = getBuildInfluence(map, balance).radiated
-    const influenceCanvas = document.createElement("canvas")
-    influenceCanvas.width = map.width
-    influenceCanvas.height = map.depth
-    const influenceCtx = influenceCanvas.getContext("2d")
-    const boundary = new Path2D()
-    if (influenceCtx) {
-      influenceCtx.fillStyle = INFLUENCE_COLOR
-      for (let z = 0; z < map.depth; z++) {
-        for (let x = 0; x < map.width; x++) {
-          if (!influence[z * map.width + x]) continue
-          influenceCtx.fillRect(x, z, 1, 1)
-          for (const [dx, dz, ax, az, bx, bz] of [
-            [-1, 0, 0, 0, 0, 1], [1, 0, 1, 0, 1, 1],
-            [0, -1, 0, 0, 1, 0], [0, 1, 0, 1, 1, 1],
-          ]) {
-            const nx = x + dx, nz = z + dz
-            if (nx >= 0 && nz >= 0 && nx < map.width && nz < map.depth && influence[nz * map.width + nx]) continue
-            boundary.moveTo(x + ax - map.width / 2, z + az - map.depth / 2)
-            boundary.lineTo(x + bx - map.width / 2, z + bz - map.depth / 2)
-          }
-        }
-      }
-    }
     const shrine = map.buildings.find((building) => building.id === map.site?.hovelId)
     const altarOffset = shrine ? shrineLayout(shrine, map.site?.door).offset : null
 
@@ -136,20 +107,7 @@ export function Minimap({ map }: { map: GameMap }) {
       ctx.save()
       ctx.setTransform(transform)
       ctx.drawImage(base, -map.width / 2, -map.depth / 2)
-      ctx.globalAlpha = 0.35
-      ctx.drawImage(influenceCanvas, -map.width / 2, -map.depth / 2)
-      ctx.globalAlpha = 1
       ctx.restore()
-
-      // Stroke in screen space so the boundary stays legible on large maps.
-      const projectedBoundary = new Path2D()
-      projectedBoundary.addPath(boundary, transform)
-      ctx.strokeStyle = INFLUENCE_OUTLINE
-      ctx.lineWidth = 4
-      ctx.stroke(projectedBoundary)
-      ctx.strokeStyle = INFLUENCE_COLOR
-      ctx.lineWidth = 2
-      ctx.stroke(projectedBoundary)
 
       // Keep the viewport outline inside the projected map's diamond.
       ctx.save()
@@ -230,7 +188,7 @@ export function Minimap({ map }: { map: GameMap }) {
       unsubscribeSimulation()
       window.removeEventListener("resize", draw)
     }
-  }, [map, balance])
+  }, [map])
 
   // Click or drag anywhere on the map to send the camera focus there.
   useEffect(() => {

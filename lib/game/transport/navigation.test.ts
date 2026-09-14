@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest"
-import { convoyClear, convoyPoint, shrineParking, parkingClear, parkingTree, convoyBounds, stallParking } from "./navigation"
+import { convoyClear, convoyPoint, shrineParking, parkingClear, parkingClearance, parkingTree, convoyBounds, stallParking } from "./navigation"
+import { makeRng } from "../rng"
 import { cartLoadout, cartOffset } from "./assets"
 import { alignCart, cartOnRoute, followCart } from "./follow"
 import { createSim, stepSim } from "../sim"
 import { generateTravelers, TRAVELER_TYPES } from "../travelers"
 import { DEFAULT_ELEVATION } from "../map/elevation"
-import { shrineStations } from "../shrine-layout"
-import { buildingStepAllowed, shrineGates } from "../building-navigation"
+import { shrineGates } from "../building-navigation"
 import { shrineVisitPlan } from "../shrine-visit"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "../map/types"
 
@@ -26,6 +26,47 @@ function fixture(): GameMap {
     buildings: [{ id: "shrine", label: "Shrine", x: 12, z: 10, w: 3, d: 3, height: 1, color: "#888", roofColor: "#888" }],
     site: { hovelId: "shrine", junction: 10, branch: [...Array.from({ length: 8 }, (_, i) => ({ x: 10, z: 4 + i })), { x: 11, z: 11 }], door: { x: 11, z: 11 } } }
 }
+
+describe("parking search spatial queries", () => {
+  it("matches full collision checks for rotated bodies, large obstacles, trees and people", () => {
+    const map: GameMap = { width: 80, depth: 80, tiles: Array(6400).fill("grass"), buildings: [] }
+    const rng = makeRng(7521), coordinate = () => (rng() - .5) * 50
+    const context = {
+      trees: Array.from({ length: 80 }, () => ({ x: coordinate(), z: coordinate(), y: 0, species: "oak" as const, scale: .5 + rng() * 8 })),
+      people: Array.from({ length: 30 }, () => ({ x: coordinate(), z: coordinate() })),
+      obstacles: Array.from({ length: 15 }, () => ({ x: coordinate(), z: coordinate(), heading: rng() * Math.PI * 2,
+        halfWidth: .1 + rng() * 2, halfLength: .1 + rng() * 5 })),
+    }
+    let clear = 0, blocked = 0
+    for (const puller of ["hand", "donkey", "horse"] as const) for (const scale of [.7, 1.5]) {
+      const query = parkingClearance(map, puller, scale, context)
+      for (let i = 0; i < 400; i++) {
+        const pose = alignCart({ x: coordinate(), z: coordinate() }, rng() * Math.PI * 2, -cartOffset(puller) * scale)
+        const heading = pose.heading + (rng() - .5), grassOnly = i % 2 === 0
+        const expected = parkingClear(map, pose, puller, scale, context, grassOnly, heading)
+        expect(query(pose, grassOnly, heading)).toBe(expected)
+        if (expected) clear++; else blocked++
+      }
+    }
+    expect(clear).toBeGreaterThan(100)
+    expect(blocked).toBeGreaterThan(100)
+  })
+
+  it("includes trunk clearance at a body edge and rebuilds after in-place edits", () => {
+    const map: GameMap = { width: 80, depth: 80, tiles: Array(6400).fill("grass"), buildings: [] }
+    const pose = alignCart({ x: 0, z: 0 }, 0, 0)
+    const body = convoyBounds(pose, "horse", 1.5)[0], clearance = .18 * 10 + .08
+    const tree = { x: body.x + body.halfWidth + clearance - 1e-7, z: body.z, y: 0, species: "oak" as const, scale: 10 }
+    const context = { trees: [tree] }
+    expect(parkingClearance(map, "horse", 1.5, context)(pose)).toBe(false)
+    tree.x += 1e-4
+    expect(parkingClearance(map, "horse", 1.5, context)(pose)).toBe(true)
+    tree.x = body.x
+    expect(parkingClearance(map, "horse", 1.5, context)(pose)).toBe(false)
+    context.trees.length = 0
+    expect(parkingClearance(map, "horse", 1.5, context)(pose)).toBe(true)
+  })
+})
 
 describe("joining the relic line from the parking field", () => {
   it("walks a parked knight to the tail of the line on the track, not across the field", () => {
@@ -75,7 +116,7 @@ describe("joining the relic line from the parking field", () => {
 })
 
 describe("merchant shrine parking", () => {
-  it.each([0, 4, 8, "knight"] as const)("keeps parking and shrine access around a covered junction (%s)", loadout => {
+  it.each([0, 4, 8, "knight"] as const)("keeps the correct destination around a covered junction (%s)", loadout => {
     for (const direction of [1, -1] as const) {
       const map = fixture(), t = generateTravelers(1, 1)[0]
       map.buildings.push({ id: "obstruction", label: "Cross", x: 10, z: 4, w: 1, d: 1, height: 1, color: "", roofColor: "" })
@@ -102,9 +143,9 @@ describe("merchant shrine parking", () => {
           expect(s.shrineRoute!.some(p => p.x === 10 && p.z === 4)).toBe(false)
           s.timer = 0; s.hunger = s.thirst = s.stamina = 100
         }
-        if (sawVisit && s.activity === "walking") break
+        if (s.activity === "walking" && (sawVisit || (loadout !== "knight" && direction * (s.progress - 10) > 6))) break
       }
-      expect({ sawVisit, visits: s.visits, activity: s.activity }).toEqual({ sawVisit: true, visits: 1, activity: "walking" })
+      expect({ sawVisit, visits: s.visits, activity: s.activity }).toEqual({ sawVisit: loadout === "knight", visits: loadout === "knight" ? 1 : 0, activity: "walking" })
       expect(s.shrineParking).toBeUndefined()
       expect(s.shrineSeat).toBeUndefined()
     }
@@ -155,41 +196,48 @@ describe("merchant shrine parking", () => {
     const map = fixture(); map.tiles = map.tiles.map(t => t === "grass" ? "water" : t)
     expect(shrineParking(map, 10, 1, -cartOffset("horse") * 1.5, "horse", 1.5)).toBeNull()
   })
-  it.each([0, 4, 8])("parks, visits alone, recovers its convoy and continues (vendor %s)", id => {
-    const map = fixture(), t = generateTravelers(1, 1)[0]
-    t.id = id; t.type = TRAVELER_TYPES.vendor; t.offset = 9.9 / 29; t.direction = 1; t.pace = 1
-    t.attributes.piety = 100; t.attributes.hunger = 100; t.attributes.thirst = 100; t.attributes.stamina = 100; t.attributes.gold = 100
-    // Guarantee devotion so this exercises parking and reserved-seat access,
-    // independently of main's probabilistic shrine-attraction balance.
-    const sim = createSim([t], map, [], { sanctity: 100, spectacle: 100, doubt: 0 }), s = sim.travelers.get(id)!
-    sim.trees = trees(map)
-    sim.shrineRenown = sim.balance.rules.drawCap
-    s.timer = 10000
-    let parked: unknown, sawVisit = false, sawReturn = false
-    for (let i = 0; i < 4000; i++) {
-      stepSim(sim, [t], map, 1, 0.1)
-      if (s.shrineParking?.walking) {
-        parked ??= structuredClone(s.shrineParking.pose)
-        expect(s.shrineParking.pose).toEqual(parked)
-        expect(convoyClear(map, s.shrineParking.pose, id === 0 ? "hand" : id === 4 ? "donkey" : "horse", 1.5, true)).toBe(true)
+  it.each([0, 4, 8])("keeps vendor %s on the road without a market, even at a renowned shrine", id => {
+    for (const direction of [1, -1] as const) {
+      const map = fixture(), t = generateTravelers(1, 1)[0]
+      Object.assign(t, { id, type: TRAVELER_TYPES.vendor, offset: (10 - direction * 4) / 29, direction, pace: 1 })
+      Object.assign(t.attributes, { piety: 100, hunger: 100, thirst: 100, stamina: 100, gold: 100 })
+      const sim = createSim([t], map, [], { sanctity: 100, spectacle: 100, doubt: 0 }), s = sim.travelers.get(id)!
+      sim.shrineRenown = sim.balance.rules.drawCap
+      s.timer = 10000
+      for (let i = 0; i < 200 && direction * (s.progress - 10) < 4; i++) {
+        stepSim(sim, [t], map, 1, .1)
+        expect(s.activity).toBe("walking")
+        expect(s.shrineParking).toBeUndefined()
+        expect(s.marketParking).toBeUndefined()
       }
-      if (s.activity === "visiting") {
-        sawVisit = true
-        expect(s.shrineSeat).toMatch(/^queue-/)
-        expect(s.shrineRoute!.at(-1)).toEqual(shrineStations(map.buildings[0], map.site!.door).viewing)
-        for (let j=1;j<s.shrineRoute!.length;j++) expect(buildingStepAllowed(map,map.buildings,s.shrineRoute![j-1],s.shrineRoute![j],true,j===s.shrineRoute!.length-1?s.shrineSeat:undefined)).toBe(true)
-        expect(s.x).toBeGreaterThanOrEqual(tileToWorldX(map, 12))
-        expect(s.z).toBeGreaterThanOrEqual(tileToWorldZ(map, 10))
-      }
-      sawReturn ||= s.activity === "fromParking"
-      if (sawReturn && s.activity === "walking") break
+      expect(direction * (s.progress - 10)).toBeGreaterThanOrEqual(4)
+      expect(s.visits).toBe(0)
     }
-    expect({ sawVisit, sawReturn, visits: s.visits, parked: !!s.shrineParking }).toEqual({ sawVisit: true, sawReturn: true, visits: 1, parked: false })
-    expect(s.shrineSeat).toBeUndefined()
   })
 })
 
 describe("convoy corner routes", () => {
+  it.each([1, -1] as const)("places a pack animal along a curve without reconstructing a trailing axle (%i)", direction => {
+    let samples = 0
+    const point = (p: number) => { samples++; return { x: Math.cos(p), z: Math.sin(p) } }
+    const pose = cartOnRoute(1, direction, 0, point)
+    expect(pose.x).toBeCloseTo(Math.cos(1), 12)
+    expect(pose.z).toBeCloseTo(Math.sin(1), 12)
+    const heading = Math.atan2(Math.cos(1) - Math.cos(1 - direction * .05), Math.sin(1) - Math.sin(1 - direction * .05))
+    expect(pose.heading).toBeCloseTo(heading, 12)
+    expect(pose.hitch).toEqual({ x: pose.x, z: pose.z })
+    expect(pose.distance).toBe(0)
+    expect(samples).toBeLessThanOrEqual(3)
+  })
+
+  it("retains the last moving heading at a stationary route endpoint", () => {
+    const point = (p: number) => ({ x: Math.min(p, .8), z: Math.min(p, .8) * 2 })
+    const pose = cartOnRoute(1, 1, 0, point)
+    expect(pose.hitch).toEqual({ x: .8, z: 1.6 })
+    expect(pose.heading).toBeCloseTo(Math.atan2(1, 2), 12)
+    expect(pose.distance).toBe(0)
+  })
+
   function bend() {
     const map = fixture(); map.buildings = []; map.site = undefined
     map.tiles.fill("grass")

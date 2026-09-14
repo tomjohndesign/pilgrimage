@@ -2,7 +2,7 @@ import { innWalkingRoute } from "./inn-navigation"
 import { tavernWalkingRoute } from "./tavern-navigation"
 import { tavernWorkStop } from "./tavern-layout"
 import { exploresWorkerShortcut, smoothWalkingRoute, SHORTCUT_EXPLORERS } from "./walking-shortcuts"
-import { buildingEntry, buildingYaw, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
+import { buildingDoorOffset, buildingEntry, buildingYaw, rotatedFootprint, rotateBuildingPoint } from "./building-rotation"
 import { MALLET_CONTACT_REACH } from "./base-person/building"
 import { BASE_CHARACTER_SCALE, PERSON_SPRITE_SCALE } from "./base-person/gait"
 import { BASE_PERSON } from "./base-person/pose"
@@ -10,7 +10,8 @@ import { surfaceHeight } from "./map/bridges"
 import { tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type BuildingDef, type GameMap, type TilePos } from "./map/types"
 import { settlementRoute } from "./settlement-route"
 import type { WanderSpot } from "./monk-wander"
-import { buildingSupports } from "./character-support"
+import { buildingSupports, placedSupport } from "./character-support"
+import { SETTLER_BUILD_RATE } from "./build-labour"
 import { workPost } from "./work-posts"
 import { rememberedWorkerCorridor, rememberedWorkerRoute } from "./worker-route-memory"
 
@@ -50,7 +51,15 @@ export interface BuildingTask {
   /** Reroute when placement changes the obstacles. */
   buildings: readonly BuildingDef[]
 }
-export interface Worker extends WanderSpot { buildingTask?: BuildingTask; workSlot?: number; workScale?: number }
+export interface Worker extends WanderSpot {
+  buildingTask?: BuildingTask
+  workSlot?: number
+  workScale?: number
+  /** Worker-seconds added per second at a site; see build-labour.ts. Absent means plain hands. */
+  buildRate?: number
+}
+/** Every builder counts as a plain pair of hands until their trades say otherwise. */
+function buildRate(worker: Worker): number { return worker.buildRate ?? SETTLER_BUILD_RATE }
 // Construction survives map publications and is shared by monks and settlers.
 // Keep reservations out of saved game data; a cancelled/replaced task frees its place.
 const buildingCrews = new WeakMap<Construction, Map<Worker, BuildingTask>>()
@@ -102,6 +111,8 @@ function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask
     if (!host) return null
     return taskPosition(map,host,purpose,slot,scale,workStop)
   }
+  // A well's construction positions rotate around its curb, without a front door.
+  if (purpose === "build" && building.buildType === "well") building = { ...building, rotation: (slot % 4) as 0 | 1 | 2 | 3 }
   const local = rotatedFootprint(building, building.rotation)
   const beds = purpose === "rest" ? buildingSupports(building).filter(s => s.clips.includes("sleeping")) : []
   const bed = beds[slot % beds.length]
@@ -109,17 +120,29 @@ function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask
   const post = purpose === "work" ? building.buildType === "tavern"
     ? tavernWorkStop(slot, workStop, local.w, local.d, building.layoutSeed, building.hearthZ) : buildingWorkPost(building, slot) : null
   if (purpose === "work" && !post) return null
-  const x = purpose === "build" ? (slot % 4 - 1.5) * Math.min(0.45, (local.w - 0.5) / 3)
+  const x = purpose === "build" && building.buildType === "well" ? buildingDoorOffset(local.w, "well")
+    : purpose === "build" ? (slot % 4 - 1.5) * Math.min(0.45, (local.w - 0.5) / 3)
     : purpose === "work" ? post!.x : bed.anchor.x
-  const z = purpose === "build" ? local.d / 2 - 0.055 + constructionStandOff(scale)
+  const buildSide = building.churchId ? -1 : 1
+  const z = purpose === "build" ? buildSide * (local.d / 2 - 0.055 + constructionStandOff(scale))
     : purpose === "work" ? post!.z : bed.anchor.z
   const offset = rotateBuildingPoint(x, z, building.rotation)
-  const approach = rotateBuildingPoint(x, (local.d + 1) / 2, building.rotation)
+  const approach = rotateBuildingPoint(x, (purpose === "build" ? buildSide : 1) * (local.d + 1) / 2, building.rotation)
   const cx = tileToWorldX(map, building.x) + (building.w - 1) / 2
   const cz = tileToWorldZ(map, building.z) + (building.d - 1) / 2
   const frontage = { x: worldToTileX(map, cx + approach.x), z: worldToTileZ(map, cz + approach.z) }
-  return { destination: { x: cx + offset.x, z: cz + offset.z, y: building.buildType === "inn" && purpose !== "build" ? surfaceHeight(map, building.x, building.z)+(building.floorHeight ?? 0)+(purpose === "rest" ? bed.height : 0) : surfaceHeight(map, frontage.x, frontage.z) }, frontage,
-    heading: (bed?.heading ?? (purpose === "work" ? 0 : Math.PI)) + buildingYaw(building.rotation) }
+  return { destination: { x: cx + offset.x, z: cz + offset.z, y: purpose === "rest" ? placedSupport(map, building, bed).height : building.buildType === "inn" && purpose !== "build" ? surfaceHeight(map, building.x, building.z)+(building.floorHeight ?? 0) : surfaceHeight(map, frontage.x, frontage.z) }, frontage,
+    heading: (bed?.heading ?? (purpose === "work" || purpose === "build" && building.churchId ? 0 : Math.PI)) + buildingYaw(building.rotation) }
+}
+
+/** The slowest builder on a crew that a faster pair of hands may take over from. */
+function slowestBuilderUnder(crew: readonly Worker[], rate: number): Worker | null {
+  let slowest: Worker | null = null
+  for (const worker of crew) {
+    if (buildRate(worker) >= rate) continue
+    if (!slowest || buildRate(worker) < buildRate(slowest)) slowest = worker
+  }
+  return slowest
 }
 
 /** Reserve a place before walking so en-route builders count toward the site's crew. */
@@ -133,8 +156,14 @@ export function assignBuildingTask(actor: Worker, map: GameMap, purpose: Buildin
       Math.hypot(tileToWorldX(map, b.x) - actor.x, tileToWorldZ(map, b.z) - actor.z))
   for (const building of candidates) {
     const crew = purpose === "build" ? constructionCrew(building) : null
-    const others = crew ? [...crew.keys()].filter(worker => worker !== actor) : []
-    if (others.length >= constructionBuilders(building.w, building.d)) continue
+    const full = crew ? [...crew.keys()].filter(worker => worker !== actor) : []
+    // A full site still takes a better builder: the slowest hand on it steps
+    // back, which is how a brother gives up the mallet once a wright turns up.
+    // Only a strictly faster rate displaces, so equals never trade places.
+    const crowded = full.length >= constructionBuilders(building.w, building.d)
+    const displaced = crowded ? slowestBuilderUnder(full, buildRate(actor)) : null
+    if (crowded && !displaced) continue
+    const others = displaced ? full.filter(worker => worker !== displaced) : full
     for (let attempt = 0; attempt < (purpose === "build" ? 4 : 1); attempt++) {
       const slot = (actor.workSlot ?? 0) + attempt
       if (others.some(worker => worker.buildingTask!.slot % 4 === slot % 4)) continue
@@ -144,6 +173,8 @@ export function assignBuildingTask(actor: Worker, map: GameMap, purpose: Buildin
       const route = purpose === "build" ? workerRoute(map, actor, frontage) : routeToDestination(map, actor, destination)
       if (!route) continue
       if (purpose === "build") route.push(destination)
+      // Only release the place once this builder can actually reach it.
+      if (displaced) { displaced.buildingTask = undefined; crew!.delete(displaced) }
       actor.buildingTask = { buildingId: building.id, purpose, slot, heading, route,
         destination: { ...destination }, buildings: map.buildings }
       crew?.set(actor, actor.buildingTask)
@@ -181,7 +212,7 @@ export function walkWorker(actor: WanderSpot, route: WanderSpot[], speed: number
   return true
 }
 
-/** Progress is paid in worker-seconds, only while standing at the site's entrance. */
+/** Progress is paid in worker-seconds at the builder's own rate, only while standing at the site's entrance. */
 export function stepBuildingTask(actor: Worker, map: GameMap, speed: number, dt: number): "walking" | "building" | "sleeping" | "posted" | null {
   const task = actor.buildingTask
   if (!task || dt <= 0) return null
@@ -231,6 +262,6 @@ export function stepBuildingTask(actor: Worker, map: GameMap, speed: number, dt:
     return "posted"
   }
   const construction = building.construction!
-  construction.work = Math.min(construction.required, construction.work + dt)
+  construction.work = Math.min(construction.required, construction.work + dt * buildRate(actor))
   return "building"
 }

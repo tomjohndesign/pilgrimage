@@ -50,8 +50,9 @@ describe("playable woodland", () => {
     }
     const church = map.buildings.find(b => b.id === HOVEL_ID) ?? map.buildings[0]
     const cx = church.x + Math.floor(church.w / 2), cz = church.z + Math.floor(church.d / 2)
-    expect(Math.abs(cx - map.width / 2)).toBeLessThanOrEqual(map.width * .25)
-    expect(Math.abs(cz - map.depth / 2)).toBeLessThanOrEqual(map.depth * .25)
+    // The middle of the map is a founding rule; the others can bend it by a few tiles.
+    expect(Math.abs(cx - map.width / 2)).toBeLessThanOrEqual(map.width * .3)
+    expect(Math.abs(cz - map.depth / 2)).toBeLessThanOrEqual(map.depth * .3)
     const trees = map.tiles.flatMap((t, i) => t === "forest" && Math.hypot(i % map.width - cx, Math.floor(i / map.width) - cz) <= 15 ? [i] : [])
     expect(trees.length).toBeGreaterThanOrEqual(12)
     expect(trees.some(i => [i-1, i+1, i-map.width, i+map.width].some(n => seen.has(n)))).toBe(true)

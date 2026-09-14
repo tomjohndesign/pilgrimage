@@ -96,6 +96,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "hall",
+    retired: true,
     label: "Shrine hall",
     category: "buildings",
     description: "A gathering place worthy of a sanctuary.",
@@ -117,15 +118,15 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     color: "#7a5a3a", roofColor: "#54402c",
   },
   {
-    id: "monk-shelter", label: "Monks’ shelter", category: "buildings",
-    description: "An open-front sleeping shelter with a hearth. Tired monks rest here until their stamina recovers.",
+    id: "monk-shelter", label: "Monks’ residence", category: "buildings",
+    description: "A plastered sleeping wing built along a side wall of the church, beneath its extended thatch roof. Monks enter through the church and a doorway in the shared wall. Four beds and a hearth help tired monks recover.",
     cost: { gold: 50, wood: 40 }, renown: 2, requiredRenown: 0,
-    income: { gold: 0, wood: 0 }, w: 3, d: 2, height: 0.62,
+    income: { gold: 0, wood: 0 }, w: 3, d: 2, height: 1.18,
     color: "#8c7658", roofColor: "#a59164",
   },
   {
     id: "house", label: "House", category: "buildings",
-    description: "A log hut with a hearth and six straw pallets, three on the floor and three on a sleeping shelf above. Settlers who take work here move in, and come home to sleep when they tire.",
+    description: "A log hut for eight residents, with four straw bunks in two timber frames, each with a lower and upper bed. Tired residents take any free bunk; each bunk holds one sleeper at a time.",
     cost: { gold: 40, wood: 30 }, renown: 1, requiredRenown: 0,
     income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.70,
     color: "#8c7658", roofColor: "#a59164",
@@ -148,13 +149,14 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "market", label: "Market stall", category: "buildings",
-    description: "A cloth-canopied stall with a rear cart yard. A passing vendor parks their cart and animal here and settles to sell food and wares.",
+    description: "A stall with an open cart bay beside it. A passing vendor parks their cart and animal here, rigs the cloth and settles to sell food and wares.",
     cost: { gold: 50, wood: 30 }, renown: 3, requiredRenown: 10,
     income: { gold: 0, wood: 0 }, w: MARKET_WIDTH, d: MARKET_DEPTH, height: 0.65,
     color: "#8c7658", roofColor: "#a59164",
   },
   {
     id: "guard-post", label: "Guard post", category: "buildings",
+    retired: true,
     description: "A sheltered watch post that reassures travelers on the approach.",
     cost: { gold: 70, wood: 50 }, renown: 4, requiredRenown: 80,
     income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.65,
@@ -176,14 +178,14 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "sheep-pen", label: "Sheep pen", category: "buildings",
-    description: "Two shepherds gather roaming sheep and lead them back to the open railed pen beside a hut and hearth.",
+    description: "Two shepherds care for up to eight sheep and goats, delivering milk buckets and meat to a food platform inside the pen. Thatched bays shelter the flock.",
     cost: { gold: 55, wood: 45 }, renown: 2, requiredRenown: 5,
-    income: { gold: 0, wood: 0 }, w: 3, d: 2, height: 0.70,
+    income: { gold: 0, wood: 0 }, w: 5, d: 4, height: 0.70,
     color: "#8c7658", roofColor: "#a59164",
   },
   {
     id: "well", label: "Timber well", category: "scenery",
-    description: "Free drinking water for thirsty walkers and settlers. One person draws water at a time; keep its front approach clear.",
+    description: "Free drinking water for thirsty walkers and settlers. One person draws water at a time, approaching from any clear side.",
     cost: { gold: 20, wood: 15 }, renown: 0, requiredRenown: 0,
     income: { gold: 0, wood: 0 }, w: 2, d: 2, height: .58, color: "#877152", roofColor: "#95805c",
   },
@@ -203,6 +205,7 @@ export const RULE_GROUPS = [
   "Relic renown",
   "Progression",
   "Traveler attraction",
+  "Settlement work",
   "Traveler needs",
 ] as const
 export const RULE_FIELDS = [
@@ -247,7 +250,7 @@ export const RULE_FIELDS = [
     group: "Treasury & construction",
     label: "Influence radius at 5 renown (tiles)",
     description:
-      "Renown sources radiate this far at 5 renown, scaled by the square root of their renown / 5. Connected influence and land beside the approach allow construction. Existing structures stay.",
+      "Renown sources radiate this far at 5 renown, scaled by the square root of their renown / 5. Connected influence claims independent town buildings and enriches scenery colors; it does not restrict construction.",
     default: 12,
     min: 2,
     max: 128,
@@ -460,6 +463,26 @@ export const RULE_FIELDS = [
     default: 0.5, min: 0, max: 1, step: 0.01,
   },
   {
+    key: "joblessHireChance", group: "Settlement work", label: "Hiring chance without a trade",
+    description: "Chance a visitor out of work takes an open place after seeing the relic. They still need space in a household and a vacancy they can reach; a woodcutter also needs standing timber in range.",
+    default: 0.9, min: 0, max: 1, step: 0.01,
+  },
+  {
+    key: "employedHireChance", group: "Settlement work", label: "Hiring chance already in a trade",
+    description: "Chance a visitor who already has work elsewhere gives it up for an open place. Monks, nuns and vendors keep their own callings whatever this is set to.",
+    default: 0.05, min: 0, max: 1, step: 0.01,
+  },
+  {
+    key: "dailyWage", group: "Settlement work", label: "Daily wage per worker",
+    description: "Gold paid from the treasury to each settler working a player-owned place, once a game day. A settler eats and drinks about two thirds of a gold a day at the counter, so keep this above that or households slide into poverty. Much of it comes back over your own counter. Independent town households are paid by their own town.",
+    default: 2, min: 0, max: 100, step: 1,
+  },
+  {
+    key: "hearthHours", group: "Settlement work", label: "Hearth hours per hour at home",
+    description: "A settler asleep at home eats and drinks their own bread and small beer, restoring this many hours’ worth of food and drink for every hour abed. Nights are short, so raising this much further lets the household larder replace the counter and no resident ever buys supper.",
+    default: 12, min: 0, max: 1000, step: 1,
+  },
+  {
     key: "happinessDecay", group: "Traveler needs", label: "Happiness drain per game hour",
     description: "Happiness lost while away from tavern tables. Low happiness draws customers to staffed taverns.",
     default: 0.5, min: 0, max: 10, step: 0.1,
@@ -584,7 +607,7 @@ export function buildingIncomeLabel(def: BuildDefinition, balance: GameBalance):
     : def.id === "tavern" ? "4 jobs · food & drink for gold"
     : def.id === "sheep-pen" ? "2 herding jobs"
     : def.id === "inn" ? "4 jobs · bunks & beds"
-    : def.id === "house" ? "Homes 6 settlers"
+    : def.id === "house" ? "Homes 8 settlers · 4 bunks"
     : def.id === "monk-shelter" || def.id === "shelter" ? "Adds monk housing when complete"
     : def.id === "market" ? "Draws a vendor to keep it"
     : def.id === "storehouse" ? `Timber storage · ${STOREHOUSE_FOOD_CAPACITY} food capacity` : "No resource income"
@@ -674,6 +697,10 @@ export function importBalance(json: string): ReturnType<typeof validateBalance> 
         hospitalityNeedThreshold: DEFAULT_BALANCE.rules.hospitalityNeedThreshold,
         hospitalityRenownBonus: DEFAULT_BALANCE.rules.hospitalityRenownBonus,
         levellingLimit: DEFAULT_BALANCE.rules.levellingLimit,
+        joblessHireChance: DEFAULT_BALANCE.rules.joblessHireChance,
+        employedHireChance: DEFAULT_BALANCE.rules.employedHireChance,
+        dailyWage: DEFAULT_BALANCE.rules.dailyWage,
+        hearthHours: DEFAULT_BALANCE.rules.hearthHours,
         ...rules,
         // Adopt slower defaults in old saves without overwriting custom rates.
         ...((version < 4 && rules.hungerDecay === 12.5 || version < 5 && rules.hungerDecay === 3 || version < 7 && rules.hungerDecay === 1.5) ? { hungerDecay: DEFAULT_BALANCE.rules.hungerDecay } : {}),

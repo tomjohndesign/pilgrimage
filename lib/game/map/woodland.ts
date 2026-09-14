@@ -82,15 +82,15 @@ function spacedPoints(count: number, size: number, rng: () => number, avoid: (po
 }
 
 /** Eight-neighbor distance keeps a full woodland belt even at diagonal tips. */
-export function distanceToMask(mask: Uint8Array, size: number): Int32Array {
-  const distances = new Int32Array(mask.length).fill(size * 2), queue: number[] = []
+export function distanceToMask(mask: Uint8Array, width: number, depth = width): Int32Array {
+  const distances = new Int32Array(mask.length).fill(width + depth), queue: number[] = []
   for (let i = 0; i < mask.length; i++) if (mask[i]) { distances[i] = 0; queue.push(i) }
   for (let head = 0; head < queue.length; head++) {
-    const i = queue[head], x = i % size, z = Math.floor(i / size)
+    const i = queue[head], x = i % width, z = Math.floor(i / width)
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
       const nx = x + dx, nz = z + dz
-      if (nx < 0 || nz < 0 || nx >= size || nz >= size) continue
-      const n = nz * size + nx
+      if (nx < 0 || nz < 0 || nx >= width || nz >= depth) continue
+      const n = nz * width + nx
       if (distances[n] > distances[i] + 1) { distances[n] = distances[i] + 1; queue.push(n) }
     }
   }

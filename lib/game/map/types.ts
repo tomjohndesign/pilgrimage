@@ -17,6 +17,8 @@ export interface BuildingDef {
   hearthZ?: number
   /** Independent upper storey supported by this tavern. */
   supportId?: string
+  /** Ground-floor residence entered through this church's shared side wall. */
+  churchId?: string
   /** Floor height above the levelled ground; zero for standalone buildings. */
   floorHeight?: number
   /** The tavern's flue passes through the upper floor without a second hearth. */
@@ -68,6 +70,8 @@ export interface TilePos {
  * at the junction walk the branch to the door, venerate, and walk back out.
  */
 export interface FoundingSite {
+  /** New foundations keep space for the church nave and attached side rooms. */
+  churchPlot?: { x: number; z: number; w: number; d: number }
   /** Index into `road` of the tile where the branch forks off the main road. */
   junction: number
   /**
