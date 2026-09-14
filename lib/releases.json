@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "2ebd02e36129eacaac735d9f85ccdac0ee6534b9",
-  "releaseCount": 240,
+  "lastProcessedCommit": "d689eabbdb69e576e8f02f154330119d9fd5f2f0",
+  "releaseCount": 241,
   "releases": [
+    {
+      "version": "0.0.255",
+      "title": "Release 0.0.255",
+      "summary": "Restore original colors for people outside the enclave (#274)",
+      "commit": "d689eabbdb69e576e8f02f154330119d9fd5f2f0"
+    },
     {
       "version": "0.0.254",
       "title": "Release 0.0.254",
