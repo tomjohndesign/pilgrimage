@@ -1,0 +1,472 @@
+{
+  "version": 2,
+  "notes": "IPA targets are editorial approximations, not verified reconstructions. Dutch and Icelandic are accent experiments only. Latin uses a conventional ecclesiastical reading, not a claim about local Anglo-Saxon Latin.",
+  "sources": [
+    "https://elevenlabs.io/docs/overview/capabilities/text-to-speech/best-practices",
+    "https://oldenglish.info/advpronunciationguide.html"
+  ],
+  "jobs": [
+    {
+      "id": "peasant-1-george-ipa",
+      "kind": "voice",
+      "label": "Field hand: George · IPA direction",
+      "character": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-1",
+      "actor": "George",
+      "variant": "ipa",
+      "response": "select",
+      "ipa": "hwæt wilt θuː",
+      "pitchSemitones": 0,
+      "description": "Pronunciation study · IPA direction",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "/hwæt wilt θuː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-1-george-dutch",
+      "kind": "voice",
+      "label": "Field hand: George · Dutch influence",
+      "character": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-1",
+      "actor": "George",
+      "variant": "dutch",
+      "response": "comparison",
+      "ipa": "hwæt wilt θuː",
+      "pitchSemitones": 0,
+      "description": "Pronunciation study · Dutch accent experiment",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "[strong Dutch accent] /hwæt wilt θuː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-1-george-icelandic",
+      "kind": "voice",
+      "label": "Field hand: George · Icelandic influence",
+      "character": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-1",
+      "actor": "George",
+      "variant": "icelandic",
+      "response": "comparison",
+      "ipa": "hwæt wilt θuː",
+      "pitchSemitones": 0,
+      "description": "Pronunciation study · Icelandic accent experiment",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "[strong Icelandic accent] /hwæt wilt θuː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-2-george-ipa",
+      "kind": "voice",
+      "label": "Field hand: George · IPA direction",
+      "character": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-2",
+      "actor": "George",
+      "variant": "ipa",
+      "response": "select",
+      "ipa": "itʃ ˈhæbːe weork toː ˈdoːnːe",
+      "pitchSemitones": 0,
+      "description": "Pronunciation study · IPA direction",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "/itʃ ˈhæbːe weork toː ˈdoːnːe/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-3-george-ipa",
+      "kind": "voice",
+      "label": "Field hand: George · IPA direction",
+      "character": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-3",
+      "actor": "George",
+      "variant": "ipa",
+      "response": "select",
+      "ipa": "jɑː",
+      "pitchSemitones": 0,
+      "description": "Pronunciation study · IPA direction",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "/jɑː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-1-lily-ipa",
+      "kind": "voice",
+      "label": "Field hand: Lily · IPA direction",
+      "character": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-1",
+      "actor": "Lily",
+      "variant": "ipa",
+      "response": "select",
+      "ipa": "hwæt wilt θuː",
+      "pitchSemitones": 0,
+      "description": "Pronunciation study · IPA direction",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "/hwæt wilt θuː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-1-lily-dutch",
+      "kind": "voice",
+      "label": "Field hand: Lily · Dutch influence",
+      "character": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-1",
+      "actor": "Lily",
+      "variant": "dutch",
+      "response": "comparison",
+      "ipa": "hwæt wilt θuː",
+      "pitchSemitones": 0,
+      "description": "Pronunciation study · Dutch accent experiment",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[strong Dutch accent] /hwæt wilt θuː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-1-lily-icelandic",
+      "kind": "voice",
+      "label": "Field hand: Lily · Icelandic influence",
+      "character": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-1",
+      "actor": "Lily",
+      "variant": "icelandic",
+      "response": "comparison",
+      "ipa": "hwæt wilt θuː",
+      "pitchSemitones": 0,
+      "description": "Pronunciation study · Icelandic accent experiment",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[strong Icelandic accent] /hwæt wilt θuː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-2-lily-ipa",
+      "kind": "voice",
+      "label": "Field hand: Lily · IPA direction",
+      "character": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-2",
+      "actor": "Lily",
+      "variant": "ipa",
+      "response": "select",
+      "ipa": "itʃ ˈhæbːe weork toː ˈdoːnːe",
+      "pitchSemitones": 0,
+      "description": "Pronunciation study · IPA direction",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "/itʃ ˈhæbːe weork toː ˈdoːnːe/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-3-lily-ipa",
+      "kind": "voice",
+      "label": "Field hand: Lily · IPA direction",
+      "character": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-3",
+      "actor": "Lily",
+      "variant": "ipa",
+      "response": "select",
+      "ipa": "jɑː",
+      "pitchSemitones": 0,
+      "description": "Pronunciation study · IPA direction",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "/jɑː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "friar-1-brian-ipa",
+      "kind": "voice",
+      "label": "Friar: Brian · IPA direction",
+      "character": "friar",
+      "bodyType": "Male",
+      "lineId": "friar-1",
+      "actor": "Brian",
+      "variant": "ipa",
+      "response": "select",
+      "ipa": "paks ˈte.kum",
+      "pitchSemitones": -2,
+      "description": "Pronunciation study · IPA direction",
+      "path": "/v1/text-to-speech/nPczCjzI2devNBz1zQrb",
+      "body": {
+        "text": "[low-pitched] [calm] /paks ˈte.kum/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "friar-2-brian-ipa",
+      "kind": "voice",
+      "label": "Friar: Brian · IPA direction",
+      "character": "friar",
+      "bodyType": "Male",
+      "lineId": "friar-2",
+      "actor": "Brian",
+      "variant": "ipa",
+      "response": "select",
+      "ipa": "ˈde.o ˈɡra.tsi.as",
+      "pitchSemitones": -2,
+      "description": "Pronunciation study · IPA direction",
+      "path": "/v1/text-to-speech/nPczCjzI2devNBz1zQrb",
+      "body": {
+        "text": "[low-pitched] [calm] /ˈde.o ˈɡra.tsi.as/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "friar-3-brian-ipa",
+      "kind": "voice",
+      "label": "Friar: Brian · IPA direction",
+      "character": "friar",
+      "bodyType": "Male",
+      "lineId": "friar-3",
+      "actor": "Brian",
+      "variant": "ipa",
+      "response": "select",
+      "ipa": "kwid vis ˈfi.li",
+      "pitchSemitones": -2,
+      "description": "Pronunciation study · IPA direction",
+      "path": "/v1/text-to-speech/nPczCjzI2devNBz1zQrb",
+      "body": {
+        "text": "[low-pitched] [calm] /kwid vis ˈfi.li/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "nun-1-lily-latin",
+      "kind": "voice",
+      "label": "Nun: Lily · Latin direction",
+      "character": "nun",
+      "bodyType": "Female",
+      "lineId": "nun-1",
+      "actor": "Lily",
+      "variant": "ipa",
+      "response": "select",
+      "ipa": "be.neˈdi.tʃi.te",
+      "pitchSemitones": 0,
+      "description": "Latin text · Italian vowel guidance",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "Benedicite.",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        },
+        "language_code": "it"
+      }
+    },
+    {
+      "id": "nun-2-lily-latin",
+      "kind": "voice",
+      "label": "Nun: Lily · Latin direction",
+      "character": "nun",
+      "bodyType": "Female",
+      "lineId": "nun-2",
+      "actor": "Lily",
+      "variant": "ipa",
+      "response": "select",
+      "ipa": "ˈdo.mi.nus voˈbis.kum",
+      "pitchSemitones": 0,
+      "description": "Latin text · Italian vowel guidance",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "Dominus vobiscum.",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        },
+        "language_code": "it"
+      }
+    },
+    {
+      "id": "nun-3-lily-latin",
+      "kind": "voice",
+      "label": "Nun: Lily · Latin direction",
+      "character": "nun",
+      "bodyType": "Female",
+      "lineId": "nun-3",
+      "actor": "Lily",
+      "variant": "ipa",
+      "response": "select",
+      "ipa": "in siˈlen.tsjo ˈkwe.so",
+      "pitchSemitones": 0,
+      "description": "Latin text · Italian vowel guidance",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "In silentio, quaeso.",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        },
+        "language_code": "it"
+      }
+    },
+    {
+      "id": "forest-birds",
+      "kind": "sfx",
+      "label": "Woodland · birds and leaves",
+      "loop": true,
+      "description": "Road ambience layer",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Quiet deciduous woodland beside a rural track in England in late spring. Gentle wind moving oak and hazel leaves, sparse European robin and blackbird calls at varying distances. Calm natural daytime forest ambience, steady background bed with room for dialogue, seamless loop. No tropical birds, owls, music, voices, traffic or machinery.",
+        "duration_seconds": 20,
+        "loop": true,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "road-people",
+      "kind": "sfx",
+      "label": "Road folk · distant conversation",
+      "loop": true,
+      "description": "Road ambience layer",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A few small groups of adults chatting very softly in the distance outdoors on a rural footpath. Indistinct low conversational murmur, male and female voices, no intelligible words in any language, subtle cloth rustles. Sparse and calm, not a crowded marketplace. Seamless continuous ambience loop, no music, shouting, vehicles, modern objects or indoor reverberation.",
+        "duration_seconds": 20,
+        "loop": true,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "road-footsteps",
+      "kind": "sfx",
+      "label": "Travelers · earth footsteps",
+      "loop": true,
+      "description": "Road ambience layer",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Two or three people walking at a relaxed steady pace on a dry compacted earth path. Soft uneven leather shoe footfalls with fine grit and occasional cloth rustle. Natural close-to-middle distance outdoor recording, restrained and gentle. Seamless loop. No speech, music, metal armor, modern shoes, pavement or machinery.",
+        "duration_seconds": 10,
+        "loop": true,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "horse-walk",
+      "kind": "sfx",
+      "label": "Horse · walking on earth",
+      "loop": true,
+      "description": "Road ambience layer",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One horse walking calmly at a natural four-beat walking gait on a firm dirt track, muted irregular hoof clops, fine grit, faint leather bridle creaks. Outdoor natural recording, restrained middle distance. Seamless loop. No trotting, galloping, pavement, cart wheels, voices, music, or machinery.",
+        "duration_seconds": 8,
+        "loop": true,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "horse-snort",
+      "kind": "sfx",
+      "label": "Horse · breath and soft snort",
+      "loop": false,
+      "description": "Occasional horse sound",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One calm horse exhales through its nostrils then gives a single soft natural snort. Isolated close outdoor animal sound, short clean decay. No neigh, squeal, hoofbeats, voices, music or other animals.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    }
+  ]
+}

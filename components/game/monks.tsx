@@ -1,5 +1,7 @@
 "use client"
 
+import { playCharacterSound } from "@/lib/game/character-audio"
+
 import { fordSpeedAt } from "@/lib/game/map/fords"
 
 import { SceneAssetBoundary } from "./scene-assets"
@@ -136,6 +138,11 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
     useMonkEvangelismStore.setState({ available: preachingSpots(map).length > 0 })
   }, [map])
 
+  useEffect(() => useCameraStore.subscribe((state, previous) => {
+    const next = state.selection
+    if (next !== previous.selection && next?.kind === "monk") void playCharacterSound("friar", next.id, "Male")
+  }), [])
+
   // Publish activities so the HUD's monk panel can poll them.
   useEffect(() => {
     const preachers = { road: map.road, monks: world.states }
@@ -214,6 +221,8 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       s.workScale = characterScale
       const group = groupRefs.current[i]
       if (!group) continue
+      group.userData.audioProfile = "friar"
+      group.userData.audioActor = `monk/${monks[i].id}`
       group.userData.initialized = true
       group.userData.phase = i / Math.max(1, monks.length)
       group.userData.playbackRate = playback.paused ? 0 : playback.speed

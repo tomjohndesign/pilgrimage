@@ -1,0 +1,266 @@
+{
+  "version": 5,
+  "output": ".context/elevenlabs-voices-road-v5",
+  "selectionVariants": {
+    "peasant": "yorkshire"
+  },
+  "replaceSoundIds": [
+    "peasant-1-george-yorkshire",
+    "peasant-1-lily-yorkshire",
+    "peasant-2-george-yorkshire",
+    "peasant-2-lily-yorkshire"
+  ],
+  "jobs": [
+    {
+      "id": "peasant-1-george-yorkshire-direct",
+      "kind": "voice",
+      "label": "Peasant: George \u00b7 Yorkshire, direct",
+      "character": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-1",
+      "actor": "George",
+      "variant": "yorkshire",
+      "response": "select",
+      "ipa": "hw\u00e6t wilt \u03b8u\u02d0",
+      "pitchSemitones": 0,
+      "description": "Yorkshire \u00b7 matter-of-fact, concise delivery",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "[strong Yorkshire accent] [matter-of-fact] /hw\u00e6t wilt \u03b8u\u02d0/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-2-george-yorkshire-direct",
+      "kind": "voice",
+      "label": "Peasant: George \u00b7 Yorkshire, direct",
+      "character": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-2",
+      "actor": "George",
+      "variant": "yorkshire",
+      "response": "select",
+      "ipa": "it\u0283 \u02c8h\u00e6b\u02d0e weork to\u02d0 \u02c8do\u02d0n\u02d0e",
+      "pitchSemitones": 0,
+      "description": "Yorkshire \u00b7 matter-of-fact, concise delivery",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "[strong Yorkshire accent] [matter-of-fact] /it\u0283 \u02c8h\u00e6b\u02d0e weork to\u02d0 \u02c8do\u02d0n\u02d0e/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-3-george-yorkshire-direct",
+      "kind": "voice",
+      "label": "Peasant: George \u00b7 Yorkshire, direct",
+      "character": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-3",
+      "actor": "George",
+      "variant": "yorkshire",
+      "response": "select",
+      "ipa": "j\u0251\u02d0",
+      "pitchSemitones": 0,
+      "description": "Yorkshire \u00b7 matter-of-fact, concise delivery",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "[strong Yorkshire accent] [matter-of-fact] /j\u0251\u02d0/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-1-lily-yorkshire-direct",
+      "kind": "voice",
+      "label": "Peasant: Lily \u00b7 Yorkshire, direct",
+      "character": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-1",
+      "actor": "Lily",
+      "variant": "yorkshire",
+      "response": "select",
+      "ipa": "hw\u00e6t wilt \u03b8u\u02d0",
+      "pitchSemitones": 0,
+      "description": "Yorkshire \u00b7 matter-of-fact, concise delivery",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[strong Yorkshire accent] [matter-of-fact] /hw\u00e6t wilt \u03b8u\u02d0/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-2-lily-yorkshire-direct",
+      "kind": "voice",
+      "label": "Peasant: Lily \u00b7 Yorkshire, direct",
+      "character": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-2",
+      "actor": "Lily",
+      "variant": "yorkshire",
+      "response": "select",
+      "ipa": "it\u0283 \u02c8h\u00e6b\u02d0e weork to\u02d0 \u02c8do\u02d0n\u02d0e",
+      "pitchSemitones": 0,
+      "description": "Yorkshire \u00b7 matter-of-fact, concise delivery",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[strong Yorkshire accent] [matter-of-fact] /it\u0283 \u02c8h\u00e6b\u02d0e weork to\u02d0 \u02c8do\u02d0n\u02d0e/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-3-lily-yorkshire-direct",
+      "kind": "voice",
+      "label": "Peasant: Lily \u00b7 Yorkshire, direct",
+      "character": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-3",
+      "actor": "Lily",
+      "variant": "yorkshire",
+      "response": "select",
+      "ipa": "j\u0251\u02d0",
+      "pitchSemitones": 0,
+      "description": "Yorkshire \u00b7 matter-of-fact, concise delivery",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[strong Yorkshire accent] [matter-of-fact] /j\u0251\u02d0/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "forest-birds",
+      "kind": "sfx",
+      "label": "Birds & forest",
+      "loop": true,
+      "description": "Clean replacement \u00b7 continuous loop",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Clean outdoor recording of European robin and blackbird calls beside a deciduous woodland path. Clear scattered chirps with natural pauses and a little leaf movement. Natural present recording level with distinct birds. Seamless thirty-second loop. No insects, buzzing, hum, electrical noise, hiss, wind rumble, music or voices.",
+        "duration_seconds": 30,
+        "loop": true,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "layer": "forest-birds",
+      "defaultVolume": 0.3,
+      "audioFilter": "highpass=f=180,afftdn=nf=-35",
+      "maxGainDb": 0
+    },
+    {
+      "id": "road-people",
+      "kind": "sfx",
+      "label": "Conversation murmur",
+      "loop": true,
+      "description": "Muffled conversation assembled from clean voice recordings",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A small group of adults conversing naturally outdoors, relaxed slow turns. Indistinct overlapping conversational murmur, no intelligible words or foreground speaker. Clean dry recording at a normal audible level. No background bed, buzzing, humming, electrical noise, hiss, wind, music or laughter. Seamless thirty-second loop.",
+        "duration_seconds": 30,
+        "loop": true,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "layer": "road-people",
+      "defaultVolume": 0.3,
+      "tempo": 0.9,
+      "audioFilter": "highpass=f=180,lowpass=f=1200",
+      "maxGainDb": 6,
+      "mix": [
+        {
+          "url": "/sounds/elevenlabs/v5/peasant-1-george-yorkshire-direct.wav",
+          "at": 0
+        },
+        {
+          "url": "/sounds/elevenlabs/v5/peasant-2-lily-yorkshire-direct.wav",
+          "at": 1
+        },
+        {
+          "url": "/sounds/elevenlabs/v5/peasant-2-george-yorkshire-direct.wav",
+          "at": 4
+        },
+        {
+          "url": "/sounds/elevenlabs/v5/peasant-1-lily-yorkshire-direct.wav",
+          "at": 5.5
+        },
+        {
+          "url": "/sounds/elevenlabs/v5/peasant-2-george-yorkshire-direct.wav",
+          "at": 8
+        },
+        {
+          "url": "/sounds/elevenlabs/v5/peasant-2-lily-yorkshire-direct.wav",
+          "at": 10
+        },
+        {
+          "url": "/sounds/elevenlabs/v5/peasant-1-george-yorkshire-direct.wav",
+          "at": 13
+        },
+        {
+          "url": "/sounds/elevenlabs/v5/peasant-2-lily-yorkshire-direct.wav",
+          "at": 14
+        },
+        {
+          "url": "/sounds/elevenlabs/v5/peasant-2-george-yorkshire-direct.wav",
+          "at": 18
+        },
+        {
+          "url": "/sounds/elevenlabs/v5/peasant-1-lily-yorkshire-direct.wav",
+          "at": 20
+        },
+        {
+          "url": "/sounds/elevenlabs/v5/peasant-2-george-yorkshire-direct.wav",
+          "at": 24
+        },
+        {
+          "url": "/sounds/elevenlabs/v5/peasant-2-lily-yorkshire-direct.wav",
+          "at": 27
+        }
+      ]
+    },
+    {
+      "id": "road-laughter",
+      "kind": "sfx",
+      "label": "Brief chuckle",
+      "loop": false,
+      "description": "Brief occasional chuckle",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One person gives a single brief friendly chuckle, a small natural amused laugh lasting less than one second, then stops. Clean isolated human recording. No other people, speech, continuous laughter, music, buzz or background ambience.",
+        "duration_seconds": 1,
+        "loop": false,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "layer": "road-laughter",
+      "defaultVolume": 0.15,
+      "maxGainDb": 0
+    }
+  ]
+}

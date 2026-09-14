@@ -1,5 +1,7 @@
 "use client"
 
+import { tickCharacterSound } from "@/lib/game/character-sound-motion"
+
 import { createContext, useContext, useLayoutEffect, useMemo, useRef, type ReactNode } from "react"
 import { useFrame, type RootState } from "@react-three/fiber"
 import type { GameMap } from "@/lib/game/map/types"
@@ -42,6 +44,7 @@ export function SpriteFrames({ children, visibleRoot }: { children: ReactNode; v
           if (pose && parent && entry && parent.name === "traveler-unit" && parent.userData.poseWorldFrame === time) {
             if (!isWorldVisible(parent)) continue
             if (updateCrowdWalk(crowd.walk, parent, pose, entry, view, detail, delta)) {
+              tickCharacterSound(parent, state.camera, "walk", crowd.walk.state.phase)
               crowd.publish(entry, true); continue
             }
           }

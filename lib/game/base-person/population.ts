@@ -37,6 +37,15 @@ export function travelerAppearance(seed: number, id: number): TravelerAppearance
     scale: 1, bodyType: female ? "Female" : "Male", complexion: rollComplexion(random) }
 }
 
+/**
+ * Friars and nuns always belong to their order's sex; everyone else follows the
+ * seeded body draw. Names, sprites and selection barks all read this, so a
+ * person never sounds like someone other than the body on screen.
+ */
+export function travelerBodyType(seed: number, typeId: TravelerTypeId, id: number): PersonDesign["bodyType"] {
+  return typeId === "friar" ? "Male" : typeId === "nun" ? "Female" : travelerAppearance(seed, id).bodyType
+}
+
 export function populationDesign(type: Pick<TravelerTypeDef, "id" | "color">, variant: number, base: PersonDesign = DEFAULT_DESIGN): PersonDesign {
   const profile = POPULATION_PROFILES[variant]
   const minstrel = type.id === "minstrel"

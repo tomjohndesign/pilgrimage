@@ -111,6 +111,24 @@ and apply its path in the playground. Playback uses a distinct cue per calling
 and a stable, slight pitch variation per traveler. Sounds occur only on a new
 selection; deselecting or dragging does not play a cue. Mute and volume persist.
 
+These cues are now the **fallback**. A selected person normally speaks a line
+instead; the cue plays only when the spoken audio is missing.
+
+## Generate the placeholder selection barks
+
+```sh
+npm run assets:voices
+```
+
+`assets/recipes/voices.json` defines what each character says when selected, in
+Old English for the laity and Church Latin for the clergy. Each line is rendered
+once per body type, so a man sounds like a man and a woman like a woman. The
+generator renders placeholders with the macOS `say` voices into
+`public/sounds/voices/<type>/<male|female>/`, which is gitignored because
+Apple's voices cannot be redistributed. See
+[VOICES.md](VOICES.md) for the line bank, the repeat-click escalation, and the
+routes to real recorded audio.
+
 ## Checks
 
 ```sh
