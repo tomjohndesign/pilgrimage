@@ -38,12 +38,12 @@ export function travelerAppearance(seed: number, id: number): TravelerAppearance
 }
 
 /**
- * Friars and nuns always belong to their order's sex; everyone else follows the
+ * Knights and friars are always male, nuns female; everyone else follows the
  * seeded body draw. Names, sprites and selection barks all read this, so a
  * person never sounds like someone other than the body on screen.
  */
 export function travelerBodyType(seed: number, typeId: TravelerTypeId, id: number): PersonDesign["bodyType"] {
-  return typeId === "friar" ? "Male" : typeId === "nun" ? "Female" : travelerAppearance(seed, id).bodyType
+  return typeId === "knight" || typeId === "friar" ? "Male" : typeId === "nun" ? "Female" : travelerAppearance(seed, id).bodyType
 }
 
 export function populationDesign(type: Pick<TravelerTypeDef, "id" | "color">, variant: number, base: PersonDesign = DEFAULT_DESIGN): PersonDesign {

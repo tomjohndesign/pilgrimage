@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { CHARACTER_VOICES, BARK_STREAK_MS, barkForStreak, barkUrl, nextStreak, voiceBodyType } from "./voice-lines"
 import { CHARACTER_ASSETS } from "./character-assets"
 import { travelerBodyType } from "./base-person/population"
+import { characterBark } from "./sound-catalog"
 
 describe("selection barks", () => {
   it("gives every traveler type lines in a period tongue", () => {
@@ -45,15 +46,26 @@ describe("selection barks", () => {
   it("answers with a voice of the speaker's own body type", () => {
     expect(voiceBodyType(CHARACTER_VOICES.peasant, "Female")).toBe("Female")
     expect(voiceBodyType(CHARACTER_VOICES.peasant, "Male")).toBe("Male")
-    expect(barkUrl("knight", "Female", CHARACTER_VOICES.knight.select[0]))
-      .toBe(`/sounds/voices/knight/female/${CHARACTER_VOICES.knight.select[0].id}-v1.wav`)
+    expect(barkUrl("peasant", "Female", CHARACTER_VOICES.peasant.select[0]))
+      .toBe(`/sounds/voices/peasant/female/${CHARACTER_VOICES.peasant.select[0].id}-v1.wav`)
   })
 
   it("keeps callings bound to one sex on their own voice", () => {
+    expect(CHARACTER_VOICES.knight.bodyTypes).toEqual(["Male"])
+    expect(voiceBodyType(CHARACTER_VOICES.knight, "Female")).toBe("Male")
     expect(CHARACTER_VOICES.friar.bodyTypes).toEqual(["Male"])
     expect(CHARACTER_VOICES.nun.bodyTypes).toEqual(["Female"])
     expect(voiceBodyType(CHARACTER_VOICES.friar, "Female")).toBe("Male")
     expect(voiceBodyType(CHARACTER_VOICES.nun, "Male")).toBe("Female")
+  })
+
+  it("gives knights male identities and recordings across seeds and body draws", () => {
+    for (const seed of [0, 7, 12345, 31337]) for (let id = 0; id < 50; id++) {
+      expect(travelerBodyType(seed, "knight", id)).toBe("Male")
+    }
+    for (const body of ["Male", "Female"] as const) for (let streak = 1; streak <= 8; streak++) {
+      expect(characterBark("knight", body, 3, streak).url).toContain("knight-male-")
+    }
   })
 
   it("takes the body type from the same draw the sprite and name use", () => {

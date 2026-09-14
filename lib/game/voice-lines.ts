@@ -17,7 +17,7 @@ export interface VoiceLine {
 export interface CharacterVoice {
   label: string
   tongue: string
-  /** Recorded body types. Friars are only male and nuns only female. */
+  /** Allowed voice body types. Knights and friars are male; nuns are female. */
   bodyTypes: BodyType[]
   select: VoiceLine[]
   repeat: VoiceLine[]
