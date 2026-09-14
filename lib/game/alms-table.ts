@@ -1,3 +1,4 @@
+import { workerNavigationVersion } from "./worker-route-memory"
 import { buildingStepAllowed } from "./building-navigation"
 import { buildingEntry, buildingYaw, rotateBuildingPoint } from "./building-rotation"
 import { isComplete, walkWorker, workerRoute } from "./construction"
@@ -8,7 +9,6 @@ import { MONK_TIRED_AT, type MonkNeeds } from "./monk-work"
 
 export const ALMS_HUNGER_GAIN = 40
 export const ALMS_HUNGER_CAP = 50
-export const ALMS_SEEK_RADIUS = 12
 
 export const ALMS_SERVING_SECONDS = 4
 type Point = { x: number; y: number; z: number }
@@ -56,6 +56,7 @@ export interface BreadVisit {
   stand: Point
   heading: number
   returnTo: Point
+  navigation?: object
   buildings: GameMap["buildings"]
   arrival: Point[]
   resumeActivity?: "toRelic" | "fromRelic"
@@ -66,7 +67,7 @@ export function breadVisitPlan(map: GameMap, table: BuildingDef, from: Point, ba
   const { stand, heading } = almsAccess(map, table)
   const route = almsArrival(map, table, from, false)
   if (!route) return null
-  const visit: BreadVisit = { tableId: table.id, stand, heading, returnTo: { ...back }, buildings: map.buildings, arrival: [{ ...from }, ...route] }
+  const visit: BreadVisit = { tableId: table.id, stand, heading, returnTo: { ...back }, navigation: workerNavigationVersion(map), buildings: map.buildings, arrival: [{ ...from }, ...route] }
   return { visit, route }
 }
 

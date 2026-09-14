@@ -42,6 +42,8 @@ import { BuildInfluenceOverlay } from "./build-influence-overlay"
 import { CameraLight } from "./camera-light"
 import { CameraRig } from "./camera-rig"
 import { GroundSelection, PersonPicking } from "./character-selection"
+import { WAYFINDING_DEBUG } from "@/lib/game/wayfinding-settings"
+import { WayfindingOverlay } from "./wayfinding-overlay"
 import { DebugHandle } from "./debug-handle"
 import { Environment } from "./environment"
 import { Monks } from "./monks"
@@ -246,6 +248,7 @@ export function GameCanvas({
       <SceneAssetBoundary>
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
       <BuildInfluenceOverlay map={map} buildMode={!!buildType} />
+      {WAYFINDING_DEBUG && <WayfindingOverlay map={map} />}
 
       </SceneAssetBoundary>
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />

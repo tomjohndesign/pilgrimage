@@ -10,6 +10,7 @@ import { SceneAssetBoundary } from "./scene-assets"
 
 import { stepDevotion } from "@/lib/game/wellbeing"
 import { useBalanceStore } from "@/lib/game/balance-store"
+import { monkWayfindingRegistry } from "@/lib/game/wayfinding-debug"
 import { simRegistry } from "@/lib/game/sim"
 import { isComplete } from "@/lib/game/construction"
 import { shrineLayout, shrineStations, isRelicViewingSeat } from "@/lib/game/shrine-layout"
@@ -156,6 +157,8 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
     monkStaminaRegistry.current = world.stamina
     const positions = new Map(monks.map((m, i) => [m.id, world.states[i]]))
     monkPositionRegistry.current = positions
+    const wayfinding = { map, actors: positions }
+    monkWayfindingRegistry.current = wayfinding
     processionRegistry.current = world.procession
     useRelicProcessionStore.setState({ available: !!world.grounds, monkId: null, stage: "idle", returnRequested: false })
     return () => {
@@ -165,6 +168,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         preachingRegistry.current = null
         useMonkEvangelismStore.setState({ available: false, assigned: new Set() })
       }
+      if (monkWayfindingRegistry.current === wayfinding) monkWayfindingRegistry.current = null
       if (monkPositionRegistry.current === positions) monkPositionRegistry.current = null
       if (monkRegistry.current === world.activities) monkRegistry.current = null
       if (monkStaminaRegistry.current === world.stamina) monkStaminaRegistry.current = null

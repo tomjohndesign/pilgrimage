@@ -1,3 +1,4 @@
+import { workerNavigationVersion } from "../worker-route-memory"
 import { isComplete, workerRoute } from "../construction"
 import { buildingEntry, buildingYaw } from "../building-rotation"
 import { buildingCentre } from "../buildings"
@@ -10,7 +11,7 @@ export interface WaterPoint { x: number; y: number; z: number }
 /** Match the drink threshold so happiness decides between taverns and free water. */
 export const WATER_SEEK_THRESHOLD = 60
 /** Includes a town well across the road from a tavern's rear work posts. */
-export const WATER_SEEK_RADIUS = 12
+
 export const WATER_VISIT_SECONDS = 8
 
 export function isWaterSource(building: BuildingDef): building is BuildingDef & { buildType: WaterSourceKind } {
@@ -35,6 +36,7 @@ export interface WaterVisit {
   /** Clear final walk between the footprint's front and its dipping edge. */
   approach: WaterPoint[]
   returnTo: WaterPoint
+  navigation?: object
   buildings: GameMap["buildings"]
 }
 
@@ -58,6 +60,6 @@ export function waterVisitPlan(map: GameMap, source: BuildingDef, from: WaterPoi
   const approach = [front, aligned, access.stand]
   const visit: WaterVisit = { sourceId: source.id, kind: source.buildType, stand: access.stand,
     heading: Math.atan2(access.water.x - access.stand.x, access.water.z - access.stand.z),
-    approach, returnTo: { x: back.x, y: back.y, z: back.z }, buildings: map.buildings }
+    approach, returnTo: { x: back.x, y: back.y, z: back.z }, navigation: workerNavigationVersion(map), buildings: map.buildings }
   return { visit, route: [...route, ...approach] }
 }

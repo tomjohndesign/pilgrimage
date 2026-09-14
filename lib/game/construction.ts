@@ -13,7 +13,7 @@ import type { WanderSpot } from "./monk-wander"
 import { buildingSupports } from "./character-support"
 import { SETTLER_BUILD_RATE } from "./build-labour"
 import { workPost } from "./work-posts"
-import { rememberedWorkerCorridor, rememberedWorkerRoute } from "./worker-route-memory"
+import { destinationWorldRoute, rememberedWorkerCorridor, rememberedWorkerRoute } from "./worker-route-memory"
 
 export interface Construction { work: number; required: number; cost?: { gold: number; wood: number } }
 /** Worker-seconds: small sites finish quickly; doubling the area quadruples the work. */
@@ -83,6 +83,10 @@ export function workerRoute(map: GameMap, actor: WanderSpot & { id?: number }, g
   // Retain the shared obstacle index unless this actor needs to escape a newly
   // placed site. Allocating a new array otherwise rebuilds it for every trip.
   const obstacles = map.buildings.some(canLeave) ? map.buildings.filter(b => !canLeave(b)) : map.buildings
+  if (obstacles === map.buildings) {
+    const shared = destinationWorldRoute(map, start, goal)
+    if (shared !== undefined) return shared
+  }
   const journey = Math.abs(Math.sin(actor.x * 12.9898 + actor.z * 78.233 + goal.x * 37.719 + goal.z))
   const exploring = actor.id === undefined ? journey < SHORTCUT_EXPLORERS : exploresWorkerShortcut(map, actor.id, start, goal)
   const plan = () => {

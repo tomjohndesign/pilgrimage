@@ -1,5 +1,6 @@
 "use client"
 
+import { WayfindingPanel, WayfindingSelection } from "./wayfinding-panel"
 import { almsStaffed } from "@/lib/game/alms-table"
 
 import { isChapel } from "@/lib/game/shrine-layout"
@@ -738,7 +739,7 @@ export function GameHud({
 
   useEffect(() => {
     if (!selection) return
-    setPanel(null)
+    setPanel(current => SHOW_PROPERTY_PANELS && current === "world" ? current : null)
     economy.chooseBuild(null)
   }, [selection, economy.chooseBuild])
 
@@ -841,7 +842,7 @@ export function GameHud({
               setPanel((current) => current === "world" ? null : "world")
               setMenuOpen(false)
               economy.chooseBuild(null)
-              useCameraStore.getState().select(null)
+              if (!SHOW_PROPERTY_PANELS) useCameraStore.getState().select(null)
             }}><Settings size={16} /></button>}
           {playing && <button type="button" className="hud-header-button" aria-label="Menu" title="Menu"
             aria-expanded={menuOpen} onClick={() => {
@@ -906,6 +907,7 @@ export function GameHud({
           <HudButton onClick={() => set(DEFAULT_SCENE_VISIBILITY)}>Reset visibility</HudButton>
         </Section>
         {SHOW_PROPERTY_PANELS && <>
+        {map && <Section {...section("Wayfinding")}><WayfindingPanel map={map} travelers={travelers} monks={monks} /></Section>}
         <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />
           <MapSizeControl label="Size" value={settings.size} onChange={(size) => set({ size })} />
@@ -1169,7 +1171,7 @@ export function GameHud({
         {panel === "settlement" && <div className="hud-inspector" id="settlement-details">
           <SettlementPanel economy={economy} monks={monks} relic={relic} onClose={() => setPanel(null)} />
         </div>}
-        {selection && <div className="hud-inspector" aria-label="Selection details">
+        {selection && panel !== "world" && <div className="hud-inspector" aria-label="Selection details">
           {(selection.kind === "tree" || selection.kind === "pile") && <ResourceInspector selection={selection} />}
           {selectedBuilding && (
             <Panel>
@@ -1236,6 +1238,7 @@ export function GameHud({
             </>}
           </Panel>
           )}
+          {SHOW_PROPERTY_PANELS && map && <WayfindingSelection map={map} travelers={travelers} monks={monks} onSettings={() => setPanel("world")} />}
           {selection?.kind === "animal" && <AnimalInspector id={selection.id} />}
           {selectedTraveler && <TravelerPanel traveler={selectedTraveler} travelers={travelers} map={map} />}
           {selectedMonk && <MonkPanel monk={selectedMonk} />}
