@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "b1a70e7b42906c2f92e309263e5c4b9a90898298",
-  "releaseCount": 244,
+  "lastProcessedCommit": "b8c5a6c10e670fe5fa4f0273382d11c07adb6043",
+  "releaseCount": 245,
   "releases": [
+    {
+      "version": "0.0.259",
+      "title": "Release 0.0.259",
+      "summary": "Ensure knights always use male names and voices (#279)",
+      "commit": "b8c5a6c10e670fe5fa4f0273382d11c07adb6043"
+    },
     {
       "version": "0.0.258",
       "title": "Release 0.0.258",
