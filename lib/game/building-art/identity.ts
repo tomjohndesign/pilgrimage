@@ -105,11 +105,13 @@ export function buildingLandmark(type: string, width: number, depth: number, hei
     box("cross-binding", [0, height * .73, .055], [Math.min(.55, width * .65), .055, .016], wood, true)
     box("cross-tail", [.065, height * .73 - .14, .06], [.07, .25, .016], wood, true)
   } else if (type === "sheep-pen") {
-    box("crook-staff", [x, (y + .25) / 2, z], [.05, y + .25, .05], wood)
+    // On expanded folds, mount the crook beside the hut; keep the food platform clear.
+    const crookX=width>=5 ? -w+.28 : x
+    box("crook-staff", [crookX, (y + .25) / 2, z], [.05, y + .25, .05], wood)
     // Open hooked head, never a modern shepherd's metal crook.
-    box("crook-top", [x - .085, y + .26, z], [.22, .055, .05], linen)
-    box("crook-hook", [x - .17, y + .19, z], [.055, .17, .05], linen)
-    box("crook-binding", [x, y - .04, z], [.09, .26, .07], wood, true)
+    box("crook-top", [crookX - .085, y + .26, z], [.22, .055, .05], linen)
+    box("crook-hook", [crookX - .17, y + .19, z], [.055, .17, .05], linen)
+    box("crook-binding", [crookX, y - .04, z], [.09, .26, .07], wood, true)
   } else if (type === "wood-shelter") {
     // Hang below the high front eave, rather than through the roof covering.
     const signY = height + .05, face = board("timber", signY, .6, .35)

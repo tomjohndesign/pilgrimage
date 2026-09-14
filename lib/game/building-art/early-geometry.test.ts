@@ -1,4 +1,7 @@
 import { ROOF_OVERHANG } from "./roof-overhang"
+import { buildingHearth } from "./furnishings"
+import { BUILD_CATALOG } from "../balance"
+import { BUILDING_KINDS } from "../buildings"
 import { minimumBuildingSize } from "./style"
 import { describe, expect, it } from "vitest"
 import { Box3, BoxGeometry, BufferGeometry, Float32BufferAttribute, Matrix4, Euler, Quaternion, Vector3 } from "three"
@@ -31,6 +34,53 @@ describe("early medieval building kit", () => {
       expect(whole.max.z-whole.min.z).toBeGreaterThan(depth-.1)
     }
   })
+  it("encloses a 5×4 fold beside and behind the side hut, with a clear front gate", () => {
+    const recipe = earlyBuildingRecipe("sheep-pen"), def = BUILD_CATALOG.find(b => b.id === "sheep-pen")!
+    expect([recipe.width, recipe.depth, def.w, def.d, BUILDING_KINDS["sheep-pen"].w, BUILDING_KINDS["sheep-pen"].d]).toEqual([5,4,5,4,5,4])
+    for (const layoutSeed of [0,1]) {
+      const parts = buildingParts({...recipe,layoutSeed})
+      const rear = bounds(parts.find(p => p.name.startsWith("pen-rail-back"))!)
+      const trough = bounds(parts.find(p => p.name === "trough-side")!)
+      expect(Math.abs(trough.min.z - rear.max.z)).toBeLessThan(.05)
+      expect(rear.min.x).toBeLessThan(-2.3); expect(rear.max.x).toBeGreaterThan(2.3)
+      for (const name of ["near", "far"]) {
+        const side = bounds(parts.find(p => p.name.startsWith(`pen-rail-${name}`))!)
+        expect(side.min.z).toBeLessThan(-1.8); expect(side.max.z).toBeGreaterThan(name === "near" ? 0 : 1.8)
+      }
+      const roof = new Box3()
+      for (const part of parts.filter(p => p.layer === "roof" && !p.name.includes("fold-shelter"))) roof.union(bounds(part))
+      const hand = layoutSeed ? -1 : 1
+      expect(roof.min.x).toBeGreaterThanOrEqual(hand === 1 ? -2.5-ROOF_OVERHANG-.001 : 1.46)
+      expect(roof.max.x).toBeLessThanOrEqual(hand === 1 ? -1.46 : 2.5+ROOF_OVERHANG+.001)
+      expect(roof.min.z).toBeGreaterThanOrEqual(-.01)
+      const sleepingRoof=parts.filter(p=>p.layer === "roof" && p.name.includes("fold-shelter"))
+      expect(sleepingRoof.length).toBeGreaterThan(0)
+      for(const part of sleepingRoof) {
+        const b=bounds(part)
+        expect(b.max.z).toBeLessThanOrEqual(.05)
+        expect(b.max.x<=-1.45 || b.min.x>=1.45).toBe(true)
+      }
+      const platform=new Box3()
+      for(const part of parts.filter(p=>p.name.startsWith("fold-food-")))platform.union(bounds(part))
+      expect(platform.min.z).toBeGreaterThan(0)
+      expect(platform.max.z).toBeLessThan(2)
+      expect(platform.max.z-platform.min.z).toBeGreaterThan(1.6)
+      expect(hand===1 ? platform.min.x>1.5 : platform.max.x< -1.5).toBe(true)
+      expect(parts.filter(p=>p.name.startsWith("fold-straw-bed"))).toHaveLength(4)
+      const gate = new Box3(new Vector3(-hand-.2,.15,1.7),new Vector3(-hand+.2,.3,2))
+      expect(parts.filter(p => p.layer === "wall" && !p.gateHinge).some(p => bounds(p).intersectsBox(gate))).toBe(false)
+      const leaf=parts.filter(p=>p.gateHinge)
+      expect(leaf.some(p=>bounds(p).intersectsBox(gate))).toBe(true)
+      for(const part of leaf) {
+        const {position:[x,y,z],openAngle}=part.gateHinge!
+        const turn=new Matrix4().makeTranslation(x,y,z).multiply(new Matrix4().makeRotationY(openAngle)).multiply(new Matrix4().makeTranslation(-x,-y,-z))
+        expect(bounds(part).applyMatrix4(turn).intersectsBox(gate)).toBe(false)
+      }
+      const hearth = buildingHearth("sheep-pen",5,4,recipe.wallHeight,recipe.roofRise,layoutSeed)
+      expect(parts.find(p => p.name === "chimney-mouth")!.position).toEqual([hearth.x,hearth.chimneyTop-.04,hearth.z])
+    }
+  })
+
   it("keeps legacy enclosures readable while starting the editor with a house", () => {
     expect(DEFAULT_RECIPE.variant).toBe("house")
     expect([DEFAULT_RECIPE.width,DEFAULT_RECIPE.depth]).toEqual([2,2])

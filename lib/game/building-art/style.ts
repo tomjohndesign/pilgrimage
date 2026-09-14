@@ -67,7 +67,7 @@ export const EARLY_BUILDINGS = [
   { id: "hall", name: "Shrine hall", description: "An enclosed gathering hall with a sheltered doorway, timber benches and wooden crosses.", width: 2, depth: 3, wallHeight: 0.78, roofRise: singlePlaneRoofRise(3) },
   { id: "market", name: "Market stall", description: "A counter with wares, linen over its rear two tiles, an open front and an open cart bay beside it.", width: 3, depth: 2, wallHeight: 0.65, roofRise: singlePlaneRoofRise(2) },
   { id: "guard-post", name: "Guard post", description: "A watch post roofed with long roundwood poles with a round shield, upright spears and a bench.", width: 2, depth: 2, wallHeight: 0.65, roofRise: singlePlaneRoofRise(2) },
-  { id: "sheep-pen", name: "Sheep pen", description: "A hut and hearth beside an open railed fold with a gate and trough.", width: 3, depth: 2, wallHeight: 0.70, roofRise: singlePlaneRoofRise(2) },
+  { id: "sheep-pen", name: "Sheep pen", description: "A grassy fold for eight sheep and goats, with a side hut and two small thatched resting bays.", width: 5, depth: 4, wallHeight: 0.70, roofRise: singlePlaneRoofRise(2) },
   { id: "lumberCamp", name: "Timber yard", description: "An open timber yard with low boundary rails and space for live timber stacks.", width: 2, depth: 2, wallHeight: 0.65, roofRise: 0 },
   { id: "garden", name: "Cloister garden", description: "Two herb beds flank a narrow flagstone path.", width: 2, depth: 1, wallHeight: 0.25, roofRise: 0 },
   { id: "cross", name: "Carved cross", description: "A plain pegged wooden cross set into a small stone footing.", width: 1, depth: 1, wallHeight: 1.1, roofRise: 0 },

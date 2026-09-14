@@ -1,4 +1,7 @@
 "use client"
+import { SheepRemains } from "./sheep-remains"
+import { carcassPose } from "@/lib/game/wildlife/carcass-pose"
+import { SheepLeads } from "./sheep-leads"
 
 import { useEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
@@ -88,6 +91,8 @@ export function Wildlife({ map, trees, characterScale }: { map: GameMap; trees: 
     })
   }, [map, world])
   return <group ref={root} name="wildlife" userData={{ animals: world.animals, burrows: world.burrows }}>
+    <SheepLeads animals={world.animals} scale={characterScale}/>
+    <SheepRemains animals={world.animals} scale={characterScale}/>
     {world.burrows.map(burrow => <RabbitHole key={burrow.id} burrow={burrow} map={map} scale={characterScale} turf={burrowTurf[burrow.id]} />)}
     {batches.map(([kind, animals]) => <WildlifeBatch key={kind} kind={kind} animals={animals} map={map} scale={characterScale} />)}
   </group>
@@ -135,7 +140,8 @@ export function WildlifeBatch({ kind, animals, map, scale, grazing }: { kind: Wi
       const glide = bird && flight ? birdGlide(kind as "hawk" | "sparrow", flight.elapsed, flight.duration) : 0
       const burrow = kind === "rabbit" && ["entering","inside","emerging"].includes(animal.burrowState) ? {...burrowMotion(animal.shelter,animal.burrowState!=="emerging"),concealed:animal.concealed} : undefined
       const posePhase = burrow ? burrow.clipPhase : animal.moving || bird ? animal.phase : (animal.actionAge * (animal.action === "lie" ? 0.125 : 0.8)) % 1
-      rig.pose(posePhase, animal.moving, animal.age, graze, wingBlend, animal.gait, { burrow, glide, drive: animal.drive, lying: animal.lying, edits: design, clip: bird ? flight ? glide > .5 ? "glide" : "fly" : "idle" : animal.moving ? animal.gait : animal.action })
+      const slaughter = animal.fold?.carcass ? 1 : animal.fold?.slaughter
+      rig.pose(slaughter !== undefined ? 0 : posePhase, animal.moving, slaughter !== undefined ? 0 : animal.age, slaughter !== undefined ? 0 : graze, wingBlend, animal.gait, { burrow, glide, drive: animal.drive, lying: slaughter !== undefined ? 0 : animal.lying, edits: design, clip: slaughter !== undefined ? "idle" : bird ? flight ? glide > .5 ? "glide" : "fly" : "idle" : animal.moving ? animal.gait : animal.action })
       root.position.set(animal.x, animal.y, animal.z)
       root.rotation.set(0, animal.heading, 0, "YXZ")
       if (!bird) {
@@ -144,6 +150,13 @@ export function WildlifeBatch({ kind, animals, map, scale, grazing }: { kind: Wi
         root.rotation.x = -Math.atan(surface.dx * s + surface.dz * c) + (burrow?.pitch??0)
         root.rotation.z = Math.atan(surface.dx * c - surface.dz * s)
       } else if (animal.flight) root.rotation.z = Math.sin(animal.flight.elapsed / animal.flight.duration * Math.PI * 2) * (kind === "hawk" ? 0.2 : 0.08)
+      if (slaughter !== undefined) {
+        const side = carcassPose(rig.parts, slaughter)
+        root.rotation.z += side.roll
+        root.position.x += Math.cos(animal.heading) * side.x * size
+        root.position.z -= Math.sin(animal.heading) * side.x * size
+        root.position.y += side.lift * size + .05
+      }
       root.scale.setScalar(size); root.updateMatrix()
       batch.write(i, root.matrix)
       drawn.expandByPoint(root.position)

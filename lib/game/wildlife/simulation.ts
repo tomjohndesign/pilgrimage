@@ -3,6 +3,8 @@ import { withTerrainCornerQueries } from "../map/cliff-corners"
 import { SpatialPoints } from "../spatial-points"
 import { treeSpatialIndex } from "../trees/spatial"
 import { stepFoldSheep, type SheepFold } from "../herding"
+import { stepPenCare, type PenCare } from "../sheep-husbandry"
+import { penGatePassage, stepPenGates, type PenGateState } from "../pen-gate"
 import { BURROW_SECONDS, burrowApproach, burrowMotion } from "./burrow-motion"
 import { RIG_TO_WORLD } from "../transport/assets"
 import { walkingSurface } from "../map/walking-surface"
@@ -30,6 +32,8 @@ export interface WildlifeAnimal extends Point {
 }
 export interface RabbitBurrow extends Point { id: number; group: number; y: number; heading: number }
 export interface WildlifeWorld {
+  penCare?: Map<string, PenCare>
+  penGates?: Map<string, PenGateState>
   burrows: RabbitBurrow[]
   animals: WildlifeAnimal[]; habitat: ReturnType<typeof wildlifeHabitat>; trees: readonly TreePlacement[]
   rng: () => number; canopy: number
@@ -235,13 +239,19 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
   dt = Math.min(dt, 0.1)
   clearWildlifeFootprints(world, map, scale, animalSnapshot)
   const { rng, habitat } = world
+  stepPenCare(world,map,dt)
+  stepPenGates(world,map,dt)
   const nearbyBuildings = buildingSpatialQuery(map.buildings, Math.max(3, .2 * scale + .25))
   const nearbyPeople = peopleSnapshot ?? new SpatialPoints(people)
   const nearbyAnimals = animalSnapshot ?? new SpatialPoints(world.animals.filter(animal => !isBird(animal.kind)))
   for (const animal of world.animals) {
     if (animal.reserve) continue
     animal.distance = 0; animal.age += dt; animal.frightened = Math.max(0, animal.frightened - dt)
-    if (stepFoldSheep(animal, map, dt, scale, edits[animal.kind])) continue
+    if(animal.fold && !animal.fold.arrived && animal.fold.route.length) {
+      const pen=map.buildings.find(b=>b.id===animal.fold!.penId)
+      if(pen && !penGatePassage(world,map,pen,animal,animal.fold.route,dt)) {animal.moving=false;animal.speed=0;animal.drive=0;continue}
+    }
+    if (stepFoldSheep(animal, map, dt, scale, edits[animal.kind],world.animals)) continue
     if (isBird(animal.kind)) {
       if (!animal.flight) {
         if (animal.perch !== null && !felled.has(animal.perch) && !world.trees[animal.perch].walking) {

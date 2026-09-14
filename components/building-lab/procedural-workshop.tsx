@@ -19,6 +19,7 @@ import { Section, Tuner } from "../game/property-controls"
 
 const ProceduralMapScene = dynamic(() => import("./map-comparison").then(m => m.ProceduralMapScene), { ssr: false })
 const STORAGE = "pilgrimage-procedural-buildings-v3"
+const SCENE_VERSION = 4
 
 function saveFile(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob), link = document.createElement("a")
@@ -57,6 +58,12 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
     setRecipe({...earlyBuildingRecipe("tavern"),layoutSeed:18});setNeighbors(tavernPreviewNeighbors());setNeighbor(true)
     setSelectedId(null);setPlacement(null);setNotice("Tavern with two houses: one shared hearth and one house without a fireplace.")
   }
+  function showSheepPenExample() {
+    setSlaughterDemo(0)
+    setRecipe({...earlyBuildingRecipe("sheep-pen"),view:recipe.view})
+    setNeighbors([]);setNeighbor(false);setSelectedId(null);setPlacement(null)
+    setNotice("Eight places: three animals rest under thatch while five are gathered. Shepherds feed, water, tend and replenish the flock. Choose this example again to restart.")
+  }
   function showInnExample() {
     const inn=earlyBuildingRecipe("inn")
     setRecipe({...earlyBuildingRecipe("tavern"),layoutSeed:0,fireplace:true})
@@ -74,6 +81,8 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
     }
     window.addEventListener("keydown",key);return()=>window.removeEventListener("keydown",key)
   }, [placement,rotatePlacement])
+  const [playbackRate,setPlaybackRate] = useState(3)
+  const [slaughterDemo,setSlaughterDemo] = useState(0)
   const [zoom, setZoom] = useState(1.15)
   const [notice, setNotice] = useState("")
   const [controlsOpen, setControlsOpen] = useState(false)
@@ -92,7 +101,10 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
       if (saved) {
         const scene=JSON.parse(saved),result=recipeSchema.safeParse(scene.recipe)
         if (result.success && isEarlyBuilding(result.data.variant) && !REMOVED_BUILDING_TYPES.includes(result.data.variant)) {
-          setRecipe(result.data)
+          // Upgrade the previous pen preset once; keep subsequent custom dimensions.
+          const oldPen = (scene.version ?? 3) < SCENE_VERSION && result.data.variant === "sheep-pen" && result.data.width === 5 && result.data.depth === 3
+          setRecipe(oldPen ? {...result.data,depth:4} : result.data)
+          if (oldPen) setNotice("Sheep pen expanded to 5 × 4 tiles, with the shed at one side.")
           if(Array.isArray(scene.neighbors)) setNeighbors(scene.neighbors.filter((p:PreviewPlacement)=>
             typeof p.id==="string" && p.id!=="workshop" && !REMOVED_BUILDING_TYPES.includes(p.recipe?.variant) && recipeSchema.safeParse(p.recipe).success && Number.isInteger(p.x) && Number.isInteger(p.z) && [0,1,2,3].includes(p.rotation)))
         }
@@ -100,7 +112,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
     } catch { /* The workshop also works without browser storage. */ }
     setReady(true)
   }, [])
-  useEffect(() => { if (ready) { try { localStorage.setItem(STORAGE, JSON.stringify({recipe,neighbors})) } catch { /* Recipes can still be downloaded. */ } } }, [ready, recipe, neighbors])
+  useEffect(() => { if (ready) { try { localStorage.setItem(STORAGE, JSON.stringify({version:SCENE_VERSION,recipe,neighbors})) } catch { /* Recipes can still be downloaded. */ } } }, [ready, recipe, neighbors])
 
   function update<K extends keyof BuildingRecipe>(key: K, value: BuildingRecipe[K]) { setRecipe(r => ({ ...r, [key]: value })) }
   function exportRecipe() {
@@ -169,6 +181,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
           <Section {...section("Place buildings")}>
             <button className="hud-action" onClick={showTavernExample}>Tavern + two houses</button>
             <button className="hud-action" onClick={showInnExample}>Tavern + Inn</button>
+            <button className="hud-action" onClick={showSheepPenExample}>Sheep pen + flock</button>
             <label className="person-choice">Building to place<select aria-label="Building to place" value={placeType} onChange={e=>{setPlaceType(e.target.value);setPlacement(null)}}>
               <option value="current">Copy current recipe</option>{AVAILABLE_EARLY_BUILDINGS.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
             </select></label>
@@ -202,11 +215,11 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
       </aside>
       <div className="person-preview" aria-label="Building preview">
         <div className="person-preview-toolbar hud-well">
-          <div className="person-playback"><span className="person-hint">{AVAILABLE_EARLY_BUILDINGS.find(v => v.id === recipe.variant)?.name}{neighbor && neighbors.length ? ` + ${neighbors.length} buildings` : ""}</span><label>Zoom<select aria-label="Building preview zoom" value={zoom} onChange={e => setZoom(Number(e.target.value))}>{[0.75, 1, 1.15, 1.5, 1.7].map(n => <option key={n} value={n}>{n}×</option>)}</select></label></div>
-          <div className="person-view-buttons" aria-label="Building preview modes"><button className="hud-action" aria-pressed={!allViews} onClick={() => setAllViews(false)}>On the map</button><button className="hud-action" aria-pressed={allViews} onClick={() => setAllViews(true)}>All four</button></div>
+          <div className="person-playback"><span className="person-hint">{AVAILABLE_EARLY_BUILDINGS.find(v => v.id === recipe.variant)?.name}{neighbor && neighbors.length ? ` + ${neighbors.length} buildings` : ""}</span>{recipe.variant === "sheep-pen" && <label>Speed<select aria-label="Herding demo speed" value={playbackRate} onChange={e=>setPlaybackRate(Number(e.target.value))}>{[1,2,3,6].map(rate=><option key={rate} value={rate}>{rate}×</option>)}</select></label>}<label>Zoom<select aria-label="Building preview zoom" value={zoom} onChange={e => setZoom(Number(e.target.value))}>{[0.75, 1, 1.15, 1.5, 1.7].map(n => <option key={n} value={n}>{n}×</option>)}</select></label></div>
+          <div className="person-view-buttons" aria-label="Building preview modes">{recipe.variant === "sheep-pen" && <><button className="hud-action" onClick={()=>{setSlaughterDemo(n=>-Math.abs(n)-1);setNotice("Sheep and goats are milked beside the flock. Workers carry milk in buckets to the public food platform.")}}>Show milking cycle</button><button className="hud-action" onClick={()=>{setSlaughterDemo(n=>Math.abs(n)+1);setNotice("The shepherd leads an animal to the work spot, collects three small trays of meat onto the public food platform, then replenishes the flock. Each tray adds 50 meat; milk arrives in buckets between harvests.")}}>Show slaughter cycle</button></>}<button className="hud-action" aria-pressed={!allViews} onClick={() => setAllViews(false)}>On the map</button><button className="hud-action" aria-pressed={allViews} onClick={() => setAllViews(true)}>All four</button></div>
         </div>
         <div className={`person-stage asset-building-stage ${allViews ? "asset-building-four" : ""}`}>
-          {active && viewRecipes.map((viewRecipe, i) => <ProceduralMapScene key={viewRecipe.view} embedded recipe={viewRecipe} grid={grid} zoom={zoom} selectedId={selectedId} onSelect={setSelectedId} neighbor={neighbor ? neighbors : undefined} placement={placement} placementRotation={placementRotation} snapRoofs={snapRoofs} onPlace={placeBuilding} onPlacementStatus={setPlacementStatus} onGuideReady={i === 0 ? onGuideReady : undefined} />)}
+          {active && viewRecipes.map((viewRecipe, i) => <ProceduralMapScene slaughterDemo={slaughterDemo} playbackRate={playbackRate} key={viewRecipe.view} embedded recipe={viewRecipe} grid={grid} zoom={zoom} selectedId={selectedId} onSelect={setSelectedId} neighbor={neighbor ? neighbors : undefined} placement={placement} placementRotation={placementRotation} snapRoofs={snapRoofs} onPlace={placeBuilding} onPlacementStatus={setPlacementStatus} onGuideReady={i === 0 ? onGuideReady : undefined} />)}
         </div>
         <div className="person-animation-dock hud-well"><div className="person-direction-strip" aria-label="Building directions">{BUILDING_VIEWS.map(v => <button key={v.id} className="hud-building-tile person-direction asset-building-direction" aria-label={`Face ${v.name}`} aria-pressed={recipe.view === v.id} onClick={() => { update("view", v.id); setAllViews(false) }}><span>{["SE", "NE", "NW", "SW"][v.id]}</span><span>{v.name}</span></button>)}</div></div>
       </div>

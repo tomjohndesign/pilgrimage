@@ -59,7 +59,7 @@ function Part({ part, idColor, onClick, ghostColor, ink = true, terrainFloors = 
 export function batchDetails(parts: BuildingPart[]): BuildingPart[] {
   const visible: BuildingPart[] = [], groups = new Map<string, BuildingPart>()
   for (const part of parts) {
-    if (part.outline !== false || part.surface) { visible.push(part); continue }
+    if (part.outline !== false || part.surface || part.gateHinge) { visible.push(part); continue }
     const side = part.layer === "wall" ? wallSide(part) : undefined
     const detail = buildingPartDetail(part)
     const key = `${part.layer}:${part.color}:${side?.join(",") ?? ""}:${detail}`
@@ -109,12 +109,14 @@ export function BuildingModel({ recipe, cutaway = false, idColor, onClick, ink =
 }
 
 /** Ghosts retain every surface, with frame lines only on structural parts. */
-export function StructureModel({ parts, idColor, ghostColor, ink = true, cutaway = false, onClick, terrainFloors = false, surfaceMaterial, dynamic = false }: {
+export function StructureModel({ parts, idColor, ghostColor, ink = true, cutaway = false, onClick, terrainFloors = false, surfaceMaterial, dynamic = false, penGateOpen }: {
   /** Moving furnishings must keep their world transforms live. */
   dynamic?: boolean
+  penGateOpen?: () => number
   parts: BuildingPart[]; onClick?: (event: ThreeEvent<MouseEvent>) => void; idColor?: THREE.Color; ghostColor?: string; ink?: boolean; cutaway?: boolean; terrainFloors?: boolean; surfaceMaterial?: THREE.MeshLambertMaterial
 }) {
-  const rendered = useMemo(() => batchDetails(parts), [parts])
+  const rendered = useMemo(() => batchDetails(parts.filter(p=>!p.gateHinge)), [parts])
+  const gateParts=useMemo(()=>parts.filter(p=>p.gateHinge),[parts])
   const root = useRef<THREE.Group>(null)
   const [direction,setDirection] = useState<[number,number]>([1,1])
   const [distant, setDistant] = useState(false)
@@ -134,5 +136,17 @@ export function StructureModel({ parts, idColor, ghostColor, ink = true, cutaway
   const visible = useMemo(() => visibleStructureParts(rendered, cutaway && !distant, direction), [rendered, cutaway, distant, direction])
   return <group ref={root} userData={{ cutaway: cutaway && !distant }}>{!ink && !ghostColor
     ? <MergedParts batchable={!cutaway && !dynamic} dynamic={dynamic} parts={visible} idColor={idColor} onClick={onClick} terrainFloors={terrainFloors} surfaceMaterial={surfaceMaterial} />
-    : visible.map((part) => <Part key={part.name} part={part} terrainFloors={terrainFloors} idColor={idColor} ghostColor={ghostColor} onClick={onClick} ink={ink} />)}</group>
+    : visible.map((part) => <Part key={part.name} part={part} terrainFloors={terrainFloors} idColor={idColor} ghostColor={ghostColor} onClick={onClick} ink={ink} />)}
+    {gateParts.length>0 && <PenGateLeaf parts={gateParts} open={penGateOpen} idColor={idColor} ghostColor={ghostColor} onClick={onClick} />}
+  </group>
+}
+
+function PenGateLeaf({parts,open,idColor,ghostColor,onClick}:{parts:BuildingPart[];open?:()=>number;idColor?:THREE.Color;ghostColor?:string;onClick?:(event:ThreeEvent<MouseEvent>)=>void}) {
+  const root=useRef<THREE.Group>(null),hinge=parts[0].gateHinge!
+  const local=useMemo(()=>parts.map(p=>({...p,gateHinge:undefined,position:p.position.map((v,i)=>v-hinge.position[i]) as [number,number,number]})),[parts,hinge])
+  useFrame(()=>{if(root.current)root.current.rotation.y=hinge.openAngle*(open?.() ?? 0)})
+  return <group ref={root} name="pen-gate-leaf" position={hinge.position}>
+    {ghostColor ? local.map(part=><Part key={part.name} part={part} ghostColor={ghostColor} ink={false}/>)
+      : <MergedParts parts={local} dynamic batchable={false} terrainFloors={false} idColor={idColor} onClick={onClick} />}
+  </group>
 }

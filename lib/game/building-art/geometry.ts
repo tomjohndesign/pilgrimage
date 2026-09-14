@@ -17,6 +17,9 @@ export interface BuildingPart {
   playerAccent?: boolean
   /** Ground surface uses the same dirt texture and tile scale as paths. */
   surface?: "trail"
+  /** Grass with worn patches outside the hut: local centre X/Z and width/depth. */
+  pastureHut?: [number, number, number, number]
+  gateHinge?: { position:Vec3; openAngle:number }
   cutawaySide?: [number, number]
   outline?: boolean
   /** Last scenery detail level retaining this surface (0 is the close view). */

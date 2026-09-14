@@ -999,7 +999,7 @@ describe("houses, counters and posts", () => {
     for (const type of ["tavern", "sheep-pen"] as const) {
       const { map, traveler } = fixture()
       const def = BUILD_CATALOG.find(b => b.id === type)!
-      const place = { ...def, id: `${type}-0`, buildType: type, label: def.label, x: 13, z: 9, rotation: 0 as const }
+      const place = { ...def, id: `${type}-0`, buildType: type, label: def.label, x: 13, z: 13, rotation: 0 as const }
       map.buildings.push(place)
       addHouse(map)
       const people = Array.from({ length: 24 }, (_, id) => {
