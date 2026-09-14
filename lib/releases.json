@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "c52dd8486a5674ba9f9b0fd060bf04db6970f79d",
-  "releaseCount": 237,
+  "lastProcessedCommit": "d652d426715e49b37d8a0e12a6c6da9355411cc9",
+  "releaseCount": 238,
   "releases": [
+    {
+      "version": "0.0.252",
+      "title": "Release 0.0.252",
+      "summary": "Give nuns white cloth head coverings (#271)",
+      "commit": "d652d426715e49b37d8a0e12a6c6da9355411cc9"
+    },
     {
       "version": "0.0.251",
       "title": "Release 0.0.251",
