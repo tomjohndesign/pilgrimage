@@ -57,6 +57,9 @@ export function pastureEscapeClear(a: Point, b: Point, obstacles: readonly Stall
 /** Segment vs expanded oriented boxes: check the whole body sweep, including
  * its head while grazing, rather than only the destination tile or hoof. */
 export function pastureSegmentClear(a: Point, b: Point, obstacles: readonly StallObstacle[], clearance: number) {
+  // Parking queries stationary trunks and people thousands of times. A point
+  // needs only its distance to the box, with no segment/corner reconstruction.
+  if (a.x === b.x && a.z === b.z) return obstacles.every(box => obstacleDistance(a, box) > Math.max(0, clearance))
   return obstacles.every(box => {
     const local = (p: Point) => ({ x: (p.x - box.x) * Math.cos(box.heading) - (p.z - box.z) * Math.sin(box.heading), z: (p.x - box.x) * Math.sin(box.heading) + (p.z - box.z) * Math.cos(box.heading) })
     const p = local(a), q = local(b)

@@ -4,7 +4,7 @@ import { MinHeap } from "../map/route"
 import { tileToWorldX, tileToWorldZ, type BuildingDef, type GameMap } from "../map/types"
 import { cartOffset, RIG_TO_WORLD, type Puller } from "./assets"
 import { alignCart, followCart, type CartPose } from "./follow"
-import { parkingClear, type ParkingContext, type ShrineParking } from "./navigation"
+import { parkingClear, parkingClearance, type ParkingContext, type ShrineParking } from "./navigation"
 import { routePoint, type Point } from "./roadside"
 
 export interface MarketParking extends ShrineParking { buildingId: string }
@@ -49,8 +49,8 @@ export function cartPath(map: GameMap, initial: CartPose, goal: Point, puller: P
   const wheelbase = -cartOffset(puller) * scale
   // Playback also checks the animal aligned with the shafts after each tick.
   // A route that only clears its instantaneous travel heading can jam mid-turn.
-  const clear = (pose: CartPose, heading: number) => parkingClear(map, pose, puller, scale, context, false, heading) &&
-    parkingClear(map, pose, puller, scale, context)
+  const clearance = parkingClearance(map, puller, scale, context)
+  const clear = (pose: CartPose, heading: number) => clearance(pose, false, heading) && clearance(pose)
   if (!clear(initial, initial.heading)) return null
   const headings = goalHeading === undefined ? Array.from({ length: 8 }, (_, i) => i * Math.PI / 4) : [goalHeading]
   if (!headings.some(heading => clear(alignCart(goal, heading, wheelbase), heading))) return null

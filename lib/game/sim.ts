@@ -58,6 +58,7 @@ import { isComplete, isHouse } from "./construction"
 import { AXE_DAMAGE_PER_HOUR, STUMP_LIFETIME_DAYS, TIMBER_LOAD, stackWood, treeResource, type TreeResource, type WoodPile } from "./trees/timber"
 import { BUILDING_KINDS, buildingCentre, isPostedWork, type PlacedBuilding } from "./buildings"
 import { DRINK_PRICE, MEAL_PRICE, SERVING_THRESHOLD, SEAT_REST_THRESHOLD, SEAT_STAMINA_PER_HOUR, TABLE_HOURS, servingHouses, tavernVisitPlan, seatRestPlan, type TavernPlan } from "./tavern"
+import { TavernReservations } from "./tavern-reservations"
 import { generateRelic, hospitalityNeedThreshold, visitChance, type RelicStats } from "./relic"
 import { settlementRoute } from "./settlement-route"
 import { relicQueueSpacing, shrineDonation, shrineExitPlan, shrineVisitPlan, shrineViewingRoute, shrineQueueStop, shrineRouteBehind } from "./shrine-visit"
@@ -1272,8 +1273,7 @@ function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
   if (!counters.length || !((s.hunger < SERVING_THRESHOLD && s.gold >= MEAL_PRICE)
     || ((s.thirst < SERVING_THRESHOLD || s.happiness < HAPPINESS_THRESHOLD) && s.gold >= DRINK_PRICE))) return false
   const from = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
-  const occupied = new Set([...sim.travelers.values()].flatMap(other => other.tavernVisit?.plan.seat
-    ? [`${other.tavernVisit.plan.buildingId}:${other.tavernVisit.plan.seat.id}`] : []))
+  const occupied = tavernReservations(sim)
   const nearest = [...counters].sort((a, b) => Math.hypot(tileToWorldX(map, a.x) - s.x, tileToWorldZ(map, a.z) - s.z)
     - Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z))
   for (const house of nearest) {
@@ -1285,6 +1285,7 @@ function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
     if (!plan) continue
     if (!s.employer && s.partyId === undefined && map.buildings.find(b => b.id === plan.buildingId)?.owner !== "independent") s.enclaveVisitPending = true
     s.tavernVisit = { plan, served: false, returnTo }
+    occupied.update(s)
     s.walkFrom = { x: s.x, y: s.y, z: s.z }; s.walkT = 0; s.targetId = null
     s.offRoadRoute = [...plan.route, plan.counter.point]
     s.activity = "toTavern"
@@ -1297,17 +1298,17 @@ function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
 function startSeatRest(sim: SimState, s: SimTraveler, map: GameMap, returnTo: WorldPoint | null): boolean {
   if (s.stamina > SEAT_REST_THRESHOLD || s.visitCooldown > 0 || (s.seatRestRetry ?? 0) > 0) return false
   s.seatRestRetry = 5
-  const occupied = new Set([...sim.travelers.values()].flatMap(other => other.tavernVisit?.plan.seat
-    ? [`${other.tavernVisit.plan.buildingId}:${other.tavernVisit.plan.seat.id}`] : []))
   const nearby = map.buildings.filter(b => ["tavern", "house", "shelter", "monk-shelter", "hall"].includes(b.buildType ?? "") &&
     Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z) < 6)
     .sort((a, b) => Math.hypot(tileToWorldX(map, a.x) - s.x, tileToWorldZ(map, a.z) - s.z)
       - Math.hypot(tileToWorldX(map, b.x) - s.x, tileToWorldZ(map, b.z) - s.z))
   if (!nearby.length) return false
+  const occupied = tavernReservations(sim)
   for (const building of nearby) {
     const plan = seatRestPlan(map, building, s, occupied)
     if (!plan) continue
     s.tavernVisit = { plan, served: true, returnTo }
+    occupied.update(s)
     s.walkFrom = { x: s.x, y: s.y, z: s.z }; s.walkT = 0; s.targetId = null
     s.offRoadRoute = plan.route
     s.activity = "toTavern"
@@ -2173,6 +2174,15 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   return false
 }
 
+// Build occupancy only when someone actually asks for a seat. Every step starts
+// fresh, including after saves/editor changes; callers update new reservations.
+const tavernSeatIndexes = new WeakMap<SimState, TavernReservations>()
+function tavernReservations(sim: SimState): TavernReservations {
+  let index = tavernSeatIndexes.get(sim)
+  if (!index) { index = new TavernReservations(sim.travelers); tavernSeatIndexes.set(sim, index) }
+  return index
+}
+
 export function stepSim(
   sim: SimState,
   travelers: Traveler[],
@@ -2188,6 +2198,7 @@ export function stepSim(
 ): void {
   return withTerrainCornerQueries(map, () => {
   if (!map.road || map.road.length < 2) return
+  tavernSeatIndexes.delete(sim)
   if (dt > 0) for (const animal of sim.wildlife?.animals ?? []) {
     const shepherd = animal.fold?.shepherd == null ? undefined : sim.travelers.get(animal.fold.shepherd)
     if (animal.fold && !animal.fold.arrived && (!shepherd || shepherd.herding?.animalId !== animal.id)) {
