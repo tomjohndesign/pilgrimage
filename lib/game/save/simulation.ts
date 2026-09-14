@@ -31,6 +31,7 @@ export function captureSimulation(sim: SimState, treeModel: TreeModel): Simulati
   pruneTravelParties(parties, travelers, sim.joinedMonks)
   return {
     time: sim.time,
+    monkJobs: { ...sim.monkJobs },
     treeModel,
     visits: sim.visits,
     wood: sim.wood,
@@ -62,6 +63,7 @@ function captureTraveler(s: SimTraveler): TravelerSave {
     deliveryBuilding: s.deliveryBuilding ?? undefined,
     beggar: s.beggar, goldlessSeconds: s.goldlessSeconds,
     carrying: s.carrying,
+    lastBreadDay: s.lastBreadDay,
     visits: s.visits, visitCooldown: s.visitCooldown, admissionPaid: s.admissionPaid,
     fled: s.fled, rolls: s.rolls, cycle: s.cycle,
     direction: s.direction, progress: s.progress, laneOffset: s.laneOffset, lane: s.lane,
@@ -90,6 +92,7 @@ export function restoreSimulation(sim: SimState, save: SimulationSave, travelers
   const roadLength = map.road ? map.road.length - 1 : 0
   const treeFits = (index: number) => treeCount === undefined || index < treeCount
 
+  sim.monkJobs = { ...save.monkJobs }
   sim.time = save.time
   sim.visits = save.visits
   sim.wood = save.wood
@@ -193,6 +196,7 @@ function restoreTraveler(
   s.goldlessSeconds = record.goldlessSeconds
   s.carrying = record.carrying
   s.visits = record.visits
+  s.lastBreadDay = record.lastBreadDay
   s.visitCooldown = record.visitCooldown
   s.admissionPaid = record.admissionPaid
   s.fled = record.fled

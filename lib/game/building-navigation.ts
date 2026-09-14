@@ -22,7 +22,17 @@ export function shrineGates(building: BuildingDef, door?: TilePos): Array<{ outs
     { outside: { x: building.x - 1, z }, inside: { x: building.x, z } },
     { outside: { x: building.x + building.w, z }, inside: { x: building.x + building.w - 1, z } },
   ]
-  return [door ? gates.find(g => g.outside.x === door.x && g.outside.z === door.z) ?? gates[1] : gates[1]]
+  if (door) {
+    if (door.x >= building.x && door.x < building.x + building.w) {
+      if (door.z === building.z - 1) return [{ outside: door, inside: { x: door.x, z: building.z } }]
+      if (door.z === building.z + building.d) return [{ outside: door, inside: { x: door.x, z: building.z + building.d - 1 } }]
+    }
+    if (door.z >= building.z && door.z < building.z + building.d) {
+      if (door.x === building.x - 1) return [{ outside: door, inside: { x: building.x, z: door.z } }]
+      if (door.x === building.x + building.w) return [{ outside: door, inside: { x: building.x + building.w - 1, z: door.z } }]
+    }
+  }
+  return [gates[1]]
 }
 
 /** Test the whole walking segment against furniture, with room for the body. */
@@ -62,6 +72,22 @@ export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDe
     if (building.supportId) continue
     const a = containsTile(building, from) && !marketBayContains(building, from), b = containsTile(building, to) && !marketBayContains(building, to)
     if (!a && !b) continue
+    // An alms counter occupies the right half; the left passage and rear
+    // working space stay open. Everyone can approach the open counter from outside.
+    if (building.buildType === "alms-table" && isComplete(building)) {
+      const local = (p: TilePos) => rotateBuildingPoint(p.x - building.x, p.z - building.z, -(building.rotation ?? 0))
+      const start = local(from), end = local(to)
+      if (building.layoutSeed === 1) { start.x *= -1; end.x *= -1 }
+      let low = 0, high = 1
+      for (const axis of ["x", "z"] as const) {
+        const min = axis === "x" ? -.08 : -.26, max = axis === "x" ? .55 : .26
+        const delta = end[axis] - start[axis]
+        if (Math.abs(delta) < 1e-8) { if (start[axis] < min || start[axis] > max) { low = 1; high = 0; break } }
+        else { const u = (min - start[axis]) / delta, v = (max - start[axis]) / delta; low = Math.max(low, Math.min(u, v)); high = Math.min(high, Math.max(u, v)) }
+      }
+      if (low <= high) return false
+      continue
+    }
     if (enterShrine && isEnterable(building) && isComplete(building)) {
       if (building.buildType === "sheep-pen") {
         const local = rotatedFootprint(building, building.rotation)

@@ -13,6 +13,7 @@ export function activityClip(activity: Activity | MonkActivity | undefined, movi
   if (carrying > 0) return "carrying"
   if (moving) return weary ? "wearyWalk" : "walk"
   switch (activity) {
+    case "servingAlms":
     case "showingRelic":
     case "preaching": return "preaching"
     case "drinking": return "drinking"

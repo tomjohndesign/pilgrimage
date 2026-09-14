@@ -7,13 +7,20 @@ import { buildingAt } from "./settlement"
 
 export const MONK_TIRED_AT = 25
 export const MONK_WAKE_AT = 95
-export interface MonkNeeds { home?: string; bedSlot?: number; workSlot: number; stamina: number; buildingTask?: BuildingTask; jobSearch: number; buildRate: number; outdoorRest?: boolean }
+export interface MonkNeeds { home?: string; bedSlot?: number; workSlot: number; stamina: number; buildingTask?: BuildingTask; jobSearch: number; buildRate: number; outdoorRest?: boolean; workExit?: WanderSpot[] }
 export function createMonkNeeds(index: number): MonkNeeds { return { workSlot: index, stamina: 100 - index * 6, jobSearch: 0, buildRate: MONK_BUILD_RATE } }
 
-/** Finish assigned construction before resting; tired monks cannot take new work. */
-export function stepMonkWork(s: MonkRoutine & MonkNeeds, map: GameMap, speed: number, dt: number): boolean {
+/** Every job yields to rest; the unfinished construction stays for another worker. */
+export function stepMonkWork(s: MonkRoutine & MonkNeeds, map: GameMap, speed: number, dt: number, allowBuilding = true): boolean {
   if (dt <= 0) return !!s.buildingTask
+  // Vacate a service post before sleeping, including when no beds exist yet.
+  if (s.workExit?.length) {
+    s.activity = "walking"
+    if (walkWorker(s, s.workExit, speed, dt)) s.workExit = undefined
+    return true
+  }
   if (s.activity !== "sleeping" && !s.outdoorRest) s.stamina = Math.max(0, s.stamina - dt * (s.activity === "building" ? 0.4 : 0.125))
+  if (s.stamina <= MONK_TIRED_AT && s.buildingTask?.purpose === "build") s.buildingTask = undefined
   s.jobSearch = Math.max(0, s.jobSearch - dt)
   if ((s.stamina <= MONK_TIRED_AT || s.outdoorRest) && !s.buildingTask && s.jobSearch === 0) {
     const workSlot = s.workSlot
@@ -31,7 +38,7 @@ export function stepMonkWork(s: MonkRoutine & MonkNeeds, map: GameMap, speed: nu
     if (s.stamina >= MONK_WAKE_AT) { s.outdoorRest = false; s.jobSearch = 0 }
     return true
   }
-  if (!s.buildingTask && s.stamina > MONK_TIRED_AT && s.jobSearch === 0 && s.activity !== "praying") {
+  if (allowBuilding && !s.buildingTask && s.stamina > MONK_TIRED_AT && s.jobSearch === 0 && s.activity !== "praying") {
     if (assignBuildingTask(s, map, "build")) { s.route = []; s.pause = 0 }
     else s.jobSearch = 2
   }

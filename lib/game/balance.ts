@@ -4,7 +4,7 @@ import { STOREHOUSE_FOOD_CAPACITY } from "./storage"
 /** Pure balance data, shared by gameplay, the tuning page and the specification. */
 export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "storehouse"
   | "inn" | "monk-shelter" | "house" | "tavern" | "wood-shelter" | "market" | "guard-post" | "lumberCamp"
-  | "sheep-pen" | "well" | "watering-hole"
+  | "sheep-pen" | "well" | "watering-hole" | "alms-table"
 
 export interface Resources {
   gold: number
@@ -180,6 +180,12 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     cost: { gold: 55, wood: 45 }, renown: 2, requiredRenown: 5,
     income: { gold: 0, wood: 0 }, w: 3, d: 2, height: 0.70,
     color: "#8c7658", roofColor: "#a59164",
+  },
+  {
+    id: "alms-table", label: "Alms table", category: "scenery",
+    description: "A freestanding 1×1 table for free bread served by a monk. Place it on suitable ground with a clear front approach. Hungry visitors receive 40 food, up to 50, once a day, with no happiness gain. No church visit is required.",
+    cost: { gold: 15, wood: 10 }, renown: 0, requiredRenown: 0,
+    income: { gold: 0, wood: 0 }, w: 1, d: 1, height: .65, color: "#92744e", roofColor: "#92744e",
   },
   {
     id: "well", label: "Timber well", category: "scenery",

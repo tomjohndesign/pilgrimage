@@ -1,3 +1,5 @@
+import type { MonkJob } from "./monk-jobs"
+import { ALMS_HUNGER_GAIN, ALMS_HUNGER_CAP, ALMS_SEEK_RADIUS, ALMS_SERVING_SECONDS, almsStaffed, breadVisitPlan, type BreadVisit } from "./alms-table"
 import { shrineDonationMultiplier } from "./shrine-upgrade"
 import { fordSpeedAt } from "./map/fords"
 import { ensurePartyTransport, stepPartyPacks, stepPackParking, seatParty, parkParty, parkPartyPacks, movePartyCart, turnPartyCart } from "./transport/party"
@@ -111,6 +113,7 @@ import { TRAVELER_TYPES, type Traveler } from "./travelers"
  */
 
 export type Activity =
+  | "toBread" | "receivingBread" | "fromBread"
   | "toWater" | "drinking" | "drinkingLow" | "fromWater"
   | "toParking"
   | "fromParking"
@@ -165,6 +168,7 @@ export type Activity =
   | "fromShop"
 
 export const ACTIVITY_LABELS: Record<Activity, string> = {
+  toBread: "Going to the alms table", receivingBread: "Receiving bread from a monk", fromBread: "Returning from the alms table",
   toWater: "Going to drink water", drinking: "Drinking at the well", drinkingLow: "Drinking at the water’s edge", fromWater: "Returning from water",
   toParking: "Parking outside the shrine",
   fromParking: "Returning the wagon to the road",
@@ -316,6 +320,9 @@ export interface SimTraveler {
   partyGathering?: PartyGathering
   /** Where a shrine route began off the road; the first tile of the approach blends from here rather than the road lane. */
   shrineOrigin?: WorldPoint
+  breadVisit?: BreadVisit
+  breadRetry?: number
+  lastBreadDay?: number
   waterVisit?: WaterVisit
   waterRetry?: number
   /** A reversible progression; the original calling and personal attributes stay intact. */
@@ -477,6 +484,7 @@ export interface SimState {
   admissionPayments: AdmissionPayment[]
   seed: number
   travelers: Map<number, SimTraveler>
+  monkJobs: Record<number, MonkJob>
   joinedMonks: Map<number, Monk>
   /** Game time in days since the sim began (fractional). */
   time: number
@@ -821,6 +829,7 @@ export function createSim(
     danger: computeDangerField(map, threats),
     relic: { ...relic },
     world: map,
+    monkJobs: {},
     joinedMonks: new Map(),
     shrineRenown: 0,
     balance: DEFAULT_BALANCE,
@@ -946,7 +955,7 @@ function findNearbySpot(
 const STALL_ACTIVITIES: readonly Activity[] = ["toShop", "openingShop", "vending", "packingShop"]
 /** Activities that hold someone in place; their speed stays at zero. */
 const STILL_ACTIVITIES: readonly Activity[] = ["offering", "working", "building", "browsing", "performing", "listening", "begging", "givingAlms",
-  "openingShop", "packingShop", "vending", "idle", "posted", "sleeping", "buying", "sitting", "drinking", "drinkingLow"]
+  "openingShop", "packingShop", "vending", "idle", "posted", "sleeping", "buying", "sitting", "receivingBread", "drinking", "drinkingLow"]
 
 function startOffRoadWalk(s: SimTraveler, activity: Activity): void {
   s.walkFrom = { x: s.x, y: s.y, z: s.z }
@@ -1314,6 +1323,36 @@ function startSeatRest(sim: SimState, s: SimTraveler, map: GameMap, returnTo: Wo
     return true
   }
   return false
+}
+
+/** A single free serving per day, shared across every charity table. */
+function startBreadTrip(sim: SimState, s: SimTraveler, map: GameMap, tables: readonly import("./map/types").BuildingDef[], back: WorldPoint): boolean {
+  if (s.hunger >= ALMS_HUNGER_CAP || s.breadRetry || s.lastBreadDay === Math.floor(sim.time) || s.convoy || s.carrying > 0 || !tables.length) return false
+  s.breadRetry = 5
+  const reserved = new Set([...sim.travelers.values()].flatMap(other => other.breadVisit ? [other.breadVisit.tableId] : []))
+  const nearby = tables.filter(b => !reserved.has(b.id) && almsStaffed(map, b.id) &&
+    Math.hypot(buildingCentre(map, b).x - s.x, buildingCentre(map, b).z - s.z) <= ALMS_SEEK_RADIUS)
+    .sort((a, b) => Math.hypot(buildingCentre(map, a).x - s.x, buildingCentre(map, a).z - s.z)
+      - Math.hypot(buildingCentre(map, b).x - s.x, buildingCentre(map, b).z - s.z) || a.id.localeCompare(b.id))
+  for (const table of nearby) {
+    const plan = breadVisitPlan(map, table, s, back)
+    if (!plan) continue
+    if (s.activity === "toRelic" || s.activity === "fromRelic") plan.visit.resumeActivity = s.activity
+    if (!s.employer && s.partyId === undefined && s.activity === "walking") s.enclaveVisitPending = true
+    s.breadVisit = plan.visit; s.offRoadRoute = plan.route; s.walkT = 0; s.targetId = null
+    s.activity = "toBread"
+    return true
+  }
+  return false
+}
+
+function leaveBread(s: SimTraveler, map: GameMap): void {
+  // If service closes mid-visit, retrace the walked part through real doors.
+  const visit = s.breadVisit
+  s.offRoadRoute = s.activity === "toBread" && visit && s.offRoadRoute
+    ? [...visit.arrival.slice(0, visit.arrival.length - s.offRoadRoute.length).reverse(), visit.returnTo] : null
+  if (visit) visit.buildings = map.buildings
+  s.activity = "fromBread"
 }
 
 /** Thirsty pedestrians reserve one source; failed searches retry on a bounded timer. */
@@ -1859,7 +1898,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
       // Members in the line, at the relic or fetching water on the way are on
       // their errand, not waiting: the line moves as the keeper shows the relic.
       // Only companions who could not get a place count as waiting.
-      if (members.some(s => ["toRelic", "visiting", "offering", "fromRelic", "toWater", "drinking", "drinkingLow", "fromWater"].includes(s.activity))) party.elapsed = 0
+      if (members.some(s => ["toRelic", "visiting", "offering", "fromRelic", "toWater", "drinking", "drinkingLow", "fromWater", "toBread", "receivingBread", "fromBread"].includes(s.activity))) party.elapsed = 0
       // A closed or saturated enclave cannot keep unadmitted companions forever.
       if (party.elapsed > 120) party.visitPending = []
       // Whoever is not at the relic waits in one group on the grass beside the
@@ -2103,7 +2142,7 @@ function tryRoadVisit(sim: SimState, s: SimTraveler, t: Traveler, map: GameMap,
   const wantsVisit = partyVisit || decision < ordinaryChance || persuaded
   const occupiedSeats = new Set([...sim.travelers.values()].flatMap(other =>
     other.shrineSeat && (["toParking","toRelic","visiting","fromRelic","offering"].includes(other.activity) ||
-      other.waterVisit?.resumeActivity) ? [other.shrineSeat] : []))
+      other.waterVisit?.resumeActivity || other.breadVisit?.resumeActivity) ? [other.shrineSeat] : []))
   // Companies share the nave: each member takes any free place, and a company
   // still waiting for places gives up after its bounded wait. Nobody else's
   // lingering place may bar the door.
@@ -2218,6 +2257,7 @@ export function stepSim(
       * (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)
       * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
   }, characterScale, movement)
+  const almsTables = map.buildings.filter(b => b.buildType === "alms-table" && b.owner !== "independent" && isComplete(b))
   const waterSources = map.buildings.filter(b => isWaterSource(b) && isComplete(b))
   const roadWalkerCount = travelers.reduce((count, t) => count + (t.type.id !== "vendor" && t.type.id !== "knight" ? 1 : 0), 0)
   let explorerRank = 0
@@ -2254,7 +2294,7 @@ export function stepSim(
   const occupiedPlaces = new Map<number, number>()
   for (const s of sim.travelers.values()) {
     const entering = s.activity === "toRelic" && s.shrinePlace !== undefined
-    const leaving = s.activity === "fromRelic" && s.shrineRoute && (singleVisitor
+    const leaving = (s.activity === "fromRelic" || s.activity === "offering") && s.shrineRoute && (singleVisitor
       ? s.branchProgress > s.shrineRoute.findLastIndex(p => p.x === map.site!.door.x && p.z === map.site!.door.z)
       : insideShrine(map, s))
     if (!entering && s.activity !== "visiting" && !leaving) continue
@@ -2331,9 +2371,10 @@ export function stepSim(
     s.naturalWaterRetry = Math.max(0, (s.naturalWaterRetry ?? 0) - dt)
     s.seatRestRetry = Math.max(0, (s.seatRestRetry ?? 0) - dt)
     s.visitCooldown = Math.max(0, s.visitCooldown - dt)
+    s.breadRetry = Math.max(0, (s.breadRetry ?? 0) - dt)
     s.waterRetry = Math.max(0, (s.waterRetry ?? 0) - dt)
     s.musicCooldown = Math.max(0, (s.musicCooldown ?? 0) - dt)
-    // Kneeling in the shrine is a rest, not a meal: the brothers keep no table.
+    // Kneeling in the shrine is a rest; bread is served separately at the alms table.
     const sheltered = s.activity === "visiting"
     const abed = s.activity === "sleeping"
     const isVendor = t.type.id === "vendor", needsParking = isVendor || t.type.id === "knight"
@@ -2349,7 +2390,7 @@ export function stepSim(
     // Travelling on the road costs no stamina, and standing at a stall, a post
     // or a performance neither drains nor restores the legs.
     else if (!s.partyCarried && !s.partyWaiting && !TRAVEL_ACTIVITIES.includes(s.activity) &&
-      !["vending", "performing", "listening", "begging", "givingAlms", "posted", "sitting", "buying", "drinking", "drinkingLow"].includes(s.activity)) {
+      !["vending", "performing", "listening", "begging", "givingAlms", "posted", "sitting", "buying", "receivingBread", "drinking", "drinkingLow"].includes(s.activity)) {
       s.stamina = Math.max(0, s.stamina - sim.balance.rules.staminaDecay * hours)
     }
 
@@ -2470,7 +2511,8 @@ export function stepSim(
       case "fromRelic": {
         // Detour on the outdoor approach; finish crossing the chapel gate first.
         if (dt > 0 && !buildingAt(map, worldToTileX(map, s.x), worldToTileZ(map, s.z)) &&
-          startWaterTrip(sim, s, map, waterSources, { x: s.x, y: s.y, z: s.z })) break
+          (startBreadTrip(sim, s, map, almsTables, { x: s.x, y: s.y, z: s.z }) ||
+          startWaterTrip(sim, s, map, waterSources, { x: s.x, y: s.y, z: s.z }))) break
         let branch = s.shrineRoute ?? map.site!.branch
         const inbound = s.activity === "toRelic"
         let limit = branch.length - 1
@@ -2662,6 +2704,7 @@ export function stepSim(
         if (unhappy && startTavernTrip(sim, s, map, counters.filter(b => b.buildType === "tavern"), workplaceReturn(sim, s, map))) break
         if (dt > 0 && !isVendor && (startWaterTrip(sim, s, map, waterSources, workplaceReturn(sim, s, map) ?? s) ||
           startNaturalWaterTrip(s, map))) break
+        if (dt > 0 && !isVendor && startBreadTrip(sim, s, map, almsTables, workplaceReturn(sim, s, map) ?? s)) break
         if (hungry && startTavernTrip(sim, s, map, counters, workplaceReturn(sim, s, map))) break
         if (!hungry && startSeatRest(sim, s, map, workplaceReturn(sim, s, map))) break
         // Home covers both errands: a tired settler sleeps, and one who could
@@ -2740,6 +2783,52 @@ export function stepSim(
           // the existing work poll instead of waiting for hunger or exhaustion.
           if (startCitizenBuild(sim, s, t, map)) break
           seekSheep(s, sim.wildlife, map, characterScale)
+        }
+        break
+      }
+      case "toBread": {
+        const visit = s.breadVisit
+        const table = almsTables.find(b => b.id === visit?.tableId)
+        if (!visit || !table || !almsStaffed(map, table.id)) { leaveBread(s, map); break }
+        if (visit.buildings !== map.buildings) {
+          const plan = breadVisitPlan(map, table, s, visit.returnTo)
+          if (!plan) { leaveBread(s, map); break }
+          plan.visit.resumeActivity = visit.resumeActivity
+          plan.visit.arrival = [...visit.arrival.slice(0, visit.arrival.length - (s.offRoadRoute?.length ?? 0)), ...plan.visit.arrival]
+          s.breadVisit = plan.visit; s.offRoadRoute = plan.route
+        }
+        if (stepOffRoadWalk(s, visit.stand, worldSpeed, dt, map)) {
+          s.activity = "receivingBread"; s.timer = ALMS_SERVING_SECONDS
+        }
+        break
+      }
+      case "receivingBread": {
+        const visit = s.breadVisit
+        if (!visit || !almsTables.some(b => b.id === visit.tableId) || !almsStaffed(map, visit.tableId)) { leaveBread(s, map); break }
+        s.timer = Math.max(0, s.timer - dt)
+        if (dt > 0 && s.timer < 1e-8) {
+          if (s.lastBreadDay !== Math.floor(sim.time)) {
+            const gain = Math.max(0, Math.min(ALMS_HUNGER_GAIN, ALMS_HUNGER_CAP - s.hunger))
+            const party = s.partyId === undefined ? undefined : sim.parties.get(s.partyId)
+            if (party) {
+              party.hunger = Math.min(ALMS_HUNGER_CAP, party.hunger + gain / Math.max(1, party.members.length))
+              for (const id of party.members) { const member = sim.travelers.get(id); if (member) member.hunger = party.hunger }
+            } else s.hunger += gain
+            s.lastBreadDay = Math.floor(sim.time)
+          }
+          leaveBread(s, map)
+        }
+        break
+      }
+      case "fromBread": {
+        const visit = s.breadVisit
+        if (!visit) { finishErrand(s); break }
+        if (visit.buildings !== map.buildings) { s.offRoadRoute = null; visit.buildings = map.buildings }
+        if (stepOffRoadWalk(s, visit.returnTo, worldSpeed, dt, map)) {
+          const resume = visit.resumeActivity
+          s.breadVisit = undefined; s.breadRetry = 5
+          finishErrand(s)
+          if (resume) s.activity = resume
         }
         break
       }
@@ -2906,6 +2995,8 @@ export function stepSim(
             (b.id === townCounter?.id || (b.owner !== "independent" && ahead >= 0 && ahead <= 3)))
           if (startTavernTrip(sim, s, map, taverns, null)) break
         }
+        if (dt > 0 && !needsParking && (s.activity === "walking" || s.activity === "seeking") &&
+          startBreadTrip(sim, s, map, almsTables, currentRoutePoint(map, s))) break
         // If content, penniless, or unable to get a table, use reachable free water.
         if (dt > 0 && !needsParking && s.activity !== "fleeing" &&
           startWaterTrip(sim, s, map, waterSources, currentRoutePoint(map, s))) break

@@ -29,6 +29,13 @@ describe("game save schema", () => {
     expect(parseGameSave({ ...input, world: { ...input.world, generation: 2 } }).save?.world.generation).toBe(2)
   })
 
+  it("migrates version two saves and keeps new job assignments", () => {
+    const input = minimal()
+    expect(parseGameSave({ ...input, version: 2 }).save?.version).toBe(SAVE_VERSION)
+    const result = parseGameSave({ ...input, simulation: { ...input.simulation, monkJobs: { 0: "builder", 1: "keeper", 2: "almoner" } } })
+    expect(result.save?.simulation.monkJobs).toEqual({ 0: "builder", 1: "keeper", 2: "almoner" })
+  })
+
   it("accepts a well-formed document and fills elevation defaults", () => {
     const input = minimal()
     input.world.elevation = { maxHeight: 3 } as typeof input.world.elevation

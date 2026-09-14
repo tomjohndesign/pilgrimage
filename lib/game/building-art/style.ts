@@ -34,7 +34,7 @@ export function minimumBuildingSize(variant: string) {
 
 export const recipeSchema = z.object({
   subject: z.string().trim().min(1).max(160),
-  variant: z.enum(["inn", "enclosure", "monk-shelter", "house", "storehouse", "wood-shelter", "tavern", "shelter", "workshop", "garden", "cross", "hall", "lumberCamp", "market", "guard-post", "sheep-pen", "gable", "hipped", "porch"]),
+  variant: z.enum(["alms-table", "inn", "enclosure", "monk-shelter", "house", "storehouse", "wood-shelter", "tavern", "shelter", "workshop", "garden", "cross", "hall", "lumberCamp", "market", "guard-post", "sheep-pen", "gable", "hipped", "porch"]),
   width: z.number().int().min(1).max(5),
   depth: z.number().int().min(1).max(5),
   wallHeight: z.number().min(0.25).max(1.4),
@@ -55,6 +55,7 @@ export const LEGACY_RECIPE: BuildingRecipe = {
 
 /** Authored starting dimensions; choosing a type restores its intended proportions. */
 export const EARLY_BUILDINGS = [
+  { id: "alms-table", name: "Alms table", description: "A small timber table with a bread basket, earthenware pottage pot, wooden bowls and a plain cross on its front. A monk serves from the rear.", width: 1, depth: 1, wallHeight: .65, roofRise: 0 },
   { id: "inn", name: "Inn", description: "An open dormitory of bunks and beds, with crossed timber framing, rough plaster and a partly shingled roof. Stands alone or covers a tavern’s full footprint, with the upper roof running perpendicular to the tavern’s roof.", width: 3, depth: 4, wallHeight: 1.2, roofRise: singlePlaneRoofRise(2) },
   { id: "enclosure", name: "Relic enclosure", description: "Four open timber gates with plain crosses, low paling walls and a glowing relic on a rough stone table under the sky.", width: 3, depth: 3, wallHeight: 0.42, roofRise: 0 },
   { id: "monk-shelter", name: "Monks’ residence", description: "An enclosed church wing with pale plaster over rubble stonework, arched door and window openings, a gabled thatch roof, plain crosses, four straw beds and a stone fireplace and chimney.", width: 3, depth: 2, wallHeight: 1.18, roofRise: singlePlaneRoofRise(2) },

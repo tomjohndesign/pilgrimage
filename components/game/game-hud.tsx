@@ -1,5 +1,7 @@
 "use client"
 
+import { almsStaffed } from "@/lib/game/alms-table"
+
 import { isChapel } from "@/lib/game/shrine-layout"
 import { CHURCH_COST, CHURCH_RENOWN_BONUS, CHAPEL_MONKS, CHURCH_MONKS } from "@/lib/game/shrine-upgrade"
 import { builderPaceLabel, builderRate, MONK_BUILD_RATE } from "@/lib/game/build-labour"
@@ -31,6 +33,7 @@ import { CHANGELOG, CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, BEGGAR_RECOVERY_GOLD, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
+import { MONK_JOBS, MONK_JOB_LABELS, type MonkJob } from "@/lib/game/monk-jobs"
 import { MONK_TIRED_AT } from "@/lib/game/monk-work"
 import { useMonkEvangelismStore } from "@/lib/game/monk-evangelism-store"
 import { MONK_ACTIVITY_LABELS, monkStaminaRegistry, monkRegistry, monkPositionRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
@@ -533,9 +536,9 @@ function ConstructionStatus({ building }: { building: BuildingDef }) {
 
 /** Sample the brothers' live activity and piety on the HUD's own schedule. */
 function useMonkLiveState(monkId: number) {
-  const [live, setLive] = useState<{ activity: MonkActivity | null; piety?: number; happiness?: number }>({ activity: null })
+  const [live, setLive] = useState<{ activity: MonkActivity | null; job?: MonkJob; piety?: number; happiness?: number }>({ activity: null })
   useEffect(() => {
-    const read = () => setLive({ activity: monkRegistry.current?.get(monkId) ?? null, piety: monkPositionRegistry.current?.get(monkId)?.piety, happiness: monkPositionRegistry.current?.get(monkId)?.happiness })
+    const read = () => setLive({ job: simRegistry.current?.monkJobs[monkId] ?? "auto", activity: monkRegistry.current?.get(monkId) ?? null, piety: monkPositionRegistry.current?.get(monkId)?.piety, happiness: monkPositionRegistry.current?.get(monkId)?.happiness })
     read()
     const timer = setInterval(read, 250)
     return () => clearInterval(timer)
@@ -547,7 +550,7 @@ function useMonkLiveState(monkId: number) {
 function MonkPanel({ monk }: { monk: Monk }) {
   const balance = useBalanceStore((s) => s.balance)
   const a = monk.attributes
-  const { activity, piety, happiness } = useMonkLiveState(monk.id)
+  const { activity, job, piety, happiness } = useMonkLiveState(monk.id)
   const [stamina, setStamina] = useState(100)
   useEffect(() => {
     const read = () => setStamina(monkStaminaRegistry.current?.get(monk.id) ?? 100)
@@ -578,7 +581,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
       <div className="pt-1">
         <div className="font-display text-xs text-ink">{monk.name}</div>
         <div className="text-[13px] italic text-ink-light">
-          {monk.duty}, {a.age} years
+          {MONK_JOB_LABELS[job ?? "auto"]}, {a.age} years
         </div>
         {activity && (
           <div className="text-[11px] italic text-gold">{evangelizing && activity === "sleeping" ? "Sleeping on an evangelism mission" : MONK_ACTIVITY_LABELS[activity]}</div>
@@ -593,8 +596,14 @@ function MonkPanel({ monk }: { monk: Monk }) {
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
+        <Chooser label="Job" value={MONK_JOBS.indexOf(job ?? "auto")} options={MONK_JOBS.map(key => MONK_JOB_LABELS[key])}
+          onChange={index => { const sim = simRegistry.current; if (sim) sim.monkJobs[monk.id] = MONK_JOBS[index] }} />
+        <p className="mt-1 text-[11px] italic text-ink-light">Every job allows rest. Brothers helping where needed cover the relic and alms table, then build. Assigned jobs resume after sleep or a mission.</p>
+      </div>
+
+      <div className="mt-2 border-t border-rule pt-2">
         <button type="button" className="hud-action"
-          disabled={monk.duty === "Keeper of the Relic" || !evangelizing && (!evangelism.available || carryingRelic || activity === "flying" || stamina <= MONK_TIRED_AT)}
+          disabled={!evangelizing && (!evangelism.available || carryingRelic || activity === "flying" || stamina <= MONK_TIRED_AT)}
           onClick={() => evangelizing ? evangelism.recall(monk.id) : evangelism.request(monk.id)}>
           {evangelizing ? "Recall from preaching" : "Evangelize on the main road"}
         </button>
@@ -602,7 +611,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
-        <button type="button" className="hud-action" disabled={monk.duty === "Keeper of the Relic" || !procession.available || evangelizing || activity === "toEvangelize" || activity === "preaching" || activity === "flying" ||
+        <button type="button" className="hud-action" disabled={!procession.available || evangelizing || activity === "toEvangelize" || activity === "preaching" || activity === "flying" ||
           (procession.monkId !== null && !carryingRelic) || (carryingRelic && (procession.returnRequested || procession.stage === "lowering" || procession.stage === "returning"))}
           onClick={() => carryingRelic ? procession.returnRelic() : procession.request(monk.id)}>
           {carryingRelic ? "Return relic" : "Carry relic in procession"}
@@ -1172,6 +1181,8 @@ export function GameHud({
               Inspect {floor.label.toLowerCase()} {floor.supportId ? "upstairs" : "downstairs"}
             </button>)}
             {selectedBuilding.owner === "independent" && <p className="mt-2 max-w-56 text-[11px] text-ink-light">Independent roadside town. {selectedBuilding.buildType === "tavern" ? "Locally run tavern serving food and drink to passing travelers." : "Home to the townspeople."} Joins your settlement when your influence reaches this building; until then, it earns you no income or renown.</p>}
+            {map && selectedBuilding.buildType === "alms-table" && isComplete(selectedBuilding) &&
+              <p className="mt-1 text-[11px] text-ink-light">{almsStaffed(map, selectedBuilding.id) ? "Open · A monk is serving free bread." : "Closed · Waiting for an available monk."}</p>}
             {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">{brothersAtHome} / {housingBeds(selectedBuilding)} monks · {Math.max(0, housingBeds(selectedBuilding) - brothersAtHome)} spaces available. Tired monks sleep here until their stamina recovers.</p>}
             {isHouse(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
               {household} / {housingBeds(selectedBuilding)} settlers · {Math.max(0, housingBeds(selectedBuilding) - household)} spaces available. They come back here to sleep and eat.
@@ -1185,7 +1196,7 @@ export function GameHud({
             )}
             {selectedBuilding.id === map?.site?.hovelId && isComplete(selectedBuilding) && (
               <div className="mt-3 flex flex-col gap-1.5">
-                <p className="max-w-56 text-[11px] text-ink-light">Entry is free. The keeper reveals the relic to {isChapel(selectedBuilding) ? "one visitor" : "two kneeling visitors"} at a time. Visitors may leave a donation in the offering box {isChapel(selectedBuilding) ? "outside beside the door" : "by the door"}; greater piety encourages larger gifts.</p>
+                <p className="max-w-56 text-[11px] text-ink-light">Entry is free. The keeper reveals the relic to {isChapel(selectedBuilding) ? "one visitor" : "two kneeling visitors"} at a time. Visitors may leave a donation in the offering box inside by the door; greater piety encourages larger gifts.</p>
                 <p className="max-w-56 text-[11px] text-ink-light">{isChapel(selectedBuilding)
                   ? `A 2 × 2 relic chapel. One visitor kneels at the altar; others queue outside. Modest donations. Supports up to ${CHAPEL_MONKS} monks with shelter beds.`
                   : `Two places at the rails; the queue waits four person-spaces behind. Larger donations${selectedBuilding.buildType === "church" ? `, with +${CHURCH_RENOWN_BONUS} renown to draw visitors` : ""}. Supports up to ${CHURCH_MONKS} monks with shelter beds.`}</p>
