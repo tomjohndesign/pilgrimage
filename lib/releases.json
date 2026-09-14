@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "d689eabbdb69e576e8f02f154330119d9fd5f2f0",
-  "releaseCount": 241,
+  "lastProcessedCommit": "540fe6a7860c7429ed3e1a4d4c07ee5a470bf280",
+  "releaseCount": 242,
   "releases": [
+    {
+      "version": "0.0.256",
+      "title": "Release 0.0.256",
+      "summary": "Add appearance tuning, update palette, and restore edge details (#276)",
+      "commit": "540fe6a7860c7429ed3e1a4d4c07ee5a470bf280"
+    },
     {
       "version": "0.0.255",
       "title": "Release 0.0.255",
