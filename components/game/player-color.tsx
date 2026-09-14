@@ -21,6 +21,6 @@ export function PlayerColorPicker({ value, onChange }: { value: string; onChange
         <input type="color" aria-label="Custom settlement color" value={value} onChange={event => onChange(event.target.value)} className="h-7 w-8 cursor-pointer border border-rule bg-transparent p-0" />
       </label>
     </div>
-    <p className="text-[11px] text-ink-light">Residents and building accents use this color. Visitors wear muted clothing.</p>
+    <p className="text-[11px] text-ink-light">Residents and building accents use this color. Visitors keep their own clothing colors.</p>
   </fieldset>
 }

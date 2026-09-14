@@ -1,8 +1,7 @@
 "use client"
 
-import { applySpriteSaturation } from "@/lib/game/render/sprite-saturation"
 import { usePlayerColor } from "./player-color"
-import { DEFAULT_PLAYER_COLOR, playerClothingSwap } from "@/lib/game/player-color"
+import { playerClothingSwap } from "@/lib/game/player-color"
 
 import { useContext } from "react"
 import { CharacterMapContext } from "./character-map-context"
@@ -157,12 +156,10 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
   // covers every clip a character can play, so they all have to qualify.
   const recolourable = visual.reservedTones && (playingClip?.reservedTones ?? true) && (flightClip?.reservedTones ?? true)
   const owned = resident ?? name === "monk"
-  // A new player color leaves visitor palettes and their materials reusable.
-  const clothingColor = owned ? playerColor : playerColor ? DEFAULT_PLAYER_COLOR : null
+  const clothingColor = owned ? playerColor : null
   const swap = useMemo(() => playerClothingSwap(complexionSwap(recolourable ? visual.design : undefined, complexion),
     visual.reservedTones ? visual.design : undefined, clothingColor, owned),
     [recolourable, visual.reservedTones, visual.design, complexion?.skin, complexion?.hair, clothingColor, owned])
-  const saturation = playerColor && !visual.reservedTones && !owned ? .22 : 1
   const complexionValues = useMemo(() => complexionUniforms(swap), [swap])
   const material = useMemo(() => {
     const material = new THREE.SpriteMaterial({ map: textures.get(1), alphaTest: 0.5, transparent: false, toneMapped: false })
@@ -170,12 +167,11 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
     material.onBeforeCompile = (shader) => {
       applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth, undefined, depthBias)
       applyComplexionSwap(shader, uniforms)
-      applySpriteSaturation(shader, saturation)
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "person-clothing-v3"
+    material.customProgramCacheKey = () => "person-clothing-v4"
     return material
-  }, [textures, viewport, worldTexel, groundPlane, poseDepth, depthBias, complexionValues, saturation])
+  }, [textures, viewport, worldTexel, groundPlane, poseDepth, depthBias, complexionValues])
   useEffect(() => () => material.dispose(), [material])
   const center = useMemo(() => new THREE.Vector2(...visual.center), [visual])
   const sprite = useRef<THREE.Sprite>(null)
@@ -206,14 +202,14 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
   const batchUv = useMemo(() => new THREE.Vector4(), [])
   useLayoutEffect(() => {
     if (!batchEntries || !sprite.current || !idSprite.current || !outlineColor || name !== "traveler") return
-    const entry = { saturation, sprite: sprite.current, ids: idSprite.current, publishesPose: true, complexion: complexionValues, palette: characterPalette(complexionValues), ground: groundPlane,
+    const entry = { sprite: sprite.current, ids: idSprite.current, publishesPose: true, complexion: complexionValues, palette: characterPalette(complexionValues), ground: groundPlane,
       fixedAttributes: Float32Array.from([center.x, center.y, ...outlineColor]), depth: poseDepth, depthBias, id: new THREE.Vector3(...outlineColor) }
     batchEntry.current = entry
     const unregisterEntry = registerCharacterBatchEntry(entry)
     batchEntries.add(entry)
     const unregister = registerSimpleBatchSource(entry.sprite, entry.ids)
     return () => { batchEntry.current = null; unregisterEntry(); unregister(); batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
-  }, [saturation, batchEntries, complexionValues, groundPlane, poseDepth, depthBias, name, center, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [batchEntries, complexionValues, groundPlane, poseDepth, depthBias, name, center, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
 
   const crowdWalk = useMemo<CrowdWalk | null>(() => map && rig && !attachment && walkTuning?.sync !== false ? {
     map, rig, walk: visual.walk, weary: visual.actions.wearyWalk, wearyIndex: actionIndices.wearyWalk,

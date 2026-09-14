@@ -23,35 +23,22 @@ export function isPlayerResident(person: { home?: string | null; employer?: stri
 export const CHARACTER_PALETTE_SLOTS = 32
 const CLOTH_SHADES = [.55, .8, 1, 1.3]
 
-/** Quiet, warm cloth for road travelers; keep the original light and dark folds. */
-export function mutedCloth(color: string): string {
-  const rgb = [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16))
-  const grey = rgb[0] * .299 + rgb[1] * .587 + rgb[2] * .114
-  return "#" + rgb.map((c, i) => Math.max(0, Math.min(255, Math.round(c * .18 + grey * .82 + [5, 2, -3][i])))
-    .toString(16).padStart(2, "0")).join("")
-}
-
 /** Extend the existing skin/hair swap with the authored clothing palette.
  * Resident monks keep brown wool, with only their woven edging and cord dyed.
  * The shared ink, timber, metal and leather palette is never a swap source. */
 export function playerClothingSwap(skin: ComplexionSwap, design: PersonDesign | undefined,
   playerColor: string | null, resident: boolean): ComplexionSwap {
-  if (!design || !playerColor) return skin
+  if (!design || !playerColor || !resident) return skin
   const swap = { from: [...skin.from], to: [...skin.to] }
-  const add = (from: string, to: string, factors = CLOTH_SHADES) => {
-    for (const factor of factors) {
+  const add = (from: string, to: string) => {
+    for (const factor of CLOTH_SHADES) {
       const source = shade(from, factor)
       if (swap.from.includes(source)) continue
       swap.from.push(source); swap.to.push(shade(to, factor))
     }
   }
-  if (resident) {
-    if (design.tunicStyle === "Trimmed") add(design.accentColor, playerColor)
-    else add(design.tunicColor, playerColor)
-  } else {
-    for (const color of [design.tunicColor, design.accentColor, design.coveringColor]) add(color, mutedCloth(color))
-    for (const color of [design.shirtColor, design.trouserColor]) add(color, mutedCloth(color), [.55, .8, 1, 1.25])
-  }
+  if (design.tunicStyle === "Trimmed") add(design.accentColor, playerColor)
+  else add(design.tunicColor, playerColor)
   return swap
 }
 
