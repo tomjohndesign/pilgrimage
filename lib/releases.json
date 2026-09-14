@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "d652d426715e49b37d8a0e12a6c6da9355411cc9",
-  "releaseCount": 238,
+  "lastProcessedCommit": "2ebd02e36129eacaac735d9f85ccdac0ee6534b9",
+  "releaseCount": 240,
   "releases": [
+    {
+      "version": "0.0.254",
+      "title": "Release 0.0.254",
+      "summary": "Expand sheep pens with flock care and food production (#273)",
+      "commit": "2ebd02e36129eacaac735d9f85ccdac0ee6534b9"
+    },
+    {
+      "version": "0.0.253",
+      "title": "Release 0.0.253",
+      "summary": "Restore forest floor colors after grass palette changes (#272)",
+      "commit": "b354dd0e9b3536ea3e1f4858391b4e8f39db2d7e"
+    },
     {
       "version": "0.0.252",
       "title": "Release 0.0.252",
