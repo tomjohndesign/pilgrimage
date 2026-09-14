@@ -1,3 +1,4 @@
+import { ROOF_OVERHANG } from "./roof-overhang"
 import { minimumBuildingSize } from "./style"
 import { describe, expect, it } from "vitest"
 import { Box3, BoxGeometry, BufferGeometry, Float32BufferAttribute, Matrix4, Euler, Quaternion, Vector3 } from "three"
@@ -13,15 +14,15 @@ function bounds(part: BuildingPart) {
 }
 
 describe("early medieval building kit", () => {
-  it.each(EARLY_BUILDINGS)("$name fills every supported footprint without spilling into neighbours", (preset) => {
+  it.each(EARLY_BUILDINGS)("$name keeps ground parts inside each footprint and bounds the roof overhang", (preset) => {
     for(let width=minimumBuildingSize(preset.id).width;width<=5;width++) for(let depth=minimumBuildingSize(preset.id).depth;depth<=5;depth++) {
       const parts=buildingParts({...earlyBuildingRecipe(preset.id),width,depth}), whole=new Box3()
       for(const part of parts) {
-        const box=bounds(part), context=`${preset.id} ${width}×${depth} ${part.name}`
-        expect(box.min.x,context).toBeGreaterThanOrEqual(-width/2-.001)
-        expect(box.max.x,context).toBeLessThanOrEqual(width/2+.001)
-        expect(box.min.z,context).toBeGreaterThanOrEqual(-depth/2-.001-(part.name.startsWith("tavern-outside-") ? .6 : 0))
-        expect(box.max.z,context).toBeLessThanOrEqual(depth/2+.001+(part.name.startsWith("tavern-outside-") ? .6 : 0))
+        const box=bounds(part), overhang=part.layer === "roof" ? ROOF_OVERHANG : 0, context=`${preset.id} ${width}×${depth} ${part.name}`
+        expect(box.min.x,context).toBeGreaterThanOrEqual(-width/2-.001-overhang)
+        expect(box.max.x,context).toBeLessThanOrEqual(width/2+.001+overhang)
+        expect(box.min.z,context).toBeGreaterThanOrEqual(-depth/2-.001-overhang-(part.name.startsWith("tavern-outside-") ? .6 : 0))
+        expect(box.max.z,context).toBeLessThanOrEqual(depth/2+.001+overhang+(part.name.startsWith("tavern-outside-") ? .6 : 0))
         expect(box.min.y,context).toBeGreaterThanOrEqual(-.06)
         expect(Number.isFinite(box.max.y),context).toBe(true)
         whole.union(box)
@@ -30,14 +31,15 @@ describe("early medieval building kit", () => {
       expect(whole.max.z-whole.min.z).toBeGreaterThan(depth-.1)
     }
   })
-  it("starts with a roofless 3×3 enclosure and a clear gate passage in each wall", () => {
-    expect(DEFAULT_RECIPE.variant).toBe("enclosure")
-    expect([DEFAULT_RECIPE.width,DEFAULT_RECIPE.depth]).toEqual([3,3])
-    const parts=buildingParts(DEFAULT_RECIPE)
+  it("keeps legacy enclosures readable while starting the editor with a house", () => {
+    expect(DEFAULT_RECIPE.variant).toBe("house")
+    expect([DEFAULT_RECIPE.width,DEFAULT_RECIPE.depth]).toEqual([2,2])
+    const enclosureRecipe=earlyBuildingRecipe("enclosure")
+    const parts=buildingParts(enclosureRecipe)
     expect(parts.some(p=>p.layer==="roof")).toBe(false)
     expect(parts.filter(p=>p.name.startsWith("open-gate-"))).toHaveLength(4)
     for(const [width,depth] of [[1,1],[3,3],[5,2]]) {
-      const walls=buildingParts({...DEFAULT_RECIPE,width,depth}).filter(p=>p.layer==="wall").map(bounds)
+      const walls=buildingParts({...enclosureRecipe,width,depth}).filter(p=>p.layer==="wall").map(bounds)
       for(const side of [-1,1]) {
         const x=side*width/2,z=side*depth/2
         const northSouth=new Box3(new Vector3(-.18,.15,z-.16),new Vector3(.18,.3,z+.16))
@@ -68,7 +70,7 @@ describe("early medieval building kit", () => {
     }
   })
   it("marks religious structures with crosses while keeping all four gateways open", () => {
-    const enclosure=buildingParts(DEFAULT_RECIPE)
+    const enclosure=buildingParts(earlyBuildingRecipe("enclosure"))
     expect(enclosure.filter(p=>p.name.startsWith("gate-cross-upright-"))).toHaveLength(4)
     const shelter=buildingParts(earlyBuildingRecipe("monk-shelter"))
     expect(shelter.filter(p=>p.name.startsWith("shelter-cross-upright-"))).toHaveLength(2)
@@ -98,7 +100,7 @@ describe("early medieval building kit", () => {
         const hearth = bounds(parts.find(p => p.name === "hearth-slab")!)
         const chimney = bounds(parts.find(p => p.name === "chimney-mouth")!)
         const roof = new Box3()
-        parts.filter(p => p.name.startsWith("thatch-bundle-")).forEach(p => roof.union(bounds(p)))
+        parts.filter(p => /^(thatch-bundle-|shingle-course-|pole-roof-underlay-)/.test(p.name)).forEach(p => roof.union(bounds(p)))
         expect(chimney.min.y).toBeGreaterThan(roof.max.y)
         for(const bed of parts.filter(p => p.name.startsWith("straw-bed-"))) {
           expect(hearth.intersectsBox(bounds(bed)),`${variant} ${width}×${depth} ${bed.name}`).toBe(false)
@@ -165,7 +167,7 @@ it("gives the tavern an unobstructed rear doorway and a taller front brow",()=>{
 
 it("slopes the woodcutter hut roof down toward the front like the houses",()=>{
   const parts=buildingParts(earlyBuildingRecipe("workshop"))
-  const vertices=parts.filter(p=>p.name.startsWith("thatch-bundle-")).flatMap(p=>p.vertices ?? [])
+  const vertices=parts.filter(p=>/^(thatch-bundle-|shingle-course-|pole-roof-underlay-)/.test(p.name)).flatMap(p=>p.vertices ?? [])
   const front:number[]=[],back:number[]=[]
   for(let i=0;i<vertices.length;i+=3) (vertices[i+2]>0 ? front : back).push(vertices[i+1])
   expect(Math.max(...back)).toBeGreaterThan(Math.max(...front))

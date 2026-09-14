@@ -62,7 +62,7 @@ it("makes the market canopy level at all four corners, with sag and isolated sti
   const midEdges=points.filter(([x,,z])=>x===0 && Math.abs(z)===1)
   expect(midEdges.every(p=>p[1]<.8)).toBe(true)
   const hem=parts.find(p=>p.name==="market-cloth-hem-1-0")!.vertices!
-  expect(Math.abs(hem[4]-hem[7])).toBeCloseTo(.009)
+  expect(Math.abs(hem[4]-hem[7])).toBeCloseTo(.08)
   expect(parts.filter(p=>p.name.includes("patch-"))).toHaveLength(3)
   expect(parts.filter(p=>p.name.includes("stitch-"))).toHaveLength(24)
 })

@@ -488,7 +488,7 @@ function makeTileMaterial({
             float floorBare = dirtFloorCover(world, vTileLocal);
             if (!roadIsDirt && floorBare > 0.0) {
               vec4 floorTex = sampleTiled(trailMap, world * ${ROAD_UV_SCALE}, world);
-              landTop = mix(landTop, roadSurfaceColor(floorTex, roadShade, vOverlay, roadColor),
+              landTop = mix(landTop, buildingDirtColor(roadSurfaceColor(floorTex, roadShade, vOverlay, roadColor), world),
                 floorBare * floorTex.a * roadOpacity * (1.0 - shore));
             }
             float bare = roadIsDirt ? max(shape.x, floorBare) : shape.x;
@@ -508,7 +508,8 @@ function makeTileMaterial({
             float line = (1.0 - smoothstep(halfLine - 0.5 * px, halfLine + 0.5 * px, abs(d - edge))) * roadEdgeLine * (1.0 - shore);
             ${edgeOnly ? "diffuseColor.a = line * roadOpacity * segmentOpacity * vGridTop;" : ""}
 
-            vec3 top = mix(landTop, road, cover) * (1.0 - 0.75 * line * roadOpacity * segmentOpacity);
+            vec3 floorRoad = mix(road, buildingDirtColor(road, world), floorBare);
+            vec3 top = mix(landTop, floorRoad, cover) * (1.0 - 0.75 * line * roadOpacity * segmentOpacity);
             vec3 surface = mix(${ROAD_SIDE_COLOR} * roadColor, top, vGridTop);
             diffuseColor.rgb *= surface;
           #else

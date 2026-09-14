@@ -53,20 +53,20 @@ export const LEGACY_RECIPE: BuildingRecipe = {
   wallHeight: HOVEL_WALL_HEIGHT, roofRise: HOVEL_ROOF_RISE, seed: 17, view: 0, output: "concept", notes: "A humble monks’ refuge. A tiny wooden cross over the entrance; a subdued golden glint within.",
 }
 
-/** Authored starting dimensions; choosing a type restores its intended proportions. */
+/** Authored recipes, including retired forms needed to render older saves. */
 export const EARLY_BUILDINGS = [
-  { id: "inn", name: "Inn", description: "An open dormitory of bunks and beds, with crossed timber framing, rough plaster and a partly shingled roof. Stands alone or covers a tavern’s full footprint, with the upper roof running perpendicular to the tavern’s roof.", width: 3, depth: 4, wallHeight: 1.2, roofRise: singlePlaneRoofRise(2) },
+  { id: "inn", name: "Inn", description: "An open dormitory of bunks and beds, with crossed timber framing, rough plaster and a grey-brown split-oak shingle roof. Stands alone or covers a tavern’s full footprint, with the upper roof running perpendicular to the tavern’s roof.", width: 3, depth: 4, wallHeight: 1.2, roofRise: singlePlaneRoofRise(2) },
   { id: "enclosure", name: "Relic enclosure", description: "Four open timber gates with plain crosses, low paling walls and a glowing relic on a rough stone table under the sky.", width: 3, depth: 3, wallHeight: 0.42, roofRise: 0 },
   { id: "monk-shelter", name: "Monks’ residence", description: "An enclosed church wing with pale plaster over rubble stonework, arched door and window openings, a gabled thatch roof, plain crosses, four straw beds and a stone fireplace and chimney.", width: 3, depth: 2, wallHeight: 1.18, roofRise: singlePlaneRoofRise(2) },
-  { id: "house", name: "House", description: "A compact log-built home with a low single-plane thatched roof, a deep arched brow over the low-eave doorway, a stone chimney and fireplace, and straw beds for its household.", width: 2, depth: 2, wallHeight: 0.70, roofRise: singlePlaneRoofRise(2) },
+  { id: "house", name: "House", description: "A compact log-built home with a low single-plane thatched roof, a deep arched brow over the low-eave doorway, a stone chimney and fireplace, and four straw bunks for a household of eight.", width: 2, depth: 2, wallHeight: 0.70, roofRise: singlePlaneRoofRise(2) },
   { id: "tavern", name: "Tavern", description: "A broad timber-and-rubble alehouse with a back-to-back thatched roof, an arched entrance, stone hearth and chimney, wooden drinking tables, benches and an ale-cup sign.", width: 3, depth: 4, wallHeight: 0.78, roofRise: singlePlaneRoofRise(4) },
   { id: "storehouse", name: "Raised store", description: "An open raised storage platform on timber legs, with a plank entry ramp and sacks.", width: 2, depth: 2, wallHeight: 0.62, roofRise: 0 },
-  { id: "wood-shelter", name: "Wood shelter", description: "An open lean-to with a low thatched roof over split wood and spare poles.", width: 2, depth: 1, wallHeight: 0.62, roofRise: singlePlaneRoofRise(1) },
+  { id: "wood-shelter", name: "Wood shelter", description: "An open lean-to with a low timber-shingle roof over split wood and spare poles.", width: 2, depth: 1, wallHeight: 0.62, roofRise: singlePlaneRoofRise(1) },
   { id: "shelter", name: "Pilgrim shelter", description: "An open resting shelter with straw beds, a bench and a domestic hearth.", width: 2, depth: 2, wallHeight: 0.62, roofRise: singlePlaneRoofRise(2) },
-  { id: "workshop", name: "Woodcutter’s hut", description: "An open work court beside covered timber bays and a rear workbench.", width: 3, depth: 2, wallHeight: 0.68, roofRise: singlePlaneRoofRise(2) },
+  { id: "workshop", name: "Woodcutter’s hut", description: "An open work court with long roundwood roofing, covered timber bays, a rear workbench and a broad axe sign.", width: 3, depth: 2, wallHeight: 0.68, roofRise: singlePlaneRoofRise(2) },
   { id: "hall", name: "Shrine hall", description: "An enclosed gathering hall with a sheltered doorway, timber benches and wooden crosses.", width: 2, depth: 3, wallHeight: 0.78, roofRise: singlePlaneRoofRise(3) },
-  { id: "market", name: "Market stall", description: "A cloth-covered counter with wares and an open cart bay beside it.", width: 3, depth: 2, wallHeight: 0.65, roofRise: singlePlaneRoofRise(2) },
-  { id: "guard-post", name: "Guard post", description: "A small sheltered watch post with a bench and staff.", width: 2, depth: 2, wallHeight: 0.65, roofRise: singlePlaneRoofRise(2) },
+  { id: "market", name: "Market stall", description: "A counter with wares, linen over its rear two tiles, an open front and an open cart bay beside it.", width: 3, depth: 2, wallHeight: 0.65, roofRise: singlePlaneRoofRise(2) },
+  { id: "guard-post", name: "Guard post", description: "A watch post roofed with long roundwood poles with a round shield, upright spears and a bench.", width: 2, depth: 2, wallHeight: 0.65, roofRise: singlePlaneRoofRise(2) },
   { id: "sheep-pen", name: "Sheep pen", description: "A hut and hearth beside an open railed fold with a gate and trough.", width: 3, depth: 2, wallHeight: 0.70, roofRise: singlePlaneRoofRise(2) },
   { id: "lumberCamp", name: "Timber yard", description: "An open timber yard with low boundary rails and space for live timber stacks.", width: 2, depth: 2, wallHeight: 0.65, roofRise: 0 },
   { id: "garden", name: "Cloister garden", description: "Two herb beds flank a narrow flagstone path.", width: 2, depth: 1, wallHeight: 0.25, roofRise: 0 },
@@ -77,7 +77,10 @@ export function earlyBuildingRecipe(variant: EarlyBuildingType): BuildingRecipe 
   const preset = EARLY_BUILDINGS.find(p => p.id === variant)!
   return { ...LEGACY_RECIPE, width: preset.width, depth: preset.depth, wallHeight: preset.wallHeight, roofRise: preset.roofRise, subject: preset.name, variant, notes: preset.description }
 }
-export const DEFAULT_RECIPE = earlyBuildingRecipe("enclosure")
+/** Removed from new selections and generated previews; older saves still render. */
+export const REMOVED_BUILDING_TYPES: readonly string[] = ["hall", "lumberCamp", "enclosure", "shelter", "wood-shelter", "guard-post"]
+export const AVAILABLE_EARLY_BUILDINGS = EARLY_BUILDINGS.filter(preset => !REMOVED_BUILDING_TYPES.includes(preset.id))
+export const DEFAULT_RECIPE = earlyBuildingRecipe("house")
 export const isEarlyBuilding = (variant: BuildingRecipe["variant"]): variant is EarlyBuildingType => EARLY_BUILDINGS.some(p => p.id === variant)
 
 export function buildingPrompt(recipe: BuildingRecipe): string {

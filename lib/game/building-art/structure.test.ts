@@ -1,3 +1,4 @@
+import { ROOF_OVERHANG } from "./roof-overhang"
 import { shrineStructureParts } from "./shrine-geometry"
 import { buildingDoorOffset } from "../building-rotation"
 import { CHURCH_PLASTER } from "./church-wall"
@@ -26,7 +27,7 @@ const catalogue = BUILD_CATALOG.map(def => ({ ...def, buildType: def.id }))
 const partsFor = (id: string) => structureParts(catalogue.find(def => def.id === id)!)
 
 describe("settlement construction", () => {
-  it.each([...catalogue, ...PROTOTYPE_BUILDINGS])("$label has complete, deterministic geometry within its occupied tiles and reserved bench frontage", (building) => {
+  it.each([...catalogue, ...PROTOTYPE_BUILDINGS])("$label has complete, deterministic geometry within its ground footprint, roof overhang and reserved bench frontage", (building) => {
     const parts = structureParts(building)
     expect(parts.length).toBeGreaterThan(5)
     expect(new Set(parts.map(part => part.name)).size).toBe(parts.length)
@@ -34,11 +35,11 @@ describe("settlement construction", () => {
     expect(structureParts(building)).toEqual(parts)
     const whole = new Box3()
     for (const part of parts) {
-      const box = bounds(part)
-      expect(box.min.x, part.name).toBeGreaterThanOrEqual(-building.w / 2 - .001)
-      expect(box.max.x, part.name).toBeLessThanOrEqual(building.w / 2 + .001)
-      expect(box.min.z, part.name).toBeGreaterThanOrEqual(-building.d / 2 - .001 - (part.name.startsWith("tavern-outside-") ? .6 : 0))
-      expect(box.max.z, part.name).toBeLessThanOrEqual(building.d / 2 + .001 + (part.name.startsWith("tavern-outside-") ? .6 : 0))
+      const box = bounds(part), overhang = part.layer === "roof" ? ROOF_OVERHANG : 0
+      expect(box.min.x, part.name).toBeGreaterThanOrEqual(-building.w / 2 - .001 - overhang)
+      expect(box.max.x, part.name).toBeLessThanOrEqual(building.w / 2 + .001 + overhang)
+      expect(box.min.z, part.name).toBeGreaterThanOrEqual(-building.d / 2 - .001 - overhang - (part.name.startsWith("tavern-outside-") ? .6 : 0))
+      expect(box.max.z, part.name).toBeLessThanOrEqual(building.d / 2 + .001 + overhang + (part.name.startsWith("tavern-outside-") ? .6 : 0))
       const groundSurface = part.name === "cart-bay" || part.name === "floor" && building.buildType !== "storehouse"
         || part.name.startsWith("paving-") || part.name.startsWith("garden-path-") || part.name === "hall-threshold"
       expect(box.min.y, part.name).toBeGreaterThanOrEqual(groundSurface ? -.06 : -.001)
@@ -80,13 +81,13 @@ describe("settlement construction", () => {
       for (const [w, d] of [[2, 2], [3, 2], [3, 4]]) {
         const parts = structureParts({ ...def, w, d })
         expect(parts.some(p => /ridge-pole|rafter-left|rafter-right|woven-gable/.test(p.name))).toBe(false)
-        const bundles = parts.filter(p => p.name.startsWith("thatch-bundle-"))
+        const bundles = parts.filter(p => /^(thatch-bundle-|shingle-course-|shingle-underlay-|pole-roof-underlay-)/.test(p.name))
         expect(bundles.length).toBeGreaterThan(0)
         for (const part of bundles) {
           const [ax, ay, az, bx, by, bz, cx, cy, cz] = part.vertices!
           const profile=roofProfile(d,singlePlaneRoofRise(d),hasFrontAwning(def.id))
-          expect(ay-profile.height(az),part.name).toBeCloseTo(by-profile.height(bz))
-          expect(ay-profile.height(az),part.name).toBeCloseTo(cy-profile.height(cz))
+          expect(ay-profile.height(az/(1+ROOF_OVERHANG/(d/2))),part.name).toBeCloseTo(by-profile.height(bz/(1+ROOF_OVERHANG/(d/2))))
+          expect(ay-profile.height(az/(1+ROOF_OVERHANG/(d/2))),part.name).toBeCloseTo(cy-profile.height(cz/(1+ROOF_OVERHANG/(d/2))))
           expect(by,part.name).toBeLessThan(ay)
 
         }
@@ -119,7 +120,7 @@ describe("settlement construction", () => {
     expect(parts.find(p => p.name === "floor")?.surface).toBe("trail")
     expect(parts.some(p => /bed|blanket|wool-cover/.test(p.name))).toBe(false)
     expect(parts.some(p => p.name.startsWith("roof-plank-"))).toBe(false)
-    const roof = parts.filter(p => p.name.startsWith("thatch-bundle-")).map(bounds)
+    const roof = parts.filter(p => /^(thatch-bundle-|shingle-course-|shingle-underlay-|pole-roof-underlay-)/.test(p.name)).map(bounds)
     const covered = (x: number, z: number) => roof.some(b => x >= b.min.x && x <= b.max.x && z >= b.min.z && z <= b.max.z)
     for (const part of parts.filter(p => p.name === "workbench-seat")) {
       expect(covered(part.position[0], part.position[2]), part.name).toBe(true)
@@ -183,14 +184,14 @@ describe("settlement construction", () => {
   })
 })
 
-it("keeps shrine furniture and both roof levels inside the 3×5 footprint", () => {
+it("keeps shrine furniture inside its footprint with bounded roof overhangs", () => {
   const parts = shrineStructureParts(3, 5)
   for (const part of parts) {
-    const b = bounds(part)
-    expect(b.min.x, part.name).toBeGreaterThanOrEqual(-1.501)
-    expect(b.max.x, part.name).toBeLessThanOrEqual(1.501)
-    expect(b.min.z, part.name).toBeGreaterThanOrEqual(-2.501)
-    expect(b.max.z, part.name).toBeLessThanOrEqual(2.501)
+    const b = bounds(part), overhang = part.layer === "roof" ? ROOF_OVERHANG : 0
+    expect(b.min.x, part.name).toBeGreaterThanOrEqual(-1.501-overhang)
+    expect(b.max.x, part.name).toBeLessThanOrEqual(1.501+overhang)
+    expect(b.min.z, part.name).toBeGreaterThanOrEqual(-2.501-overhang)
+    expect(b.max.z, part.name).toBeLessThanOrEqual(2.501+overhang)
   }
   const aisle = new Box3(new Vector3(-.3,.13,-.5),new Vector3(.3,.7,2.5))
   expect(parts.filter(p => p.layer === "interior").some(p => bounds(p).intersectsBox(aisle))).toBe(false)

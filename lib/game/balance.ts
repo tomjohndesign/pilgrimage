@@ -96,6 +96,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "hall",
+    retired: true,
     label: "Shrine hall",
     category: "buildings",
     description: "A gathering place worthy of a sanctuary.",
@@ -125,7 +126,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "house", label: "House", category: "buildings",
-    description: "A log hut with a hearth and six straw pallets, three on the floor and three on a sleeping shelf above. Settlers who take work here move in, and come home to sleep when they tire.",
+    description: "A log hut for eight residents, with four straw bunks in two timber frames, each with a lower and upper bed. Tired residents take any free bunk; each bunk holds one sleeper at a time.",
     cost: { gold: 40, wood: 30 }, renown: 1, requiredRenown: 0,
     income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.70,
     color: "#8c7658", roofColor: "#a59164",
@@ -155,6 +156,7 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "guard-post", label: "Guard post", category: "buildings",
+    retired: true,
     description: "A sheltered watch post that reassures travelers on the approach.",
     cost: { gold: 70, wood: 50 }, renown: 4, requiredRenown: 80,
     income: { gold: 0, wood: 0 }, w: 2, d: 2, height: 0.65,
@@ -462,7 +464,7 @@ export const RULE_FIELDS = [
   },
   {
     key: "joblessHireChance", group: "Settlement work", label: "Hiring chance without a trade",
-    description: "Chance a visitor out of work takes an open place after seeing the relic. They still need a free house bed and a vacancy they can reach; a woodcutter also needs standing timber in range.",
+    description: "Chance a visitor out of work takes an open place after seeing the relic. They still need space in a household and a vacancy they can reach; a woodcutter also needs standing timber in range.",
     default: 0.9, min: 0, max: 1, step: 0.01,
   },
   {
@@ -605,7 +607,7 @@ export function buildingIncomeLabel(def: BuildDefinition, balance: GameBalance):
     : def.id === "tavern" ? "4 jobs · food & drink for gold"
     : def.id === "sheep-pen" ? "2 herding jobs"
     : def.id === "inn" ? "4 jobs · bunks & beds"
-    : def.id === "house" ? "Homes 6 settlers"
+    : def.id === "house" ? "Homes 8 settlers · 4 bunks"
     : def.id === "monk-shelter" || def.id === "shelter" ? "Adds monk housing when complete"
     : def.id === "market" ? "Draws a vendor to keep it"
     : def.id === "storehouse" ? `Timber storage · ${STOREHOUSE_FOOD_CAPACITY} food capacity` : "No resource income"

@@ -34,7 +34,7 @@ describe("authored character supports", () => {
     expect(support.anchor.z).toBeCloseTo(4)
   })
 
-  for (const type of ["monk-shelter", "shelter"]) {
+  for (const type of ["monk-shelter", "shelter", "house"]) {
     it.each([0, 1, 2, 3] as BuildingRotation[])(`${type} routes every rest slot onto its rendered bed at rotation %s`, rotation => {
       const map = fixture(type), building = map.buildings[0]
       Object.assign(building, { rotation, ...rotatedFootprint({ w: 3, d: 2 }, rotation) })
@@ -43,14 +43,14 @@ describe("authored character supports", () => {
       expect(beds).toHaveLength(type === "shelter" ? 2 : 4)
       for (let slot = 0; slot < beds.length * 2; slot++) {
         const actor: Worker = { x: 0, y: 0, z: 2, workSlot: slot }
-        expect(assignBuildingTask(actor, map, "rest")).toBe(true)
+        expect(assignBuildingTask(actor, map, "rest", type === "house" ? building.id : undefined)).toBe(true)
         for (let tick = 0; actor.buildingTask!.route.length && tick < 500; tick++) stepBuildingTask(actor, map, 2, .1)
         expect(stepBuildingTask(actor, map, 2, .1)).toBe("sleeping")
         const bed = placedSupport(map, building, beds[slot % beds.length])
         expect(actor.x).toBeCloseTo(bed.anchor.x)
         expect(actor.z).toBeCloseTo(bed.anchor.z)
         expect(actor.buildingTask!.heading).toBeCloseTo(bed.heading)
-        expect(characterSupport(map, actor.x, actor.z, "sleeping")).toEqual(bed)
+        expect(characterSupport(map, actor.x, actor.z, "sleeping", actor.y)).toEqual(bed)
         expect(characterSupport(map, actor.x, actor.z, "walk")).toBeUndefined()
       }
     })

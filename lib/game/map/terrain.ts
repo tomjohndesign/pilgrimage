@@ -67,7 +67,7 @@ export const TERRAIN: Record<TerrainId, TerrainDef> = {
   grass: {
     id: "grass",
     label: "Clear land",
-    color: "#77864b",
+    color: "#4f7045",
     jitter: 0.035,
     shadeBlend: 0.55,
     buildable: true,

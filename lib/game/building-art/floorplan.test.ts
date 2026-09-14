@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { buildingParts } from "./geometry"
 import { earlyBuildingRecipe } from "./style"
+import { INN_OVERHANG } from "./dimensions"
+import { innParts } from "./inn"
 import { HOUSE_BEDS } from "./early-geometry"
 import { furnitureBounds, insideRoom, overlapsFloor } from "./furniture-placement"
 import { partSupports } from "../character-support"
@@ -9,21 +11,28 @@ import { tavernInteriorRoute } from "../tavern-navigation"
 import { entranceParts } from "./entrance"
 
 describe("furnished procedural rooms", () => {
-  it("rotates complete beds and sleeping contacts while retaining the six house pallets", () => {
-    const headings=new Set<number>()
-    for(const seed of [4,8,12,16,32,64]) {
+  it("keeps each upper mattress aligned with its lower bunk and timber frame", () => {
+    for(const seed of [0,1,2,4,8,12,16,32,64,40130]) {
       const recipe={...earlyBuildingRecipe("house"),width:3,depth:4,layoutSeed:seed}
       const parts=buildingParts(recipe),supports=partSupports(parts).filter(p=>p.clips.includes("sleeping"))
       expect(supports).toHaveLength(HOUSE_BEDS)
       for(const support of supports) {
-        headings.add(Math.round(support.heading*2/Math.PI))
         const index=support.id.slice("wool-cover-".length),bed=parts.find(p=>p.name===`straw-bed-${index}`)!
         expect(support.anchor.x).toBeCloseTo(bed.position[0])
         expect(support.anchor.z).toBeCloseTo(bed.position[2])
         expect(insideRoom(furnitureBounds([bed]),3,4,bed.rotation?.[1] ? .18 : .04)).toBe(true)
       }
+      expect(parts.some(p=>p.name==="sleeping-shelf")).toBe(false)
+      for(let col=0;col<2;col++) {
+        const lower=parts.find(p=>p.name===`straw-bed-${col}`)!,upper=parts.find(p=>p.name===`straw-bed-${col+2}`)!
+        expect(upper.position[0]).toBe(lower.position[0])
+        expect(upper.position[2]).toBe(lower.position[2])
+        expect(upper.rotation).toEqual(lower.rotation)
+        expect(upper.position[1]-lower.position[1]).toBeCloseTo(.48)
+        expect(parts.filter(p=>p.name.startsWith(`bunk-${col}-post-`))).toHaveLength(4)
+        expect(parts.filter(p=>p.name.startsWith(`bunk-${col}-rung-`))).toHaveLength(3)
+      }
     }
-    expect([...headings].some(n=>Math.abs(n)%2===1)).toBe(true)
   })
 
   it.each(["house","hall","shelter","monk-shelter","guard-post"] as const)("adds separate furniture to larger %s rooms without intersecting other furniture", variant => {
@@ -79,4 +88,23 @@ describe("furnished procedural rooms", () => {
       }
     }
   })
+})
+
+
+it("keeps every house bunk component inside the log walls, including mirrored heated layouts", () => {
+  for (const [width,depth] of [[2,2],[3,2],[3,4],[5,5]]) for (const seed of [0,1,2,4,27,81,40130]) for(const fireplace of [false,true]) {
+    const parts=buildingParts({...earlyBuildingRecipe("house"),width,depth,layoutSeed:seed,fireplace})
+    const bunks=parts.filter(p=>/^(bunk-|straw-bed-|wool-cover-|rolled-blanket-)/.test(p.name))
+    expect(parts.filter(p=>p.support?.clips.includes("sleeping"))).toHaveLength(HOUSE_BEDS)
+    for(const part of bunks) expect(insideRoom(furnitureBounds([part]),width,depth,.239),`${width}x${depth}/${seed}/${part.name}`).toBe(true)
+  }
+})
+
+it("keeps inn bedframes, posts, mattresses and rungs inside the plaster", () => {
+  for (const [width,depth] of [[2,2],[3,4],[4,4],[5,5]]) for(const upper of [false,true]) {
+    const parts=innParts(width,depth,1.2,false,17,upper)
+    const beds=parts.filter(p=>/^(inn-bed|inn-bunk-|straw-bed-|wool-cover-|rolled-blanket-)/.test(p.name))
+    expect(beds.length).toBeGreaterThan(0)
+    for(const part of beds) expect(insideRoom(furnitureBounds([part]),width+(upper ? 2*INN_OVERHANG : 0),depth+(upper ? 2*INN_OVERHANG : 0),.185),`${width}x${depth}/${upper}/${part.name}`).toBe(true)
+  }
 })

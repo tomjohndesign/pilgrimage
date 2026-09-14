@@ -13,6 +13,8 @@ export interface BuildingPart {
   rotation?: Vec3
   vertices?: number[]
   color: string
+  /** Authored paint/cloth surface for the owning settlement. */
+  playerAccent?: boolean
   /** Ground surface uses the same dirt texture and tile scale as paths. */
   surface?: "trail"
   cutawaySide?: [number, number]

@@ -53,14 +53,16 @@ export function dirtFloorMaterial(part: BuildingPart, trail: THREE.Texture, gras
         vec2 q = abs(vFloorLocal) - floorHalfSize;
         float d = length(max(q,0.0)) + min(max(q.x,q.y),0.0);
         float rough = tileNoise(vFloorWorld * 3.7) * .65 + tileNoise(vFloorWorld * 8.3) * .35;
-        float edge = .025 + ${DIRT_FLOOR_OVERLAP-.025} * rough;
+        float edge = .005 + .02 * rough;
         float aa = max(fwidth(d), .001);
         diffuseColor.a *= 1.0-smoothstep(edge-aa*.5,edge+aa*.5,d);
         vec4 dirt = sampleTiled(trailMap, vFloorWorld * ${ROAD_UV_SCALE}, vFloorWorld);
         vec3 sward = sampleSward(grassMap, vFloorWorld);
-        diffuseColor.rgb *= mix(sward, roadSurfaceColor(dirt, ${DEFAULT_ROAD_LOOK.shade.toFixed(1)}, vec4(0.0), vec3(1.0)), dirt.a * ${DEFAULT_ROAD_LOOK.opacity.toFixed(1)});
+        float growth = tileNoise(vFloorWorld * 7.3) * .12 + tileNoise(vFloorWorld * 17.0) * .05;
+        float floorBare = smoothstep(.015, .13 + growth, -d);
+        diffuseColor.rgb *= mix(sward, buildingDirtColor(roadSurfaceColor(dirt, ${DEFAULT_ROAD_LOOK.shade.toFixed(1)}, vec4(0.0), vec3(1.0)), vFloorWorld), floorBare * dirt.a * ${DEFAULT_ROAD_LOOK.opacity.toFixed(1)});
       `)
   }
-  material.customProgramCacheKey = () => "building-trail-preview-growth-v2"
+  material.customProgramCacheKey = () => "building-trail-preview-growth-v3"
   return material
 }

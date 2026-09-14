@@ -1,11 +1,13 @@
 "use client"
 
+import { PlayerColorPicker } from "./player-color"
+
 import { isChapel } from "@/lib/game/shrine-layout"
 import { CHURCH_COST, CHURCH_RENOWN_BONUS, CHAPEL_MONKS, CHURCH_MONKS } from "@/lib/game/shrine-upgrade"
 import { builderPaceLabel, builderRate, MONK_BUILD_RATE } from "@/lib/game/build-labour"
 import { isComplete, isHouse, isMonkShelter } from "@/lib/game/construction"
 import { BUILDING_KINDS, buildingKind } from "@/lib/game/buildings"
-import { housingBeds, monkBeds } from "@/lib/game/housing"
+import { housingBeds, housingCapacity, monkBeds } from "@/lib/game/housing"
 import { FOOD_TYPES, FOOD_LABELS, STOREHOUSE_FOOD_CAPACITY, emptyFoodStock, storedFood } from "@/lib/game/storage"
 
 import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/elevation"
@@ -184,7 +186,7 @@ function ToggleRow({
 }
 
 /** Top-level navigation, folded into the play view. Controls live in here too. */
-function MenuPanel({ onClose, playing }: { onClose: () => void; playing: boolean }) {
+function MenuPanel({ onClose, playing, playerColor, onColorChange }: { onClose: () => void; playing: boolean; playerColor: string; onColorChange: (color: string) => void }) {
   const [showControls, setShowControls] = useState(false)
 
   return (
@@ -192,6 +194,7 @@ function MenuPanel({ onClose, playing }: { onClose: () => void; playing: boolean
       className={`hud-menu pointer-events-auto absolute right-0 top-full mt-2 w-56 border border-rule bg-parchment/95 px-4 py-3 ${PANEL_SHADOW}`}
     >
       <div className="hud-world-heading"><span>Menu</span><button type="button" className="hud-close" aria-label="Close menu" onClick={onClose}><X size={16} /></button></div>
+      <div className="mb-3 border-b border-rule pb-3"><PlayerColorPicker value={playerColor} onChange={onColorChange} /></div>
       <nav className="flex flex-col gap-1.5">
         {SITE_MENU.map((item) => (
           <div key={item.href} className="flex flex-col gap-1">
@@ -843,7 +846,7 @@ export function GameHud({
               setPanel(null)
               economy.chooseBuild(null)
             }}><Menu size={16} /></button>}
-          {playing && menuOpen && <MenuPanel playing={playing} onClose={() => setMenuOpen(false)} />}
+          {playing && menuOpen && <MenuPanel playerColor={settings.playerColor} onColorChange={playerColor => set({ playerColor })} playing={playing} onClose={() => setMenuOpen(false)} />}
         </div>
         {playing && <HudClock />}
         </div>
@@ -868,6 +871,7 @@ export function GameHud({
           <Link href={continueHref} className="hud-action hud-action-primary hud-landing-play">Continue</Link>
           <div className="hud-landing-divider" role="separator">or</div>
         </>}
+        <PlayerColorPicker value={settings.playerColor} onChange={playerColor => set({ playerColor })} />
         <NewWorldFields seedId="landing-seed" size={settings.size} seed={seed}
           onSizeChange={size => set({ size })} onSeedChange={onSeedChange} onSeedValidityChange={setSeedValid} />
         <button type="submit" className={`hud-action hud-landing-play${continueHref ? "" : " hud-action-primary"}`} disabled={!canStart || !seedValid}>
@@ -1176,7 +1180,7 @@ export function GameHud({
             {selectedBuilding.owner === "independent" && <p className="mt-2 max-w-56 text-[11px] text-ink-light">Independent roadside town. {selectedBuilding.buildType === "tavern" ? "Locally run tavern serving food and drink to passing travelers." : "Home to the townspeople."} Joins your settlement when your influence reaches this building; until then, it earns you no income or renown.</p>}
             {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">{brothersAtHome} / {housingBeds(selectedBuilding)} monks · {Math.max(0, housingBeds(selectedBuilding) - brothersAtHome)} spaces available. Tired monks sleep here until their stamina recovers.</p>}
             {isHouse(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
-              {household} / {housingBeds(selectedBuilding)} settlers · {Math.max(0, housingBeds(selectedBuilding) - household)} spaces available. They come back here to sleep and eat.
+              {household} / {housingCapacity(selectedBuilding)} settlers · {housingBeds(selectedBuilding)} bunks. Residents take a free bunk when they need sleep.
             </p>}
             {selectedKind && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
               {staff} of {BUILDING_KINDS[selectedKind].jobs} {BUILDING_KINDS[selectedKind].vendorKept ? "kept by a settled vendor" : "jobs taken"}

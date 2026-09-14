@@ -1,3 +1,4 @@
+import { DEFAULT_PLAYER_COLOR } from "../player-color"
 import { DEFAULT_SCENE_VISIBILITY, type SceneVisibility } from "../scene-visibility"
 import { DEFAULT_ELEVATION, elevationSettings, type ElevationSettings } from "../map/elevation"
 import { BASE_CHARACTER_SCALE, DEFAULT_WALK_SPEED, DEFAULT_WALK_STRIDE } from "../base-person/gait"
@@ -55,6 +56,7 @@ export interface WorldSettings {
 }
 
 export interface DisplaySettings extends SceneVisibility {
+  playerColor: string
   /** Walking speed in tiles per second at the reference character size. */
   walkSpeed: number
   characterFps: number
@@ -102,6 +104,7 @@ export const DEFAULT_WORLD_SETTINGS: WorldSettings = {
 
 export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings = {
   ...DEFAULT_SCENE_VISIBILITY,
+  playerColor: DEFAULT_PLAYER_COLOR,
   walkSpeed: DEFAULT_WALK_SPEED,
   characterFps: BASE_PERSON.defaultFps,
   walkSync: true,

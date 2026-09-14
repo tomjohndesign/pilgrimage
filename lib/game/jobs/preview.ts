@@ -1,6 +1,6 @@
 import { travelerAppearance } from "../base-person/population"
 import { BUILDING_KINDS } from "../buildings"
-import { buildingSupports } from "../character-support"
+import { housingCapacity } from "../housing"
 import type { GameMap } from "../map/types"
 import { jobBuildings } from "../settlement"
 import { TRAVELER_TYPES, type Traveler } from "../travelers"
@@ -9,7 +9,7 @@ import { TRAVELER_TYPES, type Traveler } from "../travelers"
 export function previewResidents(map: GameMap) {
   const seen = new Map<string, number>()
   const homes = map.buildings.filter(b => b.owner !== "independent" && b.buildType === "house").flatMap(b =>
-    buildingSupports(b).filter(s => s.clips.includes("sleeping")).map(() => b.id))
+    Array.from({ length: housingCapacity(b) }, () => b.id))
   let index = 0
   let nextId = 1_000_000
   return jobBuildings(map).filter(b => b.id.startsWith("preview-")).flatMap(building =>

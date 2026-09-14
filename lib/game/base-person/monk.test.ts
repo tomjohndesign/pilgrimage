@@ -26,7 +26,11 @@ describe("parametric monks", () => {
       expect(b.tunicHem).toBeLessThan(b.ankleHeight + 0.05)
       expect(recipe.renderPalette).toContain(recipe.palette.belt)
       const robe = rig.root.getObjectByName("robe") as THREE.Mesh
-      expect((robe.material as THREE.MeshLambertMaterial).color.getHexString()).toBe(design.tunicColor.slice(1))
+      const materials = robe.material as THREE.MeshLambertMaterial[]
+      expect(materials[0].color.getHexString()).toBe(design.tunicColor.slice(1))
+      expect(materials[1].color.getHexString()).toBe(design.accentColor.slice(1))
+      expect(robe.geometry.groups.some(group => group.materialIndex === 1)).toBe(true)
+      expect((rig.root.getObjectByName("rope-belt") as THREE.Mesh).material).toBe(materials[1])
       expect(rig.root.getObjectByName("head-covering")).toBeUndefined()
       rig.pose(0, "idle")
       const ring = rig.root.getObjectByName("tonsure") as THREE.Mesh

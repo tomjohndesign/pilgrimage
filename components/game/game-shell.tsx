@@ -1,5 +1,7 @@
 "use client"
 
+import { PlayerColorContext } from "./player-color"
+
 import { withTravelParties } from "@/lib/game/travel-parties"
 import { townResidents } from "@/lib/game/town-residents"
 
@@ -366,7 +368,7 @@ export function GameShell({
   }, [travelers])
 
   return (
-    <div className="fixed inset-0 overflow-hidden select-none" style={{ backgroundColor: GAME_BACKGROUND }}>
+    <PlayerColorContext.Provider value={settings.playerColor}><div className="fixed inset-0 overflow-hidden select-none" style={{ backgroundColor: GAME_BACKGROUND }}>
       <LoadingChurch showChurch={!resuming && (!openingMap || !map || landmarkRoad !== map.road || revealPhase === "loading")}
         chapel={!openingHovel || isChapel(openingHovel)}
         generating={starting && revealPhase === "loading"} idle={!starting}
@@ -454,6 +456,6 @@ export function GameShell({
         onGrant={economy.grant}
         onGrantRenown={economy.bless}
       />}
-    </div>
+    </div></PlayerColorContext.Provider>
   )
 }

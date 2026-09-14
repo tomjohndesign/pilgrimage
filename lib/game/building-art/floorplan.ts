@@ -44,7 +44,8 @@ export function furnishFloorplan(source: BuildingPart[], recipe: RoomRecipe): Bu
     const index=Number(bed.name.slice("straw-bed-".length))
     const assembly=parts.filter(p=>["straw-bed-","wool-cover-","rolled-blanket-"].some(prefix=>p.name===`${prefix}${index}`))
     const quarter=Math.floor(seed/4+index)%4
-    if(seed<4 || !quarter) continue
+    // House bedding is fixed to a shared two-tier timber frame.
+    if(variant === "house" || seed<4 || !quarter) continue
     const turned=turnFurniture(assembly,bed.position[0],bed.position[2],quarter*Math.PI/2)
     const placed=place(turned,new Set(assembly),true)
     if(placed) parts=[...parts.filter(p=>!assembly.includes(p)),...placed]

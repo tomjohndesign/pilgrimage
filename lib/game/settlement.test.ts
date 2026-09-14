@@ -169,7 +169,7 @@ describe("build and buy", () => {
     expect(placementError(trackMap(), BUILD_CATALOG.find(b => b.id === "monk-shelter")!, { x: 14, z: 16 })).toMatch(/access|entrance|door|approach|side wall/)
   })
 
-  it.each(["shelter", "wood-shelter", "lumberCamp", "watering-hole"])("retires %s without deleting existing structures or charging for new ones", type => {
+  it.each(["shelter", "wood-shelter", "lumberCamp", "watering-hole", "hall", "guard-post"])("retires %s without deleting existing structures or charging for new ones", type => {
     const def = BUILD_CATALOG.find(b => b.id === type)!
     expect(def.retired).toBe(true)
     const existing = { ...def, id: "legacy", buildType: type, x: 10, z: 14 }
@@ -197,8 +197,8 @@ describe("build and buy", () => {
     expect(settlementEvangelism(map)).toBe(0)
   })
   it.each([0, 1, 2, 3] as BuildingRotation[])("buys and reserves a rectangular building at rotation %i", rotation => {
-    const map = testMap(), at = { x: 9, z: 14 }
-    const def = BUILD_CATALOG.find(item => item.id === "hall")!
+    const map = testMap(), at = { x: 7, z: 14 }
+    const def = BUILD_CATALOG.find(item => item.id === "tavern")!
     const water = new Uint8Array(map.tiles.length)
     map.elevation = generateElevation(1, map.width, map.depth, water)
     map.elevation.height = map.elevation.height.map((_, i) => (i % map.width) * 0.025)
@@ -233,16 +233,16 @@ describe("build and buy", () => {
   })
 
   it("checks the turned footprint rather than the catalogue dimensions", () => {
-    const map = testMap(), at = { x: 9, z: 14 }
-    const def = BUILD_CATALOG.find(item => item.id === "hall")!
-    map.tiles[(at.z + 2) * map.width + at.x] = "water"
+    const map = testMap(), at = { x: 7, z: 14 }
+    const def = BUILD_CATALOG.find(item => item.id === "tavern")!
+    map.tiles[(at.z + 3) * map.width + at.x] = "water"
     expect(placementError(map, def, at)).toBeTruthy()
     expect(placementError(map, def, at, undefined, 1)).toBeNull()
   })
 
   it("offers the active building kit", () => {
     expect(BUILD_CATALOG.filter(b => b.category === "buildings" && !b.retired).map(b => b.id))
-      .toEqual(["workshop", "hall", "storehouse", "monk-shelter", "house", "market", "guard-post", "tavern", "inn", "sheep-pen"])
+      .toEqual(["workshop", "storehouse", "monk-shelter", "house", "market", "tavern", "inn", "sheep-pen"])
     for (const type of ["enclosure", "gable", "hovel"])
       expect(purchaseStructure(createSettlement(), testMap(), monks, [relic], type, { x: 10, z: 14 }).error).toBe("Unknown structure.")
   })
@@ -481,11 +481,11 @@ describe("build and buy", () => {
     expect(placementError(testMap(), house, { x: 11.5, z: 14 })).toBeTruthy()
   })
 
-  it("housing does not unlock the hall; completed visits can earn the required renown", () => {
+  it("housing does not unlock the market; completed visits can earn the required renown", () => {
     const map = testMap()
     let settlement = { ...createSettlement(), resources: { gold: 1000, wood: 1000 } }
-    const locked = purchaseStructure(settlement, map, [], [], "hall", { x: 18, z: 14 })
-    expect(locked.error).toMatch(/40 shrine renown/)
+    const locked = purchaseStructure(settlement, map, [], [], "market", { x: 18, z: 14 })
+    expect(locked.error).toMatch(/10 shrine renown/)
     expect(locked.settlement).toBe(settlement)
     for (const at of [
       { x: 9, z: 10 },
@@ -498,10 +498,10 @@ describe("build and buy", () => {
       expect(purchase.error).toBeNull()
       settlement = purchase.settlement
     }
-    expect(purchaseStructure(settlement, map, [], [], "hall", { x: 18, z: 14 }).error).toMatch(/40 shrine renown/)
-    const hall = purchaseStructure(settlement, map, [], [], "hall", { x: 18, z: 14 }, undefined, 70)
-    expect(hall.error).toBeNull()
-    expect(hall.settlement.structures.at(-1)?.buildType).toBe("hall")
+    expect(purchaseStructure(settlement, map, [], [], "market", { x: 18, z: 14 }).error).toMatch(/10 shrine renown/)
+    const market = purchaseStructure(settlement, map, [], [], "market", { x: 18, z: 14 }, undefined, 10000)
+    expect(market.error).toBeNull()
+    expect(market.settlement.structures.at(-1)?.buildType).toBe("market")
   })
 
   it("counts granted renown toward unlocks and reports it separately", () => {
@@ -513,8 +513,8 @@ describe("build and buy", () => {
     const renown = settlementRenown(map, [], [], undefined, 0, settlement.grantedRenown)
     expect(renown.granted).toBe(1000)
     expect(renown.total).toBe(earned.total + 1000)
-    const hall = purchaseStructure(settlement, map, [], [], "hall", { x: 18, z: 14 })
-    expect(hall.error).toBeNull()
+    const market = purchaseStructure(settlement, map, [], [], "market", { x: 18, z: 14 })
+    expect(market.error).toBeNull()
   })
 
   it("grants resources on top of the treasury without touching deliveries", () => {
