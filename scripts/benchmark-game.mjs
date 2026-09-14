@@ -84,6 +84,8 @@ try {
   // the complete cast, including converts, rather than waiting for traffic alone.
   const expectedPopulation = await page.evaluate(() => window.__pilgrimage.expectedPopulation ?? window.__pilgrimage.populationStatus().total)
   assert.ok(expectedPopulation >= count, "the cast must include all requested travelers")
+  const simulationDaySeconds = await page.evaluate(() => window.__pilgrimage.simulationDaySeconds)
+  assert.ok(Number.isFinite(simulationDaySeconds) && simulationDaySeconds > 0, "benchmark build must expose its current simulation day length")
   // Simulation is ready before Suspense has mounted the sprite assets.
   await page.evaluate(({ zoom, target, adaptive, compactBatches }) => {
     const game = window.__pilgrimage, road = game.map.road
@@ -293,7 +295,7 @@ try {
     const batchPreparation = await page.evaluate(() => window.__pilgrimage.batchPreparation?.())
     if (compactBatches) assert.ok(batchPreparation?.compact && batchPreparation.direct > 0, "compact POC must actually prepare direct billboard inputs")
     const elapsedSeconds = measured.elapsedSeconds
-    const simulatedSeconds = (measured.timeAfter - measured.timeBefore) * 600
+    const simulatedSeconds = (measured.timeAfter - measured.timeBefore) * simulationDaySeconds
     const population = await page.evaluate(before => {
       const after = new Map(window.__pilgrimage.sim().map(s => [s.id, s]))
       return { count: after.size, ...window.__pilgrimage.populationStatus(), moved: before.filter(s => { const next = after.get(s.id); return next && Math.hypot(next.x - s.x, next.z - s.z) > .01 }).length }
@@ -316,7 +318,7 @@ try {
     }
     const occlusion = process.env.BENCH_OCCLUSION === "1" ? await page.evaluate(() => window.__pilgrimage.characterOcclusion()) : undefined
     const observedWalkPoses = Object.fromEntries([...poseFrames].map(([detail, frames]) => [detail, [...frames].sort((a, b) => a - b)]))
-    const result = { ...info, figureSamples: measured.figureSamples, zoom: viewSize, occlusion, city, scenario, trees, target, measuredAt: new Date().toISOString(), host: { cpu: cpus()[0]?.model, memoryGiB: totalmem() / 2 ** 30, loadAverage: loadavg() }, speed, gameTime: { elapsedSeconds, simulatedSeconds, effectiveSpeed: simulatedSeconds / elapsedSeconds / 2 }, population, timings, gpuTimings, characterMotion, observedWalkPoses, longTasks: measured.longTasks, seconds, motion, rotate, zoomMotion, inputMotion, sceneryDetails: measured.sceneryDetails, detailTransitions: measured.detailTransitions, detailChangesDuringZoom: measured.detailChangesDuringZoom, cameraMisalignedFrames: measured.misaligned, missingVisibleFigures: measured.missingFigures, frames: frames.length, fps: 1000 / mean, mean, p50: sorted[Math.floor(sorted.length * .5)], p95: sorted[Math.floor(sorted.length * .95)], p99: sorted[Math.floor(sorted.length * .99)], overBudgetPercent: frames.filter(ms => ms > 18).length / frames.length * 100, metrics, errors, browserWarnings: [...new Set(browserWarnings)] }
+    const result = { ...info, figureSamples: measured.figureSamples, zoom: viewSize, occlusion, city, scenario, trees, target, measuredAt: new Date().toISOString(), host: { cpu: cpus()[0]?.model, memoryGiB: totalmem() / 2 ** 30, loadAverage: loadavg() }, speed, gameTime: { daySeconds: simulationDaySeconds, startDays: measured.timeBefore, endDays: measured.timeAfter, elapsedSeconds, simulatedSeconds, effectiveSpeed: simulatedSeconds / elapsedSeconds / 2 }, population, timings, gpuTimings, characterMotion, observedWalkPoses, longTasks: measured.longTasks, seconds, motion, rotate, zoomMotion, inputMotion, sceneryDetails: measured.sceneryDetails, detailTransitions: measured.detailTransitions, detailChangesDuringZoom: measured.detailChangesDuringZoom, cameraMisalignedFrames: measured.misaligned, missingVisibleFigures: measured.missingFigures, frames: frames.length, fps: 1000 / mean, mean, p50: sorted[Math.floor(sorted.length * .5)], p95: sorted[Math.floor(sorted.length * .95)], p99: sorted[Math.floor(sorted.length * .99)], overBudgetPercent: frames.filter(ms => ms > 18).length / frames.length * 100, metrics, errors, browserWarnings: [...new Set(browserWarnings)] }
     result.batchPreparation = batchPreparation
     result.requestedTravelers = count
     await writeFile(`${output}/result-${tag}.json`, JSON.stringify(result, null, 2))
@@ -713,7 +715,7 @@ try {
         }) : undefined
         const frames = [...sample.frames].sort((a, b) => a - b)
         const result = { ...condition, viewSize, speed: speeds[0], gpu, ...sample,
-          effectiveSpeed: (sample.timeAfter - sample.timeBefore) * 600 / (sample.frames.reduce((a, b) => a + b, 0) / 1000) / 2,
+          effectiveSpeed: (sample.timeAfter - sample.timeBefore) * simulationDaySeconds / (sample.frames.reduce((a, b) => a + b, 0) / 1000) / 2,
           fps: sample.frames.length * 1000 / sample.frames.reduce((a, b) => a + b, 0), p95: frames[Math.floor(frames.length * .95)] }
         results.push(result)
         await writeFile(`${output}/isolation.json`, JSON.stringify(results, null, 2))

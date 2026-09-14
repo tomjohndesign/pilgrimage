@@ -6,9 +6,20 @@ export function alignCart(hitch: Point, heading: number, wheelbase: number): Car
 /** Reconstruct a trailing axle when joining an existing route. Only the hitch
  * follows the path; the axle rolls along its own inside curve. */
 export function cartOnRoute(progress: number, direction: 1 | -1, wheelbase: number, pointAt: (progress: number) => Point): CartPose {
-  const start = progress - direction * (wheelbase * 10 + 2), hitch = pointAt(start), ahead = pointAt(start + direction * 0.01)
-  let pose = alignCart(hitch, Math.atan2(ahead.x - hitch.x, ahead.z - hitch.z), wheelbase)
+  const start = progress - direction * (wheelbase * 10 + 2)
   const steps = Math.ceil(Math.abs(progress - start) / 0.05)
+  // Pack animals use this route with no trailing axle. Their final heading
+  // depends only on the last moving segment, not forty earlier towing steps.
+  // Retain reconstruction for a stationary endpoint, whose heading is inherited.
+  if (wheelbase === 0 && steps > 0) {
+    const before = pointAt(start + (progress - start) * (steps - 1) / steps)
+    const hitch = pointAt(start + (progress - start) * steps / steps)
+    if (Math.hypot(hitch.x - before.x, hitch.z - before.z) >= 1e-8) {
+      return alignCart(hitch, Math.atan2(hitch.x - before.x, hitch.z - before.z), 0)
+    }
+  }
+  const hitch = pointAt(start), ahead = pointAt(start + direction * 0.01)
+  let pose = alignCart(hitch, Math.atan2(ahead.x - hitch.x, ahead.z - hitch.z), wheelbase)
   for (let i = 1; i <= steps; i++) pose = followCart(pose, pointAt(start + (progress - start) * i / steps), wheelbase)
   return { ...pose, distance: 0 }
 }

@@ -1,4 +1,5 @@
 import { mapBuildingQuery } from "../building-spatial"
+import { SpatialPoints } from "../spatial-points"
 import { buildingYaw, rotateBuildingPoint, rotatedFootprint } from "../building-rotation"
 import { marketLayout, marketBayContains } from "../market-layout"
 import type { TreePlacement } from "../trees/placement"
@@ -103,6 +104,34 @@ export interface ParkingContext {
   trees: readonly TreePlacement[]
   obstacles?: readonly StallObstacle[]
   people?: readonly Point[]
+}
+
+/** Share a spatial broad phase across a synchronous parking/recovery search.
+ * The caller must keep its obstacle positions fixed until the search returns;
+ * each new search rebuilds from live data, including moved trees and stalls. */
+export function parkingClearance(map: GameMap, puller: Puller, scale: number, context: ParkingContext) {
+  const obstacles = new SpatialPoints(context.obstacles ?? [])
+  const trees = new SpatialPoints(context.trees)
+  const people = new SpatialPoints(context.people ?? [])
+  let obstacleRadius = 0, treeRadius = 0
+  for (const box of context.obstacles ?? []) obstacleRadius = Math.max(obstacleRadius, Math.hypot(box.halfWidth, box.halfLength))
+  for (const tree of context.trees) treeRadius = Math.max(treeRadius, (tree.shape?.trunkRadius ?? .18) * (tree.scale ?? 1) + .08)
+  return (pose: CartPose, grassOnly = false, animalHeading = pose.heading): boolean => {
+    if (!convoyClear(map, pose, puller, scale, grassOnly, animalHeading)) return false
+    for (const box of convoyBounds(pose, puller, scale, animalHeading)) {
+      const radius = Math.hypot(box.halfWidth, box.halfLength)
+      // Include tangencies: SpatialPoints uses a strict radius comparison.
+      // SAT expands both separating axes by .12, so its corner envelope needs
+      // sqrt(2) times that margin, not merely the margin along one axis.
+      if (obstacles.firstWithin(box.x, box.z, radius + obstacleRadius + .12 * Math.SQRT2 + 1e-6,
+        other => overlaps(box, other))) return false
+      if (trees.firstWithin(box.x, box.z, radius + treeRadius + 1e-6,
+        tree => !pastureSegmentClear(tree, tree, [box], (tree.shape?.trunkRadius ?? .18) * (tree.scale ?? 1) + .08))) return false
+      if (people.firstWithin(box.x, box.z, radius + .2 + 1e-6,
+        person => !pastureSegmentClear(person, person, [box], .2))) return false
+    }
+    return true
+  }
 }
 
 function overlaps(a: StallObstacle, b: StallObstacle, clearance = .12) {

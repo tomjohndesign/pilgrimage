@@ -16,6 +16,7 @@ import { surfaceHeight } from "@/lib/game/map/bridges"
 import { SELECTED_CHARACTER_LAYER, type OutlineMode } from "@/lib/game/render/outline"
 import type { Traveler } from "@/lib/game/travelers"
 import { simRegistry, stepSim } from "@/lib/game/sim"
+import { GAME_DAY_SECONDS } from "@/lib/game/calendar"
 import type { MovementTuning } from "@/lib/game/motion"
 import { strikeTree } from "@/lib/game/trees/impact"
 import type { TreePlacement } from "@/lib/game/trees/placement"
@@ -69,6 +70,7 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
           activity: s.activity, riding: s.partyRiding, boarding: s.partyBoarding, stamina: s.stamina, waiting: s.partyWaiting, home: s.home, employer: s.employer,
         } }) })),
       expectedPopulation: travelers.length,
+      simulationDaySeconds: GAME_DAY_SECONDS,
       bakeLoadingChurch: async (chapel = true) => (await import("@/lib/game/render/loading-church-bake")).bakeLoadingChurch(gl, chapel),
       benchmarkTarget: benchmarkCity(map)?.centre,
       cityStats: () => cityBenchmarkStats(simRegistry.current, map),

@@ -97,7 +97,7 @@ export function tavernVisitPlan(
   map: GameMap,
   building: BuildingDef,
   from: TilePos,
-  occupied: ReadonlySet<string> = new Set(),
+  occupied: Pick<ReadonlySet<string>, "has"> = new Set(),
   fromWorld?: TavernWalkPoint,
 ): TavernPlan | null {
   const counter = servingCounter(map, building)
@@ -119,7 +119,7 @@ export function tavernVisitPlan(
 
 /** A free short rest uses a tavern seat or an exterior chair, without needing a keeper. */
 export function seatRestPlan(map: GameMap, building: BuildingDef, from: TavernWalkPoint,
-  occupied: ReadonlySet<string>): TavernPlan | null {
+  occupied: Pick<ReadonlySet<string>, "has">): TavernPlan | null {
   if (!isComplete(building)) return null
   const seats = buildingSeats(map, building).filter(seat =>
     (building.buildType === "tavern" || seat.id.startsWith("entry-")) && !occupied.has(`${building.id}:${seat.id}`))
