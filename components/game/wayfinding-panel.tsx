@@ -6,13 +6,15 @@ import type { GameMap } from "@/lib/game/map/types"
 import { DEFAULT_WAYFINDING, useWayfindingStore } from "@/lib/game/wayfinding-settings"
 import { wayfindingJourneys, wayfindingSnapshot, type DebugJourney } from "@/lib/game/wayfinding-debug"
 import { rebuildWorkerNavigation } from "@/lib/game/worker-route-memory"
+import { WayfindingControls } from "./wayfinding-controls"
 import { HudButton } from "./hud-button"
 
 /** Development controls use portable JSON and the live simulation's routes. */
 export function WayfindingPanel({ map, travelers, monks }: { map: GameMap; travelers: readonly { id: number; name: string }[]; monks: readonly { id: number; name: string }[] }) {
   const settings = useWayfindingStore(s => s.settings), apply = useWayfindingStore(s => s.apply)
   const selection = useCameraStore(s => s.selection)
-  const [draft, setDraft] = useState(() => JSON.stringify(settings, null, 2))
+  const [edit, setEdit] = useState<{ base: typeof settings; text: string } | null>(null)
+  const draft = edit?.base === settings ? edit.text : JSON.stringify(settings, null, 2)
   const [message, setMessage] = useState("")
   const [snapshot, setSnapshot] = useState<ReturnType<typeof wayfindingSnapshot> | null>(null)
   useEffect(() => {
@@ -25,18 +27,20 @@ export function WayfindingPanel({ map, travelers, monks }: { map: GameMap; trave
     catch { setMessage("Clipboard unavailable. Select and copy the JSON below.") }
   }
   return <div className="space-y-2 text-[11px] text-ink-light">
-    <p>Select a person to see their remaining route. Select a building to see incoming people. Cyan routes end at a gold marker; field arrows point toward the entrance, green near it and red farther away.</p>
+    <WayfindingControls map={map} />
+    <details><summary className="cursor-pointer font-display text-ink">Import / export JSON</summary>
     <label className="block">Wayfinding JSON
-      <textarea aria-label="Wayfinding JSON" spellCheck={false} rows={12} value={draft} onChange={e => setDraft(e.target.value)}
+      <textarea aria-label="Wayfinding JSON" spellCheck={false} rows={12} value={draft} onChange={e => setEdit({ base: settings, text: e.target.value })}
         className="mt-1 w-full border border-rule bg-parchment p-2 font-mono text-[11px] text-ink" />
     </label>
     <div className="flex flex-wrap gap-1">
-      <HudButton onClick={() => { try { apply(draft); setMessage("Applied. New trips use these rules; current reservations finish. Debug closures also stop incoming bread/water visits.") } catch (e) { setMessage(e instanceof Error ? e.message : "Invalid JSON") } }}>Apply JSON</HudButton>
+      <HudButton onClick={() => { try { apply(draft); setEdit(null); setMessage("Applied. New trips use these rules; current reservations finish. Debug closures also stop incoming bread/water visits.") } catch (e) { setMessage(e instanceof Error ? e.message : "Invalid JSON") } }}>Apply JSON</HudButton>
       <HudButton onClick={() => void copy(settings)}>Copy settings</HudButton>
-      <HudButton onClick={() => { const json = JSON.stringify(DEFAULT_WAYFINDING, null, 2); apply(json); setDraft(json); setMessage("Defaults restored.") }}>Reset</HudButton>
+      <HudButton onClick={() => { const json = JSON.stringify(DEFAULT_WAYFINDING, null, 2); apply(json); setEdit(null); setMessage("Defaults restored.") }}>Reset</HudButton>
     </div>
+    </details>
     <p role="status" className="break-words">{message}</p>
-    <p>Budget includes the full walk to the counter or water edge. “geographic” compares centres for an experiment, still within the travel budget. closedDestinations accepts building IDs. Edits last for this session. Activity priorities, needs and staffing still apply.</p>
+
     <p>{snapshot?.cache.destinationFields ?? 0} shared fields · {snapshot?.cache.fieldBuilds ?? 0} builds · {snapshot?.cache.fieldHits ?? 0} reuses · {snapshot?.cache.destinationCells ?? 0} cells</p>
     {snapshot?.journeys.map(j => <button key={`${j.kind}:${j.id}`} type="button" className="block text-left text-ink underline"
       onClick={() => useCameraStore.getState().select({ kind: j.kind, id: j.id })}>
@@ -44,7 +48,7 @@ export function WayfindingPanel({ map, travelers, monks }: { map: GameMap; trave
     </button>)}
     {!!selection && !snapshot?.journeys.length && <p>No incoming routes for this selection.</p>}
     {!!snapshot?.candidates.length && <div className="max-h-52 overflow-auto"><p>Service probes (geometry and availability; activity priorities decide when to seek):</p>
-      {snapshot.candidates.map(c => <p key={c.id} className="my-1"><button type="button" className="text-ink underline" onClick={() => useCameraStore.getState().select({ kind: "building", id: c.id })}>{c.id}</button> · {c.availability} · {c.distance === null ? c.reachability : `${c.distance.toFixed(1)} tiles`}</p>)}
+      {snapshot.candidates.map(c => <p key={c.id} className="my-1"><button type="button" className="text-ink underline" onClick={() => useCameraStore.getState().select({ kind: "building", id: c.id })}>{c.id}</button> · {c.availability} · {c.distance === null ? c.reachability : `${c.distance.toFixed(1)} tiles · score ${c.score?.toFixed(1)}`}</p>)}
     </div>}
     <div className="flex flex-wrap gap-1">
       <HudButton onClick={() => void copy(snapshot)}>Copy inspection JSON</HudButton>

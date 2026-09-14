@@ -1,5 +1,5 @@
 import { servicePlans } from "./service-wayfinding"
-import { wayfindingSettings } from "./wayfinding-settings"
+import { destinationEnabled } from "./wayfinding-settings"
 import { workerNavigationVersion } from "./worker-route-memory"
 import type { MonkJob } from "./monk-jobs"
 import { ALMS_HUNGER_GAIN, ALMS_HUNGER_CAP, ALMS_SERVING_SECONDS, almsStaffed, breadVisitPlan, type BreadVisit } from "./alms-table"
@@ -1288,7 +1288,6 @@ function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
   counters: readonly { id: string; x: number; z: number; w: number; d: number }[], returnTo: WorldPoint | null): boolean {
   if (!counters.length || !((s.hunger < SERVING_THRESHOLD && s.gold >= MEAL_PRICE)
     || ((s.thirst < SERVING_THRESHOLD || s.happiness < HAPPINESS_THRESHOLD) && s.gold >= DRINK_PRICE))) return false
-  const from = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
   const occupied = tavernReservations(sim)
   const physicalNeed = (s.hunger < SERVING_THRESHOLD && s.gold >= MEAL_PRICE)
     || (s.thirst < SERVING_THRESHOLD && s.gold >= DRINK_PRICE)
@@ -1296,8 +1295,9 @@ function startTavernTrip(sim: SimState, s: SimTraveler, map: GameMap,
     const building = map.buildings.find(b => b.id === house.id)
     return building && (physicalNeed || building.buildType === "tavern") ? [building] : []
   })
-  const ranked = servicePlans(map, s, candidates, building => {
-    const plan = tavernVisitPlan(map, building, from, occupied, s)
+  const ranked = servicePlans(map, s, candidates, (building, origin) => {
+    const originTile = { x: worldToTileX(map, origin.x), z: worldToTileZ(map, origin.z) }
+    const plan = tavernVisitPlan(map, building, originTile, occupied, origin)
     return plan && { ...plan, route: [...plan.route, plan.counter.point] }
   })
   for (const { plan } of ranked) {
@@ -1341,7 +1341,7 @@ function startBreadTrip(sim: SimState, s: SimTraveler, map: GameMap, tables: rea
   s.breadRetry = 5
   const reserved = new Set([...sim.travelers.values()].flatMap(other => other.breadVisit ? [other.breadVisit.tableId] : []))
   const nearby = tables.filter(b => !reserved.has(b.id) && almsStaffed(map, b.id))
-  for (const { plan } of servicePlans(map, s, nearby, table => breadVisitPlan(map, table, s, back))) {
+  for (const { plan } of servicePlans(map, s, nearby, (table, origin) => breadVisitPlan(map, table, origin, back))) {
     if (s.activity === "toRelic" || s.activity === "fromRelic") plan.visit.resumeActivity = s.activity
     if (!s.employer && s.partyId === undefined && s.activity === "walking") s.enclaveVisitPending = true
     s.breadVisit = plan.visit; s.offRoadRoute = plan.route; s.walkT = 0; s.targetId = null
@@ -1368,7 +1368,7 @@ function startWaterTrip(sim: SimState, s: SimTraveler, map: GameMap,
   const reserved = new Set([...sim.travelers.values()].flatMap(other =>
     other.waterVisit && (other.activity !== "fromWater" || !other.waterVisit.exitCleared) ? [other.waterVisit.sourceId] : []))
   const nearby = sources.filter(b => !reserved.has(b.id))
-  for (const { building: source, plan } of servicePlans(map, s, nearby, source => waterVisitPlan(map, source, s, back))) {
+  for (const { building: source, plan } of servicePlans(map, s, nearby, (source, origin) => waterVisitPlan(map, source, origin, back))) {
     if (s.activity === "toRelic" || s.activity === "fromRelic") plan.visit.resumeActivity = s.activity
     if (!s.employer && s.partyId === undefined && s.activity === "walking" && source.owner !== "independent") s.enclaveVisitPending = true
     s.waterVisit = plan.visit; s.offRoadRoute = plan.route; s.walkT = 0; s.targetId = null
@@ -2847,7 +2847,7 @@ export function stepSim(
       case "toBread": {
         const visit = s.breadVisit
         const table = almsTables.find(b => b.id === visit?.tableId)
-        if (!visit || !table || wayfindingSettings().closedDestinations.includes(table.id) || !almsStaffed(map, table.id)) { leaveBread(s, map); break }
+        if (!visit || !table || !destinationEnabled(table.id) || !almsStaffed(map, table.id)) { leaveBread(s, map); break }
         if (visit.navigation !== workerNavigationVersion(map)) {
           const plan = breadVisitPlan(map, table, s, visit.returnTo)
           if (!plan) { leaveBread(s, map); break }
@@ -2906,7 +2906,7 @@ export function stepSim(
         }
         const visit = s.waterVisit
         const source = waterSources.find(b => b.id === visit?.sourceId)
-        if (!visit || !source || wayfindingSettings().closedDestinations.includes(source.id)) { leaveWater(s); break }
+        if (!visit || !source || !destinationEnabled(source.id)) { leaveWater(s); break }
         if (visit.navigation !== workerNavigationVersion(map) && s.offRoadRoute && s.offRoadRoute.length <= visit.approach.length) {
           // Placement protects this source's footprint and approach. Finish the
           // reserved strip rather than routing from inside a closed building.
@@ -2981,7 +2981,7 @@ export function stepSim(
         const visit = s.tavernVisit!
         const goal = visit.served ? visit.plan.seat!.point : visit.plan.counter.point
         const building = map.buildings.find(b => b.id === visit.plan.buildingId)
-        if (!building || !isComplete(building) || wayfindingSettings().closedDestinations.includes(building.id)) {
+        if (!building || !isComplete(building) || !destinationEnabled(building.id)) {
           leaveTavern(s, map, visit.returnTo ?? currentRoutePoint(map, s)); break
         }
         const navigation = workerNavigationVersion(map)

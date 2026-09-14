@@ -151,7 +151,7 @@ export function GameCanvas({
       : selection.kind === "traveler" || selection.kind === "monk" ? !visibility.showCharacters
         : selection.kind === "animal" ? !visibility.showWildlife
           : visibility.buildingVisibility === "hidden"
-    if (hidden) useCameraStore.getState().select(null)
+    if (hidden && !(WAYFINDING_DEBUG && (selection.kind === "traveler" || selection.kind === "monk"))) useCameraStore.getState().select(null)
   }, [selection, visibility.showTrees, visibility.showCharacters, visibility.showWildlife, visibility.buildingVisibility])
   const population = usePopulationStore(s => s.pack)
   const assets = useCharacterAssetStore(s => s.assets)

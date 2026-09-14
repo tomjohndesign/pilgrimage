@@ -1,5 +1,7 @@
 "use client"
 
+import { useWayfindingStore } from "@/lib/game/wayfinding-settings"
+
 import { WayfindingPanel, WayfindingSelection } from "./wayfinding-panel"
 import { almsStaffed } from "@/lib/game/alms-table"
 import { AppearancePanel } from "./appearance-panel"
@@ -19,7 +21,7 @@ import Link from "next/link"
 import * as Tooltip from "@radix-ui/react-tooltip"
 import { Dices, Menu, Settings, X } from "lucide-react"
 import "./game-hud.css"
-import { useEffect, useId, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import {
@@ -64,13 +66,12 @@ import { NewMapDialog, type NewWorld } from "./new-map-dialog"
 import { randomSeed } from "@/lib/game/rng"
 import { NewWorldFields } from "./new-world-fields"
 import { SeedField } from "./seed-field"
-import { Switch } from "@/components/ui/switch"
 import { browserDiagnostics, diagnosticsSchema, type BugReportDiagnostics } from "@/lib/bug-report"
 import { useBugReportRuntime } from "@/hooks/use-bug-report-runtime"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { partyNeedDrain } from "@/lib/game/travel-parties"
 import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES } from "@/lib/game/scene-visibility"
-import { Section, Tuner } from "./property-controls"
+import { Chooser, ToggleRow, Section, Tuner } from "./property-controls"
 import { BuildControls, HudClock, HudHelp, HudResources } from "./hud-controls"
 
 const CONTROLS: Array<[string, string]> = [
@@ -127,65 +128,6 @@ function TrafficDensity({ value, travelerCount, onChange }: {
         {travelerCount} folk across the map.
       </p>
     </>
-  )
-}
-
-/** A stepped choice drawn as the same box as a tuner track, with the option's name inside. */
-function Chooser({
-  label,
-  value,
-  options,
-  onChange,
-  labelClassName = "w-16",
-}: {
-  label: string
-  value: number
-  options: string[]
-  onChange: (index: number) => void
-  labelClassName?: string
-}) {
-  return (
-    <div className="flex items-center">
-      <span className={`${labelClassName} shrink-0 text-[13px] font-medium text-ink-light`}>{label}</span>
-      <div className="hud-choice-track relative h-8 flex-1 rounded-[6px] bg-parchment-dark">
-        <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 truncate font-display text-[11px] font-black text-ink-light">
-          {options[value]}
-        </span>
-        <select
-          value={value}
-          aria-label={label}
-          onChange={(event) => onChange(Number(event.target.value))}
-          className="pointer-events-auto absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        >
-          {options.map((option, index) => (
-            <option key={option} value={index}>
-              {option}
-            </option>
-          ))}
-        </select>
-      </div>
-    </div>
-  )
-}
-
-/** An on/off preference as the shared switch, recoloured for the HUD's dark parchment. */
-function ToggleRow({
-  label,
-  checked,
-  disabled = false,
-  onChange,
-}: {
-  label: string
-  checked: boolean
-  disabled?: boolean
-  onChange: (checked: boolean) => void
-}) {
-  const id = useId()
-  return (
-    <div className="hud-switch-row flex items-center justify-between gap-3 py-0.5">
-      <label htmlFor={id} className={`text-[13px] font-medium text-ink-light ${disabled ? "opacity-50" : ""}`}>{label}</label>
-      <Switch id={id} className="hud-switch" checked={checked} disabled={disabled} onCheckedChange={onChange} />
-    </div>
   )
 }
 
@@ -728,6 +670,9 @@ export function GameHud({
   const [menuOpen, setMenuOpen] = useState(false)
   const [minimapOpen, setMinimapOpen] = useState(false)
   const [panel, setPanel] = useState<"build" | "world" | "settlement" | null>(null)
+  const selectedNodeId = useWayfindingStore(s => s.selectedNodeId)
+  const nodeFocusRevision = useWayfindingStore(s => s.nodeFocusRevision)
+  useEffect(() => { if (SHOW_PROPERTY_PANELS && selectedNodeId) setPanel("world") }, [selectedNodeId, nodeFocusRevision])
 
   const closeBuild = () => {
     setPanel(null)
@@ -742,6 +687,7 @@ export function GameHud({
   }
 
   useEffect(() => {
+    if (useWayfindingStore.getState().selectedNodeId) useWayfindingStore.getState().selectNode(null)
     if (!selection) return
     setPanel(current => SHOW_PROPERTY_PANELS && current === "world" ? current : null)
     economy.chooseBuild(null)

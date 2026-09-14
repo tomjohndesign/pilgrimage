@@ -44,3 +44,25 @@ it("inspects geometric access to an unstaffed table and keeps its field when a m
   expect(workerDestinationField(map, access.entry, 42)).toBe(field)
   expect(workerRouteMemoryStats(map).fieldBuilds).toBe(builds)
 })
+
+
+it("includes every live route with no selection in all-paths mode", () => {
+  const { map, actor, sim } = setup()
+  actor.activity = "walking"
+  expect(wayfindingJourneys(map, null)).toEqual([])
+  const all = wayfindingJourneys(map, null, "all")
+  expect(all.map(j => j.id)).toEqual([actor.id])
+  expect(all[0].route.length).toBeGreaterThan(1)
+  expect(wayfindingJourneys(map, { kind: "building", id: "unrelated" }, "all")).toHaveLength(1)
+  sim.joinedMonks.set(actor.id, { id: actor.id, name: "Brother", duty: "Almoner", attributes: { age: 30, piety: 80, happiness: 80, skills: [] } })
+  expect(wayfindingJourneys(map, null, "all")).toEqual([])
+})
+
+it("shows an active detour's remaining bends before the road it rejoins", () => {
+  const { map, actor } = setup()
+  actor.activity = "walking"
+  actor.roadShortcut = { from: { x: -5, z: 1 }, via: [{ x: -4, z: 1 }, { x: -4, z: 3 }], to: { x: -2, z: 3 }, start: 2, end: 6, distance: 1.5, length: 5 }
+  const route = wayfindingJourneys(map, { kind: "traveler", id: actor.id })[0].route
+  expect(route[1]).toMatchObject({ x: -4, z: 3 })
+  expect(route[2]).toMatchObject({ x: -2, z: 3 })
+})

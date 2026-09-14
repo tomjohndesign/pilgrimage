@@ -26,7 +26,12 @@ import type { FigureClickHandler } from "./traveler-figure"
 export function PersonPicking() {
   const setEvents = useThree((s) => s.setEvents)
   useEffect(() => {
-    setEvents({ filter: prioritizePeople })
+    setEvents({ filter: hits => {
+      const ordered = prioritizePeople(hits)
+      // Debug nodes are drawn above roofs, so their hit order matches that view.
+      if (!ordered.some(hit => hit.object.name === "wayfinding-nodes")) return ordered
+      return [...ordered.filter(hit => hit.object.name === "wayfinding-nodes"), ...ordered.filter(hit => hit.object.name !== "wayfinding-nodes")]
+    } })
     return () => setEvents({ filter: undefined })
   }, [setEvents])
   return null

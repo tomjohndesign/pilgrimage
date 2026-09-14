@@ -9,6 +9,7 @@ import { DEFAULT_ELEVATION } from "./map/elevation"
 import { servicePlans, walkingDistance } from "./service-wayfinding"
 import { sharedDestinationRoute, withDestinationRoutes, withWorkerRouteMemory, workerDestinationField, workerNavigationVersion, workerRouteMemoryStats } from "./worker-route-memory"
 import { DEFAULT_WAYFINDING, useWayfindingStore, wayfindingSchema } from "./wayfinding-settings"
+import { wayfindingNetwork } from "./wayfinding-nodes"
 import { breadVisitPlan } from "./alms-table"
 import { waterVisitPlan } from "./water-sources/navigation"
 
@@ -130,6 +131,58 @@ describe("shared service wayfinding", () => {
     expect(plans()[0].building.id).toBe("far")
     useWayfindingStore.getState().apply(JSON.stringify({ ...DEFAULT_WAYFINDING, selection: "geographic" }))
     expect(plans()[0].building.id).toBe("near")
+  })
+
+  it("uses a building's own travel budget, preference and enable switch", () => {
+    const map = world(), from = point(map, 2, 5)
+    map.buildings = [building("near", 10, 4, "alms-table"), building("far", 30, 4, "alms-table")]
+    const plans = () => servicePlans(map, from, map.buildings, (b, origin) => breadVisitPlan(map, b, origin, from))
+    expect(plans()[0].building.id).toBe("near")
+    useWayfindingStore.getState().updateBuilding("far", { preference: 35 })
+    expect(plans()[0].building.id).toBe("far")
+    useWayfindingStore.getState().updateBuilding("far", { travelBudget: 10 })
+    expect(plans().map(p => p.building.id)).toEqual(["near"])
+    useWayfindingStore.getState().updateBuilding("near", { enabled: false })
+    expect(plans()).toEqual([])
+    useWayfindingStore.getState().updateBuilding("far", { travelBudget: 40 })
+    useWayfindingStore.getState().update({ travelBudget: 5 })
+    expect(plans().map(p => p.building.id)).toEqual(["far"])
+    useWayfindingStore.getState().updateBuilding("far", null)
+    expect(plans()).toEqual([])
+  })
+
+  it("walks through a selected approach node and budgets the full detour", () => {
+    const map = world(), from = point(map, 2, 5), table = building("table", 9, 4, "alms-table")
+    map.buildings = [table]
+    map.site = { hovelId: "unused", door: { x: 2, z: 12 }, junction: 0, branch: [{ x: 2, z: 5 }, { x: 2, z: 12 }] }
+    const plans = () => servicePlans(map, from, [table], (b, origin) => breadVisitPlan(map, b, origin, from))
+    const direct = plans()[0].distance
+    useWayfindingStore.getState().updateBuilding("table", { viaNodeId: "enclave:door" })
+    const via = plans()[0]
+    expect(via.plan.route).toContainEqual(point(map, 2, 12))
+    expect(via.distance).toBeGreaterThan(direct + 10)
+    expect(via.plan.visit.arrival).toEqual([from, ...via.plan.route])
+    useWayfindingStore.getState().updateBuilding("table", { travelBudget: direct + 2 })
+    expect(plans()).toEqual([])
+    useWayfindingStore.getState().updateBuilding("table", { travelBudget: 40, viaNodeId: "missing-node" })
+    expect(plans()).toEqual([])
+    useWayfindingStore.getState().updateBuilding("table", { viaNodeId: "enclave:door" })
+    map.tiles[12 * map.width + 2] = "water"
+    map.footpaths = createFootpaths(map); markGroundChanged(map.footpaths)
+    expect(plans()).toEqual([])
+    expect(wayfindingNetwork(map).nodes.find(n => n.id === "enclave:door")?.tile).toEqual({ x: 2, z: 12 })
+  })
+
+  it("reads old JSON and round-trips all UI routing overrides", () => {
+    const old = { version: 1, travelBudget: 40, selection: "travel", closedDestinations: [], showRoutes: true, showField: false }
+    useWayfindingStore.getState().apply(JSON.stringify(old))
+    expect(useWayfindingStore.getState().settings.routeScope).toBe("all")
+    useWayfindingStore.getState().updateBuilding("well", { travelBudget: 64, preference: -5, viaNodeId: "enclave:door" })
+    const json = JSON.stringify(useWayfindingStore.getState().settings)
+    useWayfindingStore.getState().apply(json)
+    expect(useWayfindingStore.getState().settings.buildings.well).toEqual({ enabled: true, travelBudget: 64, preference: -5, viaNodeId: "enclave:door" })
+    expect(() => useWayfindingStore.getState().updateBuilding("well", { travelBudget: -1 })).toThrow()
+    expect(JSON.stringify(useWayfindingStore.getState().settings)).toBe(json)
   })
 
   it("validates portable JSON atomically", () => {

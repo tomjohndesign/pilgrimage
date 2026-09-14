@@ -125,6 +125,13 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
       profileFrames: frameProfile.capture,
       routeMemory: () => workerRouteMemoryStats(map),
       wayfinding: () => wayfindingSnapshot(map, useCameraStore.getState().selection),
+      wayfindingOverlay: () => {
+        const paths = scene.getObjectByName("wayfinding-paths") as THREE.LineSegments | undefined
+        const nodes = scene.getObjectByName("wayfinding-nodes") as THREE.InstancedMesh | undefined
+        return { pathSegments: (paths?.geometry.getAttribute("position").count ?? 0) / 2, nodes: nodes?.count ?? 0,
+          charactersVisible: scene.getObjectByName("visibility-characters")?.visible ?? false,
+          selectedNodeId: useWayfindingStore.getState().selectedNodeId }
+      },
       rebuildWayfinding: () => { if (WAYFINDING_DEBUG) rebuildWorkerNavigation(map) },
       configureWayfinding: (json: string) => { if (WAYFINDING_DEBUG) useWayfindingStore.getState().apply(json) },
       isolateWork: (settings: Partial<BenchmarkWork>) => {
