@@ -3,6 +3,7 @@
 import { useContext } from "react"
 import { CharacterMapContext } from "./character-map-context"
 import { SceneAssetBoundary } from "./scene-assets"
+import { ShepherdLoad } from "./carried-meat"
 
 import { monkVisual, MONK_WALK_TUNING } from "@/lib/game/base-person/monk-assets"
 import { withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
@@ -173,7 +174,7 @@ export function TravelerFigure({ resident = false, map: suppliedMap, age, job, t
   if (workVisual) return <SceneAssetBoundary><CharacterSprite resident={resident} map={suppliedMap} age={age} appearance={appearance}
     complexion={appearance && age !== undefined && age >= GREY_HAIR_AGE ? { ...appearance.complexion, hair: GREY_HAIR_COLOR } : appearance?.complexion}
     selected={selected} type={type.id} onClick={onClick} outlineColor={color} characterModel="base"
-    characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} visualOverride={workVisual} /></SceneAssetBoundary>
+    characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} visualOverride={workVisual} />{job === "shepherd" && <ShepherdLoad scale={characterScale}/>}</SceneAssetBoundary>
   if (type.id === "friar") return <SceneAssetBoundary><CharacterSprite resident={resident} map={suppliedMap} age={age}
     complexion={appearance?.complexion} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
     characterModel="base" characterScale={characterScale} characterFps={characterFps}

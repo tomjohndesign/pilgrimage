@@ -76,9 +76,9 @@ export const BUILDING_KINDS: Record<BuildingKind, BuildingKindDef> = {
   "sheep-pen": {
     id: "sheep-pen",
     label: "Sheep pen",
-    blurb: "Two shepherds gather sheep and lead them home to the fold.",
-    w: 3,
-    d: 2,
+    blurb: "Two shepherds tend up to eight sheep and goats, delivering milk and meat to a public food platform and replenishing the flock from the shed.",
+    w: 5,
+    d: 4,
     height: 0.70,
     color: "#8c7658",
     roofColor: "#a59164",

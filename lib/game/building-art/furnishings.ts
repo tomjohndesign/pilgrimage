@@ -29,9 +29,9 @@ export function hasDomesticHearth(variant: string | undefined, layoutSeed = 0, f
 
 /** Resolve the actual local fireplace, including huts inside a larger open plot. */
 export function buildingHearth(variant: string | undefined, width: number, depth: number, height: number, rise: number, layoutSeed = 0, hearthZ?: number) {
-  const hut=variant === "sheep-pen" ? sheepPenLayout(width) : {coreWidth:width,coreX:0}
-  const hearth=shelterHearth(hut.coreWidth,depth,height,variant === "inn" ? innHearthRoofRise(width,depth,false) : rise,variant === "inn" ? 0 : layoutSeed,variant === "inn" ? depth/2-.5 : hearthZ)
-  return {...hearth,x:(hearth.x+hut.coreX)*layoutHand(variant,layoutSeed),z:hearth.z}
+  const hut=variant === "sheep-pen" ? sheepPenLayout(width,depth) : {coreWidth:width,coreDepth:depth,coreX:0,coreZ:0}
+  const hearth=shelterHearth(hut.coreWidth,hut.coreDepth,height,variant === "inn" ? innHearthRoofRise(width,depth,false) : rise,variant === "inn" ? 0 : layoutSeed,variant === "inn" ? depth/2-.5 : hearthZ)
+  return {...hearth,x:(hearth.x+hut.coreX)*layoutHand(variant,layoutSeed),z:hearth.z+hut.coreZ}
 }
 
 /** One fireplace kit for homes and shelters, with a compact footprint in small huts. */

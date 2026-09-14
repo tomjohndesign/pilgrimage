@@ -178,9 +178,9 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
   },
   {
     id: "sheep-pen", label: "Sheep pen", category: "buildings",
-    description: "Two shepherds gather roaming sheep and lead them back to the open railed pen beside a hut and hearth.",
+    description: "Two shepherds care for up to eight sheep and goats, delivering milk buckets and meat to a food platform inside the pen. Thatched bays shelter the flock.",
     cost: { gold: 55, wood: 45 }, renown: 2, requiredRenown: 5,
-    income: { gold: 0, wood: 0 }, w: 3, d: 2, height: 0.70,
+    income: { gold: 0, wood: 0 }, w: 5, d: 4, height: 0.70,
     color: "#8c7658", roofColor: "#a59164",
   },
   {

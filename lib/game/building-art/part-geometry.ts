@@ -3,7 +3,7 @@ import type { BuildingPart } from "./geometry"
 import { DEFAULT_ROAD_LOOK, ROAD_TIERS } from "../map/road"
 
 import { GROUND_SURFACE_GLSL, ROAD_UV_SCALE } from "../render/ground-surface"
-import { DIRT_FLOOR_OVERLAP } from "./dirt-floor"
+import { DIRT_FLOOR_OVERLAP, PASTURE_FLOOR_GLSL } from "./dirt-floor"
 
 export const BUILDING_DIRT_TEXTURE = ROAD_TIERS[0].textureUrl
 
@@ -36,6 +36,7 @@ export function dirtFloorMaterial(part: BuildingPart, trail: THREE.Texture, gras
     shader.uniforms.swardField = { value: null }
     shader.uniforms.swardFieldSize = { value: new THREE.Vector2() }
     shader.uniforms.swardFieldOrigin = { value: new THREE.Vector2() }
+    shader.uniforms.pastureHut = { value: new THREE.Vector4(...(part.pastureHut ?? [0,0,0,0])) }
     shader.uniforms.floorHalfSize = { value: new THREE.Vector2(part.size![0]/2, part.size![2]/2) }
     shader.vertexShader = shader.vertexShader.replace("#include <common>", "varying vec2 vFloorLocal; varying vec2 vFloorWorld;\n#include <common>")
       .replace("#include <project_vertex>", `#include <project_vertex>
@@ -47,7 +48,9 @@ export function dirtFloorMaterial(part: BuildingPart, trail: THREE.Texture, gras
       uniform sampler2D trailMap;
       uniform sampler2D grassMap;
       uniform vec2 floorHalfSize;
+      uniform vec4 pastureHut;
       ${GROUND_SURFACE_GLSL}
+      ${PASTURE_FLOOR_GLSL}
       #include <common>`)
       .replace("#include <color_fragment>", `
         vec2 q = abs(vFloorLocal) - floorHalfSize;
@@ -60,9 +63,11 @@ export function dirtFloorMaterial(part: BuildingPart, trail: THREE.Texture, gras
         vec3 sward = sampleSward(grassMap, vFloorWorld);
         float growth = tileNoise(vFloorWorld * 7.3) * .12 + tileNoise(vFloorWorld * 17.0) * .05;
         float floorBare = smoothstep(.015, .13 + growth, -d);
-        diffuseColor.rgb *= mix(sward, buildingDirtColor(roadSurfaceColor(dirt, ${DEFAULT_ROAD_LOOK.shade.toFixed(1)}, vec4(0.0), vec3(1.0)), vFloorWorld), floorBare * dirt.a * ${DEFAULT_ROAD_LOOK.opacity.toFixed(1)});
+        vec2 hutDistance = abs(vFloorLocal-pastureHut.xy)-pastureHut.zw*.5;
+        float wear = pastureHut.z > 0.0 && max(hutDistance.x,hutDistance.y) > 0.0 ? pastureFloorCover(vFloorWorld) : 1.0;
+        diffuseColor.rgb *= mix(sward, buildingDirtColor(roadSurfaceColor(dirt, ${DEFAULT_ROAD_LOOK.shade.toFixed(1)}, vec4(0.0), vec3(1.0)), vFloorWorld), floorBare * wear * dirt.a * ${DEFAULT_ROAD_LOOK.opacity.toFixed(1)});
       `)
   }
-  material.customProgramCacheKey = () => "building-trail-preview-growth-v3"
+  material.customProgramCacheKey = () => "building-trail-preview-pasture-growth-v4"
   return material
 }

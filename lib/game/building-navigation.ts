@@ -65,8 +65,13 @@ export function buildingStepAllowed(map: GameMap, buildings: readonly BuildingDe
     if (enterShrine && isEnterable(building) && isComplete(building)) {
       if (building.buildType === "sheep-pen") {
         const local = rotatedFootprint(building, building.rotation)
-        const inHut = (p: TilePos) => rotateBuildingPoint(p.x - building.x - (building.w - 1) / 2,
-          p.z - building.z - (building.d - 1) / 2, -(building.rotation ?? 0)).x * layoutHand(building.buildType,building.layoutSeed) < sheepPenLayout(local.w).penLeft
+        const hut = sheepPenLayout(local.w, local.d)
+        const inHut = (p: TilePos) => {
+          const at = rotateBuildingPoint(p.x - building.x - (building.w - 1) / 2,
+            p.z - building.z - (building.d - 1) / 2, -(building.rotation ?? 0))
+          return Math.abs(at.x * layoutHand(building.buildType,building.layoutSeed) - hut.coreX) < hut.coreWidth / 2
+            && Math.abs(at.z - hut.coreZ) < hut.coreDepth / 2
+        }
         if (a && b) { if (inHut(from) !== inHut(to)) return false; continue }
         const inside = a ? from : to, outside = a ? to : from
         if (!inHut(inside)) {

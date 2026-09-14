@@ -1,3 +1,4 @@
+import { seekPenFood, stepPenFood, type PenFoodVisit } from "./pen-food"
 import { shrineDonationMultiplier } from "./shrine-upgrade"
 import { fordSpeedAt } from "./map/fords"
 import { ensurePartyTransport, stepPartyPacks, stepPackParking, seatParty, parkParty, parkPartyPacks, movePartyCart, turnPartyCart } from "./transport/party"
@@ -20,6 +21,8 @@ import { withTerrainCornerQueries } from "./map/cliff-corners"
 import { buildingSpatialQuery } from "./building-spatial"
 import { settlementJob, jobSpeedScale } from "./jobs/design"
 import { seekSheep, stepShepherd, releaseSheep, type HerdingTask } from "./herding"
+import { seekPenCare, stepShepherdCare, releasePenCare, type PenCareTask } from "./sheep-husbandry"
+import { penGatePassage } from "./pen-gate"
 import type { WildlifeWorld } from "./wildlife/simulation"
 import { cartPath, driveSegment, driveRouteSegment, marketParking, type MarketParking } from "./transport/building-parking"
 import { roadCartPose } from "./transport/bridge-guide"
@@ -112,6 +115,7 @@ import { TRAVELER_TYPES, type Traveler } from "./travelers"
  */
 
 export type Activity =
+  | "collectingFood"
   | "toWater" | "drinking" | "drinkingLow" | "fromWater"
   | "toParking"
   | "fromParking"
@@ -122,6 +126,7 @@ export type Activity =
   | "toWork"
   | "toSheep"
   | "herding"
+  | "tendingSheep" | "feedingSheep" | "wateringSheep" | "slaughteringSheep" | "deliveringMeat" | "replacingSheep" | "milkingSheep" | "deliveringMilk"
   | "toPost"
   | "posted"
   | "toHome"
@@ -166,6 +171,7 @@ export type Activity =
   | "fromShop"
 
 export const ACTIVITY_LABELS: Record<Activity, string> = {
+  collectingFood: "Collecting food from the public platform",
   toWater: "Going to drink water", drinking: "Drinking at the well", drinkingLow: "Drinking at the water’s edge", fromWater: "Returning from water",
   toParking: "Parking outside the shrine",
   fromParking: "Returning the wagon to the road",
@@ -174,8 +180,12 @@ export const ACTIVITY_LABELS: Record<Activity, string> = {
   offering: "At the offering box",
   fromRelic: "Returning from the shrine",
   toWork: "Walking to work",
-  toSheep: "Going to gather a sheep",
-  herding: "Leading a sheep back to the pen",
+  toSheep: "Going to gather sheep or goats",
+  herding: "Herding sheep or goats back to the pen",
+  tendingSheep: "Tending the flock", feedingSheep: "Adding hay to the feed rack", wateringSheep: "Changing the trough water",
+  slaughteringSheep: "Preparing livestock for food", replacingSheep: "Bringing replacement livestock from the shed",
+  deliveringMeat: "Carrying meat to the food platform",
+  milkingSheep: "Milking a sheep or goat", deliveringMilk: "Carrying milk buckets to the food platform",
   toPost: "Going to their post",
   posted: "At work",
   toHome: "Tired — going home",
@@ -317,6 +327,8 @@ export interface SimTraveler {
   partyGathering?: PartyGathering
   /** Where a shrine route began off the road; the first tile of the approach blends from here rather than the road lane. */
   shrineOrigin?: WorldPoint
+  penFoodVisit?: PenFoodVisit
+  foodRetry?:number
   waterVisit?: WaterVisit
   waterRetry?: number
   /** A reversible progression; the original calling and personal attributes stay intact. */
@@ -369,6 +381,7 @@ export interface SimTraveler {
   deliveryBuilding?: string | null
   employer: string | null
   herding?: HerdingTask
+  penCare?: PenCareTask
   herdingRetry?: number
   /** Which of the employer's work slots is theirs; posts are one per slot. */
   jobSlot: number
@@ -2194,6 +2207,12 @@ export function stepSim(
     if (animal.fold && !animal.fold.arrived && (!shepherd || shepherd.herding?.animalId !== animal.id)) {
       animal.fold = undefined; animal.target = null; animal.rest = 0
     }
+    if(animal.fold?.tendedBy !== undefined && sim.travelers.get(animal.fold.tendedBy)?.penCare?.animalId !== animal.id) {
+      animal.fold.tendedBy=undefined;animal.fold.escort=undefined;animal.fold.slaughter=undefined;animal.fold.route=[]
+    }
+  }
+  if(dt>0) for(const [id,care] of sim.wildlife?.penCare ?? []) {
+    if(care.caretaker!==undefined && sim.travelers.get(care.caretaker)?.penCare?.penId!==id)care.caretaker=undefined
   }
   const length = map.road.length - 1
   sim.time += dt / GAME_DAY_SECONDS
@@ -2290,6 +2309,7 @@ export function stepSim(
     stepPoverty(s, t, dt)
     const previousStall = deployedStall(s)
     if (s.herding && !["toSheep", "herding"].includes(s.activity)) releaseSheep(s, sim.wildlife)
+    if (s.penCare && s.activity !== s.penCare.chore) releasePenCare(s, sim.wildlife)
     s.herdingRetry = Math.max(0, (s.herdingRetry ?? 0) - dt)
     s.convoyScale = characterScale
     s.cartRecoveryRetry = Math.max(0, (s.cartRecoveryRetry ?? 0) - dt)
@@ -2328,6 +2348,11 @@ export function stepSim(
     if (processionNearby) {
       if (dt > 0 && sim.procession) blessByProcession(sim.procession, `traveler:${s.id}`, s)
       s.moveSpeed = 0; continue
+    }
+    s.foodRetry=Math.max(0,(s.foodRetry ?? 0)-dt)
+    if(dt>0 && !s.foodRetry && !riding && t.type.id !== "vendor" && ["walking","idle"].includes(s.activity)) {
+      s.foodRetry=5
+      seekPenFood(s,map,sim.foodStores,characterScale)
     }
     s.naturalWaterRetry = Math.max(0, (s.naturalWaterRetry ?? 0) - dt)
     s.seatRestRetry = Math.max(0, (s.seatRestRetry ?? 0) - dt)
@@ -2391,6 +2416,10 @@ export function stepSim(
         easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)
     }
     if (s.partyRiding || s.partyBoarding) continue
+    const penRoute=s.herding?.route ?? s.penCare?.route ?? s.penFoodVisit?.route ?? s.buildingTask?.route ?? s.constructionReturn ?? s.offRoadRoute
+    if(penRoute?.length && sim.wildlife) for(const pen of map.buildings) {
+      if(pen.buildType === "sheep-pen" && !penGatePassage(sim.wildlife,map,pen,s,penRoute,dt)) {targetSpeed=0;s.moveSpeed=0;break}
+    }
     const worldSpeed = s.moveSpeed
     const transportBefore = isVendor && s.convoy && !s.shrineParking?.walking ? {
       ...s, offRoadRoute: s.offRoadRoute ? [...s.offRoadRoute] : null,
@@ -2654,7 +2683,7 @@ export function stepSim(
         if (workplace && isPostedWork(workplace.kind) && !hungry && !unhappy && s.stamina > SETTLER_TIRED_AT) {
           if (workplace.kind === "sheep-pen" && dt > 0 && !s.herdingRetry) {
             s.herdingRetry = 5
-            if (seekSheep(s, sim.wildlife, map, characterScale)) break
+            if (seekPenCare(s, sim.wildlife, map, characterScale,sim.foodStores) || seekSheep(s, sim.wildlife, map, characterScale)) break
           }
           s.workSlot = s.jobSlot
           if (assignBuildingTask(s, map, "work", workplace.id)) { s.activity = "toPost"; break }
@@ -2726,6 +2755,10 @@ export function stepSim(
         }
         break
       }
+      case "collectingFood": {
+        if(!stepPenFood(s,map,sim.foodStores,targetSpeed,dt,sim.wildlife))finishErrand(s)
+        break
+      }
       case "toSheep":
       case "herding": {
         if (dt <= 0) break
@@ -2734,6 +2767,15 @@ export function stepSim(
           releaseSheep(s, sim.wildlife); s.activity = "idle"; s.timer = 0
         } else if (!stepShepherd(s, sim.wildlife, map, targetSpeed, dt, characterScale)) {
           s.activity = "idle"; s.timer = 0
+        }
+        break
+      }
+      case "tendingSheep": case "feedingSheep": case "wateringSheep": case "slaughteringSheep": case "deliveringMeat": case "replacingSheep": case "milkingSheep": case "deliveringMilk": {
+        if(dt<=0)break
+        if(s.stamina<=SETTLER_TIRED_AT || Math.min(s.hunger,s.thirst)<SERVING_THRESHOLD || socialBreak) {
+          releasePenCare(s,sim.wildlife);s.activity="idle";s.timer=0
+        } else if(!stepShepherdCare(s,sim.wildlife,map,targetSpeed,dt,characterScale,sim.foodStores)) {
+          s.activity="idle";s.timer=0
         }
         break
       }
@@ -2758,7 +2800,7 @@ export function stepSim(
           // A staffed counter may predate the site. Reconsider construction on
           // the existing work poll instead of waiting for hunger or exhaustion.
           if (startCitizenBuild(sim, s, t, map)) break
-          seekSheep(s, sim.wildlife, map, characterScale)
+          if(!seekPenCare(s, sim.wildlife, map, characterScale,sim.foodStores)) seekSheep(s, sim.wildlife, map, characterScale)
         }
         break
       }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 import { dirtFloorMask, FLOOR_NEIGHBOURS } from "./dirt-floor"
 import { BUILD_CATALOG } from "../balance"
 import { structureParts } from "./structure"
-import { buildingApproaches, buildingApproach, buildingEntry, buildingFoldEntry, rotatedFootprint, type BuildingRotation } from "../building-rotation"
+import { buildingApproaches, buildingApproach, buildingEntry, buildingFoldEntry, rotateBuildingPoint, rotatedFootprint, type BuildingRotation } from "../building-rotation"
 import type { GameMap } from "../map/types"
 
 const hut = { id: "hut", buildType: "workshop", label: "Hut", x: 3, z: 3, w: 3, d: 2, height: .85, color: "tan", roofColor: "tan" }
@@ -66,6 +66,19 @@ describe("shared path dirt for building floors", () => {
     expect(data[(entry.z*map.width+entry.x)*4+1]).toBe(0)
     const west=(building.z*map.width+building.x-1)*4
     expect(data[west] & 1<<FLOOR_NEIGHBOURS.findIndex(([x,z])=>x===1 && z===0)).not.toBe(0)
+  })
+
+  it.each([0,1,2,3] as BuildingRotation[])("keeps the fold grassy around the hut at rotation %i", rotation => {
+    const building={...hut,buildType:"sheep-pen",...rotatedFootprint({w:5,d:4},rotation),rotation}
+    const map=mapWith([building]),{data,tiles}=dirtFloorMask(map)
+    for(let z=0;z<4;z++) for(let x=0;x<5;x++) {
+      const local=rotateBuildingPoint(x-2,z-1.5,rotation)
+      const tx=building.x+(building.w-1)/2+local.x,tz=building.z+(building.d-1)/2+local.z,index=tz*map.width+tx
+      const inHut=x===0 && z>=2
+      expect(data[index*4+1]).toBe(inHut ? 255 : 0)
+      expect(data[index*4+3]).toBe(inHut ? 0 : 255)
+      expect(tiles.has(index)).toBe(true)
+    }
   })
 
   it("unions touching dirt floors without exposing an internal seam", () => {

@@ -26,6 +26,8 @@ export function reflectBuildingParts(parts: BuildingPart[]): BuildingPart[] {
       vertices[i + 3 + axis] = vertices[i + 6 + axis]; vertices[i + 6 + axis] = swap
     }
     return { ...part, position: [-part.position[0], part.position[1], part.position[2]], vertices,
+      pastureHut: part.pastureHut ? [-part.pastureHut[0],part.pastureHut[1],part.pastureHut[2],part.pastureHut[3]] : undefined,
+      gateHinge:part.gateHinge ? {position:[-part.gateHinge.position[0],part.gateHinge.position[1],part.gateHinge.position[2]],openAngle:-part.gateHinge.openAngle}:undefined,
       rotation: part.rotation ? [part.rotation[0], -part.rotation[1], -part.rotation[2]] : undefined,
       cutawaySide: part.cutawaySide ? [-part.cutawaySide[0], part.cutawaySide[1]] : undefined,
       support: part.support ? { ...part.support, heading: -(part.support.heading ?? 0),

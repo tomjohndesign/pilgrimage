@@ -1222,8 +1222,9 @@ export function GameHud({
             {selectedBuilding.buildType === "storehouse" && <div className="mt-2 text-[11px] text-ink-light">
               <p>Food stored · {storedFood(foodStock)} / {STOREHOUSE_FOOD_CAPACITY}</p>
               {FOOD_TYPES.map(type => <p key={type}>{FOOD_LABELS[type]} · {foodStock[type]}</p>)}
-              <p className="mt-1 italic">Food supplies start empty; food gathering is still to come.</p>
+              <p className="mt-1 italic">Food supplies start empty.</p>
             </div>}
+            {selectedBuilding.buildType === "sheep-pen" && <p className="mt-2 text-[11px] text-ink-light">Up to 8 sheep and goats · Food platform: {foodStock.meat} meat · {foodStock.milk} milk</p>}
             {selectedBuilding.owner !== "independent" && selectedDefinition && isComplete(selectedBuilding) && <>
               <p className="mt-2 text-[11px] text-ink-light">Contributes +{selectedDefinition.renown} shrine renown</p>
               <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">{selectedDefinition.description}</p>
