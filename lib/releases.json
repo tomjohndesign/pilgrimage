@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "9101e24922255b0dbaff528ceebcaf862ee8715e",
-  "releaseCount": 236,
+  "lastProcessedCommit": "c52dd8486a5674ba9f9b0fd060bf04db6970f79d",
+  "releaseCount": 237,
   "releases": [
+    {
+      "version": "0.0.251",
+      "title": "Release 0.0.251",
+      "summary": "Add player colors and improve building readability and housing (#270)",
+      "commit": "c52dd8486a5674ba9f9b0fd060bf04db6970f79d"
+    },
     {
       "version": "0.0.250",
       "title": "Release 0.0.250",
