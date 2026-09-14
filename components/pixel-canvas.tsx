@@ -11,6 +11,7 @@ import * as THREE from "three"
 import { CHARACTER_COLOR_LAYER, tagPixelCharacters, withoutPixelCharacters, withoutPixelRoots } from "@/lib/game/render/pixel-characters"
 
 import { CHARACTER_PIXELS_PER_UNIT } from "@/lib/game/render/pixel-scale"
+import { spriteSceneryDepth, type SpriteSceneryDepth } from "@/lib/game/render/sprite-depth"
 
 export interface PixelationProps {
   /** Rendered pixels per world unit. Lower is chunkier and cheaper. Default: native character density.
@@ -61,9 +62,15 @@ interface PixelRenderer {
   characters: Set<THREE.Object3D>
   world: Set<THREE.Object3D>
   worldTexel: { value: number }
+  sceneryDepth: SpriteSceneryDepth
 }
 const PixelRenderContext = createContext<PixelRenderer | null>(null)
 const NATIVE_WORLD_TEXEL = { value: 0 }
+const NO_SCENERY_DEPTH = spriteSceneryDepth()
+
+export function usePixelSceneryDepth() {
+  return useContext(PixelRenderContext)?.sceneryDepth ?? NO_SCENERY_DEPTH
+}
 
 /** World-space size of an enlarged scenery texel during the character pass. */
 export function usePixelWorldTexel() {
@@ -396,11 +403,16 @@ function PixelRenderPass({ pixelsPerUnit, pixelated }: Required<Pick<PixelationP
             gl.autoClear = false
             camera.layers.set(CHARACTER_COLOR_LAYER)
             renderer.worldTexel.value = 1 / density
+            renderer.sceneryDepth.map.value = r.target.depthTexture
+            renderer.sceneryDepth.scale.value.copy(r.stage.scale)
+            renderer.sceneryDepth.offset.value.copy(r.stage.offset)
+            renderer.sceneryDepth.mode.value = 1
             r.stage.phase = "characters"
             if (revealDirect) revealDirect.value = true
             withoutPixelRoots(renderer.world, () => renderScene(camera, null, r.stage))
           } finally {
             renderer.worldTexel.value = 0
+            renderer.sceneryDepth.mode.value = 0
             scene.background = background
             camera.layers.mask = mask
             gl.autoClear = autoClear
@@ -433,7 +445,7 @@ export function PixelCanvas({
   outputDpr = 1,
   ...props
 }: Omit<CanvasProps, "dpr" | "gl"> & PixelationProps) {
-  const renderer = useMemo<PixelRenderer>(() => ({ scene: { current: null }, frame: { current: null }, capture: { current: null }, characters: new Set(), world: new Set(), worldTexel: { value: 0 } }), [])
+  const renderer = useMemo<PixelRenderer>(() => ({ scene: { current: null }, frame: { current: null }, capture: { current: null }, characters: new Set(), world: new Set(), worldTexel: { value: 0 }, sceneryDepth: spriteSceneryDepth() }), [])
   const density = Number.isFinite(pixelsPerUnit) ? THREE.MathUtils.clamp(pixelsPerUnit, 1, 64) : CHARACTER_PIXELS_PER_UNIT
   const dpr = Number.isFinite(outputDpr) ? THREE.MathUtils.clamp(outputDpr, 0.5, 2) : 1
   return (
