@@ -30,6 +30,11 @@ export function WayfindingControls({ map }: { map: GameMap }) {
   return <div className="space-y-3">
     <div className="space-y-1">
       <ToggleRow label="NPC paths" checked={settings.showRoutes} onChange={showRoutes => update({ showRoutes })} />
+      <ToggleRow label="Show route changes" checked={settings.showRouteChanges} onChange={showRouteChanges => update({ showRouteChanges })} />
+      {settings.showRouteChanges && <>
+        <Tuner label="Keep changes" labelClassName="w-28" value={settings.routeChangeSeconds} display={`${settings.routeChangeSeconds}s`} min={5} max={120} showHandle onChange={routeChangeSeconds => update({ routeChangeSeconds })} />
+        <p>Pink: previous path. Green: replacement path. Crosses mark their destinations. Records while enabled; pausing stops expiry. Pin a history entry below to keep comparing it.</p>
+      </>}
       <Chooser label="Show paths" labelClassName="w-28" value={settings.routeScope === "all" ? 1 : 0} options={["Selected", "All NPCs"]} onChange={i => update({ routeScope: i ? "all" : "selected" })} />
       <ToggleRow label="Road & approach network" checked={settings.showNetwork} onChange={showNetwork => update({ showNetwork })} />
       <ToggleRow label="Direction nodes" checked={settings.showNodes} onChange={showNodes => update({ showNodes })} />

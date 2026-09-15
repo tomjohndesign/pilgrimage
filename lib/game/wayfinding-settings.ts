@@ -15,6 +15,8 @@ export const wayfindingSchema = z.object({
   closedDestinations: z.array(z.string().min(1)).max(256),
   showRoutes: z.boolean(),
   showField: z.boolean(),
+  showRouteChanges: z.boolean().default(false),
+  routeChangeSeconds: z.number().min(5).max(120).default(30),
   routeScope: z.enum(["selected", "all"]).default("all"),
   showNetwork: z.boolean().default(true),
   showNodes: z.boolean().default(true),
@@ -25,11 +27,13 @@ export type BuildingRouting = z.infer<typeof buildingRoutingSchema>
 export const DEFAULT_BUILDING_ROUTING: BuildingRouting = { enabled: true, preference: 0, viaNodeId: null }
 export const DEFAULT_WAYFINDING: WayfindingSettings = {
   version: 1, travelBudget: 40, selection: "travel", closedDestinations: [], showRoutes: true, showField: false,
-  routeScope: "all", showNetwork: true, showNodes: true, buildings: {},
+  routeScope: "all", showNetwork: true, showNodes: true, buildings: {}, showRouteChanges: false, routeChangeSeconds: 30,
 }
 interface WayfindingStore {
   settings: WayfindingSettings
   selectedNodeId: string | null
+  selectedChangeId: number | null
+  selectChange: (id: number | null) => void
   nodeFocusRevision: number
   selectNode: (id: string | null) => void
   apply: (json: string) => void
@@ -37,7 +41,8 @@ interface WayfindingStore {
   updateBuilding: (id: string, patch: Partial<BuildingRouting> | null) => void
 }
 export const useWayfindingStore = create<WayfindingStore>(set => ({
-  settings: DEFAULT_WAYFINDING, selectedNodeId: null, nodeFocusRevision: 0,
+  settings: DEFAULT_WAYFINDING, selectedNodeId: null, nodeFocusRevision: 0, selectedChangeId: null,
+  selectChange: selectedChangeId => set({ selectedChangeId }),
   selectNode: selectedNodeId => set(s => ({ selectedNodeId, nodeFocusRevision: s.nodeFocusRevision + 1 })),
   apply: json => set({ settings: wayfindingSchema.parse(JSON.parse(json)) }),
   update: patch => set(s => ({ settings: wayfindingSchema.parse({ ...s.settings, ...patch }) })),

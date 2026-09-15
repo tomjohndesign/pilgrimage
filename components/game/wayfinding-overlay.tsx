@@ -5,7 +5,7 @@ import * as THREE from "three"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { surfaceHeight } from "@/lib/game/map/bridges"
 import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
-import { wayfindingFields, wayfindingJourneys } from "@/lib/game/wayfinding-debug"
+import { observeWayfinding, wayfindingFields, wayfindingHistory, wayfindingJourneys } from "@/lib/game/wayfinding-debug"
 import { wayfindingNetwork, type WayfindingNode } from "@/lib/game/wayfinding-nodes"
 import { useWayfindingStore } from "@/lib/game/wayfinding-settings"
 import { workerDestinationField, workerNavigationVersion } from "@/lib/game/worker-route-memory"
@@ -39,8 +39,13 @@ function DirectionNodes({ map, nodes }: { map: GameMap; nodes: WayfindingNode[] 
 export function WayfindingOverlay({ map }: { map: GameMap }) {
   const selection = useCameraStore(s => s.selection), settings = useWayfindingStore(s => s.settings)
   const selectedNodeId = useWayfindingStore(s => s.selectedNodeId)
+  const selectedChangeId = useWayfindingStore(s => s.selectedChangeId)
   const [tick, setTick] = useState(0)
-  useEffect(() => { const timer = setInterval(() => setTick(t => t + 1), 250); return () => clearInterval(timer) }, [])
+  useEffect(() => {
+    const sample = () => { observeWayfinding(map); setTick(t => t + 1) }
+    sample(); const timer = setInterval(sample, 250)
+    return () => clearInterval(timer)
+  }, [map, settings.showRouteChanges])
   const version = workerNavigationVersion(map)
   const network = useMemo(() => wayfindingNetwork(map), [map, version])
   const selectedNode = network.nodes.find(n => n.id === selectedNodeId)
@@ -102,13 +107,35 @@ export function WayfindingOverlay({ map }: { map: GameMap }) {
     turns.setAttribute("position", new THREE.Float32BufferAttribute(bends, 3))
     return { route, ends, turns }
   }, [map, selection, settings, tick])
+  const changes = useMemo(() => {
+    void tick
+    const old: number[] = [], next: number[] = []
+    if (settings.showRouteChanges) for (const change of wayfindingHistory(map).visible(selection, settings.routeScope, settings.routeChangeSeconds, selectedChangeId)) {
+      for (const [journey, positions] of [[change.before, old], [change.after, next]] as const) {
+        for (let i = 1; i < journey.route.length; i++) {
+          const a = journey.route[i - 1], b = journey.route[i]
+          positions.push(a.x, a.y + .2, a.z, b.x, b.y + .2, b.z)
+        }
+        const end = journey.route.at(-1)
+        if (end) for (const sign of [-1, 1])
+          positions.push(end.x - .3, end.y + .22, end.z - .3 * sign, end.x + .3, end.y + .22, end.z + .3 * sign)
+      }
+    }
+    const before = new THREE.BufferGeometry(), after = new THREE.BufferGeometry()
+    before.setAttribute("position", new THREE.Float32BufferAttribute(old, 3))
+    after.setAttribute("position", new THREE.Float32BufferAttribute(next, 3))
+    return { before, after }
+  }, [map, selection, settings, selectedChangeId, tick])
   useEffect(() => () => geometry.dispose(), [geometry])
   useEffect(() => () => { routes.route.dispose(); routes.ends.dispose(); routes.turns.dispose() }, [routes])
+  useEffect(() => () => { changes.before.dispose(); changes.after.dispose() }, [changes])
   return <group name="wayfinding-overlay">
     <lineSegments name="wayfinding-network" geometry={geometry} renderOrder={20} raycast={() => {}}><lineBasicMaterial vertexColors transparent opacity={.7} depthTest={false} depthWrite={false} /></lineSegments>
     <lineSegments name="wayfinding-paths" geometry={routes.route} renderOrder={21} raycast={() => {}}><lineBasicMaterial color="#4ce5ed" depthTest={false} depthWrite={false} /></lineSegments>
     <lineSegments geometry={routes.ends} renderOrder={22} raycast={() => {}}><lineBasicMaterial color="#ffcf56" depthTest={false} depthWrite={false} /></lineSegments>
     <lineSegments geometry={routes.turns} renderOrder={23} raycast={() => {}}><lineBasicMaterial color="#4ce5ed" depthTest={false} depthWrite={false} /></lineSegments>
+    <lineSegments name="wayfinding-previous-paths" geometry={changes.before} renderOrder={24} raycast={() => {}}><lineBasicMaterial color="#ff849b" depthTest={false} depthWrite={false} /></lineSegments>
+    <lineSegments name="wayfinding-new-paths" geometry={changes.after} renderOrder={25} raycast={() => {}}><lineBasicMaterial color="#8aff87" depthTest={false} depthWrite={false} /></lineSegments>
     {settings.showNodes && <DirectionNodes map={map} nodes={network.nodes} />}
   </group>
 }

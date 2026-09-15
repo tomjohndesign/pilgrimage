@@ -1,3 +1,5 @@
+import { WayfindingHistory } from "./wayfinding-history"
+import { GAME_DAY_SECONDS } from "./calendar"
 import { walkingSurface } from "./map/walking-surface"
 import { wayfindingNetwork } from "./wayfinding-nodes"
 import { almsStaffed, breadVisitPlan, type AlmsMonk } from "./alms-table"
@@ -16,7 +18,7 @@ import { buildingRouting, destinationEnabled, useWayfindingStore, wayfindingSett
 
 export const monkWayfindingRegistry: { current: { map: GameMap; actors: Map<number, AlmsMonk> } | null } = { current: null }
 export interface DebugJourney {
-  kind: "traveler" | "monk"; id: number; activity: string; destination?: string; route: WanderSpot[]; remaining: number
+  kind: "traveler" | "monk"; id: number; activity: string; destination?: string; route: WanderSpot[]; remaining: number; intent?: string
 }
 function travelerDestination(s: SimTraveler, map: GameMap): string | undefined {
   if (s.activity === "toBread") return s.breadVisit?.tableId
@@ -31,18 +33,25 @@ function gridPoints(map: GameMap, tiles: readonly TilePos[], progress: number, d
   const rest = direction > 0 ? tiles.slice(Math.floor(progress) + 1) : tiles.slice(0, Math.ceil(progress)).reverse()
   return rest.map(p => ({ x: tileToWorldX(map, p.x), z: tileToWorldZ(map, p.z), y: surfaceHeight(map, p.x, p.z) }))
 }
+function remainingPoints(map: GameMap, path: readonly { x: number; z: number }[], traveled: number) {
+  let distance = 0, next = 1
+  for (; next < path.length; next++) {
+    distance += Math.hypot(path[next].x - path[next - 1].x, path[next].z - path[next - 1].z)
+    if (distance > traveled) break
+  }
+  return path.slice(next).map(p => ({ ...p, y: walkingSurface(map, p.x, p.z).height }))
+}
 function travelerRoute(s: SimTraveler, map: GameMap): WanderSpot[] {
   if (s.roadShortcut) {
     const cut = s.roadShortcut, path = [cut.from, ...cut.via ?? [], cut.to]
-    let distance = 0, next = 1
-    for (; next < path.length; next++) {
-      distance += Math.hypot(path[next].x - path[next - 1].x, path[next].z - path[next - 1].z)
-      if (distance > cut.distance) break
-    }
-    const remainder = path.slice(next).map(p => ({ ...p, y: walkingSurface(map, p.x, p.z).height }))
+    const remainder = remainingPoints(map, path, cut.distance)
     return [...remainder, ...travelerRoute({ ...s, roadShortcut: undefined, progress: cut.end }, map)]
   }
   if (s.offRoadRoute?.length) return s.offRoadRoute
+  const cart = s.partyRiding && s.partyId !== undefined ? simRegistry.current?.parties.get(s.partyId)?.transport : undefined
+  if (cart?.parking) return cart.phase === "parking" || cart.phase === "leaving"
+    ? remainingPoints(map, cart.parking[cart.phase === "parking" ? "entry" : "exit"], cart.parking.distance) : []
+  if (s.partyWaiting || s.partyGathering?.arrived) return []
   if (["toBuild", "toPost", "toHome"].includes(s.activity) && s.buildingTask) return s.buildingTask.route
   if (["toRelic", "fromRelic"].includes(s.activity) && s.shrineRoute) return gridPoints(map, s.shrineRoute, s.branchProgress, s.activity === "toRelic" ? 1 : -1)
   if (["fromHome", "fromBuild"].includes(s.activity) && s.constructionReturn) return s.constructionReturn
@@ -53,7 +62,7 @@ function travelerRoute(s: SimTraveler, map: GameMap): WanderSpot[] {
     if (route.length < 2) return []
     const points: WanderSpot[] = []
     // Sample the same curved lanes used by the simulation, including bridges.
-    for (let p = progress + s.direction * .25; p >= 0 && p <= route.length - 1; p += s.direction * .25)
+    for (let p = (s.direction > 0 ? Math.floor(progress * 4) + 1 : Math.ceil(progress * 4) - 1) / 4; p >= 0 && p <= route.length - 1; p += s.direction * .25)
       points.push(routeWorldPoint(map, route, p, s.lane, track || undefined))
     points.push(routeWorldPoint(map, route, s.direction > 0 ? route.length - 1 : 0, s.lane, track || undefined))
     return points
@@ -63,15 +72,18 @@ function travelerRoute(s: SimTraveler, map: GameMap): WanderSpot[] {
 /** Remaining waypoints, copied for inspection; never expose mutable simulation arrays. */
 export function wayfindingJourneys(map: GameMap, selection: Selection | null, scope: "selected" | "all" = "selected"): DebugJourney[] {
   const result: DebugJourney[] = [], sim = simRegistry.current
-  const add = (kind: DebugJourney["kind"], id: number, activity: string, from: WanderSpot, points: WanderSpot[], destination?: string) => {
+  const add = (kind: DebugJourney["kind"], id: number, activity: string, from: WanderSpot, points: WanderSpot[], destination?: string, intent = activity) => {
     if (scope !== "all" && (!selection || !(selection.kind === kind && selection.id === id || selection.kind === "building" && selection.id === destination))) return
-    result.push({ kind, id, activity, destination, route: [from, ...points].map(p => ({ x: p.x, y: p.y, z: p.z })), remaining: walkingDistance(from, points) })
+    result.push({ kind, id, activity, destination, intent, route: [from, ...points].map(p => ({ x: p.x, y: p.y, z: p.z })), remaining: walkingDistance(from, points) })
   }
   if (sim && sim.world.road === map.road) for (const s of sim.travelers.values()) {
     if (sim.joinedMonks.has(s.id)) continue
     const destination = travelerDestination(s, map)
     if (scope !== "all" && !(selection?.kind === "traveler" && selection.id === s.id || selection?.kind === "building" && selection.id === destination)) continue
-    add("traveler", s.id, s.activity, s, travelerRoute(s, map), destination)
+    const cart = s.partyRiding && s.partyId !== undefined ? sim.parties.get(s.partyId)?.transport : undefined
+    const road = ["walking", "fleeing", "seeking"].includes(s.activity) && !s.roadShortcut && !s.offRoadRoute?.length && !s.partyWaiting && !s.partyGathering?.arrived
+    add("traveler", s.id, s.activity, s, travelerRoute(s, map), destination,
+      cart?.parking ? `cart:${cart.phase}` : road ? `road:${s.track?.index ?? "main"}:${s.direction}` : s.partyGathering ? `gathering:${!!s.partyGathering.back}` : s.activity)
   }
   const monks = monkWayfindingRegistry.current
   if (monks && monks.map.road === map.road) for (const [id, s] of monks.actors) {
@@ -80,6 +92,22 @@ export function wayfindingJourneys(map: GameMap, selection: Selection | null, sc
     add("monk", id, s.activity, s, points, destination)
   }
   return result
+}
+
+const histories = new WeakMap<object, WayfindingHistory>()
+export function wayfindingHistory(map: GameMap) {
+  const sim = simRegistry.current, key = sim && sim.world.road === map.road ? sim : map.road ?? map
+  let history = histories.get(key)
+  if (!history) { history = new WayfindingHistory(); histories.set(key, history) }
+  return history
+}
+export function observeWayfinding(map: GameMap) {
+  const history = wayfindingHistory(map)
+  const { settings, selectedChangeId } = useWayfindingStore.getState()
+  if (settings.showRouteChanges) {
+    history.observe(wayfindingJourneys(map, null, "all"), (simRegistry.current?.time ?? 0) * GAME_DAY_SECONDS, selectedChangeId)
+  } else history.suspend()
+  return history
 }
 
 /** Geometry can be inspected even when a building is unstaffed or reserved. */
@@ -116,5 +144,5 @@ export function wayfindingSnapshot(map: GameMap, selection: Selection | null) {
     entry: buildingEntry(selectedBuilding), staffed: selectedBuilding.buildType === "alms-table" ? almsStaffed(map, selectedBuilding.id) : undefined,
     debugClosed: !destinationEnabled(selectedBuilding.id, settings), rules: buildingRouting(selectedBuilding.id, settings),
     fields: settings.showField ? wayfindingFields(map, selectedBuilding.id).map(field => ({ goal: field.goal, budget: field.budget, cells: field.distance.size })) : [] } : undefined
-  return { settings, selection, destination, selectedNode: wayfindingNetwork(map).nodes.find(n => n.id === useWayfindingStore.getState().selectedNodeId), nodes: wayfindingNetwork(map).nodes, journeys: wayfindingJourneys(map, selection), candidates, cache: workerRouteMemoryStats(map) }
+  return { settings, selection, destination, routeChanges: wayfindingHistory(map).matching(selection, settings.routeScope), selectedNode: wayfindingNetwork(map).nodes.find(n => n.id === useWayfindingStore.getState().selectedNodeId), nodes: wayfindingNetwork(map).nodes, journeys: wayfindingJourneys(map, selection), candidates, cache: workerRouteMemoryStats(map) }
 }

@@ -1596,10 +1596,8 @@ const GATHERING_REACH = 3
 const GATHERING_RETRY = 3
 const GATHERING_GROUND: readonly string[] = ["grass", "dirt", "clearing"]
 
-/** Open ground at the corner where the branch leaves the road, on the side the
- * company came from: grass within reach of the entrance, never road, track,
- * footprint, parked wagon or tree, ordered from the corner outward so a company
- * fills one loose group rather than a ring around the junction. */
+/** Cart companions gather beside their reserved bay; walking companies use the
+ * road junction. Keep the track, standing lane and the wagon itself clear. */
 function gatheringGround(sim: SimState, map: GameMap, party: TravelParty, head: SimTraveler, scale: number): WorldPoint[] {
   const site = map.site, road = map.road
   if (!site || !road) return []
@@ -1612,13 +1610,16 @@ function gatheringGround(sim: SimState, map: GameMap, party: TravelParty, head: 
   const first = site.branch[1] ?? site.door
   const aside = { x: Math.sign(first.x - junction.x), z: Math.sign(first.z - junction.z) }
   const rng = makeRng(deriveSeed(party.id ^ 0x47415448, party.decisions))
-  const anchor = { x: tileToWorldX(map, junction.x) + (aside.x - along.x) * 1.5 + (rng() - .5) * .8,
+  const cart = party.transport, parking = cart?.parking
+  const anchor = parking?.parked.hitch ?? { x: tileToWorldX(map, junction.x) + (aside.x - along.x) * 1.5 + (rng() - .5) * .8,
     z: tileToWorldZ(map, junction.z) + (aside.z - along.z) * 1.5 + (rng() - .5) * .8 }
   const key = (x: number, z: number) => z * map.width + x
   const blocked = new Set<number>()
   for (const p of site.branch) blocked.add(key(p.x, p.z))
+  if (parking) for (const p of currentStanding(sim, map)?.lane ?? []) blocked.add(key(p.x, p.z))
   for (let i = -GATHERING_REACH * 3; i <= GATHERING_REACH * 3; i++) { const p = road[wrap(site.junction + i)]; if (p) blocked.add(key(p.x, p.z)) }
-  const wagons = parkingContext(sim, head, scale, false, anchor).obstacles ?? []
+  const wagons = [...parkingContext(sim, head, scale, false, anchor).obstacles ?? []]
+  if (parking && cart) wagons.push(...convoyBounds(parking.parked, cart.animal, scale))
   const trees = treeSpatialIndex(sim.trees)
   const ax = worldToTileX(map, anchor.x), az = worldToTileZ(map, anchor.z)
   const points: WorldPoint[] = []
@@ -1637,13 +1638,30 @@ function gatheringGround(sim: SimState, map: GameMap, party: TravelParty, head: 
 }
 
 /** Take the nearest free place on the ground that can be walked to, and set out for it. */
-function joinGathering(s: SimTraveler, map: GameMap, ground: readonly WorldPoint[], reservations: RoadsideReservations): boolean {
+function joinGathering(s: SimTraveler, map: GameMap, ground: readonly WorldPoint[], reservations: RoadsideReservations, parking?: ShrineParking): boolean {
   const start = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
+  // Use the wagon's validated approach corridor, joining at the nearest point
+  // and leaving it beside the bay. Connect its tile centres with pedestrian
+  // navigation so bends, walls and terrain obey the same rules as other walks.
+  const corridor: TilePos[] = []
+  for (const p of parking?.entry ?? []) {
+    const tile = { x: worldToTileX(map, p.x), z: worldToTileZ(map, p.z) }, last = corridor.at(-1)
+    if (!last || tile.x !== last.x || tile.z !== last.z) corridor.push(tile)
+  }
+  const nearest = (point: TilePos) => corridor.reduce((best, p, i) =>
+    Math.hypot(p.x - point.x, p.z - point.z) < Math.hypot(corridor[best].x - point.x, corridor[best].z - point.z) ? i : best, 0)
   for (const spot of ground) {
     if (reservations.occupied(spot, s.id)) continue
-    const route = settlementRoute(map, map.buildings, start, { x: worldToTileX(map, spot.x), z: worldToTileZ(map, spot.z) },
-      false, false, undefined, PARTY_ROUTE_LIMIT)
-    if (!route) continue
+    const goal = { x: worldToTileX(map, spot.x), z: worldToTileZ(map, spot.z) }
+    const via = corridor.length ? corridor.slice(nearest(start), nearest(goal) + 1) : []
+    const route: TilePos[] = [start]
+    let reachable = true
+    for (const next of [...via, goal]) {
+      const leg = settlementRoute(map, map.buildings, route.at(-1)!, next, false, false, undefined, PARTY_ROUTE_LIMIT)
+      if (!leg) { reachable = false; break }
+      route.push(...leg.slice(1))
+    }
+    if (!reachable) continue
     routeWalk(s, map, route, spot)
     s.partyGathering = { spot, arrived: false }
     reservations.update(s)
@@ -1840,6 +1858,25 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
         for (const s of members) hold(s)
         const done = movePartyCart(party, map, characterScale, companyPace(party, members, naturalSpeed, characterScale), dt)
         seatParty(party, members, characterScale)
+        if (parking) {
+          party.gatherRetry = Math.max(0, (party.gatherRetry ?? 0) - dt)
+          let ground: WorldPoint[] | undefined
+          for (const s of members) {
+            if (s.partyRiding || s.activity !== "walking") continue
+            if (!s.partyGathering && party.gatherRetry <= 0) {
+              ground ??= gatheringGround(sim, map, party, members[0], characterScale)
+              reservations ??= new RoadsideReservations(sim.travelers.values())
+              joinGathering(s, map, ground, reservations, cart.parking)
+            }
+            if (s.partyGathering) {
+              stepGathering(s, map, naturalSpeed(s), dt)
+              s.partyWaiting = s.partyGathering?.arrived ?? true
+              s.partySpeed = s.partyWaiting ? 0 : naturalSpeed(s)
+            }
+          }
+          if (ground) party.gatherRetry = GATHERING_RETRY
+          party.reason = "Walking together to the parking area"
+        }
         if (done && parking) for (const s of members) s.partyRiding = false
         if (done && !parking) regroupParty(party, members, length, seconds, characterScale)
         continue
@@ -1916,7 +1953,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
           if (party.gatherRetry > 0 || !map.site) continue
           ground ??= gatheringGround(sim, map, party, members[0], characterScale)
           reservations ??= new RoadsideReservations(sim.travelers.values())
-          if (!joinGathering(s, map, ground, reservations)) continue
+          if (!joinGathering(s, map, ground, reservations, cart?.parking)) continue
         }
         stepGathering(s, map, naturalSpeed(s), dt)
       }

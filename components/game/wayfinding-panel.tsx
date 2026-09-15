@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useCameraStore } from "@/lib/game/camera-store"
 import type { GameMap } from "@/lib/game/map/types"
 import { DEFAULT_WAYFINDING, useWayfindingStore } from "@/lib/game/wayfinding-settings"
-import { wayfindingJourneys, wayfindingSnapshot, type DebugJourney } from "@/lib/game/wayfinding-debug"
+import { wayfindingHistory, wayfindingJourneys, wayfindingSnapshot, type DebugJourney } from "@/lib/game/wayfinding-debug"
 import { rebuildWorkerNavigation } from "@/lib/game/worker-route-memory"
 import { WayfindingControls } from "./wayfinding-controls"
 import { HudButton } from "./hud-button"
@@ -13,6 +13,7 @@ import { HudButton } from "./hud-button"
 export function WayfindingPanel({ map, travelers, monks }: { map: GameMap; travelers: readonly { id: number; name: string }[]; monks: readonly { id: number; name: string }[] }) {
   const settings = useWayfindingStore(s => s.settings), apply = useWayfindingStore(s => s.apply)
   const selection = useCameraStore(s => s.selection)
+  const selectedChangeId = useWayfindingStore(s => s.selectedChangeId), selectChange = useWayfindingStore(s => s.selectChange)
   const [edit, setEdit] = useState<{ base: typeof settings; text: string } | null>(null)
   const draft = edit?.base === settings ? edit.text : JSON.stringify(settings, null, 2)
   const [message, setMessage] = useState("")
@@ -26,8 +27,31 @@ export function WayfindingPanel({ map, travelers, monks }: { map: GameMap; trave
     try { await navigator.clipboard.writeText(JSON.stringify(value, null, 2)); setMessage("Copied JSON.") }
     catch { setMessage("Clipboard unavailable. Select and copy the JSON below.") }
   }
+  const target = (journey: DebugJourney) => {
+    const end = journey.route.at(-1)
+    return journey.destination ?? (journey.route.length > 1 && end ? `(${end.x.toFixed(1)}, ${end.z.toFixed(1)})` : "stopped")
+  }
   return <div className="space-y-2 text-[11px] text-ink-light">
     <WayfindingControls map={map} />
+    {settings.showRouteChanges && <div className="space-y-1 border-t border-rule pt-2">
+      <p className="font-display text-ink">Route change history · {snapshot?.routeChanges.length ?? 0}</p>
+      <p>Latest change per NPC is shown. Select an entry to pin its before/after paths. History keeps the last 100 changes.</p>
+      <div className="max-h-52 space-y-1 overflow-auto">
+        {snapshot?.routeChanges.map(change => <button key={change.id} type="button" aria-pressed={selectedChangeId === change.id}
+          className={`block w-full border p-1 text-left ${selectedChangeId === change.id ? "border-ink bg-parchment-dark text-ink" : "border-rule"}`}
+          onClick={() => selectChange(change.id)}>
+          #{change.id} · {(change.after.kind === "monk" ? monks : travelers).find(p => p.id === change.after.id)?.name ?? `${change.after.kind} ${change.after.id}`}<br />
+          Before: {change.before.activity} → {target(change.before)}<br />
+          After: {change.after.activity} → {target(change.after)}
+        </button>)}
+        {!snapshot?.routeChanges.length && <p>No recorded changes for this scope yet.</p>}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        <HudButton disabled={selectedChangeId === null} onClick={() => selectChange(null)}>Follow latest changes</HudButton>
+        <HudButton onClick={() => { wayfindingHistory(map).clear(); selectChange(null); setSnapshot(wayfindingSnapshot(map, selection)) }}>Clear history</HudButton>
+        <HudButton onClick={() => void copy(selectedChangeId === null ? snapshot?.routeChanges : snapshot?.routeChanges.find(c => c.id === selectedChangeId))}>Copy changes JSON</HudButton>
+      </div>
+    </div>}
     <details><summary className="cursor-pointer font-display text-ink">Import / export JSON</summary>
     <label className="block">Wayfinding JSON
       <textarea aria-label="Wayfinding JSON" spellCheck={false} rows={12} value={draft} onChange={e => setEdit({ base: settings, text: e.target.value })}

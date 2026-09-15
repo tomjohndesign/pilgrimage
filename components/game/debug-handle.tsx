@@ -129,6 +129,8 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
         const paths = scene.getObjectByName("wayfinding-paths") as THREE.LineSegments | undefined
         const nodes = scene.getObjectByName("wayfinding-nodes") as THREE.InstancedMesh | undefined
         return { pathSegments: (paths?.geometry.getAttribute("position").count ?? 0) / 2, nodes: nodes?.count ?? 0,
+          previousSegments: ((scene.getObjectByName("wayfinding-previous-paths") as THREE.LineSegments | undefined)?.geometry.getAttribute("position").count ?? 0) / 2,
+          replacementSegments: ((scene.getObjectByName("wayfinding-new-paths") as THREE.LineSegments | undefined)?.geometry.getAttribute("position").count ?? 0) / 2,
           charactersVisible: scene.getObjectByName("visibility-characters")?.visible ?? false,
           selectedNodeId: useWayfindingStore.getState().selectedNodeId }
       },
