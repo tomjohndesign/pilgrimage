@@ -444,7 +444,7 @@
 
 /* Party selection uses the same joined list/detail arrangement as Build. */
 .game-hud .hud-selection-dock[data-party="true"] { width:560px; max-width:calc(100% - var(--hud-space) * 2); overflow:hidden; }
-.hud-party-selection { display:grid; grid-template-columns:240px minmax(0,1fr); max-height:calc(100dvh - 176px); }
+.hud-party-selection { display:grid; grid-template-columns:240px minmax(0,1fr); grid-template-rows:minmax(0,1fr); height:480px; max-height:calc(100dvh - 176px); }
 .hud-party-roster,.hud-party-detail { min-width:0; min-height:0; overflow:auto; overscroll-behavior:contain; }
 .hud-party-roster { display:flex; flex-direction:column; padding:20px 12px; overflow:hidden; }
 .hud-party-heading { flex-shrink:0; padding:0 8px; }
@@ -453,7 +453,8 @@
 .hud-party-members .chrome-nav-row { flex-shrink:0; }
 .game-hud .hud-building-tiles { max-height:400px; overflow:auto; overscroll-behavior:contain; }
 .game-hud .hud-building-tiles .hud-building-tile { flex-shrink:0; }
-.hud-party-detail { border-left:1px solid var(--chrome-line); }
+/* Member previews share a fixed viewport; overflow must not move the roster or rewrap details. */
+.hud-party-detail { border-left:1px solid var(--chrome-line); scrollbar-gutter:stable; }
 .hud-party-members .chrome-nav-row[aria-current="true"] { background:var(--chrome-field); color:var(--chrome-text); }
 .hud-party-members .chrome-nav-row > span { min-width:0; white-space:normal; overflow-wrap:anywhere; }
 .hud-party-members .chrome-nav-row > svg { flex-shrink:0; }
