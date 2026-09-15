@@ -1,3 +1,4 @@
+import { generateMap } from "./generate-map"
 import { turningMap } from "../transport/turning-demo"
 import { cartTrafficPoint } from "../transport/route"
 import { roadCartPose, cartGroundContacts, onBridgeDeck } from "../transport/bridge-guide"
@@ -6,6 +7,8 @@ import { BASE_CHARACTER_SCALE } from "../base-person/gait"
 import { tileToWorldZ } from "./types"
 import { describe, expect, it } from "vitest"
 import { bridgeLayout } from "./bridges"
+import { layMainRoadTiles } from "./road-footprint"
+import { roadTopologyTileAt } from "./road"
 import { mainRoadWidthAt, clearMainRoadVerge } from "./road-width"
 import { roadLanePoint } from "./road-lane"
 import { diagonalRoadSegments, distanceToRoadSegments, roadSegmentWear } from "../render/road-segments"
@@ -139,5 +142,80 @@ describe("two-tile main road", () => {
     expect(map.tiles[7 * map.width + 11]).toBe("water")
     expect(map.tiles[8 * map.width + 11]).toBe("bridge")
     expect(map.road).toEqual(road)
+  })
+})
+
+
+describe("tile-aligned main road nodes", () => {
+  it("occupies exactly two rows, with four walking lanes inside the path nodes", () => {
+    const map = fixture()
+    layMainRoadTiles(map)
+    for (let x = 2; x < map.width - 2; x++) {
+      expect(map.tiles[6 * map.width + x]).toBe("grass")
+      expect(map.tiles[7 * map.width + x]).toBe("path")
+      expect(map.tiles[8 * map.width + x]).toBe("path")
+      expect(map.tiles[9 * map.width + x]).toBe("grass")
+      expect(roadTopologyTileAt(map, x, 7)).toBe("grass")
+      expect(roadLanePoint(map, map.road!, x, 0)!.z).toBe(7.5)
+      for (const lane of [-.36, -.17, .17, .36]) {
+        const at = roadLanePoint(map, map.road!, x, lane)!
+        expect(map.tiles[Math.round(at.z) * map.width + Math.round(at.x)]).toBe("path")
+      }
+    }
+    const bins = diagonalRoadSegments(map)
+    // Renderer coordinates use tile edges, half a tile beyond node coordinates.
+    expect(distanceToRoadSegments(.5, 1, bins.get(7 * map.width + 10)!)).toBe(0)
+    expect(distanceToRoadSegments(0, 1, bins.get(7 * map.width)!)).toBe(0)
+    expect(distanceToRoadSegments(1, 1, bins.get(8 * map.width - 1)!)).toBe(0)
+    const centre = tileToWorldZ(map, 7.5)
+    for (const direction of [1, -1] as const)
+      expect(cartTrafficPoint(map, 10, direction).z).toBeCloseTo(centre - direction * .5)
+  })
+
+  it.each([[1, 0], [-1, 0], [0, 1], [0, -1]])("keeps both directional path rows on tiles (%i, %i)", (dx, dz) => {
+    const map: GameMap = { width: 40, depth: 40, tiles: Array(1600).fill("grass"), buildings: [], mainRoadWidth: 2,
+      road: Array.from({ length: 25 }, (_, i) => ({ x: 20 + dx * (i - 12), z: 20 + dz * (i - 12) })) }
+    for (const p of map.road!) map.tiles[p.z * map.width + p.x] = "path"
+    layMainRoadTiles(map)
+    const centre = roadLanePoint(map, map.road!, 12, 0)!
+    expect(centre).toEqual({ x: 20 + dz * .5, z: 20 - dx * .5 })
+    for (const side of [-1, 1]) {
+      const row = { x: centre.x + side * dz * .5, z: centre.z - side * dx * .5 }
+      expect(map.tiles[row.z * map.width + row.x]).toBe("path")
+      const verge = { x: row.x + side * dz, z: row.z - side * dx }
+      expect(map.tiles[verge.z * map.width + verge.x]).toBe("grass")
+    }
+    const tiles = [...map.tiles]
+    layMainRoadTiles(map)
+    expect(map.tiles).toEqual(tiles)
+  })
+
+  it("keeps the four lanes on path nodes through a generated road", () => {
+    const map = generateMap({ seed: 42, width: 128, depth: 128 })
+    for (let progress = 1; progress < map.road!.length - 2; progress += .25) {
+      for (const lane of [-.36, -.17, .17, .36]) {
+        const point = roadLanePoint(map, map.road!, progress, lane)!
+        const terrain = map.tiles[Math.round(point.z) * map.width + Math.round(point.x)]
+        expect(["path", "track", "bridge", "ford"], `progress ${progress}, lane ${lane}: ${JSON.stringify(point)}`).toContain(terrain)
+      }
+    }
+  })
+
+  it("preserves diagonal topology and merges into supported bridge nodes", () => {
+    const map = turningMap("compound_bridge")
+    map.mainRoadWidth = 2
+    const before = bridgeLayout(map)
+    layMainRoadTiles(map)
+    expect(bridgeLayout({ ...map }).spans).toEqual(before.spans)
+    for (let p = 0; p < map.road!.length - 1; p += .025) {
+      for (const lane of [-.36, .36]) {
+        const a = roadLanePoint(map, map.road!, p, lane)!
+        const b = roadLanePoint(map, map.road!, p + .001, lane)!
+        expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeLessThan(.006)
+        const tile = map.road![Math.round(p)]
+        if (before.rise[tile.z * map.width + tile.x] > 0)
+          expect(Math.hypot(a.x - roadLanePoint(map, map.road!, p, 0)!.x, a.z - roadLanePoint(map, map.road!, p, 0)!.z)).toBeLessThanOrEqual(.281)
+      }
+    }
   })
 })

@@ -202,6 +202,24 @@ export function roadTint(map: GameMap, x: number, z: number, tier: number): Tint
   return tint
 }
 
+/** Widened path nodes occupy ground, without creating extra route junctions. */
+export function roadTopologyTileAt(map: GameMap, x: number, z: number): TerrainId | null {
+  const terrain = tileAt(map, x, z)
+  return terrain === null ? null : map.mainRoadGround?.[z * map.width + x] ?? terrain
+}
+
+const mainTiles = new WeakMap<GameMap, Set<number>>()
+export function isMainRoadTile(map: GameMap, index: number): boolean {
+  if (!map.mainRoadGround) return false
+  let tiles = mainTiles.get(map)
+  if (!tiles) {
+    tiles = new Set(map.road?.map(p => p.z * map.width + p.x))
+    for (const key of Object.keys(map.mainRoadGround)) tiles.add(Number(key))
+    mainTiles.set(map, tiles)
+  }
+  return tiles.has(index)
+}
+
 /** Four flags in +x, -x, +z, -z order. */
 export type SideFlags = [number, number, number, number]
 
@@ -245,7 +263,7 @@ export function roadEdge(map: GameMap, x: number, z: number): RoadEdge {
   const open: SideFlags = [0, 0, 0, 0]
   for (let side = 0; side < 4; side++) {
     const [dx, dz] = EDGE_DIRS[side]
-    if (!roadContinues(tileAt(map, x + dx, z + dz))) open[side] = 1
+    if (!roadContinues(roadTopologyTileAt(map, x + dx, z + dz))) open[side] = 1
   }
   const filledCorners: SideFlags = [0, 0, 0, 0]
   for (let corner = 0; corner < 4; corner++) {
@@ -255,9 +273,9 @@ export function roadEdge(map: GameMap, x: number, z: number): RoadEdge {
     const dz = zSide === 2 ? 1 : -1
     // Off-map and bridges continue a lane but do not create a paved plaza.
     if (
-      isRoadTerrain(tileAt(map, x + dx, z)) &&
-      isRoadTerrain(tileAt(map, x, z + dz)) &&
-      isRoadTerrain(tileAt(map, x + dx, z + dz))
+      isRoadTerrain(roadTopologyTileAt(map, x + dx, z)) &&
+      isRoadTerrain(roadTopologyTileAt(map, x, z + dz)) &&
+      isRoadTerrain(roadTopologyTileAt(map, x + dx, z + dz))
     ) {
       filledCorners[corner] = 1
     }
@@ -267,11 +285,11 @@ export function roadEdge(map: GameMap, x: number, z: number): RoadEdge {
 
 /** Encode the two perpendicular entrances of an ordinary bend. */
 function roadBendSides(map: GameMap, x: number, z: number): number {
-  if (!isRoadTerrain(tileAt(map, x, z))) return 0
+  if (!isRoadTerrain(roadTopologyTileAt(map, x, z))) return 0
   let sides = 0, count = 0
   for (let side = 0; side < 4; side++) {
     const [dx, dz] = EDGE_DIRS[side]
-    if (roadContinues(tileAt(map, x + dx, z + dz))) { sides |= 1 << side; count++ }
+    if (roadContinues(roadTopologyTileAt(map, x + dx, z + dz))) { sides |= 1 << side; count++ }
   }
   return count === 2 && (sides & 3) !== 0 && (sides & 12) !== 0 ? sides : 0
 }
@@ -307,7 +325,7 @@ const bendCache = new WeakMap<GameMap, { seed: number | undefined; width: number
 
 /** A centreline with matching tangents at diagonal and ordinary entrances. Coordinates use tile edges. */
 export function diagonalRoadBend(map: GameMap, x: number, z: number): RoadBend | null {
-  if (!isRoadTerrain(tileAt(map, x, z))) return null
+  if (!isRoadTerrain(roadTopologyTileAt(map, x, z))) return null
   let cache = bendCache.get(map)
   if (!cache || cache.seed !== map.seed || cache.width !== map.width || cache.depth !== map.depth) {
     cache = { seed: map.seed, width: map.width, depth: map.depth, tiles: new Map() }
@@ -315,7 +333,7 @@ export function diagonalRoadBend(map: GameMap, x: number, z: number): RoadBend |
   }
   let signature = 0
   for (const [dx, dz] of bendNeighborhood) {
-    const terrain = tileAt(map, x + dx, z + dz)
+    const terrain = roadTopologyTileAt(map, x + dx, z + dz)
     signature = (signature << 2) | (isRoadTerrain(terrain) ? 2 : roadContinues(terrain) ? 1 : 0)
   }
   const key = z * map.width + x, previous = cache.tiles.get(key)
@@ -328,8 +346,8 @@ export function diagonalRoadBend(map: GameMap, x: number, z: number): RoadBend |
 function createDiagonalRoadBend(map: GameMap, x: number, z: number): RoadBend | null {
   const diagonal = roadDiagonals(map, x, z)
   if (!diagonal.some(Boolean)) return null
-  const sx = roadContinues(tileAt(map, x + 1, z)) ? 1 : -1
-  const sz = roadContinues(tileAt(map, x, z + 1)) ? 1 : -1
+  const sx = roadContinues(roadTopologyTileAt(map, x + 1, z)) ? 1 : -1
+  const sz = roadContinues(roadTopologyTileAt(map, x, z + 1)) ? 1 : -1
   const diagonalX = diagonal[sx > 0 ? 0 : 1] > 0
   const diagonalZ = diagonal[sz > 0 ? 2 : 3] > 0
   const a = { x: x + 0.5 + sx * 0.5, z: z + 0.5 }
@@ -368,7 +386,7 @@ export function diagonalRoadPoint(map: GameMap, x: number, z: number): { x: numb
  */
 export function junctionShoulders(map: GameMap, excluded: ReadonlySet<number> = new Set()): Map<number, SideFlags> {
   const shoulders = new Map<number, SideFlags>()
-  const road = (x: number, z: number) => isRoadTerrain(tileAt(map, x, z)) && !excluded.has(z * map.width + x)
+  const road = (x: number, z: number) => isRoadTerrain(roadTopologyTileAt(map, x, z)) && !excluded.has(z * map.width + x)
   for (let z = 0; z < map.depth; z++) {
     for (let x = 0; x < map.width; x++) {
       if (!road(x, z)) continue
@@ -377,7 +395,7 @@ export function junctionShoulders(map: GameMap, excluded: ReadonlySet<number> = 
         for (const dz of [-1, 1]) {
           if (!road(x + dx, z) || !road(x, z + dz)) continue
           // Shoulders may use a grassy verge, never water or occupied land.
-          if (tileAt(map, x + dx, z + dz) !== "grass" || excluded.has((z + dz) * map.width + x + dx)) continue
+          if (roadTopologyTileAt(map, x + dx, z + dz) !== "grass" || excluded.has((z + dz) * map.width + x + dx)) continue
           if (map.buildings.some(b => x + dx >= b.x && x + dx < b.x + b.w && z + dz >= b.z && z + dz < b.z + b.d)) continue
           const code = (dx > 0 ? 1 : 3) + (dz > 0 ? 0 : 1)
           const cornerX = x + (dx > 0 ? 1 : 0)

@@ -123,6 +123,8 @@ export interface GameMap {
   road?: TilePos[]
   /** Physical width around the main centreline; omitted on legacy authored maps. */
   mainRoadWidth?: number
+  /** Ground replaced by the second row of path nodes; retains the original route topology. */
+  mainRoadGround?: Record<number, TerrainId>
   /**
    * Secondary tracks: each a shorter, more dangerous walk through a dark
    * forest between two points on the road. Present on generated maps that

@@ -1,7 +1,7 @@
 import { roadLanePoint } from "../map/road-lane"
 import { mainRoadWidthAt } from "../map/road-width"
 import { bridgeLayout } from "../map/bridges"
-import { diagonalRoadBend, isRoadTerrain, roadWear, sampleRoadBend, TRAFFIC_FOR_BARE_ROAD } from "../map/road"
+import { diagonalRoadBend, isMainRoadTile, isRoadTerrain, roadWear, sampleRoadBend, TRAFFIC_FOR_BARE_ROAD } from "../map/road"
 import { tileAt, type GameMap } from "../map/types"
 import { contactAppearance } from "./path-appearance"
 
@@ -80,7 +80,10 @@ export function diagonalRoadSegments(map: GameMap, excluded: ReadonlySet<number>
     for (let i = 0; i < road.length; i++) {
       const p = road[i]
       if (bridges.rise[p.z * map.width + p.x] > 0 || tileAt(map, p.x, p.z) === "bridge") continue
-      const from = Math.max(0, i - .5), to = Math.min(road.length - 1, i + .5)
+      // Tile-owned roads reach the map boundary; their suppressed legacy
+      // centreline shape can no longer supply the final half-tile.
+      const endCap = map.mainRoadGround ? .5 : 0
+      const from = Math.max(-endCap, i - .5), to = Math.min(road.length - 1 + endCap, i + .5)
       const previous = road[Math.max(0, i - 1)], next = road[Math.min(road.length - 1, i + 1)]
       const straight = previous.x === next.x || previous.z === next.z
       const steps = straight && mainRoadWidthAt(map, from) === mainRoadWidthAt(map, to) ? 1 : 8
@@ -107,7 +110,7 @@ export function diagonalRoadSegments(map: GameMap, excluded: ReadonlySet<number>
   const main = (map.mainRoadWidth ?? 1) > 1 ? new Set(map.road?.map(p => p.z * map.width + p.x)) : new Set<number>()
   for (let z = 0; z < map.depth; z++) {
     for (let x = 0; x < map.width; x++) {
-      if (blocked.has(z * map.width + x) || main.has(z * map.width + x)) continue
+      if (blocked.has(z * map.width + x) || main.has(z * map.width + x) || isMainRoadTile(map, z * map.width + x)) continue
       const bend = diagonalRoadBend(map, x, z)
       if (!bend) continue
       const steps = bend.straight ? 1 : 12

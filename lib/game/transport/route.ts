@@ -46,7 +46,7 @@ export function cartRoute(map: GameMap, turnRadius = DEFAULT_CART_TURN_RADIUS): 
     // across that ribbon and make animals travel farther than the road itself.
     // Start from the shared diagonal centreline before fitting convoy corners;
     // bridge landings retain their supported tile-centre route.
-    const lane=bridges.rise[p.z*map.width+p.x]===0 && diagonalRoadBend(map,p.x,p.z)
+    const lane=bridges.rise[p.z*map.width+p.x]===0 && (map.mainRoadGround || diagonalRoadBend(map,p.x,p.z))
       ? roadLanePoint(map,road,progress,0) : null
     return {x:tileToWorldX(map,lane?.x??p.x),z:tileToWorldZ(map,lane?.z??p.z),progress}
   })

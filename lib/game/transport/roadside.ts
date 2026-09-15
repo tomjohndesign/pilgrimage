@@ -1,4 +1,5 @@
 import { tileAt, tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "../map/types"
+import { roadLanePoint } from "../map/road-lane"
 import type { Puller } from "./assets"
 import { buildingAt } from "../settlement"
 
@@ -68,23 +69,27 @@ export function roadsideStall(map: GameMap, from: Point, progress: number, direc
   const index = Math.floor(progress), a = road[index], b = road[index + 1]
   const forward = { x: (b.x - a.x) * direction, z: (b.z - a.z) * direction }
   if (Math.abs(forward.x) + Math.abs(forward.z) !== 1) return null
-  const centre = { x: tileToWorldX(map, a.x) + (b.x - a.x) * (progress - index), z: tileToWorldZ(map, a.z) + (b.z - a.z) * (progress - index) }
+  const laneCentre = map.mainRoadGround ? roadLanePoint(map, road, progress, 0) : null
+  const centre = laneCentre ? { x: tileToWorldX(map, laneCentre.x), z: tileToWorldZ(map, laneCentre.z) } : { x: tileToWorldX(map, a.x) + (b.x - a.x) * (progress - index), z: tileToWorldZ(map, a.z) + (b.z - a.z) * (progress - index) }
   const lateral = (from.x - centre.x) * forward.z - (from.z - centre.z) * forward.x
   const clear = (p: Point) => {
     const x = worldToTileX(map, p.x), z = worldToTileZ(map, p.z), t = tileAt(map, x, z)
     return (t === "grass" || t === "clearing" || t === "dirt") && !buildingAt(map, x, z)
   }
   for (const side of [1, -1] as const) {
-    const plan = roadsideManeuver(from, forward, lateral, side, wheelbase)
+    // With the median on a tile edge, the first grass row is 1.5 tiles
+    // away. Keep the display there and the parked cart on the following row.
+    const vergeShift = map.mainRoadGround ? .5 : 0
+    const plan = roadsideManeuver(from, forward, lateral - vergeShift * side, side, wheelbase)
     const returnProgress = progress + direction * plan.advance
     if (returnProgress < 0 || returnProgress >= road.length - 1) continue
     let suitable = true
     for (let i = Math.floor(Math.min(progress, returnProgress)); i <= Math.ceil(Math.max(progress, returnProgress)); i++) {
-      const p = road[i], along = (i - progress) * direction
+      const p = map.mainRoadGround ? roadLanePoint(map, road, i, 0) : road[i], along = (i - progress) * direction
       if (!p || Math.abs(tileToWorldX(map, p.x) - centre.x - forward.x * along) > 0.01 || Math.abs(tileToWorldZ(map, p.z) - centre.z - forward.z * along) > 0.01) suitable = false
     }
     // Check both clear verge rows along the approach, stall and exit.
-    for (let along = 0.6; along <= plan.advance; along += 0.25) for (const depth of [1, 2]) {
+    for (let along = 0.6; along <= plan.advance; along += 0.25) for (const depth of [1 + vergeShift, 2 + vergeShift]) {
       if (!clear({ x: centre.x + forward.x * along + forward.z * side * depth, z: centre.z + forward.z * along - forward.x * side * depth })) suitable = false
     }
     if (suitable) {
