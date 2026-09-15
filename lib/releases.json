@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "0c3dbf3d5388544246e11d3a51e898d424e301e0",
-  "releaseCount": 248,
+  "lastProcessedCommit": "43252f5f15c2120ca033e8f18e2c804d3433856f",
+  "releaseCount": 249,
   "releases": [
+    {
+      "version": "0.0.263",
+      "title": "Release 0.0.263",
+      "summary": "Let waiting companions gather and rest off the road (#283)",
+      "commit": "43252f5f15c2120ca033e8f18e2c804d3433856f"
+    },
     {
       "version": "0.0.262",
       "title": "Release 0.0.262",
