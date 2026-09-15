@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "a8bcbf254baadb16fe2d738b5ec7f65bef06dee5",
-  "releaseCount": 253,
+  "lastProcessedCommit": "43c89558a7ced5fcbb7ed838a1c6c54d0db1e6ff",
+  "releaseCount": 254,
   "releases": [
+    {
+      "version": "0.0.268",
+      "title": "Release 0.0.268",
+      "summary": "Add surface grain and optimized dithered lighting (#288)",
+      "commit": "43c89558a7ced5fcbb7ed838a1c6c54d0db1e6ff"
+    },
     {
       "version": "0.0.267",
       "title": "Release 0.0.267",
