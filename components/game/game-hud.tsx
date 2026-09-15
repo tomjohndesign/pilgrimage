@@ -283,6 +283,9 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
   const sim = simRegistry.current
   const party = live?.partyId === undefined ? undefined : sim?.parties.get(live.partyId)
   const companions = traveler.party ? travelers.filter(t => t.party?.id === traveler.party!.id) : []
+  const waitingLabel = live?.partyGathering?.back ? "Rejoining the company"
+    : party?.gathering ? `${live?.partyGathering?.arrived ? "Waiting for" : "Joining"} companions · ${party.gathering.label}`
+    : "Waiting for companions"
   const focusParty = () => {
     const members = party?.members.flatMap(id => sim?.travelers.get(id) ? [sim.travelers.get(id)!] : []) ?? []
     if (!members.length) return
@@ -324,7 +327,7 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
         </div>
         {live && (
           <div className="text-[11px] italic text-gold">
-            {live.praying ? "Kneeling in prayer before the relic" : live.partyWaiting ? "Waiting for companions" : ACTIVITY_LABELS[live.activity]}
+            {live.praying ? "Kneeling in prayer before the relic" : live.partyWaiting ? waitingLabel : ACTIVITY_LABELS[live.activity]}
             {(live.employer || live.home) && " · Settler"}
             {live.track && " · on the dark track"}
           </div>
