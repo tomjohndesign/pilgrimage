@@ -1,0 +1,329 @@
+{
+  "version": 10,
+  "output": ".context/elevenlabs-scene-v10",
+  "jobs": [
+    {
+      "id": "animal-horse-call-v10",
+      "kind": "sfx",
+      "label": "Horse call",
+      "bank": "animal-horse",
+      "loop": false,
+      "targetDb": -25,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=2.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A single relaxed horse gives one short gentle whinny, then exhales softly. Isolated dry field recording with a clean quiet background. No music, people, footsteps, wind, hiss or buzzing. Let the sound finish naturally with a short quiet tail.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "animal-donkey-call-v10",
+      "kind": "sfx",
+      "label": "Donkey call",
+      "bank": "animal-donkey",
+      "loop": false,
+      "targetDb": -25,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=2.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One donkey gives a short natural two-part bray, subdued rather than loud. Isolated dry field recording with a clean quiet background. No music, people, footsteps, wind, hiss or buzzing. Let the sound finish naturally with a short quiet tail.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "animal-ox-call-v10",
+      "kind": "sfx",
+      "label": "Ox call",
+      "bank": "animal-ox",
+      "loop": false,
+      "targetDb": -25,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=2.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A single ox gives one calm low rounded moo. Isolated dry field recording with a clean quiet background. No music, people, footsteps, wind, hiss or buzzing. Let the sound finish naturally with a short quiet tail.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "animal-sheep-call-v10",
+      "kind": "sfx",
+      "label": "Sheep call",
+      "bank": "animal-sheep",
+      "loop": false,
+      "targetDb": -25,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=2.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One sheep gives a brief soft natural bleat. Isolated dry field recording with a clean quiet background. No music, people, footsteps, wind, hiss or buzzing. Let the sound finish naturally with a short quiet tail.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "animal-goat-call-v10",
+      "kind": "sfx",
+      "label": "Goat call",
+      "bank": "animal-goat",
+      "loop": false,
+      "targetDb": -25,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=2.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One goat gives a short nasal natural bleat. Isolated dry field recording with a clean quiet background. No music, people, footsteps, wind, hiss or buzzing. Let the sound finish naturally with a short quiet tail.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "animal-deer-call-v10",
+      "kind": "sfx",
+      "label": "Doe call",
+      "bank": "animal-deer",
+      "loop": false,
+      "targetDb": -25,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=2.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One roe deer gives a brief quiet contact grunt and soft exhale. Isolated dry field recording with a clean quiet background. No music, people, footsteps, wind, hiss or buzzing. Let the sound finish naturally with a short quiet tail.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "animal-buck-call-v10",
+      "kind": "sfx",
+      "label": "Buck call",
+      "bank": "animal-buck",
+      "loop": false,
+      "targetDb": -25,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=2.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One male deer gives a brief low contact grunt, relaxed, not a rutting roar. Isolated dry field recording with a clean quiet background. No music, people, footsteps, wind, hiss or buzzing. Let the sound finish naturally with a short quiet tail.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "animal-rabbit-call-v10",
+      "kind": "sfx",
+      "label": "Rabbit call",
+      "bank": "animal-rabbit",
+      "loop": false,
+      "targetDb": -25,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=2.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One rabbit quietly snuffles and chews, very close and delicate, no squeal. Isolated dry field recording with a clean quiet background. No music, people, footsteps, wind, hiss or buzzing. Let the sound finish naturally with a short quiet tail.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "animal-boar-call-v10",
+      "kind": "sfx",
+      "label": "Boar call",
+      "bank": "animal-boar",
+      "loop": false,
+      "targetDb": -25,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=2.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One wild boar gives two brief low relaxed grunts and a soft snuffle. Isolated dry field recording with a clean quiet background. No music, people, footsteps, wind, hiss or buzzing. Let the sound finish naturally with a short quiet tail.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "animal-fox-call-v10",
+      "kind": "sfx",
+      "label": "Fox call",
+      "bank": "animal-fox",
+      "loop": false,
+      "targetDb": -25,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=2.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One fox gives a brief soft contact yip, natural and restrained, no screaming. Isolated dry field recording with a clean quiet background. No music, people, footsteps, wind, hiss or buzzing. Let the sound finish naturally with a short quiet tail.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "animal-hawk-call-v10",
+      "kind": "sfx",
+      "label": "Hawk call",
+      "bank": "animal-hawk",
+      "loop": false,
+      "targetDb": -25,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=2.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One hawk gives a single short natural call outdoors, no other birds. Isolated dry field recording with a clean quiet background. No music, people, footsteps, wind, hiss or buzzing. Let the sound finish naturally with a short quiet tail.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "animal-sparrow-call-v10",
+      "kind": "sfx",
+      "label": "Sparrow call",
+      "bank": "animal-sparrow",
+      "loop": false,
+      "targetDb": -25,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=2.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One sparrow gives two or three delicate natural chirps, with a little space between them. Isolated dry field recording with a clean quiet background. No music, people, footsteps, wind, hiss or buzzing. Let the sound finish naturally with a short quiet tail.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "crowd-murmur-1-v10",
+      "kind": "sfx",
+      "label": "Quiet conversation 1",
+      "bank": "crowd-murmur",
+      "loop": false,
+      "targetDb": -40,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=4.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Two people converse quietly outdoors, one low male murmur and a softer female reply. Relaxed medieval country road conversation, indistinct syllables with no intelligible words. Warm human vocal tones, not whispering. Clean dry close recording, no wind, insects, buzzing, hiss, music or footsteps. Fade naturally to quiet.",
+        "duration_seconds": 5,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "crowd-murmur-2-v10",
+      "kind": "sfx",
+      "label": "Quiet conversation 2",
+      "bank": "crowd-murmur",
+      "loop": false,
+      "targetDb": -40,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=4.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A few people pass a brief quiet exchange outdoors, gentle low voices overlapping slightly. Relaxed medieval country road conversation, indistinct syllables with no intelligible words. Warm human vocal tones, not whispering. Clean dry close recording, no wind, insects, buzzing, hiss, music or footsteps. Fade naturally to quiet.",
+        "duration_seconds": 5,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "crowd-murmur-3-v10",
+      "kind": "sfx",
+      "label": "Quiet conversation 3",
+      "bank": "crowd-murmur",
+      "loop": false,
+      "targetDb": -40,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=4.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A small group chats quietly outdoors, soft indistinct voices and one very brief warm chuckle. Relaxed medieval country road conversation, indistinct syllables with no intelligible words. Warm human vocal tones, not whispering. Clean dry close recording, no wind, insects, buzzing, hiss, music or footsteps. Fade naturally to quiet.",
+        "duration_seconds": 5,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "cart-wheel-1-v10",
+      "kind": "sfx",
+      "label": "Wooden cart wheels 1",
+      "bank": "cart-wheel",
+      "loop": false,
+      "targetDb": -36,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=2.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A slow wooden cart rolls over compacted dry earth: a soft low wheel rumble with a few delicate wooden axle creaks. Quiet intimate dry foley. No metallic squealing, voices, animals, footsteps, bells or music. Natural start and finish.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "cart-wheel-2-v10",
+      "kind": "sfx",
+      "label": "Wooden cart wheels 2",
+      "bank": "cart-wheel",
+      "loop": false,
+      "targetDb": -36,
+      "peakLimitDb": -8,
+      "maxGainDb": 2,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=2.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A wooden handcart rolling slowly on a dirt path: muted uneven wooden wheel turns and a subtle brief timber creak. Quiet intimate dry foley. No metallic squealing, voices, animals, footsteps, bells or music. Natural start and finish.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    }
+  ]
+}

@@ -34,6 +34,7 @@ import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/gam
 import type { CharacterModel } from "@/lib/game/character-assets"
 import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 
+import { EnvironmentAudio } from "./environment-audio"
 import { Bridges } from "./bridges"
 import { HearthLights } from "./hearth-lights"
 import { BuildingBatches } from "./building-batches"
@@ -205,6 +206,7 @@ export function GameCanvas({
       <ambientLight intensity={SURFACE_LIGHT.ambient} />
       <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
       <CameraLight />
+      <EnvironmentAudio map={terrainMap} trees={trees} showTrees={visibility.showTrees} />
 
       <HearthLights enabled={visibility.buildingVisibility !== "hidden"}>
       <group name="map-reveal-church" userData={{ mapRevealLandmark: !restore }} visible={visibility.buildingVisibility !== "hidden"}>

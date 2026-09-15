@@ -413,7 +413,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     <div className="person-workspace">
       <aside className={`person-controls hud-well ${controlsOpen ? "is-open" : ""}`} aria-label="Character controls">
         <div className="person-panel-heading"><label className="person-choice">Asset<select aria-label="Character asset" value={subject} onChange={e => { setSubject(e.target.value as Subject); setFrame(0); setClip("walk") }}>{Object.entries(SUBJECTS).filter(([id]) => id === "person" || id === "cart" || id === "knight").map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><button className="hud-close person-controls-toggle" aria-label="Close character controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
-        {(isPerson || isKnight) && <div className="person-panel-heading person-presets" role="group" aria-label="Character editing mode">
+        {(isPerson || isKnight || subject === "cart") && <div className="person-panel-heading person-presets" role="group" aria-label="Character editing mode">
           <button className={button} aria-pressed={editorTab==='sounds'} onClick={()=>setEditorTab('sounds')}>Sounds</button>
           <button className={button} aria-pressed={editorTab==='appearance'} onClick={()=>setEditorTab('appearance')}>Appearance</button>
         </div>}
@@ -433,8 +433,8 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
           </div>}
         <div className="person-controls-scroll">
 
-          {(isPerson || isKnight) && editorTab==='sounds' && <CharacterAudioEditor profile={soundProfile} bodyType={isKnight ? "Male" : design.bodyType} voiceVariant={voiceVariant} previewZoom={zoom} clip={isKnight ? mountedKnight ? "mounted" : knightClip : clip} frame={frame} frames={frameCount} playing={playing} active={active && !onMap} selected={previewSelected} onSelect={() => { setPreviewSelected(true); setView("character") }} onDeselect={clearPreviewSelection} onPreviewClip={next=>{setClip(next);setFrame(0)}}/>}
-          {(editorTab==='appearance' || (!isPerson && !isKnight)) && (isPerson ? <>
+          {(isPerson || isKnight || subject === "cart") && editorTab==='sounds' && <CharacterAudioEditor profile={subject === "cart" ? "vehicle/cart" : soundProfile} bodyType={isKnight ? "Male" : design.bodyType} voiceVariant={voiceVariant} previewZoom={zoom} clip={isKnight ? mountedKnight ? "mounted" : knightClip : clip} frame={frame} frames={frameCount} playing={playing} active={active && !onMap} selected={previewSelected} onSelect={() => { setPreviewSelected(true); setView("character") }} onDeselect={clearPreviewSelection} onPreviewClip={next=>{setClip(next);setFrame(0)}}/>}
+          {(editorTab==='appearance' || (!isPerson && !isKnight && subject !== "cart")) && (isPerson ? <>
           <Section {...section("Body")}>
             <label className="person-choice">Body type<select aria-label="Body type" value={design.bodyType} onChange={event => { const bodyType = event.currentTarget.value as PersonDesign["bodyType"]; setDesign(d => withBodyType(d, bodyType)); setMessage("") }}><option>Male</option><option>Female</option></select></label>
             {controls(["head", "build", "torsoHeight", "neckHeight", "legs"])}
@@ -534,7 +534,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
           <button className={`${button} person-apply`} disabled={!ready} onClick={() => { if (bake) { applyDesign(design, bake); void usePopulationStore.getState().prepare(design); setMessage("Foundation saved. Road characters keep their clothing colors and varied bodies.") } }}><Check size={14} />Apply to road</button>
           <button className={button} onClick={() => { usePersonDesignStore.getState().reset(); void usePopulationStore.getState().prepare(null); setDesign({ ...DEFAULT_DESIGN }); setMessage("Project default restored on the road.") }}><RotateCcw size={12} />Restore project default</button>
         </footer>}
-        {(isPerson || isKnight) && editorTab==='sounds' && <footer className="person-panel-footer">
+        {(isPerson || isKnight || subject === "cart") && editorTab==='sounds' && <footer className="person-panel-footer">
           <p className="person-hint">Sound edits save automatically and apply to the game.</p>
           <div className="person-presets"><button className={button} onClick={()=>void copyJson(characterSoundsJson())}>Copy sound JSON</button><button className={button} onClick={()=>openJson(characterSoundsJson())}>Edit sound JSON</button></div>
         </footer>}

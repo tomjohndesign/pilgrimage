@@ -8,7 +8,7 @@ import { soundEventForClip, soundMarkersCrossed, soundImpactPhase } from './char
 describe('authored character sounds',()=>{
   it('covers all callings/jobs and bodies with real, non-clipping WAV greetings',()=>{
     let count=0
-    for(const profile of Object.keys(AUDIO_PROFILES)) {
+    for(const profile of Object.keys(AUDIO_PROFILES).filter(profile=>!profile.startsWith("animal/")&&!profile.startsWith("scene/")&&!profile.startsWith("vehicle/"))) {
       const type=(profile.startsWith('job/')?'peasant':profile) as keyof typeof CHARACTER_VOICES
       for(const body of CHARACTER_VOICES[type].bodyTypes){
         const bark=characterBark(type,body,1,1,undefined,profile)
@@ -78,4 +78,23 @@ describe('authored character sounds',()=>{
     expect(distanceGain(10,20)).toBe(.25)
     expect(distanceGain(21,20)).toBe(0)
   })
+})
+
+it('migrates the repeated crowd bed and long tavern laugh while preserving authored edits',()=>{
+ const old=structuredClone(DEFAULT_CHARACTER_SOUNDS)
+ old.profiles['scene/crowd'].idle.clips=['crowd-murmur-1-v10','crowd-murmur-2-v10','crowd-murmur-3-v10']
+ old.profiles['scene/crowd'].idle.cooldown=2.5
+ old.profiles['scene/crowd'].idle.volume=.61
+ old.profiles['scene/crowd-accents'].idle.clips=['crowd-chuckle-v11','crowd-call-v11','crowd-reply-v11']
+ old.profiles['scene/crowd-accents'].idle.cooldown=12
+ old.profiles['job/tavern'].idle.clips=['road-laughter']
+ const next=migrateSoftDirtFootsteps(old)
+ expect(next.profiles['scene/crowd'].idle.clips).toHaveLength(6)
+ expect(next.profiles['scene/crowd'].idle.cooldown).toBe(4)
+ expect(next.profiles['scene/crowd'].idle.volume).toBe(.61)
+ expect(next.profiles['scene/crowd-accents'].idle.cooldown).toBe(35)
+ expect(next.profiles['scene/crowd-accents'].idle.clips).toHaveLength(5)
+ expect(next.profiles['job/tavern'].idle.clips).not.toContain('road-laughter')
+ old.profiles['scene/crowd'].idle.clips=['crowd-murmur-2-v10'];old.profiles['scene/crowd'].idle.cooldown=25
+ expect(migrateSoftDirtFootsteps(old).profiles['scene/crowd'].idle).toEqual(old.profiles['scene/crowd'].idle)
 })

@@ -376,6 +376,7 @@ export const Travelers = memo(function Travelers({
       if (!onScreen) { stopActorAudio(`traveler/${travelers[i].id}`); continue }
       group.userData.audioActor = `traveler/${travelers[i].id}`
       group.userData.audioProfile = currentJobs.current.get(travelers[i].id) ? `job/${currentJobs.current.get(travelers[i].id)}` : s.beggar ? "beggar" : travelers[i].type.id
+      group.userData.audioBodyType = appearances[i]?.bodyType
       group.userData.audioVisible = personOnScreen
       renderedUnits++
 

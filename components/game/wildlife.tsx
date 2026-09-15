@@ -1,4 +1,6 @@
 "use client"
+import { touchSceneSoundSource, sceneSoundSources } from "@/lib/game/scene-sound-sources"
+import { playSourceSelection } from "@/lib/game/scene-audio"
 import { SheepRemains } from "./sheep-remains"
 import { carcassPose } from "@/lib/game/wildlife/carcass-pose"
 import { SheepLeads } from "./sheep-leads"
@@ -51,6 +53,12 @@ export function Wildlife({ map, trees, characterScale }: { map: GameMap; trees: 
   // Building placement updates map.buildings without resetting every animal's life.
   const world = useMemo(() => createWildlife(map, trees, characterScale), [map.tiles, map.seed, trees])
   useEffect(() => { wildlifeRegistry.current = world; return () => { if (wildlifeRegistry.current === world) wildlifeRegistry.current = null } }, [world])
+  useEffect(() => useCameraStore.subscribe((state,previous)=>{
+    if(state.selection===previous.selection || state.selection?.kind!=="animal")return
+    const id=state.selection.id
+    const animal=world.animals.find(animal=>animal.id===id)
+    if(animal&&!animal.concealed&&!animal.fold?.carcass&&animal.fold?.slaughter===undefined)void playSourceSelection(`animal/${animal.kind}`)
+  }),[world])
   // Building upgrades are immediate even while playback is paused.
   useEffect(() => { clearWildlifeFootprints(world, map, characterScale) }, [world, map.buildings, characterScale])
   const strikes = useRef<TreePlacement[]>([])
@@ -127,6 +135,9 @@ export function WildlifeBatch({ kind, animals, map, scale, grazing }: { kind: Wi
       const animal = animals[i], bird = isBird(kind)
       bounds.center.set(animal.x, animal.y, animal.z)
       if (animal.concealed || !frustum.intersectsSphere(bounds)) continue
+      if (!useSimulationStore.getState().paused && !animal.fold?.carcass && animal.fold?.slaughter===undefined) {
+        touchSceneSoundSource(`wildlife/${animal.id}`, `animal/${kind}`, animal, camera, animal.moving || !!animal.flight)
+      } else sceneSoundSources.remove(`wildlife/${animal.id}`)
       drawnAnimals.push(i)
       drawn.expandByPoint(bounds.center)
       // Simulation advances at 30 Hz. Reuse identical poses between ticks and

@@ -34,7 +34,7 @@ describe("character and playground playback", () => {
   it("plays new greetings for every calling, job and supported body", async () => {
     const {CHARACTER_VOICES} = await import("./voice-lines")
     const {AUDIO_PROFILES} = await import("./character-sound-store")
-    for (const profile of Object.keys(AUDIO_PROFILES)) {
+    for (const profile of Object.keys(AUDIO_PROFILES).filter(profile=>!profile.startsWith("animal/")&&!profile.startsWith("scene/")&&!profile.startsWith("vehicle/"))) {
       const type = (profile.startsWith("job/") ? "peasant" : profile) as keyof typeof CHARACTER_VOICES
       for (const body of CHARACTER_VOICES[type].bodyTypes) {
         expect(await player.playCharacterSound(type,0,body,profile)).toBe(true)

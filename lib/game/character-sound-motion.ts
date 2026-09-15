@@ -1,3 +1,4 @@
+import { touchObjectSoundSource } from "./scene-sound-sources"
 import { SPLITTING_CONTACT, SPLITTING_FRAMES } from "./base-person/splitting"
 import { BUILDING_FRAMES } from "./base-person/building"
 import type { EventSound } from "./character-sound-store"
@@ -21,25 +22,30 @@ export function soundImpactPhase(clip:string,slot:Pick<EventSound,'phase'|'rigTi
 export function soundMarkersCrossed(previous:number,current:number,event:string,phase:number) {
   return crossedSoundMarker(previous,current,phase) || (event === "walking" && crossedSoundMarker(previous,current,(phase+.5)%1))
 }
-const states=new WeakMap<Object3D,{phase:number;clip:string;time:number;idleAt:number}>()
+const states=new WeakMap<Object3D,{phase:number;clip:string;time:number;idleAt:number;musicAt:number}>()
 const point=new Vector3()
 /** Uses actual rendered stride/action progress, including the crowd batching path. */
 export function tickCharacterSound(parent:Object3D,camera:Camera,clip:string,phase:number) {
   const {audioProfile:profile,audioActor:actor}=parent.userData
   if(!profile||!actor)return
-  const now=performance.now(),previous=states.get(parent),event=soundEventForClip(clip)
+  const now=performance.now(),previous=states.get(parent)
+  const performing=profile==='minstrel' && (parent.userData.activity==='performing'||clip==='performing'||clip==='playing')
+  const event=performing?'work':soundEventForClip(clip)
   if(event==='walking')phase%=1
-  const state={phase,clip,time:now,idleAt:previous?.idleAt??now+3000+Math.random()*12000}
+  const state={phase,clip:performing?'performing':clip,time:now,musicAt:previous?.clip==='performing' ? previous.musicAt : now,idleAt:previous?.idleAt??now+3000+Math.random()*12000}
   states.set(parent,state)
   if(parent.userData.playbackRate===0||parent.userData.motionReset||!parent.visible){stopActorAudio(actor);return}
-  if(!event||!previous||previous.clip!==clip||now-previous.time>250)return
+  if(parent.userData.audioVisible!==false)touchObjectSoundSource(parent,camera,"person",event==='walking',actor)
+  if(previous?.clip==='performing'&&!performing)stopActorAudio(actor)
+  if(!event||(!performing&&(!previous||previous.clip!==clip||now-previous.time>250)))return
   const slot=useCharacterSoundStore.getState().document.profiles[profile]?.[event]
   if(!slot)return
   let current=phase
   // The distance-driven rig wraps its walking phase at one stride.
-  if(event==='walking'&&current<previous.phase)current+=1
-  const trigger=event==='idle'? now>=state.idleAt:soundMarkersCrossed(previous.phase,current,event,soundImpactPhase(clip,slot))
+  if(event==='walking'&&current<previous!.phase)current+=1
+  const trigger=performing?now>=state.musicAt:event==='idle'? now>=state.idleAt:soundMarkersCrossed(previous!.phase,current,event,soundImpactPhase(clip,slot))
   if(!trigger)return
+  if(performing)state.musicAt=now+Math.max(3,slot.cooldown)*1000
   if(event==='idle')state.idleAt=now+Math.max(3,slot.cooldown)*(1+Math.random())*1000
   point.setFromMatrixPosition(parent.matrixWorld)
   const focus=useCameraStore.getState(),distance=Math.hypot(point.x-focus.targetX,point.z-focus.targetZ)

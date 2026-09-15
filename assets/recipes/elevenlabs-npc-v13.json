@@ -1,0 +1,166 @@
+{
+  "version": 13,
+  "output": ".context/elevenlabs-npc-v13",
+  "jobs": [
+    {
+      "id": "npc-murmur-1-v13",
+      "kind": "sfx",
+      "label": "Roadside murmur \u00b7 voice 1",
+      "bank": "npc-murmur",
+      "loop": false,
+      "targetDb": -24,
+      "peakLimitDb": -6,
+      "maxGainDb": 20,
+      "audioFilter": "highpass=f=100,lowpass=f=5000,afade=t=in:d=0.025,afade=t=out:st=1.88:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One short natural conversational murmur from a relaxed adult man, low warm voice, casually answering someone beside them outdoors. A few indistinct softly spoken syllables in one breath, then silence. Unhurried and understated, voiced speech not whispering. Exactly one person. No intelligible words, repeated phrase, crowd bed, laughter, background hiss, buzzing, music or reverb.",
+        "duration_seconds": 2,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Male"
+    },
+    {
+      "id": "npc-murmur-2-v13",
+      "kind": "sfx",
+      "label": "Roadside murmur \u00b7 voice 2",
+      "bank": "npc-murmur",
+      "loop": false,
+      "targetDb": -24,
+      "peakLimitDb": -6,
+      "maxGainDb": 20,
+      "audioFilter": "highpass=f=100,lowpass=f=5000,afade=t=in:d=0.025,afade=t=out:st=1.88:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One short natural conversational murmur from an adult woman, middle register, casually answering someone beside them outdoors. A few indistinct softly spoken syllables in one breath, then silence. Unhurried and understated, voiced speech not whispering. Exactly one person. No intelligible words, repeated phrase, crowd bed, laughter, background hiss, buzzing, music or reverb.",
+        "duration_seconds": 2,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Female"
+    },
+    {
+      "id": "npc-murmur-3-v13",
+      "kind": "sfx",
+      "label": "Roadside murmur \u00b7 voice 3",
+      "bank": "npc-murmur",
+      "loop": false,
+      "targetDb": -24,
+      "peakLimitDb": -6,
+      "maxGainDb": 20,
+      "audioFilter": "highpass=f=100,lowpass=f=5000,afade=t=in:d=0.025,afade=t=out:st=1.88:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One short natural conversational murmur from an older man with a slightly rough voice, casually answering someone beside them outdoors. A few indistinct softly spoken syllables in one breath, then silence. Unhurried and understated, voiced speech not whispering. Exactly one person. No intelligible words, repeated phrase, crowd bed, laughter, background hiss, buzzing, music or reverb.",
+        "duration_seconds": 2,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Male"
+    },
+    {
+      "id": "npc-murmur-4-v13",
+      "kind": "sfx",
+      "label": "Roadside murmur \u00b7 voice 4",
+      "bank": "npc-murmur",
+      "loop": false,
+      "targetDb": -24,
+      "peakLimitDb": -6,
+      "maxGainDb": 20,
+      "audioFilter": "highpass=f=100,lowpass=f=5000,afade=t=in:d=0.025,afade=t=out:st=1.88:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One short natural conversational murmur from an adult woman with a soft warm voice, casually answering someone beside them outdoors. A few indistinct softly spoken syllables in one breath, then silence. Unhurried and understated, voiced speech not whispering. Exactly one person. No intelligible words, repeated phrase, crowd bed, laughter, background hiss, buzzing, music or reverb.",
+        "duration_seconds": 2,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Female"
+    },
+    {
+      "id": "npc-murmur-5-v13",
+      "kind": "sfx",
+      "label": "Roadside murmur \u00b7 voice 5",
+      "bank": "npc-murmur",
+      "loop": false,
+      "targetDb": -24,
+      "peakLimitDb": -6,
+      "maxGainDb": 20,
+      "audioFilter": "highpass=f=100,lowpass=f=5000,afade=t=in:d=0.025,afade=t=out:st=1.88:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One short natural conversational murmur from a young adult man, light voice, casually answering someone beside them outdoors. A few indistinct softly spoken syllables in one breath, then silence. Unhurried and understated, voiced speech not whispering. Exactly one person. No intelligible words, repeated phrase, crowd bed, laughter, background hiss, buzzing, music or reverb.",
+        "duration_seconds": 2,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Male"
+    },
+    {
+      "id": "npc-murmur-6-v13",
+      "kind": "sfx",
+      "label": "Roadside murmur \u00b7 voice 6",
+      "bank": "npc-murmur",
+      "loop": false,
+      "targetDb": -24,
+      "peakLimitDb": -6,
+      "maxGainDb": 20,
+      "audioFilter": "highpass=f=100,lowpass=f=5000,afade=t=in:d=0.025,afade=t=out:st=1.88:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One short natural conversational murmur from an older woman, calm voice, casually answering someone beside them outdoors. A few indistinct softly spoken syllables in one breath, then silence. Unhurried and understated, voiced speech not whispering. Exactly one person. No intelligible words, repeated phrase, crowd bed, laughter, background hiss, buzzing, music or reverb.",
+        "duration_seconds": 2,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Female"
+    },
+    {
+      "id": "crowd-chuckle-2-v13",
+      "kind": "sfx",
+      "label": "Brief chuckle \u00b7 2",
+      "bank": "crowd-accent",
+      "loop": false,
+      "targetDb": -28,
+      "peakLimitDb": -8,
+      "maxGainDb": 15,
+      "audioFilter": "highpass=f=100,afade=t=in:d=0.02,afade=t=out:st=0.88:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One person: a man giving one soft amused huff, a single short warm spontaneous laugh lasting less than a second, then stopping. Quiet natural human voice, casual outdoor conversation, dry close recording. No extended laughing, second laugh, laugh track, words, other people, music, hiss or echo.",
+        "duration_seconds": 1,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Male"
+    },
+    {
+      "id": "crowd-chuckle-3-v13",
+      "kind": "sfx",
+      "label": "Brief chuckle \u00b7 3",
+      "bank": "crowd-accent",
+      "loop": false,
+      "targetDb": -28,
+      "peakLimitDb": -8,
+      "maxGainDb": 15,
+      "audioFilter": "highpass=f=100,afade=t=in:d=0.02,afade=t=out:st=0.88:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One person: a woman giving a brief little chuckle, a single short warm spontaneous laugh lasting less than a second, then stopping. Quiet natural human voice, casual outdoor conversation, dry close recording. No extended laughing, second laugh, laugh track, words, other people, music, hiss or echo.",
+        "duration_seconds": 1,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Female"
+    }
+  ]
+}
