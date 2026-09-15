@@ -1,10 +1,11 @@
 "use client"
 
 import { ChromeButton, ChromeSelect } from "@/components/ui/chrome-controls"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { placementSite } from "@/lib/game/building-placement-layout"
 
 import Image from "next/image"
-import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react"
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactElement, type ReactNode } from "react"
 import { Tooltip } from "@base-ui/react/tooltip"
 import { Coins, Map, Footprints, House, Pause, Play, RotateCcw, RotateCw, Sparkles, Users, X } from "lucide-react"
 
@@ -23,11 +24,11 @@ import { CROWD_SPEED_LIMIT, SIMULATION_SPEEDS, crowdSafeSpeed, speedBlockedByCro
 /** Hover and keyboard-focus help, positioned inside the viewport by Base UI.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1N5-0
  */
-export function HudHelp({ children, content, open, onOpenChange, className = "" }: { children: ReactElement; content: ReactNode; className?: string; open?: boolean; onOpenChange?: (open: boolean) => void }) {
+export function HudHelp({ children, content, open, onOpenChange, className = "", anchor, side = "top" }: { children: ReactElement; content: ReactNode; className?: string; open?: boolean; onOpenChange?: (open: boolean) => void; anchor?: ComponentProps<typeof Tooltip.Positioner>["anchor"]; side?: ComponentProps<typeof Tooltip.Positioner>["side"] }) {
   return <Tooltip.Root open={open} onOpenChange={onOpenChange}>
     <Tooltip.Trigger render={children} />
     <Tooltip.Portal>
-      <Tooltip.Positioner side="top" align="start" sideOffset={8} collisionPadding={12} className="chrome-popup-positioner"><Tooltip.Popup className={`game-hud-tooltip ${className}`}>
+      <Tooltip.Positioner anchor={anchor} side={side} align="start" sideOffset={8} collisionPadding={12} collisionAvoidance={{ side: "flip", align: "shift", fallbackAxisSide: "start" }} className="chrome-popup-positioner"><Tooltip.Popup className={`chrome-tooltip game-hud-tooltip ${className}`}>
         {content}
       </Tooltip.Popup></Tooltip.Positioner>
     </Tooltip.Portal>
@@ -78,6 +79,8 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
   minimapOpen: boolean
   onToggleMinimap: () => void
 }) {
+  const tray = useRef<HTMLElement>(null)
+  const mobile = useIsMobile()
   const { map, balance, settlement, buildType, chooseBuild } = economy
   const rotation = useBuildStore((s) => s.rotation)
   const rotateBuilding = useBuildStore((s) => s.rotateBuilding)
@@ -99,13 +102,15 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
   const footprint = selected && rotatedFootprint(selected, alignedRotation)
 
   return <div className="hud-bottom-center">
-    {open && <section id="build-tray" className="hud-well hud-build-tray" aria-label={churchAddition ? "Church additions" : "Build options"}>
+    {open && <section ref={tray} id="build-tray" className="hud-well hud-build-tray" aria-label={churchAddition ? "Church additions" : "Build options"}>
+      <div className="hud-build-heading"><span>{churchAddition ? "Church additions" : "Buildings"}</span><ChromeButton type="button" className="chrome-icon-button" aria-label="Close build options" onClick={onClose}><X size={14} /></ChromeButton></div>
       <div className="hud-build-content">
         <div className="hud-building-tiles">
           {options.map((item) => {
             const locked = renown < item.requiredRenown
             const unavailable = !map || locked || !canAfford(settlement.resources, item.cost)
-            return <HudHelp key={item.id} content={<>
+            return <HudHelp key={item.id} anchor={mobile ? undefined : tray} side={mobile ? "top" : "right"} className="hud-building-preview" content={<>
+              <div className="hud-building-preview-art"><BuildThumbnail id={item.id} scale={3} /></div>
               <div className="hud-help-title">Build {item.label}{item.id === "workshop" && <kbd>L</kbd>}</div>
               <p>{item.description}</p>
               <div className="hud-help-meta">{item.cost.gold} gold · {item.cost.wood} wood · {item.w} × {item.d} tiles</div>
@@ -142,7 +147,6 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
           <span className="hud-entry-key">Gold arrows mark entrances{map && churchDevelopmentPlot(map) ? " · Gold grid reserves the church and side wings" : ""}</span>
         </div>)}
       </div>
-      <ChromeButton type="button" className="hud-close" aria-label="Close build options" onClick={onClose}><X size={14} /></ChromeButton>
     </section>}
     {open && (selected || economy.message) && <div className={`hud-placement-status ${problem ? "hud-placement-error" : ""}`} role="status">
       {problem ?? (selected ? selected.id === "monk-shelter"

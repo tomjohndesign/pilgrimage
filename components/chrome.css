@@ -36,7 +36,7 @@ body > main { isolation:isolate; }
 .chrome-icon-button:hover { background:var(--chrome-field); color:var(--chrome-text); }
 :is(button,a,input,textarea,[role="combobox"],[role="slider"],[role="separator"]):focus-visible { outline:2px solid var(--chrome-accent); outline-offset:2px; }
 .chrome-popup-positioner { z-index:100; pointer-events:auto; }
-.chrome-tooltip,.game-hud-tooltip,.game-hud-tooltip.workspace-tooltip {
+.chrome-tooltip,.chrome-tooltip.game-hud-tooltip,.game-hud-tooltip.workspace-tooltip {
   width:max-content; max-width:min(320px,calc(100vw - 24px)); padding:10px 12px;
   color:var(--chrome-text); background:var(--chrome-surface); border:1px solid var(--chrome-line);
   border-radius:4px; box-shadow:0 5px 18px #0003; font:12px/1.5 var(--font-geist),sans-serif;
