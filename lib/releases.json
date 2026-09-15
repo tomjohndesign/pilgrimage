@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "0c14beaf43f51540e191b2655b0b13ebd258bf83",
-  "releaseCount": 251,
+  "lastProcessedCommit": "8d25a56869950204273116855e52b4ee4b75cc60",
+  "releaseCount": 252,
   "releases": [
+    {
+      "version": "0.0.266",
+      "title": "Release 0.0.266",
+      "summary": "Fix deployment by syncing the pnpm lockfile for Base UI (#286)",
+      "commit": "8d25a56869950204273116855e52b4ee4b75cc60"
+    },
     {
       "version": "0.0.265",
       "title": "Release 0.0.265",
