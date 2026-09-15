@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "43c89558a7ced5fcbb7ed838a1c6c54d0db1e6ff",
-  "releaseCount": 254,
+  "lastProcessedCommit": "4cb62f452cdd2750332d8cc2851e2cd387aa4b95",
+  "releaseCount": 255,
   "releases": [
+    {
+      "version": "0.0.269",
+      "title": "Release 0.0.269",
+      "summary": "Fix party selection panel size during member previews (#289)",
+      "commit": "4cb62f452cdd2750332d8cc2851e2cd387aa4b95"
+    },
     {
       "version": "0.0.268",
       "title": "Release 0.0.268",
