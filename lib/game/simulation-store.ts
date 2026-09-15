@@ -37,6 +37,13 @@ export function crowdSafeSpeed(rate: SimulationSpeed, population: number): Simul
   return fallback
 }
 
+/** Cycle only through speeds the current crowd can run, wrapping to the slowest. */
+export function nextSimulationSpeed(rate: SimulationSpeed, population: number): SimulationSpeed {
+  const choices = SIMULATION_SPEEDS.filter(choice => !speedBlockedByCrowd(choice.rate, population))
+  const index = choices.findIndex(choice => choice.rate === rate)
+  return choices[(index + 1) % choices.length].rate
+}
+
 export const MAX_SIMULATION_STEP = .1 * 12
 
 /** Movement follows complete route segments and sweeps transport collisions.

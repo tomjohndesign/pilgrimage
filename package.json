@@ -1,6 +1,6 @@
 {
   "name": "my-project",
-  "version": "0.0.264",
+  "version": "0.0.267",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
   "scripts": {
@@ -27,6 +27,7 @@
     "assets:transport": "node scripts/export-transport.mjs"
   },
   "dependencies": {
+    "@base-ui/react": "^1.8.0",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "1.2.12",
     "@radix-ui/react-alert-dialog": "1.1.15",

@@ -1,2 +1,2 @@
-/** The game page and renderer share the minimap's .hud-well background. */
-export const GAME_BACKGROUND = "#211e16"
+/** Initial canvas color before the current chrome theme is read from CSS. */
+export const GAME_BACKGROUND = "#171810"

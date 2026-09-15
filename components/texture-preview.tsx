@@ -80,7 +80,7 @@ function PreviewScene({ entry }: { entry: TextureEntry }) {
       return (
         <group position={[0, 1.4, 0]}>
           <Suspense fallback={null}>
-            <TerrainTiles map={MAP_EDGE_MAP} />
+            <TerrainTiles showGrid map={MAP_EDGE_MAP} />
           </Suspense>
         </group>
       )
@@ -88,25 +88,25 @@ function PreviewScene({ entry }: { entry: TextureEntry }) {
       return (
         <group position={[0, 1.4, 0]}>
           <Suspense fallback={null}>
-            <TerrainTiles map={ROAD_MAP} roadTier={entry.roadTier} />
+            <TerrainTiles showGrid map={ROAD_MAP} roadTier={entry.roadTier} />
           </Suspense>
         </group>
       )
     case "forest":
-      return <group position={[0, 1.4, 0]}><TerrainTiles map={FOREST_MAP} trees={FOREST_TREES} /></group>
+      return <group position={[0, 1.4, 0]}><TerrainTiles showGrid map={FOREST_MAP} trees={FOREST_TREES} /></group>
     case "ground":
     case "water":
     case "sand":
       return (
         <group position={[0, 1.4, 0]}>
-          <TerrainTiles map={entry.preview === "water" ? WATER_MAP : entry.preview === "sand" ? SAND_MAP : GROUND_MAP} />
+          <TerrainTiles showGrid map={entry.preview === "water" ? WATER_MAP : entry.preview === "sand" ? SAND_MAP : GROUND_MAP} />
         </group>
       )
     case "grass":
       return (
         <group position={[0, 1.4, 0]}>
           <Suspense fallback={null}>
-            <TerrainTiles map={GRASS_MAP} roadTier={0} />
+            <TerrainTiles showGrid map={GRASS_MAP} roadTier={0} />
           </Suspense>
         </group>
       )

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { createAdmissionAudio } from "./admission-audio"
+import { DEFAULT_CHARACTER_SOUNDS, useCharacterSoundStore } from "./character-sound-store"
 
 const sound = vi.hoisted(() => ({ muted: false, listener: undefined as undefined | ((state: { muted: boolean }) => void) }))
 vi.mock("./character-asset-store", () => ({ useCharacterAssetStore: {
@@ -7,7 +8,7 @@ vi.mock("./character-asset-store", () => ({ useCharacterAssetStore: {
   subscribe: (listener: typeof sound.listener) => { sound.listener = listener; return () => { sound.listener = undefined } },
 } }))
 
-afterEach(() => { vi.unstubAllGlobals(); sound.muted = false; sound.listener = undefined })
+afterEach(() => { vi.unstubAllGlobals(); sound.muted = false; sound.listener = undefined; useCharacterSoundStore.getState().patchMixer(DEFAULT_CHARACTER_SOUNDS.mixer) })
 
 describe("admission clinks", () => {
   it("unlocks once, plays the new ElevenLabs coin sound, respects mute and releases audio on cleanup", async () => {
@@ -35,7 +36,12 @@ describe("admission clinks", () => {
     expect(fetchAudio).toHaveBeenCalledExactlyOnceWith("/sounds/elevenlabs/v1/coin-purse-1.wav")
     expect(audio.play(false)).toBe(false)
     expect(audio.play(true)).toBe(true)
-    expect(gains[0].value).toBe(.12)
+    expect(gains[0].value).toBeCloseTo(.12)
+    useCharacterSoundStore.getState().patchMixer({ foley: DEFAULT_CHARACTER_SOUNDS.mixer.foley / 2 })
+    expect(gains[0].value).toBeCloseTo(.06)
+    useCharacterSoundStore.getState().patchMixer({ foley: 0 })
+    expect(gains[0].value).toBe(0)
+    useCharacterSoundStore.getState().patchMixer({ foley: DEFAULT_CHARACTER_SOUNDS.mixer.foley })
     expect(audio.play(true)).toBe(false)
     expect(sources[0].start).toHaveBeenCalledOnce()
     sound.muted = true

@@ -1,5 +1,8 @@
 "use client"
 
+import { ChromeButton } from "@/components/ui/chrome-controls"
+import { AssetEditorHelp } from "../asset-editor-frame"
+
 import dynamic from "next/dynamic"
 import { useEffect, useState } from "react"
 import { ENVIRONMENT_KINDS, ENVIRONMENT_LABELS } from "@/lib/game/environment/elements"
@@ -17,14 +20,14 @@ export function EnvironmentGallery() {
   }, [])
   const [seed, setSeed] = useState(42)
   const [view, setView] = useState(0)
-  const button = "border border-rule bg-parchment-dark px-3 py-2 font-display text-[10px] uppercase tracking-[2px] text-ink hover:border-gold"
+  const button = "hud-action"
   return (
-    <div className="border border-rule bg-parchment p-5">
+    <div className="w-full">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm italic text-ink-light">Meadow patches, wildflowers, and weathered outcrops, from loose stones to 1×2 and 2×2 boulder groups.</p>
-        <div className="flex gap-2">
-          <button type="button" className={button} onClick={() => setSeed((s) => s + 1)}>New variations</button>
-          <button type="button" className={button} onClick={() => setView((v) => (v + 1) % 4)}>Rotate</button>
+        <AssetEditorHelp label="Preview">Meadow patches, wildflowers, and weathered outcrops, from loose stones to 1×2 and 2×2 boulder groups.</AssetEditorHelp>
+        <div className="flex flex-wrap gap-2">
+          <ChromeButton type="button" className={button} onClick={() => setSeed((s) => s + 1)}>New variations</ChromeButton>
+          <ChromeButton type="button" className={button} onClick={() => setView((v) => (v + 1) % 4)}>Rotate</ChromeButton>
         </div>
       </div>
       <div className="h-[480px] overflow-hidden border border-rule" role="img" aria-label="Three variations each of shrubs, meadow grass, loose stones, small boulders, groundcover, wildflowers, and 1 by 2 and 2 by 2 boulder groups">
@@ -35,7 +38,6 @@ export function EnvironmentGallery() {
         <li>1×2 boulder groups</li>
         <li>2×2 boulder groups</li>
       </ul>
-      <p className="mt-4 text-center text-sm italic text-ink-light">Individual variations above; see them grow in clusters across the landscape in the map preview below.</p>
     </div>
   )
 }

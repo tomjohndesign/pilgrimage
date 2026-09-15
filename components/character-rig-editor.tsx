@@ -1,7 +1,11 @@
 "use client"
 
-import { useEffect, useRef, type ReactNode } from "react"
+import { ChromeSelect, ChromeButton } from "@/components/ui/chrome-controls"
+import { useEffect, useRef, useContext, type ReactNode } from "react"
 import { orderJoints, pickBone, pickJoint, rigDragDelta, type InspectedJoint } from "@/lib/game/base-person/rig-inspection"
+import { createPortal } from "react-dom"
+import { WorkspaceSlots } from "./workspace-context"
+import { AssetEditorHelp } from "./asset-editor-frame"
 import { MAX_POSE_OFFSET } from "@/lib/game/base-person/pose-edits"
 import type { Point3 } from "@/lib/game/base-person/pose"
 
@@ -78,6 +82,9 @@ export function JointOverlay<J extends string>({ joints, selected, row, offset, 
   </svg>
 }
 
+/** Pose properties for the selected joint, in the shared inspector.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/BO4-0
+ */
 export function CharacterRigInspector<J extends string>({ joints, selected, offset, frame, radius, maxRadius, keyed, frameKeyed, onSelect, onChange, onRadius, onReset, onResetKey, onResetFrame, onResetClip, onUndo, onRedo, canUndo, canRedo, labels, children, footer, axisLocked }: {
   joints: Partial<Record<J, InspectedJoint>>; selected: J; offset: Point3; frame: number; radius: number; maxRadius: number; keyed: boolean; frameKeyed: boolean
   onSelect: (joint: J) => void; onChange: (offset: Point3) => void; onRadius: (radius: number) => void
@@ -85,40 +92,42 @@ export function CharacterRigInspector<J extends string>({ joints, selected, offs
   labels: Record<J, string>; children?: ReactNode; footer?: ReactNode; axisLocked?: (axis: number) => boolean
 }) {
   const joint = joints[selected]
-  return <aside className="person-rig-inspector hud-well" aria-label="Pose inspector">
-    <div className="person-panel-heading">Frame {frame + 1} · {keyed ? "Key pose" : "Blended pose"}</div>
+  const slots = useContext(WorkspaceSlots)
+  const content = <aside className="person-rig-inspector hud-well" aria-label="Pose inspector">
+    <div className="person-panel-heading">Frame {frame + 1} · {keyed ? "Key pose" : "Blended pose"}<AssetEditorHelp label="Pose editing">Drag a node or bone to pose it; rotate the view to adjust depth. X moves sideways, Y up and Z forward. Keys blend into nearby frames and across the loop seam while arm and leg lengths stay fixed. Grey joints follow the surrounding rig.</AssetEditorHelp></div>
     <div className="person-rig-fields">
-      <label className="person-choice">Joint<select aria-label="Selected rig joint" value={selected} onChange={e => onSelect(e.target.value as J)}>{Object.keys(joints).map(name => <option key={name} value={name}>{labels[name as J]}</option>)}</select></label>
-      <p className="person-hint">Drag a gold or blue node, or a bone to move both its joints. Rotate the view to adjust depth. Grey nodes follow the joints around them.</p>
+      <label className="person-choice">Joint<ChromeSelect aria-label="Selected rig joint" value={selected} onChange={e => onSelect(e.target.value as J)}>{Object.keys(joints).map(name => <option key={name} value={name}>{labels[name as J]}</option>)}</ChromeSelect></label>
       <div className="person-rig-axes">{["X", "Y", "Z"].map((axis, i) => <label key={axis}>{axis} offset<input aria-label={`${axis} joint offset`} type="number" step="0.01" min={-MAX_POSE_OFFSET} max={MAX_POSE_OFFSET} disabled={!joint?.editable || (axisLocked?.(i) ?? false)} value={Number(offset[i].toFixed(3))} onChange={event => {
         const value = event.currentTarget.valueAsNumber
         if (!Number.isFinite(value)) return
         const next = [...offset] as Point3; next[i] = Math.max(-MAX_POSE_OFFSET, Math.min(MAX_POSE_OFFSET, value)); onChange(next)
       }} /></label>)}</div>
-      <p className="person-hint">Position: {joint?.position.map(v => v.toFixed(3)).join(" / ") ?? "—"}<br />X sideways · Y up · Z forward</p>
+      <p className="person-hint" role="status">Position: {joint?.position.map(v => v.toFixed(3)).join(" / ") ?? "—"}</p>
       <label className="person-choice">Blend frames<input aria-label="Blend frames" type="number" min={1} max={maxRadius} value={radius} disabled={!joint?.editable} onChange={e => { const value = e.currentTarget.valueAsNumber; if (Number.isInteger(value)) onRadius(Math.max(1, Math.min(maxRadius, value))) }} /></label>
-      <p className="person-hint">Keys blend into nearby frames and across the loop seam. Arm and leg lengths stay fixed.{selected === "staffTip" ? " A planted staff shares its ground position across contact frames." : ""}</p>
-      {joint?.reason && <p className="person-hint">{joint.reason}</p>}
+      {joint?.reason && <AssetEditorHelp label="Pose controls">{joint.reason}</AssetEditorHelp>}
       {children}
-      <div className="person-presets"><button className="hud-action" disabled={!canUndo} onClick={onUndo}>Undo pose</button><button className="hud-action" disabled={!canRedo} onClick={onRedo}>Redo pose</button>
-        <button className="hud-action" disabled={!joint?.editable || offset.every(v => v === 0)} onClick={onResetKey}>Reset key</button><button className="hud-action" disabled={!keyed} onClick={onReset}>Clear key</button>
-        <button className="hud-action" disabled={!frameKeyed} onClick={onResetFrame}>Reset frame</button><button className="hud-action" onClick={onResetClip}>Reset clip</button></div>
-      <p className="person-hint">Reset key returns this joint to its original pose here and keeps the key. Clear key removes it so neighbours blend through. Reset frame returns every joint on this frame.</p>
+      <div className="person-presets"><ChromeButton className="hud-action" disabled={!canUndo} onClick={onUndo}>Undo pose</ChromeButton><ChromeButton className="hud-action" disabled={!canRedo} onClick={onRedo}>Redo pose</ChromeButton>
+        <ChromeButton className="hud-action" disabled={!joint?.editable || offset.every(v => v === 0)} title="Return this joint to its original pose, keeping the key" onClick={onResetKey}>Reset key</ChromeButton><ChromeButton className="hud-action" disabled={!keyed} title="Remove this key so neighbouring keys blend through" onClick={onReset}>Clear key</ChromeButton>
+        <ChromeButton className="hud-action" disabled={!frameKeyed} title="Reset every joint on this frame" onClick={onResetFrame}>Reset frame</ChromeButton><ChromeButton className="hud-action" onClick={onResetClip}>Reset clip</ChromeButton></div>
       {footer}
     </div>
   </aside>
+  return slots?.inspector ? createPortal(content, slots.inspector) : content
 }
 
-/** One direction strip and keyed frame timeline for people, animals and future rigs. */
-export function CharacterAnimationDock({ directions, row, onDirection, renderDirection, frameCount, frame, clipLabel, onFrame, keyed, showFrames = true, maxFrames = frameCount }: {
+/** One direction strip and keyed frame timeline for people, animals and future rigs.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/CCL-0
+ */
+export function CharacterAnimationDock({ directions, row, onDirection, renderDirection, frameCount, frame, clipLabel, onFrame, keyed, playback, showFrames = true, maxFrames = frameCount }: {
   directions: readonly string[]; row: number; onDirection: (row: number) => void; renderDirection: (row: number) => ReactNode
-  frameCount: number; frame: number; clipLabel: string; onFrame: (frame: number) => void; keyed: (frame: number) => boolean; showFrames?: boolean; maxFrames?: number
+  playback?: ReactNode; frameCount: number; frame: number; clipLabel: string; onFrame: (frame: number) => void; keyed: (frame: number) => boolean; showFrames?: boolean; maxFrames?: number
 }) {
   const count = Math.min(frameCount, maxFrames)
   return <div className="person-animation-dock hud-well" aria-label="Character animation timeline">
-    <div className="person-direction-strip" aria-label="Character directions">{directions.map((direction, index) => <button key={direction} aria-label={`Face ${direction}`} aria-pressed={row === index} onClick={() => onDirection(index)} className="hud-building-tile person-direction">
-      {renderDirection(index)}<span>{direction}</span>
-    </button>)}</div>
-    {showFrames && <div className="person-steps"><span>{clipLabel}</span><div>{Array.from({ length: count }, (_, index) => Math.floor(index * frameCount / count)).map(step => <button key={step} className="hud-pause" data-keyed={keyed(step)} aria-label={`Inspect step ${step + 1}`} aria-pressed={frame === step} onClick={() => onFrame(step)}>{step + 1}</button>)}</div><span className="person-step-count">{frameCount === 1 ? "Still" : `${frame + 1} / ${frameCount}`}</span></div>}
+    {playback && <div className="chrome-animation-playback">{playback}</div>}
+    <div className="person-direction-strip" aria-label="Character directions">{directions.map((direction, index) => <ChromeButton key={direction} aria-label={`Face ${direction}`} aria-pressed={row === index} onClick={() => onDirection(index)} className="hud-building-tile person-direction">
+      <span className="chrome-direction-sprite">{renderDirection(index)}</span><span>{direction}</span>
+    </ChromeButton>)}</div>
+    {showFrames && <div className="person-steps"><span>{clipLabel}</span><div>{Array.from({ length: count }, (_, index) => Math.floor(index * frameCount / count)).map(step => <ChromeButton key={step} className="hud-pause" data-keyed={keyed(step)} aria-label={`Inspect step ${step + 1}`} aria-pressed={frame === step} onClick={() => onFrame(step)}>{step + 1}</ChromeButton>)}</div><span className="person-step-count">{frameCount === 1 ? "Still" : `${frame + 1} / ${frameCount}`}</span></div>}
   </div>
 }

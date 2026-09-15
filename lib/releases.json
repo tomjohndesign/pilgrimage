@@ -1,7 +1,25 @@
 {
-  "lastProcessedCommit": "de7e154ffd2c0553a1b7a2bdecb942614b33a719",
-  "releaseCount": 250,
+  "lastProcessedCommit": "a8bcbf254baadb16fe2d738b5ec7f65bef06dee5",
+  "releaseCount": 253,
   "releases": [
+    {
+      "version": "0.0.267",
+      "title": "Release 0.0.267",
+      "summary": "Refine game controls, minimap, menus, and theme integration (#287)",
+      "commit": "a8bcbf254baadb16fe2d738b5ec7f65bef06dee5"
+    },
+    {
+      "version": "0.0.266",
+      "title": "Release 0.0.266",
+      "summary": "Fix deployment by syncing the pnpm lockfile for Base UI (#286)",
+      "commit": "8d25a56869950204273116855e52b4ee4b75cc60"
+    },
+    {
+      "version": "0.0.265",
+      "title": "Release 0.0.265",
+      "summary": "Unify app chrome and isometric asset staging with Base UI (#285)",
+      "commit": "0c14beaf43f51540e191b2655b0b13ebd258bf83"
+    },
     {
       "version": "0.0.264",
       "title": "Release 0.0.264",

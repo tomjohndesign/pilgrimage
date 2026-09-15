@@ -1,9 +1,9 @@
-import type { Metadata } from "next"
-import { PathLab } from "@/components/path-lab/path-lab"
+import { redirect } from "next/navigation"
+import { legacyPlaygroundHref } from "@/lib/asset-playground"
 
-export const metadata: Metadata = {
-  title: "Pilgrimage — Path playgrounds",
-  description: "Explore shared routes, traffic-worn paths, regrowth, and settlement frontage.",
+/** Preserve bookmarks and shared settings in the unified playground. */
+export default async function LegacyToolPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  redirect(legacyPlaygroundHref(await searchParams, "paths"))
 }
-
-export default function PathsPage() { return <PathLab /> }

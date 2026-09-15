@@ -1,9 +1,9 @@
-import type { Metadata } from "next"
-import { MapLab } from "@/components/map-lab/map-lab"
+import { redirect } from "next/navigation"
+import { legacyPlaygroundHref } from "@/lib/asset-playground"
 
-export const metadata: Metadata = {
-  title: "Pilgrimage — Map playground",
-  description: "Explore wind-spread and cellular woodland seeding, open meadows and connected clearings.",
+/** Preserve bookmarks and shared settings in the unified playground. */
+export default async function LegacyToolPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  redirect(legacyPlaygroundHref(await searchParams, "maps"))
 }
-
-export default function MapsPage() { return <MapLab /> }
