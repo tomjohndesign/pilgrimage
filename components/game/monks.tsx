@@ -232,6 +232,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       const group = groupRefs.current[i]
       if (!group) continue
       group.userData.audioProfile = "friar"
+      group.userData.audioBodyType = "Male"
       group.userData.audioActor = `monk/${monks[i].id}`
       group.userData.initialized = true
       group.userData.phase = i / Math.max(1, monks.length)

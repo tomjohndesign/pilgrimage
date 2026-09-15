@@ -1,0 +1,44 @@
+{
+  "version": 12,
+  "output": ".context/elevenlabs-scene-v11",
+  "jobs": [
+    {
+      "id": "minstrel-lyre-1-v11",
+      "kind": "sfx",
+      "label": "Minstrel \u00b7 short lyre phrase",
+      "bank": "minstrel-phrase",
+      "loop": false,
+      "targetDb": -23,
+      "peakLimitDb": -6,
+      "maxGainDb": 40,
+      "audioFilter": "highpass=f=65,afade=t=in:d=0.025,afade=t=out:st=2.88:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Three or four softly plucked gut strings on a small wooden early medieval lyre, a tiny relaxed modal phrase with natural pauses and warm woody resonance. One player nearby. No modern guitar strumming, piano, accompaniment, vocals, drums or background music. Let the last note decay naturally.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "minstrel-lyre-2-v11",
+      "kind": "sfx",
+      "label": "Minstrel \u00b7 quiet lyre answer",
+      "bank": "minstrel-phrase",
+      "loop": false,
+      "targetDb": -23,
+      "peakLimitDb": -6,
+      "maxGainDb": 40,
+      "audioFilter": "highpass=f=65,afade=t=in:d=0.025,afade=t=out:st=2.88:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A brief answering phrase of four gentle notes on an unamplified six-string wooden lyre with gut strings, natural uneven touch and soft wooden resonance. A wandering early medieval musician. No vocals, orchestra, modern instruments, percussion or reverb. Natural ending.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    }
+  ]
+}

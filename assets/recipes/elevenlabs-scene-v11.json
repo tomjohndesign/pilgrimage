@@ -1,0 +1,216 @@
+{
+  "version": 11,
+  "output": ".context/elevenlabs-scene-v11",
+  "jobs": [
+    {
+      "id": "animal-ox-call-v10",
+      "kind": "sfx",
+      "label": "Ox · single natural moo",
+      "bank": "animal-ox",
+      "loop": false,
+      "targetDb": -27,
+      "peakLimitDb": -8,
+      "maxGainDb": 4,
+      "audioFilter": "highpass=f=65,afade=t=in:d=0.025,afade=t=out:st=1.48:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Field recording of one real adult ox making exactly one short low cattle moo, one continuous breath with natural rough vocal texture, then stopping. Calm close farm animal. No second moo, repetition, echo, layering, synthetic bass, cartoon pitch or music. Quiet dry background.",
+        "duration_seconds": 1.6,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "woodland-birds-1-v11",
+      "kind": "sfx",
+      "label": "Woodland birds · nearby replies",
+      "bank": "woodland-birds",
+      "loop": false,
+      "targetDb": -27,
+      "peakLimitDb": -8,
+      "maxGainDb": 4,
+      "audioFilter": "highpass=f=65,afade=t=in:d=0.025,afade=t=out:st=6.88:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Natural woodland songbirds: a few delicate sparrow-like chirps and short melodic calls, spaced replies from two birds at different distances. Clean outdoor field recording. Quiet background with no buzzing, drone, insects, music or human voices. Sparse lively detail, not a loud dawn chorus.",
+        "duration_seconds": 7,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "woodland-birds-2-v11",
+      "kind": "sfx",
+      "label": "Woodland birds · short song",
+      "bank": "woodland-birds",
+      "loop": false,
+      "targetDb": -28,
+      "peakLimitDb": -8,
+      "maxGainDb": 4,
+      "audioFilter": "highpass=f=65,afade=t=in:d=0.025,afade=t=out:st=5.88:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A small woodland songbird sings a short bright natural phrase, answered softly by a distant bird. Several varied chirps with breathing room. Clean clear field recording. No constant hiss, wind rumble, insects, electronic buzzing, people or music.",
+        "duration_seconds": 6,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "water-stream-v11",
+      "kind": "sfx",
+      "label": "Shallow flowing water",
+      "bank": "water-stream",
+      "loop": true,
+      "targetDb": -29,
+      "peakLimitDb": -8,
+      "maxGainDb": 4,
+      "audioFilter": "highpass=f=65",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Natural small stream flowing slowly over a few smooth stones. Soft irregular burbling, little trickles and delicate water ripples, steady peaceful outdoor field recording. No waterfall roar, rain, voices, birds or music. Seamless continuous water texture.",
+        "duration_seconds": 9,
+        "loop": true,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "water-shore-v11",
+      "kind": "sfx",
+      "label": "Pond edge · small ripples",
+      "bank": "water-shore",
+      "loop": true,
+      "targetDb": -30,
+      "peakLimitDb": -8,
+      "maxGainDb": 4,
+      "audioFilter": "highpass=f=65",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Gentle freshwater pond ripples lapping softly against a grassy muddy bank. Small irregular liquid laps and quiet sloshing, peaceful close field recording. No ocean surf, boats, birds, people, wind roar or music. Seamless continuous water texture.",
+        "duration_seconds": 9,
+        "loop": true,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "wind-leaves-v11",
+      "kind": "sfx",
+      "label": "Light breeze through leaves",
+      "bank": "wind-leaves",
+      "loop": true,
+      "targetDb": -34,
+      "peakLimitDb": -8,
+      "maxGainDb": 4,
+      "audioFilter": "highpass=f=65",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A light intermittent breeze rustling broad green leaves in a deciduous woodland canopy. Delicate leafy flutter and soft airy movement, gentle swells. Natural field recording, quiet and warm. No storm, strong gusts, microphone rumble, insect buzz, birds, voices or music. Seamless leaf rustle texture.",
+        "duration_seconds": 9,
+        "loop": true,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "minstrel-lyre-1-v11",
+      "kind": "sfx",
+      "label": "Minstrel · short lyre phrase",
+      "bank": "minstrel-phrase",
+      "loop": false,
+      "targetDb": -32,
+      "peakLimitDb": -8,
+      "maxGainDb": 20,
+      "audioFilter": "highpass=f=65,afade=t=in:d=0.025,afade=t=out:st=2.88:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Three or four softly plucked gut strings on a small wooden early medieval lyre, a tiny relaxed modal phrase with natural pauses and warm woody resonance. One player nearby. No modern guitar strumming, piano, accompaniment, vocals, drums or background music. Let the last note decay naturally.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "minstrel-lyre-2-v11",
+      "kind": "sfx",
+      "label": "Minstrel · quiet lyre answer",
+      "bank": "minstrel-phrase",
+      "loop": false,
+      "targetDb": -32,
+      "peakLimitDb": -8,
+      "maxGainDb": 20,
+      "audioFilter": "highpass=f=65,afade=t=in:d=0.025,afade=t=out:st=2.88:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A brief answering phrase of four gentle notes on an unamplified six-string wooden lyre with gut strings, natural uneven touch and soft wooden resonance. A wandering early medieval musician. No vocals, orchestra, modern instruments, percussion or reverb. Natural ending.",
+        "duration_seconds": 3,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "crowd-chuckle-v11",
+      "kind": "sfx",
+      "label": "Crowd · brief muted chuckle",
+      "bank": "crowd-accent",
+      "loop": false,
+      "targetDb": -32,
+      "peakLimitDb": -8,
+      "maxGainDb": 4,
+      "audioFilter": "highpass=f=65,afade=t=in:d=0.025,afade=t=out:st=1.1800000000000002:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One person gives a single brief quiet warm chuckle, less than a second, then stops. Natural subdued human laugh nearby outdoors, not whispering. No repeated laughter, laugh track, crowd bed, words, buzzing, hiss or music.",
+        "duration_seconds": 1.3,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "crowd-call-v11",
+      "kind": "sfx",
+      "label": "Crowd · short distant call",
+      "bank": "crowd-accent",
+      "loop": false,
+      "targetDb": -32,
+      "peakLimitDb": -8,
+      "maxGainDb": 4,
+      "audioFilter": "highpass=f=65,afade=t=in:d=0.025,afade=t=out:st=1.2799999999999998:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One person gives a short friendly calling-out sound to someone a little farther down a country road, muffled and restrained, one indistinct syllable then silence. Human outdoor vocal gesture, not a scream or battle cry. No intelligible modern words, crowd bed, echo, hiss or music.",
+        "duration_seconds": 1.4,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "crowd-reply-v11",
+      "kind": "sfx",
+      "label": "Crowd · brief amused reply",
+      "bank": "crowd-accent",
+      "loop": false,
+      "targetDb": -32,
+      "peakLimitDb": -8,
+      "maxGainDb": 4,
+      "audioFilter": "highpass=f=65,afade=t=in:d=0.025,afade=t=out:st=1.38:d=0.12",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One woman gives a brief soft amused vocal reply, a small laugh in her breath and one indistinct murmured syllable, then stops. Casual natural outdoor conversation, warm and muted. No intelligible words, repeated laugh, background crowd, buzzing or music.",
+        "duration_seconds": 1.5,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Female"
+    }
+  ]
+}

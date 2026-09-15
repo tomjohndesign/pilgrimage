@@ -1,4 +1,6 @@
 "use client"
+import { touchObjectSoundSource, sceneSoundSources } from "@/lib/game/scene-sound-sources"
+import { playSourceSelection } from "@/lib/game/scene-audio"
 import { useCharacterBatches } from "./character-batches"
 import { spriteTextureView } from "@/lib/game/render/sprite-texture"
 
@@ -100,6 +102,8 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
     return () => { batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
   }, [batchEntries, groundPlane, poseDepth, depthBias, kind, passengerCart, edited, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   const root = useRef<THREE.Group>(null), phase = useRef(0), grazingTime = useRef(0), plant = useRef<FootPlant | null>(null)
+  useEffect(() => { if(selected && animal && terrain) void playSourceSelection(`animal/${kind}`) }, [selected, animal, kind, !!terrain])
+  useEffect(() => { const actor=root.current?.uuid; return()=>{if(actor)sceneSoundSources.remove(actor)} }, [])
   const vectors = useMemo(() => ({ facing: new THREE.Vector3(), origin: new THREE.Vector3(), foot: new THREE.Vector3(), corrected: new THREE.Vector3() }), [])
   // A standing figure whose pose, facing, place and shop state did not change
   // keeps last frame's frame, ground plane and uniforms; only movers pay.
@@ -115,6 +119,10 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
     group.visible = !(worldStall && kind === "cart" && shop)
     if (!group.visible) return
     const moving = data.moving === true, distance = data.playbackRate === 0 ? 0 : data.distance ?? 0
+    if (terrain && (animal || kind === "cart")) {
+      if (data.playbackRate === 0 || data.motionReset) sceneSoundSources.remove(group.uuid)
+      else touchObjectSoundSource(group, camera, animal ? `animal/${kind}` : "vehicle/cart", moving)
+    }
     const stride = animal ? animalStride(kind, characterScale, horseVariant) : manifest.wheelCycleRadians * TRANSPORT.wheelRadius * RIG_TO_WORLD * characterScale
     if (moving) phase.current = transportPhase(phase.current, Math.abs(distance), stride, data.reversing === true)
     if (data.grazing && !moving) grazingTime.current += Math.min(delta, 0.1) * (data.playbackRate ?? 1)

@@ -24,11 +24,12 @@ export function createAdmissionAudio() {
         .then(decoded => { if (!disposed) buffer = decoded })
         .catch(() => { loading = undefined })
     },
-    play(): boolean {
-      if (disposed || useCharacterAssetStore.getState().muted || context?.state !== "running" || !buffer || active.size >= 4) return false
+    setVisible(visible: boolean) { if (!visible) stop() },
+    play(visible: boolean): boolean {
+      if (!visible || disposed || useCharacterAssetStore.getState().muted || context?.state !== "running" || !buffer || active.size >= 1) return false
       const source = context.createBufferSource(), gain = context.createGain()
       source.buffer = buffer
-      gain.gain.value = 0.4
+      gain.gain.value = 0.12
       source.connect(gain).connect(context.destination)
       active.add(source)
       source.onended = () => { active.delete(source); source.disconnect(); gain.disconnect() }
