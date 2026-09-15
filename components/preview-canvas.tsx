@@ -1,10 +1,12 @@
 "use client"
 
+import { PreviewNavigation } from "@/components/preview-navigation"
+
+import { TERRAIN } from "@/lib/game/map/terrain"
+
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 
-import { useEffect } from "react"
 import { useThree } from "@react-three/fiber"
-import type * as THREE from "three"
 
 import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
 
@@ -17,7 +19,7 @@ import {
 } from "@/lib/game/render/iso"
 
 /**
- * A still iso view for galleries and labs: the game's exact camera pitch and
+ * An interactive iso view for galleries and labs: the game's exact camera pitch and
  * lighting rig, frozen at one of the four views, looking at the origin. Scenes
  * are expected to lift themselves so their visual centre sits there.
  */
@@ -38,10 +40,10 @@ export function PreviewCanvas({
     <PixelCanvas
       {...pixelation}
       orthographic
-      camera={{ position: cameraOffset(yaw), zoom, near: CAM_NEAR, far: CAM_FAR }}
+      camera={{ manual: true, position: cameraOffset(yaw), zoom, near: CAM_NEAR, far: CAM_FAR }}
       onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
     >
-      <color attach="background" args={["#14100a"]} />
+      <color attach="background" args={[TERRAIN.grass.color]} />
 
       <ambientLight intensity={SURFACE_LIGHT.ambient} />
       <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
@@ -56,15 +58,6 @@ export function PreviewCanvas({
 }
 
 function CameraAim({ view, zoom }: { view: number; zoom: number }) {
-  const camera = useThree((s) => s.camera) as THREE.OrthographicCamera
-  useEffect(() => {
-    const [x, y, z] = cameraOffset(yawForView(view))
-    camera.position.set(x, y, z)
-    camera.lookAt(0, 0, 0)
-    camera.zoom = zoom
-    camera.updateProjectionMatrix()
-    // Sprite animation and culling read the matrix before Three renders.
-    camera.updateMatrixWorld()
-  }, [camera, view, zoom])
-  return null
+  const size = useThree(s => s.size)
+  return <PreviewNavigation view={view} height={Math.max(1, size.height) / zoom} />
 }

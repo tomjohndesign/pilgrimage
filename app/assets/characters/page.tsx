@@ -1,12 +1,9 @@
-import type { Metadata } from "next"
-import { Suspense } from "react"
-import { AssetPlayground } from "@/components/asset-playground"
+import { redirect } from "next/navigation"
+import { legacyPlaygroundHref } from "@/lib/asset-playground"
 
-export const metadata: Metadata = {
-  title: "Pilgrimage — Asset playground",
-  description: "Characters, animals and procedural buildings in one shared playground.",
-}
-
-export default function CharactersPage() {
-  return <main><Suspense fallback={<p>Loading asset playground…</p>}><AssetPlayground /></Suspense></main>
+/** Preserve bookmarks and shared settings in the unified playground. */
+export default async function LegacyToolPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  redirect(legacyPlaygroundHref(await searchParams))
 }

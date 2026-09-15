@@ -1,4 +1,6 @@
 "use client"
+
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { inkAnimalFrame } from "@/lib/game/base-person/ink"
 
 import { useEffect, useRef, type RefObject } from "react"
@@ -129,7 +131,7 @@ export function AnimalPreview({ pack = false, subject, lineup, motion, playing, 
     {(lineup ? SUBJECTS : [subject]).map(kind => <div key={kind} style={{ width: 64 * zoom, height: 64 * zoom, position: "relative", flexShrink: 0 }}>
       <canvas data-animal={kind} width={64} height={64} role="img" aria-label={`${kind} model preview`} style={{ width: "100%", height: "100%", imageRendering: "pixelated" }} />
       {showRig && !lineup && <AnimalRigOverlay joints={joints} selected={selected} row={row - (motion === "burrow" ? burrowPreview(inspectedFrame / ANIMAL_FRAMES).heading / (Math.PI / 4) : 0)} edits={edits} clip={motion} phase={inspectedFrame / ANIMAL_FRAMES} onSelect={onJoint} onChange={onPose} onDrag={onDrag} />}
-      {lineup && <button className="hud-action animal-lineup-label" onClick={() => onSelect(kind)}>{kind === "deer" ? "Doe" : kind.charAt(0).toUpperCase() + kind.slice(1)}</button>}
+      {lineup && <ChromeButton className="hud-action animal-lineup-label" onClick={() => onSelect(kind)}>{kind === "deer" ? "Doe" : kind.charAt(0).toUpperCase() + kind.slice(1)}</ChromeButton>}
     </div>)}
   </div>
 }

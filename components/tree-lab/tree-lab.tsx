@@ -1,6 +1,9 @@
 "use client"
 
+import { ChromeSelect, ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
 import dynamic from "next/dynamic"
+import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "../asset-editor-frame"
+import { LabSelect, LabSlider, labButton } from "../lab-controls"
 import { useEffect, useState } from "react"
 import { DEFAULT_FOLIAGE, FOLIAGE_SPECIES, isFoliageSpecies, type FoliageAtlas, type FoliageDesigns } from "@/lib/game/trees/foliage/design"
 import { DEFAULT_FOLIAGE_ATLAS } from "@/lib/game/trees/foliage/assets"
@@ -22,96 +25,19 @@ function randomSeed(): number {
   return Math.floor(Math.random() * 2 ** 31)
 }
 
-// --- Small parchment UI atoms ------------------------------------------------
-
-function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
-  return (
-    <article className="border border-rule bg-parchment p-5 shadow-[0_0_0_3px_var(--parchment-dark),0_0_0_4px_var(--rule),4px_4px_24px_rgba(0,0,0,0.6)]">
-      <h2 className="mb-1 font-display text-base font-semibold uppercase tracking-[3px] text-ink">
-        {title}
-      </h2>
-      {subtitle && <p className="mb-4 text-[14px] italic text-ink-light">{subtitle}</p>}
-      {children}
-    </article>
-  )
-}
-
-function Label({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="font-display text-[9px] uppercase tracking-[2px] text-gold">{children}</div>
-  )
-}
-
-function LabButton({
-  children,
-  onClick,
-  active = false,
-}: {
-  children: React.ReactNode
-  onClick: () => void
-  active?: boolean
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`border px-2 py-1 font-display text-[9px] uppercase tracking-[2px] transition-colors hover:border-gold hover:text-red ${
-        active ? "border-gold bg-gold text-parchment hover:text-parchment" : "border-rule bg-parchment-dark text-ink"
-      }`}
-    >
-      {children}
-    </button>
-  )
-}
-
-function Slider({
-  label,
-  value,
-  min,
-  max,
-  step,
-  onChange,
-  format = (v: number) => String(v),
-}: {
-  label: string
-  value: number
-  min: number
-  max: number
-  step: number
-  onChange: (value: number) => void
-  format?: (value: number) => string
-}) {
-  return (
-    <div className="pt-1.5">
-      <div className="flex items-baseline justify-between gap-4">
-        <span className="text-[13px] italic text-ink-light">{label}</span>
-        <span className="font-display text-[10px] text-ink">{format(value)}</span>
-      </div>
-      <input
-        type="range"
-        aria-label={label}
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="mt-0.5 h-1 w-full cursor-pointer accent-gold"
-      />
-    </div>
-  )
-}
-
-/** Min and max of a range on one row. Dragging one past the other drags both. */
-// --- The lab -------------------------------------------------------------------
-
-export function TreeLab() {
+/** Tree foliage controls and previews in the shared playground.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/9VE-0 — Trees
+ */
+export function TreeLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
+  const [controlsOpen, setControlsOpen] = useState(false)
+  const [preview, setPreview] = useState("species")
   const species = TREE_SPECIES
   const [foliage, setFoliage] = useState<FoliageDesigns>(() => structuredClone(DEFAULT_FOLIAGE))
   const [atlas, setAtlas] = useState<FoliageAtlas>(DEFAULT_FOLIAGE_ATLAS)
   const [baking, setBaking] = useState(false)
   const [bakeError, setBakeError] = useState("")
   useEffect(() => {
+    if (!active) return
     let cancelled = false
     const target = window as unknown as { __foliageAtlas?: FoliageAtlas; __bakeTreeFoliage?: () => Promise<FoliageAtlas> }
     target.__bakeTreeFoliage = async () => {
@@ -134,8 +60,8 @@ export function TreeLab() {
       } finally { if (!cancelled) setBaking(false) }
     }, 250)
     return () => { cancelled = true; clearTimeout(timer); delete target.__bakeTreeFoliage; delete target.__foliageAtlas }
-  }, [foliage])
-  const [selected, setSelected] = useState<TreeSpeciesId | "all">("all")
+  }, [foliage, active])
+  const [selected, setSelected] = useState<TreeSpeciesId>("oak")
   const [lineupSeed, setLineupSeed] = useState(1)
   const [lineupView, setLineupView] = useState(0)
   const [darkForest, setDarkForest] = useState(false)
@@ -167,87 +93,33 @@ export function TreeLab() {
     setCopied(true)
   }
 
-
-  return (
-    <div className="flex w-full flex-col gap-8">
-      <Card
-        title="Species"
-        subtitle="All six species: branching silhouettes, simplified foliage and a darker woodland palette. Monks show the game’s native pixel scale."
-      >
-        <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          {baking && <span className="text-[12px] italic text-ink-light">Updating foliage…</span>}
-          {bakeError && <span role="alert" className="text-[12px] text-red">{bakeError}</span>}
-        </div>
-        <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          <LabButton active={selected === "all"} onClick={() => setSelected("all")}>
-            All species
-          </LabButton>
-          {FOLIAGE_SPECIES.map((id) => (
-            <LabButton key={id} active={selected === id} onClick={() => setSelected(id)}>
-              {species[id].label}
-            </LabButton>
-          ))}
-          <span className="flex-1" />
-          <LabButton active={darkForest} onClick={() => setDarkForest(value => !value)}>Dark forest</LabButton>
-          <LabButton onClick={() => setLineupView((v) => (v + 1) % 4)}>View {lineupView + 1}</LabButton>
-          <LabButton onClick={() => setLineupSeed(randomSeed())}>Reroll</LabButton>
-        </div>
-
-        {(selected === "all" ? [0, 1] : [0]).map(speciesPage => <div key={speciesPage} className="mb-3">
-          <div className="aspect-[3/1] w-full border border-rule">
-            <TreeLineup species={selected} seed={lineupSeed} view={lineupView} darkForest={darkForest} speciesPage={speciesPage} atlas={atlas} />
-          </div>
-          {selected === "all" && <div className="mt-2 grid grid-cols-3 text-center font-display text-[9px] uppercase tracking-[2px] text-gold">
-            {FOLIAGE_SPECIES.slice(speciesPage * 3, speciesPage * 3 + 3).map(id => <span key={id}>{species[id].label}</span>)}
-          </div>}
-        </div>)}
-
-        <div className="mt-5">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              {(selected !== "all" && isFoliageSpecies(selected) ? [selected] : FOLIAGE_SPECIES).map(id => <div key={id}>
-                <Label>{species[id].label}</Label>
-                {([
-                  ["height", "Height", 1.4, 3.25, 0.05],
-                  ["spread", "Branch spread", 0.55, 1.2, 0.05],
-                  ["density", "Foliage density", 0.4, 1.4, 0.05],
-                  ["leafSize", "Leaf clusters", 0.6, 1.3, 0.05],
-                ] as const).map(([key, label, min, max, step]) => <Slider key={key} label={label} value={foliage[id][key]} min={min} max={max} step={step} format={v => v.toFixed(2)}
-                  onChange={value => setFoliage(old => ({ ...old, [id]: { ...old[id], [key]: value } }))} />)}
-              </div>)}
-            </div>
-        </div>
-
-        <div className="mt-5 flex flex-wrap items-center gap-1.5 border-t border-rule pt-4">
-          <span className="flex-1" />
-          <LabButton onClick={copyJson}>Copy species JSON</LabButton>
-          {copied && <span className="text-[11px] italic text-ink-light">Copied ✦</span>}
-          <LabButton onClick={() => setFoliage(structuredClone(DEFAULT_FOLIAGE))}>Reset foliage</LabButton>
-        </div>
-      </Card>
-
-      <Card
-        title="Forest"
-        subtitle="The real game canvas on a generated map. Drag to pan, scroll to zoom, Q and E to rotate, O to cycle outlines."
-      >
-        <div className="mb-3 flex flex-wrap items-center gap-1.5">
-          <Label>Size</Label>
-          {MAP_SIZES.map((size) => (
-            <LabButton key={size} active={mapSize === size} onClick={() => setMapSize(size)}>
-              {size}
-            </LabButton>
-          ))}
-          <span className="flex-1" />
-          {mapSeed !== null && (
-            <span className="font-display text-[10px] text-ink-light">seed {mapSeed}</span>
-          )}
-          <LabButton onClick={() => setMapSeed(randomSeed())}>New map</LabButton>
-        </div>
-        <div className="relative aspect-[16/9] w-full border border-rule bg-[#14100a]">
-          {mapSeed !== null && (
-            <TreeMapPreview seed={mapSeed} size={mapSize} atlas={atlas} />
-          )}
-        </div>
-      </Card>
-    </div>
-  )
+  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Trees editor" version="" controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(value => !value)} status={bakeError || (baking ? "Updating foliage…" : copied ? "Species JSON copied" : species[selected].label)} detail="Preview draft">
+    <AssetEditorWorkspace title="Trees" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
+      controls={<>
+        <AssetEditorSection title="Foliage">
+          <LabSelect navigation label="Species" value={selected} options={Object.fromEntries(FOLIAGE_SPECIES.map(id => [id, species[id].label]))} onChange={value => setSelected(value as TreeSpeciesId)} />
+          {isFoliageSpecies(selected) && ([
+            ["height", "Height", 1.4, 3.25, 0.05], ["spread", "Branch spread", 0.55, 1.2, 0.05],
+            ["density", "Foliage density", 0.4, 1.4, 0.05], ["leafSize", "Leaf clusters", 0.6, 1.3, 0.05],
+          ] as const).map(([key, label, min, max, step]) => <LabSlider key={key} label={label} value={foliage[selected][key]} min={min} max={max} step={step}
+            onChange={value => setFoliage(old => ({ ...old, [selected]: { ...old[selected], [key]: value } }))} />)}
+        </AssetEditorSection>
+        <AssetEditorSection title="Forest">
+          <LabSelect label="Map size" value={String(mapSize)} options={Object.fromEntries(MAP_SIZES.map(size => [size, `${size} × ${size}`]))} onChange={value => setMapSize(Number(value))} />
+          <ChromeButton className={labButton} onClick={() => { setMapSeed(randomSeed()); setPreview("forest") }}>New map</ChromeButton>
+          <p className="person-hint">Drag to pan, scroll to zoom, Q and E to rotate, O to cycle outlines.</p>
+        </AssetEditorSection>
+        <AssetEditorSection title="Files"><ChromeButton className={labButton} onClick={() => { void copyJson().catch(() => setBakeError("Could not copy species JSON.")) }}>Copy species JSON</ChromeButton><ChromeButton className={labButton} onClick={() => setFoliage(structuredClone(DEFAULT_FOLIAGE))}>Reset foliage</ChromeButton></AssetEditorSection>
+      </>}
+      toolbar={<>
+        <ChromeSelect aria-label="Tree view" value={preview} onChange={e => setPreview(e.target.value)}><option value="species">Species</option><option value="all">All species</option><option value="forest">Forest</option></ChromeSelect>
+        {preview !== "forest" && <><label className="person-check"><ChromeCheckbox type="checkbox" checked={darkForest} onChange={event => setDarkForest(event.target.checked)} />Dark forest</label><ChromeButton className={labButton} onClick={() => setLineupView(value => (value + 1) % 4)}>Rotate</ChromeButton><ChromeButton className={labButton} onClick={() => setLineupSeed(randomSeed())}>New variations</ChromeButton></>}
+      </>}
+      dock={null}>
+      <div className="person-stage playground-stage">{active && (preview === "forest" ? <div className="workspace-forest-preview">{mapSeed !== null && <TreeMapPreview seed={mapSeed} size={mapSize} atlas={atlas} />}</div> : <div className="workspace-tree-lineup">{(preview === "all" ? [0, 1] : [0]).map(speciesPage => <div key={speciesPage}>
+        <div className="aspect-[3/1] min-h-52"><TreeLineup species={preview === "all" ? "all" : selected} seed={lineupSeed} view={lineupView} darkForest={darkForest} speciesPage={speciesPage} atlas={atlas} /></div>
+        {preview === "all" && <div className="grid grid-cols-3 text-center text-xs">{FOLIAGE_SPECIES.slice(speciesPage * 3, speciesPage * 3 + 3).map(id => <span key={id}>{species[id].label}</span>)}</div>}
+      </div>)}</div>)}</div>
+    </AssetEditorWorkspace>
+  </AssetEditorFrame>
 }

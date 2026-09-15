@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
 import { DEFAULT_VIEW_SIZE } from "@/lib/game/render/iso"
 import type { CameraSave } from "@/lib/game/save/schema"
@@ -155,14 +156,14 @@ export function LoadingChurch({ showChurch, phase, overlayRef, chapel = true, id
       fetchPriority="high" loading="eager" decoding="sync" alt="" draggable={false}
       className="loading-church-image" style={{ width: `${8 * scale}dvh`, height: `${8 * scale}dvh` }} />}
     {generating && <>
-      <p className="loading-church-caption" role="status">{resuming ? "restoring your settlement" : "generating map"}</p>
+      <p className="loading-church-caption page-title" role="status">{resuming ? "restoring your settlement" : "generating map"}</p>
       <svg className="loading-church-progress" viewBox={`0 0 ${CONSTRUCTION_BAR_WIDTH} ${CONSTRUCTION_BAR_HEIGHT}`}
         role="progressbar" aria-label="Generating map" shapeRendering="crispEdges">
         <rect width={48} height={6} fill="#30210c" />
         <rect x={1} y={1} width={46} height={4} fill="#5b4d2f" />
         <rect className="loading-church-progress-fill" x={2} y={2} width={12} height={2} fill="#dab767" />
       </svg>
-      {!resuming && onStop && <button type="button" className="hud-action loading-church-stop" onClick={onStop}>Stop</button>}
+      {!resuming && onStop && <ChromeButton type="button" className="hud-action loading-church-stop" onClick={onStop}>Stop</ChromeButton>}
     </>}
   </div>
 }

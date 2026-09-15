@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { MapPlus } from "lucide-react"
 import { useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
@@ -28,19 +29,16 @@ export function NewMapDialog({ defaultSize, onCreate }: {
   const [seedValid, setSeedValid] = useState(true)
 
   return <Dialog open={open} onOpenChange={setOpen}>
-    <button type="button" id="new-map-button" className="hud-header-button" aria-label="New map" title="New map"
+    <ChromeButton type="button" id="new-map-button" className="hud-header-button" aria-label="New map" title="New map"
       aria-haspopup="dialog" aria-expanded={open} onClick={() => {
         setSize(defaultSize)
         setSeed(randomSeed())
         setSeedValid(true)
         setOpen(true)
-      }}><MapPlus size={16} /></button>
+      }}><MapPlus size={16} /></ChromeButton>
     <DialogContent className="hud-report max-h-[85dvh] overflow-y-auto rounded-none border-rule bg-parchment text-ink sm:max-w-md"
       onKeyDown={event => event.stopPropagation()}
-      onCloseAutoFocus={event => {
-        event.preventDefault()
-        document.getElementById("new-map-button")?.focus()
-      }}>
+      finalFocus={() => document.getElementById("new-map-button")}>
       <DialogTitle className="font-display text-lg">New map</DialogTitle>
       <DialogDescription className="text-sm text-ink-light">
         Choose the size and seed of your new land. Creating a map replaces the current map and starts a fresh settlement.

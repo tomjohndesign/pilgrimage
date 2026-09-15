@@ -3,36 +3,40 @@
 import { addSurfaceLighting } from "@/lib/game/render/lighting"
 
 import Image from "next/image"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import * as THREE from "three"
 import { GRASS_TEXTURE_URL } from "@/lib/game/render/ground-surface"
-import { BUILD_CATALOG, type BuildId } from "@/lib/game/balance"
+import { BUILD_CATALOG, type BuildDefinition, type BuildId } from "@/lib/game/balance"
+import { playerBuildingParts } from "@/lib/game/player-color"
 import { structureParts } from "@/lib/game/building-art/structure"
 import { batchDetails } from "@/components/building-lab/building-model"
-import { BUILDING_STYLE } from "@/lib/game/building-art/style"
+import { BUILDING_STYLE, AVAILABLE_EARLY_BUILDINGS, type EarlyBuildingType } from "@/lib/game/building-art/style"
 import { buildingPartGeometry, BUILDING_DIRT_TEXTURE, configureBuildingDirt, dirtFloorMaterial } from "@/lib/game/building-art/part-geometry"
 import { cameraOffset, yawForView } from "@/lib/game/render/iso"
 
-let thumbnails: Promise<Partial<Record<BuildId, string>>> | undefined
+type ThumbnailId = BuildId | EarlyBuildingType
+const thumbnails = new Map<string, Promise<Partial<Record<ThumbnailId, string>>>>()
+const THUMBNAIL_WIDTH = 216, THUMBNAIL_HEIGHT = 196
 
-/** Bake the actual meshes once, with one short-lived WebGL context for the tray. */
-async function buildThumbnails() {
+/** Bake the live game catalogue at a fixed preview resolution, using one short-lived context. */
+async function buildThumbnails(catalog: readonly BuildDefinition[], playerColor: string | null) {
   const load = async (url: string, fallbackColor: number[]) => configureBuildingDirt(await new THREE.TextureLoader().loadAsync(url).catch(() => {
     const fallback = new THREE.DataTexture(new Uint8Array(fallbackColor), 1, 1)
     fallback.needsUpdate = true
     return fallback
   }))
   const [dirt, grass] = await Promise.all([load(BUILDING_DIRT_TEXTURE, [164,147,114,255]), load(GRASS_TEXTURE_URL, [148,161,88,255])])
-  const images: Partial<Record<BuildId, string>> = {}
+  const images: Partial<Record<ThumbnailId, string>> = {}
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false })
-  renderer.setSize(54, 49)
+  renderer.setSize(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT)
   renderer.setClearColor(0, 0)
   const yaw = yawForView(0)
   try {
-    for (const definition of BUILD_CATALOG) {
+    const definitions = [...catalog, ...AVAILABLE_EARLY_BUILDINGS.filter(preset => !catalog.some(def => def.id === preset.id)).map(preset => ({id:preset.id, w:preset.width, d:preset.depth, height:preset.wallHeight, color:BUILDING_STYLE.palette.plaster, roofColor:BUILDING_STYLE.palette.thatch}))]
+    for (const definition of definitions) {
       const scene = new THREE.Scene(), model = new THREE.Group()
       const geometries: THREE.BufferGeometry[] = [], materials: THREE.Material[] = []
-      for (const part of batchDetails(structureParts({ ...definition, buildType: definition.id }))) {
+      for (const part of batchDetails(playerBuildingParts(structureParts({ ...definition, buildType: definition.id }), playerColor))) {
         const geometry = buildingPartGeometry(part)
         const material = part.surface === "trail" ? dirtFloorMaterial(part, dirt, grass)
           : new THREE.MeshLambertMaterial({ color: part.color, side: THREE.DoubleSide })
@@ -41,12 +45,6 @@ async function buildThumbnails() {
         if (part.rotation) mesh.rotation.set(...part.rotation)
         model.add(mesh)
         geometries.push(geometry); materials.push(material)
-        if (part.outline !== false && !/^(reed-|thatch-grain-|thatch-highlight-)/.test(part.name)) {
-          const edges = new THREE.EdgesGeometry(geometry, 25)
-          const ink = new THREE.LineBasicMaterial({ color: BUILDING_STYLE.palette.ink, transparent: true, opacity: 0.65 })
-          mesh.add(new THREE.LineSegments(edges, ink))
-          geometries.push(edges); materials.push(ink)
-        }
       }
       const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 400)
       camera.position.set(...cameraOffset(yaw))
@@ -82,13 +80,27 @@ async function buildThumbnails() {
   }
 }
 
-export function BuildThumbnail({ id }: { id: BuildId }) {
+/** Actual model thumbnails shared by the build tray and building browser.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/BX2-0
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/D7K-0
+ */
+export function BuildThumbnail({ id, scale = 1, catalog = BUILD_CATALOG, playerColor = null }: {
+  id: ThumbnailId; scale?: number; catalog?: readonly BuildDefinition[]; playerColor?: string | null
+}) {
+  const key = useMemo(() => JSON.stringify([catalog, playerColor]), [catalog, playerColor])
   const [src, setSrc] = useState<string>()
   useEffect(() => {
     let active = true
-    thumbnails ??= buildThumbnails()
-    void thumbnails.then(images => { if (active) setSrc(images[id]) }).catch(() => { thumbnails = undefined })
+    setSrc(undefined)
+    let images = thumbnails.get(key)
+    if (!images) {
+      // Keep a bounded cache across live tuning presets and player palettes.
+      if (thumbnails.size >= 4) thumbnails.delete(thumbnails.keys().next().value!)
+      images = buildThumbnails(catalog, playerColor)
+      thumbnails.set(key, images)
+    }
+    void images.then(result => { if (active) setSrc(result[id]) }).catch(() => { thumbnails.delete(key) })
     return () => { active = false }
-  }, [id])
-  return src ? <Image src={src} unoptimized alt="" width={54} height={49} /> : null
+  }, [id, key, catalog, playerColor])
+  return src ? <Image src={src} unoptimized alt="" width={54 * scale} height={49 * scale} style={{ imageRendering:"pixelated" }} /> : null
 }

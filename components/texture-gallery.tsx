@@ -1,6 +1,7 @@
 "use client"
 
 import dynamic from "next/dynamic"
+import { AssetEditorHelp } from "./asset-editor-frame"
 
 import { TEXTURES } from "@/lib/game/render/textures"
 
@@ -24,12 +25,12 @@ export function TextureGallery() {
       {TEXTURES.map((entry) => (
         <article
           key={entry.id}
-          className="border border-rule bg-parchment p-5 shadow-[0_0_0_3px_var(--parchment-dark),0_0_0_4px_var(--rule),4px_4px_24px_rgba(0,0,0,0.6)]"
+          className="workspace-catalogue-item"
         >
           <h2 className="mb-1 font-display text-base font-semibold uppercase tracking-[3px] text-ink">
             {entry.label}
           </h2>
-          <p className="mb-4 text-[14px] italic text-ink-light">{entry.appliedTo}</p>
+          <AssetEditorHelp label={entry.label}>{entry.appliedTo} {entry.source}</AssetEditorHelp>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -49,7 +50,7 @@ export function TextureGallery() {
             </div>
           </div>
 
-          <p className="mt-4 text-[12px] text-ink-light">{entry.source}</p>
+
         </article>
       ))}
     </div>

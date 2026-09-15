@@ -1,7 +1,9 @@
 "use client"
 
+import { EntitySelect } from "@/components/workspace-navigation"
+
+import { ChromeSelect, ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
 import dynamic from "next/dynamic"
-import Link from "next/link"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { BUILDING_STYLE, DEFAULT_RECIPE, AVAILABLE_EARLY_BUILDINGS, REMOVED_BUILDING_TYPES, earlyBuildingRecipe, isEarlyBuilding, recipeSchema, type BuildingRecipe } from "@/lib/game/building-art/style"
 import { BUILDING_VIEWS } from "@/lib/game/building-art/projection"
@@ -9,13 +11,13 @@ import { buildingDimensions } from "@/lib/game/building-art/dimensions"
 import { hasBuildingLayouts } from "@/lib/game/building-layout"
 import { RELIC_TABLE_TOP } from "@/lib/game/building-art/early-geometry"
 import type { CaptureMapGuide } from "./map-comparison"
-import { RotateCcw, X } from "lucide-react"
+import { RotateCcw } from "lucide-react"
 import { minimumBuildingSize } from "@/lib/game/building-art/style"
 import { randomPreviewNeighbor, tavernPreviewNeighbors, type PreviewPlacement } from "@/lib/game/building-art/map-preview"
 import { normalizeBuildingRotation, type BuildingRotation } from "@/lib/game/building-rotation"
 import { previewRandomSeed } from "@/lib/game/preview-random"
-import { AssetEditorFrame, type AssetEditorNavigation } from "../asset-editor-frame"
-import { Section, Tuner } from "../game/property-controls"
+import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "../asset-editor-frame"
+import { Tuner } from "../game/property-controls"
 
 const ProceduralMapScene = dynamic(() => import("./map-comparison").then(m => m.ProceduralMapScene), { ssr: false })
 const STORAGE = "pilgrimage-procedural-buildings-v3"
@@ -28,13 +30,16 @@ function saveFile(blob: Blob, name: string) {
 }
 
 /** The primary building workflow uses the same deterministic model as the game.
- * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — Building workshop — procedural (214-0)
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/930-0 — Buildings
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/BX2-0 — Buildings · Tavern
  */
-export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
+export function ProceduralWorkshop({ mode, onModeChange, active: workspaceActive = true }: AssetEditorNavigation & { active?: boolean }) {
+  const [entityActive, setEntityActive] = useState(false)
+  const active = workspaceActive && entityActive
   const [recipe, setRecipe] = useState<BuildingRecipe>({...earlyBuildingRecipe("tavern"),layoutSeed:18})
   const [ready, setReady] = useState(false)
   const [allViews, setAllViews] = useState(false)
-  const [grid, setGrid] = useState(true)
+  const grid = true
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [neighbor, setNeighbor] = useState(true)
   const [neighbors, setNeighbors] = useState<PreviewPlacement[]>(tavernPreviewNeighbors)
@@ -83,11 +88,9 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
   }, [placement,rotatePlacement])
   const [playbackRate,setPlaybackRate] = useState(3)
   const [slaughterDemo,setSlaughterDemo] = useState(0)
-  const [zoom, setZoom] = useState(1.15)
+  const zoom = 1.15
   const [notice, setNotice] = useState("")
   const [controlsOpen, setControlsOpen] = useState(false)
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
-  const section = (title: string, defaultOpen = true) => ({ title, open: openSections[title] ?? defaultOpen, onToggle: () => setOpenSections(s => ({ ...s, [title]: !(s[title] ?? defaultOpen) })) })
   const [mapReady, setMapReady] = useState(false)
   const capture = useRef<CaptureMapGuide | null>(null)
   const upload = useRef<HTMLInputElement>(null)
@@ -146,7 +149,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
     } catch (error) { setNotice(error instanceof Error ? error.message : "Could not save the map sheet.") }
   }
 
-  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Procedural building editor"
+  return <AssetEditorFrame onSelectionChange={setEntityActive} mode={mode} onModeChange={onModeChange} label="Procedural building editor"
     onRandomize={() => { setRecipe(r=>({...r,layoutSeed:(previewRandomSeed()%65524+(r.layoutSeed ?? 0)+1)%65536,fireplace:undefined,hearthZ:undefined})); setNeighbors(items=>items.map(p=>{
       const next=p.anchor && items.every(item=>item.anchor) ? randomPreviewNeighbor(recipe.variant,previewRandomSeed()) : p.recipe
       return {...p,recipe:{...next,layoutSeed:previewRandomSeed()%65536,hearthZ:undefined,fireplace:undefined}}
@@ -154,75 +157,71 @@ export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetE
     randomizeDisabled={hasBuildingLayouts(recipe.variant) ? undefined : "This building form currently has a fixed layout"}
     version="Timber & earth" controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(!controlsOpen)}
     status={placement ? placementStatus : selectedId ? `${selectedNeighbor?.recipe.subject ?? recipe.subject} selected · click again or the ground to deselect` : notice || "Live procedural model · settings save in this browser"} detail={`${recipe.width} × ${recipe.depth} tiles · 4 directions`}>
-    <div className="person-workspace">
-      <aside className={`person-controls hud-well ${controlsOpen ? "is-open" : ""}`} aria-label="Building controls">
-        <div className="person-panel-heading"><span>Building</span><button className="hud-close person-controls-toggle" aria-label="Close building controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
-        <div className="person-controls-scroll">
-          <Section {...section("Building forms")}><div className="person-presets">{AVAILABLE_EARLY_BUILDINGS.map(v => <button key={v.id} className="hud-action" aria-pressed={recipe.variant === v.id} onClick={() => { setRecipe({ ...earlyBuildingRecipe(v.id), view: recipe.view, seed: recipe.seed }); setSelectedId(null);setPlacement(null); setNotice(v.description) }}>{v.name}</button>)}</div></Section>
-          <Section {...section("Dimensions")}>
+    <AssetEditorWorkspace title="Building" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
+      controlsHeading={<span>Building</span>}
+      controlsHeader={<></>}
+      controls={<><AssetEditorSection title="Shape"><label className="person-choice">Form<EntitySelect aria-label="Building form" value={recipe.variant} staging={{ kind: "buildings", active: workspaceActive }} onChange={event => {
+          const selected = AVAILABLE_EARLY_BUILDINGS.find(item => item.id === event.target.value)
+          if (!selected) return
+          setRecipe({ ...earlyBuildingRecipe(selected.id), view: recipe.view, seed: recipe.seed }); setSelectedId(null); setPlacement(null); setNotice(selected.description)
+        }}>{AVAILABLE_EARLY_BUILDINGS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</EntitySelect></label></AssetEditorSection>
+<AssetEditorSection title="Shape">
             <label className="person-choice">Name<input aria-label="Building name" value={recipe.subject} maxLength={160} onChange={e => update("subject", e.target.value)} /></label>
-            {(["width", "depth"] as const).map(key => <label key={key} className="person-choice">Building {key}<select aria-label={`Building ${key}`} value={recipe[key]} onChange={e => update(key, Number(e.target.value))}>{Array.from({ length: 6-minimumBuildingSize(recipe.variant)[key] }, (_, i) => i+minimumBuildingSize(recipe.variant)[key]).map(n => <option key={n} value={n}>{n} tiles</option>)}</select></label>)}
+            {(["width", "depth"] as const).map(key => <label key={key} className="person-choice">Building {key}<ChromeSelect aria-label={`Building ${key}`} value={recipe[key]} onChange={e => update(key, Number(e.target.value))}>{Array.from({ length: 6-minimumBuildingSize(recipe.variant)[key] }, (_, i) => i+minimumBuildingSize(recipe.variant)[key]).map(n => <option key={n} value={n}>{n} tiles</option>)}</ChromeSelect></label>)}
             <Tuner label="Wall height" labelClassName="w-28" value={recipe.wallHeight} min={0.25} max={recipe.variant === "enclosure" ? 0.7 : 1.4} step={0.05} display={`${recipe.wallHeight.toFixed(2)} tiles`} onChange={value => update("wallHeight", value)} />
             {!["enclosure","garden","cross","lumberCamp"].includes(recipe.variant) && <Tuner label="Roof rise" labelClassName="w-28" value={recipe.roofRise} min={0.2} max={1.5} step={0.025} display={`${recipe.roofRise.toFixed(2)} tiles`} onChange={value => update("roofRise", value)} />}
             <p className="person-hint">{dimensions.width} × {dimensions.depth} occupied tiles. {recipe.variant === "enclosure" ? "Open sky and a gate on every side." : "One storey, sized beside a traveler."} No surrounding tile border.</p>
-          </Section>
-          {hasBuildingLayouts(recipe.variant) && <Section {...section("Layout")}>
+          </AssetEditorSection>
+{hasBuildingLayouts(recipe.variant) && <AssetEditorSection title="Layout">
             <label className="person-choice">Layout seed<input aria-label="Layout seed" type="number" min="0" max="65535" step="1" value={recipe.layoutSeed ?? 0} onChange={e => update("layoutSeed", Math.max(0, Math.min(65535, Math.trunc(Number(e.target.value) || 0))))} /></label>
-            {recipe.variant === "house" && <label className="person-choice">Fireplace<select aria-label="House fireplace" value={recipe.fireplace === undefined ? "auto" : recipe.fireplace ? "yes" : "no"} onChange={e=>update("fireplace",e.target.value === "auto" ? undefined : e.target.value === "yes")}><option value="auto">From layout seed</option><option value="yes">Present</option><option value="no">None</option></select></label>}
-            <button className="hud-action" onClick={() => update("layoutSeed", ((recipe.layoutSeed ?? 0) + 1) % 65536)}>Next layout</button>
+            {recipe.variant === "house" && <label className="person-choice">Fireplace<ChromeSelect aria-label="House fireplace" value={recipe.fireplace === undefined ? "auto" : recipe.fireplace ? "yes" : "no"} onChange={e=>update("fireplace",e.target.value === "auto" ? undefined : e.target.value === "yes")}><option value="auto">From layout seed</option><option value="yes">Present</option><option value="no">None</option></ChromeSelect></label>}
+            <ChromeButton className="hud-action" onClick={() => update("layoutSeed", ((recipe.layoutSeed ?? 0) + 1) % 65536)}>Next layout</ChromeButton>
             {recipe.variant === "house" && <p className="person-hint">One in four seeded house layouts has no fireplace. Choose None to preview an unheated house.</p>}
             <p className="person-hint">Vary gates, furniture positions and rotations. Larger rooms gain more tables, chests and stools. Click a building to inspect its beds and furniture.</p>
-          </Section>}
-          <Section {...section("Materials")}>
+          </AssetEditorSection>}
+<AssetEditorSection title="Appearance">
             <label className="person-choice">Variation seed<input aria-label="Variation seed" type="number" min="0" max="99999" step="1" value={recipe.seed} onChange={e => update("seed", Math.max(0, Math.min(99999, Math.trunc(Number(e.target.value) || 0))))} /></label>
             <p className="person-hint">Vary chimney masonry, wall timbers, plaster, thatch and the props beside the entrance.</p>
             <div className="person-palette">{Object.entries(BUILDING_STYLE.palette).map(([name, color]) => <span key={name} title={`${name}: ${color}`} style={{ background: color }} />)}</div>
-          </Section>
-          <Section {...section("Place buildings")}>
-            <button className="hud-action" onClick={showTavernExample}>Tavern + two houses</button>
-            <button className="hud-action" onClick={showInnExample}>Tavern + Inn</button>
-            <button className="hud-action" onClick={showSheepPenExample}>Sheep pen + flock</button>
-            <label className="person-choice">Building to place<select aria-label="Building to place" value={placeType} onChange={e=>{setPlaceType(e.target.value);setPlacement(null)}}>
+          </AssetEditorSection>
+<AssetEditorSection title="Scene">
+            <ChromeButton className="hud-action" onClick={showTavernExample}>Tavern + two houses</ChromeButton>
+            <ChromeButton className="hud-action" onClick={showInnExample}>Tavern + Inn</ChromeButton>
+            <ChromeButton className="hud-action" onClick={showSheepPenExample}>Sheep pen + flock</ChromeButton>
+            <label className="person-choice">Building to place<ChromeSelect aria-label="Building to place" value={placeType} onChange={e=>{setPlaceType(e.target.value);setPlacement(null)}}>
               <option value="current">Copy current recipe</option>{AVAILABLE_EARLY_BUILDINGS.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
-            </select></label>
-            <button className="hud-action" disabled={!mapReady} aria-pressed={Boolean(placement)} onClick={()=>placement ? setPlacement(null) : startPlacement()}>{placement ? "Cancel placement" : "Place building"}</button>
-            <button className="hud-action" onClick={rotatePlacement}>Rotate placement · {placementRotation*90}°</button>
-            <label className="person-check"><input type="checkbox" checked={snapRoofs} onChange={e=>setSnapRoofs(e.target.checked)} />Snap rotation to neighboring roofs</label>
+            </ChromeSelect></label>
+            <ChromeButton className="hud-action" disabled={!mapReady} aria-pressed={Boolean(placement)} onClick={()=>placement ? setPlacement(null) : startPlacement()}>{placement ? "Cancel placement" : "Place building"}</ChromeButton>
+            <ChromeButton className="hud-action" onClick={rotatePlacement}>Rotate placement · {placementRotation*90}°</ChromeButton>
+            <label className="person-check"><ChromeCheckbox type="checkbox" checked={snapRoofs} onChange={e=>setSnapRoofs(e.target.checked)} />Snap rotation to neighboring roofs</label>
             <p className="person-hint">Click a tile to place the building. R turns it by 90°; Escape cancels. Green previews fit, red previews need more space.</p>
             {selectedNeighbor && <>
-              <p className="person-hint">Selected: {selectedNeighbor.recipe.subject} · {selectedNeighbor.rotation*90}°</p>
-              {selectedNeighbor.recipe.variant === "house" && <label className="person-choice">Selected fireplace<select aria-label="Selected house fireplace" value={selectedNeighbor.recipe.fireplace===undefined ? "auto" : selectedNeighbor.recipe.fireplace ? "yes" : "no"} onChange={e=>setNeighbors(items=>items.map(p=>p.id===selectedId ? {...p,recipe:{...p.recipe,fireplace:e.target.value==="auto" ? undefined : e.target.value==="yes"}} : p))}><option value="auto">From layout seed</option><option value="yes">Present</option><option value="no">None</option></select></label>}
-              <button className="hud-action" onClick={()=>{setNeighbors(items=>items.filter(p=>p.id!==selectedId));setSelectedId(null)}}>Remove selected building</button>
+              <p role="status" className="person-hint">Selected: {selectedNeighbor.recipe.subject} · {selectedNeighbor.rotation*90}°</p>
+              {selectedNeighbor.recipe.variant === "house" && <label className="person-choice">Selected fireplace<ChromeSelect aria-label="Selected house fireplace" value={selectedNeighbor.recipe.fireplace===undefined ? "auto" : selectedNeighbor.recipe.fireplace ? "yes" : "no"} onChange={e=>setNeighbors(items=>items.map(p=>p.id===selectedId ? {...p,recipe:{...p.recipe,fireplace:e.target.value==="auto" ? undefined : e.target.value==="yes"}} : p))}><option value="auto">From layout seed</option><option value="yes">Present</option><option value="no">None</option></ChromeSelect></label>}
+              <ChromeButton className="hud-action" onClick={()=>{setNeighbors(items=>items.filter(p=>p.id!==selectedId));setSelectedId(null)}}>Remove selected building</ChromeButton>
             </>}
-          </Section>
-          <Section {...section("Inspection")}>
-            <label className="person-check"><input type="checkbox" checked={grid} onChange={e => setGrid(e.target.checked)} />Isometric grid</label>
+          </AssetEditorSection>
+<AssetEditorSection title="Inspect">
+
             <p className="person-hint">Click a building to select it and reveal its interior. Click it again or the ground to clear selection.</p>
-            <label className="person-check"><input type="checkbox" checked={neighbor} onChange={e => { setNeighbor(e.target.checked); if (!e.target.checked && selectedId !== "workshop") setSelectedId(null) }} />Adjoining buildings</label>
+            <label className="person-check"><ChromeCheckbox type="checkbox" checked={neighbor} onChange={e => { setNeighbor(e.target.checked); if (!e.target.checked && selectedId !== "workshop") setSelectedId(null) }} />Adjoining buildings</label>
             {neighbor && <p className="person-hint">{neighbors.length} neighbors. Select one to inspect or remove it.</p>}
             <p className="person-hint">Actual game tiles and characters for scale. All four views render the same buildings.</p>
-          </Section>
-          <Section {...section("Files")}>
+          </AssetEditorSection>
+<AssetEditorSection title="Files">
             <div className="person-file-actions">
-              <button className="hud-action" disabled={!recipeSchema.safeParse(recipe).success} onClick={exportRecipe}>Export building recipe</button>
+              <ChromeButton className="hud-action" disabled={!recipeSchema.safeParse(recipe).success} onClick={exportRecipe}>Export building recipe</ChromeButton>
               <label className="hud-action person-file-input">Import recipe<input ref={upload} aria-label="Import building recipe" type="file" accept="application/json,.json" onChange={e => { importRecipe(e.target.files?.[0]); e.target.value = "" }} /></label>
-              <button className="hud-action" disabled={!mapReady} onClick={exportViews}>Download four-view map sheet</button>
-              <Link className="hud-action" href="/assets/buildings/studies">Illustrated references</Link>
+              <ChromeButton className="hud-action" disabled={!mapReady} onClick={exportViews}>Download four-view map sheet</ChromeButton>
             </div>
-          </Section>
-        </div>
-        <footer className="person-panel-footer"><p className="person-hint">Buildings use these same models in the game. These drafts do not change the live game’s default recipe.</p><button className="hud-action" onClick={() => { setRecipe(DEFAULT_RECIPE);setNeighbors([]);setPlacement(null); setSelectedId(null); setNotice("House restored.") }}><RotateCcw size={12} />Restore house</button></footer>
-      </aside>
-      <div className="person-preview" aria-label="Building preview">
-        <div className="person-preview-toolbar hud-well">
-          <div className="person-playback"><span className="person-hint">{AVAILABLE_EARLY_BUILDINGS.find(v => v.id === recipe.variant)?.name}{neighbor && neighbors.length ? ` + ${neighbors.length} buildings` : ""}</span>{recipe.variant === "sheep-pen" && <label>Speed<select aria-label="Herding demo speed" value={playbackRate} onChange={e=>setPlaybackRate(Number(e.target.value))}>{[1,2,3,6].map(rate=><option key={rate} value={rate}>{rate}×</option>)}</select></label>}<label>Zoom<select aria-label="Building preview zoom" value={zoom} onChange={e => setZoom(Number(e.target.value))}>{[0.75, 1, 1.15, 1.5, 1.7].map(n => <option key={n} value={n}>{n}×</option>)}</select></label></div>
-          <div className="person-view-buttons" aria-label="Building preview modes">{recipe.variant === "sheep-pen" && <><button className="hud-action" onClick={()=>{setSlaughterDemo(n=>-Math.abs(n)-1);setNotice("Sheep and goats are milked beside the flock. Workers carry milk in buckets to the public food platform.")}}>Show milking cycle</button><button className="hud-action" onClick={()=>{setSlaughterDemo(n=>Math.abs(n)+1);setNotice("The shepherd leads an animal to the work spot, collects three small trays of meat onto the public food platform, then replenishes the flock. Each tray adds 50 meat; milk arrives in buckets between harvests.")}}>Show slaughter cycle</button></>}<button className="hud-action" aria-pressed={!allViews} onClick={() => setAllViews(false)}>On the map</button><button className="hud-action" aria-pressed={allViews} onClick={() => setAllViews(true)}>All four</button></div>
-        </div>
-        <div className={`person-stage asset-building-stage ${allViews ? "asset-building-four" : ""}`}>
+          </AssetEditorSection></>}
+      controlsFooter={<><footer className="person-panel-footer"><p className="person-hint">Buildings use these same models in the game. These drafts do not change the live game’s default recipe.</p><ChromeButton className="hud-action" onClick={() => { setRecipe(DEFAULT_RECIPE);setNeighbors([]);setPlacement(null); setSelectedId(null); setNotice("House restored.") }}><RotateCcw size={12} />Restore house</ChromeButton></footer></>}
+      toolbar={<><div className="person-playback"><span className="person-hint">{AVAILABLE_EARLY_BUILDINGS.find(v => v.id === recipe.variant)?.name}{neighbor && neighbors.length ? ` + ${neighbors.length} buildings` : ""}</span>{recipe.variant === "sheep-pen" && <label>Speed<ChromeSelect aria-label="Herding demo speed" value={playbackRate} onChange={e=>setPlaybackRate(Number(e.target.value))}>{[1,2,3,6].map(rate=><option key={rate} value={rate}>{rate}×</option>)}</ChromeSelect></label>}</div>
+<div className="person-view-buttons" aria-label="Building preview modes">{recipe.variant === "sheep-pen" && <><ChromeButton className="hud-action" onClick={()=>{setSlaughterDemo(n=>-Math.abs(n)-1);setNotice("Sheep and goats are milked beside the flock. Workers carry milk in buckets to the public food platform.")}}>Show milking cycle</ChromeButton><ChromeButton className="hud-action" onClick={()=>{setSlaughterDemo(n=>Math.abs(n)+1);setNotice("The shepherd leads an animal to the work spot, collects three small trays of meat onto the public food platform, then replenishes the flock. Each tray adds 50 meat; milk arrives in buckets between harvests.")}}>Show slaughter cycle</ChromeButton></>}<ChromeSelect aria-label="Building view" value={allViews ? "all" : "map"} onChange={e => setAllViews(e.target.value === "all")}><option value="map">On the map</option><option value="all">All four</option></ChromeSelect></div></>}
+      dock={<div className="person-animation-dock hud-well"><div className="person-direction-strip" aria-label="Building directions">{BUILDING_VIEWS.map(v => <ChromeButton key={v.id} className="hud-building-tile person-direction asset-building-direction" aria-label={`Face ${v.name}`} aria-pressed={recipe.view === v.id} onClick={() => { update("view", v.id); setAllViews(false) }}><span>{["SE", "NE", "NW", "SW"][v.id]}</span><span>{v.name}</span></ChromeButton>)}</div></div>}>
+      <div className={`person-stage asset-building-stage ${allViews ? "asset-building-four" : ""}`}>
           {active && viewRecipes.map((viewRecipe, i) => <ProceduralMapScene slaughterDemo={slaughterDemo} playbackRate={playbackRate} key={viewRecipe.view} embedded recipe={viewRecipe} grid={grid} zoom={zoom} selectedId={selectedId} onSelect={setSelectedId} neighbor={neighbor ? neighbors : undefined} placement={placement} placementRotation={placementRotation} snapRoofs={snapRoofs} onPlace={placeBuilding} onPlacementStatus={setPlacementStatus} onGuideReady={i === 0 ? onGuideReady : undefined} />)}
         </div>
-        <div className="person-animation-dock hud-well"><div className="person-direction-strip" aria-label="Building directions">{BUILDING_VIEWS.map(v => <button key={v.id} className="hud-building-tile person-direction asset-building-direction" aria-label={`Face ${v.name}`} aria-pressed={recipe.view === v.id} onClick={() => { update("view", v.id); setAllViews(false) }}><span>{["SE", "NE", "NW", "SW"][v.id]}</span><span>{v.name}</span></button>)}</div></div>
-      </div>
-    </div>
+    </AssetEditorWorkspace>
   </AssetEditorFrame>
 }

@@ -102,11 +102,9 @@
   top: calc(var(--loading-indicator-top) - 10 * var(--loading-pixel));
   left: 50%;
   transform: translate(-50%, -100%);
-  color: #d4c297;
-  font-family: var(--font-cinzel), serif;
-  font-size: 11px;
-  line-height: var(--loading-caption-line);
-  letter-spacing: .12em;
+  color: var(--chrome-text);
+  font-size: 18px;
+  line-height: 1.2;
   white-space: nowrap;
 }
 

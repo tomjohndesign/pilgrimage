@@ -1,4 +1,9 @@
 import { redirect } from "next/navigation"
+import { legacyPlaygroundHref } from "@/lib/asset-playground"
 
-/** Keep existing workshop bookmarks pointed at the shared playground. */
-export default function BuildingsPage() { redirect("/assets/characters?asset=buildings") }
+/** Preserve bookmarks and shared settings in the unified playground. */
+export default async function LegacyToolPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  redirect(legacyPlaygroundHref(await searchParams, "buildings"))
+}

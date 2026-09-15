@@ -50,13 +50,13 @@ export function drawPathMap(ctx: CanvasRenderingContext2D, world: PathWorld, vie
   const drawBuilding = (b: BuildingDef, color: string, preview = false) => {
     ctx.fillStyle = "#30291f"; ctx.fillRect(b.x * CELL, b.z * CELL, b.w * CELL, b.d * CELL)
     ctx.fillStyle = color; ctx.fillRect(b.x * CELL + 2, b.z * CELL + 2, b.w * CELL - 4, b.d * CELL - 4)
-    ctx.fillStyle = "#f2e8d5"; ctx.font = "10px Georgia"; ctx.textAlign = "center"
+    ctx.fillStyle = "#f2e8d5"; ctx.font = `10px ${getComputedStyle(document.body).fontFamily}`; ctx.textAlign = "center"
     ctx.fillText(`${b.buildType === "workshop" ? "HUT" : "REST"} ${preview ? world.buildings.length + 1 : world.buildings.findIndex(item => item.id === b.id) + 1}`, (b.x + 1) * CELL, (b.z + 1) * CELL + 4)
     const entry = buildingEntry(b)
     ctx.fillStyle = preview ? color : "#ecd396"; ctx.fillRect(entry.x * CELL + 8, entry.z * CELL + 8, 8, 8)
   }
   world.buildings.forEach(b => drawBuilding(b, world.closedDestinations.has(b.id) ? "#58564c" : b.buildType === "workshop" ? "#815c3a" : "#556d7b"))
-  ctx.fillStyle = "#f2e8d5"; ctx.font = "12px Georgia"; ctx.textAlign = "left"
+  ctx.fillStyle = "#f2e8d5"; ctx.font = `12px ${getComputedStyle(document.body).fontFamily}`; ctx.textAlign = "left"
   if (world.permutation.sources !== "local") ctx.fillText("ARRIVALS →", CELL, (ROAD_Z + 2.2) * CELL)
   if (world.permutation.sources === "both") { ctx.textAlign = "right"; ctx.fillText("← ARRIVALS", (WIDTH - 1) * CELL, (ROAD_Z + 2.2) * CELL) }
   for (const journey of world.journeys) {

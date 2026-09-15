@@ -17,7 +17,7 @@ export function DemolishBuildingDialog({ targets, onDemolish, trigger }: {
     <DialogTrigger asChild>{trigger ?? <HudButton className="mt-3">Demolish</HudButton>}</DialogTrigger>
     <DialogContent className="hud-report max-h-[85dvh] overflow-y-auto rounded-none border-rule bg-parchment text-ink sm:max-w-md"
       onKeyDown={event => event.stopPropagation()}
-      onOpenAutoFocus={event => { event.preventDefault(); cancel.current?.focus() }}>
+      initialFocus={cancel}>
       <DialogTitle className="font-display text-lg">Demolish {targets[0].label}?</DialogTitle>
       <DialogDescription className="text-sm text-ink-light">
         This removes the building immediately, including any unfinished construction. This cannot be undone, and construction costs are not refunded.

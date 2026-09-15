@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { useEffect, useRef, useState } from "react"
 import { Music2, Slash } from "lucide-react"
 
@@ -207,7 +208,7 @@ export function MusicPlayer({ className = "", compact = false }: { className?: s
       <div aria-hidden className="pointer-events-none fixed bottom-0 left-0 h-px w-px overflow-hidden opacity-0">
         <div ref={hostRef} />
       </div>
-      <button
+      <ChromeButton
         type="button"
         onClick={toggle}
         aria-pressed={enabled}
@@ -220,7 +221,7 @@ export function MusicPlayer({ className = "", compact = false }: { className?: s
           {!enabled && <Slash size={16} className="absolute inset-0" />}
         </span>
         {!compact && ` Music ${enabled ? "On" : "Off"}`}
-      </button>
+      </ChromeButton>
     </>
   )
 }

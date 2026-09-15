@@ -1,9 +1,10 @@
 "use client"
 
-/**
- * One category inside the merged World panel: a gold header that folds the
- * body away, with a rule between neighbours. Everything stays in one column so
- * the tuning knobs read as a single instrument rather than a stack of cards.
+import { Slider } from "@base-ui/react/slider"
+import { Collapsible } from "@base-ui/react/collapsible"
+
+/** Shared property disclosure for the game HUD and workspace.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/CCL-0
  */
 export function Section({
   title,
@@ -16,25 +17,11 @@ export function Section({
   onToggle: () => void
   children: React.ReactNode
 }) {
-  return (
-    <section className="flex flex-col gap-1 border-t border-rule/70 py-2 first:border-t-0 first:pt-0">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        aria-label={title}
-        className="pointer-events-auto flex w-full items-baseline justify-between gap-3 text-left"
-      >
-        <span className="font-display text-[9px] font-black uppercase tracking-[2px] text-ink">
-          {title}
-        </span>
-        <span className="font-display text-[9px] text-gold/70">{open ? "▾" : "▸"}</span>
-      </button>
-      {open && <div className="flex flex-col gap-1">{children}</div>}
-    </section>
-  )
+  return <Collapsible.Root open={open} onOpenChange={onToggle} className="chrome-property-section">
+    <Collapsible.Trigger className="chrome-section-trigger">{title}<span aria-hidden>{open ? "−" : "+"}</span></Collapsible.Trigger>
+    <Collapsible.Panel><div className="chrome-section-content">{children}</div></Collapsible.Panel>
+  </Collapsible.Root>
 }
-
 
 export function Tuner({
   label,
@@ -59,42 +46,10 @@ export function Tuner({
   onDragChange?: (dragging: boolean) => void
   labelClassName?: string
 }) {
-  const fraction = max > min ? (value - min) / (max - min) : 0
-  return (
-    <div className="group flex items-center">
-      <span className={`${labelClassName} shrink-0 text-[13px] font-medium text-ink-light`}>{label}</span>
-      <div className="relative h-8 min-w-0 flex-1 overflow-hidden rounded-[6px] bg-[#c3b193]">
-        {/* Fill and knob are drawn; the real range input sits on top, invisible. */}
-        <div
-          className="absolute inset-y-0 left-0 rounded-[6px] bg-gold"
-          style={{ width: `${fraction * 100}%` }}
-        />
-        {/* The handle is a notch in the panel's own parchment, optionally always
-            visible. It rides inside the fill's leading edge, never touching
-            the rim, and stops short of the value at the far end so the two never collide. */}
-        <div
-          className={`absolute top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-parchment ${showHandle ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}
-          style={{ left: `clamp(4px, calc(${fraction * 100}% - 8px), calc(100% - 32px))` }}
-        />
-        <span className="absolute right-1 top-1/2 -translate-y-1/2 font-display text-[11px] font-black text-[#2c1f0e]">
-          {display}
-        </span>
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          aria-label={label}
-          onChange={(event) => onChange(Number(event.currentTarget.value))}
-          onPointerDown={onDragChange ? (event) => { event.currentTarget.setPointerCapture(event.pointerId); onDragChange(true) } : undefined}
-          onPointerUp={onDragChange ? () => onDragChange(false) : undefined}
-          onPointerCancel={onDragChange ? () => onDragChange(false) : undefined}
-          onLostPointerCapture={onDragChange ? () => onDragChange(false) : undefined}
-          className="pointer-events-auto absolute inset-0 h-full w-full touch-none cursor-ew-resize opacity-0"
-        />
-      </div>
-    </div>
-  )
+  return <Slider.Root className="chrome-tuner" value={value} min={min} max={max} step={step} onValueChange={next => onChange(next)} onValueCommitted={() => onDragChange?.(false)}>
+    <label className="chrome-tuner-label">{label}</label>
+    <Slider.Control className="chrome-tuner-control" onPointerDown={() => onDragChange?.(true)} onPointerUp={() => onDragChange?.(false)} onPointerCancel={() => onDragChange?.(false)} onLostPointerCapture={() => onDragChange?.(false)}>
+      <Slider.Track className="chrome-tuner-track"><Slider.Indicator className="chrome-tuner-fill" /><span className="chrome-tuner-value">{display}</span><Slider.Thumb className="chrome-tuner-thumb" aria-label={label} aria-valuetext={display} /></Slider.Track>
+    </Slider.Control>
+  </Slider.Root>
 }
-

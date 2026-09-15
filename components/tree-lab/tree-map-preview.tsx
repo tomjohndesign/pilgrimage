@@ -1,5 +1,7 @@
 "use client"
 
+import { TERRAIN } from "@/lib/game/map/terrain"
+
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 
 import { Suspense, useEffect, useMemo } from "react"
@@ -43,13 +45,13 @@ export function TreeMapPreview({ seed, size, atlas, ...pixelation }: { seed: num
       orthographic
       camera={{ manual: true, position: [20, 20, 20], near: CAM_NEAR, far: CAM_FAR }}
     >
-      <color attach="background" args={["#14100a"]} />
+      <color attach="background" args={[TERRAIN.grass.color]} />
       <ambientLight intensity={SURFACE_LIGHT.ambient} />
       <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
       <CameraLight />
 
       <Suspense fallback={null}>
-        <TerrainTiles map={map} trees={placements} />
+        <TerrainTiles showGrid map={map} trees={placements} />
       </Suspense>
       <Suspense fallback={null}><FoliageField atlas={atlas} placements={placements} seed={seed} onSelect={id => useCameraStore.getState().select({ kind: "tree", id })} /></Suspense>
       <Environment map={map} />

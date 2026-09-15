@@ -48,7 +48,7 @@ export function TreeLineup({
     <PreviewCanvas zoom={darkForest ? 80 : 90} view={view}>
       <group position={[0, darkForest ? -1.7 : -1.2, 0]}>
         <Suspense fallback={null}>
-          <TerrainTiles map={darkForest ? DARK_FOLIAGE_GROUND : FOLIAGE_GROUND} />
+          <TerrainTiles showGrid map={darkForest ? DARK_FOLIAGE_GROUND : FOLIAGE_GROUND} />
         </Suspense>
         <Suspense fallback={null}>
           <>
