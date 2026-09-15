@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "8d25a56869950204273116855e52b4ee4b75cc60",
-  "releaseCount": 252,
+  "lastProcessedCommit": "a8bcbf254baadb16fe2d738b5ec7f65bef06dee5",
+  "releaseCount": 253,
   "releases": [
+    {
+      "version": "0.0.267",
+      "title": "Release 0.0.267",
+      "summary": "Refine game controls, minimap, menus, and theme integration (#287)",
+      "commit": "a8bcbf254baadb16fe2d738b5ec7f65bef06dee5"
+    },
     {
       "version": "0.0.266",
       "title": "Release 0.0.266",
