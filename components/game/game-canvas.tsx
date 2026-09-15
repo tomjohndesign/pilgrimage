@@ -135,6 +135,15 @@ export function GameCanvas({
   showGrid?: boolean
   visibility?: SceneVisibility
 } & PixelationProps) {
+  const [background, setBackground] = useState(GAME_BACKGROUND)
+  useEffect(() => {
+    const root = document.documentElement
+    const update = () => setBackground(getComputedStyle(root).getPropertyValue("--chrome-surface").trim() || GAME_BACKGROUND)
+    update()
+    const observer = new MutationObserver(update)
+    observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] })
+    return () => observer.disconnect()
+  }, [])
   const previousTerrain = useRef<GameMap>(undefined)
   const terrainMap = useMemo(() => {
     previousTerrain.current = terrainMapSnapshot(map, previousTerrain.current)
@@ -194,7 +203,7 @@ export function GameCanvas({
       }}
       camera={{ manual: true, position: [20, 20, 20], near: CAM_NEAR, far: CAM_FAR }}
     >
-      <color attach="background" args={[GAME_BACKGROUND]} />
+      <color attach="background" args={[background]} />
 
       {/*
         No cast shadows — separation between overlapping objects comes from the

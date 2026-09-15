@@ -341,7 +341,7 @@
 }
 
 /* Base UI chrome: the game uses the workspace's same controls and palette. */
-.game-hud:not(.person-editor) { --hud-space:20px; --hud-bar-height:48px; --hud-dock-width:264px; color:var(--chrome-text); }
+.game-hud:not(.person-editor) { --hud-space:10px; --hud-bar-height:32px; --hud-dock-width:264px; color:var(--chrome-text); }
 .hud-frame { display:none; }
 .game-hud :is(.hud-resource-bar,.hud-header-actions,.hud-clock,.hud-traffic,.hud-bottom-actions,.hud-well,.hud-menu,.hud-world,.hud-inspector,.hud-landing-setup),.loading-church {
  background:var(--chrome-surface); color:var(--chrome-text); border:0; border-radius:6px; box-shadow:none;
@@ -363,7 +363,7 @@
 .hud-header-actions { padding:7px; gap:6px; }
 .hud-header-button { width:32px; height:34px; }
 .hud-bottom-actions { padding:7px; gap:6px; }
-.hud-bottom-center { right:auto; max-width:calc(100% - var(--hud-dock-width) - 60px); }
+.hud-bottom-center { right:auto; max-width:calc(100% - var(--hud-dock-width) - var(--hud-space) * 3); }
 .hud-build-tray { width:240px; max-height:65dvh; padding:12px; overflow:auto; flex-direction:column; gap:8px; }
 .hud-build-heading { display:flex; align-items:center; justify-content:space-between; width:100%; padding:8px; font-size:13px; }
 .hud-build-content { width:100%; }
@@ -391,18 +391,15 @@
 .hud-help-meta,.game-hud-tooltip .hud-help-secondary { color:var(--chrome-muted); border-color:var(--chrome-line); }
 .hud-report.chrome-dialog { border-radius:6px; background:var(--chrome-surface); color:var(--chrome-text); }
 @media(max-width:900px) {
- .game-hud:not(.person-editor) { --hud-space:10px; --hud-dock-width:220px; }
+ .game-hud:not(.person-editor) { --hud-space:5px; --hud-dock-width:220px; }
  .hud-bottom-center { max-width:calc(100% - 20px); }
  .hud-build-tray { width:min(240px,calc(100vw - 20px)); }
  .hud-resources { gap:8px; padding:0 8px; }
  .hud-resources > :is(span,button) { font-size:12px; }
  .hud-header-actions { gap:3px; padding:6px; }
 }
-.game-hud .hud-time-controls { display:flex; flex-direction:column; gap:12px; flex-shrink:0; padding:0 12px 12px; pointer-events:auto; }
-.game-hud .hud-time-controls .hud-clock { position:static; height:auto; width:100%; padding:0; flex-direction:column; align-items:stretch; gap:8px; background:transparent; }
 .hud-clock-date,.hud-clock-playback { display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .hud-clock-date :is(.hud-day,.hud-date) { margin:0; font-size:12px; }
-.game-hud .hud-time-controls .hud-traffic { position:static; width:100%; height:auto; padding:0; background:transparent; }
 .game-hud .hud-traffic .chrome-tuner { gap:3px; }
 .game-hud .hud-traffic .chrome-tuner-label { font-size:10px; }
 .game-hud .hud-traffic .chrome-tuner-control { height:20px; }
@@ -432,8 +429,8 @@
  .hud-building-preview-art img { width:108px; height:98px; }
 }
 
-/* Selection stays above the left build action; the minimap owns playback only. */
-.game-hud .hud-selection-dock { position:absolute; left:var(--hud-space); bottom:calc(var(--hud-space) * 2 + 48px); width:300px; max-height:calc(100% - 176px); overflow:auto; pointer-events:auto; z-index:20; }
+/* Selection stays above the left build action. */
+.game-hud .hud-selection-dock { position:absolute; left:var(--hud-space); bottom:calc(var(--hud-space) * 2 + var(--hud-bar-height)); width:300px; max-height:calc(100% - 176px); overflow:auto; pointer-events:auto; z-index:20; }
 .game-hud .hud-selection-dock .hud-selection-name { font-size:24px; line-height:1.2; margin:8px 0; }
 .hud-party-members { display:flex; flex-direction:column; gap:4px; margin-top:12px; }
 .hud-party-members .chrome-nav-row > span { display:flex; flex-direction:column; gap:4px; }
@@ -469,3 +466,77 @@
  .game-hud .hud-party-heading > .hud-selection-name { font-size:20px; }
  .hud-inspector .hud-party-detail .hud-inspector-content { padding:12px; }
 }
+
+/* Player controls share the workspace list and tuner surfaces. */
+.game-hud .hud-traffic { top:var(--hud-space); left:50%; transform:translateX(-50%); width:216px; padding:0; }
+.game-hud .hud-traffic .chrome-tuner { width:100%; }
+.game-hud #build-menu-button { border:0; }
+.game-hud .hud-menu .chrome-nav-row { font-family:var(--font-geist),sans-serif; }
+.game-hud .hud-menu .hud-menu-child { padding-left:24px; }
+.game-hud .hud-clock-playback { justify-content:flex-start; padding:0; gap:0; min-height:var(--hud-bar-height); flex-shrink:0; background:var(--chrome-surface); border-radius:6px; pointer-events:auto; }
+.game-hud .hud-minimap .hud-clock-date { position:absolute; bottom:var(--hud-space); left:var(--hud-space); right:var(--hud-space); pointer-events:none; }
+.game-hud .hud-clock-date :is(.hud-day,.hud-date) { font-size:11px; line-height:1; margin:0; }
+@media(max-width:1024px) {
+ .game-hud .hud-header > .hud-header-right > .hud-clock-playback { grid-column:2; grid-row:2; justify-self:end; }
+}
+.hud-speed { min-width:48px; }
+.hud-sound-menu { width:280px; max-width:calc(100vw - 24px); max-height:var(--available-height); overflow:auto; padding:16px; border-radius:6px; background:var(--chrome-surface); color:var(--chrome-text); font-family:var(--font-geist),sans-serif; box-shadow:0 8px 30px #0003; }
+.hud-sound-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; font-size:18px; font-family:var(--font-unifraktur-cook),serif; }
+.hud-sound-row { display:flex; align-items:flex-end; gap:10px; padding:8px 0; }
+.hud-sound-row .chrome-tuner { flex:1; min-width:0; }
+.hud-sound-row .chrome-icon-button { flex-shrink:0; min-width:32px; min-height:32px; }
+@media(max-width:1200px) {
+ .game-hud .hud-traffic { top:calc(var(--hud-header-height) + var(--hud-space) * 2); }
+}
+@media(max-width:900px) {
+ .hud-sound-row .chrome-icon-button { min-width:44px; min-height:44px; }
+}
+
+
+/* The isometric overview floats over the world; its card appears on interaction. */
+.game-hud #minimap-dock { background:transparent; transition:background-color 160ms ease; }
+.game-hud #minimap-dock:is(:hover,:focus-within,:active) { background:var(--chrome-surface); }
+.game-hud .hud-minimap :is(.hud-day,.hud-date,.hud-minimap-north) { color:var(--chrome-text); text-shadow:0 1px 2px var(--chrome-surface),0 0 3px var(--chrome-surface); }
+@media(prefers-reduced-motion:reduce) {
+ .game-hud #minimap-dock { transition:none; }
+}
+
+
+/* One compact control height, with padding inside rows instead of around icons. */
+.game-hud :is(.hud-header-actions,.hud-bottom-actions) { height:var(--hud-bar-height); padding:0; gap:0; }
+.game-hud :is(.hud-header-button,.hud-header-actions > .chrome-icon-button,.hud-pause,.hud-close) { width:var(--hud-bar-height); height:var(--hud-bar-height); min-width:var(--hud-bar-height); min-height:var(--hud-bar-height); padding:0; border:0; }
+.game-hud :is(.hud-speed,.hud-bottom-actions .hud-action) { height:var(--hud-bar-height); min-height:var(--hud-bar-height); padding:0 8px; border:0; }
+.game-hud .hud-resources { min-height:var(--hud-bar-height); gap:12px; padding:0 8px; }
+.game-hud .hud-resources > :is(span,button) { min-height:var(--hud-bar-height); }
+.game-hud .hud-traffic { height:var(--hud-bar-height); gap:0; }
+.hud-traffic-icon { display:grid; place-items:center; width:var(--hud-bar-height); height:var(--hud-bar-height); flex-shrink:0; color:var(--chrome-muted); }
+.game-hud .hud-traffic .chrome-tuner-control { height:var(--hud-bar-height); }
+.game-hud .hud-traffic .chrome-tuner-track { border-radius:0 6px 6px 0; }
+.game-hud .hud-traffic .chrome-tuner-value { font-size:12px; right:8px; }
+.game-hud :is(.hud-world,.hud-header-actions .hud-menu,.hud-build-tray,.hud-inspector .hud-inspector-content) { padding:12px; }
+.game-hud :is(.hud-world-heading,.hud-build-heading) { min-height:32px; padding:0 0 8px; font-size:13px; }
+.game-hud .hud-menu :is(nav,nav > div),.game-hud .hud-building-tiles,.game-hud .hud-party-members { gap:2px; }
+.game-hud .hud-menu .chrome-nav-row { min-height:32px; padding:6px 8px; }
+.game-hud .hud-menu .hud-menu-child { padding-left:20px; }
+.game-hud .hud-switch-row { min-height:32px; padding-block:0; }
+.game-hud .hud-building-tiles .hud-building-tile { min-height:48px; padding:6px 8px; grid-template-columns:36px minmax(0,1fr); gap:0 8px; }
+.game-hud .hud-building-tiles .hud-building-tile img { width:36px; height:36px; }
+.game-hud .hud-building-label,.game-hud .hud-party-member-name { line-height:16px; }
+.game-hud .hud-building-cost,.game-hud .hud-party-members small { line-height:14px; }
+.game-hud .hud-party-members .chrome-nav-row { min-height:48px; padding:6px 8px; }
+.game-hud .hud-party-members .chrome-nav-row > span { gap:2px; }
+.game-hud .hud-party-roster { padding:12px; }
+.hud-sound-menu { padding:12px; }
+.hud-sound-heading { min-height:32px; margin-bottom:8px; }
+.hud-sound-row { gap:8px; padding:4px 0; }
+@media(max-width:1024px) {
+ .game-hud:not(.person-editor) { --hud-bar-height:40px; --hud-header-height:84px; }
+ .game-hud .hud-header { row-gap:4px; }
+ .game-hud .hud-menu .chrome-nav-row,.game-hud .hud-switch-row { min-height:40px; }
+ .game-hud .hud-world-heading button { min-width:40px; min-height:40px; }
+}
+@media(max-width:1024px) and (max-height:500px) {
+ .game-hud:not(.person-editor) { --hud-header-height:40px; }
+}
+
+.game-hud :is(.hud-header-actions,.hud-clock-playback,.hud-bottom-actions) svg { width:16px; height:16px; }
