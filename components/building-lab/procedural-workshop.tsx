@@ -27,7 +27,7 @@ function saveFile(blob: Blob, name: string) {
 }
 
 /** The primary building workflow uses the same deterministic model as the game.
- * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — Building workshop — procedural (214-0)
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/930-0 — Buildings
  */
 export function ProceduralWorkshop({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const [recipe, setRecipe] = useState<BuildingRecipe>({...earlyBuildingRecipe("tavern"),layoutSeed:18})

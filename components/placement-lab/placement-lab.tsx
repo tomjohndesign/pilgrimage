@@ -22,7 +22,9 @@ const LIMIT_FIELD = RULE_FIELDS.find(field => field.key === "levellingLimit")!
 const VIEW_NAMES = ["North-east", "North-west", "South-west", "South-east"]
 
 /** Hillside placement study: the real purchase rules with a tunable levelling limit,
- * on a generated slope, so grading can be watched building by building. */
+ * on a generated slope, so grading can be watched building by building.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/9LH-0 — Building placement
+ */
 export function PlacementLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const [controlsOpen, setControlsOpen] = useState(false)
   const [settings, setSettings] = useState<PlacementLabSettings>(DEFAULT_PLACEMENT_LAB)

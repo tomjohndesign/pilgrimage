@@ -13,7 +13,7 @@ const TownScene = dynamic(() => import("./town-scene").then(module => module.Tow
 
 /**
  * A staged village using the shared path policy, game buildings and distance-driven people.
- * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/6LV-0
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/9I8-0 — Village journeys
  */
 export function TownLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const [controlsOpen, setControlsOpen] = useState(false)

@@ -8,6 +8,9 @@ export const metadata: Metadata = {
   description: "Release history for Pilgrimage, a medieval settlement builder.",
 }
 
+/** Release history in the shared reading workspace.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/ABB-0 — Changelog
+ */
 export default function ChangelogPage() {
   return (
     <WorkspaceDocument page="changelog" title="Changelog" version={CURRENT_VERSION}>

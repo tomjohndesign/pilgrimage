@@ -234,6 +234,7 @@ function Legend({ items }: { items: Legend[] }) {
 /**
  * One figure carried through every stage of the sprite bake, rendered live by the
  * same modules the exporter uses: rig, camera, lighting, ink, depth and shadow.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/A3C-0 — Sprite pipeline
  */
 export function SpritePipeline({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const saved = usePersonDesignStore(state => state.design)

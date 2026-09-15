@@ -42,7 +42,8 @@ import { ASSET_ZOOMS, useAssetPreviewStore, usePreviewWheel } from "./asset-prev
 const DIRECTIONS = BASE_PERSON.directions
 
 /** Animals use the shared playground frame, controls and direction dock.
- * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — Shared asset editor
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/8X4-0 — Animals
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/AEA-0 — Animals · sound mix
  */
 export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const search = useSearchParams()

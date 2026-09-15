@@ -77,7 +77,9 @@ function MapCard({ map, overlay }: { map: Preview; overlay: boolean }) {
 }
 
 /** Seed-selected woodland previews in the existing asset playground, using its shared
- * controls and the game's minimap palette. No playable world is instantiated. */
+ * controls and the game's minimap palette. No playable world is instantiated.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/9BY-0 — Maps
+ */
 export function MapLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const [controlsOpen, setControlsOpen] = useState(false)
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)

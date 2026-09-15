@@ -73,7 +73,11 @@ function NumericField({
   </div>
 }
 
-/** Game balance editor. Apply atomically; retain unsaved edits when another tab applies a preset. */
+/** Game balance editor. Apply atomically; retain unsaved edits when another tab applies a preset.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/9S7-0 — Game tuning
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/AQY-0 — Game tuning · buildings
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/B2W-0 — Mobile · game tuning
+ */
 export function BalanceEditor({ mode, onModeChange }: AssetEditorNavigation & { active?: boolean }) {
   const [building, setBuilding] = useState(BUILD_CATALOG.find(def => !def.retired)!.id)
   const balance = useBalanceStore((s) => s.balance)

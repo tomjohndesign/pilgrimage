@@ -13,6 +13,9 @@ const heading = "mb-3 mt-10 font-display text-xl text-ink"
 const table =
   "w-full text-left text-sm [&_th]:border-b [&_th]:border-rule [&_th]:p-2 [&_td]:border-b [&_td]:border-rule/40 [&_td]:p-2"
 
+/** Shipped game rules in the shared reading workspace.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/A8V-0 — Game specifications
+ */
 export default function GameSpecsPage() {
   return (
     <WorkspaceDocument page="specs" title="Game specifications">

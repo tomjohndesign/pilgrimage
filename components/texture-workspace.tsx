@@ -7,6 +7,9 @@ import { CharacterTextures } from "./character-textures"
 import { EnvironmentGallery } from "./environment-lab/environment-gallery"
 import { WaterSourceGallery } from "./environment-lab/water-source-gallery"
 
+/** Texture catalogue using the shared workspace sections.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/9YC-0 — Textures
+ */
 export function TextureWorkspace({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   useEffect(() => { if (active && window.location.hash === "#trees") { window.history.replaceState(null, "", window.location.href.split("#")[0]); onModeChange("trees") } }, [active, onModeChange])
   return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Texture catalogue" version="" status="Game assets" detail="Textures and sprite sheets">

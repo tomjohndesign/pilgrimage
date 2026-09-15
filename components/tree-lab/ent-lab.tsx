@@ -14,7 +14,7 @@ import { BASE_PERSON, type Point3 } from "@/lib/game/base-person/pose"
 import { clearFrameKeys, poseOffset, setPoseKey } from "@/lib/game/base-person/pose-edits"
 
 /** Ents use the existing shared playground, inspector, handles and animation dock.
- * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — Shared asset editor
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/97M-0 — Ents
  */
 export function EntLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const search = useSearchParams(), requested = search.get("species")

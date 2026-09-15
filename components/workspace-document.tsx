@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { AssetEditorContent, WorkspaceFrame } from "./asset-editor-frame"
 
-/** Reading uses the same workspace chrome, with navigation to document sections. */
+/** Reading uses the same workspace chrome, with navigation to document sections.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/A65-0 — Design document
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/A8V-0 — Game specifications
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/ABB-0 — Changelog
+ */
 export function WorkspaceDocument({ page, title, children, version }: { page: string; title: string; children: ReactNode; version?: string }) {
   const content = useRef<HTMLDivElement>(null)
   const [sections, setSections] = useState<{ id: string; title: string }[]>([])

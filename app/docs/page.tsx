@@ -14,6 +14,9 @@ export const metadata: Metadata = {
   description: "Game design document for Pilgrimage, a medieval settlement builder.",
 }
 
+/** Game design reference in the shared reading workspace.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/A65-0 — Design document
+ */
 export default function DesignDocumentPage() {
   return (
     <WorkspaceDocument page="docs" title="Design document">

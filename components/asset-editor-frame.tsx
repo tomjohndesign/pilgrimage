@@ -23,7 +23,9 @@ export type AssetEditorMode = PlaygroundTool
 export interface AssetEditorNavigation { mode: AssetEditorMode; onModeChange: (mode: AssetEditorMode) => void }
 
 /** Shared character-playground frame, controls drawer and asset switch.
- * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — Shared asset editor header, building workshop (214-0)
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/81D-0 — Characters
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/930-0 — Buildings
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/AY5-0 — Mobile · controls drawer
  */
 export function AssetEditorFrame({ mode, onModeChange, controlsOpen, onControlsToggle, roadHref = "/play", label, status, detail, children, onRandomize, randomizeDisabled }: AssetEditorNavigation & {
   onRandomize?: () => void; randomizeDisabled?: string;
@@ -76,7 +78,10 @@ export function AssetEditorContent({ toolbar, children }: { toolbar?: ReactNode;
 
 const CanvasControlsContext = createContext<HTMLDivElement | null>(null)
 
-/** Preview-specific controls join the same dock as directions and animation frames. */
+/** Preview-specific controls join the same dock as directions and animation frames.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/AM2-0 — Merchant journey · canvas dock
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/AUG-0 — Mobile · merchant journey
+ */
 export function AssetEditorCanvasControls({ children }: { children: ReactNode }) {
   const target = useContext(CanvasControlsContext)
   return target ? createPortal(children, target) : null

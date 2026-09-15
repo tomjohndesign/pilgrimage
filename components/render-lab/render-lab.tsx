@@ -56,7 +56,7 @@ function RenderPane({ index, method, character, frames, focus }: { index: number
 /**
  * Synchronized rendering experiments. Choices are recorded locally for review;
  * they do not change /play's renderer.
- * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — Pixel workshop, frame 1YV-0.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/9P4-0 — Rendering
  */
 export function RenderLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const [controlsOpen, setControlsOpen] = useState(false)

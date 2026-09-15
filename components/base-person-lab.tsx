@@ -110,7 +110,12 @@ function KnightEntourage({ mounted, row, frame, visibleFrame, variant, walking, 
 }
 
 /** Character proportions and editable animation poses.
- * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/81D-0 — Characters
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/8G4-0 — Characters · rig & animation
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/8PM-0 — Characters · sound mix
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/AM2-0 — Merchant journey · canvas dock
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/AUG-0 — Mobile · merchant journey
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/AY5-0 — Mobile · controls drawer
  */
 export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const [subject, setSubject] = useState<Subject>("person")

@@ -24,6 +24,9 @@ function randomSeed(): number {
   return Math.floor(Math.random() * 2 ** 31)
 }
 
+/** Tree foliage controls and previews in the shared playground.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/9VE-0 — Trees
+ */
 export function TreeLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const [controlsOpen, setControlsOpen] = useState(false)
   const [preview, setPreview] = useState("species")
