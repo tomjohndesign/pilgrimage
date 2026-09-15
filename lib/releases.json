@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "b8c5a6c10e670fe5fa4f0273382d11c07adb6043",
-  "releaseCount": 245,
+  "lastProcessedCommit": "a40b388da6c49b4339ba1ea58cad73c142157463",
+  "releaseCount": 246,
   "releases": [
+    {
+      "version": "0.0.260",
+      "title": "Release 0.0.260",
+      "summary": "Fix sprite depth ordering, scenery occlusion, and overlap borders (#280)",
+      "commit": "a40b388da6c49b4339ba1ea58cad73c142157463"
+    },
     {
       "version": "0.0.259",
       "title": "Release 0.0.259",
