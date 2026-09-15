@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "43252f5f15c2120ca033e8f18e2c804d3433856f",
-  "releaseCount": 249,
+  "lastProcessedCommit": "de7e154ffd2c0553a1b7a2bdecb942614b33a719",
+  "releaseCount": 250,
   "releases": [
+    {
+      "version": "0.0.264",
+      "title": "Release 0.0.264",
+      "summary": "Restore building progress bars above scenery and characters (#284)",
+      "commit": "de7e154ffd2c0553a1b7a2bdecb942614b33a719"
+    },
     {
       "version": "0.0.263",
       "title": "Release 0.0.263",
