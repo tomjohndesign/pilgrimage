@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "a40b388da6c49b4339ba1ea58cad73c142157463",
-  "releaseCount": 246,
+  "lastProcessedCommit": "b1e195e943a621833b5e74449d1c845df8684f82",
+  "releaseCount": 247,
   "releases": [
+    {
+      "version": "0.0.261",
+      "title": "Release 0.0.261",
+      "summary": "Tie ambient sounds to visible NPCs, animals and scenery (#281)",
+      "commit": "b1e195e943a621833b5e74449d1c845df8684f82"
+    },
     {
       "version": "0.0.260",
       "title": "Release 0.0.260",
