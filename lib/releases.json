@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "b1e195e943a621833b5e74449d1c845df8684f82",
-  "releaseCount": 247,
+  "lastProcessedCommit": "0c3dbf3d5388544246e11d3a51e898d424e301e0",
+  "releaseCount": 248,
   "releases": [
+    {
+      "version": "0.0.262",
+      "title": "Release 0.0.262",
+      "summary": "Align roads to path tiles and move roadside placements clear (#282)",
+      "commit": "0c3dbf3d5388544246e11d3a51e898d424e301e0"
+    },
     {
       "version": "0.0.261",
       "title": "Release 0.0.261",
