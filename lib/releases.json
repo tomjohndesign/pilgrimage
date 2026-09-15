@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "de7e154ffd2c0553a1b7a2bdecb942614b33a719",
-  "releaseCount": 250,
+  "lastProcessedCommit": "0c14beaf43f51540e191b2655b0b13ebd258bf83",
+  "releaseCount": 251,
   "releases": [
+    {
+      "version": "0.0.265",
+      "title": "Release 0.0.265",
+      "summary": "Unify app chrome and isometric asset staging with Base UI (#285)",
+      "commit": "0c14beaf43f51540e191b2655b0b13ebd258bf83"
+    },
     {
       "version": "0.0.264",
       "title": "Release 0.0.264",
