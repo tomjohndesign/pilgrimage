@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "4cb62f452cdd2750332d8cc2851e2cd387aa4b95",
-  "releaseCount": 255,
+  "lastProcessedCommit": "637ede9e94b0ba38a84d3b556e8e07433eca4075",
+  "releaseCount": 256,
   "releases": [
+    {
+      "version": "0.0.270",
+      "title": "Release 0.0.270",
+      "summary": "Fix home page theming and interactive chapel preview (#290)",
+      "commit": "637ede9e94b0ba38a84d3b556e8e07433eca4075"
+    },
     {
       "version": "0.0.269",
       "title": "Release 0.0.269",
