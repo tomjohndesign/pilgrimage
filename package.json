@@ -24,7 +24,8 @@
     "assets:check-base": "node scripts/check-base-person.mjs",
     "assets:population": "node scripts/export-population.mjs",
     "assets:check-population": "node scripts/check-population.mjs",
-    "assets:transport": "node scripts/export-transport.mjs"
+    "assets:transport": "node scripts/export-transport.mjs",
+    "assets:icons": "node scripts/export-icons.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

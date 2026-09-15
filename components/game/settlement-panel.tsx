@@ -1,6 +1,7 @@
 "use client"
 
 import { ChromeButton } from "@/components/ui/chrome-controls"
+import { GameIcon } from "./game-icon"
 import Link from "next/link"
 import type { useSettlement } from "@/hooks/use-settlement"
 import { useCameraStore } from "@/lib/game/camera-store"
@@ -48,7 +49,7 @@ export function SettlementPanel({
   return (
     <section className="hud-inspector-content text-ink">
       <div className="flex items-center justify-between">
-        <h2 className="font-display text-xs uppercase tracking-[2px]">Shrine</h2>
+        <h2 className="flex items-center gap-1 font-display text-xs uppercase tracking-[2px]"><GameIcon name="faith" />Shrine</h2>
         <Link
           href="/tuning"
           target="_blank"
@@ -70,7 +71,7 @@ export function SettlementPanel({
       <div className="my-3 grid grid-cols-2 gap-2">
         {(["gold", "wood"] as const).map((resource) => (
           <div key={resource} className="rounded border border-rule bg-parchment-dark px-2 py-1.5">
-            <div className="text-[11px] capitalize text-ink-light">{resource}</div>
+            <div className="flex items-center gap-1 text-[11px] capitalize text-ink-light"><GameIcon name={resource} />{resource}</div>
             <div className="font-display text-lg tabular-nums">
               {settlement.resources[resource]}
             </div>
@@ -89,7 +90,7 @@ export function SettlementPanel({
         {(["people", "monks"] as const).map(kind => {
           const housing = economy.housing![kind]
           return <div key={kind} className="rounded border border-rule bg-parchment-dark px-2 py-1.5">
-            <div className="text-[11px] capitalize text-ink-light">{kind}</div>
+            <div className="flex items-center gap-1 text-[11px] capitalize text-ink-light"><GameIcon name={kind === "people" ? "population" : "faith"} />{kind}</div>
             <div className="font-display text-lg tabular-nums">{housing.occupied} / {housing.capacity}</div>
             <div className="text-[10px] text-ink-light">{housing.available} spaces available</div>
           </div>
@@ -98,7 +99,7 @@ export function SettlementPanel({
       <p className="mb-3 text-[11px] text-ink-light">Complete houses for settlers and residences against the completed church for monks. The chapel supports 4 monks; upgrading it to a church supports 8. Visiting monks may join when both a place and a bed are free.</p>
       <details>
         <summary className="cursor-pointer text-xs">
-          <span className="font-display">{renown.total} renown</span> · {tier.label}
+          <GameIcon name="renown" size={16} /> <span className="font-display">{renown.total} renown</span> · {tier.label}
         </summary>
         <dl className="mt-2 space-y-1 text-[11px]">
           {(["buildings", "individuals", "scenery", "relics", "visits", "granted"] as const).filter(source => source !== "granted" || renown.granted > 0).map((source) => (

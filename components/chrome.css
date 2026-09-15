@@ -152,6 +152,9 @@ body > main { isolation:isolate; }
 .chrome-empty-selection:has(.chrome-staging-map) { display:block; overflow:hidden; }
 .chrome-empty-selection:has(.chrome-staging-map) .chrome-select-prompt { display:none; }
 .chrome-entity-overview,.chrome-staging-map { width:100%; height:100%; }
+.chrome-empty-selection:has(.chrome-catalogue-overview) { display:block; background:var(--chrome-surface); color:var(--chrome-text); }
+.chrome-empty-selection:has(.chrome-catalogue-overview) .chrome-select-prompt { display:none; }
+.chrome-catalogue-overview { width:100%; height:100%; overflow:auto; }
 .chrome-staging-map { position:relative; }
 .chrome-staging-map canvas { touch-action:none; cursor:grab; }
 .chrome-staging-map canvas:active { cursor:grabbing; }
@@ -200,3 +203,10 @@ html[data-scrolling], body [data-scrolling="true"], :root body :is(.chrome-works
 .chrome-header-controls label:has([role="checkbox"]) { display:flex; align-items:center; gap:8px; font-size:12px; }
 
 .chrome-map-caption,.chrome-map-caption .text-ink-light,.chrome-map-readout { color:#f2e8d5; }
+
+/* Both native PNGs are ready before a theme toggle, including before hydration. */
+.game-themed-icon { display:inline-block; flex-shrink:0; vertical-align:middle; }
+.game-themed-icon > img { display:block; image-rendering:pixelated; }
+.game-themed-icon > img[data-icon-theme="light"] { display:none; }
+:root[data-theme="light"] .game-themed-icon > img[data-icon-theme="dark"] { display:none; }
+:root[data-theme="light"] .game-themed-icon > img[data-icon-theme="light"] { display:block; }
