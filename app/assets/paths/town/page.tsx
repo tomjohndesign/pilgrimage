@@ -1,4 +1,9 @@
-import type { Metadata } from "next"
-import { TownLab } from "@/components/path-lab/town-lab"
-export const metadata: Metadata = { title: "Pilgrimage — A village finds its paths", description: "A staged village with working residents and roads emerging from daily journeys." }
-export default function TownPathsPage() { return <TownLab /> }
+import { redirect } from "next/navigation"
+import { legacyPlaygroundHref } from "@/lib/asset-playground"
+
+/** Preserve bookmarks and shared settings in the unified playground. */
+export default async function LegacyToolPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  redirect(legacyPlaygroundHref(await searchParams, "town"))
+}

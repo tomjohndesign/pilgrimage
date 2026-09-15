@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowUpRight, Check, Pause, Play, RotateCcw, X } from "lucide-react"
 import { ASSET_ZOOMS, useAssetPreviewStore, usePreviewWheel } from "./asset-preview-controls"
-import { AssetEditorFrame, type AssetEditorNavigation } from "./asset-editor-frame"
+import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "./asset-editor-frame"
 import { characterSoundIdentity } from "@/lib/game/character-sound-identity"
 import { SpriteSelectionPreview } from "./sprite-selection-preview"
 import { playCharacterSound, stopCharacterSound } from "@/lib/game/character-audio"
@@ -12,7 +12,7 @@ import type { TravelerTypeId } from "@/lib/game/travelers"
 import { CharacterAudioEditor } from "./character-audio-editor"
 import { SceneAudioLifecycle } from "./scene-audio-lifecycle"
 import { characterSoundsJson, useCharacterSoundStore } from "@/lib/game/character-sound-store"
-import { Section, Tuner } from "@/components/game/property-controls"
+import { Tuner } from "@/components/game/property-controls"
 import "./game/game-hud.css"
 import "./base-person-lab.css"
 import { actionPlaybackRate } from "@/lib/game/base-person/activity"
@@ -318,6 +318,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   }
   const [bakeProgress, setBakeProgress] = useState<BakeProgress | null>(null)
   useEffect(() => {
+    if (!active) return
     setBusy(true)
     const target = window as unknown as { __basePersonBake?: BasePersonBake }
     delete target.__basePersonBake
@@ -333,9 +334,9 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
       }, e => { setError(e instanceof Error ? e.message : "The base sprite could not render."); setBusy(false); setBakeProgress(null) })
     }, 180)
     return () => { clearTimeout(timer); job?.cancel(); delete target.__basePersonBake }
-  }, [design, dragging, isPerson])
+  }, [active, design, dragging, isPerson])
   useEffect(() => {
-    if (sheetMatchesDesign || !isPerson) return
+    if (!active || sheetMatchesDesign || !isPerson) return
     // Coalesce inputs into a paint, without waiting for the user to stop dragging; a drag refreshes only the facing on screen.
     const request = requestAnimationFrame(() => {
       try {
@@ -344,7 +345,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
       } catch (e) { setError(e instanceof Error ? e.message : "The preview could not render.") }
     })
     return () => cancelAnimationFrame(request)
-  }, [design, clip, frame, sides, sheetMatchesDesign, isPerson, dragging, row])
+  }, [active, design, clip, frame, sides, sheetMatchesDesign, isPerson, dragging, row])
   useEffect(() => {
     if (!active || !playing || frameCount === 1 || onMap) return
     const timer = setInterval(() => setFrame((f) => subject === "knight" || (subject === "cart" && shopState !== "opening" && shopState !== "packing") ? f + 1 : (f + 1) % frameCount), 1000 / (fps * animationRate))
@@ -375,7 +376,6 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     download(url, `base-person-v${BASE_PERSON.version}.json`); setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
   const [previewSelected, setPreviewSelected] = useState(false)
   useEffect(() => { setPreviewSelected(false) }, [character, subject, design.bodyType, active])
   const [editorTab, setEditorTab] = useState<"appearance" | "sounds">("appearance")
@@ -393,8 +393,6 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   const [scrubbingViews, setScrubbingViews] = useState(false)
   usePreviewWheel(stageRef, view === "character")
   const fittedZoom = zoom
-  const section = (title: string, defaultOpen = true) => ({ title, open: openSections[title] ?? defaultOpen,
-    onToggle: () => setOpenSections(s => ({ ...s, [title]: !(s[title] ?? defaultOpen) })) })
   const controls = (keys: DesignKey[]) => keys.map(key => {
     const control = DESIGN_CONTROLS[key]
     return <Tuner key={key} label={control.label} labelClassName="w-28" value={design[key]}
@@ -410,14 +408,13 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     status={onMap ? "Merchant journey and turning simulations · game scale" : !isPerson ? `${subject === "horse" ? transportMetadata.animalProfiles[horseVariant].label : SUBJECTS[subject]} · ${clipLabel}` : dragging ? "Live preview · release to finish sprite sheets." : busy ? bakeProgress ? `Updating sprite sheets · ${Math.round(bakeProgress.done / bakeProgress.total * 100)}%` : "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}
     detail={onMap ? "8 camera angles · game scale" : `${subject === "cart" ? CART.directions : 8} directions · ${Number((fps * animationRate).toFixed(1))} fps`}>
     <SceneAudioLifecycle active={active} />
-    <div className="person-workspace">
-      <aside className={`person-controls hud-well ${controlsOpen ? "is-open" : ""}`} aria-label="Character controls">
-        <div className="person-panel-heading"><label className="person-choice">Asset<select aria-label="Character asset" value={subject} onChange={e => { setSubject(e.target.value as Subject); setFrame(0); setClip("walk") }}>{Object.entries(SUBJECTS).filter(([id]) => id === "person" || id === "cart" || id === "knight").map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><button className="hud-close person-controls-toggle" aria-label="Close character controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
-        {(isPerson || isKnight || subject === "cart") && <div className="person-panel-heading person-presets" role="group" aria-label="Character editing mode">
+    <AssetEditorWorkspace title="Character" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
+      controlsHeading={<label className="person-choice">Asset<select aria-label="Character asset" value={subject} onChange={e => { setSubject(e.target.value as Subject); setFrame(0); setClip("walk") }}>{Object.entries(SUBJECTS).filter(([id]) => id === "person" || id === "cart" || id === "knight").map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>}
+      controlsHeader={<>{(isPerson || isKnight || subject === "cart") && <div className="person-panel-heading playground-view-tabs" role="group" aria-label="Character editing mode">
           <button className={button} aria-pressed={editorTab==='sounds'} onClick={()=>setEditorTab('sounds')}>Sounds</button>
           <button className={button} aria-pressed={editorTab==='appearance'} onClick={()=>setEditorTab('appearance')}>Appearance</button>
         </div>}
-          {isPerson && <div className="person-panel-heading" style={{display:"block"}}>
+{isPerson && <div className="person-panel-heading" style={{display:"block"}}>
             <label className="person-choice">Character<select aria-label="Preview character" value={character} onChange={e=>{
               const id=e.target.value
               const entry=[...ROAD_DESIGNS,...JOB_DESIGNS].find(d=>d.id===id)
@@ -430,19 +427,17 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
               <optgroup label="Settlement jobs">{JOB_DESIGNS.map(entry=><option key={entry.id} value={entry.id}>{entry.label}</option>)}</optgroup>
             </select></label>
             {editorTab==='sounds'&&<label className="person-choice">Body voice<select aria-label="Sound body voice" value={design.bodyType} disabled={soundProfile==='friar'||soundProfile==='nun'} onChange={e=>setDesign(d=>withBodyType(d,e.target.value as PersonDesign['bodyType']))}><option>Male</option><option>Female</option></select></label>}
-          </div>}
-        <div className="person-controls-scroll">
-
-          {(isPerson || isKnight || subject === "cart") && editorTab==='sounds' && <CharacterAudioEditor profile={subject === "cart" ? "vehicle/cart" : soundProfile} bodyType={isKnight ? "Male" : design.bodyType} voiceVariant={voiceVariant} previewZoom={zoom} clip={isKnight ? mountedKnight ? "mounted" : knightClip : clip} frame={frame} frames={frameCount} playing={playing} active={active && !onMap} selected={previewSelected} onSelect={() => { setPreviewSelected(true); setView("character") }} onDeselect={clearPreviewSelection} onPreviewClip={next=>{setClip(next);setFrame(0)}}/>}
-          {(editorTab==='appearance' || (!isPerson && !isKnight && subject !== "cart")) && (isPerson ? <>
-          <Section {...section("Body")}>
+          </div>}</>}
+      controls={<>{(isPerson || isKnight || subject === "cart") && editorTab==='sounds' && <AssetEditorSection title="Sounds"><CharacterAudioEditor profile={subject === "cart" ? "vehicle/cart" : soundProfile} bodyType={isKnight ? "Male" : design.bodyType} voiceVariant={voiceVariant} previewZoom={zoom} clip={isKnight ? mountedKnight ? "mounted" : knightClip : clip} frame={frame} frames={frameCount} playing={playing} active={active && !onMap} selected={previewSelected} onSelect={() => { setPreviewSelected(true); setView("character") }} onDeselect={clearPreviewSelection} onPreviewClip={next=>{setClip(next);setFrame(0)}}/></AssetEditorSection>}
+{(editorTab==='appearance' || (!isPerson && !isKnight && subject !== "cart")) && (isPerson ? <>
+          <AssetEditorSection title="Body">
             <label className="person-choice">Body type<select aria-label="Body type" value={design.bodyType} onChange={event => { const bodyType = event.currentTarget.value as PersonDesign["bodyType"]; setDesign(d => withBodyType(d, bodyType)); setMessage("") }}><option>Male</option><option>Female</option></select></label>
             {controls(["head", "build", "torsoHeight", "neckHeight", "legs"])}
-          </Section>
-          <Section {...section("Arms")}>
+          </AssetEditorSection>
+          <AssetEditorSection title="Body">
             {controls(["shoulderHeight", "armSpacing", "upperArm", "forearm", "armAngle", "elbowBend", "armSwing", "hands", "sleeves"])}
-          </Section>
-          <Section {...section("Clothing")}>
+          </AssetEditorSection>
+          <AssetEditorSection title="Outfit">
             <label className="person-choice">Garment<select aria-label="Garment" value={design.garment} onChange={event => { const garment = event.currentTarget.value as PersonDesign["garment"]; setDesign(d => ({ ...d, garment })); setMessage("") }}><option>Everyday</option><option>Robe</option></select></label>
             <label className="person-choice">Belt<select aria-label="Belt" value={design.beltStyle} onChange={event => { const beltStyle = event.currentTarget.value as PersonDesign["beltStyle"]; setDesign(d => ({ ...d, beltStyle })); setMessage("") }}><option>Leather</option><option>Rope</option></select></label>
             <label className="person-choice">Tunic style<select aria-label="Tunic style" value={design.tunicStyle} onChange={event => { const tunicStyle = event.currentTarget.value as PersonDesign["tunicStyle"]; setDesign(d => ({ ...d, tunicStyle })); setMessage("") }}>{TUNIC_STYLES.map(style => <option key={style}>{style}</option>)}</select></label>
@@ -451,36 +446,36 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
             <p className="person-hint">{design.garment === "Robe" ? "Ankle-length robe with full sleeves." : design.bodyType === "Female" ? "Sleeveless ankle-length dress over a long-sleeved shirt." : "Hip-length shirt with loose sleeves and trousers."}</p>
             <label className="person-choice">Clothing color<input type="color" aria-label="Clothing color" value={design.tunicColor} onChange={event => { const tunicColor = event.currentTarget.value; setDesign(d => ({ ...d, tunicColor })); setMessage("") }} /></label>
             {(design.bodyType === "Female" ? [["shirtColor", "Undershirt color"], ["coveringColor", "Head covering color"]] as const : [["trouserColor", "Trouser color"]] as const).map(([key, label]) => <label key={key} className="person-choice">{label}<input type="color" aria-label={label} value={design[key]} onChange={event => { const value = event.currentTarget.value; setDesign(d => ({ ...d, [key]: value })); setMessage("") }} /></label>)}
-          </Section>
-          <Section {...section("Road accessories")}>
+          </AssetEditorSection>
+          <AssetEditorSection title="Outfit">
             <label className="person-choice">Hat<select aria-label="Hat" value={design.hat} onChange={event => { const hat = event.currentTarget.value as PersonDesign["hat"]; setDesign(d => ({ ...d, hat })); setMessage("") }}>{HAT_STYLES.map(style => <option key={style}>{style}</option>)}</select></label>
             <label className="person-choice">Hand tool<select aria-label="Hand tool" value={design.handTool} onChange={event => { const handTool = event.target.value as PersonDesign["handTool"]; setDesign(d => validatePersonDesign({ ...d, handTool })) }}>{HAND_TOOLS.map(tool => <option key={tool}>{tool}</option>)}</select></label>
             {([["satchel", "Satchel"], ["walkingStick", "Walking staff"], ["lute", "Lute"]] as const).map(([key, label]) => <label key={key} className="person-check"><input aria-label={label} type="checkbox" checked={design[key]} onChange={event => { const value = event.currentTarget.checked; setDesign(d => ({ ...d, [key]: value })); setMessage("") }} />{label}</label>)}
             <p className="person-hint">Road equipment is worn while walking or idle. Other activities free the hands and set bags and instruments aside.</p>
-          </Section>
-          <Section {...section("Feet")}>
+          </AssetEditorSection>
+          <AssetEditorSection title="Body">
             {controls(["feet", "footWidth", "footHeight"])}
-          </Section>
-          <Section {...section("Appearance")}>
+          </AssetEditorSection>
+          <AssetEditorSection title="Appearance">
             {([["skinColor", "Skin color"], ["hairColor", "Hair color"]] as const).map(([key, label]) => <label key={key} className="person-choice">{label}<input type="color" aria-label={label} value={design[key]} onChange={event => { const value = event.currentTarget.value; setDesign(d => ({ ...d, [key]: value })); setMessage("") }} /></label>)}
             <label className="person-choice">Hair style<select aria-label="Hair style" value={design.hairStyle} onChange={event => { const hairStyle = event.currentTarget.value as PersonDesign["hairStyle"]; setDesign(d => ({ ...d, hairStyle })); setMessage("") }}>{HAIR_STYLES.map(style => <option key={style}>{style}</option>)}</select></label>
             <label className="person-check"><input aria-label="Short beard" disabled={design.bodyType === "Female"} type="checkbox" checked={design.beard} onChange={event => { const beard = event.currentTarget.checked; setDesign(d => ({ ...d, beard })); setMessage("") }} />Short beard</label>
             {controls(["shadow", "ink"])}
-          </Section>
-          <Section {...section("Walking")}>
+          </AssetEditorSection>
+          <AssetEditorSection title="Walking">
             <label className="person-choice">Walk style<select aria-label="Walk style" value={design.walkStyle} onChange={event => { const walkStyle = event.currentTarget.value as PersonDesign["walkStyle"]; setDesign(d => ({ ...d, walkStyle })); setMessage("") }}><option>Natural</option><option>Devotional</option></select></label>
             {controls(["stride"])}
             <Tuner label="Walk timing" labelClassName="w-28" value={fps} min={1} max={24} display={`${fps} fps`} onChange={setFps} />
-          </Section>
-          <Section {...section("Inspection")}>
+          </AssetEditorSection>
+          <AssetEditorSection title="Inspect">
             <label className="person-check"><input type="checkbox" checked={onion} onChange={e => setOnion(e.target.checked)} />Previous frame ghost</label>
             <label className="person-check"><input type="checkbox" checked={sides} onChange={e => setSides(e.target.checked)} />Track left / right</label>
             <label className="person-check"><input type="checkbox" checked={guides} onChange={e => setGuides(e.target.checked)} />Attachment guides</label>
             <div className="person-palette">{renderPalette.map((color, index) => <span key={`${index}-${color}`} title={color} style={{ background: color }} />)}</div>
             <p className="person-hint">{pixels} × {pixels} px cell · {renderPalette.length} colours<br />{sheetMatchesDesign ? `${bake.metadata.safePadding} px safe margin` : "Checking margins…"}</p>
             <Link className={button} href="/assets/characters/pipeline">How this sprite is baked <ArrowUpRight size={12} /></Link>
-          </Section>
-          <Section {...section("Files", false)}>
+          </AssetEditorSection>
+          <AssetEditorSection title="Files">
             <div className="person-file-actions">
               <button className={button} onClick={() => openJson()}>Copy / paste JSON</button>
               <button className={button} onClick={() => { const url = URL.createObjectURL(new Blob([JSON.stringify({ ...design, templateVersion: BASE_PERSON.version }, null, 2) + "\n"], { type: "application/json" })); download(url, `person-design-v${BASE_PERSON.version}.json`); setTimeout(() => URL.revokeObjectURL(url), 1000) }}>Download parameters</button>
@@ -497,57 +492,58 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
               <button className={button} disabled={!ready} onClick={() => bake && download(bake.shadowWalk, `base-person-v${BASE_PERSON.version}-shadow-walk.png`)}>Download walk shadows</button>
               <button className={button} disabled={!ready} onClick={() => download(url, `base-person-v${BASE_PERSON.version}-${clip}.png`)}>Download selected pose sheet</button>
               <button className={button} disabled={!ready} onClick={jsonDownload}>Download attachment data</button>
-              <Link className={button} href="/assets/characters/callings">Earlier character drafts <ArrowUpRight size={12} /></Link>
             </div>
-          </Section>
+          </AssetEditorSection>
           </> : <>
-            {isKnight && <Section {...section("Knight")}>
+            {isKnight && <AssetEditorSection title="Knight">
               <label className="person-choice">Pose<select aria-label="Knight pose" value={mountedKnight ? "mounted" : "foot"} onChange={e => { setMountedKnight(e.target.value === "mounted"); setFrame(0); setClip("walk") }}><option value="mounted">Mounted</option><option value="foot">On foot</option></select></label>
               <label className="person-choice">Build<select aria-label="Knight build" value={knightVariant} onChange={e => { setKnightVariant(Number(e.target.value)); setFrame(0) }}>{["Regular", "Tall", "Broad"].map((label, variant) => <option key={label} value={variant}>{label}</option>)}</select></label>
               <label className="person-check"><input type="checkbox" checked={showSquire} onChange={e => setShowSquire(e.target.checked)} />Following squire</label>
               <p className="person-hint">Mail armour and a nasal helmet, riding a noble horse. Knights dismount outside the shrine; the squire carries a shield, rolled cloak and supplies, and waits with the horse.</p>
-            </Section>}
-            {subject === "horse" && <Section {...section("Horse")}>
+            </AssetEditorSection>}
+            {subject === "horse" && <AssetEditorSection title="Horse">
               <label className="person-choice">Variant<select aria-label="Horse variant" value={horseVariant} onChange={e => { setHorseVariant(e.target.value as HorseVariant); setFrame(0) }}><option value="common">Common horse</option><option value="noble">Noble horse</option></select></label>
               <p className="person-hint">{horseVariant === "noble" ? "Deep chest, strong haunches and a proud carriage. A powerful, deliberate walk." : "Lean, worn and lower-headed, with a measured, weary walk."}</p>
-            </Section>}
+            </AssetEditorSection>}
             {subject === "donkey" && <p className="person-hint">A slightly stooped head and a slow, weighty plod.</p>}
-            {animalKind && (!isKnight || mountedKnight) && <Section {...section("Coat")}><label className="person-choice">Natural coat<select aria-label="Animal coat" value={animalCoat(animalKind, coat).id} onChange={e => setCoat(e.target.value)}>{COATS[animalKind].map(value => <option key={value.id} value={value.id}>{value.label}</option>)}</select></label>
+            {animalKind && (!isKnight || mountedKnight) && <AssetEditorSection title="Coat"><label className="person-choice">Natural coat<select aria-label="Animal coat" value={animalCoat(animalKind, coat).id} onChange={e => setCoat(e.target.value)}>{COATS[animalKind].map(value => <option key={value.id} value={value.id}>{value.label}</option>)}</select></label>
               {subject !== "cart" && !isKnight && <label className="person-check"><input type="checkbox" checked={grazing} onChange={e => { setGrazing(e.target.checked); setFrame(0) }} />Grazing</label>}
-            </Section>}
-            {subject === "cart" && <Section {...section("Cart")}>
+            </AssetEditorSection>}
+            {subject === "cart" && <AssetEditorSection title="Cart">
               <label className="person-choice">Offering<select aria-label="Offering" value={cargo} onChange={e => { setCargo(e.target.value as Cargo); setFrame(0) }}>{CARGO.map(value => <option key={value}>{value}</option>)}</select></label>
               <label className="person-choice">Puller<select aria-label="Cart puller" value={cartPuller} onChange={e => { setCartPuller(e.target.value as Puller); setFrame(0) }}><option value="hand">Person</option><option value="donkey">Donkey</option><option value="horse">Horse</option></select></label>
               {cartPuller === "horse" && <label className="person-choice">Horse<select aria-label="Cart horse variant" value={horseVariant} onChange={e => setHorseVariant(e.target.value as HorseVariant)}><option value="common">Common</option><option value="noble">Noble</option></select></label>}
               <label className="person-choice" style={onMap ? { display: "none" } : undefined}>Setup<select aria-label="Cart setup" value={shopState} onChange={e => { setShopState(e.target.value as ShopState); setFrame(0) }}><option value="travel">Travelling</option><option value="opening">Opening shop</option><option value="trading">Open for business</option><option value="packing">Packing up</option></select></label>
               <p className="person-hint">Choose a merchant journey or turning scenario below the map. Compare turn radii, pause and scrub the motion, or follow the hitch and axle trails at game scale.</p>
-            </Section>}
-            {!onMap && <Section {...section("Animation")}><Tuner label="Timing" labelClassName="w-28" value={fps} min={1} max={24} display={`${(fps * animationRate).toFixed(1)} fps`} onChange={setFps} /></Section>}
-            <Section {...section("Files")}><div className="person-file-actions">
+            </AssetEditorSection>}
+            {!onMap && <AssetEditorSection title="Animation"><Tuner label="Timing" labelClassName="w-28" value={fps} min={1} max={24} display={`${(fps * animationRate).toFixed(1)} fps`} onChange={setFps} /></AssetEditorSection>}
+            <AssetEditorSection title="Files"><div className="person-file-actions">
               <a className={button} href={url} download>Download sprite sheet</a>
               <a className={button} href={isKnight ? `/textures/knights/${KNIGHT.version}/manifest.json` : `/textures/transport/${subject === "cart" ? TRANSPORT.version : PARTY_TRANSPORT_VERSION}/manifest.json`} download>Download sheet metadata</a>
-            </div><p className="person-hint">{pixels} × {pixels} px cell · {subject === "cart" ? CART.directions : 8} directions<br />{isKnight ? mountedKnight ? knightMetadata.safePadding : 4 : transportMetadata.safePadding} px safe margin</p></Section>
-          </>)}
-        </div>
-        {isPerson && editorTab==='appearance' && <footer className="person-panel-footer">
+            </div><p className="person-hint">{pixels} × {pixels} px cell · {subject === "cart" ? CART.directions : 8} directions<br />{isKnight ? mountedKnight ? knightMetadata.safePadding : 4 : transportMetadata.safePadding} px safe margin</p></AssetEditorSection>
+          </>)}</>}
+      controlsFooter={<>{isPerson && editorTab==='appearance' && <footer className="person-panel-footer">
           <p className="person-hint">Apply these proportions to the mixed crowd. Each person keeps their clothing colors.</p>
           <button className={`${button} person-apply`} disabled={!ready} onClick={() => { if (bake) { applyDesign(design, bake); void usePopulationStore.getState().prepare(design); setMessage("Foundation saved. Road characters keep their clothing colors and varied bodies.") } }}><Check size={14} />Apply to road</button>
           <button className={button} onClick={() => { usePersonDesignStore.getState().reset(); void usePopulationStore.getState().prepare(null); setDesign({ ...DEFAULT_DESIGN }); setMessage("Project default restored on the road.") }}><RotateCcw size={12} />Restore project default</button>
         </footer>}
-        {(isPerson || isKnight || subject === "cart") && editorTab==='sounds' && <footer className="person-panel-footer">
+{(isPerson || isKnight || subject === "cart") && editorTab==='sounds' && <footer className="person-panel-footer">
           <p className="person-hint">Sound edits save automatically and apply to the game.</p>
           <div className="person-presets"><button className={button} onClick={()=>void copyJson(characterSoundsJson())}>Copy sound JSON</button><button className={button} onClick={()=>openJson(characterSoundsJson())}>Edit sound JSON</button></div>
-        </footer>}
-      </aside>
-      <div className="person-preview" aria-label="Character preview">
-        <div className="person-preview-toolbar hud-well">
-          <div className="person-playback"><button className="hud-pause" aria-label={playing ? "Pause" : "Play"} disabled={frameCount === 1 || view === "sheet"} onClick={() => setPlaying(!playing)}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
+        </footer>}</>}
+      toolbar={<><div className="person-playback"><button className="hud-pause" aria-label={playing ? "Pause" : "Play"} disabled={frameCount === 1 || view === "sheet"} onClick={() => setPlaying(!playing)}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
             <label style={subject === "cart" ? { display: "none" } : undefined}>Clip<select aria-label="Animation clip" value={isKnight ? knightClip : clip} onChange={e => { setClip(e.target.value as BaseClip); setFrame(0) }}>{Object.entries(PERSON_CLIPS).filter(([id]) => isPerson || (isKnight && !mountedKnight && id in knightMetadata.person.frameCounts) || id === "walk" || id === "idle").map(([id, entry]) => <option key={id} value={id}>{entry.label}</option>)}</select></label>
             <label>{onMap ? "View" : "Zoom"}<select aria-label={onMap ? "Map framing" : "Pixel inspection zoom"} value={zoom} onChange={e => setZoom(Number(e.target.value))}>{(onMap ? [4, 6, 8] : ASSET_ZOOMS).map(n => <option key={n} value={n}>{onMap ? ({ 4: "Wide", 6: "Map", 8: "Close" } as Record<number, string>)[n] : `${n}×`}</option>)}</select></label>
           </div>
-          <div className="person-view-buttons" aria-label="Preview modes">{isPerson && <><button className={button} disabled={!draftsReady} onClick={() => void copyJson()}>Copy edits as JSON</button><button className={button} aria-pressed={showRig} onClick={() => { setShowRig(!showRig); setView("character"); setPlaying(false) }}>Show rig</button></>}{subject === "cart" && <button className={button} aria-pressed={onMap} onClick={() => { setView("map"); if (zoom < 4) setZoom(6) }}>Small map</button>}{([['character', 'Character'], ['native', 'Native size'], ['sheet', 'Sprite sheet']] as const).map(([mode, label]) => <button key={mode} className={button} aria-pressed={view === mode} onClick={() => setView(mode)}>{label}</button>)}</div>
-        </div>
-        <div className="person-stage-layout"><div ref={stageRef} className={`person-stage person-stage-${view}${scrubbingViews ? " is-scrubbing" : ""}`}
+<div className="person-view-buttons" aria-label="Preview modes">{isPerson && <><button className={button} disabled={!draftsReady} onClick={() => void copyJson()}>Copy edits as JSON</button><label className="person-check"><input type="checkbox" checked={showRig} onChange={event => { setShowRig(event.target.checked); setView("character"); setPlaying(false) }} />Show rig</label></>}{subject === "cart" && <button className={button} aria-pressed={onMap} onClick={() => { setView("map"); if (zoom < 4) setZoom(6) }}>Small map</button>}{([['character', 'Character'], ['native', 'Native size'], ['sheet', 'Sprite sheet']] as const).map(([mode, label]) => <button key={mode} className={button} aria-pressed={view === mode} onClick={() => setView(mode)}>{label}</button>)}</div></>}
+      dock={<CharacterAnimationDock directions={BASE_PERSON.directions} row={row} onDirection={next => { setRow(next); if (!onMap) setView("character") }}
+          renderDirection={index => (!isPerson || bake) && (partialLive
+            ? <Tile url={bakedSheet} shadowUrl={bakedShadow} row={index} frame={step} columns={PERSON_CLIPS[clip].frames} name={`${BASE_PERSON.directions[index]} direction`} />
+            : <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + index * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={BASE_PERSON.cellSize / pixels} name={`${BASE_PERSON.directions[index]} direction`} />)}
+          frameCount={frameCount} maxFrames={isPerson ? frameCount : 24} frame={step} clipLabel={clipLabel} showFrames={!onMap}
+          keyed={step => isPerson && frameKeyed(step)}
+          onFrame={next => { setFrame(next); setPlaying(false); setView("character") }} />}>
+      <div className="person-stage-layout"><div ref={stageRef} className={`person-stage person-stage-${view}${scrubbingViews ? " is-scrubbing" : ""}`}
           onPointerDown={event => {
             if (view !== "character" || event.button !== 0 || !event.isPrimary ||
               (event.target as Element).closest('[role="button"], button, input, select, a')) return
@@ -595,7 +591,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
           </div>}
           {isPerson && (error || storeError) && <p role="alert" className="person-stage-error">{error || storeError} Adjust the pose or undo to recover.</p>}
           {isPerson && !dragging && bakeProgress && <div className="person-stage-progress hud-well" role="status" aria-live="polite"><span>Updating sprite sheets · {Math.round(bakeProgress.done / bakeProgress.total * 100)}%</span><i style={{ width: `${bakeProgress.done / bakeProgress.total * 100}%` }} /></div>}
-          <div className="person-stage-caption" style={onMap ? { display: "none" } : undefined}>{view === "native" ? "Actual pixels · 1×" : view === "sheet" ? `${SUBJECTS[subject]} atlas · ${columns * atlasRows} poses` : `${direction} · ${fittedZoom}×${view === "character" ? " · Drag left / right to turn · Shift-drag to pan · Scroll to zoom" : ""}`}</div>
+          <div className="person-stage-caption" style={onMap ? { display: "none" } : undefined}>{view === "native" ? "Actual pixels · 1×" : view === "sheet" ? `${SUBJECTS[subject]} atlas · ${columns * atlasRows} poses` : `${direction} · ${fittedZoom}×`}</div>
         </div>
         {isPerson && showRig && <RigInspector joints={inspected} selected={selectedJoint} offset={currentOffset(selectedJoint as EditableJoint)} frame={frame} radius={radius} maxRadius={Math.max(1, Math.floor(PERSON_CLIPS[clip].frames / 2))} keyed={!!selectedKey} frameKeyed={frameKeyed(frame % PERSON_CLIPS[clip].frames)}
           onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} onChange={offset => changeJoint(selectedJoint as EditableJoint, offset)} onRadius={blend => changeJoint(selectedJoint as EditableJoint, currentOffset(selectedJoint as EditableJoint), blend)}
@@ -607,15 +603,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
           onUndo={() => { const previous = history.at(-1); if (previous) { setFuture(f => [...f, design.poseEdits ?? {}]); setHistory(h => h.slice(0, -1)); setDesign(d => ({ ...d, poseEdits: previous })) } }}
           onRedo={() => { const next = future.at(-1); if (next) { setHistory(h => [...h, design.poseEdits ?? {}]); setFuture(f => f.slice(0, -1)); setDesign(d => ({ ...d, poseEdits: next })) } }} />}
         </div>
-        <CharacterAnimationDock directions={BASE_PERSON.directions} row={row} onDirection={next => { setRow(next); if (!onMap) setView("character") }}
-          renderDirection={index => (!isPerson || bake) && (partialLive
-            ? <Tile url={bakedSheet} shadowUrl={bakedShadow} row={index} frame={step} columns={PERSON_CLIPS[clip].frames} name={`${BASE_PERSON.directions[index]} direction`} />
-            : <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + index * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={BASE_PERSON.cellSize / pixels} name={`${BASE_PERSON.directions[index]} direction`} />)}
-          frameCount={frameCount} maxFrames={isPerson ? frameCount : 24} frame={step} clipLabel={clipLabel} showFrames={!onMap}
-          keyed={step => isPerson && frameKeyed(step)}
-          onFrame={next => { setFrame(next); setPlaying(false); setView("character") }} />
-      </div>
-    </div>
+    </AssetEditorWorkspace>
     <dialog ref={jsonDialog} className="person-json-dialog" aria-labelledby="person-json-title">
       <div className="person-panel-heading"><h2 id="person-json-title">{soundJson ? "Copy / paste sounds" : "Copy / paste character edits"}</h2><button className="hud-close" aria-label="Close JSON" onClick={() => jsonDialog.current?.close()}><X size={14} /></button></div>
       <div className="person-json-content">

@@ -1,3 +1,9 @@
 import { redirect } from "next/navigation"
+import { legacyPlaygroundHref } from "@/lib/asset-playground"
 
-export default function AnimalsPage() { redirect("/assets/characters?asset=animals") }
+/** Preserve bookmarks and shared settings in the unified playground. */
+export default async function LegacyToolPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  redirect(legacyPlaygroundHref(await searchParams, "animals"))
+}

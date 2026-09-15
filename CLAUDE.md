@@ -13,6 +13,24 @@
   repository's existing test setup and application workflows. Do not create
   new test environments, standalone demo apps, or parallel testing setups.
 
+- **All visual testing belongs in the shared playground.** `/assets` and
+  `AssetPlayground` host characters, animals, buildings, maps, paths, placement
+  and rendering. Use `AssetEditorFrame`, `AssetEditorWorkspace`, and the same
+  property sections, tuners, controls drawer and preview stage as the character
+  and building editors. `PLAYGROUND_TOOLS` in `lib/asset-playground.ts` owns the
+  tool selector. Add scenarios and presets inside these tools; do not create
+  separate test pages, lab frames, navigation or per-case control panels. Keep
+  drafts when switching tools and pause hidden simulations and previews. Drive
+  deterministic game checks through the existing `DebugHandle` and benchmark
+  scripts. Keep one control group visible at a time through the shared section
+  tabs. Use dropdowns for item selection, tabs for views, and checkboxes for
+  independent options. Put explanations in the shared help tooltips; keep labels,
+  values and live status visible. Stack labels above fields and tuners with
+  consistent spacing; keep checkbox labels inline. Avoid nested cards and
+  repeated borders.
+  Redirect retired URLs to the matching playground tool, preserving
+  their shared settings.
+
 - **Generated assets must fit the late Dark Ages to early Middle Ages.**
   Apply this to characters, clothing, accessories, instruments, tools,
   buildings, vehicles, and other authored or generated artwork. Check materials,

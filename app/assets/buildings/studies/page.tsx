@@ -1,9 +1,9 @@
-import type { Metadata } from "next"
-import { BuildingLab } from "@/components/building-lab/building-lab"
+import { redirect } from "next/navigation"
+import { legacyPlaygroundHref } from "@/lib/asset-playground"
 
-export const metadata: Metadata = {
-  title: "Pilgrimage — Illustrated building studies",
-  description: "Illustrated material references and earlier building image experiments.",
+/** Preserve bookmarks and shared settings in the unified playground. */
+export default async function LegacyToolPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  redirect(legacyPlaygroundHref(await searchParams, "buildings"))
 }
-
-export default function BuildingStudiesPage() { return <BuildingLab /> }

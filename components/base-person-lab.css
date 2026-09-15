@@ -160,3 +160,94 @@
 
 .animal-lineup { display: grid; gap: 12px; }
 .animal-lineup-label { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); font-size: 11px; }
+
+/* Simulation previews use the same editor workspace as characters and buildings. */
+.asset-mode-toggle select { width: 180px; margin-left: 0; }
+.person-editor .playground-input { width:100%; min-width:0; border:1px solid #726242; border-radius:6px; padding:6px 8px; background:#423725; color:#f2e8d5; font-size:12px; }
+.person-stage.playground-stage { display:block; overflow:auto; padding:12px; background:#171810; color:var(--ink); scrollbar-width:thin; }
+.person-animation-dock { max-height:160px; overflow:auto; }
+.person-animation-dock > :is(label,span) { font-size:12px; color:var(--ink-light); }
+.person-animation-dock:has(> label) { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.person-controls-scroll :is(p,h2,h3) { font-size:12px; line-height:1.5; }
+.person-controls-scroll .person-file-actions { gap:8px; }
+@media (max-width:480px) { .asset-mode-toggle select { width:145px; } }
+
+/* Quiet surfaces and one sub-navigation pattern throughout the playground. */
+.person-editor.game-hud { padding:0; grid-template-rows:52px minmax(0,1fr) 28px; }
+.person-editor .person-header { padding:0 16px; border-bottom:1px solid #ffffff12; }
+.person-editor .person-version { display:none; }
+.person-editor .person-workspace { padding:0; gap:0; grid-template-columns:300px minmax(0,1fr); }
+.person-editor .hud-well { border:0; box-shadow:none; background:transparent; }
+.person-editor .person-controls { background:#211e16; border-right:1px solid #ffffff12; }
+.person-editor .person-panel-heading { border:0; padding:12px 16px 4px; }
+.person-editor .person-controls-scroll { padding:12px 16px; }
+.person-editor .person-panel-footer { border:0; padding:12px 16px; }
+.person-editor .person-preview { gap:0; }
+.person-editor .person-preview-toolbar { padding:10px 16px; justify-content:flex-start; border-bottom:1px solid #ffffff12; font-size:12px; }
+.person-editor .person-stage { border:0; }
+.person-editor :is(.hud-action,.hud-pause,.hud-building-tile) { border-color:transparent; box-shadow:none; background:transparent; border-radius:4px; font-size:11px; letter-spacing:.02em; }
+.person-editor :is(.hud-action,.hud-pause,.hud-building-tile):hover { background:#ffffff08; }
+.person-editor :is(.hud-action,.hud-pause,.hud-building-tile)[aria-pressed="true"] { background:#b69a5522; border-color:transparent; color:#f2ddb0; }
+.person-editor :is(select,.playground-input,.person-choice input:not([type="color"]),textarea) { border:1px solid #ffffff12; border-radius:4px; background:#302a20; color:#f2e8d5; }
+.person-editor .person-choice { gap:10px; font-size:12px; }
+.person-editor .person-choice > :is(select,input) { flex:1; width:0; }
+.person-editor .asset-mode-toggle select { width:180px; flex:none; }
+.person-editor .person-controls-scroll .group > .relative { background:#302a20; }
+.person-editor .person-controls-scroll .group .bg-gold { background:#6d5b3a; }
+.person-editor .person-controls-scroll .group .absolute.right-1 { color:#f2e8d5; font-size:11px; font-weight:500; }
+.person-editor .person-animation-dock { padding:10px 16px; border-top:1px solid #ffffff12; }
+.person-editor .person-steps { border-top:1px solid #ffffff12; }
+.playground-subnav { display:flex; flex-wrap:wrap; gap:4px 12px; margin-bottom:20px; }
+.playground-subnav button, .person-editor .playground-view-tabs .hud-action { padding:6px 0; border:0; border-bottom:2px solid transparent; background:none; color:#a99b7d; font-size:12px; cursor:pointer; }
+.playground-subnav button[aria-selected="true"], .person-editor .playground-view-tabs .hud-action[aria-pressed="true"] { color:#f2ddb0; border-bottom-color:#c4a66a; background:none; }
+.playground-view-tabs { display:flex; gap:16px; }
+.playground-control-section { padding:0 !important; }
+.playground-section-heading { display:flex; align-items:center; gap:8px; margin-bottom:16px; }
+.playground-section-heading h2 { font-size:12px; font-weight:600; color:#e7d8b9; }
+.playground-control-section > .person-file-actions { gap:12px; }
+.playground-help { display:inline-flex; align-items:center; justify-content:center; width:24px; height:24px; padding:0; border:0; border-radius:50%; background:none; color:#a99b7d; cursor:pointer; flex-shrink:0; }
+.playground-help:hover { color:#f2ddb0; background:#ffffff08; }
+.playground-help-content { max-width:320px; max-height:min(360px,70vh); overflow:auto; font-size:12px; line-height:1.5; }
+.playground-help-content :is(p,span) { color:inherit; }
+.playground-help-content p { margin:0 0 8px; }
+.person-editor .playground-stage :is(article,figure,canvas) { border:0; box-shadow:none; }
+.person-editor .playground-stage :is(article,figure) { background:transparent; }
+@media (max-width:760px) {
+  .person-editor .person-workspace { grid-template-columns:minmax(0,1fr); }
+  .person-editor .person-controls { left:0; top:52px; bottom:28px; width:min(320px,calc(100% - 36px)); box-shadow:8px 0 24px #0006; }
+  .person-editor .person-header { padding:0 10px; }
+  .person-editor .asset-mode-toggle select { width:145px; }
+}
+.playground-map-canvas { display:block; width:auto; max-width:100%; max-height:calc(100dvh - 330px); height:auto; margin:0 auto; }
+.person-editor .person-panel-footer { margin-top:auto; }
+
+/* Labels sit above fields at every size; checkbox labels remain inline. */
+.person-editor .person-choice:not(.asset-mode-toggle) {
+  display:flex; flex-direction:column; align-items:stretch; gap:6px;
+  width:100%; font-size:12px; line-height:18px;
+}
+.person-editor .person-choice:not(.asset-mode-toggle) > :is(select,input) {
+  width:100%; margin:0; flex:none; min-height:34px;
+}
+.person-editor .property-tuner { flex-direction:column; align-items:stretch; gap:6px; }
+.person-editor .property-tuner > span { width:auto; font-size:12px; line-height:18px; }
+.person-editor .property-tuner > .relative { flex:auto; min-height:34px; }
+.person-editor .playground-control-section > .person-file-actions,
+.person-editor .person-controls-scroll .person-file-actions { gap:18px; }
+.person-editor .person-controls-scroll .person-file-actions > .person-file-actions { gap:18px; }
+.person-editor .person-preview-toolbar { align-items:flex-end; gap:12px; padding:12px 16px; }
+.person-editor .person-playback { align-items:flex-end; gap:12px; }
+.person-editor .person-preview-toolbar label:not(:has(input[type="checkbox"])) {
+  display:flex; flex-direction:column; align-items:stretch; gap:6px; font-size:12px; line-height:18px;
+}
+.person-editor .person-preview-toolbar label select { min-height:34px; }
+.person-editor label:has(> input[type="checkbox"]) { display:flex; flex-direction:row; align-items:center; gap:8px; min-height:30px; }
+.person-editor .person-controls-scroll > :is(label,.property-tuner) { margin-bottom:18px; }
+.person-editor .person-panel-heading { gap:10px; align-items:flex-start; padding-bottom:8px; }
+.person-editor .person-panel-heading > .person-choice { flex:1; }
+.person-editor .playground-section-heading { margin-bottom:18px; }
+.person-editor .person-preview-toolbar .person-choice { width:auto; min-width:110px; }
+.person-editor .person-preview-toolbar .person-choice > select { width:100%; }
+.person-editor .person-rig-axes label { display:flex; flex-direction:column; gap:6px; }
+.person-editor .playground-view-tabs { justify-content:flex-start; gap:16px; }
+.person-editor .playground-view-tabs .hud-action { font-family:inherit; text-transform:none; letter-spacing:0; }

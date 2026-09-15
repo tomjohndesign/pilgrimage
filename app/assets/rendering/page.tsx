@@ -1,11 +1,9 @@
-import type { Metadata } from "next"
-import { RenderLab } from "@/components/render-lab/render-lab"
+import { redirect } from "next/navigation"
+import { legacyPlaygroundHref } from "@/lib/asset-playground"
 
-export const metadata: Metadata = {
-  title: "Pilgrimage — Pixel workshop",
-  description: "Compare pixel rendering methods with synchronized characters and scenery.",
-}
-
-export default function RenderingPage() {
-  return <RenderLab />
+/** Preserve bookmarks and shared settings in the unified playground. */
+export default async function LegacyToolPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  redirect(legacyPlaygroundHref(await searchParams, "rendering"))
 }

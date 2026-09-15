@@ -1,9 +1,9 @@
-import type { Metadata } from "next"
-import { PlacementLab } from "@/components/placement-lab/placement-lab"
+import { redirect } from "next/navigation"
+import { legacyPlaygroundHref } from "@/lib/asset-playground"
 
-export const metadata: Metadata = {
-  title: "Pilgrimage — Placement playground",
-  description: "Place buildings on hillsides and watch the ground level under them, within the tuned limit.",
+/** Preserve bookmarks and shared settings in the unified playground. */
+export default async function LegacyToolPage({ searchParams }: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  redirect(legacyPlaygroundHref(await searchParams, "placement"))
 }
-
-export default function PlacementPage() { return <PlacementLab /> }

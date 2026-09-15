@@ -4,7 +4,6 @@ import type { PopulationPack } from "@/lib/game/base-person/population"
 import Link from "next/link"
 import { DEFAULT_POPULATION } from "@/lib/game/base-person/population-assets"
 import { POPULATION_PROFILES } from "@/lib/game/base-person/population"
-import { CHARACTER_ASSETS } from "@/lib/game/character-assets"
 import { TRAVELER_TYPES } from "@/lib/game/travelers"
 
 export function CharacterTextures() {
@@ -33,23 +32,6 @@ export function CharacterTextures() {
         <img src="/textures/characters/base/base-person-v25-walk.png" width={1280} height={512} alt="Shared base person, 160 walk poses at native resolution" className="max-w-full bg-[#62724d]" style={{ imageRendering: "pixelated" }} />
       </div>
     </article>
-    <p className="mb-5 text-center text-sm text-[#b9ad92]">Earlier image-generated drafts · retained for comparison</p>
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{Object.values(TRAVELER_TYPES).filter(type => type.id !== "beggar" && type.id !== "nun").map((type) => {
-      const asset = CHARACTER_ASSETS[type.id]
-      return <article key={type.id} className="border border-rule bg-parchment p-4 text-ink">
-        <h3 className="font-display text-base">{type.label}</h3>
-        <p className="mt-1 text-xs text-ink-light">256 × 512 · 32 frames · PNG + alpha</p>
-        <Link href={`/assets/characters/callings?character=${type.id}`} className="mt-4 block border border-rule bg-[#485443]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={asset.sheet} alt={`${type.label}: eight rows of directions, four walk poses per row`} width={256} height={512} className="h-auto w-full" style={{ imageRendering: "pixelated" }} />
-        </Link>
-        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 text-xs underline underline-offset-4">
-          <a href={asset.sheet} download>Sheet</a><a href={asset.sheet.replace(".png", ".json")} download>Frame data</a>
-          <a href={`/textures/characters/sources/${type.id}-v1.png`} download>Source art</a><a href={asset.sound} download>Sound</a>
-        </div>
-        <p className="mt-3 text-[11px] leading-relaxed text-ink-light">Generated with imagegen. Registered into small frames with a 32-color palette.</p>
-      </article>
-    })}</div>
   </section>
 }
 

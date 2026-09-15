@@ -1,11 +1,13 @@
 "use client"
 
-import Link from "next/link"
+import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, AssetEditorHelp, type AssetEditorNavigation } from "@/components/asset-editor-frame"
+import { playgroundHref } from "@/lib/asset-playground"
+
 import { useEffect, useRef, useState, type MutableRefObject } from "react"
 import { CAMERAS, CHARACTERS, comparisonQuery, DEFAULT_METHODS, DEFAULT_SETTINGS, METHODS, MOTIONS, readMethods, readSettings, type LabSettings, type Method } from "@/lib/render-lab/settings"
 import { LabRenderer } from "./renderer"
 
-import { labButton as button, labInput as input, LabSelect as Select, LabSlider as Slider } from "@/components/lab-controls"
+import { LabPlayback, labButton as button, labInput as input, LabSelect as Select, LabSlider as Slider } from "@/components/lab-controls"
 
 type Draw = (settings: LabSettings, time: number) => void
 const SAVE_KEY = "pilgrimage-rendering-choice-v1"
@@ -56,7 +58,8 @@ function RenderPane({ index, method, character, frames, focus }: { index: number
  * they do not change /play's renderer.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — Pixel workshop, frame 1YV-0.
  */
-export function RenderLab() {
+export function RenderLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
+  const [controlsOpen, setControlsOpen] = useState(false)
   const [settings, setSettings] = useState<LabSettings>(DEFAULT_SETTINGS)
   const [methods, setMethods] = useState<Method[]>(DEFAULT_METHODS)
   const [playing, setPlaying] = useState(true)
@@ -69,8 +72,8 @@ export function RenderLab() {
   const [hydrated, setHydrated] = useState(false)
   const frames = useRef(new Map<number, Draw>())
   const elapsed = useRef(0)
-  const latest = useRef({ settings, playing, focus })
-  latest.current = { settings, playing, focus }
+  const latest = useRef({ settings, playing, focus, active })
+  latest.current = { settings, playing, focus, active }
   const patch = (change: Partial<LabSettings>) => setSettings(current => ({ ...current, ...change }))
 
   useEffect(() => {
@@ -90,12 +93,12 @@ export function RenderLab() {
     const tick = (now: number) => {
       const dt = Math.min((now - previous) / 1000, 0.1)
       previous = now
-      const { settings, playing, focus } = latest.current
+      const { settings, playing, focus, active } = latest.current
       // Start together after every visible pane has its artwork. One time value
       // and one RAF drive all views, including pause, stepping, and scrubbing.
-      if (playing && !document.hidden && frames.current.size === (focus === null ? 4 : 1)) elapsed.current += dt * settings.speed
-      if (!document.hidden) frames.current.forEach(draw => draw(settings, elapsed.current))
-      if (now - lastLabel > 150) { setTime(elapsed.current); lastLabel = now }
+      if (active && playing && !document.hidden && frames.current.size === (focus === null ? 4 : 1)) elapsed.current += dt * settings.speed
+      if (active && !document.hidden) frames.current.forEach(draw => draw(settings, elapsed.current))
+      if (active && now - lastLabel > 150) { setTime(elapsed.current); lastLabel = now }
       id = requestAnimationFrame(tick)
     }
     id = requestAnimationFrame(tick)
@@ -111,7 +114,7 @@ export function RenderLab() {
     } catch { setMessage(`Selected “${METHODS[method].label}”. Browser storage is unavailable; copy the comparison link to keep the settings.`) }
   }
   const share = async () => {
-    const url = `${window.location.origin}/assets/rendering?${comparisonQuery(settings, methods)}`
+    const url = `${window.location.origin}${playgroundHref("rendering", new URLSearchParams(comparisonQuery(settings, methods)))}`
     setShareUrl(url)
     window.history.replaceState(null, "", url)
     try { await navigator.clipboard.writeText(url); setMessage("Comparison link copied. It restores the four methods and shared controls.") }
@@ -119,85 +122,52 @@ export function RenderLab() {
   }
   const reset = () => {
     setSettings(DEFAULT_SETTINGS); setMethods(DEFAULT_METHODS); setFocus(null); seek(0); setPlaying(true)
-    setMessage(""); setShareUrl(""); window.history.replaceState(null, "", "/assets/rendering")
+    setMessage(""); setShareUrl(""); window.history.replaceState(null, "", playgroundHref("rendering"))
   }
 
-  return <main className="min-h-screen bg-[#14100a] px-4 py-8 text-parchment sm:px-8">
-    <div className="mx-auto flex max-w-[1600px] flex-col gap-5">
-      <header className="flex flex-wrap items-end justify-between gap-5">
-        <div>
-          <Link href="/assets" className="font-display text-[10px] uppercase tracking-[3px] text-gold hover:text-gold-light">← Assets</Link>
-          <h1 className="mt-4 font-display text-2xl font-semibold uppercase tracking-[4px] sm:text-3xl">Pixel workshop</h1>
-          <p className="mt-2 text-base text-parchment-dark">One scene. Different ways to draw it. Follow the feet, watch the face, and move past the trees.</p>
-        </div>
-        <a href="https://app.conductor.build/workspace/8ffb9739-5c1f-478d-871c-26deb51f420e" className="text-xs text-gold underline underline-offset-4">Artwork from the character workspace ↗</a>
-      </header>
+  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Rendering editor" version="Rendering" controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(value => !value)} status={message || "Synchronized rendering comparison"} detail={`${time.toFixed(2)} s`}>
+    <AssetEditorWorkspace title="Rendering" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
+      controls={<><AssetEditorSection title="Scene"><Select label="Character" value={settings.character} options={Object.fromEntries(CHARACTERS.map(id => [id, id === "base" ? "Base person · v8" : id[0].toUpperCase() + id.slice(1)]))} onChange={character => patch({ character: character as LabSettings["character"] })} />
+<Select label="Movement test" value={settings.motion} options={MOTIONS} onChange={motion => { patch({ motion: motion as LabSettings["motion"] }); seek(0) }} />
+<Select label="Camera test" value={settings.camera} options={CAMERAS} onChange={camera => patch({ camera: camera as LabSettings["camera"] })} />
+<Select label="View" value={String(settings.view)} options={{ 0: "View 1", 1: "View 2", 2: "View 3", 3: "View 4" }} onChange={view => patch({ view: Number(view) })} />
+<Select label="Display resolution" value={String(settings.dpr)} options={{ "0.5": "Half resolution", "1": "1× · game default", "1.5": "1.5×", "2": "2× · Retina" }} onChange={dpr => patch({ dpr: Number(dpr) })} /></AssetEditorSection>
+        <AssetEditorSection title="Rendering & motion"><Slider label="Zoom" value={settings.zoom} min={0.5} max={4} step={0.05} suffix="×" onChange={zoom => patch({ zoom })} />
+<Slider label="World detail" value={settings.density} min={8} max={64} step={1} suffix=" px/unit" onChange={density => patch({ density })} />
+<Slider label="Character size" value={settings.scale} min={0.5} max={3} step={0.05} suffix="×" onChange={scale => patch({ scale })} />
+<Slider label="Playback speed" value={settings.speed} min={0.1} max={2} step={0.1} suffix="×" onChange={speed => patch({ speed })} />
+<Slider label="Walk animation" value={settings.fps} min={1} max={16} step={1} suffix=" fps" onChange={fps => patch({ fps })} /></AssetEditorSection>
+        <AssetEditorSection title="Notes & files"><button type="button" className={button} onClick={share}>Copy comparison link</button><label className="flex flex-col gap-2 text-sm" htmlFor="render-notes">Notes for the chosen look<textarea id="render-notes" className={`${input} min-h-24 resize-y`} placeholder="What feels right? What still jitters?" value={notes} onChange={event => setNotes(event.target.value)} /></label>
+<p className="mt-2 text-xs text-ink-light">Use “Choose this look” to save the current settings and these notes. {choice && `Saved preference: ${METHODS[choice].label}.`}</p>
+<p role="status" className="mt-2 min-h-5 text-sm text-ink">{message}</p>
+{shareUrl && <label className="mt-2 flex flex-col gap-1 text-xs">Comparison link<input readOnly className={input} value={shareUrl} onFocus={event => event.target.select()} /></label>}</AssetEditorSection>
+        </>}
+      toolbar={<><LabPlayback playing={playing} onPlayingChange={setPlaying} onStep={() => seek(elapsed.current + 1 / settings.fps)} stepLabel="Step one frame" onRestart={() => seek(0)} />
+<span className="px-2 text-xs tabular-nums text-ink-light">{time.toFixed(2)} s · synchronized</span>
+<span className="flex-1" />
 
-      <section aria-label="Shared comparison controls" className="border border-rule bg-parchment p-4 text-ink sm:p-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className={button} onClick={() => setPlaying(value => !value)}>{playing ? "Pause" : "Play"}</button>
-          <button type="button" className={button} onClick={() => { setPlaying(false); seek(elapsed.current + 1 / settings.fps) }}>Step one frame</button>
-          <button type="button" className={button} onClick={() => seek(0)}>Restart walk</button>
-          <span className="px-2 text-xs tabular-nums text-ink-light">{time.toFixed(2)} s · synchronized</span>
-          <span className="flex-1" />
-          <button type="button" className={button} onClick={share}>Copy comparison link</button>
-          <button type="button" className={button} onClick={reset}>Reset controls</button>
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
-          <Select label="Character" value={settings.character} options={Object.fromEntries(CHARACTERS.map(id => [id, id === "base" ? "Base person · v8" : id[0].toUpperCase() + id.slice(1)]))} onChange={character => patch({ character: character as LabSettings["character"] })} />
-          <Select label="Movement test" value={settings.motion} options={MOTIONS} onChange={motion => { patch({ motion: motion as LabSettings["motion"] }); seek(0) }} />
-          <Select label="Camera test" value={settings.camera} options={CAMERAS} onChange={camera => patch({ camera: camera as LabSettings["camera"] })} />
-          <Select label="View" value={String(settings.view)} options={{ 0: "View 1", 1: "View 2", 2: "View 3", 3: "View 4" }} onChange={view => patch({ view: Number(view) })} />
-          <Select label="Display resolution" value={String(settings.dpr)} options={{ "0.5": "Half resolution", "1": "1× · game default", "1.5": "1.5×", "2": "2× · Retina" }} onChange={dpr => patch({ dpr: Number(dpr) })} />
-        </div>
-        <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 lg:grid-cols-5">
-          <Slider label="Zoom" value={settings.zoom} min={0.5} max={4} step={0.05} suffix="×" onChange={zoom => patch({ zoom })} />
-          <Slider label="World detail" value={settings.density} min={8} max={64} step={1} suffix=" px/unit" onChange={density => patch({ density })} />
-          <Slider label="Character size" value={settings.scale} min={0.5} max={3} step={0.05} suffix="×" onChange={scale => patch({ scale })} />
-          <Slider label="Playback speed" value={settings.speed} min={0.1} max={2} step={0.1} suffix="×" onChange={speed => patch({ speed })} />
-          <Slider label="Walk animation" value={settings.fps} min={1} max={16} step={1} suffix=" fps" onChange={fps => patch({ fps })} />
-        </div>
-        <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-rule pt-3 text-xs text-ink-light">
-          <label className="flex items-center gap-2"><input type="checkbox" className="accent-gold" checked={settings.scenery} onChange={event => patch({ scenery: event.target.checked })} />Scenery and overlap test</label>
-          <label className="flex min-w-52 flex-1 items-center gap-3">Scrub walk<input aria-label="Scrub walk" type="range" min={0} max={17.142857} step={0.01} value={time % 17.142857} onChange={event => { setPlaying(false); seek(Number(event.target.value)) }} className="w-full accent-gold" /></label>
-          <span>Try “Slide a frozen pose” to isolate rendering from animation.</span>
-        </div>
-      </section>
-
-      {focus !== null && <div className="flex items-center justify-between"><p className="text-sm text-parchment-dark">Focused view · shared settings are retained</p><button type="button" className={button} onClick={() => setFocus(null)}>Back to four views</button></div>}
-      <section aria-label="Rendering comparisons" className={`grid gap-5 ${focus === null ? "xl:grid-cols-2" : "grid-cols-1"}`}>
+<button type="button" className={button} onClick={reset}>Reset controls</button></>}
+      dock={<div className="person-animation-dock hud-well"><><label className="flex items-center gap-2"><input type="checkbox" className="accent-gold" checked={settings.scenery} onChange={event => patch({ scenery: event.target.checked })} />Scenery and overlap test</label>
+<label className="flex min-w-52 flex-1 items-center gap-3">Scrub walk<input aria-label="Scrub walk" type="range" min={0} max={17.142857} step={0.01} value={time % 17.142857} onChange={event => { setPlaying(false); seek(Number(event.target.value)) }} className="w-full accent-gold" /></label>
+</></div>}>
+      <div className="person-stage playground-stage">{active && <>{focus !== null && <div className="flex items-center justify-between"><button type="button" className={button} onClick={() => setFocus(null)}>Back to four views</button></div>}<section aria-label="Rendering comparisons" className={`grid gap-5 ${focus === null ? "xl:grid-cols-2" : "grid-cols-1"}`}>
         {methods.map((method, index) => (focus === null || focus === index) && <article key={index} className={`overflow-hidden border bg-parchment text-ink ${choice === method ? "border-gold ring-2 ring-gold" : "border-rule"}`}>
           <div className="flex items-start gap-4 p-4">
-            <span className="pt-6 font-display text-2xl text-gold">{String.fromCharCode(65 + index)}</span>
-            <div className="min-w-0 flex-1"><Select label={`View ${String.fromCharCode(65 + index)} rendering method`} value={method} options={Object.fromEntries(Object.entries(METHODS).map(([key, item]) => [key, item.label]))} onChange={value => setMethods(current => current.map((item, i) => i === index ? value as Method : item))} />
-              <p className="mt-2 min-h-10 text-sm text-ink-light">{METHODS[method].description}</p>
+
+            <div className="min-w-0 flex-1"><Select label={`View ${String.fromCharCode(65 + index)}`} ariaLabel={`View ${String.fromCharCode(65 + index)} rendering method`} value={method} options={Object.fromEntries(Object.entries(METHODS).map(([key, item]) => [key, item.label]))} onChange={value => setMethods(current => current.map((item, i) => i === index ? value as Method : item))} />
+
             </div>
           </div>
           {hydrated && <RenderPane index={index} method={method} character={settings.character} frames={frames} focus={focus !== null} />}
-          <div className="flex min-h-24 flex-wrap items-center justify-between gap-3 p-4">
-            <p className="max-w-sm flex-1 text-sm italic text-ink-light">{METHODS[method].watch}</p>
+          <div className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <AssetEditorHelp label={METHODS[method].label}><p>{METHODS[method].description}</p><p>{METHODS[method].watch}</p></AssetEditorHelp>
             <div className="flex gap-2">
               <button type="button" className={button} onClick={() => setFocus(focus === index ? null : index)}>{focus === index ? "Compare all" : "Focus"}</button>
-              <button type="button" className={button} aria-pressed={choice === method} onClick={() => selectChoice(method)}>{choice === method ? "Chosen · save again" : "Choose this look"}</button>
+              <button type="button" className={button} aria-pressed={choice === method} onClick={() => selectChoice(method)}>{choice === method ? "Saved" : "Save choice"}</button>
             </div>
           </div>
         </article>)}
-      </section>
-
-      <section aria-label="Comparison notes" className="grid gap-5 border border-rule bg-parchment p-5 text-ink md:grid-cols-2">
-        <div>
-          <h2 className="font-display text-sm uppercase tracking-[2px]">What to compare</h2>
-          <p className="mt-2 text-sm text-ink-light">First watch a frozen pose slide, then turn walking back on. Pan with a standing character to check camera shimmer. Finally watch the fence cross the body and the tree hide the walker.</p>
-          <p className="mt-2 text-sm text-ink-light">Each menu also offers global pixels with snapped movement. Smooth zoom can still make pixel widths uneven. “Pixels per asset” rebuilds scenery images during camera turns; this is a visual experiment, not a performance benchmark.</p>
-          <p className="mt-2 text-sm text-ink-light">These views use copied sprite artwork and fixed sample scenery, with the game’s tree shapes, lighting, and camera angle. Selection outlines and character shadows are omitted in every view to isolate pixel rendering. The game now uses Separate characters; the alternatives stay here for comparison.</p>
-        </div>
-        <div>
-          <label className="flex flex-col gap-2 text-sm" htmlFor="render-notes">Notes for the chosen look<textarea id="render-notes" className={`${input} min-h-24 resize-y`} placeholder="What feels right? What still jitters?" value={notes} onChange={event => setNotes(event.target.value)} /></label>
-          <p className="mt-2 text-xs text-ink-light">Use “Choose this look” to save the current settings and these notes. {choice && `Saved preference: ${METHODS[choice].label}.`}</p>
-          <p role="status" className="mt-2 min-h-5 text-sm text-ink">{message}</p>
-          {shareUrl && <label className="mt-2 flex flex-col gap-1 text-xs">Comparison link<input readOnly className={input} value={shareUrl} onFocus={event => event.target.select()} /></label>}
-        </div>
-      </section>
-    </div>
-  </main>
+      </section></>}</div>
+    </AssetEditorWorkspace>
+  </AssetEditorFrame>
 }

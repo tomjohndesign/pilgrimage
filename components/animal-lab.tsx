@@ -6,9 +6,8 @@ import { characterSoundsJson, useCharacterSoundStore } from "@/lib/game/characte
 import { playSourceSelection } from "@/lib/game/scene-audio"
 import { useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Pause, Play, RotateCcw, X } from "lucide-react"
-import { AssetEditorFrame, type AssetEditorNavigation } from "./asset-editor-frame"
-import { Section } from "./game/property-controls"
+import { Pause, Play, RotateCcw } from "lucide-react"
+import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "./asset-editor-frame"
 import { AnimalPreview, animalActions, ACTION_LABELS, type AnimalSubject, type AnimalMotion } from "./animal-preview"
 import { WILDLIFE_PROFILES, isBird } from "@/lib/game/wildlife/species"
 import { previewRandomSeed } from "@/lib/game/preview-random"
@@ -63,10 +62,8 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
   const [editorTab,setEditorTab]=useState<'appearance'|'sounds'>(search.has('sounds')?'sounds':'appearance')
   const [soundJson,setSoundJson]=useState(''),[soundMessage,setSoundMessage]=useState('')
   const [controlsOpen, setControlsOpen] = useState(search.has('sounds'))
-  const [sections, setSections] = useState<Record<string, boolean>>({})
   const packed = pack && (subject === "horse" || subject === "donkey" || subject === "ox")
   const equine = subject === "donkey" || subject === "horse" || subject === "ox", bird = !equine && isBird(subject)
-  const section = (title: string) => ({ title, open: sections[title] ?? true, onToggle: () => setSections(old => ({ ...old, [title]: !(old[title] ?? true) })) })
   useEffect(() => {
     if (active && requested && Object.hasOwn(ANIMAL_SUBJECTS, requested)) setSubject(requested as AnimalSubject)
   }, [active, requested])
@@ -114,54 +111,51 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
     status={`${lineup ? "All animals" : ANIMAL_SUBJECTS[subject]} · ${actionLabel}${playing ? "" : " · Paused"}`}
     detail="Game models · shared pixel scale">
     <SceneAudioLifecycle active={active}/>
-    <div className="person-workspace">
-      <aside className={`person-controls hud-well${controlsOpen ? " is-open" : ""}`} aria-label="Animal controls">
-        <div className="person-panel-heading"><span>Animals</span><button className="hud-close person-controls-toggle" aria-label="Close controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
-        <div className="person-panel-heading person-presets" role="group" aria-label="Animal editing mode"><button className="hud-action" aria-pressed={editorTab==='sounds'} onClick={()=>setEditorTab('sounds')}>Sounds</button><button className="hud-action" aria-pressed={editorTab==='appearance'} onClick={()=>setEditorTab('appearance')}>Appearance</button></div>
-        <div className="person-controls-scroll">
-          <Section {...section("Animal")}>
+    <AssetEditorWorkspace title="Animal" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
+      controlsHeading={<span>Animals</span>}
+      controlsHeader={<><div className="person-panel-heading playground-view-tabs" role="group" aria-label="Animal editing mode"><button className="hud-action" aria-pressed={editorTab==='sounds'} onClick={()=>setEditorTab('sounds')}>Sounds</button><button className="hud-action" aria-pressed={editorTab==='appearance'} onClick={()=>setEditorTab('appearance')}>Appearance</button></div></>}
+      controls={<><AssetEditorSection title="Animal">
             <label className="person-choice">Species<select aria-label="Animal species" value={subject} onChange={e => choose(e.target.value as AnimalSubject)}>{Object.entries(ANIMAL_SUBJECTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
-            <div className="person-presets">{Object.entries(ANIMAL_SUBJECTS).map(([id, label]) => <button key={id} className="hud-action" aria-pressed={subject === id && !lineup} onClick={() => choose(id as AnimalSubject)}>{label}</button>)}</div>
-          </Section>
-          {editorTab==='sounds'&&<CharacterAudioEditor profile={`animal/${subject}`} bodyType="Male" voiceVariant={0} previewZoom={zoom} clip={action} frame={frame} frames={24} playing={playing} active={active} selected={false} onSelect={()=>{}} onDeselect={()=>{}} onPreviewClip={()=>{}}/>}
-          {editorTab==='appearance'&&<>
-          {equine && <Section {...section("Appearance")}>
+          </AssetEditorSection>
+{editorTab==='sounds'&&<AssetEditorSection title="Sounds"><CharacterAudioEditor profile={`animal/${subject}`} bodyType="Male" voiceVariant={0} previewZoom={zoom} clip={action} frame={frame} frames={24} playing={playing} active={active} selected={false} onSelect={()=>{}} onDeselect={()=>{}} onPreviewClip={()=>{}}/></AssetEditorSection>}
+{editorTab==='appearance'&&<>
+          {equine && <AssetEditorSection title="Appearance">
             {equine && <label className="person-choice">Equipment<select aria-label="Animal equipment" value={pack ? "pack" : "none"} onChange={e => setPack(e.target.value === "pack")}><option value="none">None</option><option value="pack">Tied bundles</option></select></label>}
             {subject === "horse" && !pack && <label className="person-choice">Build<select aria-label="Horse build" value={horseVariant} onChange={e => setHorseVariant(e.target.value as HorseVariant)}><option value="common">Common</option><option value="noble">Noble</option></select></label>}
             <label className="person-choice">Coat<select aria-label="Animal coat" value={coat || COATS[subject][0].id} onChange={e => setCoat(e.target.value)}>{COATS[subject].map(value => <option key={value.id} value={value.id}>{value.label}</option>)}</select></label>
-          </Section>}
-          {!equine && <Section {...section("Appearance")}><label className="person-choice">Coat<select aria-label="Animal coat" value={wildlifeCoat} onChange={e => setWildlifeCoat(e.target.value)}>{WILDLIFE_COATS.map(value => <option key={value.id} value={value.id}>{value.label}</option>)}</select></label></Section>}
-          {equine && <Section {...section("Files")}><div className="person-file-actions">
+          </AssetEditorSection>}
+          {!equine && <AssetEditorSection title="Appearance"><label className="person-choice">Coat<select aria-label="Animal coat" value={wildlifeCoat} onChange={e => setWildlifeCoat(e.target.value)}>{WILDLIFE_COATS.map(value => <option key={value.id} value={value.id}>{value.label}</option>)}</select></label></AssetEditorSection>}
+          {equine && <AssetEditorSection title="Files"><div className="person-file-actions">
             <a className="hud-action" href={animalUrl(subject, animalCoat(subject, packed ? undefined : coat).id, false, packed)} download>Download sprite sheet</a>
             <a className="hud-action" href={`/textures/transport/${packed ? PACK_ANIMAL_VERSION : PARTY_TRANSPORT_VERSION}/manifest.json`} download>Download sheet metadata</a>
-          </div></Section>}
-          <Section {...section("In the world")}><p className="person-hint">{HABITATS[subject]}</p></Section>
-          <Section {...section("Inspection")}>
+          </div></AssetEditorSection>}
+
+          <AssetEditorSection title="Inspect">
             {construction && <p className="person-hint">Blue: rib cage · purple: pelvis · green: shoulders · amber: neck · pink: skull.</p>}
             {!bird && !equine && <p className="person-hint">Standing pose for reviewing proportions. Construction shows the pelvis, rib cage, shoulders, neck, skull and limb chains through the shared rig controls.</p>}
             <p className="person-hint">Drag sideways to turn. Shift-drag to pan. Scroll or pinch to zoom. All animals use the same pixel scale as characters.</p>
-          </Section>
+          </AssetEditorSection>
           </>}
-          {editorTab==='sounds'&&<Section {...section('Sound JSON')}>
+{editorTab==='sounds'&&<AssetEditorSection title="Sound JSON">
             <button className="hud-action" onClick={async()=>{const text=characterSoundsJson();setSoundJson(text);try{await navigator.clipboard.writeText(text);setSoundMessage('Sound settings copied.')}catch{setSoundMessage('Select the text below to copy.')}}}>Copy sound JSON</button>
             <textarea aria-label="Animal sound JSON" value={soundJson} onChange={e=>setSoundJson(e.target.value)} className="w-full" rows={5}/>
             <button className="hud-action" onClick={()=>{try{useCharacterSoundStore.getState().replace(JSON.parse(soundJson));setSoundMessage('Sound settings loaded.')}catch(error){setSoundMessage(error instanceof Error?error.message:'Invalid JSON')}}}>Load sound JSON</button>
             <p className="person-hint" role="status">{soundMessage}</p>
-          </Section>}
-        </div>
-        <footer className="person-panel-footer"><button className="hud-action" onClick={() => { setRow(1); setZoom(6); setOffset([0, 0]); setRate(1); setConstruction(false); setPlaying(bird || equine); setMotion(bird || equine ? "graze" : "idle") }}><RotateCcw size={12} />Reset preview</button></footer>
-      </aside>
-      <div className="person-preview" aria-label="Animal preview">
-        <div className="person-preview-toolbar hud-well">
-          <div className="person-playback flex-wrap">
+          </AssetEditorSection>}</>}
+      controlsFooter={<><footer className="person-panel-footer"><button className="hud-action" onClick={() => { setRow(1); setZoom(6); setOffset([0, 0]); setRate(1); setConstruction(false); setPlaying(bird || equine); setMotion(bird || equine ? "graze" : "idle") }}><RotateCcw size={12} />Reset preview</button></footer></>}
+      toolbar={<><div className="person-playback flex-wrap">
             <button className="hud-pause" aria-label={playing ? "Pause animal animation" : "Play animal animation"} onClick={() => setPlaying(v => !v)}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>
             <label>Action<select aria-label="Animal action" value={action} onChange={e => { setMotion(e.target.value as AnimalMotion); setFrame(0) }}>{actions.map(clip => <option key={clip} value={clip}>{clip === "idle" && bird ? "Perched" : ACTION_LABELS[clip]}</option>)}</select></label>
             <label>Speed<select aria-label="Animal animation speed" value={rate} onChange={e => setRate(Number(e.target.value))}>{[0.5, 1, 2].map(value => <option key={value} value={value}>{value}×</option>)}</select></label>
             <label>Zoom<select aria-label="Animal preview zoom" value={zoom} onChange={e => setZoom(Number(e.target.value))}>{ASSET_ZOOMS.map(value => <option key={value} value={value}>{value}×</option>)}</select></label>
           </div>
-          <div className="person-view-buttons"><button className="hud-action" aria-pressed={showRig} onClick={() => { setShowRig(v => !v); setLineup(false); setPlaying(false) }}>Show rig</button>{!bird && !equine && <button className="hud-action" aria-pressed={construction} onClick={() => { setConstruction(v => !v); setShowRig(true); setLineup(false); setPlaying(false); setMotion("idle"); setFrame(0) }}>Construction</button>}<button className="hud-action" aria-pressed={!lineup} onClick={() => setLineup(false)}>Animal</button><button className="hud-action" aria-pressed={lineup} onClick={() => setLineup(true)}>All animals</button></div>
-        </div>
-        <div className="person-stage-layout"><div ref={stage} className="person-stage person-stage-character"
+<div className="person-view-buttons"><label className="person-check"><input type="checkbox" checked={showRig} onChange={event => { setShowRig(event.target.checked); setLineup(false); setPlaying(false) }} />Show rig</label>{!bird && !equine && <label className="person-check"><input type="checkbox" checked={construction} onChange={event => { setConstruction(event.target.checked); setShowRig(true); setLineup(false); setPlaying(false); setMotion("idle"); setFrame(0) }} />Construction</label>}<button className="hud-action" aria-pressed={!lineup} onClick={() => setLineup(false)}>Animal</button><button className="hud-action" aria-pressed={lineup} onClick={() => setLineup(true)}>All animals</button></div></>}
+      dock={<CharacterAnimationDock directions={DIRECTIONS} row={row} onDirection={next => { setRow(next); setLineup(false) }}
+          renderDirection={index => <span role="img" aria-label={`${DIRECTIONS[index]} direction`} className="block shrink-0" style={{ width: 64, height: 64 }}><canvas ref={canvas => { directionCanvases.current[index] = canvas }} width={64} height={64} style={{ imageRendering: "pixelated" }} /></span>}
+          frameCount={ANIMAL_FRAMES} frame={frame} clipLabel={actionLabel}
+          keyed={step => frameKeyed(step)}
+          onFrame={next => { setFrame(next); setPlaying(false); setLineup(false) }} />}>
+      <div className="person-stage-layout"><div ref={stage} className="person-stage person-stage-character"
           onPointerDown={event => { if ((event.target as Element).closest("button, [role=button]") || event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); drag.current = { x: event.clientX, y: event.clientY, row, pan: event.shiftKey, offset } }}
           onPointerMove={event => { const start = drag.current; if (!start) return; if (start.pan) setOffset([start.offset[0] + event.clientX - start.x, start.offset[1] + event.clientY - start.y]); else setRow(((start.row + Math.trunc((event.clientX - start.x) / 48)) % 8 + 8) % 8) }}
           onPointerUp={event => { const start=drag.current;if(editorTab==='sounds'&&!lineup&&start&&!start.pan&&Math.hypot(event.clientX-start.x,event.clientY-start.y)<6)void playSourceSelection(`animal/${subject}`);drag.current = null; event.currentTarget.releasePointerCapture(event.pointerId) }} onLostPointerCapture={() => { drag.current = null }}>
@@ -179,12 +173,6 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
           onUndo={() => { const previous = history.at(-1); if (previous) { setFuture(f => [...f, edits]); setHistory(h => h.slice(0, -1)); save(subject, previous) } }}
           onRedo={() => { const next = future.at(-1); if (next) { setHistory(h => [...h, edits]); setFuture(f => f.slice(0, -1)); save(subject, next) } }} />}
         </div>
-        <CharacterAnimationDock directions={DIRECTIONS} row={row} onDirection={next => { setRow(next); setLineup(false) }}
-          renderDirection={index => <span role="img" aria-label={`${DIRECTIONS[index]} direction`} className="block shrink-0" style={{ width: 64, height: 64 }}><canvas ref={canvas => { directionCanvases.current[index] = canvas }} width={64} height={64} style={{ imageRendering: "pixelated" }} /></span>}
-          frameCount={ANIMAL_FRAMES} frame={frame} clipLabel={actionLabel}
-          keyed={step => frameKeyed(step)}
-          onFrame={next => { setFrame(next); setPlaying(false); setLineup(false) }} />
-      </div>
-    </div>
+    </AssetEditorWorkspace>
   </AssetEditorFrame>
 }

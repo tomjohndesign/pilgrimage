@@ -1,10 +1,12 @@
 "use client"
 
-import Link from "next/link"
+import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "@/components/asset-editor-frame"
+import { playgroundHref } from "@/lib/asset-playground"
+
 import { useEffect, useMemo, useRef, useState } from "react"
-import { LabSelect, LabSlider, labButton, labInput } from "@/components/lab-controls"
+import { LabSeedInput, LabSeedActions, LabSelect, LabSlider, labButton, labInput } from "@/components/lab-controls"
 import { TERRAIN, type TerrainId } from "@/lib/game/map/terrain"
-import { parseSeed, randomSeed } from "@/lib/game/rng"
+import { parseSeed } from "@/lib/game/rng"
 import { DEFAULT_SETTINGS, LIMITS, METHODS, generatePreview, normalizeSettings, seedingMethodForSeed, type Preview, type Settings } from "@/lib/map-lab/generate"
 
 const palette = Object.fromEntries(Object.entries(TERRAIN).map(([id, def]) => {
@@ -64,8 +66,8 @@ function MapCard({ map, overlay }: { map: Preview; overlay: boolean }) {
     </div>
     <canvas ref={canvas} width={map.size * 3} height={map.size * 3} role="img"
       aria-label={`${METHODS[map.method].title}: ${stats.open.toFixed(1)}% open land, ${stats.smallGroves} small groves, ${stats.connected} of ${map.clearings.length} clearings connected; initial church with ${stats.nearbyTrees} nearby wooded tiles`}
-      className="block aspect-square h-auto w-full border border-rule" style={{ imageRendering: "pixelated" }} />
-    <p className="mt-3 text-sm text-ink-light">{METHODS[map.method].description}</p>
+      className="playground-map-canvas" style={{ imageRendering: "pixelated" }} />
+
     <dl className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2 border-t border-rule pt-3 text-xs">
       {[["Open land", `${stats.open.toFixed(1)}%`], ["Woodland", `${stats.forest.toFixed(1)}%`], ["Dark forest", `${stats.dark.toFixed(1)}%`],
         ["Water", `${stats.water.toFixed(1)}%`], ["Starting lumber", `${stats.nearbyTrees} wooded tiles`], ["Tiny groves (1–8 tiles)", stats.tinyGroves], ["Small groves", stats.smallGroves], ["Largest wood", `${stats.largestWood.toLocaleString("en-US")} tiles`], ["Connected", `${stats.connected}/${map.clearings.length}`]].map(([label, value]) =>
@@ -76,7 +78,8 @@ function MapCard({ map, overlay }: { map: Preview; overlay: boolean }) {
 
 /** Seed-selected woodland previews in the existing asset playground, using its shared
  * controls and the game's minimap palette. No playable world is instantiated. */
-export function MapLab() {
+export function MapLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
+  const [controlsOpen, setControlsOpen] = useState(false)
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
   const [draft, setDraft] = useState<Settings>(DEFAULT_SETTINGS)
   const [seedDraft, setSeedDraft] = useState(String(DEFAULT_SETTINGS.seed))
@@ -107,7 +110,7 @@ export function MapLab() {
   const share = async () => {
     const params = new URLSearchParams(Object.fromEntries(Object.entries(settings).map(([key, value]) => [key, String(value)])))
     params.set("overlay", overlay ? "1" : "0")
-    const url = `${window.location.origin}/assets/maps?${params}`
+    const url = `${window.location.origin}${playgroundHref("maps", params)}`
     setShareUrl(url); window.history.replaceState(null, "", url)
     try { await navigator.clipboard.writeText(url); setStatus("Map link copied.") }
     catch { setStatus("Copy the map link below.") }
@@ -130,52 +133,36 @@ export function MapLab() {
     ctx.fillText(`${map.stats.open.toFixed(1)}% open · ${map.stats.tinyGroves} tiny groves · ${map.stats.connected}/${map.clearings.length} clearings connected`, 16, header + squareSize + 28)
     const link = document.createElement("a"); link.download = `woodland-${method}-${settings.seed}.png`; link.href = canvas.toDataURL("image/png"); link.click()
   }
-  return <main className="min-h-screen bg-[#14100a] px-4 py-8 text-parchment sm:px-8">
-    <div className="mx-auto flex max-w-[1440px] flex-col gap-5">
-      <header>
-        <Link href="/assets" className="font-display text-[10px] uppercase tracking-[3px] text-gold hover:text-gold-light">← Assets</Link>
-        <h1 className="mt-4 font-display text-2xl font-semibold uppercase tracking-[4px] sm:text-3xl">Map playground</h1>
-        <p className="mt-2 text-parchment-dark">More meadow, smaller groves, deeper woods. Each seed grows its woodland through wind spread or cellular growth.</p>
-        <p className="mt-2 max-w-4xl text-sm text-parchment-dark">Terrain studies with shared rivers and lakes. Dark forests have irregular hearts and a single entrance, enclosed by normal woodland; the initial church sits beside harvestable trees. Every main clearing, forest heart and church has a walking connection, with preview crossings where needed. These seeding styles also generate playable worlds. This lightweight study omits elevation and settlement simulation; playable paths follow the actual slopes and river crossings.</p>
-      </header>
-      <section aria-label="Map settings" className="border border-rule bg-parchment p-4 text-ink sm:p-5">
-        <div className="grid grid-cols-2 items-end gap-4 md:grid-cols-4">
-          <label className="flex flex-col gap-1 text-xs text-ink-light">Map seed<input className={labInput} value={seedDraft} inputMode="numeric" aria-invalid={seed === null}
-            onChange={e => setSeedDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && seed !== null) apply(seed) }} /></label>
-          <LabSelect label="Sample size" value={String(draft.size)} options={{ 128: "128 × 128", 192: "192 × 192", 256: "256 × 256" }} onChange={value => patch({ size: Number(value) })} />
-          <LabSlider label="Tree cover target" value={draft.forest} min={25} max={60} step={1} suffix="%" onChange={forest => patch({ forest })} />
-          <LabSlider label="Clearing density / 192²" value={draft.clearings} min={4} max={14} step={1} onChange={clearings => patch({ clearings })} />
-          {method === "groves" && <LabSlider label="Parent stands / 192² (wind)" value={draft.groves} min={1} max={28} step={1} onChange={groves => patch({ groves })} />}
-          {method === "groves" && <LabSlider label="Wind direction (wind study)" value={draft.wind} min={0} max={359} step={1} suffix="°" onChange={wind => patch({ wind })} />}
-          <LabSelect label="River density / 192²" value={String(draft.rivers)} options={{ 0: "None", 1: "One", 2: "Two" }} onChange={value => patch({ rivers: Number(value) })} />
-          <LabSelect label="Lake density / 192²" value={String(draft.lakes)} options={{ 0: "None", 1: "One", 2: "Two" }} onChange={value => patch({ lakes: Number(value) })} />
-          <LabSlider label="Water coverage budget" value={draft.water} min={0} max={25} step={1} suffix="%" onChange={water => patch({ water })} />
-          <LabSelect label="Dark forests / 192²" value={String(draft.darkCount)} options={{ 0: "None", 1: "One", 2: "Two" }} onChange={value => patch({ darkCount: Number(value) })} />
-          <LabSlider label="Dark forest size (% of 192²)" value={draft.darkShare} min={6} max={14} step={1} suffix="%" onChange={darkShare => patch({ darkShare })} />
-          <LabSlider label="Forest heart size (tiles)" value={draft.heart} min={5} max={12} step={1} onChange={heart => patch({ heart })} />
-          <LabSlider label="Main passage width in tiles" value={draft.corridor} min={1} max={5} step={1} onChange={corridor => patch({ corridor })} />
-          <div className="col-span-2 flex flex-wrap gap-2 md:col-span-3">
-            <button type="button" className={labButton} disabled={seed === null || !ready} onClick={() => seed !== null && apply(seed)}>Generate map</button>
-            <button type="button" className={labButton} disabled={!ready} onClick={() => apply((settings.seed + 1) >>> 0)}>Next seed</button>
-            <button type="button" className={labButton} disabled={!ready} onClick={() => apply(randomSeed())}>Random seed</button>
+  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Maps editor" version="Maps" controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(value => !value)} status={status || (pending ? "Settings changed — apply seed to regenerate." : "Ready · seed controls regenerate the map")} detail={`Seed ${settings.seed} · ${settings.size} × ${settings.size}`}>
+    <AssetEditorWorkspace title="Maps" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
+      controlsFooter={<div className="person-panel-footer"><div className="flex flex-wrap gap-2">
+            <LabSeedActions draft={seedDraft} seed={settings.seed} onApply={apply} disabled={!ready} />
             <button type="button" className={labButton} onClick={() => { setDraft(DEFAULT_SETTINGS); setSettings(DEFAULT_SETTINGS); setSeedDraft(String(DEFAULT_SETTINGS.seed)); setShareUrl(""); setStatus("Default map restored.") }}>Reset</button>
-          </div>
-        </div>
-        <p className="mt-3 text-xs text-ink-light">{pending ? "Settings changed — generate to apply them to the map." : `Showing seed ${settings.seed} at ${settings.size} × ${settings.size}.`} Sample size crops the same surrounding landscape: features keep their tile dimensions. Counts set density per 192 × 192 tiles, and the visible totals vary with the crop. Tree cover is a target for the surrounding region, including dark forest. Enclosing woodland, clearings and passages take priority, so actual coverage may differ. Wind is clockwise from east; parent stands and wind affect the wind study. Water counts are requested seedings within the coverage budget. The game and these studies start at 40% tree cover, with one large dark-forest seed per 192 × 192 tiles and a 9% footprint per seed.</p>
-      </section>
-      <div className="flex flex-wrap items-center gap-4 text-sm">
-        <label className="flex items-center gap-2"><input type="checkbox" className="accent-gold" checked={overlay} onChange={e => setOverlay(e.target.checked)} />Show connections & clearing numbers</label>
-        <button type="button" className={labButton} disabled={!ready || pending} onClick={share}>Copy map link</button>
-        <button type="button" className={labButton} disabled={!ready || pending} onClick={download}>Save map PNG</button>
-        <span className="text-xs text-parchment-dark">Cross = initial church. Gold numbers = forest hearts. The seed determines the woodland style.</span>
-      </div>
-      <div className="flex flex-wrap gap-4 text-xs" aria-label="Map legend">
+          </div></div>}
+      controls={<><AssetEditorSection title="Layout"><LabSeedInput value={seedDraft} onChange={setSeedDraft} onApply={apply} disabled={!ready} />
+<LabSelect label="Sample size" value={String(draft.size)} options={{ 128: "128 × 128", 192: "192 × 192", 256: "256 × 256" }} onChange={value => patch({ size: Number(value) })} />
+<LabSlider label="Clearings" help="Clearing density / 192²" value={draft.clearings} min={4} max={14} step={1} onChange={clearings => patch({ clearings })} />
+<LabSlider label="Path width" help="Main passage width in tiles" value={draft.corridor} min={1} max={5} step={1} onChange={corridor => patch({ corridor })} /><p className="person-hint">Apply the seed to regenerate after changing settings. Clearing counts are densities per 192 × 192 tiles.</p></AssetEditorSection>
+<AssetEditorSection title="Woodland"><LabSlider label="Tree cover" help="Tree cover target" value={draft.forest} min={25} max={60} step={1} suffix="%" onChange={forest => patch({ forest })} />
+{method === "groves" && <LabSlider label="Parent stands" help="Parent stands / 192² (wind)" value={draft.groves} min={1} max={28} step={1} onChange={groves => patch({ groves })} />}
+{method === "groves" && <LabSlider label="Wind direction" help="Wind direction (wind study)" value={draft.wind} min={0} max={359} step={1} suffix="°" onChange={wind => patch({ wind })} />}
+<LabSelect label="Dark forests" help="Dark forests / 192²" value={String(draft.darkCount)} options={{ 0: "None", 1: "One", 2: "Two" }} onChange={value => patch({ darkCount: Number(value) })} />
+<LabSlider label="Forest size" help="Dark forest size (% of 192²)" value={draft.darkShare} min={6} max={14} step={1} suffix="%" onChange={darkShare => patch({ darkShare })} />
+<LabSlider label="Heart size" help="Forest heart size (tiles)" value={draft.heart} min={5} max={12} step={1} onChange={heart => patch({ heart })} /><p className="person-hint">Tree cover is a target. Forest counts and areas use a 192 × 192 tile reference; changing sample size crops the same surrounding landscape.</p></AssetEditorSection>
+<AssetEditorSection title="Water"><LabSelect label="Rivers" help="River density / 192²" value={String(draft.rivers)} options={{ 0: "None", 1: "One", 2: "Two" }} onChange={value => patch({ rivers: Number(value) })} />
+<LabSelect label="Lakes" help="Lake density / 192²" value={String(draft.lakes)} options={{ 0: "None", 1: "One", 2: "Two" }} onChange={value => patch({ lakes: Number(value) })} />
+<LabSlider label="Water cover" help="Water coverage budget" value={draft.water} min={0} max={25} step={1} suffix="%" onChange={water => patch({ water })} /><p className="person-hint">River and lake counts are densities per 192 × 192 tiles. The coverage limit may reduce how much water is placed.</p></AssetEditorSection>
+        <AssetEditorSection title="Files"><button type="button" className={labButton} disabled={!ready || pending} onClick={share}>Copy map link</button>
+<button type="button" className={labButton} disabled={!ready || pending} onClick={download}>Save map PNG</button>{shareUrl && <label className="text-xs text-ink-light">Map link<input readOnly className={`${labInput} mt-1`} value={shareUrl} onFocus={e => e.target.select()} /></label>}</AssetEditorSection>
+        </>}
+      toolbar={<><label className="flex items-center gap-2"><input type="checkbox" className="accent-gold" checked={overlay} onChange={e => setOverlay(e.target.checked)} />Show connections</label>
+
+
+</>}
+      dock={<div className="person-animation-dock hud-well"><><div className="flex flex-wrap gap-4 text-xs" aria-label="Map legend">
         {(["grass", "forest", "darkwood", "clearing", "water", "bridge"] as const).map(id => <span key={id} className="flex items-center gap-2"><span className="h-3 w-3 border border-rule" style={{ background: TERRAIN[id].color }} />{id === "clearing" ? "Forest passage" : TERRAIN[id].label}</span>)}
-      </div>
-      <p role="status" className="text-sm text-parchment-dark">{status || "Change the seed to compare several layouts; turn off connections to judge the woodland shapes."}</p>
-      {shareUrl && <label className="text-xs text-parchment-dark">Map link<input readOnly className={`${labInput} mt-1`} value={shareUrl} onFocus={e => e.target.select()} /></label>}
-      <div className="mx-auto w-full max-w-[800px]">{map && <MapCard map={map} overlay={overlay} />}</div>
-      <p className="text-xs text-parchment-dark">Connectivity is measured on the final tiles using four-direction walking. Tiny groves are detached woods of 1–8 tiles; small groves have 9–120 tiles at every sample size. Largest wood includes ordinary and dark forest. Dark footprints are measured before their hearts and entrances are carved. Starting lumber counts normal forest within 8 tiles of the church in each axis; at least 24 wooded tiles are protected. Percentages below each map use total map area, including water. Saplings also extend existing treelines, so attached clusters are not counted as detached groves. The seeded terrain matches exactly in overlapping samples. Church placement and access paths are planned for each visible window. Wind groves are seeded beyond the square and cropped at its edges. Heart size sets an area equivalent to that radius, with an irregular outline. Dark-forest access tracks stay one tile wide. Crossings are planning sketches, not the live bridge generator.</p>
-    </div>
-  </main>
+      </div></></div>}>
+      <div className="person-stage playground-stage">{active && <><div className="mx-auto w-full max-w-[800px]">{map && <MapCard map={map} overlay={overlay} />}</div></>}</div>
+    </AssetEditorWorkspace>
+  </AssetEditorFrame>
 }

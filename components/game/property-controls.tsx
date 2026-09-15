@@ -61,7 +61,7 @@ export function Tuner({
 }) {
   const fraction = max > min ? (value - min) / (max - min) : 0
   return (
-    <div className="group flex items-center">
+    <div className="property-tuner group flex items-center">
       <span className={`${labelClassName} shrink-0 text-[13px] font-medium text-ink-light`}>{label}</span>
       <div className="relative h-8 min-w-0 flex-1 overflow-hidden rounded-[6px] bg-[#c3b193]">
         {/* Fill and knob are drawn; the real range input sits on top, invisible. */}
