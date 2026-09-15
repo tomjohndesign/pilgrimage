@@ -64,6 +64,12 @@ describe("game save schema", () => {
     expect("walkSpeed" in identity).toBe(false)
   })
 
+  it("retains the grid preference and accepts older display settings without it", () => {
+    expect(parseDisplaySettings({ showGrid: false })).toEqual({ showGrid: false })
+    expect(parseDisplaySettings({ showTrees: false })).toEqual({ showTrees: false })
+    expect(parseDisplaySettings({ showGrid: "off" })).toEqual({})
+  })
+
   it("salvages valid display fields and drops the rest", () => {
     expect(parseDisplaySettings({ showTrees: false, characterModel: "wizard", road: 99, walkSpeed: 1.2, extra: 1 }))
       .toEqual({ showTrees: false, walkSpeed: 1.2 })

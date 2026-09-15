@@ -1,5 +1,5 @@
 import { expect, it } from "vitest"
-import { CROWD_SPEED_LIMIT, MAX_SIMULATION_STEP, BENCHMARK_SIMULATION_SPEEDS, SIMULATION_SPEEDS, crowdSafeSpeed, simulationFrameStep, simulationSpeedControl, speedBlockedByCrowd } from "./simulation-store"
+import { CROWD_SPEED_LIMIT, MAX_SIMULATION_STEP, BENCHMARK_SIMULATION_SPEEDS, SIMULATION_SPEEDS, crowdSafeSpeed, nextSimulationSpeed, simulationFrameStep, simulationSpeedControl, speedBlockedByCrowd } from "./simulation-store"
 
 it("preserves playback time and the background-frame clamp with bounded combined ticks", () => {
   for (const { rate } of BENCHMARK_SIMULATION_SPEEDS) for (const delta of [0, 1 / 144, 1 / 60, 1 / 30, .0334, .034, .1, 2]) {
@@ -41,4 +41,14 @@ it("lets the benchmark handle measure the top speed at any crowd size", () => {
   } finally {
     simulationSpeedControl.crowdLimit = true
   }
+})
+
+it("cycles speeds and wraps while skipping speeds blocked by the crowd", () => {
+  expect(nextSimulationSpeed(1, 100)).toBe(2)
+  expect(nextSimulationSpeed(2, 100)).toBe(6)
+  expect(nextSimulationSpeed(6, 100)).toBe(12)
+  expect(nextSimulationSpeed(12, 100)).toBe(1)
+  expect(nextSimulationSpeed(6, CROWD_SPEED_LIMIT.population + 1)).toBe(1)
+  expect(nextSimulationSpeed(12, CROWD_SPEED_LIMIT.population + 1)).toBe(1)
+  expect(nextSimulationSpeed(4, 100)).toBe(1)
 })
