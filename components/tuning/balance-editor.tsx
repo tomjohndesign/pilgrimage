@@ -78,6 +78,7 @@ function NumericField({
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/AQY-0 — Game tuning · buildings
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/B2W-0 — Mobile · game tuning
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/C2E-0 — Proposed IA: Game tuning · construction
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/D1K-0 — Proposed IA: Light game tuning
  */
 export function BalanceEditor({ mode, onModeChange }: AssetEditorNavigation & { active?: boolean }) {
   const [building, setBuilding] = useState(BUILD_CATALOG.find(def => !def.retired)!.id)

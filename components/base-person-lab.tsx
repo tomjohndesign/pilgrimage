@@ -118,6 +118,7 @@ function KnightEntourage({ mounted, row, frame, visibleFrame, variant, walking, 
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/AY5-0 — Mobile · controls drawer
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/BEA-0 — Proposed IA: Character · properties
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/BO4-0 — Proposed IA: Character · pose editing
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/CTF-0 — Proposed IA: Light character properties; 16 px row sprites
  */
 export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const [subject, setSubject] = useState<Subject>("person")

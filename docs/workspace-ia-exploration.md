@@ -3,8 +3,8 @@
 **Status: proposed design, not implemented.** September 15, 2026.
 
 The [Paper UI page](https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0)
-contains ten exploration frames below the current application captures, named
-**IA 01–10**. UI layers are editable; scene previews use captured game imagery.
+contains sixteen exploration frames below the current application captures, named
+**IA 01–16**. UI layers are editable; scene previews use captured game imagery.
 The tuning scene illustrates proposed preview context, not an existing live balance preview.
 
 ## Three areas, three responsibilities
@@ -90,6 +90,65 @@ it should show applicable effects and explain rules that affect new settlements 
 The existing Geist font, olive workspace surfaces, grass canvas background,
 stacked field labels and shared tooltip style remain the visual foundation.
 
+## Refined visual system
+
+The user-edited [resized character frame](https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/CCL-0)
+is the dark-mode reference. IA 01–10 use its exact surfaces and secondary controls.
+
+| Role | Dark | Light exploration |
+| --- | --- | --- |
+| Panels and canvas chrome | `#171810` | `#F1F1E8` |
+| Filled fields and selected rows | `#252B1D` | `#E3E7D7` |
+| Active timeline step | `#334127` | `#CBD5B7` |
+| Main text | `#F2E8D5` | `#24291D` |
+| Secondary text and icons | `#B5B5A1` | `#626B54` |
+| Slider fill | `#66734E` | `#AAB995` |
+| Grass canvas | `#556835` | `#556835` |
+
+Secondary buttons, search and canvas dropdowns use transparent backgrounds,
+4 px corners and a quiet one-pixel outline. Selected rows and property inputs
+use filled surfaces. Panel toggles sit on the surrounding surface. The animation
+footer shares the canvas chrome, with filled direction tiles and a single inset
+timeline strip. Light mode changes UI surfaces and contrast, preserving scene
+artwork and grass. These palettes are Paper proposals; they do not enable an
+application theme switch.
+
+### Character row sprites
+
+Replace the generic person icon with the entry's actual sprite in a fixed
+16 × 16 px slot. Fit the visible silhouette inside the slot without stretching,
+keep a consistent ground anchor and pixelated rendering, and retain a 36 px row
+hit target. Rows show presets, Merchant cart, Knight and existing settlement
+workers; Tavern worker and Shepherd replace the earlier placeholder Farmer and
+Stonemason entries.
+
+- At rest, show the idle pose facing southwest.
+- Hovering the row or focusing it by keyboard loops that character's existing
+  walk clip at its metadata timing. Keep navigation and selection independent.
+- Leaving or blurring the row returns to idle. Selection alone does not animate.
+- Share the existing atlas and animation clock; animate only the hovered/focused
+  visible row, pause when hidden, and respect reduced motion with the idle pose.
+- Use one framing transform based on the clip's full bounds so the sprite does
+  not change size or jump between frames. Carts use their existing travel clip.
+
+Paper shows static sprite poses; hover playback is an implementation requirement,
+not working animation in these frames.
+
+## Main game concepts
+
+IA 11–13 carry the same visual system into the existing contextual HUD: compact
+resources at top left, music/world/menu controls at top right, build actions at
+bottom left, time and traffic controls near the bottom, and the minimap at right.
+There is no full-width header or footer. Build mode opens a compact list with
+rotation and cancel controls; selection opens details above the minimap. Labels
+sit above property values. Icon-only actions use accessible names and tooltips.
+
+The main-game scene images are captures from `/play`; resource values, inspection
+values, minimap geography and placement overlays illustrate the proposed UI.
+They are not a recorded simulation state. IA 14–16 compare light mode for the
+character editor, game tuning and normal gameplay. These are design explorations,
+not implemented gameplay or navigation changes.
+
 ## Paper frames
 
 - [IA 01 · Workspace navigation](https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/B67-0)
@@ -102,3 +161,10 @@ stacked field labels and shared tooltip style remain the visual foundation.
 - [IA 08 · Character · sidebars collapsed](https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/C99-0)
 - [IA 09 · Character · resized sidebars](https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/CCL-0)
 - [IA 10 · Exploration · path reinforcement](https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/CLC-0)
+
+- [IA 11 · Game · Playing](https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/D4R-0)
+- [IA 12 · Game · Building placement](https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/D7K-0)
+- [IA 13 · Game · Building selected](https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/DC0-0)
+- [IA 14 · Light · Character properties](https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/CTF-0)
+- [IA 15 · Light · Game tuning](https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/D1K-0)
+- [IA 16 · Light · Playing](https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/DFN-0)
