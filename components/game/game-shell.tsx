@@ -46,7 +46,6 @@ import { useSettlement } from "@/hooks/use-settlement"
 import { previewResidents } from "@/lib/game/jobs/preview"
 import { BUILDING_PREVIEW, JOB_PREVIEW } from "@/lib/game/building-preview"
 
-import { GAME_BACKGROUND } from "@/lib/game/render/background"
 import { LoadingChurch } from "./loading-church"
 import { shrineLayout, isChapel } from "@/lib/game/shrine-layout"
 import { cameraOffset, yawForView } from "@/lib/game/render/iso"
@@ -368,7 +367,7 @@ export function GameShell({
   }, [travelers])
 
   return (
-    <PlayerColorContext.Provider value={settings.playerColor}><div className="fixed inset-0 overflow-hidden select-none" style={{ backgroundColor: GAME_BACKGROUND }}>
+    <PlayerColorContext.Provider value={settings.playerColor}><div className="fixed inset-0 overflow-hidden select-none" style={{ backgroundColor: "var(--chrome-surface)" }}>
       <LoadingChurch showChurch={!resuming && (!openingMap || !map || landmarkRoad !== map.road || revealPhase === "loading")}
         chapel={!openingHovel || isChapel(openingHovel)}
         generating={starting && revealPhase === "loading"} idle={!starting}
@@ -405,6 +404,7 @@ export function GameShell({
           characterModel={settings.characterModel}
           treeModel={settings.treeModel}
           visibility={settings}
+          showGrid={settings.showGrid}
           characterScale={settings.characterModel === "base" ? settings.baseSize : settings.draftSize}
           roadTier={settings.road}
           relicTraffic={relicTraffic}

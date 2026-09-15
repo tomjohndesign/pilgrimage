@@ -113,11 +113,12 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
         characterOcclusionRequest.current = resolve
       }),
       distantEffects: () => {
-        const counts = { smoke: 0, fires: 0, pointLights: 0, floaters: 0, cutaways: 0 }
+        const counts = { smoke: 0, fires: 0, pointLights: 0, activePointLights: 0, floaters: 0, cutaways: 0 }
         scene.traverseVisible(object => {
           if (object.name === "building-smoke") counts.smoke++
           if (object.name === "hearth-fire") counts.fires++
           if (object instanceof THREE.PointLight) counts.pointLights++
+          if (object instanceof THREE.PointLight && object.intensity > 0) counts.activePointLights++
           if (["admission-effects", "piety-effects", "construction-cost-effects"].includes(object.name)) counts.floaters++
           if (object.userData.cutaway) counts.cutaways++
         })

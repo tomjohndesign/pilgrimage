@@ -1,3 +1,4 @@
+import { buildingSurfaceMaterial } from "./building-surface"
 import * as THREE from "three"
 import { shrineStructureParts } from "../building-art/shrine-geometry"
 import { mergedBuildingGeometry } from "../building-art/merged-geometry"
@@ -28,7 +29,7 @@ export function bakeLoadingChurch(renderer: THREE.WebGLRenderer, chapel = true) 
     for (let view = 0; view < 4; view++) {
       const parts = shrineStructureParts(chapel ? 2 : 3, chapel ? 2 : 5, [], view === 1 || view === 2 ? -.5 : .5)
       const geometry = mergedBuildingGeometry(parts.filter(part => !part.surface))
-      const material = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })
+      const material = buildingSurfaceMaterial()
       const mesh = new THREE.Mesh(geometry, material)
       mesh.rotation.y = view * Math.PI / 2
       scene.add(mesh)

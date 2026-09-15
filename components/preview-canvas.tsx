@@ -1,11 +1,13 @@
 "use client"
 
+import { registerSurfaceLighting } from "@/lib/game/render/surface-registration"
 import { PreviewNavigation } from "@/components/preview-navigation"
 
 import { TERRAIN } from "@/lib/game/map/terrain"
 
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 
+import { useEffect } from "react"
 import { useThree } from "@react-three/fiber"
 
 import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
@@ -51,6 +53,7 @@ export function PreviewCanvas({
 
       {/* Re-aim when the view changes; the camera prop is only read at mount. */}
       <CameraAim view={view} zoom={zoom} />
+      <PreviewSurfaceLighting />
 
       {children}
     </PixelCanvas>
@@ -60,4 +63,10 @@ export function PreviewCanvas({
 function CameraAim({ view, zoom }: { view: number; zoom: number }) {
   const size = useThree(s => s.size)
   return <PreviewNavigation view={view} height={Math.max(1, size.height) / zoom} />
+}
+
+function PreviewSurfaceLighting() {
+  const scene = useThree(s => s.scene)
+  useEffect(() => registerSurfaceLighting(scene), [scene])
+  return null
 }

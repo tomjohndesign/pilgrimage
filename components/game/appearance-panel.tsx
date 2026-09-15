@@ -36,7 +36,7 @@ export function AppearancePanel({ map }: { map: GameMap }) {
   const selection=useCameraStore(s=>s.selection)
   const [target,setTarget]=useState<"assets"|AppearanceGroup>("assets")
   const [scope,setScope]=useState<"object"|"group">("object")
-  const [open,setOpen]=useState<Record<string,boolean>>({Grass:true,Assets:true,"Selected object":true,"Appearance JSON":false})
+  const [open,setOpen]=useState<Record<string,boolean>>({Grass:true,"Surface texture":true,Assets:true,"Selected object":true,"Appearance JSON":false})
   const [json,setJson]=useState("")
   const [message,setMessage]=useState("")
   const [error,setError]=useState("")
@@ -73,6 +73,19 @@ export function AppearancePanel({ map }: { map: GameMap }) {
         onChange={canopyShade=>update({...value,grass:{...value.grass,canopyShade}})} />
       <p className="py-1 text-[11px] text-ink-light">Try the swatches, then adjust brightness. Ground shading controls the terrain tint; canopy shading controls the shadows beneath trees.</p>
       <HudButton onClick={()=>update({...value,grass:defaultAppearance().grass})}>Reset grass</HudButton>
+    </Section>
+    <Section {...section("Surface texture")}>
+      <Tuner label="Surface grain" labelClassName="w-28" value={value.terrain.texture} display={`${Math.round(value.terrain.texture * 100)}%`} min={0} max={2} step={.01}
+        onChange={texture => update({...value, terrain: {...value.terrain, texture}})} />
+      <label className="flex items-center justify-between gap-2 text-xs text-ink-light">Surface shading
+        <ChromeSelect aria-label="Surface shading" value={value.terrain.inclineStyle}
+          onChange={e => update({...value, terrain: {...value.terrain, inclineStyle: e.target.value as typeof value.terrain.inclineStyle}})}
+          className="border border-rule bg-parchment p-1 text-ink">
+          <option value="smooth">Smooth</option><option value="stipple">Soft stipple</option><option value="ordered">Ordered dither</option>
+        </ChromeSelect>
+      </label>
+      <p className="py-1 text-[11px] text-ink-light">Shared grain on ground, water, buildings, and trees. Shading style also controls scene lighting, canopy shadows, and smoke.</p>
+      <HudButton onClick={() => update({...value, terrain: defaultAppearance().terrain})}>Reset surface texture</HudButton>
     </Section>
     <Section {...section("Assets")}>
       <label className="flex items-center justify-between gap-2 text-xs text-ink-light">Apply to

@@ -18,7 +18,7 @@ import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/eleva
 
 import Link from "next/link"
 import { Tooltip } from "@base-ui/react/tooltip"
-import { ChevronRight, Dices, Menu, Settings, X } from "lucide-react"
+import { ChevronRight, Menu, Settings, Users, X } from "lucide-react"
 import "./game-hud.css"
 import { useEffect, useId, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
@@ -63,7 +63,6 @@ import { HudButton } from "./hud-button"
 import { BugReportDialog } from "./bug-report-dialog"
 import { MapSizeControl } from "./map-size-control"
 import { NewMapDialog, type NewWorld } from "./new-map-dialog"
-import { randomSeed } from "@/lib/game/rng"
 import { NewWorldFields } from "./new-world-fields"
 import { SeedField } from "./seed-field"
 import { Switch } from "@/components/ui/switch"
@@ -72,7 +71,7 @@ import { useBugReportRuntime } from "@/hooks/use-bug-report-runtime"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES } from "@/lib/game/scene-visibility"
 import { Section, Tuner } from "./property-controls"
-import { BuildControls, HudClock, HudResources } from "./hud-controls";
+import { BuildControls, HudClock, HudPlayback, HudResources } from "./hud-controls";
 
 const CONTROLS: Array<[string, string]> = [
   ["Tap / click", "Inspect people, trees & piles"],
@@ -190,7 +189,7 @@ function ToggleRow({
 }
 
 /** Top-level navigation, folded into the play view. Controls live in here too. */
-function MenuPanel({ onClose, playing, playerColor, onColorChange }: { onClose: () => void; playing: boolean; playerColor: string; onColorChange: (color: string) => void }) {
+function MenuPanel({ onClose, playing, playerColor, onColorChange, onReportBug, reportError }: { onReportBug: () => void; reportError: string; onClose: () => void; playing: boolean; playerColor: string; onColorChange: (color: string) => void }) {
   const [showControls, setShowControls] = useState(false)
 
   return (
@@ -206,7 +205,7 @@ function MenuPanel({ onClose, playing, playerColor, onColorChange }: { onClose: 
               href={item.href}
               target={item.href === "/tuning" ? "_blank" : undefined}
               rel={item.href === "/tuning" ? "noopener noreferrer" : undefined}
-              className="font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red"
+              className="chrome-nav-row"
             >
               {item.label}
             </Link>
@@ -214,7 +213,7 @@ function MenuPanel({ onClose, playing, playerColor, onColorChange }: { onClose: 
               <Link
                 key={child.href}
                 href={child.href}
-                className="pl-3 font-display text-[10px] uppercase tracking-[2px] text-ink-light hover:text-red"
+                className="chrome-nav-row hud-menu-child"
               >
                 {child.label}
               </Link>
@@ -225,22 +224,24 @@ function MenuPanel({ onClose, playing, playerColor, onColorChange }: { onClose: 
           type="button"
           onClick={() => setShowControls((open) => !open)}
           aria-expanded={showControls}
-          className="text-left font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red"
+          className="chrome-nav-row"
         >
-          Controls {showControls ? "▾" : "▸"}
+          <span>Controls</span><ChevronRight size={14} className={showControls ? "rotate-90" : ""} />
         </ChromeButton>}
         {playing && <ChromeButton type="button" onClick={() => { useCameraStore.getState().reset(); onClose() }}
-          className="text-left font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red">Reset camera</ChromeButton>}
+          className="chrome-nav-row">Reset camera</ChromeButton>}
         {playing && showControls && (
           <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
             {CONTROLS.map(([key, action]) => (
               <div key={key} className="contents">
-                <dt className="font-display text-[10px] text-gold">{key}</dt>
+                <dt className="text-xs text-gold">{key}</dt>
                 <dd className="text-[13px] text-ink-light">{action}</dd>
               </div>
             ))}
           </dl>
         )}
+        <ChromeButton id="bug-report-button" type="button" className="chrome-nav-row" onClick={onReportBug}>Report a bug</ChromeButton>
+        {reportError && <p role="alert" className="text-sm text-red">{reportError}</p>}
       </nav>
     </div>
   )
@@ -817,8 +818,6 @@ export function GameHud({
         </div>
         <div className="hud-header-right">
         <div className="hud-header-actions">
-          {playing && <ChromeButton type="button" className="hud-header-button" aria-label="Random map" title="Random map: regenerate at this size with a random seed"
-            onClick={() => onNewMap({ size: settings.size, seed: randomSeed() })}><Dices size={16} /></ChromeButton>}
           {playing && <NewMapDialog defaultSize={settings.size} onCreate={onNewMap} />}
           <MusicPlayer className="hud-header-button" compact /><ThemeToggle />
           {playing && <ChromeButton type="button" className="hud-header-button" aria-label="World settings" title="World settings"
@@ -835,11 +834,16 @@ export function GameHud({
               setPanel(null)
               economy.chooseBuild(null)
             }}><Menu size={16} /></ChromeButton>}
-          {playing && menuOpen && <MenuPanel playerColor={settings.playerColor} onColorChange={playerColor => set({ playerColor })} playing={playing} onClose={() => setMenuOpen(false)} />}
+          {playing && menuOpen && <MenuPanel playerColor={settings.playerColor} onColorChange={playerColor => set({ playerColor })} playing={playing} onClose={() => setMenuOpen(false)} onReportBug={openBugReport} reportError={reportError} />}
         </div>
-
+        {playing && <HudPlayback />}
         </div>
       </header>
+
+      {playing && <section className="hud-traffic" aria-label="Character count">
+        <span className="hud-traffic-icon" aria-hidden="true"><Users size={16} /></span>
+        <Tuner label="Characters" hideLabel display={String(travelers.length)} min={0} max={MAX_TRAFFIC} value={settings.traffic} onChange={traffic => set({ traffic })} />
+      </section>}
 
       {!starting && <div className="hud-landing-heading">
         <h1 className="hud-landing-title">Pilgrimage</h1>
@@ -868,11 +872,7 @@ export function GameHud({
       </footer>}
 
       {playing && panel === "world" && <aside id="world-settings" className="hud-world hud-well" aria-label="World settings">
-        <div className="hud-world-heading"><span>World</span><ChromeButton type="button" aria-label="Close world settings" onClick={() => setPanel(null)}><X size={16} /></ChromeButton></div>
-        <div className="mb-4 flex flex-wrap gap-2">
-          <HudButton id="bug-report-button" onClick={openBugReport}>Report a bug</HudButton>
-        </div>
-        {reportError && <p role="alert" className="mb-4 text-sm text-red">{reportError}</p>}
+        <div className="hud-world-heading"><span>World</span><ChromeButton type="button" className="hud-close" aria-label="Close world settings" onClick={() => setPanel(null)}><X size={16} /></ChromeButton></div>
         <Section {...section("Visibility")}>
           {VISIBILITY_TOGGLES.map(([key, label]) => (
             <ToggleRow key={key} label={label} checked={settings[key]} onChange={(shown) => set({ [key]: shown })} />
@@ -881,7 +881,6 @@ export function GameHud({
             onChange={(shown) => set({ buildingVisibility: shown ? "auto" : "hidden" })} />
           <ToggleRow label="All interiors" checked={settings.buildingVisibility === "interiors"} disabled={settings.buildingVisibility === "hidden"}
             onChange={(all) => set({ buildingVisibility: all ? "interiors" : "auto" })} />
-          <p className="py-1 text-[11px] italic text-ink-light">Interiors open on their own when you select a building or someone inside; All interiors keeps every roof off. Scenery includes rocks, plants and the signpost. Hidden objects keep working.</p>
           <HudButton onClick={() => set(DEFAULT_SCENE_VISIBILITY)}>Reset visibility</HudButton>
         </Section>
         {SHOW_PROPERTY_PANELS && <>
@@ -1224,16 +1223,11 @@ export function GameHud({
           {selectedRelic && relic && <RelicPanel relic={relic} />}
         </div>}
       </aside>}
-      {playing && map && <aside id="minimap-dock" data-map-open={minimapOpen} data-inspecting={!!selection || panel === "settlement"} className="hud-details-dock hud-well" aria-label="Minimap and playback">
+      {playing && map && <aside id="minimap-dock" data-map-open={minimapOpen} data-inspecting={!!selection || panel === "settlement"} className="hud-details-dock hud-well" aria-label="Minimap and date">
         <div className="hud-minimap">
           <Minimap map={map} />
           <span className="hud-minimap-north" aria-hidden="true">N ↑</span>
-        </div>
-        <div className="hud-time-controls">
           <HudClock />
-          <section className="hud-traffic" aria-label="Traffic">
-            <Tuner label="Characters" display={String(travelers.length)} min={0} max={MAX_TRAFFIC} value={settings.traffic} onChange={traffic => set({ traffic })} />
-          </section>
         </div>
       </aside>}
     </div>

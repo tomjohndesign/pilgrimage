@@ -31,6 +31,7 @@ export function Tuner({
   max,
   step = 1,
   showHandle = false,
+  hideLabel = false,
   onChange,
   onDragChange,
   labelClassName = "w-16",
@@ -42,12 +43,13 @@ export function Tuner({
   max: number
   step?: number
   showHandle?: boolean
+  hideLabel?: boolean
   onChange: (value: number) => void
   onDragChange?: (dragging: boolean) => void
   labelClassName?: string
 }) {
   return <Slider.Root className="chrome-tuner" value={value} min={min} max={max} step={step} onValueChange={next => onChange(next)} onValueCommitted={() => onDragChange?.(false)}>
-    <label className="chrome-tuner-label">{label}</label>
+    {!hideLabel && <label className="chrome-tuner-label">{label}</label>}
     <Slider.Control className="chrome-tuner-control" onPointerDown={() => onDragChange?.(true)} onPointerUp={() => onDragChange?.(false)} onPointerCancel={() => onDragChange?.(false)} onLostPointerCapture={() => onDragChange?.(false)}>
       <Slider.Track className="chrome-tuner-track"><Slider.Indicator className="chrome-tuner-fill" /><span className="chrome-tuner-value">{display}</span><Slider.Thumb className="chrome-tuner-thumb" aria-label={label} aria-valuetext={display} /></Slider.Track>
     </Slider.Control>
