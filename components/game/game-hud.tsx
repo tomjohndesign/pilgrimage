@@ -17,7 +17,7 @@ import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/eleva
 
 import Link from "next/link"
 import { Tooltip } from "@base-ui/react/tooltip"
-import { ArrowLeft, ChevronRight, Dices, Menu, Settings, X } from "lucide-react"
+import { ChevronRight, Dices, Menu, Settings, X } from "lucide-react"
 import "./game-hud.css"
 import { useEffect, useId, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
@@ -276,55 +276,58 @@ function useLiveStats(travelerId: number): SimTraveler | null {
   return live
 }
 
+/** Hover previews party members; clicking selects them in the scene.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1GB-0
+ */
+function PartyPanel({ traveler, travelers, map, monk }: { traveler: Traveler; travelers: Traveler[]; map: GameMap | null; monk?: Monk }) {
+  const companions = travelers.filter(person => person.party?.id === traveler.party?.id)
+  const [preview, setPreview] = useState<{ selectedId: number; personId: number } | null>(null)
+  const person = (preview?.selectedId === traveler.id ? companions.find(member => member.id === preview.personId) : undefined) ?? traveler
+  const previewMonk = person.id === traveler.id ? monk : simRegistry.current?.joinedMonks.get(person.id)
+  return <div className="hud-party-selection">
+    <section className="hud-party-roster" aria-label="Travel party">
+      <header className="hud-party-heading">
+        <h2 className="page-title hud-selection-name">{traveler.party!.name}</h2>
+        <p>{companions.length} {companions.length === 1 ? "member" : "members"}</p>
+      </header>
+      <nav className="hud-party-members" aria-label="Party members" onPointerLeave={() => setPreview(null)} onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setPreview(null)
+      }}>{companions.map(person => {
+        const sim = simRegistry.current
+        const state = sim?.travelers.get(person.id), joinedMonk = sim?.joinedMonks.get(person.id)
+        return <ChromeButton key={person.id} className="chrome-nav-row" aria-current={person.id === traveler.id ? "true" : undefined}
+          onPointerEnter={() => setPreview({ selectedId: traveler.id, personId: person.id })}
+          onFocus={() => setPreview({ selectedId: traveler.id, personId: person.id })}
+          onClick={() => {
+            setPreview(null)
+            const camera = useCameraStore.getState()
+            camera.select(joinedMonk ? { kind: "monk", id: joinedMonk.id } : { kind: "traveler", id: person.id })
+            if (state) camera.panTo(state.x, state.z)
+          }}><span><span className="page-title hud-party-member-name">{person.name}</span><small>{joinedMonk || state?.home || state?.employer ? "Settled" : state?.partyWaiting ? "Waiting" : person.type.label}</small></span><ChevronRight size={14} /></ChromeButton>
+      })}</nav>
+    </section>
+    <section className="hud-party-detail" aria-label="Party member details">
+      {previewMonk ? <MonkPanel key={previewMonk.id} monk={previewMonk} /> : <TravelerPanel key={person.id} traveler={person} map={map} />}
+    </section>
+  </div>
+}
+
 /** Who the player clicked on the road: name, calling, and what drives them. */
-function TravelerPanel({ traveler, travelers, map, monk }: { traveler: Traveler; travelers: Traveler[]; map: GameMap | null; monk?: Monk }) {
+function TravelerPanel({ traveler, map }: { traveler: Traveler; map: GameMap | null }) {
   const a = traveler.attributes
   const live = useLiveStats(traveler.id)
   const sim = simRegistry.current
   const party = live?.partyId === undefined ? undefined : sim?.parties.get(live.partyId)
-  const companions = traveler.party ? travelers.filter(t => t.party?.id === traveler.party!.id) : []
-  const [view, setView] = useState<"party" | "members" | "person">(monk ? "person" : traveler.party ? "party" : "person")
-  useEffect(() => { setView(monk ? "person" : traveler.party ? "party" : "person") }, [traveler.party?.id])
   const waitingLabel = live?.partyGathering?.back ? "Rejoining the company"
     : party?.gathering ? `${live?.partyGathering?.arrived ? "Waiting for" : "Joining"} companions · ${party.gathering.label}`
     : "Waiting for companions"
-  const focusParty = () => {
-    const members = party?.members.flatMap(id => sim?.travelers.get(id) ? [sim.travelers.get(id)!] : []) ?? []
-    if (!members.length) return
-    const minX = Math.min(...members.map(s => s.x)), maxX = Math.max(...members.map(s => s.x))
-    const minZ = Math.min(...members.map(s => s.z)), maxZ = Math.max(...members.map(s => s.z))
-    const camera = useCameraStore.getState()
-    camera.panTo((minX + maxX) / 2, (minZ + maxZ) / 2)
-    camera.zoomBy(Math.max(12, Math.hypot(maxX - minX, maxZ - minZ) + 8) / camera.viewSize)
-  }
   const named = (id: string | null | undefined) => map?.buildings.find(b => b.id === id)?.label
   // The barks are in Old English and Latin, so the panel carries the meaning.
   const spokenLine = useVoiceSubtitleStore(s => s.travelerId === traveler.id ? s.line : null)
-  if (monk && view === "person") return <MonkPanel monk={monk} onBack={() => setView("members")} />
-  if (companions.length > 0 && view !== "person") return <Panel>
-    <div className="flex items-center justify-between gap-2">
-      {view === "members" ? <ChromeButton className="chrome-back" onClick={() => setView("party")}><ArrowLeft size={14} />Party</ChromeButton> : <Label>Travel party</Label>}
-      <ChromeButton className="chrome-icon-button" aria-label="Dismiss party" onClick={() => useCameraStore.getState().select(null)}><X size={14} /></ChromeButton>
-    </div>
-    <h2 className="page-title hud-selection-name">{view === "members" ? "Party members" : traveler.party!.name}</h2>
-    {view === "party" ? <>
-      <p className="text-xs text-ink-light">{party?.members.length ?? companions.length} members{party ? ` · ${party.reason}` : " · Former companions"}</p>
-      <div className="mt-3 flex gap-2"><FollowButton subject="party" />{party && <ChromeButton className="hud-action" onClick={focusParty}>Find party</ChromeButton>}</div>
-      <ChromeButton className="chrome-nav-row mt-3" onClick={() => setView("members")}><span>Members</span><ChevronRight size={14} /></ChromeButton>
-    </> : <nav className="hud-party-members" aria-label="Party members">{companions.map(person => {
-      const state = sim?.travelers.get(person.id), monk = sim?.joinedMonks.get(person.id)
-      return <ChromeButton key={person.id} className="chrome-nav-row" onClick={() => {
-        setView("person")
-        const camera = useCameraStore.getState()
-        camera.select(monk ? {kind:"monk",id:monk.id} : {kind:"traveler",id:person.id})
-        if (state) camera.panTo(state.x,state.z)
-      }}><span><span className="page-title hud-party-member-name">{person.name}</span><small>{monk || state?.home || state?.employer ? "Settled" : state?.partyWaiting ? "Waiting" : person.type.label}</small></span><ChevronRight size={14} /></ChromeButton>
-    })}</nav>}
-  </Panel>
   return (
     <Panel>
       <div className="flex items-center justify-between gap-4">
-        {companions.length > 0 ? <ChromeButton className="chrome-back" onClick={() => setView("members")}><ArrowLeft size={14} />Members</ChromeButton> : <Label>Traveler</Label>}
+        <Label>Traveler</Label>
         <div className="flex items-center gap-2">
           <FollowButton subject="traveler" />
           <ChromeButton
@@ -543,7 +546,7 @@ function useMonkLiveState(monkId: number) {
 }
 
 /** One of the brothers: name, office, and what he brought with him. */
-function MonkPanel({ monk, onBack }: { monk: Monk; onBack?: () => void }) {
+function MonkPanel({ monk }: { monk: Monk }) {
   const balance = useBalanceStore((s) => s.balance)
   const a = monk.attributes
   const { activity, piety, happiness } = useMonkLiveState(monk.id)
@@ -561,7 +564,7 @@ function MonkPanel({ monk, onBack }: { monk: Monk; onBack?: () => void }) {
   return (
     <Panel>
       <div className="flex items-center justify-between gap-4">
-        {onBack ? <ChromeButton className="chrome-back" onClick={onBack}><ArrowLeft size={14} />Members</ChromeButton> : <Label>Brother</Label>}
+        <Label>Brother</Label>
         <div className="flex items-center gap-2">
           <FollowButton subject="monk" />
           <ChromeButton
@@ -612,7 +615,7 @@ function MonkPanel({ monk, onBack }: { monk: Monk; onBack?: () => void }) {
 }
 
 /**
- * Contextual game chrome: bottom-left actions and a shared minimap/selection dock on the right.
+ * Contextual game chrome: selection and Build at left, minimap and playback at right.
  * Build, world tuning, and object inspection open only when requested.
  *
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1SK-0 — nothing selected
@@ -1141,7 +1144,7 @@ export function GameHud({
           economy.chooseBuild(null)
           useCameraStore.getState().select(null)
         }} />}
-      {playing && map && (selection || panel === "settlement") && <aside className="hud-selection-dock hud-well" aria-label="Selected item">
+      {playing && map && (selection || panel === "settlement") && <aside className="hud-selection-dock hud-well" data-party={!!selectedPartyMember?.party} aria-label="Selected item">
         {panel === "settlement" && <div className="hud-inspector" id="settlement-details">
           <SettlementPanel economy={economy} monks={monks} relic={relic} onClose={() => setPanel(null)} />
         </div>}
@@ -1215,7 +1218,7 @@ export function GameHud({
           </Panel>
           )}
           {selection?.kind === "animal" && <AnimalInspector id={selection.id} />}
-          {selectedPartyMember && <TravelerPanel traveler={selectedPartyMember} travelers={travelers} map={map} monk={selectedMonk ?? undefined} />}
+          {selectedPartyMember?.party ? <PartyPanel key={selectedPartyMember.party.id} traveler={selectedPartyMember} travelers={travelers} map={map} monk={selectedMonk ?? undefined} /> : selectedTraveler && <TravelerPanel key={selectedTraveler.id} traveler={selectedTraveler} map={map} />}
           {selectedMonk && !selectedPartyMember && <MonkPanel monk={selectedMonk} />}
           {selectedRelic && relic && <RelicPanel relic={relic} />}
         </div>}

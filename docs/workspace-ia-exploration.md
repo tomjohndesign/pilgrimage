@@ -155,7 +155,11 @@ mobile camera controls; the Paths and Demolish toolbar buttons were removed.
 Build mode opens a narrow list joined to its hover details by one divider, with
 a detailed preview of the live building model below its name. Rotation and cancel
 controls remain available. Selection opens a compact floating panel on the left
-above Build; parties drill into Members and individual details with back navigation.
+above Build; party selection opens a joined member list on the left and the selected
+person’s details on the right. Hover or keyboard focus previews a member; clicking
+selects and highlights them on the map and in the list. Leaving the list restores
+the selected member’s details. A persistent header shows the group name and member
+count; party and building lists scroll with a maximum height of 400 px.
 Labels sit above property values. Icon-only actions use accessible names and tooltips.
 
 The main-game scene images are captures from `/play`; resource values, inspection

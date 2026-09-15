@@ -442,3 +442,29 @@
  .game-hud .hud-details-dock[data-inspecting="true"] .hud-minimap { display:none; }
  .game-hud:is([data-panel="world"],[data-panel="menu"]) .hud-selection-dock { display:none; }
 }
+
+/* Party selection uses the same joined list/detail arrangement as Build. */
+.game-hud .hud-selection-dock[data-party="true"] { width:560px; max-width:calc(100% - var(--hud-space) * 2); overflow:hidden; }
+.hud-party-selection { display:grid; grid-template-columns:240px minmax(0,1fr); max-height:calc(100dvh - 176px); }
+.hud-party-roster,.hud-party-detail { min-width:0; min-height:0; overflow:auto; overscroll-behavior:contain; }
+.hud-party-roster { display:flex; flex-direction:column; padding:20px 12px; overflow:hidden; }
+.hud-party-heading { flex-shrink:0; padding:0 8px; }
+.hud-party-heading p { color:var(--chrome-muted); font-size:12px; }
+.hud-party-members { min-height:0; max-height:400px; overflow:auto; overscroll-behavior:contain; }
+.hud-party-members .chrome-nav-row { flex-shrink:0; }
+.game-hud .hud-building-tiles { max-height:400px; overflow:auto; overscroll-behavior:contain; }
+.game-hud .hud-building-tiles .hud-building-tile { flex-shrink:0; }
+.hud-party-detail { border-left:1px solid var(--chrome-line); }
+.hud-party-members .chrome-nav-row[aria-current="true"] { background:var(--chrome-field); color:var(--chrome-text); }
+.hud-party-members .chrome-nav-row > span { min-width:0; white-space:normal; overflow-wrap:anywhere; }
+.hud-party-members .chrome-nav-row > svg { flex-shrink:0; }
+@media(max-width:900px) {
+ .hud-party-selection { max-height:calc(100dvh - 330px); }
+}
+@media(max-width:600px) {
+ .hud-party-selection { grid-template-columns:minmax(0,2fr) minmax(0,3fr); }
+ .hud-party-roster { padding:12px 4px; }
+ .game-hud .hud-party-heading > .hud-selection-name { font-size:20px; }
+ .hud-party-member-name { font-size:16px; }
+ .hud-inspector .hud-party-detail .hud-inspector-content { padding:12px; }
+}
