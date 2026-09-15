@@ -44,17 +44,9 @@ import styles from "./building-lab.module.css"
 export type CaptureMapGuide = () => Promise<File>
 
 function SceneCamera({ recipe, zoom }: { recipe: BuildingRecipe; zoom: number }) {
-  const { camera, size, invalidate } = useThree()
-  useEffect(() => {
-    camera.position.set(...cameraOffset(yawForView(recipe.view)))
-    camera.position.y += TILE_HEIGHT + 0.6
-    camera.lookAt(0, TILE_HEIGHT + 0.6, 0)
-    if (camera instanceof THREE.OrthographicCamera) camera.zoom = Math.min(size.width, size.height) / (Math.max(buildingDimensions(recipe).width, buildingDimensions(recipe).depth) * 1.42 + 5) * zoom
-    camera.updateProjectionMatrix()
-    camera.updateMatrixWorld()
-    invalidate()
-  }, [camera, size, recipe.width, recipe.depth, recipe.view, zoom, invalidate])
-  return null
+  const size = useThree(s => s.size)
+  const fit = Math.max(1, Math.min(size.width, size.height)) / (Math.max(buildingDimensions(recipe).width, buildingDimensions(recipe).depth) * 1.42 + 5) * zoom
+  return <PreviewNavigation view={recipe.view} height={Math.max(1, size.height) / fit} target={[0, TILE_HEIGHT + .6, 0]} resetKey={recipe.variant} />
 }
 
 /** Capture the actual procedural model on game tiles in all four guide cells. */
@@ -152,9 +144,9 @@ export function ProceduralMapScene({ recipe, grid, zoom, playbackRate = 3, slaug
   return <section className={embedded ? "asset-building-scene" : styles.mapPanel} aria-label={`${BUILDING_VIEWS[recipe.view].name} procedural building on game tiles`}>
     {!embedded && <div className={styles.mapLabel}><strong>{BUILDING_VIEWS[recipe.view].name}</strong><span>{recipe.width} × {recipe.depth} tile footprint</span></div>}
     <div className={embedded ? "asset-building-viewport" : styles.mapCanvas}>
-      <Canvas frameloop="demand" onPointerMissed={() => {if(!placement) onSelect?.(null)}} orthographic camera={{ near: 0.1, far: 400 }} outputDpr={1} fallback={<p>This map preview needs WebGL.</p>}>
+      <Canvas frameloop="demand" onPointerMissed={() => {if(!placement) onSelect?.(null)}} orthographic camera={{ manual: true, near: 0.1, far: 400 }} outputDpr={1} fallback={<p>This map preview needs WebGL.</p>}>
         <color attach="background" args={[TERRAIN.grass.color]} />
-        <SceneCamera recipe={study} zoom={zoom} /><PreviewNavigation key={recipe.view} />
+        <SceneCamera recipe={study} zoom={zoom} />
         <ambientLight intensity={SURFACE_LIGHT.ambient} />
         <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
         <directionalLight name="workshop-sun" position={lightOffsetForYaw(yawForView(recipe.view))} intensity={SURFACE_LIGHT.sun} />

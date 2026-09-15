@@ -25,9 +25,9 @@ The game link lives at the bottom of the left sidebar.
 1. Open the workspace: the left sidebar lists Entities, Explorations and Pages.
 2. Select Characters: that list is replaced by the character list, with a
    **Back to Workspace** action at the top. The canvas shows every character in
-   a spaced grid, playing varied sprite sequences without changing position;
-   the properties sidebar stays closed. Buildings use the same grid with actual
-   model thumbnails. Click an item in either the grid or sidebar to select it.
+   a blank isometric staging map, playing varied sprite sequences without changing position;
+   the properties sidebar stays closed. Buildings use the same map with actual
+   models at game scale. Click an item in either the map or sidebar to select it.
 3. Select Storybook: highlight its row, load its preview, and show its properties
    on the right. The left sidebar stays on the character list.
 4. Select another character: replace the canvas and inspector together while
@@ -38,8 +38,8 @@ The game link lives at the bottom of the left sidebar.
 A branch opens another list; a leaf selects content. Search filters the current
 list. Long lists scroll independently. The Paper character list shows representative
 entries from presets, road characters and settlement jobs; the implemented list
-includes every available character. Search filters both the list and its grid.
-Click the category heading to return from an item to the grid.
+includes every available character. Search filters both the list and its staging map.
+Click the category heading to return from an item to the staging map.
 
 Navigation depth belongs on the left. Property groups such as Body, Outfit,
 Walking and Sounds stay on the right as simple sections, with optional disclosure
@@ -50,9 +50,9 @@ such as Character, Sprite sheet and Show rig belong to the canvas.
 
 | Destination | Left sidebar after entering | Canvas | Right properties |
 | --- | --- | --- | --- |
-| Characters | Characters, grouped by source | All-character grid, selected character / sprite sheet | Body, outfit, appearance, walking, sounds; selected rig joint |
+| Characters | Characters, grouped by source | Isometric character staging map, selected character / sprite sheet | Body, outfit, appearance, walking, sounds; selected rig joint |
 | Animals | Species / variants | Selected animal | Appearance, gait, rig, sounds |
-| Buildings | Buildings | All-building grid, selected building / map context | Shape, layout, appearance and placement |
+| Buildings | Buildings | Isometric building staging map, selected building / map context | Shape, layout, appearance and placement |
 | Ents | Species | Selected ent | Foliage, walking and rig |
 | Trees | Species | Selected species / lineup / forest | Foliage and generation settings |
 | Maps | Workspace destinations | Generated map | Seed, woodland, clearings and paths |
@@ -91,6 +91,13 @@ to preserve the complete balance preset.
 
 The existing Geist font, olive workspace surfaces, grass canvas background,
 stacked field labels and shared tooltip style remain the visual foundation.
+
+Preview navigation is shared across tools: wheel zoom uses the game's response,
+mouse drag pans, and two-finger gestures pan and pinch. Resizing a sidebar or
+rotating a scene preserves the current camera framing; choosing a new staging
+map or an explicit overview action fits it again. Native sprite strips and sprite
+sheets use the same flat-canvas gestures without changing the underlying pixels.
+Simulation playback uses the same compact buttons and places speed in the footer.
 
 ## Refined visual system
 

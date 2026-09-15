@@ -12,7 +12,7 @@ import { ChromeButton, type SelectOption } from "./ui/chrome-controls"
 import { earlyBuildingRecipe, type EarlyBuildingType } from "@/lib/game/building-art/style"
 import { TERRAIN, TILE_HEIGHT } from "@/lib/game/map/terrain"
 import type { GameMap } from "@/lib/game/map/types"
-import { cameraOffset, yawForView, lightOffsetForYaw } from "@/lib/game/render/iso"
+import { yawForView, lightOffsetForYaw } from "@/lib/game/render/iso"
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 import type { BaseClip } from "@/lib/game/base-person/pose"
 
@@ -63,12 +63,6 @@ function StagedBuilding({ id }: { id: string }) {
 }
 function StageCamera({ map, placed, labels }: { map: GameMap; placed: Placed[]; labels: React.RefObject<Map<string, HTMLButtonElement>> }) {
   const { camera, size } = useThree()
-  useEffect(() => {
-    const cam = camera as THREE.OrthographicCamera, aspect = size.width / Math.max(1, size.height)
-    const height = Math.max((map.width + map.depth) * .46 + 6, (map.width + map.depth) * .78 / aspect)
-    cam.left = -height * aspect / 2; cam.right = -cam.left; cam.top = height / 2; cam.bottom = -cam.top
-    cam.zoom = 1; cam.position.set(...cameraOffset(yawForView(0))); cam.lookAt(0, 0, 0); cam.updateProjectionMatrix(); cam.updateMatrixWorld()
-  }, [camera, size, map])
   const point = useMemo(() => new THREE.Vector3(), [])
   useFrame(() => {
     for (const { item, x, z } of placed) {
@@ -78,7 +72,8 @@ function StageCamera({ map, placed, labels }: { map: GameMap; placed: Placed[]; 
       label.style.visibility = Math.abs(point.x) > .96 || Math.abs(point.y) > .96 ? "hidden" : "visible"
     }
   })
-  return null
+  const aspect = size.width / Math.max(1, size.height)
+  return <PreviewNavigation height={Math.max((map.width + map.depth) * .46 + 6, (map.width + map.depth) * .78 / aspect)} resetKey={map} />
 }
 
 /** Real game assets on one blank, gridded isometric map at their world scale.
@@ -101,7 +96,7 @@ export function EntityStagingMap({ kind, items, active, onSelect }: { kind: "cha
       <color attach="background" args={[TERRAIN.grass.color]} />
       <ambientLight intensity={SURFACE_LIGHT.ambient} /><hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
       <directionalLight intensity={SURFACE_LIGHT.sun} position={lightOffsetForYaw(yawForView(0))} />
-      <StageCamera map={layout.map} placed={layout.placed} labels={labels} /><PreviewNavigation key={key} />
+      <StageCamera map={layout.map} placed={layout.placed} labels={labels} />
       <Suspense fallback={null}><TerrainTiles map={layout.map} showGrid vegetation={false} traffic={0} />
         {layout.placed.map(({ item, x, z }) => <group key={item.value} position={[x, TILE_HEIGHT, z]}
           onPointerOver={event => { event.stopPropagation(); setHovered(item.value) }} onPointerOut={() => setHovered(null)}

@@ -43,7 +43,7 @@ import { AnimalRigInspector, type AnimalInspection } from "./animal-rig-editor"
 import { useAnimalRigStore } from "@/lib/game/wildlife/rig-store"
 import { ANIMAL_FRAMES, EMPTY_ANIMAL_EDITS, animalClearFrame, animalPoseKey, type AnimalJoint, type AnimalRigEdits } from "@/lib/game/wildlife/rig-edits"
 import { BASE_PERSON } from "@/lib/game/base-person/pose"
-import { useAssetPreviewStore, usePreviewWheel } from "./asset-preview-controls"
+import { useAssetPreviewStore, usePreviewGestures } from "./asset-preview-controls"
 const DIRECTIONS = BASE_PERSON.directions
 
 /** Animals use the shared playground frame, controls and direction dock.
@@ -58,9 +58,9 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
   const [playing, setPlaying] = useState(["hawk", "sparrow", "horse", "donkey", "ox"].includes(subject)), [lineup, setLineup] = useState(false)
   const [row, setRow] = useState(1), [rate, setRate] = useState(1)
   const { zoom, setZoom } = useAssetPreviewStore()
-  const stage = useRef<HTMLDivElement>(null), drag = useRef<{ x: number; y: number; row: number; pan: boolean; offset: [number, number] } | null>(null)
+  const stage = useRef<HTMLDivElement>(null)
   const [offset, setOffset] = useState<[number, number]>([0, 0])
-  usePreviewWheel(stage)
+  usePreviewGestures(stage, { zoom, offset, onZoom: setZoom, onPan: setOffset, onTap: () => { if (!lineup) void playSourceSelection(`animal/${subject}`) } })
   const [construction, setConstruction] = useState(false)
   const [pack, setPack] = useState(false)
   const [coat, setCoat] = useState(""), [horseVariant, setHorseVariant] = useState<HorseVariant>("common")
@@ -158,10 +158,7 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
           frameCount={ANIMAL_FRAMES} frame={frame} clipLabel={actionLabel}
           keyed={step => frameKeyed(step)}
           onFrame={next => { setFrame(next); setPlaying(false); setLineup(false) }} />}>
-      <div className="person-stage-layout"><div ref={stage} className="person-stage person-stage-character"
-          onPointerDown={event => { if ((event.target as Element).closest("button, [role=button]") || event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); drag.current = { x: event.clientX, y: event.clientY, row, pan: true, offset } }}
-          onPointerMove={event => { const start = drag.current; if (!start) return; if (start.pan) setOffset([start.offset[0] + event.clientX - start.x, start.offset[1] + event.clientY - start.y]); else setRow(((start.row + Math.trunc((event.clientX - start.x) / 48)) % 8 + 8) % 8) }}
-          onPointerUp={event => { const start=drag.current;if(!lineup&&start&&Math.hypot(event.clientX-start.x,event.clientY-start.y)<6)void playSourceSelection(`animal/${subject}`);drag.current = null; event.currentTarget.releasePointerCapture(event.pointerId) }} onLostPointerCapture={() => { drag.current = null }}>
+      <div className="person-stage-layout"><div ref={stage} className="person-stage person-stage-character">
           {active && <SpriteStageGround zoom={zoom} offset={offset} />}
           <div style={{ transform: `translate(${offset[0]}px, ${offset[1]}px)`, position: "relative" }}>
           {active && <AnimalPreview pack={packed} subject={subject} lineup={lineup} motion={action} playing={playing} row={row} zoom={zoom} rate={rate} coat={coat} wildlifeCoat={wildlifeCoat} horseVariant={horseVariant} onSelect={choose} directionCanvases={directionCanvases} showRig={showRig} construction={construction && !bird && !equine} frame={frame} edits={edits} joints={joints} selected={selectedJoint}

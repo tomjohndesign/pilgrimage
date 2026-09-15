@@ -6,9 +6,7 @@ import { TERRAIN } from "@/lib/game/map/terrain"
 
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 
-import { useEffect } from "react"
 import { useThree } from "@react-three/fiber"
-import type * as THREE from "three"
 
 import { PixelCanvas, type PixelationProps } from "@/components/pixel-canvas"
 
@@ -42,7 +40,7 @@ export function PreviewCanvas({
     <PixelCanvas
       {...pixelation}
       orthographic
-      camera={{ position: cameraOffset(yaw), zoom, near: CAM_NEAR, far: CAM_FAR }}
+      camera={{ manual: true, position: cameraOffset(yaw), zoom, near: CAM_NEAR, far: CAM_FAR }}
       onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
     >
       <color attach="background" args={[TERRAIN.grass.color]} />
@@ -52,7 +50,7 @@ export function PreviewCanvas({
       <directionalLight position={lightOffsetForYaw(yaw)} intensity={SURFACE_LIGHT.sun} />
 
       {/* Re-aim when the view changes; the camera prop is only read at mount. */}
-      <CameraAim view={view} zoom={zoom} /><PreviewNavigation key={view} />
+      <CameraAim view={view} zoom={zoom} />
 
       {children}
     </PixelCanvas>
@@ -60,15 +58,6 @@ export function PreviewCanvas({
 }
 
 function CameraAim({ view, zoom }: { view: number; zoom: number }) {
-  const camera = useThree((s) => s.camera) as THREE.OrthographicCamera
-  useEffect(() => {
-    const [x, y, z] = cameraOffset(yawForView(view))
-    camera.position.set(x, y, z)
-    camera.lookAt(0, 0, 0)
-    camera.zoom = zoom
-    camera.updateProjectionMatrix()
-    // Sprite animation and culling read the matrix before Three renders.
-    camera.updateMatrixWorld()
-  }, [camera, view, zoom])
-  return null
+  const size = useThree(s => s.size)
+  return <PreviewNavigation view={view} height={Math.max(1, size.height) / zoom} />
 }

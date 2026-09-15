@@ -29,7 +29,7 @@ import { rollComplexion } from "@/lib/game/base-person/complexion"
 import { makeRng } from "@/lib/game/rng"
 import { BASE_CHARACTER_SCALE, DEFAULT_WALK_CADENCE, personWalkStride } from "@/lib/game/base-person/gait"
 import { TRAVELER_TYPES } from "@/lib/game/travelers"
-import { CAM_FAR, CAM_NEAR, cameraOffset } from "@/lib/game/render/iso"
+import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 import { merchantDemo, type MerchantDemoFrame, type MerchantDemo } from "@/lib/game/transport/demo"
 import type { Cargo, HorseVariant, Puller } from "@/lib/game/transport/assets"
 
@@ -40,15 +40,9 @@ const PASSER_SPEED = personWalkStride(populationDesign(TRAVELER_TYPES.pilgrim, 1
 const CAMERA = { manual: true, near: CAM_NEAR, far: CAM_FAR, position: [20, 20, 20] as [number, number, number] }
 
 function MapCamera({ row, zoom, map }: { row: number; zoom: number; map: GameMap }) {
-  const { camera, size } = useThree()
-  useEffect(() => {
-    const cam = camera as THREE.OrthographicCamera, height = Math.max(7, (map.width + map.depth) * 3.3 / zoom), aspect = size.width / size.height
-    const fitted = Math.max(height, 12 / aspect)
-    cam.left = -fitted * aspect / 2; cam.right = -cam.left; cam.top = fitted / 2; cam.bottom = -cam.top
-    const offset = cameraOffset(row * Math.PI / 4)
-    cam.position.set(offset[0], offset[1] - 0.2, offset[2]); cam.lookAt(0, -0.2, 0); cam.updateProjectionMatrix()
-  }, [camera, size, row, zoom, map])
-  return null
+  const size = useThree(s => s.size)
+  const height = Math.max(7, (map.width + map.depth) * 3.3 / zoom), aspect = size.width / Math.max(1, size.height)
+  return <PreviewNavigation yaw={row * Math.PI / 4} height={Math.max(height, 12 / Math.max(.01, aspect))} target={[0, -.2, 0]} resetKey={map} />
 }
 
 function DemoActors({ demo, clock, seek, playing, rate, onProgress, ...options }: {
@@ -152,7 +146,7 @@ export function MerchantMapPreview({ playing, onPlayingChange, row, zoom, ...opt
   return <div className="merchant-map-preview" aria-label="Merchant journey on a small map">
     <div className="merchant-map-scene"><PixelCanvas orthographic camera={CAMERA}>
       <color attach="background" args={[TERRAIN.grass.color]} /><ambientLight intensity={SURFACE_LIGHT.ambient} /><hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} /><CameraLight />
-      <MapCamera row={row} zoom={zoom} map={demo.map} /><PreviewNavigation key={row} />
+      <MapCamera row={row} zoom={zoom} map={demo.map} />
       <Suspense fallback={null}><TerrainTiles map={demo.map} showGrid traffic={3} /><Trees map={demo.map} /><Bridges map={demo.map} />
         {demo.turning && trails && <TurningTrails demo={demo} />}
         <DemoActors key={`${scenario}:${radius}:${options.puller}:${options.horseVariant}`} {...options} demo={demo} clock={clock} seek={seek} playing={playing} rate={rate} onProgress={setFrame} />

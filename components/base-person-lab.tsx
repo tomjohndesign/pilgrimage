@@ -1,5 +1,6 @@
 "use client"
 
+import { PreviewViewport } from "./preview-viewport"
 import { SpriteStageGround } from "./sprite-stage-ground"
 
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dialog"
@@ -10,7 +11,7 @@ import { CharacterRowSprite } from "./character-row-sprite"
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowUpRight, Check, Pause, Play, RotateCcw } from "lucide-react";
-import { useAssetPreviewStore, usePreviewWheel } from "./asset-preview-controls"
+import { useAssetPreviewStore, usePreviewGestures } from "./asset-preview-controls"
 import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "./asset-editor-frame"
 import { characterSoundIdentity } from "@/lib/game/character-sound-identity"
 import { SpriteSelectionPreview } from "./sprite-selection-preview"
@@ -405,10 +406,12 @@ export function BasePersonLab({ mode, onModeChange, active: workspaceActive = tr
   const clearPreviewSelection = () => { setPreviewSelected(false); stopCharacterSound() }
   const stageRef = useRef<HTMLDivElement>(null)
   const [previewOffset, setPreviewOffset] = useState<[number, number]>([0, 0])
-  const viewDrag = useRef<{ pointer: number; x: number; y: number; row: number; pan: boolean; person: boolean; offset: [number, number] } | null>(null)
-  const [scrubbingViews, setScrubbingViews] = useState(false)
-  usePreviewWheel(stageRef, view === "character")
   const fittedZoom = zoom
+  usePreviewGestures(stageRef, { zoom: fittedZoom, offset: previewOffset, onPan: setPreviewOffset,
+    enabled: view === "character",
+    onZoom: setZoom,
+    onTap: target => { if (isPerson || isKnight) { if (target.closest(".person-sprite") && !previewSelected) selectPreview(); else clearPreviewSelection() } },
+  })
   const controls = (keys: DesignKey[]) => keys.map(key => {
     const control = DESIGN_CONTROLS[key]
     return <Tuner key={key} label={control.label} labelClassName="w-28" value={design[key]}
@@ -558,42 +561,14 @@ export function BasePersonLab({ mode, onModeChange, active: workspaceActive = tr
           frameCount={frameCount} maxFrames={isPerson ? frameCount : 24} frame={step} clipLabel={clipLabel} showFrames={!onMap}
           keyed={step => isPerson && frameKeyed(step)}
           onFrame={next => { setFrame(next); setPlaying(false); setView("character") }} />}>
-      <div className="person-stage-layout"><div ref={stageRef} className={`person-stage person-stage-${view}${scrubbingViews ? " is-scrubbing" : ""}`}
-          onPointerDown={event => {
-            if (view !== "character" || event.button !== 0 || !event.isPrimary ||
-              (event.target as Element).closest('[role="button"], button, input, select, a')) return
-            event.preventDefault()
-            viewDrag.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, row, pan: true, person: !!(event.target as Element).closest(".person-sprite"), offset: previewOffset }
-            event.currentTarget.setPointerCapture(event.pointerId); setScrubbingViews(true)
-          }}
-          onPointerMove={event => {
-            const start = viewDrag.current
-            if (!start || start.pointer !== event.pointerId) return
-            if (start.pan) { setPreviewOffset([start.offset[0] + event.clientX - start.x, start.offset[1] + event.clientY - start.y]); return }
-            const steps = Math.trunc((event.clientX - start.x) / 48)
-            const count = BASE_PERSON.directions.length
-            setRow(((start.row + steps) % count + count) % count)
-          }}
-          onPointerUp={event => {
-            if (viewDrag.current?.pointer !== event.pointerId) return
-            const start = viewDrag.current
-            if (Math.hypot(event.clientX-start.x,event.clientY-start.y)<6 && (isPerson || isKnight)) {
-              if(start.person && !previewSelected)selectPreview()
-              else clearPreviewSelection()
-            }
-            viewDrag.current = null; setScrubbingViews(false)
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-          }}
-          onLostPointerCapture={event => {
-            if (viewDrag.current?.pointer === event.pointerId) { viewDrag.current = null; setScrubbingViews(false) }
-          }}>
-          {active && view === "character" && <SpriteStageGround zoom={zoom} offset={previewOffset} cellSize={pixels} anchor={isKnight ? (mountedKnight ? knightMetadata.anchor[1] : knightMetadata.person.anchor[1]) : isPerson ? BASE_PERSON.anchor[1] : subject === "cart" ? (cartMode === "shop" ? SHOP.anchor[1] : CART.anchor[1]) : transportMetadata.anchor[1]} worldSize={.74 * pixels / 48 * 1.5} />}
-          {onMap ? <MerchantMapPreview playing={active && playing} onPlayingChange={setPlaying} row={row} zoom={zoom} cargo={cargo} puller={cartPuller} horseVariant={horseVariant} coat={coat} /> : isPerson && !bake && !preview ? <p className="person-stage-message">Rendering the base person…</p> : view === "sheet" ? <div className="person-sheet">
+      <div className="person-stage-layout"><div ref={stageRef} className={`person-stage person-stage-${view}`}>
+          {active && view === "character" && <SpriteStageGround zoom={fittedZoom} offset={previewOffset} cellSize={pixels} anchor={isKnight ? (mountedKnight ? knightMetadata.anchor[1] : knightMetadata.person.anchor[1]) : isPerson ? BASE_PERSON.anchor[1] : subject === "cart" ? (cartMode === "shop" ? SHOP.anchor[1] : CART.anchor[1]) : transportMetadata.anchor[1]} worldSize={.74 * pixels / 48 * 1.5} />}
+          {onMap ? <MerchantMapPreview playing={active && playing} onPlayingChange={setPlaying} row={row} zoom={zoom} cargo={cargo} puller={cartPuller} horseVariant={horseVariant} coat={coat} /> : isPerson && !bake && !preview ? <p className="person-stage-message">Rendering the base person…</p> : view === "sheet" ? <PreviewViewport><div className="person-sheet">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={url} width={pixels * columns} height={pixels * atlasRows} alt={`${SUBJECTS[subject]} ${clipLabel}: ${subject === "cart" ? CART.directions : 8} directions${subject === "horse" ? ", common and noble variants" : ""} and ${columns} frames`} />
-          </div> : view === "native" ? <div className="person-native" aria-label="Native size lineup">
+          </div></PreviewViewport> : view === "native" ? <PreviewViewport><div className="person-native" aria-label="Native size lineup">
             {BASE_PERSON.directions.map((d, i) => <div key={d}>{isKnight && showSquire ? <KnightEntourage mounted={mountedKnight} row={i} frame={frame} variant={knightVariant} walking={knightClip === "walk"} url={url} visibleFrame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} name={`${d}, native Knight`} /> : <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + i * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} name={`${d}, native ${SUBJECTS[subject]}`} />}<span>{d}</span></div>)}
-          </div> : isKnight && showSquire ? <KnightEntourage mounted={mountedKnight} row={row} frame={frame} variant={knightVariant} walking={knightClip === "walk"} url={url} visibleFrame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={fittedZoom} selected={previewSelected} offset={previewOffset} name={`Knight ${direction}, frame ${step + 1}`} /> : <div className="person-sprite" style={{ width: pixels * fittedZoom, height: pixels * fittedZoom, transform: `translate(${previewOffset[0]}px, ${previewOffset[1]}px)` }}>
+          </div></PreviewViewport> : isKnight && showSquire ? <KnightEntourage mounted={mountedKnight} row={row} frame={frame} variant={knightVariant} walking={knightClip === "walk"} url={url} visibleFrame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={fittedZoom} selected={previewSelected} offset={previewOffset} name={`Knight ${direction}, frame ${step + 1}`} /> : <div className="person-sprite" style={{ width: pixels * fittedZoom, height: pixels * fittedZoom, transform: `translate(${previewOffset[0]}px, ${previewOffset[1]}px)` }}>
             {isPerson && onion && !live && columns > 1 && <div className="absolute inset-0 opacity-25"><Tile url={url} row={row} frame={(visibleFrame + columns - 1) % columns} columns={columns} zoom={fittedZoom} name="Previous frame ghost" /></div>}
             <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + row * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={fittedZoom} selected={previewSelected} name={`${SUBJECTS[subject]} ${direction}, frame ${step + 1}`} />
             {isPerson && showRig && <RigOverlay joints={inspected} selected={selectedJoint} row={row} offset={currentOffset} onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} onChange={changeJoints} onDrag={rigDragging} />}
@@ -607,7 +582,7 @@ export function BasePersonLab({ mode, onModeChange, active: workspaceActive = tr
           </div>}
           {isPerson && (error || storeError) && <p role="alert" className="person-stage-error">{error || storeError} Adjust the pose or undo to recover.</p>}
           {isPerson && !dragging && bakeProgress && <div className="person-stage-progress hud-well" role="status" aria-live="polite"><span>Updating sprite sheets · {Math.round(bakeProgress.done / bakeProgress.total * 100)}%</span><i style={{ width: `${bakeProgress.done / bakeProgress.total * 100}%` }} /></div>}
-          <div className="person-stage-caption" style={onMap ? { display: "none" } : undefined}>{view === "native" ? "Actual pixels · 1×" : view === "sheet" ? `${SUBJECTS[subject]} atlas · ${columns * atlasRows} poses` : `${direction} · ${fittedZoom.toFixed(1)}×`}</div>
+          <div className="person-stage-caption" style={onMap ? { display: "none" } : undefined}>{view === "native" ? "Native sprite cells" : view === "sheet" ? `${SUBJECTS[subject]} atlas · ${columns * atlasRows} poses` : `${direction} · ${fittedZoom.toFixed(1)}×`}</div>
         </div>
         {isPerson && showRig && <RigInspector joints={inspected} selected={selectedJoint} offset={currentOffset(selectedJoint as EditableJoint)} frame={frame} radius={radius} maxRadius={Math.max(1, Math.floor(PERSON_CLIPS[clip].frames / 2))} keyed={!!selectedKey} frameKeyed={frameKeyed(frame % PERSON_CLIPS[clip].frames)}
           onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} onChange={offset => changeJoint(selectedJoint as EditableJoint, offset)} onRadius={blend => changeJoint(selectedJoint as EditableJoint, currentOffset(selectedJoint as EditableJoint), blend)}

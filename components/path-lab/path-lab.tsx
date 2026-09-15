@@ -3,7 +3,7 @@
 import { PreviewViewport } from "../preview-viewport"
 
 import { ChromeCheckbox, ChromeButton } from "@/components/ui/chrome-controls"
-import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "@/components/asset-editor-frame"
+import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, AssetEditorHelp, type AssetEditorNavigation } from "@/components/asset-editor-frame"
 import { playgroundHref } from "@/lib/asset-playground"
 
 import { useEffect, useRef, useState } from "react"
@@ -170,7 +170,6 @@ export function PathLab({ mode, onModeChange, active = true }: AssetEditorNaviga
         </div>
 <p className="mt-3 text-xs text-ink-light">Seed {permutation.seed} · {world.buildings.length} destinations. Layout, seed, origins and destination count restart all experiments. Tuning below changes the running simulation.{permutation.layout === "original" ? " The original fixture has fixed destinations; change the layout to vary their count and position." : ""}</p></AssetEditorSection>
         <AssetEditorSection title="Path rules"><div className="person-file-actions">
-          <LabSelect label="Playback speed" value={String(speed)} options={{ 1: "1×", 4: "4×", 12: "12×" }} onChange={n => setSpeed(Number(n))} />
           <LabSlider label="Journeys / minute" value={settings.traffic} min={0} max={120} step={1} onChange={traffic => patch({ traffic })} />
           <LabSlider label="Wear / passage" value={settings.wear} min={.005} max={.15} step={.005} onChange={wear => patch({ wear })} />
           <LabSlider label="Regrowth half-life" value={settings.halfLife} min={.25} max={10} step={.25} suffix=" days" onChange={halfLife => patch({ halfLife })} />
@@ -204,8 +203,8 @@ export function PathLab({ mode, onModeChange, active = true }: AssetEditorNaviga
 <p className="mt-3 text-xs text-ink-light">{permutation.sources === "local" && world.buildings.filter(b => !world.closedDestinations.has(b.id)).length < 2 ? "Local journeys need at least two open destinations." : "Turn visits off to test whether a branch still has a reason to exist. Deep paths stay attractive while they lead somewhere useful."}</p></AssetEditorSection>
 
         <AssetEditorSection title="Files" initialOpen={false}><ChromeButton type="button" className={button} onClick={share}>Copy settings link</ChromeButton>{shareUrl && <input aria-label="Settings link" className="playground-input" value={shareUrl} readOnly onFocus={event => event.target.select()} />}</AssetEditorSection></>}
-      toolbar={null}
-      dock={<div className="person-animation-dock hud-well"><div className="chrome-simulation-playback"><LabPlayback playing={playing} onPlayingChange={setPlaying} onStep={advance} stepLabel="Advance one day" onRestart={restart} />
+      toolbar={<AssetEditorHelp label="Path experiment"><p>{copy.description}</p><p>{copy.try}</p><p>Drag to pan; scroll or pinch to zoom. Point at a tile to inspect it, or focus the map and use arrow keys. Enter inspects or places the selected building.</p></AssetEditorHelp>}
+      dock={<div className="person-animation-dock hud-well"><div className="chrome-simulation-playback"><LabPlayback playing={playing} onPlayingChange={setPlaying} onStep={advance} stepLabel="Advance one day" onRestart={restart} /><LabSelect label="Speed" value={String(speed)} options={{ 1: "1×", 4: "4×", 12: "12×" }} onChange={n => setSpeed(Number(n))} />
 <ChromeButton type="button" className={button} onClick={() => { const enabled = !world.trafficOn; current.forEach(w => { w.trafficOn = enabled }); refresh(n => n + 1) }}>{world.trafficOn ? "Stop new journeys" : "Resume journeys"}</ChromeButton>
 <span className="px-2 text-sm tabular-nums" data-testid="lab-clock">Day {(world.time / LAB_DAY).toFixed(2)} · {world.journeys.length} walking · {world.completed} completed</span>
 <span className="flex-1" />
@@ -213,23 +212,20 @@ export function PathLab({ mode, onModeChange, active = true }: AssetEditorNaviga
           <span><span className="mr-2 inline-block h-2 w-2 bg-[#fff0d1]" />Outbound journey</span>
           <span><span className="mr-2 inline-block h-2 w-2 bg-[#b5d3dd]" />Returning journey</span>
           {experiment === "wear" && <span><span className="mr-2 inline-block h-2 w-2 bg-[#e7ba64]" />Through traveler</span>}
-          <span>{layer === "frontage" ? "Gold = connected path · green = adjoining entrance ground. Full footprint checks still apply." : layer === "wear" ? "Green = untouched · ochre = fully worn" : "Trails establish at 45% wear. Temporary trails become fallow below 25%; permanent paths remain."}</span>
+          <AssetEditorHelp label="Path legend">{layer === "frontage" ? "Gold = connected path · green = adjoining entrance ground. Full footprint checks still apply." : layer === "wear" ? "Green = untouched · ochre = fully worn" : "Trails establish at 45% wear. Temporary trails become fallow below 25%; permanent paths remain."}</AssetEditorHelp>
         </div></></div>}>
-      <div className="person-stage playground-stage">{active && <><div>
-          <h2 id="experiment-title" className="font-display text-lg tracking-[1px]">{copy.title}</h2>
-
-        </div>
+      <div className="person-stage playground-stage">{active && <>
 <div className={`grid gap-4 ${experiment === "routes" ? "lg:grid-cols-2" : "mx-auto w-full max-w-[1100px]"}`}>
           {current.map((w, i) => {
             const stats = worldStats(w)
-            return <figure key={`${experiment}-${i}`} className="min-w-0 border border-rule">
-              <figcaption className="flex flex-wrap justify-between gap-2 bg-parchment px-4 py-3 text-sm">
-                <strong className="font-display text-xs tracking-[1px]">{experiment === "routes" ? i === 0 ? "Distance only" : "Follow one another’s paths" : experiment === "wear" ? "Local traffic, local wear" : "A settlement taking shape"}</strong>
+            return <figure key={`${experiment}-${i}`} className="chrome-map-comparison">
+              <figcaption className="chrome-map-caption">
+                <strong className="text-xs font-medium">{experiment === "routes" ? i === 0 ? "Distance only" : "Follow one another’s paths" : experiment === "wear" ? "Local traffic, local wear" : "A settlement taking shape"}</strong>
                 <span className="text-ink-light tabular-nums"><span title="Recent distance walked on segments already used by another commuter">{Math.round(stats.sharedTravel * 100)}% shared travel</span> · {stats.traces} trace tiles · {stats.connected} connected · {stats.permanent} permanent segments</span>
               </figcaption>
               <PathMap world={w} settings={settings} layer={layer} grid={grid} routes={routes} selected={selected} onSelect={setSelected} tool={tool} rotation={rotation} onPlace={place} />
-              <div className="min-h-12 bg-parchment px-4 py-3 text-sm text-ink-light">
-                {selected === null ? "Point at a tile to inspect it. Tab to the map and use arrow keys for keyboard control." : <span>Tile {point!.x}, {point!.z} · Wear {Math.round(w.wear[selected] * 100)}% · Minimum {Math.round(w.baseline[selected] * 100)}%{w.permanentTiles[selected] ? " · Permanent" : ""} · {w.blocked[selected] ? "Occupied" : w.connected[selected] ? "Connected path" : w.established[selected] ? "Isolated trail" : "Open ground"}</span>}
+              <div className="chrome-map-readout">
+                {selected === null ? null : <span>Tile {point!.x}, {point!.z} · Wear {Math.round(w.wear[selected] * 100)}% · Minimum {Math.round(w.baseline[selected] * 100)}%{w.permanentTiles[selected] ? " · Permanent" : ""} · {w.blocked[selected] ? "Occupied" : w.connected[selected] ? "Connected path" : w.established[selected] ? "Isolated trail" : "Open ground"}</span>}
               </div>
             </figure>
           })}

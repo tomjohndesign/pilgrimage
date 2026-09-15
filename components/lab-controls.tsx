@@ -1,5 +1,6 @@
 "use client"
 
+import { Pause, Play, RotateCcw, StepForward } from "lucide-react"
 import { EntitySelect } from "./workspace-navigation"
 
 import { ChromeButton, ChromeSelect } from "@/components/ui/chrome-controls"
@@ -15,9 +16,9 @@ export function LabPlayback({ playing, onPlayingChange, onStep, stepLabel, onRes
   playing: boolean; onPlayingChange: (playing: boolean) => void; onStep: () => void; stepLabel: string; onRestart: () => void
 }) {
   return <>
-    <ChromeButton type="button" className={labButton} onClick={() => onPlayingChange(!playing)}>{playing ? "Pause" : "Play"}</ChromeButton>
-    <ChromeButton type="button" className={labButton} onClick={() => { onPlayingChange(false); onStep() }}>{stepLabel}</ChromeButton>
-    <ChromeButton type="button" className={labButton} onClick={onRestart}>Restart</ChromeButton>
+    <ChromeButton type="button" className="hud-pause" aria-label={playing ? "Pause" : "Play"} title={playing ? "Pause simulation" : "Play simulation"} onClick={() => onPlayingChange(!playing)}>{playing ? <Pause size={14} /> : <Play size={14} />}</ChromeButton>
+    <ChromeButton type="button" className="chrome-icon-button" aria-label={stepLabel} title={stepLabel} onClick={() => { onPlayingChange(false); onStep() }}><StepForward size={16} /></ChromeButton>
+    <ChromeButton type="button" className="chrome-icon-button" aria-label="Restart" title="Restart simulation" onClick={onRestart}><RotateCcw size={16} /></ChromeButton>
   </>
 }
 

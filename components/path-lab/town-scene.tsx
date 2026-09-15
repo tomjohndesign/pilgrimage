@@ -17,7 +17,7 @@ import { StructureModel } from "@/components/building-lab/building-model"
 import { structureParts } from "@/lib/game/building-art/structure"
 import { buildingYaw, rotatedFootprint } from "@/lib/game/building-rotation"
 import { BASE_CHARACTER_SCALE } from "@/lib/game/base-person/gait"
-import { cameraOffset, lightOffsetForYaw, yawForView } from "@/lib/game/render/iso"
+import { lightOffsetForYaw, yawForView } from "@/lib/game/render/iso"
 import { tileToWorldX, tileToWorldZ } from "@/lib/game/map/types"
 import { townRoadSegments } from "@/lib/path-lab/town-roads"
 import { WIDTH, type PathSettings } from "@/lib/path-lab/simulation"
@@ -45,21 +45,8 @@ function Person({ town, person, live, selected, onSelect }: { town: Town; person
   return <group ref={root}><CharacterSprite map={town.map} type={person.calling} characterModel="base" visualOverride={visual}
     characterScale={BASE_CHARACTER_SCALE} selected={selected} onClick={event => { event.stopPropagation(); onSelect() }} /></group>
 }
-function Camera({ town, view, focus, selected, labels }: { town: Town; view: number; focus: number | null; selected: number | null; labels: MutableRefObject<Map<string, HTMLButtonElement>> }) {
+function Camera({ town, view, focus, selected, labels, cameraReset }: { cameraReset: number; town: Town; view: number; focus: number | null; selected: number | null; labels: MutableRefObject<Map<string, HTMLButtonElement>> }) {
   const { camera, size } = useThree()
-  useEffect(() => {
-    const cam = camera as THREE.OrthographicCamera, aspect = size.width / size.height
-    const height = Math.max(25, 43 / aspect)
-    cam.left = -height * aspect / 2; cam.right = -cam.left; cam.top = height / 2; cam.bottom = -cam.top
-    cam.updateProjectionMatrix()
-  }, [camera, size])
-  useEffect(() => {
-    const person = focus === null ? null : town.people[focus]
-    const target = person ? new THREE.Vector3(tileToWorldX(town.map, person.x), .2, tileToWorldZ(town.map, person.z)) : new THREE.Vector3(0, .2, -1.5)
-    camera.position.copy(target).add(new THREE.Vector3(...cameraOffset(yawForView(view))))
-    camera.lookAt(target); (camera as THREE.OrthographicCamera).zoom = person ? 2.4 : 1
-    camera.updateProjectionMatrix()
-  }, [camera, town, view, focus])
   const point = useMemo(() => new THREE.Vector3(), [])
   useFrame(() => {
     camera.updateMatrixWorld()
@@ -82,9 +69,12 @@ function Camera({ town, view, focus, selected, labels }: { town: Town; view: num
       if (element.style.visibility === "visible") occupied.push([x, y, width])
     }
   }, -2)
-  return null
+  const person = focus === null ? null : town.people[focus]
+  const target: [number, number, number] = person ? [tileToWorldX(town.map, person.x), .2, tileToWorldZ(town.map, person.z)] : [0, .2, -1.5]
+  return <PreviewNavigation view={view} height={Math.max(25, 43 / Math.max(.01, size.width / Math.max(1, size.height))) / (person ? 2.4 : 1)} target={target} resetKey={`${focus}/${cameraReset}`} />
 }
-export function TownScene({ town, live, view, focus, selected, labels, onSelect, onReady }: {
+export function TownScene({ town, live, view, focus, selected, labels, onSelect, onReady, cameraReset = 0 }: {
+  cameraReset?: number
   town: Town; live: MutableRefObject<TownPlayback>; view: number; focus: number | null; selected: number | null
   labels: MutableRefObject<Map<string, HTMLButtonElement>>; onSelect: (id: number) => void; onReady: () => void
 }) {
@@ -95,7 +85,7 @@ export function TownScene({ town, live, view, focus, selected, labels, onSelect,
     <color attach="background" args={[TERRAIN.grass.color]} />
     <ambientLight intensity={SURFACE_LIGHT.ambient} /><hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
     <directionalLight intensity={SURFACE_LIGHT.sun} position={lightOffsetForYaw(yawForView(view))} />
-    <Camera town={town} view={view} focus={focus} selected={selected} labels={labels} /><PreviewNavigation key={`${view}/${focus}`} />
+    <Camera cameraReset={cameraReset} town={town} view={view} focus={focus} selected={selected} labels={labels} />
     <TerrainTiles showGrid map={town.map} traffic={0} traveledRoads={roads} />
     <Suspense fallback={null}><FoliageField atlas={DEFAULT_FOLIAGE_ATLAS} placements={trees} seed={42} /></Suspense>
     {TOWN_SITES.map((site, i) => <group key={site.id} position={[tileToWorldX(town.map, site.x) + .5, .2, tileToWorldZ(town.map, site.z) + .5]} rotation={[0, buildingYaw(site.rotation), 0]}>

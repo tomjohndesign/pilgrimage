@@ -384,7 +384,7 @@
 :is(.chrome-workspace,.chrome-mobile-panel) .chrome-direction-sprite > * { transform:scale(.75); flex-shrink:0; }
 :is(.chrome-workspace,.chrome-mobile-panel) .person-direction .chrome-direction-sprite > * { max-width:none; max-height:none; }
 :is(.chrome-workspace,.chrome-mobile-panel) .person-direction { overflow:hidden; }
-:is(.chrome-workspace,.chrome-mobile-panel) .chrome-header-controls > label:not(.person-check) { font-size:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-header-controls > label:not(.person-check):not(:has([role="checkbox"])) { font-size:0; }
 :is(.chrome-workspace,.chrome-mobile-panel) .chrome-header-controls .chrome-select { background:transparent; }
 :is(.chrome-workspace,.chrome-mobile-panel) .chrome-section-content .playground-control-section { padding:0; border:0; }
 :is(.chrome-workspace,.chrome-mobile-panel) .chrome-section-content .playground-section-heading { margin:0 0 12px; }
@@ -401,4 +401,5 @@
 .chrome-property-section:has(.chrome-section-content [data-navigation-marker]):not(:has(.chrome-section-content input,.chrome-section-content button,.chrome-section-content [role="combobox"],.chrome-section-content [role="slider"])) { display:none; }
 :is(.chrome-workspace,.chrome-mobile-panel) .chrome-simulation-playback { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding-bottom:12px; }
 :is(.chrome-workspace,.chrome-mobile-panel) .chrome-simulation-playback > .flex-1:empty { display:none; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-simulation-playback > .person-choice { flex:0 0 84px; width:84px; }
 :is(.chrome-workspace,.chrome-mobile-panel) .chrome-section-page .chrome-select { width:100%; }
