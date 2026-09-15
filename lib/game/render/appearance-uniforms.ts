@@ -1,8 +1,10 @@
+import { surfaceAppearanceUniforms } from "./pixel-surface"
 import * as THREE from "three"
 import { defaultAppearance, APPEARANCE_GROUPS, type Appearance, type AppearanceGroup } from "../appearance"
 
 const defaults = defaultAppearance()
 export const grassAppearanceUniforms = {
+  ...surfaceAppearanceUniforms,
   grassBaseColor: { value: new THREE.Color(defaults.grass.color) },
   grassBrightness: { value: defaults.grass.brightness }, grassSaturation: { value: defaults.grass.saturation },
   grassShading: { value: defaults.grass.shading }, grassCanopyShade: { value: defaults.grass.canopyShade },
@@ -16,6 +18,8 @@ export const assetAppearanceUniforms = Object.fromEntries(APPEARANCE_GROUPS.map(
   appearanceFactors: { value: new THREE.Vector2(defaults.assets.saturation * defaults.groups[group].saturation, defaults.assets.brightness * defaults.groups[group].brightness) }, appearanceEdits: { value: edits }, appearanceEditCount: count,
 }])) as Record<AppearanceGroup, { appearanceFactors: { value: THREE.Vector2 }; appearanceEdits: { value: THREE.DataTexture }; appearanceEditCount: { value: number } }>
 export function updateAppearanceUniforms(value: Appearance, objects: Array<{ id: number; saturation: number; brightness: number }>) {
+  grassAppearanceUniforms.terrainTexture.value = value.terrain.texture
+  grassAppearanceUniforms.terrainInclineStyle.value = ["smooth", "stipple", "ordered"].indexOf(value.terrain.inclineStyle)
   grassAppearanceUniforms.grassBaseColor.value.set(value.grass.color)
   grassAppearanceUniforms.grassBrightness.value = value.grass.brightness
   grassAppearanceUniforms.grassSaturation.value = value.grass.saturation

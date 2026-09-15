@@ -7,6 +7,8 @@ import { sceneryDetail } from "@/lib/game/render/scenery-detail"
 import { isWorldVisible } from "@/lib/game/render/visibility"
 import { RELIC_TABLE_TOP } from "@/lib/game/building-art/early-geometry"
 import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
+import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
+import { pixelOpacityShader } from "@/lib/game/render/pixel-opacity"
 
 const SIZE = 0.16
 export const RELIC_DISPLAY_HEIGHT = .125 + SIZE / 2 + .01
@@ -20,8 +22,8 @@ function relicRaycast(this: THREE.Mesh, raycaster: THREE.Raycaster, intersection
 }
 
 /** The same relic, warm light and slow pulse in the game and building previews. */
-export function RelicDisplay({ color = "#ece2c8", idColor, onClick, height = RELIC_DISPLAY_HEIGHT, groundGlow = true, trayWidth = 0 }: {
-  height?: number; groundGlow?: boolean; trayWidth?: number
+export function RelicDisplay({ color = "#ece2c8", idColor, onClick, height = RELIC_DISPLAY_HEIGHT, groundGlow = true, trayWidth = 0, effectsEnabled = true }: {
+  height?: number; groundGlow?: boolean; trayWidth?: number; effectsEnabled?: boolean
   color?: string; idColor?: THREE.Color; onClick?: (event: ThreeEvent<MouseEvent>) => void
 }) {
   const effects = useRef<THREE.Group>(null)
@@ -30,6 +32,8 @@ export function RelicDisplay({ color = "#ece2c8", idColor, onClick, height = REL
   const aura = useRef<THREE.Sprite>(null)
   const pool = useRef<THREE.MeshBasicMaterial>(null)
   const light = useRef<THREE.PointLight>(null)
+  const auraPixels = useMemo(() => ({ value: new THREE.Vector2().setScalar(.78 / CHARACTER_PIXEL_SIZE) }), [])
+  const poolPixels = useMemo(() => ({ value: new THREE.Vector2().setScalar(1.6 / CHARACTER_PIXEL_SIZE) }), [])
   const { invalidate } = useThree()
   const glow = useMemo(() => {
     const size = 64, data = new Uint8Array(size * size * 4)
@@ -47,7 +51,7 @@ export function RelicDisplay({ color = "#ece2c8", idColor, onClick, height = REL
   useEffect(() => () => glow.dispose(), [glow])
   useFrame(({ clock, scene }) => {
     if (!effects.current) return
-    effects.current.visible = sceneryDetail(scene) === 0
+    effects.current.visible = effectsEnabled && sceneryDetail(scene) === 0
     if (!effects.current.visible || !isWorldVisible(effects.current.parent)) {
       if (core.current) core.current.emissiveIntensity = 1
       return
@@ -56,6 +60,7 @@ export function RelicDisplay({ color = "#ece2c8", idColor, onClick, height = REL
     if (core.current) core.current.emissiveIntensity = .65 + pulse * 1.35
     if (halo.current) halo.current.opacity = .42 + pulse * .38
     if (aura.current) aura.current.scale.setScalar(.68 + pulse * .2)
+    auraPixels.value.setScalar((.68 + pulse * .2) / CHARACTER_PIXEL_SIZE)
     if (pool.current) pool.current.opacity = .12 + pulse * .17
     if (light.current) light.current.intensity = 1.1 + pulse * 2.1
     // Previews render on demand; only the mounted relic keeps requesting frames.
@@ -81,12 +86,12 @@ export function RelicDisplay({ color = "#ece2c8", idColor, onClick, height = REL
         <boxGeometry args={[SIZE, SIZE, SIZE]} /><meshBasicMaterial color={idColor} toneMapped={false} />
       </mesh>}
     </group>
-    <group ref={effects} name="relic-effects"><sprite name="relic-aura" ref={aura} position={[0, height, 0]} scale={.78} raycast={() => {}}>
-      <spriteMaterial ref={halo} map={glow} color="#ffe3a0" transparent opacity={.6} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+    <group ref={effects} name="relic-effects" visible={effectsEnabled}><sprite name="relic-aura" ref={aura} position={[0, height, 0]} scale={.78} raycast={() => {}}>
+      <spriteMaterial ref={halo} map={glow} color="#ffe3a0" transparent opacity={.6} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} onBeforeCompile={shader => pixelOpacityShader(shader, auraPixels)} customProgramCacheKey={() => "relic-pixel-glow-v1"} />
     </sprite>
     {groundGlow && <mesh position={[0, .084, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => {}}>
       <planeGeometry args={[1.6, 1.6]} />
-      <meshBasicMaterial ref={pool} map={glow} color="#e8c16c" transparent opacity={.2} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+      <meshBasicMaterial ref={pool} map={glow} color="#e8c16c" transparent opacity={.2} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} onBeforeCompile={shader => pixelOpacityShader(shader, poolPixels)} customProgramCacheKey={() => "relic-pixel-glow-v1"} />
     </mesh>}
     <pointLight name="relic-light" ref={light} position={[0, height + .18, 0]} color="#ffd98a" intensity={2} distance={3} decay={2} /></group>
   </group>

@@ -21,6 +21,8 @@ export const appearanceSchema = z.object({
   version: z.literal(1),
   grass: z.object({ color: z.string().regex(/^#[0-9a-fA-F]{6}$/), brightness: factor, saturation: factor,
     shading: factor, canopyShade: factor }).strict(),
+  terrain: z.object({ texture: factor, inclineStyle: z.enum(["smooth", "stipple", "ordered"]) }).strict()
+    .default({ texture: 1, inclineStyle: "stipple" }),
   assets: colorAdjustmentSchema,
   groups: z.object(Object.fromEntries(APPEARANCE_GROUPS.map(group => [group, colorAdjustmentSchema])) as Record<AppearanceGroup, typeof colorAdjustmentSchema>).strict(),
   objects: z.array(z.object({ world: z.string().min(1), selection: selectionSchema, label: z.string(), ...colorAdjustmentSchema.shape }).strict()).max(256),
@@ -35,6 +37,7 @@ export const appearanceSchema = z.object({
 export type Appearance = z.infer<typeof appearanceSchema>
 export function defaultAppearance(): Appearance {
   return { version: 1, grass: { color: TERRAIN.grass.color, brightness: 1.06, saturation: 0.84, shading: 1.95, canopyShade: 1.28 },
+    terrain: { texture: 1, inclineStyle: "stipple" },
     assets: { saturation: 1.23, brightness: 0.85 }, groups: Object.fromEntries(APPEARANCE_GROUPS.map(group => [group, { ...NEUTRAL_ADJUSTMENT }])) as Appearance["groups"], objects: [] }
 }
 export function selectionGroup(selection: Selection): AppearanceGroup {
