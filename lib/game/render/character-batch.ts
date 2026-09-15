@@ -1,15 +1,13 @@
 import * as THREE from "three"
-import { applySpriteSaturation } from "./sprite-saturation"
 import { spriteTextureView } from "./sprite-texture"
 import type { ComplexionUniforms } from "./complexion-swap"
 import { MATCH_TOLERANCE } from "./complexion-swap"
 import { CHARACTER_PALETTE_SLOTS } from "../player-color"
-import { applySpriteDepth, type SpritePoseDepth } from "./sprite-depth"
+import { applySpriteDepth, type SpritePoseDepth, type SpriteSceneryDepth } from "./sprite-depth"
 import { OUTLINE_ID_LAYER_MASK } from "./outline"
 import { updateBillboardWorld } from "./sprite-transforms"
 
 export interface CharacterBatchEntry {
-  saturation?: number
   sprite: THREE.Sprite
   ids: THREE.Sprite
   /** Direct atlas/UV state for batched poses; ordinary source sprites may omit it. */
@@ -17,6 +15,10 @@ export interface CharacterBatchEntry {
   uv?: THREE.Vector4
   /** This source publishes its ready pose and world transform during animation. */
   publishesPose?: boolean
+  /** Custom shaders still participate in overlap ordering, but draw individually. */
+  batchable?: boolean
+  /** Logical ground position before animated foot planting offsets. */
+  overlapAnchor?: THREE.Object3D
   /** Immutable center/ID snapshot; omit for mutable editor/test sprites. */
   fixedAttributes?: Float32Array
   complexion?: ComplexionUniforms
@@ -29,9 +31,9 @@ export interface CharacterBatchEntry {
   /** Painter's bias toward the camera (world units) from render/overlap-order.
    * Standalone materials read the same object as a uniform. */
   depthBias?: { value: number }
-  /** Shares its anchor with another sprite by design (a cart and its seated
-   * passengers); exempt from coincidence ordering. */
-  shared?: boolean
+  /** Shares its anchor with a cart/passengers. Order this assembly
+   * as one figure, preserving its baked internal relief. */
+  shared?: object
   /** This frame's resolved anchor, written by CharacterBatch.write for the
    * overlap ordering pass. */
   anchorX?: number
@@ -77,7 +79,7 @@ export class CharacterBatch {
   private paletteHeight = { value: 1 }
   private materials: THREE.MeshBasicMaterial[]
 
-  constructor(entry: CharacterBatchEntry, worldTexel: { value: number }, order: number, readonly compact = false) {
+  constructor(entry: CharacterBatchEntry, worldTexel: { value: number }, order: number, readonly compact = false, sceneryDepth?: SpriteSceneryDepth) {
     this.color = spriteTextureView(entry.color ?? entry.sprite.material.map!)
     this.color.offset.set(0, 0); this.color.repeat.set(1, 1)
     this.materials = [false, true].map(ids => {
@@ -113,7 +115,7 @@ export class CharacterBatch {
           mvPosition.xy += (position.xy - (characterCenter - vec2(.5))) * characterScale;
           gl_Position = projectionMatrix * mvPosition;`)
         applySpriteDepth(shader, this.viewport, worldTexel, { value: new THREE.Vector4(0, 1, 0, 0) }, { map: { value: entry.depth.map.value }, enabled: { value: true } },
-          { anchor: compact ? "characterWorldAnchor" : "(modelMatrix * instanceMatrix[3])", viewAnchor: "vec4(characterView.xyz, 1.0)", size: compact ? "length(characterWorldX)" : "length(characterWorld[0].xyz)", ground: "characterGround", bias: "characterView.w" })
+          { anchor: compact ? "characterWorldAnchor" : "(modelMatrix * instanceMatrix[3])", viewAnchor: "vec4(characterView.xyz, 1.0)", size: compact ? "length(characterWorldX)" : "length(characterWorld[0].xyz)", ground: "characterGround", bias: "characterView.w" }, undefined, sceneryDepth)
         shader.fragmentShader = `flat varying vec3 vCharacterId;
           flat varying float vCharacterIndex;
           uniform sampler2D characterPalette;
@@ -129,10 +131,9 @@ export class CharacterBatch {
                 diffuseColor.rgb = texture2D(characterPalette, at + vec2(.5, 0.0)).rgb; break;
               }
             }`}`)
-        if (!ids) applySpriteSaturation(shader, entry.saturation ?? 1)
       }
       material.onBeforeRender = renderer => { renderer.getCurrentViewport(this.viewport) }
-      material.customProgramCacheKey = () => `character-batch-v6-${compact}-${ids}-${!!entry.complexion}`
+      material.customProgramCacheKey = () => `character-batch-v8-${compact}-${ids}-${!!entry.complexion}`
       return material
     })
     this.root.name = "character-atlas-batch"

@@ -7,11 +7,12 @@
  * whole body. Real intersections between figures further apart still resolve
  * through their baked relief; only near-coincident anchors need a tie-break.
  *
- * Each figure receives a bias toward the camera of one `OVERLAP_STEP` per
- * neighbour standing behind it within `OVERLAP_RADIUS`, both measured in the
- * figure's own sprite size. Nearer anchors therefore cover farther ones
- * completely, as a classic 2D sort would. The colour and ID passes share the
- * value, and it is zero for every figure with nobody on its spot.
+ * Resolve neighbours from back to front. Each figure clears the bias already
+ * assigned to those behind it by both sprites' estimated relief thickness.
+ * Counting neighbours independently can push a large animal
+ * ahead of a nearer person, especially when their neighbour sets differ.
+ * The colour and ID passes share the value, and it is zero for every figure
+ * with nobody behind it on its spot.
  */
 
 export interface OverlapParticipant {
@@ -28,8 +29,8 @@ export interface OverlapParticipant {
 
 /** Anchors closer than this fraction of the sprite size share a spot. */
 export const OVERLAP_RADIUS = 0.3
-/** Bias per covered neighbour, as a fraction of the sprite size: about a body's thickness. */
-export const OVERLAP_STEP = 0.2
+/** Relief allowance for each sprite, as a fraction of its cell size. */
+export const OVERLAP_STEP = 0.25
 
 /** World-unit bias toward the camera for each participant, in input order. */
 export function overlapBiases(participants: readonly OverlapParticipant[], out: Float32Array<ArrayBufferLike> = new Float32Array(participants.length)): Float32Array<ArrayBufferLike> {
@@ -49,9 +50,11 @@ export function overlapBiases(participants: readonly OverlapParticipant[], out: 
     const bucket = buckets.get(k)
     if (bucket) bucket.push(i); else buckets.set(k, [i])
   }
-  for (let i = 0; i < count; i++) {
+  const ordered = Array.from({ length: count }, (_, i) => i)
+  ordered.sort((a, b) => participants[b].distance - participants[a].distance || participants[a].order - participants[b].order)
+  for (const i of ordered) {
     const p = participants[i], cx = Math.floor(p.x / cell), cz = Math.floor(p.z / cell)
-    let behind = 0
+    let bias = 0
     for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
       const bucket = buckets.get(key(cx + dx, cz + dz))
       if (!bucket) continue
@@ -60,10 +63,12 @@ export function overlapBiases(participants: readonly OverlapParticipant[], out: 
         const q = participants[j]
         const radius = OVERLAP_RADIUS * Math.max(p.size, q.size)
         if ((p.x - q.x) ** 2 + (p.z - q.z) ** 2 >= radius * radius) continue
-        if (q.distance > p.distance || (q.distance === p.distance && q.order < p.order)) behind++
+        if (q.distance > p.distance || (q.distance === p.distance && q.order < p.order)) {
+          bias = Math.max(bias, out[j] + OVERLAP_STEP * (p.size + q.size))
+        }
       }
     }
-    out[i] = behind * OVERLAP_STEP * p.size
+    out[i] = bias
   }
   return out
 }

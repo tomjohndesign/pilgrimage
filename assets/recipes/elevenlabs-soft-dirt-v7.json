@@ -1,0 +1,46 @@
+{
+  "version": 7,
+  "output": ".context/elevenlabs-soft-dirt-v7",
+  "jobs": [
+    {
+      "id": "step-dirt-soft-1",
+      "kind": "sfx",
+      "bank": "step-dirt-soft",
+      "label": "Soft boot on dirt \u00b7 1",
+      "loop": false,
+      "description": "One quiet leather boot landing on soft packed soil. Dry, close, restrained.",
+      "maxGainDb": 0,
+      "audioFilter": "highpass=f=90,lowpass=f=2200,afade=t=in:d=0.008,afade=t=out:st=0.35:d=0.15",
+      "targetDb": -32,
+      "peakLimitDb": -15,
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A single very soft footstep: a supple leather boot gently settles onto soft packed dirt. Small muffled earthy thup, faint short soil compression, quick quiet decay. Understated close dry foley. Exactly one gentle step. No stomp, gravel crunch, scraping, squeak, metal, equipment, rumble, reverb, voices, wind or background noise.",
+        "duration_seconds": 0.5,
+        "loop": false,
+        "prompt_influence": 0.7,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "step-dirt-soft-2",
+      "kind": "sfx",
+      "bank": "step-dirt-soft",
+      "label": "Soft boot on dirt \u00b7 2",
+      "loop": false,
+      "description": "One quiet leather boot landing on soft packed soil. Dry, close, restrained.",
+      "maxGainDb": 0,
+      "audioFilter": "highpass=f=90,lowpass=f=2200,afade=t=in:d=0.008,afade=t=out:st=0.35:d=0.15",
+      "targetDb": -32,
+      "peakLimitDb": -15,
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A single very soft footstep: a supple leather boot gently settles onto soft packed dirt. Small muffled earthy thup, faint short soil compression, quick quiet decay. Understated close dry foley. Exactly one gentle step. No stomp, gravel crunch, scraping, squeak, metal, equipment, rumble, reverb, voices, wind or background noise.",
+        "duration_seconds": 0.5,
+        "loop": false,
+        "prompt_influence": 0.7,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    }
+  ]
+}

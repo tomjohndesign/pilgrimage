@@ -1,7 +1,55 @@
 {
-  "lastProcessedCommit": "2ebd02e36129eacaac735d9f85ccdac0ee6534b9",
-  "releaseCount": 240,
+  "lastProcessedCommit": "0c3dbf3d5388544246e11d3a51e898d424e301e0",
+  "releaseCount": 248,
   "releases": [
+    {
+      "version": "0.0.262",
+      "title": "Release 0.0.262",
+      "summary": "Align roads to path tiles and move roadside placements clear (#282)",
+      "commit": "0c3dbf3d5388544246e11d3a51e898d424e301e0"
+    },
+    {
+      "version": "0.0.261",
+      "title": "Release 0.0.261",
+      "summary": "Tie ambient sounds to visible NPCs, animals and scenery (#281)",
+      "commit": "b1e195e943a621833b5e74449d1c845df8684f82"
+    },
+    {
+      "version": "0.0.260",
+      "title": "Release 0.0.260",
+      "summary": "Fix sprite depth ordering, scenery occlusion, and overlap borders (#280)",
+      "commit": "a40b388da6c49b4339ba1ea58cad73c142157463"
+    },
+    {
+      "version": "0.0.259",
+      "title": "Release 0.0.259",
+      "summary": "Ensure knights always use male names and voices (#279)",
+      "commit": "b8c5a6c10e670fe5fa4f0273382d11c07adb6043"
+    },
+    {
+      "version": "0.0.258",
+      "title": "Release 0.0.258",
+      "summary": "Add character sound authoring and gameplay audio (#278)",
+      "commit": "b1a70e7b42906c2f92e309263e5c4b9a90898298"
+    },
+    {
+      "version": "0.0.257",
+      "title": "Release 0.0.257",
+      "summary": "Fix animal sprites covering nearer characters (#277)",
+      "commit": "bfaf0796b854bbb4bd8805b983d28c43d1334423"
+    },
+    {
+      "version": "0.0.256",
+      "title": "Release 0.0.256",
+      "summary": "Add appearance tuning, update palette, and restore edge details (#276)",
+      "commit": "540fe6a7860c7429ed3e1a4d4c07ee5a470bf280"
+    },
+    {
+      "version": "0.0.255",
+      "title": "Release 0.0.255",
+      "summary": "Restore original colors for people outside the enclave (#274)",
+      "commit": "d689eabbdb69e576e8f02f154330119d9fd5f2f0"
+    },
     {
       "version": "0.0.254",
       "title": "Release 0.0.254",

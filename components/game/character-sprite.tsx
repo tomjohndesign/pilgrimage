@@ -1,8 +1,8 @@
 "use client"
 
-import { applySpriteSaturation } from "@/lib/game/render/sprite-saturation"
+import { tickCharacterSound } from "@/lib/game/character-sound-motion"
 import { usePlayerColor } from "./player-color"
-import { DEFAULT_PLAYER_COLOR, playerClothingSwap } from "@/lib/game/player-color"
+import { playerClothingSwap } from "@/lib/game/player-color"
 
 import { useContext } from "react"
 import { CharacterMapContext } from "./character-map-context"
@@ -38,7 +38,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { useLoader, type RootState } from "@react-three/fiber"
 import * as THREE from "three"
 import { prepareSpritePicking, spriteTexelRaycast } from "@/lib/game/render/sprite-picking"
-import { usePixelWorldTexel } from "@/components/pixel-canvas"
+import { usePixelSceneryDepth, usePixelWorldTexel } from "@/components/pixel-canvas"
 import { characterVisual, spriteRow, type SpriteClip, type CharacterModel } from "@/lib/game/character-assets"
 import { usePopulationStore } from "@/lib/game/base-person/population-store"
 import { populationVisual } from "@/lib/game/base-person/population-assets"
@@ -148,6 +148,7 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
     }
   }, [sources, textureEntries, visual.rowOffset])
   useEffect(() => () => textures.dispose(), [textures])
+  const sceneryDepth = usePixelSceneryDepth()
   const worldTexel = usePixelWorldTexel()
   const groundPlane = useMemo(() => ({ value: new THREE.Vector4() }), [])
   const groundAt = useMemo(() => map ? (x: number, z: number) => walkingSurface(map, x, z).height : undefined, [map])
@@ -157,25 +158,22 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
   // covers every clip a character can play, so they all have to qualify.
   const recolourable = visual.reservedTones && (playingClip?.reservedTones ?? true) && (flightClip?.reservedTones ?? true)
   const owned = resident ?? name === "monk"
-  // A new player color leaves visitor palettes and their materials reusable.
-  const clothingColor = owned ? playerColor : playerColor ? DEFAULT_PLAYER_COLOR : null
+  const clothingColor = owned ? playerColor : null
   const swap = useMemo(() => playerClothingSwap(complexionSwap(recolourable ? visual.design : undefined, complexion),
     visual.reservedTones ? visual.design : undefined, clothingColor, owned),
     [recolourable, visual.reservedTones, visual.design, complexion?.skin, complexion?.hair, clothingColor, owned])
-  const saturation = playerColor && !visual.reservedTones && !owned ? .22 : 1
   const complexionValues = useMemo(() => complexionUniforms(swap), [swap])
   const material = useMemo(() => {
     const material = new THREE.SpriteMaterial({ map: textures.get(1), alphaTest: 0.5, transparent: false, toneMapped: false })
     const uniforms = complexionValues
     material.onBeforeCompile = (shader) => {
-      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth, undefined, depthBias)
+      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth, undefined, depthBias, sceneryDepth)
       applyComplexionSwap(shader, uniforms)
-      applySpriteSaturation(shader, saturation)
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "person-clothing-v3"
+    material.customProgramCacheKey = () => "person-clothing-v5"
     return material
-  }, [textures, viewport, worldTexel, groundPlane, poseDepth, depthBias, complexionValues, saturation])
+  }, [textures, viewport, worldTexel, groundPlane, poseDepth, depthBias, sceneryDepth, complexionValues])
   useEffect(() => () => material.dispose(), [material])
   const center = useMemo(() => new THREE.Vector2(...visual.center), [visual])
   const sprite = useRef<THREE.Sprite>(null)
@@ -190,30 +188,31 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
     const id = new THREE.Vector3(...outlineColor)
     material.userData.objectId = id
     material.onBeforeCompile = (shader) => {
-      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth, undefined, depthBias)
+      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth, undefined, depthBias, sceneryDepth)
       shader.uniforms.travelerId = { value: id }
       shader.fragmentShader = "uniform vec3 travelerId;\n" + shader.fragmentShader.replace("#include <map_fragment>",
         "#include <map_fragment>\ndiffuseColor.rgb = travelerId;")
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "traveler-id-v8"
+    material.customProgramCacheKey = () => "traveler-id-v9"
     return material
-  }, [textures, viewport, worldTexel, groundPlane, poseDepth, depthBias, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [textures, viewport, worldTexel, groundPlane, poseDepth, depthBias, sceneryDepth, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => outlineMaterial?.dispose(), [outlineMaterial])
   const idSprite = useRef<THREE.Sprite>(null)
   const batchEntries = useCharacterBatches()
   const batchEntry = useRef<CharacterBatchEntry | null>(null)
   const batchUv = useMemo(() => new THREE.Vector4(), [])
   useLayoutEffect(() => {
-    if (!batchEntries || !sprite.current || !idSprite.current || !outlineColor || name !== "traveler") return
-    const entry = { saturation, sprite: sprite.current, ids: idSprite.current, publishesPose: true, complexion: complexionValues, palette: characterPalette(complexionValues), ground: groundPlane,
+    if (!batchEntries || !sprite.current || !idSprite.current || !outlineColor) return
+    const entry = { sprite: sprite.current, ids: idSprite.current, publishesPose: true, complexion: complexionValues, palette: characterPalette(complexionValues), ground: groundPlane,
+      batchable: name === "traveler", overlapAnchor: sprite.current.parent?.parent ?? undefined,
       fixedAttributes: Float32Array.from([center.x, center.y, ...outlineColor]), depth: poseDepth, depthBias, id: new THREE.Vector3(...outlineColor) }
     batchEntry.current = entry
     const unregisterEntry = registerCharacterBatchEntry(entry)
     batchEntries.add(entry)
     const unregister = registerSimpleBatchSource(entry.sprite, entry.ids)
     return () => { batchEntry.current = null; unregisterEntry(); unregister(); batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
-  }, [saturation, batchEntries, complexionValues, groundPlane, poseDepth, depthBias, name, center, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [batchEntries, complexionValues, groundPlane, poseDepth, depthBias, name, center, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
 
   const crowdWalk = useMemo<CrowdWalk | null>(() => map && rig && !attachment && walkTuning?.sync !== false ? {
     map, rig, walk: visual.walk, weary: visual.actions.wearyWalk, wearyIndex: actionIndices.wearyWalk,
@@ -288,6 +287,7 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
     let frame = special ? Math.floor(poseState.actionTime * special.fps) % special.columns : action ? (requested === "carrying" || requested === "procession" || requested === "wearyWalk") ? walkClipFrame(poseState.phase, clip.columns, clip.strides ?? 1) :
       Math.floor(poseState.actionTime * fps * (action.playbackRate ?? 1)) % clip.columns : moving ? walkClipFrame(poseState.phase, clip.columns, clip.strides ?? 1) : clip.stillFrame
     const walkingPose = !special && moving && (requested === "walk" || requested === "wearyWalk" || requested === "carrying" || requested === "procession")
+    tickCharacterSound(parent, camera, flight ? "flying" : playing ? "performing" : walkingPose ? "walk" : requested, walkingPose ? poseState.phase : poseState.actionTime * (special?.fps ?? fps * (action?.playbackRate ?? 1)) / clip.columns)
     const walkDetail = walkingPose && map && !selected ? sceneryDetail(scene) : 0
     if (walkingPose) frame = reducedWalkFrame(frame, clip.columns, clip.strides ?? 1, walkDetail)
     if (sprite.current) { sprite.current.userData.walkDetail = walkDetail; sprite.current.userData.displayedFrame = frame }
@@ -399,7 +399,7 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
     // Texture view per NPC and played clip; selected/standalone sprites still
     // receive their own UV view through the ordinary material path.
     const entry = batchEntry.current
-    const batched = entry && characterBatchControl.enabled && !selected && !!poseDepth.map.value && groundPlane.value.y > 0
+    const batched = entry && entry.batchable !== false && characterBatchControl.enabled && !selected && !!poseDepth.map.value && groundPlane.value.y > 0
     const texture = batched ? sources[textureIndex] : textures.get(textureIndex)
     if (entry) { entry.color = batched ? texture : undefined; entry.uv = batched ? batchUv : undefined }
     const previous = poseState
@@ -419,7 +419,7 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
   // Equal-depth overlaps must choose the same traveler in the color and ID passes.
   return (
     <group ref={poseRoot}>
-      <SpriteFrame map={map} update={updateFrame} crowd={crowdWalk && !selected && batchEntries ? {
+      <SpriteFrame map={map} update={updateFrame} crowd={name === "traveler" && crowdWalk && !selected && batchEntries ? {
         walk: crowdWalk, pose: poseRoot, entry: batchEntry, control: characterBatchControl, publish: batchEntries.publish,
       } : undefined} />
       {(type === "minstrel" || type === "beggar") && !visualOverride && <RoadsideSignals type={type} size={size} pixelSize={size / 64} />}

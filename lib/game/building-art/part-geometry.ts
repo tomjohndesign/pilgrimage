@@ -1,4 +1,5 @@
 import * as THREE from "three"
+import { grassAppearanceUniforms } from "../render/appearance-uniforms"
 import type { BuildingPart } from "./geometry"
 import { DEFAULT_ROAD_LOOK, ROAD_TIERS } from "../map/road"
 
@@ -31,6 +32,7 @@ export function buildingPartGeometry(part: BuildingPart, previewApron = true) {
 export function dirtFloorMaterial(part: BuildingPart, trail: THREE.Texture, grass: THREE.Texture) {
   const material = new THREE.MeshLambertMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide })
   material.onBeforeCompile = shader => {
+    Object.assign(shader.uniforms, grassAppearanceUniforms)
     shader.uniforms.trailMap = { value: trail }
     shader.uniforms.grassMap = { value: grass }
     shader.uniforms.swardField = { value: null }

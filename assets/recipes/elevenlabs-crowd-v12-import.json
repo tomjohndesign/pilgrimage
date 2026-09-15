@@ -1,0 +1,63 @@
+{
+  "version": 12,
+  "output": ".context/elevenlabs-scene-v10",
+  "jobs": [
+    {
+      "id": "crowd-murmur-1-v10",
+      "kind": "sfx",
+      "label": "Quiet conversation 1",
+      "bank": "crowd-murmur",
+      "loop": false,
+      "targetDb": -23,
+      "peakLimitDb": -6,
+      "maxGainDb": 40,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=4.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Two people converse quietly outdoors, one low male murmur and a softer female reply. Relaxed medieval country road conversation, indistinct syllables with no intelligible words. Warm human vocal tones, not whispering. Clean dry close recording, no wind, insects, buzzing, hiss, music or footsteps. Fade naturally to quiet.",
+        "duration_seconds": 5,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "crowd-murmur-2-v10",
+      "kind": "sfx",
+      "label": "Quiet conversation 2",
+      "bank": "crowd-murmur",
+      "loop": false,
+      "targetDb": -23,
+      "peakLimitDb": -6,
+      "maxGainDb": 40,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=4.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A few people pass a brief quiet exchange outdoors, gentle low voices overlapping slightly. Relaxed medieval country road conversation, indistinct syllables with no intelligible words. Warm human vocal tones, not whispering. Clean dry close recording, no wind, insects, buzzing, hiss, music or footsteps. Fade naturally to quiet.",
+        "duration_seconds": 5,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "crowd-murmur-3-v10",
+      "kind": "sfx",
+      "label": "Quiet conversation 3",
+      "bank": "crowd-murmur",
+      "loop": false,
+      "targetDb": -23,
+      "peakLimitDb": -6,
+      "maxGainDb": 40,
+      "audioFilter": "highpass=f=90,afade=t=in:d=0.02,afade=t=out:st=4.85:d=0.15",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "A small group chats quietly outdoors, soft indistinct voices and one very brief warm chuckle. Relaxed medieval country road conversation, indistinct syllables with no intelligible words. Warm human vocal tones, not whispering. Clean dry close recording, no wind, insects, buzzing, hiss, music or footsteps. Fade naturally to quiet.",
+        "duration_seconds": 5,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    }
+  ]
+}

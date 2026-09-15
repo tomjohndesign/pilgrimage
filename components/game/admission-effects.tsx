@@ -23,6 +23,8 @@ export function PietyEffects({ procession, characterScale }: { procession: Relic
 function FloatingEffects({ source, characterScale }: { source: SimState | RelicProcession; characterScale: number }) {
   const piety = "blessings" in source
   const group = useRef<THREE.Group>(null)
+  const soundPoint = useRef(new THREE.Vector3())
+  const offering = useRef<{x:number;y:number;z:number} | null>(null)
   const state = useRef<{ seen: number; floaters: ReturnType<typeof createPaymentFloaters>; audio: ReturnType<typeof createAdmissionAudio> | null } | null>(null)
 
   useEffect(() => {
@@ -45,24 +47,27 @@ function FloatingEffects({ source, characterScale }: { source: SimState | RelicP
     }
   }, [source, piety])
 
-  useFrame(({ scene }, delta) => {
+  useFrame(({ scene, camera }, delta) => {
     const live = state.current
     if (!live || !group.current) return
-    if (sceneryDetail(scene) > 0 || !isWorldVisible(group.current.parent)) {
-      if (group.current.visible) live.floaters.step(PAYMENT_LIFETIME)
-      group.current.visible = false
-      live.seen = "blessings" in source ? source.blessingSequence : source.admissionSequence
-      return
+    const offeringVisible = (position: {x:number;y:number;z:number} | null) => {
+      if (!position || document.hidden || useSimulationStore.getState().paused || scene.getObjectByName("visibility-buildings")?.visible === false) return false
+      soundPoint.current.set(position.x, position.y + .4, position.z).project(camera)
+      return Math.abs(soundPoint.current.x)<=1 && Math.abs(soundPoint.current.y)<=1 && Math.abs(soundPoint.current.z)<=1
     }
-    group.current.visible = true
+    live.audio?.setVisible(offeringVisible(offering.current))
+    const showFloaters = sceneryDetail(scene) === 0 && isWorldVisible(group.current.parent)
+    if (!showFloaters && group.current.visible) live.floaters.step(PAYMENT_LIFETIME)
+    group.current.visible = showFloaters
     const playback = useSimulationStore.getState()
     const dt = playback.paused ? 0 : Math.min(delta, 0.1) * playback.speed
     live.floaters.step(dt)
     for (const payment of ("blessings" in source ? source.blessings : source.admissionPayments)) {
       if (payment.id <= live.seen) continue
       live.seen = payment.id
-      live.floaters.show(piety ? { ...payment, resource: "cross" } : payment, characterScale)
-      live.audio?.play()
+      if (showFloaters) live.floaters.show(piety ? { ...payment, resource: "cross" } : payment, characterScale)
+      offering.current = payment
+      live.audio?.play(offeringVisible(payment))
     }
   }, -2)
 

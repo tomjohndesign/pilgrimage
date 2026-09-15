@@ -1,5 +1,6 @@
 "use client"
 
+import { AppearancePanel } from "./appearance-panel"
 import { PlayerColorPicker } from "./player-color"
 
 import { isChapel } from "@/lib/game/shrine-layout"
@@ -19,6 +20,7 @@ import "./game-hud.css"
 import { useEffect, useId, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
+import { useVoiceSubtitleStore } from "@/lib/game/voice-subtitle-store"
 import {
   arrivalOdds,
   computeDangerField,
@@ -52,6 +54,7 @@ import { DemolishBuildingDialog } from "./demolish-building-dialog"
 
 import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
 import { useBalanceStore } from "@/lib/game/balance-store"
+import { SceneAudioLifecycle } from "@/components/scene-audio-lifecycle"
 import { MusicPlayer } from "./music-player"
 import { HudButton } from "./hud-button"
 import { BugReportDialog } from "./bug-report-dialog"
@@ -293,6 +296,8 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
     camera.zoomBy(Math.max(12, Math.hypot(maxX - minX, maxZ - minZ) + 8) / camera.viewSize)
   }
   const named = (id: string | null | undefined) => map?.buildings.find(b => b.id === id)?.label
+  // The barks are in Old English and Latin, so the panel carries the meaning.
+  const spokenLine = useVoiceSubtitleStore(s => s.travelerId === traveler.id ? s.line : null)
   return (
     <Panel>
       <div className="flex items-center justify-between gap-4">
@@ -325,6 +330,12 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
             {live.praying ? "Kneeling in prayer before the relic" : live.partyWaiting ? waitingLabel : ACTIVITY_LABELS[live.activity]}
             {(live.employer || live.home) && " · Settler"}
             {live.track && " · on the dark track"}
+          </div>
+        )}
+        {spokenLine && (
+          <div className="pt-0.5 text-[11px] text-ink" aria-live="polite">
+            <span className="italic">&ldquo;{spokenLine.text}&rdquo;</span>
+            <span className="text-ink-light"> · {spokenLine.gloss}</span>
           </div>
         )}
         {live?.beggar && <div className="text-[11px] italic text-ink-light">Needs {BEGGAR_RECOVERY_GOLD} gold to return to their calling</div>}
@@ -736,7 +747,7 @@ export function GameHud({
 
   useEffect(() => {
     if (!selection) return
-    setPanel(null)
+    setPanel(current => SHOW_PROPERTY_PANELS && current === "world" ? current : null)
     economy.chooseBuild(null)
   }, [selection, economy.chooseBuild])
 
@@ -815,6 +826,7 @@ export function GameHud({
 
   return (
     <Tooltip.Provider delayDuration={180} skipDelayDuration={100}>
+    <SceneAudioLifecycle active={playing} />
     <BugReportDialog diagnostics={report} onClose={() => setReport(null)} />
     <div className="game-hud" data-landing={!playing} data-panel={menuOpen ? "menu" : panel ?? (selection ? "selection" : "none")}>
       <div className="hud-frame" aria-hidden="true" />
@@ -840,7 +852,7 @@ export function GameHud({
               setPanel((current) => current === "world" ? null : "world")
               setMenuOpen(false)
               economy.chooseBuild(null)
-              useCameraStore.getState().select(null)
+              if (!SHOW_PROPERTY_PANELS) useCameraStore.getState().select(null)
             }}><Settings size={16} /></button>}
           {playing && <button type="button" className="hud-header-button" aria-label="Menu" title="Menu"
             aria-expanded={menuOpen} onClick={() => {
@@ -906,6 +918,7 @@ export function GameHud({
           <HudButton onClick={() => set(DEFAULT_SCENE_VISIBILITY)}>Reset visibility</HudButton>
         </Section>
         {SHOW_PROPERTY_PANELS && <>
+        {map && <AppearancePanel map={map} />}
         <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />
           <MapSizeControl label="Size" value={settings.size} onChange={(size) => set({ size })} />

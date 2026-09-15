@@ -1,7 +1,8 @@
 import { expandReachable, nearestReachableLand } from "./connectivity"
 import { generateLegacyMap } from "./legacy-generate-map"
 import { DEFAULT_SETTINGS, PLAYABLE_SEED_REGION_SIZE, distanceToMask, sampleWoodland, seedingMethodForSeed } from "./woodland"
-import { MAIN_ROAD_WIDTH, clearMainRoadVerge } from "./road-width"
+import { layMainRoadTiles } from "./road-footprint"
+import { MAIN_ROAD_WIDTH } from "./road-width"
 import { routeBounds, ROUTE_EDGE_INSET } from "./route-bounds"
 import { createCrossroads } from "./crossroads"
 import { straightenRoad } from "./straighten-road"
@@ -830,7 +831,7 @@ export function generateMap(options: GenerateMapOptions): GameMap {
   addPathSprings(map)
   addRoadsideTowns(map)
   createCrossroads(map)
-  clearMainRoadVerge(map)
+  layMainRoadTiles(map)
   // Wells, springs and towns lay their own tracks; keep those clear of cliffs too.
   for (let round = 0; round < 3 && clearCliffsBesideRoads(map.elevation!, width, depth, kind, map.tiles, map.buildings, waterInfo.surface) > 0; round++) {
     finishElevation(map.elevation!, width, depth, kind, waterInfo.surface!)

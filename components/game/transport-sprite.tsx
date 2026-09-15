@@ -1,6 +1,6 @@
 "use client"
-import { usePlayerColor } from "./player-color"
-import { applySpriteSaturation } from "@/lib/game/render/sprite-saturation"
+import { touchObjectSoundSource, sceneSoundSources } from "@/lib/game/scene-sound-sources"
+import { playSourceSelection } from "@/lib/game/scene-audio"
 import { useCharacterBatches } from "./character-batches"
 import { spriteTextureView } from "@/lib/game/render/sprite-texture"
 
@@ -14,7 +14,7 @@ import * as THREE from "three"
 import { prepareSpritePicking, spriteTexelRaycast } from "@/lib/game/render/sprite-picking"
 import type { GameMap } from "@/lib/game/map/types"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
-import { usePixelWorldTexel } from "@/components/pixel-canvas"
+import { usePixelSceneryDepth, usePixelWorldTexel } from "@/components/pixel-canvas"
 import { spriteRow } from "@/lib/game/character-assets"
 import { applySpriteDepth, configureSpriteDepthTexture, spriteRenderOrder, type SpritePoseDepth } from "@/lib/game/render/sprite-depth"
 import { OUTLINE_ID_LAYER_MASK, SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
@@ -38,14 +38,13 @@ import type { FigureClickHandler } from "./traveler-figure"
 const KEEPER_POSE_INDEX: Record<string, number> = Object.fromEntries(Object.keys(KEEPER_CLIPS).map((key, i) => [key, i]))
 
 export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", pack = false, knight, map: terrain, kind, coat, variant = 0, horseVariant = "common", cargo = "produce", puller = "hand", awning = false, worldStall = false, characterScale = 1,
-  selected = false, outlineColor, onClick, position = [0, 0, 0] }: {
+  selected = false, outlineColor, overlapGroup, onClick, position = [0, 0, 0] }: {
   passengerCart?: PassengerCart; seat?: number; calling?: TravelerTypeId; pack?: boolean
+  overlapGroup?: object
   knight?: "mounted" | "saddled"
   map?: GameMap; kind: "cart" | "merchant" | "passenger" | Animal; coat?: string; variant?: number; horseVariant?: HorseVariant; cargo?: Cargo; puller?: Puller; awning?: boolean; characterScale?: number
   selected?: boolean; outlineColor?: [number, number, number]; onClick?: FigureClickHandler; position?: [number, number, number]; worldStall?: boolean
 }) {
-  const playerColor = usePlayerColor()
-  const saturation = playerColor && (kind === "cart" || kind === "passenger" || kind === "merchant" || knight === "mounted") ? .22 : 1
   const animal = kind === "donkey" || kind === "horse" || kind === "ox"
   const edits = useAnimalRigStore(state => state.designs[kind])
   const hasEdits = animal && !!edits && Object.keys(edits.clips).length > 0
@@ -66,6 +65,7 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
     return map
   }), [sources, urls.length])
   const map = maps[0]
+  const sceneryDepth = usePixelSceneryDepth()
   const worldTexel = usePixelWorldTexel(), viewport = useMemo(() => new THREE.Vector4(), [])
   const driverFrame = useMemo(() => ({ value: new THREE.Vector4() }), [])
   const driverVisible = useMemo(() => ({ value: 0 }), [])
@@ -75,18 +75,17 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
     const material = new THREE.SpriteMaterial({ map, alphaTest: 0.5, transparent: false, toneMapped: false })
     if (idPass) material.userData.objectId = new THREE.Vector3(...(outlineColor ?? [0, 0, 0]))
     material.onBeforeCompile = shader => {
-      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth, undefined, depthBias)
+      applySpriteDepth(shader, viewport, worldTexel, groundPlane, poseDepth, undefined, depthBias, sceneryDepth)
       if (kind === "cart" && !passengerCart) applyDriverLayer(shader, maps[3], driverFrame, driverVisible, depths[3])
-      if (!idPass) applySpriteSaturation(shader, saturation)
       if (idPass) {
         shader.uniforms.transportId = { value: new THREE.Vector3(...(outlineColor ?? [0, 0, 0])) }
         shader.fragmentShader = "uniform vec3 transportId;\n" + shader.fragmentShader.replace("#include <alphatest_fragment>", "#include <alphatest_fragment>\ndiffuseColor.rgb = transportId;")
       }
     }
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => `transport-${kind}-${passengerCart ?? "vendor"}-${idPass ? "id" : "color"}-v6`
+    material.customProgramCacheKey = () => `transport-${kind}-${passengerCart ?? "vendor"}-${idPass ? "id" : "color"}-v8`
     return material
-  }), [saturation, map, maps, kind, passengerCart, driverFrame, driverVisible, viewport, worldTexel, groundPlane, poseDepth, depthBias, depths, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }), [map, maps, kind, passengerCart, driverFrame, driverVisible, viewport, worldTexel, groundPlane, poseDepth, depthBias, sceneryDepth, depths, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   useEffect(() => () => { materials.forEach(m => m.dispose()) }, [materials])
   useEffect(() => () => maps.forEach(map => map.dispose()), [maps])
   useEffect(() => prepareSpritePicking(maps), [maps])
@@ -96,15 +95,19 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
     // Vendor carts have a separately composited driver's atlas; keep that shader
     // intact. Passenger carts are plain sheets and batch like the animals.
     // Edited animal frames also retain their live canvas rendering path.
-    if (!batchEntries || !body.current || !ids.current || !outlineColor || (kind === "cart" && !passengerCart) || edited) return
+    if (!batchEntries || !body.current || !ids.current || !outlineColor) return
     // A passenger cart and its seated passengers share one anchor on purpose;
-    // their baked relief orders them, so the coincidence pass leaves them out.
-    const entry = { saturation, sprite: body.current, ids: ids.current, ground: groundPlane, depth: poseDepth, depthBias,
-      shared: kind === "cart" || kind === "passenger", id: new THREE.Vector3(...outlineColor) }
+    // their baked relief orders them, so they receive one shared depth bias.
+    const entry = { sprite: body.current, ids: ids.current, ground: groundPlane, depth: poseDepth, depthBias,
+      overlapAnchor: body.current.parent?.parent ?? undefined,
+      batchable: !(kind === "cart" && !passengerCart) && !edited,
+      shared: overlapGroup, id: new THREE.Vector3(...outlineColor) }
     batchEntries.add(entry)
     return () => { batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
-  }, [saturation, batchEntries, groundPlane, poseDepth, depthBias, kind, passengerCart, edited, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [batchEntries, groundPlane, poseDepth, depthBias, kind, passengerCart, overlapGroup, edited, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   const root = useRef<THREE.Group>(null), phase = useRef(0), grazingTime = useRef(0), plant = useRef<FootPlant | null>(null)
+  useEffect(() => { if(selected && animal && terrain) void playSourceSelection(`animal/${kind}`) }, [selected, animal, kind, !!terrain])
+  useEffect(() => { const actor=root.current?.uuid; return()=>{if(actor)sceneSoundSources.remove(actor)} }, [])
   const vectors = useMemo(() => ({ facing: new THREE.Vector3(), origin: new THREE.Vector3(), foot: new THREE.Vector3(), corrected: new THREE.Vector3() }), [])
   // A standing figure whose pose, facing, place and shop state did not change
   // keeps last frame's frame, ground plane and uniforms; only movers pay.
@@ -120,6 +123,10 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
     group.visible = !(worldStall && kind === "cart" && shop)
     if (!group.visible) return
     const moving = data.moving === true, distance = data.playbackRate === 0 ? 0 : data.distance ?? 0
+    if (terrain && (animal || kind === "cart")) {
+      if (data.playbackRate === 0 || data.motionReset) sceneSoundSources.remove(group.uuid)
+      else touchObjectSoundSource(group, camera, animal ? `animal/${kind}` : "vehicle/cart", moving)
+    }
     const stride = animal ? animalStride(kind, characterScale, horseVariant) : manifest.wheelCycleRadians * TRANSPORT.wheelRadius * RIG_TO_WORLD * characterScale
     if (moving) phase.current = transportPhase(phase.current, Math.abs(distance), stride, data.reversing === true)
     if (data.grazing && !moving) grazingTime.current += Math.min(delta, 0.1) * (data.playbackRate ?? 1)

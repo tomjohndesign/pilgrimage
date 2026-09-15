@@ -3,9 +3,9 @@
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
-import { PixelCharacters, usePixelWorldTexel } from "@/components/pixel-canvas"
+import { PixelCharacters, usePixelSceneryDepth, usePixelWorldTexel } from "@/components/pixel-canvas"
 import { CharacterBatch, type CharacterBatchEntry } from "@/lib/game/render/character-batch"
-import { overlapBiases, type OverlapParticipant } from "@/lib/game/render/overlap-order"
+import { CharacterOverlap } from "@/lib/game/render/character-overlap"
 import { SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import { batchSourceRoot, updateBatchSourceVisibility, clearBatchSourceVisibility } from "@/lib/game/render/batch-source-visibility"
 import { isWorldVisible } from "@/lib/game/render/visibility"
@@ -39,29 +39,30 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
   const scene = useThree(state => state.scene)
   const groups = useMemo(() => new Map<string, AtlasGroup>(), [])
   const membership = useMemo(() => new WeakMap<CharacterBatchEntry, {
-    color: THREE.Texture["source"]; depth: THREE.Texture["source"]; recolor: boolean; saturation: number; group: AtlasGroup
+    color: THREE.Texture["source"]; depth: THREE.Texture["source"]; recolor: boolean; group: AtlasGroup
   }>(), [])
   const candidates = useMemo(() => new Set<THREE.Object3D>(), [])
   const entries = useMemo(() => new CharacterEntries((entry, knownBatched) => {
     const sprite = entry.sprite, map = entry.color ?? sprite.material.map, depth = entry.depth.map.value
-    const batched = knownBatched ?? (characterBatchControl.enabled && isWorldVisible(sprite.parent) &&
-      !sprite.layers.isEnabled(SELECTED_CHARACTER_LAYER) && !!map && !!depth && entry.ground.value.y > 0)
+    const batched = entry.batchable !== false && (knownBatched ?? (characterBatchControl.enabled && isWorldVisible(sprite.parent) &&
+      !sprite.layers.isEnabled(SELECTED_CHARACTER_LAYER) && !!map && !!depth && entry.ground.value.y > 0))
     sprite.visible = entry.ids.visible = !batched
     if (!batched) return
     candidates.add(batchSourceRoot(sprite))
     let cached = membership.get(entry)
-    if (!cached || cached.color !== map!.source || cached.depth !== depth!.source || cached.recolor !== !!entry.complexion || cached.saturation !== (entry.saturation ?? 1)) {
-      const key = `${map!.source.uuid}:${depth!.source.uuid}:${!!entry.complexion}:${entry.saturation ?? 1}`
+    if (!cached || cached.color !== map!.source || cached.depth !== depth!.source || cached.recolor !== !!entry.complexion) {
+      const key = `${map!.source.uuid}:${depth!.source.uuid}:${!!entry.complexion}`
       let group = groups.get(key)
       if (!group) { group = { entries: [] }; groups.set(key, group) }
-      cached = { color: map!.source, depth: depth!.source, recolor: !!entry.complexion, saturation: entry.saturation ?? 1, group }
+      cached = { color: map!.source, depth: depth!.source, recolor: !!entry.complexion, group }
       membership.set(entry, cached)
     }
     cached.group.entries.push(entry)
   }), [groups, membership, candidates])
   const root = useRef<THREE.Group>(null)
+  const sceneryDepth = usePixelSceneryDepth()
   const worldTexel = usePixelWorldTexel()
-  const overlap = useMemo(() => ({ participants: [] as OverlapParticipant[], entries: [] as CharacterBatchEntry[], biases: new Float32Array(0), anchor: new THREE.Vector3() }), [])
+  const overlap = useMemo(() => new CharacterOverlap(), [])
   const phaseStart = useRef(0)
   useFrame(() => { phaseStart.current = frameProfile.start() }, -2.5)
   useFrame(() => {
@@ -98,13 +99,14 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
         root.current.remove(batch.root); batch.dispose(); group.batch = batch = undefined
       }
       if (!batch && group.entries.length) {
-        batch = group.batch = new CharacterBatch(group.entries[0], worldTexel, order, compact)
+        batch = group.batch = new CharacterBatch(group.entries[0], worldTexel, order, compact, sceneryDepth)
         root.current.add(batch.root)
       }
       group.entries.sort((a, b) => a.sprite.renderOrder - b.sprite.renderOrder)
       batch?.write(group.entries, camera, true)
     }
-    orderCoincidentFigures(entries, groups, camera, overlap)
+    overlap.update(entries, groups.values(), camera)
+    for (const group of groups.values()) group.batch?.writeBiases(group.entries)
     updateBatchSourceVisibility(scene, candidates, clock.elapsedTime)
     frameProfile.end("characterBatches", started)
   }, .5)
@@ -121,34 +123,4 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
     <SpriteFrames visibleRoot={root}>{children}</SpriteFrames>
     <PixelCharacters><group name="character-batches" ref={root} /></PixelCharacters>
   </Context.Provider>
-}
-
-/** Figures standing on one spot resolve by painter's order instead of texel
- * noise. Batched entries carry this frame's anchors from their write; the few
- * standalone sprites (selected figures, edited animals) resolve their own. */
-function orderCoincidentFigures(entries: CharacterEntries, groups: Map<string, AtlasGroup>, camera: THREE.Camera,
-  scratch: { participants: OverlapParticipant[]; entries: CharacterBatchEntry[]; biases: Float32Array; anchor: THREE.Vector3 }) {
-  const { participants, anchor } = scratch
-  participants.length = 0; scratch.entries.length = 0
-  const admit = (entry: CharacterBatchEntry) => {
-    participants.push({ x: entry.anchorX!, z: entry.anchorZ!, distance: entry.anchorDistance!, size: entry.anchorSize!, order: entry.sprite.renderOrder })
-    scratch.entries.push(entry)
-  }
-  for (const group of groups.values()) for (const entry of group.entries) if (!entry.shared && entry.depthBias) admit(entry)
-  const view = camera.matrixWorldInverse.elements
-  for (const entry of entries) {
-    const sprite = entry.sprite
-    if (entry.shared || !entry.depthBias || !sprite.visible) continue
-    if (!isWorldVisible(sprite.parent)) { entry.depthBias.value = 0; continue }
-    sprite.getWorldPosition(anchor)
-    entry.anchorX = anchor.x; entry.anchorZ = anchor.z
-    entry.anchorDistance = -(view[2] * anchor.x + view[6] * anchor.y + view[10] * anchor.z + view[14])
-    const world = sprite.matrixWorld.elements
-    entry.anchorSize = Math.hypot(world[0], world[1], world[2])
-    admit(entry)
-  }
-  if (scratch.biases.length < participants.length) scratch.biases = new Float32Array(Math.max(64, 2 ** Math.ceil(Math.log2(participants.length))))
-  const biases = overlapBiases(participants, scratch.biases)
-  for (let i = 0; i < scratch.entries.length; i++) scratch.entries[i].depthBias!.value = biases[i]
-  for (const group of groups.values()) group.batch?.writeBiases(group.entries)
 }

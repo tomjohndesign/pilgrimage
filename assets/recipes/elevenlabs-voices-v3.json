@@ -1,0 +1,378 @@
+{
+  "version": 3,
+  "output": ".context/elevenlabs-voices-v3",
+  "replaceCharacters": [
+    "friar"
+  ],
+  "selectionVariants": {
+    "peasant": "dutch"
+  },
+  "notes": "Dutch is the preferred game treatment, not a claim of reconstructed Old English. Yorkshire and West Country are explicitly modern artistic comparisons. Monk uses natural pitch and warm reassuring direction.",
+  "sources": [
+    "https://people.uleth.ca/~daniel.odonnell/tutorials/the-pronunciation-of-old-english",
+    "https://oldenglishteaching.arts.gla.ac.uk/Units/3_Description_of_OE.html",
+    "https://www.cambridge.org/core/books/abs/frisians-and-their-north-sea-neighbours/geography-and-dialects-of-old-saxon-riverbasin-communication-networks-and-the-distributional-patterns-of-north-sea-germanic-features-in-old-saxon/5CCE39B84DADACEA0BFE94D2FD3B20B0"
+  ],
+  "jobs": [
+    {
+      "id": "peasant-2-george-dutch",
+      "kind": "voice",
+      "label": "Field hand: George · Dutch influence",
+      "character": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-2",
+      "actor": "George",
+      "variant": "dutch",
+      "response": "select",
+      "ipa": "itʃ ˈhæbːe weork toː ˈdoːnːe",
+      "pitchSemitones": 0,
+      "description": "Dutch influence · current game voice",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "[strong Dutch accent] /itʃ ˈhæbːe weork toː ˈdoːnːe/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-3-george-dutch",
+      "kind": "voice",
+      "label": "Field hand: George · Dutch influence",
+      "character": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-3",
+      "actor": "George",
+      "variant": "dutch",
+      "response": "select",
+      "ipa": "jɑː",
+      "pitchSemitones": 0,
+      "description": "Dutch influence · current game voice",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "[strong Dutch accent] /jɑː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-1-george-yorkshire",
+      "kind": "voice",
+      "label": "Field hand: George · Yorkshire",
+      "character": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-1",
+      "actor": "George",
+      "variant": "yorkshire",
+      "response": "comparison",
+      "ipa": "hwæt wilt θuː",
+      "pitchSemitones": 0,
+      "description": "Yorkshire influence · atmosphere comparison",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "[strong Yorkshire accent] /hwæt wilt θuː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-2-george-yorkshire",
+      "kind": "voice",
+      "label": "Field hand: George · Yorkshire",
+      "character": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-2",
+      "actor": "George",
+      "variant": "yorkshire",
+      "response": "comparison",
+      "ipa": "itʃ ˈhæbːe weork toː ˈdoːnːe",
+      "pitchSemitones": 0,
+      "description": "Yorkshire influence · atmosphere comparison",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "[strong Yorkshire accent] /itʃ ˈhæbːe weork toː ˈdoːnːe/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-1-george-west-country",
+      "kind": "voice",
+      "label": "Field hand: George · West Country",
+      "character": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-1",
+      "actor": "George",
+      "variant": "west-country",
+      "response": "comparison",
+      "ipa": "hwæt wilt θuː",
+      "pitchSemitones": 0,
+      "description": "West Country influence · atmosphere comparison",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "[strong West Country accent] /hwæt wilt θuː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-2-george-west-country",
+      "kind": "voice",
+      "label": "Field hand: George · West Country",
+      "character": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-2",
+      "actor": "George",
+      "variant": "west-country",
+      "response": "comparison",
+      "ipa": "itʃ ˈhæbːe weork toː ˈdoːnːe",
+      "pitchSemitones": 0,
+      "description": "West Country influence · atmosphere comparison",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "[strong West Country accent] /itʃ ˈhæbːe weork toː ˈdoːnːe/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-2-lily-dutch",
+      "kind": "voice",
+      "label": "Field hand: Lily · Dutch influence",
+      "character": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-2",
+      "actor": "Lily",
+      "variant": "dutch",
+      "response": "select",
+      "ipa": "itʃ ˈhæbːe weork toː ˈdoːnːe",
+      "pitchSemitones": 0,
+      "description": "Dutch influence · current game voice",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[strong Dutch accent] /itʃ ˈhæbːe weork toː ˈdoːnːe/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-3-lily-dutch",
+      "kind": "voice",
+      "label": "Field hand: Lily · Dutch influence",
+      "character": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-3",
+      "actor": "Lily",
+      "variant": "dutch",
+      "response": "select",
+      "ipa": "jɑː",
+      "pitchSemitones": 0,
+      "description": "Dutch influence · current game voice",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[strong Dutch accent] /jɑː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-1-lily-yorkshire",
+      "kind": "voice",
+      "label": "Field hand: Lily · Yorkshire",
+      "character": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-1",
+      "actor": "Lily",
+      "variant": "yorkshire",
+      "response": "comparison",
+      "ipa": "hwæt wilt θuː",
+      "pitchSemitones": 0,
+      "description": "Yorkshire influence · atmosphere comparison",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[strong Yorkshire accent] /hwæt wilt θuː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-2-lily-yorkshire",
+      "kind": "voice",
+      "label": "Field hand: Lily · Yorkshire",
+      "character": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-2",
+      "actor": "Lily",
+      "variant": "yorkshire",
+      "response": "comparison",
+      "ipa": "itʃ ˈhæbːe weork toː ˈdoːnːe",
+      "pitchSemitones": 0,
+      "description": "Yorkshire influence · atmosphere comparison",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[strong Yorkshire accent] /itʃ ˈhæbːe weork toː ˈdoːnːe/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-1-lily-west-country",
+      "kind": "voice",
+      "label": "Field hand: Lily · West Country",
+      "character": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-1",
+      "actor": "Lily",
+      "variant": "west-country",
+      "response": "comparison",
+      "ipa": "hwæt wilt θuː",
+      "pitchSemitones": 0,
+      "description": "West Country influence · atmosphere comparison",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[strong West Country accent] /hwæt wilt θuː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-2-lily-west-country",
+      "kind": "voice",
+      "label": "Field hand: Lily · West Country",
+      "character": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-2",
+      "actor": "Lily",
+      "variant": "west-country",
+      "response": "comparison",
+      "ipa": "itʃ ˈhæbːe weork toː ˈdoːnːe",
+      "pitchSemitones": 0,
+      "description": "West Country influence · atmosphere comparison",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[strong West Country accent] /itʃ ˈhæbːe weork toː ˈdoːnːe/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "friar-1-daniel-gentle",
+      "kind": "voice",
+      "label": "Monk: Daniel · gentle scholar",
+      "character": "friar",
+      "bodyType": "Male",
+      "lineId": "friar-1",
+      "actor": "Daniel",
+      "variant": "gentle",
+      "response": "select",
+      "ipa": "paks ˈte.kum",
+      "pitchSemitones": 0,
+      "description": "Patient, learned and reassuring · natural pitch",
+      "path": "/v1/text-to-speech/onwK4e9ZLuTAKqWW03F9",
+      "body": {
+        "text": "[warm] [gentle] [reassuring] /paks ˈte.kum/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.08
+        }
+      }
+    },
+    {
+      "id": "friar-2-daniel-gentle",
+      "kind": "voice",
+      "label": "Monk: Daniel · gentle scholar",
+      "character": "friar",
+      "bodyType": "Male",
+      "lineId": "friar-2",
+      "actor": "Daniel",
+      "variant": "gentle",
+      "response": "select",
+      "ipa": "ˈde.o ˈɡra.tsi.as",
+      "pitchSemitones": 0,
+      "description": "Patient, learned and reassuring · natural pitch",
+      "path": "/v1/text-to-speech/onwK4e9ZLuTAKqWW03F9",
+      "body": {
+        "text": "[warm] [gentle] [reassuring] /ˈde.o ˈɡra.tsi.as/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.08
+        }
+      }
+    },
+    {
+      "id": "friar-3-daniel-gentle",
+      "kind": "voice",
+      "label": "Monk: Daniel · gentle scholar",
+      "character": "friar",
+      "bodyType": "Male",
+      "lineId": "friar-3",
+      "actor": "Daniel",
+      "variant": "gentle",
+      "response": "select",
+      "ipa": "kwid vis ˈfi.li",
+      "pitchSemitones": 0,
+      "description": "Patient, learned and reassuring · natural pitch",
+      "path": "/v1/text-to-speech/onwK4e9ZLuTAKqWW03F9",
+      "body": {
+        "text": "[warm] [gentle] [reassuring] /kwid vis ˈfi.li/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.08
+        }
+      }
+    }
+  ]
+}

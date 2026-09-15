@@ -2,6 +2,7 @@
 
 import { useMemo, useEffect, useLayoutEffect, useRef, useState } from "react"
 import * as THREE from "three"
+import { APPEARANCE_ENABLED } from "@/lib/game/appearance-store"
 import { GRASS_TEXTURE_URL } from "@/lib/game/render/ground-surface"
 import { useFrame, type ThreeEvent } from "@react-three/fiber"
 import { buildingGeometryLevels, buildingPartDetail } from "@/lib/game/building-art/merged-geometry"
@@ -75,8 +76,16 @@ export function batchDetails(parts: BuildingPart[]): BuildingPart[] {
 }
 
 /** Game buildings keep their authored surfaces in two color/ID draws. */
-function MergedParts({ parts, idColor, onClick, terrainFloors, surfaceMaterial, batchable, dynamic }: { batchable: boolean; dynamic: boolean; parts: BuildingPart[]; idColor?: THREE.Color; onClick?: (event: ThreeEvent<MouseEvent>) => void; terrainFloors: boolean; surfaceMaterial?: THREE.MeshLambertMaterial }) {
+function MergedParts({ parts, idColor, appearanceIdColor = idColor, onClick, terrainFloors, surfaceMaterial, batchable, dynamic }: { batchable: boolean; dynamic: boolean; parts: BuildingPart[]; idColor?: THREE.Color; appearanceIdColor?: THREE.Color; onClick?: (event: ThreeEvent<MouseEvent>) => void; terrainFloors: boolean; surfaceMaterial?: THREE.MeshLambertMaterial }) {
   const levels = useMemo(() => buildingGeometryLevels(parts.filter(p => !p.surface)), [parts])
+  useLayoutEffect(() => {
+    if (!APPEARANCE_ENABLED) return
+    for (const geometry of levels) {
+      const data = new Float32Array(geometry.getAttribute("position").count * 3)
+      if (appearanceIdColor) for (let i=0;i<data.length;i+=3) appearanceIdColor.toArray(data,i)
+      geometry.setAttribute("appearanceObjectId", new THREE.BufferAttribute(data,3))
+    }
+  }, [levels, appearanceIdColor])
   const body = useRef<THREE.Mesh>(null), ids = useRef<THREE.Mesh>(null)
   const batches = useBuildingBatches()
   const material = batches?.material ?? surfaceMaterial
@@ -109,10 +118,11 @@ export function BuildingModel({ recipe, cutaway = false, idColor, onClick, ink =
 }
 
 /** Ghosts retain every surface, with frame lines only on structural parts. */
-export function StructureModel({ parts, idColor, ghostColor, ink = true, cutaway = false, onClick, terrainFloors = false, surfaceMaterial, dynamic = false, penGateOpen }: {
+export function StructureModel({ parts, idColor, appearanceIdColor, ghostColor, ink = true, cutaway = false, onClick, terrainFloors = false, surfaceMaterial, dynamic = false, penGateOpen }: {
   /** Moving furnishings must keep their world transforms live. */
   dynamic?: boolean
   penGateOpen?: () => number
+  appearanceIdColor?: THREE.Color
   parts: BuildingPart[]; onClick?: (event: ThreeEvent<MouseEvent>) => void; idColor?: THREE.Color; ghostColor?: string; ink?: boolean; cutaway?: boolean; terrainFloors?: boolean; surfaceMaterial?: THREE.MeshLambertMaterial
 }) {
   const rendered = useMemo(() => batchDetails(parts.filter(p=>!p.gateHinge)), [parts])
@@ -135,7 +145,7 @@ export function StructureModel({ parts, idColor, ghostColor, ink = true, cutaway
   })
   const visible = useMemo(() => visibleStructureParts(rendered, cutaway && !distant, direction), [rendered, cutaway, distant, direction])
   return <group ref={root} userData={{ cutaway: cutaway && !distant }}>{!ink && !ghostColor
-    ? <MergedParts batchable={!cutaway && !dynamic} dynamic={dynamic} parts={visible} idColor={idColor} onClick={onClick} terrainFloors={terrainFloors} surfaceMaterial={surfaceMaterial} />
+    ? <MergedParts batchable={!cutaway && !dynamic} dynamic={dynamic} parts={visible} idColor={idColor} appearanceIdColor={appearanceIdColor} onClick={onClick} terrainFloors={terrainFloors} surfaceMaterial={surfaceMaterial} />
     : visible.map((part) => <Part key={part.name} part={part} terrainFloors={terrainFloors} idColor={idColor} ghostColor={ghostColor} onClick={onClick} ink={ink} />)}
     {gateParts.length>0 && <PenGateLeaf parts={gateParts} open={penGateOpen} idColor={idColor} ghostColor={ghostColor} onClick={onClick} />}
   </group>

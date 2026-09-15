@@ -5,8 +5,9 @@ import { BASE_CHARACTER_SCALE, personWalkStride } from "../base-person/gait"
 import { cartOffset, merchantWalkSpeed, pullingDesign, animalStride } from "./assets"
 import { advanceWalkPhase } from "../motion"
 import { tileAt, worldToTileX, worldToTileZ, type GameMap } from "../map/types"
+import { layMainRoadTiles } from "../map/road-footprint"
 import { roadLanePoint } from "../map/road-lane"
-import { advanceCartProgress, cartRoutePoint } from "./route"
+import { advanceCartProgress, cartRoutePoint, cartTrafficPoint } from "./route"
 import { roadCartPose } from "./bridge-guide"
 
 const stride = personWalkStride(pullingDesign(0)) * BASE_CHARACTER_SCALE
@@ -71,6 +72,23 @@ describe("shared merchant movement", () => {
         }
         expect(route.some((p, i) => i && Math.abs(Math.abs(p.x - route[i - 1].x) - Math.abs(p.z - route[i - 1].z)) < 1e-8 && Math.abs(p.x - route[i - 1].x) > 0.1)).toBe(true)
       }
+    }
+  })
+  it("parks both directional markets beyond the two occupied path rows", () => {
+    for (const direction of [1, -1] as const) for (const side of [1, -1] as const) {
+      const map = roadMap()
+      map.mainRoadWidth = 2
+      layMainRoadTiles(map)
+      const blockedRow = direction * side === 1 ? 5 : 2
+      for (let x = 0; x < map.width; x++) map.tiles[blockedRow * map.width + x] = "forest"
+      const progress = direction === 1 ? 2 : 17
+      const from = cartTrafficPoint(map, progress, direction)
+      const plan = roadsideStall(map, from, progress, direction, 1.3)!
+      expect(plan).not.toBeNull()
+      expect(plan.side).toBe(side)
+      for (const point of [plan.park, plan.frontage])
+        expect(tileAt(map, worldToTileX(map, point.x), worldToTileZ(map, point.z))).toBe("grass")
+      expect(plan.exit.at(-1)!.z).toBeCloseTo(from.z)
     }
   })
   it("declines blocked ground, bends and the map edge", () => {

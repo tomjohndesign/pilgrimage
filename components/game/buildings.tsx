@@ -122,7 +122,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
           return <group key={building.id}>
             {(building.buildType === "well" || building.buildType === "watering-hole") &&
               <group position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={event => selectSite(building, event)}>
-                <StructureModel parts={(building.owner === "independent" ? waterMarkers : ownedWaterMarkers)[building.buildType]} idColor={idColors[index]} ink={false} surfaceMaterial={surfaceMaterial} />
+                <StructureModel parts={(building.owner === "independent" ? waterMarkers : ownedWaterMarkers)[building.buildType]} idColor={idColors[index]} appearanceIdColor={models[index].idColor} ink={false} surfaceMaterial={surfaceMaterial} />
               </group>}
             <mesh position={[centreX, baseY + .25, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={event => selectSite(building, event)}>
               <boxGeometry args={[building.buildType === "well" ? 1.2 : 2.2, .5, building.buildType === "well" ? 1.2 : 1.6]} />
@@ -139,7 +139,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
         if (building.buildType === "storehouse" || building.buildType === "workshop") {
           return (
             <group key={building.id} name={`storage-${building.id}`} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
-              <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
+              <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} appearanceIdColor={models[index].idColor} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} />
               {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
               <CloseScenery enabled={building.buildType === "storehouse"}>{building.buildType === "storehouse" && FOOD_TYPES.map((type, slot) => {
                 const amount = foodStores.get(building.id)?.[type] ?? 0
@@ -159,7 +159,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
 
         return (
           <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
-            <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} penGateOpen={()=>wildlifeRegistry.current?.penGates?.get(building.id)?.open ?? 0} />
+            <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} appearanceIdColor={models[index].idColor} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} penGateOpen={()=>wildlifeRegistry.current?.penGates?.get(building.id)?.open ?? 0} />
             {isComplete(building) && building.buildType === "sheep-pen" && <PenFoodStock width={local.w} depth={local.d} layoutSeed={building.layoutSeed} stock={()=>foodStores.get(building.id)} />}
             {isComplete(building) && building.supportId && <InnFlueSmoke width={local.w} depth={local.d} height={building.height} flue={building.tavernFlue} cutaway={cutaway} smoke={occupied.has(building.supportId)} />}
             {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}

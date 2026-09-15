@@ -3,10 +3,10 @@
 import { useEffect, useMemo } from "react"
 import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
-import { usePixelScene } from "@/components/pixel-canvas"
+import { usePixelScene, usePixelSceneryDepth } from "@/components/pixel-canvas"
 import { CHARACTER_COLOR_LAYER, CHARACTER_ID_LAYER } from "@/lib/game/render/pixel-characters"
 import { characterOcclusionRequest, sampleCharacterOcclusion } from "@/lib/game/render/character-occlusion"
-import { sceneryCloseOpacity, sceneryDetail, treeEdgeOpacity } from "@/lib/game/render/scenery-detail"
+import { sceneryCloseOpacity, treeEdgeOpacity } from "@/lib/game/render/scenery-detail"
 
 import { useCameraStore, type Selection } from "@/lib/game/camera-store"
 import { useBuildStore } from "@/lib/game/build-store"
@@ -273,6 +273,7 @@ const FRAGMENT_SHADER = /* glsl */ `
 
 export function OutlinePass({ objects, selection: previewSelection }: { selection?: Selection | null; objects?: Omit<Parameters<typeof selectionObjectId>[1], "piles"> }) {
   const { gl, scene, camera: displayCamera, size } = useThree()
+  const sceneryDepth = usePixelSceneryDepth()
 
   // ID + depth buffer at drawing-buffer resolution. Nearest filtering is load-
   // bearing: interpolated ID colours would decode as phantom objects.
@@ -436,25 +437,20 @@ export function OutlinePass({ objects, selection: previewSelection }: { selectio
       ? selectionObjectId(selection, { ...objects, piles: useBuildStore.getState().piles }) : 0
     const selectingCharacter = requestedId !== 0 && (selection?.kind === "monk" || selection?.kind === "traveler")
     const characterPass = stage.phase === "characters"
-    const detail = sceneryDetail(scene)
-    const distant = detail > 0
     const closeOpacity = sceneryCloseOpacity(scene)
-    // At the farthest view, authored building lines and sprite colors are
-    // sufficient. Selection still requests its IDs, but ordinary overlap ink
-    // must not require another complete terrain/building/tree scene pass.
-    const mode = detail === 2 || (characterPass && closeOpacity === 0) ? "off" : outlineMode
+    // Overlap ink carries depth information even under frame pressure. Only
+    // the optional see-through mask follows adaptive scenery detail.
+    const mode = outlineMode
     const selectionInOtherPass = (stage.phase === "world" && selectingCharacter) || (characterPass && !selectingCharacter)
     const selectedId = selectionInOtherPass ? 0 : requestedId
-    // Wide views use ordinary depth occlusion. Dropping the see-through masks
-    // removes the extra character colour and road-edge scene renders entirely.
+    // Wide views use ordinary depth occlusion for characters.
     const maskCharacters = closeOpacity > 0 && stage.hasCharacters
-    // Trees hide the roads under them in the same pass they are drawn in.
-    const roadEdgePass = !characterPass && !distant
+    // Keep the road verge readable through canopy at every detail level.
+    const roadEdgePass = !characterPass
     const maskPass = characterPass && maskCharacters
     const characterSelected = selectedId !== 0 && selectingCharacter
     const needsOutline = mode !== "off" || selectedId !== 0 || maskPass || roadEdgePass
     // Selection and one-shot diagnostics still need the matching world depth.
-    // With no distant selection the character stage draws only its real colour.
     const needsIds = needsOutline || !!characterOcclusionRequest.current
       || (stage.phase === "world" && (maskCharacters || selectingCharacter || worldObjectIds.wanted))
     const ids = characterPass ? displayTarget : target
@@ -462,6 +458,7 @@ export function OutlinePass({ objects, selection: previewSelection }: { selectio
     const mask = camera.layers.mask
     const autoClear = gl.autoClear
     const previousTarget = gl.getRenderTarget()
+    const sceneryMode = sceneryDepth.mode.value
     gl.getClearColor(prevClearColor)
     const clearAlpha = gl.getClearAlpha()
     try {
@@ -487,7 +484,9 @@ export function OutlinePass({ objects, selection: previewSelection }: { selectio
           camera.layers.set(SELECTED_CHARACTER_LAYER)
           gl.setRenderTarget(characterTarget)
           gl.clear()
+          sceneryDepth.mode.value = 2
           gl.render(scene, camera)
+          sceneryDepth.mode.value = sceneryMode
         }
         if (roadEdgePass) {
           roadEdgeTarget.setSize(ids.width, ids.height)
@@ -503,13 +502,19 @@ export function OutlinePass({ objects, selection: previewSelection }: { selectio
           camera.layers.set(CHARACTER_COLOR_LAYER)
           gl.setRenderTarget(maskTarget)
           gl.clear()
+          sceneryDepth.mode.value = 2
           gl.render(scene, camera)
+          sceneryDepth.mode.value = sceneryMode
         }
       }
       if (characterPass && characterOcclusionRequest.current) {
         const resolve = characterOcclusionRequest.current
         characterOcclusionRequest.current = null
+        // The diagnostic compares visible IDs with a crowd rendered without
+        // scenery. Keep inter-character ordering, bypass only the scenery test.
+        sceneryDepth.mode.value = 0
         resolve(sampleCharacterOcclusion(gl, scene, camera, ids))
+        sceneryDepth.mode.value = sceneryMode
       }
       camera.layers.mask = mask
       gl.setClearColor(prevClearColor, clearAlpha)
@@ -546,12 +551,13 @@ export function OutlinePass({ objects, selection: previewSelection }: { selectio
         pass.uniforms.uMaskCharacters.value = maskPass
         pass.uniforms.uRoadEdges.value = roadEdgePass
         pass.uniforms.uTreeIdMin.value = (objects?.buildings.length ?? 0) + 1
-        pass.uniforms.uTreeEdgeOpacity.value = distant ? 0 : treeEdgeOpacity(displayCamera, size.height)
-        pass.uniforms.uCharacterEdgeOpacity.value = closeOpacity
+        pass.uniforms.uTreeEdgeOpacity.value = treeEdgeOpacity(displayCamera, size.height)
+        pass.uniforms.uCharacterEdgeOpacity.value = 1
         pass.uniforms.uMaskOpacity.value = CHARACTER_MASK_OPACITY * closeOpacity
         gl.render(pass.quadScene, pass.quadCamera)
       }
     } finally {
+      sceneryDepth.mode.value = sceneryMode
       camera.layers.mask = mask
       scene.background = background
       gl.setClearColor(prevClearColor, clearAlpha)

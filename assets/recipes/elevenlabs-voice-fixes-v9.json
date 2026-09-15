@@ -1,0 +1,88 @@
+{
+  "version": 9,
+  "output": ".context/elevenlabs-voice-fixes-v9",
+  "jobs": [
+    {
+      "id": "friar-2-daniel-gentle",
+      "kind": "voice",
+      "character": "friar",
+      "bodyType": "Male",
+      "lineId": "friar-2",
+      "actor": "Daniel",
+      "variant": "gentle",
+      "response": "select",
+      "label": "Monk · Deo gratias · spoken Latin",
+      "profile": "friar",
+      "text": "Deo gratias.",
+      "gloss": "Thanks be to God.",
+      "tongue": "Church Latin",
+      "description": "Plain Latin spelling, patient natural delivery; no spoken IPA symbols.",
+      "trimSilence": false,
+      "path": "/v1/text-to-speech/onwK4e9ZLuTAKqWW03F9",
+      "body": {
+        "text": "[warm] [gentle] Deo gratias.",
+        "language_code": "it",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1
+        }
+      }
+    },
+    {
+      "id": "knight-male-greeting-v6",
+      "kind": "voice",
+      "label": "Knight · Male greeting · complete take",
+      "character": "knight",
+      "profile": "knight",
+      "bodyType": "Male",
+      "lineId": "knight-1",
+      "actor": "Daniel",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Hēr ic eom.",
+      "gloss": "Here I am.",
+      "tongue": "Old English",
+      "description": "Complete Old English greeting, untrimmed source with natural ending.",
+      "path": "/v1/text-to-speech/onwK4e9ZLuTAKqWW03F9",
+      "body": {
+        "text": "[calm] [measured] Hēr ic eom.",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 0.95
+        }
+      },
+      "trimSilence": false
+    },
+    {
+      "id": "knight-female-greeting-v6",
+      "kind": "voice",
+      "label": "Knight · Female greeting · complete take",
+      "character": "knight",
+      "profile": "knight",
+      "bodyType": "Female",
+      "lineId": "knight-1",
+      "actor": "Alice",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Hēr ic eom.",
+      "gloss": "Here I am.",
+      "tongue": "Old English",
+      "description": "Complete Old English greeting, untrimmed source with natural ending.",
+      "path": "/v1/text-to-speech/Xb7hH8MSUJpSbSDYk0k2",
+      "body": {
+        "text": "[calm] [measured] Hēr ic eom.",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 0.95
+        }
+      },
+      "trimSilence": false
+    }
+  ]
+}

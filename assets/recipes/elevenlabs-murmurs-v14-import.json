@@ -1,0 +1,132 @@
+{
+  "version": 14,
+  "output": ".context/elevenlabs-npc-v13",
+  "jobs": [
+    {
+      "id": "npc-murmur-1-v13",
+      "kind": "sfx",
+      "label": "Indistinct background murmur \u00b7 voice 1",
+      "bank": "npc-murmur",
+      "loop": false,
+      "targetDb": -34,
+      "peakLimitDb": -15,
+      "maxGainDb": 35,
+      "audioFilter": "highpass=f=120,lowpass=f=500:p=2,lowpass=f=500:p=2,acompressor=threshold=0.01:ratio=3:attack=15:release=180,afade=t=in:d=0.18,afade=t=out:st=2.08:d=0.27",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One short natural conversational murmur from a relaxed adult man, low warm voice, casually answering someone beside them outdoors. A few indistinct softly spoken syllables in one breath, then silence. Unhurried and understated, voiced speech not whispering. Exactly one person. No intelligible words, repeated phrase, crowd bed, laughter, background hiss, buzzing, music or reverb.",
+        "duration_seconds": 2,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Male",
+      "tempo": 0.85
+    },
+    {
+      "id": "npc-murmur-2-v13",
+      "kind": "sfx",
+      "label": "Indistinct background murmur \u00b7 voice 2",
+      "bank": "npc-murmur",
+      "loop": false,
+      "targetDb": -34,
+      "peakLimitDb": -15,
+      "maxGainDb": 35,
+      "audioFilter": "highpass=f=120,lowpass=f=500:p=2,lowpass=f=500:p=2,acompressor=threshold=0.01:ratio=3:attack=15:release=180,afade=t=in:d=0.18,afade=t=out:st=2.08:d=0.27",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One short natural conversational murmur from an adult woman, middle register, casually answering someone beside them outdoors. A few indistinct softly spoken syllables in one breath, then silence. Unhurried and understated, voiced speech not whispering. Exactly one person. No intelligible words, repeated phrase, crowd bed, laughter, background hiss, buzzing, music or reverb.",
+        "duration_seconds": 2,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Female",
+      "tempo": 0.85
+    },
+    {
+      "id": "npc-murmur-3-v13",
+      "kind": "sfx",
+      "label": "Indistinct background murmur \u00b7 voice 3",
+      "bank": "npc-murmur",
+      "loop": false,
+      "targetDb": -34,
+      "peakLimitDb": -15,
+      "maxGainDb": 35,
+      "audioFilter": "highpass=f=120,lowpass=f=500:p=2,lowpass=f=500:p=2,acompressor=threshold=0.01:ratio=3:attack=15:release=180,afade=t=in:d=0.18,afade=t=out:st=2.08:d=0.27",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One short natural conversational murmur from an older man with a slightly rough voice, casually answering someone beside them outdoors. A few indistinct softly spoken syllables in one breath, then silence. Unhurried and understated, voiced speech not whispering. Exactly one person. No intelligible words, repeated phrase, crowd bed, laughter, background hiss, buzzing, music or reverb.",
+        "duration_seconds": 2,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Male",
+      "tempo": 0.85
+    },
+    {
+      "id": "npc-murmur-4-v13",
+      "kind": "sfx",
+      "label": "Indistinct background murmur \u00b7 voice 4",
+      "bank": "npc-murmur",
+      "loop": false,
+      "targetDb": -34,
+      "peakLimitDb": -15,
+      "maxGainDb": 35,
+      "audioFilter": "highpass=f=120,lowpass=f=500:p=2,lowpass=f=500:p=2,acompressor=threshold=0.01:ratio=3:attack=15:release=180,afade=t=in:d=0.18,afade=t=out:st=2.08:d=0.27",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One short natural conversational murmur from an adult woman with a soft warm voice, casually answering someone beside them outdoors. A few indistinct softly spoken syllables in one breath, then silence. Unhurried and understated, voiced speech not whispering. Exactly one person. No intelligible words, repeated phrase, crowd bed, laughter, background hiss, buzzing, music or reverb.",
+        "duration_seconds": 2,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Female",
+      "tempo": 0.85
+    },
+    {
+      "id": "npc-murmur-5-v13",
+      "kind": "sfx",
+      "label": "Indistinct background murmur \u00b7 voice 5",
+      "bank": "npc-murmur",
+      "loop": false,
+      "targetDb": -34,
+      "peakLimitDb": -15,
+      "maxGainDb": 35,
+      "audioFilter": "highpass=f=120,lowpass=f=500:p=2,lowpass=f=500:p=2,acompressor=threshold=0.01:ratio=3:attack=15:release=180,afade=t=in:d=0.18,afade=t=out:st=2.08:d=0.27",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One short natural conversational murmur from a young adult man, light voice, casually answering someone beside them outdoors. A few indistinct softly spoken syllables in one breath, then silence. Unhurried and understated, voiced speech not whispering. Exactly one person. No intelligible words, repeated phrase, crowd bed, laughter, background hiss, buzzing, music or reverb.",
+        "duration_seconds": 2,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Male",
+      "tempo": 0.85
+    },
+    {
+      "id": "npc-murmur-6-v13",
+      "kind": "sfx",
+      "label": "Indistinct background murmur \u00b7 voice 6",
+      "bank": "npc-murmur",
+      "loop": false,
+      "targetDb": -34,
+      "peakLimitDb": -15,
+      "maxGainDb": 35,
+      "audioFilter": "highpass=f=120,lowpass=f=500:p=2,lowpass=f=500:p=2,acompressor=threshold=0.01:ratio=3:attack=15:release=180,afade=t=in:d=0.18,afade=t=out:st=2.08:d=0.27",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One short natural conversational murmur from an older woman, calm voice, casually answering someone beside them outdoors. A few indistinct softly spoken syllables in one breath, then silence. Unhurried and understated, voiced speech not whispering. Exactly one person. No intelligible words, repeated phrase, crowd bed, laughter, background hiss, buzzing, music or reverb.",
+        "duration_seconds": 2,
+        "loop": false,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      },
+      "bodyType": "Female",
+      "tempo": 0.85
+    }
+  ]
+}

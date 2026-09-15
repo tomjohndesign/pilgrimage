@@ -34,6 +34,7 @@ import { LINEAR_MOVEMENT, type MovementTuning, type WalkTuning } from "@/lib/gam
 import type { CharacterModel } from "@/lib/game/character-assets"
 import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 
+import { EnvironmentAudio } from "./environment-audio"
 import { Bridges } from "./bridges"
 import { HearthLights } from "./hearth-lights"
 import { BuildingBatches } from "./building-batches"
@@ -46,6 +47,7 @@ import { DebugHandle } from "./debug-handle"
 import { Environment } from "./environment"
 import { Monks } from "./monks"
 import { OutlinePass } from "./outline-pass"
+import { AppearanceScene } from "./appearance-scene"
 import { vendorSpeedScale } from "@/lib/game/transport/assets"
 import { Shrine } from "./shrine"
 import { Signpost, ForestWarnings } from "./signpost"
@@ -204,6 +206,7 @@ export function GameCanvas({
       <ambientLight intensity={SURFACE_LIGHT.ambient} />
       <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
       <CameraLight />
+      <EnvironmentAudio map={terrainMap} trees={trees} showTrees={visibility.showTrees} />
 
       <HearthLights enabled={visibility.buildingVisibility !== "hidden"}>
       <group name="map-reveal-church" userData={{ mapRevealLandmark: !restore }} visible={visibility.buildingVisibility !== "hidden"}>
@@ -234,11 +237,13 @@ export function GameCanvas({
           </BuildingBatches>
         </group>
         <group name="visibility-characters" visible={visibility.showCharacters}>
-          <PixelCharacters>
-            <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
-          </PixelCharacters>
-          <CharacterBatches><Travelers map={map} travelers={travelers} restore={restore} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
-            characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} /></CharacterBatches>
+          <CharacterBatches>
+            <PixelCharacters>
+              <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
+            </PixelCharacters>
+            <Travelers map={map} travelers={travelers} restore={restore} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
+              characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
+          </CharacterBatches>
         </group>
       </SceneAssetBoundary>
       </HearthLights>
@@ -250,6 +255,7 @@ export function GameCanvas({
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />
       <PersonPicking />
       <GroundSelection map={map} trees={trees} characterScale={characterScale} />
+      <AppearanceScene map={map} travelers={travelers} monks={monks} />
       <OutlinePass objects={{ buildings: map.buildings, travelers, monks }} />
       <DebugHandle characterScale={characterScale} map={map} trees={trees} travelers={travelers} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} movement={movement} />
       <ViewSnapshotCapture pixelsPerUnit={pixelation.pixelsPerUnit ?? CHARACTER_PIXELS_PER_UNIT} map={map} trees={trees} />

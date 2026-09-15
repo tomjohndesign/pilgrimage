@@ -1,4 +1,4 @@
-import { mainRoadWidthAt } from "./road-width"
+import { mainRoadWidthAt, MAIN_ROAD_WALK_LANES, NARROW_ROAD_WALK_LANE } from "./road-width"
 import { bridgeLayout } from "./bridges"
 import { diagonalRoadBend, isRoadTerrain, sampleRoadBend } from "./road"
 import { tileAt, type GameMap, type TilePos } from "./types"
@@ -72,7 +72,14 @@ export function roadLanePoint(map: GameMap, route: readonly TilePos[], progress:
       dz = iz * cos + oz * sin
     }
   }
-  if (route === map.road) lane *= mainRoadWidthAt(map, progress, true)
+  if (route === map.road) {
+    const width = mainRoadWidthAt(map, progress, true)
+    // The outer of two walking lanes merges into the single bridge lane.
+    lane *= map.mainRoadGround ? width * (1 - Math.max(0, 2 - width) * (1 - NARROW_ROAD_WALK_LANE / MAIN_ROAD_WALK_LANES[1])) : width
+    // The two path rows share their median at a tile edge. Ease back to the
+    // original tile centre through narrow bends and bridge approaches.
+    if (map.mainRoadGround) lane += Math.max(0, width - 1) / 2
+  }
   const length = Math.hypot(dx, dz)
   return { x: x + dz / length * lane, z: z - dx / length * lane }
 }
