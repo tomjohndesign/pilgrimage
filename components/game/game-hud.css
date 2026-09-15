@@ -242,12 +242,12 @@
 
 /* The opening screen shares the live game's frame and control surfaces. */
 .hud-site-links { display: flex; align-items: center; gap: 20px; padding: 0 var(--hud-space); overflow-x: auto; }
-.hud-site-links a { flex-shrink: 0; font-family: var(--font-geist), sans-serif; font-size: 11px; color: #d3c097; white-space: nowrap; }
-.hud-site-links a:hover { color: #f9e5af; }
+.hud-site-links a { flex-shrink: 0; font-family: var(--font-geist), sans-serif; font-size: 11px; color: var(--chrome-muted); white-space: nowrap; }
+.hud-site-links a:hover { color: var(--chrome-text); }
 .hud-landing-setup {
   position: absolute;
   z-index: 20;
-  right: calc(50% + 15dvh);
+  right: calc(50% + 15dvh + 12px);
   top: 50%;
   transform: translateY(-50%);
   width: 280px;
@@ -258,24 +258,14 @@
   pointer-events: auto;
 }
 /* The saved world's Continue sits apart from the new-world inputs beneath it. */
-.hud-landing-divider { display: flex; align-items: center; gap: 10px; margin: 2px 0; font-family: var(--font-geist), sans-serif; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #d4c297; }
-.hud-landing-divider::before, .hud-landing-divider::after { content: ""; flex: 1; height: 1px; background: #5c4e32; }
+.hud-landing-divider { display: flex; align-items: center; gap: 10px; margin: 2px 0; font-family: var(--font-geist), sans-serif; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--chrome-muted); }
+.hud-landing-divider::before, .hud-landing-divider::after { content: ""; flex: 1; height: 1px; background: var(--chrome-line); }
 .hud-landing-play { height: 42px; margin-top: 4px; font-size: 14px; }
 @media (max-width: 1024px) {
   .game-hud[data-landing="true"] .hud-header { display: flex; }
   .game-hud[data-landing="true"] .hud-header-right { display: flex; }
   .hud-site-links { gap: 16px; min-height: 44px; }
 }
-/* Primary actions retain the HUD's shape and gold palette. */
-.hud-action-primary {
-  --hud-button-face: #dab767;
-  --hud-button-edge: #f0d598;
-  --hud-button-hover: #ebcc85;
-  color: #30210c;
-  text-shadow: none;
-  font-weight: 700;
-}
-.hud-action.hud-action-primary:not(:disabled) { color: #30210c; }
 .game-hud[data-landing="true"] .hud-header { z-index: 45; }
 @media (max-width: 640px) {
   .hud-landing-setup {
@@ -312,10 +302,10 @@
   letter-spacing: normal;
   text-indent: 0;
   text-transform: none;
-  color: #f2e8d5;
+  color: var(--chrome-text);
   white-space: nowrap;
 }
-.hud-landing-subtitle { margin-top: 12px; font-size: clamp(14px, 1.4vw, 19px); color: #d3c097; white-space: nowrap; }
+.hud-landing-subtitle { margin-top: 12px; font-size: clamp(14px, 1.4vw, 19px); color: var(--chrome-muted); white-space: nowrap; }
 .hud-landing-footer {
   position: absolute;
   bottom: calc(24px + env(safe-area-inset-bottom));
@@ -328,11 +318,11 @@
   flex-wrap: wrap;
   gap: 8px 24px;
   font-size: 13px;
-  color: #bda97f;
+  color: var(--chrome-muted);
   pointer-events: auto;
 }
 .hud-landing-footer > * { white-space: nowrap; }
-.hud-landing-footer a:hover { color: #f9e5af; }
+.hud-landing-footer a:hover { color: var(--chrome-text); }
 @media (max-width: 640px) {
   .hud-landing-heading { top: 100px; }
   .hud-landing-title { font-size: clamp(25px, 7.5vw, 42px); }
@@ -353,6 +343,8 @@
 .game-hud :is(.hud-action,.hud-pause,.hud-speeds button,.hud-close,.hud-header-button):hover { background:var(--chrome-field); border-color:var(--chrome-field); }
 .game-hud :is(.hud-action,.hud-pause,.hud-speeds button,.hud-close,.hud-header-button):is([aria-pressed="true"],[aria-expanded="true"]) { background:var(--chrome-active); color:var(--chrome-text); border-color:transparent; box-shadow:none; }
 .game-hud :is(.hud-action,.hud-pause,.hud-speeds button,.hud-header-button):is(:disabled,[aria-disabled="true"]) { background:transparent; border-color:var(--chrome-line); color:var(--chrome-muted); opacity:.45; }
+.game-hud .hud-action-primary:not(:disabled) { background:var(--chrome-active); border-color:var(--chrome-active); color:var(--chrome-text); font-weight:500; }
+.game-hud .hud-action-primary:not(:disabled):hover { background:var(--chrome-field); border-color:var(--chrome-accent); }
 .game-hud :is(button,a):focus-visible { outline-color:var(--chrome-accent); }
 /* Keep keyboard focus inside scrolling rows so it cannot clip into an underline. */
 .game-hud :is(.chrome-nav-row,.hud-building-tile):focus-visible { outline-offset:-2px; }

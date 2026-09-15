@@ -165,7 +165,8 @@ body > main { isolation:isolate; }
 .game-hud.person-editor.chrome-mobile-panel[data-closed] { display:none; }
 .chrome-dialog :is(.hud-action,.hud-pause,.hud-close) { background:transparent; border:1px solid var(--chrome-field); border-radius:4px; box-shadow:none; color:var(--chrome-text); font:13px/20px var(--font-geist),sans-serif; padding:6px 10px; }
 .chrome-dialog :is(.hud-action,.hud-pause,.hud-close):hover { background:var(--chrome-field); }
-.chrome-dialog :is(input:not([type="checkbox"]):not([type="range"]):not([type="hidden"]),textarea) { min-height:34px; border:0; border-radius:4px; background:var(--chrome-field); color:var(--chrome-text); padding:7px 10px; font:13px/20px var(--font-geist),sans-serif; }
+.chrome-input,.chrome-dialog :is(input:not([type="checkbox"]):not([type="range"]):not([type="hidden"]),textarea) { min-height:34px; border:0; border-radius:4px; background:var(--chrome-field); color:var(--chrome-text); padding:7px 10px; font:13px/20px var(--font-geist),sans-serif; }
+.chrome-input[aria-invalid="true"] { outline:2px solid var(--chrome-error); outline-offset:-2px; }
 .chrome-dialog label { color:var(--chrome-muted); font-size:12px; }
 
 .chrome-canvas-content:has(> .workspace-content), .workspace-content, .workspace-content-scroll { background:var(--chrome-surface); color:var(--chrome-text); }

@@ -2,7 +2,8 @@
 
 import { ChromeButton } from "@/components/ui/chrome-controls"
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
-import { DEFAULT_VIEW_SIZE } from "@/lib/game/render/iso"
+import { DEFAULT_VIEW_SIZE, projectGround, yawForView } from "@/lib/game/render/iso"
+import { LANDING_CHAPEL_CENTER } from "@/lib/game/render/landing-layout"
 import type { CameraSave } from "@/lib/game/save/schema"
 import { focusGridShift } from "@/lib/game/save/view"
 import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
@@ -119,6 +120,8 @@ export function LoadingChurch({ showChurch, phase, overlayRef, chapel = true, id
   }, [active])
   if (!showChurch && phase === "complete") return null
   const scale = 100 / viewSize
+  // The first-paint image occupies the same grid-aligned footprint as the live model.
+  const churchShift = idle ? projectGround(LANDING_CHAPEL_CENTER.x, LANDING_CHAPEL_CENTER.z, 0, yawForView(0)) : { x: 0, y: 0 }
   return <div ref={overlayRef} className="loading-church" data-loading-church data-phase={phase} data-idle={idle}
     style={{ "--ground-offset": `${groundOffset * scale}dvh`, "--church-caption-offset": `${3.5 * scale}dvh` } as CSSProperties}>
     {phase !== "complete" && <div className="loading-church-ground" aria-hidden="true"><div className="loading-church-wipe">
@@ -154,7 +157,7 @@ export function LoadingChurch({ showChurch, phase, overlayRef, chapel = true, id
     {resuming && phase !== "complete" && <div className="loading-church-view" aria-hidden="true"><div className="loading-church-view-wipe" /></div>}
     {showChurch && !(idle && sceneReady) && <img src={`/textures/ui/${chapel ? "loading-chapel-v5" : "loading-church-v2"}/${view}.webp`} width={256} height={256}
       fetchPriority="high" loading="eager" decoding="sync" alt="" draggable={false}
-      className="loading-church-image" style={{ width: `${8 * scale}dvh`, height: `${8 * scale}dvh` }} />}
+      className="loading-church-image" style={{ width: `${8 * scale}dvh`, height: `${8 * scale}dvh`, marginLeft: `${churchShift.x * scale}dvh`, marginTop: `${churchShift.y * scale}dvh` }} />}
     {generating && <>
       <p className="loading-church-caption page-title" role="status">{resuming ? "restoring your settlement" : "generating map"}</p>
       <svg className="loading-church-progress" viewBox={`0 0 ${CONSTRUCTION_BAR_WIDTH} ${CONSTRUCTION_BAR_HEIGHT}`}

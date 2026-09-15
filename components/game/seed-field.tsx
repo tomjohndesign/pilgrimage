@@ -72,9 +72,7 @@ export function SeedField({
         spellCheck={false}
         aria-label="World seed"
         aria-invalid={invalid}
-        className={`pointer-events-auto min-w-0 flex-1 border bg-parchment px-2 py-1 text-[13px] text-ink outline-none ${
-          invalid ? "border-red" : "border-rule focus:border-gold"
-        }`}
+        className="chrome-input pointer-events-auto min-w-0 flex-1"
         />
         <HudButton onClick={refresh} aria-label="Randomize world seed" title="Randomize world seed">
           <RefreshCw size={14} aria-hidden="true" />
