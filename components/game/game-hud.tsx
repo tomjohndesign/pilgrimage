@@ -303,7 +303,7 @@ function PartyPanel({ traveler, travelers, map, monk }: { traveler: Traveler; tr
             const camera = useCameraStore.getState()
             camera.select(joinedMonk ? { kind: "monk", id: joinedMonk.id } : { kind: "traveler", id: person.id })
             if (state) camera.panTo(state.x, state.z)
-          }}><span><span className="page-title hud-party-member-name">{person.name}</span><small>{joinedMonk || state?.home || state?.employer ? "Settled" : state?.partyWaiting ? "Waiting" : person.type.label}</small></span><ChevronRight size={14} /></ChromeButton>
+          }}><span><span className="hud-party-member-name">{person.name}</span><small>{joinedMonk || state?.home || state?.employer ? "Settled" : state?.partyWaiting ? "Waiting" : person.type.label}</small></span><ChevronRight size={14} /></ChromeButton>
       })}</nav>
     </section>
     <section className="hud-party-detail" aria-label="Party member details">

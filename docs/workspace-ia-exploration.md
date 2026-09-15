@@ -89,7 +89,7 @@ to preserve the complete balance preset.
 - Keep status beside the operation it describes: draft/apply state in properties,
   playback state in the canvas footer, and validation beside its field.
 
-Geist body text and controls, UnifrakturCook titles and entity names, olive
+Geist body text, controls and list names, UnifrakturCook panel and page titles, olive
 workspace surfaces, grass canvas backgrounds, stacked field labels and shared
 tooltips form the visual foundation.
 

@@ -354,6 +354,8 @@
 .game-hud :is(.hud-action,.hud-pause,.hud-speeds button,.hud-close,.hud-header-button):is([aria-pressed="true"],[aria-expanded="true"]) { background:var(--chrome-active); color:var(--chrome-text); border-color:transparent; box-shadow:none; }
 .game-hud :is(.hud-action,.hud-pause,.hud-speeds button,.hud-header-button):is(:disabled,[aria-disabled="true"]) { background:transparent; border-color:var(--chrome-line); color:var(--chrome-muted); opacity:.45; }
 .game-hud :is(button,a):focus-visible { outline-color:var(--chrome-accent); }
+/* Keep keyboard focus inside scrolling rows so it cannot clip into an underline. */
+.game-hud :is(.chrome-nav-row,.hud-building-tile):focus-visible { outline-offset:-2px; }
 .game-hud :is(.hud-resources svg,.hud-day,.hud-date,.hud-minimap-north,.hud-build-rotation,.hud-entry-key) { color:var(--chrome-muted); }
 .hud-resources > :is(span,button) { font-size:13px; font-weight:500; }
 .hud-resources svg { width:16px; height:16px; }
@@ -435,7 +437,7 @@
 .game-hud .hud-selection-dock .hud-selection-name { font-size:24px; line-height:1.2; margin:8px 0; }
 .hud-party-members { display:flex; flex-direction:column; gap:4px; margin-top:12px; }
 .hud-party-members .chrome-nav-row > span { display:flex; flex-direction:column; gap:4px; }
-.hud-party-member-name { font-size:18px; }
+.hud-party-member-name { font:13px/1.4 var(--font-geist),sans-serif; }
 .hud-party-members small { color:var(--chrome-muted); font:11px/1.4 var(--font-geist),sans-serif; }
 @media(max-width:900px) {
  .game-hud .hud-selection-dock { width:min(300px,calc(100% - 20px)); bottom:200px; max-height:calc(100% - 330px); }
@@ -465,6 +467,5 @@
  .hud-party-selection { grid-template-columns:minmax(0,2fr) minmax(0,3fr); }
  .hud-party-roster { padding:12px 4px; }
  .game-hud .hud-party-heading > .hud-selection-name { font-size:20px; }
- .hud-party-member-name { font-size:16px; }
  .hud-inspector .hud-party-detail .hud-inspector-content { padding:12px; }
 }

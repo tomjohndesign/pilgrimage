@@ -93,6 +93,7 @@ body > main { isolation:isolate; }
 .chrome-navigation h3 { font-size:11px; font-weight:400; color:var(--chrome-muted); padding:22px 10px 8px; }
 .chrome-nav-row { display:flex; align-items:center; justify-content:space-between; width:100%; min-height:36px; padding:7px 10px; gap:10px; border-radius:4px; color:var(--chrome-muted); font-size:13px; text-align:left; border:0; }
 .chrome-nav-row > span:not(.chrome-nav-sprite) { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.chrome-nav-row:focus-visible { outline-offset:-2px; }
 .chrome-nav-row:hover { background:var(--chrome-field); color:var(--chrome-text); }
 .chrome-nav-row[aria-current="page"] { color:var(--chrome-text); background:var(--chrome-field); font-weight:500; }
 .chrome-nav-row:disabled { opacity:.45; }
