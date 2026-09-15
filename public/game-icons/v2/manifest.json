@@ -1,0 +1,76 @@
+{
+  "version": "v2",
+  "design": {
+    "view": 0,
+    "ink": 0.6,
+    "glow": 0.7
+  },
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "sizes": [
+    16,
+    24,
+    32,
+    48
+  ],
+  "icons": [
+    {
+      "id": "wood",
+      "label": "Wood"
+    },
+    {
+      "id": "food",
+      "label": "Food"
+    },
+    {
+      "id": "gold",
+      "label": "Gold"
+    },
+    {
+      "id": "population",
+      "label": "Population"
+    },
+    {
+      "id": "stone",
+      "label": "Stone"
+    },
+    {
+      "id": "faith",
+      "label": "Faith"
+    },
+    {
+      "id": "build",
+      "label": "Build"
+    },
+    {
+      "id": "map",
+      "label": "Map"
+    },
+    {
+      "id": "new-map",
+      "label": "New map"
+    },
+    {
+      "id": "visits",
+      "label": "Pilgrim visits"
+    },
+    {
+      "id": "renown",
+      "label": "Renown"
+    },
+    {
+      "id": "music",
+      "label": "Music"
+    },
+    {
+      "id": "play",
+      "label": "Play"
+    },
+    {
+      "id": "pause",
+      "label": "Pause"
+    }
+  ]
+}

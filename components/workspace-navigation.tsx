@@ -11,7 +11,7 @@ const EntityStagingMap = dynamic(() => import("./entity-staging-map").then(m => 
 /** Entity selection belongs to the left sidebar; properties remain on the right.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/BA2-0
  */
-export function EntitySelect({ children, options: supplied, value, onChange, renderIcon, staging, anchors = false, autoSelect = false }: ChromeSelectProps & { autoSelect?: boolean; anchors?: boolean; staging?: { kind: "characters" | "buildings"; active: boolean }; renderIcon?: (option: SelectOption, active: boolean) => ReactNode }) {
+export function EntitySelect({ children, options: supplied, value, onChange, renderIcon, staging, overview, anchors = false, autoSelect = false }: ChromeSelectProps & { overview?: ReactNode; autoSelect?: boolean; anchors?: boolean; staging?: { kind: "characters" | "buildings"; active: boolean }; renderIcon?: (option: SelectOption, active: boolean) => ReactNode }) {
   const slots = useContext(WorkspaceSlots)
   const [query, setQuery] = useState("")
   const [hovered, setHovered] = useState<string | null>(null)
@@ -46,5 +46,6 @@ export function EntitySelect({ children, options: supplied, value, onChange, ren
     </div>)}</nav>{!filtered.length && <p className="chrome-nav-empty">No matches</p>}
   </div>, slots.navigation)}
     {staging && slots?.overview && !slots.entitySelected && createPortal(<EntityStagingMap kind={staging.kind} active={staging.active} items={filtered} onSelect={activate} />, slots.overview)}
+    {overview && slots?.overview && !slots.entitySelected && createPortal(<div className="chrome-catalogue-overview">{overview}</div>, slots.overview)}
   </>
 }

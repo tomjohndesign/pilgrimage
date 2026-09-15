@@ -14,6 +14,7 @@ const EDITORS: Record<PlaygroundTool, ComponentType<AssetEditorNavigation & { ac
   characters: lazy(() => import("./base-person-lab").then(m => ({ default: m.BasePersonLab }))),
   animals: lazy(() => import("./animal-lab").then(m => ({ default: m.AnimalLab }))),
   buildings: lazy(() => import("./building-lab/procedural-workshop").then(m => ({ default: m.ProceduralWorkshop }))),
+  icons: lazy(() => import("./icon-lab/icon-lab").then(m => ({ default: m.IconLab }))),
   ents: lazy(() => import("./tree-lab/ent-lab").then(m => ({ default: m.EntLab }))),
   maps: lazy(() => import("./map-lab/map-lab").then(m => ({ default: m.MapLab }))),
   paths: lazy(() => import("./path-lab/path-lab").then(m => ({ default: m.PathLab }))),

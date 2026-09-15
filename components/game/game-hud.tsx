@@ -1,6 +1,7 @@
 "use client"
 
 import { ThemeToggle } from "../chrome-provider"
+import { GameIcon } from "./game-icon"
 
 import { ChromeSelect, ChromeButton } from "@/components/ui/chrome-controls"
 import { AppearancePanel } from "./appearance-panel"
@@ -387,7 +388,7 @@ function TravelerPanel({ traveler, map }: { traveler: Traveler; map: GameMap | n
       <div className="mt-2 border-t border-rule pt-2">
         <div className="flex items-baseline justify-between gap-4">
           <span className="text-[11px] italic text-ink-light">Gold</span>
-          <span className="font-display text-[10px] text-ink">{live?.gold ?? a.gold} ✦</span>
+          <span className="inline-flex items-center gap-1 font-display text-[10px] text-ink"><GameIcon name="gold" size={16} />{live?.gold ?? a.gold}</span>
         </div>
         <div className="flex items-baseline justify-between gap-4">
           <span className="text-[11px] italic text-ink-light">Skills</span>
@@ -1197,13 +1198,13 @@ export function GameHud({
               </div>
             )}
             {(selectedBuilding.buildType === "workshop" || selectedBuilding.buildType === "storehouse") && (
-              <p className="mt-2 text-[11px] text-ink"><span className="text-ink-light">Stored wood</span> · {storedWood} wood</p>
+              <p className="mt-2 flex items-center gap-1 text-[11px] text-ink"><GameIcon name="wood" size={16} /><span className="text-ink-light">Stored wood</span> · {storedWood} wood</p>
             )}
             {selectedBuilding.buildType === "storehouse" && <div className="mt-2 text-[11px] text-ink-light">
-              <p>Food stored · {storedFood(foodStock)} / {STOREHOUSE_FOOD_CAPACITY}</p>
+              <p className="flex items-center gap-1"><GameIcon name="food" size={16} />Food stored · {storedFood(foodStock)} / {STOREHOUSE_FOOD_CAPACITY}</p>
               {FOOD_TYPES.filter(type => foodStock[type] > 0).map(type => <p key={type}>{FOOD_LABELS[type]} · {foodStock[type]}</p>)}
             </div>}
-            {selectedBuilding.buildType === "sheep-pen" && <p className="mt-2 text-[11px] text-ink-light">Up to 8 sheep and goats · Food platform: {foodStock.meat} meat · {foodStock.milk} milk</p>}
+            {selectedBuilding.buildType === "sheep-pen" && <p className="mt-2 text-[11px] text-ink-light"><GameIcon name="food" size={16} /> Up to 8 sheep and goats · Food platform: {foodStock.meat} meat · {foodStock.milk} milk</p>}
             {selectedBuilding.owner !== "independent" && selectedDefinition && isComplete(selectedBuilding) && <>
               {selectedDefinition.renown > 0 && <p className="mt-2 text-[11px] text-ink-light">+{selectedDefinition.renown} shrine renown</p>}
               <p className="mt-1 text-[11px] text-ink-light">{buildingIncomeLabel(selectedDefinition, economy.balance)}</p>

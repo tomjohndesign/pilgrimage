@@ -11,6 +11,8 @@ describe("shared playground navigation", () => {
     expect(legacyPlaygroundHref({ clip: "walk" }, "pipeline")).toBe("/assets?clip=walk&asset=pipeline")
     expect(playgroundTool("trees")).toBe("trees")
     expect(playgroundTool("textures")).toBe("textures")
+    expect(playgroundTool("icons")).toBe("icons")
+    expect(playgroundHref("icons")).toBe("/assets?asset=icons")
   })
   it("preserves character deep links and repeated parameters", () => {
     expect(legacyPlaygroundHref({ asset: "horse", sounds: "1", tag: ["one", "two"] }))

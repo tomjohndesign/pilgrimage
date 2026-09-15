@@ -4,10 +4,10 @@ import { ChromeButton } from "@/components/ui/chrome-controls"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { placementSite } from "@/lib/game/building-placement-layout"
 
-import Image from "next/image"
+import { GameIcon } from "./game-icon"
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactElement, type ReactNode } from "react"
 import { Tooltip } from "@base-ui/react/tooltip"
-import { Coins, Map, Footprints, Hammer, Pause, Play, RotateCcw, RotateCw, Sparkles, Users } from "lucide-react"
+import { Pause, Play, RotateCcw, RotateCw } from "lucide-react"
 
 import type { useSettlement } from "@/hooks/use-settlement"
 import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
@@ -47,21 +47,21 @@ export function HudResources({ economy, settlers, open, onToggle }: {
   const { gold, wood } = economy.settlement.resources
   const renown = Math.round((economy.renown?.total ?? 0) * 10) / 10
   return <div className="hud-resources" aria-label="Settlement resources">
-    <span title="Gold" aria-label={`${gold} gold`}><Coins aria-hidden size={21} />{gold}</span>
-    <span title="Stored timber" aria-label={`${wood} timber`}><Image src="/game-icons/timber.svg" width={30} height={28} alt="" />{wood}</span>
+    <span title="Gold" aria-label={`${gold} gold`}><GameIcon name="gold" />{gold}</span>
+    <span title="Stored timber" aria-label={`${wood} timber`}><GameIcon name="wood" />{wood}</span>
     <HudHelp content={<><div className="hud-help-title">Enclave housing</div>
       <p>People: {settlers} / {economy.housing?.people.capacity ?? 0} · {economy.housing?.people.available ?? 0} spaces available in houses.</p>
       <p>Monks: {economy.housing?.monks.occupied ?? 0} / {economy.housing?.monks.capacity ?? 0} · {economy.housing?.monks.available ?? 0} spaces available in residences.</p>
       <p>Complete houses and a monks’ residence beside the church to welcome more residents.</p></>}>
       <ChromeButton type="button" className="hud-resource-button" aria-label={`Enclave housing: ${economy.residents.length} residents, ${(economy.housing?.people.available ?? 0) + (economy.housing?.monks.available ?? 0)} spaces available`}
         aria-expanded={open} aria-controls="settlement-details" onClick={onToggle}>
-        <Users aria-hidden size={21} />{economy.residents.length}/{(economy.housing?.people.capacity ?? 0) + (economy.housing?.monks.capacity ?? 0)}
+        <GameIcon name="population" />{economy.residents.length}/{(economy.housing?.people.capacity ?? 0) + (economy.housing?.monks.capacity ?? 0)}
       </ChromeButton>
     </HudHelp>
-    <span title="Pilgrim visits" aria-label={`${economy.visits} pilgrim visits`}><Footprints aria-hidden size={21} />{economy.visits}</span>
+    <span title="Pilgrim visits" aria-label={`${economy.visits} pilgrim visits`}><GameIcon name="visits" />{economy.visits}</span>
     <HudHelp content={<><div className="hud-help-title">Shrine renown</div><p>Open the treasury and renown breakdown.</p></>}>
       <ChromeButton type="button" className="hud-resource-button" aria-label="Settlement details" aria-expanded={open} aria-controls="settlement-details" onClick={onToggle}>
-        <Sparkles aria-hidden size={18} />{renown}
+        <GameIcon name="renown" />{renown}
       </ChromeButton>
     </HudHelp>
   </div>
@@ -155,11 +155,11 @@ export function BuildControls({ economy, open, onToggle, playerColor, minimapOpe
     </div>}
     <nav className="hud-bottom-actions" aria-label="Building tools">
       <ChromeButton id="build-menu-button" type="button" className="hud-action" aria-expanded={open} aria-controls="build-tray" onClick={onToggle}>
-        <Hammer size={17} aria-hidden />Build
+        <GameIcon name="build" />Build
       </ChromeButton>
       <div className="hud-mobile-camera" role="group" aria-label="Camera controls">
         <ChromeButton type="button" className="hud-action" aria-label="Rotate view" onClick={() => useCameraStore.getState().rotate(1)}><RotateCw size={18} /></ChromeButton>
-        <ChromeButton type="button" className="hud-action" aria-label="Toggle minimap" aria-expanded={minimapOpen} aria-controls="minimap-dock" onClick={onToggleMinimap}><Map size={18} /></ChromeButton>
+        <ChromeButton type="button" className="hud-action" aria-label="Toggle minimap" aria-expanded={minimapOpen} aria-controls="minimap-dock" onClick={onToggleMinimap}><GameIcon name="map" /></ChromeButton>
       </div>
     </nav>
   </div>
