@@ -67,7 +67,7 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
       parties: () => [...(simRegistry.current?.parties.values() ?? [])].map(p => ({ ...p,
         members: p.members.map(id => { const s = simRegistry.current!.travelers.get(id)!; return {
           id, name: travelers.find(t => t.id === id)?.name, x: s.x, z: s.z, progress: s.progress,
-          activity: s.activity, riding: s.partyRiding, boarding: s.partyBoarding, stamina: s.stamina, waiting: s.partyWaiting, home: s.home, employer: s.employer,
+          activity: s.activity, riding: s.partyRiding, boarding: s.partyBoarding, stamina: s.stamina, waiting: s.partyWaiting, gathering: s.partyGathering, home: s.home, employer: s.employer,
         } }) })),
       expectedPopulation: travelers.length,
       simulationDaySeconds: GAME_DAY_SECONDS,
