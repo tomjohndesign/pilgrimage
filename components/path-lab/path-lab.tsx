@@ -62,6 +62,7 @@ function PathMap({ world, settings, layer, grid, routes, selected, onSelect, too
 /**
  * Three reversible simulations for testing traffic-driven paths before adopting game rules.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/9FI-0 — Paths
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/CLC-0 — Proposed IA: Exploration · path reinforcement
  */
 export function PathLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const [controlsOpen, setControlsOpen] = useState(false)

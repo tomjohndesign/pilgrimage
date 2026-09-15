@@ -39,7 +39,12 @@ export function AssetEditorFrame({ mode, onModeChange, controlsOpen, onControlsT
   </WorkspaceFrame>
 }
 
-/** Common navigation and chrome for every screen outside the running game. */
+/** Common navigation and chrome for every screen outside the running game.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/B67-0 — Proposed IA: Workspace navigation
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/BA2-0 — Proposed IA: Characters · browse
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/C99-0 — Proposed IA: Character · sidebars collapsed
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/CCL-0 — Proposed IA: Character · resized sidebars
+ */
 export function WorkspaceFrame({ selection, title, label, status, detail, children, onToolChange, controlsOpen, onControlsToggle, roadHref = "/play", actions }: {
   selection: string; title: string; label: string; status?: ReactNode; detail?: ReactNode; children: ReactNode;
   onToolChange?: (tool: PlaygroundTool) => void; controlsOpen?: boolean; onControlsToggle?: () => void; roadHref?: string; actions?: ReactNode
@@ -87,7 +92,10 @@ export function AssetEditorCanvasControls({ children }: { children: ReactNode })
   return target ? createPortal(children, target) : null
 }
 
-/** The character/building workspace layout, also used by simulation tools. */
+/** The character/building workspace layout, also used by simulation tools.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/BEA-0 — Proposed IA: Character · properties
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/CCL-0 — Proposed IA: Character · resized sidebars
+ */
 export function AssetEditorWorkspace({ title, controlsOpen, onControlsClose, controls, controlsHeading, controlsHeader, controlsFooter, toolbar, dock, children }: {
   title: string; controlsOpen: boolean; onControlsClose: () => void; controls: ReactNode;
   controlsHeading?: ReactNode; controlsHeader?: ReactNode; controlsFooter?: ReactNode;
