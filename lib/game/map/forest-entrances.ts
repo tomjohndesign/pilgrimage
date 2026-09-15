@@ -1,7 +1,7 @@
 import { computeDarkShade } from "./forest-field"
 import { groundHeight } from "./elevation"
 import { isRoadTerrain } from "./road"
-import { signpostPlacements, tJunctionVerge, SIGNPOST_CLEARANCE, type SignpostPlacement } from "./signpost"
+import { signpostPlacements, tJunctionVerge, roadsideVergeTile, SIGNPOST_CLEARANCE, type SignpostPlacement } from "./signpost"
 import { tileAt, tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./types"
 
 /** Keep broad ancient crowns from covering the warning board and skull. */
@@ -40,9 +40,11 @@ export function forestEntrancePlacements(map: GameMap): SignpostPlacement[] {
       sides.sort((a, b) => Number(["forest", "darkwood"].includes(tileAt(map, at.x + a.x, at.z + a.z) ?? ""))
         - Number(["forest", "darkwood"].includes(tileAt(map, at.x + b.x, at.z + b.z) ?? "")))
       const opposite = tJunctionVerge(map, at)
-      if (opposite) sides.unshift({ x: opposite.x - at.x, z: opposite.z - at.z })
+      if (opposite) sides.unshift({ x: Math.sign(opposite.x - at.x), z: Math.sign(opposite.z - at.z) })
       for (const side of sides) {
-        const tile = { x: at.x + side.x, z: at.z + side.z }, terrain = tileAt(map, tile.x, tile.z)
+        const tile = roadsideVergeTile(map, at, side)
+        if (!tile) continue
+        const terrain = tileAt(map, tile.x, tile.z)
         if (!terrain || isRoadTerrain(terrain) || !["grass", "clearing", "forest", "darkwood", "dirt", "sand"].includes(terrain)) continue
         if (map.buildings.some(b => tile.x >= b.x && tile.x < b.x + b.w && tile.z >= b.z && tile.z < b.z + b.d)) continue
         if (map.site?.door.x === tile.x && map.site.door.z === tile.z) continue

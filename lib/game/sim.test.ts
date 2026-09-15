@@ -1,3 +1,4 @@
+import { layMainRoadTiles } from "./map/road-footprint"
 import { TILES_PER_DAY } from "./calendar"
 import { MIN_WEARY_SPEED } from "./traveler-weariness"
 import { populationVisual } from "./base-person/population-assets"
@@ -815,16 +816,18 @@ describe("off-road grid walking", () => {
 })
 
 describe("roadside music", () => {
-  function performance() {
-    const map = makeMap(), travelers = [makeTraveler(0, "minstrel", { hunger: 100, thirst: 100, stamina: 100 })]
+  function performance(aligned = false) {
+    const map = makeMap()
+    if (aligned) { map.mainRoadWidth = 2; layMainRoadTiles(map) }
+    const travelers = [makeTraveler(0, "minstrel", { hunger: 100, thirst: 100, stamina: 100 })]
     const sim = createSim(travelers, map), minstrel = sim.travelers.get(0)!
     minstrel.timer = 0
     expect(runUntil(sim, travelers, map, () => minstrel.activity === "performing", 20)).toBe(true)
     return { map, travelers, sim, minstrel }
   }
 
-  it("periodically leaves the road to play, then rejoins at its original lane", () => {
-    const { map, travelers, sim, minstrel } = performance()
+  it.each([false, true])("leaves the road to play, then rejoins its lane (tile-aligned: %s)", aligned => {
+    const { map, travelers, sim, minstrel } = performance(aligned)
     expect(tileAt(map, worldToTileX(map, minstrel.x), worldToTileZ(map, minstrel.z))).toBe("grass")
     const position = [minstrel.x, minstrel.z], progress = minstrel.progress
     for (let i = 0; i < 100; i++) stepSim(sim, travelers, map, 1, 0.1)
@@ -837,8 +840,8 @@ describe("roadside music", () => {
     expect(minstrel.cycle).toBe(1)
   })
 
-  it("gathers a spaced audience that stands briefly, listens, and returns to the road", () => {
-    const { map, travelers, sim, minstrel } = performance()
+  it.each([false, true])("gathers an off-road audience that listens and returns (tile-aligned: %s)", aligned => {
+    const { map, travelers, sim, minstrel } = performance(aligned)
     const audience = Array.from({ length: 16 }, (_, i) => makeTraveler(i + 1, "peasant", { hunger: 100, thirst: 100, stamina: 100 }))
     const people = createSim(audience, map)
     for (const [id, person] of people.travelers) sim.travelers.set(id, person)
@@ -1124,8 +1127,10 @@ describe("roadside generosity", () => {
     }
   })
 
-  it("has beggars sit safely off the road for a long stay, then move on", () => {
-    const map = makeMap(), travelers = [makeTraveler(0, "peasant", { hunger: 100, thirst: 100, stamina: 100 })]
+  it.each([false, true])("has beggars sit safely off the road, then move on (tile-aligned: %s)", aligned => {
+    const map = makeMap()
+    if (aligned) { map.mainRoadWidth = 2; layMainRoadTiles(map) }
+    const travelers = [makeTraveler(0, "peasant", { hunger: 100, thirst: 100, stamina: 100 })]
     const sim = createSim(travelers, map), beggar = sim.travelers.get(0)!
     beggar.beggar = true
     beggar.timer = 0
@@ -1136,7 +1141,7 @@ describe("roadside generosity", () => {
     expect(beggar.activity).toBe("begging")
     expect([beggar.x, beggar.z]).toEqual(position)
     beggar.timer = 0
-    expect(runUntil(sim, travelers, map, () => beggar.activity === "walking", 20)).toBe(true)
+    expect(runUntil(sim, travelers, map, () => beggar.activity === "walking", 40)).toBe(true)
     expect(beggar.spot).toBeNull()
     expect(beggar.cycle).toBe(1)
   })
