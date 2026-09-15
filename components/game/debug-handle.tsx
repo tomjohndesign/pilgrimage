@@ -37,7 +37,9 @@ import { createDrawProfile } from "@/lib/game/render/draw-profile"
 import { sceneryDetailStatus } from "@/lib/game/render/scenery-detail"
 import { batchedSourceRoots } from "@/lib/game/render/batch-source-visibility"
 import { characterBatchEntry } from "@/lib/game/render/character-batch"
-import { workerRouteMemoryStats } from "@/lib/game/worker-route-memory"
+import { wayfindingSnapshot } from "@/lib/game/wayfinding-debug"
+import { WAYFINDING_DEBUG, useWayfindingStore } from "@/lib/game/wayfinding-settings"
+import { rebuildWorkerNavigation, workerRouteMemoryStats } from "@/lib/game/worker-route-memory"
 import { BENCHMARK_SIMULATION_SPEEDS, simulationSpeedControl, useSimulationStore } from "@/lib/game/simulation-store"
 
 /**
@@ -125,6 +127,18 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
       },
       profileFrames: frameProfile.capture,
       routeMemory: () => workerRouteMemoryStats(map),
+      wayfinding: () => wayfindingSnapshot(map, useCameraStore.getState().selection),
+      wayfindingOverlay: () => {
+        const paths = scene.getObjectByName("wayfinding-paths") as THREE.LineSegments | undefined
+        const nodes = scene.getObjectByName("wayfinding-nodes") as THREE.InstancedMesh | undefined
+        return { pathSegments: (paths?.geometry.getAttribute("position").count ?? 0) / 2, nodes: nodes?.count ?? 0,
+          previousSegments: ((scene.getObjectByName("wayfinding-previous-paths") as THREE.LineSegments | undefined)?.geometry.getAttribute("position").count ?? 0) / 2,
+          replacementSegments: ((scene.getObjectByName("wayfinding-new-paths") as THREE.LineSegments | undefined)?.geometry.getAttribute("position").count ?? 0) / 2,
+          charactersVisible: scene.getObjectByName("visibility-characters")?.visible ?? false,
+          selectedNodeId: useWayfindingStore.getState().selectedNodeId }
+      },
+      rebuildWayfinding: () => { if (WAYFINDING_DEBUG) rebuildWorkerNavigation(map) },
+      configureWayfinding: (json: string) => { if (WAYFINDING_DEBUG) useWayfindingStore.getState().apply(json) },
       isolateWork: (settings: Partial<BenchmarkWork>) => {
         resetBenchmarkWork(); Object.assign(benchmarkWork, settings)
         return { ...benchmarkWork }

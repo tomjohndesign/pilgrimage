@@ -118,6 +118,48 @@ describe("a company's pack animal at the enclave", () => {
   }, 120_000)
 })
 
+describe("a cart company's approach", () => {
+  it.each([1, -1] as const)("walks companions up the track during parking and gathers beside the bay (%i)", direction => {
+    const count = 8, id = 0
+    const travelers: Traveler[] = Array.from({ length: count }, (_, slot) => ({ id: slot, name: `Pilgrim ${slot}`,
+      type: TRAVELER_TYPES.pilgrim, direction, offset: (direction === 1 ? 18 - slot : 42 + slot) / 59,
+      pace: 1, party: { id, name: "Company", slot }, attributes: { ...devout } }))
+    const { map, sim } = standingRoad(travelers), party = sim.parties.get(id)!
+    // Keep the shrine closed so the company has time to gather beside the bay.
+    sim.shrineKeeperReady = false
+    let followed = false, gathered = false, longestStep = 0
+    for (let tick = 0; tick < 4000 && !gathered; tick++) {
+      const before = new Map([...sim.travelers].map(([id, s]) => [id, { x: s.x, z: s.z }]))
+      stepSim(sim, travelers, map, 1, .1)
+      const cart = party.transport
+      if (!cart?.parking) continue
+      const walkers = [...sim.travelers.values()].filter(s => !cart.seats.includes(s.id))
+      for (const s of walkers) {
+        const old = before.get(s.id)!
+        longestStep = Math.max(longestStep, Math.hypot(s.x - old.x, s.z - old.z))
+        if (cart.phase === "parking" && worldToTileZ(map, s.z) >= 8 && worldToTileZ(map, s.z) < map.site!.branch[findHorseStanding(map)!.fork].z - 3) {
+          followed = true
+          expect(Math.abs(worldToTileX(map, s.x) - 30)).toBeLessThanOrEqual(1)
+        }
+      }
+      gathered = cart.phase === "parked" && walkers.every(s => s.partyGathering?.arrived)
+      if (gathered) for (const s of walkers) {
+        expect(Math.hypot(s.x - cart.parking.parked.hitch.x, s.z - cart.parking.parked.hitch.z)).toBeLessThan(5)
+        expect(worldToTileZ(map, s.z)).toBeGreaterThan(8)
+        expect(map.site!.branch.some(p => p.x === worldToTileX(map, s.x) && p.z === worldToTileZ(map, s.z))).toBe(false)
+      }
+    }
+    expect(followed).toBe(true)
+    expect(gathered, party.reason).toBe(true)
+    expect(longestStep).toBeLessThan(.5)
+    sim.shrineKeeperReady = true
+    for (let tick = 0; tick < 12000 && !(sim.visits === count && party.transport?.phase === "road"); tick++) stepSim(sim, travelers, map, 1, .1)
+    expect(sim.visits).toBe(count)
+    expect(party.transport!.phase).toBe("road")
+    for (const s of sim.travelers.values()) expect(s.partyGathering).toBeUndefined()
+  }, 120_000)
+})
+
 describe("a knight's squire in the line", () => {
   /** A squire leaves extra space behind a knight waiting for admission. */
   function gapBehindKnight(knightId: number) {

@@ -129,7 +129,7 @@ export function settlementMap(baseMap: GameMap, settlement: Settlement): GameMap
   const claimed = new Set(settlement.claimedBuildings)
   const demolished = new Set(settlement.demolishedBuildings)
   const map = { ...baseMap, elevation: settlement.elevation ?? baseMap.elevation,
-    buildings: [...baseMap.buildings.filter(b => !demolished.has(b.id)).map(b => b.id === baseMap.site?.hovelId && settlement.church ? settlement.church : claimed.has(b.id) ? { ...b, owner: undefined } : b), ...settlement.structures] }
+    buildings: [...baseMap.buildings.filter(b => !demolished.has(b.id)).map(b => b.id === baseMap.site?.hovelId && settlement.church ? settlement.church : claimed.has(b.id) ? { ...b, owner: undefined } : b), ...settlement.structures].map(b => b.buildType === "alms-table" && b.churchId ? { ...b, churchId: undefined } : b) }
   perSettlement.set(settlement, map)
   return map
 }
@@ -401,7 +401,7 @@ function validateAccess(map: GameMap, def: BuildDefinition, at: TilePos, balance
         return "The entrance path needs level ground."
     }
     const occupied = [...map.buildings, candidate]
-    if (candidate.churchId) {
+    if (candidate.churchId && candidate.buildType !== "alms-table") {
       const finished = { ...candidate, construction: undefined }
       const connected = { ...map, buildings: [...map.buildings, finished] }
       if (!settlementRoute(connected, connected.buildings, map.site.door, buildingEntry(finished, true), false, true))

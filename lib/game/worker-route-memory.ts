@@ -1,9 +1,10 @@
 import { buildingSpatialQuery } from "./building-spatial"
-import { buildingStepAllowed } from "./building-navigation"
+import { MinHeap, ROUTE_DIRS } from "./map/route"
+import { buildingStepAllowed, containsTile } from "./building-navigation"
 import { surfaceHeight } from "./map/bridges"
 import { elevationStep } from "./map/elevation"
 import { TERRAIN } from "./map/terrain"
-import { tileAt, worldToTileX, worldToTileZ, type GameMap, type TilePos } from "./map/types"
+import { tileAt, worldToTileX, worldToTileZ, tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 import type { WanderSpot } from "./monk-wander"
 import { shortcutCost } from "./walking-shortcuts"
 
@@ -12,6 +13,7 @@ const CAPACITY = 16384
 interface Memory {
   width: number; depth: number; routes: Map<number, { at: number; points: WanderSpot[] }>
   hits: number; planned: number; invalidated: number
+  fields: Map<string, DestinationField>; fieldBuilds: number; fieldHits: number
 }
 const memories = new WeakMap<GameMap, Memory>()
 const clocks = new WeakMap<GameMap, number>()
@@ -40,6 +42,8 @@ export function workerRouteMemoryStats(map: GameMap) {
   const memory = memories.get(map), learned = corridors.get(map)
   return { routes: memory?.routes.size ?? 0, reused: memory?.hits ?? 0,
     planned: memory?.planned ?? 0, invalidated: memory?.invalidated ?? 0,
+    destinationFields: memory?.fields.size ?? 0, fieldBuilds: memory?.fieldBuilds ?? 0, fieldHits: memory?.fieldHits ?? 0,
+    destinationCells: [...(memory?.fields.values() ?? [])].reduce((sum, f) => sum + f.distance.size, 0),
     corridorCells: learned?.cells ?? 0, corridorGoals: learned?.goals.size ?? 0,
     corridorReused: learned?.hits ?? 0, corridorPlanned: learned?.plans ?? 0 }
 }
@@ -114,7 +118,7 @@ export function rememberedWorkerRoute(map: GameMap, start: TilePos, goal: TilePo
   if (seconds === undefined || !Number.isFinite(seconds)) return plan()
   let memory = memories.get(map)
   if (!memory || memory.width !== map.width || memory.depth !== map.depth) {
-    memory = { width: map.width, depth: map.depth, routes: new Map(), hits: 0, planned: 0, invalidated: 0 }
+    memory = { width: map.width, depth: map.depth, routes: new Map(), hits: 0, planned: 0, invalidated: 0, fields: new Map(), fieldBuilds: 0, fieldHits: 0 }
     memories.set(map, memory)
   }
   const size = map.width * map.depth
@@ -161,4 +165,119 @@ function clearRoute(map: GameMap, points: WanderSpot[]): boolean {
     from = to
   }
   return true
+}
+
+
+export interface DestinationField {
+  goal: TilePos; budget: number; distance: Map<number, number>; next: Map<number, number>
+}
+interface NavigationVersion {
+  buildings: string; tiles: GameMap["tiles"]; elevation: GameMap["elevation"]
+  ground: number; width: number; depth: number; site: string; crossroads: GameMap["crossroads"]
+}
+const versions = new WeakMap<GameMap, NavigationVersion>()
+const destinationScopes = new WeakMap<GameMap, number>()
+
+/** Geometry only: construction completion changes clearance, serving a visitor does not.
+ * Editors replacing terrain/elevation or calling markGroundChanged invalidate immediately. */
+export function workerNavigationVersion(map: GameMap): object {
+  const buildings = JSON.stringify(map.buildings.map(b => [b.id, b.buildType, b.x, b.z, b.w, b.d,
+    b.rotation, b.layoutSeed, b.hearthZ, b.supportId, b.churchId, b.floorHeight,
+    !b.construction || b.construction.work >= b.construction.required]))
+  const site = JSON.stringify(map.site), old = versions.get(map), ground = map.footpaths?.ground ?? 0
+  if (old && old.buildings === buildings && old.tiles === map.tiles && old.elevation === map.elevation &&
+    old.ground === ground && old.width === map.width && old.depth === map.depth && old.site === site && old.crossroads === map.crossroads) return old
+  const version = { buildings, tiles: map.tiles, elevation: map.elevation, ground, width: map.width, depth: map.depth, site, crossroads: map.crossroads }
+  versions.set(map, version)
+  const memory = memories.get(map)
+  if (memory) { memory.fields.clear(); memory.routes.clear() }
+  corridors.delete(map)
+  return version
+}
+
+/** Share bounded reverse Dijkstra searches in the worker cache. A tile is one unit of actual
+ * grid travel; terrain, cliffs and directed doorway rules define legal edges.
+ * Each predecessor is tested in the direction the NPC will walk. */
+export function workerDestinationField(map: GameMap, goal: TilePos, budget: number): DestinationField {
+  workerNavigationVersion(map)
+  let memory = memories.get(map)
+  if (!memory) {
+    memory = { width: map.width, depth: map.depth, routes: new Map(), hits: 0, planned: 0, invalidated: 0,
+      fields: new Map(), fieldBuilds: 0, fieldHits: 0 }
+    memories.set(map, memory)
+  }
+  const key = `${goal.x},${goal.z}:${budget}`, existing = memory.fields.get(key)
+  if (existing) { memory.fieldHits++; memory.fields.delete(key); memory.fields.set(key, existing); return existing }
+  const field: DestinationField = { goal: { ...goal }, budget, distance: new Map(), next: new Map() }
+  const end = goal.z * map.width + goal.x
+  if (Number.isInteger(goal.x) && Number.isInteger(goal.z) && tileAt(map, goal.x, goal.z) && TERRAIN[map.tiles[end]].passable) {
+    const queue = new MinHeap(), closed = new Set<number>(), nearby = buildingSpatialQuery(map.buildings)
+    const church = map.buildings.find(b => b.id === map.site?.hovelId)
+    const interiorDirections = [...ROUTE_DIRS, [1, 1], [1, -1], [-1, 1], [-1, -1]]
+    field.distance.set(end, 0); field.next.set(end, -1); queue.push(end, 0)
+    while (queue.size) {
+      const cell = queue.pop()
+      if (closed.has(cell)) continue
+      closed.add(cell)
+      const to = { x: cell % map.width, z: Math.floor(cell / map.width) }
+      // Match the shrine's diagonal interior connections, with their real length.
+      const directions = church && containsTile(church, to) ? interiorDirections : ROUTE_DIRS
+      for (const [dx, dz] of directions) {
+        const from = { x: to.x + dx, z: to.z + dz }, terrain = tileAt(map, from.x, from.z)
+        const index = from.z * map.width + from.x
+        const distance = field.distance.get(cell)! + Math.hypot(dx, dz)
+        if (distance > budget || !terrain || !TERRAIN[terrain].passable || closed.has(index) || distance >= (field.distance.get(index) ?? Infinity)) continue
+        if (dx && dz && (!church || !containsTile(church, from))) continue
+        const a = nearby(from), b = nearby(to)
+        if (!buildingStepAllowed(map, a, from, to, true) || (a !== b && !buildingStepAllowed(map, b, from, to, true))) continue
+        if (terrain !== "bridge" && map.tiles[cell] !== "bridge" && !Number.isFinite(elevationStep(map.elevation, index, cell))) continue
+        field.distance.set(index, distance); field.next.set(index, cell); queue.push(index, distance)
+      }
+    }
+  }
+  memory.fieldBuilds++; memory.fields.set(key, field)
+  // Sparse fields grow with the travel budget, never the world's full area.
+  let cells = [...memory.fields.values()].reduce((sum, f) => sum + f.distance.size, 0)
+  while (memory.fields.size > 64 || cells > 262144) {
+    const first = memory.fields.keys().next().value!
+    cells -= memory.fields.get(first)!.distance.size; memory.fields.delete(first)
+  }
+  return field
+}
+
+export function withDestinationRoutes<T>(map: GameMap, budget: number, run: () => T): T {
+  const previous = destinationScopes.get(map)
+  destinationScopes.set(map, budget)
+  try { return run() }
+  finally { if (previous === undefined) destinationScopes.delete(map); else destinationScopes.set(map, previous) }
+}
+
+/** Undefined leaves ordinary wear-aware worker routes alone. Service searches
+ * use the same reverse tree for cost discovery and waypoint reconstruction. */
+export function sharedDestinationRoute(map: GameMap, start: TilePos, goal: TilePos): TilePos[] | null | undefined {
+  const budget = destinationScopes.get(map)
+  if (budget === undefined) return undefined
+  if (![start.x, start.z, goal.x, goal.z].every(Number.isInteger) || !tileAt(map, start.x, start.z)) return null
+  const field = workerDestinationField(map, goal, budget)
+  let cell = start.z * map.width + start.x
+  if (!field.distance.has(cell)) return null
+  const route: TilePos[] = []
+  while (cell !== -1) {
+    route.push({ x: cell % map.width, z: Math.floor(cell / map.width) })
+    cell = field.next.get(cell)!
+  }
+  return route
+}
+
+export function destinationWorldRoute(map: GameMap, start: TilePos, goal: TilePos): WanderSpot[] | null | undefined {
+  const route = sharedDestinationRoute(map, start, goal)
+  if (!route) return route
+  return route.map(p => ({ x: tileToWorldX(map, p.x), z: tileToWorldZ(map, p.z), y: surfaceHeight(map, p.x, p.z) }))
+}
+
+
+/** Debug cold-cache comparison and explicit notification after in-place map edits. */
+export function rebuildWorkerNavigation(map: GameMap): void {
+  versions.delete(map)
+  workerNavigationVersion(map)
 }

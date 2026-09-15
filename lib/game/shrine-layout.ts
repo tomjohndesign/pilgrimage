@@ -66,11 +66,10 @@ export function shrineStations(building: Pick<BuildingDef,"x"|"z"|"w"|"d">, door
   if (isChapel(building)) {
     const side = -Math.sign(layout.entranceX || 1)
     const sin = Math.round(Math.sin(layout.rotation)), cos = Math.round(Math.cos(layout.rotation))
-    const entrance = door ?? { x: building.x + 1, z: building.z + 2 }
     return {
       viewing: { x: layout.altar.x + sin * .5, z: layout.altar.z + cos * .5 },
       keeper: { x: layout.altar.x - sin * .5, z: layout.altar.z - cos * .5 },
-      offering: { x: entrance.x + side * cos, z: entrance.z - side * sin },
+      offering: { x: layout.altar.x + side * .5 * cos + sin * .5, z: layout.altar.z - side * .5 * sin + cos * .5 },
       queueCapacity: 1,
     }
   }

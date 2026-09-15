@@ -58,7 +58,7 @@ export function churchWallBuilder(parts: BuildingPart[], stoneHeight = .4) {
       }
     }
     let cursor = start
-    for (const [index, opening] of openings.entries()) {
+    for (const [index, opening] of [...openings].sort((a, b) => a.centre - b.centre).entries()) {
       const { centre, sill, shoulder, radius } = opening
       panel(`pier-${index}`, cursor, centre - radius, bottom, top)
       panel(`sill-wall-${index}`, centre - radius, centre + radius, bottom, sill)

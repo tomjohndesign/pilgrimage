@@ -34,6 +34,7 @@ export function adoptNeighborChimney(map: GameMap, building: BuildingDef, riseFo
 }
 
 export function placementBuildingLayout(map: GameMap, building: BuildingDef): Pick<BuildingDef,"layoutSeed"|"hearthZ"|"fireplace"|"supportId"|"floorHeight"|"tavernFlue"|"churchId"> {
+  if (building.buildType === "alms-table") return { layoutSeed: 0 }
   if (building.buildType === "monk-shelter") return { churchId: map.site?.hovelId, layoutSeed: 0 }
   if (building.buildType === "inn") return innPlacementLayout(map,{...building,layoutSeed:placementLayoutSeed("inn",building,map.seed)})
   return adoptNeighborChimney(map,{...building,layoutSeed:placementLayoutSeed(building.buildType ?? "",building,map.seed)})
@@ -80,7 +81,7 @@ export function placementClearance(map: GameMap, candidate: BuildingDef): string
   if(map.buildings.some(b=>overlaps(candidate,b))) return "Another building occupies these tiles."
   if(map.road?.some(p=>covers(candidate,p))) return "Keep the road clear."
   if(map.buildings.some(b=>buildingApproaches(map,b).some(p=>covers(candidate,p)))) return "Keep the neighboring doors clear."
-  if(!candidate.churchId && candidate.buildType !== "monk-shelter" && buildingApproaches(map,candidate).some(p=>p.x<0 || p.z<0 || p.x>=map.width || p.z>=map.depth || map.buildings.some(b=>covers(b,p)))) return "Leave a clear tile outside each door."
+  if(candidate.buildType !== "monk-shelter" && buildingApproaches(map,candidate).some(p=>p.x<0 || p.z<0 || p.x>=map.width || p.z>=map.depth || map.buildings.some(b=>covers(b,p)))) return "Leave a clear tile outside each door."
   return null
 }
 

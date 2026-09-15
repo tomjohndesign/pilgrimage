@@ -13,7 +13,7 @@ import type { WanderSpot } from "./monk-wander"
 import { buildingSupports, placedSupport } from "./character-support"
 import { SETTLER_BUILD_RATE } from "./build-labour"
 import { workPost } from "./work-posts"
-import { rememberedWorkerCorridor, rememberedWorkerRoute } from "./worker-route-memory"
+import { destinationWorldRoute, rememberedWorkerCorridor, rememberedWorkerRoute } from "./worker-route-memory"
 
 export interface Construction { work: number; required: number; cost?: { gold: number; wood: number } }
 /** Worker-seconds: small sites finish quickly; doubling the area quadruples the work. */
@@ -83,6 +83,10 @@ export function workerRoute(map: GameMap, actor: WanderSpot & { id?: number }, g
   // Retain the shared obstacle index unless this actor needs to escape a newly
   // placed site. Allocating a new array otherwise rebuilds it for every trip.
   const obstacles = map.buildings.some(canLeave) ? map.buildings.filter(b => !canLeave(b)) : map.buildings
+  if (obstacles === map.buildings) {
+    const shared = destinationWorldRoute(map, start, goal)
+    if (shared !== undefined) return shared
+  }
   const journey = Math.abs(Math.sin(actor.x * 12.9898 + actor.z * 78.233 + goal.x * 37.719 + goal.z))
   const exploring = actor.id === undefined ? journey < SHORTCUT_EXPLORERS : exploresWorkerShortcut(map, actor.id, start, goal)
   const plan = () => {
@@ -123,7 +127,7 @@ function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask
   const x = purpose === "build" && building.buildType === "well" ? buildingDoorOffset(local.w, "well")
     : purpose === "build" ? (slot % 4 - 1.5) * Math.min(0.45, (local.w - 0.5) / 3)
     : purpose === "work" ? post!.x : bed.anchor.x
-  const buildSide = building.churchId ? -1 : 1
+  const buildSide = building.churchId && building.buildType !== "alms-table" ? -1 : 1
   const z = purpose === "build" ? buildSide * (local.d / 2 - 0.055 + constructionStandOff(scale))
     : purpose === "work" ? post!.z : bed.anchor.z
   const offset = rotateBuildingPoint(x, z, building.rotation)
@@ -132,7 +136,7 @@ function taskPosition(map: GameMap, building: BuildingDef, purpose: BuildingTask
   const cz = tileToWorldZ(map, building.z) + (building.d - 1) / 2
   const frontage = { x: worldToTileX(map, cx + approach.x), z: worldToTileZ(map, cz + approach.z) }
   return { destination: { x: cx + offset.x, z: cz + offset.z, y: purpose === "rest" ? placedSupport(map, building, bed).height : building.buildType === "inn" && purpose !== "build" ? surfaceHeight(map, building.x, building.z)+(building.floorHeight ?? 0) : surfaceHeight(map, frontage.x, frontage.z) }, frontage,
-    heading: (bed?.heading ?? (purpose === "work" || purpose === "build" && building.churchId ? 0 : Math.PI)) + buildingYaw(building.rotation) }
+    heading: (bed?.heading ?? (purpose === "work" || purpose === "build" && building.churchId && building.buildType !== "alms-table" ? 0 : Math.PI)) + buildingYaw(building.rotation) }
 }
 
 /** The slowest builder on a crew that a faster pair of hands may take over from. */

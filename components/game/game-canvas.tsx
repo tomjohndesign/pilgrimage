@@ -43,6 +43,8 @@ import { BuildInfluenceOverlay } from "./build-influence-overlay"
 import { CameraLight } from "./camera-light"
 import { CameraRig } from "./camera-rig"
 import { GroundSelection, PersonPicking } from "./character-selection"
+import { WAYFINDING_DEBUG } from "@/lib/game/wayfinding-settings"
+import { WayfindingOverlay } from "./wayfinding-overlay"
 import { DebugHandle } from "./debug-handle"
 import { Environment } from "./environment"
 import { Monks } from "./monks"
@@ -150,7 +152,7 @@ export function GameCanvas({
       : selection.kind === "traveler" || selection.kind === "monk" ? !visibility.showCharacters
         : selection.kind === "animal" ? !visibility.showWildlife
           : visibility.buildingVisibility === "hidden"
-    if (hidden) useCameraStore.getState().select(null)
+    if (hidden && !(WAYFINDING_DEBUG && (selection.kind === "traveler" || selection.kind === "monk"))) useCameraStore.getState().select(null)
   }, [selection, visibility.showTrees, visibility.showCharacters, visibility.showWildlife, visibility.buildingVisibility])
   const population = usePopulationStore(s => s.pack)
   const assets = useCharacterAssetStore(s => s.assets)
@@ -250,6 +252,7 @@ export function GameCanvas({
       <SceneAssetBoundary>
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={shrineRenown} />
       <BuildInfluenceOverlay map={map} buildMode={!!buildType} />
+      {WAYFINDING_DEBUG && <WayfindingOverlay map={map} />}
 
       </SceneAssetBoundary>
       <CameraRig map={map} onPlace={buildType ? onPlace : undefined} />

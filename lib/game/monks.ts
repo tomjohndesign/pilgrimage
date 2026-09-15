@@ -25,7 +25,7 @@ export interface MonkAttributes {
 export interface Monk {
   id: number
   name: string
-  /** Office within the brotherhood; the first monk is always the relic's keeper. */
+  /** Original office within the brotherhood; active jobs are assigned separately. */
   duty: string
   /** Skin and hair colouring, as varied as the travelers on the road. The HUD's
    * settler entries borrow this shape for a list and carry none. */
@@ -43,9 +43,13 @@ const PIETY = { min: 75, max: 100 }
 const SKILL_COUNT = { min: 1, max: 3 }
 
 /** What a brother is up to, for the HUD; set by the scene's ambient loop. */
-export type MonkActivity = "keepingRelic" | "showingRelic" | "toEvangelize" | "preaching" | "toBuild" | "building" | "toShelter" | "sleeping" | "vigil" | "walking" | "resting" | "flying" | "collecting" | "procession" | "returningRelic" | "praying" | "hoisting"
+export type MonkActivity = "toKeepRelic" | "toAlmsTable" | "keepingAlms" | "servingAlms" | "keepingRelic" | "showingRelic" | "toEvangelize" | "preaching" | "toBuild" | "building" | "toShelter" | "sleeping" | "vigil" | "walking" | "resting" | "flying" | "collecting" | "procession" | "returningRelic" | "praying" | "hoisting"
 
 export const MONK_ACTIVITY_LABELS: Record<MonkActivity, string> = {
+  toAlmsTable: "Going to staff the alms table",
+  keepingAlms: "Waiting to give out bread",
+  servingAlms: "Giving bread to a hungry visitor",
+  toKeepRelic: "Going to keep the relic",
   keepingRelic: "Keeping the veiled relic behind the altar",
   showingRelic: "Showing the relic to a visitor",
   toEvangelize: "Going to preach beside the main road",

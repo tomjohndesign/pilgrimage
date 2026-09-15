@@ -182,7 +182,10 @@ describe("chapel progression", () => {
     expect(shrineVisitPlan(map, 0, 0, new Set(), undefined, false, false)).toBeNull()
     const plan = shrineVisitPlan(map, 0, 0)!
     expect(plan.route.at(-1)).toEqual(stations.viewing)
-    expect(Math.abs(stations.offering.x - map.site!.door.x) + Math.abs(stations.offering.z - map.site!.door.z)).toBe(1)
+    expect(stations.offering.x).toBeGreaterThanOrEqual(chapel.x)
+    expect(stations.offering.x).toBeLessThan(chapel.x + chapel.w)
+    expect(stations.offering.z).toBeGreaterThanOrEqual(chapel.z)
+    expect(stations.offering.z).toBeLessThan(chapel.z + chapel.d)
     const exit = shrineExitPlan(map, stations.viewing, plan.route)!
     expect(exit.route[exit.offeringProgress]).toEqual(stations.offering)
     for (const route of [plan.route, exit.route]) for (let i = 1; i < route.length; i++)

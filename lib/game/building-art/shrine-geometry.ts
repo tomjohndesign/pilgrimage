@@ -167,11 +167,11 @@ function churchStructureParts(width: number, depth: number, wings: readonly Chur
     box(`relic-veil-${fold}`, "interior", [x, altarRise + .25, z], [.061, .38, .018], fold % 2 ? "#b5a687" : "#d6c8a8")
     box(`relic-veil-hem-${fold}`, "interior", [x, altarRise + .078, z + .002], [.061, .025, .02], "#92764e")
   }
-  // Small wall-mounted timber offering box beside the entrance, with an iron slot.
-  box("offering-box", "interior", [1, .42, wallZ - .13], [.3, .24, .2], palette.darkWood)
-  box("offering-box-lid", "interior", [1, .548, wallZ - .13], [.33, .025, .23], palette.paleWood)
-  box("offering-box-slot", "interior", [1, .562, wallZ - .15], [.16, .004, .025], "#302c27")
-  for (const x of [.9, 1.1]) box(`offering-box-strap-${x}`, "interior", [x, .42, wallZ - .235], [.026, .24, .014], "#555349")
+  // Small side-wall offering box inside the entrance.
+  box("offering-box", "interior", [wallX - .13, .42, wallZ - .45], [.2, .24, .3], palette.darkWood)
+  box("offering-box-lid", "interior", [wallX - .13, .548, wallZ - .45], [.23, .025, .33], palette.paleWood)
+  box("offering-box-slot", "interior", [wallX - .15, .562, wallZ - .45], [.025, .004, .16], "#302c27")
+  for (const z of [wallZ - .55, wallZ - .35]) box(`offering-box-strap-${z}`, "interior", [wallX - .235, .42, z], [.014, .24, .026], "#555349")
   for(const side of [-1,1]) {
     const x=side*.73,z=altarZ+.08
     box(`candle-stand-foot-${side}`,"interior",[x,altarRise+.035,z],[.24,.07,.24],palette.darkWood)
@@ -215,12 +215,12 @@ export function shrineStructureParts(width: number, depth: number, wings: readon
   parts.push(...earlyBuildingParts({ ...earlyBuildingRecipe("monk-shelter"), width, depth, wallHeight: eave, roofRise: rise, roofForm: "gable", fireplace: false })
     .filter(p => p.layer === "roof" && !p.name.startsWith("shelter-cross-")))
   parts.push(...steepleParts(eave + rise, -edge + .3))
-  // Center the offering box on the broad wall and center the cross in the front gable.
-  const offeringX = entranceX > 0 ? (-edge + entranceX - halfDoor) / 2 : (edge + entranceX + halfDoor) / 2
-  const offeringZ = edge + .14
-  box("offering-box", "wall", [offeringX, .34, offeringZ], [.16, .2, .16], palette.darkWood, [0, 1])
-  box("offering-box-lid", "wall", [offeringX, .448, offeringZ], [.19, .025, .19], palette.paleWood, [0, 1])
-  box("offering-box-slot", "wall", [offeringX, .463, offeringZ], [.1, .005, .025], "#302c27", [0, 1])
+  // Keep the offering box on the interior side wall.
+  const offeringX = (entranceX > 0 ? -1 : 1) * (edge - .18)
+  const offeringZ = .4
+  box("offering-box", "interior", [offeringX, .34, offeringZ], [.16, .2, .16], palette.darkWood, [0, 1])
+  box("offering-box-lid", "interior", [offeringX, .448, offeringZ], [.19, .025, .19], palette.paleWood, [0, 1])
+  box("offering-box-slot", "interior", [offeringX, .463, offeringZ], [.1, .005, .025], "#302c27", [0, 1])
   box("chapel-wall-cross-upright", "wall", [0, eave + .28, edge + .08], [.055, .34, .045], palette.darkWood, [0, 1])
   box("chapel-wall-cross-arm", "wall", [0, eave + .34, edge + .08], [.22, .055, .045], palette.darkWood, [0, 1])
   return buildingIdentity(roofOverhang(parts,width,depth), "shrine", width, depth, eave)

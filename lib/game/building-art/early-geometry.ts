@@ -9,6 +9,7 @@ import type { ChurchWing } from "../church-additions"
 import { furnishFloorplan } from "./floorplan"
 import { turnFurniture } from "./furniture-placement"
 import { tavernLayout } from "../tavern-layout"
+import { almsTableParts } from "./alms-table"
 import { marketLayout, MARKET_STALL_WIDTH } from "../market-layout"
 import { EARLY_MATERIALS as palette } from "./materials"
 import type { BuildingPart, Vec3 } from "./geometry"
@@ -49,6 +50,10 @@ type ConstructionRecipe = Omit<BuildingRecipe, "variant"> & {
 
 /** Small early medieval structures built directly in tile units. No plot padding. */
 export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
+  if (recipe.variant === "alms-table") {
+    const parts = almsTableParts(recipe.width, recipe.depth, recipe.seed)
+    return recipe.layoutSeed === 1 ? reflectBuildingParts(parts) : parts
+  }
   if (recipe.variant === "inn") return innParts(recipe.width,recipe.depth,recipe.wallHeight,recipe.fireplace !== false,recipe.seed+(recipe.layoutSeed ?? 0))
   const mirrored = layoutHand(recipe.variant, recipe.layoutSeed) === -1
   const local = mirrored ? { ...recipe, roofJoins: recipe.roofJoins?.map(join => ({ ...join, side: -join.side as -1 | 1,

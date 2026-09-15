@@ -1,5 +1,9 @@
 "use client"
 
+import { useWayfindingStore } from "@/lib/game/wayfinding-settings"
+
+import { WayfindingPanel, WayfindingSelection } from "./wayfinding-panel"
+import { almsStaffed } from "@/lib/game/alms-table"
 import { AppearancePanel } from "./appearance-panel"
 import { PlayerColorPicker } from "./player-color"
 
@@ -17,7 +21,7 @@ import Link from "next/link"
 import * as Tooltip from "@radix-ui/react-tooltip"
 import { Dices, Menu, Settings, X } from "lucide-react"
 import "./game-hud.css"
-import { useEffect, useId, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { useVoiceSubtitleStore } from "@/lib/game/voice-subtitle-store"
@@ -35,6 +39,7 @@ import { CHANGELOG, CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, BEGGAR_RECOVERY_GOLD, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
+import { MONK_JOBS, MONK_JOB_LABELS, type MonkJob } from "@/lib/game/monk-jobs"
 import { MONK_TIRED_AT } from "@/lib/game/monk-work"
 import { useMonkEvangelismStore } from "@/lib/game/monk-evangelism-store"
 import { MONK_ACTIVITY_LABELS, monkStaminaRegistry, monkRegistry, monkPositionRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
@@ -63,13 +68,12 @@ import { NewMapDialog, type NewWorld } from "./new-map-dialog"
 import { randomSeed } from "@/lib/game/rng"
 import { NewWorldFields } from "./new-world-fields"
 import { SeedField } from "./seed-field"
-import { Switch } from "@/components/ui/switch"
 import { browserDiagnostics, diagnosticsSchema, type BugReportDiagnostics } from "@/lib/bug-report"
 import { useBugReportRuntime } from "@/hooks/use-bug-report-runtime"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { partyNeedDrain } from "@/lib/game/travel-parties"
 import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES } from "@/lib/game/scene-visibility"
-import { Section, Tuner } from "./property-controls"
+import { Chooser, ToggleRow, Section, Tuner } from "./property-controls"
 import { BuildControls, HudClock, HudHelp, HudResources } from "./hud-controls"
 
 const CONTROLS: Array<[string, string]> = [
@@ -126,65 +130,6 @@ function TrafficDensity({ value, travelerCount, onChange }: {
         {travelerCount} folk across the map.
       </p>
     </>
-  )
-}
-
-/** A stepped choice drawn as the same box as a tuner track, with the option's name inside. */
-function Chooser({
-  label,
-  value,
-  options,
-  onChange,
-  labelClassName = "w-16",
-}: {
-  label: string
-  value: number
-  options: string[]
-  onChange: (index: number) => void
-  labelClassName?: string
-}) {
-  return (
-    <div className="flex items-center">
-      <span className={`${labelClassName} shrink-0 text-[13px] font-medium text-ink-light`}>{label}</span>
-      <div className="hud-choice-track relative h-8 flex-1 rounded-[6px] bg-parchment-dark">
-        <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 truncate font-display text-[11px] font-black text-ink-light">
-          {options[value]}
-        </span>
-        <select
-          value={value}
-          aria-label={label}
-          onChange={(event) => onChange(Number(event.target.value))}
-          className="pointer-events-auto absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        >
-          {options.map((option, index) => (
-            <option key={option} value={index}>
-              {option}
-            </option>
-          ))}
-        </select>
-      </div>
-    </div>
-  )
-}
-
-/** An on/off preference as the shared switch, recoloured for the HUD's dark parchment. */
-function ToggleRow({
-  label,
-  checked,
-  disabled = false,
-  onChange,
-}: {
-  label: string
-  checked: boolean
-  disabled?: boolean
-  onChange: (checked: boolean) => void
-}) {
-  const id = useId()
-  return (
-    <div className="hud-switch-row flex items-center justify-between gap-3 py-0.5">
-      <label htmlFor={id} className={`text-[13px] font-medium text-ink-light ${disabled ? "opacity-50" : ""}`}>{label}</label>
-      <Switch id={id} className="hud-switch" checked={checked} disabled={disabled} onCheckedChange={onChange} />
-    </div>
   )
 }
 
@@ -548,9 +493,9 @@ function ConstructionStatus({ building }: { building: BuildingDef }) {
 
 /** Sample the brothers' live activity and piety on the HUD's own schedule. */
 function useMonkLiveState(monkId: number) {
-  const [live, setLive] = useState<{ activity: MonkActivity | null; piety?: number; happiness?: number }>({ activity: null })
+  const [live, setLive] = useState<{ activity: MonkActivity | null; job?: MonkJob; piety?: number; happiness?: number }>({ activity: null })
   useEffect(() => {
-    const read = () => setLive({ activity: monkRegistry.current?.get(monkId) ?? null, piety: monkPositionRegistry.current?.get(monkId)?.piety, happiness: monkPositionRegistry.current?.get(monkId)?.happiness })
+    const read = () => setLive({ job: simRegistry.current?.monkJobs[monkId] ?? "auto", activity: monkRegistry.current?.get(monkId) ?? null, piety: monkPositionRegistry.current?.get(monkId)?.piety, happiness: monkPositionRegistry.current?.get(monkId)?.happiness })
     read()
     const timer = setInterval(read, 250)
     return () => clearInterval(timer)
@@ -562,7 +507,7 @@ function useMonkLiveState(monkId: number) {
 function MonkPanel({ monk }: { monk: Monk }) {
   const balance = useBalanceStore((s) => s.balance)
   const a = monk.attributes
-  const { activity, piety, happiness } = useMonkLiveState(monk.id)
+  const { activity, job, piety, happiness } = useMonkLiveState(monk.id)
   const [stamina, setStamina] = useState(100)
   useEffect(() => {
     const read = () => setStamina(monkStaminaRegistry.current?.get(monk.id) ?? 100)
@@ -593,7 +538,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
       <div className="pt-1">
         <div className="font-display text-xs text-ink">{monk.name}</div>
         <div className="text-[13px] italic text-ink-light">
-          {monk.duty}, {a.age} years
+          {MONK_JOB_LABELS[job ?? "auto"]}, {a.age} years
         </div>
         {activity && (
           <div className="text-[11px] italic text-gold">{evangelizing && activity === "sleeping" ? "Sleeping on an evangelism mission" : MONK_ACTIVITY_LABELS[activity]}</div>
@@ -608,8 +553,14 @@ function MonkPanel({ monk }: { monk: Monk }) {
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
+        <Chooser label="Job" value={MONK_JOBS.indexOf(job ?? "auto")} options={MONK_JOBS.map(key => MONK_JOB_LABELS[key])}
+          onChange={index => { const sim = simRegistry.current; if (sim) sim.monkJobs[monk.id] = MONK_JOBS[index] }} />
+        <p className="mt-1 text-[11px] italic text-ink-light">Every job allows rest. Brothers helping where needed cover the relic and alms table, then build. Assigned jobs resume after sleep or a mission.</p>
+      </div>
+
+      <div className="mt-2 border-t border-rule pt-2">
         <button type="button" className="hud-action"
-          disabled={monk.duty === "Keeper of the Relic" || !evangelizing && (!evangelism.available || carryingRelic || activity === "flying" || stamina <= MONK_TIRED_AT)}
+          disabled={!evangelizing && (!evangelism.available || carryingRelic || activity === "flying" || stamina <= MONK_TIRED_AT)}
           onClick={() => evangelizing ? evangelism.recall(monk.id) : evangelism.request(monk.id)}>
           {evangelizing ? "Recall from preaching" : "Evangelize on the main road"}
         </button>
@@ -617,7 +568,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
-        <button type="button" className="hud-action" disabled={monk.duty === "Keeper of the Relic" || !procession.available || evangelizing || activity === "toEvangelize" || activity === "preaching" || activity === "flying" ||
+        <button type="button" className="hud-action" disabled={!procession.available || evangelizing || activity === "toEvangelize" || activity === "preaching" || activity === "flying" ||
           (procession.monkId !== null && !carryingRelic) || (carryingRelic && (procession.returnRequested || procession.stage === "lowering" || procession.stage === "returning"))}
           onClick={() => carryingRelic ? procession.returnRelic() : procession.request(monk.id)}>
           {carryingRelic ? "Return relic" : "Carry relic in procession"}
@@ -729,6 +680,9 @@ export function GameHud({
   const [menuOpen, setMenuOpen] = useState(false)
   const [minimapOpen, setMinimapOpen] = useState(false)
   const [panel, setPanel] = useState<"build" | "world" | "settlement" | null>(null)
+  const selectedNodeId = useWayfindingStore(s => s.selectedNodeId)
+  const nodeFocusRevision = useWayfindingStore(s => s.nodeFocusRevision)
+  useEffect(() => { if (SHOW_PROPERTY_PANELS && selectedNodeId) setPanel("world") }, [selectedNodeId, nodeFocusRevision])
 
   const closeBuild = () => {
     setPanel(null)
@@ -743,6 +697,7 @@ export function GameHud({
   }
 
   useEffect(() => {
+    if (useWayfindingStore.getState().selectedNodeId) useWayfindingStore.getState().selectNode(null)
     if (!selection) return
     setPanel(current => SHOW_PROPERTY_PANELS && current === "world" ? current : null)
     economy.chooseBuild(null)
@@ -915,6 +870,7 @@ export function GameHud({
           <HudButton onClick={() => set(DEFAULT_SCENE_VISIBILITY)}>Reset visibility</HudButton>
         </Section>
         {SHOW_PROPERTY_PANELS && <>
+        {map && <Section {...section("Wayfinding")}><WayfindingPanel map={map} travelers={travelers} monks={monks} /></Section>}
         {map && <AppearancePanel map={map} />}
         <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />
@@ -1179,7 +1135,7 @@ export function GameHud({
         {panel === "settlement" && <div className="hud-inspector" id="settlement-details">
           <SettlementPanel economy={economy} monks={monks} relic={relic} onClose={() => setPanel(null)} />
         </div>}
-        {selection && <div className="hud-inspector" aria-label="Selection details">
+        {selection && panel !== "world" && <div className="hud-inspector" aria-label="Selection details">
           {(selection.kind === "tree" || selection.kind === "pile") && <ResourceInspector selection={selection} />}
           {selectedBuilding && (
             <Panel>
@@ -1191,6 +1147,8 @@ export function GameHud({
               Inspect {floor.label.toLowerCase()} {floor.supportId ? "upstairs" : "downstairs"}
             </button>)}
             {selectedBuilding.owner === "independent" && <p className="mt-2 max-w-56 text-[11px] text-ink-light">Independent roadside town. {selectedBuilding.buildType === "tavern" ? "Locally run tavern serving food and drink to passing travelers." : "Home to the townspeople."} Joins your settlement when your influence reaches this building; until then, it earns you no income or renown.</p>}
+            {map && selectedBuilding.buildType === "alms-table" && isComplete(selectedBuilding) &&
+              <p className="mt-1 text-[11px] text-ink-light">{almsStaffed(map, selectedBuilding.id) ? "Open · A monk is serving free bread." : "Closed · Waiting for an available monk."}</p>}
             {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">{brothersAtHome} / {housingBeds(selectedBuilding)} monks · {Math.max(0, housingBeds(selectedBuilding) - brothersAtHome)} spaces available. Tired monks sleep here until their stamina recovers.</p>}
             {isHouse(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
               {household} / {housingCapacity(selectedBuilding)} settlers · {housingBeds(selectedBuilding)} bunks. Residents take a free bunk when they need sleep.
@@ -1204,7 +1162,7 @@ export function GameHud({
             )}
             {selectedBuilding.id === map?.site?.hovelId && isComplete(selectedBuilding) && (
               <div className="mt-3 flex flex-col gap-1.5">
-                <p className="max-w-56 text-[11px] text-ink-light">Entry is free. The keeper reveals the relic to {isChapel(selectedBuilding) ? "one visitor" : "two kneeling visitors"} at a time. Visitors may leave a donation in the offering box {isChapel(selectedBuilding) ? "outside beside the door" : "by the door"}; greater piety encourages larger gifts.</p>
+                <p className="max-w-56 text-[11px] text-ink-light">Entry is free. The keeper reveals the relic to {isChapel(selectedBuilding) ? "one visitor" : "two kneeling visitors"} at a time. Visitors may leave a donation in the offering box inside by the door; greater piety encourages larger gifts.</p>
                 <p className="max-w-56 text-[11px] text-ink-light">{isChapel(selectedBuilding)
                   ? `A 2 × 2 relic chapel. One visitor kneels at the altar; others queue outside. Modest donations. Supports up to ${CHAPEL_MONKS} monks with shelter beds.`
                   : `Two places at the rails; the queue waits four person-spaces behind. Larger donations${selectedBuilding.buildType === "church" ? `, with +${CHURCH_RENOWN_BONUS} renown to draw visitors` : ""}. Supports up to ${CHURCH_MONKS} monks with shelter beds.`}</p>
@@ -1251,6 +1209,7 @@ export function GameHud({
               }} />}
           </Panel>
           )}
+          {SHOW_PROPERTY_PANELS && map && <WayfindingSelection map={map} travelers={travelers} monks={monks} onSettings={() => setPanel("world")} />}
           {selection?.kind === "animal" && <AnimalInspector id={selection.id} />}
           {selectedTraveler && <TravelerPanel traveler={selectedTraveler} travelers={travelers} map={map} />}
           {selectedMonk && <MonkPanel monk={selectedMonk} />}

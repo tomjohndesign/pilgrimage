@@ -1,3 +1,4 @@
+import { MONK_JOBS } from "../monk-jobs"
 import { z } from "zod"
 
 import { ELEVATION_CONTROLS, elevationSettings } from "../map/elevation"
@@ -26,7 +27,7 @@ import { DEFAULT_DISPLAY_SETTINGS, DEFAULT_WORLD_SETTINGS, WATER_COUNT_AUTO, typ
  * Bump SAVE_VERSION when the shape changes, and add a migration in
  * `parseGameSave` rather than rejecting older saves.
  */
-export const SAVE_VERSION = 2
+export const SAVE_VERSION = 3
 
 const finite = z.number().finite()
 const count = z.number().int().min(0)
@@ -155,6 +156,7 @@ export const travelerSaveSchema = z.object({
   carrying: finite.min(0).describe("Timber carried"),
   visits: count.describe("Times they have venerated the relic"),
   visitCooldown: finite,
+  lastBreadDay: count.optional().describe("Last game day this person received free bread"),
   admissionPaid: finite,
   fled: count.describe("Times they turned back from trouble"),
   rolls: count.describe("Dice rolled so far; keeps their luck deterministic"),
@@ -203,6 +205,7 @@ export const simulationSaveSchema = z.object({
   foodStores: z.array(z.tuple([z.string(), z.record(z.string(), finite.min(0))])).describe("Stored food by building id"),
   piles: z.array(z.object({ id: z.string(), campId: z.string(), slot: count, wood: finite.min(0) })).describe("Timber stacked at the camps"),
   travelers: z.array(travelerSaveSchema),
+  monkJobs: z.record(z.string().regex(/^\d+$/), z.enum(MONK_JOBS)).optional().describe("Assigned jobs by monk id; unassigned brothers help where needed"),
   partyGold: z.array(z.tuple([count, finite.min(0)])).optional()
     .describe("Shared purse baselines by party id; member balances include unreconciled transactions"),
   joinedMonks: z.array(joinedMonkSchema).describe("Friars who joined the brotherhood; they are no longer travelers"),
@@ -258,7 +261,7 @@ export function parseGameSave(input: unknown): { save: GameSave; error: null } |
   if (typeof input !== "object" || input === null) return { save: null, error: "Save is not an object." }
   const version = (input as { version?: unknown }).version
   if (typeof version !== "number" || version > SAVE_VERSION) return { save: null, error: `Unsupported save version ${String(version)}.` }
-  const migrated = version === 1 ? { ...input, version: SAVE_VERSION } : input
+  const migrated = version === 1 || version === 2 ? { ...input, version: SAVE_VERSION } : input
   const result = gameSaveSchema.safeParse(migrated)
   return result.success ? { save: result.data, error: null } : { save: null, error: describeIssue(result.error) }
 }

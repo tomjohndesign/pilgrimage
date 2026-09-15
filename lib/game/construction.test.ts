@@ -263,7 +263,7 @@ describe("resident construction", () => {
 })
 
 describe("monk fatigue and rest", () => {
-  it.each([false, true])("finishes the assigned build before resting despite exhaustion (at work: %s)", atWork => {
+  it.each([false, true])("leaves a build for another brother when exhausted (at work: %s)", atWork => {
     const map = fixture(), site = map.buildings[2], grounds = monkWander(map)
     const monk = { ...createMonkRoutine(grounds, 0, makeRng(1)), ...createMonkNeeds(0) }
     site.construction!.required = constructionWork(site.w, site.d)
@@ -272,16 +272,14 @@ describe("monk fatigue and rest", () => {
       for (let i = 0; i < 300 && monk.activity !== "building"; i++) stepMonkWork(monk, map, 1, 0.1)
       expect(monk.activity).toBe("building")
     }
-    // Another brother builds no faster, so he cannot take the place over.
     const task = monk.buildingTask, spare = { ...worker(map), buildRate: MONK_BUILD_RATE }
     expect(task?.purpose).toBe("build")
     monk.stamina = 0
-    for (let i = 0; i < 3000 && !isComplete(site); i++) {
-      stepMonkWork(monk, map, 1, 0.1)
-      expect(monk.buildingTask).toBe(task)
-      expect(assignBuildingTask(spare, map, "build")).toBe(false)
-    }
-    expect(isComplete(site)).toBe(true)
+    stepMonkWork(monk, map, 1, 0.1)
+    expect(monk.buildingTask).not.toBe(task)
+    expect(isComplete(site)).toBe(false)
+    expect(assignBuildingTask(spare, map, "build")).toBe(true)
+    expect(spare.buildingTask?.buildingId).toBe(site.id)
     for (let i = 0; i < 300 && monk.activity !== "sleeping"; i++) stepMonkWork(monk, map, 1, 0.1)
     expect(monk.activity).toBe("sleeping")
     expect(monk.stamina).toBeGreaterThan(0)

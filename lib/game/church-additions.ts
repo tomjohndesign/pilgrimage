@@ -45,13 +45,14 @@ export function churchAdditionError(map: GameMap, building: Pick<BuildingDef, "b
   return churchWing(map, building) ? null : "Build the monks’ residence directly against a side wall of the church, within its length."
 }
 
-/** Completed wings add paired door tiles through the shared wall, never outside. */
+/** Completed additions open paired passages through the church wall. */
 export function churchWingGates(map: GameMap): Array<{ inside: TilePos; outside: TilePos }> {
-  return map.buildings.filter(b => !!b.churchId && b.churchId === map.site?.hovelId && (!b.construction || b.construction.work >= b.construction.required))
+  return map.buildings.filter(b => !!b.churchId && b.churchId === map.site?.hovelId && (!b.construction || b.construction.work >= b.construction.required)
+    && b.buildType === "monk-shelter")
     .map(b => ({ inside: buildingEntry(b), outside: buildingEntry(b, true) }))
 }
 
 export function completedChurchWings(map: GameMap): ChurchWing[] {
   return map.buildings.flatMap(b => !!b.churchId && b.churchId === map.site?.hovelId && (!b.construction || b.construction.work >= b.construction.required)
-    ? churchWing(map, b) ?? [] : [])
+    && b.buildType === "monk-shelter" ? churchWing(map, b) ?? [] : [])
 }
