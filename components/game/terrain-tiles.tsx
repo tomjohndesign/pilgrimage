@@ -708,6 +708,8 @@ type TerrainProps = {
   tileCoverage?: THREE.DataTexture
   /** Omit the deep earth slab for an isolated terrain preview. */
   slab?: boolean
+  /** Omit decorative ground growth on blank staging maps. */
+  vegetation?: boolean
   /** The rendered stand, with stable indices shared by the felling store. */
   trees?: readonly TreePlacement[]
   /** Simulation removals only; hiding the tree display leaves canopy shade intact. */
@@ -809,7 +811,7 @@ export function TerrainTiles(props: TerrainProps) {
     const texture = new THREE.DataTexture(new Uint8Array(growthField.data.length), growthField.width, growthField.height)
     return { texture, origin: new THREE.Vector2(...growthField.origin) }
   }, [growthField.width, growthField.height, map.width, map.depth])
-  useLayoutEffect(() => { growth.texture.image.data = growthField.data; growth.texture.needsUpdate = true }, [growth, growthField])
+  useLayoutEffect(() => { growth.texture.image.data = props.vegetation === false ? new Uint8Array(growthField.data.length) : growthField.data; growth.texture.needsUpdate = true }, [growth, growthField, props.vegetation])
   useEffect(() => () => growth.texture.dispose(), [growth])
 
   const palette = useMemo(() => {

@@ -1,14 +1,13 @@
 /** One navigation registry for asset editing and visual simulation checks. */
 export const PLAYGROUND_TOOLS = [
-  { id: "characters", label: "Characters", help: "Drag to turn, Shift-drag to pan, and scroll to zoom. Show rig exposes pose keys and timing. Apply to road saves appearance changes for the game." },
-  { id: "animals", label: "Animals", help: "Choose a species, then use Show rig to edit its pose and timing. Drag to turn and scroll to zoom." },
+  { id: "characters", label: "Characters", help: "Drag to pan and scroll to zoom. Show rig exposes pose keys and timing. Apply to road saves appearance changes for the game." },
+  { id: "animals", label: "Animals", help: "Choose a species, then use Show rig to edit its pose and timing. Drag to pan and scroll to zoom." },
   { id: "buildings", label: "Buildings", help: "Choose a building form and edit its shape or layout. Click a building to inspect its interior. Scene contains placement examples." },
-  { id: "ents", label: "Ents", help: "Choose a tree species and inspect its shared walking rig. Drag to turn and scroll to zoom." },
+  { id: "ents", label: "Ents", help: "Choose a tree species and inspect its shared walking rig. Drag to pan and scroll to zoom." },
   { id: "maps", label: "Maps", help: "Apply a seed to regenerate the map. Show connections reveals clearing access. The same seed restores the same terrain." },
   { id: "paths", label: "Paths", help: "Choose a scenario and layout. Play advances journeys; stepping pauses the simulation. Use the map to inspect wear or place a building." },
   { id: "town", label: "Village journeys", help: "Follow a resident or close a workplace to see how journeys affect paths. Drag to pan and scroll to zoom." },
   { id: "placement", label: "Building placement", help: "Choose terrain and a structure, then click the map to place it. Green pads are valid; red pads show why placement is refused." },
-  { id: "rendering", label: "Rendering", help: "Compare rendering methods with synchronized settings. Pause or scrub the walk to inspect a frame. Focus enlarges one comparison." },
   { id: "tuning", label: "Game tuning", help: "Apply saves the whole preset and updates open game tabs at this address. Starting supplies affect new settlements. Import loads a draft; Restore defaults applies immediately." },
   { id: "trees", label: "Trees", help: "Edit foliage by species and inspect it beside characters or on a generated map. Changes stay in this preview; copy the species JSON to export." },
   { id: "textures", label: "Textures", help: "Browse terrain, character sheets and environment assets using the same previews as the game." },

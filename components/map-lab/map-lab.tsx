@@ -1,5 +1,7 @@
 "use client"
 
+import { PreviewViewport } from "../preview-viewport"
+
 import { ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
 import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "@/components/asset-editor-frame"
 import { playgroundHref } from "@/lib/asset-playground"
@@ -65,9 +67,9 @@ function MapCard({ map, overlay }: { map: Preview; overlay: boolean }) {
     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
       <h2 className="font-display text-lg font-semibold">{METHODS[map.method].title}</h2>
     </div>
-    <canvas ref={canvas} width={map.size * 3} height={map.size * 3} role="img"
+    <PreviewViewport aspectRatio={1}><canvas ref={canvas} width={map.size * 3} height={map.size * 3} role="img"
       aria-label={`${METHODS[map.method].title}: ${stats.open.toFixed(1)}% open land, ${stats.smallGroves} small groves, ${stats.connected} of ${map.clearings.length} clearings connected; initial church with ${stats.nearbyTrees} nearby wooded tiles`}
-      className="playground-map-canvas" style={{ imageRendering: "pixelated" }} />
+      className="playground-map-canvas" style={{ imageRendering: "pixelated" }} /></PreviewViewport>
 
     <dl className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2 border-t border-rule pt-3 text-xs">
       {[["Open land", `${stats.open.toFixed(1)}%`], ["Woodland", `${stats.forest.toFixed(1)}%`], ["Dark forest", `${stats.dark.toFixed(1)}%`],

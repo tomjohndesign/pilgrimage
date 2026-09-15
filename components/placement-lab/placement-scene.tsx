@@ -1,5 +1,7 @@
 "use client"
 
+import { PreviewNavigation } from "@/components/preview-navigation"
+
 import { TERRAIN } from "@/lib/game/map/terrain"
 
 import { Suspense, useEffect, useMemo, useRef } from "react"
@@ -70,12 +72,12 @@ export function PlacementScene({ map, relic, balance, buildType, resources, view
   const ceiling = useMemo(() => TILE_HEIGHT + (map.elevation?.height.reduce((a, b) => Math.max(a, b), 0) ?? 0) + 1, [map.elevation])
   return <PixelCanvas frameloop="demand" orthographic camera={{ near: CAM_NEAR, far: CAM_FAR }} outputDpr={1} fallback={<p>This playground needs WebGL.</p>}>
     <color attach="background" args={[TERRAIN.grass.color]} />
-    <LabCamera view={view} extent={Math.max(map.width, map.depth)} />
+    <LabCamera view={view} extent={Math.max(map.width, map.depth)} /><PreviewNavigation key={view} />
     <ambientLight intensity={SURFACE_LIGHT.ambient} />
     <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
     <directionalLight position={lightOffsetForYaw(yawForView(view))} intensity={SURFACE_LIGHT.sun} />
     <Suspense fallback={null}>
-      <TerrainTiles map={map} showGrid={grid} />
+      <TerrainTiles showGrid map={map} />
       <Shrine map={map} relic={relic} />
       <Buildings map={map} />
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={1000} balance={balance} />

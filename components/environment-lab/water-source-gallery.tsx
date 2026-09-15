@@ -1,5 +1,8 @@
 "use client"
 
+import { TerrainTiles } from "../game/terrain-tiles"
+import type { GameMap } from "@/lib/game/map/types"
+
 import { ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
 import { AssetEditorHelp } from "../asset-editor-frame"
 
@@ -14,6 +17,8 @@ import { useCameraStore } from "@/lib/game/camera-store"
 import { selectElement } from "@/lib/game/selection"
 import { monkVisual } from "@/lib/game/base-person/monk-assets"
 import { WATER_SOURCE_ATLAS, WATER_SOURCE_DEFINITIONS, type WaterSourcePlacement } from "@/lib/game/water-sources/assets"
+
+const GROUND: GameMap = { width: 8, depth: 5, buildings: [], tiles: Array(40).fill("grass") }
 
 declare global { interface Window { __bakeWaterSources?: typeof import("@/lib/game/water-sources/bake").bakeWaterSources } }
 
@@ -43,7 +48,7 @@ export function WaterSourceGallery() {
     </div>
     <div className="h-[360px] overflow-hidden border border-rule" role="img" aria-label="Timber-lined well and natural watering hole beside monks for scale">
       <PreviewCanvas zoom={75} view={view}>
-        <mesh position={[0, -.04, 0]}><boxGeometry args={[6.5, .18, 3.5]} /><meshLambertMaterial color="#77864b" /></mesh>
+        <Suspense fallback={null}><group position={[0, -.15, 0]}><TerrainTiles map={GROUND} showGrid vegetation={false} slab={false} /></group></Suspense>
         <WaterSources placements={placements} />
         <Suspense fallback={null}><PixelCharacters>{placements.map((p, index) => <group key={p.kind} position={[p.x + (drinking || overlap ? 0 : -.65), p.y, drinking ? WATER_SOURCE_DEFINITIONS[p.kind].access[0].stand[2] : overlap ? -1.03 : .95]} rotation={[0, drinking ? Math.PI : 0, 0]} userData={{ moving: false, activity: drinking ? p.kind === "well" ? "drinking" : "drinkingLow" : undefined, playbackRate: 1 }}>
           <CharacterSprite type="friar" name="monk" selected={selection?.kind === "monk" && selection.id === index} onClick={event => { selectElement({ kind: "monk", id: index }, event) }} outlineColor={encodeObjectId(residentObjectId(index))} characterModel="base" characterScale={1.5} visualOverride={monkVisual(30)} />

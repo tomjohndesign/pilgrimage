@@ -1,5 +1,7 @@
 "use client"
 
+import { wheelZoomFactor } from "@/lib/game/render/camera-input"
+
 import { useEffect, useMemo, useRef } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
@@ -217,8 +219,7 @@ export function CameraRig({ map, onPlace }: { map: GameMap; onPlace?: (at: TileP
       // and figure for each wheel event, although none handles scrolling.
       event.stopPropagation()
       // Normalise line-mode deltas so a mouse wheel and a trackpad feel similar.
-      const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY
-      zoomBy(Math.exp(delta * 0.0015))
+      zoomBy(wheelZoomFactor(event.deltaY, event.deltaMode))
     }
 
     canvas.addEventListener("wheel", onWheel, { passive: false, capture: true })

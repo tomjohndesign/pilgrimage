@@ -1,5 +1,7 @@
 "use client"
 
+import { SpriteStageGround } from "./sprite-stage-ground"
+
 import { EntitySelect } from "@/components/workspace-navigation"
 
 import { ChromeSelect, ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
@@ -41,7 +43,7 @@ import { AnimalRigInspector, type AnimalInspection } from "./animal-rig-editor"
 import { useAnimalRigStore } from "@/lib/game/wildlife/rig-store"
 import { ANIMAL_FRAMES, EMPTY_ANIMAL_EDITS, animalClearFrame, animalPoseKey, type AnimalJoint, type AnimalRigEdits } from "@/lib/game/wildlife/rig-edits"
 import { BASE_PERSON } from "@/lib/game/base-person/pose"
-import { ASSET_ZOOMS, useAssetPreviewStore, usePreviewWheel } from "./asset-preview-controls"
+import { useAssetPreviewStore, usePreviewWheel } from "./asset-preview-controls"
 const DIRECTIONS = BASE_PERSON.directions
 
 /** Animals use the shared playground frame, controls and direction dock.
@@ -141,12 +143,12 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
           <AssetEditorSection title="Inspect">
             {construction && <p className="person-hint">Blue: rib cage · purple: pelvis · green: shoulders · amber: neck · pink: skull.</p>}
             {!bird && !equine && <p className="person-hint">Standing pose for reviewing proportions. Construction shows the pelvis, rib cage, shoulders, neck, skull and limb chains through the shared rig controls.</p>}
-            <p className="person-hint">Drag sideways to turn. Shift-drag to pan. Scroll or pinch to zoom. All animals use the same pixel scale as characters.</p>
+            <p className="person-hint">Drag to pan. Scroll or pinch to zoom. All animals use the same pixel scale as characters.</p>
           </AssetEditorSection>
           </>
 </>}
       controlsFooter={<><footer className="person-panel-footer"><ChromeButton className="hud-action" onClick={() => { setRow(1); setZoom(6); setOffset([0, 0]); setRate(1); setConstruction(false); setPlaying(bird || equine); setMotion(bird || equine ? "graze" : "idle") }}><RotateCcw size={12} />Reset preview</ChromeButton></footer></>}
-      toolbar={<><ChromeSelect aria-label="Animal view" value={lineup ? "all" : "animal"} onChange={e => setLineup(e.target.value === "all")}><option value="animal">Animal</option><option value="all">All animals</option></ChromeSelect>            <label>Zoom<ChromeSelect aria-label="Animal preview zoom" value={zoom} onChange={e => setZoom(Number(e.target.value))}>{ASSET_ZOOMS.map(value => <option key={value} value={value}>{value}×</option>)}</ChromeSelect></label>
+      toolbar={<><ChromeSelect aria-label="Animal view" value={lineup ? "all" : "animal"} onChange={e => setLineup(e.target.value === "all")}><option value="animal">Animal</option><option value="all">All animals</option></ChromeSelect>
 <label className="person-check"><ChromeCheckbox type="checkbox" checked={showRig} onChange={event => { setShowRig(event.target.checked); setLineup(false); setPlaying(false) }} />Show rig</label>{!bird && !equine && <label className="person-check"><ChromeCheckbox type="checkbox" checked={construction} onChange={event => { setConstruction(event.target.checked); setShowRig(true); setLineup(false); setPlaying(false); setMotion("idle"); setFrame(0) }} />Construction</label>}</>}
       dock={<CharacterAnimationDock playback={<div className="person-playback">            <ChromeButton className="hud-pause" aria-label={playing ? "Pause animal animation" : "Play animal animation"} onClick={() => setPlaying(v => !v)}>{playing ? <Pause size={14} /> : <Play size={14} />}</ChromeButton>
             <label>Action<ChromeSelect aria-label="Animal action" value={action} onChange={e => { setMotion(e.target.value as AnimalMotion); setFrame(0) }}>{actions.map(clip => <option key={clip} value={clip}>{clip === "idle" && bird ? "Perched" : ACTION_LABELS[clip]}</option>)}</ChromeSelect></label>
@@ -157,10 +159,11 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
           keyed={step => frameKeyed(step)}
           onFrame={next => { setFrame(next); setPlaying(false); setLineup(false) }} />}>
       <div className="person-stage-layout"><div ref={stage} className="person-stage person-stage-character"
-          onPointerDown={event => { if ((event.target as Element).closest("button, [role=button]") || event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); drag.current = { x: event.clientX, y: event.clientY, row, pan: event.shiftKey, offset } }}
+          onPointerDown={event => { if ((event.target as Element).closest("button, [role=button]") || event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); drag.current = { x: event.clientX, y: event.clientY, row, pan: true, offset } }}
           onPointerMove={event => { const start = drag.current; if (!start) return; if (start.pan) setOffset([start.offset[0] + event.clientX - start.x, start.offset[1] + event.clientY - start.y]); else setRow(((start.row + Math.trunc((event.clientX - start.x) / 48)) % 8 + 8) % 8) }}
-          onPointerUp={event => { const start=drag.current;if(!lineup&&start&&!start.pan&&Math.hypot(event.clientX-start.x,event.clientY-start.y)<6)void playSourceSelection(`animal/${subject}`);drag.current = null; event.currentTarget.releasePointerCapture(event.pointerId) }} onLostPointerCapture={() => { drag.current = null }}>
-          <div style={{ transform: `translate(${offset[0]}px, ${offset[1]}px)` }}>
+          onPointerUp={event => { const start=drag.current;if(!lineup&&start&&Math.hypot(event.clientX-start.x,event.clientY-start.y)<6)void playSourceSelection(`animal/${subject}`);drag.current = null; event.currentTarget.releasePointerCapture(event.pointerId) }} onLostPointerCapture={() => { drag.current = null }}>
+          {active && <SpriteStageGround zoom={zoom} offset={offset} />}
+          <div style={{ transform: `translate(${offset[0]}px, ${offset[1]}px)`, position: "relative" }}>
           {active && <AnimalPreview pack={packed} subject={subject} lineup={lineup} motion={action} playing={playing} row={row} zoom={zoom} rate={rate} coat={coat} wildlifeCoat={wildlifeCoat} horseVariant={horseVariant} onSelect={choose} directionCanvases={directionCanvases} showRig={showRig} construction={construction && !bird && !equine} frame={frame} edits={edits} joints={joints} selected={selectedJoint}
             onInspect={(next, inspection) => { setFrame(next); setJoints(inspection) }} onJoint={joint => { setSelectedJoint(joint); setPlaying(false) }}
             onPose={changes => commit(changes.reduce((next, [joint, value]) => animalPoseKey(next, action, joint, { frame, offset: value, radius: 4 }, frame), edits))}

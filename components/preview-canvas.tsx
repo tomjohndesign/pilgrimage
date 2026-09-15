@@ -1,5 +1,7 @@
 "use client"
 
+import { PreviewNavigation } from "@/components/preview-navigation"
+
 import { TERRAIN } from "@/lib/game/map/terrain"
 
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
@@ -19,7 +21,7 @@ import {
 } from "@/lib/game/render/iso"
 
 /**
- * A still iso view for galleries and labs: the game's exact camera pitch and
+ * An interactive iso view for galleries and labs: the game's exact camera pitch and
  * lighting rig, frozen at one of the four views, looking at the origin. Scenes
  * are expected to lift themselves so their visual centre sits there.
  */
@@ -50,7 +52,7 @@ export function PreviewCanvas({
       <directionalLight position={lightOffsetForYaw(yaw)} intensity={SURFACE_LIGHT.sun} />
 
       {/* Re-aim when the view changes; the camera prop is only read at mount. */}
-      <CameraAim view={view} zoom={zoom} />
+      <CameraAim view={view} zoom={zoom} /><PreviewNavigation key={view} />
 
       {children}
     </PixelCanvas>

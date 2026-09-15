@@ -85,7 +85,7 @@ export function GameCanvas({
   roadTier,
   relicTraffic,
   roadLook,
-  showGrid = false,
+  showGrid = true,
   visibility = DEFAULT_SCENE_VISIBILITY,
   buildType,
   shrineRenown,

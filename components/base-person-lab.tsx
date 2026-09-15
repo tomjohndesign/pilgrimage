@@ -1,5 +1,7 @@
 "use client"
 
+import { SpriteStageGround } from "./sprite-stage-ground"
+
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dialog"
 
 import { ChromeSelect, ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
@@ -8,7 +10,7 @@ import { CharacterRowSprite } from "./character-row-sprite"
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowUpRight, Check, Pause, Play, RotateCcw } from "lucide-react";
-import { ASSET_ZOOMS, useAssetPreviewStore, usePreviewWheel } from "./asset-preview-controls"
+import { useAssetPreviewStore, usePreviewWheel } from "./asset-preview-controls"
 import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "./asset-editor-frame"
 import { characterSoundIdentity } from "@/lib/game/character-sound-identity"
 import { SpriteSelectionPreview } from "./sprite-selection-preview"
@@ -425,7 +427,7 @@ export function BasePersonLab({ mode, onModeChange, active: workspaceActive = tr
     <AssetEditorWorkspace title="Character" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
 
       controlsHeader={<>{<div className="person-panel-heading" style={{display:"block"}}>
-            <label className="person-choice">Character<EntitySelect aria-label="Preview character" value={subject === "cart" ? "cart" : isKnight ? `knight/${POPULATION_PROFILES[knightVariant]?.id}` : character} renderIcon={(option, active) => <CharacterRowSprite id={option.value} active={active} />} renderPreview={option => <CharacterRowSprite id={option.value} active={workspaceActive} sequence="random" size={32} />} onChange={e=>{
+            <label className="person-choice">Character<EntitySelect aria-label="Preview character" value={subject === "cart" ? "cart" : isKnight ? `knight/${POPULATION_PROFILES[knightVariant]?.id}` : character} renderIcon={(option, active) => <CharacterRowSprite id={option.value} active={active} />} staging={{ kind: "characters", active: workspaceActive }} onChange={e=>{
               const id=e.target.value
               if (id === "cart") { setSubject("cart"); setFrame(0); return }
               if (!id.startsWith("knight/")) setSubject("person")
@@ -545,7 +547,6 @@ export function BasePersonLab({ mode, onModeChange, active: workspaceActive = tr
  </>}
       toolbar={<>
         <ChromeSelect aria-label="Preview view" value={view} onChange={e => { setView(e.target.value as typeof view); if (e.target.value === "map" && zoom < 4) setZoom(6) }}><option value="character">Character</option><option value="native">Native size</option><option value="sheet">Sprite sheet</option>{subject === "cart" && <option value="map">Small map</option>}</ChromeSelect>
-        <ChromeSelect aria-label={onMap ? "Map framing" : "Pixel inspection zoom"} value={zoom} onChange={e => setZoom(Number(e.target.value))}>{(onMap ? [4, 6, 8] : ASSET_ZOOMS).map(n => <option key={n} value={n}>{onMap ? ({ 4: "Wide", 6: "Map", 8: "Close" } as Record<number, string>)[n] : `${n}×`}</option>)}</ChromeSelect>
         {isPerson && <label className="person-check"><ChromeCheckbox checked={showRig} onChange={event => { setShowRig(event.target.checked); setView("character"); setPlaying(false) }} />Show rig</label>}
       </>}
       dock={<CharacterAnimationDock playback={<div className="person-playback"><ChromeButton className="hud-pause" aria-label={playing ? "Pause" : "Play"} disabled={frameCount === 1 || view === "sheet"} onClick={() => setPlaying(!playing)}>{playing ? <Pause size={14} /> : <Play size={14} />}</ChromeButton>
@@ -562,7 +563,7 @@ export function BasePersonLab({ mode, onModeChange, active: workspaceActive = tr
             if (view !== "character" || event.button !== 0 || !event.isPrimary ||
               (event.target as Element).closest('[role="button"], button, input, select, a')) return
             event.preventDefault()
-            viewDrag.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, row, pan: event.shiftKey, person: !!(event.target as Element).closest(".person-sprite"), offset: previewOffset }
+            viewDrag.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, row, pan: true, person: !!(event.target as Element).closest(".person-sprite"), offset: previewOffset }
             event.currentTarget.setPointerCapture(event.pointerId); setScrubbingViews(true)
           }}
           onPointerMove={event => {
@@ -576,7 +577,7 @@ export function BasePersonLab({ mode, onModeChange, active: workspaceActive = tr
           onPointerUp={event => {
             if (viewDrag.current?.pointer !== event.pointerId) return
             const start = viewDrag.current
-            if (Math.hypot(event.clientX-start.x,event.clientY-start.y)<6 && !start.pan && (isPerson || isKnight)) {
+            if (Math.hypot(event.clientX-start.x,event.clientY-start.y)<6 && (isPerson || isKnight)) {
               if(start.person && !previewSelected)selectPreview()
               else clearPreviewSelection()
             }
@@ -586,6 +587,7 @@ export function BasePersonLab({ mode, onModeChange, active: workspaceActive = tr
           onLostPointerCapture={event => {
             if (viewDrag.current?.pointer === event.pointerId) { viewDrag.current = null; setScrubbingViews(false) }
           }}>
+          {active && view === "character" && <SpriteStageGround zoom={zoom} offset={previewOffset} cellSize={pixels} anchor={isKnight ? (mountedKnight ? knightMetadata.anchor[1] : knightMetadata.person.anchor[1]) : isPerson ? BASE_PERSON.anchor[1] : subject === "cart" ? (cartMode === "shop" ? SHOP.anchor[1] : CART.anchor[1]) : transportMetadata.anchor[1]} worldSize={.74 * pixels / 48 * 1.5} />}
           {onMap ? <MerchantMapPreview playing={active && playing} onPlayingChange={setPlaying} row={row} zoom={zoom} cargo={cargo} puller={cartPuller} horseVariant={horseVariant} coat={coat} /> : isPerson && !bake && !preview ? <p className="person-stage-message">Rendering the base person…</p> : view === "sheet" ? <div className="person-sheet">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={url} width={pixels * columns} height={pixels * atlasRows} alt={`${SUBJECTS[subject]} ${clipLabel}: ${subject === "cart" ? CART.directions : 8} directions${subject === "horse" ? ", common and noble variants" : ""} and ${columns} frames`} />
@@ -605,7 +607,7 @@ export function BasePersonLab({ mode, onModeChange, active: workspaceActive = tr
           </div>}
           {isPerson && (error || storeError) && <p role="alert" className="person-stage-error">{error || storeError} Adjust the pose or undo to recover.</p>}
           {isPerson && !dragging && bakeProgress && <div className="person-stage-progress hud-well" role="status" aria-live="polite"><span>Updating sprite sheets · {Math.round(bakeProgress.done / bakeProgress.total * 100)}%</span><i style={{ width: `${bakeProgress.done / bakeProgress.total * 100}%` }} /></div>}
-          <div className="person-stage-caption" style={onMap ? { display: "none" } : undefined}>{view === "native" ? "Actual pixels · 1×" : view === "sheet" ? `${SUBJECTS[subject]} atlas · ${columns * atlasRows} poses` : `${direction} · ${fittedZoom}×`}</div>
+          <div className="person-stage-caption" style={onMap ? { display: "none" } : undefined}>{view === "native" ? "Actual pixels · 1×" : view === "sheet" ? `${SUBJECTS[subject]} atlas · ${columns * atlasRows} poses` : `${direction} · ${fittedZoom.toFixed(1)}×`}</div>
         </div>
         {isPerson && showRig && <RigInspector joints={inspected} selected={selectedJoint} offset={currentOffset(selectedJoint as EditableJoint)} frame={frame} radius={radius} maxRadius={Math.max(1, Math.floor(PERSON_CLIPS[clip].frames / 2))} keyed={!!selectedKey} frameKeyed={frameKeyed(frame % PERSON_CLIPS[clip].frames)}
           onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} onChange={offset => changeJoint(selectedJoint as EditableJoint, offset)} onRadius={blend => changeJoint(selectedJoint as EditableJoint, currentOffset(selectedJoint as EditableJoint), blend)}

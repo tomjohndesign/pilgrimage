@@ -4,7 +4,7 @@ import { AssetPlayground } from "@/components/asset-playground"
 
 export const metadata: Metadata = {
   title: "Pilgrimage — Playground",
-  description: "Edit assets and inspect maps, paths, placement and rendering in one shared playground.",
+  description: "Edit assets and inspect maps, paths and placement in one shared playground.",
 }
 
 export default function PlaygroundPage() {

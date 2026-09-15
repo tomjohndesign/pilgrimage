@@ -19,7 +19,6 @@ const EDITORS: Record<PlaygroundTool, ComponentType<AssetEditorNavigation & { ac
   paths: lazy(() => import("./path-lab/path-lab").then(m => ({ default: m.PathLab }))),
   town: lazy(() => import("./path-lab/town-lab").then(m => ({ default: m.TownLab }))),
   placement: lazy(() => import("./placement-lab/placement-lab").then(m => ({ default: m.PlacementLab }))),
-  rendering: lazy(() => import("./render-lab/render-lab").then(m => ({ default: m.RenderLab }))),
 }
 
 /** One playground. Keep drafts when switching tools and pause hidden previews. */
@@ -27,7 +26,7 @@ export function AssetPlayground() {
   const search = useSearchParams()
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
-  const root = !search.get("asset")
+  const root = !search.get("asset") || search.get("asset") === "rendering"
   const mode = playgroundTool(search.get("asset"))
   const [visited, setVisited] = useState<PlaygroundTool[]>(root ? [] : [mode])
   const queries = useRef(new Map<PlaygroundTool, string>())

@@ -3,7 +3,6 @@
 import { ChromeSelect } from "@/components/ui/chrome-controls"
 import { Children, isValidElement, useEffect, useMemo, useState, type ReactNode } from "react"
 import { AssetEditorFrame, AssetEditorContent, AssetEditorPanels, AssetEditorSection, AssetEditorHelp, type AssetEditorNavigation } from "./asset-editor-frame"
-import { TERRAIN } from "@/lib/game/map/terrain"
 import { LabSlider } from "./lab-controls"
 import * as THREE from "three"
 import { DEFAULT_DESIGN, PALETTE_TONES, PERSON_PRESETS, personRecipe, type PersonDesign } from "@/lib/game/base-person/design"
@@ -22,8 +21,8 @@ const BACKDROPS = {
     backgroundImage: "conic-gradient(#b6b3a5 25%, transparent 0 50%, #b6b3a5 0 75%, transparent 0)",
     backgroundSize: "24px 24px",
   },
-  dark: { backgroundColor: "#191912" },
-  ground: { backgroundColor: TERRAIN.grass.color },
+  dark: { backgroundColor: "var(--chrome-surface)" },
+  ground: { backgroundColor: "var(--chrome-field)" },
 } as const
 
 /** The primitives the rig is assembled from, coloured by geometry so the parts list reads at a glance. */

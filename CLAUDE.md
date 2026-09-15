@@ -14,8 +14,7 @@
   new test environments, standalone demo apps, or parallel testing setups.
 
 - **All visual testing belongs in the shared playground.** `/assets` and
-  `AssetPlayground` host characters, animals, buildings, maps, paths, placement
-  and rendering. Use `AssetEditorFrame`, `AssetEditorWorkspace`, and the same
+  `AssetPlayground` host characters, animals, buildings, maps, paths and placement. Use `AssetEditorFrame`, `AssetEditorWorkspace`, and the same
   property sections, tuners, resizable sidebars, mobile drawers and preview stage as the character
   and building editors. `PLAYGROUND_TOOLS` in `lib/asset-playground.ts` owns the
   tool selector. Add scenarios and presets inside these tools; do not create
@@ -26,7 +25,7 @@
   for previews, and right-side disclosure sections for properties. Use Base UI
   through the shared chrome controls for buttons, dropdowns, checkboxes, sliders,
   dialogs and tooltips. Keep view choices in the canvas header and animation
-  playback in its footer. Characters and buildings open to spaced canvas grids;
+  playback in its footer. Characters and buildings open to blank isometric staging maps with assets at game scale;
   animate character sequences in place, pausing offscreen and for reduced motion. Put explanations in the shared help tooltips; keep labels,
   values and live status visible. Stack labels above fields and tuners with
   consistent spacing; keep checkbox labels inline. Avoid nested cards and
@@ -36,7 +35,7 @@
   All non-game pages share `WorkspaceFrame` navigation and surfaces; reference
   documents use `WorkspaceDocument` for section navigation. Do not add separate
   page chrome for a new tool or reference page. All panels and help use the
-  existing olive workspace tokens. Canvas backgrounds use `TERRAIN.grass.color`.
+  existing olive workspace tokens. Scene canvases use `TERRAIN.grass.color` and the isometric tile grid. Documents, forms, catalogues and pipeline inspection use the themed chrome surface. Use the game wheel response and drag panning in asset previews; do not add zoom controls. Document navigation uses smooth anchor scrolling with scroll-synchronized selection; scrollbars appear only while scrolling and use theme colors.
   Geist is the app-wide font for pages, controls, HUD and canvas labels. Preview controls belong in the common
   canvas dock via `AssetEditorCanvasControls`, never on separate coloured bands.
   Redirect retired URLs to the matching playground tool, preserving

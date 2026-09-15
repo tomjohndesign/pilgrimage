@@ -6,7 +6,7 @@ import { placementSite } from "@/lib/game/building-placement-layout"
 import Image from "next/image"
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react"
 import { Tooltip } from "@base-ui/react/tooltip"
-import { Coins, Map, Minus, Plus, Footprints, House, Pause, Play, RotateCcw, RotateCw, Sparkles, Users, X } from "lucide-react"
+import { Coins, Map, Footprints, House, Pause, Play, RotateCcw, RotateCw, Sparkles, Users, X } from "lucide-react"
 
 import type { useSettlement } from "@/hooks/use-settlement"
 import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
@@ -154,8 +154,6 @@ export function BuildControls({ economy, open, onToggle, onClose, minimapOpen, o
         <House size={17} aria-hidden />Build
       </ChromeButton>
       <div className="hud-mobile-camera" role="group" aria-label="Camera controls">
-        <ChromeButton type="button" className="hud-action" aria-label="Zoom out" onClick={() => useCameraStore.getState().zoomBy(1.25)}><Minus size={18} /></ChromeButton>
-        <ChromeButton type="button" className="hud-action" aria-label="Zoom in" onClick={() => useCameraStore.getState().zoomBy(1 / 1.25)}><Plus size={18} /></ChromeButton>
         <ChromeButton type="button" className="hud-action" aria-label="Rotate view" onClick={() => useCameraStore.getState().rotate(1)}><RotateCw size={18} /></ChromeButton>
         <ChromeButton type="button" className="hud-action" aria-label="Toggle minimap" aria-expanded={minimapOpen} aria-controls="minimap-dock" onClick={onToggleMinimap}><Map size={18} /></ChromeButton>
       </div>

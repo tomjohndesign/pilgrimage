@@ -1,5 +1,7 @@
 "use client"
 
+import { PreviewNavigation } from "@/components/preview-navigation"
+
 import { TERRAIN } from "@/lib/game/map/terrain"
 
 import { SheepPenDemo } from "./sheep-pen-demo"
@@ -123,7 +125,7 @@ function Site({ recipe, grid, map: suppliedMap }: { recipe: BuildingRecipe; grid
     { x: recipe.width / 2 + 3, z: -recipe.depth / 2 - 3.5, y: TILE_HEIGHT, species: "birch" as const, scale: 0.8 },
   ], [recipe.width, recipe.depth])
   return <>
-    <TerrainTiles map={map} showGrid={grid} traffic={35} relicTraffic={10} />
+    <TerrainTiles showGrid map={map} traffic={35} relicTraffic={10} />
     <Footprint recipe={recipe} />
     <PixelCharacters><group name="workshop-scale-reference" position={(() => { const p = referencePersonPosition(recipe, recipe.view); return [p[0], p[1] + TILE_HEIGHT, p[2]] })()}>
       <TravelerFigure characterModel="base" characterScale={BASE_CHARACTER_SCALE} type={TRAVELER_TYPES.pilgrim} />
@@ -152,7 +154,7 @@ export function ProceduralMapScene({ recipe, grid, zoom, playbackRate = 3, slaug
     <div className={embedded ? "asset-building-viewport" : styles.mapCanvas}>
       <Canvas frameloop="demand" onPointerMissed={() => {if(!placement) onSelect?.(null)}} orthographic camera={{ near: 0.1, far: 400 }} outputDpr={1} fallback={<p>This map preview needs WebGL.</p>}>
         <color attach="background" args={[TERRAIN.grass.color]} />
-        <SceneCamera recipe={study} zoom={zoom} />
+        <SceneCamera recipe={study} zoom={zoom} /><PreviewNavigation key={recipe.view} />
         <ambientLight intensity={SURFACE_LIGHT.ambient} />
         <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
         <directionalLight name="workshop-sun" position={lightOffsetForYaw(yawForView(recipe.view))} intensity={SURFACE_LIGHT.sun} />

@@ -33,7 +33,7 @@ export function PlacementLab({ mode, onModeChange, active = true }: AssetEditorN
   const [seedDraft, setSeedDraft] = useState(String(DEFAULT_PLACEMENT_LAB.seed))
   const [limit, setLimit] = useState(DEFAULT_BALANCE.rules.levellingLimit)
   const [view, setView] = useState(0)
-  const [grid, setGrid] = useState(true)
+  const grid = true
   const [status, setStatus] = useState("")
   const balance = useMemo(() => placementLabBalance(limit), [limit])
   const baseMap = useMemo(() => placementLabMap(settings), [settings])
@@ -117,7 +117,7 @@ export function PlacementLab({ mode, onModeChange, active = true }: AssetEditorN
           ["Verdict", verdict]].map(([label, value]) =>
           <div key={label}><dt className="text-ink-light">{label}</dt><dd className="mt-1 font-semibold tabular-nums">{value}</dd></div>)}</AssetEditorSection>
         </>}
-      toolbar={<><label className="flex items-center gap-2"><ChromeCheckbox type="checkbox" className="accent-gold" checked={grid} onChange={e => setGrid(e.target.checked)} />Show tile grid</label>
+      toolbar={<>
 </>}
       dock={<div className="person-animation-dock hud-well"><><span className="person-hint">{verdict}</span></></div>}>
       <div className="person-stage asset-building-stage">{active && <><div className="asset-building-viewport">

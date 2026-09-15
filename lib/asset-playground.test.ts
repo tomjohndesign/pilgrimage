@@ -25,7 +25,7 @@ describe("shared playground navigation", () => {
   it("supports old animal selections and defaults unknown modes to characters", () => {
     expect(playgroundTool("horse")).toBe("animals")
     expect(playgroundTool("donkey")).toBe("animals")
-    expect(playgroundTool("rendering")).toBe("rendering")
+    expect(playgroundTool("rendering")).toBe("characters")
     expect(playgroundTool("unknown")).toBe("characters")
     expect(playgroundTool(null)).toBe("characters")
   })

@@ -7,7 +7,7 @@ import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 import { Suspense, useEffect, useMemo, useRef, type MutableRefObject } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
+import { PreviewNavigation } from "@/components/preview-navigation"
 import { PixelCanvas, PixelCharacters } from "@/components/pixel-canvas"
 import { CharacterSprite } from "@/components/game/character-sprite"
 import { TerrainTiles } from "@/components/game/terrain-tiles"
@@ -46,16 +46,7 @@ function Person({ town, person, live, selected, onSelect }: { town: Town; person
     characterScale={BASE_CHARACTER_SCALE} selected={selected} onClick={event => { event.stopPropagation(); onSelect() }} /></group>
 }
 function Camera({ town, view, focus, selected, labels }: { town: Town; view: number; focus: number | null; selected: number | null; labels: MutableRefObject<Map<string, HTMLButtonElement>> }) {
-  const { camera, gl, size } = useThree(), controls = useRef<OrbitControls | null>(null)
-  useEffect(() => {
-    const control = new OrbitControls(camera, gl.domElement)
-    control.enableRotate = false; control.enableDamping = true; control.screenSpacePanning = false
-    control.minZoom = .7; control.maxZoom = 3.5
-    control.mouseButtons.LEFT = THREE.MOUSE.PAN
-    control.touches.ONE = THREE.TOUCH.PAN
-    controls.current = control
-    return () => { control.dispose(); controls.current = null }
-  }, [camera, gl])
+  const { camera, size } = useThree()
   useEffect(() => {
     const cam = camera as THREE.OrthographicCamera, aspect = size.width / size.height
     const height = Math.max(25, 43 / aspect)
@@ -67,11 +58,11 @@ function Camera({ town, view, focus, selected, labels }: { town: Town; view: num
     const target = person ? new THREE.Vector3(tileToWorldX(town.map, person.x), .2, tileToWorldZ(town.map, person.z)) : new THREE.Vector3(0, .2, -1.5)
     camera.position.copy(target).add(new THREE.Vector3(...cameraOffset(yawForView(view))))
     camera.lookAt(target); (camera as THREE.OrthographicCamera).zoom = person ? 2.4 : 1
-    camera.updateProjectionMatrix(); controls.current?.target.copy(target); controls.current?.update()
+    camera.updateProjectionMatrix()
   }, [camera, town, view, focus])
   const point = useMemo(() => new THREE.Vector3(), [])
   useFrame(() => {
-    controls.current?.update(); camera.updateMatrixWorld()
+    camera.updateMatrixWorld()
     const occupied: Array<[number, number, number]> = []
     const resident = selected === null ? null : town.people[selected], badge = labels.current.get("resident")
     if (resident && badge) {
@@ -104,8 +95,8 @@ export function TownScene({ town, live, view, focus, selected, labels, onSelect,
     <color attach="background" args={[TERRAIN.grass.color]} />
     <ambientLight intensity={SURFACE_LIGHT.ambient} /><hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
     <directionalLight intensity={SURFACE_LIGHT.sun} position={lightOffsetForYaw(yawForView(view))} />
-    <Camera town={town} view={view} focus={focus} selected={selected} labels={labels} />
-    <TerrainTiles map={town.map} traffic={0} traveledRoads={roads} />
+    <Camera town={town} view={view} focus={focus} selected={selected} labels={labels} /><PreviewNavigation key={`${view}/${focus}`} />
+    <TerrainTiles showGrid map={town.map} traffic={0} traveledRoads={roads} />
     <Suspense fallback={null}><FoliageField atlas={DEFAULT_FOLIAGE_ATLAS} placements={trees} seed={42} /></Suspense>
     {TOWN_SITES.map((site, i) => <group key={site.id} position={[tileToWorldX(town.map, site.x) + .5, .2, tileToWorldZ(town.map, site.z) + .5]} rotation={[0, buildingYaw(site.rotation), 0]}>
       <StructureModel parts={buildings[i]} ink={false} />

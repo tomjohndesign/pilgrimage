@@ -1,5 +1,7 @@
 "use client"
 
+import { PreviewNavigation } from "@/components/preview-navigation"
+
 import { ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
 import { TERRAIN } from "@/lib/game/map/terrain"
 
@@ -150,7 +152,7 @@ export function MerchantMapPreview({ playing, onPlayingChange, row, zoom, ...opt
   return <div className="merchant-map-preview" aria-label="Merchant journey on a small map">
     <div className="merchant-map-scene"><PixelCanvas orthographic camera={CAMERA}>
       <color attach="background" args={[TERRAIN.grass.color]} /><ambientLight intensity={SURFACE_LIGHT.ambient} /><hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} /><CameraLight />
-      <MapCamera row={row} zoom={zoom} map={demo.map} />
+      <MapCamera row={row} zoom={zoom} map={demo.map} /><PreviewNavigation key={row} />
       <Suspense fallback={null}><TerrainTiles map={demo.map} showGrid traffic={3} /><Trees map={demo.map} /><Bridges map={demo.map} />
         {demo.turning && trails && <TurningTrails demo={demo} />}
         <DemoActors key={`${scenario}:${radius}:${options.puller}:${options.horseVariant}`} {...options} demo={demo} clock={clock} seek={seek} playing={playing} rate={rate} onProgress={setFrame} />

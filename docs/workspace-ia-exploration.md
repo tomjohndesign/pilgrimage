@@ -60,7 +60,6 @@ such as Character, Sprite sheet and Show rig belong to the canvas.
 | Paths | Reinforcement, Wear & regrowth, Grow a town | Scenario / comparison | Layout, path rules, demand and selected tile |
 | Village journeys | Residents | Village / selected resident | Journey and selected-entity settings |
 | Building placement | Placement scenarios / structures | Placement preview | Terrain, levelling and selected structure |
-| Rendering | Comparisons / experiments | Synchronized render views | Scene and render settings |
 | Sprite pipeline | Bake stages | Selected stage's output | Character, pose and bake inputs |
 | Game tuning | Global rule sections | Village context | Selected global rules or building costs |
 | Design document / game specifications | Document sections | Reading surface | Hidden |

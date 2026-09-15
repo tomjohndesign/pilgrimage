@@ -1,5 +1,9 @@
 "use client"
 
+import { PreviewViewport } from "../preview-viewport"
+import { SpriteStageGround } from "../sprite-stage-ground"
+import { FOLIAGE_FRAME } from "@/lib/game/trees/foliage/design"
+
 import { EntitySelect } from "@/components/workspace-navigation"
 
 import { ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls";
@@ -91,8 +95,8 @@ export function EntLab({ mode, onModeChange, active = true }: AssetEditorNavigat
       dock={<CharacterAnimationDock playback={<div className="person-playback"><ChromeButton className="hud-pause" aria-label={playing ? "Pause Ent animation" : "Play Ent animation"} onClick={() => setPlaying(v => !v)}>{playing ? <Pause size={14} /> : <Play size={14} />}</ChromeButton><span>Slow march</span></div>} directions={BASE_PERSON.directions} row={row} onDirection={setRow} renderDirection={i => <canvas ref={canvas => { directions.current[i] = canvas }} width={64} height={64} style={{ imageRendering: "pixelated" }} />}
           frameCount={ENT_FRAMES} frame={frame} clipLabel="Slow march" keyed={keyed} onFrame={next => { setFrame(next); setPlaying(false) }} />}>
       <div className="person-stage-layout"><div className="person-stage person-stage-character">
-          {active && <EntPreview species={species} design={design} row={row} frame={frame} playing={playing} showRig={showRig} selected={selected} joints={joints} directions={directions}
-            onInspect={(next, inspection) => { setFrame(next); setJoints(inspection) }} onJoint={joint => { setSelected(joint); setPlaying(false) }} onPose={pose} onDrag={active => { if (active) { drag.current = design; setPlaying(false) } else endDrag() }} />}
+          {active && <PreviewViewport><SpriteStageGround zoom={3} offset={[0, 0]} cellSize={192} anchor={171} worldSize={FOLIAGE_FRAME.extent} /><EntPreview species={species} design={design} row={row} frame={frame} playing={playing} showRig={showRig} selected={selected} joints={joints} directions={directions}
+            onInspect={(next, inspection) => { setFrame(next); setJoints(inspection) }} onJoint={joint => { setSelected(joint); setPlaying(false) }} onPose={pose} onDrag={active => { if (active) { drag.current = design; setPlaying(false) } else endDrag() }} /></PreviewViewport>}
           <span className="person-stage-caption">{TREE_SPECIES[species].label} · branch arms and root feet</span>
         </div>
         {showRig && <CharacterRigInspector joints={joints} selected={selected} labels={ENT_JOINT_LABELS} onSelect={joint => { setSelected(joint); setPlaying(false) }}

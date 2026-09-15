@@ -1,6 +1,5 @@
 "use client"
 
-import { BuildThumbnail } from "../game/build-thumbnail"
 import { EntitySelect } from "@/components/workspace-navigation"
 
 import { ChromeSelect, ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
@@ -40,7 +39,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active: workspaceActive
   const [recipe, setRecipe] = useState<BuildingRecipe>({...earlyBuildingRecipe("tavern"),layoutSeed:18})
   const [ready, setReady] = useState(false)
   const [allViews, setAllViews] = useState(false)
-  const [grid, setGrid] = useState(true)
+  const grid = true
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [neighbor, setNeighbor] = useState(true)
   const [neighbors, setNeighbors] = useState<PreviewPlacement[]>(tavernPreviewNeighbors)
@@ -89,7 +88,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active: workspaceActive
   }, [placement,rotatePlacement])
   const [playbackRate,setPlaybackRate] = useState(3)
   const [slaughterDemo,setSlaughterDemo] = useState(0)
-  const [zoom, setZoom] = useState(1.15)
+  const zoom = 1.15
   const [notice, setNotice] = useState("")
   const [controlsOpen, setControlsOpen] = useState(false)
   const [mapReady, setMapReady] = useState(false)
@@ -161,7 +160,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active: workspaceActive
     <AssetEditorWorkspace title="Building" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
       controlsHeading={<span>Building</span>}
       controlsHeader={<></>}
-      controls={<><AssetEditorSection title="Shape"><label className="person-choice">Form<EntitySelect aria-label="Building form" value={recipe.variant} renderPreview={option => <BuildThumbnail id={option.value as typeof AVAILABLE_EARLY_BUILDINGS[number]["id"]} scale={2} />} onChange={event => {
+      controls={<><AssetEditorSection title="Shape"><label className="person-choice">Form<EntitySelect aria-label="Building form" value={recipe.variant} staging={{ kind: "buildings", active: workspaceActive }} onChange={event => {
           const selected = AVAILABLE_EARLY_BUILDINGS.find(item => item.id === event.target.value)
           if (!selected) return
           setRecipe({ ...earlyBuildingRecipe(selected.id), view: recipe.view, seed: recipe.seed }); setSelectedId(null); setPlacement(null); setNotice(selected.description)
@@ -203,7 +202,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active: workspaceActive
             </>}
           </AssetEditorSection>
 <AssetEditorSection title="Inspect">
-            <label className="person-check"><ChromeCheckbox type="checkbox" checked={grid} onChange={e => setGrid(e.target.checked)} />Isometric grid</label>
+
             <p className="person-hint">Click a building to select it and reveal its interior. Click it again or the ground to clear selection.</p>
             <label className="person-check"><ChromeCheckbox type="checkbox" checked={neighbor} onChange={e => { setNeighbor(e.target.checked); if (!e.target.checked && selectedId !== "workshop") setSelectedId(null) }} />Adjoining buildings</label>
             {neighbor && <p className="person-hint">{neighbors.length} neighbors. Select one to inspect or remove it.</p>}
@@ -217,7 +216,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active: workspaceActive
             </div>
           </AssetEditorSection></>}
       controlsFooter={<><footer className="person-panel-footer"><p className="person-hint">Buildings use these same models in the game. These drafts do not change the live game’s default recipe.</p><ChromeButton className="hud-action" onClick={() => { setRecipe(DEFAULT_RECIPE);setNeighbors([]);setPlacement(null); setSelectedId(null); setNotice("House restored.") }}><RotateCcw size={12} />Restore house</ChromeButton></footer></>}
-      toolbar={<><div className="person-playback"><span className="person-hint">{AVAILABLE_EARLY_BUILDINGS.find(v => v.id === recipe.variant)?.name}{neighbor && neighbors.length ? ` + ${neighbors.length} buildings` : ""}</span>{recipe.variant === "sheep-pen" && <label>Speed<ChromeSelect aria-label="Herding demo speed" value={playbackRate} onChange={e=>setPlaybackRate(Number(e.target.value))}>{[1,2,3,6].map(rate=><option key={rate} value={rate}>{rate}×</option>)}</ChromeSelect></label>}<label>Zoom<ChromeSelect aria-label="Building preview zoom" value={zoom} onChange={e => setZoom(Number(e.target.value))}>{[0.75, 1, 1.15, 1.5, 1.7].map(n => <option key={n} value={n}>{n}×</option>)}</ChromeSelect></label></div>
+      toolbar={<><div className="person-playback"><span className="person-hint">{AVAILABLE_EARLY_BUILDINGS.find(v => v.id === recipe.variant)?.name}{neighbor && neighbors.length ? ` + ${neighbors.length} buildings` : ""}</span>{recipe.variant === "sheep-pen" && <label>Speed<ChromeSelect aria-label="Herding demo speed" value={playbackRate} onChange={e=>setPlaybackRate(Number(e.target.value))}>{[1,2,3,6].map(rate=><option key={rate} value={rate}>{rate}×</option>)}</ChromeSelect></label>}</div>
 <div className="person-view-buttons" aria-label="Building preview modes">{recipe.variant === "sheep-pen" && <><ChromeButton className="hud-action" onClick={()=>{setSlaughterDemo(n=>-Math.abs(n)-1);setNotice("Sheep and goats are milked beside the flock. Workers carry milk in buckets to the public food platform.")}}>Show milking cycle</ChromeButton><ChromeButton className="hud-action" onClick={()=>{setSlaughterDemo(n=>Math.abs(n)+1);setNotice("The shepherd leads an animal to the work spot, collects three small trays of meat onto the public food platform, then replenishes the flock. Each tray adds 50 meat; milk arrives in buckets between harvests.")}}>Show slaughter cycle</ChromeButton></>}<ChromeSelect aria-label="Building view" value={allViews ? "all" : "map"} onChange={e => setAllViews(e.target.value === "all")}><option value="map">On the map</option><option value="all">All four</option></ChromeSelect></div></>}
       dock={<div className="person-animation-dock hud-well"><div className="person-direction-strip" aria-label="Building directions">{BUILDING_VIEWS.map(v => <ChromeButton key={v.id} className="hud-building-tile person-direction asset-building-direction" aria-label={`Face ${v.name}`} aria-pressed={recipe.view === v.id} onClick={() => { update("view", v.id); setAllViews(false) }}><span>{["SE", "NE", "NW", "SW"][v.id]}</span><span>{v.name}</span></ChromeButton>)}</div></div>}>
       <div className={`person-stage asset-building-stage ${allViews ? "asset-building-four" : ""}`}>

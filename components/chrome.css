@@ -147,14 +147,17 @@ body > main { isolation:isolate; }
 }
 @media(prefers-reduced-motion:reduce) { .chrome-switch-thumb { transition:none; } }
 .chrome-empty-selection[hidden] { display:none; }
-.chrome-empty-selection:has(.chrome-entity-grid) { display:block; overflow:auto; }
-.chrome-empty-selection:has(.chrome-entity-grid) .chrome-select-prompt { display:none; }
-.chrome-entity-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); align-content:start; gap:36px 24px; padding:40px; }
-.chrome-entity-tile { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; min-height:160px; padding:12px; color:#f2e8d5; font-size:12px; border-radius:4px; text-align:center; }
-.chrome-entity-tile:hover { background:#ffffff0a; }
-.chrome-entity-art { display:flex; align-items:center; justify-content:center; height:100px; width:120px; pointer-events:none; }
-.chrome-entity-art img { object-fit:contain; }
-@media(max-width:900px) { .chrome-entity-grid { grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); padding:20px; gap:24px 12px; } }
+.chrome-empty-selection:has(.chrome-staging-map) { display:block; overflow:hidden; }
+.chrome-empty-selection:has(.chrome-staging-map) .chrome-select-prompt { display:none; }
+.chrome-entity-overview,.chrome-staging-map { width:100%; height:100%; }
+.chrome-staging-map { position:relative; }
+.chrome-staging-map canvas { touch-action:none; cursor:grab; }
+.chrome-staging-map canvas:active { cursor:grabbing; }
+.chrome-staging-labels { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+.chrome-staging-label { position:absolute; transform:translate(-50%,0); pointer-events:auto; width:32px; height:28px; padding:0; color:#f2e8d5; font-size:11px; white-space:nowrap; }
+.chrome-staging-label span { position:absolute; left:50%; top:12px; transform:translateX(-50%); padding:3px 5px; border-radius:3px; color:var(--chrome-text); opacity:0; pointer-events:none; }
+.chrome-staging-label:hover span,.chrome-staging-label:focus-visible span,.chrome-staging-label[data-hovered] span { opacity:1; background:var(--chrome-surface); }
+
 .game-hud.person-editor.chrome-mobile-panel { display:block; inset:0 auto 0 0; width:min(360px,calc(100vw - 48px)); z-index:92; padding:0; pointer-events:auto; background:var(--chrome-surface); box-shadow:none; }
 .game-hud.person-editor.chrome-mobile-properties { inset:0 0 0 auto; }
 .game-hud.person-editor.chrome-mobile-panel[data-closed] { display:none; }
@@ -162,3 +165,26 @@ body > main { isolation:isolate; }
 .chrome-dialog :is(.hud-action,.hud-pause,.hud-close):hover { background:var(--chrome-field); }
 .chrome-dialog :is(input:not([type="checkbox"]):not([type="range"]):not([type="hidden"]),textarea) { min-height:34px; border:0; border-radius:4px; background:var(--chrome-field); color:var(--chrome-text); padding:7px 10px; font:13px/20px var(--font-geist),sans-serif; }
 .chrome-dialog label { color:var(--chrome-muted); font-size:12px; }
+
+.chrome-canvas-content:has(> .workspace-content), .workspace-content, .workspace-content-scroll { background:var(--chrome-surface); color:var(--chrome-text); }
+
+/* Preserve the gutter while the thumb fades, including native macOS scrollbars. */
+html, body, body *, :root body :is(.chrome-workspace,.chrome-mobile-panel,.chrome-dialog,.game-hud) * { scrollbar-width:thin; scrollbar-color:transparent transparent; }
+html[data-scrolling], body [data-scrolling="true"], :root body :is(.chrome-workspace,.chrome-mobile-panel,.chrome-dialog,.game-hud) [data-scrolling="true"] { scrollbar-color:var(--chrome-muted) transparent; }
+::-webkit-scrollbar { width:7px; height:7px; }
+::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background:transparent; }
+::-webkit-scrollbar-thumb { background:transparent; border-radius:8px; }
+[data-scrolling="true"]::-webkit-scrollbar-thumb { background:var(--chrome-muted); }
+.chrome-nav-row[aria-current="location"] { color:var(--chrome-text); background:var(--chrome-field); }
+.chrome-navigation a.chrome-nav-row { display:flex; text-decoration:none; }
+
+.chrome-staging-label:hover,.chrome-staging-label:focus-visible,.chrome-staging-label[data-hovered] { z-index:1; }
+.chrome-sprite-ground { position:absolute; inset:0; pointer-events:none; }
+.chrome-sprite-ground + .person-sprite { position:relative; }
+
+.chrome-flat-viewport { position:relative; width:100%; height:100%; overflow:hidden; touch-action:none; cursor:grab; }
+.chrome-flat-viewport:active { cursor:grabbing; }
+.chrome-flat-viewport[style*="aspect-ratio"] { height:auto; }
+.chrome-flat-content { position:relative; width:100%; height:100%; display:grid; place-items:center; transform-origin:center; }
+
+.chrome-workspace-overview { background:var(--chrome-surface); color:var(--chrome-muted); }

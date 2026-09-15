@@ -1,5 +1,7 @@
 "use client"
 
+import { PreviewViewport } from "../preview-viewport"
+
 import { ChromeCheckbox, ChromeButton } from "@/components/ui/chrome-controls"
 import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "@/components/asset-editor-frame"
 import { playgroundHref } from "@/lib/asset-playground"
@@ -47,7 +49,7 @@ function PathMap({ world, settings, layer, grid, routes, selected, onSelect, too
     const rect = event.currentTarget.getBoundingClientRect()
     return indexAt(Math.min(WIDTH - 1, Math.max(0, Math.floor((event.clientX - rect.left) / rect.width * WIDTH))), Math.min(DEPTH - 1, Math.max(0, Math.floor((event.clientY - rect.top) / rect.height * DEPTH))))
   }
-  return <canvas ref={canvas} width={WIDTH * CELL} height={DEPTH * CELL} tabIndex={0} role="img"
+  return <PreviewViewport aspectRatio={WIDTH / DEPTH}><canvas ref={canvas} width={WIDTH * CELL} height={DEPTH * CELL} tabIndex={0} role="img"
     aria-label="Path simulation map. Arrow keys select a tile. Enter inspects or places the selected building."
     className="block h-auto w-full cursor-crosshair focus-visible:outline-2 focus-visible:outline-gold"
     style={{ imageRendering: "pixelated" }}
@@ -57,7 +59,7 @@ function PathMap({ world, settings, layer, grid, routes, selected, onSelect, too
       const p = coords(selected ?? indexAt(20, 10)), directions: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }
       if (directions[event.key]) { event.preventDefault(); const [dx, dz] = directions[event.key]; onSelect(indexAt(Math.min(WIDTH - 1, Math.max(0, p.x + dx)), Math.min(DEPTH - 1, Math.max(0, p.z + dz)))) }
       if (event.key === "Enter") { event.preventDefault(); const i = selected ?? indexAt(p.x, p.z); onSelect(i); if (tool !== "inspect") onPlace(i) }
-    }} />
+    }} /></PreviewViewport>
 }
 
 /**
@@ -74,7 +76,7 @@ export function PathLab({ mode, onModeChange, active = true }: AssetEditorNaviga
   const [playing, setPlaying] = useState(true)
   const [speed, setSpeed] = useState(4)
   const [layer, setLayer] = useState<MapLayer>("ground")
-  const [grid, setGrid] = useState(false)
+  const grid = true
   const [routes, setRoutes] = useState(false)
   const [selected, setSelected] = useState<number | null>(null)
   const [tool, setTool] = useState<"inspect" | "workshop" | "shelter">("inspect")
@@ -183,7 +185,7 @@ export function PathLab({ mode, onModeChange, active = true }: AssetEditorNaviga
 <p className="mt-4 text-xs text-ink-light">One experimental day = 60 simulation seconds. Shared travel measures recent walking on segments another commuter has already used. Controls apply to future movement and regrowth. Restart for a fresh comparison. Inactive experiments pause and retain their maps.</p></AssetEditorSection>
         <AssetEditorSection title="Inspection"><div className="person-file-actions">
           <LabSelect label="Map overlay" value={layer} options={{ ground: "Ground surface", wear: "Wear intensity", frontage: "Connected frontage" }} onChange={value => setLayer(value as MapLayer)} />
-          <label className="text-sm"><ChromeCheckbox className="mr-2 accent-gold" type="checkbox" checked={grid} onChange={event => setGrid(event.target.checked)} />Tile grid</label>
+
           <label className="text-sm"><ChromeCheckbox className="mr-2 accent-gold" type="checkbox" checked={routes} onChange={event => setRoutes(event.target.checked)} />Journey routes</label>
           {experiment === "town" && <>
             <LabSelect label="Placement tool" value={tool} options={{ inspect: "Inspect ground", workshop: "Place a hut · off-road allowed", shelter: "Place a shelter · path required" }} onChange={value => { setTool(value as typeof tool); if (value === "shelter") setLayer("frontage") }} />
