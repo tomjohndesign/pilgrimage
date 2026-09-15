@@ -90,8 +90,8 @@ export function WorkspaceFrame({ selection, title, label, status, detail, childr
   const chooseTool = (next: PlaygroundTool) => { setDrawer(null); if (onToolChange) onToolChange(next); else router.push(`/assets?asset=${next}`) }
   const back = () => { setDrawer(null); if (onToolChange) window.history.pushState(null, "", "/assets"); else router.push("/assets") }
   const nav = <div className="chrome-navigation">
-    <div className="chrome-navigation-heading">{root ? <span>Workspace</span> : <ChromeButton className="chrome-back" onClick={back}><ArrowLeft size={14} />Workspace</ChromeButton>}</div>
-    {!root && <h2><ChromeButton title="Show all items" onClick={() => { if (hasEntities) setEntitySelected(false); setDrawer(null) }}>{tool?.label ?? label}</ChromeButton></h2>}
+    <div className="chrome-navigation-heading">{root ? <span className="page-title">Workspace</span> : <ChromeButton className="chrome-back" onClick={back}><ArrowLeft size={14} />Workspace</ChromeButton>}</div>
+    {!root && <h2 className="page-title"><ChromeButton title="Show all items" onClick={() => { if (hasEntities) setEntitySelected(false); setDrawer(null) }}>{tool?.label ?? label}</ChromeButton></h2>}
     <div className="chrome-navigation-scroll"><div ref={setNavigation} />
       {(root || !hasEntities) && <nav aria-label="Workspace pages">{[
         { title: "Entities", ids: ["characters", "animals", "buildings", "ents", "trees", "maps", "textures"] },

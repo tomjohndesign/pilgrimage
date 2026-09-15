@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Geist } from 'next/font/google'
+import { Geist, UnifrakturCook } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { BalanceProvider } from '@/components/game/balance-provider'
 import { ChromeProvider } from '@/components/chrome-provider'
@@ -9,6 +9,13 @@ import '@/components/chrome.css'
 const geist = Geist({
   subsets: ["latin"],
   variable: '--font-geist',
+  display: 'swap',
+})
+
+const unifrakturCook = UnifrakturCook({
+  subsets: ["latin"],
+  weight: '700',
+  variable: '--font-unifraktur-cook',
   display: 'swap',
 })
 
@@ -52,7 +59,7 @@ export default function RootLayout({
   return (
     // The play page's resume script styles the root element before hydration
     // (see lib/game/save/view.ts), which React must not report as a mismatch.
-    <html lang="en" suppressHydrationWarning className={geist.variable}>
+    <html lang="en" suppressHydrationWarning className={`${geist.variable} ${unifrakturCook.variable}`}>
       <body className="font-sans antialiased">
         <ChromeProvider><BalanceProvider>{children}</BalanceProvider></ChromeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}

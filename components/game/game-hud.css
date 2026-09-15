@@ -310,7 +310,7 @@
   font-weight: 600;
   line-height: 1.1;
   letter-spacing: .12em;
-  text-indent: .12em;
+  text-indent: 0;
   text-transform: uppercase;
   color: #f2e8d5;
   white-space: nowrap;

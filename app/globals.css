@@ -106,3 +106,11 @@
 .font-display {
   font-family: var(--font-geist), sans-serif;
 }
+
+/* Titles share the display face; controls and reading text keep Geist. */
+:root body h1, :root .page-title {
+  font-family: var(--font-unifraktur-cook), serif;
+  font-weight: 700;
+  letter-spacing: normal;
+  text-transform: none;
+}
