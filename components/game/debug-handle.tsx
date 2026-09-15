@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect } from "react"
+import { sceneSoundSources } from "@/lib/game/scene-sound-sources"
+import { useAudioQA } from "@/lib/game/scene-audio"
 import { useThree } from "@react-three/fiber"
 import * as THREE from "three"
 
@@ -66,6 +68,7 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
     const handle = {
       map,
       trees,
+      audio: () => ({ ...useAudioQA.getState(), sources: [...sceneSoundSources.sources].map(([actor, source]) => ({ actor, ...source })) }),
       parties: () => [...(simRegistry.current?.parties.values() ?? [])].map(p => ({ ...p,
         members: p.members.map(id => { const s = simRegistry.current!.travelers.get(id)!; return {
           id, name: travelers.find(t => t.id === id)?.name, x: s.x, z: s.z, progress: s.progress,
@@ -414,7 +417,7 @@ export function DebugHandle({ map, trees, travelers, speed, movement, speedScale
       },
       /** Live settlement loop: who works where, who lives where, and the takings. */
       travelers: () => [...(simRegistry.current?.travelers.values() ?? [])].map(s => ({
-        id: s.id, activity: s.activity, employer: s.employer, home: s.home, jobSlot: s.jobSlot,
+        id: s.id, type: travelers.find(t => t.id === s.id)?.type.id, activity: s.activity, employer: s.employer, home: s.home, jobSlot: s.jobSlot,
         gold: s.gold, hunger: Math.round(s.hunger), thirst: Math.round(s.thirst), stamina: Math.round(s.stamina),
       })),
       takings: () => ({ shrineGold: simRegistry.current?.shrineGold ?? 0, tradeGold: simRegistry.current?.tradeGold ?? 0 }),

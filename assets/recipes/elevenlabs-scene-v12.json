@@ -1,0 +1,44 @@
+{
+  "version": 12,
+  "output": ".context/elevenlabs-scene-v12",
+  "jobs": [
+    {
+      "id": "waterfall-v12",
+      "kind": "sfx",
+      "label": "Waterfall \u00b7 falling water and pool",
+      "bank": "waterfall",
+      "loop": true,
+      "targetDb": -25,
+      "peakLimitDb": -8,
+      "maxGainDb": 10,
+      "audioFilter": "highpass=f=90,lowpass=f=7000",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Outdoor field recording beside a modest woodland waterfall, a continuous broad rush of falling water with irregular splashing into a rocky pool below. Natural open air depth, rounded watery roar and sparkling splashes. No ocean waves, rain, voices, music, machine hum or sharp hiss. Seamless sustained ambience.",
+        "duration_seconds": 12,
+        "loop": true,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "wind-leaves-v11",
+      "kind": "sfx",
+      "label": "Woodland breeze \u00b7 distant canopy",
+      "bank": "wind-leaves",
+      "loop": true,
+      "targetDb": -32,
+      "peakLimitDb": -8,
+      "maxGainDb": 25,
+      "audioFilter": "highpass=f=120,lowpass=f=4500,acompressor=threshold=0.006:ratio=5:attack=15:release=500",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Wide outdoor field recording of a gentle breeze passing high through a stand of living oak and beech trees. Smooth soft airy swells across the whole canopy, delicate distant leaves, open spacious air. No close crinkling, fabric, handling noise, paper, dry crackles, flapping, microphone buffeting, insects, birds or music. Seamless continuous natural forest air.",
+        "duration_seconds": 12,
+        "loop": true,
+        "prompt_influence": 0.5,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    }
+  ]
+}

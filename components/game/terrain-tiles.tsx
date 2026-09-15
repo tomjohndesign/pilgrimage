@@ -40,6 +40,7 @@ import {
   DEFAULT_ROAD_LOOK,
   DEFAULT_ROAD_TIER,
   isRoadTerrain,
+  isMainRoadTile,
   junctionShoulders,
   ROAD_TIERS,
   roadContinues,
@@ -1269,7 +1270,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
             target.roadCorners.setXYZW(i, ...edge.filledCorners)
             target.shoulders.setXYZW(i, ...(shoulders.get(index) ?? [0, 0, 0, 0]))
             const shoreCode = shoulderOnly ? shorelineCorners(map, x, z).reduce((code, flag, corner) => code + flag * 2 ** corner, 0) : 0
-            target.surface.setX(i, shoulderOnly ? 1 + 2 * shoreCode : 0)
+            target.surface.setX(i, shoulderOnly ? 1 + 2 * shoreCode : isMainRoadTile(map, index) ? 1 : 0)
             target.landOverlay.setXYZW(i, landOverlay.x, landOverlay.y, landOverlay.z, landOverlay.w)
             target.land.setXYZW(i, landJitter, 0, 0, 0)
           }

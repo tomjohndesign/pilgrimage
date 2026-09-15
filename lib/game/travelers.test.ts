@@ -76,13 +76,13 @@ describe("generateTravelers", () => {
           continue
         }
         const { variant } = travelerAppearance(seed, traveler.id)
-        const { bodyType } = POPULATION_PROFILES[variant]
+        const bodyType = traveler.type.id === "knight" ? "Male" : POPULATION_PROFILES[variant].bodyType
         expect(women.has(traveler.name.split(" ")[0]), traveler.name).toBe(bodyType === "Female")
         callings[bodyType].add(traveler.type.id)
       }
     }
-    for (const seen of Object.values(callings)) {
-      expect([...seen].sort()).toEqual(Object.keys(TRAVELER_TYPES).filter(id => id !== "friar" && id !== "nun" && id !== "beggar").sort())
+    for (const [bodyType, seen] of Object.entries(callings)) {
+      expect([...seen].sort()).toEqual(Object.keys(TRAVELER_TYPES).filter(id => id !== "friar" && id !== "nun" && id !== "beggar" && (bodyType === "Male" || id !== "knight")).sort())
     }
   })
 

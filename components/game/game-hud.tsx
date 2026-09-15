@@ -24,6 +24,7 @@ import "./game-hud.css"
 import { useEffect, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
+import { useVoiceSubtitleStore } from "@/lib/game/voice-subtitle-store"
 import {
   arrivalOdds,
   computeDangerField,
@@ -58,6 +59,7 @@ import { DemolishBuildingDialog } from "./demolish-building-dialog"
 
 import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
 import { useBalanceStore } from "@/lib/game/balance-store"
+import { SceneAudioLifecycle } from "@/components/scene-audio-lifecycle"
 import { MusicPlayer } from "./music-player"
 import { HudButton } from "./hud-button"
 import { BugReportDialog } from "./bug-report-dialog"
@@ -236,6 +238,8 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
     camera.zoomBy(Math.max(12, Math.hypot(maxX - minX, maxZ - minZ) + 8) / camera.viewSize)
   }
   const named = (id: string | null | undefined) => map?.buildings.find(b => b.id === id)?.label
+  // The barks are in Old English and Latin, so the panel carries the meaning.
+  const spokenLine = useVoiceSubtitleStore(s => s.travelerId === traveler.id ? s.line : null)
   return (
     <Panel>
       <div className="flex items-center justify-between gap-4">
@@ -268,6 +272,12 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
             {live.praying ? "Kneeling in prayer before the relic" : live.partyWaiting ? "Waiting for companions" : ACTIVITY_LABELS[live.activity]}
             {(live.employer || live.home) && " · Settler"}
             {live.track && " · on the dark track"}
+          </div>
+        )}
+        {spokenLine && (
+          <div className="pt-0.5 text-[11px] text-ink" aria-live="polite">
+            <span className="italic">&ldquo;{spokenLine.text}&rdquo;</span>
+            <span className="text-ink-light"> · {spokenLine.gloss}</span>
           </div>
         )}
         {live?.beggar && <div className="text-[11px] italic text-ink-light">Needs {BEGGAR_RECOVERY_GOLD} gold to return to their calling</div>}
@@ -768,6 +778,7 @@ export function GameHud({
 
   return (
     <Tooltip.Provider delayDuration={180} skipDelayDuration={100}>
+    <SceneAudioLifecycle active={playing} />
     <BugReportDialog diagnostics={report} onClose={() => setReport(null)} />
     <div className="game-hud" data-landing={!playing} data-panel={menuOpen ? "menu" : panel ?? (selection ? "selection" : "none")}>
       <div className="hud-frame" aria-hidden="true" />

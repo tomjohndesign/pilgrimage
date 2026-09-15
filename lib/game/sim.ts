@@ -3,6 +3,7 @@ import { destinationEnabled } from "./wayfinding-settings"
 import { workerNavigationVersion } from "./worker-route-memory"
 import type { MonkJob } from "./monk-jobs"
 import { ALMS_HUNGER_GAIN, ALMS_HUNGER_CAP, ALMS_SERVING_SECONDS, almsStaffed, breadVisitPlan, type BreadVisit } from "./alms-table"
+import { MAIN_ROAD_WALK_LANES } from "./map/road-width"
 import { seekPenFood, stepPenFood, type PenFoodVisit } from "./pen-food"
 import { shrineDonationMultiplier } from "./shrine-upgrade"
 import { fordSpeedAt } from "./map/fords"
@@ -872,7 +873,9 @@ export function createSim(
     const progress = t.offset * length
     // A separate, per-id stream preserves the cast and survives reordering.
     const laneRng = makeRng(deriveSeed(deriveSeed(map.seed ?? 0, SEED_STREAM.lanes), t.id))
-    const laneOffset = t.type.id === "vendor" ? 0 : 0.18 + laneRng() * 0.1
+    const laneOffset = t.type.id === "vendor" ? 0 : map.mainRoadGround
+      ? MAIN_ROAD_WALK_LANES[laneRng() < .5 ? 0 : 1] + (laneRng() - .5) * .02
+      : 0.18 + laneRng() * 0.1
     const lane = t.direction * laneOffset
     const at = roadPosition(map, t, progress, lane)
     sim.travelers.set(t.id, {

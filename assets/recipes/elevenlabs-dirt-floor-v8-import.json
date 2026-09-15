@@ -1,0 +1,75 @@
+{
+  "version": 8,
+  "output": ".context/elevenlabs-dirt-floor-v8",
+  "jobs": [
+    {
+      "id": "dirt-floor-step-1",
+      "sourceId": "dirt-floor-walk-source",
+      "kind": "sfx",
+      "bank": "dirt-floor",
+      "label": "Dirt floor \u00b7 step 1",
+      "description": "Soft foot contact extracted from a natural walking passage.",
+      "loop": false,
+      "trimStart": 1.72,
+      "trimEnd": 2.12,
+      "maxGainDb": 6,
+      "targetDb": -34,
+      "peakLimitDb": -16,
+      "audioFilter": "highpass=f=65,lowpass=f=5500,afade=t=in:d=0.015,afade=t=out:st=0.29:d=0.11",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Quiet natural footsteps on a dry compacted dirt floor. A person walks slowly and gently in soft leather shoes. Soft subdued soil contact and delicate short scuffs, an ordinary relaxed walk. Dry close recording, quiet background.",
+        "duration_seconds": 6,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "dirt-floor-step-2",
+      "sourceId": "dirt-floor-walk-source",
+      "kind": "sfx",
+      "bank": "dirt-floor",
+      "label": "Dirt floor \u00b7 step 2",
+      "description": "Soft foot contact extracted from a natural walking passage.",
+      "loop": false,
+      "trimStart": 2.27,
+      "trimEnd": 2.67,
+      "maxGainDb": 6,
+      "targetDb": -34,
+      "peakLimitDb": -16,
+      "audioFilter": "highpass=f=65,lowpass=f=5500,afade=t=in:d=0.015,afade=t=out:st=0.29:d=0.11",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Quiet natural footsteps on a dry compacted dirt floor. A person walks slowly and gently in soft leather shoes. Soft subdued soil contact and delicate short scuffs, an ordinary relaxed walk. Dry close recording, quiet background.",
+        "duration_seconds": 6,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "dirt-floor-step-3",
+      "sourceId": "dirt-floor-walk-source",
+      "kind": "sfx",
+      "bank": "dirt-floor",
+      "label": "Dirt floor \u00b7 step 3",
+      "description": "Soft foot contact extracted from a natural walking passage.",
+      "loop": false,
+      "trimStart": 2.77,
+      "trimEnd": 3.17,
+      "maxGainDb": 6,
+      "targetDb": -34,
+      "peakLimitDb": -16,
+      "audioFilter": "highpass=f=65,lowpass=f=5500,afade=t=in:d=0.015,afade=t=out:st=0.29:d=0.11",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "Quiet natural footsteps on a dry compacted dirt floor. A person walks slowly and gently in soft leather shoes. Soft subdued soil contact and delicate short scuffs, an ordinary relaxed walk. Dry close recording, quiet background.",
+        "duration_seconds": 6,
+        "loop": false,
+        "prompt_influence": 0.45,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    }
+  ]
+}

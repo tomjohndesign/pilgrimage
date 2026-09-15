@@ -5,6 +5,10 @@ import { tileAt, type GameMap } from "./types"
 
 /** Main roads have two tiles of usable ground; tracks and bridge decks retain one. */
 export const MAIN_ROAD_WIDTH = 2
+/** Walking offsets as fractions of main-road width, on either side of its median. */
+export const MAIN_ROAD_WALK_LANES = [.17, .36] as const
+export const NARROW_ROAD_WALK_LANE = .28
+
 const profiles = new WeakMap<GameMap, { width: number[]; lanes: number[] }>()
 
 function profile(map: GameMap) {
@@ -14,10 +18,13 @@ function profile(map: GameMap) {
   const width = road.map(p => {
     const index = p.z * map.width + p.x
     if (bridges.rise[index] > 0 || tileAt(map, p.x, p.z) === "bridge") return 1
+    // Four-way posts keep their central island; the road merges around it.
+    if (map.mainRoadGround && map.crossroads?.some(post => post.arms.length > 3
+      && Math.max(Math.abs(post.center.x - p.x), Math.abs(post.center.z - p.z)) <= 1)) return 1
     // A bank, cliff or existing building can still make a local pinch point.
     for (let z = p.z - 1; z <= p.z + 1; z++) for (let x = p.x - 1; x <= p.x + 1; x++) {
       const terrain = tileAt(map, x, z)
-      if (terrain === "water" || terrain === "bridge" || map.elevation?.cliffs[z * map.width + x]
+      if ((map.mainRoadGround && bridges.rise[z * map.width + x] > 0) || terrain === "water" || terrain === "bridge" || map.elevation?.cliffs[z * map.width + x]
         || map.buildings.some(b => x >= b.x && x < b.x + b.w && z >= b.z && z < b.z + b.d)) return 1
     }
     return map.mainRoadWidth ?? 1

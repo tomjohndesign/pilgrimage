@@ -1,9 +1,9 @@
 "use client"
 
-import { CHARACTER_ASSETS } from "./character-assets"
+import { COIN_SOUND_URL } from "./sound-catalog"
 import { useCharacterAssetStore } from "./character-asset-store"
 
-/** The existing merchant coin-purse recording, unlocked by a game gesture. */
+/** The ElevenLabs silver-coin/purse recording, unlocked by a game gesture. */
 export function createAdmissionAudio() {
   let context: AudioContext | undefined
   let buffer: AudioBuffer | undefined
@@ -18,17 +18,18 @@ export function createAdmissionAudio() {
       context ??= new AudioContext()
       void context.resume().catch(() => {})
       const audio = context
-      loading ??= fetch(CHARACTER_ASSETS.merchant.sound)
+      loading ??= fetch(COIN_SOUND_URL)
         .then(response => { if (!response.ok) throw new Error("Coin audio unavailable"); return response.arrayBuffer() })
         .then(data => audio.decodeAudioData(data))
         .then(decoded => { if (!disposed) buffer = decoded })
         .catch(() => { loading = undefined })
     },
-    play(): boolean {
-      if (disposed || useCharacterAssetStore.getState().muted || context?.state !== "running" || !buffer || active.size >= 4) return false
+    setVisible(visible: boolean) { if (!visible) stop() },
+    play(visible: boolean): boolean {
+      if (!visible || disposed || useCharacterAssetStore.getState().muted || context?.state !== "running" || !buffer || active.size >= 1) return false
       const source = context.createBufferSource(), gain = context.createGain()
       source.buffer = buffer
-      gain.gain.value = 0.4
+      gain.gain.value = 0.12
       source.connect(gain).connect(context.destination)
       active.add(source)
       source.onended = () => { active.delete(source); source.disconnect(); gain.disconnect() }

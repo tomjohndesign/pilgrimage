@@ -1,5 +1,9 @@
 "use client"
 
+import { CharacterAudioEditor } from "./character-audio-editor"
+import { SceneAudioLifecycle } from "./scene-audio-lifecycle"
+import { characterSoundsJson, useCharacterSoundStore } from "@/lib/game/character-sound-store"
+import { playSourceSelection } from "@/lib/game/scene-audio"
 import { useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Pause, Play, RotateCcw, X } from "lucide-react"
@@ -56,7 +60,9 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
   const [pack, setPack] = useState(false)
   const [coat, setCoat] = useState(""), [horseVariant, setHorseVariant] = useState<HorseVariant>("common")
   const [wildlifeCoat, setWildlifeCoat] = useState<string>("natural")
-  const [controlsOpen, setControlsOpen] = useState(false)
+  const [editorTab,setEditorTab]=useState<'appearance'|'sounds'>(search.has('sounds')?'sounds':'appearance')
+  const [soundJson,setSoundJson]=useState(''),[soundMessage,setSoundMessage]=useState('')
+  const [controlsOpen, setControlsOpen] = useState(search.has('sounds'))
   const [sections, setSections] = useState<Record<string, boolean>>({})
   const packed = pack && (subject === "horse" || subject === "donkey" || subject === "ox")
   const equine = subject === "donkey" || subject === "horse" || subject === "ox", bird = !equine && isBird(subject)
@@ -107,14 +113,18 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
     controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(v => !v)}
     status={`${lineup ? "All animals" : ANIMAL_SUBJECTS[subject]} · ${actionLabel}${playing ? "" : " · Paused"}`}
     detail="Game models · shared pixel scale">
+    <SceneAudioLifecycle active={active}/>
     <div className="person-workspace">
       <aside className={`person-controls hud-well${controlsOpen ? " is-open" : ""}`} aria-label="Animal controls">
         <div className="person-panel-heading"><span>Animals</span><button className="hud-close person-controls-toggle" aria-label="Close controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
+        <div className="person-panel-heading person-presets" role="group" aria-label="Animal editing mode"><button className="hud-action" aria-pressed={editorTab==='sounds'} onClick={()=>setEditorTab('sounds')}>Sounds</button><button className="hud-action" aria-pressed={editorTab==='appearance'} onClick={()=>setEditorTab('appearance')}>Appearance</button></div>
         <div className="person-controls-scroll">
           <Section {...section("Animal")}>
             <label className="person-choice">Species<select aria-label="Animal species" value={subject} onChange={e => choose(e.target.value as AnimalSubject)}>{Object.entries(ANIMAL_SUBJECTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
             <div className="person-presets">{Object.entries(ANIMAL_SUBJECTS).map(([id, label]) => <button key={id} className="hud-action" aria-pressed={subject === id && !lineup} onClick={() => choose(id as AnimalSubject)}>{label}</button>)}</div>
           </Section>
+          {editorTab==='sounds'&&<CharacterAudioEditor profile={`animal/${subject}`} bodyType="Male" voiceVariant={0} previewZoom={zoom} clip={action} frame={frame} frames={24} playing={playing} active={active} selected={false} onSelect={()=>{}} onDeselect={()=>{}} onPreviewClip={()=>{}}/>}
+          {editorTab==='appearance'&&<>
           {equine && <Section {...section("Appearance")}>
             {equine && <label className="person-choice">Equipment<select aria-label="Animal equipment" value={pack ? "pack" : "none"} onChange={e => setPack(e.target.value === "pack")}><option value="none">None</option><option value="pack">Tied bundles</option></select></label>}
             {subject === "horse" && !pack && <label className="person-choice">Build<select aria-label="Horse build" value={horseVariant} onChange={e => setHorseVariant(e.target.value as HorseVariant)}><option value="common">Common</option><option value="noble">Noble</option></select></label>}
@@ -131,6 +141,13 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
             {!bird && !equine && <p className="person-hint">Standing pose for reviewing proportions. Construction shows the pelvis, rib cage, shoulders, neck, skull and limb chains through the shared rig controls.</p>}
             <p className="person-hint">Drag sideways to turn. Shift-drag to pan. Scroll or pinch to zoom. All animals use the same pixel scale as characters.</p>
           </Section>
+          </>}
+          {editorTab==='sounds'&&<Section {...section('Sound JSON')}>
+            <button className="hud-action" onClick={async()=>{const text=characterSoundsJson();setSoundJson(text);try{await navigator.clipboard.writeText(text);setSoundMessage('Sound settings copied.')}catch{setSoundMessage('Select the text below to copy.')}}}>Copy sound JSON</button>
+            <textarea aria-label="Animal sound JSON" value={soundJson} onChange={e=>setSoundJson(e.target.value)} className="w-full" rows={5}/>
+            <button className="hud-action" onClick={()=>{try{useCharacterSoundStore.getState().replace(JSON.parse(soundJson));setSoundMessage('Sound settings loaded.')}catch(error){setSoundMessage(error instanceof Error?error.message:'Invalid JSON')}}}>Load sound JSON</button>
+            <p className="person-hint" role="status">{soundMessage}</p>
+          </Section>}
         </div>
         <footer className="person-panel-footer"><button className="hud-action" onClick={() => { setRow(1); setZoom(6); setOffset([0, 0]); setRate(1); setConstruction(false); setPlaying(bird || equine); setMotion(bird || equine ? "graze" : "idle") }}><RotateCcw size={12} />Reset preview</button></footer>
       </aside>
@@ -147,7 +164,7 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
         <div className="person-stage-layout"><div ref={stage} className="person-stage person-stage-character"
           onPointerDown={event => { if ((event.target as Element).closest("button, [role=button]") || event.button !== 0) return; event.currentTarget.setPointerCapture(event.pointerId); drag.current = { x: event.clientX, y: event.clientY, row, pan: event.shiftKey, offset } }}
           onPointerMove={event => { const start = drag.current; if (!start) return; if (start.pan) setOffset([start.offset[0] + event.clientX - start.x, start.offset[1] + event.clientY - start.y]); else setRow(((start.row + Math.trunc((event.clientX - start.x) / 48)) % 8 + 8) % 8) }}
-          onPointerUp={event => { drag.current = null; event.currentTarget.releasePointerCapture(event.pointerId) }} onLostPointerCapture={() => { drag.current = null }}>
+          onPointerUp={event => { const start=drag.current;if(editorTab==='sounds'&&!lineup&&start&&!start.pan&&Math.hypot(event.clientX-start.x,event.clientY-start.y)<6)void playSourceSelection(`animal/${subject}`);drag.current = null; event.currentTarget.releasePointerCapture(event.pointerId) }} onLostPointerCapture={() => { drag.current = null }}>
           <div style={{ transform: `translate(${offset[0]}px, ${offset[1]}px)` }}>
           {active && <AnimalPreview pack={packed} subject={subject} lineup={lineup} motion={action} playing={playing} row={row} zoom={zoom} rate={rate} coat={coat} wildlifeCoat={wildlifeCoat} horseVariant={horseVariant} onSelect={choose} directionCanvases={directionCanvases} showRig={showRig} construction={construction && !bird && !equine} frame={frame} edits={edits} joints={joints} selected={selectedJoint}
             onInspect={(next, inspection) => { setFrame(next); setJoints(inspection) }} onJoint={joint => { setSelectedJoint(joint); setPlaying(false) }}

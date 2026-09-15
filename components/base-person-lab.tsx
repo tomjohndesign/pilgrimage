@@ -5,6 +5,13 @@ import Link from "next/link"
 import { ArrowUpRight, Check, Pause, Play, RotateCcw, X } from "lucide-react"
 import { ASSET_ZOOMS, useAssetPreviewStore, usePreviewWheel } from "./asset-preview-controls"
 import { AssetEditorFrame, type AssetEditorNavigation } from "./asset-editor-frame"
+import { characterSoundIdentity } from "@/lib/game/character-sound-identity"
+import { SpriteSelectionPreview } from "./sprite-selection-preview"
+import { playCharacterSound, stopCharacterSound } from "@/lib/game/character-audio"
+import type { TravelerTypeId } from "@/lib/game/travelers"
+import { CharacterAudioEditor } from "./character-audio-editor"
+import { SceneAudioLifecycle } from "./scene-audio-lifecycle"
+import { characterSoundsJson, useCharacterSoundStore } from "@/lib/game/character-sound-store"
 import { Section, Tuner } from "@/components/game/property-controls"
 import "./game/game-hud.css"
 import "./base-person-lab.css"
@@ -59,14 +66,14 @@ const ROAD_DESIGNS = Object.values(TRAVELER_TYPES).flatMap(type => POPULATION_PR
 const DRAFT_KEY = "pilgrimage-rig-editor-v1"
 const button = "hud-action"
 
-function Tile({ url, shadowUrl, row, frame, columns, zoom = 1, name, cellSize = BASE_PERSON.cellSize, rows = 8 }: {
-  url: string; shadowUrl?: string; row: number; frame: number; columns: number; zoom?: number; name: string; cellSize?: number; rows?: number
+function Tile({ url, shadowUrl, row, frame, columns, zoom = 1, selected = false, name, cellSize = BASE_PERSON.cellSize, rows = 8 }: {
+  selected?: boolean; url: string; shadowUrl?: string; row: number; frame: number; columns: number; zoom?: number; name: string; cellSize?: number; rows?: number
 }) {
   const size = cellSize * zoom
-  return <span role="img" aria-label={name} className="block shrink-0" style={{ width: size, height: size,
+  return <span role="img" aria-label={name} className="relative block shrink-0" style={{ width: size, height: size,
     imageRendering: "pixelated", backgroundImage: `url("${url}")${shadowUrl ? `, url("${shadowUrl}")` : ""}`,
     backgroundSize: `${columns * size}px ${rows * size}px`, backgroundPosition: `${-frame * size}px ${-row * size}px`,
-  }} />
+  }}>{selected && <SpriteSelectionPreview url={url} row={row} frame={frame} cellSize={cellSize}/>}</span>
 }
 
 function download(url: string, name: string) {
@@ -89,7 +96,7 @@ function entourageLayout(mounted: boolean, row: number) {
 
 function KnightEntourage({ mounted, row, frame, visibleFrame, variant, walking, zoom = 1, offset = [0, 0], ...tile }: {
   mounted: boolean; row: number; frame: number; variant: number; walking: boolean; zoom?: number; offset?: [number, number]
-  url: string; columns: number; visibleFrame: number; rows: number; cellSize: number; name: string
+  selected?: boolean; url: string; columns: number; visibleFrame: number; rows: number; cellSize: number; name: string
 }) {
   const layout = entourageLayout(mounted, row), squire = squireVisual()
   const stride = mounted ? animalStride("horse", 1, "noble") : personWalkStride(knightDesign(variant))
@@ -211,12 +218,15 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   const copyJson = async (text = editsJson()) => {
     try {
       await navigator.clipboard.writeText(text)
-      setMessage("All character drafts copied as JSON. Paste into the chat with ⌘V.")
+      setMessage(text.includes('"character-audio"') ? "Sound settings copied as JSON." : "All character drafts copied as JSON. Paste into the chat with ⌘V.")
       setJsonMessage("Copied. Paste into the chat with ⌘V.")
     } catch { openJson(text, "Clipboard access is unavailable. Press ⌘C to copy the selected JSON, then paste it into the chat.") }
   }
+  const soundJson = /"kind"\s*:\s*"character-audio"/.test(jsonText)
   const loadJson = () => {
     try {
+      const input = JSON.parse(jsonText)
+      if (input.kind === "character-audio") { useCharacterSoundStore.getState().replace(input); setJsonMessage("Sound settings loaded and saved."); return }
       const imported = parseCharacterEdits(jsonText, character)
       const available = new Set([...Object.keys(PERSON_PRESETS).map(name => `preset/${name}`), ...ROAD_DESIGNS.map(entry => entry.id), ...JOB_DESIGNS.map(entry => entry.id)])
       if (Object.keys(imported.drafts).some(id => !available.has(id))) throw new Error("These edits include an unknown character.")
@@ -366,10 +376,20 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
   }
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({})
+  const [previewSelected, setPreviewSelected] = useState(false)
+  useEffect(() => { setPreviewSelected(false) }, [character, subject, design.bodyType, active])
+  const [editorTab, setEditorTab] = useState<"appearance" | "sounds">("appearance")
   const [controlsOpen, setControlsOpen] = useState(false)
+  useEffect(() => { if (new URLSearchParams(location.search).has("sounds")) { setControlsOpen(true); setEditorTab("sounds") } }, [])
+  const {profile:soundProfile,variant:voiceVariant} = characterSoundIdentity(character,subject)
+  const selectPreview = () => {
+    setPreviewSelected(true)
+    void playCharacterSound((soundProfile.startsWith("job/") ? "peasant" : soundProfile) as TravelerTypeId, 0, isKnight ? "Male" : design.bodyType, soundProfile, {voiceVariant})
+  }
+  const clearPreviewSelection = () => { setPreviewSelected(false); stopCharacterSound() }
   const stageRef = useRef<HTMLDivElement>(null)
   const [previewOffset, setPreviewOffset] = useState<[number, number]>([0, 0])
-  const viewDrag = useRef<{ pointer: number; x: number; y: number; row: number; pan: boolean; offset: [number, number] } | null>(null)
+  const viewDrag = useRef<{ pointer: number; x: number; y: number; row: number; pan: boolean; person: boolean; offset: [number, number] } | null>(null)
   const [scrubbingViews, setScrubbingViews] = useState(false)
   usePreviewWheel(stageRef, view === "character")
   const fittedZoom = zoom
@@ -389,14 +409,32 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
     roadHref={`/play?characters=base&baseSize=1.5&fps=${fps}`}
     status={onMap ? "Merchant journey and turning simulations · game scale" : !isPerson ? `${subject === "horse" ? transportMetadata.animalProfiles[horseVariant].label : SUBJECTS[subject]} · ${clipLabel}` : dragging ? "Live preview · release to finish sprite sheets." : busy ? bakeProgress ? `Updating sprite sheets · ${Math.round(bakeProgress.done / bakeProgress.total * 100)}%` : "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}
     detail={onMap ? "8 camera angles · game scale" : `${subject === "cart" ? CART.directions : 8} directions · ${Number((fps * animationRate).toFixed(1))} fps`}>
+    <SceneAudioLifecycle active={active} />
     <div className="person-workspace">
       <aside className={`person-controls hud-well ${controlsOpen ? "is-open" : ""}`} aria-label="Character controls">
         <div className="person-panel-heading"><label className="person-choice">Asset<select aria-label="Character asset" value={subject} onChange={e => { setSubject(e.target.value as Subject); setFrame(0); setClip("walk") }}>{Object.entries(SUBJECTS).filter(([id]) => id === "person" || id === "cart" || id === "knight").map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label><button className="hud-close person-controls-toggle" aria-label="Close character controls" onClick={() => setControlsOpen(false)}><X size={14} /></button></div>
+        {(isPerson || isKnight || subject === "cart") && <div className="person-panel-heading person-presets" role="group" aria-label="Character editing mode">
+          <button className={button} aria-pressed={editorTab==='sounds'} onClick={()=>setEditorTab('sounds')}>Sounds</button>
+          <button className={button} aria-pressed={editorTab==='appearance'} onClick={()=>setEditorTab('appearance')}>Appearance</button>
+        </div>}
+          {isPerson && <div className="person-panel-heading" style={{display:"block"}}>
+            <label className="person-choice">Character<select aria-label="Preview character" value={character} onChange={e=>{
+              const id=e.target.value
+              const entry=[...ROAD_DESIGNS,...JOB_DESIGNS].find(d=>d.id===id)
+              const preset=PERSON_PRESETS[id.slice(7)]
+              if(entry)chooseCharacter(entry.id,entry.design)
+              else if(preset)chooseCharacter(id,preset)
+            }}>
+              <optgroup label="Presets">{Object.keys(PERSON_PRESETS).map(name=><option key={name} value={`preset/${name}`}>{name}</option>)}</optgroup>
+              <optgroup label="Road characters">{ROAD_DESIGNS.map(entry=><option key={entry.id} value={entry.id}>{entry.label}</option>)}</optgroup>
+              <optgroup label="Settlement jobs">{JOB_DESIGNS.map(entry=><option key={entry.id} value={entry.id}>{entry.label}</option>)}</optgroup>
+            </select></label>
+            {editorTab==='sounds'&&<label className="person-choice">Body voice<select aria-label="Sound body voice" value={design.bodyType} disabled={soundProfile==='friar'||soundProfile==='nun'} onChange={e=>setDesign(d=>withBodyType(d,e.target.value as PersonDesign['bodyType']))}><option>Male</option><option>Female</option></select></label>}
+          </div>}
         <div className="person-controls-scroll">
-          {isPerson ? <>
-          <Section {...section("Presets")}><div className="person-presets">{Object.entries(PERSON_PRESETS).map(([name, preset]) => <button key={name} className={button} onClick={() => chooseCharacter(`preset/${name}`, preset)}>{name}</button>)}</div></Section>
-          <Section {...section("Road characters")}><label className="person-choice">Character<select aria-label="Road character" value={ROAD_DESIGNS.some(entry => entry.id === character) ? character : ""} onChange={e => { const entry = ROAD_DESIGNS.find(d => d.id === e.target.value); if (entry) chooseCharacter(entry.id, entry.design) }}><option value="" disabled>Choose calling / body</option>{ROAD_DESIGNS.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select></label></Section>
-          <Section {...section("Settlement jobs")}><label className="person-choice">Job<select aria-label="Settlement job character" value={character.startsWith("job/") ? character : ""} onChange={e => { const entry = JOB_DESIGNS.find(d => d.id === e.target.value); if (entry) chooseCharacter(entry.id, entry.design) }}><option value="" disabled>Choose job / body</option>{JOB_DESIGNS.map(entry => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select></label></Section>
+
+          {(isPerson || isKnight || subject === "cart") && editorTab==='sounds' && <CharacterAudioEditor profile={subject === "cart" ? "vehicle/cart" : soundProfile} bodyType={isKnight ? "Male" : design.bodyType} voiceVariant={voiceVariant} previewZoom={zoom} clip={isKnight ? mountedKnight ? "mounted" : knightClip : clip} frame={frame} frames={frameCount} playing={playing} active={active && !onMap} selected={previewSelected} onSelect={() => { setPreviewSelected(true); setView("character") }} onDeselect={clearPreviewSelection} onPreviewClip={next=>{setClip(next);setFrame(0)}}/>}
+          {(editorTab==='appearance' || (!isPerson && !isKnight && subject !== "cart")) && (isPerson ? <>
           <Section {...section("Body")}>
             <label className="person-choice">Body type<select aria-label="Body type" value={design.bodyType} onChange={event => { const bodyType = event.currentTarget.value as PersonDesign["bodyType"]; setDesign(d => withBodyType(d, bodyType)); setMessage("") }}><option>Male</option><option>Female</option></select></label>
             {controls(["head", "build", "torsoHeight", "neckHeight", "legs"])}
@@ -489,12 +527,16 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
               <a className={button} href={url} download>Download sprite sheet</a>
               <a className={button} href={isKnight ? `/textures/knights/${KNIGHT.version}/manifest.json` : `/textures/transport/${subject === "cart" ? TRANSPORT.version : PARTY_TRANSPORT_VERSION}/manifest.json`} download>Download sheet metadata</a>
             </div><p className="person-hint">{pixels} × {pixels} px cell · {subject === "cart" ? CART.directions : 8} directions<br />{isKnight ? mountedKnight ? knightMetadata.safePadding : 4 : transportMetadata.safePadding} px safe margin</p></Section>
-          </>}
+          </>)}
         </div>
-        {isPerson && <footer className="person-panel-footer">
+        {isPerson && editorTab==='appearance' && <footer className="person-panel-footer">
           <p className="person-hint">Apply these proportions to the mixed crowd. Each person keeps their clothing colors.</p>
           <button className={`${button} person-apply`} disabled={!ready} onClick={() => { if (bake) { applyDesign(design, bake); void usePopulationStore.getState().prepare(design); setMessage("Foundation saved. Road characters keep their clothing colors and varied bodies.") } }}><Check size={14} />Apply to road</button>
           <button className={button} onClick={() => { usePersonDesignStore.getState().reset(); void usePopulationStore.getState().prepare(null); setDesign({ ...DEFAULT_DESIGN }); setMessage("Project default restored on the road.") }}><RotateCcw size={12} />Restore project default</button>
+        </footer>}
+        {(isPerson || isKnight || subject === "cart") && editorTab==='sounds' && <footer className="person-panel-footer">
+          <p className="person-hint">Sound edits save automatically and apply to the game.</p>
+          <div className="person-presets"><button className={button} onClick={()=>void copyJson(characterSoundsJson())}>Copy sound JSON</button><button className={button} onClick={()=>openJson(characterSoundsJson())}>Edit sound JSON</button></div>
         </footer>}
       </aside>
       <div className="person-preview" aria-label="Character preview">
@@ -510,7 +552,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
             if (view !== "character" || event.button !== 0 || !event.isPrimary ||
               (event.target as Element).closest('[role="button"], button, input, select, a')) return
             event.preventDefault()
-            viewDrag.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, row, pan: event.shiftKey, offset: previewOffset }
+            viewDrag.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, row, pan: event.shiftKey, person: !!(event.target as Element).closest(".person-sprite"), offset: previewOffset }
             event.currentTarget.setPointerCapture(event.pointerId); setScrubbingViews(true)
           }}
           onPointerMove={event => {
@@ -523,6 +565,11 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
           }}
           onPointerUp={event => {
             if (viewDrag.current?.pointer !== event.pointerId) return
+            const start = viewDrag.current
+            if (Math.hypot(event.clientX-start.x,event.clientY-start.y)<6 && !start.pan && (isPerson || isKnight)) {
+              if(start.person && !previewSelected)selectPreview()
+              else clearPreviewSelection()
+            }
             viewDrag.current = null; setScrubbingViews(false)
             if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
           }}
@@ -534,9 +581,9 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
             <img src={url} width={pixels * columns} height={pixels * atlasRows} alt={`${SUBJECTS[subject]} ${clipLabel}: ${subject === "cart" ? CART.directions : 8} directions${subject === "horse" ? ", common and noble variants" : ""} and ${columns} frames`} />
           </div> : view === "native" ? <div className="person-native" aria-label="Native size lineup">
             {BASE_PERSON.directions.map((d, i) => <div key={d}>{isKnight && showSquire ? <KnightEntourage mounted={mountedKnight} row={i} frame={frame} variant={knightVariant} walking={knightClip === "walk"} url={url} visibleFrame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} name={`${d}, native Knight`} /> : <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + i * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} name={`${d}, native ${SUBJECTS[subject]}`} />}<span>{d}</span></div>)}
-          </div> : isKnight && showSquire ? <KnightEntourage mounted={mountedKnight} row={row} frame={frame} variant={knightVariant} walking={knightClip === "walk"} url={url} visibleFrame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={fittedZoom} offset={previewOffset} name={`Knight ${direction}, frame ${step + 1}`} /> : <div className="person-sprite" style={{ width: pixels * fittedZoom, height: pixels * fittedZoom, transform: `translate(${previewOffset[0]}px, ${previewOffset[1]}px)` }}>
+          </div> : isKnight && showSquire ? <KnightEntourage mounted={mountedKnight} row={row} frame={frame} variant={knightVariant} walking={knightClip === "walk"} url={url} visibleFrame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={fittedZoom} selected={previewSelected} offset={previewOffset} name={`Knight ${direction}, frame ${step + 1}`} /> : <div className="person-sprite" style={{ width: pixels * fittedZoom, height: pixels * fittedZoom, transform: `translate(${previewOffset[0]}px, ${previewOffset[1]}px)` }}>
             {isPerson && onion && !live && columns > 1 && <div className="absolute inset-0 opacity-25"><Tile url={url} row={row} frame={(visibleFrame + columns - 1) % columns} columns={columns} zoom={fittedZoom} name="Previous frame ghost" /></div>}
-            <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + row * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={fittedZoom} name={`${SUBJECTS[subject]} ${direction}, frame ${step + 1}`} />
+            <Tile url={url} shadowUrl={shadowUrl} row={rowOffset + row * directionStep} frame={visibleFrame} columns={columns} cellSize={pixels} rows={atlasRows} zoom={fittedZoom} selected={previewSelected} name={`${SUBJECTS[subject]} ${direction}, frame ${step + 1}`} />
             {isPerson && showRig && <RigOverlay joints={inspected} selected={selectedJoint} row={row} offset={currentOffset} onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} onChange={changeJoints} onDrag={rigDragging} />}
             {isPerson && guides && <svg aria-label="Origin and attachment guides" className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${pixels} ${pixels}`}>
               <path d={`M${BASE_PERSON.anchor[0]} 0V${pixels} M0 ${BASE_PERSON.anchor[1]}H${pixels}`} stroke="#d9d5a7" strokeWidth="0.15" strokeDasharray="1 1" />
@@ -570,12 +617,12 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
       </div>
     </div>
     <dialog ref={jsonDialog} className="person-json-dialog" aria-labelledby="person-json-title">
-      <div className="person-panel-heading"><h2 id="person-json-title">Copy / paste character edits</h2><button className="hud-close" aria-label="Close JSON" onClick={() => jsonDialog.current?.close()}><X size={14} /></button></div>
+      <div className="person-panel-heading"><h2 id="person-json-title">{soundJson ? "Copy / paste sounds" : "Copy / paste character edits"}</h2><button className="hud-close" aria-label="Close JSON" onClick={() => jsonDialog.current?.close()}><X size={14} /></button></div>
       <div className="person-json-content">
-        <p className="person-hint">Includes all saved characters, their proportions, and every pose key. Copy this JSON and paste it directly into the chat. To restore edits, paste JSON here and load it. Loading replaces matching characters and keeps the others.</p>
+        <p className="person-hint">{soundJson ? "All calling and job sound events and mixer settings. Copy into the chat, or paste changes and Load JSON to save and hear them." : "Includes all saved characters, their proportions, and every pose key. Copy this JSON and paste it directly into the chat. To restore edits, paste JSON here and load it. Loading replaces matching characters and keeps the others."}</p>
         <textarea ref={jsonArea} aria-label="Character edits JSON" spellCheck={false} value={jsonText} onChange={event => { setJsonText(event.target.value); setJsonMessage("") }} />
         <p role="status" className="person-hint">{jsonMessage}</p>
-        <div className="person-json-actions"><button className={button} onClick={() => void copyJson(jsonText)}>Copy JSON</button><button className={button} onClick={() => { const url = URL.createObjectURL(new Blob([editsJson()], { type: "application/json" })); download(url, "character-edits.json"); setTimeout(() => URL.revokeObjectURL(url), 1000) }}>Download all drafts</button><button className={button} onClick={loadJson}>Load JSON</button><button className={button} onClick={() => jsonDialog.current?.close()}>Close</button></div>
+        <div className="person-json-actions"><button className={button} onClick={() => void copyJson(jsonText)}>Copy JSON</button><button className={button} onClick={() => { const url = URL.createObjectURL(new Blob([soundJson ? jsonText : editsJson()], { type: "application/json" })); download(url, soundJson ? "character-sounds.json" : "character-edits.json"); setTimeout(() => URL.revokeObjectURL(url), 1000) }}>{soundJson ? "Download sound settings" : "Download all drafts"}</button><button className={button} onClick={loadJson}>Load JSON</button><button className={button} onClick={() => jsonDialog.current?.close()}>Close</button></div>
       </div>
     </dialog>
   </AssetEditorFrame>

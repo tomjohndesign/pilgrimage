@@ -1,0 +1,839 @@
+{
+  "version": 6,
+  "output": ".context/elevenlabs-character-v6",
+  "notes": "Coverage: all nine road callings and four settlement jobs, for each supported body voice. Phonetic readings remain prototypes. Short foley events replace continuous footstep beds.",
+  "jobs": [
+    {
+      "id": "peasant-male-greeting-v6",
+      "kind": "voice",
+      "label": "Field hand · Male greeting",
+      "character": "peasant",
+      "profile": "peasant",
+      "bodyType": "Male",
+      "lineId": "peasant-1",
+      "actor": "George",
+      "variant": "yorkshire",
+      "response": "greeting",
+      "text": "Hwæt wilt þū?",
+      "gloss": "What do you want?",
+      "tongue": "Old English",
+      "description": "Selection greeting · Field hand",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "[strong Yorkshire accent] [matter-of-fact] /hwæt wilt θuː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "peasant-female-greeting-v6",
+      "kind": "voice",
+      "label": "Field hand · Female greeting",
+      "character": "peasant",
+      "profile": "peasant",
+      "bodyType": "Female",
+      "lineId": "peasant-1",
+      "actor": "Lily",
+      "variant": "yorkshire",
+      "response": "greeting",
+      "text": "Hwæt wilt þū?",
+      "gloss": "What do you want?",
+      "tongue": "Old English",
+      "description": "Selection greeting · Field hand",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[strong Yorkshire accent] [matter-of-fact] /hwæt wilt θuː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "beggar-male-greeting-v6",
+      "kind": "voice",
+      "label": "Beggar · Male greeting",
+      "character": "beggar",
+      "profile": "beggar",
+      "bodyType": "Male",
+      "lineId": "beggar-1",
+      "actor": "Roger",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Ǣnne pening, lēof?",
+      "gloss": "A penny, kind one?",
+      "tongue": "Old English",
+      "description": "Selection greeting · Beggar",
+      "path": "/v1/text-to-speech/CwhRBWXzGAHq8TQ4Fs17",
+      "body": {
+        "text": "[warm] /ˈæːnːe ˈpeniŋɡ leːof/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "beggar-female-greeting-v6",
+      "kind": "voice",
+      "label": "Beggar · Female greeting",
+      "character": "beggar",
+      "profile": "beggar",
+      "bodyType": "Female",
+      "lineId": "beggar-1",
+      "actor": "Matilda",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Ǣnne pening, lēof?",
+      "gloss": "A penny, kind one?",
+      "tongue": "Old English",
+      "description": "Selection greeting · Beggar",
+      "path": "/v1/text-to-speech/XrExE9yKIg1WjnnlVkGX",
+      "body": {
+        "text": "[warm] /ˈæːnːe ˈpeniŋɡ leːof/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "pilgrim-male-greeting-v6",
+      "kind": "voice",
+      "label": "Pilgrim · Male greeting",
+      "character": "pilgrim",
+      "profile": "pilgrim",
+      "bodyType": "Male",
+      "lineId": "pilgrim-1",
+      "actor": "Eric",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Tō þǣre hālgan stōwe.",
+      "gloss": "To the holy place.",
+      "tongue": "Old English",
+      "description": "Selection greeting · Pilgrim",
+      "path": "/v1/text-to-speech/cjVigY5qzO86Huf0OWal",
+      "body": {
+        "text": "[warm] /toː θæːre ˈhɑːlɡɑn ˈstoːwe/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "pilgrim-female-greeting-v6",
+      "kind": "voice",
+      "label": "Pilgrim · Female greeting",
+      "character": "pilgrim",
+      "profile": "pilgrim",
+      "bodyType": "Female",
+      "lineId": "pilgrim-1",
+      "actor": "Alice",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Tō þǣre hālgan stōwe.",
+      "gloss": "To the holy place.",
+      "tongue": "Old English",
+      "description": "Selection greeting · Pilgrim",
+      "path": "/v1/text-to-speech/Xb7hH8MSUJpSbSDYk0k2",
+      "body": {
+        "text": "[warm] /toː θæːre ˈhɑːlɡɑn ˈstoːwe/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "merchant-male-greeting-v6",
+      "kind": "voice",
+      "label": "Merchant · Male greeting",
+      "character": "merchant",
+      "profile": "merchant",
+      "bodyType": "Male",
+      "lineId": "merchant-1",
+      "actor": "Chris",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Wilt þū cēapian?",
+      "gloss": "Do you wish to trade?",
+      "tongue": "Old English",
+      "description": "Selection greeting · Merchant",
+      "path": "/v1/text-to-speech/iP95p4xoKVk53GoZ742B",
+      "body": {
+        "text": "[warm] /wilt θuː ˈtʃæːɑpiɑn/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "merchant-female-greeting-v6",
+      "kind": "voice",
+      "label": "Merchant · Female greeting",
+      "character": "merchant",
+      "profile": "merchant",
+      "bodyType": "Female",
+      "lineId": "merchant-1",
+      "actor": "Sarah",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Wilt þū cēapian?",
+      "gloss": "Do you wish to trade?",
+      "tongue": "Old English",
+      "description": "Selection greeting · Merchant",
+      "path": "/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL",
+      "body": {
+        "text": "[warm] /wilt θuː ˈtʃæːɑpiɑn/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "vendor-male-greeting-v6",
+      "kind": "voice",
+      "label": "Stall keeper · Male greeting",
+      "character": "vendor",
+      "profile": "vendor",
+      "bodyType": "Male",
+      "lineId": "vendor-1",
+      "actor": "Will",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Cum, cēap hēr!",
+      "gloss": "Come, buy here!",
+      "tongue": "Old English",
+      "description": "Selection greeting · Stall keeper",
+      "path": "/v1/text-to-speech/bIHbv24MWmeRgasZH58o",
+      "body": {
+        "text": "[warm] /kum tʃæːɑp heːr/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "vendor-female-greeting-v6",
+      "kind": "voice",
+      "label": "Stall keeper · Female greeting",
+      "character": "vendor",
+      "profile": "vendor",
+      "bodyType": "Female",
+      "lineId": "vendor-1",
+      "actor": "Jessica",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Cum, cēap hēr!",
+      "gloss": "Come, buy here!",
+      "tongue": "Old English",
+      "description": "Selection greeting · Stall keeper",
+      "path": "/v1/text-to-speech/cgSgspJ2msm6clMCkdW9",
+      "body": {
+        "text": "[warm] /kum tʃæːɑp heːr/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "knight-male-greeting-v6",
+      "kind": "voice",
+      "label": "Knight · Male greeting",
+      "character": "knight",
+      "profile": "knight",
+      "bodyType": "Male",
+      "lineId": "knight-1",
+      "actor": "Daniel",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Hēr ic eom.",
+      "gloss": "Here I am.",
+      "tongue": "Old English",
+      "description": "Selection greeting · Knight",
+      "path": "/v1/text-to-speech/onwK4e9ZLuTAKqWW03F9",
+      "body": {
+        "text": "[warm] /heːr itʃ eom/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "knight-female-greeting-v6",
+      "kind": "voice",
+      "label": "Knight · Female greeting",
+      "character": "knight",
+      "profile": "knight",
+      "bodyType": "Female",
+      "lineId": "knight-1",
+      "actor": "Alice",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Hēr ic eom.",
+      "gloss": "Here I am.",
+      "tongue": "Old English",
+      "description": "Selection greeting · Knight",
+      "path": "/v1/text-to-speech/Xb7hH8MSUJpSbSDYk0k2",
+      "body": {
+        "text": "[warm] /heːr itʃ eom/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "minstrel-male-greeting-v6",
+      "kind": "voice",
+      "label": "Minstrel · Male greeting",
+      "character": "minstrel",
+      "profile": "minstrel",
+      "bodyType": "Male",
+      "lineId": "minstrel-1",
+      "actor": "Charlie",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Wilt þū lēoþ?",
+      "gloss": "Would you care for a song?",
+      "tongue": "Old English",
+      "description": "Selection greeting · Minstrel",
+      "path": "/v1/text-to-speech/IKne3meq5aSn9XLyUdCD",
+      "body": {
+        "text": "[warm] /wilt θuː leːoθ/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "minstrel-female-greeting-v6",
+      "kind": "voice",
+      "label": "Minstrel · Female greeting",
+      "character": "minstrel",
+      "profile": "minstrel",
+      "bodyType": "Female",
+      "lineId": "minstrel-1",
+      "actor": "Lily",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Wilt þū lēoþ?",
+      "gloss": "Would you care for a song?",
+      "tongue": "Old English",
+      "description": "Selection greeting · Minstrel",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[warm] /wilt θuː leːoθ/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "friar-male-greeting-v6",
+      "kind": "voice",
+      "label": "Friar · Male greeting",
+      "character": "friar",
+      "profile": "friar",
+      "bodyType": "Male",
+      "lineId": "friar-1",
+      "actor": "Daniel",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Pax tecum.",
+      "gloss": "Peace be with you.",
+      "tongue": "Church Latin",
+      "description": "Selection greeting · Friar",
+      "path": "/v1/text-to-speech/onwK4e9ZLuTAKqWW03F9",
+      "body": {
+        "text": "[warm] [gentle] [reassuring] /paks ˈtekum/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.08
+        }
+      }
+    },
+    {
+      "id": "nun-female-greeting-v6",
+      "kind": "voice",
+      "label": "Nun · Female greeting",
+      "character": "nun",
+      "profile": "nun",
+      "bodyType": "Female",
+      "lineId": "nun-1",
+      "actor": "Lily",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Benedicite.",
+      "gloss": "A blessing on you.",
+      "tongue": "Church Latin",
+      "description": "Selection greeting · Nun",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[warm] /beneˈditʃite/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "job-woodcutter-male-greeting-v6",
+      "kind": "voice",
+      "label": "Woodcutter · Male greeting",
+      "character": "peasant",
+      "profile": "job/woodcutter",
+      "bodyType": "Male",
+      "lineId": "job-woodcutter-greeting",
+      "actor": "George",
+      "variant": "yorkshire",
+      "response": "greeting",
+      "text": "Hwæt wilt þū?",
+      "gloss": "What do you want?",
+      "tongue": "Old English",
+      "description": "Selection greeting · Woodcutter",
+      "path": "/v1/text-to-speech/JBFqnCBsd6RMkjVDRZzb",
+      "body": {
+        "text": "[strong Yorkshire accent] [matter-of-fact] /hwæt wilt θuː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "job-woodcutter-female-greeting-v6",
+      "kind": "voice",
+      "label": "Woodcutter · Female greeting",
+      "character": "peasant",
+      "profile": "job/woodcutter",
+      "bodyType": "Female",
+      "lineId": "job-woodcutter-greeting",
+      "actor": "Lily",
+      "variant": "yorkshire",
+      "response": "greeting",
+      "text": "Hwæt wilt þū?",
+      "gloss": "What do you want?",
+      "tongue": "Old English",
+      "description": "Selection greeting · Woodcutter",
+      "path": "/v1/text-to-speech/pFZP5JQG7iQjIQuC4Bku",
+      "body": {
+        "text": "[strong Yorkshire accent] [matter-of-fact] /hwæt wilt θuː/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "job-tavern-male-greeting-v6",
+      "kind": "voice",
+      "label": "Tavern worker · Male greeting",
+      "character": "peasant",
+      "profile": "job/tavern",
+      "bodyType": "Male",
+      "lineId": "job-tavern-greeting",
+      "actor": "Will",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Cum, cēap hēr!",
+      "gloss": "Come, buy here!",
+      "tongue": "Old English",
+      "description": "Selection greeting · Tavern worker",
+      "path": "/v1/text-to-speech/bIHbv24MWmeRgasZH58o",
+      "body": {
+        "text": "[warm] /kum tʃæːɑp heːr/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "job-tavern-female-greeting-v6",
+      "kind": "voice",
+      "label": "Tavern worker · Female greeting",
+      "character": "peasant",
+      "profile": "job/tavern",
+      "bodyType": "Female",
+      "lineId": "job-tavern-greeting",
+      "actor": "Jessica",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Cum, cēap hēr!",
+      "gloss": "Come, buy here!",
+      "tongue": "Old English",
+      "description": "Selection greeting · Tavern worker",
+      "path": "/v1/text-to-speech/cgSgspJ2msm6clMCkdW9",
+      "body": {
+        "text": "[warm] /kum tʃæːɑp heːr/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "job-shepherd-male-greeting-v6",
+      "kind": "voice",
+      "label": "Shepherd · Male greeting",
+      "character": "peasant",
+      "profile": "job/shepherd",
+      "bodyType": "Male",
+      "lineId": "job-shepherd-greeting",
+      "actor": "Eric",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Tō þǣre hālgan stōwe.",
+      "gloss": "To the holy place.",
+      "tongue": "Old English",
+      "description": "Selection greeting · Shepherd",
+      "path": "/v1/text-to-speech/cjVigY5qzO86Huf0OWal",
+      "body": {
+        "text": "[warm] /toː θæːre ˈhɑːlɡɑn ˈstoːwe/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "job-shepherd-female-greeting-v6",
+      "kind": "voice",
+      "label": "Shepherd · Female greeting",
+      "character": "peasant",
+      "profile": "job/shepherd",
+      "bodyType": "Female",
+      "lineId": "job-shepherd-greeting",
+      "actor": "Alice",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Tō þǣre hālgan stōwe.",
+      "gloss": "To the holy place.",
+      "tongue": "Old English",
+      "description": "Selection greeting · Shepherd",
+      "path": "/v1/text-to-speech/Xb7hH8MSUJpSbSDYk0k2",
+      "body": {
+        "text": "[warm] /toː θæːre ˈhɑːlɡɑn ˈstoːwe/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "job-market-male-greeting-v6",
+      "kind": "voice",
+      "label": "Market keeper · Male greeting",
+      "character": "peasant",
+      "profile": "job/market",
+      "bodyType": "Male",
+      "lineId": "job-market-greeting",
+      "actor": "Chris",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Wilt þū cēapian?",
+      "gloss": "Do you wish to trade?",
+      "tongue": "Old English",
+      "description": "Selection greeting · Market keeper",
+      "path": "/v1/text-to-speech/iP95p4xoKVk53GoZ742B",
+      "body": {
+        "text": "[warm] /wilt θuː ˈtʃæːɑpiɑn/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "job-market-female-greeting-v6",
+      "kind": "voice",
+      "label": "Market keeper · Female greeting",
+      "character": "peasant",
+      "profile": "job/market",
+      "bodyType": "Female",
+      "lineId": "job-market-greeting",
+      "actor": "Sarah",
+      "variant": "greeting",
+      "response": "greeting",
+      "text": "Wilt þū cēapian?",
+      "gloss": "Do you wish to trade?",
+      "tongue": "Old English",
+      "description": "Selection greeting · Market keeper",
+      "path": "/v1/text-to-speech/EXAVITQu4vr4xnSDxMaL",
+      "body": {
+        "text": "[warm] /wilt θuː ˈtʃæːɑpiɑn/",
+        "model_id": "eleven_v3",
+        "voice_settings": {
+          "stability": 0.5,
+          "similarity_boost": 0.75,
+          "speed": 1.12
+        }
+      }
+    },
+    {
+      "id": "step-soft-1",
+      "kind": "sfx",
+      "bank": "step-soft",
+      "label": "step-soft · 1",
+      "loop": false,
+      "description": "Single action cue",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One soft leather shoe footstep on compacted earth with fine grit. A single natural dry footfall, restrained, clean recording. No voices, hum, music or other footsteps.",
+        "duration_seconds": 0.5,
+        "loop": false,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "step-soft-2",
+      "kind": "sfx",
+      "bank": "step-soft",
+      "label": "step-soft · 2",
+      "loop": false,
+      "description": "Single action cue",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One soft leather shoe footstep on compacted earth with fine grit. A single natural dry footfall, restrained, clean recording. No voices, hum, music or other footsteps.",
+        "duration_seconds": 0.5,
+        "loop": false,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "step-boots-1",
+      "kind": "sfx",
+      "bank": "step-boots",
+      "label": "step-boots · 1",
+      "loop": false,
+      "description": "Single action cue",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One sturdy leather boot footstep on a firm dirt road, a muted heel and sole impact with fine grit. A single natural clean footfall. No voices, hum, music or other footsteps.",
+        "duration_seconds": 0.5,
+        "loop": false,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "step-boots-2",
+      "kind": "sfx",
+      "bank": "step-boots",
+      "label": "step-boots · 2",
+      "loop": false,
+      "description": "Single action cue",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One sturdy leather boot footstep on a firm dirt road, a muted heel and sole impact with fine grit. A single natural clean footfall. No voices, hum, music or other footsteps.",
+        "duration_seconds": 0.5,
+        "loop": false,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "step-mail-1",
+      "kind": "sfx",
+      "bank": "step-mail",
+      "label": "step-mail · 1",
+      "loop": false,
+      "description": "Single action cue",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One leather boot footstep on earth accompanied by a subtle brief rustle of iron chain mail. Restrained natural medieval foley, single dry impact. No plate armour, voices, hum, music or other steps.",
+        "duration_seconds": 0.7,
+        "loop": false,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "step-mail-2",
+      "kind": "sfx",
+      "bank": "step-mail",
+      "label": "step-mail · 2",
+      "loop": false,
+      "description": "Single action cue",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One leather boot footstep on earth accompanied by a subtle brief rustle of iron chain mail. Restrained natural medieval foley, single dry impact. No plate armour, voices, hum, music or other steps.",
+        "duration_seconds": 0.7,
+        "loop": false,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "axe-hit-1",
+      "kind": "sfx",
+      "bank": "axe-hit",
+      "label": "axe-hit · 1",
+      "loop": false,
+      "description": "Single action cue",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One iron axe strikes a wooden log with a crisp woody thock and a short small split. Dry clean isolated medieval woodworking sound. No voices, hum, music or repeated strikes.",
+        "duration_seconds": 0.8,
+        "loop": false,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "axe-hit-2",
+      "kind": "sfx",
+      "bank": "axe-hit",
+      "label": "axe-hit · 2",
+      "loop": false,
+      "description": "Single action cue",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One iron axe strikes a wooden log with a crisp woody thock and a short small split. Dry clean isolated medieval woodworking sound. No voices, hum, music or repeated strikes.",
+        "duration_seconds": 0.8,
+        "loop": false,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "wood-tool-1",
+      "kind": "sfx",
+      "bank": "wood-tool",
+      "label": "wood-tool · 1",
+      "loop": false,
+      "description": "Single action cue",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One wooden mallet taps a timber joint. Short dry solid woody knock with clean decay, isolated medieval carpentry sound. No voices, hum, music or repeated strikes.",
+        "duration_seconds": 0.6,
+        "loop": false,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "pottery-1",
+      "kind": "sfx",
+      "bank": "pottery",
+      "label": "pottery · 1",
+      "loop": false,
+      "description": "Single action cue",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One earthenware cup is gently set onto a wooden table, a muted clay clink and wood tap. Clean short isolated sound, no glass, voices, buzz or music.",
+        "duration_seconds": 0.6,
+        "loop": false,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "cloth-work-1",
+      "kind": "sfx",
+      "bank": "cloth-work",
+      "label": "cloth-work · 1",
+      "loop": false,
+      "description": "Single action cue",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One brief handling movement of rough wool cloth and a soft leather bag, close dry fabric rustle. Short clean isolated sound. No speech, buzzing, music or sustained background.",
+        "duration_seconds": 0.7,
+        "loop": false,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "lyre-pluck-1",
+      "kind": "sfx",
+      "bank": "lyre-pluck",
+      "label": "lyre-pluck · 1",
+      "loop": false,
+      "description": "Single action cue",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One soft pluck on a gut string of a small Anglo Saxon wooden lyre, warm intimate woody resonance, single note short natural decay. No melody, guitar, piano, voices, hum or background music.",
+        "duration_seconds": 1,
+        "loop": false,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    },
+    {
+      "id": "bird-call-1",
+      "kind": "sfx",
+      "bank": "bird-call",
+      "label": "bird-call · 1",
+      "loop": false,
+      "description": "Single action cue",
+      "path": "/v1/sound-generation",
+      "body": {
+        "text": "One brief natural European sparrow chirp, clean isolated outdoor bird call. No insects, buzzing, hum, wind bed, music or other animals.",
+        "duration_seconds": 1,
+        "loop": false,
+        "prompt_influence": 0.6,
+        "model_id": "eleven_text_to_sound_v2"
+      }
+    }
+  ]
+}

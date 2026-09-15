@@ -18,6 +18,7 @@ export const SITE_MENU: SiteMenuItem[] = [
     children: [
       { label: "Textures", description: "Every texture, in place", href: "/assets/textures" },
       { label: "Playground", description: "Characters, animals & buildings", href: "/assets/characters" },
+      { label: "Character sounds", description: "Voices, animation events & mixing", href: "/assets/characters?sounds=1" },
       { label: "Path playgrounds", description: "Traffic, regrowth & settlement paths", href: "/assets/paths" },
       { label: "Map playground", description: "Compare meadows, groves & connected clearings", href: "/assets/maps" },
       { label: "Placement playground", description: "Level hillsides under new buildings", href: "/assets/placement" },

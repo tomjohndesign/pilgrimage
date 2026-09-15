@@ -3,16 +3,17 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import dynamic from "next/dynamic"
-import { Download, Pause, Play, RotateCcw, Upload, Volume2, VolumeX } from "lucide-react"
+import { Download, Pause, Play, RotateCcw, Upload } from "lucide-react"
 import { TRAVELER_TYPES, type TravelerTypeId } from "@/lib/game/travelers"
 import { SPRITE_DIRECTIONS, spriteFrame, type CharacterAsset, type CharacterModel } from "@/lib/game/character-assets"
 import { useCharacterAssetStore, validateCharacterAssets, type AssetTable } from "@/lib/game/character-asset-store"
-import { playCharacterSound, stopCharacterSound } from "@/lib/game/character-audio"
+import { stopCharacterSound } from "@/lib/game/character-audio"
+import { CharacterSoundControls, SOUND_BUTTON } from "./character-sound-controls"
 
 const CharacterPreview = dynamic(() => import("./character-preview").then((m) => m.CharacterPreview), { ssr: false })
 // Archived four-frame drafts; new callings live in the shared rig playground.
 const TYPES = Object.values(TRAVELER_TYPES).filter(type => type.id !== "beggar" && type.id !== "nun")
-const button = "inline-flex items-center justify-center gap-2 border border-rule px-3 py-2 text-xs text-ink transition hover:bg-parchment-dark focus-visible:outline-2 focus-visible:outline-gold disabled:opacity-40"
+const button = SOUND_BUTTON
 const label = "font-display text-[10px] uppercase tracking-[2px] text-ink-light"
 
 export function SpriteTile({ sheet, row = 0, frame = 1, zoom = 1, name }: {
@@ -58,7 +59,7 @@ export function CharacterLab() {
   const [previewModel, setPreviewModel] = useState<CharacterModel>("callings")
   const [message, setMessage] = useState("")
   const [busy, setBusy] = useState(false)
-  const { assets, patch, reset, replace, muted, setMuted } = useCharacterAssetStore()
+  const { assets, patch, reset, replace } = useCharacterAssetStore()
   const asset = assets[id]
   const type = TRAVELER_TYPES[id]
   const [sheetPath, setSheetPath] = useState(asset.sheet)
@@ -158,9 +159,8 @@ export function CharacterLab() {
         <div className="my-6 border-t border-rule" />
         <p className={label}>Selection sound</p>
         <p className="mt-3 text-sm">{asset.soundLabel}</p>
-        <div className="mt-3 flex gap-2"><button className={button} disabled={muted} onClick={async () => setMessage(await playCharacterSound(id) ? `Playing ${type.label.toLowerCase()} cue.` : "Sound could not play. Check the sound file and browser audio settings.")}><Volume2 size={14} /> Audition</button>
-          <button className={button} aria-label={muted ? "Unmute character sounds" : "Mute character sounds"} aria-pressed={muted} onClick={() => { setMuted(!muted); stopCharacterSound() }}>{muted ? <VolumeX size={14} /> : <Volume2 size={14} />}</button></div>
-        <label className="mt-4 block text-sm">Volume <span className="float-right font-mono text-xs">{Math.round(asset.volume * 100)}%</span><input className="mt-2 w-full accent-[#94742f]" type="range" min="0" max="1" step="0.01" value={asset.volume} onChange={(e) => patch(id, { volume: Number(e.target.value) })} /></label>
+        <CharacterSoundControls type={id} />
+        <Link href="/assets/sounds" className="mt-3 block text-xs underline underline-offset-4">Open sound playground →</Link>
         <a href={asset.sound} download className="mt-2 inline-block text-xs underline underline-offset-4">Download WAV</a>
         <div className="my-6 border-t border-rule" />
         <details><summary className="cursor-pointer text-sm">Manage asset files</summary><div className="mt-3 space-y-3">
