@@ -118,7 +118,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     await page.goto(`http://127.0.0.1:${server.address().port}`)
     const result = await page.evaluate(async ({ outlineFragment, presentationFragment, poseClips, transport }) => {
       const THREE = await import("/three.module.js")
-      const { applySpriteDepth } = await import("/shader.js")
+      const { applySpriteDepth, spriteSceneryDepth } = await import("/shader.js")
       const { applyDriverLayer } = await import("/driver.js")
       const driverColor = await new THREE.TextureLoader().loadAsync("/driver.png")
       const driverDepth = await new THREE.TextureLoader().loadAsync("/driver-depth.png")
@@ -371,6 +371,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       {
         const coincidentTarget = new THREE.WebGLRenderTarget(256, 256, { depthBuffer: true })
         const figures = []
+        const sceneryDepth = spriteSceneryDepth()
         for (const [clip, order, color] of [["walk", 1, 0x00ff00], ["idle", 2, 0xff0000]]) {
           const map = await new THREE.TextureLoader().loadAsync(`/pose-${clip}.png`)
           const depth = await new THREE.TextureLoader().loadAsync(`/depth-${clip}.png`)
@@ -380,7 +381,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
           const bias = { value: 0 }, pose = { map: { value: depth }, enabled: { value: true } }
           const material = new THREE.SpriteMaterial({ color, map, alphaTest: .5, transparent: false, toneMapped: false })
           material.onBeforeCompile = shader => {
-            applySpriteDepth(shader, viewport, worldTexel, groundPlane, pose, undefined, bias)
+            applySpriteDepth(shader, viewport, worldTexel, groundPlane, pose, undefined, bias, sceneryDepth)
             shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\ndiffuseColor.rgb = diffuse;")
           }
           material.onBeforeRender = renderer => renderer.getCurrentViewport(viewport)
@@ -439,6 +440,51 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
             if (actual[i + channel] < 200) coincidence.animalMismatches++
           }
         }
+        // Crowd ordering must never promote a hidden body through scenery.
+        // Use the same world-depth copy as PixelCanvas, then sample that buffer
+        // before biasing the sprites. Test both people and large transport.
+        const occluders = new THREE.Scene()
+        const blocker = new THREE.Mesh(new THREE.PlaneGeometry(.6, 5),
+          new THREE.MeshBasicMaterial({ color: 0x333333, side: THREE.DoubleSide }))
+        blocker.quaternion.copy(camera.quaternion)
+        blocker.position.copy(person.sprite.position).addScaledVector(camera.position.clone().normalize(), .5)
+        occluders.add(blocker)
+        const world = new THREE.WebGLRenderTarget(128, 128, { depthTexture: new THREE.DepthTexture(128, 128) })
+        sceneryDepth.map.value = world.depthTexture
+        copyMaterial.uniforms.tDepth.value = world.depthTexture
+        coincidence.sceneryCompared = 0; coincidence.sceneryMismatches = 0; coincidence.unguardedLeaks = 0
+        const withScenery = () => {
+          gl.setRenderTarget(world); gl.render(occluders, camera)
+          gl.setRenderTarget(coincidentTarget); gl.render(copyScene, copyCamera)
+          gl.autoClear = false; gl.render(scene, camera); gl.autoClear = true
+          const pixels = new Uint8Array(256 * 256 * 4)
+          gl.readRenderTargetPixels(coincidentTarget, 0, 0, 256, 256, pixels)
+          return pixels
+        }
+        for (const zoom of [1, 1.5, 2]) for (const active of [0, 1]) {
+          camera.zoom = zoom; camera.updateProjectionMatrix()
+          figures.forEach((figure, i) => { figure.sprite.visible = i === active; figure.bias.value = 0 })
+          sceneryDepth.mode.value = 0
+          const expected = withScenery(), channel = active === 0 ? 1 : 0
+          figures[active].bias.value = 10
+          const unguarded = withScenery()
+          sceneryDepth.mode.value = 1
+          const actual = withScenery()
+          for (let i = 0; i < actual.length; i += 4) {
+            const visible = expected[i + channel] > 200
+            if (unguarded[i + channel] > 200 && !visible) coincidence.unguardedLeaks++
+            if (actual[i + channel] > 200 || visible) coincidence.sceneryCompared++
+            if ((actual[i + channel] > 200) !== visible) coincidence.sceneryMismatches++
+          }
+          // Isolated masks must contain the real pose depth, independent of bias.
+          sceneryDepth.mode.value = 2
+          const isolated = withScenery()
+          for (let i = 0; i < isolated.length; i++) if (isolated[i] !== expected[i]) coincidence.sceneryMismatches++
+        }
+        if (coincidence.unguardedLeaks < 100 || coincidence.sceneryCompared < 100 || coincidence.sceneryMismatches)
+          throw new Error(`Scenery must occlude biased crowds: ${JSON.stringify(coincidence)}`)
+        sceneryDepth.mode.value = 0
+        world.dispose(); blocker.geometry.dispose(); blocker.material.dispose()
         camera.zoom = 1; camera.updateProjectionMatrix()
         horseMap.dispose(); horseDepth.dispose()
         for (const { sprite, map, depth } of figures) { scene.remove(sprite); sprite.material.dispose(); map.dispose(); depth.dispose() }

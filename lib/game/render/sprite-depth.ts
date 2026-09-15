@@ -9,6 +9,14 @@ export interface SpritePoseDepth {
   enabled: { value: boolean }
 }
 
+/** Reuse the existing scenery depth buffer before applying crowd-only ordering.
+ * Modes: 0 = ordinary depth, 1 = scenery guard, 2 = unbiased selection/tree mask. */
+export function spriteSceneryDepth() {
+  return { mode: { value: 0 }, map: { value: null as THREE.Texture | null },
+    scale: { value: new THREE.Vector2(1, 1) }, offset: { value: new THREE.Vector2() } }
+}
+export type SpriteSceneryDepth = ReturnType<typeof spriteSceneryDepth>
+
 /** Depth is data. Share the immutable atlas; its UVs come from the color map. */
 export function configureSpriteDepthTexture(texture: THREE.Texture) {
   if (texture.colorSpace === THREE.NoColorSpace && texture.minFilter === THREE.NearestFilter &&
@@ -40,13 +48,17 @@ export function configureSpriteDepthTexture(texture: THREE.Texture) {
  */
 export function applySpriteDepth(shader: Parameters<THREE.Material["onBeforeCompile"]>[0], viewport: THREE.Vector4, worldTexel = { value: 0 },
   groundPlane = { value: { x: 0, y: 0, z: 0, w: 0 } }, pose?: SpritePoseDepth,
-  instance?: { anchor: string; size: string; ground: string; viewAnchor?: string; bias?: string }, bias = { value: 0 }) {
+  instance?: { anchor: string; size: string; ground: string; viewAnchor?: string; bias?: string }, bias = { value: 0 }, scenery = spriteSceneryDepth()) {
   shader.uniforms.spriteWorldTexel = worldTexel
   shader.uniforms.spriteViewport = { value: viewport }
   shader.uniforms.spriteGroundPlane = groundPlane
   shader.uniforms.spritePoseDepth = pose?.map ?? { value: null }
   shader.uniforms.spriteHasPoseDepth = pose?.enabled ?? { value: false }
   shader.uniforms.spriteDepthBias = bias
+  shader.uniforms.spriteSceneryMode = scenery.mode
+  shader.uniforms.spriteSceneryDepth = scenery.map
+  shader.uniforms.spriteSceneryScale = scenery.scale
+  shader.uniforms.spriteSceneryOffset = scenery.offset
   shader.vertexShader = "flat varying vec2 vSpritePoseDepth;\nflat varying float vSpriteDepthBias;\nuniform float spriteDepthBias;\n" + shader.vertexShader
   shader.vertexShader = "flat varying vec4 vSpritePlanes;\nflat varying float vSpriteGroundX;\nuniform float spriteWorldTexel;\nuniform vec4 spriteGroundPlane;\n" + shader.vertexShader.replace(
     "#include <fog_vertex>", `#include <fog_vertex>
@@ -84,5 +96,14 @@ export function applySpriteDepth(shader: Parameters<THREE.Material["onBeforeComp
         if (spriteGroundPlane.y <= 0.0) depths.y = 1.0;
       }
     #endif
-    gl_FragDepth = clamp(min(depths.x, depths.y) - vSpriteDepthBias, 0.0, 1.0);`)
+    float poseDepth = min(depths.x, depths.y);
+    if (spriteSceneryMode == 1) {
+      vec2 displayUv = (gl_FragCoord.xy - spriteViewport.xy) / spriteViewport.zw;
+      vec2 worldUv = (displayUv - 0.5) * spriteSceneryScale + 0.5 + spriteSceneryOffset;
+      // A crowd bias may separate people, but must never pull them through
+      // a tree, wall or hillside. Test their real pose against scenery first.
+      if (poseDepth > texture2D(spriteSceneryDepth, worldUv).x + 1.0e-7) discard;
+    }
+    gl_FragDepth = clamp(poseDepth - (spriteSceneryMode == 2 ? 0.0 : vSpriteDepthBias), 0.0, 1.0);`)
+  shader.fragmentShader = "uniform int spriteSceneryMode;\nuniform sampler2D spriteSceneryDepth;\nuniform vec2 spriteSceneryScale;\nuniform vec2 spriteSceneryOffset;\n" + shader.fragmentShader
 }

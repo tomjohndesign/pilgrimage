@@ -235,11 +235,13 @@ export function GameCanvas({
           </BuildingBatches>
         </group>
         <group name="visibility-characters" visible={visibility.showCharacters}>
-          <PixelCharacters>
-            <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
-          </PixelCharacters>
-          <CharacterBatches><Travelers map={map} travelers={travelers} restore={restore} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
-            characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} /></CharacterBatches>
+          <CharacterBatches>
+            <PixelCharacters>
+              <Monks map={map} monks={monks} relic={relic} flying={blasterPastor} characterScale={characterScale} />
+            </PixelCharacters>
+            <Travelers map={map} travelers={travelers} restore={restore} speed={walkSpeed} speedScales={speedScales} beggarSpeedScales={beggarSpeedScales} relic={relic} trees={trees} shrineRenown={baseRenown}
+              characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} movement={movement} />
+          </CharacterBatches>
         </group>
       </SceneAssetBoundary>
       </HearthLights>
