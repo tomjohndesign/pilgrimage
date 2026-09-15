@@ -9,6 +9,10 @@ export const PLAYGROUND_TOOLS = [
   { id: "town", label: "Village journeys", help: "Follow a resident or close a workplace to see how journeys affect paths. Drag to pan and scroll to zoom." },
   { id: "placement", label: "Building placement", help: "Choose terrain and a structure, then click the map to place it. Green pads are valid; red pads show why placement is refused." },
   { id: "rendering", label: "Rendering", help: "Compare rendering methods with synchronized settings. Pause or scrub the walk to inspect a frame. Focus enlarges one comparison." },
+  { id: "tuning", label: "Game tuning", help: "Apply saves the whole preset and updates open game tabs at this address. Starting supplies affect new settlements. Import loads a draft; Restore defaults applies immediately." },
+  { id: "trees", label: "Trees", help: "Edit foliage by species and inspect it beside characters or on a generated map. Changes stay in this preview; copy the species JSON to export." },
+  { id: "textures", label: "Textures", help: "Browse terrain, character sheets and environment assets using the same previews as the game." },
+  { id: "pipeline", label: "Sprite pipeline", help: "Inspect one character through the shared sprite bake. Choose a stage to inspect its output; help explains each render pass." },
 ] as const
 
 export type PlaygroundTool = typeof PLAYGROUND_TOOLS[number]["id"]

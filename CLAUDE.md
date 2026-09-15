@@ -28,6 +28,14 @@
   values and live status visible. Stack labels above fields and tuners with
   consistent spacing; keep checkbox labels inline. Avoid nested cards and
   repeated borders.
+  Game tuning, tree editing, texture catalogues and sprite pipeline inspection
+  belong here too. Use `AssetEditorContent` for tools without a preview sidebar.
+  All non-game pages share `WorkspaceFrame` navigation and surfaces; reference
+  documents use `WorkspaceDocument` for section navigation. Do not add separate
+  page chrome for a new tool or reference page. All panels and help use the
+  existing olive workspace tokens. Canvas backgrounds use `TERRAIN.grass.color`.
+  Geist is the app-wide font for pages, controls, HUD and canvas labels. Preview controls belong in the common
+  canvas dock via `AssetEditorCanvasControls`, never on separate coloured bands.
   Redirect retired URLs to the matching playground tool, preserving
   their shared settings.
 

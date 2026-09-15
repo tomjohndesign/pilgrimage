@@ -6,6 +6,12 @@ describe("shared playground navigation", () => {
     expect(legacyPlaygroundHref({ seed: "123", forest: "35", overlay: "0" }, "maps"))
       .toBe("/assets?seed=123&forest=35&overlay=0&asset=maps")
   })
+  it("keeps tuning and resource bookmarks in the same workspace", () => {
+    expect(legacyPlaygroundHref({}, "tuning")).toBe("/assets?asset=tuning")
+    expect(legacyPlaygroundHref({ clip: "walk" }, "pipeline")).toBe("/assets?clip=walk&asset=pipeline")
+    expect(playgroundTool("trees")).toBe("trees")
+    expect(playgroundTool("textures")).toBe("textures")
+  })
   it("preserves character deep links and repeated parameters", () => {
     expect(legacyPlaygroundHref({ asset: "horse", sounds: "1", tag: ["one", "two"] }))
       .toBe("/assets?asset=horse&sounds=1&tag=one&tag=two")

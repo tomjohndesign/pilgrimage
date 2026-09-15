@@ -1,5 +1,7 @@
 "use client"
 
+import { TERRAIN } from "@/lib/game/map/terrain"
+
 import { SheepPenDemo } from "./sheep-pen-demo"
 import { sheepPenDemo } from "@/lib/game/building-art/sheep-pen-demo"
 import type { WildlifeWorld } from "@/lib/game/wildlife/simulation"
@@ -149,7 +151,7 @@ export function ProceduralMapScene({ recipe, grid, zoom, playbackRate = 3, slaug
     {!embedded && <div className={styles.mapLabel}><strong>{BUILDING_VIEWS[recipe.view].name}</strong><span>{recipe.width} × {recipe.depth} tile footprint</span></div>}
     <div className={embedded ? "asset-building-viewport" : styles.mapCanvas}>
       <Canvas frameloop="demand" onPointerMissed={() => {if(!placement) onSelect?.(null)}} orthographic camera={{ near: 0.1, far: 400 }} outputDpr={1} fallback={<p>This map preview needs WebGL.</p>}>
-        <color attach="background" args={["#14100a"]} />
+        <color attach="background" args={[TERRAIN.grass.color]} />
         <SceneCamera recipe={study} zoom={zoom} />
         <ambientLight intensity={SURFACE_LIGHT.ambient} />
         <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />

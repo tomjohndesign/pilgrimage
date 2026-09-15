@@ -37,9 +37,10 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-garamond), Georgia, serif;
-  --font-serif: var(--font-garamond), Georgia, serif;
-  --font-display: var(--font-cinzel), serif;
+  --font-sans: var(--font-geist), sans-serif;
+  --font-serif: var(--font-geist), sans-serif;
+  --font-display: var(--font-geist), sans-serif;
+  --font-mono: var(--font-geist), sans-serif;
   --color-parchment: var(--parchment);
   --color-parchment-dark: var(--parchment-dark);
   --color-ink: var(--ink);
@@ -103,5 +104,5 @@
 
 /* Font display class */
 .font-display {
-  font-family: var(--font-cinzel), serif;
+  font-family: var(--font-geist), sans-serif;
 }

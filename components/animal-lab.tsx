@@ -5,7 +5,7 @@ import { SceneAudioLifecycle } from "./scene-audio-lifecycle"
 import { characterSoundsJson, useCharacterSoundStore } from "@/lib/game/character-sound-store"
 import { playSourceSelection } from "@/lib/game/scene-audio"
 import { useEffect, useRef, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Pause, Play, RotateCcw } from "lucide-react"
 import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "./asset-editor-frame"
 import { AnimalPreview, animalActions, ACTION_LABELS, type AnimalSubject, type AnimalMotion } from "./animal-preview"
@@ -45,7 +45,7 @@ const DIRECTIONS = BASE_PERSON.directions
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — Shared asset editor
  */
 export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
-  const search = useSearchParams(), router = useRouter()
+  const search = useSearchParams()
   const requested = search.get("animal") ?? search.get("asset")
   const [subject, setSubject] = useState<AnimalSubject>(requested && Object.hasOwn(ANIMAL_SUBJECTS, requested) ? requested as AnimalSubject : "deer")
   const [motion, setMotion] = useState<AnimalMotion>(["hawk", "sparrow", "horse", "donkey", "ox"].includes(subject) ? "graze" : "idle")
@@ -72,7 +72,7 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
     if (!["hawk", "sparrow", "horse", "donkey", "ox"].includes(animal)) { setMotion("idle"); setPlaying(false) }
     setSubject(animal); setCoat(""); setWildlifeCoat("natural"); setLineup(false); setOffset([0, 0])
     const params = new URLSearchParams(search.toString()); params.set("asset", "animals"); params.set("animal", animal)
-    router.replace(`/assets/characters?${params}`, { scroll: false })
+    window.history.replaceState(null, "", `/assets?${params}`)
   }
   const directionCanvases = useRef<(HTMLCanvasElement | null)[]>([])
   const [showRig, setShowRig] = useState(false), [frame, setFrame] = useState(0)
@@ -113,11 +113,16 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
     <SceneAudioLifecycle active={active}/>
     <AssetEditorWorkspace title="Animal" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
       controlsHeading={<span>Animals</span>}
-      controlsHeader={<><div className="person-panel-heading playground-view-tabs" role="group" aria-label="Animal editing mode"><button className="hud-action" aria-pressed={editorTab==='sounds'} onClick={()=>setEditorTab('sounds')}>Sounds</button><button className="hud-action" aria-pressed={editorTab==='appearance'} onClick={()=>setEditorTab('appearance')}>Appearance</button></div></>}
-      controls={<><AssetEditorSection title="Animal">
+      controlsHeader={<><div className="person-panel-heading">
             <label className="person-choice">Species<select aria-label="Animal species" value={subject} onChange={e => choose(e.target.value as AnimalSubject)}>{Object.entries(ANIMAL_SUBJECTS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
-          </AssetEditorSection>
-{editorTab==='sounds'&&<AssetEditorSection title="Sounds"><CharacterAudioEditor profile={`animal/${subject}`} bodyType="Male" voiceVariant={0} previewZoom={zoom} clip={action} frame={frame} frames={24} playing={playing} active={active} selected={false} onSelect={()=>{}} onDeselect={()=>{}} onPreviewClip={()=>{}}/></AssetEditorSection>}
+          </div><div className="person-panel-heading playground-view-tabs" role="group" aria-label="Animal editing mode"><button className="hud-action" aria-pressed={editorTab==='sounds'} onClick={()=>setEditorTab('sounds')}>Sounds</button><button className="hud-action" aria-pressed={editorTab==='appearance'} onClick={()=>setEditorTab('appearance')}>Appearance</button></div></>}
+      controls={<>
+{editorTab==='sounds'&&<CharacterAudioEditor profile={`animal/${subject}`} bodyType="Male" voiceVariant={0} previewZoom={zoom} clip={action} frame={frame} frames={24} playing={playing} active={active} selected={false} onSelect={()=>{}} onDeselect={()=>{}} onPreviewClip={()=>{}} files={<>
+            <button className="hud-action" onClick={async()=>{const text=characterSoundsJson();setSoundJson(text);try{await navigator.clipboard.writeText(text);setSoundMessage('Sound settings copied.')}catch{setSoundMessage('Select the text below to copy.')}}}>Copy sound JSON</button>
+            <textarea aria-label="Animal sound JSON" value={soundJson} onChange={e=>setSoundJson(e.target.value)} className="w-full" rows={5}/>
+            <button className="hud-action" onClick={()=>{try{useCharacterSoundStore.getState().replace(JSON.parse(soundJson));setSoundMessage('Sound settings loaded.')}catch(error){setSoundMessage(error instanceof Error?error.message:'Invalid JSON')}}}>Load sound JSON</button>
+            <p className="person-hint" role="status">{soundMessage}</p>
+          </>}/>}
 {editorTab==='appearance'&&<>
           {equine && <AssetEditorSection title="Appearance">
             {equine && <label className="person-choice">Equipment<select aria-label="Animal equipment" value={pack ? "pack" : "none"} onChange={e => setPack(e.target.value === "pack")}><option value="none">None</option><option value="pack">Tied bundles</option></select></label>}
@@ -136,12 +141,7 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
             <p className="person-hint">Drag sideways to turn. Shift-drag to pan. Scroll or pinch to zoom. All animals use the same pixel scale as characters.</p>
           </AssetEditorSection>
           </>}
-{editorTab==='sounds'&&<AssetEditorSection title="Sound JSON">
-            <button className="hud-action" onClick={async()=>{const text=characterSoundsJson();setSoundJson(text);try{await navigator.clipboard.writeText(text);setSoundMessage('Sound settings copied.')}catch{setSoundMessage('Select the text below to copy.')}}}>Copy sound JSON</button>
-            <textarea aria-label="Animal sound JSON" value={soundJson} onChange={e=>setSoundJson(e.target.value)} className="w-full" rows={5}/>
-            <button className="hud-action" onClick={()=>{try{useCharacterSoundStore.getState().replace(JSON.parse(soundJson));setSoundMessage('Sound settings loaded.')}catch(error){setSoundMessage(error instanceof Error?error.message:'Invalid JSON')}}}>Load sound JSON</button>
-            <p className="person-hint" role="status">{soundMessage}</p>
-          </AssetEditorSection>}</>}
+</>}
       controlsFooter={<><footer className="person-panel-footer"><button className="hud-action" onClick={() => { setRow(1); setZoom(6); setOffset([0, 0]); setRate(1); setConstruction(false); setPlaying(bird || equine); setMotion(bird || equine ? "graze" : "idle") }}><RotateCcw size={12} />Reset preview</button></footer></>}
       toolbar={<><div className="person-playback flex-wrap">
             <button className="hud-pause" aria-label={playing ? "Pause animal animation" : "Play animal animation"} onClick={() => setPlaying(v => !v)}>{playing ? <Pause size={14} /> : <Play size={14} />}</button>

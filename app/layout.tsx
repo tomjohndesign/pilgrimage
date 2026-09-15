@@ -1,18 +1,12 @@
 import type { Metadata, Viewport } from 'next'
-import { Cinzel, EB_Garamond } from 'next/font/google'
+import { Geist } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { BalanceProvider } from '@/components/game/balance-provider'
 import './globals.css'
 
-const cinzel = Cinzel({ 
+const geist = Geist({
   subsets: ["latin"],
-  variable: '--font-cinzel',
-  display: 'swap',
-})
-
-const ebGaramond = EB_Garamond({ 
-  subsets: ["latin"],
-  variable: '--font-garamond',
+  variable: '--font-geist',
   display: 'swap',
 })
 
@@ -56,8 +50,8 @@ export default function RootLayout({
   return (
     // The play page's resume script styles the root element before hydration
     // (see lib/game/save/view.ts), which React must not report as a mismatch.
-    <html lang="en" className={`${cinzel.variable} ${ebGaramond.variable} bg-[#1a1208]`} suppressHydrationWarning>
-      <body className="font-serif antialiased">
+    <html lang="en" className={`${geist.variable} bg-[#1a1208]`} suppressHydrationWarning>
+      <body className="font-sans antialiased">
         <BalanceProvider>{children}</BalanceProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>

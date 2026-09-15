@@ -1,6 +1,6 @@
 "use client"
 
-import Link from "next/link"
+import { AssetEditorFrame, AssetEditorContent, AssetEditorPanels, AssetEditorSection, AssetEditorHelp, type AssetEditorNavigation } from "@/components/asset-editor-frame"
 import { useState } from "react"
 import {
   BUILD_CATALOG,
@@ -41,8 +41,7 @@ function parseDraft(draft: Draft): ReturnType<typeof validateBalance> {
     ),
   })
 }
-const BUTTON =
-  "border border-rule bg-parchment-dark px-4 py-2 text-sm text-ink hover:border-gold disabled:opacity-50"
+const BUTTON = "hud-action"
 
 function NumericField({
   id,
@@ -63,40 +62,20 @@ function NumericField({
     Number(value) < field.min ||
     Number(value) > field.max ||
     Math.abs(Number(value) / field.step - Math.round(Number(value) / field.step)) > 0.00001
-  return (
-    <div className="space-y-1.5">
-      <label htmlFor={id} className="block text-sm font-semibold text-ink">
-        {field.label}
-      </label>
-      <div className="flex items-center gap-3">
-        <input
-          id={id}
-          type="number"
-          min={field.min}
-          max={field.max}
-          step={field.step}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          aria-invalid={invalid}
-          aria-describedby={`${id}-help`}
-          className={`w-28 rounded border bg-parchment-dark px-3 py-2 font-display text-sm tabular-nums outline-none focus:border-gold ${invalid ? "border-red" : "border-rule"}`}
-        />
-        <span className="text-xs text-ink-light">Default {defaultValue}</span>
-      </div>
-      <p id={`${id}-help`} className="text-sm leading-snug text-ink-light">
-        {field.description}
-      </p>
-      {invalid && (
-        <p className="text-xs text-red">
-          Use {field.min}–{field.max}, in steps of {field.step}.
-        </p>
-      )}
+  return <div className="tuning-field">
+    <div className="flex items-center gap-1"><label htmlFor={id}>{field.label}</label>
+      <AssetEditorHelp label={field.label}>{field.description} Default: {defaultValue}. Range: {field.min}–{field.max}; step: {field.step}.</AssetEditorHelp>
     </div>
-  )
+    <input id={id} type="number" min={field.min} max={field.max} step={field.step} value={value}
+      onChange={event => onChange(event.target.value)} aria-invalid={invalid}
+      aria-describedby={invalid ? `${id}-error` : undefined} className="playground-input" />
+    {invalid && <p id={`${id}-error`} className="text-xs text-red">Use {field.min}–{field.max}, in steps of {field.step}.</p>}
+  </div>
 }
 
 /** Game balance editor. Apply atomically; retain unsaved edits when another tab applies a preset. */
-export function BalanceEditor() {
+export function BalanceEditor({ mode, onModeChange }: AssetEditorNavigation & { active?: boolean }) {
+  const [building, setBuilding] = useState(BUILD_CATALOG.find(def => !def.retired)!.id)
   const balance = useBalanceStore((s) => s.balance)
   const ready = useBalanceStore((s) => s.ready)
   const storageMessage = useBalanceStore((s) => s.storageMessage)
@@ -141,171 +120,46 @@ export function BalanceEditor() {
     setMessage("Preset exported. Apply tuning to use any unsaved edits in the game.")
   }
 
-  return (
-    <div>
-      <div className="sticky top-0 z-20 -mx-5 mb-8 border-b border-rule bg-parchment/95 px-5 py-4 shadow-sm backdrop-blur sm:-mx-8 sm:px-8">
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (validation.error === null) apply(validation.balance)
-            }}
-            disabled={!ready || validation.error !== null || !dirty}
-            className={`${BUTTON} !bg-ink !text-parchment`}
-          >
-            Apply tuning
-          </button>
-          <button
-            type="button"
-            onClick={() => apply(DEFAULT_BALANCE)}
-            disabled={!ready}
-            className={BUTTON}
-          >
-            Restore defaults
-          </button>
-          <button
-            type="button"
-            onClick={exportPreset}
-            disabled={!ready || validation.error !== null}
-            className={BUTTON}
-          >
-            Export preset
-          </button>
-          <label className={`${BUTTON} cursor-pointer`}>
-            Import preset
-            <input
-              type="file"
-              accept=".json,application/json"
-              aria-label="Import preset"
-              className="sr-only"
-              disabled={!ready}
-              onChange={async (event) => {
-                const file = event.target.files?.[0]
-                event.target.value = ""
-                if (!file) return
-                try {
-                  const result = importBalance(await file.text())
-                  if (result.error !== null) {
-                    setError(result.error)
-                    return
-                  }
-                  setSession({
-                    source: useBalanceStore.getState().balance,
-                    draft: toDraft(result.balance),
-                  })
-                  setError(null)
-                  setMessage("Preset loaded. Apply tuning to use it in the game.")
-                } catch {
-                  setError("Could not read that preset file.")
-                }
-              }}
-            />
-          </label>
-          <span className="text-sm italic text-ink-light">
-            {!ready ? "Loading saved tuning…" : dirty ? "Unapplied edits" : "Using saved tuning"}
-          </span>
-        </div>
-        <p role="status" aria-live="polite" className="mt-2 text-sm text-ink-light">
-          {message}
-        </p>
-        {(error || storageMessage || (dirty && validation.error)) && (
-          <p role="alert" className="mt-2 text-sm text-red">
-            {error || storageMessage || validation.error}
-          </p>
-        )}
-        {changedElsewhere && (
-          <p className="mt-2 text-sm text-ink-light">
-            Another tab changed the saved tuning. Your edits are still here.{" "}
-            <button
-              type="button"
-              onClick={() => {
-                setSession({ source: balance, draft: toDraft(balance) })
-                setError(null)
-                setMessage("Loaded the saved tuning.")
-              }}
-              className="underline"
-            >
-              Load saved tuning
-            </button>{" "}
-            or apply your edits to replace it.
-          </p>
-        )}
+  const def = BUILD_CATALOG.find(item => item.id === building)!
+  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Game tuning editor" version=""
+    status={message || (!ready ? "Loading saved tuning…" : dirty ? "Unapplied edits" : "Using saved tuning")} detail="Saved in this browser">
+    <AssetEditorContent toolbar={<>
+      <button type="button" onClick={() => { if (validation.error === null) apply(validation.balance) }} disabled={!ready || validation.error !== null || !dirty} className={BUTTON}>Apply tuning</button>
+      <button type="button" onClick={() => apply(DEFAULT_BALANCE)} disabled={!ready} className={BUTTON}>Restore defaults</button>
+    </>}>
+      <div className="workspace-form">
+        {(error || storageMessage || (dirty && validation.error)) && <p role="alert" className="mb-4 text-sm text-red">{error || storageMessage || validation.error}</p>}
+        {changedElsewhere && <p role="status" className="mb-4 text-sm">Saved tuning changed in another tab. Your edits are retained. <button type="button" className={BUTTON} onClick={() => {
+          setSession({ source: balance, draft: toDraft(balance) }); setError(null); setMessage("Loaded the saved tuning.")
+        }}>Load saved tuning</button></p>}
+        <fieldset disabled={!ready}>
+          <AssetEditorPanels>
+            {RULE_GROUPS.filter(group => group !== "Resident income").map(group => <AssetEditorSection key={group} title={group}>
+              <div className="workspace-field-grid">{RULE_FIELDS.filter(field => field.group === group && field.key !== "incomeSeconds").map(field => <NumericField key={field.key} id={field.key} field={field} value={session.draft[field.key]} defaultValue={field.default} onChange={value => update(field.key, value)} />)}</div>
+            </AssetEditorSection>)}
+            <AssetEditorSection title="Buildings">
+              <label className="person-choice">Building<select aria-label="Building" value={building} onChange={event => setBuilding(event.target.value as typeof building)}>{BUILD_CATALOG.filter(item => !item.retired).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+              <p className="person-hint">Costs and unlocks apply on placement. Renown applies to every placed copy. Footprint: {def.w} × {def.d} tiles.</p>
+              <div className="workspace-field-grid">{BUILDING_FIELDS.filter(field => field.key !== "goldIncome" && field.key !== "woodIncome").map(field => <NumericField key={`${building}.${field.key}`} id={`${building}.${field.key}`} field={field} value={session.draft[`${building}.${field.key}`]} defaultValue={DEFAULT_BALANCE.buildings[building][field.key]} onChange={value => update(`${building}.${field.key}`, value)} />)}</div>
+            </AssetEditorSection>
+            <AssetEditorSection title="Files">
+              <div className="flex flex-wrap gap-3">
+                <button type="button" onClick={exportPreset} disabled={validation.error !== null} className={BUTTON}>Export preset</button>
+                <label className={`${BUTTON} person-file-input`}>Import preset<input type="file" accept=".json,application/json" aria-label="Import preset" onChange={async event => {
+                  const file = event.target.files?.[0]; event.target.value = ""; if (!file) return
+                  try {
+                    const result = importBalance(await file.text())
+                    if (result.error !== null) { setError(result.error); return }
+                    setSession({ source: useBalanceStore.getState().balance, draft: toDraft(result.balance) })
+                    setError(null); setMessage("Preset loaded. Apply tuning to use it in the game.")
+                  } catch { setError("Could not read that preset file.") }
+                }} /></label>
+              </div>
+              <p className="person-hint">Export includes unapplied edits. Import loads a draft; Apply tuning activates it in game tabs at this address.</p>
+            </AssetEditorSection>
+          </AssetEditorPanels>
+        </fieldset>
       </div>
-
-      <div className="mb-8 border-l-2 border-gold bg-parchment-dark p-4 text-base leading-relaxed text-ink-light">
-        Keep your game open and use this page in a second tab. Applied settings are saved in this
-        browser and shared with game tabs at the same address. Buildings and supplies stay in place.
-        New costs affect future purchases; income and renown changes affect existing settlements
-        too.
-        <div className="mt-2 flex flex-wrap gap-4">
-          <Link
-            href="/play"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-red underline"
-          >
-            Open game in another tab ↗
-          </Link>
-          <Link href="/docs/game-specs" className="text-red underline">
-            Read the game specifications →
-          </Link>
-        </div>
-      </div>
-
-      <fieldset disabled={!ready} className="space-y-6">
-        {RULE_GROUPS.filter(group => group !== "Resident income").map((group, index) => (
-          <details key={group} open={index < 2} className="rounded border border-rule p-5">
-            <summary className="cursor-pointer font-display text-base text-ink">{group}</summary>
-            <div className="mt-5 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
-              {RULE_FIELDS.filter((field) => field.group === group && field.key !== "incomeSeconds").map((field) => (
-                <NumericField
-                  key={field.key}
-                  id={field.key}
-                  field={field}
-                  value={session.draft[field.key]}
-                  defaultValue={field.default}
-                  onChange={(value) => update(field.key, value)}
-                />
-              ))}
-            </div>
-          </details>
-        ))}
-        <section>
-          <h2 className="mb-2 font-display text-xl text-ink">Buildings & scenery</h2>
-          <p className="mb-5 text-base text-ink-light">
-            Costs and unlocks apply on placement. Renown and income apply to every placed copy.
-            Footprints and appearance stay fixed.
-          </p>
-          <div className="space-y-5">
-            {BUILD_CATALOG.map((def) => (
-              <details
-                key={def.id}
-                className="rounded border border-rule p-5"
-                open={def.id === "shelter"}
-              >
-                <summary className="cursor-pointer font-display text-base text-ink">
-                  {def.label}{" "}
-                  <span className="ml-2 font-serif text-sm text-ink-light">
-                    {def.category === "scenery" ? "Scenery" : "Building"} · {def.w} × {def.d} tiles
-                  </span>
-                </summary>
-                <div className="mt-5 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
-                  {BUILDING_FIELDS.filter(field => field.key !== "goldIncome" && field.key !== "woodIncome").map((field) => (
-                    <NumericField
-                      key={field.key}
-                      id={`${def.id}.${field.key}`}
-                      field={field}
-                      value={session.draft[`${def.id}.${field.key}`]}
-                      defaultValue={DEFAULT_BALANCE.buildings[def.id][field.key]}
-                      onChange={(value) => update(`${def.id}.${field.key}`, value)}
-                    />
-                  ))}
-                </div>
-              </details>
-            ))}
-          </div>
-        </section>
-      </fieldset>
-    </div>
-  )
+    </AssetEditorContent>
+  </AssetEditorFrame>
 }

@@ -61,7 +61,7 @@
 .hud-resources > :is(span, button) { display: flex; align-items: center; gap: 6px; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .hud-resources img { width: 30px; height: auto; }
 .hud-resources svg { color: #cbb783; }
-.hud-brand { border-left: 1px solid #73633f; padding: 0 var(--hud-space); font-family: var(--font-cinzel), serif; font-size: 12px; letter-spacing: .15em; color: #cbb783; }
+.hud-brand { border-left: 1px solid #73633f; padding: 0 var(--hud-space); font-family: var(--font-geist), sans-serif; font-size: 12px; letter-spacing: .15em; color: #cbb783; }
 .hud-header-actions { position: relative; }
 .hud-header-button { display: flex; justify-content: center; align-items: center; width: 38px; height: 32px; border-left: 1px solid #574b34; color: #d3c097; cursor: pointer; }
 .hud-header-button:hover, .hud-header-button[aria-expanded="true"] { background: #51422c; }
@@ -71,14 +71,14 @@
 .hud-minimap canvas { max-width: 216px; }
 .hud-minimap-north { position: absolute; top: var(--hud-space); right: var(--hud-space); color: #ecdfb7; font-size: 12px; }
 .hud-clock { gap: var(--hud-control-gap); padding: 3px; white-space: nowrap; }
-.hud-day { margin-left: var(--hud-control-gap); font-family: var(--font-cinzel), serif; color: #d4c297; font-size: 12px; }
+.hud-day { margin-left: var(--hud-control-gap); font-family: var(--font-geist), sans-serif; color: #d4c297; font-size: 12px; }
 .hud-date { margin-left: 4px; margin-right: var(--hud-control-gap); font-size: 14px; font-variant-numeric: tabular-nums; line-height: 24px; }
 .hud-pause { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .hud-speeds { display: flex; gap: var(--hud-control-gap); }
 .hud-speeds button { min-width: 28px; height: 28px; padding: 0 4px; font-size: 12px; cursor: pointer; }
 .hud-bottom-center { position: absolute; left: var(--hud-left); right: var(--hud-right); bottom: var(--hud-space); display: flex; flex-direction: column; gap: var(--hud-space); z-index: 15; }
 .hud-bottom-actions { width: fit-content; max-width: 100%; background: #241f16ed; pointer-events: auto; display: flex; align-items: center; gap: var(--hud-control-gap); height: var(--hud-bar-height); border: 1px solid #8c784c; box-shadow: inset 0 0 0 2px #17140e; padding: 3px; }
-.hud-action { display: flex; gap: 7px; align-items: center; justify-content: center; padding: 4px var(--hud-space); height: 28px; font-family: var(--font-cinzel), serif; font-size: 11px; letter-spacing: .04em; white-space: nowrap; pointer-events: auto; cursor: pointer; text-shadow: 0 1px 2px #000; }
+.hud-action { display: flex; gap: 7px; align-items: center; justify-content: center; padding: 4px var(--hud-space); height: 28px; font-family: var(--font-geist), sans-serif; font-size: 11px; letter-spacing: .04em; white-space: nowrap; pointer-events: auto; cursor: pointer; text-shadow: 0 1px 2px #000; }
 .hud-build-tray { position: relative; display: flex; align-items: flex-start; gap: var(--hud-space); padding: var(--hud-space); pointer-events: auto; }
 .hud-build-content { flex: 1; min-width: 0; }
 .hud-build-rotation { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: var(--hud-space); font-size: 12px; color: #d3c097; }
@@ -87,7 +87,7 @@
 .hud-building-tiles { overflow-x: auto; display: flex; min-width: 0; align-items: center; gap: var(--hud-space); }
 .hud-building-tile { position: relative; width: 60px; height: 56px; flex-shrink: 0; padding: 2px; cursor: pointer; }
 .hud-building-tile img { width: 54px; height: 49px; object-fit: contain; }
-.hud-building-tile kbd { position: absolute; right: 4px; bottom: 3px; font: 10px Georgia, serif; color: #eed8a3; text-shadow: 1px 1px #000; }
+.hud-building-tile kbd { position: absolute; right: 4px; bottom: 3px; font: 10px var(--font-geist), sans-serif; color: #eed8a3; text-shadow: 1px 1px #000; }
 .hud-building-tile[aria-disabled="true"] img { filter: saturate(.45); opacity: .6; }
 .hud-close { display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-left: auto; width: 24px; height: 24px; cursor: pointer; }
 /* One button surface for build commands, tabs, playback, and tray dismissal. */
@@ -116,14 +116,14 @@
 }
 .hud-placement-status { position: absolute; bottom: calc(100% + var(--hud-space)); max-width: 100%; padding: 8px var(--hud-space); border-left: 2px solid #a68a50; background: #16150eeb; color: #f1e5c6; font-size: 14px; line-height: 20px; }
 .hud-placement-error { border-color: #cc8e6e; color: #f0baa4; }
-.game-hud-tooltip { z-index: 60; width: 286px; max-width: calc(100vw - var(--hud-space) * 2); padding: var(--hud-space); background: #201c13f5; color: #e4d8bc; border: 1px solid #b79c61; box-shadow: inset 0 0 0 2px #443920, 0 4px 10px #0007; font-family: var(--font-garamond), Georgia, serif; font-size: 15px; line-height: 20px; }
+.game-hud-tooltip { z-index: 60; width: 286px; max-width: calc(100vw - var(--hud-space) * 2); padding: var(--hud-space); background: #201c13f5; color: #e4d8bc; border: 1px solid #b79c61; box-shadow: inset 0 0 0 2px #443920, 0 4px 10px #0007; font-family: var(--font-geist), sans-serif; font-size: 15px; line-height: 20px; }
 .game-hud-tooltip p { margin: 0; }
-.hud-help-title { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-family: var(--font-cinzel), serif; font-size: 14px; color: #f3dfae; }
-.hud-help-title kbd { font: 12px Georgia, serif; border: 1px solid #7c6943; padding: 0 5px; }
+.hud-help-title { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; font-family: var(--font-geist), sans-serif; font-size: 14px; color: #f3dfae; }
+.hud-help-title kbd { font: 12px var(--font-geist), sans-serif; border: 1px solid #7c6943; padding: 0 5px; }
 .hud-help-meta { margin-top: 10px; padding-top: 8px; border-top: 1px solid #5c4e32; color: #d7c192; font-size: 14px; }
 .game-hud-tooltip .hud-help-secondary { margin-top: 6px; color: #c9bd9f; font-size: 13px; }
 .hud-world { position: absolute; top: calc(var(--hud-space) * 2 + var(--hud-bar-height)); right: var(--hud-space); width: var(--hud-dock-width); max-height: calc(100% - var(--hud-map-height) - var(--hud-bar-height) - var(--hud-space) * 4); padding: var(--hud-space); overflow-y: auto; overscroll-behavior: contain; pointer-events: auto; z-index: 20; }
-.hud-world-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 0 var(--hud-space); font-family: var(--font-cinzel), serif; font-size: 14px; }
+.hud-world-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 0 var(--hud-space); font-family: var(--font-geist), sans-serif; font-size: 14px; }
 .hud-world-heading button { cursor: pointer; }
 /* The shared switch in the HUD's dark parchment: gold when on, a rule-coloured rim when off. */
 .hud-switch { pointer-events: auto; border-color: #8c784c; background: #423725; box-shadow: none; }
@@ -155,7 +155,7 @@
 .hud-traffic input { min-width: 0; width: 100%; accent-color: #bea067; }
 .hud-traffic output { min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
 
-.hud-report { font-family: var(--font-garamond), Georgia, serif; }
+.hud-report { font-family: var(--font-geist), sans-serif; }
 
 .hud-mobile-camera, .hud-mobile-speed, .hud-building-label, .hud-building-cost { display: none; }
 .hud-menu { max-height: calc(100dvh - 100px); overflow-y: auto; overscroll-behavior: contain; }
@@ -243,7 +243,7 @@
 
 /* The opening screen shares the live game's frame and control surfaces. */
 .hud-site-links { display: flex; align-items: center; gap: 20px; padding: 0 var(--hud-space); overflow-x: auto; }
-.hud-site-links a { flex-shrink: 0; font-family: var(--font-cinzel), serif; font-size: 11px; color: #d3c097; white-space: nowrap; }
+.hud-site-links a { flex-shrink: 0; font-family: var(--font-geist), sans-serif; font-size: 11px; color: #d3c097; white-space: nowrap; }
 .hud-site-links a:hover { color: #f9e5af; }
 .hud-landing-setup {
   position: absolute;
@@ -259,7 +259,7 @@
   pointer-events: auto;
 }
 /* The saved world's Continue sits apart from the new-world inputs beneath it. */
-.hud-landing-divider { display: flex; align-items: center; gap: 10px; margin: 2px 0; font-family: var(--font-cinzel), serif; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #d4c297; }
+.hud-landing-divider { display: flex; align-items: center; gap: 10px; margin: 2px 0; font-family: var(--font-geist), sans-serif; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: #d4c297; }
 .hud-landing-divider::before, .hud-landing-divider::after { content: ""; flex: 1; height: 1px; background: #5c4e32; }
 .hud-landing-play { height: 42px; margin-top: 4px; font-size: 14px; }
 @media (max-width: 1024px) {
@@ -306,7 +306,7 @@
   text-align: center;
 }
 .hud-landing-title {
-  font-family: var(--font-cinzel), serif;
+  font-family: var(--font-geist), sans-serif;
   font-size: clamp(32px, 5vw, 80px);
   font-weight: 600;
   line-height: 1.1;

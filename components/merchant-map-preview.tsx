@@ -1,5 +1,9 @@
 "use client"
 
+import { TERRAIN } from "@/lib/game/map/terrain"
+
+import { AssetEditorCanvasControls, AssetEditorHelp } from "./asset-editor-frame"
+import { LabSelect, LabSlider, labButton } from "./lab-controls"
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
@@ -124,8 +128,8 @@ function TurningTrails({ demo }: { demo: MerchantDemo }) {
 /** The real terrain, character render pass, scale and transport assembly, shown
  * as a short isolated journey within the existing character playground.
  */
-export function MerchantMapPreview({ playing, row, zoom, ...options }: {
-  playing: boolean; row: number; zoom: number; cargo: Cargo; puller: Puller; horseVariant: HorseVariant; coat: string
+export function MerchantMapPreview({ playing, onPlayingChange, row, zoom, ...options }: {
+  playing: boolean; onPlayingChange: (playing: boolean) => void; row: number; zoom: number; cargo: Cargo; puller: Puller; horseVariant: HorseVariant; coat: string
 }) {
   const [scenario, setScenario] = useState<"merchant" | TurningScenario>("merchant")
   const [radius, setRadius] = useState(DEFAULT_CART_TURN_RADIUS), [trails, setTrails] = useState(true)
@@ -144,22 +148,24 @@ export function MerchantMapPreview({ playing, row, zoom, ...options }: {
   const jump = (time: number) => { clock.current = time; setSeek(time); setFrame(demo.frames[Math.min(demo.frames.length - 1, Math.round(time / demo.step))]) }
   return <div className="merchant-map-preview" aria-label="Merchant journey on a small map">
     <div className="merchant-map-scene"><PixelCanvas orthographic camera={CAMERA}>
-      <color attach="background" args={["#252b1c"]} /><ambientLight intensity={SURFACE_LIGHT.ambient} /><hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} /><CameraLight />
+      <color attach="background" args={[TERRAIN.grass.color]} /><ambientLight intensity={SURFACE_LIGHT.ambient} /><hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} /><CameraLight />
       <MapCamera row={row} zoom={zoom} map={demo.map} />
       <Suspense fallback={null}><TerrainTiles map={demo.map} showGrid traffic={3} /><Trees map={demo.map} /><Bridges map={demo.map} />
         {demo.turning && trails && <TurningTrails demo={demo} />}
         <DemoActors key={`${scenario}:${radius}:${options.puller}:${options.horseVariant}`} {...options} demo={demo} clock={clock} seek={seek} playing={playing} rate={rate} onProgress={setFrame} />
       </Suspense><OutlinePass />
     </PixelCanvas></div>
-    <div className="merchant-map-caption"><span role="status">{frame.stage}{frame.stage === "Selling" ? frame.sales ? " · Customer served" : " · Customer approaching and browsing" : frame.stage === "Closing" && frame.shopProgress === 0 && frame.pasture && !frame.pasture.ready ? " · Waiting for the animal" : ""}</span><span>{demo.turning ? `${frame.clearance ? "Clear of obstacles" : "Cart touches an edge"} · ${trails ? "Gold: hitch · Blue: axle" : "1 tile grid"}` : "Game scale · 1 tile grid"}</span></div>
-    <div className="merchant-map-controls hud-well">
-      <div className="merchant-map-timeline merchant-turn-options">
-        <label>Scenario<select aria-label="Cart simulation" value={scenario} onChange={e => setScenario(e.target.value as typeof scenario)}><option value="merchant">Merchant journey</option>{TURNING_SCENARIOS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
-        {demo.turning && <><label>Turn radius<input aria-label="Cart turn radius" type="range" min={0.4} max={3} step={0.1} value={radius} onChange={e => setRadius(Number(e.target.value))} /><output>{radius.toFixed(1)} tiles</output></label><label><input type="checkbox" checked={trails} onChange={e => setTrails(e.target.checked)} />Show trails</label></>}
+    <AssetEditorCanvasControls>
+      <div className="workspace-canvas-toolbar" aria-label="Journey controls">
+        <LabSelect label="Scenario" ariaLabel="Cart simulation" value={scenario} options={{ merchant: "Merchant journey", ...Object.fromEntries(TURNING_SCENARIOS.map(item => [item.id, item.label])) }} onChange={value => setScenario(value as typeof scenario)} />
+        <LabSelect label="Stage" value={frame.stage} options={Object.fromEntries(demo.stages.map(stage => [stage, stage]))} onChange={value => { onPlayingChange(false); jump(demo.starts[value as typeof frame.stage] ?? 0) }} />
+        <button className={labButton} onClick={() => jump(0)}>Restart</button>
+        <div className="workspace-scrubber"><LabSlider label="Journey progress" value={frame.time} min={0} max={demo.duration} step={demo.step} suffix=" s" onChange={value => { onPlayingChange(false); jump(value) }} /></div>
+        <LabSelect label="Speed" ariaLabel="Journey speed" value={String(rate)} options={{ 1: "1×", 2: "2×", 4: "4×" }} onChange={value => setRate(Number(value))} />
+        {demo.turning && <><div className="workspace-radius"><LabSlider label="Turn radius" value={radius} min={0.4} max={3} step={0.1} suffix=" tiles" onChange={setRadius} /></div><label className="person-check"><input type="checkbox" checked={trails} onChange={event => setTrails(event.target.checked)} />Show trails</label><button className={labButton} disabled={!firstContact} onClick={() => { if (firstContact) { onPlayingChange(false); jump(firstContact.time) } }}>First contact</button></>}
+        <AssetEditorHelp label="Journey">{demo.turning ? TURNING_SCENARIOS.find(item => item.id === scenario)?.description : "Scrub or choose a stage to pause and inspect the journey. Directions below rotate the camera. The map uses the same scale as the game."}</AssetEditorHelp>
+        <span className="workspace-canvas-status" role="status">{demo.turning ? frame.clearance ? "Route clear" : "Edge contact" : frame.stage === "Selling" ? frame.sales ? "Customer served" : "Customer browsing" : frame.stage === "Closing" && frame.shopProgress === 0 && frame.pasture && !frame.pasture.ready ? "Waiting for the animal" : frame.stage}</span>
       </div>
-      {demo.turning && <p className="person-hint">{TURNING_SCENARIOS.find(s => s.id === scenario)?.description}</p>}
-      <div className="merchant-map-stages">{demo.stages.map(stage => <button key={stage} className="hud-action" aria-pressed={frame.stage === stage} onClick={() => jump(demo.starts[stage] ?? 0)}>{stage}</button>)}{demo.turning && <button className="hud-action" disabled={!firstContact} onClick={() => firstContact && jump(firstContact.time)}>{firstContact ? "First edge contact" : "Full route clear"}</button>}</div>
-      <div className="merchant-map-timeline"><button className="hud-action" onClick={() => jump(0)}>Restart</button><input aria-label="Merchant journey progress" type="range" min={0} max={Math.floor(demo.duration/demo.step)} step={1} value={Math.round(frame.time/demo.step)} onChange={e => jump(Number(e.target.value)*demo.step)} /><label>Speed<select aria-label="Journey speed" value={rate} onChange={e => setRate(Number(e.target.value))}>{[1, 2, 4].map(n => <option key={n} value={n}>{n}×</option>)}</select></label></div>
-    </div>
+    </AssetEditorCanvasControls>
   </div>
 }

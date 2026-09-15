@@ -428,7 +428,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
             </select></label>
             {editorTab==='sounds'&&<label className="person-choice">Body voice<select aria-label="Sound body voice" value={design.bodyType} disabled={soundProfile==='friar'||soundProfile==='nun'} onChange={e=>setDesign(d=>withBodyType(d,e.target.value as PersonDesign['bodyType']))}><option>Male</option><option>Female</option></select></label>}
           </div>}</>}
-      controls={<>{(isPerson || isKnight || subject === "cart") && editorTab==='sounds' && <AssetEditorSection title="Sounds"><CharacterAudioEditor profile={subject === "cart" ? "vehicle/cart" : soundProfile} bodyType={isKnight ? "Male" : design.bodyType} voiceVariant={voiceVariant} previewZoom={zoom} clip={isKnight ? mountedKnight ? "mounted" : knightClip : clip} frame={frame} frames={frameCount} playing={playing} active={active && !onMap} selected={previewSelected} onSelect={() => { setPreviewSelected(true); setView("character") }} onDeselect={clearPreviewSelection} onPreviewClip={next=>{setClip(next);setFrame(0)}}/></AssetEditorSection>}
+      controls={<>{(isPerson || isKnight || subject === "cart") && editorTab==='sounds' && <CharacterAudioEditor profile={subject === "cart" ? "vehicle/cart" : soundProfile} bodyType={isKnight ? "Male" : design.bodyType} voiceVariant={voiceVariant} previewZoom={zoom} clip={isKnight ? mountedKnight ? "mounted" : knightClip : clip} frame={frame} frames={frameCount} playing={playing} active={active && !onMap} selected={previewSelected} onSelect={() => { setPreviewSelected(true); setView("character") }} onDeselect={clearPreviewSelection} onPreviewClip={next=>{setClip(next);setFrame(0)}}/>}
 {(editorTab==='appearance' || (!isPerson && !isKnight && subject !== "cart")) && (isPerson ? <>
           <AssetEditorSection title="Body">
             <label className="person-choice">Body type<select aria-label="Body type" value={design.bodyType} onChange={event => { const bodyType = event.currentTarget.value as PersonDesign["bodyType"]; setDesign(d => withBodyType(d, bodyType)); setMessage("") }}><option>Male</option><option>Female</option></select></label>
@@ -473,7 +473,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
             <label className="person-check"><input type="checkbox" checked={guides} onChange={e => setGuides(e.target.checked)} />Attachment guides</label>
             <div className="person-palette">{renderPalette.map((color, index) => <span key={`${index}-${color}`} title={color} style={{ background: color }} />)}</div>
             <p className="person-hint">{pixels} × {pixels} px cell · {renderPalette.length} colours<br />{sheetMatchesDesign ? `${bake.metadata.safePadding} px safe margin` : "Checking margins…"}</p>
-            <Link className={button} href="/assets/characters/pipeline">How this sprite is baked <ArrowUpRight size={12} /></Link>
+            <button className={button} onClick={() => onModeChange("pipeline")}>Sprite pipeline <ArrowUpRight size={12} /></button>
           </AssetEditorSection>
           <AssetEditorSection title="Files">
             <div className="person-file-actions">
@@ -572,7 +572,7 @@ export function BasePersonLab({ mode, onModeChange, active = true }: AssetEditor
           onLostPointerCapture={event => {
             if (viewDrag.current?.pointer === event.pointerId) { viewDrag.current = null; setScrubbingViews(false) }
           }}>
-          {onMap ? <MerchantMapPreview playing={active && playing} row={row} zoom={zoom} cargo={cargo} puller={cartPuller} horseVariant={horseVariant} coat={coat} /> : isPerson && !bake && !preview ? <p className="person-stage-message">Rendering the base person…</p> : view === "sheet" ? <div className="person-sheet">
+          {onMap ? <MerchantMapPreview playing={active && playing} onPlayingChange={setPlaying} row={row} zoom={zoom} cargo={cargo} puller={cartPuller} horseVariant={horseVariant} coat={coat} /> : isPerson && !bake && !preview ? <p className="person-stage-message">Rendering the base person…</p> : view === "sheet" ? <div className="person-sheet">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={url} width={pixels * columns} height={pixels * atlasRows} alt={`${SUBJECTS[subject]} ${clipLabel}: ${subject === "cart" ? CART.directions : 8} directions${subject === "horse" ? ", common and noble variants" : ""} and ${columns} frames`} />
           </div> : view === "native" ? <div className="person-native" aria-label="Native size lineup">

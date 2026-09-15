@@ -1,6 +1,6 @@
 .mapPanel { min-width:0; background:#14100a; }
 .mapLabel { display:flex; flex-direction:column; gap:5px; padding:16px 18px; border-bottom:1px solid #695338; background:#251c12; }
-.mapLabel strong { font:13px var(--font-cinzel),serif; color:#f2e8d5; letter-spacing:1px; }
+.mapLabel strong { font:13px var(--font-geist),sans-serif; color:#f2e8d5; letter-spacing:1px; }
 .mapLabel span { font-size:13px; color:#c3b193; }
 .mapCanvas { height:430px; position:relative; }
 @media(max-width:1100px) { .mapCanvas { height:370px; } }

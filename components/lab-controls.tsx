@@ -47,11 +47,11 @@ export function LabSelect({ label, value, options, onChange, help, ariaLabel }: 
       {Object.entries(options).map(([key, text]) => <option key={key} value={key}>{text}</option>)}
     </select>
   </label>
-  return help ? <HudHelp content={help}><div>{control}</div></HudHelp> : control
+  return help ? <HudHelp className="workspace-tooltip" content={help}><div>{control}</div></HudHelp> : control
 }
 
 export function LabSlider({ label, value, min, max, step, suffix = "", onChange, help }: { help?: string; label: string; value: number; min: number; max: number; step: number; suffix?: string; onChange: (value: number) => void }) {
   const control = <Tuner label={label} labelClassName="w-28" value={value} min={min} max={max} step={step}
     display={`${Number(value.toFixed(step < .01 ? 3 : 2))}${suffix}`} onChange={onChange} />
-  return help ? <HudHelp content={help}><div>{control}</div></HudHelp> : control
+  return help ? <HudHelp className="workspace-tooltip" content={help}><div>{control}</div></HudHelp> : control
 }

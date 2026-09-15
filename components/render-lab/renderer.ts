@@ -1,3 +1,4 @@
+import { TERRAIN } from "@/lib/game/map/terrain"
 import * as THREE from "three"
 import { applySpriteDepth } from "@/lib/game/render/sprite-depth"
 import { cameraOffset, yawForView } from "@/lib/game/render/iso"
@@ -5,7 +6,7 @@ import { actorPose, spriteRow, type Character, type LabSettings, type Method } f
 import { createWorld, disposeScene, lightScene } from "./world"
 
 const ROOT = "/render-lab/sprites/"
-const BACKGROUND = "#14100a"
+const BACKGROUND = TERRAIN.grass.color
 const NEAR = 0.1
 const FAR = 400
 

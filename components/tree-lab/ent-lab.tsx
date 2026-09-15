@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Pause, Play } from "lucide-react"
 import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "../asset-editor-frame"
 import { CharacterAnimationDock, CharacterRigInspector } from "../character-rig-editor"
@@ -17,7 +17,7 @@ import { clearFrameKeys, poseOffset, setPoseKey } from "@/lib/game/base-person/p
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0 — Shared asset editor
  */
 export function EntLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
-  const search = useSearchParams(), router = useRouter(), requested = search.get("species")
+  const search = useSearchParams(), requested = search.get("species")
   const [species, setSpecies] = useState<FoliageSpecies>(requested && isFoliageSpecies(requested) ? requested : "oak")
   const [playing, setPlaying] = useState(true), [showRig, setShowRig] = useState(false), [frame, setFrame] = useState(0), [row, setRow] = useState(1)
   const [selected, setSelected] = useState<EntJoint>("leftHand"), [joints, setJoints] = useState<EntInspection>({})
@@ -50,7 +50,7 @@ export function EntLab({ mode, onModeChange, active = true }: AssetEditorNavigat
   const choose = (next: FoliageSpecies) => {
     setSpecies(next)
     const params = new URLSearchParams(search.toString()); params.set("asset", "ents"); params.set("species", next)
-    router.replace(`/assets/characters?${params}`, { scroll: false })
+    window.history.replaceState(null, "", `/assets?${params}`)
   }
   const keyed = (step: number) => Object.values(design.poseEdits.walk ?? {}).some(keys => keys?.some(key => key.frame === step))
   const key = design.poseEdits.walk?.[selected]?.find(k => k.frame === frame), offset = poseOffset(design.poseEdits, "walk", selected, frame / ENT_FRAMES)

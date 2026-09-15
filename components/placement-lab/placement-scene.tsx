@@ -1,5 +1,7 @@
 "use client"
 
+import { TERRAIN } from "@/lib/game/map/terrain"
+
 import { Suspense, useEffect, useMemo, useRef } from "react"
 import { useThree, type ThreeEvent } from "@react-three/fiber"
 import * as THREE from "three"
@@ -67,7 +69,7 @@ export function PlacementScene({ map, relic, balance, buildType, resources, view
 }) {
   const ceiling = useMemo(() => TILE_HEIGHT + (map.elevation?.height.reduce((a, b) => Math.max(a, b), 0) ?? 0) + 1, [map.elevation])
   return <PixelCanvas frameloop="demand" orthographic camera={{ near: CAM_NEAR, far: CAM_FAR }} outputDpr={1} fallback={<p>This playground needs WebGL.</p>}>
-    <color attach="background" args={["#14100a"]} />
+    <color attach="background" args={[TERRAIN.grass.color]} />
     <LabCamera view={view} extent={Math.max(map.width, map.depth)} />
     <ambientLight intensity={SURFACE_LIGHT.ambient} />
     <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />

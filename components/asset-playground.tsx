@@ -7,6 +7,10 @@ import { AssetEditorFrame, type AssetEditorNavigation } from "./asset-editor-fra
 import type { ComponentType } from "react"
 
 const EDITORS: Record<PlaygroundTool, ComponentType<AssetEditorNavigation & { active?: boolean }>> = {
+  tuning: lazy(() => import("./tuning/balance-editor").then(m => ({ default: m.BalanceEditor }))),
+  trees: lazy(() => import("./tree-lab/tree-lab").then(m => ({ default: m.TreeLab }))),
+  textures: lazy(() => import("./texture-workspace").then(m => ({ default: m.TextureWorkspace }))),
+  pipeline: lazy(() => import("./sprite-pipeline").then(m => ({ default: m.SpritePipeline }))),
   characters: lazy(() => import("./base-person-lab").then(m => ({ default: m.BasePersonLab }))),
   animals: lazy(() => import("./animal-lab").then(m => ({ default: m.AnimalLab }))),
   buildings: lazy(() => import("./building-lab/procedural-workshop").then(m => ({ default: m.ProceduralWorkshop }))),

@@ -1,3 +1,4 @@
+import { WorkspaceDocument } from "@/components/workspace-document"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { BUILD_CATALOG, DEFAULT_BALANCE, RULE_FIELDS, RULE_GROUPS } from "@/lib/game/balance"
@@ -14,19 +15,7 @@ const table =
 
 export default function GameSpecsPage() {
   return (
-    <main className="min-h-screen bg-[#1a1208] px-4 py-10">
-      <article className="mx-auto max-w-5xl border border-rule bg-parchment p-6 text-base leading-relaxed text-ink-light shadow-xl sm:p-10">
-        <nav className="flex flex-wrap gap-5 text-sm text-red">
-          <Link href="/docs">← Design document</Link>
-          <Link href="/tuning">Game tuning →</Link>
-          <Link href="/play" target="_blank" rel="noopener noreferrer">
-            Play ↗
-          </Link>
-        </nav>
-        <h1 className="mt-8 font-display text-3xl tracking-[2px] text-ink">Game specifications</h1>
-        <p className="mt-3 text-lg italic">
-          The implemented build, buy and shrine progression rules.
-        </p>
+    <WorkspaceDocument page="specs" title="Game specifications">
         <p className="mt-3">
           Values on this page are the shipped defaults, generated from the same definitions the game
           uses.{" "}
@@ -309,7 +298,6 @@ export default function GameSpecsPage() {
             </div>
           </section>
         ))}
-      </article>
-    </main>
+    </WorkspaceDocument>
   )
 }

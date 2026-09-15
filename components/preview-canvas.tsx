@@ -1,5 +1,7 @@
 "use client"
 
+import { TERRAIN } from "@/lib/game/map/terrain"
+
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 
 import { useEffect } from "react"
@@ -41,7 +43,7 @@ export function PreviewCanvas({
       camera={{ position: cameraOffset(yaw), zoom, near: CAM_NEAR, far: CAM_FAR }}
       onCreated={({ camera }) => camera.lookAt(0, 0, 0)}
     >
-      <color attach="background" args={["#14100a"]} />
+      <color attach="background" args={[TERRAIN.grass.color]} />
 
       <ambientLight intensity={SURFACE_LIGHT.ambient} />
       <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />

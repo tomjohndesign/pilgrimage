@@ -1,7 +1,7 @@
+import { WorkspaceDocument } from "@/components/workspace-document"
 import Link from "next/link"
 import type { Metadata } from "next"
 
-import { DocumentHeader } from "@/components/document-header"
 import { Section } from "@/components/section"
 import { PhaseGrid } from "@/components/phase-grid"
 import { CoreLoop } from "@/components/core-loop"
@@ -16,10 +16,9 @@ export const metadata: Metadata = {
 
 export default function DesignDocumentPage() {
   return (
-    <main className="min-h-screen bg-[#1a1208] px-5 py-10 md:px-5 md:py-10">
-      <article className="relative mx-auto max-w-[780px] bg-parchment p-7 md:p-[60px_70px] shadow-[0_0_0_1px_var(--rule),0_0_0_4px_var(--parchment-dark),0_0_0_5px_var(--rule),8px_8px_40px_rgba(0,0,0,0.7)] page-border parchment-texture">
+    <WorkspaceDocument page="docs" title="Design document">
         
-        <DocumentHeader />
+        <p className="text-sm text-ink-light">Design Document v0.3 · April 2026</p>
         <p className="my-6 border-l-2 border-gold bg-parchment-dark p-4 text-base text-ink-light">
           This document describes the wider game design. For the current prototype’s economy,
           construction and renown rules, read the <Link href="/docs/game-specs" className="text-red underline">game specifications</Link>.
@@ -260,7 +259,6 @@ export default function DesignDocumentPage() {
         </Section>
 
         <DocumentFooter />
-      </article>
-    </main>
+    </WorkspaceDocument>
   )
 }

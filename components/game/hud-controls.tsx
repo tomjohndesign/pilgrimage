@@ -23,11 +23,11 @@ import { CROWD_SPEED_LIMIT, SIMULATION_SPEEDS, crowdSafeSpeed, speedBlockedByCro
 /** Hover and keyboard-focus help, positioned inside the viewport by Radix.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1N5-0
  */
-export function HudHelp({ children, content, open, onOpenChange }: { children: ReactElement; content: ReactNode; open?: boolean; onOpenChange?: (open: boolean) => void }) {
+export function HudHelp({ children, content, open, onOpenChange, className = "" }: { children: ReactElement; content: ReactNode; className?: string; open?: boolean; onOpenChange?: (open: boolean) => void }) {
   return <Tooltip.Root open={open} onOpenChange={onOpenChange}>
     <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
     <Tooltip.Portal>
-      <Tooltip.Content className="game-hud-tooltip" side="top" align="start" sideOffset={12} collisionPadding={12}>
+      <Tooltip.Content className={`game-hud-tooltip ${className}`} side="top" align="start" sideOffset={12} collisionPadding={12}>
         {content}
       </Tooltip.Content>
     </Tooltip.Portal>

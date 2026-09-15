@@ -45,7 +45,7 @@ function drawMap(canvas: HTMLCanvasElement, map: Preview, overlay: boolean) {
     })
     ctx.stroke()
   }
-  ctx.font = `bold ${Math.round(scale * 5)}px sans-serif`
+  ctx.font = `bold ${Math.round(scale * 5)}px ${getComputedStyle(document.body).fontFamily}`
   ctx.textAlign = "center"; ctx.textBaseline = "middle"
   map.clearings.forEach((c, i) => {
     const x = (c.x + .5) * scale, y = (c.z + .5) * scale
@@ -121,9 +121,9 @@ export function MapLab({ mode, onModeChange, active = true }: AssetEditorNavigat
     canvas.width = squareSize + 32; canvas.height = header + squareSize + 48
     const ctx = canvas.getContext("2d")!
     ctx.fillStyle = "#14100a"; ctx.fillRect(0, 0, canvas.width, canvas.height)
-    ctx.fillStyle = "#f2e8d5"; ctx.font = "22px sans-serif"
+    ctx.fillStyle = "#f2e8d5"; ctx.font = `22px ${getComputedStyle(document.body).fontFamily}`
     ctx.fillText(METHODS[method].title, 16, 30)
-    ctx.font = "14px sans-serif"
+    ctx.font = `14px ${getComputedStyle(document.body).fontFamily}`
     ctx.fillText(`Seed ${settings.seed} · ${settings.size} × ${settings.size} tile sample · woodland & water`, 16, 54)
     ctx.fillText(`Trees ${settings.forest}% · clearing density ${settings.clearings} · dark woods ${settings.darkCount} × ${settings.darkShare}% · heart size ${settings.heart}`, 16, 76)
     ctx.fillText(`River density ${settings.rivers} · lake density ${settings.lakes}${method === "groves" ? ` · parent stands ${settings.groves} · wind ${settings.wind}°` : ""}`, 16, 98)
