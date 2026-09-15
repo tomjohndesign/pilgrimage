@@ -108,7 +108,7 @@
 }
 
 /* Titles share the display face; controls and reading text keep Geist. */
-:root body h1, :root .page-title {
+:root body h1, :root .page-title, :root .workspace-document :is(h2,h3,h4) {
   font-family: var(--font-unifraktur-cook), serif;
   font-weight: 700;
   letter-spacing: normal;

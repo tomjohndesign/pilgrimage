@@ -156,7 +156,7 @@ export function LoadingChurch({ showChurch, phase, overlayRef, chapel = true, id
       fetchPriority="high" loading="eager" decoding="sync" alt="" draggable={false}
       className="loading-church-image" style={{ width: `${8 * scale}dvh`, height: `${8 * scale}dvh` }} />}
     {generating && <>
-      <p className="loading-church-caption" role="status">{resuming ? "restoring your settlement" : "generating map"}</p>
+      <p className="loading-church-caption page-title" role="status">{resuming ? "restoring your settlement" : "generating map"}</p>
       <svg className="loading-church-progress" viewBox={`0 0 ${CONSTRUCTION_BAR_WIDTH} ${CONSTRUCTION_BAR_HEIGHT}`}
         role="progressbar" aria-label="Generating map" shapeRendering="crispEdges">
         <rect width={48} height={6} fill="#30210c" />

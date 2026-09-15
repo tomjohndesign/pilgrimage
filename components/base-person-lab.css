@@ -267,7 +267,9 @@
 .workspace-document { max-width:900px; margin:0 auto; font-size:16px; line-height:1.6; }
 .workspace-document > h1 { font-size:24px; margin:0 0 24px; }
 .workspace-document :is(h1,h2,h3) { font-family:inherit; letter-spacing:0; text-transform:none; scroll-margin-top:20px; }
-.workspace-document h2 { margin-top:28px; font-size:18px; }
+.workspace-document h2 { margin-top:28px; font-size:22px; }
+.workspace-document h3 { font-size:18px; }
+.workspace-document h4 { font-size:16px; }
 .workspace-document :is(section,header,footer,li,p,h2) { border:0; box-shadow:none; }
 .workspace-document .bg-parchment-dark { background:transparent; }
 .workspace-document a { color:var(--workspace-accent); }

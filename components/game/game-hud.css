@@ -305,13 +305,13 @@
   text-align: center;
 }
 .hud-landing-title {
-  font-family: var(--font-geist), sans-serif;
+  font-family: var(--font-unifraktur-cook), serif;
   font-size: clamp(32px, 5vw, 80px);
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.1;
-  letter-spacing: .12em;
+  letter-spacing: normal;
   text-indent: 0;
-  text-transform: uppercase;
+  text-transform: none;
   color: #f2e8d5;
   white-space: nowrap;
 }
@@ -335,7 +335,7 @@
 .hud-landing-footer a:hover { color: #f9e5af; }
 @media (max-width: 640px) {
   .hud-landing-heading { top: 100px; }
-  .hud-landing-title { font-size: clamp(25px, 7.5vw, 42px); letter-spacing: .07em; }
+  .hud-landing-title { font-size: clamp(25px, 7.5vw, 42px); }
   .hud-landing-subtitle { margin-top: 6px; }
   .hud-landing-footer { bottom: calc(18px + env(safe-area-inset-bottom)); gap: 4px 16px; font-size: 12px; }
 }
@@ -362,8 +362,8 @@
 .hud-header-button { width:32px; height:34px; }
 .hud-bottom-actions { padding:7px; gap:6px; }
 .hud-bottom-center { right:auto; max-width:calc(100% - var(--hud-dock-width) - 60px); }
-.hud-build-tray { width:304px; max-height:65dvh; padding:12px; overflow:auto; flex-direction:column; gap:8px; }
-.hud-build-heading { display:flex; align-items:center; justify-content:space-between; width:100%; padding-left:8px; font-size:13px; }
+.hud-build-tray { width:240px; max-height:65dvh; padding:12px; overflow:auto; flex-direction:column; gap:8px; }
+.hud-build-heading { display:flex; align-items:center; justify-content:space-between; width:100%; padding:8px; font-size:13px; }
 .hud-build-content { width:100%; }
 .hud-building-tiles { flex-direction:column; align-items:stretch; gap:4px; overflow:visible; }
 .hud-building-tiles .hud-building-tile { display:grid; grid-template-columns:44px minmax(0,1fr); column-gap:10px; align-items:center; text-align:left; width:100%; height:auto; min-height:48px; padding:6px 8px; border:0; border-radius:4px; box-shadow:none; background:transparent; color:var(--chrome-text); }
@@ -391,40 +391,54 @@
 @media(max-width:900px) {
  .game-hud:not(.person-editor) { --hud-space:10px; --hud-dock-width:220px; }
  .hud-bottom-center { max-width:calc(100% - 20px); }
- .hud-build-tray { width:min(304px,calc(100vw - 20px)); }
+ .hud-build-tray { width:min(240px,calc(100vw - 20px)); }
  .hud-resources { gap:8px; padding:0 8px; }
  .hud-resources > :is(span,button) { font-size:12px; }
  .hud-header-actions { gap:3px; padding:6px; }
 }
-.game-hud .hud-time-controls { position:absolute; bottom:20px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:8px; pointer-events:auto; }
-.game-hud .hud-time-controls .hud-clock { position:static; height:48px; }
-.game-hud .hud-time-controls .hud-traffic { position:static; width:140px; height:48px; padding:6px 10px; }
+.game-hud .hud-time-controls { display:flex; flex-direction:column; gap:12px; flex-shrink:0; padding:0 12px 12px; pointer-events:auto; }
+.game-hud .hud-time-controls .hud-clock { position:static; height:auto; width:100%; padding:0; flex-direction:column; align-items:stretch; gap:8px; background:transparent; }
+.hud-clock-date,.hud-clock-playback { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.hud-clock-date :is(.hud-day,.hud-date) { margin:0; font-size:12px; }
+.game-hud .hud-time-controls .hud-traffic { position:static; width:100%; height:auto; padding:0; background:transparent; }
 .game-hud .hud-traffic .chrome-tuner { gap:3px; }
 .game-hud .hud-traffic .chrome-tuner-label { font-size:10px; }
 .game-hud .hud-traffic .chrome-tuner-control { height:20px; }
 .game-hud .hud-traffic .chrome-tuner-value { font-size:10px; right:5px; }
 @media (max-width:900px) {
- .game-hud .hud-time-controls { bottom:12px; gap:4px; }
- .game-hud .hud-time-controls .hud-traffic { width:90px; }
+ .game-hud .hud-details-dock { display:flex; }
+ .game-hud .hud-details-dock:not([data-map-open="true"]) .hud-minimap { display:none; }
 }
 .game-hud .hud-menu :is(a,nav button) { text-transform:none; letter-spacing:normal; font-size:13px; }
-@media(max-width:900px) {
- .game-hud .hud-time-controls { bottom:72px; z-index:25; }
- .game-hud .hud-build-tray { margin-bottom:56px; max-height:calc(100dvh - 270px); }
-}
 @media(max-width:900px) {
  .game-hud .hud-mobile-speed.chrome-select { display:inline-flex; align-items:center; width:64px; min-width:64px; gap:6px; padding:4px 8px; }
 }
 
 /* The hover preview aligns to the whole tray, keeping rows unobscured. */
 .chrome-tooltip.game-hud-tooltip.hud-building-preview {
- width:320px; height:var(--anchor-height); max-height:var(--available-height); overflow:auto; padding:20px;
+ width:320px; height:var(--anchor-height); max-height:var(--available-height); overflow:auto; padding:20px; border:0; border-left:1px solid var(--chrome-line); border-radius:0 6px 6px 0; box-shadow:none;
 }
-.hud-building-preview-art { display:grid; place-items:center; min-height:168px; margin-bottom:16px; }
-.hud-building-preview-art img { width:162px; height:147px; object-fit:contain; }
+.hud-building-preview-art { display:grid; place-items:center; min-height:216px; margin-bottom:16px; }
+.hud-building-preview .hud-help-title { font-size:24px; margin-bottom:12px; }
+.game-hud .hud-build-tray:has([data-popup-open]) { border-radius:6px 0 0 6px; }
+.hud-building-preview-art img { width:216px; height:196px; object-fit:contain; }
 
 @media(max-width:767px) {
- .chrome-tooltip.game-hud-tooltip.hud-building-preview { height:auto; max-height:min(55dvh,var(--available-height)); padding:16px; }
+ .chrome-tooltip.game-hud-tooltip.hud-building-preview { height:auto; max-height:min(55dvh,var(--available-height)); padding:16px; border:1px solid var(--chrome-line); border-radius:6px; }
+ .game-hud .hud-build-tray:has([data-popup-open]) { border-radius:6px; }
  .hud-building-preview-art { min-height:110px; margin-bottom:12px; }
  .hud-building-preview-art img { width:108px; height:98px; }
+}
+
+/* Selection stays above the left build action; the minimap owns playback only. */
+.game-hud .hud-selection-dock { position:absolute; left:var(--hud-space); bottom:calc(var(--hud-space) * 2 + 48px); width:300px; max-height:calc(100% - 176px); overflow:auto; pointer-events:auto; z-index:20; }
+.game-hud .hud-selection-dock .hud-selection-name { font-size:24px; line-height:1.2; margin:8px 0; }
+.hud-party-members { display:flex; flex-direction:column; gap:4px; margin-top:12px; }
+.hud-party-members .chrome-nav-row > span { display:flex; flex-direction:column; gap:4px; }
+.hud-party-member-name { font-size:18px; }
+.hud-party-members small { color:var(--chrome-muted); font:11px/1.4 var(--font-geist),sans-serif; }
+@media(max-width:900px) {
+ .game-hud .hud-selection-dock { width:min(300px,calc(100% - 20px)); bottom:200px; max-height:calc(100% - 330px); }
+ .game-hud .hud-details-dock[data-inspecting="true"] .hud-minimap { display:none; }
+ .game-hud:is([data-panel="world"],[data-panel="menu"]) .hud-selection-dock { display:none; }
 }

@@ -8,7 +8,6 @@ import { PlayerColorPicker } from "./player-color"
 
 import { isChapel } from "@/lib/game/shrine-layout"
 import { CHURCH_COST, CHURCH_RENOWN_BONUS, CHAPEL_MONKS, CHURCH_MONKS } from "@/lib/game/shrine-upgrade"
-import { builderPaceLabel, builderRate, MONK_BUILD_RATE } from "@/lib/game/build-labour"
 import { isComplete, isHouse, isMonkShelter } from "@/lib/game/construction"
 import { BUILDING_KINDS, buildingKind } from "@/lib/game/buildings"
 import { housingBeds, housingCapacity, monkBeds } from "@/lib/game/housing"
@@ -18,7 +17,7 @@ import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/eleva
 
 import Link from "next/link"
 import { Tooltip } from "@base-ui/react/tooltip"
-import { Dices, Menu, Settings, X } from "lucide-react"
+import { ArrowLeft, ChevronRight, Dices, Menu, Settings, X } from "lucide-react"
 import "./game-hud.css"
 import { useEffect, useId, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
@@ -70,7 +69,6 @@ import { Switch } from "@/components/ui/switch"
 import { browserDiagnostics, diagnosticsSchema, type BugReportDiagnostics } from "@/lib/bug-report"
 import { useBugReportRuntime } from "@/hooks/use-bug-report-runtime"
 import { useSimulationStore } from "@/lib/game/simulation-store"
-import { partyNeedDrain } from "@/lib/game/travel-parties"
 import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES } from "@/lib/game/scene-visibility"
 import { Section, Tuner } from "./property-controls"
 import { BuildControls, HudClock, HudResources } from "./hud-controls";
@@ -279,12 +277,14 @@ function useLiveStats(travelerId: number): SimTraveler | null {
 }
 
 /** Who the player clicked on the road: name, calling, and what drives them. */
-function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; travelers: Traveler[]; map: GameMap | null }) {
+function TravelerPanel({ traveler, travelers, map, monk }: { traveler: Traveler; travelers: Traveler[]; map: GameMap | null; monk?: Monk }) {
   const a = traveler.attributes
   const live = useLiveStats(traveler.id)
   const sim = simRegistry.current
   const party = live?.partyId === undefined ? undefined : sim?.parties.get(live.partyId)
   const companions = traveler.party ? travelers.filter(t => t.party?.id === traveler.party!.id) : []
+  const [view, setView] = useState<"party" | "members" | "person">(monk ? "person" : traveler.party ? "party" : "person")
+  useEffect(() => { setView(monk ? "person" : traveler.party ? "party" : "person") }, [traveler.party?.id])
   const waitingLabel = live?.partyGathering?.back ? "Rejoining the company"
     : party?.gathering ? `${live?.partyGathering?.arrived ? "Waiting for" : "Joining"} companions · ${party.gathering.label}`
     : "Waiting for companions"
@@ -300,12 +300,33 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
   const named = (id: string | null | undefined) => map?.buildings.find(b => b.id === id)?.label
   // The barks are in Old English and Latin, so the panel carries the meaning.
   const spokenLine = useVoiceSubtitleStore(s => s.travelerId === traveler.id ? s.line : null)
+  if (monk && view === "person") return <MonkPanel monk={monk} onBack={() => setView("members")} />
+  if (companions.length > 0 && view !== "person") return <Panel>
+    <div className="flex items-center justify-between gap-2">
+      {view === "members" ? <ChromeButton className="chrome-back" onClick={() => setView("party")}><ArrowLeft size={14} />Party</ChromeButton> : <Label>Travel party</Label>}
+      <ChromeButton className="chrome-icon-button" aria-label="Dismiss party" onClick={() => useCameraStore.getState().select(null)}><X size={14} /></ChromeButton>
+    </div>
+    <h2 className="page-title hud-selection-name">{view === "members" ? "Party members" : traveler.party!.name}</h2>
+    {view === "party" ? <>
+      <p className="text-xs text-ink-light">{party?.members.length ?? companions.length} members{party ? ` · ${party.reason}` : " · Former companions"}</p>
+      <div className="mt-3 flex gap-2"><FollowButton subject="party" />{party && <ChromeButton className="hud-action" onClick={focusParty}>Find party</ChromeButton>}</div>
+      <ChromeButton className="chrome-nav-row mt-3" onClick={() => setView("members")}><span>Members</span><ChevronRight size={14} /></ChromeButton>
+    </> : <nav className="hud-party-members" aria-label="Party members">{companions.map(person => {
+      const state = sim?.travelers.get(person.id), monk = sim?.joinedMonks.get(person.id)
+      return <ChromeButton key={person.id} className="chrome-nav-row" onClick={() => {
+        setView("person")
+        const camera = useCameraStore.getState()
+        camera.select(monk ? {kind:"monk",id:monk.id} : {kind:"traveler",id:person.id})
+        if (state) camera.panTo(state.x,state.z)
+      }}><span><span className="page-title hud-party-member-name">{person.name}</span><small>{monk || state?.home || state?.employer ? "Settled" : state?.partyWaiting ? "Waiting" : person.type.label}</small></span><ChevronRight size={14} /></ChromeButton>
+    })}</nav>}
+  </Panel>
   return (
     <Panel>
       <div className="flex items-center justify-between gap-4">
-        <Label>Traveler</Label>
+        {companions.length > 0 ? <ChromeButton className="chrome-back" onClick={() => setView("members")}><ArrowLeft size={14} />Members</ChromeButton> : <Label>Traveler</Label>}
         <div className="flex items-center gap-2">
-          <FollowButton subject={party ? "party" : "traveler"} />
+          <FollowButton subject="traveler" />
           <ChromeButton
             type="button"
             onClick={() => useCameraStore.getState().select(null)}
@@ -317,7 +338,7 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
         </div>
       </div>
       <div className="pt-1">
-        <div className="font-display text-xs text-ink">{traveler.name}</div>
+        <h2 className="page-title hud-selection-name">{traveler.name}</h2>
         <div className="flex items-center gap-1.5">
           <span
             className="inline-block h-2 w-2 border border-rule"
@@ -348,39 +369,10 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
           </div>
         )}
         {live?.home && !live.employer && <div className="text-[11px] text-ink-light">Lives at {named(live.home) ?? "a house"} · Looking for work</div>}
-        {live && live.fled > 0 && (
-          <div className="text-[11px] italic text-red">
-            Turned back {live.fled === 1 ? "once" : `${live.fled} times`}
-          </div>
-        )}
+
       </div>
 
-      {companions.length > 0 && <div className="mt-2 border-t border-rule pt-2" aria-label="Travel party">
-        <div className="flex items-center justify-between gap-2">
-          <Label>{party ? `Party of ${party.members.length}` : "Former companions"}</Label>
-          {party && <ChromeButton type="button" className="hud-action" onClick={focusParty}>Find party</ChromeButton>}
-        </div>
-        <div className="text-[11px] text-ink">{traveler.party!.name}</div>
-        {party && <p className="text-[11px] italic text-ink-light">{party.reason}{party.stage === "traveling" && ` · ${party.singleFile ? "Single file" : "Loose group"}`}</p>}
-        {party && <p className="text-[11px] text-ink-light">Shares purse, food and water · provisions last {Math.round(100 / partyNeedDrain(party.members.length, (party.transport ? 1 : 0) + (party.packs?.length ?? 0)))}% as long as alone</p>}
-        <div className="mt-1 flex max-h-36 flex-col gap-1 overflow-y-auto">
-          {companions.map(person => {
-            const state = sim?.travelers.get(person.id), monk = sim?.joinedMonks.get(person.id)
-            const resident = !!(state?.home || state?.employer || monk)
-            return <ChromeButton key={person.id} type="button" className="hud-action text-left" aria-current={person.id === traveler.id ? "true" : undefined}
-              onClick={() => {
-                const camera = useCameraStore.getState()
-                camera.select(monk ? { kind: "monk", id: monk.id } : { kind: "traveler", id: person.id })
-                if (state) camera.panTo(state.x, state.z)
-              }}>
-              {person.name}{traveler.party?.partnerId === person.id ? " · Partner" : ""}{resident ? " · Settled" : state?.partyWaiting ? " · Waiting" : ""}
-            </ChromeButton>
-          })}
-        </div>
-      </div>}
-
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
-        <StatBar label="Status" value={a.status} />
         <StatBar label="Piety" value={Math.round(live?.piety ?? a.piety)} />
         <StatBar label="Happiness" value={Math.round(live?.happiness ?? a.happiness)} />
         <StatBar label="Hunger" value={Math.round(live?.hunger ?? a.hunger)} />
@@ -394,16 +386,11 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
           <span className="font-display text-[10px] text-ink">{live?.gold ?? a.gold} ✦</span>
         </div>
         <div className="flex items-baseline justify-between gap-4">
-          <span className="text-[11px] italic text-ink-light">Jobless</span>
-          <span className="font-display text-[10px] text-ink">{(live?.jobless ?? a.jobless) ? "Yes" : "No"}</span>
-        </div>
-        <div className="flex items-baseline justify-between gap-4">
           <span className="text-[11px] italic text-ink-light">Skills</span>
           <span className="max-w-32 text-right text-[11px] italic text-ink">
             {a.skills.length > 0 ? a.skills.join(", ") : "none"}
           </span>
         </div>
-        <BuilderPace rate={builderRate(a.skills)} />
       </div>
     </Panel>
   )
@@ -505,7 +492,7 @@ function RelicPanel({ relic }: { relic: Relic }) {
         </ChromeButton>
       </div>
       <div className="pt-1">
-        <div className="font-display text-xs text-ink">{relicTitle(relic)}</div>
+        <h2 className="page-title hud-selection-name">{relicTitle(relic)}</h2>
         <div className="flex items-center gap-1.5">
           <span
             className="inline-block h-2 w-2 border border-rule"
@@ -526,14 +513,6 @@ function RelicPanel({ relic }: { relic: Relic }) {
       </div>
     </Panel>
   )
-}
-
-/** How fast this pair of hands raises a building, against a plain untrained one. */
-function BuilderPace({ rate }: { rate: number }) {
-  return <div className="flex items-baseline justify-between gap-4">
-    <span className="text-[11px] italic text-ink-light">Building</span>
-    <span className="font-display text-[10px] text-ink">{builderPaceLabel(rate)} ×{rate}</span>
-  </div>
 }
 
 function ConstructionStatus({ building }: { building: BuildingDef }) {
@@ -564,7 +543,7 @@ function useMonkLiveState(monkId: number) {
 }
 
 /** One of the brothers: name, office, and what he brought with him. */
-function MonkPanel({ monk }: { monk: Monk }) {
+function MonkPanel({ monk, onBack }: { monk: Monk; onBack?: () => void }) {
   const balance = useBalanceStore((s) => s.balance)
   const a = monk.attributes
   const { activity, piety, happiness } = useMonkLiveState(monk.id)
@@ -582,7 +561,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
   return (
     <Panel>
       <div className="flex items-center justify-between gap-4">
-        <Label>Brother</Label>
+        {onBack ? <ChromeButton className="chrome-back" onClick={onBack}><ArrowLeft size={14} />Members</ChromeButton> : <Label>Brother</Label>}
         <div className="flex items-center gap-2">
           <FollowButton subject="monk" />
           <ChromeButton
@@ -596,7 +575,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
         </div>
       </div>
       <div className="pt-1">
-        <div className="font-display text-xs text-ink">{monk.name}</div>
+        <h2 className="page-title hud-selection-name">{monk.name}</h2>
         <div className="text-[13px] italic text-ink-light">
           {monk.duty}, {a.age} years
         </div>
@@ -613,32 +592,21 @@ function MonkPanel({ monk }: { monk: Monk }) {
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
-        <ChromeButton type="button" className="hud-action"
+        <ChromeButton type="button" className="hud-action" title="Preach on the main road for up to three days, or recall earlier. Nearby travelers gain an extra chance to visit the relic."
           disabled={monk.duty === "Keeper of the Relic" || !evangelizing && (!evangelism.available || carryingRelic || activity === "flying" || stamina <= MONK_TIRED_AT)}
           onClick={() => evangelizing ? evangelism.recall(monk.id) : evangelism.request(monk.id)}>
           {evangelizing ? "Recall from preaching" : "Evangelize on the main road"}
         </ChromeButton>
-        <p className="mt-1 text-[11px] italic text-ink-light">Preach beside the junction for 3 days, including travel and rest, or until recalled. Monks tire more slowly and sleep where they are before resuming. While preaching, gives passing travelers a 5% extra chance to visit the relic, independent of a cross. Extra preachers do not stack.</p>
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
-        <ChromeButton type="button" className="hud-action" disabled={monk.duty === "Keeper of the Relic" || !procession.available || evangelizing || activity === "toEvangelize" || activity === "preaching" || activity === "flying" ||
+        <ChromeButton type="button" className="hud-action" title="Carry the relic to the main road. Nearby travelers gain piety once per procession." disabled={monk.duty === "Keeper of the Relic" || !procession.available || evangelizing || activity === "toEvangelize" || activity === "preaching" || activity === "flying" ||
           (procession.monkId !== null && !carryingRelic) || (carryingRelic && (procession.returnRequested || procession.stage === "lowering" || procession.stage === "returning"))}
           onClick={() => carryingRelic ? procession.returnRelic() : procession.request(monk.id)}>
           {carryingRelic ? "Return relic" : "Carry relic in procession"}
         </ChromeButton>
-        <p className="mt-1 text-[11px] italic text-ink-light">The procession follows the path to the main road. Nearby folk gain up to 5 piety once per procession, marked by a cross.</p>
       </div>
 
-      <div className="mt-2 border-t border-rule pt-2">
-        <div className="flex items-baseline justify-between gap-4">
-          <span className="text-[11px] italic text-ink-light">Skills</span>
-          <span className="max-w-32 text-right text-[11px] italic text-ink">
-            {a.skills.join(", ")}
-          </span>
-        </div>
-        <BuilderPace rate={MONK_BUILD_RATE} />
-      </div>
     </Panel>
   )
 }
@@ -739,11 +707,6 @@ export function GameHud({
   const [minimapOpen, setMinimapOpen] = useState(false)
   const [panel, setPanel] = useState<"build" | "world" | "settlement" | null>(null)
 
-  const closeBuild = () => {
-    setPanel(null)
-    economy.chooseBuild(null)
-    document.getElementById("build-menu-button")?.focus()
-  }
   const toggleBuild = () => {
     setPanel((current) => current === "build" ? null : "build")
     setMenuOpen(false)
@@ -812,6 +775,7 @@ export function GameHud({
     selection?.kind === "traveler" ? (travelers.find((t) => t.id === selection.id) ?? null) : null
   const selectedMonk =
     selection?.kind === "monk" ? (monks.find((m) => m.id === selection.id) ?? null) : null
+  const selectedPartyMember = selectedTraveler ?? (selectedMonk ? travelers.find(t => t.id === selectedMonk.id && t.party) : undefined)
   const piles = useBuildStore((s) => s.piles)
   const selectedBuilding = selection?.kind === "building" ? map?.buildings.find((b) => b.id === selection.id) : null
   const demolition = map && selectedBuilding ? demolitionTargets(map, selectedBuilding.id) : []
@@ -872,9 +836,6 @@ export function GameHud({
 
         </div>
       </header>
-      {playing && <div className="hud-time-controls"><HudClock /><section className="hud-traffic" aria-label="Traffic">
-        <Tuner label="Characters" display={String(travelers.length)} min={0} max={MAX_TRAFFIC} value={settings.traffic} onChange={traffic => set({ traffic })} />
-      </section></div>}
 
       {!starting && <div className="hud-landing-heading">
         <h1 className="hud-landing-title">Pilgrimage</h1>
@@ -1172,7 +1133,7 @@ export function GameHud({
         </>}
       </aside>}
 
-      {playing && <BuildControls economy={economy} open={panel === "build"} onToggle={toggleBuild} onClose={closeBuild}
+      {playing && <BuildControls economy={economy} open={panel === "build"} onToggle={toggleBuild} playerColor={settings.playerColor}
         minimapOpen={minimapOpen} onToggleMinimap={() => {
           setMinimapOpen((open) => !open)
           setMenuOpen(false)
@@ -1180,7 +1141,7 @@ export function GameHud({
           economy.chooseBuild(null)
           useCameraStore.getState().select(null)
         }} />}
-      {playing && map && <aside id="minimap-dock" data-map-open={minimapOpen} className="hud-details-dock hud-well" aria-label="Minimap and selection" data-selected={!!selection || panel === "settlement"}>
+      {playing && map && (selection || panel === "settlement") && <aside className="hud-selection-dock hud-well" aria-label="Selected item">
         {panel === "settlement" && <div className="hud-inspector" id="settlement-details">
           <SettlementPanel economy={economy} monks={monks} relic={relic} onClose={() => setPanel(null)} />
         </div>}
@@ -1189,36 +1150,35 @@ export function GameHud({
           {selectedBuilding && (
             <Panel>
             <div className="flex items-center justify-between gap-4"><Label>{selectedDefinition?.category === "scenery" ? "Scenery" : "Building"}</Label><ChromeButton type="button" aria-label="Dismiss building" onClick={() => useCameraStore.getState().select(null)} className="pointer-events-auto text-xs text-ink-light">✕</ChromeButton></div>
-            <p className="mt-1 font-display text-xs text-ink">{selectedBuilding.label}</p>
+            <h2 className="page-title hud-selection-name">{selectedBuilding.label}</h2>
             <ConstructionStatus building={selectedBuilding} />
             {selectedBuilding.buildType === "inn" && <p className="mt-1 text-[11px] text-ink-light">Open dormitory · {selectedBuilding.supportId ? "Upper floor · ladder access" : "Ground floor"} · {selectedBuilding.fireplace ? "Hearth" : "Unheated"}</p>}
             {map?.buildings.filter(b=>b.id===selectedBuilding.supportId || b.supportId===selectedBuilding.id).map(floor=><ChromeButton key={floor.id} type="button" className="mt-2 block text-[11px] text-ink underline underline-offset-2" onClick={()=>useCameraStore.getState().select({kind:"building",id:floor.id})}>
               Inspect {floor.label.toLowerCase()} {floor.supportId ? "upstairs" : "downstairs"}
             </ChromeButton>)}
-            {selectedBuilding.owner === "independent" && <p className="mt-2 max-w-56 text-[11px] text-ink-light">Independent roadside town. {selectedBuilding.buildType === "tavern" ? "Locally run tavern serving food and drink to passing travelers." : "Home to the townspeople."} Joins your settlement when your influence reaches this building; until then, it earns you no income or renown.</p>}
-            {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">{brothersAtHome} / {housingBeds(selectedBuilding)} monks · {Math.max(0, housingBeds(selectedBuilding) - brothersAtHome)} spaces available. Tired monks sleep here until their stamina recovers.</p>}
+            {selectedBuilding.owner === "independent" && <p className="mt-2 max-w-56 text-[11px] text-ink-light">Independent · joins when your influence reaches this building.</p>}
+            {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">{brothersAtHome} / {housingBeds(selectedBuilding)} monks · {Math.max(0, housingBeds(selectedBuilding) - brothersAtHome)} spaces available.</p>}
             {isHouse(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
-              {household} / {housingCapacity(selectedBuilding)} settlers · {housingBeds(selectedBuilding)} bunks. Residents take a free bunk when they need sleep.
+              {household} / {housingCapacity(selectedBuilding)} settlers · {housingBeds(selectedBuilding)} bunks.
             </p>}
             {selectedKind && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
               {staff} of {BUILDING_KINDS[selectedKind].jobs} {BUILDING_KINDS[selectedKind].vendorKept ? "kept by a settled vendor" : "jobs taken"}
               {selectedBuilding.buildType === "tavern" && staff === 0 ? " · nobody is serving yet" : ""}
             </p>}
             {selectedBuilding.id === map?.site?.hovelId && !isComplete(selectedBuilding) && (
-              <p className="mt-3 max-w-56 text-[11px] text-ink-light">Relic visits are paused while the chapel is expanded. The church’s two kneeling places, larger donations, visitor draw and capacity for 8 monks become available when the work is complete.</p>
+              <p className="mt-3 max-w-56 text-[11px] text-ink-light">Relic visits paused during the upgrade.</p>
             )}
             {selectedBuilding.id === map?.site?.hovelId && isComplete(selectedBuilding) && (
               <div className="mt-3 flex flex-col gap-1.5">
-                <p className="max-w-56 text-[11px] text-ink-light">Entry is free. The keeper reveals the relic to {isChapel(selectedBuilding) ? "one visitor" : "two kneeling visitors"} at a time. Visitors may leave a donation in the offering box {isChapel(selectedBuilding) ? "outside beside the door" : "by the door"}; greater piety encourages larger gifts.</p>
                 <p className="max-w-56 text-[11px] text-ink-light">{isChapel(selectedBuilding)
-                  ? `A 2 × 2 relic chapel. One visitor kneels at the altar; others queue outside. Modest donations. Supports up to ${CHAPEL_MONKS} monks with shelter beds.`
-                  : `Two places at the rails; the queue waits four person-spaces behind. Larger donations${selectedBuilding.buildType === "church" ? `, with +${CHURCH_RENOWN_BONUS} renown to draw visitors` : ""}. Supports up to ${CHURCH_MONKS} monks with shelter beds.`}</p>
+                  ? `1 visitor place · Up to ${CHAPEL_MONKS} monks`
+                  : `2 visitor places · Up to ${CHURCH_MONKS} monks · +${CHURCH_RENOWN_BONUS} renown`}</p>
                 {isChapel(selectedBuilding) && <>
-                  <ChromeButton type="button" onClick={economy.upgradeShrine} disabled={!!economy.churchUpgradeError}
+                  <ChromeButton type="button" onClick={economy.upgradeShrine} disabled={!!economy.churchUpgradeError} title="Adds a second visitor place, larger donations and room for more monks. Side-wing plots are marked while building."
                     className="rounded border border-rule bg-parchment-dark px-2 py-1.5 text-left text-[11px] text-ink hover:text-red disabled:opacity-50">
                     Upgrade to church · {CHURCH_COST.gold} gold · {CHURCH_COST.wood} wood
                   </ChromeButton>
-                  <p className="max-w-56 text-[10px] text-ink-light">{economy.churchUpgradeError ?? `The church and side-wing plots are marked in gold while building. Construction adds two kneeling places, larger gifts, +${CHURCH_RENOWN_BONUS} renown and capacity for ${CHURCH_MONKS} monks.`}</p>
+                  {economy.churchUpgradeError && <p className="max-w-56 text-[11px] text-ink-light">{economy.churchUpgradeError}</p>}
                 </>}
                 <p className="text-[11px] text-ink-light">Donated · {economy.settlement.collectedAdmission} gold</p>
                 {map.buildings.filter(b => b.churchId === selectedBuilding.id).map(wing => <ChromeButton key={wing.id} type="button" className="mt-2 block text-left text-[11px] text-ink underline underline-offset-2"
@@ -1239,13 +1199,11 @@ export function GameHud({
             )}
             {selectedBuilding.buildType === "storehouse" && <div className="mt-2 text-[11px] text-ink-light">
               <p>Food stored · {storedFood(foodStock)} / {STOREHOUSE_FOOD_CAPACITY}</p>
-              {FOOD_TYPES.map(type => <p key={type}>{FOOD_LABELS[type]} · {foodStock[type]}</p>)}
-              <p className="mt-1 italic">Food supplies start empty.</p>
+              {FOOD_TYPES.filter(type => foodStock[type] > 0).map(type => <p key={type}>{FOOD_LABELS[type]} · {foodStock[type]}</p>)}
             </div>}
             {selectedBuilding.buildType === "sheep-pen" && <p className="mt-2 text-[11px] text-ink-light">Up to 8 sheep and goats · Food platform: {foodStock.meat} meat · {foodStock.milk} milk</p>}
             {selectedBuilding.owner !== "independent" && selectedDefinition && isComplete(selectedBuilding) && <>
-              <p className="mt-2 text-[11px] text-ink-light">Contributes +{selectedDefinition.renown} shrine renown</p>
-              <p className="mt-1 max-w-56 text-[11px] italic text-ink-light">{selectedDefinition.description}</p>
+              {selectedDefinition.renown > 0 && <p className="mt-2 text-[11px] text-ink-light">+{selectedDefinition.renown} shrine renown</p>}
               <p className="mt-1 text-[11px] text-ink-light">{buildingIncomeLabel(selectedDefinition, economy.balance)}</p>
             </>}
             {demolition.length > 0 && <DemolishBuildingDialog key={selectedBuilding.id}
@@ -1257,13 +1215,21 @@ export function GameHud({
           </Panel>
           )}
           {selection?.kind === "animal" && <AnimalInspector id={selection.id} />}
-          {selectedTraveler && <TravelerPanel traveler={selectedTraveler} travelers={travelers} map={map} />}
-          {selectedMonk && <MonkPanel monk={selectedMonk} />}
+          {selectedPartyMember && <TravelerPanel traveler={selectedPartyMember} travelers={travelers} map={map} monk={selectedMonk ?? undefined} />}
+          {selectedMonk && !selectedPartyMember && <MonkPanel monk={selectedMonk} />}
           {selectedRelic && relic && <RelicPanel relic={relic} />}
         </div>}
+      </aside>}
+      {playing && map && <aside id="minimap-dock" data-map-open={minimapOpen} data-inspecting={!!selection || panel === "settlement"} className="hud-details-dock hud-well" aria-label="Minimap and playback">
         <div className="hud-minimap">
           <Minimap map={map} />
           <span className="hud-minimap-north" aria-hidden="true">N ↑</span>
+        </div>
+        <div className="hud-time-controls">
+          <HudClock />
+          <section className="hud-traffic" aria-label="Traffic">
+            <Tuner label="Characters" display={String(travelers.length)} min={0} max={MAX_TRAFFIC} value={settings.traffic} onChange={traffic => set({ traffic })} />
+          </section>
         </div>
       </aside>}
     </div>

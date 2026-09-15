@@ -36,7 +36,7 @@
   documents use `WorkspaceDocument` for section navigation. Do not add separate
   page chrome for a new tool or reference page. All panels and help use the
   existing olive workspace tokens. Scene canvases use `TERRAIN.grass.color` and the isometric tile grid. Documents, forms, catalogues and pipeline inspection use the themed chrome surface. Use the game wheel response and drag panning in asset previews; do not add zoom controls. Document navigation uses smooth anchor scrolling with scroll-synchronized selection; scrollbars appear only while scrolling and use theme colors.
-  Use UnifrakturCook for H1s and page titles; Geist remains the font for body text, controls, HUD and canvas labels. Preview controls belong in the common
+  Use UnifrakturCook for H1s, page titles, document headings, loading splash titles and the homepage wordmark; Geist remains the font for body text, controls, HUD and canvas labels. Preview controls belong in the common
   canvas dock via `AssetEditorCanvasControls`, never on separate coloured bands.
   Redirect retired URLs to the matching playground tool, preserving
   their shared settings.

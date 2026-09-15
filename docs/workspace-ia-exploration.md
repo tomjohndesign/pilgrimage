@@ -89,8 +89,9 @@ to preserve the complete balance preset.
 - Keep status beside the operation it describes: draft/apply state in properties,
   playback state in the canvas footer, and validation beside its field.
 
-The existing Geist font, olive workspace surfaces, grass canvas background,
-stacked field labels and shared tooltip style remain the visual foundation.
+Geist body text and controls, UnifrakturCook titles and entity names, olive
+workspace surfaces, grass canvas backgrounds, stacked field labels and shared
+tooltips form the visual foundation.
 
 Preview navigation is shared across tools: wheel zoom uses the game's response,
 mouse drag pans, and two-finger gestures pan and pinch. Resizing a sidebar or
@@ -147,12 +148,15 @@ not working animation in these frames.
 
 IA 11–13 carry the same visual system into the existing contextual HUD: compact
 resources at top left, music/world/menu controls at top right, build actions at
-bottom left, time and traffic controls near the bottom, and the minimap at right.
+bottom left, and the minimap at right with playback and traffic controls inside
+its card below the map.
 There is no full-width header or footer. The game toolbar has Build and the
 mobile camera controls; the Paths and Demolish toolbar buttons were removed.
-Build mode opens a compact list with
-rotation and cancel controls; selection opens details above the minimap. Labels
-sit above property values. Icon-only actions use accessible names and tooltips.
+Build mode opens a narrow list joined to its hover details by one divider, with
+a detailed preview of the live building model below its name. Rotation and cancel
+controls remain available. Selection opens a compact floating panel on the left
+above Build; parties drill into Members and individual details with back navigation.
+Labels sit above property values. Icon-only actions use accessible names and tooltips.
 
 The main-game scene images are captures from `/play`; resource values, inspection
 values, minimap geography and placement overlays illustrate the proposed UI.
