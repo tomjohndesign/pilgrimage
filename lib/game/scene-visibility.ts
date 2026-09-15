@@ -1,5 +1,6 @@
 /** Display preferences only; hiding a layer never changes the simulation. */
 export interface SceneVisibility {
+  showGrid: boolean
   showTrees: boolean
   showCharacters: boolean
   showWildlife: boolean
@@ -8,6 +9,7 @@ export interface SceneVisibility {
 }
 
 export const DEFAULT_SCENE_VISIBILITY: SceneVisibility = {
+  showGrid: true,
   showTrees: true,
   showCharacters: true,
   showWildlife: true,
@@ -16,6 +18,7 @@ export const DEFAULT_SCENE_VISIBILITY: SceneVisibility = {
 }
 
 export const VISIBILITY_TOGGLES = [
+  ["showGrid", "Isometric grid"],
   ["showTrees", "Trees"],
   ["showCharacters", "Characters"],
   ["showWildlife", "Wildlife"],

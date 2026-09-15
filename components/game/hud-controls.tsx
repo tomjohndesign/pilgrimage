@@ -1,13 +1,13 @@
 "use client"
 
-import { ChromeButton, ChromeSelect } from "@/components/ui/chrome-controls"
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { placementSite } from "@/lib/game/building-placement-layout"
 
 import Image from "next/image"
 import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactElement, type ReactNode } from "react"
 import { Tooltip } from "@base-ui/react/tooltip"
-import { Coins, Map, Footprints, House, Pause, Play, RotateCcw, RotateCw, Sparkles, Users } from "lucide-react"
+import { Coins, Map, Footprints, Hammer, Pause, Play, RotateCcw, RotateCw, Sparkles, Users } from "lucide-react"
 
 import type { useSettlement } from "@/hooks/use-settlement"
 import { buildCatalog, buildingIncomeLabel } from "@/lib/game/balance"
@@ -19,7 +19,7 @@ import { churchDevelopmentPlot } from "@/lib/game/shrine-upgrade"
 import { canAfford, placementError } from "@/lib/game/settlement"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { formatGameTime, simRegistry } from "@/lib/game/sim"
-import { CROWD_SPEED_LIMIT, SIMULATION_SPEEDS, crowdSafeSpeed, speedBlockedByCrowd, useSimulationStore } from "@/lib/game/simulation-store"
+import { crowdSafeSpeed, nextSimulationSpeed, useSimulationStore } from "@/lib/game/simulation-store"
 
 /** Hover and keyboard-focus help, positioned inside the viewport by Base UI.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1N5-0
@@ -155,7 +155,7 @@ export function BuildControls({ economy, open, onToggle, playerColor, minimapOpe
     </div>}
     <nav className="hud-bottom-actions" aria-label="Building tools">
       <ChromeButton id="build-menu-button" type="button" className="hud-action" aria-expanded={open} aria-controls="build-tray" onClick={onToggle}>
-        <House size={17} aria-hidden />Build
+        <Hammer size={17} aria-hidden />Build
       </ChromeButton>
       <div className="hud-mobile-camera" role="group" aria-label="Camera controls">
         <ChromeButton type="button" className="hud-action" aria-label="Rotate view" onClick={() => useCameraStore.getState().rotate(1)}><RotateCw size={18} /></ChromeButton>
@@ -165,20 +165,33 @@ export function BuildControls({ economy, open, onToggle, playerColor, minimapOpe
   </div>
 }
 
+/** Day and date sit in the minimap corners alongside its compass. */
+export function HudClock() {
+  const [time, setTime] = useState<number | null>(null)
+  useEffect(() => {
+    const read = () => setTime(simRegistry.current?.time ?? null)
+    read()
+    const timer = setInterval(read, 250)
+    return () => clearInterval(timer)
+  }, [])
+  const day = time === null ? "Day —" : `Day ${Math.floor(time) + 1}`
+  const date = time === null ? "March 1, 825 AD" : formatGameTime(time)
+  return <div className="hud-clock-date" aria-label="Simulation date">
+    <span className="hud-day">{day}</span><span className="hud-date">{date}</span>
+  </div>
+}
+
 /** Playback controls drive the actual simulation, while camera movement stays live.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/1GB-0
  */
-export function HudClock() {
-  const [time, setTime] = useState<number | null>(null)
+export function HudPlayback() {
   const [population, setPopulation] = useState(0)
   const paused = useSimulationStore((s) => s.paused)
   const speed = useSimulationStore((s) => s.speed)
   useEffect(() => {
-    // The same poll that shows the date watches the crowd, so a settlement that
-    // grows past the limit while running at 6× drops to the fastest speed left.
+    // A growing settlement drops to the fastest speed its crowd can still run.
     const read = () => {
       const sim = simRegistry.current
-      setTime(sim?.time ?? null)
       const crowd = (sim?.travelers.size ?? 0) + (sim?.joinedMonks.size ?? 0)
       setPopulation(crowd)
       const playback = useSimulationStore.getState()
@@ -189,30 +202,14 @@ export function HudClock() {
     const timer = setInterval(read, 250)
     return () => clearInterval(timer)
   }, [])
-  const day = time === null ? "Day —" : `Day ${Math.floor(time) + 1}`
-  const date = time === null ? "March 1, 825 AD" : formatGameTime(time)
-  return <section className="hud-clock" aria-label="Simulation time">
-    <div className="hud-clock-date"><span className="hud-day">{day}</span><span className="hud-date">{date}</span></div>
-    <div className="hud-clock-playback">
-      <ChromeButton type="button" className="hud-pause" aria-label={paused ? "Resume simulation" : "Pause simulation"}
-        aria-pressed={paused} onClick={() => useSimulationStore.getState().togglePaused()}>
-        {paused ? <Play size={14} /> : <Pause size={14} />}
-      </ChromeButton>
-      <ChromeSelect className="hud-mobile-speed hud-action" aria-label="Simulation speed" value={speed}
-        onChange={(event) => {
-          const choice = SIMULATION_SPEEDS.find((item) => item.rate === Number(event.target.value))
-          if (choice) useSimulationStore.getState().setSpeed(choice.rate)
-        }}>
-        {SIMULATION_SPEEDS.map(({ label, rate }) => <option key={rate} value={rate} disabled={speedBlockedByCrowd(rate, population)}>{label}×</option>)}
-      </ChromeSelect>
-      <div className="hud-speeds" aria-label="Simulation speed">
-        {SIMULATION_SPEEDS.map(({ label, rate }) => {
-          const blocked = speedBlockedByCrowd(rate, population)
-          return <ChromeButton type="button" key={rate} aria-label={`${label}× simulation speed`} aria-pressed={speed === rate}
-            disabled={blocked} title={blocked ? `${label}× is unavailable above ${CROWD_SPEED_LIMIT.population.toLocaleString()} people` : undefined}
-            onClick={() => useSimulationStore.getState().setSpeed(rate)}>{label}×</ChromeButton>
-        })}
-      </div>
-    </div>
+  return <section className="hud-clock-playback" aria-label="Playback controls">
+    <ChromeButton type="button" className="hud-pause" aria-label={paused ? "Resume simulation" : "Pause simulation"}
+      aria-pressed={paused} onClick={() => useSimulationStore.getState().togglePaused()}>
+      {paused ? <Play size={14} /> : <Pause size={14} />}
+    </ChromeButton>
+    <ChromeButton type="button" className="hud-action hud-speed" aria-label={`Simulation speed: ${speed / 2}×. Click to cycle speeds`}
+      title="Cycle simulation speed" onClick={() => {
+        useSimulationStore.getState().setSpeed(nextSimulationSpeed(speed, population))
+      }}>{speed / 2}×</ChromeButton>
   </section>
 }

@@ -63,6 +63,7 @@ export function MapReveal({ map, state, onPhase, onProgress, onLandmarkReady, la
     scene.userData.mapRevealDirect = materials.uniforms.mapRevealDirect
     scene.userData.mapRevealActive = state.phase !== "complete"
     if (state.phase === "complete") return
+    if (scene.background instanceof THREE.Color) materials.uniforms.mapRevealBackground.value.copy(scene.background).convertLinearToSRGB()
     if (materials.prepare(scene) && state.phase === "loading") state.begin()()
     const now = performance.now()
     const loadingElapsed = document.hidden || loadingClock.current === null ? 0 : (now - loadingClock.current) / 1000
