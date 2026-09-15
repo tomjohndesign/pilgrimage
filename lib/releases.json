@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "637ede9e94b0ba38a84d3b556e8e07433eca4075",
-  "releaseCount": 256,
+  "lastProcessedCommit": "2cd9f45ef54a26408325d31a437f1490ad0ecfd2",
+  "releaseCount": 257,
   "releases": [
+    {
+      "version": "0.0.271",
+      "title": "Release 0.0.271",
+      "summary": "Add themed illustrated game icons and shared icon playground (#291)",
+      "commit": "2cd9f45ef54a26408325d31a437f1490ad0ecfd2"
+    },
     {
       "version": "0.0.270",
       "title": "Release 0.0.270",
