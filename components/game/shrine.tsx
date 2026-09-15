@@ -45,9 +45,11 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
     const selection = s.selection
     return selection?.kind === "building" && map.buildings.some(b => b.id === selection.id && !!b.churchId && b.churchId === map.site?.hovelId)
   })
+  const interiorSelected = relicSelected || buildingSelected || wingSelected || (!!unitInterior && (unitInterior === map.site?.hovelId ||
+    map.buildings.some(b => b.id === unitInterior && b.churchId === map.site?.hovelId)))
   useFrame(({ scene }) => {
     const near = buildingDetail(scene) === 0
-    if (lights.current) lights.current.visible = near
+    if (lights.current) lights.current.visible = near && interiorSelected
     const sim = simRegistry.current
     const available = !processionRegistry.current || !relicIsCarried(processionRegistry.current)
     const showing = relicSelected || (available && sim && sim.world.road === map.road && sim.shrineKeeperReady
@@ -95,14 +97,14 @@ export function Shrine({ map, relic, showInteriors = false }: { map: GameMap; re
   return (
     <group position={[layout.centreX, layout.baseY, layout.centreZ]}>
       <group rotation={[0, layout.rotation, 0]} onClick={event => selectElement({ kind: "building", id: hovel.id }, event)}>
-        <StructureModel terrainFloors parts={layout.parts} cutaway={showInteriors || relicSelected || buildingSelected || wingSelected || unitInterior === hovel.id || map.buildings.some(b => b.id === unitInterior && b.churchId === hovel.id)} idColor={shrineId} ink={false} />
+        <StructureModel terrainFloors parts={layout.parts} cutaway={showInteriors || interiorSelected} idColor={shrineId} ink={false} />
         {isComplete(hovel) && <group name="relic-altar">
           <StructureModel parts={layout.altar} cutaway idColor={relicId} onClick={select} ink={false} />
           <group ref={veilGroup}><StructureModel parts={layout.veil} cutaway dynamic idColor={relicId} onClick={select} ink={false} /></group>
         </group>}
-        {isComplete(hovel) && <group ref={lights} name="shrine-lights">{[-1,1].map(side => <pointLight key={side} position={[side*.73,.8+layout.altarRise,layout.altarZ+.08]} color="#ffd184" intensity={.18} distance={1.8} decay={2} />)}</group>}
+        {isComplete(hovel) && <group ref={lights} name="shrine-lights" visible={interiorSelected}>{[-1,1].map(side => <pointLight key={side} position={[side*.73,.8+layout.altarRise,layout.altarZ+.08]} color="#ffd184" intensity={.18} distance={1.8} decay={2} />)}</group>}
       </group>
-      {isComplete(hovel) && <group ref={relicGroup} position={[layout.offset.x,layout.altarRise,layout.offset.z]}><RelicDisplay groundGlow={false} color={relic.color} idColor={relicId} onClick={select} /></group>}
+      {isComplete(hovel) && <group ref={relicGroup} position={[layout.offset.x,layout.altarRise,layout.offset.z]}><RelicDisplay effectsEnabled={interiorSelected} groundGlow={false} color={relic.color} idColor={relicId} onClick={select} /></group>}
 
     </group>
   )

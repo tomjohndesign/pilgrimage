@@ -606,7 +606,7 @@ try {
       await page.waitForFunction(zoom => window.__pilgrimage.sceneryDetail() === (zoom === 140 ? 2 : zoom === 70 ? 1 : 0), zoom, { timeout: 30000 })
       await page.waitForTimeout(700)
       const effects = await page.evaluate(() => window.__pilgrimage.distantEffects())
-      if (zoom > 36) assert.deepEqual(effects, { smoke: 0, fires: 0, pointLights: 0, floaters: 0, cutaways: 0 }, "wide views must omit interiors, smoke, fire, local lights and floating receipts")
+      if (zoom > 36) assert.deepEqual(effects, { smoke: 0, fires: 0, pointLights: 0, activePointLights: 0, floaters: 0, cutaways: 0 }, "wide views must omit interiors, smoke, fire, local lights and floating receipts")
       else assert.ok(effects.cutaways > 0 && effects.pointLights > 0 && effects.floaters > 0, "zooming in must restore the selected interior and effects")
       assert.deepEqual(await page.evaluate(() => window.__pilgrimage.camera().selection), selected)
     }

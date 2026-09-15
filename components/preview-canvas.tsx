@@ -1,5 +1,6 @@
 "use client"
 
+import { registerSurfaceLighting } from "@/lib/game/render/surface-registration"
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 
 import { useEffect } from "react"
@@ -49,6 +50,7 @@ export function PreviewCanvas({
 
       {/* Re-aim when the view changes; the camera prop is only read at mount. */}
       <CameraAim view={view} zoom={zoom} />
+      <PreviewSurfaceLighting />
 
       {children}
     </PixelCanvas>
@@ -66,5 +68,11 @@ function CameraAim({ view, zoom }: { view: number; zoom: number }) {
     // Sprite animation and culling read the matrix before Three renders.
     camera.updateMatrixWorld()
   }, [camera, view, zoom])
+  return null
+}
+
+function PreviewSurfaceLighting() {
+  const scene = useThree(s => s.scene)
+  useEffect(() => registerSurfaceLighting(scene), [scene])
   return null
 }

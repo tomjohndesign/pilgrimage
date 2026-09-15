@@ -7,7 +7,7 @@ export const GROUND_TRANSITIONS_GLSL = /* glsl */ `
   vec4 groundRecord(vec2 cell) {
     return texture2D(groundPalette, (clamp(cell, vec2(0.0), groundPaletteSize - 1.0) + .5) / groundPaletteSize);
   }
-  vec3 waterSurface(vec2 world, float donor) {
+  vec3 waterSurface(vec2 world, float donor, SurfaceSample detail) {
     vec2 grid = terrainPaintWorld(world) + groundPaletteSize * .5;
     vec2 cell = floor(grid), local = fract(grid);
     if (donor > .5) {
@@ -21,7 +21,7 @@ export const GROUND_TRANSITIONS_GLSL = /* glsl */ `
       if (dot(local - .5, direction) > 0.0)
         record = texture2D(waterPalette, (cell + vec2(direction.x, 0.0) + .5) / groundPaletteSize);
     }
-    return record.rgb;
+    return record.rgb * surfaceGrain(detail, 1.0);
   }
   vec3 groundSprite(vec4 record, vec3 grass, vec3 mineral, vec3 sand) {
     float kind = mod(record.a, 8.0);
@@ -29,7 +29,7 @@ export const GROUND_TRANSITIONS_GLSL = /* glsl */ `
     if (kind > 2.5) return sand * record.rgb;
     return mineral * record.rgb;
   }
-  vec3 groundSurface(vec2 world, vec3 grass, float donor) {
+  vec3 groundSurface(vec2 world, vec3 grass, float donor, SurfaceSample detail) {
     vec2 grid = terrainPaintWorld(world) + groundPaletteSize * .5;
     vec2 cell = floor(grid), local = fract(grid);
     vec4 record = groundRecord(cell);
@@ -46,7 +46,8 @@ export const GROUND_TRANSITIONS_GLSL = /* glsl */ `
     // The coloured sand asset is normalized to its own average before the
     // terrain palette supplies shade. Native texels stay the same size as grass.
     vec3 sand = texture2D(sandMap, world * ${GROUND_UV_SCALE}).rgb / vec3(0.651406, 0.508881, 0.234551);
-    return groundSprite(record, grass, mineral, sand);
+    float grain = surfaceGrain(detail, 0.0);
+    return groundSprite(record, grass, mineral * grain, sand * grain);
   }
-  vec3 groundSurface(vec2 world, vec3 grass) { return groundSurface(world, grass, 0.0); }
+  vec3 groundSurface(vec2 world, vec3 grass, SurfaceSample detail) { return groundSurface(world, grass, 0.0, detail); }
 `

@@ -1,5 +1,7 @@
 "use client"
 
+import { buildingSurfaceMaterial } from "@/lib/game/render/building-surface"
+
 import { addSurfaceLighting } from "@/lib/game/render/lighting"
 
 import Image from "next/image"
@@ -35,7 +37,7 @@ async function buildThumbnails() {
       for (const part of batchDetails(structureParts({ ...definition, buildType: definition.id }))) {
         const geometry = buildingPartGeometry(part)
         const material = part.surface === "trail" ? dirtFloorMaterial(part, dirt, grass)
-          : new THREE.MeshLambertMaterial({ color: part.color, side: THREE.DoubleSide })
+          : buildingSurfaceMaterial(undefined, { color: part.color, vertexColors: false })
         const mesh = new THREE.Mesh(geometry, material)
         mesh.position.set(...part.position)
         if (part.rotation) mesh.rotation.set(...part.rotation)

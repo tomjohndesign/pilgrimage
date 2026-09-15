@@ -9,6 +9,7 @@ import * as THREE from "three"
 import { waterfallTurbulence } from "@/lib/game/map/waterfall-turbulence"
 import { DEFAULT_ELEVATION } from "@/lib/game/map/elevation"
 import { RoadSegmentTexture } from "@/lib/game/render/road-segment-texture"
+import { terrainShadingShader } from "@/lib/game/render/terrain-shading"
 import { elevationShader } from "@/lib/game/render/terrain-elevation"
 import { terrainHiddenFaces, compactTerrainFaces } from "@/lib/game/render/terrain-hidden-faces"
 import { TERRAIN_BLOCK, terrainBlockState, type TerrainBlockState, terrainBlocks, sameRoadSnapshot, type TerrainBlockBounds } from "@/lib/game/render/terrain-blocks"
@@ -428,7 +429,7 @@ function makeTileMaterial({
         {
           vec2 world = vWorld;
           vec3 treeCover = vGridTop > 0.5 ? treeGroundCover(world) : vec3(0.0);
-          vec3 grassColor = sampleSward(grassMap, world);
+          vec3 grassColor = sampleSward(grassMap, world, terrainDetail);
           // Leaf clusters, humus and moss share the native grass pixel size.
           // Broad patches reveal turf between the varied fallen-leaf motifs.
           // Two authored floor sprites share a sampler; nearest sampling keeps
@@ -445,9 +446,9 @@ function makeTileMaterial({
             // the road's traffic-shaped ruts over it with their separate tint.
             float vEdge = vLand.y;
             float vInner = vLand.z;
-            vec3 sward = groundSurface(world, grassColor);
+            vec3 sward = groundSurface(world, grassColor, terrainDetail);
             float shore = terrainWaterCover(world, 0.0);
-            vec3 landTop = mix(sward, waterSurface(world, 0.0), shore);
+            vec3 landTop = mix(sward, waterSurface(world, 0.0, terrainDetail), shore);
 
             // The road proper: the tier texture, shaded, the shade ramp at
             // the road's own blend, then the weathering tint and grain.
@@ -518,11 +519,11 @@ function makeTileMaterial({
             // Every natural ground type shares the same adjacency-aware paint,
             // including patches that continue beneath roads and building aprons.
             if (vGridTop > 0.5) {
-              vec3 land = groundSurface(world, grassColor, vGroundDonor);
-              diffuseColor.rgb = mix(land, waterSurface(world, vGroundDonor), terrainWaterCover(world, vGroundDonor));
+              vec3 land = groundSurface(world, grassColor, vGroundDonor, terrainDetail);
+              diffuseColor.rgb = mix(land, waterSurface(world, vGroundDonor, terrainDetail), terrainWaterCover(world, vGroundDonor));
             }
           #endif
-          diffuseColor.rgb *= 1.0 - clamp(treeCover.x * grassCanopyShade, 0.0, 1.0);
+          diffuseColor.rgb *= (1.0 - clamp(treeCover.x * grassCanopyShade, 0.0, 1.0));
           // Exposed earth uses the slab texture with the same horizontal scale
           // and a topsoil-to-subsoil ramp measured down from the local rim.
           if (vGridTop < 0.5 && vWater < 0.5) diffuseColor.rgb = texture2D(cliffMap, vCliffUv).rgb;
@@ -537,6 +538,10 @@ function makeTileMaterial({
           #endif
         }`,
       )
+    shader.fragmentShader = shader.fragmentShader.replace("void main() {", `void main() {
+      vec2 terrainSurface = vGridTop > 0.5 ? vWorld : vCliffUv * vec2(512.0, 256.0) * ${CHARACTER_PIXEL_SIZE};
+      SurfaceSample terrainDetail = sampleSurface(terrainSurface, surfacePixel(terrainSurface));`)
+    if (!edgeOnly) terrainShadingShader(shader)
     // Nothing but the line: no lighting, no surface, no colour conversion —
     // just its coverage, for the outline pass to lay over the trees.
     if (edgeOnly) {
@@ -559,7 +564,7 @@ function makeTileMaterial({
   // The grid origin is baked into the shader source, so it has to be part of
   // the program key or two maps of different sizes would share one program.
   const gridKey = gridOrigin ? `${gridOrigin.x.toFixed(3)}:${gridOrigin.z.toFixed(3)}` : "nogrid"
-  material.customProgramCacheKey = () => `tiles-${road ? "road" : "ground"}-${gridKey}-forest-floor-sprite-atlas-v11${edgeOnly ? "-edge" : ""}${tileCoverage ? "-coverage" : ""}`
+  material.customProgramCacheKey = () => `tiles-${road ? "road" : "ground"}-${gridKey}-terrain-grain-inclines-v13${edgeOnly ? "-edge" : ""}${tileCoverage ? "-coverage" : ""}`
   return material
 }
 
