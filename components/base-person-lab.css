@@ -1,14 +1,14 @@
 /* Reuse the existing olive preview palette for all tool panels and portal help. */
 .person-editor.game-hud, .workspace-tooltip {
-  --workspace-bg:#171810;
-  --workspace-panel:#252b1c;
-  --workspace-control:#334127;
-  --workspace-border:#5c6545;
-  --workspace-selected:#334127;
-  --workspace-fill:#66734e;
-  --workspace-text:#f2e8d5;
-  --workspace-muted:color-mix(in srgb,var(--workspace-text) 70%,var(--workspace-panel));
-  --workspace-accent:#9ba676;
+  --workspace-bg:var(--chrome-surface);
+  --workspace-panel:var(--chrome-surface);
+  --workspace-control:var(--chrome-field);
+  --workspace-border:var(--chrome-line);
+  --workspace-selected:var(--chrome-active);
+  --workspace-fill:var(--chrome-fill);
+  --workspace-text:var(--chrome-text);
+  --workspace-muted:var(--chrome-muted);
+  --workspace-accent:var(--chrome-accent);
 }
 /* Character tools share the map HUD's frame, wells, button surfaces and tuners. */
 .person-editor.game-hud {
@@ -326,3 +326,79 @@
 }
 
 .workspace-document .border { border:0; }
+
+/* One three-pane workspace; its canvas owns all header and footer controls. */
+.game-hud.person-editor.chrome-workspace { display:block; padding:0; inset:0; background:var(--chrome-surface); color-scheme:inherit; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-workspace { display:block; height:100%; min-height:0; padding:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-preview { display:flex; flex-direction:column; height:100%; gap:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-preview > .person-stage { flex:1; min-height:0; border:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-preview > :not(.workspace-canvas-dock) { min-height:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-controls { display:flex; position:static; width:auto; height:100%; box-shadow:none; border:0; background:transparent; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-panel-heading { border:0; padding:8px 20px; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-controls-scroll { flex:1; padding:0 20px 20px; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-panel-footer { padding:14px 20px; gap:10px; border:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-controls > span:only-child { display:none; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-preview-toolbar { background:var(--chrome-surface); border:0; box-shadow:none; }
+:is(.chrome-workspace,.chrome-mobile-panel) .workspace-canvas-dock { flex-shrink:0; padding:8px 16px 14px; background:var(--chrome-surface); }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-direction.hud-building-tile { width:56px; height:72px; min-height:72px; background:var(--chrome-field); border-radius:4px; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-direction.hud-building-tile[aria-pressed="true"] { background:var(--chrome-active); }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-direction > :first-child { max-width:48px; max-height:48px; overflow:hidden; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-steps { padding-top:6px; border:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-steps > div { background:var(--chrome-field); padding:4px; border-radius:4px; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-rig-inspector { background:var(--chrome-surface); border:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) :is(.person-choice,.person-playback label) { display:flex; flex-direction:column; align-items:stretch; gap:7px; font-size:12px; font-weight:400; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-choice > :is(input,.chrome-select) { width:100%; margin:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) label:has(> [data-navigation-marker]) { display:none; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-panel-heading:has(>label>[data-navigation-marker]):not(:has(>label:not(:has([data-navigation-marker])))) { padding:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) :where(input:not([type="file"]):not([type="checkbox"]):not([type="range"]),textarea) { background:var(--chrome-field); color:var(--chrome-text); border:0; border-radius:4px; min-height:34px; padding:7px 10px; font:13px/20px var(--font-geist),sans-serif; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-nav-search input { min-height:0; padding:0; background:transparent; }
+:is(.chrome-workspace,.chrome-mobile-panel) .property-tuner { flex-direction:column; align-items:stretch; gap:7px; }
+:is(.chrome-workspace,.chrome-mobile-panel) .workspace-content { height:100%; }
+:is(.chrome-workspace,.chrome-mobile-panel) .workspace-document { margin:0 auto; max-width:800px; }
+:is(.chrome-workspace,.chrome-mobile-panel) .workspace-document > h1 { display:none; }
+:is(.chrome-workspace,.chrome-mobile-panel) .workspace-document :is(header,footer) { display:none; }
+:is(.chrome-workspace,.chrome-mobile-panel) :is(.person-stage-caption,.asset-randomize-label) { display:none; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-header,:is(.chrome-workspace,.chrome-mobile-panel) > .person-status { display:none; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-section-page { padding:8px 20px 24px; overflow:auto; height:100%; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-section-page .workspace-field-grid { display:flex; flex-direction:column; gap:18px; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-section-page .person-file-actions { gap:18px; }
+:is(.chrome-workspace,.chrome-mobile-panel) .workspace-content-scroll:has(> .person-stage) { padding:0; position:relative; }
+:is(.chrome-workspace,.chrome-mobile-panel) .workspace-content-scroll:has(> .person-stage) > .workspace-form { position:absolute; top:0; left:0; z-index:1; }
+:is(.chrome-workspace,.chrome-mobile-panel) .workspace-content-scroll:has(> .person-stage) > .workspace-form:has([role="alert"],[role="status"]) { padding:12px; background:var(--chrome-surface); }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-header-controls label:has(> [data-navigation-marker]) { display:none; }
+
+/* The canvas fills the space between its own toolbar and animation footer. */
+:is(.chrome-workspace,.chrome-mobile-panel) .person-preview > .person-stage-layout { flex:1; min-height:0; overflow:hidden; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-stage-layout > .person-stage { min-height:0; height:100%; }
+.person-editor:is(.chrome-workspace,.chrome-mobile-panel) .person-choice:has([data-navigation-marker]) { display:none; }
+.person-editor:is(.chrome-workspace,.chrome-mobile-panel) .person-panel-heading:has([data-navigation-marker]) { display:none; }
+.person-editor:is(.chrome-workspace,.chrome-mobile-panel) .chrome-nav-search input { background:transparent; border:0; padding:0; height:auto; box-shadow:none; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-inspector-content:has(.person-rig-inspector) > .chrome-property-controls { display:none; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-inspector-content > .person-rig-inspector { width:100%; height:100%; max-height:none; border:0; overflow:auto; padding:12px 20px; background:var(--chrome-surface); }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-rig-fields { gap:18px; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-animation-playback { display:flex; justify-content:center; padding-bottom:12px; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-playback { flex-wrap:wrap; justify-content:center; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-animation-dock { padding:12px 16px; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-direction-strip { justify-content:safe center; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-direction .chrome-direction-sprite { display:flex; align-items:center; justify-content:center; width:48px; height:48px; overflow:visible; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-direction-sprite > * { transform:scale(.75); flex-shrink:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-direction .chrome-direction-sprite > * { max-width:none; max-height:none; }
+:is(.chrome-workspace,.chrome-mobile-panel) .person-direction { overflow:hidden; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-header-controls > label:not(.person-check) { font-size:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-header-controls .chrome-select { background:transparent; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-section-content .playground-control-section { padding:0; border:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-section-content .playground-section-heading { margin:0 0 12px; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-section-content .playground-section-heading h2 { font-size:12px; color:var(--chrome-muted); }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-section-page { height:100%; padding:12px 20px; overflow:auto; border:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) .workspace-content:has(.tuning-layout) { height:100%; padding:0; }
+:is(.chrome-workspace,.chrome-mobile-panel) .tuning-layout { height:100%; }
+.chrome-dialog.person-json-dialog { position:relative; inset:auto; margin:0; width:min(720px,100%); max-width:720px; background:var(--chrome-surface); border:1px solid var(--chrome-line); }
+.chrome-dialog .person-json-content { padding:0; }
+.chrome-dialog textarea { width:100%; min-height:220px; background:var(--chrome-field); color:var(--chrome-text); border:0; border-radius:4px; padding:12px; }
+:is(.chrome-workspace,.chrome-mobile-panel) .workspace-content { display:flex; flex-direction:column; }
+:is(.chrome-workspace,.chrome-mobile-panel) .workspace-content-scroll { flex:1; }
+.chrome-canvas-header[data-browsing] .chrome-header-controls { visibility:hidden; pointer-events:none; }
+.chrome-property-section:has(.chrome-section-content [data-navigation-marker]):not(:has(.chrome-section-content input,.chrome-section-content button,.chrome-section-content [role="combobox"],.chrome-section-content [role="slider"])) { display:none; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-simulation-playback { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding-bottom:12px; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-simulation-playback > .flex-1:empty { display:none; }
+:is(.chrome-workspace,.chrome-mobile-panel) .chrome-section-page .chrome-select { width:100%; }

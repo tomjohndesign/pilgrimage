@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { useEffect, useState, type ReactNode } from "react"
 import { useCameraStore, type Selection } from "@/lib/game/camera-store"
 import { simRegistry } from "@/lib/game/sim"
@@ -57,7 +58,7 @@ export function ResourceInspector({ selection }: { selection: Extract<Selection,
   return <div className="hud-inspector-content w-[250px] border border-rule bg-parchment/95 px-4 py-3 text-[11px] text-ink">
     <div className="mb-2 flex items-center justify-between gap-3">
       <span className="font-display text-xs">{title}</span>
-      <button type="button" aria-label="Dismiss resource" onClick={() => useCameraStore.getState().select(null)}>✕</button>
+      <ChromeButton type="button" aria-label="Dismiss resource" onClick={() => useCameraStore.getState().select(null)}>✕</ChromeButton>
     </div>
     {content}
   </div>

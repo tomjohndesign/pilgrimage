@@ -1,4 +1,8 @@
 "use client"
+
+import { EntitySelect } from "@/components/workspace-navigation"
+
+import { ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls";
 import { useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Pause, Play } from "lucide-react"
@@ -64,13 +68,13 @@ export function EntLab({ mode, onModeChange, active = true }: AssetEditorNavigat
     <AssetEditorWorkspace title="Ent" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
       controlsHeading={<span>Ents</span>}
       controlsHeader={<></>}
-      controls={<><AssetEditorSection title="Species"><label className="person-choice">Species<select aria-label="Tree species" value={species} onChange={event => choose(event.target.value as typeof species)}>{FOLIAGE_SPECIES.map(id => <option key={id} value={id}>{TREE_SPECIES[id].label}</option>)}</select></label></AssetEditorSection>
+      controls={<><AssetEditorSection title="Species"><label className="person-choice">Species<EntitySelect aria-label="Tree species" value={species} onChange={event => choose(event.target.value as typeof species)}>{FOLIAGE_SPECIES.map(id => <option key={id} value={id}>{TREE_SPECIES[id].label}</option>)}</EntitySelect></label></AssetEditorSection>
 <AssetEditorSection title="Walking">
             {([["seconds", "Seconds per stride", 3, 12, .5], ["reach", "Root reach", .6, 1.2, .05], ["lift", "Root lift", .5, 1.5, .05]] as const).map(([field, label, min, max, step]) => <label key={field} className="person-choice">{label}<input aria-label={label} type="number" min={min} max={max} step={step} value={design[field]} onChange={e => { const value = e.currentTarget.valueAsNumber; if (Number.isFinite(value)) commit({ ...design, [field]: Math.max(min, Math.min(max, value)) }) }} /></label>)}
             <p className="person-hint">{entStride(species, design).toFixed(2)} tiles per stride · {(entStride(species, design) / design.seconds).toFixed(3)} tiles/second. Feet plant for 60% of each cycle; arms swing against the roots.</p>
           </AssetEditorSection>
 
-<AssetEditorSection title="Files"><div className="person-file-actions"><button className="hud-action" onClick={exportSettings}>Export rig settings</button><button className="hud-action" onClick={() => input.current?.click()}>Import rig settings</button></div>
+<AssetEditorSection title="Files"><div className="person-file-actions"><ChromeButton className="hud-action" onClick={exportSettings}>Export rig settings</ChromeButton><ChromeButton className="hud-action" onClick={() => input.current?.click()}>Import rig settings</ChromeButton></div>
             <input ref={input} type="file" accept="application/json,.json" hidden onChange={async event => {
               const file = event.target.files?.[0]; if (!file) return
               try {
@@ -82,9 +86,9 @@ export function EntLab({ mode, onModeChange, active = true }: AssetEditorNavigat
             }} /><p className="person-hint" role="status">{message || "Saved per species in this browser. The game bakes these same limb poses when the cheat wakes the trees."}</p>
           </AssetEditorSection></>}
       controlsFooter={<></>}
-      toolbar={<><div className="person-playback"><button className="hud-pause" aria-label={playing ? "Pause Ent animation" : "Play Ent animation"} onClick={() => setPlaying(v => !v)}>{playing ? <Pause size={14} /> : <Play size={14} />}</button><span>Slow march</span></div>
-<label className="person-check"><input type="checkbox" checked={showRig} onChange={event => { setShowRig(event.target.checked); setPlaying(false) }} />Show rig</label></>}
-      dock={<CharacterAnimationDock directions={BASE_PERSON.directions} row={row} onDirection={setRow} renderDirection={i => <canvas ref={canvas => { directions.current[i] = canvas }} width={64} height={64} style={{ imageRendering: "pixelated" }} />}
+      toolbar={<>
+<label className="person-check"><ChromeCheckbox type="checkbox" checked={showRig} onChange={event => { setShowRig(event.target.checked); setPlaying(false) }} />Show rig</label></>}
+      dock={<CharacterAnimationDock playback={<div className="person-playback"><ChromeButton className="hud-pause" aria-label={playing ? "Pause Ent animation" : "Play Ent animation"} onClick={() => setPlaying(v => !v)}>{playing ? <Pause size={14} /> : <Play size={14} />}</ChromeButton><span>Slow march</span></div>} directions={BASE_PERSON.directions} row={row} onDirection={setRow} renderDirection={i => <canvas ref={canvas => { directions.current[i] = canvas }} width={64} height={64} style={{ imageRendering: "pixelated" }} />}
           frameCount={ENT_FRAMES} frame={frame} clipLabel="Slow march" keyed={keyed} onFrame={next => { setFrame(next); setPlaying(false) }} />}>
       <div className="person-stage-layout"><div className="person-stage person-stage-character">
           {active && <EntPreview species={species} design={design} row={row} frame={frame} playing={playing} showRig={showRig} selected={selected} joints={joints} directions={directions}

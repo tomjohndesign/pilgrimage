@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import Link from "next/link"
 import type { useSettlement } from "@/hooks/use-settlement"
 import { useCameraStore } from "@/lib/game/camera-store"
@@ -57,14 +58,14 @@ export function SettlementPanel({
         >
           Tune ↗
         </Link>
-        <button
+        <ChromeButton
           type="button"
           onClick={focusShrine}
           className="text-[11px] text-ink-light hover:text-red"
         >
           Locate ↗
-        </button>
-        <button type="button" aria-label="Dismiss settlement" onClick={onClose}>✕</button>
+        </ChromeButton>
+        <ChromeButton type="button" aria-label="Dismiss settlement" onClick={onClose}>✕</ChromeButton>
       </div>
       <div className="my-3 grid grid-cols-2 gap-2">
         {(["gold", "wood"] as const).map((resource) => (

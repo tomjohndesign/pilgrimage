@@ -1,5 +1,8 @@
 "use client"
 
+import { Tuner } from "../game/property-controls"
+
+import { ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
 import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, AssetEditorHelp, type AssetEditorNavigation } from "@/components/asset-editor-frame"
 import { playgroundHref } from "@/lib/asset-playground"
 
@@ -128,7 +131,7 @@ export function RenderLab({ mode, onModeChange, active = true }: AssetEditorNavi
   return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Rendering editor" version="Rendering" controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(value => !value)} status={message || "Synchronized rendering comparison"} detail={`${time.toFixed(2)} s`}>
     <AssetEditorWorkspace title="Rendering" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
       controls={<><AssetEditorSection title="Scene"><Select label="Character" value={settings.character} options={Object.fromEntries(CHARACTERS.map(id => [id, id === "base" ? "Base person · v8" : id[0].toUpperCase() + id.slice(1)]))} onChange={character => patch({ character: character as LabSettings["character"] })} />
-<Select label="Movement test" value={settings.motion} options={MOTIONS} onChange={motion => { patch({ motion: motion as LabSettings["motion"] }); seek(0) }} />
+<Select navigation label="Movement test" value={settings.motion} options={MOTIONS} onChange={motion => { patch({ motion: motion as LabSettings["motion"] }); seek(0) }} />
 <Select label="Camera test" value={settings.camera} options={CAMERAS} onChange={camera => patch({ camera: camera as LabSettings["camera"] })} />
 <Select label="View" value={String(settings.view)} options={{ 0: "View 1", 1: "View 2", 2: "View 3", 3: "View 4" }} onChange={view => patch({ view: Number(view) })} />
 <Select label="Display resolution" value={String(settings.dpr)} options={{ "0.5": "Half resolution", "1": "1× · game default", "1.5": "1.5×", "2": "2× · Retina" }} onChange={dpr => patch({ dpr: Number(dpr) })} /></AssetEditorSection>
@@ -137,20 +140,20 @@ export function RenderLab({ mode, onModeChange, active = true }: AssetEditorNavi
 <Slider label="Character size" value={settings.scale} min={0.5} max={3} step={0.05} suffix="×" onChange={scale => patch({ scale })} />
 <Slider label="Playback speed" value={settings.speed} min={0.1} max={2} step={0.1} suffix="×" onChange={speed => patch({ speed })} />
 <Slider label="Walk animation" value={settings.fps} min={1} max={16} step={1} suffix=" fps" onChange={fps => patch({ fps })} /></AssetEditorSection>
-        <AssetEditorSection title="Notes & files"><button type="button" className={button} onClick={share}>Copy comparison link</button><label className="flex flex-col gap-2 text-sm" htmlFor="render-notes">Notes for the chosen look<textarea id="render-notes" className={`${input} min-h-24 resize-y`} placeholder="What feels right? What still jitters?" value={notes} onChange={event => setNotes(event.target.value)} /></label>
+        <AssetEditorSection title="Notes & files"><ChromeButton type="button" className={button} onClick={share}>Copy comparison link</ChromeButton><label className="flex flex-col gap-2 text-sm" htmlFor="render-notes">Notes for the chosen look<textarea id="render-notes" className={`${input} min-h-24 resize-y`} placeholder="What feels right? What still jitters?" value={notes} onChange={event => setNotes(event.target.value)} /></label>
 <p className="mt-2 text-xs text-ink-light">Use “Choose this look” to save the current settings and these notes. {choice && `Saved preference: ${METHODS[choice].label}.`}</p>
 <p role="status" className="mt-2 min-h-5 text-sm text-ink">{message}</p>
 {shareUrl && <label className="mt-2 flex flex-col gap-1 text-xs">Comparison link<input readOnly className={input} value={shareUrl} onFocus={event => event.target.select()} /></label>}</AssetEditorSection>
         </>}
-      toolbar={<><LabPlayback playing={playing} onPlayingChange={setPlaying} onStep={() => seek(elapsed.current + 1 / settings.fps)} stepLabel="Step one frame" onRestart={() => seek(0)} />
+      toolbar={null}
+      dock={<div className="person-animation-dock hud-well"><div className="chrome-simulation-playback"><LabPlayback playing={playing} onPlayingChange={setPlaying} onStep={() => seek(elapsed.current + 1 / settings.fps)} stepLabel="Step one frame" onRestart={() => seek(0)} />
 <span className="px-2 text-xs tabular-nums text-ink-light">{time.toFixed(2)} s · synchronized</span>
 <span className="flex-1" />
 
-<button type="button" className={button} onClick={reset}>Reset controls</button></>}
-      dock={<div className="person-animation-dock hud-well"><><label className="flex items-center gap-2"><input type="checkbox" className="accent-gold" checked={settings.scenery} onChange={event => patch({ scenery: event.target.checked })} />Scenery and overlap test</label>
-<label className="flex min-w-52 flex-1 items-center gap-3">Scrub walk<input aria-label="Scrub walk" type="range" min={0} max={17.142857} step={0.01} value={time % 17.142857} onChange={event => { setPlaying(false); seek(Number(event.target.value)) }} className="w-full accent-gold" /></label>
+<ChromeButton type="button" className={button} onClick={reset}>Reset controls</ChromeButton></div><><label className="flex items-center gap-2"><ChromeCheckbox type="checkbox" className="accent-gold" checked={settings.scenery} onChange={event => patch({ scenery: event.target.checked })} />Scenery and overlap test</label>
+<Tuner label="Scrub walk" min={0} max={17.142857} step={.01} value={time % 17.142857} display={`${(time % 17.142857).toFixed(2)} s`} onChange={value => { setPlaying(false); seek(value) }} />
 </></div>}>
-      <div className="person-stage playground-stage">{active && <>{focus !== null && <div className="flex items-center justify-between"><button type="button" className={button} onClick={() => setFocus(null)}>Back to four views</button></div>}<section aria-label="Rendering comparisons" className={`grid gap-5 ${focus === null ? "xl:grid-cols-2" : "grid-cols-1"}`}>
+      <div className="person-stage playground-stage">{active && <>{focus !== null && <div className="flex items-center justify-between"><ChromeButton type="button" className={button} onClick={() => setFocus(null)}>Back to four views</ChromeButton></div>}<section aria-label="Rendering comparisons" className={`grid gap-5 ${focus === null ? "xl:grid-cols-2" : "grid-cols-1"}`}>
         {methods.map((method, index) => (focus === null || focus === index) && <article key={index} className={`overflow-hidden border bg-parchment text-ink ${choice === method ? "border-gold ring-2 ring-gold" : "border-rule"}`}>
           <div className="flex items-start gap-4 p-4">
 
@@ -162,8 +165,8 @@ export function RenderLab({ mode, onModeChange, active = true }: AssetEditorNavi
           <div className="flex flex-wrap items-center justify-between gap-3 p-4">
             <AssetEditorHelp label={METHODS[method].label}><p>{METHODS[method].description}</p><p>{METHODS[method].watch}</p></AssetEditorHelp>
             <div className="flex gap-2">
-              <button type="button" className={button} onClick={() => setFocus(focus === index ? null : index)}>{focus === index ? "Compare all" : "Focus"}</button>
-              <button type="button" className={button} aria-pressed={choice === method} onClick={() => selectChoice(method)}>{choice === method ? "Saved" : "Save choice"}</button>
+              <ChromeButton type="button" className={button} onClick={() => setFocus(focus === index ? null : index)}>{focus === index ? "Compare all" : "Focus"}</ChromeButton>
+              <ChromeButton type="button" className={button} aria-pressed={choice === method} onClick={() => selectChoice(method)}>{choice === method ? "Saved" : "Save choice"}</ChromeButton>
             </div>
           </div>
         </article>)}

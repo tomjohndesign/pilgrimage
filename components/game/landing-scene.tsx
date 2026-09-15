@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
@@ -105,8 +106,8 @@ export function LandingScene({ viewSize, onReady }: { viewSize: number; onReady:
     return () => { window.removeEventListener("keydown", escape); useCameraStore.getState().select(null) }
   }, [])
   return <>
-    <button type="button" className="landing-church-keyboard hud-action" aria-label="Inspect chapel" aria-pressed={selected}
-      onClick={event => toggle({ delta: 0, stopPropagation: () => event.stopPropagation() })}>{selected ? "Close chapel interior" : "Inspect chapel"}</button>
+    <ChromeButton type="button" className="landing-church-keyboard hud-action" aria-label="Inspect chapel" aria-pressed={selected}
+      onClick={event => toggle({ delta: 0, stopPropagation: () => event.stopPropagation() })}>{selected ? "Close chapel interior" : "Inspect chapel"}</ChromeButton>
     <PixelCanvas orthographic resize={{ offsetSize: true }} camera={{ manual: true, near: .1, far: 400 }} style={{ cursor: hovered ? "pointer" : "default" }} onPointerMissed={() => useCameraStore.getState().select(null)}>
     <LandingCamera viewSize={viewSize} />
     <ambientLight intensity={SURFACE_LIGHT.ambient} />

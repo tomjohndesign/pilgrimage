@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
 import { DEFAULT_VIEW_SIZE } from "@/lib/game/render/iso"
 import type { CameraSave } from "@/lib/game/save/schema"
@@ -162,7 +163,7 @@ export function LoadingChurch({ showChurch, phase, overlayRef, chapel = true, id
         <rect x={1} y={1} width={46} height={4} fill="#5b4d2f" />
         <rect className="loading-church-progress-fill" x={2} y={2} width={12} height={2} fill="#dab767" />
       </svg>
-      {!resuming && onStop && <button type="button" className="hud-action loading-church-stop" onClick={onStop}>Stop</button>}
+      {!resuming && onStop && <ChromeButton type="button" className="hud-action loading-church-stop" onClick={onStop}>Stop</ChromeButton>}
     </>}
   </div>
 }

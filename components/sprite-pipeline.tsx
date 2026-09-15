@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeSelect } from "@/components/ui/chrome-controls"
 import { Children, isValidElement, useEffect, useMemo, useState, type ReactNode } from "react"
 import { AssetEditorFrame, AssetEditorContent, AssetEditorPanels, AssetEditorSection, AssetEditorHelp, type AssetEditorNavigation } from "./asset-editor-frame"
 import { TERRAIN } from "@/lib/game/map/terrain"
@@ -220,7 +221,7 @@ function Stage({ number, title, children, note, legend, footnote }: {
 }
 
 function PipelinePanels({ children }: { children: ReactNode }) {
-  return <AssetEditorPanels>{Children.map(children, child => isValidElement<{ title: string }>(child) ? <AssetEditorSection title={child.props.title}>{child}</AssetEditorSection> : child)}</AssetEditorPanels>
+  return <AssetEditorPanels navigation>{Children.map(children, child => isValidElement<{ title: string }>(child) ? <AssetEditorSection title={child.props.title}>{child}</AssetEditorSection> : child)}</AssetEditorPanels>
 }
 
 function Legend({ items }: { items: Legend[] }) {
@@ -251,7 +252,7 @@ export function SpritePipeline({ mode, onModeChange, active = true }: AssetEdito
   useEffect(() => {
     if (!active) return
     let cancelled = false
-    setStages(null); setError("")
+    setError("")
     // Let the controls paint before the bake takes the main thread.
     const handle = requestAnimationFrame(() => {
       try {
@@ -265,29 +266,29 @@ export function SpritePipeline({ mode, onModeChange, active = true }: AssetEdito
   }, [design, clip, row, frame, frames, active])
 
   return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Sprite pipeline editor" version="" status={error || (stages ? `${stages.cellSize} × ${stages.cellSize} px · ${stages.palette.length} colours` : "Rendering…")} detail="Shared sprite bake">
-    <AssetEditorContent toolbar={<>
+    <AssetEditorContent inspector={<>
       <label className="flex flex-col gap-1 text-xs text-ink-light">Character
-        <select aria-label="Character" className={control} value={preset} onChange={event => setPreset(event.target.value)}>
+        <ChromeSelect aria-label="Character" className={control} value={preset} onChange={event => setPreset(event.target.value)}>
           {saved && <option value="saved">Playground design</option>}
           {Object.keys(PERSON_PRESETS).map(name => <option key={name} value={name}>{name}</option>)}
-        </select>
+        </ChromeSelect>
       </label>
       <label className="flex flex-col gap-1 text-xs text-ink-light">Clip
-        <select aria-label="Clip" className={control} value={clip} onChange={event => {
+        <ChromeSelect aria-label="Clip" className={control} value={clip} onChange={event => {
           const next = event.target.value as BaseClip
           setClip(next); setFrame(current => Math.min(current, PERSON_CLIPS[next].frames - 1))
         }}>
           {Object.entries(PERSON_CLIPS).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
-        </select>
+        </ChromeSelect>
       </label>
       <label className="flex flex-col gap-1 text-xs text-ink-light">Facing
-        <select aria-label="Facing" className={control} value={row} onChange={event => setRow(Number(event.target.value))}>
+        <ChromeSelect aria-label="Facing" className={control} value={row} onChange={event => setRow(Number(event.target.value))}>
           {directions.map((direction, index) => <option key={direction} value={index}>{direction}</option>)}
-        </select>
+        </ChromeSelect>
       </label>
-      <div className="w-48"><LabSlider label="Frame" value={Math.min(frame, frames - 1)} min={0} max={frames - 1} step={1} onChange={setFrame} /></div>
+      <div><LabSlider label="Frame" value={Math.min(frame, frames - 1)} min={0} max={frames - 1} step={1} onChange={setFrame} /></div>
     </>}>
-    {active && stages && <PipelinePanels>
+    {stages && <PipelinePanels>
       <Stage number="0" title="Palette"
         note={<><code>personRecipe()</code> turns the chosen design into body dimensions and a colour ramp: five skin steps, three hair, four tunic, four timber, plus cloth and accent. Skin and hair entries are reserved by tone, so a recolour cannot repaint a staff, a robe or a boot.</>}>
         <div className="person-palette">

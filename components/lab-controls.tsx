@@ -1,5 +1,8 @@
 "use client"
 
+import { EntitySelect } from "./workspace-navigation"
+
+import { ChromeButton, ChromeSelect } from "@/components/ui/chrome-controls"
 import { parseSeed, randomSeed } from "@/lib/game/rng"
 import { HudHelp } from "./game/hud-controls"
 import { Tuner } from "./game/property-controls"
@@ -12,9 +15,9 @@ export function LabPlayback({ playing, onPlayingChange, onStep, stepLabel, onRes
   playing: boolean; onPlayingChange: (playing: boolean) => void; onStep: () => void; stepLabel: string; onRestart: () => void
 }) {
   return <>
-    <button type="button" className={labButton} onClick={() => onPlayingChange(!playing)}>{playing ? "Pause" : "Play"}</button>
-    <button type="button" className={labButton} onClick={() => { onPlayingChange(false); onStep() }}>{stepLabel}</button>
-    <button type="button" className={labButton} onClick={onRestart}>Restart</button>
+    <ChromeButton type="button" className={labButton} onClick={() => onPlayingChange(!playing)}>{playing ? "Pause" : "Play"}</ChromeButton>
+    <ChromeButton type="button" className={labButton} onClick={() => { onPlayingChange(false); onStep() }}>{stepLabel}</ChromeButton>
+    <ChromeButton type="button" className={labButton} onClick={onRestart}>Restart</ChromeButton>
   </>
 }
 
@@ -35,17 +38,18 @@ export function LabSeedActions({ draft, seed, onApply, disabled = false }: {
 }) {
   const parsed = parseSeed(draft)
   return <>
-    <button type="button" className={labButton} disabled={disabled || parsed === null} onClick={() => parsed !== null && onApply(parsed)}>Apply seed</button>
-    <button type="button" className={labButton} disabled={disabled} onClick={() => onApply((seed + 1) >>> 0)}>Next seed</button>
-    <button type="button" className={labButton} disabled={disabled} onClick={() => onApply(randomSeed())}>Random seed</button>
+    <ChromeButton type="button" className={labButton} disabled={disabled || parsed === null} onClick={() => parsed !== null && onApply(parsed)}>Apply seed</ChromeButton>
+    <ChromeButton type="button" className={labButton} disabled={disabled} onClick={() => onApply((seed + 1) >>> 0)}>Next seed</ChromeButton>
+    <ChromeButton type="button" className={labButton} disabled={disabled} onClick={() => onApply(randomSeed())}>Random seed</ChromeButton>
   </>
 }
 
-export function LabSelect({ label, value, options, onChange, help, ariaLabel }: { label: string; value: string; options: Record<string, string>; onChange: (value: string) => void; help?: string; ariaLabel?: string }) {
+export function LabSelect({ label, value, options, onChange, help, ariaLabel, navigation = false }: { navigation?: boolean; label: string; value: string; options: Record<string, string>; onChange: (value: string) => void; help?: string; ariaLabel?: string }) {
+  const Select = navigation ? EntitySelect : ChromeSelect
   const control = <label className="person-choice">
-    {label}<select aria-label={ariaLabel ?? label} className={labInput} value={value} onChange={event => onChange(event.target.value)}>
+    {label}<Select aria-label={ariaLabel ?? label} className={labInput} value={value} onChange={event => onChange(event.target.value)}>
       {Object.entries(options).map(([key, text]) => <option key={key} value={key}>{text}</option>)}
-    </select>
+    </Select>
   </label>
   return help ? <HudHelp className="workspace-tooltip" content={help}><div>{control}</div></HudHelp> : control
 }

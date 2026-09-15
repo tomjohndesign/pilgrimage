@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
 import { AssetEditorHelp } from "../asset-editor-frame"
 
 import { Suspense, useEffect, useState } from "react"
@@ -35,9 +36,9 @@ export function WaterSourceGallery() {
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
       <AssetEditorHelp label="Preview">A timber-lined bucket well and a natural pool, with open access for drawing and dipping water.</AssetEditorHelp>
       <div className="flex flex-wrap gap-2">
-        <button type="button" className={button} onClick={() => setView(v => (v + 1) % 4)}>Rotate</button>
-        <label className="person-check"><input type="checkbox" checked={drinking} onChange={event => setDrinking(event.target.checked)} />Show drinking</label>
-        <label className="person-check"><input type="checkbox" checked={overlap} onChange={event => setOverlap(event.target.checked)} />Check overlap</label>
+        <ChromeButton type="button" className={button} onClick={() => setView(v => (v + 1) % 4)}>Rotate</ChromeButton>
+        <label className="person-check"><ChromeCheckbox type="checkbox" checked={drinking} onChange={event => setDrinking(event.target.checked)} />Show drinking</label>
+        <label className="person-check"><ChromeCheckbox type="checkbox" checked={overlap} onChange={event => setOverlap(event.target.checked)} />Check overlap</label>
       </div>
     </div>
     <div className="h-[360px] overflow-hidden border border-rule" role="img" aria-label="Timber-lined well and natural watering hole beside monks for scale">

@@ -1,5 +1,8 @@
 "use client"
 
+import { ThemeToggle } from "../chrome-provider"
+
+import { ChromeSelect, ChromeButton } from "@/components/ui/chrome-controls"
 import { AppearancePanel } from "./appearance-panel"
 import { PlayerColorPicker } from "./player-color"
 
@@ -14,7 +17,7 @@ import { FOOD_TYPES, FOOD_LABELS, STOREHOUSE_FOOD_CAPACITY, emptyFoodStock, stor
 import { ELEVATION_CONTROLS, type ElevationSettings } from "@/lib/game/map/elevation"
 
 import Link from "next/link"
-import * as Tooltip from "@radix-ui/react-tooltip"
+import { Tooltip } from "@base-ui/react/tooltip"
 import { Dices, Menu, Settings, X } from "lucide-react"
 import "./game-hud.css"
 import { useEffect, useId, useMemo, useState } from "react"
@@ -70,7 +73,7 @@ import { useSimulationStore } from "@/lib/game/simulation-store"
 import { partyNeedDrain } from "@/lib/game/travel-parties"
 import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES } from "@/lib/game/scene-visibility"
 import { Section, Tuner } from "./property-controls"
-import { BuildControls, HudClock, HudHelp, HudResources } from "./hud-controls"
+import { BuildControls, HudClock, HudResources } from "./hud-controls";
 
 const CONTROLS: Array<[string, string]> = [
   ["Tap / click", "Inspect people, trees & piles"],
@@ -99,7 +102,6 @@ function Panel({ children, className = "" }: { children: React.ReactNode; classN
     </div>
   )
 }
-
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
@@ -150,7 +152,7 @@ function Chooser({
         <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 truncate font-display text-[11px] font-black text-ink-light">
           {options[value]}
         </span>
-        <select
+        <ChromeSelect
           value={value}
           aria-label={label}
           onChange={(event) => onChange(Number(event.target.value))}
@@ -161,7 +163,7 @@ function Chooser({
               {option}
             </option>
           ))}
-        </select>
+        </ChromeSelect>
       </div>
     </div>
   )
@@ -196,7 +198,7 @@ function MenuPanel({ onClose, playing, playerColor, onColorChange }: { onClose: 
     <div
       className={`hud-menu pointer-events-auto absolute right-0 top-full mt-2 w-56 border border-rule bg-parchment/95 px-4 py-3 ${PANEL_SHADOW}`}
     >
-      <div className="hud-world-heading"><span>Menu</span><button type="button" className="hud-close" aria-label="Close menu" onClick={onClose}><X size={16} /></button></div>
+      <div className="hud-world-heading"><span>Menu</span><ChromeButton type="button" className="hud-close" aria-label="Close menu" onClick={onClose}><X size={16} /></ChromeButton></div>
       <div className="mb-3 border-b border-rule pb-3"><PlayerColorPicker value={playerColor} onChange={onColorChange} /></div>
       <nav className="flex flex-col gap-1.5">
         {SITE_MENU.map((item) => (
@@ -220,16 +222,16 @@ function MenuPanel({ onClose, playing, playerColor, onColorChange }: { onClose: 
             ))}
           </div>
         ))}
-        {playing && <button
+        {playing && <ChromeButton
           type="button"
           onClick={() => setShowControls((open) => !open)}
           aria-expanded={showControls}
           className="text-left font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red"
         >
           Controls {showControls ? "▾" : "▸"}
-        </button>}
-        {playing && <button type="button" onClick={() => { useCameraStore.getState().reset(); onClose() }}
-          className="text-left font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red">Reset camera</button>}
+        </ChromeButton>}
+        {playing && <ChromeButton type="button" onClick={() => { useCameraStore.getState().reset(); onClose() }}
+          className="text-left font-display text-[11px] uppercase tracking-[2px] text-ink hover:text-red">Reset camera</ChromeButton>}
         {playing && showControls && (
           <dl className="grid grid-cols-[auto_auto] gap-x-3 gap-y-0.5">
             {CONTROLS.map(([key, action]) => (
@@ -304,14 +306,14 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
         <Label>Traveler</Label>
         <div className="flex items-center gap-2">
           <FollowButton subject={party ? "party" : "traveler"} />
-          <button
+          <ChromeButton
             type="button"
             onClick={() => useCameraStore.getState().select(null)}
             aria-label="Dismiss traveler"
             className="pointer-events-auto font-display text-[10px] text-ink-light hover:text-red"
           >
             ✕
-          </button>
+          </ChromeButton>
         </div>
       </div>
       <div className="pt-1">
@@ -356,7 +358,7 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
       {companions.length > 0 && <div className="mt-2 border-t border-rule pt-2" aria-label="Travel party">
         <div className="flex items-center justify-between gap-2">
           <Label>{party ? `Party of ${party.members.length}` : "Former companions"}</Label>
-          {party && <button type="button" className="hud-action" onClick={focusParty}>Find party</button>}
+          {party && <ChromeButton type="button" className="hud-action" onClick={focusParty}>Find party</ChromeButton>}
         </div>
         <div className="text-[11px] text-ink">{traveler.party!.name}</div>
         {party && <p className="text-[11px] italic text-ink-light">{party.reason}{party.stage === "traveling" && ` · ${party.singleFile ? "Single file" : "Loose group"}`}</p>}
@@ -365,14 +367,14 @@ function TravelerPanel({ traveler, travelers, map }: { traveler: Traveler; trave
           {companions.map(person => {
             const state = sim?.travelers.get(person.id), monk = sim?.joinedMonks.get(person.id)
             const resident = !!(state?.home || state?.employer || monk)
-            return <button key={person.id} type="button" className="hud-action text-left" aria-current={person.id === traveler.id ? "true" : undefined}
+            return <ChromeButton key={person.id} type="button" className="hud-action text-left" aria-current={person.id === traveler.id ? "true" : undefined}
               onClick={() => {
                 const camera = useCameraStore.getState()
                 camera.select(monk ? { kind: "monk", id: monk.id } : { kind: "traveler", id: person.id })
                 if (state) camera.panTo(state.x, state.z)
               }}>
               {person.name}{traveler.party?.partnerId === person.id ? " · Partner" : ""}{resident ? " · Settled" : state?.partyWaiting ? " · Waiting" : ""}
-            </button>
+            </ChromeButton>
           })}
         </div>
       </div>}
@@ -493,14 +495,14 @@ function RelicPanel({ relic }: { relic: Relic }) {
     <Panel>
       <div className="flex items-baseline justify-between gap-4">
         <Label>Relic</Label>
-        <button
+        <ChromeButton
           type="button"
           onClick={() => useCameraStore.getState().select(null)}
           aria-label="Dismiss relic"
           className="pointer-events-auto font-display text-[10px] text-ink-light hover:text-red"
         >
           ✕
-        </button>
+        </ChromeButton>
       </div>
       <div className="pt-1">
         <div className="font-display text-xs text-ink">{relicTitle(relic)}</div>
@@ -514,9 +516,9 @@ function RelicPanel({ relic }: { relic: Relic }) {
       </div>
 
       <div className="mt-2 flex flex-col gap-0.5 border-t border-rule pt-2">
-        {procession.monkId !== null && <button type="button" className="hud-action mb-2"
+        {procession.monkId !== null && <ChromeButton type="button" className="hud-action mb-2"
           disabled={procession.returnRequested || procession.stage === "returning" || procession.stage === "lowering"}
-          onClick={procession.returnRelic}>Return relic</button>}
+          onClick={procession.returnRelic}>Return relic</ChromeButton>}
         <StatBar label="Sanctity" value={s.sanctity} />
         <StatBar label="Spectacle" value={s.spectacle} />
         <StatBar label="Doubt" value={s.doubt} />
@@ -583,14 +585,14 @@ function MonkPanel({ monk }: { monk: Monk }) {
         <Label>Brother</Label>
         <div className="flex items-center gap-2">
           <FollowButton subject="monk" />
-          <button
+          <ChromeButton
             type="button"
             onClick={() => useCameraStore.getState().select(null)}
             aria-label="Dismiss monk"
             className="pointer-events-auto font-display text-[10px] text-ink-light hover:text-red"
           >
             ✕
-          </button>
+          </ChromeButton>
         </div>
       </div>
       <div className="pt-1">
@@ -611,20 +613,20 @@ function MonkPanel({ monk }: { monk: Monk }) {
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
-        <button type="button" className="hud-action"
+        <ChromeButton type="button" className="hud-action"
           disabled={monk.duty === "Keeper of the Relic" || !evangelizing && (!evangelism.available || carryingRelic || activity === "flying" || stamina <= MONK_TIRED_AT)}
           onClick={() => evangelizing ? evangelism.recall(monk.id) : evangelism.request(monk.id)}>
           {evangelizing ? "Recall from preaching" : "Evangelize on the main road"}
-        </button>
+        </ChromeButton>
         <p className="mt-1 text-[11px] italic text-ink-light">Preach beside the junction for 3 days, including travel and rest, or until recalled. Monks tire more slowly and sleep where they are before resuming. While preaching, gives passing travelers a 5% extra chance to visit the relic, independent of a cross. Extra preachers do not stack.</p>
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
-        <button type="button" className="hud-action" disabled={monk.duty === "Keeper of the Relic" || !procession.available || evangelizing || activity === "toEvangelize" || activity === "preaching" || activity === "flying" ||
+        <ChromeButton type="button" className="hud-action" disabled={monk.duty === "Keeper of the Relic" || !procession.available || evangelizing || activity === "toEvangelize" || activity === "preaching" || activity === "flying" ||
           (procession.monkId !== null && !carryingRelic) || (carryingRelic && (procession.returnRequested || procession.stage === "lowering" || procession.stage === "returning"))}
           onClick={() => carryingRelic ? procession.returnRelic() : procession.request(monk.id)}>
           {carryingRelic ? "Return relic" : "Carry relic in procession"}
-        </button>
+        </ChromeButton>
         <p className="mt-1 text-[11px] italic text-ink-light">The procession follows the path to the main road. Nearby folk gain up to 5 piety once per procession, marked by a cross.</p>
       </div>
 
@@ -829,7 +831,7 @@ export function GameHud({
   const selectedRelic = selection?.kind === "relic"
 
   return (
-    <Tooltip.Provider delayDuration={180} skipDelayDuration={100}>
+    <Tooltip.Provider delay={180}>
     <SceneAudioLifecycle active={playing} />
     <BugReportDialog diagnostics={report} onClose={() => setReport(null)} />
     <div className="game-hud" data-landing={!playing} data-panel={menuOpen ? "menu" : panel ?? (selection ? "selection" : "none")}>
@@ -847,36 +849,32 @@ export function GameHud({
         </div>
         <div className="hud-header-right">
         <div className="hud-header-actions">
-          {playing && <button type="button" className="hud-header-button" aria-label="Random map" title="Random map: regenerate at this size with a random seed"
-            onClick={() => onNewMap({ size: settings.size, seed: randomSeed() })}><Dices size={16} /></button>}
+          {playing && <ChromeButton type="button" className="hud-header-button" aria-label="Random map" title="Random map: regenerate at this size with a random seed"
+            onClick={() => onNewMap({ size: settings.size, seed: randomSeed() })}><Dices size={16} /></ChromeButton>}
           {playing && <NewMapDialog defaultSize={settings.size} onCreate={onNewMap} />}
-          <MusicPlayer className="hud-header-button" compact />
-          {playing && <button type="button" className="hud-header-button" aria-label="World settings" title="World settings"
+          <MusicPlayer className="hud-header-button" compact /><ThemeToggle />
+          {playing && <ChromeButton type="button" className="hud-header-button" aria-label="World settings" title="World settings"
             aria-expanded={panel === "world"} aria-controls="world-settings" onClick={() => {
               setPanel((current) => current === "world" ? null : "world")
               setMenuOpen(false)
               economy.chooseBuild(null)
               if (!SHOW_PROPERTY_PANELS) useCameraStore.getState().select(null)
-            }}><Settings size={16} /></button>}
-          {playing && <button type="button" className="hud-header-button" aria-label="Menu" title="Menu"
+            }}><Settings size={16} /></ChromeButton>}
+          {playing && <ChromeButton type="button" className="hud-header-button" aria-label="Menu" title="Menu"
             aria-expanded={menuOpen} onClick={() => {
               setMenuOpen((open) => !open)
               useCameraStore.getState().select(null)
               setPanel(null)
               economy.chooseBuild(null)
-            }}><Menu size={16} /></button>}
+            }}><Menu size={16} /></ChromeButton>}
           {playing && menuOpen && <MenuPanel playerColor={settings.playerColor} onColorChange={playerColor => set({ playerColor })} playing={playing} onClose={() => setMenuOpen(false)} />}
         </div>
-        {playing && <HudClock />}
+
         </div>
       </header>
-      {playing && <HudHelp content={<><div className="hud-help-title">Character population</div><p>{travelers.length} travelers across the map at {Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}% traffic density. Increase for playtesting, up to 10,000 travelers on the largest map.</p><p>Scenery and sprite detail adjust when the game slows down. Travelers outside the view keep moving and living in the world.</p></>}>
-        <section className="hud-traffic" aria-label="Traffic">
-          <label htmlFor="traffic-density">Characters</label>
-          <input id="traffic-density" type="range" aria-label="Traffic density" aria-valuetext={`${travelers.length} travelers, ${Math.round(settings.traffic / DEFAULT_TRAFFIC * 100)}% traffic density`} min={0} max={MAX_TRAFFIC} step={1} value={settings.traffic} onChange={(event) => set({ traffic: Number(event.target.value) })} />
-          <output htmlFor="traffic-density">{travelers.length}</output>
-        </section>
-      </HudHelp>}
+      {playing && <div className="hud-time-controls"><HudClock /><section className="hud-traffic" aria-label="Traffic">
+        <Tuner label="Characters" display={String(travelers.length)} min={0} max={MAX_TRAFFIC} value={settings.traffic} onChange={traffic => set({ traffic })} />
+      </section></div>}
 
       {!starting && <div className="hud-landing-heading">
         <h1 className="hud-landing-title">Pilgrimage</h1>
@@ -893,9 +891,9 @@ export function GameHud({
         <PlayerColorPicker value={settings.playerColor} onChange={playerColor => set({ playerColor })} />
         <NewWorldFields seedId="landing-seed" size={settings.size} seed={seed}
           onSizeChange={size => set({ size })} onSeedChange={onSeedChange} onSeedValidityChange={setSeedValid} />
-        <button type="submit" className={`hud-action hud-landing-play${continueHref ? "" : " hud-action-primary"}`} disabled={!canStart || !seedValid}>
+        <ChromeButton type="submit" className={`hud-action hud-landing-play${continueHref ? "" : " hud-action-primary"}`} disabled={!canStart || !seedValid}>
           {continueHref ? "New world" : "Play"}
-        </button>
+        </ChromeButton>
       </form>}
       {!starting && <footer className="hud-landing-footer">
         <span>Created by <a href="https://twitter.com/tomjohndesign" target="_blank" rel="noopener noreferrer">Tomjohn</a></span>
@@ -905,7 +903,7 @@ export function GameHud({
       </footer>}
 
       {playing && panel === "world" && <aside id="world-settings" className="hud-world hud-well" aria-label="World settings">
-        <div className="hud-world-heading"><span>World</span><button type="button" aria-label="Close world settings" onClick={() => setPanel(null)}><X size={16} /></button></div>
+        <div className="hud-world-heading"><span>World</span><ChromeButton type="button" aria-label="Close world settings" onClick={() => setPanel(null)}><X size={16} /></ChromeButton></div>
         <div className="mb-4 flex flex-wrap gap-2">
           <HudButton id="bug-report-button" onClick={openBugReport}>Report a bug</HudButton>
         </div>
@@ -1190,13 +1188,13 @@ export function GameHud({
           {(selection.kind === "tree" || selection.kind === "pile") && <ResourceInspector selection={selection} />}
           {selectedBuilding && (
             <Panel>
-            <div className="flex items-center justify-between gap-4"><Label>{selectedDefinition?.category === "scenery" ? "Scenery" : "Building"}</Label><button type="button" aria-label="Dismiss building" onClick={() => useCameraStore.getState().select(null)} className="pointer-events-auto text-xs text-ink-light">✕</button></div>
+            <div className="flex items-center justify-between gap-4"><Label>{selectedDefinition?.category === "scenery" ? "Scenery" : "Building"}</Label><ChromeButton type="button" aria-label="Dismiss building" onClick={() => useCameraStore.getState().select(null)} className="pointer-events-auto text-xs text-ink-light">✕</ChromeButton></div>
             <p className="mt-1 font-display text-xs text-ink">{selectedBuilding.label}</p>
             <ConstructionStatus building={selectedBuilding} />
             {selectedBuilding.buildType === "inn" && <p className="mt-1 text-[11px] text-ink-light">Open dormitory · {selectedBuilding.supportId ? "Upper floor · ladder access" : "Ground floor"} · {selectedBuilding.fireplace ? "Hearth" : "Unheated"}</p>}
-            {map?.buildings.filter(b=>b.id===selectedBuilding.supportId || b.supportId===selectedBuilding.id).map(floor=><button key={floor.id} type="button" className="mt-2 block text-[11px] text-ink underline underline-offset-2" onClick={()=>useCameraStore.getState().select({kind:"building",id:floor.id})}>
+            {map?.buildings.filter(b=>b.id===selectedBuilding.supportId || b.supportId===selectedBuilding.id).map(floor=><ChromeButton key={floor.id} type="button" className="mt-2 block text-[11px] text-ink underline underline-offset-2" onClick={()=>useCameraStore.getState().select({kind:"building",id:floor.id})}>
               Inspect {floor.label.toLowerCase()} {floor.supportId ? "upstairs" : "downstairs"}
-            </button>)}
+            </ChromeButton>)}
             {selectedBuilding.owner === "independent" && <p className="mt-2 max-w-56 text-[11px] text-ink-light">Independent roadside town. {selectedBuilding.buildType === "tavern" ? "Locally run tavern serving food and drink to passing travelers." : "Home to the townspeople."} Joins your settlement when your influence reaches this building; until then, it earns you no income or renown.</p>}
             {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">{brothersAtHome} / {housingBeds(selectedBuilding)} monks · {Math.max(0, housingBeds(selectedBuilding) - brothersAtHome)} spaces available. Tired monks sleep here until their stamina recovers.</p>}
             {isHouse(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
@@ -1216,24 +1214,24 @@ export function GameHud({
                   ? `A 2 × 2 relic chapel. One visitor kneels at the altar; others queue outside. Modest donations. Supports up to ${CHAPEL_MONKS} monks with shelter beds.`
                   : `Two places at the rails; the queue waits four person-spaces behind. Larger donations${selectedBuilding.buildType === "church" ? `, with +${CHURCH_RENOWN_BONUS} renown to draw visitors` : ""}. Supports up to ${CHURCH_MONKS} monks with shelter beds.`}</p>
                 {isChapel(selectedBuilding) && <>
-                  <button type="button" onClick={economy.upgradeShrine} disabled={!!economy.churchUpgradeError}
+                  <ChromeButton type="button" onClick={economy.upgradeShrine} disabled={!!economy.churchUpgradeError}
                     className="rounded border border-rule bg-parchment-dark px-2 py-1.5 text-left text-[11px] text-ink hover:text-red disabled:opacity-50">
                     Upgrade to church · {CHURCH_COST.gold} gold · {CHURCH_COST.wood} wood
-                  </button>
+                  </ChromeButton>
                   <p className="max-w-56 text-[10px] text-ink-light">{economy.churchUpgradeError ?? `The church and side-wing plots are marked in gold while building. Construction adds two kneeling places, larger gifts, +${CHURCH_RENOWN_BONUS} renown and capacity for ${CHURCH_MONKS} monks.`}</p>
                 </>}
                 <p className="text-[11px] text-ink-light">Donated · {economy.settlement.collectedAdmission} gold</p>
-                {map.buildings.filter(b => b.churchId === selectedBuilding.id).map(wing => <button key={wing.id} type="button" className="mt-2 block text-left text-[11px] text-ink underline underline-offset-2"
+                {map.buildings.filter(b => b.churchId === selectedBuilding.id).map(wing => <ChromeButton key={wing.id} type="button" className="mt-2 block text-left text-[11px] text-ink underline underline-offset-2"
                   onClick={() => useCameraStore.getState().select({ kind: "building", id: wing.id })}>
                   Inspect {wing.label.toLowerCase()}
-                </button>)}
-                <button type="button" disabled={isChapel(selectedBuilding)} title={isChapel(selectedBuilding) ? "Complete the church upgrade before adding a residence." : undefined}
+                </ChromeButton>)}
+                <ChromeButton type="button" disabled={isChapel(selectedBuilding)} title={isChapel(selectedBuilding) ? "Complete the church upgrade before adding a residence." : undefined}
                   className="mt-2 block text-left text-[11px] text-ink underline underline-offset-2 disabled:opacity-50" onClick={() => {
                   useCameraStore.getState().select(null)
                   setPanel("build")
                   setMenuOpen(false)
                   economy.chooseBuild("monk-shelter")
-                }}>Build monks’ residence</button>
+                }}>Build monks’ residence</ChromeButton>
               </div>
             )}
             {(selectedBuilding.buildType === "workshop" || selectedBuilding.buildType === "storehouse") && (

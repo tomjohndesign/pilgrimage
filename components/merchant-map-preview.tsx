@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
 import { TERRAIN } from "@/lib/game/map/terrain"
 
 import { AssetEditorCanvasControls, AssetEditorHelp } from "./asset-editor-frame"
@@ -159,10 +160,10 @@ export function MerchantMapPreview({ playing, onPlayingChange, row, zoom, ...opt
       <div className="workspace-canvas-toolbar" aria-label="Journey controls">
         <LabSelect label="Scenario" ariaLabel="Cart simulation" value={scenario} options={{ merchant: "Merchant journey", ...Object.fromEntries(TURNING_SCENARIOS.map(item => [item.id, item.label])) }} onChange={value => setScenario(value as typeof scenario)} />
         <LabSelect label="Stage" value={frame.stage} options={Object.fromEntries(demo.stages.map(stage => [stage, stage]))} onChange={value => { onPlayingChange(false); jump(demo.starts[value as typeof frame.stage] ?? 0) }} />
-        <button className={labButton} onClick={() => jump(0)}>Restart</button>
+        <ChromeButton className={labButton} onClick={() => jump(0)}>Restart</ChromeButton>
         <div className="workspace-scrubber"><LabSlider label="Journey progress" value={frame.time} min={0} max={demo.duration} step={demo.step} suffix=" s" onChange={value => { onPlayingChange(false); jump(value) }} /></div>
         <LabSelect label="Speed" ariaLabel="Journey speed" value={String(rate)} options={{ 1: "1×", 2: "2×", 4: "4×" }} onChange={value => setRate(Number(value))} />
-        {demo.turning && <><div className="workspace-radius"><LabSlider label="Turn radius" value={radius} min={0.4} max={3} step={0.1} suffix=" tiles" onChange={setRadius} /></div><label className="person-check"><input type="checkbox" checked={trails} onChange={event => setTrails(event.target.checked)} />Show trails</label><button className={labButton} disabled={!firstContact} onClick={() => { if (firstContact) { onPlayingChange(false); jump(firstContact.time) } }}>First contact</button></>}
+        {demo.turning && <><div className="workspace-radius"><LabSlider label="Turn radius" value={radius} min={0.4} max={3} step={0.1} suffix=" tiles" onChange={setRadius} /></div><label className="person-check"><ChromeCheckbox type="checkbox" checked={trails} onChange={event => setTrails(event.target.checked)} />Show trails</label><ChromeButton className={labButton} disabled={!firstContact} onClick={() => { if (firstContact) { onPlayingChange(false); jump(firstContact.time) } }}>First contact</ChromeButton></>}
         <AssetEditorHelp label="Journey">{demo.turning ? TURNING_SCENARIOS.find(item => item.id === scenario)?.description : "Scrub or choose a stage to pause and inspect the journey. Directions below rotate the camera. The map uses the same scale as the game."}</AssetEditorHelp>
         <span className="workspace-canvas-status" role="status">{demo.turning ? frame.clearance ? "Route clear" : "Edge contact" : frame.stage === "Selling" ? frame.sales ? "Customer served" : "Customer browsing" : frame.stage === "Closing" && frame.shopProgress === 0 && frame.pasture && !frame.pasture.ready ? "Waiting for the animal" : frame.stage}</span>
       </div>

@@ -2,7 +2,9 @@ import type { Metadata, Viewport } from 'next'
 import { Geist } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { BalanceProvider } from '@/components/game/balance-provider'
+import { ChromeProvider } from '@/components/chrome-provider'
 import './globals.css'
+import '@/components/chrome.css'
 
 const geist = Geist({
   subsets: ["latin"],
@@ -50,9 +52,9 @@ export default function RootLayout({
   return (
     // The play page's resume script styles the root element before hydration
     // (see lib/game/save/view.ts), which React must not report as a mismatch.
-    <html lang="en" className={`${geist.variable} bg-[#1a1208]`} suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={geist.variable}>
       <body className="font-sans antialiased">
-        <BalanceProvider>{children}</BalanceProvider>
+        <ChromeProvider><BalanceProvider>{children}</BalanceProvider></ChromeProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { useEffect, useRef, useState } from "react"
 
 export const CHEAT_GOLD = 1000
@@ -110,7 +111,7 @@ export function CheatBar(cheats: CheatActions) {
         >
           <div className="mb-3 flex items-center justify-between gap-3">
             <label htmlFor="cheat-code" className="font-display text-[10px] uppercase tracking-[3px] text-gold">Cheat code</label>
-            <button type="button" onClick={() => { setMessage(""); close() }} className="text-xs text-parchment/70 hover:text-gold">Esc · Close</button>
+            <ChromeButton type="button" onClick={() => { setMessage(""); close() }} className="text-xs text-parchment/70 hover:text-gold">Esc · Close</ChromeButton>
           </div>
           <div className="flex items-center gap-3">
             <span aria-hidden="true" className="text-gold">›</span>
@@ -126,7 +127,7 @@ export function CheatBar(cheats: CheatActions) {
               maxLength={80}
               className="min-w-0 flex-1 select-text border-b border-parchment/30 bg-transparent py-2 font-mono text-base text-parchment outline-none placeholder:text-parchment/40 focus:border-gold"
             />
-            <button type="submit" className="border border-gold/60 px-3 py-2 font-display text-[10px] uppercase tracking-wider text-gold hover:bg-gold/10">Return ↵</button>
+            <ChromeButton type="submit" className="border border-gold/60 px-3 py-2 font-display text-[10px] uppercase tracking-wider text-gold hover:bg-gold/10">Return ↵</ChromeButton>
           </div>
         </form>
       )}

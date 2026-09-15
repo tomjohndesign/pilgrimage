@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
 import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "@/components/asset-editor-frame"
 
 import dynamic from "next/dynamic"
@@ -92,19 +93,19 @@ export function PlacementLab({ mode, onModeChange, active = true }: AssetEditorN
             <LabSeedActions draft={seedDraft} seed={settings.seed} onApply={apply} />
           </div>
           <LabSlider label={LIMIT_FIELD.label} value={limit} min={LIMIT_FIELD.min} max={LIMIT_FIELD.max} step={LIMIT_FIELD.step} onChange={setLimit} />
-          <LabSelect label="Structure" value={tool ?? ""} options={Object.fromEntries(catalog.map(def => [def.id, `${def.label} · ${def.w} × ${def.d}`]))} onChange={value => useBuildStore.getState().setTool(value)} />
+          <LabSelect navigation label="Structure" value={tool ?? ""} options={Object.fromEntries(catalog.map(def => [def.id, `${def.label} · ${def.w} × ${def.d}`]))} onChange={value => useBuildStore.getState().setTool(value)} />
           <div className="flex flex-col gap-1 text-xs text-ink-light">Rotation · {rotation * 90}°
             <div className="flex gap-2">
-              <button type="button" className={labButton} onClick={() => useBuildStore.getState().rotateBuilding(-1)}>↺ Left</button>
-              <button type="button" className={labButton} onClick={() => useBuildStore.getState().rotateBuilding(1)}>↻ Right</button>
+              <ChromeButton type="button" className={labButton} onClick={() => useBuildStore.getState().rotateBuilding(-1)}>↺ Left</ChromeButton>
+              <ChromeButton type="button" className={labButton} onClick={() => useBuildStore.getState().rotateBuilding(1)}>↻ Right</ChromeButton>
             </div>
           </div>
           <div className="flex flex-col gap-1 text-xs text-ink-light">View · {VIEW_NAMES[view]}
             <div className="flex gap-2">
-              <button type="button" className={labButton} aria-label="Turn view left" onClick={() => setView(v => (v + 3) % 4)}>↺</button>
-              <button type="button" className={labButton} aria-label="Turn view right" onClick={() => setView(v => (v + 1) % 4)}>↻</button>
-              <button type="button" className={labButton} disabled={!placed} onClick={undo}>Undo</button>
-              <button type="button" className={labButton} disabled={!placed} onClick={() => { setSettlement(createSettlement(balance)); setStatus("Buildings cleared.") }}>Clear</button>
+              <ChromeButton type="button" className={labButton} aria-label="Turn view left" onClick={() => setView(v => (v + 3) % 4)}>↺</ChromeButton>
+              <ChromeButton type="button" className={labButton} aria-label="Turn view right" onClick={() => setView(v => (v + 1) % 4)}>↻</ChromeButton>
+              <ChromeButton type="button" className={labButton} disabled={!placed} onClick={undo}>Undo</ChromeButton>
+              <ChromeButton type="button" className={labButton} disabled={!placed} onClick={() => { setSettlement(createSettlement(balance)); setStatus("Buildings cleared.") }}>Clear</ChromeButton>
             </div>
           </div>
         </div>
@@ -116,7 +117,7 @@ export function PlacementLab({ mode, onModeChange, active = true }: AssetEditorN
           ["Verdict", verdict]].map(([label, value]) =>
           <div key={label}><dt className="text-ink-light">{label}</dt><dd className="mt-1 font-semibold tabular-nums">{value}</dd></div>)}</AssetEditorSection>
         </>}
-      toolbar={<><label className="flex items-center gap-2"><input type="checkbox" className="accent-gold" checked={grid} onChange={e => setGrid(e.target.checked)} />Show tile grid</label>
+      toolbar={<><label className="flex items-center gap-2"><ChromeCheckbox type="checkbox" className="accent-gold" checked={grid} onChange={e => setGrid(e.target.checked)} />Show tile grid</label>
 </>}
       dock={<div className="person-animation-dock hud-well"><><span className="person-hint">{verdict}</span></></div>}>
       <div className="person-stage asset-building-stage">{active && <><div className="asset-building-viewport">

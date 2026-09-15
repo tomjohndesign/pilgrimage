@@ -1,4 +1,6 @@
 "use client"
+
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { useRef, useState } from "react"
 import { JointOverlay, CharacterRigInspector } from "./character-rig-editor"
 import { ANIMAL_BONES, ANIMAL_JOINT_LABELS, ANIMAL_FRAMES, animalOffset, animalPoseKey, validateAnimalEdits, type AnimalJoint, type AnimalClip, type AnimalRigEdits } from "@/lib/game/wildlife/rig-edits"
@@ -33,7 +35,7 @@ export function AnimalRigInspector({ joints, selected, onSelect, edits, clip, fr
     onResetClip={() => { const clips = { ...edits.clips }; delete clips[clip]; onChange({ ...edits, clips }) }}
     canUndo={canUndo} canRedo={canRedo} onUndo={onUndo} onRedo={onRedo}
     footer={<>
-      <div className="person-file-actions"><button className="hud-action" onClick={exportFile}>Export rig settings</button><button className="hud-action" onClick={() => input.current?.click()}>Import rig settings</button><button className="hud-action" onClick={() => { void navigator.clipboard.writeText(JSON.stringify(edits, null, 2)).then(() => setMessage("Copied rig settings."), () => setMessage("Use Export rig settings to save this draft.")) }}>Copy edits as JSON</button></div>
+      <div className="person-file-actions"><ChromeButton className="hud-action" onClick={exportFile}>Export rig settings</ChromeButton><ChromeButton className="hud-action" onClick={() => input.current?.click()}>Import rig settings</ChromeButton><ChromeButton className="hud-action" onClick={() => { void navigator.clipboard.writeText(JSON.stringify(edits, null, 2)).then(() => setMessage("Copied rig settings."), () => setMessage("Use Export rig settings to save this draft.")) }}>Copy edits as JSON</ChromeButton></div>
       <input ref={input} type="file" accept="application/json,.json" hidden onChange={async e => { const file = e.target.files?.[0]; if (!file) return; try { onChange(validateAnimalEdits(JSON.parse(await file.text()))); setMessage("Imported rig settings.") } catch (error) { setMessage((error as Error).message) } e.target.value = "" }} />
       <p className="person-hint" role="status">{message || "Saved in this browser per animal and action. Pose keys blend across the loop seam."}</p>
     </>}>

@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
 import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "@/components/asset-editor-frame"
 import { playgroundHref } from "@/lib/asset-playground"
 
@@ -139,7 +140,7 @@ export function MapLab({ mode, onModeChange, active = true }: AssetEditorNavigat
     <AssetEditorWorkspace title="Maps" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
       controlsFooter={<div className="person-panel-footer"><div className="flex flex-wrap gap-2">
             <LabSeedActions draft={seedDraft} seed={settings.seed} onApply={apply} disabled={!ready} />
-            <button type="button" className={labButton} onClick={() => { setDraft(DEFAULT_SETTINGS); setSettings(DEFAULT_SETTINGS); setSeedDraft(String(DEFAULT_SETTINGS.seed)); setShareUrl(""); setStatus("Default map restored.") }}>Reset</button>
+            <ChromeButton type="button" className={labButton} onClick={() => { setDraft(DEFAULT_SETTINGS); setSettings(DEFAULT_SETTINGS); setSeedDraft(String(DEFAULT_SETTINGS.seed)); setShareUrl(""); setStatus("Default map restored.") }}>Reset</ChromeButton>
           </div></div>}
       controls={<><AssetEditorSection title="Layout"><LabSeedInput value={seedDraft} onChange={setSeedDraft} onApply={apply} disabled={!ready} />
 <LabSelect label="Sample size" value={String(draft.size)} options={{ 128: "128 × 128", 192: "192 × 192", 256: "256 × 256" }} onChange={value => patch({ size: Number(value) })} />
@@ -154,11 +155,10 @@ export function MapLab({ mode, onModeChange, active = true }: AssetEditorNavigat
 <AssetEditorSection title="Water"><LabSelect label="Rivers" help="River density / 192²" value={String(draft.rivers)} options={{ 0: "None", 1: "One", 2: "Two" }} onChange={value => patch({ rivers: Number(value) })} />
 <LabSelect label="Lakes" help="Lake density / 192²" value={String(draft.lakes)} options={{ 0: "None", 1: "One", 2: "Two" }} onChange={value => patch({ lakes: Number(value) })} />
 <LabSlider label="Water cover" help="Water coverage budget" value={draft.water} min={0} max={25} step={1} suffix="%" onChange={water => patch({ water })} /><p className="person-hint">River and lake counts are densities per 192 × 192 tiles. The coverage limit may reduce how much water is placed.</p></AssetEditorSection>
-        <AssetEditorSection title="Files"><button type="button" className={labButton} disabled={!ready || pending} onClick={share}>Copy map link</button>
-<button type="button" className={labButton} disabled={!ready || pending} onClick={download}>Save map PNG</button>{shareUrl && <label className="text-xs text-ink-light">Map link<input readOnly className={`${labInput} mt-1`} value={shareUrl} onFocus={e => e.target.select()} /></label>}</AssetEditorSection>
+        <AssetEditorSection title="Files"><ChromeButton type="button" className={labButton} disabled={!ready || pending} onClick={share}>Copy map link</ChromeButton>
+<ChromeButton type="button" className={labButton} disabled={!ready || pending} onClick={download}>Save map PNG</ChromeButton>{shareUrl && <label className="text-xs text-ink-light">Map link<input readOnly className={`${labInput} mt-1`} value={shareUrl} onFocus={e => e.target.select()} /></label>}</AssetEditorSection>
         </>}
-      toolbar={<><label className="flex items-center gap-2"><input type="checkbox" className="accent-gold" checked={overlay} onChange={e => setOverlay(e.target.checked)} />Show connections</label>
-
+      toolbar={<><label className="flex items-center gap-2"><ChromeCheckbox type="checkbox" className="accent-gold" checked={overlay} onChange={e => setOverlay(e.target.checked)} />Show connections</label>
 
 </>}
       dock={<div className="person-animation-dock hud-well"><><div className="flex flex-wrap gap-4 text-xs" aria-label="Map legend">

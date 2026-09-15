@@ -16,15 +16,18 @@
 - **All visual testing belongs in the shared playground.** `/assets` and
   `AssetPlayground` host characters, animals, buildings, maps, paths, placement
   and rendering. Use `AssetEditorFrame`, `AssetEditorWorkspace`, and the same
-  property sections, tuners, controls drawer and preview stage as the character
+  property sections, tuners, resizable sidebars, mobile drawers and preview stage as the character
   and building editors. `PLAYGROUND_TOOLS` in `lib/asset-playground.ts` owns the
   tool selector. Add scenarios and presets inside these tools; do not create
   separate test pages, lab frames, navigation or per-case control panels. Keep
   drafts when switching tools and pause hidden simulations and previews. Drive
   deterministic game checks through the existing `DebugHandle` and benchmark
-  scripts. Keep one control group visible at a time through the shared section
-  tabs. Use dropdowns for item selection, tabs for views, and checkboxes for
-  independent options. Put explanations in the shared help tooltips; keep labels,
+  scripts. Use the shared left sidebar for entity and scenario selection, the canvas
+  for previews, and right-side disclosure sections for properties. Use Base UI
+  through the shared chrome controls for buttons, dropdowns, checkboxes, sliders,
+  dialogs and tooltips. Keep view choices in the canvas header and animation
+  playback in its footer. Characters and buildings open to spaced canvas grids;
+  animate character sequences in place, pausing offscreen and for reduced motion. Put explanations in the shared help tooltips; keep labels,
   values and live status visible. Stack labels above fields and tuners with
   consistent spacing; keep checkbox labels inline. Avoid nested cards and
   repeated borders.

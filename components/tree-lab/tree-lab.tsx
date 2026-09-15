@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeSelect, ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
 import dynamic from "next/dynamic"
 import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "../asset-editor-frame"
 import { LabSelect, LabSlider, labButton } from "../lab-controls"
@@ -92,12 +93,11 @@ export function TreeLab({ mode, onModeChange, active = true }: AssetEditorNaviga
     setCopied(true)
   }
 
-
   return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Trees editor" version="" controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(value => !value)} status={bakeError || (baking ? "Updating foliage…" : copied ? "Species JSON copied" : species[selected].label)} detail="Preview draft">
     <AssetEditorWorkspace title="Trees" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
       controls={<>
         <AssetEditorSection title="Foliage">
-          <LabSelect label="Species" value={selected} options={Object.fromEntries(FOLIAGE_SPECIES.map(id => [id, species[id].label]))} onChange={value => setSelected(value as TreeSpeciesId)} />
+          <LabSelect navigation label="Species" value={selected} options={Object.fromEntries(FOLIAGE_SPECIES.map(id => [id, species[id].label]))} onChange={value => setSelected(value as TreeSpeciesId)} />
           {isFoliageSpecies(selected) && ([
             ["height", "Height", 1.4, 3.25, 0.05], ["spread", "Branch spread", 0.55, 1.2, 0.05],
             ["density", "Foliage density", 0.4, 1.4, 0.05], ["leafSize", "Leaf clusters", 0.6, 1.3, 0.05],
@@ -106,14 +106,14 @@ export function TreeLab({ mode, onModeChange, active = true }: AssetEditorNaviga
         </AssetEditorSection>
         <AssetEditorSection title="Forest">
           <LabSelect label="Map size" value={String(mapSize)} options={Object.fromEntries(MAP_SIZES.map(size => [size, `${size} × ${size}`]))} onChange={value => setMapSize(Number(value))} />
-          <button className={labButton} onClick={() => { setMapSeed(randomSeed()); setPreview("forest") }}>New map</button>
+          <ChromeButton className={labButton} onClick={() => { setMapSeed(randomSeed()); setPreview("forest") }}>New map</ChromeButton>
           <p className="person-hint">Drag to pan, scroll to zoom, Q and E to rotate, O to cycle outlines.</p>
         </AssetEditorSection>
-        <AssetEditorSection title="Files"><button className={labButton} onClick={() => { void copyJson().catch(() => setBakeError("Could not copy species JSON.")) }}>Copy species JSON</button><button className={labButton} onClick={() => setFoliage(structuredClone(DEFAULT_FOLIAGE))}>Reset foliage</button></AssetEditorSection>
+        <AssetEditorSection title="Files"><ChromeButton className={labButton} onClick={() => { void copyJson().catch(() => setBakeError("Could not copy species JSON.")) }}>Copy species JSON</ChromeButton><ChromeButton className={labButton} onClick={() => setFoliage(structuredClone(DEFAULT_FOLIAGE))}>Reset foliage</ChromeButton></AssetEditorSection>
       </>}
       toolbar={<>
-        <div className="person-view-buttons">{["species", "all", "forest"].map(value => <button key={value} className={labButton} aria-pressed={preview === value} onClick={() => setPreview(value)}>{value === "all" ? "All species" : value === "forest" ? "Forest" : "Species"}</button>)}</div>
-        {preview !== "forest" && <><label className="person-check"><input type="checkbox" checked={darkForest} onChange={event => setDarkForest(event.target.checked)} />Dark forest</label><button className={labButton} onClick={() => setLineupView(value => (value + 1) % 4)}>Rotate</button><button className={labButton} onClick={() => setLineupSeed(randomSeed())}>New variations</button></>}
+        <ChromeSelect aria-label="Tree view" value={preview} onChange={e => setPreview(e.target.value)}><option value="species">Species</option><option value="all">All species</option><option value="forest">Forest</option></ChromeSelect>
+        {preview !== "forest" && <><label className="person-check"><ChromeCheckbox type="checkbox" checked={darkForest} onChange={event => setDarkForest(event.target.checked)} />Dark forest</label><ChromeButton className={labButton} onClick={() => setLineupView(value => (value + 1) % 4)}>Rotate</ChromeButton><ChromeButton className={labButton} onClick={() => setLineupSeed(randomSeed())}>New variations</ChromeButton></>}
       </>}
       dock={null}>
       <div className="person-stage playground-stage">{active && (preview === "forest" ? <div className="workspace-forest-preview">{mapSeed !== null && <TreeMapPreview seed={mapSeed} size={mapSize} atlas={atlas} />}</div> : <div className="workspace-tree-lineup">{(preview === "all" ? [0, 1] : [0]).map(speciesPage => <div key={speciesPage}>

@@ -9,11 +9,12 @@ import { GRASS_TEXTURE_URL } from "@/lib/game/render/ground-surface"
 import { BUILD_CATALOG, type BuildId } from "@/lib/game/balance"
 import { structureParts } from "@/lib/game/building-art/structure"
 import { batchDetails } from "@/components/building-lab/building-model"
-import { BUILDING_STYLE } from "@/lib/game/building-art/style"
+import { BUILDING_STYLE, AVAILABLE_EARLY_BUILDINGS, type EarlyBuildingType } from "@/lib/game/building-art/style"
 import { buildingPartGeometry, BUILDING_DIRT_TEXTURE, configureBuildingDirt, dirtFloorMaterial } from "@/lib/game/building-art/part-geometry"
 import { cameraOffset, yawForView } from "@/lib/game/render/iso"
 
-let thumbnails: Promise<Partial<Record<BuildId, string>>> | undefined
+type ThumbnailId = BuildId | EarlyBuildingType
+let thumbnails: Promise<Partial<Record<ThumbnailId, string>>> | undefined
 
 /** Bake the actual meshes once, with one short-lived WebGL context for the tray. */
 async function buildThumbnails() {
@@ -23,13 +24,14 @@ async function buildThumbnails() {
     return fallback
   }))
   const [dirt, grass] = await Promise.all([load(BUILDING_DIRT_TEXTURE, [164,147,114,255]), load(GRASS_TEXTURE_URL, [148,161,88,255])])
-  const images: Partial<Record<BuildId, string>> = {}
+  const images: Partial<Record<ThumbnailId, string>> = {}
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false })
   renderer.setSize(54, 49)
   renderer.setClearColor(0, 0)
   const yaw = yawForView(0)
   try {
-    for (const definition of BUILD_CATALOG) {
+    const definitions = [...BUILD_CATALOG, ...AVAILABLE_EARLY_BUILDINGS.filter(preset => !BUILD_CATALOG.some(def => def.id === preset.id)).map(preset => ({id:preset.id, w:preset.width, d:preset.depth, height:preset.wallHeight, color:BUILDING_STYLE.palette.plaster, roofColor:BUILDING_STYLE.palette.thatch}))]
+    for (const definition of definitions) {
       const scene = new THREE.Scene(), model = new THREE.Group()
       const geometries: THREE.BufferGeometry[] = [], materials: THREE.Material[] = []
       for (const part of batchDetails(structureParts({ ...definition, buildType: definition.id }))) {
@@ -82,7 +84,11 @@ async function buildThumbnails() {
   }
 }
 
-export function BuildThumbnail({ id }: { id: BuildId }) {
+/** Actual model thumbnails shared by the build tray and building browser.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/BX2-0
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/D7K-0
+ */
+export function BuildThumbnail({ id, scale = 1 }: { id: ThumbnailId; scale?: number }) {
   const [src, setSrc] = useState<string>()
   useEffect(() => {
     let active = true
@@ -90,5 +96,5 @@ export function BuildThumbnail({ id }: { id: BuildId }) {
     void thumbnails.then(images => { if (active) setSrc(images[id]) }).catch(() => { thumbnails = undefined })
     return () => { active = false }
   }, [id])
-  return src ? <Image src={src} unoptimized alt="" width={54} height={49} /> : null
+  return src ? <Image src={src} unoptimized alt="" width={54 * scale} height={49 * scale} style={{ imageRendering:"pixelated" }} /> : null
 }

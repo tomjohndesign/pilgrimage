@@ -340,3 +340,77 @@
   .hud-landing-subtitle { margin-top: 6px; }
   .hud-landing-footer { bottom: calc(18px + env(safe-area-inset-bottom)); gap: 4px 16px; font-size: 12px; }
 }
+
+/* Base UI chrome: the game uses the workspace's same controls and palette. */
+.game-hud:not(.person-editor) { --hud-space:20px; --hud-bar-height:48px; --hud-dock-width:264px; color:var(--chrome-text); }
+.hud-frame { display:none; }
+.game-hud :is(.hud-resource-bar,.hud-header-actions,.hud-clock,.hud-traffic,.hud-bottom-actions,.hud-well,.hud-menu,.hud-world,.hud-inspector,.hud-landing-setup),.loading-church {
+ background:var(--chrome-surface); color:var(--chrome-text); border:0; border-radius:6px; box-shadow:none;
+ --parchment:var(--chrome-surface); --parchment-dark:var(--chrome-field); --ink:var(--chrome-text); --ink-light:var(--chrome-muted); --gold:var(--chrome-accent); --rule:var(--chrome-line); --red:var(--chrome-error);
+}
+.game-hud :is(.hud-action,.hud-pause,.hud-speeds button,.hud-close,.hud-header-button),.loading-church button {
+ border:1px solid var(--chrome-field); border-radius:4px; min-height:32px; height:auto; background:transparent; color:var(--chrome-text); box-shadow:none; text-shadow:none; letter-spacing:0; text-transform:none; font-size:12px; font-weight:400;
+}
+.game-hud :is(.hud-action,.hud-pause,.hud-speeds button,.hud-close,.hud-header-button):hover { background:var(--chrome-field); border-color:var(--chrome-field); }
+.game-hud :is(.hud-action,.hud-pause,.hud-speeds button,.hud-close,.hud-header-button):is([aria-pressed="true"],[aria-expanded="true"]) { background:var(--chrome-active); color:var(--chrome-text); border-color:transparent; box-shadow:none; }
+.game-hud :is(.hud-action,.hud-pause,.hud-speeds button,.hud-header-button):is(:disabled,[aria-disabled="true"]) { background:transparent; border-color:var(--chrome-line); color:var(--chrome-muted); opacity:.45; }
+.game-hud :is(button,a):focus-visible { outline-color:var(--chrome-accent); }
+.game-hud :is(.hud-resources svg,.hud-day,.hud-date,.hud-minimap-north,.hud-build-rotation,.hud-entry-key) { color:var(--chrome-muted); }
+.hud-resources > :is(span,button) { font-size:13px; font-weight:500; }
+.hud-resources svg { width:16px; height:16px; }
+.hud-resources img { width:20px; }
+.hud-header-actions { padding:7px; gap:6px; }
+.hud-header-button { width:32px; height:34px; }
+.hud-bottom-actions { padding:7px; gap:6px; }
+.hud-bottom-center { right:auto; max-width:calc(100% - var(--hud-dock-width) - 60px); }
+.hud-build-tray { width:280px; max-height:65dvh; padding:16px; overflow:auto; }
+.hud-building-tiles { flex-direction:column; align-items:stretch; gap:4px; overflow:visible; }
+.hud-building-tiles .hud-building-tile { display:grid; grid-template-columns:34px 1fr; column-gap:10px; align-items:center; text-align:left; width:100%; height:auto; min-height:48px; padding:6px 8px; border:0; border-radius:4px; box-shadow:none; background:transparent; color:var(--chrome-text); }
+.hud-building-tiles .hud-building-tile:is(:hover,[aria-pressed="true"]) { background:var(--chrome-field); }
+.hud-building-tiles .hud-building-tile img { grid-row:1 / 3; width:32px; height:32px; }
+.hud-building-tiles :is(.hud-building-label,.hud-building-cost) { display:block; position:static; text-shadow:none; width:auto; }
+.hud-building-label { font-size:12px; }
+.hud-building-cost { font-size:11px; color:var(--chrome-muted); }
+.hud-building-tile kbd { display:none; }
+.hud-build-rotation { padding-top:10px; }
+.hud-entry-key { display:none; }
+.hud-placement-status { background:var(--chrome-surface); border:0; border-radius:4px; color:var(--chrome-text); font-size:12px; bottom:calc(100% + 10px); }
+.hud-placement-error { color:var(--chrome-error); }
+.hud-details-dock { gap:12px; }
+.hud-inspector { border:0; }
+.hud-inspector .hud-inspector-content { padding:20px; }
+.game-hud :is(.hud-inspector,.hud-world) .font-display { font-family:var(--font-geist),sans-serif; letter-spacing:0; text-transform:none; font-weight:500; }
+.hud-clock { padding:7px 10px; gap:8px; }
+.hud-switch,.hud-switch[data-checked] { border-color:var(--chrome-line); box-shadow:none; }
+.hud-switch { background:var(--chrome-field); }
+.hud-switch[data-checked] { background:var(--chrome-fill); }
+.hud-help-title { color:var(--chrome-text); }
+.hud-help-meta,.game-hud-tooltip .hud-help-secondary { color:var(--chrome-muted); border-color:var(--chrome-line); }
+.hud-report.chrome-dialog { border-radius:6px; background:var(--chrome-surface); color:var(--chrome-text); }
+@media(max-width:900px) {
+ .game-hud:not(.person-editor) { --hud-space:10px; --hud-dock-width:220px; }
+ .hud-bottom-center { max-width:calc(100% - 20px); }
+ .hud-build-tray { width:min(280px,calc(100vw - 20px)); }
+ .hud-resources { gap:8px; padding:0 8px; }
+ .hud-resources > :is(span,button) { font-size:12px; }
+ .hud-header-actions { gap:3px; padding:6px; }
+}
+.game-hud .hud-time-controls { position:absolute; bottom:20px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:8px; pointer-events:auto; }
+.game-hud .hud-time-controls .hud-clock { position:static; height:48px; }
+.game-hud .hud-time-controls .hud-traffic { position:static; width:140px; height:48px; padding:6px 10px; }
+.game-hud .hud-traffic .chrome-tuner { gap:3px; }
+.game-hud .hud-traffic .chrome-tuner-label { font-size:10px; }
+.game-hud .hud-traffic .chrome-tuner-control { height:20px; }
+.game-hud .hud-traffic .chrome-tuner-value { font-size:10px; right:5px; }
+@media (max-width:900px) {
+ .game-hud .hud-time-controls { bottom:12px; gap:4px; }
+ .game-hud .hud-time-controls .hud-traffic { width:90px; }
+}
+.game-hud .hud-menu :is(a,nav button) { text-transform:none; letter-spacing:normal; font-size:13px; }
+@media(max-width:900px) {
+ .game-hud .hud-time-controls { bottom:72px; z-index:25; }
+ .game-hud .hud-build-tray { margin-bottom:56px; max-height:calc(100dvh - 270px); }
+}
+@media(max-width:900px) {
+ .game-hud .hud-mobile-speed.chrome-select { display:inline-flex; align-items:center; width:64px; min-width:64px; gap:6px; padding:4px 8px; }
+}

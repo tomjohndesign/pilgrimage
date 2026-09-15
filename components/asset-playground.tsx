@@ -3,7 +3,7 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { playgroundHref, playgroundTool, type PlaygroundTool } from "@/lib/asset-playground"
-import { AssetEditorFrame, type AssetEditorNavigation } from "./asset-editor-frame"
+import { AssetEditorFrame, WorkspaceFrame, type AssetEditorNavigation } from "./asset-editor-frame"
 import type { ComponentType } from "react"
 
 const EDITORS: Record<PlaygroundTool, ComponentType<AssetEditorNavigation & { active?: boolean }>> = {
@@ -27,13 +27,14 @@ export function AssetPlayground() {
   const search = useSearchParams()
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
+  const root = !search.get("asset")
   const mode = playgroundTool(search.get("asset"))
-  const [visited, setVisited] = useState<PlaygroundTool[]>([mode])
+  const [visited, setVisited] = useState<PlaygroundTool[]>(root ? [] : [mode])
   const queries = useRef(new Map<PlaygroundTool, string>())
   // Include browser back/forward destinations as well as selector changes.
-  if (!visited.includes(mode)) setVisited(old => [...old, mode])
+  if (!root && !visited.includes(mode)) setVisited(old => [...old, mode])
   const onModeChange = (next: PlaygroundTool) => {
-    if (next === mode) return
+    if (!root && next === mode) return
     queries.current.set(mode, search.toString())
     window.history.pushState(null, "", playgroundHref(next, new URLSearchParams(queries.current.get(next))))
   }
@@ -41,9 +42,10 @@ export function AssetPlayground() {
     <p role="status" className="p-6 text-ink-light">Loading…</p>
   </AssetEditorFrame>
   // These editors use browser-only renderers. Load them after hydration.
-  if (!mounted) return loading(mode)
-  return <>{visited.map(tool => {
+  const overview = <WorkspaceFrame selection="workspace" title="Workspace" label="Workspace" onToolChange={onModeChange}><div className="chrome-workspace-overview">Choose an entity, exploration or page</div></WorkspaceFrame>
+  if (!mounted) return root ? overview : loading(mode)
+  return <>{root && overview}{visited.map(tool => {
     const Editor = EDITORS[tool]
-    return <div key={tool} hidden={tool !== mode}><Suspense fallback={loading(tool)}><Editor mode={tool} onModeChange={onModeChange} active={tool === mode} /></Suspense></div>
+    return <div key={tool} hidden={root || tool !== mode}><Suspense fallback={loading(tool)}><Editor mode={tool} onModeChange={onModeChange} active={!root && tool === mode} /></Suspense></div>
   })}</>
 }

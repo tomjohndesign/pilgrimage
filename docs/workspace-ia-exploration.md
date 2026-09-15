@@ -1,11 +1,11 @@
 # Workspace IA exploration
 
-**Status: proposed design, not implemented.** September 15, 2026.
+**Status: shared Base UI chrome implemented; Paper frames remain design references.** September 15, 2026.
 
 The [Paper UI page](https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0)
 contains sixteen exploration frames below the current application captures, named
 **IA 01–16**. UI layers are editable; scene previews use captured game imagery.
-The tuning scene illustrates proposed preview context, not an existing live balance preview.
+The tuning canvas reuses the village scene for visual context; global rule edits apply through the existing balance store. The preview is not a live demonstration of every rule.
 
 ## Three areas, three responsibilities
 
@@ -24,8 +24,10 @@ The game link lives at the bottom of the left sidebar.
 
 1. Open the workspace: the left sidebar lists Entities, Explorations and Pages.
 2. Select Characters: that list is replaced by the character list, with a
-   **Back to Workspace** action at the top. On a first visit, the canvas asks
-   for a selection and the properties sidebar stays closed.
+   **Back to Workspace** action at the top. The canvas shows every character in
+   a spaced grid, playing varied sprite sequences without changing position;
+   the properties sidebar stays closed. Buildings use the same grid with actual
+   model thumbnails. Click an item in either the grid or sidebar to select it.
 3. Select Storybook: highlight its row, load its preview, and show its properties
    on the right. The left sidebar stays on the character list.
 4. Select another character: replace the canvas and inspector together while
@@ -36,7 +38,8 @@ The game link lives at the bottom of the left sidebar.
 A branch opens another list; a leaf selects content. Search filters the current
 list. Long lists scroll independently. The Paper character list shows representative
 entries from presets, road characters and settlement jobs; the implemented list
-would include every available character.
+includes every available character. Search filters both the list and its grid.
+Click the category heading to return from an item to the grid.
 
 Navigation depth belongs on the left. Property groups such as Body, Outfit,
 Walking and Sounds stay on the right as simple sections, with optional disclosure
@@ -47,27 +50,27 @@ such as Character, Sprite sheet and Show rig belong to the canvas.
 
 | Destination | Left sidebar after entering | Canvas | Right properties |
 | --- | --- | --- | --- |
-| Characters | Characters, grouped by source | Selected character / sprite sheet | Body, outfit, appearance, walking, sounds; selected rig joint |
+| Characters | Characters, grouped by source | All-character grid, selected character / sprite sheet | Body, outfit, appearance, walking, sounds; selected rig joint |
 | Animals | Species / variants | Selected animal | Appearance, gait, rig, sounds |
-| Buildings | Buildings | Selected building / map context | Shape, layout, appearance, placement, cost and availability |
+| Buildings | Buildings | All-building grid, selected building / map context | Shape, layout, appearance and placement |
 | Ents | Species | Selected ent | Foliage, walking and rig |
 | Trees | Species | Selected species / lineup / forest | Foliage and generation settings |
-| Maps | Available map presets | Generated map | Seed, woodland, clearings and paths |
-| Textures | Materials, Characters, Environment, Water; then assets | Selected asset / catalogue | Asset metadata; editable values only where supported |
+| Maps | Workspace destinations | Generated map | Seed, woodland, clearings and paths |
+| Textures | Catalogue sections | Asset catalogue and metadata | Hidden |
 | Paths | Reinforcement, Wear & regrowth, Grow a town | Scenario / comparison | Layout, path rules, demand and selected tile |
-| Village journeys | Residents, workplaces and buildings | Village / selected resident | Journey and selected-entity settings |
+| Village journeys | Residents | Village / selected resident | Journey and selected-entity settings |
 | Building placement | Placement scenarios / structures | Placement preview | Terrain, levelling and selected structure |
 | Rendering | Comparisons / experiments | Synchronized render views | Scene and render settings |
 | Sprite pipeline | Bake stages | Selected stage's output | Character, pose and bake inputs |
-| Game tuning | Global rule sections | Relevant preview context | Selected global rules |
+| Game tuning | Global rule sections | Village context | Selected global rules or building costs |
 | Design document / game specifications | Document sections | Reading surface | Hidden |
 | Changelog | Releases | Release details | Hidden |
 
-Entity-specific tuning belongs to the entity inspector. Game tuning's Buildings
-entry is a shortcut to the same building browser and inspector, with
-**Back to Game tuning** as its return context. Building costs do not get a
-second editor. The preview proposed for global tuning requires implementation;
-it should show applicable effects and explain rules that affect new settlements only.
+Building costs and unlocks currently remain in Game tuning → Buildings, using the
+same properties panel and Base UI fields. The Paper proposal to link these directly
+to the building inspector is not part of the chrome migration; tuning also covers
+water sources that are not procedural building recipes. Import/export continues
+to preserve the complete balance preset.
 
 ## Sidebars and canvas
 
@@ -77,8 +80,8 @@ it should show applicable effects and explain rules that affect new settlements 
   before selection and omitted for reference content without an inspector.
 - Drag either inner sidebar edge to resize it. Reveal a grip and resize cursor
   on hover or keyboard focus; double-click restores its default width.
-- Starting widths: navigation 248 px, properties 300 px. Explore navigation
-  bounds of 200–360 px and property bounds of 260–420 px.
+- Starting widths at 1440 px: navigation 248 px, properties 300 px. Panels use
+  proportional widths, bounded to 14–26% and 18–35% respectively.
 - Resizing changes available canvas space while preserving camera zoom, pose,
   selection and animation state. Keep the animation timeline at a readable maximum width.
 - Remember widths and collapsed state across pages. On narrow windows, collapse
@@ -110,8 +113,8 @@ Secondary buttons, search and canvas dropdowns use transparent backgrounds,
 use filled surfaces. Panel toggles sit on the surrounding surface. The animation
 footer shares the canvas chrome, with filled direction tiles and a single inset
 timeline strip. Light mode changes UI surfaces and contrast, preserving scene
-artwork and grass. These palettes are Paper proposals; they do not enable an
-application theme switch.
+artwork and grass. The theme button is available in the workspace sidebar and game controls,
+and the chosen light/dark theme persists in this browser.
 
 ### Character row sprites
 
@@ -122,14 +125,14 @@ hit target. Rows show presets, Merchant cart, Knight and existing settlement
 workers; Tavern worker and Shepherd replace the earlier placeholder Farmer and
 Stonemason entries.
 
-- At rest, show the idle pose facing southwest.
+- At rest, show the idle pose facing southwest. Load this before animation frames.
 - Hovering the row or focusing it by keyboard loops that character's existing
   walk clip at its metadata timing. Keep navigation and selection independent.
 - Leaving or blurring the row returns to idle. Selection alone does not animate.
-- Share the existing atlas and animation clock; animate only the hovered/focused
+- Reuse existing atlases and runtime preset recipes; animate only the hovered/focused
   visible row, pause when hidden, and respect reduced motion with the idle pose.
-- Use one framing transform based on the clip's full bounds so the sprite does
-  not change size or jump between frames. Carts use their existing travel clip.
+- Use one framing transform based on each clip's full bounds so frames do not
+  change size or jump during playback. Carts use their existing travel clip.
 
 Paper shows static sprite poses; hover playback is an implementation requirement,
 not working animation in these frames.
@@ -139,15 +142,32 @@ not working animation in these frames.
 IA 11–13 carry the same visual system into the existing contextual HUD: compact
 resources at top left, music/world/menu controls at top right, build actions at
 bottom left, time and traffic controls near the bottom, and the minimap at right.
-There is no full-width header or footer. Build mode opens a compact list with
+There is no full-width header or footer. The game toolbar has Build and the
+mobile camera controls; the Paths and Demolish toolbar buttons were removed.
+Build mode opens a compact list with
 rotation and cancel controls; selection opens details above the minimap. Labels
 sit above property values. Icon-only actions use accessible names and tooltips.
 
 The main-game scene images are captures from `/play`; resource values, inspection
 values, minimap geography and placement overlays illustrate the proposed UI.
 They are not a recorded simulation state. IA 14–16 compare light mode for the
-character editor, game tuning and normal gameplay. These are design explorations,
-not implemented gameplay or navigation changes.
+character editor, game tuning and normal gameplay. The shared theme, contextual HUD surfaces and controls are implemented; the
+exact scene arrangements and values in Paper remain illustrative.
+
+## Implementation and checks
+
+`ChromeProvider`, `chrome.css` and `ui/chrome-controls.tsx` own the shared palette,
+Base UI primitives and tooltips. `WorkspaceFrame` owns resizable panes and mobile
+drawers; editor content fills its navigation, toolbar, inspector and grid slots.
+The app continues to use Next.js 16 and React 19. Existing renderers, game rules,
+character recipes and release versions are unchanged.
+
+Run `BENCH_URL=http://localhost:<port> node scripts/test-workspace-chrome.mjs`
+against the running app to check selection, grids, keyboard input, rig properties,
+resizing, theme persistence, JSON dialogs, draft retention, hover sprites, reduced
+motion and mobile drawers. Use `npm run typecheck` and `npm run build` for integration
+checks. Old unused UI scaffolding is not loaded by the application; active chrome
+uses the shared Base UI controls.
 
 ## Paper frames
 

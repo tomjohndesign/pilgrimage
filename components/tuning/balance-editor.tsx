@@ -1,6 +1,8 @@
 "use client"
 
+import { ChromeButton, ChromeSelect } from "@/components/ui/chrome-controls"
 import { AssetEditorFrame, AssetEditorContent, AssetEditorPanels, AssetEditorSection, AssetEditorHelp, type AssetEditorNavigation } from "@/components/asset-editor-frame"
+import { BalancePreview } from "./balance-preview"
 import { useState } from "react"
 import {
   BUILD_CATALOG,
@@ -77,10 +79,10 @@ function NumericField({
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/9S7-0 — Game tuning
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/AQY-0 — Game tuning · buildings
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/B2W-0 — Mobile · game tuning
- * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/C2E-0 — Proposed IA: Game tuning · construction
- * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/D1K-0 — Proposed IA: Light game tuning
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/C2E-0 — Game tuning · construction
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/D1K-0 — Light game tuning
  */
-export function BalanceEditor({ mode, onModeChange }: AssetEditorNavigation & { active?: boolean }) {
+export function BalanceEditor({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const [building, setBuilding] = useState(BUILD_CATALOG.find(def => !def.retired)!.id)
   const balance = useBalanceStore((s) => s.balance)
   const ready = useBalanceStore((s) => s.ready)
@@ -130,27 +132,27 @@ export function BalanceEditor({ mode, onModeChange }: AssetEditorNavigation & { 
   return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Game tuning editor" version=""
     status={message || (!ready ? "Loading saved tuning…" : dirty ? "Unapplied edits" : "Using saved tuning")} detail="Saved in this browser">
     <AssetEditorContent toolbar={<>
-      <button type="button" onClick={() => { if (validation.error === null) apply(validation.balance) }} disabled={!ready || validation.error !== null || !dirty} className={BUTTON}>Apply tuning</button>
-      <button type="button" onClick={() => apply(DEFAULT_BALANCE)} disabled={!ready} className={BUTTON}>Restore defaults</button>
+      <ChromeButton type="button" onClick={() => { if (validation.error === null) apply(validation.balance) }} disabled={!ready || validation.error !== null || !dirty} className={BUTTON}>Apply tuning</ChromeButton>
+      <ChromeButton type="button" onClick={() => apply(DEFAULT_BALANCE)} disabled={!ready} className={BUTTON}>Restore defaults</ChromeButton>
     </>}>
       <div className="workspace-form">
         {(error || storageMessage || (dirty && validation.error)) && <p role="alert" className="mb-4 text-sm text-red">{error || storageMessage || validation.error}</p>}
-        {changedElsewhere && <p role="status" className="mb-4 text-sm">Saved tuning changed in another tab. Your edits are retained. <button type="button" className={BUTTON} onClick={() => {
+        {changedElsewhere && <p role="status" className="mb-4 text-sm">Saved tuning changed in another tab. Your edits are retained. <ChromeButton type="button" className={BUTTON} onClick={() => {
           setSession({ source: balance, draft: toDraft(balance) }); setError(null); setMessage("Loaded the saved tuning.")
-        }}>Load saved tuning</button></p>}
+        }}>Load saved tuning</ChromeButton></p>}
         <fieldset disabled={!ready}>
-          <AssetEditorPanels>
+          <AssetEditorPanels navigation inspector disabled={!ready}>
             {RULE_GROUPS.filter(group => group !== "Resident income").map(group => <AssetEditorSection key={group} title={group}>
               <div className="workspace-field-grid">{RULE_FIELDS.filter(field => field.group === group && field.key !== "incomeSeconds").map(field => <NumericField key={field.key} id={field.key} field={field} value={session.draft[field.key]} defaultValue={field.default} onChange={value => update(field.key, value)} />)}</div>
             </AssetEditorSection>)}
             <AssetEditorSection title="Buildings">
-              <label className="person-choice">Building<select aria-label="Building" value={building} onChange={event => setBuilding(event.target.value as typeof building)}>{BUILD_CATALOG.filter(item => !item.retired).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>
+              <label className="person-choice">Building<ChromeSelect aria-label="Building" value={building} onChange={event => setBuilding(event.target.value as typeof building)}>{BUILD_CATALOG.filter(item => !item.retired).map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</ChromeSelect></label>
               <p className="person-hint">Costs and unlocks apply on placement. Renown applies to every placed copy. Footprint: {def.w} × {def.d} tiles.</p>
               <div className="workspace-field-grid">{BUILDING_FIELDS.filter(field => field.key !== "goldIncome" && field.key !== "woodIncome").map(field => <NumericField key={`${building}.${field.key}`} id={`${building}.${field.key}`} field={field} value={session.draft[`${building}.${field.key}`]} defaultValue={DEFAULT_BALANCE.buildings[building][field.key]} onChange={value => update(`${building}.${field.key}`, value)} />)}</div>
             </AssetEditorSection>
             <AssetEditorSection title="Files">
               <div className="flex flex-wrap gap-3">
-                <button type="button" onClick={exportPreset} disabled={validation.error !== null} className={BUTTON}>Export preset</button>
+                <ChromeButton type="button" onClick={exportPreset} disabled={validation.error !== null} className={BUTTON}>Export preset</ChromeButton>
                 <label className={`${BUTTON} person-file-input`}>Import preset<input type="file" accept=".json,application/json" aria-label="Import preset" onChange={async event => {
                   const file = event.target.files?.[0]; event.target.value = ""; if (!file) return
                   try {
@@ -166,6 +168,7 @@ export function BalanceEditor({ mode, onModeChange }: AssetEditorNavigation & { 
           </AssetEditorPanels>
         </fieldset>
       </div>
+      <BalancePreview active={active} />
     </AssetEditorContent>
   </AssetEditorFrame>
 }

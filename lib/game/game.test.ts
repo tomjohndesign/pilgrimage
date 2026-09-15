@@ -364,9 +364,9 @@ describe("site menu", () => {
     }
   })
 
-  it("lists the asset workshops and path playgrounds under assets", () => {
-    const assets = SITE_MENU.find((item) => item.label === "Assets")
-    expect(assets?.children?.map((c) => c.label)).toEqual(["Textures", "Playground", "Path playgrounds", "Map playground", "Placement playground", "Pixel workshop"])
+  it("uses one shared playground entry for assets and debugging", () => {
+    expect(SITE_MENU.find((item) => item.href === "/assets")).toMatchObject({ label: "Playground" })
+    expect(SITE_MENU.filter(item => item.href.startsWith("/assets"))).toHaveLength(1)
   })
 })
 

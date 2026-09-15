@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
 import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "@/components/asset-editor-frame"
 
 import dynamic from "next/dynamic"
@@ -32,16 +33,16 @@ export function TownLab({ mode, onModeChange, active = true }: AssetEditorNaviga
   return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Village journeys editor" version="Village journeys" controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(value => !value)} status={`${Math.round(stats.sharedTravel * 100)}% shared travel · ${stats.permanent} permanent segments`} detail={"Drag to pan · scroll to zoom"}>
     <AssetEditorWorkspace title="Village journeys" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
       controls={<><AssetEditorSection title="People & daily work"><h2 className="mb-3 font-display text-sm uppercase tracking-[1px]">People & daily work</h2>
-<LabSelect label="Resident" value={String(selected ?? 0)} options={Object.fromEntries(town.people.map(person => [person.id, `${person.name} · ${TOWN_JOBS[person.job].label}`]))} onChange={value => setSelected(Number(value))} />
+<LabSelect navigation label="Resident" value={String(selected ?? 0)} options={Object.fromEntries(town.people.map(person => [person.id, `${person.name} · ${TOWN_JOBS[person.job].label}`]))} onChange={value => setSelected(Number(value))} />
 {resident && <div className="mt-4 text-sm" data-testid="resident-task">
               <p className="font-semibold">{resident.name} · {TOWN_JOBS[resident.job].label}</p>
               <p className="mt-2">{residentTask(town, resident)}</p>
               <p className="mt-2 text-xs text-ink-light">{TOWN_SITES.find(item => item.id === resident.home)?.label} · {resident.completed} arrivals</p>
-              <button className={`${button} mt-3`} onClick={() => { setFocus(resident.id); setView(value => value + 4) }}>Find {resident.name}</button>
+              <ChromeButton className={`${button} mt-3`} onClick={() => { setFocus(resident.id); setView(value => value + 4) }}>Find {resident.name}</ChromeButton>
             </div>}</AssetEditorSection>
         <AssetEditorSection title="Workplaces"><h2 className="font-display text-sm uppercase tracking-[1px]">Workplaces</h2>
 <p className="mt-2 text-xs text-ink-light">Close a workplace to remove it from future trips. People finish their current journey.</p>
-<div className="mt-3 flex flex-col gap-2">{TOWN_SITES.filter(item => item.workplace).map(item => <button key={item.id} className={button} aria-pressed={!town.closed.has(item.id)} onClick={() => { setWorkplaceOpen(town, item.id, town.closed.has(item.id)); refresh(value => value + 1) }}>{item.label} · {town.closed.has(item.id) ? "closed" : "open"}</button>)}</div></AssetEditorSection>
+<div className="mt-3 flex flex-col gap-2">{TOWN_SITES.filter(item => item.workplace).map(item => <ChromeButton key={item.id} className={button} aria-pressed={!town.closed.has(item.id)} onClick={() => { setWorkplaceOpen(town, item.id, town.closed.has(item.id)); refresh(value => value + 1) }}>{item.label} · {town.closed.has(item.id) ? "closed" : "open"}</ChromeButton>)}</div></AssetEditorSection>
         <AssetEditorSection title="Selected building">{selectedSite && <section className="border border-rule bg-parchment p-4 text-sm text-ink"><h2 className="font-display">{selectedSite.label}</h2><p className="mt-2">{selectedSite.purpose}.</p></section>}</AssetEditorSection>
         <AssetEditorSection title="Path rules"><div className="person-file-actions">
           <LabSlider label="Follow shared paths" value={settings.preference} min={0} max={.9} step={.05} onChange={preference => setSettings(old => ({ ...old, preference }))} />
@@ -53,22 +54,22 @@ export function TownLab({ mode, onModeChange, active = true }: AssetEditorNaviga
         </div>
 <p className="mt-4 text-xs text-ink-light">Settings affect future trips and footsteps. Restart to erase earned permanence. One village day is three simulation minutes.</p></AssetEditorSection>
         </>}
-      toolbar={<><LabPlayback playing={playing} onPlayingChange={setPlaying} onStep={stepDay} stepLabel="Advance one day" onRestart={restart} />
+      toolbar={null}
+      dock={<div className="person-animation-dock hud-well"><div className="chrome-simulation-playback"><LabPlayback playing={playing} onPlayingChange={setPlaying} onStep={stepDay} stepLabel="Advance one day" onRestart={restart} />
 <LabSelect label="Village speed" value={String(speed)} options={{ 1: "1×", 4: "4×", 8: "8×" }} onChange={value => setSpeed(Number(value))} />
 <span className="flex-1" />
-<span data-testid="village-clock" className="text-sm tabular-nums">Day {(town.world.time / TOWN_DAY).toFixed(2)} · {town.people.filter(person => person.trip).length} walking · {town.people.reduce((sum, person) => sum + person.completed, 0)} arrivals</span></>}
-      dock={<div className="person-animation-dock hud-well"><><button className={button} onClick={() => setView(value => value + 1)}>Rotate view</button>
-<button className={button} onClick={() => { setFocus(null); setView(value => value + 4) }}>Whole village</button>
-<label className="flex items-center gap-2"><input type="checkbox" checked={showLabels} onChange={event => setShowLabels(event.target.checked)} />Building names</label>
+<span data-testid="village-clock" className="text-sm tabular-nums">Day {(town.world.time / TOWN_DAY).toFixed(2)} · {town.people.filter(person => person.trip).length} walking · {town.people.reduce((sum, person) => sum + person.completed, 0)} arrivals</span></div><><ChromeButton className={button} onClick={() => setView(value => value + 1)}>Rotate view</ChromeButton>
+<ChromeButton className={button} onClick={() => { setFocus(null); setView(value => value + 4) }}>Whole village</ChromeButton>
+<label className="flex items-center gap-2"><ChromeCheckbox type="checkbox" checked={showLabels} onChange={event => setShowLabels(event.target.checked)} />Building names</label>
 <span className="ml-auto text-ink-light">Drag to pan · scroll or pinch to zoom</span></></div>}>
       <div className="person-stage asset-building-stage">{active && <><div className="asset-building-viewport" data-testid="village-scene">
             <TownScene key={reset} town={town} live={live} view={view} focus={focus} selected={selected} labels={labels} onSelect={setSelected} onReady={onReady} />
             {!ready && <p role="status" className="absolute bottom-4 left-4 bg-bg/90 p-3 text-sm">Loading the residents’ artwork…</p>}
             <div className={`pointer-events-none absolute inset-0 overflow-hidden ${showLabels ? "" : "hidden"}`}>
-              {resident && <button ref={element => { if (element) labels.current.set("resident", element); else labels.current.delete("resident") }} className="absolute -translate-x-1/2 -translate-y-full border border-gold bg-[#251c12]/95 px-2 py-1 text-xs text-gold">{resident.name}</button>}
-              {TOWN_SITES.map(item => <button key={item.id} ref={element => { if (element) labels.current.set(item.id, element); else labels.current.delete(item.id) }}
-                className="pointer-events-auto absolute -translate-x-1/2 -translate-y-full whitespace-nowrap border border-rule/60 bg-[#251c12]/90 px-2 py-1 text-[10px] text-ink hover:border-gold"
-                onClick={() => setSite(item.id)}>{item.label}{town.closed.has(item.id) ? " · closed" : ""}</button>)}
+              {resident && <ChromeButton ref={element => { if (element) labels.current.set("resident", element); else labels.current.delete("resident") }} className="absolute -translate-x-1/2 -translate-y-full border border-gold bg-parchment px-2 py-1 text-xs text-gold">{resident.name}</ChromeButton>}
+              {TOWN_SITES.map(item => <ChromeButton key={item.id} ref={element => { if (element) labels.current.set(item.id, element); else labels.current.delete(item.id) }}
+                className="pointer-events-auto absolute -translate-x-1/2 -translate-y-full whitespace-nowrap border border-rule/60 bg-parchment px-2 py-1 text-[10px] text-ink hover:border-gold"
+                onClick={() => setSite(item.id)}>{item.label}{town.closed.has(item.id) ? " · closed" : ""}</ChromeButton>)}
             </div>
           </div></>}</div>
     </AssetEditorWorkspace>

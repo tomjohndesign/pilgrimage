@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { Crosshair, LocateFixed } from "lucide-react"
 import { useCameraStore } from "@/lib/game/camera-store"
 
@@ -12,7 +13,7 @@ import { useCameraStore } from "@/lib/game/camera-store"
 export function FollowButton({ subject }: { subject: string }) {
   const following = useCameraStore((s) => s.following)
   return (
-    <button
+    <ChromeButton
       type="button"
       aria-label={following ? "Stop following" : `Follow ${subject}`}
       title={following ? "Stop following" : `Follow ${subject}`}
@@ -21,6 +22,6 @@ export function FollowButton({ subject }: { subject: string }) {
       className="pointer-events-auto text-ink-light hover:text-ink aria-pressed:text-ink"
     >
       {following ? <LocateFixed size={12} aria-hidden="true" /> : <Crosshair size={12} aria-hidden="true" />}
-    </button>
+    </ChromeButton>
   )
 }

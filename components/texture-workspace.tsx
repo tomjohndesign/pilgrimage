@@ -14,7 +14,7 @@ export function TextureWorkspace({ mode, onModeChange, active = true }: AssetEdi
   useEffect(() => { if (active && window.location.hash === "#trees") { window.history.replaceState(null, "", window.location.href.split("#")[0]); onModeChange("trees") } }, [active, onModeChange])
   return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Texture catalogue" version="" status="Game assets" detail="Textures and sprite sheets">
     <AssetEditorContent><div className="workspace-catalogue">
-      <AssetEditorPanels>
+      <AssetEditorPanels navigation>
         <AssetEditorSection title="Materials">{active && <TextureGallery />}</AssetEditorSection>
         <AssetEditorSection title="Characters">{active && <CharacterTextures />}</AssetEditorSection>
         <AssetEditorSection title="Environment">{active && <EnvironmentGallery />}</AssetEditorSection>

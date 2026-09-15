@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeCheckbox, ChromeButton } from "@/components/ui/chrome-controls"
 import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "@/components/asset-editor-frame"
 import { playgroundHref } from "@/lib/asset-playground"
 
@@ -62,7 +63,7 @@ function PathMap({ world, settings, layer, grid, routes, selected, onSelect, too
 /**
  * Three reversible simulations for testing traffic-driven paths before adopting game rules.
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/9FI-0 — Paths
- * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/CLC-0 — Proposed IA: Exploration · path reinforcement
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/CLC-0 — Exploration · path reinforcement
  */
 export function PathLab({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const [controlsOpen, setControlsOpen] = useState(false)
@@ -155,7 +156,7 @@ export function PathLab({ mode, onModeChange, active = true }: AssetEditorNaviga
 
   return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Paths editor" version="Paths" controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(value => !value)} status={message || copy.title} detail={"Paths"}>
     <AssetEditorWorkspace title="Paths" controlsOpen={controlsOpen} onControlsClose={() => setControlsOpen(false)}
-      controls={<><AssetEditorSection title="Scenario"><LabSelect label="Scenario" value={experiment} options={Object.fromEntries(Object.entries(EXPERIMENTS).map(([id, item]) => [id, item.label]))} onChange={value => { setExperiment(value as Experiment); setTool("inspect"); setSelected(null); setMessage(""); setShareUrl("") }} /></AssetEditorSection>
+      controls={<><AssetEditorSection title="Scenario"><LabSelect navigation label="Scenario" value={experiment} options={Object.fromEntries(Object.entries(EXPERIMENTS).map(([id, item]) => [id, item.label]))} onChange={value => { setExperiment(value as Experiment); setTool("inspect"); setSelected(null); setMessage(""); setShareUrl("") }} /></AssetEditorSection>
         <AssetEditorSection title="Layout"><div className="person-file-actions">
           <LabSelect label="Layout permutation" value={permutation.layout} options={LAYOUTS} onChange={layout => changePermutation({ layout: layout as Permutation["layout"] })} />
           <LabSelect label="Journey origins" value={permutation.sources} options={SOURCES} onChange={sources => changePermutation({ sources: sources as Permutation["sources"] })} />
@@ -182,11 +183,11 @@ export function PathLab({ mode, onModeChange, active = true }: AssetEditorNaviga
 <p className="mt-4 text-xs text-ink-light">One experimental day = 60 simulation seconds. Shared travel measures recent walking on segments another commuter has already used. Controls apply to future movement and regrowth. Restart for a fresh comparison. Inactive experiments pause and retain their maps.</p></AssetEditorSection>
         <AssetEditorSection title="Inspection"><div className="person-file-actions">
           <LabSelect label="Map overlay" value={layer} options={{ ground: "Ground surface", wear: "Wear intensity", frontage: "Connected frontage" }} onChange={value => setLayer(value as MapLayer)} />
-          <label className="text-sm"><input className="mr-2 accent-gold" type="checkbox" checked={grid} onChange={event => setGrid(event.target.checked)} />Tile grid</label>
-          <label className="text-sm"><input className="mr-2 accent-gold" type="checkbox" checked={routes} onChange={event => setRoutes(event.target.checked)} />Journey routes</label>
+          <label className="text-sm"><ChromeCheckbox className="mr-2 accent-gold" type="checkbox" checked={grid} onChange={event => setGrid(event.target.checked)} />Tile grid</label>
+          <label className="text-sm"><ChromeCheckbox className="mr-2 accent-gold" type="checkbox" checked={routes} onChange={event => setRoutes(event.target.checked)} />Journey routes</label>
           {experiment === "town" && <>
             <LabSelect label="Placement tool" value={tool} options={{ inspect: "Inspect ground", workshop: "Place a hut · off-road allowed", shelter: "Place a shelter · path required" }} onChange={value => { setTool(value as typeof tool); if (value === "shelter") setLayer("frontage") }} />
-            <button type="button" className={button} disabled={tool === "inspect"} onClick={() => setRotation(normalizeBuildingRotation(rotation + 1))}>Rotate entrance · {["south", "west", "north", "east"][rotation]}</button>
+            <ChromeButton type="button" className={button} disabled={tool === "inspect"} onClick={() => setRotation(normalizeBuildingRotation(rotation + 1))}>Rotate entrance · {["south", "west", "north", "east"][rotation]}</ChromeButton>
           </>}
         </div></AssetEditorSection>
         <AssetEditorSection title="Destination demand" initialOpen={false}><div className="flex flex-wrap items-end gap-4">
@@ -194,19 +195,19 @@ export function PathLab({ mode, onModeChange, active = true }: AssetEditorNaviga
           <p className="max-w-xl text-sm text-ink-light">Changes apply to new journeys. Walkers finish their existing trips. In local mode, closed destinations also stop sending journeys.</p>
         </div>
 <div className="mt-4 flex flex-wrap gap-2">
-          {world.buildings.map((b, i) => <button key={b.id} type="button" className={button} aria-pressed={!world.closedDestinations.has(b.id)} onClick={() => {
+          {world.buildings.map((b, i) => <ChromeButton key={b.id} type="button" className={button} aria-pressed={!world.closedDestinations.has(b.id)} onClick={() => {
             const open = world.closedDestinations.has(b.id); current.forEach(w => setDestinationOpen(w, b.id, open)); refresh(n => n + 1)
-          }}>{b.buildType === "workshop" ? "Hut" : "Shelter"} {i + 1} · {world.closedDestinations.has(b.id) ? "visits off" : "visits on"}</button>)}
+          }}>{b.buildType === "workshop" ? "Hut" : "Shelter"} {i + 1} · {world.closedDestinations.has(b.id) ? "visits off" : "visits on"}</ChromeButton>)}
         </div>
 <p className="mt-3 text-xs text-ink-light">{permutation.sources === "local" && world.buildings.filter(b => !world.closedDestinations.has(b.id)).length < 2 ? "Local journeys need at least two open destinations." : "Turn visits off to test whether a branch still has a reason to exist. Deep paths stay attractive while they lead somewhere useful."}</p></AssetEditorSection>
 
-        <AssetEditorSection title="Files" initialOpen={false}><button type="button" className={button} onClick={share}>Copy settings link</button>{shareUrl && <input aria-label="Settings link" className="playground-input" value={shareUrl} readOnly onFocus={event => event.target.select()} />}</AssetEditorSection></>}
-      toolbar={<><LabPlayback playing={playing} onPlayingChange={setPlaying} onStep={advance} stepLabel="Advance one day" onRestart={restart} />
-<button type="button" className={button} onClick={() => { const enabled = !world.trafficOn; current.forEach(w => { w.trafficOn = enabled }); refresh(n => n + 1) }}>{world.trafficOn ? "Stop new journeys" : "Resume journeys"}</button>
+        <AssetEditorSection title="Files" initialOpen={false}><ChromeButton type="button" className={button} onClick={share}>Copy settings link</ChromeButton>{shareUrl && <input aria-label="Settings link" className="playground-input" value={shareUrl} readOnly onFocus={event => event.target.select()} />}</AssetEditorSection></>}
+      toolbar={null}
+      dock={<div className="person-animation-dock hud-well"><div className="chrome-simulation-playback"><LabPlayback playing={playing} onPlayingChange={setPlaying} onStep={advance} stepLabel="Advance one day" onRestart={restart} />
+<ChromeButton type="button" className={button} onClick={() => { const enabled = !world.trafficOn; current.forEach(w => { w.trafficOn = enabled }); refresh(n => n + 1) }}>{world.trafficOn ? "Stop new journeys" : "Resume journeys"}</ChromeButton>
 <span className="px-2 text-sm tabular-nums" data-testid="lab-clock">Day {(world.time / LAB_DAY).toFixed(2)} · {world.journeys.length} walking · {world.completed} completed</span>
 <span className="flex-1" />
-</>}
-      dock={<div className="person-animation-dock hud-well"><><div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-light">
+</div><><div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-light">
           <span><span className="mr-2 inline-block h-2 w-2 bg-[#fff0d1]" />Outbound journey</span>
           <span><span className="mr-2 inline-block h-2 w-2 bg-[#b5d3dd]" />Returning journey</span>
           {experiment === "wear" && <span><span className="mr-2 inline-block h-2 w-2 bg-[#e7ba64]" />Through traveler</span>}
@@ -220,12 +221,12 @@ export function PathLab({ mode, onModeChange, active = true }: AssetEditorNaviga
           {current.map((w, i) => {
             const stats = worldStats(w)
             return <figure key={`${experiment}-${i}`} className="min-w-0 border border-rule">
-              <figcaption className="flex flex-wrap justify-between gap-2 bg-[#251c12] px-4 py-3 text-sm">
+              <figcaption className="flex flex-wrap justify-between gap-2 bg-parchment px-4 py-3 text-sm">
                 <strong className="font-display text-xs tracking-[1px]">{experiment === "routes" ? i === 0 ? "Distance only" : "Follow one another’s paths" : experiment === "wear" ? "Local traffic, local wear" : "A settlement taking shape"}</strong>
                 <span className="text-ink-light tabular-nums"><span title="Recent distance walked on segments already used by another commuter">{Math.round(stats.sharedTravel * 100)}% shared travel</span> · {stats.traces} trace tiles · {stats.connected} connected · {stats.permanent} permanent segments</span>
               </figcaption>
               <PathMap world={w} settings={settings} layer={layer} grid={grid} routes={routes} selected={selected} onSelect={setSelected} tool={tool} rotation={rotation} onPlace={place} />
-              <div className="min-h-12 bg-[#251c12] px-4 py-3 text-sm text-ink-light">
+              <div className="min-h-12 bg-parchment px-4 py-3 text-sm text-ink-light">
                 {selected === null ? "Point at a tile to inspect it. Tab to the map and use arrow keys for keyboard control." : <span>Tile {point!.x}, {point!.z} · Wear {Math.round(w.wear[selected] * 100)}% · Minimum {Math.round(w.baseline[selected] * 100)}%{w.permanentTiles[selected] ? " · Permanent" : ""} · {w.blocked[selected] ? "Occupied" : w.connected[selected] ? "Connected path" : w.established[selected] ? "Isolated trail" : "Open ground"}</span>}
               </div>
             </figure>
@@ -233,7 +234,7 @@ export function PathLab({ mode, onModeChange, active = true }: AssetEditorNaviga
         </div>
 {experiment === "town" && tool !== "inspect" && <div className="flex flex-wrap items-center gap-3 border border-rule bg-parchment p-3 text-ink">
           <p className="flex-1 text-sm">{candidate ? issue ?? "Valid site. The small square marks the entrance." : "Point at a site, or focus the map and use the arrow keys. Tap the map to place."}</p>
-          <button type="button" className={button} disabled={!candidate || !!issue} onClick={() => selected !== null && place(selected)}>Place selected building</button>
+          <ChromeButton type="button" className={button} disabled={!candidate || !!issue} onClick={() => selected !== null && place(selected)}>Place selected building</ChromeButton>
         </div>}</>}</div>
     </AssetEditorWorkspace>
   </AssetEditorFrame>
