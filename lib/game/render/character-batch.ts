@@ -33,8 +33,8 @@ export interface CharacterBatchEntry {
   /** Painter's bias toward the camera (world units) from render/overlap-order.
    * Standalone materials read the same object as a uniform. */
   depthBias?: { value: number }
-  /** Shares its anchor with a cart/passengers. Order this assembly
-   * as one figure, preserving its baked internal relief. */
+  /** Connected cart/animal/passenger layers share one correction while their
+   * local anchors determine ordering against neighbours. */
   shared?: object | (() => object | undefined)
   /** This frame's resolved anchor, written by CharacterBatch.write for the
    * overlap ordering pass. */

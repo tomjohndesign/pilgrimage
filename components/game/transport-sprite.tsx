@@ -2,6 +2,7 @@
 import { touchObjectSoundSource, sceneSoundSources } from "@/lib/game/scene-sound-sources"
 import { playSourceSelection } from "@/lib/game/scene-audio"
 import { useCharacterBatches } from "./character-batches"
+import { registerCharacterBatchEntry } from "@/lib/game/render/character-batch"
 import { spriteTextureView } from "@/lib/game/render/sprite-texture"
 
 import { withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
@@ -104,7 +105,8 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
       batchable: !(kind === "cart" && !passengerCart) && !edited,
       shared: overlapGroup, id: new THREE.Vector3(...outlineColor) }
     batchEntries.add(entry)
-    return () => { batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
+    const unregister = registerCharacterBatchEntry(entry)
+    return () => { unregister(); batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
   }, [batchEntries, groundPlane, poseDepth, depthBias, depths, driverFrame, driverVisible, kind, passengerCart, overlapGroup, edited, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   const root = useRef<THREE.Group>(null), phase = useRef(0), grazingTime = useRef(0), plant = useRef<FootPlant | null>(null)
   useEffect(() => { if(selected && animal && terrain) void playSourceSelection(`animal/${kind}`) }, [selected, animal, kind, !!terrain])

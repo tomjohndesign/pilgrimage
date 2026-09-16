@@ -38,3 +38,27 @@ describe("projected sprite ordering", () => {
     overlapBiases([figure(10)], out); expect(out[0]).toBe(0)
   })
 })
+
+it("ignores empty space between connected parts", () => {
+  const parts = [figure(10, 1, { left: -3, right: -2 }), figure(9, 1, { left: 2, right: 3 })]
+  const convoy = figure(10, 1, { left: -3, right: 3, near: 8, far: 11, parts })
+  expect([...overlapBiases([convoy, figure(9.5, 2)])]).toEqual([0, 0])
+})
+
+it("breaks crossing-assembly cycles consistently regardless of batch visitation order", () => {
+  const part = (distance: number, left: number) => figure(distance, 1, { left, right: left + 1 })
+  const figures = [
+    figure(10, 1, { left: 0, right: 5, near: 0, far: 11, parts: [part(10, 0), part(0, 4)] }),
+    figure(9, 2, { left: 0, right: 3, near: 4, far: 11, parts: [part(5, 0), part(10, 2)] }),
+    figure(8, 3, { left: 2, right: 5, near: 4, far: 6, parts: [part(5, 2), part(5, 4)] }),
+  ]
+  const expected = overlapBiases(figures)
+  for (const order of [[2, 1, 0], [1, 0, 2], [1, 2, 0]]) {
+    expect([...overlapBiases(order.map(i => figures[i]))]).toEqual(order.map(i => expected[i]))
+  }
+  // Even the broken cycle remains coherent: no pair can slice into each other.
+  for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) {
+    expect(figures[i].far - expected[i] < figures[j].near - expected[j] ||
+      figures[j].far - expected[j] < figures[i].near - expected[i]).toBe(true)
+  }
+})

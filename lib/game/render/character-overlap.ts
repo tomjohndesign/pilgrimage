@@ -63,10 +63,11 @@ export class CharacterOverlap {
       const assembly = typeof entry.shared === "function" ? entry.shared() : entry.shared
       let index = assembly ? shared.get(assembly) : undefined
       if (index === undefined) {
-        index = participants.length; participants.push(bounds)
+        index = participants.length; participants.push(assembly ? { ...bounds, parts: [bounds] } : bounds)
         if (assembly) shared.set(assembly, index)
       } else {
         const p = participants[index]
+        p.parts!.push(bounds)
         p.left = Math.min(p.left, bounds.left); p.right = Math.max(p.right, bounds.right)
         p.bottom = Math.min(p.bottom, bounds.bottom); p.top = Math.max(p.top, bounds.top)
         p.near = Math.min(p.near, bounds.near); p.far = Math.max(p.far, bounds.far)

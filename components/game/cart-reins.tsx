@@ -1,5 +1,8 @@
 "use client"
 
+import { characterBatchEntry } from "@/lib/game/render/character-batch"
+import { applyAttachmentDepth } from "@/lib/game/render/sprite-depth"
+import { usePixelSceneryDepth } from "@/components/pixel-canvas"
 import { isWorldVisible } from "@/lib/game/render/visibility"
 
 import { useEffect, useMemo, useRef, type RefObject } from "react"
@@ -21,11 +24,6 @@ import type { FigureClickHandler } from "./traveler-figure"
 
 /** Beyond this camera view size a rein pixel is smaller than a screen pixel; skip it. */
 const REINS_MAX_VIEW_SIZE = 90
-// One material for every strap and one for every ID pass: per-wagon materials
-// each cost a shader-program lookup in every render pass. IDs ride on instance colours.
-const STRAP_MATERIAL = new THREE.MeshBasicMaterial({ color: "#493727", toneMapped: false })
-const ID_MATERIAL = new THREE.MeshBasicMaterial({ color: "#ffffff", toneMapped: false })
-
 /** Leather reins follow the displayed driving hands and animal bridle through
  * turns. Native square pixels share the animal’s bake projection and depth.
  * The strap is rebuilt only when the wagon, animal, pose or camera changed. */
@@ -36,6 +34,24 @@ export function CartReins({ handler, draft = false, seatOffset = 0, cart, animal
   characterScale: number; selected: boolean; outlineColor?: [number, number, number]; onClick?: FigureClickHandler
 }) {
   const root = useRef<THREE.Group>(null), body = useRef<THREE.InstancedMesh>(null), ids = useRef<THREE.InstancedMesh>(null)
+  const sceneryDepth = usePixelSceneryDepth()
+  const depthBias = useMemo(() => ({ value: 0 }), [])
+  const viewport = useMemo(() => new THREE.Vector4(), [])
+  const materials = useMemo(() => ["#493727", "#ffffff"].map(color => {
+    const material = new THREE.MeshBasicMaterial({ color, toneMapped: false })
+    material.onBeforeCompile = shader => applyAttachmentDepth(shader, viewport, depthBias, sceneryDepth)
+    material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
+    material.customProgramCacheKey = () => "convoy-attachment-depth-v1"
+    return material
+  }), [viewport, depthBias, sceneryDepth])
+  useEffect(() => () => materials.forEach(material => material.dispose()), [materials])
+  // Overlap ordering runs at .5, after posing. Refresh even while paused: a
+  // neighbour or camera can change the convoy's bias without moving the reins.
+  useFrame(() => {
+    if (!isWorldVisible(root.current)) return
+    const sprite = cart.current?.getObjectByName(handler ? "traveler" : "cart")
+    depthBias.value = sprite instanceof THREE.Sprite ? characterBatchEntry(sprite)?.depthBias?.value ?? 0 : 0
+  }, .75)
   const geometry = useMemo(() => new THREE.PlaneGeometry(1, 1), [])
   const dummy = useMemo(() => new THREE.Object3D(), [])
   const previous = useMemo(() => new Float64Array(12).fill(NaN), [])
@@ -116,8 +132,8 @@ export function CartReins({ handler, draft = false, seatOffset = 0, cart, animal
     if (ids.current) ids.current.instanceMatrix.needsUpdate = true
   })
   return <group ref={root} visible={false}>
-    <instancedMesh ref={body} name={handler ? "animal-lead" : "cart-reins"} args={[geometry, STRAP_MATERIAL, 2048]} frustumCulled={false} onClick={onClick}
+    <instancedMesh ref={body} name={handler ? "animal-lead" : "cart-reins"} args={[geometry, materials[0], 2048]} frustumCulled={false} onClick={onClick}
       layers-mask={selected ? 1 | (1 << SELECTED_CHARACTER_LAYER) : 1} />
-    {outlineColor && <instancedMesh ref={ids} args={[geometry, ID_MATERIAL, 2048]} frustumCulled={false} layers-mask={OUTLINE_ID_LAYER_MASK} />}
+    {outlineColor && <instancedMesh ref={ids} args={[geometry, materials[1], 2048]} frustumCulled={false} layers-mask={OUTLINE_ID_LAYER_MASK} />}
   </group>
 }

@@ -104,3 +104,20 @@ it("uses one stable assembly anchor when selected layers are visited in a differ
     expect(f.update([cart, walker])).toEqual(expected)
   } finally { f.dispose() }
 })
+
+it("orders a walker beside the animal by the animal's anchor, including selection", () => {
+  const f = fixture()
+  try {
+    const assembly = {}, cart = f.add(-.3, 2.5, false, assembly), animal = f.add(.3, 2, true, assembly), walker = f.add(0)
+    animal.overlapAnchor!.position.x = walker.overlapAnchor!.position.x = 3
+    for (const batch of [[animal, walker], [walker], []]) {
+      const biases = f.update(batch)
+      expect(biases[0]).toBe(biases[1])
+      expect(biases[1]).toBeGreaterThan(biases[2])
+    }
+    // Reverse the cart/animal depth without changing who meets the walker.
+    cart.overlapAnchor!.position.z = .3; animal.overlapAnchor!.position.z = -.3
+    const reversed = f.update([animal, walker])
+    expect(reversed[2]).toBeGreaterThan(reversed[1])
+  } finally { f.dispose() }
+})
