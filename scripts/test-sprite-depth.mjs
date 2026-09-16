@@ -20,6 +20,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
   }).outputText
   const transportSource = await readFile(new URL("../lib/game/transport/assets.ts", import.meta.url), "utf8")
   const transportVersion = transportSource.match(/version: "(v\d+)"/)[1]
+  const partyVersion = transportSource.match(/PARTY_TRANSPORT_VERSION = "(v\d+)"/)[1]
   const packVersion = transportSource.match(/PACK_ANIMAL_VERSION = "(v\d+)"/)[1]
   const transport = JSON.parse(await readFile(new URL(`../public/textures/transport/${transportVersion}/manifest.json`, import.meta.url), "utf8"))
   const transportFiles = { "cart.png": "cart-produce-horse.png", "cart-depth.png": "depth-cart-produce-horse.png",
@@ -43,10 +44,13 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
   batchModules.wildlife = ts.transpileModule(await readFile(new URL("../lib/game/wildlife/batch.ts", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   }).outputText.replaceAll('"../render/outline"', '"/batch-outline.js"')
-  for (const name of ["overlap-order", "frame-quality", "building-batch", "building-surface", "pixel-lighting", "active-lighting", "smoke", "pixel-noise", "pixel-opacity", "pixel-surface", "pixel-scale", "road-segment-texture", "terrain-elevation", "terrain-hidden-faces", "character-batch", "sprite-texture", "sprite-transforms", "static-instances", "scenery-detail", "flat-geometry", "complexion-swap", "outline"]) {
+  for (const name of ["character-overlap", "sprite-frame-bounds", "visibility", "overlap-order", "frame-quality", "building-batch", "building-surface", "pixel-lighting", "active-lighting", "smoke", "pixel-noise", "pixel-opacity", "pixel-surface", "pixel-scale", "road-segment-texture", "terrain-elevation", "terrain-hidden-faces", "character-batch", "sprite-texture", "sprite-transforms", "static-instances", "scenery-detail", "flat-geometry", "complexion-swap", "outline"]) {
     batchModules[name] = ts.transpileModule(await readFile(new URL(`../lib/game/render/${name}.ts`, import.meta.url), "utf8"), {
       compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-    }).outputText.replaceAll('"./sprite-depth"', '"/shader.js"')
+    }).outputText.replaceAll('"./sprite-frame-bounds"', '"/batch-sprite-frame-bounds.js"')
+      .replaceAll('"./overlap-order"', '"/batch-overlap-order.js"')
+      .replaceAll('"./visibility"', '"/batch-visibility.js"')
+      .replaceAll('"./sprite-depth"', '"/shader.js"')
       .replaceAll('"./sprite-texture"', '"/batch-sprite-texture.js"')
       .replaceAll('"./sprite-transforms"', '"/batch-sprite-transforms.js"')
       .replaceAll('"./complexion-swap"', '"/batch-complexion-swap.js"')
@@ -76,6 +80,10 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     const name = request.url.slice(1)
     if (name === "palette-slots.js") {
       response.setHeader("Content-Type", "text/javascript"); response.end(`export const CHARACTER_PALETTE_SLOTS = ${paletteSlots}`)
+    } else if (/^(donkey|ox)(-depth)?\.png$/.test(name)) {
+      const animal = name.startsWith("ox") ? "ox-brown" : "donkey-grey"
+      response.setHeader("Content-Type", "image/png")
+      response.end(await readFile(new URL(`../public/textures/transport/${partyVersion}/${name.includes("depth") ? "depth-" : ""}${animal}.png`, import.meta.url)))
     } else if (name === "horse.png" || name === "horse-depth.png") {
       response.setHeader("Content-Type", "image/png")
       response.end(await readFile(new URL(`../public/textures/transport/${packVersion}/${name.includes("depth") ? "depth-" : ""}horse-bay-pack.png`, import.meta.url)))
@@ -417,7 +425,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         coincidence.coveredFront = count(read(), 1)
         // A pack horse has twice a person's cell extent. Exercise the real
         // crowd ordering, including the bias it inherits from a rear neighbour.
-        const { overlapBiases } = await import("/batch-overlap-order.js")
+        const { CharacterOverlap, characterOverlapBounds } = await import("/batch-character-overlap.js")
         const horseMap = await new THREE.TextureLoader().loadAsync("/horse.png")
         const horseDepth = await new THREE.TextureLoader().loadAsync("/horse-depth.png")
         for (const texture of [horseMap, horseDepth]) { texture.minFilter = texture.magFilter = THREE.NearestFilter; texture.generateMipmaps = false }
@@ -427,27 +435,82 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         horse.sprite.scale.set(transport.scale, transport.scale, 1)
         horseMap.repeat.set(1 / transport.animalColumns, 1 / 8)
         coincidence.animalCompared = 0; coincidence.animalMismatches = 0
-        for (const zoom of [1, 1.5, 2]) for (let row = 0; row < 8; row++) for (const nearer of [0, 1]) {
-          camera.zoom = zoom; camera.updateProjectionMatrix()
-          person.map.offset.y = horseMap.offset.y = (7 - row) / 8
-          person.sprite.position.z = nearer === 0 ? .01 : 0
-          horse.sprite.position.z = nearer === 1 ? .01 : 0
-          const participants = figures.map(({ sprite }) => ({
-            x: sprite.position.x, z: sprite.position.z,
-            distance: -sprite.position.clone().applyMatrix4(camera.matrixWorldInverse).z,
-            size: sprite.scale.x, order: sprite.renderOrder,
-          }))
-          participants.push({ x: -.2, z: -.02, distance: Math.max(...participants.map(p => p.distance)) + .02, size: 1, order: 0 })
-          const biases = overlapBiases(participants)
-          figures.forEach((figure, i) => { figure.bias.value = biases[i]; figure.sprite.visible = i === nearer })
-          const expected = read()
-          figures.forEach(figure => { figure.sprite.visible = true })
-          const actual = read(), channel = nearer === 0 ? 1 : 0
-          for (let i = 0; i < expected.length; i += 4) if (expected[i + channel] > 200) {
-            coincidence.animalCompared++
-            if (actual[i + channel] < 200) coincidence.animalMismatches++
+        coincidence.crossingCases = 0; coincidence.legacyCrossingPixels = 0
+        const variants = [{ name: "horse", map: horseMap, depth: horseDepth, rows: 8, cell: transport.cellSize, anchor: transport.anchor }]
+        for (const name of ["donkey", "ox", "cart"]) {
+          const map = await new THREE.TextureLoader().loadAsync(`/${name}.png`)
+          const depth = await new THREE.TextureLoader().loadAsync(`/${name}-depth.png`)
+          for (const texture of [map, depth]) { texture.minFilter = texture.magFilter = THREE.NearestFilter; texture.generateMipmaps = false }
+          variants.push({ name, map, depth, rows: name === "cart" ? 16 : 8, cell: name === "cart" ? 160 : transport.cellSize, anchor: name === "cart" ? [80, 94] : transport.anchor })
+        }
+        const rear = { ...person, sprite: person.sprite.clone(), bias: { value: 0 } }
+        rear.sprite.material = person.sprite.material.clone(); rear.sprite.material.color.set(0x0000ff)
+        rear.sprite.material.onBeforeCompile = shader => {
+          applySpriteDepth(shader, viewport, worldTexel, groundPlane, rear.pose, undefined, rear.bias, sceneryDepth)
+          shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\ndiffuseColor.rgb = diffuse;")
+        }
+        rear.sprite.material.onBeforeRender = renderer => renderer.getCurrentViewport(viewport)
+        rear.sprite.material.customProgramCacheKey = () => "crossing-rear"
+        rear.sprite.renderOrder = 0; scene.add(rear.sprite); figures.push(rear)
+        const crossingOrder = new CharacterOverlap()
+        const crossingEntries = figures.map(figure => ({ sprite: figure.sprite, ids: figure.sprite, depth: figure.pose,
+          ground: groundPlane, depthBias: figure.bias }))
+        for (const variant of variants) {
+          horse.sprite.material.map = variant.map; horse.pose.map.value = variant.depth
+          horse.sprite.center.set(variant.anchor[0] / variant.cell, 1 - variant.anchor[1] / variant.cell)
+          horse.sprite.scale.setScalar(transport.scale * variant.cell / transport.cellSize)
+          horse.sprite.scale.z = 1
+          const columns = variant.map.image.width / variant.cell
+          variant.map.repeat.set(1 / columns, 1 / (variant.map.image.height / variant.cell))
+          for (const zoom of [1, 2]) for (let row = 0; row < variant.rows; row++) for (let personRow = 0; personRow < 8; personRow++) for (const lateral of [0, .4, .7]) for (const along of [.01, .35, .7]) for (const nearer of [0, 1]) {
+            const yaw = personRow * Math.PI / 4
+            camera.position.set(Math.sin(yaw) * 98, 71.3, Math.cos(yaw) * 98); camera.lookAt(0, 2, 0); camera.updateMatrixWorld()
+            camera.zoom = zoom; camera.updateProjectionMatrix()
+            person.map.offset.y = (7 - personRow) / 8
+            person.map.offset.x = (row % poseClips.walk) / poseClips.walk
+            variant.map.offset.set((row % columns) / columns, 1 - (row + 1) * variant.map.repeat.y)
+            const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0)
+            const toward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw))
+            person.sprite.position.set(0, 2, 0).addScaledVector(right, lateral).addScaledVector(toward, nearer === 0 ? along : 0)
+            horse.sprite.position.set(0, 2, 0).addScaledVector(toward, nearer === 1 ? along : 0)
+            rear.sprite.position.set(0, 2, 0).addScaledVector(right, -.2).addScaledVector(toward, -.02)
+            const participants = figures.map(({ sprite, pose }) => {
+              sprite.updateWorldMatrix(true, false)
+              return characterOverlapBounds({ sprite, depth: pose, ground: groundPlane }, camera, worldTexel.value)
+            })
+            figures.forEach(figure => { figure.sprite.visible = true })
+            crossingOrder.update(crossingEntries, [], camera, worldTexel.value)
+            figures.forEach((figure, i) => { figure.sprite.visible = i === nearer })
+            const expected = read()
+            figures.forEach(figure => { figure.sprite.visible = true })
+            const actual = read(), channel = nearer === 0 ? 1 : 0
+            // Reproduce the previous fixed-radius/fixed-thickness correction.
+            // This must disagree with the clean foreground at real atlas pixels.
+            const legacyBiases = [0, 0, 0]
+            const ordered = [0, 1, 2].sort((a, b) => participants[b].distance - participants[a].distance || participants[a].order - participants[b].order)
+            for (const i of ordered) for (const j of ordered) {
+              if (participants[j].distance <= participants[i].distance) continue
+              const a = figures[i].sprite, b = figures[j].sprite
+              if (Math.hypot(a.position.x - b.position.x, a.position.z - b.position.z) < .3 * Math.max(a.scale.x, b.scale.x))
+                legacyBiases[i] = Math.max(legacyBiases[i], legacyBiases[j] + .25 * (a.scale.x + b.scale.x))
+            }
+            figures.forEach((figure, i) => { figure.bias.value = legacyBiases[i] })
+            const legacy = read()
+            for (let i = 0; i < expected.length; i += 4) if (expected[i + channel] > 200) {
+              coincidence.animalCompared++
+              if (actual[i + channel] < 200) coincidence.animalMismatches++
+              if (legacy[i + channel] < 200) coincidence.legacyCrossingPixels++
+            }
+            coincidence.crossingCases++
           }
         }
+        figures.pop(); scene.remove(rear.sprite); rear.sprite.material.dispose()
+        // Restore the animal used by the scenery checks below.
+        horse.sprite.material.map = horseMap; horse.pose.map.value = horseDepth
+        horse.sprite.center.set(transport.anchor[0] / transport.cellSize, 1 - transport.anchor[1] / transport.cellSize)
+        horse.sprite.scale.set(transport.scale, transport.scale, 1)
+        person.sprite.position.set(0, 2, 0); horse.sprite.position.set(0, 2, .01)
+        for (const variant of variants.slice(1)) { variant.map.dispose(); variant.depth.dispose() }
         // Crowd ordering must never promote a hidden body through scenery.
         // Use the same world-depth copy as PixelCanvas, then sample that buffer
         // before biasing the sprites. Test both people and large transport.
@@ -658,6 +721,8 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       return { cases, compared, mismatches, occlusionFailures, floorCompared, floorClipped, supportCompared, supportClipped, poseCompared, poseMismatches, poseVisible, poseHidden, bakeCompared, bakeError,
         outlineCompared, outlineMismatches, selectionMismatches, fadeCompared, fadeMismatches, coincidence }
     }, { outlineFragment, presentationFragment, poseClips, transport })
+    console.log("Road sprite crossing regression", result.coincidence)
+    assert.ok(result.coincidence.legacyCrossingPixels > 0, "must reproduce the previous ordering failure at real crossing pixels")
     assert.ok(result.coincidence.animalCompared > 10000, "must exercise pack horse/person overlaps across directions and zooms")
     assert.equal(result.coincidence.animalMismatches, 0, `nearer people and animals must cover those behind: ${JSON.stringify(result.coincidence)}`)
     const foliageResults = []

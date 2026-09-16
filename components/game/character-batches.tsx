@@ -105,7 +105,7 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
       group.entries.sort((a, b) => a.sprite.renderOrder - b.sprite.renderOrder)
       batch?.write(group.entries, camera, true)
     }
-    overlap.update(entries, groups.values(), camera)
+    overlap.update(entries, groups.values(), camera, worldTexel.value)
     for (const group of groups.values()) group.batch?.writeBiases(group.entries)
     updateBatchSourceVisibility(scene, candidates, clock.elapsedTime)
     frameProfile.end("characterBatches", started)

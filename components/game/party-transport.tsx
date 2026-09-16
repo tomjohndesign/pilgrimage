@@ -95,7 +95,7 @@ function PartyFigure({ handlers, party, sim, map, travelers, characterScale }: {
     {vehicle && <>
       <group ref={cart}><TransportSprite map={map} kind="cart" passengerCart={vehicle.style} overlapGroup={cart} characterScale={characterScale}
         outlineColor={color(vehicle.seats[0])} onClick={click(vehicle.seats[0])} /></group>
-      <group ref={beast}><TransportSprite map={map} kind={vehicle.animal} characterScale={characterScale}
+      <group ref={beast}><TransportSprite overlapGroup={cart} map={map} kind={vehicle.animal} characterScale={characterScale}
         outlineColor={color(vehicle.seats[0])} onClick={click(vehicle.seats[0])} /></group>
       {vehicle.seats.map((id, seat) => {
         const person = travelers[indices.get(id)!]
