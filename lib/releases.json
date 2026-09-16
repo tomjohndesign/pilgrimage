@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "2cd9f45ef54a26408325d31a437f1490ad0ecfd2",
-  "releaseCount": 257,
+  "lastProcessedCommit": "0dae8ca912bdb7b5ec5f7d1fa68111ae1545db8b",
+  "releaseCount": 258,
   "releases": [
+    {
+      "version": "0.0.272",
+      "title": "Release 0.0.272",
+      "summary": "Fix road sprite layering across character orientations (#292)",
+      "commit": "0dae8ca912bdb7b5ec5f7d1fa68111ae1545db8b"
+    },
     {
       "version": "0.0.271",
       "title": "Release 0.0.271",
