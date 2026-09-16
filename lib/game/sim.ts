@@ -35,7 +35,7 @@ import { createFootpaths, HEAVY_PATH_WEAR, recordWalkingPath, regrowFootpaths, t
 import { knightMounted, knightLoadout, knightTravelSpeed, knightWalkStride, squireFollowGap, type HorseRest } from "./knights"
 import { DEFAULT_WALK_SPEED, DEFAULT_WALK_CADENCE, personWalkStride } from "./base-person/gait"
 import { builderRate } from "./build-labour"
-import { assignBuildingTask, buildingEntrance, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
+import { assignBuildingTask, buildingEntrance, stepBuildingTask, unsealedBuildings, walkWorker, workerRoute, type BuildingTask } from "./construction"
 import { buildingEntry } from "./building-rotation"
 import { timberDestination, type FoodStock } from "./storage"
 import { blessByProcession, nearProcession, type RelicProcession } from "./relic-procession"
@@ -1421,19 +1421,29 @@ function finishWaterTrip(s: SimTraveler): void {
   if (resume) s.activity = resume
 }
 
-/** Head back out of the door to the road, or to the work they left. */
-function leaveTavern(s: SimTraveler, map: GameMap, back: WorldPoint): void {
+/** Head back out of the door to the road, or to the work they left. False when
+ * no way back can be found, which leaves the caller to end the visit in place. */
+function leaveTavern(s: SimTraveler, map: GameMap, back: WorldPoint): boolean {
   const fine = tavernWalkingRoute(map, s, back)
   if (fine !== undefined) {
-    if (!fine) return
+    if (!fine) return false
     s.offRoadRoute = fine
   } else {
-    const route = settlementRoute(map, map.buildings, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
+    const start = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
+    const route = settlementRoute(map, unsealedBuildings(map, start), start,
       { x: worldToTileX(map, back.x), z: worldToTileZ(map, back.z) }, false, true)
-    if (!route) return
+    if (!route) return false
     routeWalk(s, map, route, back)
   }
   s.activity = "fromTavern"
+  return true
+}
+
+/** A seat is never a trap: end the visit where they sit and take up the day
+ * again, rather than holding the furniture for a walk that cannot be planned. */
+function abandonTavernVisit(s: SimTraveler): void {
+  s.tavernVisit = undefined
+  finishErrand(s)
 }
 
 function startWorkRoute(s: SimTraveler, route: TilePos[], activity: Activity): void {
@@ -1475,8 +1485,10 @@ function chooseTree(sim: SimState, s: SimTraveler, map: GameMap): boolean {
     .sort((a, b) => Number(sim.felled.has(b.index)) - Number(sim.felled.has(a.index)) ||
       Math.hypot(a.tree.x - s.x, a.tree.z - s.z) - Math.hypot(b.tree.x - s.x, b.tree.z - s.z))
   const start = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
+  // A footprint raised over them must not cost them the job: route out of it.
+  const obstacles = unsealedBuildings(map, start, [...map.buildings, ...sim.buildings])
   for (const { tree, index } of candidates) {
-    const route = settlementRoute(map, [...map.buildings, ...sim.buildings], start,
+    const route = settlementRoute(map, obstacles, start,
       { x: worldToTileX(map, tree.x), z: worldToTileZ(map, tree.z) }, true)
     if (!route) continue
     s.tree = index
@@ -2951,7 +2963,7 @@ export function stepSim(
         const seat = visit.plan.seat
         const onward = seat && tavernWalkingRoute(map, s, seat.point, seat.id)
         if (seat && onward) { s.offRoadRoute = onward; s.walkT = 0; s.activity = "toTavern" }
-        else leaveTavern(s, map, visit.returnTo ?? currentRoutePoint(map, s))
+        else if (!leaveTavern(s, map, visit.returnTo ?? currentRoutePoint(map, s))) abandonTavernVisit(s)
         break
       }
       case "sitting": {
@@ -2961,7 +2973,7 @@ export function stepSim(
           s.happiness = Math.min(100, s.happiness + TAVERN_HAPPINESS_GAIN * seatedHours / TABLE_HOURS)
         s.stamina = Math.min(100, s.stamina + SEAT_STAMINA_PER_HOUR * seatedHours)
         s.timer -= dt
-        if (s.timer <= 0) leaveTavern(s, map, s.tavernVisit!.returnTo ?? currentRoutePoint(map, s))
+        if (s.timer <= 0 && !leaveTavern(s, map, s.tavernVisit!.returnTo ?? currentRoutePoint(map, s))) abandonTavernVisit(s)
         break
       }
       case "fromTavern": {

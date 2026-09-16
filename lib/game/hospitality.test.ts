@@ -627,6 +627,30 @@ describe("woodcutter huts", () => {
     expect(actor.employer).toBe(camp.id)
   })
 
+  it.each(["site", "finished"] as const)("returns a settler to their job after a %s closes over them", stage => {
+    const { map, trees, camp, traveler } = fixture()
+    const t = traveler(0), sim = createSim([t], map), actor = sim.travelers.get(0)!
+    map.buildings.push(camp)
+    addHouse(map)
+    sim.buildings = [camp]
+    sim.trees = trees
+    actor.employer = camp.id
+    actor.jobless = false
+    actor.activity = "idle"
+    actor.x = tileToWorldX(map, 5); actor.z = tileToWorldZ(map, 6)
+    // Placement leaves doorways and approaches clear, not people: a storehouse
+    // can be raised over a resident standing in the open, and its finished
+    // walls must not keep them from the trees they were felling.
+    const def = BUILD_CATALOG.find(b => b.id === "storehouse")!
+    map.buildings = [...map.buildings, { ...def, id: "settlement-9", buildType: "storehouse", label: def.label,
+      x: 5, z: 6, rotation: 0 as const, ...(stage === "site" ? { construction: { work: 0, required: 96 } } : {}) }]
+    run(sim, [t], map, 600, () => ["working", "gathering"].includes(actor.activity))
+    expect(["working", "gathering"]).toContain(actor.activity)
+    expect(actor.employer).toBe(camp.id)
+    expect(worldToTileX(map, actor.x) >= 5 && worldToTileX(map, actor.x) < 7
+      && worldToTileZ(map, actor.z) >= 6 && worldToTileZ(map, actor.z) < 8).toBe(false)
+  })
+
   it.each(["none", "hunger", "thirst", "stamina"] as const)(
     "only rests after a delivery when needs are low (low need: %s)", (need) => {
       const { map, trees, camp, traveler } = fixture()
@@ -959,6 +983,26 @@ describe("houses, counters and posts", () => {
     expect(sim.tradeGold).toBe(MEAL_PRICE)
     expect(s.gold).toBe(10 - MEAL_PRICE)
     expect(sim.shrineGold).toBe(0)
+  })
+
+  it("gives up a seat nobody can walk away from and takes the day up again", () => {
+    const { map, traveler } = fixture()
+    const t = traveler(0)
+    t.attributes.hunger = 0
+    t.attributes.gold = 10
+    const sim = createEstablishedShrine([t], map)
+    staffTavern(sim, map)
+    const s = sim.travelers.get(0)!
+    run(sim, [t], map, 200, () => s.activity === "sitting")
+    expect(s.activity).toBe("sitting")
+    // The ground around the seat gives way while they rest. A break that
+    // cannot be walked off must still end, rather than seat them for good.
+    for (let z = 0; z < map.depth; z++) for (let x = 0; x < map.width; x++) {
+      if (!map.buildings.some(b => containsTile(b, { x, z }))) map.tiles[z * map.width + x] = "water"
+    }
+    run(sim, [t], map, 400, () => s.activity !== "sitting")
+    expect(s.activity).not.toBe("sitting")
+    expect(s.tavernVisit).toBeUndefined()
   })
 
   it("shares benches when full and leaves the penniless on the road", () => {

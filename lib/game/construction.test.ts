@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { assignBuildingTask, buildingEntrance, constructionBuilders, constructionStandOff, constructionStage, constructionWork, isComplete, stepBuildingTask, type Worker } from "./construction"
+import { assignBuildingTask, buildingEntrance, constructionBuilders, constructionStandOff, constructionStage, constructionWork, isComplete, stepBuildingTask, workerRoute, type Worker } from "./construction"
 import { constructionParts } from "./building-art/construction"
 import { structureParts } from "./building-art/structure"
 import { generateMap } from "./map/generate-map"
@@ -70,6 +70,28 @@ describe("resident construction", () => {
       expect(assignBuildingTask(actors[limit], published, "build")).toBe(true)
     },
   )
+
+  it.each([false, true])("walks a resident out of a footprint closed over them (finished: %s)", finished => {
+    const map = fixture(), site = map.buildings[2]
+    if (finished) site.construction!.work = site.construction!.required
+    const inside = (p: { x: number; z: number }) => {
+      const x = worldToTileX(map, p.x), z = worldToTileZ(map, p.z)
+      return x >= site.x && x < site.x + site.w && z >= site.z && z < site.z + site.d
+    }
+    // Placement guards doorways, not people: raising walls over someone must
+    // not cage them, before the site is finished or once it is.
+    const trapped = worker(map, site.x, site.z)
+    const out = workerRoute(map, trapped, map.site!.door)
+    expect(out).not.toBeNull()
+    expect(inside(out!.at(-1)!)).toBe(false)
+    // They step off the footprint once and never walk back through its walls.
+    expect(out!.slice(out!.findIndex(p => !inside(p))).some(inside)).toBe(false)
+    // Everyone else still walks around the same walls.
+    const passer = worker(map, site.x - 1, site.z + site.d)
+    const around = workerRoute(map, passer, { x: site.x + site.w, z: site.z - 1 })
+    expect(around).not.toBeNull()
+    expect(around!.some(inside)).toBe(false)
+  })
 
   it("sends spare builders to another site and releases reservations for rest", () => {
     const map = fixture(), a = worker(map), b = worker(map), c = worker(map)

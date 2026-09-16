@@ -70,6 +70,29 @@ function constructionCrew(building: BuildingDef): Map<Worker, BuildingTask> {
   for (const [worker, task] of crew) if (worker.buildingTask !== task) crew.delete(worker)
   return crew
 }
+/**
+ * Placement guards doorways and approaches, not people: a footprint can close
+ * over whoever happens to be standing on the spot. That building is no obstacle
+ * to them until they have stepped off it — neither the site they were overtaken
+ * by nor the finished walls it becomes, which would otherwise wall them in for
+ * good. Places people are meant to stand in, the shrine and its wings keep
+ * their own doorway rules.
+ */
+function overtakes(map: GameMap, building: BuildingDef, tile: TilePos): boolean {
+  if (building.supportId || building.id === map.site?.hovelId) return false
+  if (isComplete(building) && (isEnterable(building) || building.churchId)) return false
+  return tile.x >= building.x && tile.x < building.x + building.w && tile.z >= building.z && tile.z < building.z + building.d
+}
+
+/**
+ * The obstacles someone at `tile` should route against, without the footprint
+ * closed over them. Retain the shared index when nothing covers them; a new
+ * array otherwise rebuilds the spatial query for every trip.
+ */
+export function unsealedBuildings(map: GameMap, tile: TilePos, buildings: readonly BuildingDef[] = map.buildings): readonly BuildingDef[] {
+  return buildings.some(b => overtakes(map, b, tile)) ? buildings.filter(b => !overtakes(map, b, tile)) : buildings
+}
+
 export function workerRoute(map: GameMap, actor: WanderSpot & { id?: number }, goal: TilePos): WanderSpot[] | null {
   const destination = { x: tileToWorldX(map, goal.x), y: surfaceHeight(map, goal.x, goal.z), z: tileToWorldZ(map, goal.z) }
   const upstairs = innWalkingRoute(map, actor, destination)
@@ -77,12 +100,7 @@ export function workerRoute(map: GameMap, actor: WanderSpot & { id?: number }, g
   const fine = tavernWalkingRoute(map, actor, destination)
   if (fine !== undefined) return fine
   const start = { x: worldToTileX(map, actor.x), z: worldToTileZ(map, actor.z) }
-  // A footprint may be placed beneath an idle resident. Let them leave that
-  // new site before treating it as an obstacle on subsequent trips.
-  const canLeave = (b: BuildingDef) => !isComplete(b) && start.x >= b.x && start.x < b.x + b.w && start.z >= b.z && start.z < b.z + b.d
-  // Retain the shared obstacle index unless this actor needs to escape a newly
-  // placed site. Allocating a new array otherwise rebuilds it for every trip.
-  const obstacles = map.buildings.some(canLeave) ? map.buildings.filter(b => !canLeave(b)) : map.buildings
+  const obstacles = unsealedBuildings(map, start)
   const journey = Math.abs(Math.sin(actor.x * 12.9898 + actor.z * 78.233 + goal.x * 37.719 + goal.z))
   const exploring = actor.id === undefined ? journey < SHORTCUT_EXPLORERS : exploresWorkerShortcut(map, actor.id, start, goal)
   const plan = () => {
