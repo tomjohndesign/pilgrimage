@@ -53,8 +53,9 @@ import { complexionSwap, type Complexion } from "@/lib/game/base-person/complexi
 import { OUTLINE_ID_LAYER_MASK, SELECTED_CHARACTER_LAYER } from "@/lib/game/render/outline"
 import type { FigureClickHandler } from "./traveler-figure"
 
-export function CharacterSprite({ resident, map: suppliedMap, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, complexion = appearance?.complexion, age = 18, visualOverride, attachment, flightClip, name = "traveler" }: {
+export function CharacterSprite({ overlapGroup, resident, map: suppliedMap, type, onClick, outlineColor, selected = false, characterModel = "callings", characterScale = 1, characterFps, walkTuning, appearance, complexion = appearance?.complexion, age = 18, visualOverride, attachment, flightClip, name = "traveler" }: {
   resident?: boolean
+  overlapGroup?: object | (() => object | undefined)
   attachment?: { content: ReactNode; clips: Partial<Record<"hoisting" | "procession", FrameRegistration[]>>; cellSize: number; anchor: number[]; restPosition?: [number, number, number] }
   flightClip?: SpriteClip & { fps: number; reservedTones?: boolean }
   map?: GameMap
@@ -205,14 +206,14 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
   useLayoutEffect(() => {
     if (!batchEntries || !sprite.current || !idSprite.current || !outlineColor) return
     const entry = { sprite: sprite.current, ids: idSprite.current, publishesPose: true, complexion: complexionValues, palette: characterPalette(complexionValues), ground: groundPlane,
-      batchable: name === "traveler", overlapAnchor: sprite.current.parent?.parent ?? undefined,
+      shared: overlapGroup, batchable: name === "traveler", overlapAnchor: sprite.current.parent?.parent ?? undefined,
       fixedAttributes: Float32Array.from([center.x, center.y, ...outlineColor]), depth: poseDepth, depthBias, id: new THREE.Vector3(...outlineColor) }
     batchEntry.current = entry
     const unregisterEntry = registerCharacterBatchEntry(entry)
     batchEntries.add(entry)
     const unregister = registerSimpleBatchSource(entry.sprite, entry.ids)
     return () => { batchEntry.current = null; unregisterEntry(); unregister(); batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
-  }, [batchEntries, complexionValues, groundPlane, poseDepth, depthBias, name, center, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [batchEntries, overlapGroup, complexionValues, groundPlane, poseDepth, depthBias, name, center, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
 
   const crowdWalk = useMemo<CrowdWalk | null>(() => map && rig && !attachment && walkTuning?.sync !== false ? {
     map, rig, walk: visual.walk, weary: visual.actions.wearyWalk, wearyIndex: actionIndices.wearyWalk,

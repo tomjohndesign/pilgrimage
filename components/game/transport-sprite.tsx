@@ -40,7 +40,7 @@ const KEEPER_POSE_INDEX: Record<string, number> = Object.fromEntries(Object.keys
 export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", pack = false, knight, map: terrain, kind, coat, variant = 0, horseVariant = "common", cargo = "produce", puller = "hand", awning = false, worldStall = false, characterScale = 1,
   selected = false, outlineColor, overlapGroup, onClick, position = [0, 0, 0] }: {
   passengerCart?: PassengerCart; seat?: number; calling?: TravelerTypeId; pack?: boolean
-  overlapGroup?: object
+  overlapGroup?: object | (() => object | undefined)
   knight?: "mounted" | "saddled"
   map?: GameMap; kind: "cart" | "merchant" | "passenger" | Animal; coat?: string; variant?: number; horseVariant?: HorseVariant; cargo?: Cargo; puller?: Puller; awning?: boolean; characterScale?: number
   selected?: boolean; outlineColor?: [number, number, number]; onClick?: FigureClickHandler; position?: [number, number, number]; worldStall?: boolean
@@ -99,12 +99,13 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
     // A passenger cart and its seated passengers share one anchor on purpose;
     // their baked relief orders them, so they receive one shared depth bias.
     const entry = { sprite: body.current, ids: ids.current, ground: groundPlane, depth: poseDepth, depthBias,
+      depthLayers: kind === "cart" && !passengerCart ? [{ map: depths[3], frame: driverFrame, visible: driverVisible }] : undefined,
       overlapAnchor: body.current.parent?.parent ?? undefined,
       batchable: !(kind === "cart" && !passengerCart) && !edited,
       shared: overlapGroup, id: new THREE.Vector3(...outlineColor) }
     batchEntries.add(entry)
     return () => { batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
-  }, [batchEntries, groundPlane, poseDepth, depthBias, kind, passengerCart, overlapGroup, edited, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [batchEntries, groundPlane, poseDepth, depthBias, depths, driverFrame, driverVisible, kind, passengerCart, overlapGroup, edited, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
   const root = useRef<THREE.Group>(null), phase = useRef(0), grazingTime = useRef(0), plant = useRef<FootPlant | null>(null)
   useEffect(() => { if(selected && animal && terrain) void playSourceSelection(`animal/${kind}`) }, [selected, animal, kind, !!terrain])
   useEffect(() => { const actor=root.current?.uuid; return()=>{if(actor)sceneSoundSources.remove(actor)} }, [])

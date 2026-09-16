@@ -59,6 +59,11 @@ export function TravelerFigure({ resident = false, map: suppliedMap, age, job, t
   const vendor = !job && type.id === "vendor", animal = vendor && puller !== "hand"
   const driver = useRef<THREE.Group>(null), setup = useRef<THREE.Group>(null), beast = useRef<THREE.Group>(null)
   const cart = useRef<THREE.Group>(null), pullingDriver = useRef<THREE.Group>(null)
+  // Shafts and their puller intentionally interleave. Keep their rig depth
+  // together while hitched; grazing animals sort independently in the yard.
+  const convoyOverlap = useMemo(() => () => animal
+    ? beast.current?.userData.hitched ? cart : undefined
+    : pullingDriver.current?.visible ? cart : undefined, [animal])
   const point = useMemo(() => new THREE.Vector3(), [])
   const cartPose = useRef<CartPose | null>(null)
   const followingRoad = useRef(false)
@@ -189,16 +194,16 @@ export function TravelerFigure({ resident = false, map: suppliedMap, age, job, t
     </group>
     {vendor && !animal && characterModel === "base" && <group ref={pullingDriver}>
       <CharacterSprite resident={resident} map={suppliedMap} age={age} appearance={appearance} selected={selected} type={type.id} onClick={onClick} outlineColor={color}
-        characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} visualOverride={pulling} />
+        characterModel={characterModel} characterScale={characterScale} characterFps={characterFps} walkTuning={walkTuning} overlapGroup={convoyOverlap} visualOverride={pulling} />
     </group>}
     {vendor && <>
-      <group ref={cart}><TransportSprite map={map} kind="cart" variant={variant} cargo={cargo} puller={puller} awning={awning} characterScale={characterScale}
+      <group ref={cart}><TransportSprite overlapGroup={convoyOverlap} map={map} kind="cart" variant={variant} cargo={cargo} puller={puller} awning={awning} characterScale={characterScale}
         worldStall selected={selected} outlineColor={color} onClick={onClick} /></group>
       <VendorStall cart={cart} cargo={cargo} puller={puller} awning={awning} characterScale={characterScale}
         selected={selected} outlineColor={color} onClick={onClick} />
       <group ref={setup} visible={false}><TransportSprite map={map} kind="merchant" variant={variant} characterScale={characterScale * (appearance?.scale ?? 1)} selected={selected} outlineColor={color} onClick={onClick} /></group>
     </>}
-    {animal && <group ref={beast}><TransportSprite map={map} kind={puller as "donkey" | "horse"} coat={coat} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} /></group>}
+    {animal && <group ref={beast}><TransportSprite overlapGroup={convoyOverlap} map={map} kind={puller as "donkey" | "horse"} coat={coat} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} /></group>}
     {animal && <AnimalTether animal={beast} kind={puller as "horse" | "donkey"} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} />}
     {animal && <CartReins cart={cart} animal={beast} kind={puller as "horse" | "donkey"} horseVariant={horseVariant} characterScale={characterScale} selected={selected} outlineColor={color} onClick={onClick} />}
   </SceneAssetBoundary>

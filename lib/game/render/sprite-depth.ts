@@ -43,7 +43,7 @@ export function configureSpriteDepthTexture(texture: THREE.Texture) {
  * Keep that extra clearance off the upright plane to preserve body occlusion.
  * Like the game's cameras, this depth model is orthographic.
  * `bias` (world units toward the camera) is the painter's order from
- * render/overlap-order for figures sharing a spot; it moves the whole figure,
+ * render/overlap-order for intersecting silhouettes; it moves the whole figure,
  * ground contact included, and stays zero for everyone standing alone.
  */
 export function applySpriteDepth(shader: Parameters<THREE.Material["onBeforeCompile"]>[0], viewport: THREE.Vector4, worldTexel = { value: 0 },

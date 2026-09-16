@@ -65,14 +65,42 @@ it("does not swap coincident figures when their animated planted-foot offsets cr
   const f = fixture()
   try {
     const first = f.add(0), second = f.add(0)
-    const expected = f.update([first, second])
+    f.update([first, second])
     for (const offset of [-.04, .04, -.03, .03]) {
       first.sprite.parent!.position.z = offset
       second.sprite.parent!.position.z = -offset
-      expect(f.update([first, second])).toEqual(expected)
-      expect(f.update()).toEqual(expected)
+      const batched = f.update([first, second])
+      expect(batched[0]).toBe(0); expect(batched[1]).toBeGreaterThan(0)
+      expect(f.update()).toEqual(batched)
     }
     second.overlapAnchor!.position.z = 5
     expect(f.update()).toEqual([0, 0])
+  } finally { f.dispose() }
+})
+
+it("keeps a hitched animal and cart relief together, releasing a grazing animal", () => {
+  const f = fixture()
+  try {
+    let hitched = true
+    const assembly = {}, cart = f.add(-.3, 2.5, false), animal = f.add(.3, 2), walker = f.add(.5)
+    cart.shared = animal.shared = () => hitched ? assembly : undefined
+    const joined = f.update([animal, walker])
+    expect(joined[0]).toBe(joined[1])
+    expect(joined[2]).toBeGreaterThan(joined[1])
+    expect(f.update([walker])).toEqual(joined)
+    hitched = false
+    const released = f.update([animal, walker])
+    expect(released[1]).toBeGreaterThan(released[0])
+  } finally { f.dispose() }
+})
+
+it("uses one stable assembly anchor when selected layers are visited in a different order", () => {
+  const f = fixture()
+  try {
+    const assembly = {}, cart = f.add(-.1, 2.5, true, assembly), rider = f.add(.1, 2.5, true, assembly)
+    const walker = f.add(0)
+    const expected = f.update([cart, rider, walker])
+    expect(f.update([rider, walker])).toEqual(expected)
+    expect(f.update([cart, walker])).toEqual(expected)
   } finally { f.dispose() }
 })

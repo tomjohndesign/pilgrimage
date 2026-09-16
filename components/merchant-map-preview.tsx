@@ -23,6 +23,8 @@ import { TerrainTiles } from "./game/terrain-tiles"
 import { Trees } from "./game/trees"
 import { CameraLight } from "./game/camera-light"
 import { OutlinePass } from "./game/outline-pass"
+import { CharacterBatches } from "./game/character-batches"
+import { encodeObjectId, travelerObjectId } from "@/lib/game/render/outline"
 import { TravelerFigure } from "./game/traveler-figure"
 import { populationDesign } from "@/lib/game/base-person/population"
 import { rollComplexion } from "@/lib/game/base-person/complexion"
@@ -101,11 +103,11 @@ function DemoActors({ demo, clock, seek, playing, rate, onProgress, ...options }
     report.current += delta
     if (report.current > 0.1 || reset) { report.current = 0; onProgress(frame) }
   }, -3)
-  return <PixelCharacters>
-    <group ref={merchant}><TravelerFigure map={demo.map} {...options} type={TRAVELER_TYPES.vendor} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 0, scale: 1, bodyType: "Male", complexion: DEMO_COMPLEXIONS[0] }} /></group>
-    <group ref={customer}><TravelerFigure map={demo.map} type={TRAVELER_TYPES.peasant} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 3, scale: 1, bodyType: "Female", complexion: DEMO_COMPLEXIONS[1] }} /></group>
-    <group ref={passer}><TravelerFigure map={demo.map} type={TRAVELER_TYPES.pilgrim} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 1, scale: 1, bodyType: "Male", complexion: DEMO_COMPLEXIONS[2] }} /></group>
-  </PixelCharacters>
+  return <CharacterBatches><PixelCharacters>
+    <group ref={merchant}><TravelerFigure outlineColor={encodeObjectId(travelerObjectId(0))} map={demo.map} {...options} type={TRAVELER_TYPES.vendor} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 0, scale: 1, bodyType: "Male", complexion: DEMO_COMPLEXIONS[0] }} /></group>
+    <group ref={customer}><TravelerFigure outlineColor={encodeObjectId(travelerObjectId(1))} map={demo.map} type={TRAVELER_TYPES.peasant} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 3, scale: 1, bodyType: "Female", complexion: DEMO_COMPLEXIONS[1] }} /></group>
+    <group ref={passer}><TravelerFigure outlineColor={encodeObjectId(travelerObjectId(2))} map={demo.map} type={TRAVELER_TYPES.pilgrim} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 1, scale: 1, bodyType: "Male", complexion: DEMO_COMPLEXIONS[2] }} /></group>
+  </PixelCharacters></CharacterBatches>
 }
 
 function TurningTrails({ demo }: { demo: MerchantDemo }) {
