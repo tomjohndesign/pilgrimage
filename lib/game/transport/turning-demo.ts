@@ -7,6 +7,7 @@ import { advanceCartProgress, cartRoutePoint, DEFAULT_CART_TURN_RADIUS } from ".
 import type { DemoStage, MerchantDemo, MerchantDemoFrame } from "./demo"
 
 export const TURNING_SCENARIOS = [
+  { id: "passing", label: "Walkers beside a cart", description: "Walkers pass both ends of the connected animal and cart through an S-bend. Pause and rotate the camera to check their overlap and reins." },
   { id: "right", label: "Right at a T-junction", description: "An open corner with room for the rear wheels to cut inside." },
   { id: "left", label: "Left at a T-junction", description: "The mirrored turn checks left/right symmetry." },
   { id: "s_bend", label: "S-bend", description: "Two turns with enough space to straighten between them." },
@@ -26,7 +27,7 @@ export function turningMap(scenario: TurningScenario): GameMap {
   const width = 17, depth = 13, road: TilePos[] = []
   const shapes: Partial<Record<TurningScenario, number[][]>> = {
     reverse: [[1,6],[15,6]], left: [[1,9],[11,9],[11,2]],
-    s_bend: [[1,3],[6,3],[6,8],[15,8]],
+    s_bend: [[1,3],[6,3],[6,8],[15,8]], passing: [[1,3],[6,3],[6,8],[15,8]],
     hairpin: [[1,4],[11,4],[11,5],[1,5]],
     chicane: [[1,4],[8,4],[8,6],[15,6]],
     bridge_exit: [[1,3],[10,3],[10,10]],
