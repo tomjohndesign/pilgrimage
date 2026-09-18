@@ -27,15 +27,14 @@ export interface CharacterBatchEntry {
   palette?: Float32Array
   ground: { value: THREE.Vector4 }
   depth: SpritePoseDepth
-  /** Additional silhouettes composited by custom shaders, such as a driver. */
-  depthLayers?: Array<{ map: THREE.Texture; frame: { value: THREE.Vector4 }; visible: { value: number } }>
   id: THREE.Vector3
   /** Painter's bias toward the camera (world units) from render/overlap-order.
    * Standalone materials read the same object as a uniform. */
   depthBias?: { value: number }
-  /** Connected cart/animal/passenger layers share one correction while their
-   * local anchors determine ordering against neighbours. */
-  shared?: object | (() => object | undefined)
+  /** Distinguishes drawables with the same selection ID. */
+  railPart?: number
+  /** Seat ground position relative to the logical anchor, in world units. */
+  railSeat?: { x: number; z: number }
   /** This frame's resolved anchor, written by CharacterBatch.write for the
    * overlap ordering pass. */
   anchorX?: number

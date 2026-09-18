@@ -113,15 +113,18 @@ const crowdDepthFragment = `    if (spriteSceneryMode == 1) {
     gl_FragDepth = clamp(poseDepth - (spriteSceneryMode == 2 ? 0.0 : vSpriteDepthBias), 0.0, 1.0);`
 
 export function applyAttachmentDepth(shader: Parameters<THREE.Material["onBeforeCompile"]>[0],
-  viewport: THREE.Vector4, bias: { value: number }, scenery: SpriteSceneryDepth) {
+  viewport: THREE.Vector4, bias: { value: number }, scenery: SpriteSceneryDepth, endpoints?: { value: THREE.Vector3 }) {
   shader.uniforms.spriteDepthBias = bias
   shader.uniforms.spriteViewport = { value: viewport }
   shader.uniforms.spriteSceneryMode = scenery.mode
   shader.uniforms.spriteSceneryDepth = scenery.map
   shader.uniforms.spriteSceneryScale = scenery.scale
   shader.uniforms.spriteSceneryOffset = scenery.offset
-  shader.vertexShader = "uniform float spriteDepthBias;\nflat varying float vSpriteDepthBias;\n" + shader.vertexShader.replace(
-    "#include <fog_vertex>", "#include <fog_vertex>\nvSpriteDepthBias = spriteDepthBias * abs(projectionMatrix[2][2]) * 0.5;")
+  if (endpoints) shader.uniforms.attachmentBiases = endpoints
+  const declarations = endpoints ? "attribute vec2 attachmentPath;\nuniform vec3 attachmentBiases;\n" : "uniform float spriteDepthBias;\n"
+  const amount = endpoints ? "mix(mix(attachmentBiases.x, attachmentBiases.y, attachmentPath.y), attachmentBiases.z, attachmentPath.x)" : "spriteDepthBias"
+  shader.vertexShader = declarations + "flat varying float vSpriteDepthBias;\n" + shader.vertexShader.replace(
+    "#include <fog_vertex>", `#include <fog_vertex>\nvSpriteDepthBias = ${amount} * abs(projectionMatrix[2][2]) * 0.5;`)
   shader.fragmentShader = `flat varying float vSpriteDepthBias;
     uniform vec4 spriteViewport;
     uniform int spriteSceneryMode;

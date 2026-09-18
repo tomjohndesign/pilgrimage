@@ -27,7 +27,8 @@ const REINS_MAX_VIEW_SIZE = 90
 /** Leather reins follow the displayed driving hands and animal bridle through
  * turns. Native square pixels share the animal’s bake projection and depth.
  * The strap is rebuilt only when the wagon, animal, pose or camera changed. */
-export function CartReins({ handler, draft = false, seatOffset = 0, cart, animal, kind, horseVariant, characterScale, selected, outlineColor, onClick }: {
+export function CartReins({ driver, handler, draft = false, seatOffset = 0, cart, animal, kind, horseVariant, characterScale, selected, outlineColor, onClick }: {
+  driver?: () => THREE.Object3D | null | undefined
   handler?: { calling: TravelerTypeId; variant: number }
   draft?: boolean; seatOffset?: number
   cart: RefObject<THREE.Group | null>; animal: RefObject<THREE.Group | null>; kind: Animal; horseVariant: HorseVariant
@@ -36,23 +37,31 @@ export function CartReins({ handler, draft = false, seatOffset = 0, cart, animal
   const root = useRef<THREE.Group>(null), body = useRef<THREE.InstancedMesh>(null), ids = useRef<THREE.InstancedMesh>(null)
   const sceneryDepth = usePixelSceneryDepth()
   const depthBias = useMemo(() => ({ value: 0 }), [])
+  const endpointBiases = useMemo(() => ({ value: new THREE.Vector3() }), [])
   const viewport = useMemo(() => new THREE.Vector4(), [])
   const materials = useMemo(() => ["#493727", "#ffffff"].map(color => {
     const material = new THREE.MeshBasicMaterial({ color, toneMapped: false })
-    material.onBeforeCompile = shader => applyAttachmentDepth(shader, viewport, depthBias, sceneryDepth)
+    material.onBeforeCompile = shader => applyAttachmentDepth(shader, viewport, depthBias, sceneryDepth, endpointBiases)
     material.onBeforeRender = renderer => { renderer.getCurrentViewport(viewport) }
-    material.customProgramCacheKey = () => "convoy-attachment-depth-v1"
+    material.customProgramCacheKey = () => "rail-attachment-depth-v2"
     return material
-  }), [viewport, depthBias, sceneryDepth])
+  }), [viewport, depthBias, sceneryDepth, endpointBiases])
   useEffect(() => () => materials.forEach(material => material.dispose()), [materials])
-  // Overlap ordering runs at .5, after posing. Refresh even while paused: a
-  // neighbour or camera can change the convoy's bias without moving the reins.
+  // Recompute endpoint depths after global sorting, even while paused. Each
+  // strap pixel interpolates its two endpoints without joining their rails.
   useFrame(() => {
     if (!isWorldVisible(root.current)) return
-    const sprite = cart.current?.getObjectByName(handler ? "traveler" : "cart")
-    depthBias.value = sprite instanceof THREE.Sprite ? characterBatchEntry(sprite)?.depthBias?.value ?? 0 : 0
+    const bias = (object: THREE.Object3D | undefined | null) => object instanceof THREE.Sprite ? characterBatchEntry(object)?.depthBias?.value ?? 0 : 0
+    const wagon = cart.current
+    const source = wagon?.getObjectByName(handler ? "traveler" : "cart")
+    const rider = handler ? source : driver?.()?.getObjectByName("passenger") ?? wagon?.getObjectByName("driver")
+    endpointBiases.value.set(bias(source), bias(rider), bias(animal.current?.getObjectByName(kind)))
   }, .75)
-  const geometry = useMemo(() => new THREE.PlaneGeometry(1, 1), [])
+  const geometry = useMemo(() => {
+    const mesh = new THREE.PlaneGeometry(1, 1)
+    mesh.setAttribute("attachmentPath", new THREE.InstancedBufferAttribute(new Float32Array(2048 * 2), 2))
+    return mesh
+  }, [])
   const dummy = useMemo(() => new THREE.Object3D(), [])
   const previous = useMemo(() => new Float64Array(12).fill(NaN), [])
   const scratch = useMemo(() => ({ origin: new THREE.Vector3(), hitch: new THREE.Vector3(), viewToLocal: new THREE.Matrix4() }), [])
@@ -84,9 +93,16 @@ export function CartReins({ handler, draft = false, seatOffset = 0, cart, animal
     const viewToLocal = scratch.viewToLocal.copy(group.matrixWorld).invert().multiply(camera.matrixWorld)
     const pitch = BASE_PERSON.camera.pitch * Math.PI / 180
     let instance = 0
-    const draw = (points: THREE.Vector3[]) => {
+    const path = geometry.getAttribute("attachmentPath") as THREE.InstancedBufferAttribute
+    const draw = (points: THREE.Vector3[], driverSource = false) => {
+      const start = points[0], end = points[points.length - 1]
+      const dx = end.x - start.x, dy = end.y - start.y, dz = end.z - start.z
+      const lengthSq = dx * dx + dy * dy + dz * dz
+
       for (const pixel of reinPixels(points, texel)) {
         if (instance >= body.current!.instanceMatrix.count) break
+        const t = lengthSq ? ((pixel.x - start.x) * dx + (pixel.y - start.y) * dy + (pixel.z - start.z) * dz) / lengthSq : 0
+        path.setXY(instance, Math.max(0, Math.min(1, t)), driverSource ? 1 : 0)
         dummy.position.copy(pixel); dummy.position.z += .005
         dummy.quaternion.identity(); dummy.scale.set(texel, texel, 1); dummy.updateMatrix()
         dummy.matrix.premultiply(viewToLocal)
@@ -124,8 +140,9 @@ export function CartReins({ handler, draft = false, seatOffset = 0, cart, animal
       const curve = handler ? reinPoints(hand.toArray(), bit).map(p => new THREE.Vector3(...p))
         : reinCurve(hand.toArray(), bit, side, kind, horseVariant).getPoints(64)
       const points = curve.map(p => reinViewPoint(p, animalRow, 8).multiplyScalar(unit))
-      draw(points.map(point => point.add(hitch)))
+      draw(points.map(point => point.add(hitch)), true)
     }
+    path.needsUpdate = true
     body.current.count = instance
     if (ids.current) ids.current.count = instance
     body.current.instanceMatrix.needsUpdate = true

@@ -44,10 +44,11 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
   batchModules.wildlife = ts.transpileModule(await readFile(new URL("../lib/game/wildlife/batch.ts", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   }).outputText.replaceAll('"../render/outline"', '"/batch-outline.js"')
-  for (const name of ["character-overlap", "sprite-frame-bounds", "visibility", "overlap-order", "frame-quality", "building-batch", "building-surface", "pixel-lighting", "active-lighting", "smoke", "pixel-noise", "pixel-opacity", "pixel-surface", "pixel-scale", "road-segment-texture", "terrain-elevation", "terrain-hidden-faces", "character-batch", "sprite-texture", "sprite-transforms", "static-instances", "scenery-detail", "flat-geometry", "complexion-swap", "outline"]) {
+  for (const name of ["sort-rail", "character-overlap", "sprite-frame-bounds", "visibility", "overlap-order", "frame-quality", "building-batch", "building-surface", "pixel-lighting", "active-lighting", "smoke", "pixel-noise", "pixel-opacity", "pixel-surface", "pixel-scale", "road-segment-texture", "terrain-elevation", "terrain-hidden-faces", "character-batch", "sprite-texture", "sprite-transforms", "static-instances", "scenery-detail", "flat-geometry", "complexion-swap", "outline"]) {
     batchModules[name] = ts.transpileModule(await readFile(new URL(`../lib/game/render/${name}.ts`, import.meta.url), "utf8"), {
       compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
     }).outputText.replaceAll('"./sprite-frame-bounds"', '"/batch-sprite-frame-bounds.js"')
+      .replaceAll('"./sort-rail"', '"/batch-sort-rail.js"')
       .replaceAll('"./overlap-order"', '"/batch-overlap-order.js"')
       .replaceAll('"./visibility"', '"/batch-visibility.js"')
       .replaceAll('"./sprite-depth"', '"/shader.js"')
@@ -457,8 +458,8 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         rear.sprite.material.customProgramCacheKey = () => "crossing-rear"
         rear.sprite.renderOrder = 0; scene.add(rear.sprite); figures.push(rear)
         const crossingOrder = new CharacterOverlap()
-        const crossingEntries = figures.map(figure => ({ sprite: figure.sprite, ids: figure.sprite, depth: figure.pose,
-          ground: groundPlane, depthBias: figure.bias }))
+        const crossingEntries = figures.map((figure, i) => ({ sprite: figure.sprite, ids: figure.sprite, depth: figure.pose,
+          ground: groundPlane, depthBias: figure.bias, id: new THREE.Vector3((i + 1) / 255, 0, 0) }))
         for (const variant of variants) {
           horse.sprite.material.map = variant.map; horse.pose.map.value = variant.depth
           horse.sprite.center.set(variant.anchor[0] / variant.cell, 1 - variant.anchor[1] / variant.cell)
@@ -478,9 +479,10 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
             person.sprite.position.set(0, 2, 0).addScaledVector(right, lateral).addScaledVector(toward, nearer === 0 ? along : 0)
             horse.sprite.position.set(0, 2, 0).addScaledVector(toward, nearer === 1 ? along : 0)
             rear.sprite.position.set(0, 2, 0).addScaledVector(right, -.2).addScaledVector(toward, -.02)
-            const participants = figures.map(({ sprite, pose }) => {
+            const participants = crossingEntries.map(entry => {
+              const { sprite } = entry
               sprite.updateWorldMatrix(true, false)
-              return characterOverlapBounds({ sprite, depth: pose, ground: groundPlane }, camera, worldTexel.value)
+              return characterOverlapBounds(entry, camera, worldTexel.value)
             })
             figures.forEach(figure => { figure.sprite.visible = true })
             crossingOrder.update(crossingEntries, [], camera, worldTexel.value)
@@ -509,33 +511,41 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
           }
         }
         figures.pop(); scene.remove(rear.sprite); rear.sprite.material.dispose()
-        // Connected carts must sort by the end beside the walker, not always
-        // their axle. Use real hitched art, the composited driver and a geometric
-        // rein; compare the full foreground against its isolated render.
-        const { overlapBiases } = await import("/batch-overlap-order.js")
+        // Every cart, driver, animal and walker has an independent rail. Build
+        // the expected image by compositing isolated silhouettes in global order.
         const { applyAttachmentDepth } = await import("/shader.js")
         const cartArt = variants.find(variant => variant.name === "cart")
-        const cartBias = { value: 0 }, cartPose = { map: { value: cartArt.depth }, enabled: { value: true } }
-        const cartMaterial = new THREE.SpriteMaterial({ map: cartArt.map, alphaTest: .5, transparent: false, toneMapped: false })
-        cartMaterial.onBeforeCompile = shader => {
-          applySpriteDepth(shader, viewport, worldTexel, groundPlane, cartPose, undefined, cartBias, sceneryDepth)
-          applyDriverLayer(shader, driverColor, driverFrame, driverVisible, driverDepth)
-          shader.fragmentShader = shader.fragmentShader.replace("#include <alphatest_fragment>", "#include <alphatest_fragment>\ndiffuseColor.rgb = vec3(1., 0., 0.);")
+        const makePart = (map, depth, color, part) => {
+          const bias = { value: 0 }, pose = { map: { value: depth }, enabled: { value: true } }
+          const material = new THREE.SpriteMaterial({ map, alphaTest: .5, transparent: false, toneMapped: false })
+          material.onBeforeCompile = shader => {
+            applySpriteDepth(shader, viewport, worldTexel, groundPlane, pose, undefined, bias, sceneryDepth)
+            shader.fragmentShader = shader.fragmentShader.replace("#include <alphatest_fragment>", "#include <alphatest_fragment>\ndiffuseColor.rgb = vec3(" + color + ");")
+          }
+          material.customProgramCacheKey = () => "rail-part-" + part
+          material.onBeforeRender = renderer => renderer.getCurrentViewport(viewport)
+          const sprite = new THREE.Sprite(material)
+          sprite.center.set(.5, 1 - 94 / 160)
+          sprite.scale.set(transport.scale * 160 / 128, transport.scale * 160 / 128, 1); scene.add(sprite)
+          return { sprite, ids: sprite, depth: pose, ground: groundPlane, depthBias: bias, railPart: part, id: new THREE.Vector3(4 / 255, 0, 0) }
         }
-        cartMaterial.onBeforeRender = renderer => renderer.getCurrentViewport(viewport)
-        const cart = new THREE.Sprite(cartMaterial)
-        cart.renderOrder = 0; cart.center.set(.5, 1 - 94 / 160)
-        cart.scale.set(transport.scale * 160 / 128, transport.scale * 160 / 128, 1); scene.add(cart)
-        const assembly = {}, cartEntry = { sprite: cart, depth: cartPose, ground: groundPlane, depthBias: cartBias, shared: assembly,
-          depthLayers: [{ map: driverDepth, frame: driverFrame, visible: driverVisible }] }
-        const animalEntry = { ...crossingEntries[1], shared: assembly }
-        const reinBias = { value: 0 }, reinMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, toneMapped: false })
-        reinMaterial.onBeforeCompile = shader => applyAttachmentDepth(shader, viewport, reinBias, sceneryDepth)
+        const cartEntry = makePart(cartArt.map, cartArt.depth, "1., 0., 0.", 1)
+        const driverMap = driverColor.clone(), driverEntry = makePart(driverMap, driverDepth, "1., 1., 0.", 3)
+        driverEntry.railSeat = { x: 0, z: 1.24 * transport.scale / transport.viewSize }
+        driverMap.repeat.set(1 / transport.driverClip.variants, 1 / 16)
+        const cart = cartEntry.sprite, driver = driverEntry.sprite
+        const animalEntry = { ...crossingEntries[1], railPart: 2, id: cartEntry.id }
+        const entries = [cartEntry, driverEntry, animalEntry, crossingEntries[0]]
+        const reinBias = { value: 0 }, endpointBiases = { value: new THREE.Vector3() }
+        const reinMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, toneMapped: false })
+        reinMaterial.onBeforeCompile = shader => applyAttachmentDepth(shader, viewport, reinBias, sceneryDepth, endpointBiases)
         reinMaterial.onBeforeRender = renderer => renderer.getCurrentViewport(viewport)
-        const rein = new THREE.Mesh(new THREE.PlaneGeometry(.6, .025), reinMaterial); scene.add(rein)
-        coincidence.convoyCases = 0; coincidence.convoyCompared = 0; coincidence.convoyMismatches = 0; coincidence.axleOnlyLeaks = 0
+        const reinGeometry = new THREE.PlaneGeometry(.6, .025)
+        const reinPath = new THREE.InstancedBufferAttribute(new Float32Array([1, 0]), 2)
+        reinGeometry.setAttribute("attachmentPath", reinPath)
+        const rein = new THREE.InstancedMesh(reinGeometry, reinMaterial, 1); scene.add(rein); rein.visible = false
+        coincidence.convoyCases = 0; coincidence.convoyCompared = 0; coincidence.convoyMismatches = 0
         coincidence.attachmentCompared = 0; coincidence.attachmentMismatches = 0; coincidence.unbiasedAttachmentLeaks = 0
-        const meets = (a, b) => a.left < b.right && b.left < a.right && a.bottom < b.top && b.bottom < a.top
         for (const kind of ["horse", "donkey", "ox"]) {
           const map = await new THREE.TextureLoader().loadAsync(`/hitched-${kind}.png`)
           const depth = await new THREE.TextureLoader().loadAsync(`/hitched-${kind}-depth.png`)
@@ -544,68 +554,66 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
           horse.sprite.scale.set(transport.scale, transport.scale, 1)
           horse.sprite.center.set(.5, 1 - 78 / 128)
           const columns = map.image.width / 128; map.repeat.set(1 / columns, 1 / 8)
-          driverVisible.value = 1
-          for (let row = 0; row < 16; row++) for (const bend of [-1, 0, 1]) for (const zoom of [.8, 1.3]) for (const end of [0, 1]) for (const side of [-1, 1]) {
+          for (let row = 0; row < 16; row++) for (const bend of [-1, 0, 1]) for (const end of [0, 1]) for (const side of [-1, 1]) {
             const yaw = row % 8 * Math.PI / 4, heading = yaw - row * Math.PI / 8
             camera.position.set(Math.sin(yaw) * 98, 71.3, Math.cos(yaw) * 98); camera.lookAt(0, 2, 0); camera.updateMatrixWorld()
-            camera.zoom = zoom; camera.updateProjectionMatrix()
+            camera.zoom = row % 2 ? .8 : 1.3; camera.updateProjectionMatrix()
             const toward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)), right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0)
             const wheelbase = (kind === "donkey" ? 2.95 : 3.1) * transport.scale / transport.viewSize
             cart.position.set(-Math.sin(heading) * wheelbase / 2, 2, -Math.cos(heading) * wheelbase / 2)
+            driver.position.copy(cart.position); driver.userData.heading = cart.userData.heading = heading
             horse.sprite.position.set(-cart.position.x, 2, -cart.position.z)
+            horse.sprite.userData.heading = heading - bend * Math.PI / 4
             const animalRow = ((Math.round(row / 2) + bend) % 8 + 8) % 8
             map.offset.set((row % transport.animalFrames) / columns, (7 - animalRow) / 8)
             cartArt.map.offset.set((row % transport.wheelFrames) * cartArt.map.repeat.x, (15 - row) / 16)
-            driverFrame.value.set((row % transport.driverClip.variants) / transport.driverClip.variants, (15 - row) / 16, 1 / transport.driverClip.variants, 1 / 16)
+            driverMap.offset.set((row % transport.driverClip.variants) / transport.driverClip.variants, (15 - row) / 16)
             const target = end ? horse.sprite : cart
             person.sprite.position.copy(target.position).addScaledVector(right, side * .35).addScaledVector(toward, side * .08)
             person.map.offset.set((row % poseClips.walk) / poseClips.walk, (7 - row % 8) / 8)
-            rein.quaternion.copy(camera.quaternion)
-            rein.position.copy(cart.position).lerp(horse.sprite.position, .5); rein.position.y += .4
-            const entries = [cartEntry, animalEntry, crossingEntries[0]]
             entries.forEach(entry => { entry.sprite.visible = true; entry.sprite.updateWorldMatrix(true, false) })
             const bounds = entries.map(entry => characterOverlapBounds(entry, camera, worldTexel.value))
-            // Only one end meets the walker: the expected anchor is unambiguous.
-            if (!meets(bounds[end], bounds[2]) || meets(bounds[1 - end], bounds[2])) continue
+            const order = entries.map((_, i) => i).sort((a, b) => bounds[b].distance - bounds[a].distance || bounds[a].order - bounds[b].order)
             crossingOrder.update(entries, [], camera, worldTexel.value)
-            reinBias.value = cartBias.value
-            const frontIsConvoy = bounds[end].distance < bounds[2].distance
-            cart.visible = horse.sprite.visible = rein.visible = frontIsConvoy; person.sprite.visible = !frontIsConvoy
-            const expected = read()
-            cart.visible = horse.sprite.visible = rein.visible = person.sprite.visible = true
+            const expected = new Uint8Array(256 * 256 * 4)
+            for (const index of order) {
+              entries.forEach((entry, i) => { entry.sprite.visible = i === index })
+              const isolated = read()
+              for (let p = 0; p < isolated.length; p += 4) if (isolated[p] + isolated[p + 1] + isolated[p + 2] > 200) expected.set(isolated.subarray(p, p + 4), p)
+            }
+            entries.forEach(entry => { entry.sprite.visible = true })
             const actual = read()
-            const a = bounds[0], b = bounds[1]
-            const union = { ...a, left: Math.min(a.left, b.left), right: Math.max(a.right, b.right), bottom: Math.min(a.bottom, b.bottom), top: Math.max(a.top, b.top), near: Math.min(a.near, b.near), far: Math.max(a.far, b.far) }
-            const legacy = overlapBiases([union, bounds[2]])
-            reinBias.value = cartBias.value = horse.bias.value = legacy[0]; person.bias.value = legacy[1]
-            const axleOnly = read()
-            for (let i = 0; i < expected.length; i += 4) if (expected[i] + expected[i + 1] + expected[i + 2] > 200) {
+            for (let p = 0; p < expected.length; p += 4) if (expected[p] + expected[p + 1] + expected[p + 2] > 200) {
               coincidence.convoyCompared++
-              if (actual[i] !== expected[i] || actual[i + 1] !== expected[i + 1] || actual[i + 2] !== expected[i + 2]) coincidence.convoyMismatches++
-              if (axleOnly[i] !== expected[i] || axleOnly[i + 1] !== expected[i + 1] || axleOnly[i + 2] !== expected[i + 2]) coincidence.axleOnlyLeaks++
+              if (actual[p] !== expected[p] || actual[p + 1] !== expected[p + 1] || actual[p + 2] !== expected[p + 2]) coincidence.convoyMismatches++
             }
             coincidence.convoyCases++
           }
-          // The shared crowd correction must preserve the visible leather over
-          // the rig. The previous uncorrected mesh disappears inside the animal.
-          cart.visible = horse.sprite.visible = rein.visible = true; person.sprite.visible = false
+          // Each endpoint uses its own correction; midpoint interpolation must
+          // also work when all three source biases differ, including paused frames.
+          cart.visible = driver.visible = person.sprite.visible = false; horse.sprite.visible = rein.visible = true
+          rein.quaternion.copy(camera.quaternion)
           rein.position.copy(horse.sprite.position); rein.position.y += .4
           rein.position.addScaledVector(new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 2), .4)
-          reinBias.value = cartBias.value = horse.bias.value = 0
+          horse.bias.value = 0; endpointBiases.value.set(0, 0, 0)
           const isolatedRig = read()
-          reinBias.value = cartBias.value = horse.bias.value = 3
-          const correctedRig = read()
-          reinBias.value = 0
-          const oldRig = read()
-          for (let i = 0; i < isolatedRig.length; i += 4) if (isolatedRig[i + 1] > 200 && isolatedRig[i + 2] > 200) {
-            coincidence.attachmentCompared++
-            if (correctedRig[i + 1] < 200 || correctedRig[i + 2] < 200) coincidence.attachmentMismatches++
-            if (oldRig[i + 1] < 200 || oldRig[i + 2] < 200) coincidence.unbiasedAttachmentLeaks++
+          horse.bias.value = 3
+          for (const [t, source, biases] of [[0, 0, [3, 1, 5]], [0, 1, [1, 3, 5]], [1, 0, [1, 2, 3]], [.5, 0, [1, 2, 5]], [.5, 1, [2, 1, 5]]]) {
+            reinPath.setXY(0, t, source); reinPath.needsUpdate = true
+            endpointBiases.value.set(...biases)
+            const corrected = read()
+            for (let p = 0; p < isolatedRig.length; p += 4) if (isolatedRig[p + 1] > 200 && isolatedRig[p + 2] > 200) {
+              coincidence.attachmentCompared++
+              if (corrected[p + 1] < 200 || corrected[p + 2] < 200) coincidence.attachmentMismatches++
+            }
           }
-          person.sprite.visible = true
+          endpointBiases.value.set(0, 0, 0)
+          const oldRig = read()
+          for (let p = 0; p < isolatedRig.length; p += 4) if (isolatedRig[p + 1] > 200 && isolatedRig[p + 2] > 200 && (oldRig[p + 1] < 200 || oldRig[p + 2] < 200)) coincidence.unbiasedAttachmentLeaks++
+          rein.visible = false
           map.dispose(); depth.dispose()
         }
-        driverVisible.value = 0; scene.remove(cart, rein); cartMaterial.dispose(); rein.geometry.dispose(); reinMaterial.dispose()
+        driverVisible.value = 0; scene.remove(cart, driver, rein); cart.material.dispose(); driver.material.dispose(); driverMap.dispose(); rein.geometry.dispose(); reinMaterial.dispose()
         // Restore the animal used by the scenery checks below.
         horse.sprite.material.map = horseMap; horse.pose.map.value = horseDepth
         horse.sprite.center.set(transport.anchor[0] / transport.cellSize, 1 - transport.anchor[1] / transport.cellSize)
@@ -826,8 +834,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     assert.ok(result.coincidence.attachmentCompared > 10 && result.coincidence.unbiasedAttachmentLeaks > 0, "must reproduce reins disappearing under biased animals")
     assert.equal(result.coincidence.attachmentMismatches, 0, "reins must retain their depth relative to the cart and animal")
     assert.ok(result.coincidence.convoyCases > 100 && result.coincidence.convoyCompared > 10000, "must exercise connected convoys at both ends")
-    assert.ok(result.coincidence.axleOnlyLeaks > 0, "must reproduce the incorrect axle-only ordering")
-    assert.equal(result.coincidence.convoyMismatches, 0, `connected animal/cart/driver/rein foregrounds must stay coherent: ${JSON.stringify(result.coincidence)}`)
+    assert.equal(result.coincidence.convoyMismatches, 0, `independent rail order must match the complete painted silhouettes: ${JSON.stringify(result.coincidence)}`)
     assert.ok(result.coincidence.legacyCrossingPixels > 0, "must reproduce the previous ordering failure at real crossing pixels")
     assert.ok(result.coincidence.animalCompared > 10000, "must exercise pack horse/person overlaps across directions and zooms")
     assert.equal(result.coincidence.animalMismatches, 0, `nearer people and animals must cover those behind: ${JSON.stringify(result.coincidence)}`)
