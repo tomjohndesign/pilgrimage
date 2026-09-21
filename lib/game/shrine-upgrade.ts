@@ -8,6 +8,7 @@ import { isChapel } from "./shrine-layout"
 import type { Settlement } from "./settlement"
 
 export const CHURCH_COST = { gold: 120, wood: 80 }
+export const CHURCH_FOOTPRINT = { w: 3, d: 5 } as const
 export const CHURCH_RENOWN_BONUS = 30
 export const CHAPEL_MONKS = 4
 export const CHURCH_MONKS = 8
@@ -31,11 +32,11 @@ export function churchPlan(map: GameMap): BuildingDef | null {
   const chapel = shrine(map), door = map.site?.door
   if (!chapel || !door || !isChapel(chapel)) return null
   if (door.x < chapel.x || door.x >= chapel.x + chapel.w) {
-    return { ...chapel, buildType: "church", x: door.x < chapel.x ? door.x + 1 : door.x - 5, z: door.z - 1,
-      w: 5, d: 3, rotation: door.x < chapel.x ? 1 : 3, height: 1.18, label: "Church" }
+    return { ...chapel, buildType: "church", x: door.x < chapel.x ? door.x + 1 : door.x - CHURCH_FOOTPRINT.d, z: door.z - Math.floor(CHURCH_FOOTPRINT.w / 2),
+      w: CHURCH_FOOTPRINT.d, d: CHURCH_FOOTPRINT.w, rotation: door.x < chapel.x ? 1 : 3, height: 1.18, label: "Church" }
   }
-  return { ...chapel, buildType: "church", x: door.x - 1, z: door.z < chapel.z ? door.z + 1 : door.z - 5,
-    w: 3, d: 5, rotation: door.z < chapel.z ? 2 : 0, height: 1.18, label: "Church" }
+  return { ...chapel, buildType: "church", x: door.x - Math.floor(CHURCH_FOOTPRINT.w / 2), z: door.z < chapel.z ? door.z + 1 : door.z - CHURCH_FOOTPRINT.d,
+    ...CHURCH_FOOTPRINT, rotation: door.z < chapel.z ? 2 : 0, height: 1.18, label: "Church" }
 }
 
 /** Space for the nave and attached rooms, in the final church's orientation.
