@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "5d396e280382c4ce31e0fc332cb9533690c45f42",
-  "releaseCount": 260,
+  "lastProcessedCommit": "a0e846e710354a26c836729ebcf639d5cde55d10",
+  "releaseCount": 261,
   "releases": [
+    {
+      "version": "0.0.275",
+      "title": "Release 0.0.275",
+      "summary": "Show playground build times and shorten tavern, church and sheep pen builds (#296)",
+      "commit": "a0e846e710354a26c836729ebcf639d5cde55d10"
+    },
     {
       "version": "0.0.274",
       "title": "Release 0.0.274",
