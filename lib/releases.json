@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "a0e846e710354a26c836729ebcf639d5cde55d10",
-  "releaseCount": 261,
+  "lastProcessedCommit": "8147aa084d1e186d496ce40c82bcb0822579362a",
+  "releaseCount": 262,
   "releases": [
+    {
+      "version": "0.0.276",
+      "title": "Release 0.0.276",
+      "summary": "Add chickens and raised coops with egg collection (#297)",
+      "commit": "8147aa084d1e186d496ce40c82bcb0822579362a"
+    },
     {
       "version": "0.0.275",
       "title": "Release 0.0.275",
