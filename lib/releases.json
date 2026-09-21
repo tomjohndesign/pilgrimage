@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "8147aa084d1e186d496ce40c82bcb0822579362a",
-  "releaseCount": 262,
+  "lastProcessedCommit": "bd694560b82d654cba0c20b9b99a00c769c38b87",
+  "releaseCount": 263,
   "releases": [
+    {
+      "version": "0.0.277",
+      "title": "Release 0.0.277",
+      "summary": "Document the sprite pipeline in one page with anchor navigation (#298)",
+      "commit": "bd694560b82d654cba0c20b9b99a00c769c38b87"
+    },
     {
       "version": "0.0.276",
       "title": "Release 0.0.276",
