@@ -89,12 +89,14 @@ export function LoadingChurch({ showChurch, phase, overlayRef, chapel = true, id
   const onSceneReady = useCallback(() => setSceneReady(true), [])
   const patternId = useId()
   const tilesRef = useRef<SVGSVGElement>(null)
-  // The decorative grid is authored around the church's ground; slide it so its
-  // lattice matches the remembered land, whose focus need not be a tile centre.
+  // The pattern origin is a tile centre. The centred 2×2 loading chapel sits
+  // on a tile junction instead; the 3×5 church and the landing scene's world
+  // origin sit on tile centres. Saved views use their actual camera focus.
   const gridShift = useMemo(() => {
-    const shift = focus ? focusGridShift(focus.size, focus.camera) : { x: 0, y: 0 }
+    const shift = focus ? focusGridShift(focus.size, focus.camera)
+      : chapel && !idle && !resuming ? projectGround(.5, .5, 0, yawForView(view)) : { x: 0, y: 0 }
     return { x: shift.x, y: shift.y + groundOffset - GROUND_OFFSET }
-  }, [focus, groundOffset])
+  }, [focus, groundOffset, chapel, idle, resuming, view])
   const active = !idle && phase !== "complete"
   useEffect(() => {
     const root = tilesRef.current
@@ -141,7 +143,7 @@ export function LoadingChurch({ showChurch, phase, overlayRef, chapel = true, id
       <rect x="-50%" y="-50%" width="200%" height="200%" fill={`url(#${patternId})`} />
     </svg>
     {!idle && !resuming && <svg className="loading-church-pulse" viewBox="-8 -5 16 10" fill="white"
-      style={{ width: `${16 * scale}dvh`, height: `${10 * scale}dvh`, marginTop: `${groundOffset * scale}dvh` }}>
+      style={{ width: `${16 * scale}dvh`, height: `${10 * scale}dvh`, marginLeft: `${gridShift.x * scale}dvh`, marginTop: `${(GROUND_OFFSET + gridShift.y) * scale}dvh` }}>
       {Array.from({ length: 121 }, (_, i) => {
         const x = i % 11 - 5, z = Math.floor(i / 11) - 5
         const distance = Math.hypot(x, z)
