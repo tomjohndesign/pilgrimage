@@ -47,8 +47,8 @@ function MapCamera({ row, zoom, map }: { row: number; zoom: number; map: GameMap
   return <PreviewNavigation yaw={row * Math.PI / 4} height={Math.max(height, 12 / Math.max(.01, aspect))} target={[0, -.2, 0]} resetKey={map} />
 }
 
-function DemoActors({ demo, clock, seek, playing, rate, onProgress, ...options }: {
-  demo: MerchantDemo; clock: { current: number }; seek: number; playing: boolean; rate: number
+function DemoActors({ demo, crowded, clock, seek, playing, rate, onProgress, ...options }: {
+  demo: MerchantDemo; crowded: boolean; clock: { current: number }; seek: number; playing: boolean; rate: number
   onProgress: (frame: MerchantDemoFrame) => void; cargo: Cargo; puller: Puller; horseVariant: HorseVariant; coat: string
 }) {
   const merchant = useRef<THREE.Group>(null), customer = useRef<THREE.Group>(null), passer = useRef<THREE.Group>(null)
@@ -95,6 +95,15 @@ function DemoActors({ demo, clock, seek, playing, rate, onProgress, ...options }
         }
         const p = at(progress), next = at(progress + direction * 0.001)
         x = tileToWorldX(demo.map, p.x); z = tileToWorldZ(demo.map, p.z); heading = Math.atan2(next.x - p.x, next.z - p.z)
+      }
+      if (crowded) {
+        // Keep the crossing in view throughout the route, visiting the axle,
+        // shafts and animal instead of meeting only once on a long road.
+        const pose = frame.cartPose, span = Math.hypot(pose.hitch.x - pose.x, pose.hitch.z - pose.z) + 1.2
+        const along = ((clock.current * PASSER_SPEED * direction % span) + span) % span - .6
+        const side = direction * .36, sin = Math.sin(pose.heading), cos = Math.cos(pose.heading)
+        x = pose.x + sin * along + cos * side; z = pose.z + cos * along - sin * side
+        heading = pose.heading + (direction < 0 ? Math.PI : 0)
       }
       const walked = Math.hypot(x-oldX,z-oldZ), discontinuity = reset || walked > 1
       walker.position.set(x, walkingSurface(demo.map,x,z).height, z); walker.rotation.y = heading
@@ -151,7 +160,7 @@ export function MerchantMapPreview({ playing, onPlayingChange, row, zoom, ...opt
       <MapCamera row={row} zoom={zoom} map={demo.map} />
       <Suspense fallback={null}><TerrainTiles map={demo.map} showGrid traffic={3} /><Trees map={demo.map} /><Bridges map={demo.map} />
         {demo.turning && trails && <TurningTrails demo={demo} />}
-        <DemoActors key={`${scenario}:${radius}:${options.puller}:${options.horseVariant}`} {...options} demo={demo} clock={clock} seek={seek} playing={playing} rate={rate} onProgress={setFrame} />
+        <DemoActors key={`${scenario}:${radius}:${options.puller}:${options.horseVariant}`} {...options} demo={demo} crowded={scenario === "passing"} clock={clock} seek={seek} playing={playing} rate={rate} onProgress={setFrame} />
       </Suspense><OutlinePass />
     </PixelCanvas></div>
     <AssetEditorCanvasControls>

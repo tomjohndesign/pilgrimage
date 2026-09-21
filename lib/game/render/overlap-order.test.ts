@@ -38,3 +38,11 @@ describe("projected sprite ordering", () => {
     overlapBiases([figure(10)], out); expect(out[0]).toBe(0)
   })
 })
+
+it("keeps one global order through overlapping chains, regardless of visitation", () => {
+  const p = [figure(10, 1, { left: -2, right: 0 }), figure(9, 2, { left: -1, right: 1 }), figure(8, 3, { left: 0, right: 2 })]
+  const expected = overlapBiases(p)
+  for (const order of [[2, 1, 0], [1, 0, 2], [1, 2, 0]]) {
+    expect([...overlapBiases(order.map(i => p[i]))]).toEqual(order.map(i => expected[i]))
+  }
+})
