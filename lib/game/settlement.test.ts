@@ -180,6 +180,15 @@ describe("build and buy", () => {
     expect(result.settlement.structures[0]).toBe(existing)
     expect(structureParts(existing).length).toBeGreaterThan(0)
   })
+  it.each([
+    ["tavern", 360], ["sheep-pen", 240], ["inn", 864],
+  ] as const)("uses the tuned construction work when purchasing %s", (type, required) => {
+    const before = { ...createSettlement(), resources: { gold: 1000, wood: 1000 } }
+    const result = purchaseStructure(before, testMap(), monks, [relic], type, { x: 18, z: 14 }, undefined, 10000)
+    expect(result.error).toBeNull()
+    expect(result.settlement.structures[0].construction?.required).toBe(required)
+  })
+
   it("activates evangelism only after construction and never stacks extra crosses", () => {
     const map = testMap()
     expect(settlementEvangelism(map)).toBe(0)

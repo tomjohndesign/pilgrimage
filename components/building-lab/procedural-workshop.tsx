@@ -18,10 +18,27 @@ import { normalizeBuildingRotation, type BuildingRotation } from "@/lib/game/bui
 import { previewRandomSeed } from "@/lib/game/preview-random"
 import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "../asset-editor-frame"
 import { Tuner } from "../game/property-controls"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table"
+import { BUILD_CATALOG } from "@/lib/game/balance"
+import { constructionBuilders, constructionWork } from "@/lib/game/construction"
+import { MAX_BUILD_RATE, MONK_BUILD_RATE, SETTLER_BUILD_RATE } from "@/lib/game/build-labour"
+import { CHURCH_FOOTPRINT } from "@/lib/game/shrine-upgrade"
 
 const ProceduralMapScene = dynamic(() => import("./map-comparison").then(m => m.ProceduralMapScene), { ssr: false })
 const STORAGE = "pilgrimage-procedural-buildings-v3"
 const SCENE_VERSION = 4
+const BUILD_TIME_CATALOG = [
+  ...BUILD_CATALOG.filter(building => !building.retired),
+  { id: "church", label: "Church upgrade", ...CHURCH_FOOTPRINT, retired: false },
+  ...BUILD_CATALOG.filter(building => building.retired),
+]
+
+/** Uninterrupted construction at normal game speed, rounded up to whole seconds. */
+function buildTime(buildType: string, w: number, d: number, rate: number, builders = 1): string {
+  const seconds = Math.ceil(constructionWork(w, d, buildType) / (rate * builders))
+  const minutes = Math.floor(seconds / 60), remainder = seconds % 60
+  return minutes ? `${minutes}m${remainder ? ` ${remainder}s` : ""}` : `${seconds}s`
+}
 
 function saveFile(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob), link = document.createElement("a")
@@ -38,6 +55,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active: workspaceActive
   const active = workspaceActive && entityActive
   const [recipe, setRecipe] = useState<BuildingRecipe>({...earlyBuildingRecipe("tavern"),layoutSeed:18})
   const [ready, setReady] = useState(false)
+  const [buildRate, setBuildRate] = useState(SETTLER_BUILD_RATE)
   const [allViews, setAllViews] = useState(false)
   const grid = true
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -96,6 +114,7 @@ export function ProceduralWorkshop({ mode, onModeChange, active: workspaceActive
   const upload = useRef<HTMLInputElement>(null)
   const onGuideReady = useCallback((value: CaptureMapGuide | null) => { capture.current = value; setMapReady(Boolean(value)) }, [])
   const dimensions = buildingDimensions(recipe)
+  const buildCrew = constructionBuilders(recipe.width, recipe.depth)
   const viewRecipes = useMemo(() => (allViews ? BUILDING_VIEWS : [BUILDING_VIEWS[recipe.view]]).map(v => ({ ...recipe, view: v.id })), [allViews, recipe])
 
   useEffect(() => {
@@ -171,6 +190,39 @@ export function ProceduralWorkshop({ mode, onModeChange, active: workspaceActive
             <Tuner label="Wall height" labelClassName="w-28" value={recipe.wallHeight} min={0.25} max={recipe.variant === "enclosure" ? 0.7 : 1.4} step={0.05} display={`${recipe.wallHeight.toFixed(2)} tiles`} onChange={value => update("wallHeight", value)} />
             {!["enclosure","garden","cross","lumberCamp"].includes(recipe.variant) && <Tuner label="Roof rise" labelClassName="w-28" value={recipe.roofRise} min={0.2} max={1.5} step={0.025} display={`${recipe.roofRise.toFixed(2)} tiles`} onChange={value => update("roofRise", value)} />}
             <p className="person-hint">{dimensions.width} × {dimensions.depth} occupied tiles. {recipe.variant === "enclosure" ? "Open sky and a gate on every side." : "One storey, sized beside a traveler."} No surrounding tile border.</p>
+          </AssetEditorSection>
+<AssetEditorSection title="Build times">
+            <label className="person-choice">Builder type<ChromeSelect aria-label="Builder type" value={buildRate} onChange={e => setBuildRate(Number(e.target.value))}>
+              <option value={SETTLER_BUILD_RATE}>Ordinary settler</option>
+              <option value={MONK_BUILD_RATE}>Monk</option>
+              <option value={MAX_BUILD_RATE}>Maximum-skill settler</option>
+            </ChromeSelect></label>
+            <div className="text-xs">Uninterrupted work · 1× game speed</div>
+            <dl className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 text-xs" aria-label="Current building build time">
+              <dt>Current footprint</dt><dd>{recipe.width} × {recipe.depth} tiles</dd>
+              <dt>One builder</dt><dd>{buildTime(recipe.variant, recipe.width, recipe.depth, buildRate)}</dd>
+              <dt>Full crew · {buildCrew} {buildCrew === 1 ? "builder" : "builders"}</dt><dd>{buildTime(recipe.variant, recipe.width, recipe.depth, buildRate, buildCrew)}</dd>
+            </dl>
+            <Table className="text-xs" aria-label="All building build times">
+              <TableHeader><TableRow>
+                <TableHead className="px-1">Default building</TableHead>
+                <TableHead className="px-1 text-right">Solo</TableHead>
+                <TableHead className="px-1 text-right">Full crew</TableHead>
+              </TableRow></TableHeader>
+              <TableBody>{BUILD_TIME_CATALOG.map(building => {
+                const crew = constructionBuilders(building.w, building.d)
+                return <TableRow key={building.id}>
+                  <TableCell className="px-1 whitespace-normal">{building.label}
+                    <div className="text-ink-light">{building.w} × {building.d} · {crew} {crew === 1 ? "builder" : "builders"}{building.retired ? " · Retired" : ""}</div>
+                  </TableCell>
+                  <TableCell className="px-1 text-right tabular-nums">{buildTime(building.id, building.w, building.d, buildRate)}</TableCell>
+                  <TableCell className="px-1 text-right tabular-nums">{buildTime(building.id, building.w, building.d, buildRate, crew)}</TableCell>
+                </TableRow>
+              })}</TableBody>
+            </Table>
+            <div className="text-xs">Starting chapel: already built.</div>
+            <p className="person-hint">Times use the game’s construction work and crew limits. Solo means one builder; full crew fills every place with the selected builder type. Travel, rest and other duties add time. Faster game speeds shorten real-world waiting. Maximum-skill settlers work at the rate cap; other skilled settlers fall between that and ordinary settlers. Values round up to the next second.</p>
+            <p className="person-hint">The current footprint estimate follows your shape edits. The table uses default game footprints, including scenery and retired buildings from older worlds. Preview edits do not change game defaults.</p>
           </AssetEditorSection>
 {hasBuildingLayouts(recipe.variant) && <AssetEditorSection title="Layout">
             <label className="person-choice">Layout seed<input aria-label="Layout seed" type="number" min="0" max="65535" step="1" value={recipe.layoutSeed ?? 0} onChange={e => update("layoutSeed", Math.max(0, Math.min(65535, Math.trunc(Number(e.target.value) || 0))))} /></label>

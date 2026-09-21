@@ -513,7 +513,7 @@ export function purchaseStructure(
     height: def.height,
     color: def.color,
     roofColor: def.roofColor,
-    construction: { work: 0, required: constructionWork(def.w, def.d), cost: { ...def.cost } },
+    construction: { work: 0, required: constructionWork(def.w, def.d, def.id), cost: { ...def.cost } },
   }
   return {
     settlement: {
@@ -535,7 +535,7 @@ export function upgradeChurch(settlement: Settlement, baseMap: GameMap): { settl
   const map = settlementMap(baseMap, settlement), error = churchUpgradeError(map, settlement.resources)
   if (error) return { settlement, error }
   const planned = churchPlan(map)!
-  const church = { ...planned, construction: { work: 0, required: constructionWork(planned.w, planned.d), cost: { ...CHURCH_COST } } }
+  const church = { ...planned, construction: { work: 0, required: constructionWork(planned.w, planned.d, planned.buildType), cost: { ...CHURCH_COST } } }
   return { error: null, settlement: { ...settlement, church,
     elevation: levelBuildingGround(map, church) ?? settlement.elevation,
     spentWood: settlement.spentWood + CHURCH_COST.wood,

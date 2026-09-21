@@ -2,7 +2,7 @@
 export const PLAYGROUND_TOOLS = [
   { id: "characters", label: "Characters", help: "Drag to pan and scroll to zoom. Show rig exposes pose keys and timing. Apply to road saves appearance changes for the game." },
   { id: "animals", label: "Animals", help: "Choose a species, then use Show rig to edit its pose and timing. Drag to pan and scroll to zoom." },
-  { id: "buildings", label: "Buildings", help: "Choose a building form and edit its shape or layout. Click a building to inspect its interior. Scene contains placement examples." },
+  { id: "buildings", label: "Buildings", help: "Choose a building form and edit its shape or layout. Build times compares solo and full-crew durations for every building. Click a building to inspect its interior. Scene contains placement examples." },
   { id: "icons", label: "Icons", help: "All icons shows illustrated resources and actions alongside every current UI symbol and app icon. Select an icon to compare a draft with its shipped PNG, inspect native sizes or export artwork. Preview edits stay in this workspace; glow is included in exports." },
   { id: "ents", label: "Ents", help: "Choose a tree species and inspect its shared walking rig. Drag to pan and scroll to zoom." },
   { id: "maps", label: "Maps", help: "Apply a seed to regenerate the map. Show connections reveals clearing access. The same seed restores the same terrain." },

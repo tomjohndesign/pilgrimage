@@ -13,6 +13,13 @@
   repository's existing test setup and application workflows. Do not create
   new test environments, standalone demo apps, or parallel testing setups.
 
+- **Ask for build time when adding a building.** Before assigning construction
+  timing to a new building, ask the user how long it should take unless they
+  have already specified a duration. State the timing basis: uninterrupted work
+  by a full crew of ordinary settlers at 1× game speed. Apply the agreed duration
+  to gameplay and the playground's build-time estimates through the shared
+  construction calculation.
+
 - **All visual testing belongs in the shared playground.** `/assets` and
   `AssetPlayground` host characters, animals, buildings, maps, paths and placement. Use `AssetEditorFrame`, `AssetEditorWorkspace`, and the same
   property sections, tuners, resizable sidebars, mobile drawers and preview stage as the character

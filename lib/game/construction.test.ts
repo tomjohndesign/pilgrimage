@@ -51,6 +51,15 @@ describe("resident construction", () => {
     expect(constructionWork(4, 3)).toBe(864)
   })
 
+  it.each([
+    ["tavern", 3, 4, 120], ["church", 3, 5, 120], ["sheep-pen", 5, 4, 60], ["inn", 3, 4, 288],
+  ] as const)("keeps %s full-crew timing independent of rotation", (type, w, d, seconds) => {
+    const crewRate = constructionBuilders(w, d) * SETTLER_BUILD_RATE
+    expect(constructionWork(w, d, type) / crewRate).toBe(seconds)
+    expect(constructionWork(d, w, type) / crewRate).toBe(seconds)
+    expect(constructionWork(w * 2, d, type)).toBe(constructionWork(w, d, type) * 4)
+  })
+
   it.each([[1, 1, 1], [2, 1, 1], [2, 2, 1], [3, 2, 2], [3, 3, 3], [4, 4, 4], [8, 8, 4]])(
     "limits a %s by %s site to %s builders, including those still walking", (w, d, limit) => {
       const map = fixture(), site = map.buildings[2]

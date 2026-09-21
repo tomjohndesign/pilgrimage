@@ -1,4 +1,4 @@
-import { assignBuildingTask, constructionWork, isComplete, stepBuildingTask, type Worker } from "./construction"
+import { assignBuildingTask, isComplete, stepBuildingTask, type Worker } from "./construction"
 import { churchWingGates } from "./church-additions"
 import { generateMonks } from "./monks"
 import { generateRelic } from "./relic"
@@ -212,7 +212,7 @@ describe("chapel progression", () => {
     const restored = restoreSettlement(map, settlementSaveSchema.parse(JSON.parse(JSON.stringify(captureSettlement(result.settlement)))))
     expect(settlementMap(map, restored).buildings).toEqual(upgraded.buildings)
     expect(restored.resources).toEqual(result.settlement.resources)
-    expect(restored.church!.construction).toEqual({ work: 0, required: constructionWork(3, 5), cost: CHURCH_COST })
+    expect(restored.church!.construction).toEqual({ work: 0, required: 480, cost: CHURCH_COST })
     expect(shrineMonkCapacity(upgraded)).toBe(4)
     const finished = settlementMap(map, completeConstruction(restored))
     expect(shrineVisitPlan(finished, 0, 0)).not.toBeNull()
