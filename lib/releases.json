@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "523b5ecf08b3a7d4e0ec2e5ee364dc4f3888d45f",
-  "releaseCount": 259,
+  "lastProcessedCommit": "5d396e280382c4ce31e0fc332cb9533690c45f42",
+  "releaseCount": 260,
   "releases": [
+    {
+      "version": "0.0.274",
+      "title": "Release 0.0.274",
+      "summary": "Align loading grid and ripple with the chapel footprint (#295)",
+      "commit": "5d396e280382c4ce31e0fc332cb9533690c45f42"
+    },
     {
       "version": "0.0.273",
       "title": "Release 0.0.273",
