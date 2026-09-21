@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "0dae8ca912bdb7b5ec5f7d1fa68111ae1545db8b",
-  "releaseCount": 258,
+  "lastProcessedCommit": "523b5ecf08b3a7d4e0ec2e5ee364dc4f3888d45f",
+  "releaseCount": 259,
   "releases": [
+    {
+      "version": "0.0.273",
+      "title": "Release 0.0.273",
+      "summary": "Sort road sprites independently using global rails (#293)",
+      "commit": "523b5ecf08b3a7d4e0ec2e5ee364dc4f3888d45f"
+    },
     {
       "version": "0.0.272",
       "title": "Release 0.0.272",
