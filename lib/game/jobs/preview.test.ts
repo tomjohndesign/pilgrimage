@@ -5,7 +5,7 @@ import { buildingPreviewBalance, buildingPreviewSettlement } from "../building-p
 import { jobBuildings, settlementMap } from "../settlement"
 import { REMOVED_BUILDING_TYPES } from "../building-art/style"
 import { completedChurchWings, churchWingGates } from "../church-additions"
-import { BUILDING_KINDS } from "../buildings"
+import { BUILDING_KINDS, isPostedWork } from "../buildings"
 import { travelerAppearance } from "../base-person/population"
 import { createSim, stepSim } from "../sim"
 import { previewResidents, placePreviewResident } from "./preview"
@@ -31,7 +31,7 @@ describe("staffed settlement demo", () => {
       const staff = residents.filter(r => r.building.id === building.id)
       expect(staff.length).toBe(BUILDING_KINDS[building.kind].jobs)
     }
-    for (const kind of Object.keys(BUILDING_KINDS)) expect(new Set(residents.filter(r => r.building.kind === kind)
+    for (const kind of Object.keys(BUILDING_KINDS).filter(kind => residents.filter(r => r.building.kind === kind).length > 1)) expect(new Set(residents.filter(r => r.building.kind === kind)
       .map(r => travelerAppearance(map.seed ?? 0, r.traveler.id).bodyType))).toEqual(new Set(["Male", "Female"]))
   })
 
@@ -42,7 +42,7 @@ describe("staffed settlement demo", () => {
     for (const resident of residents) {
       const actor = sim.travelers.get(resident.traveler.id)!
       placePreviewResident(actor, map, resident)
-      if (resident.building.kind !== "workshop") {
+      if (isPostedWork(resident.building.kind)) {
         expect(actor.activity).toBe("posted")
         expect(actor.buildingTask?.purpose).toBe("work")
         expect(actor.buildingTask?.route).toEqual([])

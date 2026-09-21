@@ -1,3 +1,4 @@
+import { seekCoopEggs, stepCoopKeeper, releaseCoopEggs, type CoopEggTask } from "./coop-keeper"
 import { findGatheringPlace, gatheringHeading, gatheringPlaceOpen, GATHERING_ROUTE_LIMIT } from "./party-gathering"
 import { MAIN_ROAD_WALK_LANES } from "./map/road-width"
 import { seekPenFood, stepPenFood, type PenFoodVisit } from "./pen-food"
@@ -117,7 +118,7 @@ import { TRAVELER_TYPES, type Traveler } from "./travelers"
  */
 
 export type Activity =
-  | "collectingFood"
+  | "collectingFood" | "collectingEggs" | "deliveringEggs"
   | "toWater" | "drinking" | "drinkingLow" | "fromWater"
   | "toParking"
   | "fromParking"
@@ -173,6 +174,7 @@ export type Activity =
   | "fromShop"
 
 export const ACTIVITY_LABELS: Record<Activity, string> = {
+  collectingEggs: "Collecting eggs through the coop hatch", deliveringEggs: "Carrying eggs to the raised store",
   collectingFood: "Collecting food from the public platform",
   toWater: "Going to drink water", drinking: "Drinking at the well", drinkingLow: "Drinking at the water’s edge", fromWater: "Returning from water",
   toParking: "Parking outside the shrine",
@@ -387,6 +389,7 @@ export interface SimTraveler {
   employer: string | null
   herding?: HerdingTask
   penCare?: PenCareTask
+  coopEggs?: CoopEggTask
   herdingRetry?: number
   /** Which of the employer's work slots is theirs; posts are one per slot. */
   jobSlot: number
@@ -2257,6 +2260,9 @@ export function stepSim(
   if(dt>0) for(const [id,care] of sim.wildlife?.penCare ?? []) {
     if(care.caretaker!==undefined && sim.travelers.get(care.caretaker)?.penCare?.penId!==id)care.caretaker=undefined
   }
+  if (dt > 0) for (const [id, keeper] of sim.wildlife?.coopKeepers ?? []) {
+    if (sim.travelers.get(keeper)?.coopEggs?.coopId !== id) sim.wildlife!.coopKeepers!.delete(id)
+  }
   const length = map.road.length - 1
   sim.time += dt / GAME_DAY_SECONDS
   const hours = dt / GAME_HOUR_SECONDS
@@ -2351,6 +2357,7 @@ export function stepSim(
     if (dt > 0 && s.employer) payWage(sim, s)
     stepPoverty(s, t, dt)
     const previousStall = deployedStall(s)
+    if (s.coopEggs && !["collectingEggs", "deliveringEggs"].includes(s.activity)) releaseCoopEggs(s, sim.wildlife)
     if (s.herding && !["toSheep", "herding"].includes(s.activity)) releaseSheep(s, sim.wildlife)
     if (s.penCare && s.activity !== s.penCare.chore) releasePenCare(s, sim.wildlife)
     s.herdingRetry = Math.max(0, (s.herdingRetry ?? 0) - dt)
@@ -2721,6 +2728,10 @@ export function stepSim(
         const unhappy = socialBreak
         const workplace = sim.buildings.find(b => b.id === s.employer)
         if (dt > 0 && startCitizenBuild(sim, s, t, map)) break
+        if (workplace?.kind === "chicken-coop" && dt > 0 && fitForWork && !unhappy && !s.herdingRetry) {
+          s.herdingRetry = 5
+          if (seekCoopEggs(s, sim.wildlife, map, sim.foodStores)) break
+        }
         // Standing behind a counter or in a fold asks little; a settler keeps
         // that post until they are genuinely hungry or tired.
         if (workplace && isPostedWork(workplace.kind) && !hungry && !unhappy && s.stamina > SETTLER_TIRED_AT) {
@@ -2795,6 +2806,12 @@ export function stepSim(
       case "fromHome": {
         if (walkWorker(s, s.constructionReturn ?? [], targetSpeed, dt)) {
           s.activity = "idle"; s.timer = 0; s.constructionReturn = undefined
+        }
+        break
+      }
+      case "collectingEggs": case "deliveringEggs": {
+        if (!stepCoopKeeper(s, sim.wildlife, map, targetSpeed, dt, sim.foodStores)) {
+          s.activity = "idle"; s.timer = 0; sim.resourceRevision++
         }
         break
       }

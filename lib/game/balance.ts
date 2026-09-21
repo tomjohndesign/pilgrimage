@@ -4,7 +4,7 @@ import { STOREHOUSE_FOOD_CAPACITY } from "./storage"
 /** Pure balance data, shared by gameplay, the tuning page and the specification. */
 export type BuildId = "shelter" | "workshop" | "garden" | "cross" | "hall" | "storehouse"
   | "inn" | "monk-shelter" | "house" | "tavern" | "wood-shelter" | "market" | "guard-post" | "lumberCamp"
-  | "sheep-pen" | "well" | "watering-hole"
+  | "sheep-pen" | "chicken-coop" | "well" | "watering-hole"
 
 export interface Resources {
   gold: number
@@ -175,6 +175,13 @@ export const BUILD_CATALOG: readonly BuildDefinition[] = [
     cost: { gold: 100, wood: 85 }, renown: 6, requiredRenown: 15,
     income: { gold: 0, wood: 0 }, w: 3, d: 4, height: 1.2,
     color: "#b7ae94", roofColor: "#827052",
+  },
+  {
+    id: "chicken-coop", label: "Chicken coop", category: "buildings",
+    description: "A low thatched henhouse with a fenced run. Five hens lay eggs in the nests. One keeper collects them through the rear hatch and carries them to a raised store.",
+    cost: { gold: 30, wood: 25 }, renown: 1, requiredRenown: 0,
+    income: { gold: 0, wood: 0 }, w: 2, d: 2, height: .48,
+    color: "#8c7658", roofColor: "#a59164",
   },
   {
     id: "sheep-pen", label: "Sheep pen", category: "buildings",

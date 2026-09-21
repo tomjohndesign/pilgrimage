@@ -29,12 +29,12 @@ export const VARIANTS = [
 /** Work courts, sheep folds and pilgrim bedding need at least a 2×2 plot. */
 export function minimumBuildingSize(variant: string) {
   if (variant === "inn") return {width:3,depth:4}
-  return ["workshop","sheep-pen","shelter"].includes(variant) ? {width:2,depth:2} : {width:1,depth:1}
+  return ["workshop","sheep-pen","chicken-coop","shelter"].includes(variant) ? {width:2,depth:2} : {width:1,depth:1}
 }
 
 export const recipeSchema = z.object({
   subject: z.string().trim().min(1).max(160),
-  variant: z.enum(["inn", "enclosure", "monk-shelter", "house", "storehouse", "wood-shelter", "tavern", "shelter", "workshop", "garden", "cross", "hall", "lumberCamp", "market", "guard-post", "sheep-pen", "gable", "hipped", "porch"]),
+  variant: z.enum(["inn", "enclosure", "monk-shelter", "house", "storehouse", "wood-shelter", "tavern", "shelter", "workshop", "garden", "cross", "hall", "lumberCamp", "market", "guard-post", "sheep-pen", "chicken-coop", "gable", "hipped", "porch"]),
   width: z.number().int().min(1).max(5),
   depth: z.number().int().min(1).max(5),
   wallHeight: z.number().min(0.25).max(1.4),
@@ -67,6 +67,7 @@ export const EARLY_BUILDINGS = [
   { id: "hall", name: "Shrine hall", description: "An enclosed gathering hall with a sheltered doorway, timber benches and wooden crosses.", width: 2, depth: 3, wallHeight: 0.78, roofRise: singlePlaneRoofRise(3) },
   { id: "market", name: "Market stall", description: "A counter with wares, linen over its rear two tiles, an open front and an open cart bay beside it.", width: 3, depth: 2, wallHeight: 0.65, roofRise: singlePlaneRoofRise(2) },
   { id: "guard-post", name: "Guard post", description: "A watch post roofed with long roundwood poles with a round shield, upright spears and a bench.", width: 2, depth: 2, wallHeight: 0.65, roofRise: singlePlaneRoofRise(2) },
+  { id: "chicken-coop", name: "Chicken coop", description: "A low timber and thatch henhouse on the rear 2 × 1 tiles, with a fenced 2 × 1 run for five hens and a rooster.", width: 2, depth: 2, wallHeight: .48, roofRise: .18 },
   { id: "sheep-pen", name: "Sheep pen", description: "A grassy fold for eight sheep and goats, with a side hut and two small thatched resting bays.", width: 5, depth: 4, wallHeight: 0.70, roofRise: singlePlaneRoofRise(2) },
   { id: "lumberCamp", name: "Timber yard", description: "An open timber yard with low boundary rails and space for live timber stacks.", width: 2, depth: 2, wallHeight: 0.65, roofRise: 0 },
   { id: "garden", name: "Cloister garden", description: "Two herb beds flank a narrow flagstone path.", width: 2, depth: 1, wallHeight: 0.25, roofRise: 0 },

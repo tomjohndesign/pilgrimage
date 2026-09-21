@@ -76,8 +76,8 @@ describe("settlement construction", () => {
   })
 
   it("keeps a gentle pitch across houses and toward the rear of open awnings", () => {
-    // The market stall carries a level cloth canopy and the timber yard is open to the sky.
-    for (const def of catalogue.filter(b => b.category === "buildings" && !["inn", "market", "lumberCamp", "monk-shelter", "storehouse"].includes(b.id))) {
+    // The coop covers only its rear half (checked in chicken-coop.test.ts); the market carries a level canopy.
+    for (const def of catalogue.filter(b => b.category === "buildings" && !["inn", "market", "lumberCamp", "monk-shelter", "storehouse", "chicken-coop"].includes(b.id))) {
       for (const [w, d] of [[2, 2], [3, 2], [3, 4]]) {
         const parts = structureParts({ ...def, w, d })
         expect(parts.some(p => /ridge-pole|rafter-left|rafter-right|woven-gable/.test(p.name))).toBe(false)

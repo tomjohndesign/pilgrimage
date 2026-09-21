@@ -19,7 +19,7 @@ export interface BuildingPart {
   surface?: "trail"
   /** Grass with worn patches outside the hut: local centre X/Z and width/depth. */
   pastureHut?: [number, number, number, number]
-  gateHinge?: { position:Vec3; openAngle:number }
+  gateHinge?: { position:Vec3; openAngle:number; axis?: "x" | "y" }
   cutawaySide?: [number, number]
   outline?: boolean
   /** Last scenery detail level retaining this surface (0 is the close view). */

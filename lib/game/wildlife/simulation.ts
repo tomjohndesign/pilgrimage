@@ -1,3 +1,5 @@
+import type { FoodStock } from "../storage"
+import { syncCoopChickens, stepCoopChicken, type ChickenNesting } from "../chicken-coop"
 import { buildingSpatialQuery } from "../building-spatial"
 import { withTerrainCornerQueries } from "../map/cliff-corners"
 import { SpatialPoints } from "../spatial-points"
@@ -19,6 +21,9 @@ import { chooseGait, restDuration } from "./behavior"
 import { isBird, isDomestic, type WildlifeKind } from "./species"
 
 export interface WildlifeAnimal extends Point {
+  coopId?: string
+  layIn?: number
+  nesting?: ChickenNesting
   fold?: SheepFold
   id: number; kind: WildlifeKind; group: number; leader: number
   y: number; heading: number; phase: number; age: number; rest: number
@@ -32,6 +37,8 @@ export interface WildlifeAnimal extends Point {
 }
 export interface RabbitBurrow extends Point { id: number; group: number; y: number; heading: number }
 export interface WildlifeWorld {
+  coopKeepers?: Map<string, number>
+  coopFood?: Map<string, FoodStock>
   penCare?: Map<string, PenCare>
   penGates?: Map<string, PenGateState>
   burrows: RabbitBurrow[]
@@ -122,6 +129,7 @@ export function createWildlife(map: GameMap, trees: readonly TreePlacement[], sc
     const bird = add("sparrow", trees[0], world.animals.length, 0)
     bird.concealed = true; bird.transient = true; bird.reserve = true
   }
+  syncCoopChickens(world, map)
   return world
 }
 
@@ -196,7 +204,7 @@ export function clearWildlifeFootprints(world: WildlifeWorld, map: GameMap, scal
   const clearance = .2 * scale
   const nearbyBuildings = buildingSpatialQuery(map.buildings, Math.max(3, clearance + .25))
   for (const animal of world.animals) {
-    if (isBird(animal.kind) || animal.reserve || animal.fold || animal.burrowState !== "outside") continue
+    if (animal.coopId || isBird(animal.kind) || animal.reserve || animal.fold || animal.burrowState !== "outside") continue
     if (buildingDistance(map, animal, clearance, nearbyBuildings) >= clearance) continue
     const blocked = blockedRelocations.get(animal)
     if (blocked?.map === map && blocked.scale === scale && blocked.x === animal.x && blocked.z === animal.z && animal.age - blocked.age < 1) continue
@@ -247,6 +255,7 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
   for (const animal of world.animals) {
     if (animal.reserve) continue
     animal.distance = 0; animal.age += dt; animal.frightened = Math.max(0, animal.frightened - dt)
+    if (animal.coopId) { stepCoopChicken(animal, map, dt, scale, edits[animal.kind], world.animals, world.coopFood); continue }
     if(animal.fold && !animal.fold.arrived && animal.fold.route.length) {
       const pen=map.buildings.find(b=>b.id===animal.fold!.penId)
       if(pen && !penGatePassage(world,map,pen,animal,animal.fold.route,dt)) {animal.moving=false;animal.speed=0;animal.drive=0;continue}

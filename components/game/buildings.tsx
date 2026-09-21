@@ -2,6 +2,8 @@
 
 import { buildingSurfaceMaterial } from "@/lib/game/render/building-surface"
 
+import { CoopContents } from "./coop-contents"
+import { simRegistry } from "@/lib/game/sim"
 import { PenFoodStock } from "./pen-food-stock"
 
 import { usePlayerColor } from "./player-color"
@@ -148,7 +150,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
                 const amount = foodStores.get(building.id)?.[type] ?? 0
                 return amount > 0 && <mesh key={type} position={[(slot - (FOOD_TYPES.length-1)/2) * local.w * .9 / FOOD_TYPES.length, 0.43, -local.d * 0.33]}>
                   <boxGeometry args={[local.w * 0.11, 0.12, local.d * 0.12]} />
-                  <meshLambertMaterial color={["#a29978", "#748153", "#a67c56", "#828a88", "#986e58", "#ded4b3"][slot]} />
+                  <meshLambertMaterial color={["#a29978", "#748153", "#a67c56", "#828a88", "#986e58", "#ded4b3", "#e7dfc3"][slot]} />
                 </mesh>
               })}
               {piles.filter((pile) => pile.campId === building.id).map((pile) => {
@@ -163,6 +165,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
         return (
           <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
             <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} appearanceIdColor={models[index].idColor} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} penGateOpen={()=>wildlifeRegistry.current?.penGates?.get(building.id)?.open ?? 0} />
+            {isComplete(building) && building.buildType === "chicken-coop" && <CoopContents map={map} coop={building} world={()=>wildlifeRegistry.current} stores={()=>simRegistry.current?.foodStores ?? foodStores} actor={id=>simRegistry.current?.travelers.get(id)} scale={characterScale}/>}
             {isComplete(building) && building.buildType === "sheep-pen" && <PenFoodStock width={local.w} depth={local.d} layoutSeed={building.layoutSeed} stock={()=>foodStores.get(building.id)} />}
             {isComplete(building) && building.supportId && <InnFlueSmoke width={local.w} depth={local.d} height={building.height} flue={building.tavernFlue} cutaway={cutaway} smoke={occupied.has(building.supportId)} />}
             {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
