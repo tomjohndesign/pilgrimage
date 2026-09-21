@@ -11,10 +11,20 @@ import { AssetEditorContent, WorkspaceFrame } from "./asset-editor-frame"
  * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/C6L-0 — Reference · section navigation
  */
 export function WorkspaceDocument({ page, title, children, version }: { page: string; title: string; children: ReactNode; version?: string }) {
+  return <WorkspaceFrame selection={page} title="Reference" label={title} status={title} detail={version}>
+    <WorkspaceDocumentContent key={page} title={title}>{children}</WorkspaceDocumentContent>
+  </WorkspaceFrame>
+}
+
+/** Shared continuous document and anchor navigation, also usable inside a playground tool. */
+export function WorkspaceDocumentContent({ title, children, inspector, active = true, ready = true }: {
+  title: string; children: ReactNode; inspector?: ReactNode; active?: boolean; ready?: boolean
+}) {
   const content = useRef<HTMLDivElement>(null)
   const [sections, setSections] = useState<{ id: string; title: string }[]>([])
   const [selected, setSelected] = useState("")
   useEffect(() => {
+    if (!active || !ready) return
     const headings = Array.from(content.current?.querySelectorAll("h2") ?? [])
     const used = new Set<string>()
     const entries = headings.map((heading, index) => {
@@ -49,15 +59,13 @@ export function WorkspaceDocument({ page, title, children, version }: { page: st
     scrollToHash(); update()
     scroller.addEventListener("scroll", update, { passive: true }); window.addEventListener("hashchange", scrollToHash)
     return () => { cancelAnimationFrame(request); scroller.removeEventListener("scroll", update); window.removeEventListener("hashchange", scrollToHash) }
-  }, [page])
-  return <WorkspaceFrame selection={page} title="Reference" label={title} status={title} detail={version}>
-    <AssetEditorContent toolbar={sections.length > 1 && <label className="person-choice">Section<EntitySelect anchors autoSelect aria-label="Document section" value={selected} onChange={event => {
-      const heading = document.getElementById(event.target.value), scroller = content.current?.closest(".workspace-content-scroll")
+  }, [active, ready])
+  return <AssetEditorContent inspector={inspector} toolbar={sections.length > 1 && <label className="person-choice">Section<EntitySelect anchors autoSelect aria-label="Document section" value={selected} onChange={event => {
+      const heading = content.current?.querySelector(`#${CSS.escape(event.target.value)}`), scroller = content.current?.closest(".workspace-content-scroll")
       if (heading && scroller) scroller.scrollTo({ top: heading.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 20,
         behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" })
       window.history.pushState(null, "", `#${event.target.value}`)
     }}>{sections.map(section => <option key={section.id} value={section.id}>{section.title}</option>)}</EntitySelect></label>}>
       <div ref={content} className="workspace-document"><h1>{title}</h1>{children}</div>
     </AssetEditorContent>
-  </WorkspaceFrame>
 }

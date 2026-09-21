@@ -12,7 +12,7 @@ export const PLAYGROUND_TOOLS = [
   { id: "tuning", label: "Game tuning", help: "Apply saves the whole preset and updates open game tabs at this address. Starting supplies affect new settlements. Import loads a draft; Restore defaults applies immediately." },
   { id: "trees", label: "Trees", help: "Edit foliage by species and inspect it beside characters or on a generated map. Changes stay in this preview; copy the species JSON to export." },
   { id: "textures", label: "Textures", help: "Browse terrain, character sheets and environment assets using the same previews as the game." },
-  { id: "pipeline", label: "Sprite pipeline", help: "Inspect one character through the shared sprite bake. Choose a stage to inspect its output; help explains each render pass." },
+  { id: "pipeline", label: "Sprite pipeline", help: "Follow one character through the shared sprite bake. Read the continuous guide or use section links to jump to a stage. Properties updates every preview together." },
 ] as const
 
 export type PlaygroundTool = typeof PLAYGROUND_TOOLS[number]["id"]
