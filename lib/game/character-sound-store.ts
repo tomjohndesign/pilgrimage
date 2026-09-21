@@ -4,13 +4,16 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import { WALK_STANCE_FRACTION } from "./base-person/pose"
 import { TRAVELER_TYPES } from "./travelers"
+import { CHICKEN_KINDS, WILDLIFE_PROFILES } from "./wildlife/species"
 import { SOUND_AUDITIONS } from "./sound-catalog"
 
 export const AUDIO_EVENTS = ["selection", "walking", "work", "idle"] as const
 export type CharacterAudioEvent = typeof AUDIO_EVENTS[number]
+/** Animals with recorded sound banks. Chickens have editable, initially silent profiles below. */
 export const ANIMAL_SOUND_SPECIES = ["horse", "donkey", "ox", "sheep", "goat", "deer", "buck", "rabbit", "boar", "fox", "hawk", "sparrow"] as const
 export const SCENE_AUDIO_PROFILES: Record<string, string> = {
   ...Object.fromEntries(ANIMAL_SOUND_SPECIES.map(species => [`animal/${species}`, species[0].toUpperCase() + species.slice(1)])),
+  ...Object.fromEntries(CHICKEN_KINDS.map(kind => [`animal/${kind}`, WILDLIFE_PROFILES[kind].label])),
   "scene/crowd": "NPC conversation", "vehicle/cart": "Cart wheels",
   "scene/crowd-accents": "Crowd laughs and calls", "scene/birds": "Woodland birds",
   "scene/waterfall": "Waterfall", "scene/stream": "Flowing water", "scene/shore": "Pond and lake water", "scene/wind": "Wind through leaves",
@@ -33,11 +36,11 @@ const sourceProfiles = Object.fromEntries(Object.keys(SCENE_AUDIO_PROFILES).map(
   const environmentBanks: Record<string,string> = {"scene/waterfall":"waterfall","scene/crowd-accents":"crowd-accent","scene/birds":"woodland-birds","scene/stream":"water-stream","scene/shore":"water-shore","scene/wind":"wind-leaves"}
   const clips = bank(environmentBanks[id] ?? (animal ? id.replace("/", "-") : cart ? "cart-wheel" : "npc-murmur"))
   return [id, {
-    selection: event(animal ? clips : [], .65, { enabled: animal, cooldown: 0, jitter: 0 }),
+    selection: event(animal ? clips : [], .65, { enabled: animal && clips.length > 0, cooldown: 0, jitter: 0 }),
     walking: event(cart ? clips : [], .42, { enabled: cart, cooldown: 2.5, jitter: .025, range: 24 }),
     work: event([], 0, { enabled: false }),
     idle: event(cart ? [] : clips, id==='scene/crowd'?.65:id==='scene/wind'?.5:id==='scene/crowd-accents'?.45:animal ? .65 : .8, {
-      enabled: !cart, cooldown: id==='scene/crowd'?4:id==='scene/crowd-accents'?35:id==='scene/birds'?5:['scene/stream','scene/shore','scene/waterfall','scene/wind'].includes(id)?0:animal ? ['animal/hawk','animal/sparrow'].includes(id)?8:18 : 18,
+      enabled: !cart && clips.length > 0, cooldown: id==='scene/crowd'?4:id==='scene/crowd-accents'?35:id==='scene/birds'?5:['scene/stream','scene/shore','scene/waterfall','scene/wind'].includes(id)?0:animal ? ['animal/hawk','animal/sparrow'].includes(id)?8:18 : 18,
       jitter: id==='scene/wind'||id==='scene/stream'||id==='scene/shore'||id==='scene/waterfall'?0:.025, range: id==='scene/stream'||id==='scene/shore'?18:24,
     }),
   }]

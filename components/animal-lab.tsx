@@ -14,17 +14,21 @@ import { useSearchParams } from "next/navigation"
 import { Pause, Play, RotateCcw } from "lucide-react"
 import { AssetEditorFrame, AssetEditorWorkspace, AssetEditorSection, type AssetEditorNavigation } from "./asset-editor-frame"
 import { AnimalPreview, animalActions, ACTION_LABELS, type AnimalSubject, type AnimalMotion } from "./animal-preview"
-import { WILDLIFE_PROFILES, isBird } from "@/lib/game/wildlife/species"
+import { WILDLIFE_PROFILES, isBird, isChicken } from "@/lib/game/wildlife/species"
 import { previewRandomSeed } from "@/lib/game/preview-random"
 import { WILDLIFE_COATS, wildlifeAppearance } from "@/lib/game/wildlife/appearance"
 import { COATS, animalCoat } from "@/lib/game/transport/coats"
 import { animalUrl, PARTY_TRANSPORT_VERSION, PACK_ANIMAL_VERSION, type HorseVariant } from "@/lib/game/transport/assets"
 
 export const ANIMAL_SUBJECTS: Record<AnimalSubject, string> = {
+  "russet-hen": "Chicken · russet hen", "cream-hen": "Chicken · cream hen", rooster: "Chicken · dark rooster",
   deer: "Deer · doe", buck: "Deer · buck", sheep: "Sheep", goat: "Goat", rabbit: "Rabbit",
   hawk: "Hawk", sparrow: "Sparrow", boar: "Boar", fox: "Fox", donkey: "Donkey / mule", horse: "Horse", ox: "Ox",
 }
 const HABITATS: Record<AnimalSubject, string> = {
+  "russet-hen": "Russet hens take short steps and peck for grain inside their coop run.",
+  "cream-hen": "Cream hens forage alongside the flock in the enclosed run.",
+  rooster: "One dark rooster keeps company with five hens in each completed coop.",
   deer: "Does wander open ground in small groups, away from paths and settlements.",
   buck: "Bucks wander alone through quiet open ground.",
   sheep: "Sheep take slow, four-beat steps between grazing spots and stay with the flock.",
@@ -68,7 +72,7 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
   const [soundJson,setSoundJson]=useState(''),[soundMessage,setSoundMessage]=useState('')
   const [controlsOpen, setControlsOpen] = useState(search.has('sounds'))
   const packed = pack && (subject === "horse" || subject === "donkey" || subject === "ox")
-  const equine = subject === "donkey" || subject === "horse" || subject === "ox", bird = !equine && isBird(subject)
+  const equine = subject === "donkey" || subject === "horse" || subject === "ox", bird = !equine && (isBird(subject) || isChicken(subject))
   useEffect(() => {
     if (active && requested && Object.hasOwn(ANIMAL_SUBJECTS, requested)) setSubject(requested as AnimalSubject)
   }, [active, requested])
@@ -104,7 +108,7 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
     })
   }
   const actions = animalActions(subject), action = actions.includes(motion) ? motion : actions.includes("graze") ? "graze" : bird ? "fly" : "idle"
-  const actionLabel = ACTION_LABELS[action]
+  const actionLabel = isChicken(subject) && action === "graze" ? "Peck" : ACTION_LABELS[action]
   const frameKeyed = (step: number) => Object.values(edits.clips[action]?.keys ?? {}).some(keys => keys?.some(key => key.frame === step))
   return <AssetEditorFrame mode={mode} onModeChange={onModeChange} version={`${Object.keys(ANIMAL_SUBJECTS).length} animals`} label="Animal asset playground"
     onRandomize={() => {
@@ -151,7 +155,7 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
       toolbar={<><ChromeSelect aria-label="Animal view" value={lineup ? "all" : "animal"} onChange={e => setLineup(e.target.value === "all")}><option value="animal">Animal</option><option value="all">All animals</option></ChromeSelect>
 <label className="person-check"><ChromeCheckbox type="checkbox" checked={showRig} onChange={event => { setShowRig(event.target.checked); setLineup(false); setPlaying(false) }} />Show rig</label>{!bird && !equine && <label className="person-check"><ChromeCheckbox type="checkbox" checked={construction} onChange={event => { setConstruction(event.target.checked); setShowRig(true); setLineup(false); setPlaying(false); setMotion("idle"); setFrame(0) }} />Construction</label>}</>}
       dock={<CharacterAnimationDock playback={<div className="person-playback">            <ChromeButton className="hud-pause" aria-label={playing ? "Pause animal animation" : "Play animal animation"} onClick={() => setPlaying(v => !v)}>{playing ? <Pause size={14} /> : <Play size={14} />}</ChromeButton>
-            <label>Action<ChromeSelect aria-label="Animal action" value={action} onChange={e => { setMotion(e.target.value as AnimalMotion); setFrame(0) }}>{actions.map(clip => <option key={clip} value={clip}>{clip === "idle" && bird ? "Perched" : ACTION_LABELS[clip]}</option>)}</ChromeSelect></label>
+            <label>Action<ChromeSelect aria-label="Animal action" value={action} onChange={e => { setMotion(e.target.value as AnimalMotion); setFrame(0) }}>{actions.map(clip => <option key={clip} value={clip}>{isChicken(subject) && clip === "graze" ? "Peck" : clip === "idle" && bird && !isChicken(subject) ? "Perched" : ACTION_LABELS[clip]}</option>)}</ChromeSelect></label>
             <label>Speed<ChromeSelect aria-label="Animal animation speed" value={rate} onChange={e => setRate(Number(e.target.value))}>{[0.5, 1, 2].map(value => <option key={value} value={value}>{value}×</option>)}</ChromeSelect></label>
 </div>} directions={DIRECTIONS} row={row} onDirection={next => { setRow(next); setLineup(false) }}
           renderDirection={index => <span role="img" aria-label={`${DIRECTIONS[index]} direction`} className="block shrink-0" style={{ width: 64, height: 64 }}><canvas ref={canvas => { directionCanvases.current[index] = canvas }} width={64} height={64} style={{ imageRendering: "pixelated" }} /></span>}
@@ -166,10 +170,10 @@ export function AnimalLab({ mode, onModeChange, active = true }: AssetEditorNavi
             onPose={changes => commit(changes.reduce((next, [joint, value]) => animalPoseKey(next, action, joint, { frame, offset: value, radius: 4 }, frame), edits))}
             onDrag={active => { if (active) { dragEdit.current = edits; setPlaying(false) } else endDrag() }} />}
           </div>
-          <span className="person-stage-caption">{lineup ? "Deer · sheep · goats · rabbits · birds · boars · foxes · donkey / mule · horse · ox" : `${equine ? ANIMAL_SUBJECTS[subject] : WILDLIFE_PROFILES[subject].label} · ${actionLabel}`}</span>
+          <span className="person-stage-caption">{lineup ? "Chickens · deer · sheep · goats · rabbits · birds · boars · foxes · donkey / mule · horse · ox" : `${equine ? ANIMAL_SUBJECTS[subject] : WILDLIFE_PROFILES[subject].label} · ${actionLabel}`}</span>
         </div>
         {showRig && !lineup && <AnimalRigInspector joints={joints} selected={selectedJoint} onSelect={joint => { setSelectedJoint(joint); setPlaying(false) }} edits={edits} clip={action} frame={frame}
-          onChange={commit} frameKeyed={frameKeyed(frame)} onResetFrame={() => commit(animalClearFrame(edits, action, frame))} bird={bird} equine={equine}
+          onChange={commit} frameKeyed={frameKeyed(frame)} onResetFrame={() => commit(animalClearFrame(edits, action, frame))} bird={bird} equine={equine} biped={isChicken(subject)}
           canUndo={history.length > 0} canRedo={future.length > 0}
           onUndo={() => { const previous = history.at(-1); if (previous) { setFuture(f => [...f, edits]); setHistory(h => h.slice(0, -1)); save(subject, previous) } }}
           onRedo={() => { const next = future.at(-1); if (next) { setHistory(h => [...h, edits]); setFuture(f => f.slice(0, -1)); save(subject, next) } }} />}

@@ -1,7 +1,7 @@
 import type { Point, CrossSection } from "../transport/geometry"
-import type { WildlifeKind } from "./species"
+import type { ChickenKind, WildlifeKind } from "./species"
 
-export type MammalKind = Exclude<WildlifeKind, "hawk" | "sparrow">
+export type MammalKind = Exclude<WildlifeKind, "hawk" | "sparrow" | ChickenKind>
 export type BodyRegion = "pelvis" | "loin" | "ribs" | "shoulder" | "neck" | "skull" | "muzzle" | "forelimb" | "hindlimb" | "feet" | "tail"
 export const REGION_COLORS: Record<BodyRegion, string> = { pelvis: "#a77dba", loin: "#b59d73", ribs: "#73a4ae", shoulder: "#73a58d", neck: "#cba26a", skull: "#c08074", muzzle: "#dabd92", forelimb: "#88b4aa", hindlimb: "#ab91bd", feet: "#68777c", tail: "#b4a082" }
 export type BodySection = CrossSection & { region: BodyRegion }

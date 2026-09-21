@@ -414,6 +414,7 @@ export const Travelers = memo(function Travelers({
       if ((s.activity === "drinking" || s.activity === "drinkingLow") && s.waterVisit) group.rotation.y = s.waterVisit.heading
       if (s.activity === "drinkingLow" && s.naturalWaterVisit) group.rotation.y = s.naturalWaterVisit.heading
       if (s.activity === "building") group.rotation.y = s.buildingTask?.heading ?? Math.PI
+      if(s.coopEggs && !moving) group.rotation.y=s.coopEggs.heading
       if(s.penCare && !moving) group.rotation.y=s.penCare.heading
       if (s.activity === "givingAlms" && s.almsVisit) {
         const beggar = sim.travelers.get(s.almsVisit.beggarId)
@@ -467,7 +468,7 @@ export const Travelers = memo(function Travelers({
       group.userData.meatLoad = s.penCare?.carryingMeat ?? 0
       group.userData.milkLoad = s.penCare?.carryingMilk ?? 0
       group.userData.milking = s.penCare?.chore === "milkingSheep" && !s.penCare.route.length
-      group.userData.carrying = s.carrying + group.userData.meatLoad + group.userData.milkLoad
+      group.userData.carrying = s.carrying + group.userData.meatLoad + group.userData.milkLoad + (s.coopEggs?.amount ?? 0)
       group.userData.initialized = true
       group.userData.phase = travelers[i].id * 0.137
       group.userData.heading = group.rotation.y

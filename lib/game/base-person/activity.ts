@@ -18,7 +18,7 @@ export function activityClip(activity: Activity | MonkActivity | undefined, movi
     case "drinking": return "drinking"
     case "drinkingLow": return "drinkingLow"
     case "building": return "building"
-    case "collectingFood": case "milkingSheep": case "tendingSheep": case "feedingSheep": case "wateringSheep": case "slaughteringSheep": return "gathering"
+    case "collectingEggs": case "collectingFood": case "milkingSheep": case "tendingSheep": case "feedingSheep": case "wateringSheep": case "slaughteringSheep": return "gathering"
     case "sleeping":
     case "camping": return "sleeping"
     case "idle":

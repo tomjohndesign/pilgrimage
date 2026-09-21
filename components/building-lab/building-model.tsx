@@ -161,7 +161,11 @@ export function StructureModel({ parts, idColor, appearanceIdColor, ghostColor, 
 function PenGateLeaf({parts,open,idColor,ghostColor,onClick}:{parts:BuildingPart[];open?:()=>number;idColor?:THREE.Color;ghostColor?:string;onClick?:(event:ThreeEvent<MouseEvent>)=>void}) {
   const root=useRef<THREE.Group>(null),hinge=parts[0].gateHinge!
   const local=useMemo(()=>parts.map(p=>({...p,gateHinge:undefined,position:p.position.map((v,i)=>v-hinge.position[i]) as [number,number,number]})),[parts,hinge])
-  useFrame(()=>{if(root.current)root.current.rotation.y=hinge.openAngle*(open?.() ?? 0)})
+  useFrame(()=>{
+    if (!root.current) return
+    const angle=hinge.openAngle*(open?.() ?? 0)
+    root.current.rotation.set(hinge.axis === "x" ? angle : 0, hinge.axis === "x" ? 0 : angle, 0)
+  })
   return <group ref={root} name="pen-gate-leaf" position={hinge.position}>
     {ghostColor ? local.map(part=><Part key={part.name} part={part} ghostColor={ghostColor} ink={false}/>)
       : <MergedParts parts={local} dynamic batchable={false} terrainFloors={false} idColor={idColor} onClick={onClick} />}
