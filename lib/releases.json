@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "bd694560b82d654cba0c20b9b99a00c769c38b87",
-  "releaseCount": 263,
+  "lastProcessedCommit": "8ed07d4d5ad47e91717c1df60d2363a702ca0c8e",
+  "releaseCount": 265,
   "releases": [
+    {
+      "version": "0.0.279",
+      "title": "Release 0.0.279",
+      "summary": "Fix new maps at 128x128 and remove size controls (#299)",
+      "commit": "8ed07d4d5ad47e91717c1df60d2363a702ca0c8e"
+    },
+    {
+      "version": "0.0.278",
+      "title": "Release 0.0.278",
+      "summary": "Keep double tracks open at shallow river entrances (#300)",
+      "commit": "7364fe1d88e381629a3edc95715703a69ac5acbc"
+    },
     {
       "version": "0.0.277",
       "title": "Release 0.0.277",
