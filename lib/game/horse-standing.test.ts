@@ -73,7 +73,7 @@ describe("finding the horse-standing", () => {
 })
 
 describe("a company's pack animal at the enclave", () => {
-  it.each(["pack", "wagon"] as const)("moves waiting companions off the wide road while the %s is parked", kind => {
+  it.each(["pack", "wagon"] as const)("moves waiting companions off the wide road at the %s stop", kind => {
     const count = kind === "pack" ? 3 : 8
     const id = Array.from({ length: 100 }, (_, i) => i).find(i => kind === "pack"
       ? !partyLoadout(i, count).cart && partyLoadout(i, count).packs > 0 : !!partyLoadout(i, count).cart)!
@@ -81,12 +81,15 @@ describe("a company's pack animal at the enclave", () => {
       offset: (18 - slot) / 59, pace: 1, party: { id, name: "Company", slot }, attributes: { ...devout } }))
     const { map, sim } = standingRoad(travelers)
     map.mainRoadWidth = 2
+    sim.shrineKeeperReady = false
     const party = sim.parties.get(id)!
     let waitedOffRoad = false, parked = false
-    for (let tick = 0; tick < 3000 && !parked; tick++) {
+    for (let tick = 0; tick < 3000 && !(parked && waitedOffRoad); tick++) {
       stepSim(sim, travelers, map, 1, .1)
       const pack = party.packs?.[0], maneuver = kind === "pack" ? pack : party.transport
-      if (maneuver?.phase === "parking") for (const s of sim.travelers.values()) {
+      if (maneuver?.phase === "parking" || maneuver?.phase === "parked") for (const s of sim.travelers.values()) {
+        // Companions can arrive after the wagon when following its longer
+        // approach corridor. Once waiting, everyone stays clear of the road.
         if (s.id === pack?.handler || party.transport?.seats.includes(s.id) || !s.partyGathering?.arrived) continue
         expect(Math.abs(s.z - tileToWorldZ(map, 5))).toBeGreaterThanOrEqual(1.4)
         expect(s.partyWaiting).toBe(true)
@@ -140,6 +143,48 @@ describe("a company's pack animal at the enclave", () => {
       travelling = party.formed && party.reason === "Traveling together"
     }
     expect(travelling).toBe(true)
+  }, 120_000)
+})
+
+describe("a cart company's approach", () => {
+  it.each([1, -1] as const)("walks companions up the track during parking and gathers beside the bay (%i)", direction => {
+    const count = 8, id = 0
+    const travelers: Traveler[] = Array.from({ length: count }, (_, slot) => ({ id: slot, name: `Pilgrim ${slot}`,
+      type: TRAVELER_TYPES.pilgrim, direction, offset: (direction === 1 ? 18 - slot : 42 + slot) / 59,
+      pace: 1, party: { id, name: "Company", slot }, attributes: { ...devout } }))
+    const { map, sim } = standingRoad(travelers), party = sim.parties.get(id)!
+    // Keep the shrine closed so the company has time to gather beside the bay.
+    sim.shrineKeeperReady = false
+    let followed = false, gathered = false, longestStep = 0
+    for (let tick = 0; tick < 4000 && !gathered; tick++) {
+      const before = new Map([...sim.travelers].map(([id, s]) => [id, { x: s.x, z: s.z }]))
+      stepSim(sim, travelers, map, 1, .1)
+      const cart = party.transport
+      if (!cart?.parking) continue
+      const walkers = [...sim.travelers.values()].filter(s => !cart.seats.includes(s.id))
+      for (const s of walkers) {
+        const old = before.get(s.id)!
+        longestStep = Math.max(longestStep, Math.hypot(s.x - old.x, s.z - old.z))
+        if (cart.phase === "parking" && worldToTileZ(map, s.z) >= 8 && worldToTileZ(map, s.z) < map.site!.branch[findHorseStanding(map)!.fork].z - 3) {
+          followed = true
+          expect(Math.abs(worldToTileX(map, s.x) - 30)).toBeLessThanOrEqual(1)
+        }
+      }
+      gathered = cart.phase === "parked" && walkers.every(s => s.partyGathering?.arrived)
+      if (gathered) for (const s of walkers) {
+        expect(Math.hypot(s.x - cart.parking.parked.hitch.x, s.z - cart.parking.parked.hitch.z)).toBeLessThan(5)
+        expect(worldToTileZ(map, s.z)).toBeGreaterThan(8)
+        expect(map.site!.branch.some(p => p.x === worldToTileX(map, s.x) && p.z === worldToTileZ(map, s.z))).toBe(false)
+      }
+    }
+    expect(followed).toBe(true)
+    expect(gathered, party.reason).toBe(true)
+    expect(longestStep).toBeLessThan(.5)
+    sim.shrineKeeperReady = true
+    for (let tick = 0; tick < 12000 && !(sim.visits === count && party.transport?.phase === "road"); tick++) stepSim(sim, travelers, map, 1, .1)
+    expect(sim.visits).toBe(count)
+    expect(party.transport!.phase).toBe("road")
+    for (const s of sim.travelers.values()) expect(s.partyGathering).toBeUndefined()
   }, 120_000)
 })
 

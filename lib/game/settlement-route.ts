@@ -1,3 +1,4 @@
+import { sharedDestinationRoute } from "./worker-route-memory"
 import { footpathRouteCost } from "./footpaths"
 import { walkingRouteQueries } from "./walking-route-queries"
 import { buildingSpatialQuery } from "./building-spatial"
@@ -68,6 +69,10 @@ export function settlementRoute(
   // must be joined to a tile route by the caller, never indexed into this grid.
   if (![start.x, start.z, goal.x, goal.z].every(Number.isInteger)) return null
   if (!tileAt(map, start.x, start.z) || !tileAt(map, goal.x, goal.z)) return null
+  if (buildings === map.buildings && !logging && enterShrine && !seat) {
+    const shared = sharedDestinationRoute(map, start, goal)
+    if (shared !== undefined) return shared
+  }
   const routeCost = walkingRouteQueries(map)?.edgeCost ?? footpathRouteCost
   const nearby = buildingSpatialQuery(buildings)
   const allowed = (from: TilePos, to: TilePos, seat?: string) => {

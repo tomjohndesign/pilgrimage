@@ -1,5 +1,8 @@
 "use client"
 
+import { chooseRelicKeeper, stepRelicKeeper, stopKeepingRelic, type KeeperDuty, type MonkJob } from "@/lib/game/monk-jobs"
+import { MONK_TIRED_AT } from "@/lib/game/monk-work"
+import { almsRegistry, stepMonkAlms, stopAlmsDuty, type AlmsDuty } from "@/lib/game/alms-table"
 import { playCharacterSound } from "@/lib/game/character-audio"
 
 import { fordSpeedAt } from "@/lib/game/map/fords"
@@ -8,6 +11,7 @@ import { SceneAssetBoundary } from "./scene-assets"
 
 import { stepDevotion } from "@/lib/game/wellbeing"
 import { useBalanceStore } from "@/lib/game/balance-store"
+import { monkWayfindingRegistry } from "@/lib/game/wayfinding-debug"
 import { simRegistry } from "@/lib/game/sim"
 import { isComplete } from "@/lib/game/construction"
 import { shrineLayout, shrineStations, isRelicViewingSeat } from "@/lib/game/shrine-layout"
@@ -54,6 +58,10 @@ import { rocketMonkVisual, rocketFlightClip } from "@/lib/game/rocket/assets"
  */
 
 interface MonkState extends MonkRoutine, MonkNeeds {
+  keeperDuty?: KeeperDuty
+  lastJob?: MonkJob
+  almsDuty?: AlmsDuty
+  almsRetry?: number
   preachingTask?: PreachingTask
   workScale?: number
   flight?: MonkFlight
@@ -95,12 +103,12 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       }
       return {
         ...routine, ...createMonkNeeds(index),
-        ...(index === 0 && keeperStation ? { ...keeperStation, activity: "keepingRelic" as const, route: [], pause: 0 } : {}),
+        ...(index === 0 && keeperStation ? { ...keeperStation, activity: "keepingRelic" as const, keeperDuty: { map, station: keeperStation }, route: [], pause: 0 } : {}),
         piety: monk.attributes.piety, happiness: monk.attributes.happiness, flightWait: index * 8,
       }
     })
     const activities = new Map<number, MonkActivity>()
-    return { stamina: new Map<number, number>(), spots, centre, rng, flightRng, pick, states, activities, wander,
+    return { keeperIndex: keeperStation ? 0 as number | null : null, stamina: new Map<number, number>(), spots, centre, rng, flightRng, pick, states, activities, wander,
       procession: createRelicProcession(), grounds: processionGrounds(map, wander) }
   }, [map.road])
   const beds = monkBeds(map)
@@ -139,7 +147,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         state.destination = "home"
         state.pause = 0
       }
-      if (state.buildingTask || state.flight || state.preachingTask) continue
+      if (state.buildingTask || state.flight || state.preachingTask || state.almsDuty || state.keeperDuty) continue
       replanMonkAfterMapChange(state, map, navigation)
     }
   }, [map, world, navigation])
@@ -157,19 +165,24 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
   useEffect(() => {
     const preachers = { road: map.road, monks: world.states }
     preachingRegistry.current = preachers
+    almsRegistry.current = preachers
     useMonkEvangelismStore.setState({ assigned: new Set() })
     monkRegistry.current = world.activities
     monkStaminaRegistry.current = world.stamina
     const positions = new Map(monks.map((m, i) => [m.id, world.states[i]]))
     monkPositionRegistry.current = positions
+    const wayfinding = { map, actors: positions }
+    monkWayfindingRegistry.current = wayfinding
     processionRegistry.current = world.procession
     useRelicProcessionStore.setState({ available: !!world.grounds, monkId: null, stage: "idle", returnRequested: false })
     return () => {
       for (const state of world.states) state.buildingTask = undefined
+      if (almsRegistry.current === preachers) almsRegistry.current = null
       if (preachingRegistry.current === preachers) {
         preachingRegistry.current = null
         useMonkEvangelismStore.setState({ available: false, assigned: new Set() })
       }
+      if (monkWayfindingRegistry.current === wayfinding) monkWayfindingRegistry.current = null
       if (monkPositionRegistry.current === positions) monkPositionRegistry.current = null
       if (monkRegistry.current === world.activities) monkRegistry.current = null
       if (monkStaminaRegistry.current === world.stamina) monkStaminaRegistry.current = null
@@ -192,13 +205,13 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
     if (!playback.paused && controls.monkId !== null && world.procession.stage === "idle" && world.grounds) {
       const index = monks.findIndex(m => m.id === controls.monkId)
       const actor = world.states[index]
-      if (actor) actor.buildingTask = undefined
-      if (index === 0 || !actor || actor.flight || actor.preachingTask || useMonkEvangelismStore.getState().assigned.has(controls.monkId) || !startProcession(world.procession, controls.monkId, actor, world.grounds)) {
+      if (actor) { stopAlmsDuty(actor); stopKeepingRelic(actor, map, world.wander); actor.buildingTask = undefined }
+      if (!actor || actor.stamina <= MONK_TIRED_AT || actor.flight || actor.preachingTask || useMonkEvangelismStore.getState().assigned.has(controls.monkId) || !startProcession(world.procession, controls.monkId, actor, world.grounds)) {
         useRelicProcessionStore.setState({ monkId: null, returnRequested: false })
       }
     }
     if (!playback.paused && world.procession.stage === "idle" && world.grounds) {
-      const index = world.states.findIndex((s, index) => index !== 0 && !s.flight && !s.processionConsidered &&
+      const index = world.states.findIndex((s, index) => !s.keeperDuty && !s.flight && s.stamina > MONK_TIRED_AT && !s.processionConsidered &&
         !s.preachingTask && !useMonkEvangelismStore.getState().assigned.has(monks[index].id) &&
         s.activity === "praying" && s.destination === "prayer" &&
         Math.hypot(s.x - world.grounds!.altar.x, s.z - world.grounds!.altar.z) < .01)
@@ -211,7 +224,8 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
     if (carrierIndex >= 0 && world.grounds && !playback.paused) {
       const actor = world.states[carrierIndex], group = groupRefs.current[carrierIndex]
       const x = actor.x, z = actor.z
-      const exit = stepProcession(world.procession, actor, world.grounds, dt, monkWalkSpeed(characterScale), world.pick, controls.returnRequested)
+      actor.stamina = Math.max(0, actor.stamina - dt * .125)
+      const exit = stepProcession(world.procession, actor, world.grounds, dt, monkWalkSpeed(characterScale), world.pick, controls.returnRequested || actor.stamina <= MONK_TIRED_AT)
       if (map.footpaths) recordWalkingPath(map.footpaths, map, { x, z }, actor)
       if (exit) { actor.route = exit; actor.pause = 0; actor.destination = "grounds"; actor.activity = "walking" }
       if (group) {
@@ -225,8 +239,38 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
           ...(exit ? { returnRequested: false } : {}) })
       }
     }
+    const liveSim = simRegistry.current
+    const jobs = world.states.map((_, i) => liveSim?.world.road === map.road ? liveSim?.monkJobs[monks[i].id] ?? "auto" : "auto")
+    if (!playback.paused) {
+      for (const [i, s] of world.states.entries()) {
+        if (s.lastJob !== undefined && s.lastJob !== jobs[i]) {
+          stopAlmsDuty(s); stopKeepingRelic(s, map, world.wander)
+          if (s.buildingTask?.purpose === "build") s.buildingTask = undefined
+          s.jobSearch = 0
+        }
+        s.lastJob = jobs[i]
+      }
+      const unavailable = new Set(world.states.flatMap((s, i) => i === carrierIndex || s.flight || s.preachingTask ||
+        useMonkEvangelismStore.getState().assigned.has(monks[i].id) ? [i] : []))
+      const keeper = keeperStation ? chooseRelicKeeper(world.states, jobs, unavailable, world.keeperIndex) : null
+      for (const [i, s] of world.states.entries()) {
+        if (i !== keeper) stopKeepingRelic(s, map, world.wander)
+        else stopAlmsDuty(s)
+      }
+      world.keeperIndex = keeper
+      // An explicitly assigned almoner takes the next shift ahead of a general helper.
+      const assignedAlmoners = world.states.filter((s, i) => jobs[i] === "almoner" && !unavailable.has(i) &&
+        s.stamina > MONK_TIRED_AT && !s.outdoorRest && !s.buildingTask)
+      const tables = map.buildings.filter(b => b.buildType === "alms-table" && isComplete(b)).length
+      const workingAssigned = assignedAlmoners.filter(s => s.almsDuty).length
+      let replace = Math.min(assignedAlmoners.length, tables) - workingAssigned
+      for (const [i, s] of world.states.entries()) {
+        if (replace > 0 && jobs[i] === "auto" && s.almsDuty) { stopAlmsDuty(s); replace-- }
+      }
+    }
     const airborne = new Set<number>()
-    for (let i = 0; i < world.states.length; i++) {
+    const workOrder = world.states.map((_, i) => i).sort((a, b) => Number(jobs[b] === "almoner") - Number(jobs[a] === "almoner"))
+    for (const i of workOrder) {
       const s = world.states[i]
       s.workScale = characterScale
       const group = groupRefs.current[i]
@@ -244,29 +288,12 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       }
       group.userData.rocketPack = flying || !!s.flight
       const previousX = s.x, previousZ = s.z
-      const inChurch = (i === 0 && !!keeperStation) || (!s.flight && !s.buildingTask && !s.preachingTask
+      const inChurch = (i === world.keeperIndex && ["keepingRelic", "showingRelic"].includes(s.activity)) || (!s.flight && !s.buildingTask && !s.preachingTask
         && s.activity === "praying" && s.destination === "prayer" && i !== carrierIndex)
       stepDevotion(s, dt, inChurch, inChurch && s.activity === "praying", useBalanceStore.getState().balance)
-      if (i === 0 && keeperStation) {
-        // An upgrade can move the altar without replacing the ongoing world.
-        s.x = keeperStation.x; s.y = keeperStation.y; s.z = keeperStation.z
-        const sim = simRegistry.current
-        const sameWorld = sim && sim.world.road === map.road
-        const showing = sameWorld && world.procession.stage === "idle" && [...sim.travelers.values()]
-          .some(visitor => visitor.activity === "visiting" && isRelicViewingSeat(visitor.shrineSeat))
-        s.activity = showing ? "showingRelic" : "keepingRelic"
-        group.userData.activity = s.activity
-        group.userData.moving = false
-        group.userData.rocketPack = false
-        group.rotation.y = keeperStation.heading
-        group.position.set(s.x, s.y, s.z)
-        world.activities.set(monks[i].id, s.activity)
-        world.stamina.set(monks[i].id, s.stamina)
-        if (useMonkEvangelismStore.getState().assigned.has(monks[i].id)) useMonkEvangelismStore.getState().recall(monks[i].id)
-        continue
-      }
       if (playback.paused) continue
       if (i === carrierIndex) {
+        world.stamina.set(monks[i].id, s.stamina)
         if (dt > 0) blessByProcession(world.procession, `monk:${monks[i].id}`, s)
         const stage = world.procession.stage
         group.userData.activity = stage === "lifting" || stage === "lowering" ? "hoisting" : stage === "approaching" || stage === "idle" ? "walking" : "procession"
@@ -278,10 +305,26 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
         group.position.set(s.x, s.y, s.z)
         continue
       }
+      if (i === world.keeperIndex && keeperStation) {
+        const showing = !!liveSim && liveSim.world.road === map.road && world.procession.stage === "idle" && [...liveSim.travelers.values()]
+          .some(visitor => visitor.activity === "visiting" && isRelicViewingSeat(visitor.shrineSeat))
+        if (stepRelicKeeper(s, map, world.wander, keeperStation, monkWalkSpeed(characterScale), dt, showing)) {
+          group.userData.activity = s.activity
+          group.userData.distance = Math.hypot(s.x - previousX, s.z - previousZ)
+          group.userData.moving = group.userData.distance > 0
+          group.rotation.y = group.userData.moving ? Math.atan2(s.x - previousX, s.z - previousZ) : keeperStation.heading
+          group.userData.rocketPack = false
+          group.position.set(s.x, s.y, s.z)
+          world.activities.set(monks[i].id, s.activity); world.stamina.set(monks[i].id, s.stamina)
+          if (map.footpaths) recordWalkingPath(map.footpaths, map, { x: previousX, z: previousZ }, s)
+          continue
+        }
+      }
       const evangelismRequested = useMonkEvangelismStore.getState().assigned.has(monks[i].id)
       const praying = !evangelismRequested && !s.preachingTask && !s.flight && s.buildingTask?.purpose !== "rest" && nearProcession(world.procession, s, group.userData.activity === "praying")
       group.userData.moving = false
       if (praying && world.procession.position) {
+        stopAlmsDuty(s)
         blessByProcession(world.procession, `monk:${monks[i].id}`, s)
         group.userData.activity = "praying"
         world.activities.set(monks[i].id, "praying")
@@ -298,6 +341,8 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       }
       const wasFlying = !!s.flight
       if (s.flight) {
+        s.stamina = Math.max(0, s.stamina - dt * .125)
+        if (s.stamina <= MONK_TIRED_AT) recallMonkFlight(s.flight)
         const flight = s.flight
         for (let tick = 0; tick < playback.speed; tick++) {
           stepMonkFlight(flight, map, world.flightRng, Math.min(delta, 0.1))
@@ -318,6 +363,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
           airborne.add(monks[i].id)
           group.userData.activity = "flying"
           world.activities.set(monks[i].id, "flying")
+          world.stamina.set(monks[i].id, s.stamina)
           continue
         }
         s.flight = undefined
@@ -333,17 +379,23 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
       group.rotation.x = 0
 
       const groundSpeed = monkWalkSpeed(characterScale) * fordSpeedAt(map, s.x, s.z)
+      if (evangelismRequested) stopAlmsDuty(s)
       const evangelizing = stepMonkEvangelism(s, map, evangelismRequested, groundSpeed, dt,
         world.states.filter(other => other !== s && other.preachingTask).map(other => other.preachingTask!.tile))
       if (evangelismRequested && !evangelizing) useMonkEvangelismStore.getState().recall(monks[i].id)
-      if (!evangelizing && !stepMonkWork(s, map, groundSpeed, dt))
+      const serving = !!s.almsDuty && !!liveSim && liveSim.world.road === map.road && [...liveSim.travelers.values()]
+        .some(visitor => visitor.activity === "receivingBread" && visitor.breadVisit?.tableId === s.almsDuty!.tableId)
+      const almoner = !evangelizing && (jobs[i] === "almoner" || jobs[i] === "auto") && stepMonkAlms(s, map, groundSpeed, dt, world.states, serving)
+      if (!evangelizing && !almoner && !stepMonkWork(s, map, groundSpeed, dt, jobs[i] === "auto" || jobs[i] === "builder"))
         stepMonkRoutine(s, world.wander, world.rng, groundSpeed, dt)
       if (map.footpaths && !wasFlying) recordWalkingPath(map.footpaths, map, { x: previousX, z: previousZ }, s)
       world.stamina.set(monks[i].id, s.stamina)
       if (s.buildingTask && (s.activity === "building" || s.activity === "sleeping")) group.rotation.y = s.buildingTask.heading
       group.userData.activity = s.activity
       world.activities.set(monks[i].id, s.activity)
-      if (s.activity === "preaching" && s.preachingTask) {
+      if (almoner && s.almsDuty && s.activity !== "toAlmsTable") {
+        group.rotation.y = s.almsDuty.heading
+      } else if (s.activity === "preaching" && s.preachingTask) {
         group.rotation.y = s.preachingTask.heading
       } else if (s.activity === "praying" && world.centre) {
         group.rotation.y = Math.atan2(world.centre.x - s.x, world.centre.z - s.z)
@@ -378,7 +430,7 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
           })
           selectElement(relicHit ? { kind: "relic" } : { kind: "monk", id: monk.id }, event)
         }
-        const equipped = index !== 0 && (flying || airborneIds.has(monk.id))
+        const equipped = index !== world.keeperIndex && (flying || airborneIds.has(monk.id))
         return (
           <group
             key={monk.id}

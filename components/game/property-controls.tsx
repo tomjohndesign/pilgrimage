@@ -1,5 +1,8 @@
 "use client"
 
+import { useId } from "react"
+import { Switch } from "@/components/ui/switch"
+import { ChromeSelect } from "@/components/ui/chrome-controls"
 import { Slider } from "@base-ui/react/slider"
 import { Collapsible } from "@base-ui/react/collapsible"
 
@@ -55,3 +58,64 @@ export function Tuner({
     </Slider.Control>
   </Slider.Root>
 }
+
+
+/** A stepped choice drawn as the same box as a tuner track, with the option's name inside. */
+export function Chooser({
+  label,
+  value,
+  options,
+  onChange,
+  labelClassName = "w-16",
+}: {
+  label: string
+  value: number
+  options: string[]
+  onChange: (index: number) => void
+  labelClassName?: string
+}) {
+  return (
+    <div className="flex items-center">
+      <span className={`${labelClassName} shrink-0 text-[13px] font-medium text-ink-light`}>{label}</span>
+      <div className="hud-choice-track relative h-8 flex-1 rounded-[6px] bg-parchment-dark">
+        <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 truncate font-display text-[11px] font-black text-ink-light">
+          {options[value]}
+        </span>
+        <ChromeSelect
+          value={value}
+          aria-label={label}
+          onChange={(event) => onChange(Number(event.target.value))}
+          className="pointer-events-auto absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        >
+          {options.map((option, index) => (
+            <option key={option} value={index}>
+              {option}
+            </option>
+          ))}
+        </ChromeSelect>
+      </div>
+    </div>
+  )
+}
+
+/** An on/off preference as the shared switch, recoloured for the HUD's dark parchment. */
+export function ToggleRow({
+  label,
+  checked,
+  disabled = false,
+  onChange,
+}: {
+  label: string
+  checked: boolean
+  disabled?: boolean
+  onChange: (checked: boolean) => void
+}) {
+  const id = useId()
+  return (
+    <div className="hud-switch-row flex items-center justify-between gap-3 py-0.5">
+      <label htmlFor={id} className={`text-[13px] font-medium text-ink-light ${disabled ? "opacity-50" : ""}`}>{label}</label>
+      <Switch id={id} className="hud-switch" checked={checked} disabled={disabled} onCheckedChange={onChange} />
+    </div>
+  )
+}
+

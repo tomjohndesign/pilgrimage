@@ -1,9 +1,13 @@
 "use client"
 
+import { useWayfindingStore } from "@/lib/game/wayfinding-settings"
+
+import { WayfindingPanel, WayfindingSelection } from "./wayfinding-panel"
+import { almsStaffed } from "@/lib/game/alms-table"
 import { ThemeToggle } from "../chrome-provider"
 import { GameIcon } from "./game-icon"
 
-import { ChromeSelect, ChromeButton } from "@/components/ui/chrome-controls"
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { AppearancePanel } from "./appearance-panel"
 import { PlayerColorPicker } from "./player-color"
 
@@ -20,7 +24,7 @@ import Link from "next/link"
 import { Tooltip } from "@base-ui/react/tooltip"
 import { ChevronRight, Menu, Settings, Users, X } from "lucide-react"
 import "./game-hud.css"
-import { useEffect, useId, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useBuildStore } from "@/lib/game/build-store"
 import { useCameraStore } from "@/lib/game/camera-store"
 import { useVoiceSubtitleStore } from "@/lib/game/voice-subtitle-store"
@@ -38,6 +42,7 @@ import { CHANGELOG, CURRENT_VERSION } from "@/lib/changelog"
 import { SITE_MENU } from "@/lib/site-menu"
 import { ACTIVITY_LABELS, BEGGAR_RECOVERY_GOLD, simRegistry, type SimTraveler } from "@/lib/game/sim"
 import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
+import { MONK_JOBS, MONK_JOB_LABELS, type MonkJob } from "@/lib/game/monk-jobs"
 import { MONK_TIRED_AT } from "@/lib/game/monk-work"
 import { useMonkEvangelismStore } from "@/lib/game/monk-evangelism-store"
 import { MONK_ACTIVITY_LABELS, monkStaminaRegistry, monkRegistry, monkPositionRegistry, type Monk, type MonkActivity } from "@/lib/game/monks"
@@ -64,13 +69,12 @@ import { BugReportDialog } from "./bug-report-dialog"
 import { NewMapDialog, type NewWorld } from "./new-map-dialog"
 import { NewWorldFields } from "./new-world-fields"
 import { SeedField } from "./seed-field"
-import { Switch } from "@/components/ui/switch"
 import { browserDiagnostics, diagnosticsSchema, type BugReportDiagnostics } from "@/lib/bug-report"
 import { useBugReportRuntime } from "@/hooks/use-bug-report-runtime"
 import { useSimulationStore } from "@/lib/game/simulation-store"
 import { DEFAULT_SCENE_VISIBILITY, VISIBILITY_TOGGLES } from "@/lib/game/scene-visibility"
-import { Section, Tuner } from "./property-controls"
-import { BuildControls, HudClock, HudPlayback, HudResources } from "./hud-controls";
+import { Chooser, ToggleRow, Section, Tuner } from "./property-controls"
+import { BuildControls, HudClock, HudPlayback, HudResources } from "./hud-controls"
 
 const CONTROLS: Array<[string, string]> = [
   ["Tap / click", "Inspect people, trees & piles"],
@@ -125,65 +129,6 @@ function TrafficDensity({ value, travelerCount, onChange }: {
         {travelerCount} folk across the map.
       </p>
     </>
-  )
-}
-
-/** A stepped choice drawn as the same box as a tuner track, with the option's name inside. */
-function Chooser({
-  label,
-  value,
-  options,
-  onChange,
-  labelClassName = "w-16",
-}: {
-  label: string
-  value: number
-  options: string[]
-  onChange: (index: number) => void
-  labelClassName?: string
-}) {
-  return (
-    <div className="flex items-center">
-      <span className={`${labelClassName} shrink-0 text-[13px] font-medium text-ink-light`}>{label}</span>
-      <div className="hud-choice-track relative h-8 flex-1 rounded-[6px] bg-parchment-dark">
-        <span className="absolute inset-x-1.5 top-1/2 -translate-y-1/2 truncate font-display text-[11px] font-black text-ink-light">
-          {options[value]}
-        </span>
-        <ChromeSelect
-          value={value}
-          aria-label={label}
-          onChange={(event) => onChange(Number(event.target.value))}
-          className="pointer-events-auto absolute inset-0 h-full w-full cursor-pointer opacity-0"
-        >
-          {options.map((option, index) => (
-            <option key={option} value={index}>
-              {option}
-            </option>
-          ))}
-        </ChromeSelect>
-      </div>
-    </div>
-  )
-}
-
-/** An on/off preference as the shared switch, recoloured for the HUD's dark parchment. */
-function ToggleRow({
-  label,
-  checked,
-  disabled = false,
-  onChange,
-}: {
-  label: string
-  checked: boolean
-  disabled?: boolean
-  onChange: (checked: boolean) => void
-}) {
-  const id = useId()
-  return (
-    <div className="hud-switch-row flex items-center justify-between gap-3 py-0.5">
-      <label htmlFor={id} className={`text-[13px] font-medium text-ink-light ${disabled ? "opacity-50" : ""}`}>{label}</label>
-      <Switch id={id} className="hud-switch" checked={checked} disabled={disabled} onCheckedChange={onChange} />
-    </div>
   )
 }
 
@@ -536,9 +481,9 @@ function ConstructionStatus({ building }: { building: BuildingDef }) {
 
 /** Sample the brothers' live activity and piety on the HUD's own schedule. */
 function useMonkLiveState(monkId: number) {
-  const [live, setLive] = useState<{ activity: MonkActivity | null; piety?: number; happiness?: number }>({ activity: null })
+  const [live, setLive] = useState<{ activity: MonkActivity | null; job?: MonkJob; piety?: number; happiness?: number }>({ activity: null })
   useEffect(() => {
-    const read = () => setLive({ activity: monkRegistry.current?.get(monkId) ?? null, piety: monkPositionRegistry.current?.get(monkId)?.piety, happiness: monkPositionRegistry.current?.get(monkId)?.happiness })
+    const read = () => setLive({ job: simRegistry.current?.monkJobs[monkId] ?? "auto", activity: monkRegistry.current?.get(monkId) ?? null, piety: monkPositionRegistry.current?.get(monkId)?.piety, happiness: monkPositionRegistry.current?.get(monkId)?.happiness })
     read()
     const timer = setInterval(read, 250)
     return () => clearInterval(timer)
@@ -550,7 +495,7 @@ function useMonkLiveState(monkId: number) {
 function MonkPanel({ monk }: { monk: Monk }) {
   const balance = useBalanceStore((s) => s.balance)
   const a = monk.attributes
-  const { activity, piety, happiness } = useMonkLiveState(monk.id)
+  const { activity, job, piety, happiness } = useMonkLiveState(monk.id)
   const [stamina, setStamina] = useState(100)
   useEffect(() => {
     const read = () => setStamina(monkStaminaRegistry.current?.get(monk.id) ?? 100)
@@ -581,7 +526,7 @@ function MonkPanel({ monk }: { monk: Monk }) {
       <div className="pt-1">
         <h2 className="page-title hud-selection-name">{monk.name}</h2>
         <div className="text-[13px] italic text-ink-light">
-          {monk.duty}, {a.age} years
+          {MONK_JOB_LABELS[job ?? "auto"]}, {a.age} years
         </div>
         {activity && (
           <div className="text-[11px] italic text-gold">{evangelizing && activity === "sleeping" ? "Sleeping on an evangelism mission" : MONK_ACTIVITY_LABELS[activity]}</div>
@@ -596,15 +541,21 @@ function MonkPanel({ monk }: { monk: Monk }) {
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
+        <Chooser label="Job" value={MONK_JOBS.indexOf(job ?? "auto")} options={MONK_JOBS.map(key => MONK_JOB_LABELS[key])}
+          onChange={index => { const sim = simRegistry.current; if (sim) sim.monkJobs[monk.id] = MONK_JOBS[index] }} />
+        <p className="mt-1 text-[11px] italic text-ink-light">Every job allows rest. Brothers helping where needed cover the relic and alms table, then build. Assigned jobs resume after sleep or a mission.</p>
+      </div>
+
+      <div className="mt-2 border-t border-rule pt-2">
         <ChromeButton type="button" className="hud-action" title="Preach on the main road for up to three days, or recall earlier. Nearby travelers gain an extra chance to visit the relic."
-          disabled={monk.duty === "Keeper of the Relic" || !evangelizing && (!evangelism.available || carryingRelic || activity === "flying" || stamina <= MONK_TIRED_AT)}
+          disabled={!evangelizing && (!evangelism.available || carryingRelic || activity === "flying" || stamina <= MONK_TIRED_AT)}
           onClick={() => evangelizing ? evangelism.recall(monk.id) : evangelism.request(monk.id)}>
           {evangelizing ? "Recall from preaching" : "Evangelize on the main road"}
         </ChromeButton>
       </div>
 
       <div className="mt-2 border-t border-rule pt-2">
-        <ChromeButton type="button" className="hud-action" title="Carry the relic to the main road. Nearby travelers gain piety once per procession." disabled={monk.duty === "Keeper of the Relic" || !procession.available || evangelizing || activity === "toEvangelize" || activity === "preaching" || activity === "flying" ||
+        <ChromeButton type="button" className="hud-action" title="Carry the relic to the main road. Nearby travelers gain piety once per procession." disabled={!procession.available || evangelizing || activity === "toEvangelize" || activity === "preaching" || activity === "flying" ||
           (procession.monkId !== null && !carryingRelic) || (carryingRelic && (procession.returnRequested || procession.stage === "lowering" || procession.stage === "returning"))}
           onClick={() => carryingRelic ? procession.returnRelic() : procession.request(monk.id)}>
           {carryingRelic ? "Return relic" : "Carry relic in procession"}
@@ -710,6 +661,9 @@ export function GameHud({
   const [menuOpen, setMenuOpen] = useState(false)
   const [minimapOpen, setMinimapOpen] = useState(false)
   const [panel, setPanel] = useState<"build" | "world" | "settlement" | null>(null)
+  const selectedNodeId = useWayfindingStore(s => s.selectedNodeId)
+  const nodeFocusRevision = useWayfindingStore(s => s.nodeFocusRevision)
+  useEffect(() => { if (SHOW_PROPERTY_PANELS && selectedNodeId) setPanel("world") }, [selectedNodeId, nodeFocusRevision])
 
   const toggleBuild = () => {
     setPanel((current) => current === "build" ? null : "build")
@@ -719,6 +673,7 @@ export function GameHud({
   }
 
   useEffect(() => {
+    if (useWayfindingStore.getState().selectedNodeId) useWayfindingStore.getState().selectNode(null)
     if (!selection) return
     setPanel(current => SHOW_PROPERTY_PANELS && current === "world" ? current : null)
     economy.chooseBuild(null)
@@ -883,6 +838,7 @@ export function GameHud({
           <HudButton onClick={() => set(DEFAULT_SCENE_VISIBILITY)}>Reset visibility</HudButton>
         </Section>
         {SHOW_PROPERTY_PANELS && <>
+        {map && <Section {...section("Wayfinding")}><WayfindingPanel map={map} travelers={travelers} monks={monks} /></Section>}
         {map && <AppearancePanel map={map} />}
         <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />
@@ -1146,7 +1102,7 @@ export function GameHud({
         {panel === "settlement" && <div className="hud-inspector" id="settlement-details">
           <SettlementPanel economy={economy} monks={monks} relic={relic} onClose={() => setPanel(null)} />
         </div>}
-        {selection && <div className="hud-inspector" aria-label="Selection details">
+        {selection && panel !== "world" && <div className="hud-inspector" aria-label="Selection details">
           {(selection.kind === "tree" || selection.kind === "pile") && <ResourceInspector selection={selection} />}
           {selectedBuilding && (
             <Panel>
@@ -1159,6 +1115,8 @@ export function GameHud({
             </ChromeButton>)}
             {selectedBuilding.owner === "independent" && <p className="mt-2 max-w-56 text-[11px] text-ink-light">Independent · joins when your influence reaches this building.</p>}
             {isMonkShelter(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">{brothersAtHome} / {housingBeds(selectedBuilding)} monks · {Math.max(0, housingBeds(selectedBuilding) - brothersAtHome)} spaces available.</p>}
+            {map && selectedBuilding.buildType === "alms-table" && isComplete(selectedBuilding) &&
+              <p className="mt-1 text-[11px] text-ink-light">{almsStaffed(map, selectedBuilding.id) ? "Open · A monk is serving free bread." : "Closed · Waiting for an available monk."}</p>}
             {isHouse(selectedBuilding) && isComplete(selectedBuilding) && <p className="mt-1 text-[11px] text-ink-light">
               {household} / {housingCapacity(selectedBuilding)} settlers · {housingBeds(selectedBuilding)} bunks.
             </p>}
@@ -1215,6 +1173,7 @@ export function GameHud({
               }} />}
           </Panel>
           )}
+          {SHOW_PROPERTY_PANELS && map && <WayfindingSelection map={map} travelers={travelers} monks={monks} onSettings={() => setPanel("world")} />}
           {selection?.kind === "animal" && <AnimalInspector id={selection.id} />}
           {selectedPartyMember?.party ? <PartyPanel key={selectedPartyMember.party.id} traveler={selectedPartyMember} travelers={travelers} map={map} monk={selectedMonk ?? undefined} /> : selectedTraveler && <TravelerPanel key={selectedTraveler.id} traveler={selectedTraveler} map={map} />}
           {selectedMonk && !selectedPartyMember && <MonkPanel monk={selectedMonk} />}

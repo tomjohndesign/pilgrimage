@@ -71,6 +71,7 @@ export function buildingApproach(map: Pick<GameMap,"site">,building: BuildingDef
 
 /** Every doorway owns a clear approach; taverns also reserve their outdoor bench tiles. */
 export function buildingApproaches(map: Pick<GameMap,"site">, building: BuildingDef): TilePos[] {
+  if (building.buildType === "alms-table") return [buildingEntry(building)]
   const front=buildingApproach(map,building)
   if(!front) return []
   if (building.buildType === "tavern" && building.id !== map.site?.hovelId) {

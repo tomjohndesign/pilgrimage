@@ -1,6 +1,6 @@
 import { isComplete } from "./construction"
 import { isChapel, shrineLayout, shrineSeats, shrineStations, shrinePoint, shrineViewingPlaces } from "./shrine-layout"
-import { buildingStepAllowed, shrineGates } from "./building-navigation"
+import { buildingStepAllowed, containsTile, shrineGates } from "./building-navigation"
 import { tileToWorldX, tileToWorldZ, type GameMap, type TilePos } from "./map/types"
 import { settlementRoute, shrineApproach } from "./settlement-route"
 import { BASE_CHARACTER_SCALE } from "./base-person/gait"
@@ -69,6 +69,30 @@ export function shrineViewingRoute(map: GameMap, place: number): TilePos[] | nul
   return route.every((p, i) => !i || buildingStepAllowed(map, map.buildings, route[i - 1], p, true)) ? route : null
 }
 
+/** Interior routes lead visitors to the offering box and back to the entrance.
+ * Half-tile lanes go around the altar and church screen; endpoints may be fractional. */
+export function shrineInteriorRoute(map: GameMap, from: TilePos, to: TilePos): TilePos[] | null {
+  const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
+  if (!shrine || !isComplete(shrine) || !containsTile(shrine, from) || !containsTile(shrine, to)) return null
+  const points = [from, to]
+  for (let z = shrine.z; z <= shrine.z + shrine.d - 1; z += .5)
+    for (let x = shrine.x; x <= shrine.x + shrine.w - 1; x += .5)
+      if (buildingStepAllowed(map, map.buildings, { x, z }, { x, z }, true)) points.push({ x, z })
+  const parents = new Map<number, number>([[0, -1]]), queue = [0]
+  for (let head = 0; head < queue.length; head++) {
+    const i = queue[head]
+    if (i === 1) {
+      const path: TilePos[] = []
+      for (let n = 1; n >= 0; n = parents.get(n)!) path.push(points[n])
+      return path.reverse()
+    }
+    for (let j = 1; j < points.length; j++) if (!parents.has(j) && buildingStepAllowed(map, map.buildings, points[i], points[j], true)) {
+      parents.set(j, i); queue.push(j)
+    }
+  }
+  return null
+}
+
 /** Move back a physical distance along a route, including partial steps. */
 export function shrineRouteBehind(route: readonly TilePos[], progress: number, distance: number): number {
   let cursor = Math.max(0, Math.min(route.length - 1, progress))
@@ -91,7 +115,7 @@ export function shrineQueueStop(map: GameMap, route: readonly TilePos[], door: n
     : shrineRouteBehind(route, route.length - 2, 4 * relicQueueSpacing(characterScale))
 }
 
-/** Leave a gift at the chapel’s exterior box or the church’s interior wall box.
+/** Leave a voluntary gift at the interior wall box before returning to the entrance.
  * Stored in reverse because the simulation walks departure routes backwards. */
 export function shrineExitPlan(map: GameMap, from: TilePos, arrival: TilePos[]): { route: TilePos[]; offeringProgress: number } | null {
   const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
@@ -99,16 +123,11 @@ export function shrineExitPlan(map: GameMap, from: TilePos, arrival: TilePos[]):
   const { offering } = shrineStations(shrine, map.site.door)
   if (isChapel(shrine)) {
     const gate = shrineGates(shrine, map.site.door)[0]
-    const outside = settlementRoute(map, map.buildings, gate.outside, offering)
-    const toBox = outside && buildingStepAllowed(map, map.buildings, from, gate.inside, true)
-      ? [from, gate.inside, ...outside] : null
-    // Step aside to donate, then rejoin the approach beyond the doorway.
-    // Keep each visitor's original route back to the road or their parked cart.
+    const toBox = shrineInteriorRoute(map, from, offering)
+    const toDoor = shrineInteriorRoute(map, offering, gate.inside)
     const gateIndex = arrival.findIndex(p => p.x === gate.outside.x && p.z === gate.outside.z)
-    const rejoinIndex = Math.max(0, gateIndex - 1)
-    const fromBox = settlementRoute(map, map.buildings, offering, arrival[rejoinIndex])
-    if (!toBox || !fromBox) return null
-    const exit = [...toBox, ...fromBox.slice(1), ...arrival.slice(0, rejoinIndex).reverse()]
+    if (!toBox || !toDoor || gateIndex < 0) return null
+    const exit = [...toBox, ...toDoor.slice(1), ...arrival.slice(0, gateIndex + 1).reverse()]
     return { route: exit.reverse(), offeringProgress: exit.length - toBox.length }
   }
   const layout = shrineLayout(shrine, map.site.door)
