@@ -3,7 +3,8 @@ import { cartOffset, RIG_TO_WORLD } from "./transport/assets"
 import type { PartyTransport, PartyPack } from "./transport/party"
 import type { WalkingShortcut } from "./walking-shortcuts"
 import { deriveSeed, makeRng } from "./rng"
-import type { Traveler, TravelerTypeId } from "./travelers"
+import { knightLoadout } from "./knights"
+import { generateSquire, type Traveler, type TravelerTypeId } from "./travelers"
 import type { SimTraveler } from "./sim"
 
 export interface PartyMembership {
@@ -143,7 +144,17 @@ export function withTravelParties(travelers: readonly Traveler[], seed: number):
       first += size
     }
   }
-  return travelers.map(t => memberships.has(t.id) ? { ...t, party: memberships.get(t.id) } : t)
+  const squires: Traveler[] = []
+  const attendants = new Map(travelers.filter(t => t.knightId !== undefined).map(t => [t.knightId!, t]))
+  for (const knight of travelers) {
+    if (knight.type.id !== "knight" || !knightLoadout(knight.id).squire) continue
+    const squire = attendants.get(knight.id) ?? generateSquire(seed, knight)
+    const name = `${knight.name.split(" ")[0]}’s company`
+    memberships.set(knight.id, { id: knight.id, name, slot: 0 })
+    memberships.set(squire.id, { id: knight.id, name, slot: 1 })
+    if (!attendants.has(knight.id)) squires.push(squire)
+  }
+  return [...travelers, ...squires].map(t => memberships.has(t.id) ? { ...t, party: memberships.get(t.id) } : t)
 }
 
 /** Signed distance around the existing looping road, including the map-edge seam. */

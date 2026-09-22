@@ -33,13 +33,16 @@ export const CHARACTER_VOICES = Object.fromEntries(
   } satisfies CharacterVoice]),
 ) as Record<TravelerTypeId, CharacterVoice>
 
+// Attendants use the existing neutral road greetings.
+CHARACTER_VOICES.squire = { ...CHARACTER_VOICES.peasant, label: "Squire", bodyTypes: ["Male"] }
+
 /** A calling bound to one sex answers with that voice whatever is asked for. */
 export function voiceBodyType(voice: CharacterVoice, bodyType: BodyType): BodyType {
   return voice.bodyTypes.includes(bodyType) ? bodyType : voice.bodyTypes[0]
 }
 
 export function barkUrl(type: TravelerTypeId, bodyType: BodyType, line: VoiceLine): string {
-  return `/sounds/voices/${type}/${bodyType.toLowerCase()}/${line.id}-v${recipe.version}.wav`
+  return `/sounds/voices/${type === "squire" ? "peasant" : type}/${bodyType.toLowerCase()}/${line.id}-v${recipe.version}.wav`
 }
 
 /** Re-selecting the same traveler inside this window continues their streak. */

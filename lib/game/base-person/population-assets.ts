@@ -15,6 +15,8 @@ export const DEFAULT_POPULATION: PopulationPack = { ...manifest, callings: Objec
 ) as PopulationPack["greyCallings"] }
 
 export function populationVisual(type: TravelerTypeId, variant: number, custom: PopulationPack | null, age = 18) {
+  // Generic outfit tools use the base rig; the game draws the equipped squireVisual.
+  if (type === "squire") type = "merchant"
   const pack = custom ?? DEFAULT_POPULATION
   const calling = (age >= GREY_HAIR_AGE ? pack.greyCallings?.[type] : undefined) ?? pack.callings[type]
   return outfitVisual(pack, calling, variant)

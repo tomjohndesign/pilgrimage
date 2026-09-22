@@ -10,6 +10,7 @@ export const ROAD_AMBIENCE = SFX_AUDITIONS.filter(sound => sound.layer)
 
 /** A calling/job and body resolve to the same recording in the editor and game. */
 export function characterBark(type: TravelerTypeId, bodyType: BodyType, travelerId: number, streak: number, variant?: string, profile = type as string, clipIds?: string[], voiceVariant = 0) {
+  if (type === "squire") { type = "peasant"; bodyType = "Male"; if (profile === "squire") profile = "peasant" }
   const voice = CHARACTER_VOICES[type], body = voiceBodyType(voice, bodyType)
   const available = VOICE_AUDITIONS.filter(sound => sound.character === type && sound.bodyType === body)
   const assigned = clipIds?.length ? available.filter(s => clipIds.includes(s.id)) : []

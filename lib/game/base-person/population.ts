@@ -43,7 +43,7 @@ export function travelerAppearance(seed: number, id: number): TravelerAppearance
  * person never sounds like someone other than the body on screen.
  */
 export function travelerBodyType(seed: number, typeId: TravelerTypeId, id: number): PersonDesign["bodyType"] {
-  return typeId === "knight" || typeId === "friar" ? "Male" : typeId === "nun" ? "Female" : travelerAppearance(seed, id).bodyType
+  return typeId === "knight" || typeId === "squire" || typeId === "friar" ? "Male" : typeId === "nun" ? "Female" : travelerAppearance(seed, id).bodyType
 }
 
 export function populationDesign(type: Pick<TravelerTypeDef, "id" | "color">, variant: number, base: PersonDesign = DEFAULT_DESIGN): PersonDesign {

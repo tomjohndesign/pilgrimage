@@ -27,7 +27,7 @@ describe('authored character sounds',()=>{
         for(const id of clips)expect(existsSync(`public${SOUND_AUDITIONS.find(s=>s.id===id)!.url}`)).toBe(true)
       }
     }
-    expect(count).toBe(23)
+    expect(count).toBe(24)
   })
   it('replaces saved stock footsteps without discarding custom settings',()=>{
     const d=structuredClone(DEFAULT_CHARACTER_SOUNDS)

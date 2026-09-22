@@ -40,6 +40,7 @@ const BASE_NERVE: Record<TravelerTypeId, number> = {
   beggar: 0.2,
   peasant: 0.3,
   knight: 0.85,
+  squire: 0.65,
 }
 /** Very pious travellers hold their nerve this much better. */
 const PIOUS_NERVE_BONUS = 0.3
@@ -69,6 +70,7 @@ export function trackChance({ type, piety, stamina }: RouteState): number {
     case "beggar":
     case "peasant":
       return 0
+    case "squire":
     case "knight":
       return KNIGHT_TRACK_CHANCE
     case "pilgrim":

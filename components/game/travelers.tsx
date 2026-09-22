@@ -591,10 +591,11 @@ const TravelerUnit = memo(function TravelerUnit({ packHandler, index, traveler, 
   const leading = useMemo(() => packHandler ? handlerVisual(traveler.type.id, appearance.variant, traveler.attributes.age) : undefined, [packHandler, traveler.type.id, appearance.variant, traveler.attributes.age])
   const register = useCallback((node: THREE.Group | null) => { markPerson(node); if (node) node.userData.travelerId = traveler.id; groups.current[index] = node }, [groups, index, traveler.id])
   // Friars need the Monk preset and its gait, just as they do in the gallery.
+  // Squires have their own units; only previews bundle an attendant into a knight.
   return <group name="traveler-unit" visible={false} ref={register} userData={motion}>
     {!beggar && (job || traveler.type.id === "friar" || traveler.type.id === "vendor" || traveler.type.id === "knight") ?
       <TravelerFigure {...figure} job={job} age={traveler.attributes.age}
-        {...(traveler.type.id === "knight" ? knightLoadout(traveler.id) : cartLoadout(traveler.id))}
+        {...(traveler.type.id === "knight" ? { coat: knightLoadout(traveler.id).coat } : cartLoadout(traveler.id))}
         appearance={appearance} selected={selected} type={traveler.type} onClick={select} idColor={idColor} /> :
       <SceneAssetBoundary><CharacterSprite {...figure} visualOverride={beggar ? undefined : leading} age={traveler.attributes.age}
         appearance={appearance} selected={selected} type={beggar ? "beggar" : traveler.type.id} onClick={select}

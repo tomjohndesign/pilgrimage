@@ -31,8 +31,8 @@ describe("individual travel clothing", () => {
     const seed = 12345, people = generateTravelers(seed, 300)
     const outfit = (person: typeof people[number]) => populationVisual(person.type.id, travelerAppearance(seed, person.id).variant, null).design.tunicColor
     const grouped = withTravelParties(people, seed)
-    expect(grouped.map(outfit)).toEqual(people.map(outfit))
-    expect(withTravelParties([...people].reverse(), seed).reverse().map(outfit)).toEqual(people.map(outfit))
+    expect(grouped.filter(t => t.knightId === undefined).map(outfit)).toEqual(people.map(outfit))
+    expect(withTravelParties([...people].reverse(), seed).filter(t => t.knightId === undefined).reverse().map(outfit)).toEqual(people.map(outfit))
     expect(withTravelParties(generateTravelers(seed, 500), seed).slice(0, people.length).map(outfit)).toEqual(people.map(outfit))
     const companies = new Map<number, typeof people>()
     for (const person of grouped) if (person.party) companies.set(person.party.id, [...companies.get(person.party.id) ?? [], person])

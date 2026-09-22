@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest"
 import { followKnight, knightLoadout, knightMounted, knightTravelSpeed, type TrailPoint } from "./knights"
+import { withTravelParties, partyRoadDelta } from "./travel-parties"
+import { captureSimulation, restoreSimulation } from "./save/simulation"
+import { simulationSaveSchema } from "./save/schema"
+import { selectElement, selectionObjectId } from "./selection"
+import { useCameraStore } from "./camera-store"
+import { generateTravelers } from "./travelers"
 import { createSim, stepSim } from "./sim"
 import { DEFAULT_WALK_SPEED } from "./base-person/gait"
 import { knightDesign } from "./knight/design"
@@ -138,5 +144,104 @@ describe("optional squire", () => {
     for (let i = 6; i < 500; i++) followKnight(trail, { x: 2, z: i / 10, heading: 0 }, 1)
     expect(trail.length).toBeLessThan(15)
     expect(followKnight(trail, { x: -20, z: 0, heading: Math.PI / 2 }, 1, true).x).toBeCloseTo(-21)
+  })
+})
+
+
+describe("knight and squire parties", () => {
+  function company(direction: 1 | -1 = 1) {
+    const { map, t } = fixture(direction)
+    t.id = Array.from({ length: 100 }, (_, id) => id).find(id => knightLoadout(id).squire)!
+    t.name = "Edmund of the Vale"
+    const travelers = withTravelParties([t], map.seed!)
+    const sim = createSim(travelers, map)
+    return { map, travelers, sim, knight: travelers[0], squire: travelers[1] }
+  }
+
+  it("gives each attendant a stable, distinct identity and exactly one knight companion", () => {
+    const seed = 42, original = generateTravelers(seed, 300)
+    const cast = withTravelParties(original, seed)
+    const squires = cast.filter(t => t.type.id === "squire")
+    expect(squires.length).toBeGreaterThan(0)
+    expect(new Set(cast.map(t => t.id)).size).toBe(cast.length)
+    expect(withTravelParties(cast, seed)).toEqual(cast)
+    const reordered = withTravelParties([...original].reverse(), seed)
+    const larger = withTravelParties(generateTravelers(seed, 600), seed)
+    for (const squire of squires) {
+      const knight = cast.find(t => t.id === squire.knightId)!
+      expect(squire.name).not.toBe(knight.name)
+      expect(squire.type.label).toBe("Squire")
+      expect(squire.attributes).not.toBe(knight.attributes)
+      expect(cast.filter(t => t.party?.id === knight.id).map(t => t.id)).toEqual([knight.id, squire.id])
+      expect(squire.party?.slot).toBe(1)
+      expect(reordered.find(t => t.id === squire.id)).toEqual(squire)
+      expect(larger.find(t => t.id === squire.id)).toEqual(squire)
+    }
+    for (const knight of cast.filter(t => t.type.id === "knight" && !knightLoadout(t.id).squire)) expect(knight.party).toBeUndefined()
+  })
+
+  it.each([1, -1] as const)("travels as two people at their shared pace in direction %i", direction => {
+    const { map, travelers, sim, knight, squire } = company(direction)
+    map.site = undefined; map.buildings = []
+    const a = sim.travelers.get(knight.id)!, b = sim.travelers.get(squire.id)!
+    const start = a.progress
+    for (let tick = 0; tick < 600; tick++) {
+      stepSim(sim, travelers, map, DEFAULT_WALK_SPEED, .1)
+      const gap = direction * partyRoadDelta(a.progress, b.progress, 29)
+      expect(gap).toBeGreaterThan(0)
+      expect(gap).toBeLessThan(3)
+      expect(a.direction).toBe(b.direction)
+    }
+    expect(Math.abs(partyRoadDelta(a.progress, start, 29))).toBeGreaterThan(1)
+    expect(sim.parties.get(knight.id)?.members).toEqual([knight.id, squire.id])
+    expect(sim.parties.get(knight.id)?.transport).toBeUndefined()
+    expect(a.gold).toBe(b.gold)
+  })
+
+  it("visits the shrine as two people and regroups after the knight retrieves his horse", () => {
+    const { map, travelers, sim, knight, squire } = company()
+    sim.shrineRenown = 10000
+    for (const s of sim.travelers.values()) s.piety = 100
+    const party = sim.parties.get(knight.id)!
+    let dismounted = false
+    for (let tick = 0; tick < 12000; tick++) {
+      stepSim(sim, travelers, map, DEFAULT_WALK_SPEED, .1)
+      const rider = sim.travelers.get(knight.id)!
+      dismounted ||= !!rider.horseRest
+      if (sim.travelers.get(squire.id)!.visits && rider.visits && party.stage === "traveling" && !rider.horseRest) break
+    }
+    expect(dismounted).toBe(true)
+    expect(sim.travelers.get(knight.id)!.visits).toBeGreaterThan(0)
+    expect(sim.travelers.get(squire.id)!.visits).toBeGreaterThan(0)
+    expect(party.stage).toBe("traveling")
+    expect(sim.travelers.get(knight.id)!.horseRest).toBeUndefined()
+    expect(party.members).toEqual([knight.id, squire.id])
+  })
+
+  it("selects the squire independently and assigns a different outline ID", () => {
+    const { travelers, knight, squire } = company()
+    const objects = { travelers, buildings: [], monks: [], piles: [] }
+    const click = { delta: 0, stopPropagation: () => {} }
+    selectElement({ kind: "traveler", id: knight.id }, click)
+    selectElement({ kind: "traveler", id: squire.id }, click)
+    expect(useCameraStore.getState().selection).toEqual({ kind: "traveler", id: squire.id })
+    expect(selectionObjectId({ kind: "traveler", id: squire.id }, objects)).not.toBe(selectionObjectId({ kind: "traveler", id: knight.id }, objects))
+    useCameraStore.getState().select(null)
+  })
+
+  it("keeps each person's progress and the two-member purse through save and reload", () => {
+    const { map, travelers, sim, knight, squire } = company()
+    stepSim(sim, travelers, map, DEFAULT_WALK_SPEED, .1)
+    sim.travelers.get(squire.id)!.stamina = 47
+    sim.travelers.get(squire.id)!.visits = 3
+    const saved = simulationSaveSchema.parse(JSON.parse(JSON.stringify(captureSimulation(sim, "sprites"))))
+    const freshCast = withTravelParties([knight], map.seed!)
+    const restored = createSim(freshCast, map)
+    restoreSimulation(restored, saved, freshCast, map)
+    expect(freshCast.find(t => t.id === squire.id)).toEqual(squire)
+    expect(restored.travelers.get(squire.id)?.stamina).toBe(47)
+    expect(restored.travelers.get(squire.id)?.visits).toBe(3)
+    expect(restored.parties.get(knight.id)?.members).toEqual([knight.id, squire.id])
+    expect(restored.parties.get(knight.id)?.gold).toBe(sim.parties.get(knight.id)?.gold)
   })
 })

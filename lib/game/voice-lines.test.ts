@@ -16,7 +16,7 @@ describe("selection barks", () => {
       for (const line of [...voice.select, ...voice.repeat]) {
         expect(line.text.length, line.id).toBeGreaterThan(0)
         expect(line.gloss.length, line.id).toBeGreaterThan(0)
-        expect(barkUrl(id, "Male", line)).toBe(`/sounds/voices/${id}/male/${line.id}-v1.wav`)
+        expect(barkUrl(id, "Male", line)).toBe(`/sounds/voices/${id === "squire" ? "peasant" : id}/male/${line.id}-v1.wav`)
       }
     }
   })

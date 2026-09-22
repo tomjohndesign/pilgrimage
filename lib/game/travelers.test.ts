@@ -82,7 +82,7 @@ describe("generateTravelers", () => {
       }
     }
     for (const [bodyType, seen] of Object.entries(callings)) {
-      expect([...seen].sort()).toEqual(Object.keys(TRAVELER_TYPES).filter(id => id !== "friar" && id !== "nun" && id !== "beggar" && (bodyType === "Male" || id !== "knight")).sort())
+      expect([...seen].sort()).toEqual(Object.keys(TRAVELER_TYPES).filter(id => id !== "friar" && id !== "nun" && id !== "beggar" && id !== "squire" && (bodyType === "Male" || id !== "knight")).sort())
     }
   })
 
