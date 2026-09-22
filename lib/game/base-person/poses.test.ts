@@ -42,6 +42,31 @@ describe("activity rig", () => {
       }
     }
   })
+  it("separates low ground sitting from a chair pose with feet beneath the knees and relaxed hands", () => {
+    for (const design of [...Object.values(PERSON_PRESETS), ...POPULATION_PROFILES.map((_, i) => populationDesign(TRAVELER_TYPES.peasant, i))]) {
+      const recipe = personRecipe(design), rig = createBasePersonRig(recipe)
+      try {
+        const ground = legPose("left", 0, "sitting", recipe.body)
+        const chair = legPose("left", 0, "sittingChair", recipe.body)
+        expect(chair.hip[1]).toBeGreaterThan(ground.hip[1])
+        expect(chair.knee[1]).toBe(chair.hip[1])
+        expect(chair.knee[2]).toBe(chair.ankle[2])
+        expect(chair.ankle[1]).toBe(recipe.body.ankleHeight)
+        rig.pose(0, "sittingChair")
+        const feet = [rig.joints().leftFoot, rig.joints().rightFoot]
+        for (let frame = 0; frame < 8; frame++) {
+          rig.pose(frame / 8, "sittingChair")
+          expect([rig.joints().leftFoot, rig.joints().rightFoot]).toEqual(feet)
+          const left = rig.sockets.leftHand.getWorldPosition(new THREE.Vector3())
+          const right = rig.sockets.rightHand.getWorldPosition(new THREE.Vector3())
+          expect(left.distanceTo(right)).toBeGreaterThan(.25)
+          expect(rig.root.getObjectByName("tavern-cup")!.visible).toBe(false)
+          expect(rig.root.getObjectByName("eating-bread")!.visible).toBe(false)
+        }
+      } finally { rig.dispose() }
+    }
+  })
+
   it("sits with horizontal thighs, vertical shins and quiet prayer hands", () => {
     for (let profile = 0; profile < POPULATION_PROFILES.length; profile++) {
       const recipe = personRecipe(populationDesign(TRAVELER_TYPES.peasant, profile))

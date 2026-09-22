@@ -37,13 +37,14 @@ import { KNIGHT, knightDesign } from "@/lib/game/knight/design"
 import { MONK_VISUAL } from "@/lib/game/base-person/monk-assets"
 import { knightLoadout, knightTravelSpeed } from "@/lib/game/knights"
 import { personWalkStride } from "@/lib/game/base-person/gait"
-import { squireVisual } from "@/lib/game/knight/visual"
-import knightMetadata from "@/public/textures/knights/v13/manifest.json"
+import { knightPersonClip, squireVisual } from "@/lib/game/knight/visual"
+import knightMetadata from "@/public/textures/knights/v14/manifest.json"
 import transportMetadata from "@/public/textures/transport/v26/manifest.json"
 
 const SUBJECTS = { person: "Person", cart: "Merchant cart", donkey: "Donkey", horse: "Horse", knight: "Knight" } as const
 type Subject = keyof typeof SUBJECTS
 declare global { interface Window {
+  __personActionBake?: typeof import("@/lib/game/base-person/bake-action").bakePersonAction
   __jobBake?: typeof import("@/lib/game/jobs/bake").bakeJobs
   __minstrelBake?: typeof import("@/lib/game/minstrel/bake").bakeMinstrels
   __knightBake?: typeof import("@/lib/game/knight/bake").bakeKnights
@@ -156,13 +157,14 @@ export function BasePersonLab({ mode, onModeChange, active: workspaceActive = tr
     if (process.env.NODE_ENV !== "development") return
     const target = window as unknown as { __bakePersonPopulation?: (progress?: (done: number) => void, only?: Parameters<typeof import("@/lib/game/base-person/bake-population").bakePopulation>[3]) => Promise<unknown> }
     target.__bakePersonPopulation = async (progress, only) => (await import("@/lib/game/base-person/bake-population")).bakePopulation(undefined, progress, undefined, only)
+    window.__personActionBake = async (...args) => (await import("@/lib/game/base-person/bake-action")).bakePersonAction(...args)
     window.__jobBake = async progress => (await import("@/lib/game/jobs/bake")).bakeJobs(progress)
     window.__minstrelBake = async () => (await import("@/lib/game/minstrel/bake")).bakeMinstrels()
     window.__knightBake = async () => (await import("@/lib/game/knight/bake")).bakeKnights()
     window.__transportBake = async (options) => (await import("@/lib/game/transport/bake")).bakeTransport(options)
     window.__choppingBlockBake = bakeChoppingBlock
     window.__rocketMonkBake = async () => (await import("@/lib/game/rocket/bake")).bakeRocketMonks()
-    return () => { delete target.__bakePersonPopulation; delete window.__jobBake; delete window.__transportBake; delete window.__knightBake; delete window.__minstrelBake; delete window.__choppingBlockBake; delete window.__rocketMonkBake }
+    return () => { delete target.__bakePersonPopulation; delete window.__personActionBake; delete window.__jobBake; delete window.__transportBake; delete window.__knightBake; delete window.__minstrelBake; delete window.__choppingBlockBake; delete window.__rocketMonkBake }
   }, [])
   const [bake, setBake] = useState<BasePersonBake | null>(null)
   const [error, setError] = useState("")
@@ -377,7 +379,7 @@ export function BasePersonLab({ mode, onModeChange, active: workspaceActive = tr
   const visibleFrame = live ? 0 : subject === "cart" ? cartMode === "shop" ? Math.round((shopState === "opening" ? step / 47 : shopState === "packing" ? 1 - step / 47 : 1) * (TRANSPORT.shopFrames - 1)) : step % TRANSPORT.wheelFrames : firstColumn + step
   const bakedSheet = bake ? clip === "walk" || clip === "idle" ? sides ? clip === "walk" ? bake.debugWalk : bake.debugIdle : bake[clip] : sides ? bake.actions[clip].debug : bake.actions[clip].url : ""
   const bakedShadow = sides ? undefined : clip === "walk" ? bake?.shadowWalk : clip === "idle" ? bake?.shadowIdle : bake?.actions[clip].shadow
-  const url = isKnight ? `/textures/knights/${KNIGHT.version}/${mountedKnight ? `mounted-${animalCoat("horse", coat).id}` : `knight-${knightClip}`}.png` : !isPerson ? subject === "cart" ? cartUrl(cargo, cartMode, 1, cartPuller === "hand") : animalUrl(subject, animalCoat(subject, coat).id) : live?.url ?? bakedSheet
+  const url = isKnight ? mountedKnight ? `/textures/knights/${KNIGHT.version}/mounted-${animalCoat("horse", coat).id}.png` : knightPersonClip(knightClip).url : !isPerson ? subject === "cart" ? cartUrl(cargo, cartMode, 1, cartPuller === "hand") : animalUrl(subject, animalCoat(subject, coat).id) : live?.url ?? bakedSheet
   const shadowUrl = !isPerson || sides ? undefined : live?.shadowUrl ?? bakedShadow
   const partialLive = !!live && live.rows.length < BASE_PERSON.directions.length
   const renderPalette = personRecipe(design).renderPalette
@@ -421,7 +423,7 @@ export function BasePersonLab({ mode, onModeChange, active: workspaceActive = tr
   const ready = !busy && !error && !!bake && sheetMatchesDesign
 
   return <AssetEditorFrame onSelectionChange={setEntityActive} mode={mode} onModeChange={onModeChange} label="Character playground" onRandomize={randomize}
-    version={isPerson ? `Base person · v${BASE_PERSON.version}` : `${SUBJECTS[subject]} · ${isKnight ? KNIGHT.version : subject === "cart" ? TRANSPORT.version : PARTY_TRANSPORT_VERSION}`}
+    version={isPerson ? `Base person · v${BASE_PERSON.version}` : `${SUBJECTS[subject]} · ${isKnight ? knightMetadata.version : subject === "cart" ? TRANSPORT.version : PARTY_TRANSPORT_VERSION}`}
     controlsOpen={controlsOpen} onControlsToggle={() => setControlsOpen(!controlsOpen)}
     roadHref={`/play?characters=base&baseSize=1.5&fps=${fps}`}
     status={onMap ? "Merchant journey and turning simulations · game scale" : !isPerson ? `${subject === "horse" ? transportMetadata.animalProfiles[horseVariant].label : SUBJECTS[subject]} · ${clipLabel}` : dragging ? "Live preview · release to finish sprite sheets." : busy ? bakeProgress ? `Updating sprite sheets · ${Math.round(bakeProgress.done / bakeProgress.total * 100)}%` : "Updating sprite sheets…" : populationBuilding ? `Updating road characters · ${Math.round(populationProgress * 100)}%` : populationError || message || "Ready · changes preview instantly"}
@@ -535,7 +537,7 @@ export function BasePersonLab({ mode, onModeChange, active: workspaceActive = tr
             {!onMap && <AssetEditorSection title="Animation"><Tuner label="Timing" labelClassName="w-28" value={fps} min={1} max={24} display={`${(fps * animationRate).toFixed(1)} fps`} onChange={setFps} /></AssetEditorSection>}
             <AssetEditorSection title="Files"><div className="person-file-actions">
               <a className={button} href={url} download>Download sprite sheet</a>
-              <a className={button} href={isKnight ? `/textures/knights/${KNIGHT.version}/manifest.json` : `/textures/transport/${subject === "cart" ? TRANSPORT.version : PARTY_TRANSPORT_VERSION}/manifest.json`} download>Download sheet metadata</a>
+              <a className={button} href={isKnight ? `/textures/knights/${knightMetadata.version}/manifest.json` : `/textures/transport/${subject === "cart" ? TRANSPORT.version : PARTY_TRANSPORT_VERSION}/manifest.json`} download>Download sheet metadata</a>
             </div><p className="person-hint">{pixels} × {pixels} px cell · {subject === "cart" ? CART.directions : 8} directions<br />{isKnight ? mountedKnight ? knightMetadata.safePadding : 4 : transportMetadata.safePadding} px safe margin</p></AssetEditorSection>
           </>}
           {(isPerson || isKnight || subject === "cart") && <AssetEditorSection title="Sounds">

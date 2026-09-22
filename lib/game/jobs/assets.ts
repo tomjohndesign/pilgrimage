@@ -1,4 +1,4 @@
-import manifest from "../../../public/textures/characters/jobs/v5/manifest.json"
+import manifest from "../../../public/textures/characters/jobs/v6/manifest.json"
 import { outfitVisual } from "../base-person/population-assets"
 import type { PopulationPack } from "../base-person/population"
 import { validatePersonDesign } from "../base-person/design"

@@ -711,7 +711,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
       const dining = clip === "seatedMeal" || clip === "seatedDrink"
       // Raise, hold at the mouth, then lower over a four-second loop.
       const lift = Math.min(1, Math.max(0, (1 - Math.cos(phase * Math.PI * 2)) * .8))
-      const chair = clip === "seatedPrayer" || dining
+      const chair = clip === "sittingChair" || clip === "seatedPrayer" || dining
       const lowDrink = clip === "drinkingLow"
       const seated = clip === "sitting" || chair, praying = clip === "praying"
       const felling = clip === "treeFelling", splitting = clip === "woodcutting"
@@ -869,7 +869,7 @@ export function createBasePersonRig(recipe = personRecipe()) {
             new THREE.Vector3(-.20, .14, .40).lerp(new THREE.Vector3(-.06, b.headCenter - b.hipHeight - .12, .22), lift)
           reach(limb, target.toArray() as Point3, true)
         }
-        else if (praying || chair) reach(limb, [sign * 0.035, b.chestHeight - b.hipHeight, 0.33])
+        else if (praying || clip === "seatedPrayer") reach(limb, [sign * 0.035, b.chestHeight - b.hipHeight, 0.33])
         else if (felling) {
           // Carry the two-handed grip with the chest as it twists, within both arms' reach.
           const target = new THREE.Vector3(Math.sin(swing.twist) * 0.28,

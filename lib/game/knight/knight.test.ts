@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import sharp from "sharp"
 import * as THREE from "three"
-import manifest from "../../../public/textures/knights/v13/manifest.json"
+import manifest from "../../../public/textures/knights/v14/manifest.json"
 import { BASE_PERSON, PERSON_CLIPS } from "../base-person/pose"
 import { personRecipe } from "../base-person/design"
 import { personWalkStride } from "../base-person/gait"
@@ -11,12 +11,12 @@ import { TRANSPORT, ANIMAL_RIG_VERSION, animalProfile } from "../transport/asset
 import { KNIGHT, knightDesign, squireDesign } from "./design"
 import { equipKnight, seatKnight } from "./rig"
 import { equipSquire } from "./squire-rig"
-import { knightVisual, squireVisual } from "./visual"
+import { knightPersonClip, knightVisual, squireVisual } from "./visual"
 
 describe("knight assets", () => {
   it("uses the current shared template, authored gait and uniform pixels", () => {
     expect(manifest.templateVersion).toBe(BASE_PERSON.version)
-    expect(manifest.version).toBe(KNIGHT.version)
+    expect(manifest.sourceVersion).toBe(KNIGHT.version)
     expect(manifest.designs).toEqual(Array.from({ length: KNIGHT.variants }, (_, i) => knightDesign(i)))
     expect(manifest.scale / manifest.cellSize).toBeCloseTo(0.74 / 48, 12)
     expect(manifest.camera.viewSize / manifest.cellSize).toBeCloseTo(BASE_PERSON.camera.viewSize / BASE_PERSON.cellSize, 12)
@@ -34,6 +34,7 @@ describe("knight assets", () => {
       expect(visual.walkStride).toBe(personWalkStride(knightDesign(variant)))
       expect(visual.walk.columns).toBe(PERSON_CLIPS.walk.frames)
       expect(visual.actions.praying.columns).toBe(PERSON_CLIPS.praying.frames)
+      expect(visual.actions.sittingChair.columns).toBe(PERSON_CLIPS.sittingChair.frames)
       expect(visual.actions.seatedPrayer.columns).toBe(PERSON_CLIPS.seatedPrayer.frames)
     }
   })
@@ -95,7 +96,8 @@ describe("knight assets", () => {
       ...(["walk", "idle", "wearyWalk"] as const).map(clip => [`squire-${clip}`, manifest.squire.frameCounts[clip], manifest.squire.rows, manifest.squire.cellSize] as [string, number, number, number]),
     ]
     for (const [name, columns, rows, size] of sheets) {
-      const { data, info } = await sharp(`public/textures/knights/${KNIGHT.version}/${name}.png`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+      const url = name.startsWith("knight-") ? knightPersonClip(name.slice(7) as keyof typeof PERSON_CLIPS).url : `/textures/knights/${KNIGHT.version}/${name}.png`
+      const { data, info } = await sharp(`public${url}`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
       expect([info.width, info.height]).toEqual([columns * size, rows * size])
       const occupied = new Set<number>(); let invalid = 0, cropped = 0
       for (let y = 0; y < info.height; y++) for (let x = 0; x < info.width; x++) {

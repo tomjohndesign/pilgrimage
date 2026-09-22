@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import sharp from "sharp"
-import manifest from "../../../public/textures/characters/rockets/v16/manifest.json"
+import manifest from "../../../public/textures/characters/rockets/v18/manifest.json"
 import { BASE_PERSON, PERSON_CLIPS } from "../base-person/pose"
 import { monkVisual } from "../base-person/monk-assets"
 import { rocketFlightClip, rocketMonkVisual } from "./assets"
@@ -19,9 +19,11 @@ describe("rocket monk assets", () => {
     }
   })
 
-  it.each(["brown", "grey"])("ships complete, registered %s sheets with binary alpha and safe margins", async hair => {
+  it.each([30, 80])("ships complete, registered %s sheets with binary alpha and safe margins", async age => {
+    const hair = age === 30 ? "brown" : "grey", visual = rocketMonkVisual(age)
+    const clips = { walk: visual.walk, idle: visual.idle, ...visual.actions, flying: rocketFlightClip(age) }
     for (const [clip, columns] of Object.entries(manifest.frameCounts)) {
-      const { data, info } = await sharp(`public/textures/characters/rockets/v16/${hair}-${clip}.png`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+      const { data, info } = await sharp(`public${clips[clip as keyof typeof clips].url}`).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
       const cell = manifest.cellSize
       expect([info.width, info.height]).toEqual([cell * columns, cell * manifest.directions.length])
       const occupied = new Set<number>()

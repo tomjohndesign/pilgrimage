@@ -307,7 +307,7 @@ function authoredBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
   function bench(name: string, x: number, z: number, length: number, top = .3, facing?: number) {
     for (const end of [-1, 1]) pole(`${name}-leg-${end}`, [x+end*length*.35,floor,z], [x+end*length*.35,floor+top,z], .035, "interior")
     box(`${name}-seat`, "interior", [x,floor+top,z], [length,.045,.18], palette.paleWood, undefined, false)
-    if (facing !== undefined) parts[parts.length-1].support = { clips: ["sitting", "seatedMeal", "seatedDrink"], heading: facing }
+    if (facing !== undefined) parts[parts.length-1].support = { clips: ["sitting", "sittingChair", "seatedMeal", "seatedDrink"], heading: facing }
   }
   if (variant === "garden") {
     // Two herb beds leave a narrow flagstone walk between them.

@@ -21,6 +21,8 @@ describe("authored character supports", () => {
     expect(plan?.seat?.id).toBe("entry-chair-seat")
     const support = characterSupport(map, plan.seat!.point.x, plan.seat!.point.z, "sitting")!
     expect(support.id).toBe("entry-chair-seat")
+    expect(characterSupport(map, plan.seat!.point.x, plan.seat!.point.z, "sittingChair")).toEqual(support)
+    expect(characterSupport(map, start.x, start.z + 1, "sittingChair")).toBeUndefined()
     expect(support.anchor.x).toBeCloseTo(plan.seat!.point.x)
     expect(support.anchor.z).toBeCloseTo(plan.seat!.point.z)
     expect(seatRestPlan(map, building, start, new Set([`${building.id}:entry-chair-seat`]))).toBeNull()
