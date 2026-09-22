@@ -51,6 +51,7 @@ it("does not swap coincident figures when their animated planted-foot offsets cr
   const f = fixture()
   try {
     const first = f.add(0), second = f.add(0)
+    first.railSeat = { x: 0, y: .32, z: 0 }; second.railSeat = { x: 0, y: .32, z: 0 }
     f.update([first, second])
     for (const offset of [-.04, .04, -.03, .03]) {
       first.sprite.parent!.position.z = offset

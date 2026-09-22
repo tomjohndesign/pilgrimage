@@ -95,7 +95,7 @@ export function WorkspaceFrame({ selection, title, label, status, detail, childr
     <div className="chrome-navigation-scroll"><div ref={setNavigation} />
       {(root || !hasEntities) && <nav aria-label="Workspace pages">{[
         { title: "Entities", ids: ["characters", "animals", "buildings", "icons", "ents", "trees", "maps", "textures"] },
-        { title: "Explorations", ids: ["paths", "town", "placement", "pipeline"] },
+        { title: "Explorations", ids: ["paths", "town", "placement", "overlap", "pipeline"] },
         { title: "Pages", ids: ["tuning"] },
       ].map(group => <div key={group.title}><h3>{group.title}</h3>{PLAYGROUND_TOOLS.filter(item => group.ids.includes(item.id)).map(item => <ChromeButton key={item.id} className="chrome-nav-row" aria-current={item.id === selection ? "page" : undefined} onClick={() => chooseTool(item.id)}><span>{item.label}</span><ChevronRight size={12} /></ChromeButton>)}
         {group.title === "Pages" && REFERENCE_PAGES.map(page => <Link key={page.id} className="chrome-nav-row" href={page.href}>{page.label}<ChevronRight size={12} /></Link>)}

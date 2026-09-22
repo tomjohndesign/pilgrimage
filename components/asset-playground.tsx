@@ -20,6 +20,7 @@ const EDITORS: Record<PlaygroundTool, ComponentType<AssetEditorNavigation & { ac
   paths: lazy(() => import("./path-lab/path-lab").then(m => ({ default: m.PathLab }))),
   town: lazy(() => import("./path-lab/town-lab").then(m => ({ default: m.TownLab }))),
   placement: lazy(() => import("./placement-lab/placement-lab").then(m => ({ default: m.PlacementLab }))),
+  overlap: lazy(() => import("./overlap-experiments/overlap-experiments").then(m => ({ default: m.OverlapExperiments }))),
 }
 
 /** One playground. Keep drafts when switching tools and pause hidden previews. */

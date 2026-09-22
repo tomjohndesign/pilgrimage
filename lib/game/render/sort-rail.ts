@@ -15,14 +15,14 @@ export function sortRailOffset(id: number): number {
 }
 
 /** Project the logical path and its local normal through the actual camera.
- * Seat offsets are ground positions in the rig, not atlas registration points.
+ * Body offsets are positions in the rig, not atlas registration points.
  * JS doubles retain the sub-pixel rail; quantization removes cardinal-angle
  * floating-point noise so exact ties use identity, never batch visitation. */
 export function sortRailDistance(world: ArrayLike<number>, view: ArrayLike<number>, heading: number, id: number,
-  seat?: { x: number; z: number }, ground?: THREE.Vector4): number {
+  seat?: { x: number; y?: number; z: number }, ground?: THREE.Vector4): number {
   const sin = Math.sin(heading), cos = Math.cos(heading), rail = sortRailOffset(id)
   const dx = (seat?.x ?? 0) * cos + (seat?.z ?? 0) * sin + cos * rail
   const dz = -(seat?.x ?? 0) * sin + (seat?.z ?? 0) * cos - sin * rail
-  const dy = ground && ground.y > 0 ? -(ground.x * dx + ground.z * dz) / ground.y : 0
+  const dy = (seat?.y ?? 0) + (ground && ground.y > 0 ? -(ground.x * dx + ground.z * dz) / ground.y : 0)
   return Math.round(-(view[2] * (world[12] + dx) + view[6] * (world[13] + dy) + view[10] * (world[14] + dz) + view[14]) * 1e9) / 1e9
 }

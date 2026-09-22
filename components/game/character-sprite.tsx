@@ -9,6 +9,8 @@ import { CharacterMapContext } from "./character-map-context"
 
 import { useCharacterBatches, characterBatchControl } from "./character-batches"
 import { spriteTextureView } from "@/lib/game/render/sprite-texture"
+import { bodySortAnchor } from "@/lib/game/render/body-sort-anchor"
+import { RIG_TO_WORLD } from "@/lib/game/transport/assets"
 import { SpriteFrame } from "./sprite-frames"
 import { isWorldVisible } from "@/lib/game/render/visibility"
 import { sceneryDetail } from "@/lib/game/render/scenery-detail"
@@ -207,13 +209,14 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
     if (!batchEntries || !sprite.current || !idSprite.current || !outlineColor) return
     const entry = { sprite: sprite.current, ids: idSprite.current, publishesPose: true, complexion: complexionValues, palette: characterPalette(complexionValues), ground: groundPlane,
       batchable: name === "traveler", overlapAnchor: sprite.current.parent?.parent ?? undefined,
+      railSeat: bodySortAnchor(RIG_TO_WORLD * individualScale),
       fixedAttributes: Float32Array.from([center.x, center.y, ...outlineColor]), depth: poseDepth, depthBias, id: new THREE.Vector3(...outlineColor) }
     batchEntry.current = entry
     const unregisterEntry = registerCharacterBatchEntry(entry)
     batchEntries.add(entry)
     const unregister = registerSimpleBatchSource(entry.sprite, entry.ids)
     return () => { batchEntry.current = null; unregisterEntry(); unregister(); batchEntries.delete(entry); entry.sprite.visible = entry.ids.visible = true }
-  }, [batchEntries, complexionValues, groundPlane, poseDepth, depthBias, name, center, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
+  }, [batchEntries, complexionValues, groundPlane, poseDepth, depthBias, name, center, individualScale, outlineColor?.[0], outlineColor?.[1], outlineColor?.[2]])
 
   const crowdWalk = useMemo<CrowdWalk | null>(() => map && rig && !attachment && walkTuning?.sync !== false ? {
     map, rig, walk: visual.walk, weary: visual.actions.wearyWalk, wearyIndex: actionIndices.wearyWalk,

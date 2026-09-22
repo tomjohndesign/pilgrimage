@@ -33,8 +33,8 @@ export interface CharacterBatchEntry {
   depthBias?: { value: number }
   /** Distinguishes drawables with the same selection ID. */
   railPart?: number
-  /** Seat ground position relative to the logical anchor, in world units. */
-  railSeat?: { x: number; z: number }
+  /** Stable body sort position relative to the logical anchor, in world units. */
+  railSeat?: { x: number; y?: number; z: number }
   /** This frame's resolved anchor, written by CharacterBatch.write for the
    * overlap ordering pass. */
   anchorX?: number
