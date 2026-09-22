@@ -3,7 +3,7 @@ import type { SimTraveler } from "../sim"
 import type { TravelParty } from "../travel-parties"
 import { diversionPoints, partyRoadDelta } from "../travel-parties"
 import { deriveSeed, makeRng } from "../rng"
-import { animalWalkSpeed, cartOffset, type Animal } from "./assets"
+import { animalWalkSpeed, cartOffset, PACK_LEAD, type Animal } from "./assets"
 import { roadCartPose } from "./bridge-guide"
 import { followCart, type CartPose } from "./follow"
 import { convoyBuildingsClear, parkingClear, shrineParking, type ParkingContext, type ShrineParking } from "./navigation"
@@ -41,7 +41,7 @@ export interface PartyPack {
   phase?: "parking" | "parked" | "leaving"
 }
 /** How far ahead of a pack animal its handler walks on the lead, in tiles per unit of character scale. */
-export const PACK_LEAD = 1.1
+export { PACK_LEAD } from "./assets"
 
 /** Personal IDs and appearance never change when allocating transport. Keep at
  * least one walker, and favor walking companies over a road full of wagons. */

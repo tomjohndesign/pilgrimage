@@ -10,6 +10,12 @@ export interface OverlapParticipant {
 
 export const OVERLAP_CLEARANCE = .001
 
+/** Shared by rendering and the playground's recorded back-to-front baseline. */
+export function overlapOrder(participants: readonly Pick<OverlapParticipant, "distance" | "order">[]): number[] {
+  return Array.from({ length: participants.length }, (_, i) => i).sort((a, b) =>
+    participants[b].distance - participants[a].distance || participants[a].order - participants[b].order)
+}
+
 /** One global back-to-front order. Bounds only limit which depth corrections
  * must propagate; they never change the order or combine convoy members.
  * An X sweep avoids comparing every pair in a dispersed crowd. */
@@ -18,8 +24,7 @@ export function overlapBiases(participants: readonly OverlapParticipant[], out: 
   if (out.length < count) out = new Float32Array(count)
   out.fill(0, 0, count)
   if (count < 2) return out
-  const ordered = Array.from({ length: count }, (_, i) => i)
-  ordered.sort((a, b) => participants[b].distance - participants[a].distance || participants[a].order - participants[b].order)
+  const ordered = overlapOrder(participants)
   const rank = new Int32Array(count)
   ordered.forEach((index, i) => { rank[index] = i })
   const behind: number[][] = Array.from({ length: count }, () => [])

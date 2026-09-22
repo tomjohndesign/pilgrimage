@@ -4,6 +4,7 @@ import { playSourceSelection } from "@/lib/game/scene-audio"
 import { useCharacterBatches } from "./character-batches"
 import { registerCharacterBatchEntry } from "@/lib/game/render/character-batch"
 import { spriteTextureView } from "@/lib/game/render/sprite-texture"
+import { bodySortAnchor } from "@/lib/game/render/body-sort-anchor"
 
 import { withTerrainCornerQueries } from "@/lib/game/map/cliff-corners"
 import { isWorldVisible } from "@/lib/game/render/visibility"
@@ -94,7 +95,7 @@ export function TransportSprite({ passengerCart, seat = 0, calling = "peasant", 
     const entry = { sprite: body.current, ids: ids.current, ground: groundPlane, depth: poseDepth, depthBias,
       overlapAnchor: body.current.parent?.parent ?? undefined, batchable: !edited,
       railPart: kind === "cart" ? 1 : animal ? 2 : kind === "driver" ? 3 : kind === "passenger" ? 4 + seat : 0,
-      railSeat: seatPosition ? { x: seatPosition.x * unit, z: seatPosition.z * unit } : undefined,
+      railSeat: seatPosition ? bodySortAnchor(unit, seatPosition) : kind === "merchant" ? bodySortAnchor(unit) : undefined,
       id: new THREE.Vector3(...outlineColor) }
     batchEntries.add(entry)
     const unregister = registerCharacterBatchEntry(entry)

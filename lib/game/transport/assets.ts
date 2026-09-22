@@ -26,6 +26,8 @@ export const TRANSPORT = {
   wheelRadius: 0.46, wheelFrames: 24, animalFrames: 20, grazeFrames: 12, lowerFrames: 6, shopFrames: 12,
 } as const
 export const DRIVER_SEAT = { x: 0, y: 0.73, z: 1.24 } as const
+/** How far ahead of a pack animal its handler walks, per unit of character scale. */
+export const PACK_LEAD = 1.1
 /** Narrower chassis and wheel track; wheel diameter and drawbar length stay fixed. */
 export const CART_WIDTH_SCALE = 0.8
 /** Wheel centre offset in the source rig, before chassis width scaling. */
