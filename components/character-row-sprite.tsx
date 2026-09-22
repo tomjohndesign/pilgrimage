@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { BASE_PERSON, PERSON_CLIPS, type BaseClip, type ActionClip } from "@/lib/game/base-person/pose"
 import { PERSON_PRESETS, type PersonDesign } from "@/lib/game/base-person/design"
-import knightMetadata from "@/public/textures/knights/v13/manifest.json"
+import knightMetadata from "@/public/textures/knights/v14/manifest.json"
 import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
 import { BASE_CHARACTER_SCALE } from "@/lib/game/base-person/gait"
 import { POPULATION_PROFILES } from "@/lib/game/base-person/population"
@@ -45,7 +45,8 @@ async function loadSprite(id: string, draft?: PersonDesign, sequence: BaseClip =
       const { KNIGHT } = await import("@/lib/game/knight/design")
       const variant = Math.max(0, POPULATION_PROFILES.findIndex(p => id === `knight/${p.id}`)) % KNIGHT.variants
       row = variant * 8 + 1; size = knightMetadata.person.cellSize; center = [knightMetadata.person.anchor[0] / size, 1 - knightMetadata.person.anchor[1] / size]; worldSize = size * CHARACTER_PIXEL_SIZE; frames = knightMetadata.person.frameCounts[sequence as keyof typeof knightMetadata.person.frameCounts] ?? knightMetadata.person.frameCounts.walk
-      idleUrl = `/textures/knights/${KNIGHT.version}/knight-idle.png`; walkUrl = `/textures/knights/${KNIGHT.version}/knight-${sequence in knightMetadata.person.frameCounts ? sequence : "walk"}.png`
+      const { knightPersonClip } = await import("@/lib/game/knight/visual")
+      idleUrl = knightPersonClip("idle").url; walkUrl = knightPersonClip(sequence in knightMetadata.person.frameCounts ? sequence : "walk").url
     } else {
       const parts = id.split("/"); let visual
       if (parts[0] === "job") {

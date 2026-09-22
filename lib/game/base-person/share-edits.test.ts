@@ -47,3 +47,12 @@ it("imports v26 designs without retiming their existing pose edits", () => {
     templateVersion: 26, character: "preset/Monk", drafts: { "preset/Monk": design } }), "preset/Storybook")
   expect(result.drafts["preset/Monk"]).toEqual(design)
 })
+
+it("keeps ground and chair sitting keys separate across import and export", () => {
+  const key = { frame: 3, radius: 2, offset: [0.02, 0, -0.08] as [number, number, number] }
+  const design = { ...PERSON_PRESETS.Monk, poseEdits: {
+    sitting: { rightHand: [key] }, sittingChair: { leftHand: [{ ...key, frame: 5 }] },
+  } }
+  const imported = parseCharacterEdits(characterEditsJson("preset/Monk", {}, design), "preset/Monk")
+  expect(imported.drafts["preset/Monk"].poseEdits).toEqual(design.poseEdits)
+})

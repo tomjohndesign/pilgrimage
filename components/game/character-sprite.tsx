@@ -245,7 +245,11 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
     const playing = parent.userData.activity === "performing" ? playingClip : undefined
     const special = flight ?? playing
     const refreshment: import("@/lib/game/base-person/pose").ActionClip | undefined = parent.userData.refreshmentClip
-    const requested = !moving && refreshment && visual.actions[refreshment] ? refreshment : activityClip(parent.userData.activity, moving, parent.userData.carrying, parent.userData.weary === true)
+    let requested = !moving && refreshment && visual.actions[refreshment] ? refreshment : activityClip(parent.userData.activity, moving, parent.userData.carrying, parent.userData.weary === true)
+    origin.setFromMatrixPosition(parent.matrixWorld)
+    const support = map && !moving && !special && requested !== "walk" && requested !== "idle" && visual.actions[requested]
+      ? characterSupport(map, origin.x, origin.z, requested, requested === "sleeping" ? parent.userData.restHeight ?? origin.y : origin.y) : undefined
+    if (support && requested === "sitting" && visual.actions.sittingChair) requested = "sittingChair"
     const actionIndex = actionIndices[requested]
     const action = requested !== "walk" && requested !== "idle" ? visual.actions[requested] : undefined
     const workTree = !moving && action && work && (requested === "treeFelling" || requested === "woodcutting")
@@ -304,7 +308,6 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
     }
     if (sprite.current) sprite.current.userData.clip = flight ? "flying" : playing ? "performing" : action ? requested : moving ? "walk" : "idle"
     origin.setFromMatrixPosition(parent.matrixWorld)
-    const support = map && !moving && !special && action ? characterSupport(map, origin.x, origin.z, requested, requested === "sleeping" ? parent.userData.restHeight ?? origin.y : origin.y) : undefined
     if (support) heading = support.heading
     const direction = spriteRow(heading, yaw)
     if (sprite.current) sprite.current.userData.direction = direction
@@ -350,7 +353,7 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
         poseRoot.current.position.copy(corrected.applyMatrix4(parentInverse))
       } else {
         poseState.plant = null
-        if (support && visual.design && (requested === "sitting" || requested === "sleeping" || requested === "seatedPrayer" || requested === "seatedMeal" || requested === "seatedDrink")) {
+        if (support && visual.design && (requested === "sitting" || requested === "sittingChair" || requested === "sleeping" || requested === "seatedPrayer" || requested === "seatedMeal" || requested === "seatedDrink")) {
           const point = restContacts(visual.design, requested, clip.columns)[frame]
           const aligned = restContactOrigin({ ...support.anchor, y: support.height }, point,
             direction, yaw, pitch, size / BASE_PERSON.camera.viewSize)

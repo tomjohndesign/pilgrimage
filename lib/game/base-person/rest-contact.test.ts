@@ -65,6 +65,26 @@ describe("furniture pose registration", () => {
     }
   })
 
+  it("registers chair sitting at the hips while the feet and long hems hang below the seat", () => {
+    for (const design of [...designs, PERSON_PRESETS.Nun]) {
+      const recipe = personRecipe(design), rig = createBasePersonRig(recipe)
+      try {
+        const contacts = restContacts(design, "sittingChair", PERSON_CLIPS.sittingChair.frames)
+        for (let frame = 0; frame < contacts.length; frame++) {
+          rig.pose(frame / contacts.length, "sittingChair")
+          const hips = rig.root.getObjectByName("pelvis")!.getWorldPosition(new THREE.Vector3())
+          expect(contacts[frame][1]).toBeCloseTo(hips.y - recipe.body.thighWidth, 8)
+          expect(contacts[frame][0]).toBeCloseTo(hips.x, 8)
+          expect(contacts[frame][2]).toBeCloseTo(hips.z, 8)
+          for (const side of ["left", "right"]) {
+            const foot = rig.root.getObjectByName(`${side}-foot`)!.getWorldPosition(new THREE.Vector3())
+            expect(foot.y).toBeLessThan(contacts[frame][1])
+          }
+        }
+      } finally { rig.dispose() }
+    }
+  })
+
   it("keeps the baked contact's screen position and depth on rotated furniture at different zooms and pitches", () => {
     const bakedPitch = BASE_PERSON.camera.pitch * Math.PI / 180
     const point: [number, number, number] = [.08, .16, -.22]

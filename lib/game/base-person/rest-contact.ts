@@ -3,7 +3,7 @@ import { personRecipe, type PersonDesign } from "./design"
 import { BASE_PERSON, type Point3 } from "./pose"
 import { createBasePersonRig } from "./rig"
 
-type RestClip = "sitting" | "sleeping" | "seatedPrayer" | "seatedMeal" | "seatedDrink"
+type RestClip = "sitting" | "sittingChair" | "sleeping" | "seatedPrayer" | "seatedMeal" | "seatedDrink"
 const contacts = new WeakMap<PersonDesign, Map<string, Point3[]>>()
 
 /** Register the outfit's underside, including proportions and saved pose edits. */
@@ -13,7 +13,8 @@ export function restContacts(design: PersonDesign, clip: RestClip, frames: numbe
   const key = `${clip}:${frames}`
   const existing = cached.get(key)
   if (existing) return existing
-  const rig = createBasePersonRig(personRecipe(design))
+  const recipe = personRecipe(design)
+  const rig = createBasePersonRig(recipe)
   try {
     const torso = rig.root.getObjectByName(design.garment === "Robe" ? "robe" : design.bodyType === "Female" ? "sleeveless-dress" : "shirt") as THREE.Mesh
     const pelvis = rig.root.getObjectByName("pelvis")!
@@ -25,14 +26,18 @@ export function restContacts(design: PersonDesign, clip: RestClip, frames: numbe
       // The hem/back rests on the top. Feet, hands, pillows and snore marks
       // must not lower this contact or shift a seat away from the hips.
       bounds.setFromObject(torso, true)
-      const height = bounds.min.y
+      let height = bounds.min.y
       if (clip === "sleeping") {
         // Centre head to toe on the mattress. Accessories, breathing hands,
         // the ground pillow and effects do not move the body's resting place.
         bounds.makeEmpty()
         for (const part of body) bounds.expandByObject(part, true)
         bounds.getCenter(point)
-      } else pelvis.getWorldPosition(point)
+      } else {
+        pelvis.getWorldPosition(point)
+        // A chair supports the underside of the hips, not the hanging robe hem.
+        if (clip === "sittingChair") height = point.y - recipe.body.thighWidth
+      }
       return [point.x, height, point.z]
     })
     cached.set(key, result)

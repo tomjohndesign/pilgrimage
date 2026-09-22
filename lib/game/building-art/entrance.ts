@@ -43,7 +43,7 @@ export function entranceParts(type: string, wallHeight = .78, seed = 17, stocked
     } else if (type !== "tavern") {
     for(const a of [-1,1]) for(const b of [-1,1]) box(`chair-leg-${a}-${b}`,[x+a*.08,.12,z+b*.08],[.026,.24,.026],"#806b4c")
     box("chair-seat",[x,.25,z],[.22,.035,.22],"#9f875e")
-    parts[parts.length-1].support = { clips: ["sitting", "seatedMeal", "seatedDrink"], heading: 0 }
+    parts[parts.length-1].support = { clips: ["sitting", "sittingChair", "seatedMeal", "seatedDrink"], heading: 0 }
     for(const side of [-1,1]) box(`chair-back-post-${side}`,[x+side*.085,.36,z-.085],[.028,.27,.028],"#806b4c")
     box("chair-back",[x,.45,z-.085],[.20,.08,.025],"#968058")
     }
