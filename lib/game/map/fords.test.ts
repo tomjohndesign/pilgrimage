@@ -13,6 +13,10 @@ import { generateTravelers, TRAVELER_TYPES } from "../travelers"
 import { alignCart } from "../transport/follow"
 import { convoyClear } from "../transport/navigation"
 import { cartOffset } from "../transport/assets"
+import { layMainRoadTiles } from "./road-footprint"
+import { mainRoadWidthAt } from "./road-width"
+import { roadLanePoint } from "./road-lane"
+import { diagonalRoadSegments } from "../render/road-segments"
 
 function crossing(seed = 1) {
   const map = parseAsciiMap([
@@ -37,6 +41,49 @@ function finish(map: ReturnType<typeof crossing>) {
 }
 
 describe("shallow river fords", () => {
+  it("keeps both tracks across shallows and irregular bank approaches", () => {
+    const map = crossing()
+    map.mainRoadWidth = 2
+    // A narrow bank nose has river water on either side of its road tile.
+    for (const x of [5, 9]) for (const z of [2, 4]) {
+      const i = z * map.width + x
+      map.tiles[i] = "water"
+      map.water!.depth[i] = 2
+      map.water!.surface![i] = -0.2
+      map.water!.flow[i] = [0, 1]
+      map.water!.motion![i] = "flow"
+      map.elevation!.height[i] = -1
+    }
+    seedFords(map, bridgeLayout({ ...map }).spans)
+    finish(map)
+    layMainRoadTiles(map)
+    for (const x of [5, 9]) for (const z of [2, 4])
+      expect(map.tiles[z * map.width + x]).toBe("ford")
+    for (let progress = 2; progress <= 12; progress += .25) {
+      expect(mainRoadWidthAt(map, progress)).toBe(2)
+      expect(mainRoadWidthAt(map, progress, true)).toBe(2)
+      for (const lane of [-.36, -.17, .17, .36]) {
+        const at = roadLanePoint(map, map.road!, progress, lane)!
+        expect(["path", "ford"]).toContain(map.tiles[Math.round(at.z) * map.width + Math.round(at.x)])
+      }
+    }
+    const bins = diagonalRoadSegments(map)
+    for (const x of [4, 5, 9, 10]) {
+      const segments = bins.get(3 * map.width + x)!.filter(s => s[4] === 0)
+      expect(segments.length).toBeGreaterThan(0)
+      expect(segments.every(s => s[6] === 2)).toBe(true)
+    }
+  })
+
+  it("keeps a generated shallow entrance wide beside an irregular bank", () => {
+    const map = generateMap({ seed: 3, width: 128, depth: 128, riverCount: 2, lakeCount: 0, pondCount: 0 })
+    const entrance = map.road!.findIndex(p => map.tiles[p.z * map.width + p.x] === "ford")
+    expect(entrance).toBeGreaterThan(2)
+    // The far bank leads into a separate bridge; check this unobstructed bank.
+    for (let progress = entrance - 2; progress <= entrance + 1; progress += .25)
+      expect(mainRoadWidthAt(map, progress)).toBe(2)
+  })
+
   it("scatters small natural patches along riverbanks without a road", () => {
     const map = parseAsciiMap(Array(64).fill("........~~~~~........"))
     map.seed = 7919
