@@ -84,10 +84,12 @@ export function seedFords(map: GameMap, spans: readonly BridgeSpan[]): void {
     if (spans.some(other => other !== span && other.tiles.some(p => span.tiles.some(q =>
       Math.abs(p.x - q.x) + Math.abs(p.z - q.z) < 5)))) continue
     // A road uses a broad natural shelf, not a one-tile strip of riverbed.
+    // Include both bank approaches: an irregular shoreline can otherwise leave
+    // deep water beside the landing and pinch the two-track road to one lane.
     // Grow on both sides of its crossing, with an uneven fringe farther out.
     const patch = new Set(indices)
-    for (const p of span.tiles) for (const side of [-1, 1]) {
-      const reach = rng() < 0.45 ? 2 : 1
+    for (const p of [...span.tiles, span.from, span.to]) for (const side of [-1, 1]) {
+      const reach = p === span.from || p === span.to ? 1 : rng() < 0.45 ? 2 : 1
       for (let offset = 1; offset <= reach; offset++) {
         const x = p.x - span.dz * side * offset, z = p.z + span.dx * side * offset
         if (x < 0 || z < 0 || x >= map.width || z >= map.depth) break
