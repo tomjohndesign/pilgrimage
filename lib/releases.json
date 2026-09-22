@@ -1,7 +1,19 @@
 {
-  "lastProcessedCommit": "b26be1ae295571fb11030a9050fccfaba006ed6b",
-  "releaseCount": 266,
+  "lastProcessedCommit": "51baa30c8934e32efbb65e948f089293de5a35f9",
+  "releaseCount": 268,
   "releases": [
+    {
+      "version": "0.0.282",
+      "title": "Release 0.0.282",
+      "summary": "Make squires named selectable members of knight parties (#301)",
+      "commit": "51baa30c8934e32efbb65e948f089293de5a35f9"
+    },
+    {
+      "version": "0.0.281",
+      "title": "Release 0.0.281",
+      "summary": "Add separate ground and chair sitting poses (#302)",
+      "commit": "76f16cef67c5c370888964f2d9d595db021b1f2d"
+    },
     {
       "version": "0.0.280",
       "title": "Release 0.0.280",
