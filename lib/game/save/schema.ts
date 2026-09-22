@@ -2,7 +2,6 @@ import { z } from "zod"
 
 import { ELEVATION_CONTROLS, elevationSettings } from "../map/elevation"
 import { MIN_MAP_SIZE } from "../map/generate-map"
-import { MAX_MAP_SIZE } from "../map-size-storage"
 import { MAX_ROAD_TIER } from "../map/road"
 import { treeModelForGame } from "../trees/render-model"
 import { SIMULATION_SPEEDS } from "../simulation-store"
@@ -44,7 +43,8 @@ export const elevationSettingsSchema = z
 export const worldSettingsSchema = z.object({
   generation: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).default(1).describe("Terrain generator version; older saves retain their original land"),
   seed: uint32.describe("World seed. With the settings below it fully determines the generated land"),
-  size: z.number().int().min(MIN_MAP_SIZE).max(MAX_MAP_SIZE).describe("Map edge length in tiles; maps are square"),
+  // Retain larger dimensions when loading worlds saved before map size was fixed.
+  size: z.number().int().min(MIN_MAP_SIZE).max(512).describe("Map edge length in tiles; new maps are 128×128"),
   coverage: finite.min(0).max(100).describe("Percent of the map left as forest after glades are carved"),
   glades: count.describe("Open grass glades carved out of the forest"),
   clearings: count.describe("Small forest-floor clearings scattered through the woods"),

@@ -32,8 +32,8 @@ import { generateWater, WATER_KIND_LAKE, WATER_KIND_RIVER } from "./water"
 /** Worlds are big; nothing generates smaller than this on a side. */
 export const MIN_MAP_SIZE = 128
 
-export const DEFAULT_MAP_WIDTH = 192
-export const DEFAULT_MAP_DEPTH = 192
+export const DEFAULT_MAP_WIDTH = 128
+export const DEFAULT_MAP_DEPTH = 128
 
 export interface GenerateMapOptions {
   /** Saved-world compatibility; new worlds use generation 4 with a chapel and no starting residence. */
@@ -253,7 +253,8 @@ export function generateMap(options: GenerateMapOptions): GameMap {
     riverCount: options.riverCount,
     lakeCount: options.lakeCount,
     pondCount: options.pondCount,
-    landmarkArea: Math.min(width * depth, DEFAULT_MAP_WIDTH * DEFAULT_MAP_DEPTH),
+    // Keep the original density reference so larger saved worlds regenerate identically.
+    landmarkArea: Math.min(width * depth, 192 * 192),
   })
   const { kind } = water
   const elevation = generateElevation(seed, width, depth, kind, options.elevation, water.flow)

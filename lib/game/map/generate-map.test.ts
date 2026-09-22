@@ -19,7 +19,7 @@ const SWEEP_TIMEOUT = 90_000
 
 /**
  * Generator sweeps run at the size floor: their thresholds were tuned there,
- * and it keeps the suite quick as the playable default grows.
+ * and matches the fixed playable size.
  */
 const FLOOR = { width: MIN_MAP_SIZE, depth: MIN_MAP_SIZE }
 
@@ -387,6 +387,12 @@ describe("generateMap", () => {
     }
   }, SWEEP_TIMEOUT)
 
+  it("generates a 128×128 world by default", () => {
+    const map = generateMap({ seed: 99 })
+    expect([map.width, map.depth]).toEqual([128, 128])
+    expect(map.tiles).toHaveLength(128 * 128)
+  })
+
   it("fills the grid with valid terrain, never smaller than 128 a side", () => {
     const map = generateMap({ seed: 99, width: 160, depth: 192 })
     expect(map.width).toBe(160)
@@ -401,7 +407,7 @@ describe("generateMap", () => {
     expect(small.tiles).toHaveLength(128 * 128)
   }, SWEEP_TIMEOUT)
 
-  it("builds a 512 × 512 map, the largest the HUD offers, with its road and hovel intact", () => {
+  it("builds a 512 × 512 map, the largest legacy save size, with its road and hovel intact", () => {
     const map = generateMap({ seed: 99, width: 512, depth: 512 })
     expect(map.tiles).toHaveLength(512 * 512)
     expect(map.tiles.every((t) => t in TERRAIN)).toBe(true)

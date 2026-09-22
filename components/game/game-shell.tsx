@@ -18,7 +18,6 @@ import { useCameraStore } from "@/lib/game/camera-store"
 import { CHARACTER_PIXELS_PER_UNIT } from "@/lib/game/render/pixel-scale"
 import { ROAD_TIERS } from "@/lib/game/map/road"
 import { randomSeed } from "@/lib/game/rng"
-import { loadDefaultMapSize, saveDefaultMapSize } from "@/lib/game/map-size-storage"
 import { useSimulationStore, type SimulationSpeed } from "@/lib/game/simulation-store"
 import { saveMatchesWorld, saveResumesQuery } from "@/lib/game/save/resume"
 import type { GameSave } from "@/lib/game/save/schema"
@@ -94,7 +93,7 @@ export function GameShell({
   /** The zoom the cookie names, so the loading overlay is at scale before the save is read. */
   resumeViewSize?: number | null
   /**
-   * The landing page (/) picks a seed and size and hands over to /play, which
+   * The landing page (/) picks a seed and hands over to /play, which
    * is always the game: the saved world when there is one, else a new one.
    */
   mode?: "landing" | "play"
@@ -124,6 +123,8 @@ export function GameShell({
     ...DEFAULT_SETTINGS,
     ...initialDisplay,
     ...initialWorld,
+    // New worlds have a fixed size; only restoring a save may override it.
+    size: DEFAULT_WORLD_SETTINGS.size,
   })
   // The browser's save and preferences are read once after mounting, so the
   // server and client never render from different worlds. Undefined until then.
@@ -161,7 +162,6 @@ export function GameShell({
   useEffect(() => {
     // Resolve the browser's preferences and save before generating terrain or
     // writing the URL. A link that names a different world wins over the save.
-    const size = loadDefaultMapSize()
     const { save } = loadGameSave()
     // The landing page keeps the save only to offer "Continue"; its own seed is a fresh roll.
     const resuming = playing && save && !benchmarkCity && !lab && saveResumesQuery(save, initialSeed, initialWorld) ? save : null
@@ -170,7 +170,7 @@ export function GameShell({
       ...loadDisplaySettings(),
       ...initialDisplay,
       ...(resuming ? { ...worldSettingsOf(resuming.world), treeModel: resuming.simulation.treeModel }
-        : initialWorld.size === undefined ? { size } : {}),
+        : { size: DEFAULT_WORLD_SETTINGS.size }),
     }))
     if (resuming) setSeed(resuming.world.seed)
     else setSeed(current => current ?? randomSeed())
@@ -422,8 +422,6 @@ export function GameShell({
         canStart={seed !== null && booted}
         onPlay={() => {
           if (seed === null) return
-          // The last size chosen becomes the default for links that name none.
-          saveDefaultMapSize(settings.size)
           router.push(`/play?${playQuery(seed, settings)}`)
         }}
         continueHref={!playing && booted && restore ? "/play" : null}
@@ -439,9 +437,8 @@ export function GameShell({
         onSettingsChange={setSettings}
         pixelation={pixelationSettings}
         onPixelationChange={(patch) => setPixelationOverrides((current) => ({ ...current, ...patch }))}
-        onNewMap={({ size, seed }) => {
-          saveDefaultMapSize(size)
-          setSettings(current => ({ ...current, size, generation: DEFAULT_WORLD_SETTINGS.generation }))
+        onNewMap={({ seed }) => {
+          setSettings(current => ({ ...current, size: DEFAULT_WORLD_SETTINGS.size, generation: DEFAULT_WORLD_SETTINGS.generation }))
           setSeed(seed)
         }}
         onSeedChange={setSeed}
