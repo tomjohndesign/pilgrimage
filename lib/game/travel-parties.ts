@@ -1,3 +1,4 @@
+import type { GatheringPlace } from "./party-gathering"
 import { cartOffset, RIG_TO_WORLD } from "./transport/assets"
 import type { PartyTransport, PartyPack } from "./transport/party"
 import type { WalkingShortcut } from "./walking-shortcuts"
@@ -31,6 +32,8 @@ export interface TravelParty {
   waterRetry?: number
   /** Seconds before waiting companions still on the road look for standing room again. */
   gatherRetry?: number
+  /** One shared meeting place for the duration of an errand or visit. */
+  gathering?: GatheringPlace
   visitPending: number[]
   visitStarted: number[]
   /** Road progress of the formation's head. Every place in the company derives from it. */

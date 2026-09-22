@@ -1,4 +1,4 @@
-import { isBird, type WildlifeKind } from "./species"
+import { isBird, isChicken, type WildlifeKind } from "./species"
 import type { WildlifeAnimal } from "./simulation"
 import type { WildlifeGait } from "./gait"
 
@@ -19,6 +19,8 @@ export function activityLabel(animal: WildlifeAnimal) {
   if (animal.burrowState === "emerging") return "Leaving burrow"
   if (animal.flight) return "Flying"
   if (isBird(animal.kind)) return animal.concealed ? "In tree cover" : "Perched"
+  if (animal.nesting) return animal.nesting.stage === "laying" ? "Laying an egg" : animal.nesting.stage === "entering" ? "Going to the nest" : "Returning to the run"
+  if (isChicken(animal.kind)) return animal.moving ? "Walking in the run" : "Pecking for grain"
   if (animal.lying > 0.1) return animal.rest < 1.5 ? "Getting up" : "Lying down"
   if (animal.moving) return ({ walk: "Walking", trot: "Trotting", canter: "Loping", gallop: "Running", hop: "Hopping", leap: "Leaping" })[animal.gait]
   return animal.grazing > 0.5 ? animal.kind === "boar" ? "Rooting" : "Grazing" : "Resting"

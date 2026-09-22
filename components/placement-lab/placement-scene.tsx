@@ -1,6 +1,10 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useRef } from "react"
+import { PreviewNavigation } from "@/components/preview-navigation"
+
+import { TERRAIN } from "@/lib/game/map/terrain"
+
+import { Suspense, useMemo, useRef } from "react"
 import { useThree, type ThreeEvent } from "@react-three/fiber"
 import * as THREE from "three"
 import { PixelCanvas } from "@/components/pixel-canvas"
@@ -11,7 +15,7 @@ import { TileCursor } from "@/components/game/tile-cursor"
 import { BuildInfluenceOverlay } from "@/components/game/build-influence-overlay"
 import { OutlinePass } from "@/components/game/outline-pass"
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
-import { CAM_FAR, CAM_NEAR, cameraOffset, lightOffsetForYaw, yawForView } from "@/lib/game/render/iso"
+import { CAM_FAR, CAM_NEAR, lightOffsetForYaw, yawForView } from "@/lib/game/render/iso"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { marchToGround } from "@/lib/game/map/ground-pick"
 import { useCameraStore } from "@/lib/game/camera-store"
@@ -22,17 +26,9 @@ import { worldToTileX, worldToTileZ, type GameMap, type TilePos } from "@/lib/ga
 
 /** The whole study fits the viewport from any of the game's four isometric views. */
 function LabCamera({ view, extent }: { view: number; extent: number }) {
-  const { camera, size, invalidate } = useThree()
-  useEffect(() => {
-    camera.position.set(...cameraOffset(yawForView(view)))
-    camera.position.y += TILE_HEIGHT
-    camera.lookAt(0, TILE_HEIGHT, 0)
-    if (camera instanceof THREE.OrthographicCamera) camera.zoom = Math.min(size.width / (extent * 1.5), size.height / (extent * 0.85))
-    camera.updateProjectionMatrix()
-    camera.updateMatrixWorld()
-    invalidate()
-  }, [camera, size, view, extent, invalidate])
-  return null
+  const size = useThree(s => s.size)
+  const fit = Math.max(.01, Math.min(size.width / (extent * 1.5), size.height / (extent * .85)))
+  return <PreviewNavigation view={view} height={Math.max(1, size.height) / fit} target={[0, TILE_HEIGHT, 0]} resetKey={extent} />
 }
 
 /**
@@ -66,14 +62,14 @@ export function PlacementScene({ map, relic, balance, buildType, resources, view
   view: number; grid: boolean; onPlace: (at: TilePos) => void
 }) {
   const ceiling = useMemo(() => TILE_HEIGHT + (map.elevation?.height.reduce((a, b) => Math.max(a, b), 0) ?? 0) + 1, [map.elevation])
-  return <PixelCanvas frameloop="demand" orthographic camera={{ near: CAM_NEAR, far: CAM_FAR }} outputDpr={1} fallback={<p>This playground needs WebGL.</p>}>
-    <color attach="background" args={["#14100a"]} />
+  return <PixelCanvas frameloop="demand" orthographic camera={{ manual: true, near: CAM_NEAR, far: CAM_FAR }} outputDpr={1} fallback={<p>This playground needs WebGL.</p>}>
+    <color attach="background" args={[TERRAIN.grass.color]} />
     <LabCamera view={view} extent={Math.max(map.width, map.depth)} />
     <ambientLight intensity={SURFACE_LIGHT.ambient} />
     <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
     <directionalLight position={lightOffsetForYaw(yawForView(view))} intensity={SURFACE_LIGHT.sun} />
     <Suspense fallback={null}>
-      <TerrainTiles map={map} showGrid={grid} />
+      <TerrainTiles showGrid map={map} />
       <Shrine map={map} relic={relic} />
       <Buildings map={map} />
       <TileCursor map={map} buildType={buildType} resources={resources} shrineRenown={1000} balance={balance} />

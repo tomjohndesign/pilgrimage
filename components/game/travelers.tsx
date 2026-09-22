@@ -1,4 +1,5 @@
 "use client"
+import { gatheringSitting } from "@/lib/game/party-gathering"
 import { shepherdVisualActivity } from "@/lib/game/sheep-husbandry"
 
 import { useShallow } from "zustand/react/shallow"
@@ -392,6 +393,12 @@ export const Travelers = memo(function Travelers({
         const blend = movement.pathEase === 0 ? 1 : 1 - Math.exp(-Math.min(delta, 0.1) / (movement.pathEase * 0.18))
         if (turn !== 0) group.rotation.y += turn * blend
       }
+      const waitingHeading = s.partyWaiting && s.activity === "walking" && s.partyGathering?.arrived && !s.partyGathering.back
+        ? s.partyGathering.heading : undefined
+      if (!playback.paused && !moving && !s.praying && waitingHeading !== undefined) {
+        const turn = waitingHeading - group.rotation.y
+        group.rotation.y += Math.atan2(Math.sin(turn), Math.cos(turn)) * (1 - Math.exp(-Math.min(delta, .1) * playback.speed * 2))
+      }
       const workTree = s.tree === null ? undefined : trees[s.tree]
       if ((s.activity === "visiting" || (s.activity === "toRelic" && !moving)) && !!s.shrineSeat) {
         group.rotation.y = kneelingHeading
@@ -408,6 +415,7 @@ export const Travelers = memo(function Travelers({
       if ((s.activity === "drinking" || s.activity === "drinkingLow") && s.waterVisit) group.rotation.y = s.waterVisit.heading
       if (s.activity === "drinkingLow" && s.naturalWaterVisit) group.rotation.y = s.naturalWaterVisit.heading
       if (s.activity === "building") group.rotation.y = s.buildingTask?.heading ?? Math.PI
+      if(s.coopEggs && !moving) group.rotation.y=s.coopEggs.heading
       if(s.penCare && !moving) group.rotation.y=s.penCare.heading
       if (s.activity === "givingAlms" && s.almsVisit) {
         const beggar = sim.travelers.get(s.almsVisit.beggarId)
@@ -426,7 +434,7 @@ export const Travelers = memo(function Travelers({
       if (!playback.paused && s.praying && !s.shrineSeat && sim.procession?.position) {
         group.rotation.y = Math.atan2(sim.procession.position.x - s.x, sim.procession.position.z - s.z)
       }
-      group.userData.activity = s.praying ? "praying" : shepherdVisualActivity(s)
+      group.userData.activity = s.praying ? "praying" : !transported && !moving && gatheringSitting(s) ? "sitting" : shepherdVisualActivity(s)
       const refreshments = !s.praying && s.activity === "sitting" ? s.tavernVisit : undefined
       group.userData.refreshmentClip = refreshments?.meal && (!refreshments.drink || Math.floor(s.timer / 4) % 2 === 0)
         ? "seatedMeal" : refreshments?.drink ? "seatedDrink" : undefined
@@ -461,7 +469,7 @@ export const Travelers = memo(function Travelers({
       group.userData.meatLoad = s.penCare?.carryingMeat ?? 0
       group.userData.milkLoad = s.penCare?.carryingMilk ?? 0
       group.userData.milking = s.penCare?.chore === "milkingSheep" && !s.penCare.route.length
-      group.userData.carrying = s.carrying + group.userData.meatLoad + group.userData.milkLoad
+      group.userData.carrying = s.carrying + group.userData.meatLoad + group.userData.milkLoad + (s.coopEggs?.amount ?? 0)
       group.userData.initialized = true
       group.userData.phase = travelers[i].id * 0.137
       group.userData.heading = group.rotation.y

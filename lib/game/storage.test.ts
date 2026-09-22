@@ -43,13 +43,13 @@ describe("storehouse inventory", () => {
 
   it("stores every food type under one capacity and keeps buildings separate", () => {
     const stores = new Map<string, FoodStock>(), store = building("store")
-    for (const type of FOOD_TYPES) expect(depositFood(stores, store, type, 30)).toBe(30)
-    expect(depositFood(stores, store, "grain", 100)).toBe(STOREHOUSE_FOOD_CAPACITY-FOOD_TYPES.length*30)
+    for (const type of FOOD_TYPES) expect(depositFood(stores, store, type, 20)).toBe(20)
+    expect(depositFood(stores, store, "grain", 100)).toBe(STOREHOUSE_FOOD_CAPACITY-FOOD_TYPES.length*20)
     expect(storedFood(stores.get(store.id)!)).toBe(STOREHOUSE_FOOD_CAPACITY)
     expect(depositFood(stores, store, "fish", 1)).toBe(0)
     expect(depositFood(stores, building("second"), "fish", 25)).toBe(25)
-    expect(withdrawFood(stores, store.id, "fruit", 90)).toBe(30)
-    expect(depositFood(stores, store, "vegetables", 50)).toBe(30)
+    expect(withdrawFood(stores, store.id, "fruit", 90)).toBe(20)
+    expect(depositFood(stores, store, "vegetables", 50)).toBe(20)
     expect(stores.get("second")?.fish).toBe(25)
   })
   it("refuses invalid quantities and food deliveries to a hut", () => {

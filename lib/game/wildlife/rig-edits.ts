@@ -11,6 +11,11 @@ export const ANIMAL_JOINT_LABELS = {
   leftWing: "Left wing tip", rightWing: "Right wing tip",
   leftWingWrist: "Left wing wrist", rightWingWrist: "Right wing wrist",
 } as const
+export const CHICKEN_JOINT_LABELS = {
+  ...ANIMAL_JOINT_LABELS,
+  leftHip: "Left hip", rightHip: "Right hip", leftThigh: "Left knee", rightThigh: "Right knee",
+  leftKnee: "Left hock", rightKnee: "Right hock", leftFoot: "Left foot", rightFoot: "Right foot",
+}
 export type AnimalJoint = keyof typeof ANIMAL_JOINT_LABELS
 export const ANIMAL_BONES: [AnimalJoint, AnimalJoint][] = [
   ["chest", "leftWingWrist"], ["leftWingWrist", "leftWing"], ["chest", "rightWingWrist"], ["rightWingWrist", "rightWing"],

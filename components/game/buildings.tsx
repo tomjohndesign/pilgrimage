@@ -1,4 +1,9 @@
 "use client"
+
+import { buildingSurfaceMaterial } from "@/lib/game/render/building-surface"
+
+import { CoopContents } from "./coop-contents"
+import { simRegistry } from "@/lib/game/sim"
 import { PenFoodStock } from "./pen-food-stock"
 
 import { usePlayerColor } from "./player-color"
@@ -56,7 +61,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
   const ownedWaterMarkers = useMemo(() => ({ well: playerBuildingParts(waterMarkers.well, playerColor), "watering-hole": playerBuildingParts(waterMarkers["watering-hole"], playerColor) }), [waterMarkers, playerColor])
   // Authored colors live on the merged vertices. Share the otherwise identical
   // surface material so adjacent buildings reuse lighting and shader uniforms.
-  const surfaceMaterial = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), [])
+  const surfaceMaterial = useMemo(() => buildingSurfaceMaterial(), [])
   useEffect(() => () => surfaceMaterial.dispose(), [surfaceMaterial])
   const costs = useRef<ConstructionCostHandle>(null)
   const selectSite = (building: BuildingDef, event: Parameters<typeof selectElement>[1]) => {
@@ -132,10 +137,10 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
         }
         const local = rotatedFootprint(building, building.rotation)
         const wing = building.churchId ? churchWing(map, building) : undefined
-        const cutaway = models[index].parts.some(p => p.layer === "roof") && (
-          showInteriors || unitInterior === building.id || isSelected(selection, { kind: "building", id: building.id }) ||
+        const interiorSelected = unitInterior === building.id || isSelected(selection, { kind: "building", id: building.id }) ||
           (!!building.churchId && (unitInterior === building.churchId || isSelected(selection, { kind: "building", id: building.churchId }))) ||
-          (selection?.kind === "pile" && piles.some(p => p.id === selection.id && p.campId === building.id)))
+          (selection?.kind === "pile" && piles.some(p => p.id === selection.id && p.campId === building.id))
+        const cutaway = models[index].parts.some(p => p.layer === "roof") && (showInteriors || interiorSelected)
         if (building.buildType === "storehouse" || building.buildType === "workshop") {
           return (
             <group key={building.id} name={`storage-${building.id}`} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
@@ -145,7 +150,7 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
                 const amount = foodStores.get(building.id)?.[type] ?? 0
                 return amount > 0 && <mesh key={type} position={[(slot - (FOOD_TYPES.length-1)/2) * local.w * .9 / FOOD_TYPES.length, 0.43, -local.d * 0.33]}>
                   <boxGeometry args={[local.w * 0.11, 0.12, local.d * 0.12]} />
-                  <meshLambertMaterial color={["#a29978", "#748153", "#a67c56", "#828a88", "#986e58", "#ded4b3"][slot]} />
+                  <meshLambertMaterial color={["#a29978", "#748153", "#a67c56", "#828a88", "#986e58", "#ded4b3", "#e7dfc3"][slot]} />
                 </mesh>
               })}
               {piles.filter((pile) => pile.campId === building.id).map((pile) => {
@@ -160,10 +165,11 @@ export function Buildings({ map, characterScale = 1.5, showInteriors = false }: 
         return (
           <group key={building.id} position={[centreX, baseY, centreZ]} rotation={[0, buildingYaw(building.rotation), 0]} onClick={(event) => selectSite(building, event)}>
             <StructureModel terrainFloors parts={models[index].parts} idColor={idColors[index]} appearanceIdColor={models[index].idColor} ink={false} cutaway={cutaway} surfaceMaterial={surfaceMaterial} penGateOpen={()=>wildlifeRegistry.current?.penGates?.get(building.id)?.open ?? 0} />
+            {isComplete(building) && building.buildType === "chicken-coop" && <CoopContents map={map} coop={building} world={()=>wildlifeRegistry.current} stores={()=>simRegistry.current?.foodStores ?? foodStores} actor={id=>simRegistry.current?.travelers.get(id)} scale={characterScale}/>}
             {isComplete(building) && building.buildType === "sheep-pen" && <PenFoodStock width={local.w} depth={local.d} layoutSeed={building.layoutSeed} stock={()=>foodStores.get(building.id)} />}
             {isComplete(building) && building.supportId && <InnFlueSmoke width={local.w} depth={local.d} height={building.height} flue={building.tavernFlue} cutaway={cutaway} smoke={occupied.has(building.supportId)} />}
             {!isComplete(building) && <ConstructionProgress building={building} characterScale={characterScale} />}
-            {isComplete(building) && !building.supportId && hasDomesticHearth(building.buildType,building.layoutSeed,building.fireplace) && <ShelterFire roofRise={wing ? churchAisleHeight(wing.churchWidth, wing.reach, wing.churchWidth / 2) - building.height : undefined} smoke={occupied.has(building.id) && !map.buildings.some(b=>b.supportId===building.id)} buildType={building.buildType} layoutSeed={building.layoutSeed} hearthZ={building.hearthZ} sharedChimney={roofJoins.get(building.id)?.find(join=>join.chimney)?.chimney} width={local.w} depth={local.d} height={building.height} cutaway={cutaway} />}
+            {isComplete(building) && !building.supportId && hasDomesticHearth(building.buildType,building.layoutSeed,building.fireplace) && <ShelterFire roofRise={wing ? churchAisleHeight(wing.churchWidth, wing.reach, wing.churchWidth / 2) - building.height : undefined} smoke={occupied.has(building.id) && !map.buildings.some(b=>b.supportId===building.id)} buildType={building.buildType} layoutSeed={building.layoutSeed} hearthZ={building.hearthZ} sharedChimney={roofJoins.get(building.id)?.find(join=>join.chimney)?.chimney} width={local.w} depth={local.d} height={building.height} cutaway={cutaway} interiorSelected={interiorSelected} />}
           </group>
         )
       })}

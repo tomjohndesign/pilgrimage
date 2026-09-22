@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton, ChromeSelect } from "@/components/ui/chrome-controls"
 import { useEffect, useRef, useState } from "react"
 import { useAppearanceStore } from "@/lib/game/appearance-store"
 import { APPEARANCE_GROUPS, NEUTRAL_ADJUSTMENT, appearanceWorldKey, defaultAppearance, parseAppearance,
@@ -35,7 +36,7 @@ export function AppearancePanel({ map }: { map: GameMap }) {
   const selection=useCameraStore(s=>s.selection)
   const [target,setTarget]=useState<"assets"|AppearanceGroup>("assets")
   const [scope,setScope]=useState<"object"|"group">("object")
-  const [open,setOpen]=useState<Record<string,boolean>>({Grass:true,Assets:true,"Selected object":true,"Appearance JSON":false})
+  const [open,setOpen]=useState<Record<string,boolean>>({Grass:true,"Surface texture":true,Assets:true,"Selected object":true,"Appearance JSON":false})
   const [json,setJson]=useState("")
   const [message,setMessage]=useState("")
   const [error,setError]=useState("")
@@ -63,7 +64,7 @@ export function AppearancePanel({ map }: { map: GameMap }) {
   return <div aria-label="Appearance controls">
     <Section {...section("Grass")}>
       <ColorField value={value.grass.color} onChange={color=>update({...value,grass:{...value.grass,color}})} />
-      <div className="flex gap-2 py-1">{PRESETS.map(color=><button type="button" key={color} aria-label={`Use grass ${color}`} title={color}
+      <div className="flex gap-2 py-1">{PRESETS.map(color=><ChromeButton type="button" key={color} aria-label={`Use grass ${color}`} title={color}
         className="h-7 w-7 border border-rule" style={{background:color}} onClick={()=>update({...value,grass:{...value.grass,color}})} />)}</div>
       <Adjustment prefix="Grass" value={value.grass} onChange={next=>update({...value,grass:{...value.grass,...next}})} />
       <Tuner label="Ground shading" labelClassName="w-28" value={value.grass.shading} display={`${Math.round(value.grass.shading*100)}%`} min={0} max={2} step={.01}
@@ -73,11 +74,24 @@ export function AppearancePanel({ map }: { map: GameMap }) {
       <p className="py-1 text-[11px] text-ink-light">Try the swatches, then adjust brightness. Ground shading controls the terrain tint; canopy shading controls the shadows beneath trees.</p>
       <HudButton onClick={()=>update({...value,grass:defaultAppearance().grass})}>Reset grass</HudButton>
     </Section>
+    <Section {...section("Surface texture")}>
+      <Tuner label="Surface grain" labelClassName="w-28" value={value.terrain.texture} display={`${Math.round(value.terrain.texture * 100)}%`} min={0} max={2} step={.01}
+        onChange={texture => update({...value, terrain: {...value.terrain, texture}})} />
+      <label className="flex items-center justify-between gap-2 text-xs text-ink-light">Surface shading
+        <ChromeSelect aria-label="Surface shading" value={value.terrain.inclineStyle}
+          onChange={e => update({...value, terrain: {...value.terrain, inclineStyle: e.target.value as typeof value.terrain.inclineStyle}})}
+          className="border border-rule bg-parchment p-1 text-ink">
+          <option value="smooth">Smooth</option><option value="stipple">Soft stipple</option><option value="ordered">Ordered dither</option>
+        </ChromeSelect>
+      </label>
+      <p className="py-1 text-[11px] text-ink-light">Shared grain on ground, water, buildings, and trees. Shading style also controls scene lighting, canopy shadows, and smoke.</p>
+      <HudButton onClick={() => update({...value, terrain: defaultAppearance().terrain})}>Reset surface texture</HudButton>
+    </Section>
     <Section {...section("Assets")}>
       <label className="flex items-center justify-between gap-2 text-xs text-ink-light">Apply to
-        <select aria-label="Asset group" value={target} onChange={e=>setTarget(e.target.value as typeof target)} className="border border-rule bg-parchment p-1 text-ink">
+        <ChromeSelect aria-label="Asset group" value={target} onChange={e=>setTarget(e.target.value as typeof target)} className="border border-rule bg-parchment p-1 text-ink">
           <option value="assets">All assets</option>{APPEARANCE_GROUPS.map(group=><option key={group} value={group}>{LABELS[group]}</option>)}
-        </select>
+        </ChromeSelect>
       </label>
       <Adjustment prefix="Asset" value={target==="assets"?value.assets:value.groups[target]} onChange={next=>update(target==="assets"?{...value,assets:next}:{...value,groups:{...value.groups,[target]:next}})} />
       <HudButton onClick={()=>update(target==="assets"?{...value,assets:defaultAppearance().assets}:{...value,groups:{...value.groups,[target]:{...NEUTRAL_ADJUSTMENT}}})}>Reset asset group</HudButton>
@@ -86,9 +100,9 @@ export function AppearancePanel({ map }: { map: GameMap }) {
       <p className="text-xs text-ink" aria-live="polite">{label}</p>
       {selection&&selectedGroup?<>
         <label className="flex items-center justify-between gap-2 text-xs text-ink-light">Apply to
-          <select aria-label="Selected edit scope" value={scope} onChange={e=>setScope(e.target.value as typeof scope)} className="border border-rule bg-parchment p-1 text-ink">
+          <ChromeSelect aria-label="Selected edit scope" value={scope} onChange={e=>setScope(e.target.value as typeof scope)} className="border border-rule bg-parchment p-1 text-ink">
             <option value="object">This object</option><option value="group">All {LABELS[selectedGroup].toLowerCase()}</option>
-          </select>
+          </ChromeSelect>
         </label>
         <Adjustment prefix="Selected" value={selectedValue} onChange={changeSelected}/>
         <HudButton onClick={()=>{if(scope==="group")changeSelected({...NEUTRAL_ADJUSTMENT});else update({...value,objects:value.objects.filter(edit=>edit.world!==world||!sameAppearanceSelection(edit.selection,selection))})}}>Reset selected edits</HudButton>

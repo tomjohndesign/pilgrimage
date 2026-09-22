@@ -1,7 +1,11 @@
 import { WALK_STANCE_FRACTION } from "../base-person/pose"
 import { ANIMAL_PROFILES, RIG_TO_WORLD, type QuadrupedProfile } from "../transport/assets"
 
-export const WILDLIFE_SPECIES = ["deer", "sheep", "goat", "rabbit", "hawk", "sparrow", "boar", "fox"] as const
+export const CHICKEN_KINDS = ["russet-hen", "cream-hen", "rooster"] as const
+export type ChickenKind = typeof CHICKEN_KINDS[number]
+export const isChicken = (kind: string): kind is ChickenKind => (CHICKEN_KINDS as readonly string[]).includes(kind)
+
+export const WILDLIFE_SPECIES = ["deer", "sheep", "goat", "rabbit", "hawk", "sparrow", "boar", "fox", ...CHICKEN_KINDS] as const
 export type WildlifeSpecies = typeof WILDLIFE_SPECIES[number]
 export type WildlifeKind = WildlifeSpecies | "buck"
 export const isBird = (kind: WildlifeKind) => kind === "hawk" || kind === "sparrow"
@@ -17,6 +21,9 @@ export const WILDLIFE_PROFILES: Record<WildlifeKind, QuadrupedProfile> = {
   rabbit: { ...ANIMAL_PROFILES.donkey, label: "Rabbit", twist: 0.04, legHeight: 0.23, legSpread: 0.105, legZ: 0.20, stride: 0.045, lift: 0.02, sway: 0.004, bob: 0.003, cyclesPerSecond: 2.8 },
   boar: { ...ANIMAL_PROFILES.donkey, label: "Boar", twist: 0.06, legHeight: 0.53, legSpread: 0.25, legZ: 0.52, stride: 0.12, lift: 0.035, cyclesPerSecond: 1.15 },
   fox: { ...ANIMAL_PROFILES.donkey, label: "Fox", twist: 0.11, legHeight: 0.44, legSpread: 0.12, legZ: 0.43, stride: 0.10, lift: 0.03, sway: 0.01, bob: 0.01, cyclesPerSecond: 1.6 },
+  "russet-hen": { ...ANIMAL_PROFILES.donkey, label: "Russet hen", stride: .055, lift: .035, cyclesPerSecond: 1.65 },
+  "cream-hen": { ...ANIMAL_PROFILES.donkey, label: "Cream hen", stride: .055, lift: .035, cyclesPerSecond: 1.65 },
+  rooster: { ...ANIMAL_PROFILES.donkey, label: "Dark rooster", stride: .055, lift: .035, cyclesPerSecond: 1.65 },
   hawk: { ...ANIMAL_PROFILES.donkey, label: "Hawk" },
   sparrow: { ...ANIMAL_PROFILES.donkey, label: "Sparrow" },
 }

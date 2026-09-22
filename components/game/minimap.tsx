@@ -25,7 +25,8 @@ import { shrineLayout } from "@/lib/game/shrine-layout"
 const DISPLAY_WIDTH = 144
 const DISPLAY_HEIGHT = Math.ceil(DISPLAY_WIDTH * Math.sin(ISO_PITCH))
 const CANVAS_WIDTH = DISPLAY_WIDTH * 2
-const CANVAS_HEIGHT = DISPLAY_HEIGHT * 2
+const CRUST_DEPTH = 8
+const CANVAS_HEIGHT = DISPLAY_HEIGHT * 2 + CRUST_DEPTH
 const PADDING = 4
 
 /** Project world X/Z with the same orientation and pitch as the main camera. */
@@ -36,7 +37,7 @@ function mapTransform(map: GameMap, viewIndex: number): DOMMatrix {
   const height = (Math.abs(b.fwdX) * map.width + Math.abs(b.fwdZ) * map.depth) * sinPitch
   const scale = Math.min(
     (CANVAS_WIDTH - PADDING * 2) / width,
-    (CANVAS_HEIGHT - PADDING * 2) / height,
+    (CANVAS_HEIGHT - CRUST_DEPTH - PADDING * 2) / height,
   )
   return new DOMMatrix([
     b.rightX * scale,
@@ -44,7 +45,7 @@ function mapTransform(map: GameMap, viewIndex: number): DOMMatrix {
     b.rightZ * scale,
     -b.fwdZ * sinPitch * scale,
     CANVAS_WIDTH / 2,
-    CANVAS_HEIGHT / 2,
+    (CANVAS_HEIGHT - CRUST_DEPTH) / 2,
   ])
 }
 
@@ -102,8 +103,41 @@ export function Minimap({ map }: { map: GameMap }) {
       const transform = mapTransform(map, viewIndex)
       const project = (wx: number, wz: number) => transform.transformPoint({ x: wx, y: wz })
 
+      const edges = [
+        [-map.width / 2, -map.depth / 2],
+        [map.width / 2, -map.depth / 2],
+        [map.width / 2, map.depth / 2],
+        [-map.width / 2, map.depth / 2],
+      ].map(([wx, wz]) => project(wx, wz))
+      const surface = new Path2D()
+      edges.forEach((point, i) => {
+        if (i === 0) surface.moveTo(point.x, point.y)
+        else surface.lineTo(point.x, point.y)
+      })
+      surface.closePath()
+
       ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT)
       ctx.imageSmoothingEnabled = false
+
+      // Two dark front faces give the floating map the main world's shallow crust.
+      // Reserve backing-store space for it so neither drawing nor hit testing clips.
+      const center = project(0, 0)
+      edges.forEach((point, i) => {
+        const next = edges[(i + 1) % edges.length]
+        if ((point.y + next.y) / 2 < center.y) return
+        ctx.beginPath()
+        ctx.moveTo(point.x, point.y)
+        ctx.lineTo(next.x, next.y)
+        ctx.lineTo(next.x, next.y + CRUST_DEPTH)
+        ctx.lineTo(point.x, point.y + CRUST_DEPTH)
+        ctx.closePath()
+        ctx.fillStyle = (point.x + next.x) / 2 < center.x ? "#11140d" : "#080a06"
+        ctx.fill()
+        ctx.strokeStyle = "#080a06"
+        ctx.lineWidth = 2
+        ctx.stroke()
+      })
+
       ctx.save()
       ctx.setTransform(transform)
       ctx.drawImage(base, -map.width / 2, -map.depth / 2)
@@ -111,20 +145,7 @@ export function Minimap({ map }: { map: GameMap }) {
 
       // Keep the viewport outline inside the projected map's diamond.
       ctx.save()
-      ctx.beginPath()
-      const edges = [
-        [-map.width / 2, -map.depth / 2],
-        [map.width / 2, -map.depth / 2],
-        [map.width / 2, map.depth / 2],
-        [-map.width / 2, map.depth / 2],
-      ]
-      edges.forEach(([wx, wz], i) => {
-        const point = project(wx, wz)
-        if (i === 0) ctx.moveTo(point.x, point.y)
-        else ctx.lineTo(point.x, point.y)
-      })
-      ctx.closePath()
-      ctx.clip()
+      ctx.clip(surface)
 
       // The camera's ground footprint: a rectangle spanning the frustum, laid
       // on the ground along the screen axes — so it rotates with the view.
@@ -177,6 +198,11 @@ export function Minimap({ map }: { map: GameMap }) {
         ctx.fillStyle = "#000000"
         ctx.fillRect(x - 4, y - 4, 8, 8)
       }
+
+      // Outline the terrain silhouette, not the canvas's transparent corners.
+      ctx.strokeStyle = "#bec79a"
+      ctx.lineWidth = 2
+      ctx.stroke(surface)
     }
 
     draw()

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { gatheringSitting } from "./party-gathering"
 import { withTravelParties, partyRoadDelta, partyNeedDrain, PARTY_NEED_FLOOR, ANIMAL_NEED_DRAIN } from "./travel-parties"
 import { generateTravelers, TRAVELER_TYPES, type Traveler } from "./travelers"
 import { createSim, stepSim, type SimState } from "./sim"
@@ -366,6 +367,80 @@ describe("shared stops", () => {
     run(sim, travelers, map, 30)
     expect(party.stage).toBe("traveling")
     expect([...sim.travelers.values()].every(s => s.activity === "walking")).toBe(true)
+  })
+})
+
+describe("company meeting places", () => {
+  it("keeps room for absent companions when two companies meet at the same tavern", () => {
+    const { map, travelers, sim: original } = fixture(8)
+    map.buildings.push({ ...BUILD_CATALOG.find(b => b.id === "tavern")!, id: "tavern", buildType: "tavern", label: "Village tavern", x: 25, z: 11 })
+    for (const t of travelers) t.party = { id: t.id < 4 ? 0 : 1, name: "Company", slot: t.id % 4 }
+    const sim = createSim(travelers, map)
+    sim.balance = original.balance
+    for (const party of sim.parties.values()) party.transportInitialized = true
+    for (const id of [0, 4]) { const s = sim.travelers.get(id)!; s.activity = "sitting"; s.timer = 10000 }
+    run(sim, travelers, map, 120)
+    expect([...sim.parties.values()].every(p => p.gathering?.label === "Village tavern")).toBe(true)
+    const members = [...sim.travelers.values()]
+    expect(members.every(s => s.partyGathering)).toBe(true)
+    for (const s of members) for (const other of members) if (s !== other) {
+      const a = s.partyGathering!.spot, b = other.partyGathering!.spot
+      expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeGreaterThanOrEqual(.9)
+    }
+    for (const id of [0, 4]) {
+      expect(sim.travelers.get(id)!.activity).toBe("sitting")
+      expect(sim.travelers.get(id)!.partyGathering!.arrived).toBe(false)
+    }
+  })
+
+  it("waits together at a tavern away from the road, then walks back before resuming", () => {
+    const { map, travelers, sim } = fixture(8)
+    map.buildings.push({ ...BUILD_CATALOG.find(b => b.id === "tavern")!, id: "tavern", buildType: "tavern", label: "Village tavern", x: 25, z: 11 })
+    const party = sim.parties.get(0)!, visitor = sim.travelers.get(0)!
+    // One companion is taking a long seated break; the others wait nearby.
+    visitor.activity = "sitting"; visitor.timer = 10000
+    let largestStep = 0
+    const step = () => {
+      const before = [...sim.travelers.values()].map(s => ({ x: s.x, z: s.z }))
+      stepSim(sim, travelers, map, 1, .1)
+      for (const s of sim.travelers.values()) largestStep = Math.max(largestStep, Math.hypot(s.x - before[s.id].x, s.z - before[s.id].z))
+    }
+    for (let i = 0; i < 1200; i++) step()
+    expect(party.gathering?.label).toBe("Village tavern")
+    const waiting = [...sim.travelers.values()].filter(s => s !== visitor)
+    expect(waiting.every(s => s.partyWaiting && s.partyGathering?.arrived)).toBe(true)
+    expect(waiting.every(s => worldToTileZ(map, s.z) > 8)).toBe(true)
+    expect(waiting.some(gatheringSitting)).toBe(true)
+    expect(waiting.some(s => !gatheringSitting(s))).toBe(true)
+    expect(waiting.every(s => Number.isFinite(s.partyGathering?.heading))).toBe(true)
+    const rested = waiting.map(s => s.partyGathering!.waited)
+    stepSim(sim, travelers, map, 1, 0)
+    expect(waiting.map(s => s.partyGathering!.waited)).toEqual(rested)
+    // An interrupted companion returns to their reserved place before resting.
+    const interrupted = waiting[0], spot = { ...interrupted.partyGathering!.spot }
+    interrupted.activity = "sitting"; interrupted.timer = 10000
+    step()
+    expect(interrupted.partyGathering!.arrived).toBe(false)
+    interrupted.x += 1; interrupted.activity = "walking"
+    for (let i = 0; i < 200 && !interrupted.partyGathering?.arrived; i++) step()
+    expect(interrupted.x).toBeCloseTo(spot.x)
+    expect(interrupted.z).toBeCloseTo(spot.z)
+    expect(interrupted.partyGathering!.waited).toBe(0)
+    visitor.activity = "walking"
+    // A blocked return waits for a real route instead of crossing the obstacle.
+    for (let x = 0; x < map.width; x++) map.tiles[8 * map.width + x] = "water"
+    const held = waiting.map(s => ({ x: s.x, z: s.z }))
+    for (let i = 0; i < 50; i++) step()
+    expect(waiting.map(s => ({ x: s.x, z: s.z }))).toEqual(held)
+    expect(party.gathering).toBeDefined()
+    for (let x = 0; x < map.width; x++) map.tiles[8 * map.width + x] = "grass"
+    for (let i = 0; i < 1200 && party.gathering; i++) step()
+    expect(party.gathering).toBeUndefined()
+    expect(waiting.every(s => !s.partyGathering && worldToTileZ(map, s.z) === 5)).toBe(true)
+    expect(largestStep).toBeLessThan(.5)
+    const before = party.progress
+    run(sim, travelers, map, 20)
+    expect(party.progress).toBeGreaterThan(before)
   })
 })
 

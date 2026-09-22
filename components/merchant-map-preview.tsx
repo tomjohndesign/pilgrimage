@@ -1,5 +1,12 @@
 "use client"
 
+import { PreviewNavigation } from "@/components/preview-navigation"
+
+import { ChromeButton, ChromeCheckbox } from "@/components/ui/chrome-controls"
+import { TERRAIN } from "@/lib/game/map/terrain"
+
+import { AssetEditorCanvasControls, AssetEditorHelp } from "./asset-editor-frame"
+import { LabSelect, LabSlider, labButton } from "./lab-controls"
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
@@ -16,13 +23,15 @@ import { TerrainTiles } from "./game/terrain-tiles"
 import { Trees } from "./game/trees"
 import { CameraLight } from "./game/camera-light"
 import { OutlinePass } from "./game/outline-pass"
+import { CharacterBatches } from "./game/character-batches"
+import { encodeObjectId, travelerObjectId } from "@/lib/game/render/outline"
 import { TravelerFigure } from "./game/traveler-figure"
 import { populationDesign } from "@/lib/game/base-person/population"
 import { rollComplexion } from "@/lib/game/base-person/complexion"
 import { makeRng } from "@/lib/game/rng"
 import { BASE_CHARACTER_SCALE, DEFAULT_WALK_CADENCE, personWalkStride } from "@/lib/game/base-person/gait"
 import { TRAVELER_TYPES } from "@/lib/game/travelers"
-import { CAM_FAR, CAM_NEAR, cameraOffset } from "@/lib/game/render/iso"
+import { CAM_FAR, CAM_NEAR } from "@/lib/game/render/iso"
 import { merchantDemo, type MerchantDemoFrame, type MerchantDemo } from "@/lib/game/transport/demo"
 import type { Cargo, HorseVariant, Puller } from "@/lib/game/transport/assets"
 
@@ -33,19 +42,13 @@ const PASSER_SPEED = personWalkStride(populationDesign(TRAVELER_TYPES.pilgrim, 1
 const CAMERA = { manual: true, near: CAM_NEAR, far: CAM_FAR, position: [20, 20, 20] as [number, number, number] }
 
 function MapCamera({ row, zoom, map }: { row: number; zoom: number; map: GameMap }) {
-  const { camera, size } = useThree()
-  useEffect(() => {
-    const cam = camera as THREE.OrthographicCamera, height = Math.max(7, (map.width + map.depth) * 3.3 / zoom), aspect = size.width / size.height
-    const fitted = Math.max(height, 12 / aspect)
-    cam.left = -fitted * aspect / 2; cam.right = -cam.left; cam.top = fitted / 2; cam.bottom = -cam.top
-    const offset = cameraOffset(row * Math.PI / 4)
-    cam.position.set(offset[0], offset[1] - 0.2, offset[2]); cam.lookAt(0, -0.2, 0); cam.updateProjectionMatrix()
-  }, [camera, size, row, zoom, map])
-  return null
+  const size = useThree(s => s.size)
+  const height = Math.max(7, (map.width + map.depth) * 3.3 / zoom), aspect = size.width / Math.max(1, size.height)
+  return <PreviewNavigation yaw={row * Math.PI / 4} height={Math.max(height, 12 / Math.max(.01, aspect))} target={[0, -.2, 0]} resetKey={map} />
 }
 
-function DemoActors({ demo, clock, seek, playing, rate, onProgress, ...options }: {
-  demo: MerchantDemo; clock: { current: number }; seek: number; playing: boolean; rate: number
+function DemoActors({ demo, crowded, clock, seek, playing, rate, onProgress, ...options }: {
+  demo: MerchantDemo; crowded: boolean; clock: { current: number }; seek: number; playing: boolean; rate: number
   onProgress: (frame: MerchantDemoFrame) => void; cargo: Cargo; puller: Puller; horseVariant: HorseVariant; coat: string
 }) {
   const merchant = useRef<THREE.Group>(null), customer = useRef<THREE.Group>(null), passer = useRef<THREE.Group>(null)
@@ -93,6 +96,15 @@ function DemoActors({ demo, clock, seek, playing, rate, onProgress, ...options }
         const p = at(progress), next = at(progress + direction * 0.001)
         x = tileToWorldX(demo.map, p.x); z = tileToWorldZ(demo.map, p.z); heading = Math.atan2(next.x - p.x, next.z - p.z)
       }
+      if (crowded) {
+        // Keep the crossing in view throughout the route, visiting the axle,
+        // shafts and animal instead of meeting only once on a long road.
+        const pose = frame.cartPose, span = Math.hypot(pose.hitch.x - pose.x, pose.hitch.z - pose.z) + 1.2
+        const along = ((clock.current * PASSER_SPEED * direction % span) + span) % span - .6
+        const side = direction * .36, sin = Math.sin(pose.heading), cos = Math.cos(pose.heading)
+        x = pose.x + sin * along + cos * side; z = pose.z + cos * along - sin * side
+        heading = pose.heading + (direction < 0 ? Math.PI : 0)
+      }
       const walked = Math.hypot(x-oldX,z-oldZ), discontinuity = reset || walked > 1
       walker.position.set(x, walkingSurface(demo.map,x,z).height, z); walker.rotation.y = heading
       walker.userData = { heading, moving: true, motionReset: discontinuity, distance: !playing || discontinuity ? 0 : walked, playbackRate: playing ? rate : 0 }
@@ -100,11 +112,11 @@ function DemoActors({ demo, clock, seek, playing, rate, onProgress, ...options }
     report.current += delta
     if (report.current > 0.1 || reset) { report.current = 0; onProgress(frame) }
   }, -3)
-  return <PixelCharacters>
-    <group ref={merchant}><TravelerFigure map={demo.map} {...options} type={TRAVELER_TYPES.vendor} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 0, scale: 1, bodyType: "Male", complexion: DEMO_COMPLEXIONS[0] }} /></group>
-    <group ref={customer}><TravelerFigure map={demo.map} type={TRAVELER_TYPES.peasant} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 3, scale: 1, bodyType: "Female", complexion: DEMO_COMPLEXIONS[1] }} /></group>
-    <group ref={passer}><TravelerFigure map={demo.map} type={TRAVELER_TYPES.pilgrim} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 1, scale: 1, bodyType: "Male", complexion: DEMO_COMPLEXIONS[2] }} /></group>
-  </PixelCharacters>
+  return <CharacterBatches><PixelCharacters>
+    <group ref={merchant}><TravelerFigure outlineColor={encodeObjectId(travelerObjectId(0))} map={demo.map} {...options} type={TRAVELER_TYPES.vendor} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 0, scale: 1, bodyType: "Male", complexion: DEMO_COMPLEXIONS[0] }} /></group>
+    <group ref={customer}><TravelerFigure outlineColor={encodeObjectId(travelerObjectId(1))} map={demo.map} type={TRAVELER_TYPES.peasant} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 3, scale: 1, bodyType: "Female", complexion: DEMO_COMPLEXIONS[1] }} /></group>
+    <group ref={passer}><TravelerFigure outlineColor={encodeObjectId(travelerObjectId(2))} map={demo.map} type={TRAVELER_TYPES.pilgrim} characterModel="base" characterScale={BASE_CHARACTER_SCALE} appearance={{ variant: 1, scale: 1, bodyType: "Male", complexion: DEMO_COMPLEXIONS[2] }} /></group>
+  </PixelCharacters></CharacterBatches>
 }
 
 function TurningTrails({ demo }: { demo: MerchantDemo }) {
@@ -124,8 +136,8 @@ function TurningTrails({ demo }: { demo: MerchantDemo }) {
 /** The real terrain, character render pass, scale and transport assembly, shown
  * as a short isolated journey within the existing character playground.
  */
-export function MerchantMapPreview({ playing, row, zoom, ...options }: {
-  playing: boolean; row: number; zoom: number; cargo: Cargo; puller: Puller; horseVariant: HorseVariant; coat: string
+export function MerchantMapPreview({ playing, onPlayingChange, row, zoom, ...options }: {
+  playing: boolean; onPlayingChange: (playing: boolean) => void; row: number; zoom: number; cargo: Cargo; puller: Puller; horseVariant: HorseVariant; coat: string
 }) {
   const [scenario, setScenario] = useState<"merchant" | TurningScenario>("merchant")
   const [radius, setRadius] = useState(DEFAULT_CART_TURN_RADIUS), [trails, setTrails] = useState(true)
@@ -144,22 +156,24 @@ export function MerchantMapPreview({ playing, row, zoom, ...options }: {
   const jump = (time: number) => { clock.current = time; setSeek(time); setFrame(demo.frames[Math.min(demo.frames.length - 1, Math.round(time / demo.step))]) }
   return <div className="merchant-map-preview" aria-label="Merchant journey on a small map">
     <div className="merchant-map-scene"><PixelCanvas orthographic camera={CAMERA}>
-      <color attach="background" args={["#252b1c"]} /><ambientLight intensity={SURFACE_LIGHT.ambient} /><hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} /><CameraLight />
+      <color attach="background" args={[TERRAIN.grass.color]} /><ambientLight intensity={SURFACE_LIGHT.ambient} /><hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} /><CameraLight />
       <MapCamera row={row} zoom={zoom} map={demo.map} />
       <Suspense fallback={null}><TerrainTiles map={demo.map} showGrid traffic={3} /><Trees map={demo.map} /><Bridges map={demo.map} />
         {demo.turning && trails && <TurningTrails demo={demo} />}
-        <DemoActors key={`${scenario}:${radius}:${options.puller}:${options.horseVariant}`} {...options} demo={demo} clock={clock} seek={seek} playing={playing} rate={rate} onProgress={setFrame} />
+        <DemoActors key={`${scenario}:${radius}:${options.puller}:${options.horseVariant}`} {...options} demo={demo} crowded={scenario === "passing"} clock={clock} seek={seek} playing={playing} rate={rate} onProgress={setFrame} />
       </Suspense><OutlinePass />
     </PixelCanvas></div>
-    <div className="merchant-map-caption"><span role="status">{frame.stage}{frame.stage === "Selling" ? frame.sales ? " · Customer served" : " · Customer approaching and browsing" : frame.stage === "Closing" && frame.shopProgress === 0 && frame.pasture && !frame.pasture.ready ? " · Waiting for the animal" : ""}</span><span>{demo.turning ? `${frame.clearance ? "Clear of obstacles" : "Cart touches an edge"} · ${trails ? "Gold: hitch · Blue: axle" : "1 tile grid"}` : "Game scale · 1 tile grid"}</span></div>
-    <div className="merchant-map-controls hud-well">
-      <div className="merchant-map-timeline merchant-turn-options">
-        <label>Scenario<select aria-label="Cart simulation" value={scenario} onChange={e => setScenario(e.target.value as typeof scenario)}><option value="merchant">Merchant journey</option>{TURNING_SCENARIOS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
-        {demo.turning && <><label>Turn radius<input aria-label="Cart turn radius" type="range" min={0.4} max={3} step={0.1} value={radius} onChange={e => setRadius(Number(e.target.value))} /><output>{radius.toFixed(1)} tiles</output></label><label><input type="checkbox" checked={trails} onChange={e => setTrails(e.target.checked)} />Show trails</label></>}
+    <AssetEditorCanvasControls>
+      <div className="workspace-canvas-toolbar" aria-label="Journey controls">
+        <LabSelect label="Scenario" ariaLabel="Cart simulation" value={scenario} options={{ merchant: "Merchant journey", ...Object.fromEntries(TURNING_SCENARIOS.map(item => [item.id, item.label])) }} onChange={value => setScenario(value as typeof scenario)} />
+        <LabSelect label="Stage" value={frame.stage} options={Object.fromEntries(demo.stages.map(stage => [stage, stage]))} onChange={value => { onPlayingChange(false); jump(demo.starts[value as typeof frame.stage] ?? 0) }} />
+        <ChromeButton className={labButton} onClick={() => jump(0)}>Restart</ChromeButton>
+        <div className="workspace-scrubber"><LabSlider label="Journey progress" value={frame.time} min={0} max={demo.duration} step={demo.step} suffix=" s" onChange={value => { onPlayingChange(false); jump(value) }} /></div>
+        <LabSelect label="Speed" ariaLabel="Journey speed" value={String(rate)} options={{ 1: "1×", 2: "2×", 4: "4×" }} onChange={value => setRate(Number(value))} />
+        {demo.turning && <><div className="workspace-radius"><LabSlider label="Turn radius" value={radius} min={0.4} max={3} step={0.1} suffix=" tiles" onChange={setRadius} /></div><label className="person-check"><ChromeCheckbox type="checkbox" checked={trails} onChange={event => setTrails(event.target.checked)} />Show trails</label><ChromeButton className={labButton} disabled={!firstContact} onClick={() => { if (firstContact) { onPlayingChange(false); jump(firstContact.time) } }}>First contact</ChromeButton></>}
+        <AssetEditorHelp label="Journey">{demo.turning ? TURNING_SCENARIOS.find(item => item.id === scenario)?.description : "Scrub or choose a stage to pause and inspect the journey. Directions below rotate the camera. The map uses the same scale as the game."}</AssetEditorHelp>
+        <span className="workspace-canvas-status" role="status">{demo.turning ? frame.clearance ? "Route clear" : "Edge contact" : frame.stage === "Selling" ? frame.sales ? "Customer served" : "Customer browsing" : frame.stage === "Closing" && frame.shopProgress === 0 && frame.pasture && !frame.pasture.ready ? "Waiting for the animal" : frame.stage}</span>
       </div>
-      {demo.turning && <p className="person-hint">{TURNING_SCENARIOS.find(s => s.id === scenario)?.description}</p>}
-      <div className="merchant-map-stages">{demo.stages.map(stage => <button key={stage} className="hud-action" aria-pressed={frame.stage === stage} onClick={() => jump(demo.starts[stage] ?? 0)}>{stage}</button>)}{demo.turning && <button className="hud-action" disabled={!firstContact} onClick={() => firstContact && jump(firstContact.time)}>{firstContact ? "First edge contact" : "Full route clear"}</button>}</div>
-      <div className="merchant-map-timeline"><button className="hud-action" onClick={() => jump(0)}>Restart</button><input aria-label="Merchant journey progress" type="range" min={0} max={Math.floor(demo.duration/demo.step)} step={1} value={Math.round(frame.time/demo.step)} onChange={e => jump(Number(e.target.value)*demo.step)} /><label>Speed<select aria-label="Journey speed" value={rate} onChange={e => setRate(Number(e.target.value))}>{[1, 2, 4].map(n => <option key={n} value={n}>{n}×</option>)}</select></label></div>
-    </div>
+    </AssetEditorCanvasControls>
   </div>
 }

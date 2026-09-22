@@ -20,6 +20,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
   }).outputText
   const transportSource = await readFile(new URL("../lib/game/transport/assets.ts", import.meta.url), "utf8")
   const transportVersion = transportSource.match(/version: "(v\d+)"/)[1]
+  const partyVersion = transportSource.match(/PARTY_TRANSPORT_VERSION = "(v\d+)"/)[1]
   const packVersion = transportSource.match(/PACK_ANIMAL_VERSION = "(v\d+)"/)[1]
   const transport = JSON.parse(await readFile(new URL(`../public/textures/transport/${transportVersion}/manifest.json`, import.meta.url), "utf8"))
   const transportFiles = { "cart.png": "cart-produce-horse.png", "cart-depth.png": "depth-cart-produce-horse.png",
@@ -35,6 +36,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
     }).outputText.replace('"../../render/sprite-depth"', '"/shader.js"').replace('"./design"', '"/foliage-design.js"')
       .replace('"../../character-assets"', '"/sprite-row.js"')
+      .replace('"../../render/pixel-surface"', '"/batch-pixel-surface.js"')
   }
   const spriteRowSource = (await readFile(new URL("../lib/game/character-assets.ts", import.meta.url), "utf8")).match(/export function spriteRow[\s\S]*?\n}/)[0]
   const spriteRow = ts.transpileModule(spriteRowSource, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText
@@ -42,15 +44,26 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
   batchModules.wildlife = ts.transpileModule(await readFile(new URL("../lib/game/wildlife/batch.ts", import.meta.url), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
   }).outputText.replaceAll('"../render/outline"', '"/batch-outline.js"')
-  for (const name of ["overlap-order", "frame-quality", "building-batch", "road-segment-texture", "terrain-elevation", "terrain-hidden-faces", "character-batch", "sprite-texture", "sprite-transforms", "static-instances", "scenery-detail", "flat-geometry", "complexion-swap", "outline"]) {
+  for (const name of ["sort-rail", "character-overlap", "sprite-frame-bounds", "visibility", "overlap-order", "frame-quality", "building-batch", "building-surface", "pixel-lighting", "active-lighting", "smoke", "pixel-noise", "pixel-opacity", "pixel-surface", "pixel-scale", "road-segment-texture", "terrain-elevation", "terrain-hidden-faces", "character-batch", "sprite-texture", "sprite-transforms", "static-instances", "scenery-detail", "flat-geometry", "complexion-swap", "outline"]) {
     batchModules[name] = ts.transpileModule(await readFile(new URL(`../lib/game/render/${name}.ts`, import.meta.url), "utf8"), {
       compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-    }).outputText.replaceAll('"./sprite-depth"', '"/shader.js"')
+    }).outputText.replaceAll('"./sprite-frame-bounds"', '"/batch-sprite-frame-bounds.js"')
+      .replaceAll('"./sort-rail"', '"/batch-sort-rail.js"')
+      .replaceAll('"./overlap-order"', '"/batch-overlap-order.js"')
+      .replaceAll('"./visibility"', '"/batch-visibility.js"')
+      .replaceAll('"./sprite-depth"', '"/shader.js"')
       .replaceAll('"./sprite-texture"', '"/batch-sprite-texture.js"')
       .replaceAll('"./sprite-transforms"', '"/batch-sprite-transforms.js"')
       .replaceAll('"./complexion-swap"', '"/batch-complexion-swap.js"')
       .replaceAll('"./scenery-detail"', '"/batch-scenery-detail.js"')
       .replaceAll('"./flat-geometry"', '"/batch-flat-geometry.js"')
+      .replaceAll('"./building-surface"', '"/batch-building-surface.js"')
+      .replaceAll('"./active-lighting"', '"/batch-active-lighting.js"')
+      .replaceAll('"./pixel-opacity"', '"/batch-pixel-opacity.js"')
+      .replaceAll('"./pixel-noise"', '"/batch-pixel-noise.js"')
+      .replaceAll('"./pixel-lighting"', '"/batch-pixel-lighting.js"')
+      .replaceAll('"./pixel-surface"', '"/batch-pixel-surface.js"')
+      .replaceAll('"./pixel-scale"', '"/batch-pixel-scale.js"')
       .replaceAll('"./frame-quality"', '"/batch-frame-quality.js"')
       .replaceAll('"./outline"', '"/batch-outline.js"')
       .replaceAll('"../base-person/complexion"', '"/complexion-slots.js"')
@@ -68,6 +81,14 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
     const name = request.url.slice(1)
     if (name === "palette-slots.js") {
       response.setHeader("Content-Type", "text/javascript"); response.end(`export const CHARACTER_PALETTE_SLOTS = ${paletteSlots}`)
+    } else if (/^hitched-(horse|donkey|ox)(-depth)?\.png$/.test(name)) {
+      const animal = name.match(/^hitched-(horse|donkey|ox)/)[1], coat = animal === "horse" ? "bay" : animal === "donkey" ? "grey" : "brown"
+      response.setHeader("Content-Type", "image/png")
+      response.end(await readFile(new URL(`../public/textures/transport/${partyVersion}/${name.includes("-depth") ? "depth-" : ""}${animal}-${coat}-hitched.png`, import.meta.url)))
+    } else if (/^(donkey|ox)(-depth)?\.png$/.test(name)) {
+      const animal = name.startsWith("ox") ? "ox-brown" : "donkey-grey"
+      response.setHeader("Content-Type", "image/png")
+      response.end(await readFile(new URL(`../public/textures/transport/${partyVersion}/${name.includes("depth") ? "depth-" : ""}${animal}.png`, import.meta.url)))
     } else if (name === "horse.png" || name === "horse-depth.png") {
       response.setHeader("Content-Type", "image/png")
       response.end(await readFile(new URL(`../public/textures/transport/${packVersion}/${name.includes("depth") ? "depth-" : ""}horse-bay-pack.png`, import.meta.url)))
@@ -409,7 +430,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         coincidence.coveredFront = count(read(), 1)
         // A pack horse has twice a person's cell extent. Exercise the real
         // crowd ordering, including the bias it inherits from a rear neighbour.
-        const { overlapBiases } = await import("/batch-overlap-order.js")
+        const { CharacterOverlap, characterOverlapBounds } = await import("/batch-character-overlap.js")
         const horseMap = await new THREE.TextureLoader().loadAsync("/horse.png")
         const horseDepth = await new THREE.TextureLoader().loadAsync("/horse-depth.png")
         for (const texture of [horseMap, horseDepth]) { texture.minFilter = texture.magFilter = THREE.NearestFilter; texture.generateMipmaps = false }
@@ -419,27 +440,186 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         horse.sprite.scale.set(transport.scale, transport.scale, 1)
         horseMap.repeat.set(1 / transport.animalColumns, 1 / 8)
         coincidence.animalCompared = 0; coincidence.animalMismatches = 0
-        for (const zoom of [1, 1.5, 2]) for (let row = 0; row < 8; row++) for (const nearer of [0, 1]) {
-          camera.zoom = zoom; camera.updateProjectionMatrix()
-          person.map.offset.y = horseMap.offset.y = (7 - row) / 8
-          person.sprite.position.z = nearer === 0 ? .01 : 0
-          horse.sprite.position.z = nearer === 1 ? .01 : 0
-          const participants = figures.map(({ sprite }) => ({
-            x: sprite.position.x, z: sprite.position.z,
-            distance: -sprite.position.clone().applyMatrix4(camera.matrixWorldInverse).z,
-            size: sprite.scale.x, order: sprite.renderOrder,
-          }))
-          participants.push({ x: -.2, z: -.02, distance: Math.max(...participants.map(p => p.distance)) + .02, size: 1, order: 0 })
-          const biases = overlapBiases(participants)
-          figures.forEach((figure, i) => { figure.bias.value = biases[i]; figure.sprite.visible = i === nearer })
-          const expected = read()
-          figures.forEach(figure => { figure.sprite.visible = true })
-          const actual = read(), channel = nearer === 0 ? 1 : 0
-          for (let i = 0; i < expected.length; i += 4) if (expected[i + channel] > 200) {
-            coincidence.animalCompared++
-            if (actual[i + channel] < 200) coincidence.animalMismatches++
+        coincidence.crossingCases = 0; coincidence.legacyCrossingPixels = 0
+        const variants = [{ name: "horse", map: horseMap, depth: horseDepth, rows: 8, cell: transport.cellSize, anchor: transport.anchor }]
+        for (const name of ["donkey", "ox", "cart"]) {
+          const map = await new THREE.TextureLoader().loadAsync(`/${name}.png`)
+          const depth = await new THREE.TextureLoader().loadAsync(`/${name}-depth.png`)
+          for (const texture of [map, depth]) { texture.minFilter = texture.magFilter = THREE.NearestFilter; texture.generateMipmaps = false }
+          variants.push({ name, map, depth, rows: name === "cart" ? 16 : 8, cell: name === "cart" ? 160 : transport.cellSize, anchor: name === "cart" ? [80, 94] : transport.anchor })
+        }
+        const rear = { ...person, sprite: person.sprite.clone(), bias: { value: 0 } }
+        rear.sprite.material = person.sprite.material.clone(); rear.sprite.material.color.set(0x0000ff)
+        rear.sprite.material.onBeforeCompile = shader => {
+          applySpriteDepth(shader, viewport, worldTexel, groundPlane, rear.pose, undefined, rear.bias, sceneryDepth)
+          shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>", "#include <map_fragment>\ndiffuseColor.rgb = diffuse;")
+        }
+        rear.sprite.material.onBeforeRender = renderer => renderer.getCurrentViewport(viewport)
+        rear.sprite.material.customProgramCacheKey = () => "crossing-rear"
+        rear.sprite.renderOrder = 0; scene.add(rear.sprite); figures.push(rear)
+        const crossingOrder = new CharacterOverlap()
+        const crossingEntries = figures.map((figure, i) => ({ sprite: figure.sprite, ids: figure.sprite, depth: figure.pose,
+          ground: groundPlane, depthBias: figure.bias, id: new THREE.Vector3((i + 1) / 255, 0, 0) }))
+        for (const variant of variants) {
+          horse.sprite.material.map = variant.map; horse.pose.map.value = variant.depth
+          horse.sprite.center.set(variant.anchor[0] / variant.cell, 1 - variant.anchor[1] / variant.cell)
+          horse.sprite.scale.setScalar(transport.scale * variant.cell / transport.cellSize)
+          horse.sprite.scale.z = 1
+          const columns = variant.map.image.width / variant.cell
+          variant.map.repeat.set(1 / columns, 1 / (variant.map.image.height / variant.cell))
+          for (const zoom of [1, 2]) for (let row = 0; row < variant.rows; row++) for (let personRow = 0; personRow < 8; personRow++) for (const lateral of [0, .4, .7]) for (const along of [.01, .35, .7]) for (const nearer of [0, 1]) {
+            const yaw = personRow * Math.PI / 4
+            camera.position.set(Math.sin(yaw) * 98, 71.3, Math.cos(yaw) * 98); camera.lookAt(0, 2, 0); camera.updateMatrixWorld()
+            camera.zoom = zoom; camera.updateProjectionMatrix()
+            person.map.offset.y = (7 - personRow) / 8
+            person.map.offset.x = (row % poseClips.walk) / poseClips.walk
+            variant.map.offset.set((row % columns) / columns, 1 - (row + 1) * variant.map.repeat.y)
+            const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0)
+            const toward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw))
+            person.sprite.position.set(0, 2, 0).addScaledVector(right, lateral).addScaledVector(toward, nearer === 0 ? along : 0)
+            horse.sprite.position.set(0, 2, 0).addScaledVector(toward, nearer === 1 ? along : 0)
+            rear.sprite.position.set(0, 2, 0).addScaledVector(right, -.2).addScaledVector(toward, -.02)
+            const participants = crossingEntries.map(entry => {
+              const { sprite } = entry
+              sprite.updateWorldMatrix(true, false)
+              return characterOverlapBounds(entry, camera, worldTexel.value)
+            })
+            figures.forEach(figure => { figure.sprite.visible = true })
+            crossingOrder.update(crossingEntries, [], camera, worldTexel.value)
+            figures.forEach((figure, i) => { figure.sprite.visible = i === nearer })
+            const expected = read()
+            figures.forEach(figure => { figure.sprite.visible = true })
+            const actual = read(), channel = nearer === 0 ? 1 : 0
+            // Reproduce the previous fixed-radius/fixed-thickness correction.
+            // This must disagree with the clean foreground at real atlas pixels.
+            const legacyBiases = [0, 0, 0]
+            const ordered = [0, 1, 2].sort((a, b) => participants[b].distance - participants[a].distance || participants[a].order - participants[b].order)
+            for (const i of ordered) for (const j of ordered) {
+              if (participants[j].distance <= participants[i].distance) continue
+              const a = figures[i].sprite, b = figures[j].sprite
+              if (Math.hypot(a.position.x - b.position.x, a.position.z - b.position.z) < .3 * Math.max(a.scale.x, b.scale.x))
+                legacyBiases[i] = Math.max(legacyBiases[i], legacyBiases[j] + .25 * (a.scale.x + b.scale.x))
+            }
+            figures.forEach((figure, i) => { figure.bias.value = legacyBiases[i] })
+            const legacy = read()
+            for (let i = 0; i < expected.length; i += 4) if (expected[i + channel] > 200) {
+              coincidence.animalCompared++
+              if (actual[i + channel] < 200) coincidence.animalMismatches++
+              if (legacy[i + channel] < 200) coincidence.legacyCrossingPixels++
+            }
+            coincidence.crossingCases++
           }
         }
+        figures.pop(); scene.remove(rear.sprite); rear.sprite.material.dispose()
+        // Every cart, driver, animal and walker has an independent rail. Build
+        // the expected image by compositing isolated silhouettes in global order.
+        const { applyAttachmentDepth } = await import("/shader.js")
+        const cartArt = variants.find(variant => variant.name === "cart")
+        const makePart = (map, depth, color, part) => {
+          const bias = { value: 0 }, pose = { map: { value: depth }, enabled: { value: true } }
+          const material = new THREE.SpriteMaterial({ map, alphaTest: .5, transparent: false, toneMapped: false })
+          material.onBeforeCompile = shader => {
+            applySpriteDepth(shader, viewport, worldTexel, groundPlane, pose, undefined, bias, sceneryDepth)
+            shader.fragmentShader = shader.fragmentShader.replace("#include <alphatest_fragment>", "#include <alphatest_fragment>\ndiffuseColor.rgb = vec3(" + color + ");")
+          }
+          material.customProgramCacheKey = () => "rail-part-" + part
+          material.onBeforeRender = renderer => renderer.getCurrentViewport(viewport)
+          const sprite = new THREE.Sprite(material)
+          sprite.center.set(.5, 1 - 94 / 160)
+          sprite.scale.set(transport.scale * 160 / 128, transport.scale * 160 / 128, 1); scene.add(sprite)
+          return { sprite, ids: sprite, depth: pose, ground: groundPlane, depthBias: bias, railPart: part, id: new THREE.Vector3(4 / 255, 0, 0) }
+        }
+        const cartEntry = makePart(cartArt.map, cartArt.depth, "1., 0., 0.", 1)
+        const driverMap = driverColor.clone(), driverEntry = makePart(driverMap, driverDepth, "1., 1., 0.", 3)
+        driverEntry.railSeat = { x: 0, z: 1.24 * transport.scale / transport.viewSize }
+        driverMap.repeat.set(1 / transport.driverClip.variants, 1 / 16)
+        const cart = cartEntry.sprite, driver = driverEntry.sprite
+        const animalEntry = { ...crossingEntries[1], railPart: 2, id: cartEntry.id }
+        const entries = [cartEntry, driverEntry, animalEntry, crossingEntries[0]]
+        const reinBias = { value: 0 }, endpointBiases = { value: new THREE.Vector3() }
+        const reinMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, toneMapped: false })
+        reinMaterial.onBeforeCompile = shader => applyAttachmentDepth(shader, viewport, reinBias, sceneryDepth, endpointBiases)
+        reinMaterial.onBeforeRender = renderer => renderer.getCurrentViewport(viewport)
+        const reinGeometry = new THREE.PlaneGeometry(.6, .025)
+        const reinPath = new THREE.InstancedBufferAttribute(new Float32Array([1, 0]), 2)
+        reinGeometry.setAttribute("attachmentPath", reinPath)
+        const rein = new THREE.InstancedMesh(reinGeometry, reinMaterial, 1); scene.add(rein); rein.visible = false
+        coincidence.convoyCases = 0; coincidence.convoyCompared = 0; coincidence.convoyMismatches = 0
+        coincidence.attachmentCompared = 0; coincidence.attachmentMismatches = 0; coincidence.unbiasedAttachmentLeaks = 0
+        for (const kind of ["horse", "donkey", "ox"]) {
+          const map = await new THREE.TextureLoader().loadAsync(`/hitched-${kind}.png`)
+          const depth = await new THREE.TextureLoader().loadAsync(`/hitched-${kind}-depth.png`)
+          for (const texture of [map, depth]) { texture.minFilter = texture.magFilter = THREE.NearestFilter; texture.generateMipmaps = false }
+          horse.sprite.material.map = map; horse.pose.map.value = depth
+          horse.sprite.scale.set(transport.scale, transport.scale, 1)
+          horse.sprite.center.set(.5, 1 - 78 / 128)
+          const columns = map.image.width / 128; map.repeat.set(1 / columns, 1 / 8)
+          for (let row = 0; row < 16; row++) for (const bend of [-1, 0, 1]) for (const end of [0, 1]) for (const side of [-1, 1]) {
+            const yaw = row % 8 * Math.PI / 4, heading = yaw - row * Math.PI / 8
+            camera.position.set(Math.sin(yaw) * 98, 71.3, Math.cos(yaw) * 98); camera.lookAt(0, 2, 0); camera.updateMatrixWorld()
+            camera.zoom = row % 2 ? .8 : 1.3; camera.updateProjectionMatrix()
+            const toward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw)), right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0)
+            const wheelbase = (kind === "donkey" ? 2.95 : 3.1) * transport.scale / transport.viewSize
+            cart.position.set(-Math.sin(heading) * wheelbase / 2, 2, -Math.cos(heading) * wheelbase / 2)
+            driver.position.copy(cart.position); driver.userData.heading = cart.userData.heading = heading
+            horse.sprite.position.set(-cart.position.x, 2, -cart.position.z)
+            horse.sprite.userData.heading = heading - bend * Math.PI / 4
+            const animalRow = ((Math.round(row / 2) + bend) % 8 + 8) % 8
+            map.offset.set((row % transport.animalFrames) / columns, (7 - animalRow) / 8)
+            cartArt.map.offset.set((row % transport.wheelFrames) * cartArt.map.repeat.x, (15 - row) / 16)
+            driverMap.offset.set((row % transport.driverClip.variants) / transport.driverClip.variants, (15 - row) / 16)
+            const target = end ? horse.sprite : cart
+            person.sprite.position.copy(target.position).addScaledVector(right, side * .35).addScaledVector(toward, side * .08)
+            person.map.offset.set((row % poseClips.walk) / poseClips.walk, (7 - row % 8) / 8)
+            entries.forEach(entry => { entry.sprite.visible = true; entry.sprite.updateWorldMatrix(true, false) })
+            const bounds = entries.map(entry => characterOverlapBounds(entry, camera, worldTexel.value))
+            const order = entries.map((_, i) => i).sort((a, b) => bounds[b].distance - bounds[a].distance || bounds[a].order - bounds[b].order)
+            crossingOrder.update(entries, [], camera, worldTexel.value)
+            const expected = new Uint8Array(256 * 256 * 4)
+            for (const index of order) {
+              entries.forEach((entry, i) => { entry.sprite.visible = i === index })
+              const isolated = read()
+              for (let p = 0; p < isolated.length; p += 4) if (isolated[p] + isolated[p + 1] + isolated[p + 2] > 200) expected.set(isolated.subarray(p, p + 4), p)
+            }
+            entries.forEach(entry => { entry.sprite.visible = true })
+            const actual = read()
+            for (let p = 0; p < expected.length; p += 4) if (expected[p] + expected[p + 1] + expected[p + 2] > 200) {
+              coincidence.convoyCompared++
+              if (actual[p] !== expected[p] || actual[p + 1] !== expected[p + 1] || actual[p + 2] !== expected[p + 2]) coincidence.convoyMismatches++
+            }
+            coincidence.convoyCases++
+          }
+          // Each endpoint uses its own correction; midpoint interpolation must
+          // also work when all three source biases differ, including paused frames.
+          cart.visible = driver.visible = person.sprite.visible = false; horse.sprite.visible = rein.visible = true
+          rein.quaternion.copy(camera.quaternion)
+          rein.position.copy(horse.sprite.position); rein.position.y += .4
+          rein.position.addScaledVector(new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 2), .4)
+          horse.bias.value = 0; endpointBiases.value.set(0, 0, 0)
+          const isolatedRig = read()
+          horse.bias.value = 3
+          for (const [t, source, biases] of [[0, 0, [3, 1, 5]], [0, 1, [1, 3, 5]], [1, 0, [1, 2, 3]], [.5, 0, [1, 2, 5]], [.5, 1, [2, 1, 5]]]) {
+            reinPath.setXY(0, t, source); reinPath.needsUpdate = true
+            endpointBiases.value.set(...biases)
+            const corrected = read()
+            for (let p = 0; p < isolatedRig.length; p += 4) if (isolatedRig[p + 1] > 200 && isolatedRig[p + 2] > 200) {
+              coincidence.attachmentCompared++
+              if (corrected[p + 1] < 200 || corrected[p + 2] < 200) coincidence.attachmentMismatches++
+            }
+          }
+          endpointBiases.value.set(0, 0, 0)
+          const oldRig = read()
+          for (let p = 0; p < isolatedRig.length; p += 4) if (isolatedRig[p + 1] > 200 && isolatedRig[p + 2] > 200 && (oldRig[p + 1] < 200 || oldRig[p + 2] < 200)) coincidence.unbiasedAttachmentLeaks++
+          rein.visible = false
+          map.dispose(); depth.dispose()
+        }
+        driverVisible.value = 0; scene.remove(cart, driver, rein); cart.material.dispose(); driver.material.dispose(); driverMap.dispose(); rein.geometry.dispose(); reinMaterial.dispose()
+        // Restore the animal used by the scenery checks below.
+        horse.sprite.material.map = horseMap; horse.pose.map.value = horseDepth
+        horse.sprite.center.set(transport.anchor[0] / transport.cellSize, 1 - transport.anchor[1] / transport.cellSize)
+        horse.sprite.scale.set(transport.scale, transport.scale, 1)
+        person.sprite.position.set(0, 2, 0); horse.sprite.position.set(0, 2, .01)
+        for (const variant of variants.slice(1)) { variant.map.dispose(); variant.depth.dispose() }
         // Crowd ordering must never promote a hidden body through scenery.
         // Use the same world-depth copy as PixelCanvas, then sample that buffer
         // before biasing the sprites. Test both people and large transport.
@@ -650,6 +830,12 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       return { cases, compared, mismatches, occlusionFailures, floorCompared, floorClipped, supportCompared, supportClipped, poseCompared, poseMismatches, poseVisible, poseHidden, bakeCompared, bakeError,
         outlineCompared, outlineMismatches, selectionMismatches, fadeCompared, fadeMismatches, coincidence }
     }, { outlineFragment, presentationFragment, poseClips, transport })
+    console.log("Road sprite crossing regression", result.coincidence)
+    assert.ok(result.coincidence.attachmentCompared > 10 && result.coincidence.unbiasedAttachmentLeaks > 0, "must reproduce reins disappearing under biased animals")
+    assert.equal(result.coincidence.attachmentMismatches, 0, "reins must retain their depth relative to the cart and animal")
+    assert.ok(result.coincidence.convoyCases > 100 && result.coincidence.convoyCompared > 10000, "must exercise connected convoys at both ends")
+    assert.equal(result.coincidence.convoyMismatches, 0, `independent rail order must match the complete painted silhouettes: ${JSON.stringify(result.coincidence)}`)
+    assert.ok(result.coincidence.legacyCrossingPixels > 0, "must reproduce the previous ordering failure at real crossing pixels")
     assert.ok(result.coincidence.animalCompared > 10000, "must exercise pack horse/person overlaps across directions and zooms")
     assert.equal(result.coincidence.animalMismatches, 0, `nearer people and animals must cover those behind: ${JSON.stringify(result.coincidence)}`)
     const foliageResults = []
@@ -900,9 +1086,8 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
       const light = new THREE.DirectionalLight(0xffffff, 1.4); light.position.set(3, 5, 2); scene.add(light)
       const camera = new THREE.OrthographicCamera(-2, 2, 2, -2, .1, 100)
       const target = new THREE.WebGLRenderTarget(256, 256)
-      const bodyMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })
-      const flatMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide })
       const shading = { value: 1 }, batchMaterial = buildingSurfaceMaterial(shading)
+      const bodyMaterial = buildingSurfaceMaterial(shading)
       const idMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, toneMapped: false })
       const sources = Array.from({ length: 8 }, (_, i) => {
         const full = new THREE.BoxGeometry(.7, .4 + i * .08, .9).toNonIndexed()
@@ -925,6 +1110,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         return { body, ids, levels }
       })
       let compared = 0, mismatches = 0
+      const examples = []
       // Removing a selected building from a cell must retain every neighbour.
       for (const selected of [-1, 3]) {
         const active = sources.filter((_, i) => i !== selected)
@@ -934,7 +1120,7 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
         for (const source of sources) source.body.visible = source.ids.visible = source !== sources[selected]
         for (const level of [0, 1, 2]) {
           shading.value = level === 0 ? 1 : 0
-          for (const source of sources) source.body.material = level === 0 ? bodyMaterial : flatMaterial
+          for (const source of sources) source.body.material = bodyMaterial
           for (const source of sources) source.body.geometry = source.ids.geometry = source.levels[level]
           body.geometry = block.body[level]; ids.geometry = block.ids[level]
           for (let view = 0; view < 4; view++) {
@@ -951,19 +1137,176 @@ test("sprites preserve overlaps, terrain contact, scenery occlusion, and aligned
               const reference = capture(false), actual = capture(true)
               for (let i = 0; i < actual.length; i += 4) {
                 compared++
-                if ([0, 1, 2, 3].some(c => Math.abs(actual[i + c] - reference[i + c]) > 1)) mismatches++
+                if ([0, 1, 2, 3].some(c => Math.abs(actual[i + c] - reference[i + c]) > 1)) {
+                  mismatches++
+                  if (examples.length < 8) examples.push({ selected, level, view, layer, pixel: i / 4, reference: [...reference.slice(i,i+4)], actual: [...actual.slice(i,i+4)] })
+                }
               }
             }
           }
         }
         merged.remove(body, ids); block.dispose()
       }
-      target.dispose(); bodyMaterial.dispose(); flatMaterial.dispose(); batchMaterial.dispose(); idMaterial.dispose()
+      target.dispose(); bodyMaterial.dispose(); batchMaterial.dispose(); idMaterial.dispose()
       for (const source of sources) { source.ids.material.dispose(); for (const level of source.levels) level.dispose() }
       gl.dispose()
-      return { compared, mismatches }
+      return { compared, mismatches, examples }
     })
     assert.equal(buildings.mismatches, 0, `building cells must preserve surfaces and IDs at every LOD: ${JSON.stringify(buildings)}`)
+
+    const buildingGrain = await page.evaluate(async () => {
+      const THREE = await import("/three.module.js")
+      const { buildingSurfaceMaterial } = await import("/batch-building-surface.js")
+      const gl = new THREE.WebGLRenderer({ antialias: false })
+      const target = new THREE.WebGLRenderTarget(64, 64)
+      gl.setSize(64, 64); gl.setClearColor(0, 0); gl.setRenderTarget(target)
+      const scene = new THREE.Scene()
+      const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, .1, 10)
+      // Unlit authored color isolates surface grain from lighting and geometry.
+      const material = buildingSurfaceMaterial({ value: 0 }, { vertexColors: false, color: "#918061" })
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material)
+      scene.add(mesh)
+      const results = []
+      for (const [x, z] of [[0, 0], [-68, -96], [200, 200], [-400, 400]]) {
+        mesh.position.set(x, 1, z); camera.position.set(x, 1, z + 4)
+        gl.render(scene, camera)
+        const pixels = new Uint8Array(64 * 64 * 4), colors = new Set()
+        gl.readRenderTargetPixels(target, 0, 0, 64, 64, pixels)
+        let low = 255, high = 0
+        for (let i = 0; i < pixels.length; i += 4) {
+          colors.add(`${pixels[i]},${pixels[i + 1]},${pixels[i + 2]}`)
+          low = Math.min(low, pixels[i]); high = Math.max(high, pixels[i])
+        }
+        results.push({ x, z, colors: colors.size, range: high - low })
+      }
+      mesh.geometry.dispose(); material.dispose(); target.dispose(); gl.dispose()
+      return results
+    })
+    assert.deepEqual(errors, [], "surface shaders compile without GPU errors")
+    for (const grain of buildingGrain) {
+      assert.ok(grain.colors > 8 && grain.range > 8, `buildings must retain grain away from the map origin: ${JSON.stringify(grain)}`)
+    }
+
+    const effects = await page.evaluate(async () => {
+      const THREE = await import("/three.module.js")
+      const { pixelOpacityShader } = await import("/batch-pixel-opacity.js")
+      const { patchPixelLighting } = await import("/batch-pixel-lighting.js")
+      const gl = new THREE.WebGLRenderer({ antialias: false })
+      const target = new THREE.WebGLRenderTarget(64, 64)
+      gl.setSize(64, 64); gl.setClearColor(0, 0); gl.setRenderTarget(target)
+      const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, .1, 10)
+      camera.position.z = 3
+      const scene = new THREE.Scene()
+      const texture = new THREE.DataTexture(new Uint8Array([255,255,255,255]), 1, 1)
+      texture.needsUpdate = true
+      const samples = []
+      for (const sprite of [true, false]) {
+        const material = sprite ? new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: .2 })
+          : new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: .2 })
+        material.onBeforeCompile = shader => pixelOpacityShader(shader, { value: new THREE.Vector2(64, 64) })
+        const object = sprite ? new THREE.Sprite(material) : new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material)
+        object.scale.set(2, 2, 1); scene.add(object)
+        gl.render(scene, camera)
+        const pixels = new Uint8Array(64 * 64 * 4)
+        gl.readRenderTargetPixels(target, 0, 0, 64, 64, pixels)
+        let holes = 0, drawn = 0, alpha = 0
+        for (let i = 3; i < pixels.length; i += 4) { alpha += pixels[i] / 255; if (pixels[i]) drawn++; else holes++ }
+        samples.push({ sprite, holes, drawn, alpha: alpha / 4096 })
+        scene.remove(object); material.dispose(); object.geometry?.dispose()
+      }
+      const material = new THREE.MeshStandardMaterial({ color: "#ddd1b4" })
+      patchPixelLighting(material)
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(), material)
+      scene.add(mesh, new THREE.AmbientLight(0xffffff, 1))
+      gl.render(scene, camera)
+      mesh.geometry.dispose(); material.dispose(); texture.dispose(); target.dispose(); gl.dispose()
+      return samples
+    })
+    for (const effect of effects) {
+      assert.ok(effect.holes > 1000 && effect.drawn > 1000, `smoke and glow must fade by pixel coverage: ${JSON.stringify(effect)}`)
+      assert.ok(Math.abs(effect.alpha - .2) < .02, `dithering must retain mean opacity: ${JSON.stringify(effect)}`)
+    }
+
+    const lighting = await page.evaluate(async () => {
+      const THREE = await import("/three.module.js")
+      const { patchPixelLighting } = await import("/batch-pixel-lighting.js")
+      const gl = new THREE.WebGLRenderer({ antialias: false }), target = new THREE.WebGLRenderTarget(48, 48)
+      gl.setSize(48, 48); gl.setRenderTarget(target)
+      const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, .1, 10); camera.position.z = 3
+      const scene = new THREE.Scene(), geometry = new THREE.PlaneGeometry(2, 2)
+      const results = []
+      for (const Material of [THREE.MeshLambertMaterial, THREE.MeshStandardMaterial]) {
+        const material = new Material({ color: "#918061" }); patchPixelLighting(material)
+        const mesh = new THREE.Mesh(geometry, material), light = new THREE.PointLight("#ffbb77", 0)
+        light.position.set(.2, .3, 2); scene.add(mesh, light, new THREE.AmbientLight(0xffffff, .1))
+        const capture = () => {
+          gl.render(scene, camera)
+          const data = new Uint8Array(48 * 48 * 4); gl.readRenderTargetPixels(target, 0, 0, 48, 48, data)
+          return data.reduce((sum, value, i) => sum + (i % 4 === 3 ? 0 : value), 0)
+        }
+        const off = capture(), programs = gl.info.programs.length
+        light.intensity = 3; const on = capture()
+        light.intensity = 0; const offAgain = capture()
+        results.push({ off, on, offAgain, programs, afterPrograms: gl.info.programs.length })
+        scene.clear(); material.dispose()
+      }
+      geometry.dispose(); target.dispose(); gl.dispose(); return results
+    })
+    for (const light of lighting) {
+      assert.ok(light.on > light.off * 1.5, "activating a pooled light must illuminate the surface")
+      assert.equal(light.offAgain, light.off, "an inactive slot must contribute no light")
+      assert.equal(light.afterPrograms, light.programs, "light activation must reuse the compiled shader")
+    }
+
+    const smoke = await page.evaluate(async () => {
+      const THREE = await import("/three.module.js")
+      const { smokeGeometry, smokeMaterial, updateSmoke, SMOKE_PUFFS } = await import("/batch-smoke.js")
+      const { pixelOpacityShader } = await import("/batch-pixel-opacity.js")
+      const { surfaceAppearanceUniforms } = await import("/batch-pixel-surface.js")
+      const { CHARACTER_PIXEL_SIZE } = await import("/batch-pixel-scale.js")
+      const gl = new THREE.WebGLRenderer({ antialias: false }), target = new THREE.WebGLRenderTarget(192, 192)
+      gl.setSize(192, 192); gl.setClearColor(0, 0); gl.setRenderTarget(target)
+      const scene = new THREE.Scene(), geometry = smokeGeometry(), mesh = new THREE.Mesh(geometry, smokeMaterial)
+      const originals = new THREE.Group()
+      for (let i = 0; i < SMOKE_PUFFS; i++) {
+        const material = new THREE.SpriteMaterial({ map: smokeMaterial.map, color: smokeMaterial.color, transparent: true, depthWrite: false, toneMapped: false })
+        material.onBeforeCompile = shader => pixelOpacityShader(shader, { value: new THREE.Vector2(24, 24) }, i * 37)
+        const sprite = new THREE.Sprite(material); sprite.scale.setScalar(24 * CHARACTER_PIXEL_SIZE); originals.add(sprite)
+      }
+      scene.add(mesh, originals)
+      const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, .1, 20)
+      const capture = () => {
+        gl.render(scene, camera)
+        const data = new Uint8Array(192 * 192 * 4); gl.readRenderTargetPixels(target, 0, 0, 192, 192, data); return data
+      }
+      const results = []
+      for (const style of [0, 1, 2]) for (const yaw of [0, 1.5, 3]) {
+        surfaceAppearanceUniforms.terrainInclineStyle.value = style
+        camera.position.set(Math.sin(yaw) * 5, 3, Math.cos(yaw) * 5); camera.lookAt(.15, .65, 0)
+        updateSmoke(geometry, yaw + .23, .3)
+        const offsets = geometry.getAttribute("smokeOffset"), coverage = geometry.getAttribute("smokeCoverage")
+        originals.children.forEach((sprite, i) => { sprite.position.fromBufferAttribute(offsets, i); sprite.material.opacity = coverage.getX(i) })
+        originals.visible = true; mesh.visible = false; const before = capture(), originalCalls = gl.info.render.calls
+        originals.visible = false; mesh.visible = true; const after = capture(), batchCalls = gl.info.render.calls
+        let different = 0, visible = 0
+        for (let i = 0; i < before.length; i += 4) {
+          if (before[i + 3]) visible++
+          if ([0,1,2,3].some(c => Math.abs(before[i + c] - after[i + c]) > 2)) different++
+        }
+        results.push({ style, yaw, different, visible, originalCalls, batchCalls })
+      }
+      surfaceAppearanceUniforms.terrainInclineStyle.value = 1
+      originals.children.forEach(sprite => sprite.material.dispose()); geometry.dispose(); target.dispose(); gl.dispose()
+      return results
+    })
+    assert.deepEqual(errors, [], "lighting and smoke shaders compile without GPU errors")
+    for (const result of smoke) {
+      assert.ok(result.visible > 100, "smoke comparison must include visible puffs")
+      assert.ok(result.different / result.visible < .025, `cropped instanced smoke must match the original puffs: ${JSON.stringify(result)}`)
+      assert.equal(result.originalCalls, 5)
+      assert.equal(result.batchCalls, 1)
+    }
+    console.log("Instanced smoke comparison", smoke)
 
     const scenery = await page.evaluate(async () => {
       const THREE = await import("/three.module.js")

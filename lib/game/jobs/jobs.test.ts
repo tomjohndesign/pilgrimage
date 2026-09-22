@@ -9,9 +9,10 @@ import { SETTLEMENT_JOBS, jobDesign, jobSpeedScale, settlementJob, type Settleme
 const jobs = Object.keys(SETTLEMENT_JOBS) as SettlementJob[]
 
 describe("settlement job sprites", () => {
-  it("maps every workplace to an outfit only after accepting employment", () => {
+  it("maps specialized workplaces to outfits and keeps the coop keeper in everyday clothes", () => {
     const buildings = Object.values(BUILDING_KINDS).map(kind => ({ id: `${kind.id}-1`, kind: kind.id }))
-    expect(new Set(buildings.map(building => settlementJob(building.id, buildings)))).toEqual(new Set(jobs))
+    expect(new Set(buildings.map(building => settlementJob(building.id, buildings)))).toEqual(new Set([...jobs, null]))
+    expect(settlementJob("chicken-coop-1", buildings)).toBeNull()
     expect(settlementJob("inn-1", buildings)).toBe("tavern")
     expect(settlementJob(null, buildings)).toBeNull()
     expect(settlementJob("removed-building", buildings)).toBeNull()

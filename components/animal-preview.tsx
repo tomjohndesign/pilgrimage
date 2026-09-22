@@ -1,4 +1,6 @@
 "use client"
+
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { inkAnimalFrame } from "@/lib/game/base-person/ink"
 
 import { useEffect, useRef, type RefObject } from "react"
@@ -12,7 +14,7 @@ import { WILDLIFE_COATS } from "@/lib/game/wildlife/appearance"
 import { createWildlifeRig } from "@/lib/game/wildlife/rig"
 import { BURROW_SECONDS, burrowPreview } from "@/lib/game/wildlife/burrow-motion"
 import { createBurrowRig } from "@/lib/game/wildlife/burrow"
-import { isBird, type WildlifeKind } from "@/lib/game/wildlife/species"
+import { isBird, isChicken, WILDLIFE_PROFILES, type WildlifeKind } from "@/lib/game/wildlife/species"
 import { gaitRecipe, speciesGaits, type WildlifeGait } from "@/lib/game/wildlife/gait"
 import { easeWing } from "@/lib/game/wildlife/motion"
 import { ANIMAL_FRAMES, EMPTY_ANIMAL_EDITS, type AnimalClip, type AnimalJoint, type AnimalRigEdits } from "@/lib/game/wildlife/rig-edits"
@@ -21,7 +23,7 @@ import type { Point3 } from "@/lib/game/base-person/pose"
 
 export type AnimalSubject = WildlifeKind | Animal
 export type AnimalMotion = AnimalClip
-const SUBJECTS: AnimalSubject[] = ["buck", "deer", "sheep", "goat", "rabbit", "fox", "boar", "sparrow", "hawk", "donkey", "horse", "ox"]
+const SUBJECTS: AnimalSubject[] = ["russet-hen", "cream-hen", "rooster", "buck", "deer", "sheep", "goat", "rabbit", "fox", "boar", "sparrow", "hawk", "donkey", "horse", "ox"]
 export function animalActions(kind: AnimalSubject): AnimalClip[] {
   if (kind === "donkey" || kind === "horse" || kind === "ox") return ["idle", "walk", "graze"]
   if (isBird(kind)) return ["idle", "fly", "glide"]
@@ -68,7 +70,7 @@ export function AnimalPreview({ pack = false, subject, lineup, motion, playing, 
     let request = 0, last = 0, inspectedAt = 0, directionsAt = 0
     const point = new THREE.Vector3()
     const draw = (now: number) => {
-      const s = state.current, dt = s.playing && last ? Math.min((now - last) / 1000, 0.1) * s.rate : 0
+      const s = state.current, dt = s.playing && !document.hidden && !window.matchMedia("(prefers-reduced-motion: reduce)").matches && last ? Math.min((now - last) / 1000, 0.1) * s.rate : 0
       last = now
       for (const actor of actors) {
         const { rig, kind, equine, context, canvas } = actor
@@ -128,8 +130,8 @@ export function AnimalPreview({ pack = false, subject, lineup, motion, playing, 
   return <div ref={host} className={lineup ? "animal-lineup" : "person-sprite"} style={lineup ? { gridTemplateColumns: `repeat(4, ${64 * zoom}px)` } : undefined}>
     {(lineup ? SUBJECTS : [subject]).map(kind => <div key={kind} style={{ width: 64 * zoom, height: 64 * zoom, position: "relative", flexShrink: 0 }}>
       <canvas data-animal={kind} width={64} height={64} role="img" aria-label={`${kind} model preview`} style={{ width: "100%", height: "100%", imageRendering: "pixelated" }} />
-      {showRig && !lineup && <AnimalRigOverlay joints={joints} selected={selected} row={row - (motion === "burrow" ? burrowPreview(inspectedFrame / ANIMAL_FRAMES).heading / (Math.PI / 4) : 0)} edits={edits} clip={motion} phase={inspectedFrame / ANIMAL_FRAMES} onSelect={onJoint} onChange={onPose} onDrag={onDrag} />}
-      {lineup && <button className="hud-action animal-lineup-label" onClick={() => onSelect(kind)}>{kind === "deer" ? "Doe" : kind.charAt(0).toUpperCase() + kind.slice(1)}</button>}
+      {showRig && !lineup && <AnimalRigOverlay biped={isChicken(subject)} joints={joints} selected={selected} row={row - (motion === "burrow" ? burrowPreview(inspectedFrame / ANIMAL_FRAMES).heading / (Math.PI / 4) : 0)} edits={edits} clip={motion} phase={inspectedFrame / ANIMAL_FRAMES} onSelect={onJoint} onChange={onPose} onDrag={onDrag} />}
+      {lineup && <ChromeButton className="hud-action animal-lineup-label" onClick={() => onSelect(kind)}>{kind === "donkey" || kind === "horse" || kind === "ox" ? kind.charAt(0).toUpperCase() + kind.slice(1) : WILDLIFE_PROFILES[kind].label}</ChromeButton>}
     </div>)}
   </div>
 }

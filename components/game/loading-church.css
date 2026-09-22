@@ -47,6 +47,12 @@
   mask-composite: intersect;
 }
 
+/* The home screen's surrounding tiles fade farther from the chapel. */
+.loading-church[data-idle="true"] .loading-church-ground {
+  mask-size: 125% 125%;
+  mask-position: 50% 50%, 50% calc(50% + var(--ground-offset));
+}
+
 .loading-church[data-phase="revealing"] .loading-church-wipe {
   mask-image: radial-gradient(ellipse var(--reveal-radius-x, .001dvh) var(--reveal-radius-y, .001dvh)
     at 50% calc(50% + var(--ground-offset)), transparent var(--reveal-inner, 0%), #000 100%);
@@ -102,16 +108,14 @@
   top: calc(var(--loading-indicator-top) - 10 * var(--loading-pixel));
   left: 50%;
   transform: translate(-50%, -100%);
-  color: #d4c297;
-  font-family: var(--font-cinzel), serif;
-  font-size: 11px;
-  line-height: var(--loading-caption-line);
-  letter-spacing: .12em;
+  color: var(--chrome-text);
+  font-size: 18px;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
 /* Keep indicators outside the ground mask and above the rendered scene. */
-.loading-church[data-idle="true"] { z-index: 10; transform: translateX(8vw); }
+.loading-church[data-idle="true"] { z-index: 10; transform: translateX(calc(8vw + 12px)); }
 .landing-scene { position: absolute; inset: 0; z-index: 2; opacity: 0; }
 .landing-scene[data-ready="true"] { opacity: 1; }
 /* The saved picture of the last view while its world regenerates. The root
@@ -162,7 +166,7 @@
   pointer-events: auto;
 }
 .loading-church-stop:focus-visible {
-  outline: 2px solid #f4d991;
+  outline: 2px solid var(--chrome-accent);
   outline-offset: 3px;
 }
 @media (max-width: 640px) {
@@ -185,8 +189,9 @@
   height: auto;
   clip-path: none;
   padding: 8px 12px;
-  background: #30291c;
-  color: #f2e8d5;
-  border: 1px solid #dab767;
-  outline: 2px solid #f4d991;
+  background: var(--chrome-surface);
+  color: var(--chrome-text);
+  border: 1px solid var(--chrome-field);
+  border-radius: 4px;
+  outline: 2px solid var(--chrome-accent);
 }

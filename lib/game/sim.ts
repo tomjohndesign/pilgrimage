@@ -3,6 +3,8 @@ import { destinationEnabled } from "./wayfinding-settings"
 import { workerNavigationVersion } from "./worker-route-memory"
 import type { MonkJob } from "./monk-jobs"
 import { ALMS_HUNGER_GAIN, ALMS_HUNGER_CAP, ALMS_SERVING_SECONDS, almsStaffed, breadVisitPlan, type BreadVisit } from "./alms-table"
+import { seekCoopEggs, stepCoopKeeper, releaseCoopEggs, type CoopEggTask } from "./coop-keeper"
+import { findGatheringPlace, gatheringHeading, gatheringPlaceOpen, GATHERING_ROUTE_LIMIT } from "./party-gathering"
 import { MAIN_ROAD_WALK_LANES } from "./map/road-width"
 import { seekPenFood, stepPenFood, type PenFoodVisit } from "./pen-food"
 import { shrineDonationMultiplier } from "./shrine-upgrade"
@@ -122,7 +124,7 @@ import { TRAVELER_TYPES, type Traveler } from "./travelers"
 
 export type Activity =
   | "toBread" | "receivingBread" | "fromBread"
-  | "collectingFood"
+  | "collectingFood" | "collectingEggs" | "deliveringEggs"
   | "toWater" | "drinking" | "drinkingLow" | "fromWater"
   | "toParking"
   | "fromParking"
@@ -179,6 +181,7 @@ export type Activity =
 
 export const ACTIVITY_LABELS: Record<Activity, string> = {
   toBread: "Going to the alms table", receivingBread: "Receiving bread from a monk", fromBread: "Returning from the alms table",
+  collectingEggs: "Collecting eggs through the coop hatch", deliveringEggs: "Carrying eggs to the raised store",
   collectingFood: "Collecting food from the public platform",
   toWater: "Going to drink water", drinking: "Drinking at the well", drinkingLow: "Drinking at the water’s edge", fromWater: "Returning from water",
   toParking: "Parking outside the shrine",
@@ -315,10 +318,13 @@ function minstrelWalkSeconds(id: number, cycle: number): number {
 export const BEGGAR_DELAY_SECONDS = GAME_DAY_SECONDS
 export const BEGGAR_RECOVERY_GOLD = 15
 
-/** A waiting companion's place on the gathering ground, and the way back to the road once the visit is over. */
+/** A waiting companion's place in the gathering, and the way back to the road after the stop. */
 export interface PartyGathering {
   spot: WorldPoint
   arrived: boolean
+  waited?: number
+  retry?: number
+  heading?: number
   back?: { point: WorldPoint; progress: number }
 }
 
@@ -331,7 +337,7 @@ export interface SimTraveler {
   /** Placed on the road by the company this step; the personal walking update stands aside. */
   partyCarried?: boolean
   partyVisitAborted?: boolean
-  /** Standing room on the grass by the enclave entrance while the company visits, and the walk to and from it. */
+  /** A place in the company’s gathering, and the walk to and from it. */
   partyGathering?: PartyGathering
   /** Where a shrine route began off the road; the first tile of the approach blends from here rather than the road lane. */
   shrineOrigin?: WorldPoint
@@ -393,6 +399,7 @@ export interface SimTraveler {
   employer: string | null
   herding?: HerdingTask
   penCare?: PenCareTask
+  coopEggs?: CoopEggTask
   herdingRetry?: number
   /** Which of the employer's work slots is theirs; posts are one per slot. */
   jobSlot: number
@@ -1591,53 +1598,45 @@ const FORMATION_TOLERANCE = .05
 const FAR_POSITION_STEPS = 4
 /** Bound each person's camp or seat route; a stranded companion keeps the company on the road. */
 const PARTY_ROUTE_LIMIT = 1500
-/** Waiting companions stand at least this far apart on the grass. */
-const GATHERING_SPACING = .9
-/** Tiles around the entrance corner searched for standing room. */
-const GATHERING_REACH = 3
-/** Seconds between attempts to seat companions still standing on the road. */
+/** Seconds between attempts to find room for a waiting company. */
 const GATHERING_RETRY = 3
-const GATHERING_GROUND: readonly string[] = ["grass", "dirt", "clearing"]
+const gatheringBuildings = new WeakMap<TravelParty, GameMap["buildings"]>()
 
-/** Cart companions gather beside their reserved bay; walking companies use the
- * road junction. Keep the track, standing lane and the wagon itself clear. */
-function gatheringGround(sim: SimState, map: GameMap, party: TravelParty, head: SimTraveler, scale: number): WorldPoint[] {
-  const site = map.site, road = map.road
-  if (!site || !road) return []
-  const length = road.length - 1
-  const wrap = (i: number) => ((i % length) + length) % length
-  const junction = road[site.junction]
+/** Keep one meeting place for the whole stop, including companions still on
+ * errands. Public yards are preferred; open ground is always a fallback. */
+function gatheringGround(sim: SimState, map: GameMap, party: TravelParty, head: SimTraveler, scale: number,
+  reservations: RoadsideReservations): WorldPoint[] {
+  if (party.gathering?.spots.some(spot => !reservations.occupied(spot, -1))) return party.gathering.spots
+  const road = map.road!
+  const near = party.stage === "visiting" && map.site ? map.site.junction : Math.floor(party.progress)
+  const junction = road[near]
   if (!junction) return []
-  const before = road[wrap(site.junction - party.direction)] ?? junction
+  const length = road.length - 1
+  const before = road[((near - party.direction) % length + length) % length] ?? junction
   const along = { x: Math.sign(junction.x - before.x), z: Math.sign(junction.z - before.z) }
-  const first = site.branch[1] ?? site.door
-  const aside = { x: Math.sign(first.x - junction.x), z: Math.sign(first.z - junction.z) }
+  const first = party.stage === "visiting" ? map.site?.branch[1] : undefined
+  const aside = first ? { x: Math.sign(first.x - junction.x), z: Math.sign(first.z - junction.z) }
+    : { x: -along.z, z: along.x }
   const rng = makeRng(deriveSeed(party.id ^ 0x47415448, party.decisions))
   const cart = party.transport, parking = cart?.parking
-  const anchor = parking?.parked.hitch ?? { x: tileToWorldX(map, junction.x) + (aside.x - along.x) * 1.5 + (rng() - .5) * .8,
+  const fallback = parking?.parked.hitch ?? { x: tileToWorldX(map, junction.x) + (aside.x - along.x) * 1.5 + (rng() - .5) * .8,
     z: tileToWorldZ(map, junction.z) + (aside.z - along.z) * 1.5 + (rng() - .5) * .8 }
-  const key = (x: number, z: number) => z * map.width + x
   const blocked = new Set<number>()
-  for (const p of site.branch) blocked.add(key(p.x, p.z))
-  if (parking) for (const p of currentStanding(sim, map)?.lane ?? []) blocked.add(key(p.x, p.z))
-  for (let i = -GATHERING_REACH * 3; i <= GATHERING_REACH * 3; i++) { const p = road[wrap(site.junction + i)]; if (p) blocked.add(key(p.x, p.z)) }
-  const wagons = [...parkingContext(sim, head, scale, false, anchor).obstacles ?? []]
+  if (parking) for (const p of currentStanding(sim, map)?.lane ?? []) blocked.add(p.z * map.width + p.x)
+  const wagons = [...parkingContext(sim, head, scale, false, fallback).obstacles ?? []]
   if (parking && cart) wagons.push(...convoyBounds(parking.parked, cart.animal, scale))
   const trees = treeSpatialIndex(sim.trees)
-  const ax = worldToTileX(map, anchor.x), az = worldToTileZ(map, anchor.z)
-  const points: WorldPoint[] = []
-  for (let dz = -GATHERING_REACH; dz <= GATHERING_REACH; dz++) for (let dx = -GATHERING_REACH; dx <= GATHERING_REACH; dx++) {
-    const x = ax + dx, z = az + dz
-    if (blocked.has(key(x, z)) || !GATHERING_GROUND.includes(tileAt(map, x, z) ?? "") || buildingAt(map, x, z)) continue
-    for (const [ox, oz] of [[-.25, -.25], [.25, -.25], [-.25, .25], [.25, .25]]) {
-      const wx = tileToWorldX(map, x) + ox, wz = tileToWorldZ(map, z) + oz
-      if (trees.firstWithin(wx, wz, .8, (_, index) => !sim.felled.has(index))) continue
-      if (wagons.some(box => Math.hypot(box.x - wx, box.z - wz) < Math.max(box.halfWidth, box.halfLength) + .5)) continue
-      points.push({ x: wx, y: walkingSurface(map, wx, wz).height, z: wz })
-    }
+  const remaining = party.members.filter(id => !sim.travelers.get(id)?.partyGathering).length
+  const extra = findGatheringPlace(map, head, party.gathering?.spots[0] ?? fallback, Math.max(1, remaining), point =>
+    blocked.has(worldToTileZ(map, point.z) * map.width + worldToTileX(map, point.x))
+      || (parking && Math.hypot(point.x - fallback.x, point.z - fallback.z) > 3.5)
+      || reservations.occupied(point, -1) || !!trees.firstWithin(point.x, point.z, .8, (_, index) => !sim.felled.has(index))
+      || wagons.some(box => Math.hypot(box.x - point.x, box.z - point.z) < Math.max(box.halfWidth, box.halfLength) + .5))
+  if (extra) {
+    if (party.gathering) party.gathering.spots.push(...extra.spots)
+    else party.gathering = extra
   }
-  const away = (p: WorldPoint) => (p.x - anchor.x) ** 2 + (p.z - anchor.z) ** 2
-  return points.sort((a, b) => away(a) - away(b))
+  return party.gathering?.spots ?? []
 }
 
 /** Take the nearest free place on the ground that can be walked to, and set out for it. */
@@ -1660,13 +1659,13 @@ function joinGathering(s: SimTraveler, map: GameMap, ground: readonly WorldPoint
     const route: TilePos[] = [start]
     let reachable = true
     for (const next of [...via, goal]) {
-      const leg = settlementRoute(map, map.buildings, route.at(-1)!, next, false, false, undefined, PARTY_ROUTE_LIMIT)
+      const leg = settlementRoute(map, map.buildings, route.at(-1)!, next, false, false, undefined, GATHERING_ROUTE_LIMIT)
       if (!leg) { reachable = false; break }
       route.push(...leg.slice(1))
     }
     if (!reachable) continue
     routeWalk(s, map, route, spot)
-    s.partyGathering = { spot, arrived: false }
+    s.partyGathering = { spot, arrived: false, waited: 0 }
     reservations.update(s)
     return true
   }
@@ -1677,7 +1676,7 @@ function joinGathering(s: SimTraveler, map: GameMap, ground: readonly WorldPoint
  * reaching it plans the remainder from where they stand. */
 function stepGathering(s: SimTraveler, map: GameMap, speed: number, dt: number): void {
   const gathering = s.partyGathering!
-  if (gathering.arrived) return
+  if (gathering.arrived) { gathering.waited = (gathering.waited ?? 0) + dt; return }
   if (!s.offRoadRoute?.length) {
     const route = settlementRoute(map, map.buildings, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
       { x: worldToTileX(map, gathering.spot.x), z: worldToTileZ(map, gathering.spot.z) }, false, false, undefined, PARTY_ROUTE_LIMIT)
@@ -1692,7 +1691,7 @@ function nearestRoadProgress(map: GameMap, point: { x: number; z: number }, near
   const length = map.road!.length - 1
   const wrap = (p: number) => ((p % length) + length) % length
   let best = near, bestDistance = Infinity
-  for (let i = -GATHERING_REACH * 3; i <= GATHERING_REACH * 3; i++) for (const half of [0, .5]) {
+  for (let i = -30; i <= 30; i++) for (const half of [0, .5]) {
     const progress = wrap(near + i + half)
     const at = roadWorldPoint(map, progress, 0)
     const distance = (at.x - point.x) ** 2 + (at.z - point.z) ** 2
@@ -1703,17 +1702,19 @@ function nearestRoadProgress(map: GameMap, point: { x: number; z: number }, near
 
 /** Leave the gathering for the road beside it, ready to fall into formation.
  * True once they stand on the road; someone who never left it is there already. */
-function leaveGathering(s: SimTraveler, map: GameMap, speed: number, dt: number): boolean {
+function leaveGathering(s: SimTraveler, map: GameMap, speed: number, dt: number, near: number): boolean {
   const gathering = s.partyGathering
   if (!gathering) return true
   if (!gathering.back) {
-    const progress = nearestRoadProgress(map, s, map.site?.junction ?? Math.floor(s.progress))
+    gathering.retry = Math.max(0, (gathering.retry ?? 0) - dt)
+    if (gathering.retry > 0) return false
+    const progress = nearestRoadProgress(map, s, near)
     const lane = s.direction * s.laneOffset
     const point = roadWorldPoint(map, progress, lane)
     const route = settlementRoute(map, map.buildings, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
       { x: worldToTileX(map, point.x), z: worldToTileZ(map, point.z) }, false, false, undefined, PARTY_ROUTE_LIMIT)
-    if (route) routeWalk(s, map, route, point)
-    else s.offRoadRoute = [{ ...point }]
+    if (!route) { gathering.retry = GATHERING_RETRY; return false }
+    routeWalk(s, map, route, point)
     gathering.back = { point, progress }
     gathering.arrived = false
   }
@@ -1803,6 +1804,58 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
   let vending: SimTraveler[] | undefined
   // Standing room already taken beside the road, read once and only when a company needs places.
   let reservations: RoadsideReservations | undefined
+  const gatherMembers = (party: TravelParty, members: SimTraveler[], leaving = false, allowed = true, busy?: ReadonlySet<number>) => {
+    if (gatheringBuildings.get(party) !== map.buildings) {
+      gatheringBuildings.set(party, map.buildings)
+      const displaced = !leaving && party.gathering && !gatheringPlaceOpen(map, party.gathering)
+      if (displaced) { party.gathering = undefined; party.gatherRetry = 0 }
+      for (const s of members) if (s.partyGathering && !busy?.has(s.id)) {
+        // Personal errands own their own routes. Only replan the company walk.
+        if (s.activity === "walking") { s.offRoadRoute = null; s.walkFrom = null }
+        s.partyGathering.back = undefined; s.partyGathering.retry = 0
+        if (displaced) s.partyGathering = undefined
+      }
+    }
+    party.gatherRetry = Math.max(0, (party.gatherRetry ?? 0) - dt)
+    let ground: WorldPoint[] | undefined, returned = true
+    for (const s of members) {
+      if (busy?.has(s.id)) continue
+      if (s.activity !== "walking" || s.track || s.roadShortcut) {
+        if (s.partyGathering) {
+          s.partyGathering.arrived = false; s.partyGathering.waited = 0; s.partyGathering.heading = undefined
+          s.partyGathering.back = undefined
+        }
+        continue
+      }
+      hold(s)
+      if (leaving) {
+        if (!leaveGathering(s, map, naturalSpeed(s), dt, party.progress)) returned = false
+        continue
+      }
+      if (s.partyRiding || s.partyBoarding || !allowed) continue
+      if (!s.partyGathering) {
+        if (party.gatherRetry > 0) continue
+        reservations ??= new RoadsideReservations(sim.travelers.values())
+        ground ??= gatheringGround(sim, map, party, s, characterScale, reservations)
+        if (!joinGathering(s, map, ground, reservations, party.transport?.parking)) continue
+      }
+      stepGathering(s, map, naturalSpeed(s), dt)
+    }
+    if (ground) party.gatherRetry = GATHERING_RETRY
+    // Keep places for companions still on errands, so a second company cannot
+    // fill their meeting place before they return. Their current routes continue.
+    if (!leaving && ground?.length) for (const s of members) {
+      if (s.partyGathering || s.activity === "walking" || s.partyRiding || busy?.has(s.id)) continue
+      const spot = ground.find(point => !reservations!.occupied(point, s.id))
+      if (spot) { s.partyGathering = { spot, arrived: false, waited: 0 }; reservations!.update(s) }
+    }
+    const entrance = party.stage === "visiting" && map.site
+      ? { x: tileToWorldX(map, map.site.door.x), z: tileToWorldZ(map, map.site.door.z) }
+      : members.find(s => s.activity !== "walking") ?? roadWorldPoint(map, party.progress, 0)
+    for (const s of members) if (s.partyGathering) s.partyGathering.heading = gatheringHeading(s, members, entrance)
+    if (leaving && returned) { party.gathering = undefined; party.gatherRetry = 0 }
+    return returned
+  }
   for (const party of sim.parties.values()) {
     const members: SimTraveler[] = []
     for (const id of party.members) { const s = sim.travelers.get(id); if (s) members.push(s) }
@@ -1819,9 +1872,11 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
       if (party.transport || party.packs?.length) party.formed = false
     }
     // Pack animals on their way to or from the standing hold the whole company:
-    // their handlers walk the lead, everyone else waits where they stand.
+    // their handlers walk the lead, everyone else gathers clear of the road.
     if (party.packs?.some(p => p.phase === "parking" || p.phase === "leaving")) {
       for (const s of members) hold(s)
+      const handlers = new Set(party.packs.filter(p => p.phase === "parking" || p.phase === "leaving").map(p => p.handler))
+      gatherMembers(party, members, false, true, handlers)
       party.reason = party.packs.some(p => p.phase === "leaving") ? "Leading the animals back to the road" : "Leading the animals to the standing"
       party.elapsed = 0
       // Led animals wear the ground like a rider's horse: a path to the standing emerges from use.
@@ -1861,25 +1916,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
         for (const s of members) hold(s)
         const done = movePartyCart(party, map, characterScale, companyPace(party, members, naturalSpeed, characterScale), dt)
         seatParty(party, members, characterScale)
-        if (parking) {
-          party.gatherRetry = Math.max(0, (party.gatherRetry ?? 0) - dt)
-          let ground: WorldPoint[] | undefined
-          for (const s of members) {
-            if (s.partyRiding || s.activity !== "walking") continue
-            if (!s.partyGathering && party.gatherRetry <= 0) {
-              ground ??= gatheringGround(sim, map, party, members[0], characterScale)
-              reservations ??= new RoadsideReservations(sim.travelers.values())
-              joinGathering(s, map, ground, reservations, cart.parking)
-            }
-            if (s.partyGathering) {
-              stepGathering(s, map, naturalSpeed(s), dt)
-              s.partyWaiting = s.partyGathering?.arrived ?? true
-              s.partySpeed = s.partyWaiting ? 0 : naturalSpeed(s)
-            }
-          }
-          if (ground) party.gatherRetry = GATHERING_RETRY
-          party.reason = "Walking together to the parking area"
-        }
+        if (parking) gatherMembers(party, members, false, true, new Set(cart.seats))
         if (done && parking) for (const s of members) s.partyRiding = false
         if (done && !parking) regroupParty(party, members, length, seconds, characterScale)
         continue
@@ -1903,6 +1940,8 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
           }
         }
         for (const s of members) hold(s)
+        // The visit already walked companions back to the road. Keep them
+        // there while riders board, rather than sending them back to the bay.
         if (cart.phase === "boarding") {
           for (const [seat, id] of cart.seats.entries()) {
             const s = sim.travelers.get(id)!
@@ -1932,7 +1971,10 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
             party.visitStarted.push(id)
             party.elapsed = 0
             // Their place on the grass stays theirs; anyone still walking to it finishes the walk after the relic.
-            if (s.partyGathering) { s.offRoadRoute = null; s.walkFrom = null }
+            if (s.partyGathering) {
+              s.partyGathering.arrived = false; s.partyGathering.waited = 0; s.partyGathering.heading = undefined
+              s.offRoadRoute = null; s.walkFrom = null
+            }
           }
         }
       }
@@ -1942,25 +1984,8 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
       if (members.some(s => ["toRelic", "visiting", "offering", "fromRelic", "toWater", "drinking", "drinkingLow", "fromWater", "toBread", "receivingBread", "fromBread"].includes(s.activity))) party.elapsed = 0
       // A closed or saturated enclave cannot keep unadmitted companions forever.
       if (party.elapsed > 120) party.visitPending = []
-      // Whoever is not at the relic waits in one group on the grass beside the
-      // entrance rather than strung along the road. Once the visit is over
-      // everyone walks back to the road before the company regroups.
       const done = !party.visitPending.length && members.every(s => s.activity === "walking")
-      party.gatherRetry = Math.max(0, (party.gatherRetry ?? 0) - dt)
-      let ground: WorldPoint[] | undefined, returned = true
-      for (const s of members) {
-        if (s.activity !== "walking") continue
-        hold(s)
-        if (done) { if (!leaveGathering(s, map, naturalSpeed(s), dt)) returned = false; continue }
-        if (!s.partyGathering) {
-          if (party.gatherRetry > 0 || !map.site) continue
-          ground ??= gatheringGround(sim, map, party, members[0], characterScale)
-          reservations ??= new RoadsideReservations(sim.travelers.values())
-          if (!joinGathering(s, map, ground, reservations, cart?.parking)) continue
-        }
-        stepGathering(s, map, naturalSpeed(s), dt)
-      }
-      if (ground) party.gatherRetry = GATHERING_RETRY
+      const returned = gatherMembers(party, members, done, !!map.site)
       if (done && returned) {
         for (const s of members) {
           if (s.home || s.employer || s.partyVisitAborted || !party.visitStarted.includes(s.id)) continue
@@ -1988,7 +2013,7 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
     if (party.waterCarrier !== undefined) {
       const carrier = sim.travelers.get(party.waterCarrier)
       if (carrier && carrier.activity !== "walking") {
-        for (const s of members) if (s !== carrier) hold(s)
+        gatherMembers(party, members)
         party.reason = "Refilling the company’s water"
         continue
       }
@@ -2006,16 +2031,21 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
       const sources = map.buildings.filter(isWaterSource)
       if (carrier && (startWaterTrip(sim, carrier, map, sources, { x: carrier.x, y: carrier.y, z: carrier.z }) || startNaturalWaterTrip(carrier, map))) {
         party.waterCarrier = carrier.id
-        for (const s of members) if (s !== carrier) hold(s)
+        gatherMembers(party, members)
         party.reason = "Refilling the company’s water"
         continue
       }
     }
     const onRoad = members.every(s => s.partyRiding || (s.activity === "walking" && !s.roadShortcut && !s.track))
     if (!onRoad) {
-      // Someone was drawn aside by another system; the rest stand and wait.
-      for (const s of members) if (s.activity === "walking") hold(s)
+      // A companion is on an errand; share the same gathering behavior as a shrine visit.
+      gatherMembers(party, members)
       party.reason = "Regrouping with companions"
+      continue
+    }
+    if (party.gathering || members.some(s => s.partyGathering)) {
+      party.reason = "Walking back to the road"
+      if (gatherMembers(party, members, true)) regroupParty(party, members, length, seconds, characterScale)
       continue
     }
     const head = members[0]
@@ -2290,6 +2320,9 @@ export function stepSim(
   if(dt>0) for(const [id,care] of sim.wildlife?.penCare ?? []) {
     if(care.caretaker!==undefined && sim.travelers.get(care.caretaker)?.penCare?.penId!==id)care.caretaker=undefined
   }
+  if (dt > 0) for (const [id, keeper] of sim.wildlife?.coopKeepers ?? []) {
+    if (sim.travelers.get(keeper)?.coopEggs?.coopId !== id) sim.wildlife!.coopKeepers!.delete(id)
+  }
   const length = map.road.length - 1
   sim.time += dt / GAME_DAY_SECONDS
   const hours = dt / GAME_HOUR_SECONDS
@@ -2385,6 +2418,7 @@ export function stepSim(
     if (dt > 0 && s.employer) payWage(sim, s)
     stepPoverty(s, t, dt)
     const previousStall = deployedStall(s)
+    if (s.coopEggs && !["collectingEggs", "deliveringEggs"].includes(s.activity)) releaseCoopEggs(s, sim.wildlife)
     if (s.herding && !["toSheep", "herding"].includes(s.activity)) releaseSheep(s, sim.wildlife)
     if (s.penCare && s.activity !== s.penCare.chore) releasePenCare(s, sim.wildlife)
     s.herdingRetry = Math.max(0, (s.herdingRetry ?? 0) - dt)
@@ -2757,6 +2791,10 @@ export function stepSim(
         const unhappy = socialBreak
         const workplace = sim.buildings.find(b => b.id === s.employer)
         if (dt > 0 && startCitizenBuild(sim, s, t, map)) break
+        if (workplace?.kind === "chicken-coop" && dt > 0 && fitForWork && !unhappy && !s.herdingRetry) {
+          s.herdingRetry = 5
+          if (seekCoopEggs(s, sim.wildlife, map, sim.foodStores)) break
+        }
         // Standing behind a counter or in a fold asks little; a settler keeps
         // that post until they are genuinely hungry or tired.
         if (workplace && isPostedWork(workplace.kind) && !hungry && !unhappy && s.stamina > SETTLER_TIRED_AT) {
@@ -2832,6 +2870,12 @@ export function stepSim(
       case "fromHome": {
         if (walkWorker(s, s.constructionReturn ?? [], targetSpeed, dt)) {
           s.activity = "idle"; s.timer = 0; s.constructionReturn = undefined
+        }
+        break
+      }
+      case "collectingEggs": case "deliveringEggs": {
+        if (!stepCoopKeeper(s, sim.wildlife, map, targetSpeed, dt, sim.foodStores)) {
+          s.activity = "idle"; s.timer = 0; sim.resourceRevision++
         }
         break
       }

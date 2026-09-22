@@ -73,6 +73,34 @@ describe("finding the horse-standing", () => {
 })
 
 describe("a company's pack animal at the enclave", () => {
+  it.each(["pack", "wagon"] as const)("moves waiting companions off the wide road at the %s stop", kind => {
+    const count = kind === "pack" ? 3 : 8
+    const id = Array.from({ length: 100 }, (_, i) => i).find(i => kind === "pack"
+      ? !partyLoadout(i, count).cart && partyLoadout(i, count).packs > 0 : !!partyLoadout(i, count).cart)!
+    const travelers: Traveler[] = Array.from({ length: count }, (_, slot) => ({ id: slot, name: `Pilgrim ${slot}`, type: TRAVELER_TYPES.pilgrim, direction: 1,
+      offset: (18 - slot) / 59, pace: 1, party: { id, name: "Company", slot }, attributes: { ...devout } }))
+    const { map, sim } = standingRoad(travelers)
+    map.mainRoadWidth = 2
+    sim.shrineKeeperReady = false
+    const party = sim.parties.get(id)!
+    let waitedOffRoad = false, parked = false
+    for (let tick = 0; tick < 3000 && !(parked && waitedOffRoad); tick++) {
+      stepSim(sim, travelers, map, 1, .1)
+      const pack = party.packs?.[0], maneuver = kind === "pack" ? pack : party.transport
+      if (maneuver?.phase === "parking" || maneuver?.phase === "parked") for (const s of sim.travelers.values()) {
+        // Companions can arrive after the wagon when following its longer
+        // approach corridor. Once waiting, everyone stays clear of the road.
+        if (s.id === pack?.handler || party.transport?.seats.includes(s.id) || !s.partyGathering?.arrived) continue
+        expect(Math.abs(s.z - tileToWorldZ(map, 5))).toBeGreaterThanOrEqual(1.4)
+        expect(s.partyWaiting).toBe(true)
+        waitedOffRoad = true
+      }
+      parked = maneuver?.phase === "parked"
+    }
+    expect(parked).toBe(true)
+    expect(waitedOffRoad).toBe(true)
+  })
+
   it("is led to the standing by its handler while the company visits, and back to the road afterwards", () => {
     // A company of three on foot with one pack animal, starting a little way before the fork.
     const id = [0, 1, 2, 3, 4, 5].find(candidate => partyLoadout(candidate, 3).packs > 0)!

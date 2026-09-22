@@ -1,11 +1,6 @@
-import type { Metadata } from "next"
-import { RenderLab } from "@/components/render-lab/render-lab"
+import { redirect } from "next/navigation"
 
-export const metadata: Metadata = {
-  title: "Pilgrimage — Pixel workshop",
-  description: "Compare pixel rendering methods with synchronized characters and scenery.",
-}
-
-export default function RenderingPage() {
-  return <RenderLab />
+/** Retired rendering comparisons return to the shared workspace. */
+export default function RetiredRenderingPage() {
+  redirect("/assets")
 }

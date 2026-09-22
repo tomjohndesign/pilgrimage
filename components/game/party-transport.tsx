@@ -93,7 +93,7 @@ function PartyFigure({ handlers, party, sim, map, travelers, characterScale }: {
   }, -2.8)
   return <group name="party-transport">
     {vehicle && <>
-      <group ref={cart}><TransportSprite map={map} kind="cart" passengerCart={vehicle.style} overlapGroup={cart} characterScale={characterScale}
+      <group ref={cart}><TransportSprite map={map} kind="cart" passengerCart={vehicle.style} characterScale={characterScale}
         outlineColor={color(vehicle.seats[0])} onClick={click(vehicle.seats[0])} /></group>
       <group ref={beast}><TransportSprite map={map} kind={vehicle.animal} characterScale={characterScale}
         outlineColor={color(vehicle.seats[0])} onClick={click(vehicle.seats[0])} /></group>
@@ -101,12 +101,12 @@ function PartyFigure({ handlers, party, sim, map, travelers, characterScale }: {
         const person = travelers[indices.get(id)!]
         if (!person) return null
         return <group key={id} ref={group => { riders.current[seat] = group; markPerson(group) }}>
-          <TransportSprite map={map} kind="passenger" seat={seat} calling={person.type.id} overlapGroup={cart}
+          <TransportSprite map={map} kind="passenger" seat={seat} calling={person.type.id}
             variant={travelerAppearance(map.seed ?? 0, id).variant} characterScale={characterScale}
             selected={selection?.kind === "traveler" && selection.id === id} outlineColor={color(id)} onClick={click(id)} />
         </group>
       })}
-      {<CartReins draft cart={cart} animal={beast} kind={vehicle.animal} horseVariant="common"
+      {<CartReins driver={() => riders.current[0]} draft cart={cart} animal={beast} kind={vehicle.animal} horseVariant="common"
         characterScale={characterScale} selected={false} seatOffset={-.32} outlineColor={color(vehicle.seats[0])} />}
     </>}
     {party.packs?.map((pack, i) => <group key={`${pack.kind}:${i}`} ref={group => { packs.current[i] = group; markPerson(group) }}>

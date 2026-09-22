@@ -1,7 +1,8 @@
 "use client"
 
+import { registerSurfaceLighting } from "@/lib/game/render/surface-registration"
 import { useEffect, useMemo } from "react"
-import { useFrame } from "@react-three/fiber"
+import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 import { APPEARANCE_ENABLED, useAppearanceStore } from "@/lib/game/appearance-store"
 import { appearanceWorldKey, defaultAppearance, type AppearanceGroup } from "@/lib/game/appearance"
@@ -24,6 +25,8 @@ function groupOf(object: THREE.Object3D): AppearanceGroup | null {
 
 /** Bind appearance to existing color materials. IDs, depth, outlines and batching keep their original passes. */
 export function AppearanceScene({ map, travelers, monks }: { map: GameMap; travelers: readonly {id:number}[]; monks: readonly {id:number}[] }) {
+  const scene = useThree(s => s.scene)
+  useEffect(() => registerSurfaceLighting(scene), [scene])
   const defaults = useMemo(defaultAppearance, [])
   const value = useAppearanceStore(s => APPEARANCE_ENABLED ? s.value : defaults)
   const piles = useBuildStore(s => s.piles)

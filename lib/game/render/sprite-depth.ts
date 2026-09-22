@@ -43,7 +43,7 @@ export function configureSpriteDepthTexture(texture: THREE.Texture) {
  * Keep that extra clearance off the upright plane to preserve body occlusion.
  * Like the game's cameras, this depth model is orthographic.
  * `bias` (world units toward the camera) is the painter's order from
- * render/overlap-order for figures sharing a spot; it moves the whole figure,
+ * render/overlap-order for intersecting silhouettes; it moves the whole figure,
  * ground contact included, and stays zero for everyone standing alone.
  */
 export function applySpriteDepth(shader: Parameters<THREE.Material["onBeforeCompile"]>[0], viewport: THREE.Vector4, worldTexel = { value: 0 },
@@ -97,13 +97,41 @@ export function applySpriteDepth(shader: Parameters<THREE.Material["onBeforeComp
       }
     #endif
     float poseDepth = min(depths.x, depths.y);
-    if (spriteSceneryMode == 1) {
+    ${crowdDepthFragment}`)
+  shader.fragmentShader = "uniform int spriteSceneryMode;\nuniform sampler2D spriteSceneryDepth;\nuniform vec2 spriteSceneryScale;\nuniform vec2 spriteSceneryOffset;\n" + shader.fragmentShader
+}
+
+// Shared by billboard poses and the real geometry connecting them. A strap
+// must move with its convoy in crowd depth, while scenery sees its real depth.
+const crowdDepthFragment = `    if (spriteSceneryMode == 1) {
       vec2 displayUv = (gl_FragCoord.xy - spriteViewport.xy) / spriteViewport.zw;
       vec2 worldUv = (displayUv - 0.5) * spriteSceneryScale + 0.5 + spriteSceneryOffset;
       // A crowd bias may separate people, but must never pull them through
       // a tree, wall or hillside. Test their real pose against scenery first.
       if (poseDepth > texture2D(spriteSceneryDepth, worldUv).x + 1.0e-7) discard;
     }
-    gl_FragDepth = clamp(poseDepth - (spriteSceneryMode == 2 ? 0.0 : vSpriteDepthBias), 0.0, 1.0);`)
-  shader.fragmentShader = "uniform int spriteSceneryMode;\nuniform sampler2D spriteSceneryDepth;\nuniform vec2 spriteSceneryScale;\nuniform vec2 spriteSceneryOffset;\n" + shader.fragmentShader
+    gl_FragDepth = clamp(poseDepth - (spriteSceneryMode == 2 ? 0.0 : vSpriteDepthBias), 0.0, 1.0);`
+
+export function applyAttachmentDepth(shader: Parameters<THREE.Material["onBeforeCompile"]>[0],
+  viewport: THREE.Vector4, bias: { value: number }, scenery: SpriteSceneryDepth, endpoints?: { value: THREE.Vector3 }) {
+  shader.uniforms.spriteDepthBias = bias
+  shader.uniforms.spriteViewport = { value: viewport }
+  shader.uniforms.spriteSceneryMode = scenery.mode
+  shader.uniforms.spriteSceneryDepth = scenery.map
+  shader.uniforms.spriteSceneryScale = scenery.scale
+  shader.uniforms.spriteSceneryOffset = scenery.offset
+  if (endpoints) shader.uniforms.attachmentBiases = endpoints
+  const declarations = endpoints ? "attribute vec2 attachmentPath;\nuniform vec3 attachmentBiases;\n" : "uniform float spriteDepthBias;\n"
+  const amount = endpoints ? "mix(mix(attachmentBiases.x, attachmentBiases.y, attachmentPath.y), attachmentBiases.z, attachmentPath.x)" : "spriteDepthBias"
+  shader.vertexShader = declarations + "flat varying float vSpriteDepthBias;\n" + shader.vertexShader.replace(
+    "#include <fog_vertex>", `#include <fog_vertex>\nvSpriteDepthBias = ${amount} * abs(projectionMatrix[2][2]) * 0.5;`)
+  shader.fragmentShader = `flat varying float vSpriteDepthBias;
+    uniform vec4 spriteViewport;
+    uniform int spriteSceneryMode;
+    uniform sampler2D spriteSceneryDepth;
+    uniform vec2 spriteSceneryScale;
+    uniform vec2 spriteSceneryOffset;
+  ` + shader.fragmentShader.replace("#include <logdepthbuf_fragment>", `#include <logdepthbuf_fragment>
+    float poseDepth = gl_FragCoord.z;
+    ${crowdDepthFragment}`)
 }

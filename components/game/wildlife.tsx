@@ -1,4 +1,6 @@
 "use client"
+import { syncCoopChickens } from "@/lib/game/chicken-coop"
+import { isComplete } from "@/lib/game/construction"
 import { touchSceneSoundSource, sceneSoundSources } from "@/lib/game/scene-sound-sources"
 import { playSourceSelection } from "@/lib/game/scene-audio"
 import { SheepRemains } from "./sheep-remains"
@@ -64,15 +66,18 @@ export function Wildlife({ map, trees, characterScale }: { map: GameMap; trees: 
   const strikes = useRef<TreePlacement[]>([])
   const accumulator = useRef(0)
   useEffect(() => onTreeStrike(tree => { if (world.trees.includes(tree)) strikes.current.push(tree) }), [world])
+  const coopKey = map.buildings.filter(b => b.buildType === "chicken-coop").map(b => `${b.id}:${isComplete(b)}`).join("|")
   const batches = useMemo(() => {
+    syncCoopChickens(world, map)
     const groups = new Map<WildlifeKind, WildlifeAnimal[]>()
     world.animals.forEach(animal => { const list = groups.get(animal.kind) ?? []; list.push(animal); groups.set(animal.kind, list) })
     return [...groups]
-  }, [world])
+  }, [world, coopKey])
   useFrame(({ scene }, delta) => {
     if (root.current) root.current.visible = frameQuality(scene) < 2 || useCameraStore.getState().selection?.kind === "animal"
     const playback = useSimulationStore.getState()
     if (playback.paused) return
+    world.coopFood = simRegistry.current?.foodStores
     const felled = useBuildStore.getState().felled
     for (const tree of strikes.current) startleWildlife(world, tree, map, felled)
     strikes.current.length = 0
@@ -157,7 +162,7 @@ export function WildlifeBatch({ kind, animals, map, scale, grazing }: { kind: Wi
       root.rotation.set(0, animal.heading, 0, "YXZ")
       if (!bird) {
         const surface = walkingSurface(map, animal.x, animal.z), c = Math.cos(animal.heading), s = Math.sin(animal.heading)
-        root.position.y = surface.height + (burrow?.y??0) * size
+        root.position.y = (animal.coopId ? animal.y : surface.height) + (burrow?.y??0) * size
         root.rotation.x = -Math.atan(surface.dx * s + surface.dz * c) + (burrow?.pitch??0)
         root.rotation.z = Math.atan(surface.dx * c - surface.dz * s)
       } else if (animal.flight) root.rotation.z = Math.sin(animal.flight.elapsed / animal.flight.duration * Math.PI * 2) * (kind === "hawk" ? 0.2 : 0.08)

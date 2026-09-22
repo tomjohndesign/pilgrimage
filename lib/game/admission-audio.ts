@@ -2,6 +2,7 @@
 
 import { COIN_SOUND_URL } from "./sound-catalog"
 import { useCharacterAssetStore } from "./character-asset-store"
+import { DEFAULT_CHARACTER_SOUNDS, useCharacterSoundStore } from "./character-sound-store"
 
 /** The ElevenLabs silver-coin/purse recording, unlocked by a game gesture. */
 export function createAdmissionAudio() {
@@ -10,8 +11,17 @@ export function createAdmissionAudio() {
   let loading: Promise<void> | undefined
   let disposed = false
   const active = new Set<AudioBufferSourceNode>()
+  const levels = new Set<GainNode>()
+  const volume = () => {
+    const mixer = useCharacterSoundStore.getState().document.mixer
+    const defaults = DEFAULT_CHARACTER_SOUNDS.mixer
+    return .12 * mixer.master * mixer.foley / (defaults.master * defaults.foley)
+  }
   const stop = () => { for (const source of active) source.stop(); active.clear() }
   const unsubscribe = useCharacterAssetStore.subscribe(state => { if (state.muted) stop() })
+  const unsubscribeMixer = useCharacterSoundStore.subscribe(() => {
+    for (const level of levels) level.gain.value = volume()
+  })
   return {
     unlock() {
       if (disposed || typeof AudioContext === "undefined") return
@@ -29,16 +39,19 @@ export function createAdmissionAudio() {
       if (!visible || disposed || useCharacterAssetStore.getState().muted || context?.state !== "running" || !buffer || active.size >= 1) return false
       const source = context.createBufferSource(), gain = context.createGain()
       source.buffer = buffer
-      gain.gain.value = 0.12
+      gain.gain.value = volume()
       source.connect(gain).connect(context.destination)
       active.add(source)
-      source.onended = () => { active.delete(source); source.disconnect(); gain.disconnect() }
+      levels.add(gain)
+      source.onended = () => { active.delete(source); levels.delete(gain); source.disconnect(); gain.disconnect() }
       source.start()
       return true
     },
     dispose() {
       disposed = true
       unsubscribe()
+      unsubscribeMixer()
+      levels.clear()
       stop()
       if (context) void context.close().catch(() => {})
     },

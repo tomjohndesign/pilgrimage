@@ -34,7 +34,7 @@ export const characterBatchControl = { enabled: true, compact: false }
 export const useCharacterBatches = () => useContext(Context)
 
 /** Batch ordinary road people inside the existing color/ID/selection renderer.
- * Selected figures and carts with composited drivers retain their individual sprites and picking. */
+ * Selected figures and edited rigs retain individual sprites and picking. */
 export function CharacterBatches({ children }: { children: ReactNode }) {
   const scene = useThree(state => state.scene)
   const groups = useMemo(() => new Map<string, AtlasGroup>(), [])
@@ -105,7 +105,7 @@ export function CharacterBatches({ children }: { children: ReactNode }) {
       group.entries.sort((a, b) => a.sprite.renderOrder - b.sprite.renderOrder)
       batch?.write(group.entries, camera, true)
     }
-    overlap.update(entries, groups.values(), camera)
+    overlap.update(entries, groups.values(), camera, worldTexel.value)
     for (const group of groups.values()) group.batch?.writeBiases(group.entries)
     updateBatchSourceVisibility(scene, candidates, clock.elapsedTime)
     frameProfile.end("characterBatches", started)

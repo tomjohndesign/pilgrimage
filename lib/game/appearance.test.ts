@@ -16,6 +16,21 @@ describe("portable appearance edits", () => {
     for (const brightness of [-1,3,null]) expect(()=>parseAppearance(JSON.stringify({...defaultAppearance(),assets:{brightness,saturation:1}}))).toThrow()
     expect(()=>parseAppearance(JSON.stringify({...defaultAppearance(),grass:{...defaultAppearance().grass,color:"red"}}))).toThrow()
   })
+  it("loads earlier appearance files with terrain defaults and preserves the new controls", () => {
+    const { terrain, ...legacy } = defaultAppearance()
+    expect(parseAppearance(JSON.stringify(legacy)).terrain).toEqual(terrain)
+    for (const inclineStyle of ["smooth", "stipple", "ordered"] as const) {
+      const value = {...defaultAppearance(), terrain: { texture: .6, inclineStyle }}
+      expect(parseAppearance(JSON.stringify(value))).toEqual(value)
+      updateAppearanceUniforms(value, [])
+      expect(grassAppearanceUniforms.terrainTexture.value).toBe(.6)
+      expect(grassAppearanceUniforms.terrainInclineStyle.value).toBe(["smooth", "stipple", "ordered"].indexOf(inclineStyle))
+    }
+    for (const terrain of [{ texture: 3, inclineStyle: "stipple" }, { texture: 1, inclineStyle: "unknown" }]) {
+      expect(() => parseAppearance(JSON.stringify({...defaultAppearance(), terrain}))).toThrow()
+    }
+    updateAppearanceUniforms(defaultAppearance(), [])
+  })
   it("keeps object identities distinct across asset kinds", () => {
     expect(sameAppearanceSelection({kind:"tree",id:1},{kind:"animal",id:1})).toBe(false)
     expect(selectionGroup({kind:"monk",id:3})).toBe("characters")

@@ -65,6 +65,7 @@ export const displaySettingsSchema = z.object({
   showCharacters: z.boolean(),
   showWildlife: z.boolean(),
   showScenery: z.boolean(),
+  showGrid: z.boolean(),
   buildingVisibility: z.enum(["auto", "interiors", "hidden"]).describe("When building interiors are shown"),
   walkSpeed: finite.positive().describe("Walking speed in tiles per second at the reference character size"),
   characterFps: finite.min(1).max(24).describe("Animation frames per second"),

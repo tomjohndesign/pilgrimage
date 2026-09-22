@@ -4,6 +4,8 @@ import { SceneSoundScheduler, irregularSoundDelay } from "./scene-sound-sources"
 import { ANIMAL_SOUND_SPECIES, DEFAULT_CHARACTER_SOUNDS, SCENE_AUDIO_PROFILES, validateCharacterSounds } from "./character-sound-store"
 import { SOUND_AUDITIONS } from "./sound-catalog"
 
+import { CHICKEN_KINDS } from "./wildlife/species"
+
 const source = (profile: string, moving = true, x = 0) => ({ profile, moving, distance: 2, pan: 0, x, z: 0 })
 const cooldown = () => 18
 
@@ -26,6 +28,12 @@ describe("visible sound sources", () => {
         expect(existsSync(`public${sound.url}`)).toBe(true)
         expect(sound.peakDb).toBeLessThanOrEqual(-8)
       }
+    }
+    for (const kind of CHICKEN_KINDS) {
+      const profile = migrated.profiles[`animal/${kind}`]
+      expect(profile.selection.enabled).toBe(false)
+      expect(profile.selection.clips).toEqual([])
+      expect(profile.idle.enabled).toBe(false)
     }
     expect(migrated.profiles["scene/crowd"].idle.clips).toHaveLength(6)
     expect(migrated.profiles["vehicle/cart"].walking.clips).toHaveLength(2)

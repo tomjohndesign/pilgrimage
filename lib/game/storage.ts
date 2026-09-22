@@ -4,19 +4,19 @@ import type { BuildingDef, GameMap } from "./map/types"
 import { worldToTileX, worldToTileZ } from "./map/types"
 import { settlementRoute } from "./settlement-route"
 
-export const FOOD_TYPES = ["grain", "vegetables", "fruit", "fish", "meat", "milk"] as const
+export const FOOD_TYPES = ["grain", "vegetables", "fruit", "fish", "meat", "milk", "eggs"] as const
 export type FoodType = typeof FOOD_TYPES[number]
 export type FoodStock = Record<FoodType, number>
 export const STOREHOUSE_FOOD_CAPACITY = 200
 export const FOOD_LABELS: Record<FoodType, string> = {
-  grain: "Grain", vegetables: "Vegetables", fruit: "Fruit", fish: "Fish", meat: "Meat", milk: "Milk",
+  grain: "Grain", vegetables: "Vegetables", fruit: "Fruit", fish: "Fish", meat: "Meat", milk: "Milk", eggs: "Eggs",
 }
-export const emptyFoodStock = (): FoodStock => ({ grain: 0, vegetables: 0, fruit: 0, fish: 0, meat: 0, milk: 0 })
+export const emptyFoodStock = (): FoodStock => ({ grain: 0, vegetables: 0, fruit: 0, fish: 0, meat: 0, milk: 0, eggs: 0 })
 export const storedFood = (stock: FoodStock): number => FOOD_TYPES.reduce((sum, type) => sum + (stock[type] ?? 0), 0)
 
 /** Shared capacity across foods. Returns the amount accepted; excess stays with the caller. */
 export function depositFood(stores: Map<string, FoodStock>, building: BuildingDef, type: FoodType, amount: number): number {
-  if ((building.buildType !== "storehouse" && !(building.buildType === "sheep-pen" && (type === "meat" || type === "milk"))) || !isComplete(building) || !Number.isSafeInteger(amount) || amount <= 0) return 0
+  if ((building.buildType !== "storehouse" && !(building.buildType === "chicken-coop" && type === "eggs") && !(building.buildType === "sheep-pen" && (type === "meat" || type === "milk"))) || !isComplete(building) || !Number.isSafeInteger(amount) || amount <= 0) return 0
   const stock = stores.get(building.id) ?? emptyFoodStock()
   const accepted = Math.min(amount, Math.max(0, STOREHOUSE_FOOD_CAPACITY - storedFood(stock)))
   if (accepted) stores.set(building.id, { ...emptyFoodStock(), ...stock, [type]: (stock[type] ?? 0) + accepted })

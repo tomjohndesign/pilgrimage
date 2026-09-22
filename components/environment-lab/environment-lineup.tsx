@@ -1,10 +1,15 @@
 "use client"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { TerrainTiles } from "../game/terrain-tiles"
+import type { GameMap } from "@/lib/game/map/types"
+
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 
 import { EnvironmentField } from "@/components/game/environment"
 import { PreviewCanvas } from "@/components/preview-canvas"
 import { BOULDER_SIZES, ENVIRONMENT_KINDS, type EnvironmentPlacement } from "@/lib/game/environment/elements"
+
+const GROUND: GameMap = { width: 20, depth: 9, buildings: [], tiles: Array(180).fill("grass") }
 
 const SPECIMENS = [
   ...ENVIRONMENT_KINDS.map((kind, i) => ({ kind, x: i * 1.65 - 7, boulderSize: undefined })),
@@ -31,10 +36,7 @@ export function EnvironmentLineup({ seed, view }: { seed: number; view: number }
   return (
     <div ref={container} className="h-full w-full">
       <PreviewCanvas zoom={zoom} view={view}>
-        <mesh position={[0, -0.04, 0]}>
-          <boxGeometry args={[18, 0.18, 7.5]} />
-          <meshLambertMaterial color="#77864b" />
-        </mesh>
+        <Suspense fallback={null}><group position={[0, -.15, 0]}><TerrainTiles map={GROUND} showGrid vegetation={false} slab={false} /></group></Suspense>
         <EnvironmentField placements={placements} />
       </PreviewCanvas>
     </div>

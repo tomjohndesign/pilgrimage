@@ -53,16 +53,11 @@ export function BugReportDialog({ diagnostics, onClose }: {
     }
   }
 
-  return <Dialog open={diagnostics !== null} onOpenChange={open => { if (!open) close() }}>
+  return <Dialog open={diagnostics !== null} onOpenChange={(open, details) => { if (!open) { if (sending || details.reason === "outside-press") details.cancel(); else close() } }}>
     <DialogContent className="hud-report max-h-[85dvh] overflow-y-auto rounded-none border-rule bg-parchment text-ink sm:max-w-xl"
       showCloseButton={!sending}
       onKeyDown={event => event.stopPropagation()}
-      onEscapeKeyDown={event => { if (sending) event.preventDefault() }}
-      onInteractOutside={event => event.preventDefault()}
-      onCloseAutoFocus={event => {
-        event.preventDefault()
-        document.getElementById("bug-report-button")?.focus()
-      }}>
+      finalFocus={() => document.getElementById("bug-report-button")}>
       <DialogTitle className="font-display text-lg">Report a bug</DialogTitle>
       <DialogDescription className="text-sm text-ink-light">
         Your message and the diagnostics below will be posted to the Pilgrimage GitHub repository through the game’s account.

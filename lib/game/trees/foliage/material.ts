@@ -1,3 +1,4 @@
+import { PIXEL_SURFACE_GLSL, surfaceAppearanceUniforms } from "../../render/pixel-surface"
 import * as THREE from "three"
 import { applySpriteDepth } from "../../render/sprite-depth"
 import { FOLIAGE_FRAME } from "./design"
@@ -24,6 +25,7 @@ export function foliageMaterial(color: THREE.Texture, depth: THREE.Texture, view
     view.value = spriteRow(0, Math.atan2(m[8], m[10]), frame.directions)
   }
   material.onBeforeCompile = shader => {
+    if (!ids) Object.assign(shader.uniforms, surfaceAppearanceUniforms)
     shader.uniforms.foliageView = view
     shader.uniforms.foliageCrop = { value: crop ?? null }
     shader.uniforms.foliageCropped = { value: !!crop }
@@ -66,7 +68,8 @@ export function foliageMaterial(color: THREE.Texture, depth: THREE.Texture, view
     // coordinates therefore change when transparent padding is trimmed. Sample
     // from the flat, original billboard rectangle so color and depth stay exact
     // through cropping, panning, and changes of render-target size.
-    shader.fragmentShader = `flat varying vec4 vFoliageRect;
+    shader.fragmentShader = `flat varying vec3 vFoliageId;
+      flat varying vec4 vFoliageRect;
       flat varying vec2 vFoliageCell;
       uniform vec4 foliageViewport;\n` + shader.fragmentShader
       .replace("#include <map_fragment>", THREE.ShaderChunk.map_fragment)
@@ -76,16 +79,24 @@ export function foliageMaterial(color: THREE.Texture, depth: THREE.Texture, view
           - vFoliageRect.xy) / vFoliageRect.zw + vFoliageCell)
           / vec2(${frame.directions}.0, ${frame.rows}.0);`)
     if (!ids) {
+      shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>\n${PIXEL_SURFACE_GLSL}`)
       // Use the original atlas height so cropped billboards retain the same shading.
       shader.fragmentShader = shader.fragmentShader.replace("#include <color_fragment>",
         `#include <color_fragment>
-        diffuseColor.rgb *= mix(0.56, 1.0, smoothstep(0.16, 0.72, foliageSampleUv.y * ${frame.rows}.0 - vFoliageCell.y));`)
+        vec2 foliageLocal = (foliageSampleUv * vec2(${frame.directions}.0, ${frame.rows}.0) - vFoliageCell) * ${frame.extent};
+        // Stable identity offsets vary neighbouring crowns without changing the atlas,
+        // alpha silhouette or the color/depth registration when billboards crop.
+        vec2 foliageGrain = foliageLocal + floor(vFoliageId.xy * 255.0 + 0.5) * ${frame.extent};
+        float foliageShade = mix(0.56, 1.0, smoothstep(0.16, 0.72, foliageLocal.y / ${frame.extent}));
+        SurfaceSample foliageDetail = sampleSurface(foliageGrain, surfacePixel(foliageGrain));
+        diffuseColor.rgb *= surfaceDitherLight(foliageShade, 1.0, foliageDetail)
+          * surfaceGrain(foliageDetail, 0.0);`)
     }
     if (ids) {
-      shader.fragmentShader = "flat varying vec3 vFoliageId;\n" + shader.fragmentShader.replace("#include <opaque_fragment>",
+      shader.fragmentShader = shader.fragmentShader.replace("#include <opaque_fragment>",
         "outgoingLight = vFoliageId;\n#include <opaque_fragment>")
     }
   }
-  material.customProgramCacheKey = () => `foliage-depth-v4-${frame.directions}-${frame.rows}-${frame.extent}-${frame.anchor.join("-")}-${frame.cellSize}-${ids ? "ids" : "color"}`
+  material.customProgramCacheKey = () => `foliage-grain-depth-v6-${frame.directions}-${frame.rows}-${frame.extent}-${frame.anchor.join("-")}-${frame.cellSize}-${ids ? "ids" : "color"}`
   return material
 }

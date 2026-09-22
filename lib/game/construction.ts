@@ -16,8 +16,17 @@ import { workPost } from "./work-posts"
 import { destinationWorldRoute, rememberedWorkerCorridor, rememberedWorkerRoute } from "./worker-route-memory"
 
 export interface Construction { work: number; required: number; cost?: { gold: number; wood: number } }
+/** Default footprints: tavern/church take 120s with full ordinary crews; sheep pens take 60s. */
+const CONSTRUCTION_WORK: Record<string, { area: number; work: number } | undefined> = {
+  tavern: { area: 12, work: 360 },
+  church: { area: 15, work: 480 },
+  "sheep-pen": { area: 20, work: 240 },
+}
 /** Worker-seconds: small sites finish quickly; doubling the area quadruples the work. */
-export function constructionWork(w: number, d: number): number { return Math.max(12, 6 * (w * d) ** 2) }
+export function constructionWork(w: number, d: number, buildType?: string): number {
+  const tuned = buildType ? CONSTRUCTION_WORK[buildType] : undefined
+  return Math.max(12, tuned ? tuned.work * (w * d / tuned.area) ** 2 : 6 * (w * d) ** 2)
+}
 /** Small sites need one builder; each additional four tiles adds a place, up to four. */
 export function constructionBuilders(w: number, d: number): number { return Math.min(4, Math.max(1, Math.ceil(w * d / 4))) }
 export function isComplete(building: BuildingDef): boolean {

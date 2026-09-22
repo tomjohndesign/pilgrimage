@@ -4,7 +4,7 @@ import { quadrupedBody, RIG_TO_WORLD } from "../transport/assets"
 import { MAMMAL_ANATOMY, limbBones, type MammalKind } from "./anatomy"
 import { BURROW_STRIDE } from "./burrow-motion"
 import { animalOffset, type AnimalRigEdits, type AnimalClip, type AnimalJoint } from "./rig-edits"
-import { WILDLIFE_PROFILES, type WildlifeKind } from "./species"
+import { WILDLIFE_PROFILES, isChicken, type WildlifeKind } from "./species"
 
 export type WildlifeGait = "walk" | "trot" | "canter" | "gallop" | "hop" | "leap"
 export type WildlifeAction = "idle" | "graze" | "lie" | "burrow"
@@ -27,11 +27,11 @@ export function speciesGaits(kind: WildlifeKind): WildlifeGait[] {
 }
 export function gaitRecipe(kind: WildlifeKind, gait: WildlifeGait, edits?: AnimalRigEdits) {
   const p = WILDLIFE_PROFILES[kind]
-  const stance = gait === "walk" ? kind === "sheep" || kind === "goat" ? 0.76 : 0.68 : gait === "trot" ? kind === "boar" ? 0.58 : 0.52 : gait === "canter" ? 0.38 : gait === "gallop" ? 0.30 : gait === "hop" ? 0.28 : 0.26
+  const stance = isChicken(kind) ? 0.6 : gait === "walk" ? kind === "sheep" || kind === "goat" ? 0.76 : 0.68 : gait === "trot" ? kind === "boar" ? 0.58 : 0.52 : gait === "canter" ? 0.38 : gait === "gallop" ? 0.30 : gait === "hop" ? 0.28 : 0.26
   const reach = p.stride * ({ walk: 1, trot: 1.2, canter: 1.25, gallop: 1.4, hop: 1.9, leap: 1.2 }[gait])
   const lift = gait === "walk" ? p.lift : p.legHeight * ({ trot: 0.18, canter: 0.30, gallop: 0.43, hop: 0.9, leap: 0.55 }[gait])
   const cadence = gait === "walk" ? p.cyclesPerSecond * (kind === "sheep" ? 0.65 : kind === "goat" ? 0.72 : 1) : gait === "hop" ? 1.65 : p.cyclesPerSecond * ({ trot: 1.35, canter: 1.15, gallop: 1.65, leap: 0.85 }[gait])
-  return { stance, reach, lift, cadence: cadence * (edits?.clips[gait]?.cadence ?? 1), contacts: CONTACTS[gait].map((phase, limb) => phase + (edits?.clips[gait]?.contacts?.[limb] ?? 0)), stride: 2 * reach / stance }
+  return { stance, reach, lift, cadence: cadence * (edits?.clips[gait]?.cadence ?? 1), contacts: (isChicken(kind) ? [0, .5, 0, .5] : CONTACTS[gait]).map((phase, limb) => phase + (edits?.clips[gait]?.contacts?.[limb] ?? 0)), stride: 2 * reach / stance }
 }
 export function gaitStride(kind: WildlifeKind, gait: WildlifeGait, scale: number) { return gaitRecipe(kind, gait).stride * RIG_TO_WORLD * scale }
 export function gaitSpeed(kind: WildlifeKind, gait: WildlifeGait, scale: number, edits?: AnimalRigEdits) { return gaitStride(kind, gait, scale) * gaitRecipe(kind, gait, edits).cadence }

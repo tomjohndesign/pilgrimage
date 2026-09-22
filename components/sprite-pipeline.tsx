@@ -1,6 +1,10 @@
 "use client"
 
+import { ChromeSelect } from "@/components/ui/chrome-controls"
 import { useEffect, useMemo, useState, type ReactNode } from "react"
+import { AssetEditorFrame, type AssetEditorNavigation } from "./asset-editor-frame"
+import { WorkspaceDocumentContent } from "./workspace-document"
+import { LabSlider } from "./lab-controls"
 import * as THREE from "three"
 import { DEFAULT_DESIGN, PALETTE_TONES, PERSON_PRESETS, personRecipe, type PersonDesign } from "@/lib/game/base-person/design"
 import { usePersonDesignStore } from "@/lib/game/base-person/design-store"
@@ -9,11 +13,8 @@ import { inspectRig } from "@/lib/game/base-person/rig-inspection"
 import { RIG_BONES } from "@/lib/game/base-person/rig-joints"
 import { PERSON_CLIPS, type BaseClip } from "@/lib/game/base-person/pose"
 
-const card = "border border-rule bg-parchment p-5 shadow-[0_0_0_3px_var(--parchment-dark),0_0_0_4px_var(--rule),4px_4px_24px_rgba(0,0,0,0.6)]"
-const kicker = "font-display text-[9px] uppercase tracking-[2px] text-gold"
-const heading = "font-display text-base font-semibold uppercase tracking-[3px] text-ink"
-const prose = "mt-2 text-[13px] leading-relaxed text-ink-light"
-const control = "border border-rule bg-transparent p-2 text-xs text-ink"
+const card = "pipeline-stage"
+const control = "playground-input"
 /** The playground's own preview backdrops: transparency, night and bare ground. */
 const BACKDROPS = {
   checker: {
@@ -21,8 +22,8 @@ const BACKDROPS = {
     backgroundImage: "conic-gradient(#b6b3a5 25%, transparent 0 50%, #b6b3a5 0 75%, transparent 0)",
     backgroundSize: "24px 24px",
   },
-  dark: { backgroundColor: "#191912" },
-  ground: { backgroundColor: "#cdbb9a" },
+  dark: { backgroundColor: "var(--chrome-surface)" },
+  ground: { backgroundColor: "var(--chrome-field)" },
 } as const
 
 /** The primitives the rig is assembled from, coloured by geometry so the parts list reads at a glance. */
@@ -201,23 +202,25 @@ function buildStages(design: PersonDesign, clip: BaseClip, row: number, frame: n
   }
 }
 
-function Frame({ image, name, tone = "checker" }: { image: Shot; name: string; tone?: keyof typeof BACKDROPS }) {
-  return <span className="inline-flex border border-rule p-2" style={BACKDROPS[tone]}>
+function Frame({ image, name, tone = "ground" }: { image: Shot; name: string; tone?: keyof typeof BACKDROPS }) {
+  return <figure>
+    <div className="inline-flex p-2" style={BACKDROPS[tone]}>
     <img src={image.url} alt={name} width={image.width} height={image.height}
       style={{ width: image.display, height: image.display * image.height / image.width, imageRendering: "pixelated" }} />
-  </span>
+    </div>
+    <figcaption className="mt-2 text-xs text-ink-light">{name}</figcaption>
+  </figure>
 }
 
 function Stage({ number, title, children, note, legend, footnote }: {
   number: string; title: string; note: ReactNode; legend?: Legend[]; footnote?: ReactNode; children: ReactNode
 }) {
   return <article className={card}>
-    <p className={kicker}>Stage {number}</p>
-    <h2 className={`${heading} mt-1`}>{title}</h2>
-    <p className={prose}>{note}</p>
+    <h2 id={title.toLowerCase().replaceAll(" ", "-")}>{number}. {title}</h2>
+    <p>{note}</p>
     <div className="mt-4 flex flex-wrap items-center gap-4">{children}</div>
     {legend && <Legend items={legend} />}
-    {footnote && <p className={prose}>{footnote}</p>}
+    {footnote && <p className="mt-4">{footnote}</p>}
   </article>
 }
 
@@ -232,8 +235,9 @@ function Legend({ items }: { items: Legend[] }) {
 /**
  * One figure carried through every stage of the sprite bake, rendered live by the
  * same modules the exporter uses: rig, camera, lighting, ink, depth and shadow.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/A3C-0 — Sprite pipeline
  */
-export function SpritePipeline() {
+export function SpritePipeline({ mode, onModeChange, active = true }: AssetEditorNavigation & { active?: boolean }) {
   const saved = usePersonDesignStore(state => state.design)
   const [preset, setPreset] = useState("Traveler")
   const [clip, setClip] = useState<BaseClip>("walk")
@@ -246,8 +250,9 @@ export function SpritePipeline() {
   const frames = PERSON_CLIPS[clip].frames
   const directions = personRecipe(design).directions
   useEffect(() => {
+    if (!active) return
     let cancelled = false
-    setStages(null); setError("")
+    setError("")
     // Let the controls paint before the bake takes the main thread.
     const handle = requestAnimationFrame(() => {
       try {
@@ -258,90 +263,98 @@ export function SpritePipeline() {
       }
     })
     return () => { cancelled = true; cancelAnimationFrame(handle) }
-  }, [design, clip, row, frame, frames])
+  }, [design, clip, row, frame, frames, active])
 
-  return <div className="flex w-full max-w-5xl flex-col gap-6">
-    <div className={`${card} flex flex-wrap items-end gap-4`}>
+  return <AssetEditorFrame mode={mode} onModeChange={onModeChange} label="Sprite pipeline editor" version="" status={error || (stages ? `${stages.cellSize} × ${stages.cellSize} px · ${stages.palette.length} colours` : "Rendering…")} detail="Shared sprite bake">
+    <WorkspaceDocumentContent title="Sprite pipeline" active={active} ready={!!stages} inspector={<>
       <label className="flex flex-col gap-1 text-xs text-ink-light">Character
-        <select aria-label="Character" className={control} value={preset} onChange={event => setPreset(event.target.value)}>
+        <ChromeSelect aria-label="Character" className={control} value={preset} onChange={event => setPreset(event.target.value)}>
           {saved && <option value="saved">Playground design</option>}
           {Object.keys(PERSON_PRESETS).map(name => <option key={name} value={name}>{name}</option>)}
-        </select>
+        </ChromeSelect>
       </label>
       <label className="flex flex-col gap-1 text-xs text-ink-light">Clip
-        <select aria-label="Clip" className={control} value={clip} onChange={event => {
+        <ChromeSelect aria-label="Clip" className={control} value={clip} onChange={event => {
           const next = event.target.value as BaseClip
           setClip(next); setFrame(current => Math.min(current, PERSON_CLIPS[next].frames - 1))
         }}>
           {Object.entries(PERSON_CLIPS).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
-        </select>
+        </ChromeSelect>
       </label>
       <label className="flex flex-col gap-1 text-xs text-ink-light">Facing
-        <select aria-label="Facing" className={control} value={row} onChange={event => setRow(Number(event.target.value))}>
+        <ChromeSelect aria-label="Facing" className={control} value={row} onChange={event => setRow(Number(event.target.value))}>
           {directions.map((direction, index) => <option key={direction} value={index}>{direction}</option>)}
-        </select>
+        </ChromeSelect>
       </label>
-      <label className="flex min-w-40 flex-1 flex-col gap-1 text-xs text-ink-light">
-        <span className="flex justify-between">Frame<span className="font-mono text-ink">{Math.min(frame, frames - 1) + 1}/{frames}</span></span>
-        <input aria-label="Frame" className="w-full accent-[#94742f]" type="range" min={0} max={frames - 1} step={1}
-          value={Math.min(frame, frames - 1)} onChange={event => setFrame(Number(event.target.value))} />
-      </label>
-      <p className="w-full text-[12px] text-ink-light" role="status">
-        {error || (stages ? `${stages.cellSize} × ${stages.cellSize} px cell · ${stages.palette.length} colours · ${stages.padding} px safe margin` : "Rendering the pipeline…")}
-      </p>
-    </div>
-
+      <div><LabSlider label="Frame" value={Math.min(frame, frames - 1)} min={0} max={frames - 1} step={1} onChange={setFrame} /></div>
+    </>}>
+    <section>
+      <h2 id="overview">From model to pixels</h2>
+      <p>The character starts as a procedural 3D rig, but the game draws its baked image on a flat billboard. The bake preserves three things separately: surface colour, distance toward the camera and a projected ground shadow. This gives the figure a pixel silhouette while retaining the depth needed to overlap buildings and terrain.</p>
+      <p className="mt-3"><code>personRecipe()</code> resolves body proportions and palette from a design. <code>personFrameRenderer()</code> builds the rig, applies a pose and facing, and renders colour and part-ID buffers. Pixel processing combines those buffers into the finished sprite; a geometry depth pass supplies distance for its pixels, and the finished silhouette supplies the shadow. Repeating that work across frames and directions produces the atlases.</p>
+      <p className="mt-3">The geometry colours, wireframe, joint overlay and anatomical-side colours below are diagnostic views of the same rig. They explain the construction; they are not intermediate images fed into the colour pass. All previews use the same rendering modules as the exporter.</p>
+    </section>
+    {error && <p role="alert" className="mt-4">{error}{stages && " The previews below show the last successful bake."}</p>}
+    {!stages && !error && <p role="status" className="mt-4">Rendering the pipeline previews…</p>}
     {stages && <>
-      <Stage number="0" title="Design → recipe → palette"
-        note={<><code>personRecipe()</code> turns the chosen design into body dimensions and a colour ramp: five skin steps, three hair, four tunic, four timber, plus cloth and accent. Skin and hair entries are reserved by tone, so a recolour cannot repaint a staff, a robe or a boot.</>}>
+      <Stage number="0" title="Palette"
+        note={<><code>personRecipe()</code> turns the chosen design into body dimensions and colour ramps for skin, hair, tunic, timber, cloth and accents. Skin and hair entries are reserved by tone, so cloth and props cannot snap to those colours. Trimmed tunics also reserve their accent ramp.</>}
+        footnote={<>Ramps multiply the design’s RGB channels by fixed shade factors: skin uses 0.5, 0.7, 0.9, 1.1 and 1.3; hair uses 0.65, 1 and 1.4. Values are rounded and clamped to 255. The recipe removes duplicate colour-and-tone pairs and keeps parallel <code>renderPalette</code> and <code>paletteTones</code> arrays, so identical RGB values can still have different ownership.</>}>
         <div className="person-palette">
           {stages.palette.map((entry, index) => <span key={`${index}-${entry.color}`} style={{ background: entry.color }}
-            title={`${entry.color} · ${entry.tone === PALETTE_TONES.skin ? "skin" : entry.tone === PALETTE_TONES.hair ? "hair" : "shared"}`} />)}
+            title={`${entry.color} · ${entry.tone === PALETTE_TONES.skin ? "skin" : entry.tone === PALETTE_TONES.hair ? "hair" : entry.tone === PALETTE_TONES.trim ? "trim" : "shared"}`} />)}
         </div>
       </Stage>
 
-      <Stage number="1" title="Base elements — three.js primitives"
+      <Stage number="1" title="Geometry"
         note={<><code>createBasePersonRig()</code> builds {stages.meshes} visible meshes for this pose. No textures anywhere: flat-shaded <code>MeshLambertMaterial</code>, colour only. Shown at {SCALE}× the bake resolution.</>}
         legend={stages.geometry}
-        footnote="Lathes run 8–12 radial segments, leg cylinders six, hands an 8 × 6 sphere. At a 30–35px figure those facets are the shading steps once the palette snaps them.">
+        footnote="Lathes form revolved profiles, cylinders connect joints, and spheres and boxes supply smaller body parts and equipment. Their faces receive lighting before rasterization, so low-poly facets become broad shading regions. The geometry colours identify primitive types; the wireframe shows the triangles behind those surfaces.">
         <Frame image={stages.primitives} name="Rig meshes coloured by geometry type" />
         <Frame image={stages.wireframe} name="Rig wireframe" />
       </Stage>
 
-      <Stage number="2" title="Rig — no skinning, no bone weights"
-        note={<>Rigid parts hang off <code>pelvis → chest → head</code> and <code>shoulder → elbow</code> groups. Legs are unit cylinders stretched between solved joints by <code>bone()</code>; arms use the analytic two-bone IK in <code>reach()</code>. Blue handles are editable, grey ones are carried by the joints around them. The only real vertex deformation is the tunic lathe, rewritten from a rest copy each pose. Right: the shipped side diagnostic, where blue is always anatomical left.</>}>
+      <Stage number="2" title="Rig"
+        note={<>Rigid parts hang off <code>pelvis → chest → head</code> and <code>shoulder → elbow</code> groups. Legs are unit cylinders stretched between solved joints by <code>bone()</code>; arms use the analytic two-bone inverse kinematics in <code>reach()</code>. Blue handles are editable, grey ones are carried by the joints around them. The tunic is deformed from a rest copy each pose. In the side diagnostic, blue is always anatomical left.</>}
+        footnote={<>A frame samples the clip at <code>phase = frame / frameCount</code>. Walking offsets the legs by half a cycle: each foot spends 60% of the stride planted and the remainder swinging forward on an eased path with a squared-sine lift. The pelvis follows the reach of the supporting legs, and two-bone solves preserve thigh and shin lengths. Pose edits feed the same solver; planted foot targets stay locked. The overlay projects the resulting 3D joints through the sprite camera.</>}>
         <Frame image={stages.rig} name="Rig joints and bones" />
         <Frame image={stages.sides} name="Anatomical side diagnostic" />
       </Stage>
 
-      <Stage number="3" title="Colour pass — baked at final resolution"
-        note={<>One fixed orthographic camera (35.264° pitch), ambient and hemisphere light plus a single directional sun, no shadow maps, antialias off. Rendered straight into a {stages.cellSize} px cell — never downsampled from a larger image.</>}>
+      <Stage number="3" title="Colour"
+        note={<>One fixed orthographic camera (35.264° pitch), ambient and hemisphere light plus a single directional sun, no shadow maps, antialias off. Rendered straight into a {stages.cellSize} px cell — never downsampled from a larger image.</>}
+        footnote={<>Orthographic projection gives every part the same scale regardless of its distance from the camera. The camera’s vertical target is derived from the recipe’s foot anchor, so poses share a registered ground position. The renderer uses a pixel ratio of one, a transparent clear colour and sRGB output. Lighting produces continuous RGB values here; the later palette pass reduces them to the authored ramps.</>}>
         <Frame image={stages.shaded} name="Raw colour pass" />
       </Stage>
 
-      <Stage number="4" title="Part-ID pass — the same frame as data"
-        note={<><code>rig.inkMask(true)</code> swaps every material for a <code>MeshBasicMaterial</code> writing the part id into red and the body tone into green, then re-renders. Raw it is almost black, so it is false-coloured here; skin tones are lifted a step and hair dropped one.</>} legend={stages.parts}>
+      <Stage number="4" title="Part IDs"
+        note={<><code>rig.inkMask(true)</code> swaps every material for a <code>MeshBasicMaterial</code> writing the part id into red and the body tone into green, then re-renders. Raw it is almost black, so it is false-coloured here; skin tones are lifted a step and hair dropped one.</>} legend={stages.parts}
+        footnote={<>The mask stores two independent meanings: red establishes edge priority between parts, while green controls which reserved colours a pixel may use. Facing changes the priority of near and far arms, while the anatomical diagnostic keeps left and right fixed. Mask materials preserve garment clipping planes and bypass lighting and tone mapping, leaving exact channel values for <code>inkPersonFrame()</code>.</>}>
         <Frame image={stages.mask} name="Raw part-id pass" tone="dark" />
         <Frame image={stages.decoded} name="Part ids, false-coloured" />
       </Stage>
 
-      <Stage number="5" title="Ink and palette quantize — the shipped sprite"
-        note={<><code>inkPersonFrame()</code> reads both buffers: a one-pixel contour outside the silhouette, interior edges only where a neighbour&apos;s part id ranks lower, softened to a quarter strength at same-cloth sleeve and torso joins. Every pixel then snaps to the nearest palette entry, skin only onto skin steps and hair onto hair. This frame kept {stages.padding} px of transparent margin; four is the floor.</>}>
+      <Stage number="5" title="Sprite"
+        note={<><code>inkPersonFrame()</code> reads the colour and part buffers. With ink enabled, it adds a one-pixel contour outside the silhouette, leaving thin props at their native width. Interior edges appear where a neighbour&apos;s part id ranks lower, softened to a quarter strength at same-cloth sleeve and torso joins. Pixels snap to the nearest eligible palette entry: shared colours or their own reserved tone. This frame kept {stages.padding} px of transparent margin; four is the minimum.</>}
+        footnote={<>The ink pass considers only the four orthogonal neighbours and treats source alpha of at least 128 as solid. A new contour pixel inherits a solid neighbour’s colour and tone; edge strength blends that colour toward the palette’s ink colour. Palette matching minimizes squared RGB distance among eligible entries. Output alpha is either 0 or 255, keeping the native silhouette crisp. The smallest distance from any solid output pixel to a cell edge becomes the safe-padding value; the renderer rejects values below four.</>}>
         <Frame image={stages.sprite} name="Finished sprite" />
       </Stage>
 
-      {stages.depth && <Stage number="6" title="Depth atlas — view-offset-rg16-v1"
-        note={<>The same posed rig through the same camera. Red and green hold a 16-bit distance toward the camera from the rig origin and blue marks geometry, so buildings and terrain occlude the flat billboard correctly. Ink pixels inherit the depth of the solid neighbour they took their colour from.</>}>
+      {stages.depth && <Stage number="6" title="Depth"
+        note={<>The same posed rig through the same camera. Red and green hold a 16-bit distance toward the camera from the rig origin and blue marks geometry, so buildings and terrain occlude the flat billboard correctly. Ink pixels inherit the depth of the solid neighbour they took their colour from.</>}
+        footnote={<>The packed integer is <code>R × 256 + G</code>. Dividing it by 65535, subtracting 0.5 and multiplying by twice the camera’s view size reconstructs the offset in bake-world units. Blue is 255 for sprite geometry and zero outside it; alpha stays opaque to preserve the data through PNG round trips. Readback flips WebGL’s bottom-up rows into the colour buffer’s top-down order. At runtime the depth texture uses nearest sampling and no colour-space conversion.</>}>
         <Frame image={stages.depth} name="Depth atlas frame" tone="dark" />
       </Stage>}
 
-      {stages.shadow && <Stage number="7" title="Cast shadow — a separate translucent sheet"
-        note={<><code>personCastShadow()</code> fills the finished silhouette and projects it from the fixed foot anchor with a 2D canvas transform, a 0.35px blur and 16% opacity. The road draws it with ground depth, no depth writes and no selection id.</>}>
+      {stages.shadow && <Stage number="7" title="Shadow"
+        note={<><code>personCastShadow()</code> fills the finished silhouette and projects it from the fixed foot anchor with a 2D canvas transform and a 0.35px blur. Opacity comes from the character design ({Math.round(design.shadow * 100)}% for this selection). The shadow is clipped to the cell’s four-pixel inset so it cannot bleed into adjacent frames.</>}
+        footnote={<>A <code>source-in</code> composite replaces the sprite’s RGB with warm brown while retaining its silhouette alpha. An affine transform compresses and shears that silhouette down and to the right. Its translation is calculated from the anchor so the ground contact stays fixed. This is a 2D projection of the inked image, rather than a light-space render of the 3D geometry; it is stored separately so translucent shadow pixels never become part of the opaque character outline.</>}>
         <Frame image={stages.shadow} name="Cast shadow frame" tone="ground" />
       </Stage>}
 
-      <Stage number="8" title={`The sheet — 8 directions × ${frames} poses`}
-        note={<>Directions come from turning the rig on <code>root.rotation.y</code>; the light never moves and a dressed frame is never mirrored. Above: this pose in all eight rows at 2×. Below: the whole clip in the chosen row, at native size.</>}>
+      <Stage number="8" title="Sheet"
+        note={<>Directions come from turning the rig on <code>root.rotation.y</code>; the light never moves and a dressed frame is never mirrored. The first strip shows this pose in all eight directions at 2×. The second shows all {frames} frames of {PERSON_CLIPS[clip].label.toLowerCase()} in the chosen direction at native size.</>}
+        footnote={<>Each row turns the model by <code>−row × π / 4</code>. The exporter places a cell at <code>(frame × cellSize, row × cellSize)</code>, giving each clip an atlas of <code>frameCount × cellSize</code> pixels wide and <code>8 × cellSize</code> high. Colour, depth, shadow and side diagnostics share this layout. Sampling phases from zero up to, but not including, one avoids duplicating the loop’s first pose at its end.</>}>
         <div className="w-full overflow-x-auto">
           <Frame image={stages.directions} name="This pose in all eight directions" />
         </div>
@@ -349,6 +362,13 @@ export function SpritePipeline() {
           <Frame image={stages.sheet} name={`${PERSON_CLIPS[clip].label} row`} />
         </div>
       </Stage>
+      <section>
+        <h2 id="runtime">From atlas to game</h2>
+        <p><code>bakePersonSteps()</code> assembles the sheets and their registration metadata. Each frame records its direction, phase and projected attachment sockets: head, back, hips and hands. The metadata also carries cell size, foot anchor, palette, depth encoding and the smallest safe margin across all clips. Attachments can therefore follow the pose without guessing their position from the visible pixels.</p>
+        <p className="mt-3">The game selects a direction row and animation column from the atlas. Colour textures use sRGB and nearest-neighbour filtering without mipmaps, preserving the baked pixel grid. Per-character texture views share the underlying atlas image while keeping independent UV offsets, so many figures can display different frames from the same image.</p>
+        <p className="mt-3">The depth shader samples the matching depth cell with the colour texture’s UVs. It scales the decoded camera offset to the billboard’s world size and applies it relative to the character’s anchor depth. Each fragment therefore has the depth of the original posed surface instead of the flat quad. Ground-plane handling keeps contacts clear of terrain, while a scenery-depth check prevents crowd overlap adjustments from pulling a character through a wall or hillside.</p>
+      </section>
     </>}
-  </div>
+    </WorkspaceDocumentContent>
+  </AssetEditorFrame>
 }

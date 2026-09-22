@@ -3,6 +3,7 @@
 import { useMemo, useEffect, useLayoutEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import { APPEARANCE_ENABLED } from "@/lib/game/appearance-store"
+import { buildingSurfaceMaterial } from "@/lib/game/render/building-surface"
 import { GRASS_TEXTURE_URL } from "@/lib/game/render/ground-surface"
 import { useFrame, type ThreeEvent } from "@react-three/fiber"
 import { buildingGeometryLevels, buildingPartDetail } from "@/lib/game/building-art/merged-geometry"
@@ -17,6 +18,12 @@ import { OUTLINE_ID_LAYER_MASK } from "@/lib/game/render/outline"
 
 import { useTerrainTexture } from "@/components/game/use-terrain-texture"
 import { buildingPartGeometry, BUILDING_DIRT_TEXTURE, configureBuildingDirt, dirtFloorMaterial } from "@/lib/game/building-art/part-geometry"
+
+function BuildingMaterial({ color, vertexColors = false }: { color?: string; vertexColors?: boolean }) {
+  const material = useMemo(() => buildingSurfaceMaterial(undefined, { vertexColors, ...(color ? { color } : {}) }), [color, vertexColors])
+  useEffect(() => () => material.dispose(), [material])
+  return <primitive object={material} attach="material" />
+}
 
 function DirtMaterial({ part }: { part: BuildingPart }) {
   const trail = useTerrainTexture(BUILDING_DIRT_TEXTURE, "#a49372")
@@ -45,7 +52,7 @@ function Part({ part, idColor, onClick, ghostColor, ink = true, terrainFloors = 
   </mesh>
   return <group position={part.position} rotation={part.rotation}>
     <mesh name={part.name} geometry={geometry} onClick={onClick}>
-      {part.surface === "trail" ? <DirtMaterial part={part} /> : <meshLambertMaterial color={part.color} side={THREE.DoubleSide} />}
+      {part.surface === "trail" ? <DirtMaterial part={part} /> : <BuildingMaterial color={part.color} />}
     </mesh>
     {ink && part.outline !== false && !part.name.startsWith("reed-") && !part.name.startsWith("thatch-grain-") && !part.name.startsWith("thatch-highlight-") && <lineSegments geometry={edges} raycast={() => {}}>
       <lineBasicMaterial color={BUILDING_STYLE.palette.ink} transparent opacity={0.65} />
@@ -100,7 +107,7 @@ function MergedParts({ parts, idColor, appearanceIdColor = idColor, onClick, ter
   })
   return <StaticBlock enabled={!dynamic}>
     <mesh ref={body} name="building-surfaces" geometry={levels[0]} onClick={onClick}>
-      {material ? <primitive object={material} attach="material" /> : <meshLambertMaterial vertexColors side={THREE.DoubleSide} />}
+      {material ? <primitive object={material} attach="material" /> : <BuildingMaterial vertexColors />}
     </mesh>
     {idColor && <mesh ref={ids} name="building-ids" geometry={levels[0]} layers-mask={OUTLINE_ID_LAYER_MASK}>
       <meshBasicMaterial color={idColor} toneMapped={false} side={THREE.DoubleSide} />
@@ -154,7 +161,11 @@ export function StructureModel({ parts, idColor, appearanceIdColor, ghostColor, 
 function PenGateLeaf({parts,open,idColor,ghostColor,onClick}:{parts:BuildingPart[];open?:()=>number;idColor?:THREE.Color;ghostColor?:string;onClick?:(event:ThreeEvent<MouseEvent>)=>void}) {
   const root=useRef<THREE.Group>(null),hinge=parts[0].gateHinge!
   const local=useMemo(()=>parts.map(p=>({...p,gateHinge:undefined,position:p.position.map((v,i)=>v-hinge.position[i]) as [number,number,number]})),[parts,hinge])
-  useFrame(()=>{if(root.current)root.current.rotation.y=hinge.openAngle*(open?.() ?? 0)})
+  useFrame(()=>{
+    if (!root.current) return
+    const angle=hinge.openAngle*(open?.() ?? 0)
+    root.current.rotation.set(hinge.axis === "x" ? angle : 0, hinge.axis === "x" ? 0 : angle, 0)
+  })
   return <group ref={root} name="pen-gate-leaf" position={hinge.position}>
     {ghostColor ? local.map(part=><Part key={part.name} part={part} ghostColor={ghostColor} ink={false}/>)
       : <MergedParts parts={local} dynamic batchable={false} terrainFloors={false} idColor={idColor} onClick={onClick} />}

@@ -193,7 +193,9 @@ export function TravelerFigure({ resident = false, map: suppliedMap, age, job, t
     </group>}
     {vendor && <>
       <group ref={cart}><TransportSprite map={map} kind="cart" variant={variant} cargo={cargo} puller={puller} awning={awning} characterScale={characterScale}
-        worldStall selected={selected} outlineColor={color} onClick={onClick} /></group>
+        worldStall selected={selected} outlineColor={color} onClick={onClick} />
+        {animal && <TransportSprite map={map} kind="driver" variant={variant} cargo={cargo} characterScale={characterScale}
+          selected={selected} outlineColor={color} onClick={onClick} />}</group>
       <VendorStall cart={cart} cargo={cargo} puller={puller} awning={awning} characterScale={characterScale}
         selected={selected} outlineColor={color} onClick={onClick} />
       <group ref={setup} visible={false}><TransportSprite map={map} kind="merchant" variant={variant} characterScale={characterScale * (appearance?.scale ?? 1)} selected={selected} outlineColor={color} onClick={onClick} /></group>

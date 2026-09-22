@@ -1,5 +1,6 @@
 "use client"
 
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import * as THREE from "three"
@@ -14,13 +15,17 @@ import { cameraOffset, yawForView } from "@/lib/game/render/iso"
 import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 import { CameraLight } from "./camera-light"
 import { CharacterSprite } from "./character-sprite"
-import { LANDING_CHAPEL, LANDING_TERRAIN, LANDING_TILES, LANDING_ROUTE_LENGTH, landingMonkPoint } from "@/lib/game/render/landing-layout"
+import { LANDING_CHAPEL, LANDING_CHAPEL_CENTER, LANDING_CHAPEL_LAYOUT, LANDING_MONKS, LANDING_TERRAIN, LANDING_TILES, LANDING_ROUTE_LENGTH, landingMonkPoint } from "@/lib/game/render/landing-layout"
 import { isSelected, useCameraStore } from "@/lib/game/camera-store"
-import { selectElement } from "@/lib/game/selection"
-import { buildingObjectId, encodeObjectId } from "@/lib/game/render/outline"
+import { markPerson, selectElement } from "@/lib/game/selection"
+import { buildingObjectId, encodeObjectId, residentObjectId } from "@/lib/game/render/outline"
 import { OutlinePass } from "./outline-pass"
 import { SceneAssetsContext } from "./scene-assets"
 import { MapRevealState } from "@/lib/game/render/map-reveal"
+import { playerBuildingParts } from "@/lib/game/player-color"
+import { usePlayerColor } from "./player-color"
+import { CharacterHitTarget, CharacterSelectionOutline, PersonPicking } from "./character-selection"
+import type { FigureClickHandler } from "./traveler-figure"
 
 function LandingCamera({ viewSize }: { viewSize: number }) {
   const { camera, size } = useThree()
@@ -52,9 +57,13 @@ function LandingTiles() {
 }
 
 /** Decorative walkers use the same distance-driven rig and planted feet as live monks. */
-function LandingMonk({ index }: { index: number }) {
+function LandingMonk({ index, onHover }: { index: number; onHover: (hovered: boolean) => void }) {
   const group = useRef<THREE.Group>(null)
-  const visual = useMemo(() => monkVisual(index === 1 ? 65 : 30), [index])
+  const monk = LANDING_MONKS[index]
+  const visual = useMemo(() => monkVisual(monk.age), [monk.age])
+  const selected = useCameraStore(state => isSelected(state.selection, { kind: "monk", id: monk.id }))
+  const outlineColor = useMemo(() => encodeObjectId(residentObjectId(index)), [index])
+  const select: FigureClickHandler = event => { selectElement({ kind: "monk", id: monk.id }, event) }
   const progress = useRef(index * LANDING_ROUTE_LENGTH / 3)
   const reduced = useRef(false)
   useEffect(() => {
@@ -75,8 +84,12 @@ function LandingMonk({ index }: { index: number }) {
       heading, moving: distance > 0,
       playbackRate: reduced.current ? 0 : 1 })
   }, -1)
-  return <group ref={group} name="landing-monk">
-    <CharacterSprite type="friar" name="monk" visualOverride={visual} characterScale={BASE_CHARACTER_SCALE} walkTuning={MONK_WALK_TUNING} />
+  return <group ref={node => { group.current = node; markPerson(node) }} name="landing-monk"
+    onPointerOver={event => { event.stopPropagation(); onHover(true) }} onPointerOut={() => onHover(false)}>
+    <CharacterSprite type="friar" name="monk" visualOverride={visual} characterScale={BASE_CHARACTER_SCALE} walkTuning={MONK_WALK_TUNING}
+      selected={selected} onClick={select} outlineColor={outlineColor} />
+    <CharacterHitTarget onClick={select} />
+    {selected && <CharacterSelectionOutline />}
   </group>
 }
 
@@ -94,8 +107,10 @@ function Ready({ assets, onReady }: { assets: MapRevealState; onReady: () => voi
 /** A small scene of shared assets, with no generated terrain or settlement simulation. */
 export function LandingScene({ viewSize, onReady }: { viewSize: number; onReady: () => void }) {
   const assets = useMemo(() => new MapRevealState(), [])
-  const parts = useMemo(() => shrineStructureParts(LANDING_CHAPEL.w, LANDING_CHAPEL.d).filter(part => !part.surface), [])
-  const selected = useCameraStore(state => isSelected(state.selection, { kind: "building", id: LANDING_CHAPEL.id }))
+  const playerColor = usePlayerColor()
+  const parts = useMemo(() => playerBuildingParts(shrineStructureParts(LANDING_CHAPEL_LAYOUT.width, LANDING_CHAPEL_LAYOUT.depth, [], LANDING_CHAPEL_LAYOUT.entranceX).filter(part => !part.surface), playerColor), [playerColor])
+  const selection = useCameraStore(state => state.selection)
+  const selected = isSelected(selection, { kind: "building", id: LANDING_CHAPEL.id })
   const [hovered, setHovered] = useState(false)
   const idColor = useMemo(() => new THREE.Color(...encodeObjectId(buildingObjectId(0))), [])
   const toggle = (event: { delta: number; stopPropagation: () => void }) => selectElement({ kind: "building", id: LANDING_CHAPEL.id }, event)
@@ -105,22 +120,30 @@ export function LandingScene({ viewSize, onReady }: { viewSize: number; onReady:
     return () => { window.removeEventListener("keydown", escape); useCameraStore.getState().select(null) }
   }, [])
   return <>
-    <button type="button" className="landing-church-keyboard hud-action" aria-label="Inspect chapel" aria-pressed={selected}
-      onClick={event => toggle({ delta: 0, stopPropagation: () => event.stopPropagation() })}>{selected ? "Close chapel interior" : "Inspect chapel"}</button>
+    <ChromeButton type="button" className="landing-church-keyboard hud-action" aria-label="Inspect chapel" aria-pressed={selected}
+      onClick={event => toggle({ delta: 0, stopPropagation: () => event.stopPropagation() })}>{selected ? "Close chapel interior" : "Inspect chapel"}</ChromeButton>
+    {LANDING_MONKS.map((monk, index) => <ChromeButton key={monk.id} type="button" className="landing-church-keyboard hud-action"
+      aria-label={`Select monk ${index + 1}`} aria-pressed={isSelected(selection, { kind: "monk", id: monk.id })}
+      onClick={event => selectElement({ kind: "monk", id: monk.id }, { delta: 0, stopPropagation: () => event.stopPropagation() })}>
+      Select monk {index + 1}
+    </ChromeButton>)}
     <PixelCanvas orthographic resize={{ offsetSize: true }} camera={{ manual: true, near: .1, far: 400 }} style={{ cursor: hovered ? "pointer" : "default" }} onPointerMissed={() => useCameraStore.getState().select(null)}>
     <LandingCamera viewSize={viewSize} />
+    <PersonPicking />
     <ambientLight intensity={SURFACE_LIGHT.ambient} />
     <hemisphereLight args={[SURFACE_LIGHT.sky, SURFACE_LIGHT.ground, SURFACE_LIGHT.hemisphere]} />
     <CameraLight />
     <SceneAssetsContext.Provider value={assets}><Suspense fallback={null}>
       <PixelWorld><LandingTiles />
-        <group onPointerOver={event => { event.stopPropagation(); setHovered(true) }} onPointerOut={() => setHovered(false)}>
+        <group position={[LANDING_CHAPEL_CENTER.x, 0, LANDING_CHAPEL_CENTER.z]}
+          rotation={[0, LANDING_CHAPEL_LAYOUT.rotation, 0]}
+          onPointerOver={event => { event.stopPropagation(); setHovered(true) }} onPointerOut={() => setHovered(false)}>
           <StructureModel parts={parts} ink={false} idColor={idColor} cutaway={selected} onClick={toggle} />
         </group>
       </PixelWorld>
-      <PixelCharacters>{[0, 1, 2].map(index => <LandingMonk key={index} index={index} />)}</PixelCharacters>
+      <PixelCharacters>{LANDING_MONKS.map((monk, index) => <LandingMonk key={monk.id} index={index} onHover={setHovered} />)}</PixelCharacters>
       <Ready assets={assets} onReady={onReady} />
     </Suspense></SceneAssetsContext.Provider>
-    <OutlinePass objects={{ buildings: [LANDING_CHAPEL], travelers: [], monks: [] }} />
+    <OutlinePass objects={{ buildings: [LANDING_CHAPEL], travelers: [], monks: LANDING_MONKS }} />
   </PixelCanvas></>
 }

@@ -1,59 +1,71 @@
 import * as THREE from "three"
 import type { CharacterBatchEntry } from "./character-batch"
 import { overlapBiases, type OverlapParticipant } from "./overlap-order"
+import { spriteFrameBounds } from "./sprite-frame-bounds"
+import { sortRailDistance, sortRailId } from "./sort-rail"
 import { isWorldVisible } from "./visibility"
 
-/** Resolve every visible sprite in one order, including custom cart shaders and
- * selected figures. A seated party shares one correction so its internal relief
- * cannot separate or flicker as neighboring walkers enter the overlap. */
+const uv = new THREE.Vector4()
+
+/** Match the shader's pose/ground depth, in camera-space world units. */
+export function characterOverlapBounds(entry: CharacterBatchEntry, camera: THREE.Camera, worldTexel = 0): OverlapParticipant {
+  const sprite = entry.sprite, world = sprite.matrixWorld.elements, view = camera.matrixWorldInverse.elements
+  const x = world[12], y = world[13], z = world[14]
+  const vx = view[0] * x + view[4] * y + view[8] * z + view[12]
+  const vy = view[1] * x + view[5] * y + view[9] * z + view[13]
+  const distance = -(view[2] * x + view[6] * y + view[10] * z + view[14])
+  const sx = Math.hypot(world[0], world[1], world[2]), sy = Math.hypot(world[4], world[5], world[6])
+  const map = entry.color ?? sprite.material.map
+  const frame = entry.uv ?? uv.set(map?.repeat.x ?? 1, map?.repeat.y ?? 1, map?.offset.x ?? 0, map?.offset.y ?? 0)
+  const bounds = spriteFrameBounds(entry.depth.map.value, frame)
+  let { left, right, bottom, top, near, far } = bounds
+  left = vx + (left - sprite.center.x) * sx; right = vx + (right - sprite.center.x) * sx
+  bottom = vy + (bottom - sprite.center.y) * sy; top = vy + (top - sprite.center.y) * sy
+  near = distance + near * sx - .005; far = distance + far * sx - .005
+  const ground = entry.ground.value
+  if (ground.y > 0) {
+    const nx = view[0] * ground.x + view[4] * ground.y + view[8] * ground.z
+    const ny = view[1] * ground.x + view[5] * ground.y + view[9] * ground.z
+    const nz = Math.max(.05, view[2] * ground.x + view[6] * ground.y + view[10] * ground.z)
+    const gx = nx / nz, gy = ny / nz
+    const plane = distance + (ground.x * x + ground.y * y + ground.z * z + ground.w) / nz - .005
+      - .5 * worldTexel * (Math.abs(gx) + Math.abs(gy))
+    near = Math.min(near, plane + Math.min((left - vx) * gx, (right - vx) * gx) + Math.min((bottom - vy) * gy, (top - vy) * gy))
+  }
+  const anchor = entry.overlapAnchor ?? sprite
+  const logical = anchor.matrixWorld.elements
+  const order = sortRailId(entry.id, entry.railPart)
+  const heading = anchor.userData.heading ?? Math.atan2(logical[8], logical[10])
+  return { left, right, bottom, top, near, far, order,
+    distance: sortRailDistance(logical, view, heading, order, entry.railSeat, ground) }
+}
+
+/** Resolve custom shaders, selected figures and batches in the same order. */
 export class CharacterOverlap {
   private participants: OverlapParticipant[] = []
   private entries: CharacterBatchEntry[] = []
-  private indices: number[] = []
-  private shared = new Map<object, number>()
   private biases = new Float32Array(0)
-  private anchor = new THREE.Vector3()
 
-  update(entries: Iterable<CharacterBatchEntry>, groups: Iterable<{ entries: CharacterBatchEntry[] }>, camera: THREE.Camera) {
-    const { participants, anchor, shared } = this
-    participants.length = this.entries.length = this.indices.length = 0
-    shared.clear()
-    const view = camera.matrixWorldInverse.elements
+  update(entries: Iterable<CharacterBatchEntry>, groups: Iterable<{ entries: CharacterBatchEntry[] }>, camera: THREE.Camera, worldTexel = 0) {
+    const { participants } = this
+    participants.length = this.entries.length = 0
     const admit = (entry: CharacterBatchEntry) => {
       if (!entry.depthBias) return
-      let index = entry.shared ? shared.get(entry.shared) : undefined
-      if (index === undefined) {
-        index = participants.length
-        // Animation moves the rendered feet around the logical ground position.
-        // Sorting by that motion swaps near-coincident people every half stride.
-        // Batch.write (or getWorldPosition below) already refreshed this matrix.
-        const logical = entry.overlapAnchor?.matrixWorld.elements
-        const x = logical?.[12] ?? entry.anchorX!, z = logical?.[14] ?? entry.anchorZ!
-        const distance = logical ? -(view[2] * x + view[6] * logical[13] + view[10] * z + view[14]) : entry.anchorDistance!
-        participants.push({ x, z, distance, size: entry.anchorSize!, order: entry.sprite.renderOrder })
-        if (entry.shared) shared.set(entry.shared, index)
-      } else {
-        const participant = participants[index]
-        participant.size = Math.max(participant.size, entry.anchorSize!)
-        participant.order = Math.min(participant.order, entry.sprite.renderOrder)
-      }
-      this.entries.push(entry); this.indices.push(index)
+      const bounds = characterOverlapBounds(entry, camera, worldTexel)
+      if (bounds.right <= bounds.left || bounds.top <= bounds.bottom) { entry.depthBias.value = 0; return }
+      participants.push(bounds)
+      this.entries.push(entry)
     }
-    // Batches already computed their anchors, even though their sources are hidden.
     for (const group of groups) for (const entry of group.entries) admit(entry)
     for (const entry of entries) {
       const sprite = entry.sprite
       if (!entry.depthBias || !sprite.visible) continue
       if (!isWorldVisible(sprite.parent)) { entry.depthBias.value = 0; continue }
-      sprite.getWorldPosition(anchor)
-      entry.anchorX = anchor.x; entry.anchorZ = anchor.z
-      entry.anchorDistance = -(view[2] * anchor.x + view[6] * anchor.y + view[10] * anchor.z + view[14])
-      const world = sprite.matrixWorld.elements
-      entry.anchorSize = Math.hypot(world[0], world[1], world[2])
+      sprite.updateWorldMatrix(true, false)
       admit(entry)
     }
     if (this.biases.length < participants.length) this.biases = new Float32Array(Math.max(64, 2 ** Math.ceil(Math.log2(participants.length))))
     overlapBiases(participants, this.biases)
-    for (let i = 0; i < this.entries.length; i++) this.entries[i].depthBias!.value = this.biases[this.indices[i]]
+    for (let i = 0; i < this.entries.length; i++) this.entries[i].depthBias!.value = this.biases[i]
   }
 }

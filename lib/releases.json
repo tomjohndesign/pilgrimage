@@ -1,7 +1,97 @@
 {
-  "lastProcessedCommit": "0c3dbf3d5388544246e11d3a51e898d424e301e0",
-  "releaseCount": 248,
+  "lastProcessedCommit": "bd694560b82d654cba0c20b9b99a00c769c38b87",
+  "releaseCount": 263,
   "releases": [
+    {
+      "version": "0.0.277",
+      "title": "Release 0.0.277",
+      "summary": "Document the sprite pipeline in one page with anchor navigation (#298)",
+      "commit": "bd694560b82d654cba0c20b9b99a00c769c38b87"
+    },
+    {
+      "version": "0.0.276",
+      "title": "Release 0.0.276",
+      "summary": "Add chickens and raised coops with egg collection (#297)",
+      "commit": "8147aa084d1e186d496ce40c82bcb0822579362a"
+    },
+    {
+      "version": "0.0.275",
+      "title": "Release 0.0.275",
+      "summary": "Show playground build times and shorten tavern, church and sheep pen builds (#296)",
+      "commit": "a0e846e710354a26c836729ebcf639d5cde55d10"
+    },
+    {
+      "version": "0.0.274",
+      "title": "Release 0.0.274",
+      "summary": "Align loading grid and ripple with the chapel footprint (#295)",
+      "commit": "5d396e280382c4ce31e0fc332cb9533690c45f42"
+    },
+    {
+      "version": "0.0.273",
+      "title": "Release 0.0.273",
+      "summary": "Sort road sprites independently using global rails (#293)",
+      "commit": "523b5ecf08b3a7d4e0ec2e5ee364dc4f3888d45f"
+    },
+    {
+      "version": "0.0.272",
+      "title": "Release 0.0.272",
+      "summary": "Fix road sprite layering across character orientations (#292)",
+      "commit": "0dae8ca912bdb7b5ec5f7d1fa68111ae1545db8b"
+    },
+    {
+      "version": "0.0.271",
+      "title": "Release 0.0.271",
+      "summary": "Add themed illustrated game icons and shared icon playground (#291)",
+      "commit": "2cd9f45ef54a26408325d31a437f1490ad0ecfd2"
+    },
+    {
+      "version": "0.0.270",
+      "title": "Release 0.0.270",
+      "summary": "Fix home page theming and interactive chapel preview (#290)",
+      "commit": "637ede9e94b0ba38a84d3b556e8e07433eca4075"
+    },
+    {
+      "version": "0.0.269",
+      "title": "Release 0.0.269",
+      "summary": "Fix party selection panel size during member previews (#289)",
+      "commit": "4cb62f452cdd2750332d8cc2851e2cd387aa4b95"
+    },
+    {
+      "version": "0.0.268",
+      "title": "Release 0.0.268",
+      "summary": "Add surface grain and optimized dithered lighting (#288)",
+      "commit": "43c89558a7ced5fcbb7ed838a1c6c54d0db1e6ff"
+    },
+    {
+      "version": "0.0.267",
+      "title": "Release 0.0.267",
+      "summary": "Refine game controls, minimap, menus, and theme integration (#287)",
+      "commit": "a8bcbf254baadb16fe2d738b5ec7f65bef06dee5"
+    },
+    {
+      "version": "0.0.266",
+      "title": "Release 0.0.266",
+      "summary": "Fix deployment by syncing the pnpm lockfile for Base UI (#286)",
+      "commit": "8d25a56869950204273116855e52b4ee4b75cc60"
+    },
+    {
+      "version": "0.0.265",
+      "title": "Release 0.0.265",
+      "summary": "Unify app chrome and isometric asset staging with Base UI (#285)",
+      "commit": "0c14beaf43f51540e191b2655b0b13ebd258bf83"
+    },
+    {
+      "version": "0.0.264",
+      "title": "Release 0.0.264",
+      "summary": "Restore building progress bars above scenery and characters (#284)",
+      "commit": "de7e154ffd2c0553a1b7a2bdecb942614b33a719"
+    },
+    {
+      "version": "0.0.263",
+      "title": "Release 0.0.263",
+      "summary": "Let waiting companions gather and rest off the road (#283)",
+      "commit": "43252f5f15c2120ca033e8f18e2c804d3433856f"
+    },
     {
       "version": "0.0.262",
       "title": "Release 0.0.262",

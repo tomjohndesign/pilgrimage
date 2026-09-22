@@ -31,9 +31,10 @@ export interface CharacterBatchEntry {
   /** Painter's bias toward the camera (world units) from render/overlap-order.
    * Standalone materials read the same object as a uniform. */
   depthBias?: { value: number }
-  /** Shares its anchor with a cart/passengers. Order this assembly
-   * as one figure, preserving its baked internal relief. */
-  shared?: object
+  /** Distinguishes drawables with the same selection ID. */
+  railPart?: number
+  /** Seat ground position relative to the logical anchor, in world units. */
+  railSeat?: { x: number; z: number }
   /** This frame's resolved anchor, written by CharacterBatch.write for the
    * overlap ordering pass. */
   anchorX?: number
@@ -194,7 +195,7 @@ export class CharacterBatch {
       // Published humanoid poses already resolved their world transforms.
       // Transport still needs its pose root updated, especially when a parked
       // horse switches back to the mounted sprite after a shrine visit.
-      if (compactParent) direct++
+      if (compactParent) { direct++; updateBillboardWorld(sprite) }
       else if (poseReady) updateBillboardWorld(sprite)
       else sprite.updateWorldMatrix(true, false)
       // Match Three's CPU model-view multiply before conversion to float. Doing

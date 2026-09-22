@@ -1,3 +1,4 @@
+import { chickenCoopParts } from "./chicken-coop"
 import { buildingIdentity, BUILDING_IDENTITIES } from "./identity"
 import { roofOverhang, ROOF_OVERHANG } from "./roof-overhang"
 import { poleRoofSurface } from "./pole-roof"
@@ -53,6 +54,10 @@ export function earlyBuildingParts(recipe: ConstructionRecipe): BuildingPart[] {
   if (recipe.variant === "alms-table") {
     const parts = almsTableParts(recipe.width, recipe.depth, recipe.seed)
     return recipe.layoutSeed === 1 ? reflectBuildingParts(parts) : parts
+  }
+  if (recipe.variant === "chicken-coop") {
+    const parts = chickenCoopParts(recipe)
+    return layoutHand(recipe.variant, recipe.layoutSeed) === -1 ? reflectBuildingParts(parts) : parts
   }
   if (recipe.variant === "inn") return innParts(recipe.width,recipe.depth,recipe.wallHeight,recipe.fireplace !== false,recipe.seed+(recipe.layoutSeed ?? 0))
   const mirrored = layoutHand(recipe.variant, recipe.layoutSeed) === -1

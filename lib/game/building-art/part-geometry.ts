@@ -62,7 +62,7 @@ export function dirtFloorMaterial(part: BuildingPart, trail: THREE.Texture, gras
         float aa = max(fwidth(d), .001);
         diffuseColor.a *= 1.0-smoothstep(edge-aa*.5,edge+aa*.5,d);
         vec4 dirt = sampleTiled(trailMap, vFloorWorld * ${ROAD_UV_SCALE}, vFloorWorld);
-        vec3 sward = sampleSward(grassMap, vFloorWorld);
+        vec3 sward = sampleSward(grassMap, vFloorWorld, sampleSurface(vFloorWorld, surfacePixel(vFloorWorld)));
         float growth = tileNoise(vFloorWorld * 7.3) * .12 + tileNoise(vFloorWorld * 17.0) * .05;
         float floorBare = smoothstep(.015, .13 + growth, -d);
         vec2 hutDistance = abs(vFloorLocal-pastureHut.xy)-pastureHut.zw*.5;

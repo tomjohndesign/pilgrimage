@@ -12,7 +12,7 @@ import type { TreePlacement } from "../trees/placement"
 import { buildingDistance, habitatAllows, wildlifeHabitat, wildlifeSegmentClear } from "./habitat"
 import { clearWildlifeFootprints, createWildlife, startleWildlife, stepWildlife } from "./simulation"
 import { burrowApproach } from "./burrow-motion"
-import { isBird, isDomestic, WILDLIFE_PROFILES, wildlifeStride } from "./species"
+import { isBird, isChicken, isDomestic, WILDLIFE_PROFILES, wildlifeStride } from "./species"
 import { createWildlifeRig } from "./rig"
 
 function fixture() {
@@ -30,7 +30,7 @@ describe("wildlife habitats and social groups", () => {
   it("seeds all eight species, doe herds and solitary bucks deterministically", () => {
     const { map, trees } = fixture(), world = createWildlife(map, trees)
     expect(world.animals).toEqual(createWildlife(map, trees).animals)
-    expect(new Set(world.animals.map(a => a.kind))).toEqual(new Set(Object.keys(WILDLIFE_PROFILES)))
+    expect(new Set(world.animals.map(a => a.kind))).toEqual(new Set(Object.keys(WILDLIFE_PROFILES).filter(kind => !isChicken(kind))))
     for (const kind of ["sheep", "goat", "deer"] as const) {
       const herd = world.animals.filter(a => a.kind === kind)
       expect(herd.length).toBeGreaterThanOrEqual(3)

@@ -1,7 +1,9 @@
 "use client"
 
+import { ChromeButton } from "@/components/ui/chrome-controls"
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
-import { DEFAULT_VIEW_SIZE } from "@/lib/game/render/iso"
+import { DEFAULT_VIEW_SIZE, projectGround, yawForView } from "@/lib/game/render/iso"
+import { LANDING_CHAPEL_CENTER } from "@/lib/game/render/landing-layout"
 import type { CameraSave } from "@/lib/game/save/schema"
 import { focusGridShift } from "@/lib/game/save/view"
 import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
@@ -87,12 +89,14 @@ export function LoadingChurch({ showChurch, phase, overlayRef, chapel = true, id
   const onSceneReady = useCallback(() => setSceneReady(true), [])
   const patternId = useId()
   const tilesRef = useRef<SVGSVGElement>(null)
-  // The decorative grid is authored around the church's ground; slide it so its
-  // lattice matches the remembered land, whose focus need not be a tile centre.
+  // The pattern origin is a tile centre. The centred 2×2 loading chapel sits
+  // on a tile junction instead; the 3×5 church and the landing scene's world
+  // origin sit on tile centres. Saved views use their actual camera focus.
   const gridShift = useMemo(() => {
-    const shift = focus ? focusGridShift(focus.size, focus.camera) : { x: 0, y: 0 }
+    const shift = focus ? focusGridShift(focus.size, focus.camera)
+      : chapel && !idle && !resuming ? projectGround(.5, .5, 0, yawForView(view)) : { x: 0, y: 0 }
     return { x: shift.x, y: shift.y + groundOffset - GROUND_OFFSET }
-  }, [focus, groundOffset])
+  }, [focus, groundOffset, chapel, idle, resuming, view])
   const active = !idle && phase !== "complete"
   useEffect(() => {
     const root = tilesRef.current
@@ -118,6 +122,8 @@ export function LoadingChurch({ showChurch, phase, overlayRef, chapel = true, id
   }, [active])
   if (!showChurch && phase === "complete") return null
   const scale = 100 / viewSize
+  // The first-paint image occupies the same grid-aligned footprint as the live model.
+  const churchShift = idle ? projectGround(LANDING_CHAPEL_CENTER.x, LANDING_CHAPEL_CENTER.z, 0, yawForView(0)) : { x: 0, y: 0 }
   return <div ref={overlayRef} className="loading-church" data-loading-church data-phase={phase} data-idle={idle}
     style={{ "--ground-offset": `${groundOffset * scale}dvh`, "--church-caption-offset": `${3.5 * scale}dvh` } as CSSProperties}>
     {phase !== "complete" && <div className="loading-church-ground" aria-hidden="true"><div className="loading-church-wipe">
@@ -137,7 +143,7 @@ export function LoadingChurch({ showChurch, phase, overlayRef, chapel = true, id
       <rect x="-50%" y="-50%" width="200%" height="200%" fill={`url(#${patternId})`} />
     </svg>
     {!idle && !resuming && <svg className="loading-church-pulse" viewBox="-8 -5 16 10" fill="white"
-      style={{ width: `${16 * scale}dvh`, height: `${10 * scale}dvh`, marginTop: `${groundOffset * scale}dvh` }}>
+      style={{ width: `${16 * scale}dvh`, height: `${10 * scale}dvh`, marginLeft: `${gridShift.x * scale}dvh`, marginTop: `${(GROUND_OFFSET + gridShift.y) * scale}dvh` }}>
       {Array.from({ length: 121 }, (_, i) => {
         const x = i % 11 - 5, z = Math.floor(i / 11) - 5
         const distance = Math.hypot(x, z)
@@ -153,16 +159,16 @@ export function LoadingChurch({ showChurch, phase, overlayRef, chapel = true, id
     {resuming && phase !== "complete" && <div className="loading-church-view" aria-hidden="true"><div className="loading-church-view-wipe" /></div>}
     {showChurch && !(idle && sceneReady) && <img src={`/textures/ui/${chapel ? "loading-chapel-v5" : "loading-church-v2"}/${view}.webp`} width={256} height={256}
       fetchPriority="high" loading="eager" decoding="sync" alt="" draggable={false}
-      className="loading-church-image" style={{ width: `${8 * scale}dvh`, height: `${8 * scale}dvh` }} />}
+      className="loading-church-image" style={{ width: `${8 * scale}dvh`, height: `${8 * scale}dvh`, marginLeft: `${churchShift.x * scale}dvh`, marginTop: `${churchShift.y * scale}dvh` }} />}
     {generating && <>
-      <p className="loading-church-caption" role="status">{resuming ? "restoring your settlement" : "generating map"}</p>
+      <p className="loading-church-caption page-title" role="status">{resuming ? "restoring your settlement" : "generating map"}</p>
       <svg className="loading-church-progress" viewBox={`0 0 ${CONSTRUCTION_BAR_WIDTH} ${CONSTRUCTION_BAR_HEIGHT}`}
         role="progressbar" aria-label="Generating map" shapeRendering="crispEdges">
         <rect width={48} height={6} fill="#30210c" />
         <rect x={1} y={1} width={46} height={4} fill="#5b4d2f" />
         <rect className="loading-church-progress-fill" x={2} y={2} width={12} height={2} fill="#dab767" />
       </svg>
-      {!resuming && onStop && <button type="button" className="hud-action loading-church-stop" onClick={onStop}>Stop</button>}
+      {!resuming && onStop && <ChromeButton type="button" className="hud-action loading-church-stop" onClick={onStop}>Stop</ChromeButton>}
     </>}
   </div>
 }

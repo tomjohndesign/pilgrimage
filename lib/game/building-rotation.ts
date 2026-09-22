@@ -83,6 +83,7 @@ export function buildingApproaches(map: Pick<GameMap,"site">, building: Building
     })
     return [front, buildingEntry(building, false, -1), ...benches]
   }
+  if (building.buildType === "chicken-coop") return [front, buildingEntry(building, false, -1)]
   return building.buildType === "sheep-pen" ? [front, buildingFoldEntry(building)] : [front]
 }
 
