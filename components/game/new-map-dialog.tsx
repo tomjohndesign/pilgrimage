@@ -10,28 +10,23 @@ import { NewWorldFields } from "./new-world-fields"
 
 /** What names a fresh world; the shell regenerates once these are confirmed. */
 export interface NewWorld {
-  size: number
   seed: number
 }
 
 /**
- * A header button that opens the same size-and-seed form as the landing page.
+ * A header button that opens the same seed form as the landing page.
  * The draft stays local until the player confirms a fresh world.
  */
-export function NewMapDialog({ defaultSize, onCreate }: {
-  /** The size the dialog opens on: the current map's, so a reroll keeps its scale. */
-  defaultSize: number
+export function NewMapDialog({ onCreate }: {
   onCreate: (world: NewWorld) => void
 }) {
   const [open, setOpen] = useState(false)
-  const [size, setSize] = useState(defaultSize)
   const [seed, setSeed] = useState<number | null>(null)
   const [seedValid, setSeedValid] = useState(true)
 
   return <Dialog open={open} onOpenChange={setOpen}>
     <ChromeButton type="button" id="new-map-button" className="hud-header-button" aria-label="New map" title="New map"
       aria-haspopup="dialog" aria-expanded={open} onClick={() => {
-        setSize(defaultSize)
         setSeed(randomSeed())
         setSeedValid(true)
         setOpen(true)
@@ -41,17 +36,16 @@ export function NewMapDialog({ defaultSize, onCreate }: {
       finalFocus={() => document.getElementById("new-map-button")}>
       <DialogTitle className="font-display text-lg">New map</DialogTitle>
       <DialogDescription className="text-sm text-ink-light">
-        Choose the size and seed of your new land. Creating a map replaces the current map and starts a fresh settlement.
+        Choose the seed of your new 128×128 land. Creating a map replaces the current map and starts a fresh settlement.
       </DialogDescription>
       <form className="grid gap-4" onSubmit={event => {
         event.preventDefault()
         if (seed === null || !seedValid) return
         setOpen(false)
-        onCreate({ size, seed })
+        onCreate({ seed })
       }}>
-        <NewWorldFields seedId="new-map-seed" size={size} seed={seed}
-          onSizeChange={setSize} onSeedChange={setSeed} onSeedValidityChange={setSeedValid} />
-        <p className="text-xs text-ink-light">Dimensions are in tiles. Larger maps take longer to generate.</p>
+        <NewWorldFields seedId="new-map-seed" seed={seed}
+          onSeedChange={setSeed} onSeedValidityChange={setSeedValid} />
         <div className="flex justify-end gap-3">
           <HudButton onClick={() => setOpen(false)}>Cancel</HudButton>
           <HudButton type="submit" disabled={seed === null || !seedValid}>Create map</HudButton>

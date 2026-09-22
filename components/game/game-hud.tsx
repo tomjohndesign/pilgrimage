@@ -61,7 +61,6 @@ import { SceneAudioLifecycle } from "@/components/scene-audio-lifecycle"
 import { MusicPlayer } from "./music-player"
 import { HudButton } from "./hud-button"
 import { BugReportDialog } from "./bug-report-dialog"
-import { MapSizeControl } from "./map-size-control"
 import { NewMapDialog, type NewWorld } from "./new-map-dialog"
 import { NewWorldFields } from "./new-world-fields"
 import { SeedField } from "./seed-field"
@@ -668,7 +667,7 @@ export function GameHud({
   onSettingsChange: (settings: MapSettings) => void
   pixelation: Required<PixelationProps>
   onPixelationChange: (patch: PixelationProps) => void
-  /** Replace the current map with a fresh world of this size and seed. */
+  /** Replace the current map with a fresh 128×128 world with this seed. */
   onNewMap: (world: NewWorld) => void
   onSeedChange: (seed: number) => void
 }) {
@@ -818,7 +817,7 @@ export function GameHud({
         </div>
         <div className="hud-header-right">
         <div className="hud-header-actions">
-          {playing && <NewMapDialog defaultSize={settings.size} onCreate={onNewMap} />}
+          {playing && <NewMapDialog onCreate={onNewMap} />}
           <MusicPlayer className="hud-header-button" compact /><ThemeToggle />
           {playing && <ChromeButton type="button" className="hud-header-button" aria-label="World settings" title="World settings"
             aria-expanded={panel === "world"} aria-controls="world-settings" onClick={() => {
@@ -858,8 +857,8 @@ export function GameHud({
           <div className="hud-landing-divider" role="separator">or</div>
         </>}
         <PlayerColorPicker value={settings.playerColor} onChange={playerColor => set({ playerColor })} />
-        <NewWorldFields seedId="landing-seed" size={settings.size} seed={seed}
-          onSizeChange={size => set({ size })} onSeedChange={onSeedChange} onSeedValidityChange={setSeedValid} />
+        <NewWorldFields seedId="landing-seed" seed={seed}
+          onSeedChange={onSeedChange} onSeedValidityChange={setSeedValid} />
         <ChromeButton type="submit" className={`hud-action hud-landing-play${continueHref ? "" : " hud-action-primary"}`} disabled={!canStart || !seedValid}>
           {continueHref ? "New world" : "Play"}
         </ChromeButton>
@@ -887,7 +886,6 @@ export function GameHud({
         {map && <AppearancePanel map={map} />}
         <Section {...section("Seed")}>
           <SeedField seed={seed} onSeedChange={onSeedChange} />
-          <MapSizeControl label="Size" value={settings.size} onChange={(size) => set({ size })} />
         </Section>
 
         <Section {...section("Pixelation")}>
