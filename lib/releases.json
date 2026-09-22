@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "8ed07d4d5ad47e91717c1df60d2363a702ca0c8e",
-  "releaseCount": 265,
+  "lastProcessedCommit": "b26be1ae295571fb11030a9050fccfaba006ed6b",
+  "releaseCount": 266,
   "releases": [
+    {
+      "version": "0.0.280",
+      "title": "Release 0.0.280",
+      "summary": "Add monk-staffed alms tables and shared food and water routes (#275)",
+      "commit": "b26be1ae295571fb11030a9050fccfaba006ed6b"
+    },
     {
       "version": "0.0.279",
       "title": "Release 0.0.279",
