@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "51baa30c8934e32efbb65e948f089293de5a35f9",
-  "releaseCount": 268,
+  "lastProcessedCommit": "649a8cf3abe44ed21eb9ee912150ba0a534f96dd",
+  "releaseCount": 269,
   "releases": [
+    {
+      "version": "0.0.283",
+      "title": "Release 0.0.283",
+      "summary": "Fix transport overlaps and add reviewable scene experiments (#303)",
+      "commit": "649a8cf3abe44ed21eb9ee912150ba0a534f96dd"
+    },
     {
       "version": "0.0.282",
       "title": "Release 0.0.282",
