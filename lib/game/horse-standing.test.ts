@@ -6,7 +6,8 @@ import { generateMap } from "./map/generate-map"
 import { currentStanding, findHorseStanding, standingGround, STANDING_LANE_LENGTH, type HorseStanding } from "./horse-standing"
 import { shrineVisitPlan } from "./shrine-visit"
 import { tileAt, tileToWorldX, tileToWorldZ, worldToTileX, worldToTileZ, type GameMap } from "./map/types"
-import { knightLoadout, squireFollowGap } from "./knights"
+import { withTravelParties } from "./travel-parties"
+import { knightLoadout } from "./knights"
 import { PACK_LEAD, partyLoadout } from "./transport/party"
 import { BASE_CHARACTER_SCALE } from "./base-person/gait"
 
@@ -191,9 +192,9 @@ describe("a cart company's approach", () => {
 describe("a knight's squire in the line", () => {
   /** A squire leaves extra space behind a knight waiting for admission. */
   function gapBehindKnight(knightId: number) {
-    const travelers: Traveler[] = [
+    const travelers = withTravelParties([
       { id: knightId, name: "Knight", type: TRAVELER_TYPES.knight, direction: 1, offset: 24 / 59, pace: 1, attributes: { ...devout, gold: 100, status: 100 } },
-      { id: 1000, name: "Pilgrim", type: TRAVELER_TYPES.pilgrim, direction: 1, offset: 8 / 59, pace: 1, attributes: { ...devout } }]
+      { id: 1000, name: "Pilgrim", type: TRAVELER_TYPES.pilgrim, direction: 1, offset: 8 / 59, pace: 1, attributes: { ...devout } }] as Traveler[], 42).sort((a, b) => (a.id === 1000 ? 2 : a.knightId === undefined ? 0 : 1) - (b.id === 1000 ? 2 : b.knightId === undefined ? 0 : 1))
     const { map, sim } = standingRoad(travelers)
     const knight = sim.travelers.get(knightId)!, pilgrim = sim.travelers.get(1000)!
     const reserved = new Set<string>()
@@ -208,7 +209,7 @@ describe("a knight's squire in the line", () => {
     let still = 0
     for (let tick = 0; tick < 8000 && still < 30; tick++) {
       stepSim(sim, travelers, map, 1, .1)
-      // Hold the line after both visitors have joined.
+      // Hold the line after the visitors have joined.
       still = knight.activity === "toRelic" && knight.moveSpeed === 0 && pilgrim.activity === "toRelic" && pilgrim.moveSpeed === 0 ? still + 1 : 0
     }
     expect(still).toBe(30)
@@ -218,7 +219,7 @@ describe("a knight's squire in the line", () => {
     const withSquire = [...Array(60).keys()].find(id => knightLoadout(id).squire)!
     const alone = [...Array(60).keys()].find(id => !knightLoadout(id).squire)!
     const extra = gapBehindKnight(withSquire) - gapBehindKnight(alone)
-    expect(extra).toBeGreaterThan(squireFollowGap(BASE_CHARACTER_SCALE) * 0.5)
-    expect(extra).toBeLessThan(squireFollowGap(BASE_CHARACTER_SCALE) * 2)
+    expect(extra).toBeGreaterThan(0.2)
+    expect(extra).toBeLessThan(2)
   }, 120_000)
 })

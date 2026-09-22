@@ -41,6 +41,7 @@ import { prepareSpritePicking, spriteTexelRaycast } from "@/lib/game/render/spri
 import { usePixelSceneryDepth, usePixelWorldTexel } from "@/components/pixel-canvas"
 import { characterVisual, spriteRow, type SpriteClip, type CharacterModel } from "@/lib/game/character-assets"
 import { usePopulationStore } from "@/lib/game/base-person/population-store"
+import { squireVisual } from "@/lib/game/knight/visual"
 import { populationVisual } from "@/lib/game/base-person/population-assets"
 import type { TravelerAppearance } from "@/lib/game/base-person/population"
 import { advanceWalkPhase, walkClipFrame, type WalkTuning } from "@/lib/game/motion"
@@ -83,7 +84,7 @@ export function CharacterSprite({ resident, map: suppliedMap, type, onClick, out
   const custom = usePersonDesignStore((s) => s.atlas)
   const population = usePopulationStore(s => s.pack)
   const varied = (characterModel === "base" || type === "beggar" || type === "nun") && !!appearance
-  const visual = useMemo(() => visualOverride ?? (varied || type === "beggar" || type === "nun" ? populationVisual(type, appearance?.variant ?? 0, population, age) :
+  const visual = useMemo(() => visualOverride ?? (type === "squire" ? squireVisual() : varied || type === "beggar" || type === "nun" ? populationVisual(type, appearance?.variant ?? 0, population, age) :
     { ...characterVisual(asset, characterModel, custom), rowOffset: 0, strideRatio: 1, reservedTones: false }),
     [visualOverride, asset, characterModel, custom, varied, appearance?.variant, population, type, age])
   const individualScale = characterScale * (varied ? appearance.scale : 1)

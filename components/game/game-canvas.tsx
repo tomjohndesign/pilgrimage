@@ -6,6 +6,7 @@ import { SURFACE_LIGHT } from "@/lib/game/render/lighting"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { terrainMapSnapshot } from "@/lib/game/render/terrain-blocks"
 import { travelerAppearance } from "@/lib/game/base-person/population"
+import { squireVisual } from "@/lib/game/knight/visual"
 import { populationVisual } from "@/lib/game/base-person/population-assets"
 import { monkVisual } from "@/lib/game/base-person/monk-assets"
 import { walkSpeedScale } from "@/lib/game/base-person/gait"
@@ -168,7 +169,7 @@ export function GameCanvas({
   const speedScales = useMemo(() => new Map(travelers.map(traveler => {
     const appearance = travelerAppearance(map.seed ?? 0, traveler.id)
     const monk = traveler.type.id === "friar"
-    const visual = monk ? monkVisual(traveler.attributes.age)
+    const visual = traveler.type.id === "squire" ? squireVisual() : monk ? monkVisual(traveler.attributes.age)
       : characterModel === "base" || (traveler.type.id === "beggar" || traveler.type.id === "nun") ? populationVisual(traveler.type.id, appearance.variant, population, traveler.attributes.age)
       : characterVisual(assets[traveler.type.id], "callings")
     const scale = characterScale * (!monk && characterModel === "base" ? appearance.scale : 1)

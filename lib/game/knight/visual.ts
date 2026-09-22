@@ -27,7 +27,7 @@ export function knightVisual(variant: number) {
 }
 
 /** Loaded walk and standing poses share the same authored legs and equipment. */
-export function squireVisual() {
+export function squireVisual(): ReturnType<typeof populationVisual> {
   const base = populationVisual("merchant", 0, null), data = manifest.squire, design = squireDesign()
   const scale = 0.74 * data.cellSize / 48
   const clip = (name: keyof typeof data.frameCounts) => ({ url: `/textures/knights/${manifest.sourceVersion ?? KNIGHT.version}/squire-${name}.png`, depth: `/textures/knights/${manifest.sourceVersion ?? KNIGHT.version}/depth-squire-${name}.png`, columns: data.frameCounts[name], rows: data.rows, stillFrame: 0 })

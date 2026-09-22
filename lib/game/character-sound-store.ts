@@ -66,7 +66,7 @@ export function validateCharacterSounds(value: unknown): CharacterSoundDocument 
   for (const id of Object.keys(AUDIO_PROFILES)) {
     profiles[id] = {} as Record<CharacterAudioEvent,EventSound>
     for (const name of AUDIO_EVENTS) {
-      const e = (d.profiles[id] ?? sourceProfiles[id])?.[name]
+      const e = (d.profiles[id] ?? sourceProfiles[id] ?? (id === "squire" ? DEFAULT_CHARACTER_SOUNDS.profiles.squire : undefined))?.[name]
       if (!e || typeof e.rigTiming !== "boolean" || typeof e.enabled !== "boolean" || !Array.isArray(e.clips) || e.clips.length > 16 || e.clips.some(c => !known.has(c)) || !validNumber(e.volume,0,1) || !validNumber(e.rate,.5,1.5) || !validNumber(e.jitter,0,.2) || !validNumber(e.cooldown,0,60) || !validNumber(e.range,1,80) || !validNumber(e.phase,0,.999)) throw new Error(`Invalid ${name} settings for ${id}.`)
       profiles[id][name] = { rigTiming:e.rigTiming, enabled:e.enabled,clips:[...e.clips],volume:e.volume,rate:e.rate,jitter:e.jitter,cooldown:e.cooldown,range:e.range,phase:e.phase }
     }

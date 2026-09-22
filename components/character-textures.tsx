@@ -12,7 +12,7 @@ export function CharacterTextures() {
     <div className="mb-8" aria-label="Current road character sprites">
       <h3 className="mb-3 font-display text-lg text-parchment">On the road</h3>
       <AssetEditorHelp label="Character sprites">Six body profiles per calling at a shared map scale. Nuns wear a veiled habit in every profile.</AssetEditorHelp>
-      <OutfitCards types={Object.values(TRAVELER_TYPES)} pack={DEFAULT_POPULATION} />
+      <OutfitCards types={Object.values(TRAVELER_TYPES).filter(type => type.id !== "squire")} pack={DEFAULT_POPULATION} />
     </div>
     <div className="mb-8" aria-label="Settlement job sprites">
       <h3 className="mb-3 font-display text-lg text-parchment">In the enclave</h3>

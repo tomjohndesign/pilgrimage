@@ -21,6 +21,7 @@ export type TravelerTypeId =
   | "friar"
   | "nun"
   | "knight"
+  | "squire"
   | "minstrel"
   | "vendor"
   | "beggar"
@@ -140,6 +141,14 @@ export const TRAVELER_TYPES: Record<TravelerTypeId, TravelerTypeDef> = {
     skillCount: { min: 1, max: 2 },
     skills: ["swordplay", "riding", "command", "falconry"],
   },
+  // Squires arrive with their knight, never as an independent traffic roll.
+  squire: {
+    id: "squire", label: "Squire", color: "#973e38", weight: 0,
+    paceMin: 0.9, paceMax: 1.1, gold: { min: 5, max: 20 },
+    status: { min: 25, max: 50 }, piety: { min: 30, max: 80 },
+    joblessChance: 0, skillCount: { min: 1, max: 2 },
+    skills: ["riding", "mending", "swordplay", "horse care"],
+  },
   minstrel: {
     id: "minstrel",
     label: "Minstrel",
@@ -237,8 +246,10 @@ export interface TravelerAttributes {
 }
 
 export interface Traveler {
+  /** The knight this independently named attendant travels with. */
+  knightId?: number
   party?: import("./travel-parties").PartyMembership
-  /** Index into the generated batch; unique within one map's travelers. */
+  /** Stable identity, unique within a world's road travelers and companions. */
   id: number
   name: string
   type: TravelerTypeDef
@@ -251,7 +262,7 @@ export interface Traveler {
   pace: number
 }
 
-export const TRAVELER_CALLINGS = Object.values(TRAVELER_TYPES).filter(type => type.id !== "beggar")
+export const TRAVELER_CALLINGS = Object.values(TRAVELER_TYPES).filter(type => type.weight > 0)
 const TYPE_LIST = TRAVELER_CALLINGS
 const TOTAL_WEIGHT = TYPE_LIST.reduce((sum, t) => sum + t.weight, 0)
 
@@ -341,4 +352,18 @@ export function generateTravelers(seed: number, count: number): Traveler[] {
     })
   }
   return travelers
+}
+
+/** Reserve a separate ID range so traffic growth never changes an attendant's
+ * identity or collides with road travelers and the founding town households. */
+export function generateSquire(seed: number, knight: Traveler): Traveler {
+  const id = 1_000_000 + knight.id
+  const rng = makeRng(deriveSeed(seed ^ 0x53515549, knight.id))
+  const firstNames = FIRST_NAMES.Male
+  const first = Math.floor(rng() * firstNames.length), byname = BYNAMES[Math.floor(rng() * BYNAMES.length)]
+  const name = `${firstNames[first]} ${byname}` === knight.name
+    ? `${firstNames[(first + 1) % firstNames.length]} ${byname}` : `${firstNames[first]} ${byname}`
+  return { id, knightId: knight.id, name, type: TRAVELER_TYPES.squire,
+    attributes: { ...rollAttributes(rng, TRAVELER_TYPES.squire, rollStat(rng, { min: 60, max: 90 })), age: rollStat(rng, { min: 16, max: 25 }) },
+    offset: knight.offset, direction: knight.direction, pace: 1 }
 }

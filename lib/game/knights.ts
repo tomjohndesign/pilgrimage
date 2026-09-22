@@ -31,10 +31,15 @@ export function knightMounted(activity: string, horse?: HorseRest) {
   return !horse && ["toParking", "fromParking", "walking", "seeking", "fleeing", "toCamp", "fromCamp", "toShop", "fromShop", "toRelic", "fromRelic", "toListen", "listening", "fromListening", "toAlms", "givingAlms", "fromAlms"].includes(activity)
 }
 
+/** Pace comes from the equipped attendant's authored walking rig. */
+export function squireWalkSpeed(scale: number) {
+  return (squireStride ??= personWalkStride(squireDesign())) * scale * DEFAULT_WALK_CADENCE
+}
+
 /** A walking attendant limits the horse's cadence, retaining both authored strides. */
 export function knightTravelSpeed(scale: number, squire: boolean) {
   const horse = animalWalkSpeed("horse", scale, "noble")
-  return squire ? Math.min(horse, (squireStride ??= personWalkStride(squireDesign())) * scale * DEFAULT_WALK_CADENCE) : horse
+  return squire ? Math.min(horse, squireWalkSpeed(scale)) : horse
 }
 
 export interface TrailPoint { x: number; z: number; heading: number }

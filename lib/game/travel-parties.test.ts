@@ -35,18 +35,20 @@ function run(sim: SimState, travelers: Traveler[], map: GameMap, seconds: number
 }
 
 describe("travel party generation", () => {
-  it("preserves the cast and headcount, groups related callings, and varies sizes up to twenty", () => {
+  it("preserves road identities, adds attendants, and varies companies up to twenty", () => {
     const sizes = new Set<number>()
     for (let seed = 0; seed < 12; seed++) {
       const original = generateTravelers(seed, 300), grouped = withTravelParties(original, seed)
-      expect(grouped.map(({ party: _party, ...person }) => person)).toEqual(original)
+      expect(grouped.filter(t => t.knightId === undefined).map(({ party: _party, ...person }) => person)).toEqual(original)
       expect(withTravelParties(original, seed)).toEqual(grouped)
       const parties = new Map<number, Traveler[]>()
       for (const person of grouped) if (person.party) parties.set(person.party.id, [...parties.get(person.party.id) ?? [], person])
       for (const members of parties.values()) {
         sizes.add(members.length)
         expect(members.length).toBeLessThanOrEqual(20)
-        expect(new Set(members.map(t => t.type.id)).size).toBe(1)
+        if (members[0].type.id === "knight") {
+          expect(members.map(t => t.type.id)).toEqual(["knight", "squire"])
+        } else expect(new Set(members.map(t => t.type.id)).size).toBe(1)
       }
       expect(grouped.some(t => !t.party)).toBe(true)
     }

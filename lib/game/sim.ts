@@ -38,7 +38,7 @@ import { cartRoadDiversion } from "./transport/road-diversion"
 import { recoverCart } from "./transport/recovery"
 import { blockedRoad, findRoadDiversion, takeRoadShortcut, retireBypassedRoad, exploresRoadShortcut, type WalkingShortcut } from "./walking-shortcuts"
 import { createFootpaths, HEAVY_PATH_WEAR, recordWalkingPath, regrowFootpaths, type Footpaths } from "./footpaths"
-import { knightMounted, knightLoadout, knightTravelSpeed, knightWalkStride, squireFollowGap, type HorseRest } from "./knights"
+import { knightMounted, knightLoadout, knightTravelSpeed, knightWalkStride, squireWalkSpeed, type HorseRest } from "./knights"
 import { DEFAULT_WALK_SPEED, DEFAULT_WALK_CADENCE, personWalkStride } from "./base-person/gait"
 import { builderRate } from "./build-labour"
 import { assignBuildingTask, buildingEntrance, stepBuildingTask, walkWorker, workerRoute, type BuildingTask } from "./construction"
@@ -1728,17 +1728,6 @@ function leaveGathering(s: SimTraveler, map: GameMap, speed: number, dt: number,
 // Identities keyed by ID, reused across steps while the cast is unchanged.
 const identityIndexes = new WeakMap<readonly Traveler[], Map<number, Traveler>>()
 const syncedCasts = new WeakSet<readonly Traveler[]>()
-/** Knights attended by a squire, read once per cast; the cast only grows, so
- * the set is rebuilt when its length changes. */
-const squireCasts = new WeakMap<readonly Traveler[], { length: number; ids: Set<number> }>()
-function squireKnights(travelers: readonly Traveler[]): ReadonlySet<number> {
-  let cached = squireCasts.get(travelers)
-  if (!cached || cached.length !== travelers.length) {
-    cached = { length: travelers.length, ids: new Set(travelers.filter(t => t.type.id === "knight" && knightLoadout(t.id).squire).map(t => t.id)) }
-    squireCasts.set(travelers, cached)
-  }
-  return cached.ids
-}
 function travelerIdentities(travelers: readonly Traveler[]): Map<number, Traveler> {
   let index = identityIndexes.get(travelers)
   if (!index) { index = new Map(travelers.map(t => [t.id, t])); identityIndexes.set(travelers, index) }
@@ -2343,8 +2332,13 @@ export function stepSim(
   const partyIdentities = travelerIdentities(travelers)
   stepTravelParties(sim, travelers, map, dt, counters, state => {
     const t = partyIdentities.get(state.id)!
+    const rigSpeed = t.type.id === "knight" ? (knightMounted(state.activity, state.horseRest)
+      ? knightTravelSpeed(characterScale, knightLoadout(t.id).squire)
+      : knightWalkStride(travelerAppearance(map.seed ?? 0, t.id).variant) * characterScale * DEFAULT_WALK_CADENCE)
+      : t.type.id === "squire" ? squireWalkSpeed(characterScale)
+      : t.type.id === "friar" ? monkWalkSpeed(characterScale) : undefined
     return t.pace * baseSpeed * wearySpeedScale(state)
-      * (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)
+      * (rigSpeed === undefined ? speedScales?.get(t.id) ?? 1 : rigSpeed / DEFAULT_WALK_SPEED)
       * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
   }, characterScale, movement)
   const almsTables = map.buildings.filter(b => b.buildType === "alms-table" && b.owner !== "independent" && isComplete(b))
@@ -2369,14 +2363,12 @@ export function stepSim(
   const queueSpacing = relicQueueSpacing(characterScale)
   // Everyone holding a place for the relic, read once: where they stand relative
   // to the church door decides who lines up behind whom.
-  // A knight's squire stands behind him in the line, so the next person keeps
-  // a squire's step further back.
-  const squires = squireKnights(travelers)
+  // Squires reserve their own place, just like every other companion.
   const relicLine = [...sim.travelers.values()].flatMap(other => {
     if (!isRelicViewingSeat(other.shrineSeat) || !other.shrineRoute) return []
     if (other.activity !== "toRelic" && other.activity !== "visiting") return []
     other.shrineDoor ??= shrineDoorIndex(map, other.shrineRoute)
-    return [{ s: other, remaining: other.shrineDoor - other.branchProgress, space: queueSpacing + (squires.has(other.id) ? squireFollowGap(characterScale) : 0) }]
+    return [{ s: other, remaining: other.shrineDoor - other.branchProgress, space: queueSpacing }]
   })
   const shrine = map.buildings.find(b => b.id === map.site?.hovelId)
   const singleVisitor = !!shrine && isChapel(shrine)
@@ -2515,14 +2507,14 @@ export function stepSim(
     let targetSpeed = 0
     if (s.partyCarried) s.moveSpeed = s.partySpeed ?? 0
     else {
-      const knightSpeed = t.type.id === "knight" ? (knightMounted(s.activity, s.horseRest)
+      const rigSpeedScale = t.type.id === "knight" ? (knightMounted(s.activity, s.horseRest)
         ? knightTravelSpeed(characterScale, knightLoadout(t.id).squire)
-        : knightWalkStride(travelerAppearance(map.seed ?? 0, t.id).variant) * characterScale * DEFAULT_WALK_CADENCE) / DEFAULT_WALK_SPEED : undefined
+        : knightWalkStride(travelerAppearance(map.seed ?? 0, t.id).variant) * characterScale * DEFAULT_WALK_CADENCE) / DEFAULT_WALK_SPEED : t.type.id === "squire" ? squireWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : undefined
       const job = settlementJob(s.employer, sim.buildings)
       const residentSpeed = job ? jobSpeedScale(job, travelerAppearance(map.seed ?? 0, t.id).variant, characterScale) : undefined
       const pace = s.beggar ? TRAVELER_TYPES.beggar.paceMin + roll(t.id, 901) * (TRAVELER_TYPES.beggar.paceMax - TRAVELER_TYPES.beggar.paceMin) : t.pace
       const beggarSpeed = s.beggar ? beggarSpeedScales?.get(t.id) ?? 1 : undefined
-      targetSpeed = pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (beggarSpeed ?? residentSpeed ?? knightSpeed ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
+      targetSpeed = pace * baseSpeed * (riding ? 1 : wearySpeedScale(s)) * (beggarSpeed ?? residentSpeed ?? rigSpeedScale ?? (t.type.id === "friar" ? monkWalkSpeed(characterScale) / DEFAULT_WALK_SPEED : speedScales?.get(t.id) ?? 1)) * paceVariation(t.id, sim.time * GAME_DAY_SECONDS, movement.variation)
       targetSpeed *= fordSpeedAt(map, s.x, s.z)
       s.moveSpeed = sheltered || STILL_ACTIVITIES.includes(s.activity) ? 0 :
         easeSpeed(s.moveSpeed, targetSpeed, dt, movement.acceleration)

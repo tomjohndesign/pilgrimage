@@ -64,14 +64,15 @@ const soundLabels: Record<TravelerTypeId, string> = {
   friar: "Low chapel bells",
   nun: "Low chapel bells",
   knight: "Armour & steel",
+  squire: "Soft steps & equipment",
   minstrel: "Three lute notes",
   vendor: "Wooden cart & shop bell",
 }
 
 export const CHARACTER_ASSETS = Object.fromEntries(
   Object.entries(soundLabels).map(([id, soundLabel]) => [id, {
-    sheet: id === "nun" ? "/textures/characters/population/v36/nun-walk.png" : id === "beggar" ? "/textures/characters/population/v29/beggar-walk.png" : `/textures/characters/${id}-v1.png`,
-    sound: `/sounds/characters/${id === "nun" ? "friar" : id === "beggar" ? "peasant" : id}-select-v1.wav`,
+    sheet: id === "squire" ? "/textures/characters/merchant-v1.png" : id === "nun" ? "/textures/characters/population/v36/nun-walk.png" : id === "beggar" ? "/textures/characters/population/v29/beggar-walk.png" : `/textures/characters/${id}-v1.png`,
+    sound: `/sounds/characters/${id === "squire" ? "peasant" : id === "nun" ? "friar" : id === "beggar" ? "peasant" : id}-select-v1.wav`,
     soundLabel, fps: 6, scale: 0.74, volume: 0.65,
   }]),
 ) as Record<TravelerTypeId, CharacterAsset>
