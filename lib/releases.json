@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "649a8cf3abe44ed21eb9ee912150ba0a534f96dd",
-  "releaseCount": 269,
+  "lastProcessedCommit": "25f8c0eabd116a9cb15545ab4ec059fc731b9cf4",
+  "releaseCount": 270,
   "releases": [
+    {
+      "version": "0.0.284",
+      "title": "Release 0.0.284",
+      "summary": "Update manuscript branding, app icons, and social artwork (#304)",
+      "commit": "25f8c0eabd116a9cb15545ab4ec059fc731b9cf4"
+    },
     {
       "version": "0.0.283",
       "title": "Release 0.0.283",
