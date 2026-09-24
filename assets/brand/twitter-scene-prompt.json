@@ -1,0 +1,4 @@
+{
+  "mode": "built-in image_gen",
+  "prompt": "Edit this existing illustration into a Twitter/X cover with EXACT 3:1 aspect ratio, target 1500 x 500 pixels. This is a format correction only: preserve the existing manuscript settlement scene, people, relic chapel, market, sheep, builder, palette, canvas and hand-drawn linework as faithfully as possible. Keep the complete decorative vine border and all feet and roofs within the canvas; the previous 1640x624 version was too tall and its border got cropped. Achieve the wider framing by extending/re-spacing the peripheral canvas, ground and plants horizontally, keeping central artwork proportional and undistorted, with slightly more breathing room at the outer edges. No new subjects, no changed faces, no wordmark, no lettering, no large P, no text, no UI, no screenshot frame. Keep the relic centered and the story completely visible. Output the artwork only at 3:1."
+}

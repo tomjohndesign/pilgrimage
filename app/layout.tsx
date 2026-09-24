@@ -19,10 +19,6 @@ const unifrakturCook = UnifrakturCook({
   display: 'swap',
 })
 
-// Site iconography (favicon, Apple/PWA icons, Open Graph card) is the "logo"
-// mark from Paper: a parchment Cinzel Black "P" on the forest green.
-// @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/2-0/G3-0
-//
 // Local dev tabs are named after the git branch (see next.config.mjs) so that
 // several workspaces running side by side stay tellable apart in the tab strip.
 const branch = process.env.NEXT_PUBLIC_GIT_BRANCH
@@ -30,17 +26,24 @@ const title: Metadata['title'] = branch
   ? { default: branch, template: branch }
   : 'Pilgrimage — A Medieval Settlement Builder'
 
+/**
+ * Manuscript branding: gold reliquary P on green for icons; green and gold
+ * UnifrakturCook wordmark on canvas for sharing cards.
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/p-5-1/E7H-1
+ * @see https://app.paper.design/file/01M1QTYBYHXP4H1BXFQ79N18AP/p-5-1/EBK-0
+ */
 export const metadata: Metadata = {
   title,
   description: 'A medieval settlement builder inspired by RollerCoaster Tycoon & Age of Empires II. Begin with a holy relic and grow a pilgrimage site into a renowned destination.',
   generator: 'v0.app',
   manifest: '/manifest.json',
+  twitter: { card: 'summary_large_image' },
   icons: {
     icon: [
-      { url: '/favicon.ico', sizes: '48x48' },
-      { url: '/icon.svg', type: 'image/svg+xml' },
+      { url: '/favicon.ico?v=manuscript', sizes: '16x16 32x32 48x48' },
+      { url: '/icon.svg?v=manuscript', type: 'image/svg+xml', sizes: 'any' },
     ],
-    apple: '/apple-icon.png',
+    apple: '/apple-icon.png?v=manuscript',
   },
 }
 
