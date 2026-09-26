@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "25f8c0eabd116a9cb15545ab4ec059fc731b9cf4",
-  "releaseCount": 270,
+  "lastProcessedCommit": "7ab4edba0ca29274dc065da931a1e34d5fd28173",
+  "releaseCount": 271,
   "releases": [
+    {
+      "version": "0.0.285",
+      "title": "Release 0.0.285",
+      "summary": "Cut overall frame time by 40% with identical rendering (#305)",
+      "commit": "7ab4edba0ca29274dc065da931a1e34d5fd28173"
+    },
     {
       "version": "0.0.284",
       "title": "Release 0.0.284",
