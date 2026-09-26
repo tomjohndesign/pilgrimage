@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import * as THREE from "three"
-import { reinCurve, reinPixels, reinViewPoint } from "./reins"
+import { forEachReinPixel, reinCurve, reinCurvePoints, reinPixels, reinViewPoint } from "./reins"
 import { animalBit } from "./bridle"
 import { BASE_PERSON } from "../base-person/pose"
 
@@ -49,4 +49,23 @@ describe("pixel driving reins", () => {
       }
     })
   })
+
+  it("samples the curve, its pixels and view rotations exactly as three does", () => {
+    const pitch = BASE_PERSON.camera.pitch * Math.PI / 180
+    for (const kind of ["horse", "donkey", "ox"] as const) for (const side of [-1, 1]) for (const phase of [0, 0.3, 0.8]) {
+      const hand: [number, number, number] = [side * 0.21, 1.6 + phase * .1, -1.4]
+      const bit = animalBit(kind, "common", phase, true, side)
+      const expected = reinCurve(hand, bit, side, kind, "common").getPoints(64)
+      expect(reinCurvePoints(hand, bit, side, kind, "common", 64)).toEqual(expected)
+      const visited: number[][] = []
+      forEachReinPixel(expected, 0.03, (x, y, z) => { visited.push([x, y, z]) })
+      expect(visited).toEqual(reinPixels(expected, 0.03).map(p => p.toArray()))
+      for (const row of [0, 3, 7]) {
+        const point = expected[17]
+        expect(reinViewPoint(point, row, 8)).toEqual(point.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -row * Math.PI * 2 / 8)
+          .applyAxisAngle(new THREE.Vector3(1, 0, 0), pitch))
+      }
+    }
+  })
 })
+

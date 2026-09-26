@@ -11,7 +11,7 @@ import * as THREE from "three"
 import { handlerHand, handlerHandView, type HandlerClip } from "@/lib/game/transport/handler-assets"
 import type { TravelerTypeId } from "@/lib/game/travelers"
 import { DRIVER_GRIP, driverPoint, reinPoints } from "@/lib/game/transport/driver"
-import { reinCurve, reinPixels, reinViewPoint } from "@/lib/game/transport/reins"
+import { forEachReinPixel, reinCurvePoints, reinViewPoint } from "@/lib/game/transport/reins"
 import { BASE_PERSON } from "@/lib/game/base-person/pose"
 import { spinePoint } from "@/lib/game/transport/animal-pose"
 import { animalProfile } from "@/lib/game/transport/assets"
@@ -62,9 +62,8 @@ export function CartReins({ driver, handler, draft = false, seatOffset = 0, cart
     mesh.setAttribute("attachmentPath", new THREE.InstancedBufferAttribute(new Float32Array(2048 * 2), 2))
     return mesh
   }, [])
-  const dummy = useMemo(() => new THREE.Object3D(), [])
   const previous = useMemo(() => new Float64Array(12).fill(NaN), [])
-  const scratch = useMemo(() => ({ origin: new THREE.Vector3(), hitch: new THREE.Vector3(), viewToLocal: new THREE.Matrix4() }), [])
+  const scratch = useMemo(() => ({ origin: new THREE.Vector3(), hitch: new THREE.Vector3(), viewToLocal: new THREE.Matrix4(), state: new Array<number>(12) }), [])
   useEffect(() => () => geometry.dispose(), [geometry])
   useFrame(({ camera }) => {
     const group = root.current, wagon = cart.current, beast = animal.current
@@ -83,8 +82,10 @@ export function CartReins({ driver, handler, draft = false, seatOffset = 0, cart
     const origin = (cartSprite ?? wagon).getWorldPosition(scratch.origin).applyMatrix4(camera.matrixWorldInverse)
     const hitch = (sprite ?? beast).getWorldPosition(scratch.hitch).applyMatrix4(camera.matrixWorldInverse)
     // Nothing that shapes the strap changed since the last frame: keep it.
-    const state = [origin.x, origin.y, origin.z, hitch.x, hitch.y, hitch.z, yaw, data.walkPhase ?? 0, cartRow, animalRow,
-      wagon.userData.riding === true ? 1 : 0, handler ? (cartSprite?.userData.displayedFrame ?? 0) + (cartSprite?.userData.clip === "wearyWalk" ? 100 : cartSprite?.userData.clip === "walk" ? 200 : 0) : 0]
+    const state = scratch.state
+    state[0] = origin.x; state[1] = origin.y; state[2] = origin.z; state[3] = hitch.x; state[4] = hitch.y; state[5] = hitch.z
+    state[6] = yaw; state[7] = data.walkPhase ?? 0; state[8] = cartRow; state[9] = animalRow; state[10] = wagon.userData.riding === true ? 1 : 0
+    state[11] = handler ? (cartSprite?.userData.displayedFrame ?? 0) + (cartSprite?.userData.clip === "wearyWalk" ? 100 : cartSprite?.userData.clip === "walk" ? 200 : 0) : 0
     let same = true
     for (let i = 0; i < state.length; i++) if (previous[i] !== state[i]) { same = false; previous[i] = state[i] }
     if (same) return
@@ -98,16 +99,25 @@ export function CartReins({ driver, handler, draft = false, seatOffset = 0, cart
       const start = points[0], end = points[points.length - 1]
       const dx = end.x - start.x, dy = end.y - start.y, dz = end.z - start.z
       const lengthSq = dx * dx + dy * dy + dz * dz
-
-      for (const pixel of reinPixels(points, texel)) {
-        if (instance >= body.current!.instanceMatrix.count) break
-        const t = lengthSq ? ((pixel.x - start.x) * dx + (pixel.y - start.y) * dy + (pixel.z - start.z) * dz) / lengthSq : 0
-        path.setXY(instance, Math.max(0, Math.min(1, t)), driverSource ? 1 : 0)
-        dummy.position.copy(pixel); dummy.position.z += .005
-        dummy.quaternion.identity(); dummy.scale.set(texel, texel, 1); dummy.updateMatrix()
-        dummy.matrix.premultiply(viewToLocal)
-        body.current!.setMatrixAt(instance, dummy.matrix); ids.current?.setMatrixAt(instance, dummy.matrix); instance++
-      }
+      const capacity = body.current!.instanceMatrix.count, matrices = body.current!.instanceMatrix.array, idMatrices = ids.current?.instanceMatrix.array
+      const a = viewToLocal.elements, paths = path.array
+      forEachReinPixel(points, texel, (x, y, z) => {
+        if (instance >= capacity) return false
+        const t = lengthSq ? ((x - start.x) * dx + (y - start.y) * dy + (z - start.z) * dz) / lengthSq : 0
+        paths[instance * 2] = Math.max(0, Math.min(1, t)); paths[instance * 2 + 1] = driverSource ? 1 : 0
+        // viewToLocal × translate(x, y, z + .005) × scale(texel, texel, 1), with
+        // Matrix4.multiplyMatrices' products and summation order.
+        const pz = z + .005, at = instance * 16
+        matrices[at] = a[0] * texel; matrices[at + 1] = a[1] * texel; matrices[at + 2] = a[2] * texel; matrices[at + 3] = a[3] * texel
+        matrices[at + 4] = a[4] * texel; matrices[at + 5] = a[5] * texel; matrices[at + 6] = a[6] * texel; matrices[at + 7] = a[7] * texel
+        matrices[at + 8] = a[8]; matrices[at + 9] = a[9]; matrices[at + 10] = a[10]; matrices[at + 11] = a[11]
+        matrices[at + 12] = a[0] * x + a[4] * y + a[8] * pz + a[12]
+        matrices[at + 13] = a[1] * x + a[5] * y + a[9] * pz + a[13]
+        matrices[at + 14] = a[2] * x + a[6] * y + a[10] * pz + a[14]
+        matrices[at + 15] = a[3] * x + a[7] * y + a[11] * pz + a[15]
+        if (idMatrices) for (let i = 0; i < 16; i++) idMatrices[at + i] = matrices[at + i]
+        instance++
+      })
     }
     if (ids.current && !ids.current.instanceColor) {
       ids.current.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(ids.current.instanceMatrix.count * 3), 3)
@@ -138,7 +148,7 @@ export function CartReins({ driver, handler, draft = false, seatOffset = 0, cart
       const frames = TRANSPORT.animalFrames, phase = Math.floor((data.walkPhase ?? 0) * frames) / frames
       const bit = animalBit(kind, horseVariant, phase, data.moving === true, side)
       const curve = handler ? reinPoints(hand.toArray(), bit).map(p => new THREE.Vector3(...p))
-        : reinCurve(hand.toArray(), bit, side, kind, horseVariant).getPoints(64)
+        : reinCurvePoints(hand.toArray(), bit, side, kind, horseVariant, 64)
       const points = curve.map(p => reinViewPoint(p, animalRow, 8).multiplyScalar(unit))
       draw(points.map(point => point.add(hitch)), true)
     }

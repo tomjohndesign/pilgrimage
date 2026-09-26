@@ -26,8 +26,12 @@ export function tagPixelCharacters(roots: Iterable<THREE.Object3D>, scene: THREE
       if (object.layers.isEnabled(OUTLINE_ID_LAYER)) object.layers.enable(CHARACTER_ID_LAYER)
     })
   }
+  // Every pass collects the same lights, even the unlit ID passes. A light set
+  // that changes between passes bumps three's light-state version, and every
+  // lit material then rebuilds its program parameters and cache key on each
+  // pass of every frame.
   scene.traverseVisible(object => {
-    if (object instanceof THREE.Light) object.layers.enable(CHARACTER_COLOR_LAYER)
+    if (object instanceof THREE.Light) object.layers.enableAll()
   })
   return drawable
 }

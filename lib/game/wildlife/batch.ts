@@ -27,7 +27,7 @@ export function wildlifeGeometry(parts: THREE.Mesh[], ids: number[], coats: read
   const sourceIndex = geometry.index!.array.slice()
   const visible = ids.map((_, i) => i)
   let dirty = false
-  const matrix = new THREE.Matrix4(), normalMatrix = new THREE.Matrix3(), point = new THREE.Vector3()
+  const matrix = new THREE.Matrix4(), normalMatrix = new THREE.Matrix3()
   return { geometry, idGeometry, trianglesPerAnimal: indices / 3,
     animalAtFace(face: number) { return visible[Math.floor(face / (indices / 3))] },
     /** Keep stable vertex slots/IDs, but submit indices only for visible animals.
@@ -48,14 +48,27 @@ export function wildlifeGeometry(parts: THREE.Mesh[], ids: number[], coats: read
     },
     write(animal: number, root: THREE.Matrix4, concealed = false) {
       let offset = animal * vertices
+      // The same arithmetic as Vector3.applyMatrix4 and applyNormalMatrix,
+      // unrolled over the typed arrays: this runs for every hide vertex.
+      const positions = position.array as Float32Array, normals = normal.array as Float32Array
       for (const part of parts) {
         matrix.multiplyMatrices(root, part.matrixWorld); normalMatrix.getNormalMatrix(matrix)
-        const source = part.geometry
-        for (let i = 0; i < source.attributes.position.count; i++, offset++) {
-          point.fromBufferAttribute(source.attributes.position, i).applyMatrix4(matrix)
-          position.setXYZ(offset, concealed ? 0 : point.x, concealed ? -1000 : point.y, concealed ? 0 : point.z)
-          point.fromBufferAttribute(source.attributes.normal, i).applyNormalMatrix(normalMatrix)
-          normal.setXYZ(offset, point.x, point.y, point.z)
+        const e = matrix.elements, n = normalMatrix.elements
+        const source = part.geometry, from = source.attributes.position.array, facing = source.attributes.normal.array
+        for (let i = 0, count = source.attributes.position.count; i < count; i++, offset++) {
+          const at = i * 3, to = offset * 3
+          let x = from[at], y = from[at + 1], z = from[at + 2]
+          const w = 1 / (e[3] * x + e[7] * y + e[11] * z + e[15])
+          if (concealed) { positions[to] = 0; positions[to + 1] = -1000; positions[to + 2] = 0 }
+          else {
+            positions[to] = (e[0] * x + e[4] * y + e[8] * z + e[12]) * w
+            positions[to + 1] = (e[1] * x + e[5] * y + e[9] * z + e[13]) * w
+            positions[to + 2] = (e[2] * x + e[6] * y + e[10] * z + e[14]) * w
+          }
+          x = facing[at]; y = facing[at + 1]; z = facing[at + 2]
+          const nx = n[0] * x + n[3] * y + n[6] * z, ny = n[1] * x + n[4] * y + n[7] * z, nz = n[2] * x + n[5] * y + n[8] * z
+          const scale = 1 / (Math.sqrt(nx * nx + ny * ny + nz * nz) || 1)
+          normals[to] = nx * scale; normals[to + 1] = ny * scale; normals[to + 2] = nz * scale
         }
       }
       position.addUpdateRange(animal * vertices * 3, vertices * 3)
