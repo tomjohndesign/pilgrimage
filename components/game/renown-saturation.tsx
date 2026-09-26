@@ -42,9 +42,11 @@ export function RenownSaturation({ map, children }: { map: GameMap; children: Re
   useFrame(({ scene }) => withoutPixelRoots(batchedSourceRoots(scene), () => root.current?.traverseVisible(object => {
     if (!object.layers.isEnabled(0)) return
     if (!(object instanceof THREE.Mesh || object instanceof THREE.Sprite)) return
+    const done = (material: THREE.Material) => patched.has(material) || material.userData.renownSaturated
+    if (Array.isArray(object.material) ? object.material.every(done) : done(object.material)) return
     const materials: THREE.Material[] = Array.isArray(object.material) ? object.material : [object.material]
     for (const material of materials) {
-      if (patched.has(material) || material.userData.renownSaturated) continue
+      if (done(material)) continue
       material.userData.renownSaturated = true
       const compile = material.onBeforeCompile
       const cacheKey = material.customProgramCacheKey

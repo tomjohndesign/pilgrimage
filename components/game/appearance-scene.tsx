@@ -42,10 +42,14 @@ export function AppearanceScene({ map, travelers, monks }: { map: GameMap; trave
     updateAppearanceUniforms(defaultAppearance(), [])
   }, [patched])
 
-  useFrame(({ scene }) => scene.traverse(object => {
+  // A material only needs its patch before it first renders, and this runs
+  // ahead of every pass. Once the map reveal (which wraps the same materials)
+  // has finished, skip hidden subtrees such as culled off-screen travelers.
+  useFrame(({ scene }) => (scene.userData.mapRevealActive === false ? scene.traverseVisible : scene.traverse).call(scene, object => {
     if (!object.layers.isEnabled(0) || !(object instanceof THREE.Mesh || object instanceof THREE.Sprite)) return
+    const done = (material: THREE.Material) => patched.has(material) || material.userData.appearancePatched || material.colorWrite === false
+    if (Array.isArray(object.material) ? object.material.every(done) : done(object.material)) return
     const materials: THREE.Material[] = Array.isArray(object.material) ? object.material : [object.material]
-    if (materials.every(material => patched.has(material) || material.userData.appearancePatched || material.colorWrite === false)) return
     const group = groupOf(object)
     if (!group) return
     // Color and ID geometry already have matching vertices, including wildlife batches.

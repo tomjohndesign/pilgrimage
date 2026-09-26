@@ -76,8 +76,11 @@ export function ElevationEdges({ map: suppliedMap, bounds, revision: suppliedRev
     return g
   }), [revision, bounds, width])
   useEffect(() => () => geometry.dispose(), [geometry])
+  // One uniform colour and opacity blend identically in any order, so a single
+  // double-sided pass matches three's back-then-front transparent passes, which
+  // also flag the material for a program refresh on every draw.
   return <mesh ref={mesh} name="elevation-rims" geometry={geometry} frustumCulled={false}>
     <meshBasicMaterial color="#342719" transparent opacity={map.elevation?.settings.edgeStrength ?? 0.7}
-      depthWrite={false} side={THREE.DoubleSide} />
+      depthWrite={false} side={THREE.DoubleSide} forceSinglePass />
   </mesh>
 }
