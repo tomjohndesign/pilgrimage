@@ -233,7 +233,20 @@ export function syncTravelParties(parties: Map<number, TravelParty>, travelers: 
   for (const [id, people] of rosters) {
     people.sort((a, b) => a.party!.slot - b.party!.slot)
     const existing = parties.get(id)
-    if (existing) { existing.members = people.map(t => t.id); existing.roster++ }
+    if (existing) {
+      const joining = people.filter(t => !existing.members.includes(t.id)).map(t => states.get(t.id)!)
+      // A newcomer's own coin joins the pool. Everyone already in the company keeps
+      // any unreconciled earnings or spending of their own on top of the new pool.
+      if (existing.provisioned && joining.length) {
+        const coin = joining.reduce((sum, s) => sum + s.gold, 0)
+        for (const t of people) { const other = states.get(t.id)!; if (!joining.includes(other)) other.gold += coin }
+        existing.gold += coin
+        for (const s of joining) s.gold = existing.gold
+      }
+      existing.members = people.map(t => t.id); existing.roster++
+      // Newcomers walk to their place instead of jumping to it.
+      if (joining.length) existing.formed = false
+    }
     else {
       const leader = states.get(people[0].id)!
       // Companions spawn or resume wherever they stood; the head starts where the
@@ -299,12 +312,17 @@ export function regroupParty(party: TravelParty, members: readonly SimTraveler[]
   const direction = party.direction
   if (party.transport) party.progress = party.transport.progress
   else {
-    const origin = members[0].progress
+    // Places belong to the roster, not to the caller's list: anyone who left the
+    // company since the list was read (settled, joined the enclave) has no place.
+    let origin: number | undefined
     let lead = 0
-    for (let i = 0; i < members.length; i++) {
-      lead = Math.max(lead, direction * partyRoadDelta(members[i].progress, origin, length) + slots[i].behind)
+    for (const s of members) {
+      const slot = slots[party.members.indexOf(s.id)]
+      if (!slot) continue
+      origin ??= s.progress
+      lead = Math.max(lead, direction * partyRoadDelta(s.progress, origin, length) + slot.behind)
     }
-    party.progress = ((origin + direction * lead) % length + length) % length
+    if (origin !== undefined) party.progress = ((origin + direction * lead) % length + length) % length
   }
   party.formed = false
   party.speed = 0

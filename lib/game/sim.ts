@@ -477,6 +477,8 @@ export interface SimTraveler {
   rolls: number
   /** Seconds left of hurrying after turning back. */
   fleeTimer: number
+  /** Consecutive off-road walks that found no route; bounds a walk back to the road. */
+  offRoadFailures?: number
   /** Off-road walk endpoints and 0–1 progress between them. */
   walkFrom: { x: number; y: number; z: number } | null
   /** The off-road pitch — a camp or a stall, depending on activity. */
@@ -989,6 +991,7 @@ function startOffRoadWalk(s: SimTraveler, activity: Activity): void {
   s.walkFrom = { x: s.x, y: s.y, z: s.z }
   s.walkT = 0
   s.offRoadRoute = null
+  if (s.offRoadFailures) s.offRoadFailures = 0
   s.activity = activity
   s.targetId = null
 }
@@ -1102,6 +1105,26 @@ function startNaturalWaterTrip(s: SimTraveler, map: GameMap): boolean {
   return true
 }
 
+/** Failed route searches before someone with no way back is set on the road. */
+const STRANDED_ATTEMPTS = 20
+
+/** A footprint may be laid over someone already standing off the road. Let them
+ * step out of that site before it counts as a wall, as road diversions do. */
+function footprintEscapeRoute(map: GameMap, start: TilePos, goal: TilePos, limit = Infinity): TilePos[] | null {
+  const buildings = map.buildings.filter(b =>
+    !(start.x >= b.x && start.x < b.x + b.w && start.z >= b.z && start.z < b.z + b.d))
+  return buildings.length === map.buildings.length ? null : settlementRoute(map, buildings, start, goal, false, false, undefined, limit)
+}
+
+/** True once the walk back has failed to find any route often enough; the
+ * caller then finishes the errand and the road walk puts them back in place. */
+function strandedOffRoad(s: SimTraveler): boolean {
+  if ((s.offRoadFailures ?? 0) < STRANDED_ATTEMPTS) return false
+  s.offRoadFailures = 0
+  s.offRoadRoute = null; s.walkFrom = null; s.spot = null
+  return true
+}
+
 /** Camps and stalls use the same four-neighbour routing as settlement work. */
 function stepOffRoadWalk(
   s: SimTraveler,
@@ -1120,10 +1143,12 @@ function stepOffRoadWalk(
     s.offRoadRoute = drive.entry.slice(1).map(p => ({ ...p, y: walkingSurface(map, p.x, p.z).height }))
   }
   if (!s.offRoadRoute) {
-    const route = settlementRoute(map, map.buildings,
-      { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
-      { x: worldToTileX(map, to.x), z: worldToTileZ(map, to.z) })
-    if (!route) return false
+    const start = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }
+    const goal = { x: worldToTileX(map, to.x), z: worldToTileZ(map, to.z) }
+    const route = settlementRoute(map, map.buildings, start, goal) ?? footprintEscapeRoute(map, start, goal)
+    // No way there: counted, so a caller headed back to the road can give up.
+    if (!route) { s.offRoadFailures = (s.offRoadFailures ?? 0) + 1; return false }
+    if (s.offRoadFailures) s.offRoadFailures = 0
     const points = route.map(p => ({ x: tileToWorldX(map, p.x), y: surfaceHeight(map, p.x, p.z), z: tileToWorldZ(map, p.z) }))
     // Align to/from the road lane inside its tile; never take a diagonal shortcut.
     const first = points[0], last = points.at(-1)!
@@ -1349,7 +1374,10 @@ function startSeatRest(sim: SimState, s: SimTraveler, map: GameMap, returnTo: Wo
 function startBreadTrip(sim: SimState, s: SimTraveler, map: GameMap, tables: readonly import("./map/types").BuildingDef[], back: WorldPoint): boolean {
   if (s.hunger >= ALMS_HUNGER_CAP || s.breadRetry || s.lastBreadDay === Math.floor(sim.time) || s.convoy || s.carrying > 0 || !tables.length) return false
   s.breadRetry = 5
-  const reserved = new Set([...sim.travelers.values()].flatMap(other => other.breadVisit ? [other.breadVisit.tableId] : []))
+  // Only someone actually on a bread trip holds the table; a stale visit left by
+  // an interrupted errand, or the caller's own, never does.
+  const reserved = new Set([...sim.travelers.values()].flatMap(other => other !== s && other.breadVisit
+    && (other.activity === "toBread" || other.activity === "receivingBread" || other.activity === "fromBread") ? [other.breadVisit.tableId] : []))
   const nearby = tables.filter(b => !reserved.has(b.id) && almsStaffed(map, b.id))
   for (const { plan } of servicePlans(map, s, nearby, (table, origin) => breadVisitPlan(map, table, origin, back))) {
     if (s.activity === "toRelic" || s.activity === "fromRelic") plan.visit.resumeActivity = s.activity
@@ -1463,15 +1491,15 @@ function finishWaterTrip(s: SimTraveler): void {
 /** Head back out of the door to the road, or to the work they left. */
 function leaveTavern(s: SimTraveler, map: GameMap, back: WorldPoint): void {
   const fine = tavernWalkingRoute(map, s, back)
-  if (fine !== undefined) {
-    if (!fine) return
-    s.offRoadRoute = fine
-  } else {
-    const route = settlementRoute(map, map.buildings, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
-      { x: worldToTileX(map, back.x), z: worldToTileZ(map, back.z) }, false, true)
-    if (!route) return
-    routeWalk(s, map, route, back)
-  }
+  const route = fine !== undefined ? fine : settlementRoute(map, map.buildings, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
+    { x: worldToTileX(map, back.x), z: worldToTileZ(map, back.z) }, false, true)
+  if (!route) {
+    // Try again next step; after a bounded number of failures leave anyway and
+    // let the walk back step out of whatever was built around them.
+    s.offRoadFailures = (s.offRoadFailures ?? 0) + 1
+    if (!strandedOffRoad(s)) return
+  } else if (fine !== undefined) s.offRoadRoute = fine
+  else routeWalk(s, map, route, back)
   s.activity = "fromTavern"
 }
 
@@ -1711,9 +1739,20 @@ function leaveGathering(s: SimTraveler, map: GameMap, speed: number, dt: number,
     const progress = nearestRoadProgress(map, s, near)
     const lane = s.direction * s.laneOffset
     const point = roadWorldPoint(map, progress, lane)
-    const route = settlementRoute(map, map.buildings, { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) },
-      { x: worldToTileX(map, point.x), z: worldToTileZ(map, point.z) }, false, false, undefined, PARTY_ROUTE_LIMIT)
-    if (!route) { gathering.retry = GATHERING_RETRY; return false }
+    const start = { x: worldToTileX(map, s.x), z: worldToTileZ(map, s.z) }, goal = { x: worldToTileX(map, point.x), z: worldToTileZ(map, point.z) }
+    const route = settlementRoute(map, map.buildings, start, goal, false, false, undefined, PARTY_ROUTE_LIMIT)
+      ?? footprintEscapeRoute(map, start, goal, PARTY_ROUTE_LIMIT)
+    if (!route) {
+      // Boxed in: after a bounded number of tries take the place on the road
+      // instead of holding the whole company here.
+      s.offRoadFailures = (s.offRoadFailures ?? 0) + 1
+      if (!strandedOffRoad(s)) { gathering.retry = GATHERING_RETRY; return false }
+      s.progress = progress
+      s.lane = s.direction * s.laneOffset
+      s.partyGathering = undefined
+      return true
+    }
+    if (s.offRoadFailures) s.offRoadFailures = 0
     routeWalk(s, map, route, point)
     gathering.back = { point, progress }
     gathering.arrived = false
@@ -1984,15 +2023,18 @@ function stepTravelParties(sim: SimState, travelers: Traveler[], map: GameMap, d
         // Recruitment removes each new resident from the departing company.
         syncTravelParties(sim.parties, travelers, sim.travelers)
         if (!sim.parties.has(party.id)) continue
+        // Rebuild from the live roster: anyone who settled or joined the enclave is gone.
+        const remaining: SimTraveler[] = []
+        for (const id of party.members) { const s = sim.travelers.get(id); if (s) remaining.push(s) }
         party.stage = "traveling"; party.cooldown = 45; party.elapsed = 0
         party.reason = "Regrouping after the visit"
-        for (const s of members) { s.visitCooldown = 45; s.partyWaiting = false }
+        for (const s of remaining) { s.visitCooldown = 45; s.partyWaiting = false }
         // The handlers fetch the animals from the standing before the column forms again.
         let leaving = false
         for (const pack of party.packs ?? []) if (pack.phase === "parked" && pack.parking) {
           pack.phase = "leaving"; pack.parking.walking = false; pack.parking.distance = 0; leaving = true
         }
-        if (!leaving) regroupParty(party, members.filter(s => s.partyId === party.id), length, seconds, characterScale)
+        if (!leaving) regroupParty(party, remaining, length, seconds, characterScale)
         continue
       } else {
         party.reason = done ? "Walking back to the road" : party.visitPending.length ? "Waiting for room at the enclave" : "Waiting for companions to finish visiting"
@@ -2958,7 +3000,7 @@ export function stepSim(
         const visit = s.breadVisit
         if (!visit) { finishErrand(s); break }
         if (visit.buildings !== map.buildings) { s.offRoadRoute = null; visit.buildings = map.buildings }
-        if (stepOffRoadWalk(s, visit.returnTo, worldSpeed, dt, map)) {
+        if (stepOffRoadWalk(s, visit.returnTo, worldSpeed, dt, map) || strandedOffRoad(s)) {
           const resume = visit.resumeActivity
           s.breadVisit = undefined; s.breadRetry = 5
           finishErrand(s)
@@ -3028,7 +3070,7 @@ export function stepSim(
             s.offRoadRoute = null
             visit.buildings = map.buildings
           }
-          if (stepOffRoadWalk(s, visit.back, worldSpeed, dt, map)) {
+          if (stepOffRoadWalk(s, visit.back, worldSpeed, dt, map) || strandedOffRoad(s)) {
             s.naturalWaterVisit = undefined
             finishErrand(s)
           }
@@ -3048,7 +3090,7 @@ export function stepSim(
           }
           break
         }
-        if (stepOffRoadWalk(s, visit.returnTo, worldSpeed, dt, map)) {
+        if (stepOffRoadWalk(s, visit.returnTo, worldSpeed, dt, map) || strandedOffRoad(s)) {
           finishWaterTrip(s)
         }
         break
@@ -3077,7 +3119,8 @@ export function stepSim(
         s.timer -= dt
         if (s.timer > 0) break
         const visit = s.tavernVisit!
-        buyRefreshment(sim, s, map)
+        // Pay once: a customer who cannot leave yet stays here and retries the way out.
+        if (!visit.served) buyRefreshment(sim, s, map)
         visit.served = true
         const seat = visit.plan.seat
         const onward = seat && tavernWalkingRoute(map, s, seat.point, seat.id)
@@ -3097,7 +3140,7 @@ export function stepSim(
       }
       case "fromTavern": {
         const back = s.tavernVisit?.returnTo ?? currentRoutePoint(map, s)
-        if (stepOffRoadWalk(s, back, worldSpeed, dt, map)) {
+        if (stepOffRoadWalk(s, back, worldSpeed, dt, map) || strandedOffRoad(s)) {
           const restOnly = !s.tavernVisit?.meal && !s.tavernVisit?.drink
           s.tavernVisit = undefined
           finishErrand(s)
@@ -3445,7 +3488,7 @@ export function stepSim(
       }
       case "fromBegging":
       case "fromAlms": {
-        if (stepOffRoadWalk(s, currentRoutePoint(map, s), worldSpeed, dt, map)) {
+        if (stepOffRoadWalk(s, currentRoutePoint(map, s), worldSpeed, dt, map) || strandedOffRoad(s)) {
           if (s.activity === "fromBegging") s.timer = beggarWalkSeconds(s.id, s.cycle)
           s.activity = "walking"; s.spot = null; s.walkFrom = null; s.almsVisit = undefined
         }
@@ -3483,7 +3526,7 @@ export function stepSim(
       }
       case "fromPerformance":
       case "fromListening": {
-        if (stepOffRoadWalk(s, currentRoutePoint(map, s), worldSpeed, dt, map)) {
+        if (stepOffRoadWalk(s, currentRoutePoint(map, s), worldSpeed, dt, map) || strandedOffRoad(s)) {
           if (s.activity === "fromPerformance") s.timer = minstrelWalkSeconds(s.id, s.cycle)
           if (s.musicVisit) listeners.set(s.musicVisit.performerId, (listeners.get(s.musicVisit.performerId) ?? 1) - 1)
           s.activity = "walking"; s.spot = null; s.walkFrom = null; s.musicVisit = undefined
@@ -3511,7 +3554,7 @@ export function stepSim(
         break
       }
       case "fromStall": {
-        if (stepOffRoadWalk(s, s.customerVisit!.road, worldSpeed, dt, map)) {
+        if (stepOffRoadWalk(s, s.customerVisit!.road, worldSpeed, dt, map) || strandedOffRoad(s)) {
           s.activity = "walking"; s.customerVisit = undefined; s.walkFrom = null
         }
         break

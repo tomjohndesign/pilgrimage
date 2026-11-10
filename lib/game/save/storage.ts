@@ -1,4 +1,4 @@
-import { parseDisplaySettings, parseGameSave, type GameSave } from "./schema"
+import { parseDisplaySettings, parseGameSave, type GameSave, type ParsedGameSave } from "./schema"
 import type { DisplaySettings } from "./settings"
 
 /**
@@ -9,6 +9,12 @@ import type { DisplaySettings } from "./settings"
  */
 export const GAME_SAVE_KEY = "pilgrimage.game.v1"
 export const DISPLAY_SETTINGS_KEY = "pilgrimage.display.v1"
+/**
+ * The stored text of the last save that could not be read in full, kept
+ * before the next autosave replaces the slot so it can be recovered by hand.
+ * One copy; a newer unreadable save replaces it.
+ */
+export const UNREADABLE_SAVE_KEY = `${GAME_SAVE_KEY}.unreadable`
 /**
  * A cookie carries the saved world's seed and the zoom it was left at, since
  * the server cannot read localStorage. It lets the play page render straight
@@ -46,8 +52,34 @@ function storage(): Storage | null {
   }
 }
 
-/** Null when nothing is saved, storage is blocked, or the document is unreadable. */
-export function loadGameSave(): { save: GameSave | null; error: string | null } {
+function backUpUnreadable(store: Storage, raw: string): void {
+  let older: string | null = null
+  try {
+    older = store.getItem(UNREADABLE_SAVE_KEY)
+    if (older === raw) return
+    store.setItem(UNREADABLE_SAVE_KEY, raw)
+  } catch {
+    // Out of space: the older copy gives way to this one if that makes room,
+    // and stays if it does not.
+    try {
+      store.removeItem(UNREADABLE_SAVE_KEY)
+      store.setItem(UNREADABLE_SAVE_KEY, raw)
+    } catch {
+      try {
+        if (older !== null) store.setItem(UNREADABLE_SAVE_KEY, older)
+      } catch {
+        /* Storage is full or blocked; the slot itself is still untouched. */
+      }
+    }
+  }
+}
+
+/**
+ * Null when nothing is saved, storage is blocked, or the document is
+ * unreadable. A document that fails, or loses records on the way in, is
+ * copied to `UNREADABLE_SAVE_KEY` first, since the next autosave replaces it.
+ */
+export function loadGameSave(): { save: null; error: string | null } | ParsedGameSave {
   const store = storage()
   if (!store) return { save: null, error: null }
   let raw: string | null
@@ -57,11 +89,14 @@ export function loadGameSave(): { save: GameSave | null; error: string | null } 
     return { save: null, error: null }
   }
   if (raw === null) return { save: null, error: null }
+  let result: ParsedGameSave
   try {
-    return parseGameSave(JSON.parse(raw))
+    result = parseGameSave(JSON.parse(raw))
   } catch {
-    return { save: null, error: "Saved game could not be read." }
+    result = { save: null, error: "Saved game could not be read." }
   }
+  if (result.save === null || result.dropped > 0) backUpUnreadable(store, raw)
+  return result
 }
 
 /** False when the browser refused the write, typically for lack of space. */

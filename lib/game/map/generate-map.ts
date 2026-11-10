@@ -1185,12 +1185,21 @@ function foundSite(
   // itself); then the road merely avoided; a bridge only when no dry way
   // exists at all; and blind as a last resort.
   offRoad[road[junction].z * width + road[junction].x] = 0
-  const rawBranch =
+  const boundedBranch =
     routeOverLand(road[junction], door, width, depth, branchWander, offRoad, offRoad, 0, elevation) ??
     routeOverLand(road[junction], door, width, depth, branchWander, kind, passKind, 0, elevation) ??
     routeOverLand(road[junction], door, width, depth, branchWander, kind, passKind, MAX_BRIDGE_SPAN, elevation) ??
     routeOverLand(road[junction], door, width, depth, branchWander, kind, passKind, Infinity, elevation) ??
     routeBlind(road[junction], door, width, depth, branchWander, elevation, routeBounds(road[junction], door, width, depth))
+  // A road that had to hug the map's edge can put the junction inside the
+  // border inset, where every bounded route fails. Relax the border then, as
+  // the road itself does, keeping the water and cliff checks.
+  const rawBranch = boundedBranch.length ? boundedBranch :
+    routeOverLand(road[junction], door, width, depth, branchWander, kind, passKind, Infinity, elevation, false) ??
+    routeBlind(road[junction], door, width, depth, branchWander, elevation)
+  if (rawBranch.length === 0) {
+    throw new Error("Cliffs cut the shrine off from the road: no track can reach its door")
+  }
   const branchRoute = straightenRoad({ width, depth, tiles, buildings: [shelter,
     { ...shelter, x: best.x, z: best.z, w: HOVEL_WIDTH, d: HOVEL_DEPTH }], elevation }, rawBranch,
     (x, z) => !onRoad[z * width + x] || (x === road[junction].x && z === road[junction].z), "elbows")

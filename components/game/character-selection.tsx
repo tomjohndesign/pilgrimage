@@ -10,7 +10,7 @@ import { walkingSurface } from "@/lib/game/map/walking-surface"
 import type { GameMap } from "@/lib/game/map/types"
 import { simRegistry } from "@/lib/game/sim"
 import { monkPositionRegistry } from "@/lib/game/monks"
-import { wildlifeRegistry } from "@/lib/game/wildlife/registry"
+import { wildlifeAnimal, wildlifeRegistry } from "@/lib/game/wildlife/registry"
 import { isBird, WILDLIFE_PROFILES } from "@/lib/game/wildlife/species"
 import { animalProfile, RIG_TO_WORLD } from "@/lib/game/transport/assets"
 import type { TreePlacement } from "@/lib/game/trees/placement"
@@ -110,7 +110,7 @@ export function GroundSelection({ map, trees, characterScale }: { map: GameMap; 
       const monk = monkPositionRegistry.current?.get(selection.id)
       if (monk) markers.push({ ...monk, scale, id: selection.id, kind: "monk", primary: true })
     } else if (selection?.kind === "animal") {
-      const animal = wildlifeRegistry.current?.animals[selection.id]
+      const animal = wildlifeAnimal(wildlifeRegistry.current?.animals, selection.id)
       if (animal && !animal.reserve && !animal.concealed && animal.burrowState !== "inside") {
         const radius = isBird(animal.kind) ? .24 * scale
           : Math.max(.2 * scale, (WILDLIFE_PROFILES[animal.kind].legZ + .2) * RIG_TO_WORLD * characterScale)

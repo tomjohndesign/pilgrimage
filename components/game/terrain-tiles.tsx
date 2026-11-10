@@ -19,7 +19,7 @@ import { waterDepthCorners } from "@/lib/game/map/water-depth-corners"
 import { groundCornerTiles, groundPaintCode } from "@/lib/game/map/ground-transitions"
 import { OPEN_MEADOW_TINT, SWARD_TEXTURE_REFERENCE } from "@/lib/game/render/ground-palette"
 import { TERRAIN_EDGE_GLSL, TERRAIN_EDGE_GRAIN_URL } from "@/lib/game/render/terrain-edge-grain"
-import { TERRAIN_WATER_GLSL } from "@/lib/game/render/terrain-water"
+import { TERRAIN_RECORD_LAYER, TERRAIN_RECORD_LAYERS, TERRAIN_WATER_GLSL } from "@/lib/game/render/terrain-water"
 import { GROUND_TRANSITIONS_GLSL } from "@/lib/game/render/ground-transitions"
 import { groundGrowthField } from "@/lib/game/environment/ground-growth"
 import { foundingRoadStrength, foundingRoadTraffic } from "@/lib/game/footpaths"
@@ -65,6 +65,7 @@ import { diagonalRoadSegments, roadSegmentWear, type RoadSegment } from "@/lib/g
 import { ROAD_SHAPE_GLSL } from "@/lib/game/render/road-shape"
 import { DEFAULT_TRAFFIC } from "@/lib/game/travelers"
 import { useTerrainTexture } from "./use-terrain-texture"
+import { frameQuality } from "@/lib/game/render/frame-quality"
 
 /** Top of the base slab. Must sit below the shortest terrain height. */
 export const SLAB_TOP = 0.08
@@ -155,6 +156,21 @@ function makeSlabMaterial(cliffTexture: THREE.Texture): THREE.MeshLambertMateria
   return material
 }
 
+/**
+ * The dirt-floor chunk, reading its mask from the floor layer of the shared
+ * terrain records instead of a texture of its own. The mask's bytes are stored
+ * as byte / 255 and the chunk only thresholds or rounds them back to bytes, so
+ * every decision it makes is unchanged.
+ */
+const TERRAIN_DIRT_FLOOR_GLSL = (() => {
+  const lookup = "texture2D(dirtFloorMap, (cell + .5) / dirtFloorMapSize)"
+  const parts = DIRT_FLOOR_GLSL.split(lookup)
+  if (parts.length !== 3 || DIRT_FLOOR_GLSL.split("dirtFloorMap,").length !== 3) {
+    throw new Error("DIRT_FLOOR_GLSL changed its dirtFloorMap lookups; update TERRAIN_DIRT_FLOOR_GLSL in terrain-tiles.tsx")
+  }
+  return parts.join(`terrainRecord(cell, ${TERRAIN_RECORD_LAYER.floor}.0)`)
+})()
+
 /** What the road's (rarely visible) sides wear instead of the top texture. */
 const ROAD_SIDE_COLOR = "vec3(0.62, 0.51, 0.37)"
 
@@ -172,7 +188,6 @@ interface RoadSurface {
   texture: THREE.Texture
   edgeWear: number
   segments: { texture: { value: THREE.DataTexture | null }; size: { value: THREE.Vector2 } }
-  floors: THREE.DataTexture
   trail: THREE.Texture
   isDirt: boolean
   /** Live uniforms for the tunable look; the values change without a recompile. */
@@ -183,12 +198,13 @@ interface RoadSurface {
 type RoadLookUniforms = Record<keyof RoadLook | "pixelRatio", { value: number }>
 
 interface TileMaterialOptions {
-  tileCoverage?: THREE.DataTexture
+  /** Presentation-only coverage; the values themselves ride in treeGround's blue channel. */
+  tileCoverage?: boolean
   grassTexture: THREE.Texture
   groundTexture: THREE.Texture
   sandTexture: THREE.Texture
-  palette: THREE.DataTexture
-  waterPalette: THREE.DataTexture
+  /** Ground paint, water and dirt-floor records, one map-sized layer each (TERRAIN_RECORD_LAYER). */
+  records: THREE.DataTexture
   growth: { texture: THREE.DataTexture; origin: THREE.Vector2 }
   treeGround: { texture: THREE.DataTexture; atlas: THREE.Texture; floor: THREE.Texture; grain: THREE.Texture; size: THREE.Vector2 }
   cliffTexture: THREE.Texture
@@ -250,8 +266,7 @@ function makeTileMaterial({
   grassTexture,
   groundTexture,
   sandTexture,
-  palette,
-  waterPalette,
+  records,
   growth,
   treeGround,
   cliffTexture,
@@ -263,7 +278,7 @@ function makeTileMaterial({
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, grassAppearanceUniforms)
     elevationShader(shader, !road)
-    if (tileCoverage) tileCoverageShader(shader, tileCoverage)
+    if (tileCoverage) tileCoverageShader(shader, { sampler: "treeGroundMap", size: "treeGroundMapSize", channel: "b" })
     shader.uniforms.forestFloorMap = { value: treeGround.floor }
     shader.uniforms.terrainEdgeGrain = { value: treeGround.grain }
     shader.uniforms.treeGroundMap = { value: treeGround.texture }
@@ -276,16 +291,15 @@ function makeTileMaterial({
     shader.uniforms.swardFieldOrigin = { value: growth.origin }
     shader.uniforms.groundMap = { value: groundTexture }
     shader.uniforms.sandMap = { value: sandTexture }
-    shader.uniforms.waterPalette = { value: waterPalette }
-    shader.uniforms.groundPalette = { value: palette }
-    shader.uniforms.groundPaletteSize = { value: new THREE.Vector2(palette.image.width, palette.image.height) }
+    shader.uniforms.terrainRecords = { value: records }
+    const recordSize = new THREE.Vector2(records.image.width, records.image.height / TERRAIN_RECORD_LAYERS)
+    shader.uniforms.groundPaletteSize = { value: recordSize }
     shader.uniforms.grassFlat = { value: new THREE.Color(TERRAIN.grass.color) }
     if (road) {
       shader.uniforms.roadMap = { value: road.texture }
       shader.uniforms.trailMap = { value: road.trail }
       shader.uniforms.roadIsDirt = { value: road.isDirt }
-      shader.uniforms.dirtFloorMap = { value: road.floors }
-      shader.uniforms.dirtFloorMapSize = { value: new THREE.Vector2(road.floors.image.width, road.floors.image.height) }
+      shader.uniforms.dirtFloorMapSize = { value: recordSize }
       shader.uniforms.waterShallow = { value: new THREE.Color(WATER_DEPTH_COLORS[0]) }
       shader.uniforms.roadSegments = road.segments.texture
       shader.uniforms.roadSegmentTextureSize = road.segments.size
@@ -392,7 +406,6 @@ function makeTileMaterial({
         #ifdef USE_ROAD_MAP
           uniform sampler2D roadMap;
           uniform sampler2D trailMap;
-          uniform sampler2D dirtFloorMap;
           uniform vec2 dirtFloorMapSize;
           uniform bool roadIsDirt;
           uniform vec3 waterShallow;
@@ -417,7 +430,7 @@ function makeTileMaterial({
         ${TREE_GROUND_GLSL}
         ${GROUND_TRANSITIONS_GLSL}
         #ifdef USE_ROAD_MAP
-          ${DIRT_FLOOR_GLSL}
+          ${TERRAIN_DIRT_FLOOR_GLSL}
         #endif
         #include <common>`,
       )
@@ -564,20 +577,30 @@ function makeTileMaterial({
   // The grid origin is baked into the shader source, so it has to be part of
   // the program key or two maps of different sizes would share one program.
   const gridKey = gridOrigin ? `${gridOrigin.x.toFixed(3)}:${gridOrigin.z.toFixed(3)}` : "nogrid"
-  material.customProgramCacheKey = () => `tiles-${road ? "road" : "ground"}-${gridKey}-terrain-grain-inclines-v13${edgeOnly ? "-edge" : ""}${tileCoverage ? "-coverage" : ""}`
+  material.customProgramCacheKey = () => `tiles-${road ? "road" : "ground"}-${gridKey}-terrain-grain-inclines-v14${edgeOnly ? "-edge" : ""}${tileCoverage ? "-coverage" : ""}`
   return material
 }
 
 /** Presentation-only coverage, sampled at tile centres in every terrain pass.
- * Keeps previews on the live ground shader without changing its surface artwork. */
-function tileCoverageShader(shader: Parameters<THREE.Material["onBeforeCompile"]>[0], texture: THREE.DataTexture) {
-  shader.uniforms.tileCoverage = { value: texture }
-  shader.uniforms.tileCoverageSize = { value: new THREE.Vector2(texture.image.width, texture.image.height) }
-  shader.vertexShader = `uniform sampler2D tileCoverage;
-uniform vec2 tileCoverageSize;
+ * Keeps previews on the live ground shader without changing its surface artwork.
+ * The colour passes read it from a spare channel of the map-sized tree-ground
+ * records (see withTileCoverage) to stay within the texture-unit budget; the
+ * ID pass, which has units to spare, reads the caller's texture directly. */
+function tileCoverageShader(shader: Parameters<THREE.Material["onBeforeCompile"]>[0],
+  source: THREE.DataTexture | { sampler: string; size: string; channel: "b" }) {
+  const own = source instanceof THREE.DataTexture
+  const sampler = own ? "tileCoverage" : source.sampler, size = own ? "tileCoverageSize" : source.size
+  if (own) {
+    shader.uniforms.tileCoverage = { value: source }
+    shader.uniforms.tileCoverageSize = { value: new THREE.Vector2(source.image.width, source.image.height) }
+  }
+  shader.vertexShader = `uniform sampler2D ${sampler};
+uniform vec2 ${size};
 varying float vTileCoverage;\n` + shader.vertexShader
   shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", `#include <begin_vertex>
-    vTileCoverage = texture2D(tileCoverage, instanceMatrix[3].xz / tileCoverageSize + .5).r;`)
+    vTileCoverage = ${own
+      ? "texture2D(tileCoverage, instanceMatrix[3].xz / tileCoverageSize + .5).r"
+      : `texelFetch(${sampler}, ivec2(floor(instanceMatrix[3].xz + ${size} * .5)), 0).${source.channel}`};`)
   shader.fragmentShader = "varying float vTileCoverage;\n" + shader.fragmentShader
   shader.fragmentShader = shader.fragmentShader
     .replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\nif (vTileCoverage < .001) discard;")
@@ -707,6 +730,23 @@ const AROUND: ReadonlyArray<readonly [number, number]> = [
 
 const NO_TREES: readonly TreePlacement[] = []
 
+/**
+ * Copy the caller's per-tile coverage (red channel) into the blue channel of
+ * the tree-ground records, which the tree-ground lookup never reads. Each tile
+ * takes the texel a nearest, clamp-to-edge read at its centre returned from the
+ * coverage texture, and both are 8-bit, so the shader sees the same value.
+ * The texture's data is read when the map, trees or texture change.
+ */
+function withTileCoverage(data: Uint8Array, map: GameMap, coverage: THREE.DataTexture): void {
+  const { width, height, data: source } = coverage.image
+  if (!(source instanceof Uint8Array) || !width || !height) throw new Error("tileCoverage must be an 8-bit DataTexture")
+  const stride = source.length / (width * height)
+  const texel = (world: number, size: number) => Math.min(size - 1, Math.max(0, Math.floor((world / size + .5) * size)))
+  for (let z = 0; z < map.depth; z++) for (let x = 0; x < map.width; x++) {
+    data[(z * map.width + x) * 4 + 2] = source[(texel(tileToWorldZ(map, z), height) * width + texel(tileToWorldX(map, x), width)) * stride]
+  }
+}
+
 type TerrainProps = {
   map: GameMap
   /** Optional per-tile red-channel opacity for a decorative terrain footprint. */
@@ -737,7 +777,6 @@ type TerrainProps = {
 interface TerrainShared {
   coveredLand: Set<number>
   floors: ReturnType<typeof dirtFloorMask>
-  floorTexture: THREE.DataTexture
   shoulders: ReturnType<typeof junctionShoulders>
   grain: Float64Array
   floor: number
@@ -745,8 +784,9 @@ interface TerrainShared {
 interface TerrainSurfaces extends TerrainShared {
   treeGround: TileMaterialOptions["treeGround"]
   growth: { texture: THREE.DataTexture; origin: THREE.Vector2 }
-  palette: THREE.DataTexture
-  waterPalette: THREE.DataTexture
+  records: THREE.DataTexture
+  ripples: THREE.Texture
+  waterTime: { value: number }
   cuts: ReadonlyMap<number, CliffCorner>
   hiddenFaces: Uint8Array
   turbulence: Float32Array
@@ -780,11 +820,12 @@ export function TerrainTiles(props: TerrainProps) {
   }, [shadowAtlas])
   const treeGround = useMemo(() => {
     const field = treeGroundField(map, trees, felledTrees)
+    if (props.tileCoverage) withTileCoverage(field.data, map, props.tileCoverage)
     const texture = new THREE.DataTexture(field.data, field.width, field.height)
     texture.minFilter = texture.magFilter = THREE.NearestFilter
     texture.needsUpdate = true
     return { texture, atlas: shadowAtlas, floor: forestFloor, grain: edgeGrain, size: new THREE.Vector2(map.width, map.depth) }
-  }, [map.tiles, map.width, map.depth, map.shortcuts, map.darkForests, map.darkForestFloor, trees, felledTrees, shadowAtlas, forestFloor, edgeGrain])
+  }, [map.tiles, map.width, map.depth, map.shortcuts, map.darkForests, map.darkForestFloor, trees, felledTrees, shadowAtlas, forestFloor, edgeGrain, props.tileCoverage])
   useEffect(() => () => treeGround.texture.dispose(), [treeGround])
 
   const tier = ROAD_TIERS[clampRoadTier(props.roadTier ?? DEFAULT_ROAD_TIER)]
@@ -805,11 +846,19 @@ export function TerrainTiles(props: TerrainProps) {
     return next
   }, [map, grain])
   const floors = useMemo(() => dirtFloorMask(map), [map.tiles, map.width, map.depth, map.buildings, map.elevation, map.water, map.site])
-  const floorTexture = useMemo(() => new THREE.DataTexture(new Uint8Array(map.width * map.depth * 4), map.width, map.depth), [map.width, map.depth])
-  useLayoutEffect(() => { floorTexture.image.data = floors.data; floorTexture.needsUpdate = true }, [floorTexture, floors])
-  useEffect(() => () => floorTexture.dispose(), [floorTexture])
+  // Ground paint, water and dirt-floor records share one texture unit; each
+  // layer is rewritten in place when its own inputs change.
+  const records = useMemo(() => new THREE.DataTexture(new Float32Array(map.width * map.depth * 4 * TERRAIN_RECORD_LAYERS),
+    map.width, map.depth * TERRAIN_RECORD_LAYERS, THREE.RGBAFormat, THREE.FloatType), [map.width, map.depth])
+  useEffect(() => () => records.dispose(), [records])
+  const writeRecords = (layer: number, data: ArrayLike<number>, divisor = 1) => {
+    const target = records.image.data as Float32Array, offset = layer * map.width * map.depth * 4
+    for (let i = 0; i < data.length; i++) target[offset + i] = data[i] / divisor
+    records.needsUpdate = true
+  }
+  useLayoutEffect(() => writeRecords(TERRAIN_RECORD_LAYER.floor, floors.data, 255), [records, floors])
   const floor = useMemo(() => (map.elevation?.height.reduce((a, b) => Math.min(a, b), SLAB_TOP) ?? SLAB_TOP) - .02, [map.elevation])
-  const shared = useMemo<TerrainShared>(() => ({ ...landscape, floors, floorTexture, floor }), [landscape, floors, floorTexture, floor])
+  const shared = useMemo<TerrainShared>(() => ({ ...landscape, floors, floor }), [landscape, floors, floor])
   const { coveredLand } = shared
   const growthField = useMemo(() => groundGrowthField(map), [map.tiles, map.width, map.depth, map.seed, map.buildings])
   const growth = useMemo(() => {
@@ -851,11 +900,9 @@ export function TerrainTiles(props: TerrainProps) {
       color.multiplyScalar(1 + (rng() - .5) * TERRAIN[terrain].jitter)
       data.set([color.r, color.g, color.b, groundPaintCode(terrain, corners[i])], i * 4)
     }
-    const texture = new THREE.DataTexture(data, map.width, map.depth, THREE.RGBAFormat, THREE.FloatType)
-    texture.needsUpdate = true
-    return texture
+    return data
   }, [map.tiles, map.width, map.depth, map.seed, map.water, coveredLand])
-  useEffect(() => () => palette.dispose(), [palette])
+  useLayoutEffect(() => writeRecords(TERRAIN_RECORD_LAYER.ground, palette), [records, palette])
   const cuts = useMemo(() => {
     const cuts = new Map<number, CliffCorner>()
     for (let z = 0; z < map.depth; z++) for (let x = 0; x < map.width; x++) {
@@ -881,14 +928,21 @@ export function TerrainTiles(props: TerrainProps) {
       if (cut && !wet && map.tiles[cut.donor] === "water" && cliffCorner(map, i % map.width, Math.floor(i / map.width))) shore |= 2 ** cut.corner
       data.set([paint.color.r, paint.color.g, paint.color.b, corners[i] + 1 + (wet ? 8 : 0) + shore * 16], i * 4)
     }
-    const texture = new THREE.DataTexture(data, map.width, map.depth, THREE.RGBAFormat, THREE.FloatType)
-    texture.needsUpdate = true
-    return texture
+    return data
   }, [map.tiles, map.width, map.depth, map.seed, map.water, cuts])
-  useEffect(() => () => waterPalette.dispose(), [waterPalette])
+  useLayoutEffect(() => writeRecords(TERRAIN_RECORD_LAYER.water, waterPalette), [records, waterPalette])
+  // One ripple image and one clock for every block's water, so block seams stay in phase.
+  const ripples = useTerrainTexture("/textures/water.png", "#000000")
+  useMemo(() => {
+    ripples.wrapS = ripples.wrapT = THREE.RepeatWrapping
+    ripples.magFilter = THREE.NearestFilter
+    ripples.minFilter = THREE.NearestMipmapLinearFilter
+  }, [ripples])
+  const waterTime = useMemo(() => ({ value: 0 }), [])
+  useFrame(({ scene }, dt) => { if (frameQuality(scene) === 0) waterTime.value += Math.min(dt, 0.1) })
   const hiddenFaces = useMemo(() => terrainHiddenFaces(map, cuts), [map, cuts])
   const turbulence = useMemo(() => waterfallTurbulence(map.water, map.tiles.length, map.elevation?.settings.turbulenceReach ?? DEFAULT_ELEVATION.turbulenceReach), [map.water, map.tiles.length, map.elevation?.settings.turbulenceReach])
-  const surfaces = useMemo(() => ({ ...shared, turbulence, treeGround, growth, palette, waterPalette, cuts, hiddenFaces }), [shared, turbulence, treeGround, growth, palette, waterPalette, cuts, hiddenFaces])
+  const surfaces = useMemo(() => ({ ...shared, turbulence, treeGround, growth, records, ripples, waterTime, cuts, hiddenFaces }), [shared, turbulence, treeGround, growth, records, ripples, waterTime, cuts, hiddenFaces])
   const blocks = useMemo(() => terrainBlocks(map.width, map.depth), [map.width, map.depth])
   const blockState = useRef<TerrainBlockState>(undefined)
   const revisions = useMemo(() => {
@@ -990,7 +1044,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
   const idMeshRef = useRef<THREE.InstancedMesh>(null)
   const count = (bounds.endX - bounds.x) * (bounds.endZ - bounds.z)
 
-  const { coveredLand, floors, floorTexture, shoulders, treeGround, grain: grains, floor, growth, palette, waterPalette, cuts, hiddenFaces } = shared
+  const { coveredLand, floors, shoulders, treeGround, grain: grains, floor, growth, records, cuts, hiddenFaces } = shared
   const tier = ROAD_TIERS[clampRoadTier(roadTier)]
   const diagonalSegments = useMemo(() => {
     const segments = traveledRoads
@@ -1085,46 +1139,44 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
     [showGrid, map.width, map.depth],
   )
   const groundMaterial = useMemo(
-    () => makeTileMaterial({ grassTexture: grass, groundTexture: ground, sandTexture: sand, palette, waterPalette, growth, treeGround, cliffTexture: dirt, gridOrigin, tileCoverage }),
-    [grass, ground, sand, palette, waterPalette, growth, treeGround, dirt, gridOrigin, tileCoverage],
+    () => makeTileMaterial({ grassTexture: grass, groundTexture: ground, sandTexture: sand, records, growth, treeGround, cliffTexture: dirt, gridOrigin, tileCoverage: !!tileCoverage }),
+    [grass, ground, sand, records, growth, treeGround, dirt, gridOrigin, tileCoverage],
   )
   useEffect(() => () => groundMaterial.dispose(), [groundMaterial])
   const roadMaterial = useMemo(
     () =>
       makeTileMaterial({
-        tileCoverage,
+        tileCoverage: !!tileCoverage,
         grassTexture: grass,
         groundTexture: ground,
         sandTexture: sand,
-        palette,
-        waterPalette,
+        records,
         growth,
         treeGround,
         cliffTexture: dirt,
         gridOrigin,
-        road: { texture: roadTexture, edgeWear: tier.edgeWear, look: lookUniforms, segments: segmentUniforms, floors: floorTexture, trail: trailTexture, isDirt: tier.tier === 0 },
+        road: { texture: roadTexture, edgeWear: tier.edgeWear, look: lookUniforms, segments: segmentUniforms, trail: trailTexture, isDirt: tier.tier === 0 },
       }),
-    [grass, ground, sand, palette, waterPalette, growth, treeGround, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentUniforms, floorTexture, tileCoverage],
+    [grass, ground, sand, records, growth, treeGround, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentUniforms, tileCoverage],
   )
   useEffect(() => () => roadMaterial.dispose(), [roadMaterial])
   // The same road surface reduced to its edge line, for the outline pass.
   const edgeMaterial = useMemo(
     () =>
       makeTileMaterial({
-        tileCoverage,
+        tileCoverage: !!tileCoverage,
         grassTexture: grass,
         groundTexture: ground,
         sandTexture: sand,
-        palette,
-        waterPalette,
+        records,
         growth,
         treeGround,
         cliffTexture: dirt,
         gridOrigin,
-        road: { texture: roadTexture, edgeWear: tier.edgeWear, look: lookUniforms, segments: segmentUniforms, floors: floorTexture, trail: trailTexture, isDirt: tier.tier === 0 },
+        road: { texture: roadTexture, edgeWear: tier.edgeWear, look: lookUniforms, segments: segmentUniforms, trail: trailTexture, isDirt: tier.tier === 0 },
         edgeOnly: true,
       }),
-    [grass, ground, sand, palette, waterPalette, growth, treeGround, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentUniforms, floorTexture, tileCoverage],
+    [grass, ground, sand, records, growth, treeGround, dirt, gridOrigin, roadTexture, trailTexture, tier, lookUniforms, segmentUniforms, tileCoverage],
   )
   useEffect(() => () => edgeMaterial.dispose(), [edgeMaterial])
   const idGeometry = useMemo(() => makeTileGeometry(geometryCount), [geometryCount])
@@ -1402,7 +1454,7 @@ const TerrainTileBlock = memo(function TerrainTileBlock({
     <StaticBlock>
       <ElevationEdges bounds={bounds} revision={revision} />
       <FordStones bounds={bounds} revision={revision} />
-      <WaterMotion bounds={bounds} revision={revision} waterPalette={waterPalette} edgeGrain={treeGround!.grain} turbulenceField={shared.turbulence} />
+      <WaterMotion bounds={bounds} revision={revision} records={records} ripples={shared.ripples} time={shared.waterTime} edgeGrain={treeGround!.grain} turbulenceField={shared.turbulence} />
       <instancedMesh
         frustumCulled
         ref={groundMeshRef}

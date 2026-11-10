@@ -1,7 +1,7 @@
 import { createMonkRoutine, stepMonkRoutine } from "./monk-routine"
 import { tileToWorldX, tileToWorldZ } from "./map/types"
 import { describe, expect, it, vi } from "vitest"
-import { blessByProcession, PROCESSION_CHANCE, PROCESSION_COOLDOWN, createRelicProcession, nearProcession, processionGrounds, relicIsCarried, startAltarProcession, startProcession, stepProcession } from "./relic-procession"
+import { abandonProcession, blessByProcession, PROCESSION_CHANCE, PROCESSION_COOLDOWN, createRelicProcession, nearProcession, processionGrounds, relicIsCarried, startAltarProcession, startProcession, stepProcession } from "./relic-procession"
 import { createSim, stepSim } from "./sim"
 import { generateTravelers, TRAVELER_TYPES } from "./travelers"
 import { worldToTileX, worldToTileZ, type GameMap } from "./map/types"
@@ -312,5 +312,31 @@ describe("relic procession", () => {
     expect(visitor.gold).toBe(10)
     expect(sim.shrineGold).toBe(0)
     expect(sim.admissionPayments).toHaveLength(0)
+  })
+})
+
+describe("church rebuilt during a procession", () => {
+  it("sets the relic back and releases the carrier and everyone praying around him", () => {
+    const { map, grounds, actor, p, pick } = fixture()
+    const travelers = generateTravelers(1, 1)
+    const sim = createSim(travelers, map)
+    sim.procession = p
+    expect(startProcession(p, 0, actor, grounds)).toBe(true)
+    while (p.stage !== "carrying") stepProcession(p, actor, grounds, .1, .4, pick)
+    const s = sim.travelers.get(travelers[0].id)!
+    Object.assign(actor, { x: s.x, y: s.y, z: s.z }); p.position = { x: s.x, y: s.y, z: s.z }
+    stepSim(sim, travelers, map, .4, .1)
+    expect(s.praying).toBe(true)
+    // The player upgrades the church: its works leave no grounds for the outing.
+    map.buildings[0].construction = { work: 0, required: 1 }
+    expect(processionGrounds(map)).toBeNull()
+    const exit = abandonProcession(p, actor, grounds.wander, pick)
+    expect(p).toMatchObject({ stage: "idle", monkId: null, position: null, route: [], trail: [] })
+    expect(relicIsCarried(p)).toBe(false)
+    expect(exit).toEqual(grounds.wander.route(actor, pick()))
+    const progress = s.progress
+    stepSim(sim, travelers, map, .4, .1)
+    expect(s.praying).toBe(false)
+    expect(s.progress).not.toBe(progress)
   })
 })

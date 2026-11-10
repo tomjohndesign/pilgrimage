@@ -6,6 +6,8 @@ import { MIN_MAP_SIZE } from "../map/generate-map"
 import { MAX_ROAD_TIER } from "../map/road"
 import { treeModelForGame } from "../trees/render-model"
 import { SIMULATION_SPEEDS } from "../simulation-store"
+import { DEFAULT_VIEW_SIZE } from "../render/iso"
+import { MAX_TRAFFIC } from "../travelers"
 import { DEFAULT_DISPLAY_SETTINGS, DEFAULT_WORLD_SETTINGS, WATER_COUNT_AUTO, type DisplaySettings, type WorldSettings } from "./settings"
 
 /**
@@ -51,7 +53,7 @@ export const worldSettingsSchema = z.object({
   clearings: count.describe("Small forest-floor clearings scattered through the woods"),
   darkForests: count.describe("Ancient groves the road must go around"),
   relicDistance: count.describe("How far off the road the relic's hovel sits, in tiles"),
-  traffic: finite.min(0).describe("Travelers per 128 × 128 tiles of map"),
+  traffic: finite.min(0).max(MAX_TRAFFIC).describe("Travelers per 128 × 128 tiles of map"),
   water: finite.min(0).max(100).describe("Maximum percent of the map under water"),
   rivers: z.number().int().min(WATER_COUNT_AUTO).describe("Forced river count, or -1 to let the seed decide"),
   lakes: z.number().int().min(WATER_COUNT_AUTO).describe("Forced lake count, or -1 to let the seed decide"),
@@ -257,14 +259,162 @@ function describeIssue(error: z.ZodError): string {
   return issue ? `${issue.path.join(".") || "save"}: ${issue.message}` : "Invalid save."
 }
 
-/** Validate a stored document. Older versions migrate here; unknown fields are dropped. */
-export function parseGameSave(input: unknown): { save: GameSave; error: null } | { save: null; error: string } {
+/**
+ * Bring one numeric world input inside the bounds the schema enforces, so a
+ * link or an older save can never name a world that cannot be saved. Integer
+ * inputs are rounded. Undefined for a key without numeric bounds, or a value
+ * that is not a finite number.
+ */
+export function clampWorldSetting(key: string, value: number): number | undefined {
+  const field = (worldSettingsSchema.shape as Record<string, z.ZodTypeAny>)[key]
+  if (key === "seed" || !(field instanceof z.ZodNumber) || !Number.isFinite(value)) return undefined
+  const bounded = Math.min(field.maxValue ?? Infinity, Math.max(field.minValue ?? -Infinity, value))
+  return field.isInt ? Math.round(bounded) : bounded
+}
+
+function clampWorld(world: unknown): unknown {
+  if (typeof world !== "object" || world === null) return world
+  const clamped: Record<string, unknown> = { ...world }
+  for (const [key, value] of Object.entries(clamped)) {
+    if (typeof value === "number") clamped[key] = clampWorldSetting(key, value) ?? value
+  }
+  return clamped
+}
+
+/** Fallbacks for the optional sections; a resumed world opens with them rather than failing. */
+export const DEFAULT_CAMERA_SAVE: CameraSave = { targetX: 0, targetZ: 0, viewIndex: 0, viewSize: DEFAULT_VIEW_SIZE }
+export const DEFAULT_PLAYBACK_SAVE: PlaybackSave = { paused: false, speed: 2 }
+const DEFAULT_SECTIONS = { camera: DEFAULT_CAMERA_SAVE, playback: DEFAULT_PLAYBACK_SAVE } as const
+
+/**
+ * Independent records: one that fails validation is dropped on its own, so a
+ * single bad traveler, building or tree never costs the rest of the save.
+ * Lists drop the item, keyed maps the key, optional records themselves.
+ */
+const RECORD_LISTS = [
+  ["settlement", "claimedBuildings"], ["settlement", "demolishedBuildings"], ["settlement", "structures"],
+  ["simulation", "felled"], ["simulation", "treeResources"], ["simulation", "foodStores"], ["simulation", "piles"],
+  ["simulation", "travelers"], ["simulation", "partyGold"], ["simulation", "joinedMonks"],
+] as const
+const KEYED_RECORDS = [["simulation", "monkJobs"]] as const
+const OPTIONAL_RECORDS = [["settlement", "church"]] as const
+
+type Path = readonly (string | number)[]
+const startsWith = (path: Path, prefix: Path) => prefix.every((part, index) => path[index] === part)
+type Container = Record<string | number, unknown>
+function at(root: unknown, path: Path): Container | undefined {
+  let value = root
+  for (const part of path) value = typeof value === "object" && value !== null ? (value as Container)[part] : undefined
+  return typeof value === "object" && value !== null ? value as Container : undefined
+}
+
+/**
+ * Remove whatever the issues point at, when each lies in a record or an
+ * optional section. Returns how many were removed or reset, or null when an
+ * issue concerns a field the world cannot do without and the save must fail.
+ */
+function repairSave(doc: Container, issues: readonly z.ZodIssue[]): number | null {
+  const items = new Map<Path, Set<number>>(), keys = new Map<Path, Set<string>>()
+  const optional = new Set<Path>(), sections = new Set<keyof typeof DEFAULT_SECTIONS>()
+  for (const { path } of issues) {
+    const section = path[0]
+    if (section === "camera" || section === "playback") { sections.add(section); continue }
+    const list = RECORD_LISTS.find(prefix => path.length > prefix.length && startsWith(path, prefix) && typeof path[prefix.length] === "number")
+    if (list) { items.set(list, (items.get(list) ?? new Set()).add(path[list.length] as number)); continue }
+    const keyed = KEYED_RECORDS.find(prefix => path.length > prefix.length && startsWith(path, prefix))
+    if (keyed) { keys.set(keyed, (keys.get(keyed) ?? new Set()).add(String(path[keyed.length]))); continue }
+    const record = OPTIONAL_RECORDS.find(prefix => startsWith(path, prefix))
+    if (record) { optional.add(record); continue }
+    return null
+  }
+  let repaired = 0
+  for (const section of sections) { doc[section] = { ...DEFAULT_SECTIONS[section] }; repaired++ }
+  for (const [path, indices] of items) {
+    const parent = at(doc, path.slice(0, -1)), list = parent?.[path[path.length - 1]]
+    if (!parent || !Array.isArray(list)) return null
+    parent[path[path.length - 1]] = list.filter((_, index) => !indices.has(index))
+    repaired += indices.size
+  }
+  for (const [path, names] of keys) {
+    const record = at(doc, path)
+    if (!record) return null
+    for (const name of names) delete record[name]
+    repaired += names.size
+  }
+  for (const path of optional) {
+    const parent = at(doc, path.slice(0, -1))
+    if (!parent) return null
+    delete parent[path[path.length - 1]]
+    repaired++
+  }
+  return repaired
+}
+
+export type ParsedGameSave =
+  | { save: GameSave; error: null; /** Records dropped and sections reset to defaults while reading. */ dropped: number }
+  | { save: null; error: string }
+
+/**
+ * Validate a stored document. Older versions migrate here; unknown fields are
+ * dropped. The version, seed and world settings must be sound, though world
+ * inputs outside their range are clamped. Beyond those, a record that fails
+ * is dropped and a broken camera or playback section falls back to defaults,
+ * rather than the whole save being rejected.
+ */
+export function parseGameSave(input: unknown): ParsedGameSave {
   if (typeof input !== "object" || input === null) return { save: null, error: "Save is not an object." }
   const version = (input as { version?: unknown }).version
   if (typeof version !== "number" || version > SAVE_VERSION) return { save: null, error: `Unsupported save version ${String(version)}.` }
-  const migrated = version === 1 || version === 2 ? { ...input, version: SAVE_VERSION } : input
-  const result = gameSaveSchema.safeParse(migrated)
-  return result.success ? { save: result.data, error: null } : { save: null, error: describeIssue(result.error) }
+  let doc: Container = { ...input, version: version === 1 || version === 2 ? SAVE_VERSION : version, world: clampWorld((input as Container).world) }
+  let dropped = 0
+  // Each pass reports every issue zod finds; a second only catches what the first exposed.
+  for (let pass = 0; pass < 4; pass++) {
+    const result = gameSaveSchema.safeParse(doc)
+    if (result.success) return { save: result.data, error: null, dropped }
+    if (pass === 0) doc = structuredClone(doc)
+    const repaired = repairSave(doc, result.error.issues)
+    if (!repaired) return { save: null, error: describeIssue(result.error) }
+    dropped += repaired
+  }
+  return { save: null, error: "Save could not be repaired." }
+}
+
+function hasNonFinite(value: unknown): boolean {
+  if (typeof value === "number") return !Number.isFinite(value)
+  if (typeof value !== "object" || value === null) return false
+  for (const item of Array.isArray(value) ? value : Object.values(value)) if (hasNonFinite(item)) return true
+  return false
+}
+
+function zeroNonFinite(value: unknown): unknown {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0
+  if (typeof value !== "object" || value === null) return value
+  if (Array.isArray(value)) return value.map(zeroNonFinite)
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, zeroNonFinite(item)]))
+}
+
+/**
+ * JSON writes NaN and Infinity as null, which no load accepts, so they must
+ * never reach storage. Matching what `parseGameSave` would do with them: a
+ * record holding one is dropped, a camera or playback section holding one is
+ * reset to defaults, and any other number (a total, the coffer) becomes 0.
+ * The world settings are left alone: they are bounded where they are set.
+ */
+export function withoutNonFinite(save: GameSave): GameSave {
+  if (!hasNonFinite(save.settlement) && !hasNonFinite(save.simulation) && !hasNonFinite(save.camera) && !hasNonFinite(save.playback)) return save
+  const doc = structuredClone(save) as unknown as Container
+  for (const section of ["camera", "playback"] as const) if (hasNonFinite(doc[section])) doc[section] = { ...DEFAULT_SECTIONS[section] }
+  for (const path of RECORD_LISTS) {
+    const parent = at(doc, path.slice(0, -1)), list = parent?.[path[path.length - 1]]
+    if (parent && Array.isArray(list)) parent[path[path.length - 1]] = list.filter(item => !hasNonFinite(item))
+  }
+  for (const path of OPTIONAL_RECORDS) {
+    const parent = at(doc, path.slice(0, -1))
+    if (parent && hasNonFinite(parent[path[path.length - 1]])) delete parent[path[path.length - 1]]
+  }
+  doc.settlement = zeroNonFinite(doc.settlement)
+  doc.simulation = zeroNonFinite(doc.simulation)
+  return doc as unknown as GameSave
 }
 
 export function parseWorldIdentity(input: unknown): WorldIdentity | null {

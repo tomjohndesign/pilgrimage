@@ -11,6 +11,11 @@ export const useAudioQA = create<{history:AudioQA[]; active:number; peak:number}
 let serial=0, generation=0, context:AudioContext|undefined, output:GainNode|undefined, analyser:AnalyserNode|undefined
 let dialogue=false, selectionRequest=0
 const clips=new Map<string,Promise<AudioBuffer>>()
+/** Clips that failed to fetch or decode: no new attempt before `until` (seconds), doubling per failure up to the cap. */
+const failedClips=new Map<string,{until:number;failures:number}>()
+export const CLIP_RETRY_SECONDS=2, CLIP_RETRY_MAX_SECONDS=300
+/** Final voice gain (−60 dB) below which a voice is not worth a decode or one of the budgeted voices. */
+export const INAUDIBLE_GAIN=.001
 const voices=new Map<number,{source?:AudioBufferSourceNode; gain?:GainNode; panner?:StereoPannerNode; clip:string; profile:string; actor:string; event:CharacterAudioEvent; base:number; distance:number; intensity:number; ending?:boolean; pan:number; preview:boolean; viewSize?:number}>()
 const selectedAt=new Map<string,number>()
 const last=new Map<string,{at:number;index:number}>()
@@ -18,14 +23,19 @@ export function audioQA(profile:string,event:string,clip:string,result:string,ga
   const record={id:++serial,actor,profile,event,clip,result,gain,pan}
   useAudioQA.setState(s=>({history:[record,...s.history].slice(0,24),active:voices.size}))
 }
-export async function unlockSceneAudio() {
+/** Create (unless `create` is false) and resume the shared context; safe to call on every gesture. */
+export async function unlockSceneAudio(create=true) {
   if (typeof AudioContext === "undefined") return false
   if (!context) {
+    if(!create)return false
     context=new AudioContext();output=context.createGain();analyser=context.createAnalyser();analyser.fftSize=256
     const limiter=context.createDynamicsCompressor();limiter.threshold.value=-6;limiter.knee.value=6;limiter.ratio.value=12
     output.connect(limiter);limiter.connect(analyser);analyser.connect(context.destination)
   }
-  if(context.state==='suspended') await context.resume()
+  // iOS reports 'interrupted' after a call or Siri; anything but running or closed can resume.
+  // A resume outside a user activation rejects (or stays pending); the next gesture tries again.
+  const state=context.state as AudioContextState|'interrupted'
+  if(state!=='running'&&state!=='closed') {try{await context.resume()}catch{/* Not activated yet. */}}
   return context.state==='running'
 }
 function voiceGain(v:{base:number;event:CharacterAudioEvent;preview:boolean;viewSize?:number;profile?:string}) {
@@ -71,6 +81,8 @@ export async function emitCharacterAudio(profile:string,event:CharacterAudioEven
   if (typeof document !== "undefined" && document.hidden) return false
   const gain=slot.volume*(event==='selection'?1:distanceGain(distance,slot.range))*Math.max(0,Math.min(1,options.intensity??1))
   if(gain<.005)return reject('out of range')
+  // The mixer sliders, ducking and zoom can silence a voice the distance check admits.
+  if(voiceGain({base:gain,event,preview:options.preview===true,viewSize:options.viewSize,profile})<INAUDIBLE_GAIN)return reject('out of range')
   const now=Date.now()/1000,key=`${actor}/${event}`, previous=last.get(key)
   if(event==='idle'&&profile.startsWith('animal/')&&now-(selectedAt.get(profile)??-Infinity)<Math.max(8,slot.cooldown))return false
   if(previous&&now-previous.at<slot.cooldown)return false
@@ -92,15 +104,18 @@ export async function emitCharacterAudio(profile:string,event:CharacterAudioEven
     if(available!==undefined)index=available
   }
   const sound=SOUND_AUDITIONS.find(s=>s.id===bank[index]);if(!sound)return reject('missing clip')
+  // A clip that just failed is not refetched by every tick of a loop or every footstep.
+  if(now<(failedClips.get(sound.url)?.until??0))return false
   if(!context||context.state!=='running')return reject('audio locked — click to enable')
   last.set(key,{at:now,index});if(last.size>2048)last.delete(last.keys().next().value!)
   const token=generation,id=++serial
   const voice={clip:sound.id,profile,actor,event,base:gain,distance,intensity:options.intensity??1,pan,preview:options.preview===true,viewSize:options.viewSize} as NonNullable<ReturnType<typeof voices.get>>
   voices.set(id,voice)
+  let loading=clips.get(sound.url),loaded=false
   try {
-    let loading=clips.get(sound.url)
     if(!loading){loading=fetch(sound.url).then(r=>{if(!r.ok)throw Error('missing');return r.arrayBuffer()}).then(b=>context!.decodeAudioData(b));clips.set(sound.url,loading)}
     const buffer=await loading
+    loaded=true;failedClips.delete(sound.url)
     if(token!==generation||!voices.has(id)||(event!=='selection'&&!options.preview&&!useCharacterSoundStore.getState().document.mixer.sceneEnabled)){voices.delete(id);return false}
     const source=context.createBufferSource(),level=context.createGain(),panner=context.createStereoPanner()
     source.buffer=buffer;source.loop=options.loop===true;source.playbackRate.value=slot.rate*(1+(Math.random()*2-1)*slot.jitter)
@@ -109,7 +124,15 @@ export async function emitCharacterAudio(profile:string,event:CharacterAudioEven
     voice.source=source;voice.gain=level;voice.panner=panner
     source.onended=()=>{voices.delete(id);source.disconnect();level.disconnect();panner.disconnect();useAudioQA.setState({active:voices.size})}
     source.start();audioQA(profile,event,sound.id,'played',level.gain.value,pan,actor);return true
-  }catch{clips.delete(sound.url);voices.delete(id);return reject('load/decode failed')}
+  }catch{
+    // Every voice awaiting the same failed load lands here; count the failure once.
+    if(!loaded&&loading&&clips.get(sound.url)===loading){
+      clips.delete(sound.url)
+      const failures=(failedClips.get(sound.url)?.failures??0)+1
+      failedClips.set(sound.url,{failures,until:Date.now()/1000+Math.min(CLIP_RETRY_MAX_SECONDS,CLIP_RETRY_SECONDS*2**(failures-1))})
+    }
+    voices.delete(id);return reject('load/decode failed')
+  }
 }
 useCharacterSoundStore.subscribe((s,p)=>{
   if(s.document.mixer.sceneEnabled!==p.document.mixer.sceneEnabled&&!s.document.mixer.sceneEnabled)stopSceneAudio()

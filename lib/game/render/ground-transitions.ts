@@ -1,11 +1,12 @@
 import { GROUND_UV_SCALE } from "./ground-surface"
+import { TERRAIN_RECORD_LAYER } from "./terrain-water"
 
 /** Shared by plain ground, road verges and the dry corners painted into water. */
 export const GROUND_TRANSITIONS_GLSL = /* glsl */ `
-  uniform sampler2D groundPalette;
+  // Reads the ground layer of the shared terrain records (TERRAIN_WATER_GLSL).
   uniform sampler2D sandMap;
   vec4 groundRecord(vec2 cell) {
-    return texture2D(groundPalette, (clamp(cell, vec2(0.0), groundPaletteSize - 1.0) + .5) / groundPaletteSize);
+    return terrainRecord(cell, ${TERRAIN_RECORD_LAYER.ground}.0);
   }
   vec3 waterSurface(vec2 world, float donor, SurfaceSample detail) {
     vec2 grid = terrainPaintWorld(world) + groundPaletteSize * .5;
@@ -14,12 +15,12 @@ export const GROUND_TRANSITIONS_GLSL = /* glsl */ `
       float index = donor - 1.0;
       cell = vec2(mod(index, groundPaletteSize.x), floor(index / groundPaletteSize.x));
     }
-    vec4 record = texture2D(waterPalette, (cell + .5) / groundPaletteSize);
+    vec4 record = waterRecord(cell);
     float corner = mod(record.a, 8.0) - 1.0;
     if (donor < .5 && corner >= 0.0) {
       vec2 direction = vec2(corner < 2.0 ? 1.0 : -1.0, mod(corner, 2.0) < .5 ? 1.0 : -1.0);
       if (dot(local - .5, direction) > 0.0)
-        record = texture2D(waterPalette, (cell + vec2(direction.x, 0.0) + .5) / groundPaletteSize);
+        record = waterRecord(cell + vec2(direction.x, 0.0));
     }
     return record.rgb * surfaceGrain(detail, 1.0);
   }

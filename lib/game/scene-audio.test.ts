@@ -213,3 +213,64 @@ it('avoids layering the identical murmur take when another recording is availabl
   expect(played[0].clip).not.toBe(played[1].clip)
  }finally{random.mockRestore()}
 })
+
+describe('failure and budget robustness',()=>{
+ it('backs off a clip that fails to load instead of refetching it on every tick',async()=>{
+  const failing=vi.fn(async()=>({ok:false,arrayBuffer:async()=>new ArrayBuffer(0)}))
+  vi.stubGlobal('fetch',failing)
+  let now=1_000_000
+  const clock=vi.spyOn(Date,'now').mockImplementation(()=>now)
+  try {
+   await audio.unlockSceneAudio()
+   // One clip, so every attempt asks for the same URL (per-actor voices, as the scene's sources are).
+   const bank=store.useCharacterSoundStore.getState().document.profiles.peasant.work.clips.slice(0,1)
+   const emit=(actor:string)=>audio.emitCharacterAudio('peasant','work',{actor,bank})
+   // Two voices waiting on the same failed load count as one failure.
+   expect(await Promise.all([emit('a'),emit('b')])).toEqual([false,false])
+   expect(failing).toHaveBeenCalledTimes(1)
+   // An environment loop re-asks every quarter second.
+   for(let tick=0;tick<7;tick++){now+=250;expect(await emit(`tick-${tick}`)).toBe(false)}
+   expect(failing).toHaveBeenCalledTimes(1)
+   now+=audio.CLIP_RETRY_SECONDS*1000;await emit('retry-1')
+   expect(failing).toHaveBeenCalledTimes(2)
+   // The second failure doubles the wait.
+   now+=audio.CLIP_RETRY_SECONDS*1000;await emit('early')
+   expect(failing).toHaveBeenCalledTimes(2)
+   now+=audio.CLIP_RETRY_SECONDS*1000;await emit('retry-2')
+   expect(failing).toHaveBeenCalledTimes(3)
+   // The wait is capped, and a later success clears the record.
+   for(let n=0;n<20;n++){now+=audio.CLIP_RETRY_MAX_SECONDS*1000;await emit(`capped-${n}`)}
+   expect(failing).toHaveBeenCalledTimes(23)
+   vi.stubGlobal('fetch',vi.fn(async()=>({ok:true,arrayBuffer:async()=>new ArrayBuffer(4)})))
+   now+=audio.CLIP_RETRY_MAX_SECONDS*1000
+   expect(await emit('recovered')).toBe(true)
+  } finally { clock.mockRestore() }
+ })
+ it('rejects a voice the mixer has silenced before it loads or takes a voice',async()=>{
+  await audio.unlockSceneAudio()
+  store.useCharacterSoundStore.getState().patchMixer({maxVoices:1,foley:0})
+  expect(await audio.emitCharacterAudio('peasant','walking',{actor:'silent'})).toBe(false)
+  expect(fetch).not.toHaveBeenCalled()
+  expect(audio.useAudioQA.getState().history[0].result).toBe('out of range')
+  expect(await audio.emitCharacterAudio('scene/stream','idle',{actor:'stream',loop:true})).toBe(true)
+  expect(sources).toHaveLength(1)
+ })
+ it('resumes an interrupted context and survives a resume that rejects',async()=>{
+  await audio.unlockSceneAudio()
+  expect(await audio.unlockSceneAudio(false)).toBe(true)
+  vi.resetModules()
+  let instance!:FakeContext
+  class Interrupted extends FakeContext {
+   constructor(){super();this.state='interrupted';instance=this}
+   resume=vi.fn(async()=>{throw new Error('not allowed')})
+  }
+  vi.stubGlobal('AudioContext',Interrupted)
+  const fresh=await import('./scene-audio')
+  expect(await fresh.unlockSceneAudio(false)).toBe(false)
+  expect(instance).toBeUndefined()
+  await expect(fresh.unlockSceneAudio()).resolves.toBe(false)
+  expect(instance.resume).toHaveBeenCalledOnce()
+  instance.resume=vi.fn(async()=>{instance.state='running'})
+  expect(await fresh.unlockSceneAudio()).toBe(true)
+ })
+})

@@ -2,6 +2,7 @@ import { ELEVATION_CONTROLS, elevationSettings, type ElevationSettings } from ".
 import { parseSceneVisibility } from "../scene-visibility"
 import { treeModelForGame } from "../trees/render-model"
 import type { CityBenchmarkMode } from "../city-benchmark"
+import { clampWorldSetting } from "./schema"
 import { DEFAULT_WORLD_SETTINGS, type DisplaySettings, type WorldSettings } from "./settings"
 
 /**
@@ -49,8 +50,13 @@ export function parsePlayQuery(params: Params): PlayQuery {
   const world: Partial<WorldSettings> = {}
   for (const [query, key, isInteger] of WORLD_PARAMS) {
     const value = isInteger ? integer(params[query]) : decimal(params[query])
-    if (key === "generation" && value !== 1 && value !== 2 && value !== 3 && value !== 4) continue
-    if (value !== undefined) world[key] = value
+    if (key === "generation") {
+      if (value === 1 || value === 2 || value === 3 || value === 4) world[key] = value
+      continue
+    }
+    // Held to the save's own bounds, so no link names a world that cannot be saved.
+    const clamped = value === undefined ? undefined : clampWorldSetting(key, value)
+    if (clamped !== undefined) world[key] = clamped
   }
   const elevation: { -readonly [K in keyof ElevationSettings]?: number } = {}
   let shaped = false

@@ -2,7 +2,7 @@
 
 import { isWaterTerrain } from "@/lib/game/map/terrain"
 
-import { useContext, useEffect, useMemo, useRef } from "react"
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef } from "react"
 import { useFrame } from "@react-three/fiber"
 import * as THREE from "three"
 import { terrainCorner } from "@/lib/game/map/cliff-corners"
@@ -16,26 +16,24 @@ import { tileToWorldX, tileToWorldZ, type GameMap } from "@/lib/game/map/types"
 import { CHARACTER_PIXEL_SIZE } from "@/lib/game/render/pixel-scale"
 import { grassAppearanceUniforms } from "@/lib/game/render/appearance-uniforms"
 import { GROUND_SURFACE_GLSL, GROUND_UV_SCALE } from "@/lib/game/render/ground-surface"
-import { useTerrainTexture } from "./use-terrain-texture"
 import { TILE_HEIGHT } from "@/lib/game/map/terrain"
 import { frameQuality } from "@/lib/game/render/frame-quality"
 
 import { TerrainMapContext } from "./terrain-map-context"
 import type { TerrainBlockBounds } from "@/lib/game/render/terrain-blocks"
 
-/** Sparse ripple sprites cross tile seams; waterfall foam keeps the same pixel grid. */
-export function WaterMotion({ map: suppliedMap, waterPalette, edgeGrain, bounds, revision: suppliedRevision, turbulenceField }: { map?: GameMap; waterPalette: THREE.DataTexture; edgeGrain: THREE.Texture; bounds?: TerrainBlockBounds; revision?: object; turbulenceField?: Float32Array }) {
+/**
+ * Sparse ripple sprites cross tile seams; waterfall foam keeps the same pixel grid.
+ * `records` are the terrain's stacked per-tile records (see TERRAIN_RECORD_LAYER)
+ * and `ripples` the shared ripple image, both loaded once by TerrainTiles. Pass one
+ * `time` uniform to every block so their ripples share a clock; without it the
+ * block keeps and advances its own.
+ */
+export function WaterMotion({ map: suppliedMap, records, ripples, time: sharedTime, edgeGrain, bounds, revision: suppliedRevision, turbulenceField }: { map?: GameMap; records: THREE.DataTexture; ripples: THREE.Texture; time?: { value: number }; edgeGrain: THREE.Texture; bounds?: TerrainBlockBounds; revision?: object; turbulenceField?: Float32Array }) {
   const contextMap = useContext(TerrainMapContext)
   const map = suppliedMap ?? contextMap!
   const revision = suppliedRevision ?? map
-  const material = useRef<THREE.ShaderMaterial>(null)
   const mesh = useRef<THREE.Mesh>(null)
-  const ripples = useTerrainTexture("/textures/water.png", "#000000")
-  useMemo(() => {
-    ripples.wrapS = ripples.wrapT = THREE.RepeatWrapping
-    ripples.magFilter = THREE.NearestFilter
-    ripples.minFilter = THREE.NearestMipmapLinearFilter
-  }, [ripples])
   const geometry = useMemo(() => {
     const positions: number[] = [], uv: number[] = [], falling: number[] = [], turbulence: number[] = [], shores: number[] = [], modes: number[] = [], fordFlows: number[] = []
     const field = turbulenceField ?? waterfallTurbulence(map.water, map.tiles.length, map.elevation?.settings.turbulenceReach ?? DEFAULT_ELEVATION.turbulenceReach)
@@ -75,29 +73,44 @@ export function WaterMotion({ map: suppliedMap, waterPalette, edgeGrain, bounds,
     return g
   }, [revision, bounds, turbulenceField])
   useEffect(() => () => geometry.dispose(), [geometry])
-  const uniforms = useMemo(() => {
-    const s = { ...DEFAULT_ELEVATION, ...map.elevation?.settings }
-    return {
-      turbulenceStrength: { value: s.waterfallTurbulence }, currentSpeed: { value: s.turbulenceSpeed },
-      rippleMap: { value: ripples },
-      waterPalette: { value: waterPalette }, terrainEdgeGrain: { value: edgeGrain },
-      groundPaletteSize: { value: new THREE.Vector2(map.width, map.depth) },
-      time: { value: 0 }, seed: { value: ((map.seed ?? 0) % 10007) / 97 },
-      strength: { value: s.shimmerStrength }, coverage: { value: s.shimmerCoverage },
-      groupSize: { value: s.shimmerSize }, speed: { value: s.shimmerSpeed }, foam: { value: s.foam },
-    }
-  }, [map.width, map.depth, map.seed, map.elevation?.settings, ripples, waterPalette, edgeGrain])
+  const ownTime = useMemo(() => ({ value: 0 }), [])
+  const time = sharedTime ?? ownTime
+  // One material for the block's lifetime, with uniforms it owns by reference.
+  // Handing R3F a fresh uniforms prop each render made it copy every value
+  // back in, rewinding the ripple clock to 0 whenever the block re-rendered.
+  const material = useMemo(() => new THREE.ShaderMaterial({
+    uniforms: {
+      ...grassAppearanceUniforms,
+      turbulenceStrength: { value: 0 }, currentSpeed: { value: 0 },
+      rippleMap: { value: null }, terrainRecords: { value: null }, terrainEdgeGrain: { value: null },
+      groundPaletteSize: { value: new THREE.Vector2() }, time, seed: { value: 0 },
+      strength: { value: 0 }, coverage: { value: 0 }, groupSize: { value: 0 }, speed: { value: 0 }, foam: { value: 0 },
+    },
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, vertexShader: WATER_VERTEX_SHADER, fragmentShader: WATER_FRAGMENT_SHADER,
+  }), [])
+  useEffect(() => () => material.dispose(), [material])
+  useLayoutEffect(() => {
+    const s = { ...DEFAULT_ELEVATION, ...map.elevation?.settings }, u = material.uniforms
+    u.turbulenceStrength.value = s.waterfallTurbulence; u.currentSpeed.value = s.turbulenceSpeed
+    u.rippleMap.value = ripples; u.terrainRecords.value = records; u.terrainEdgeGrain.value = edgeGrain
+    u.groundPaletteSize.value.set(map.width, map.depth); u.seed.value = ((map.seed ?? 0) % 10007) / 97
+    u.strength.value = s.shimmerStrength; u.coverage.value = s.shimmerCoverage
+    u.groupSize.value = s.shimmerSize; u.speed.value = s.shimmerSpeed; u.foam.value = s.foam
+    u.time = time
+  }, [material, map.width, map.depth, map.seed, map.elevation?.settings, ripples, records, edgeGrain, time])
   useFrame(({ scene }, dt) => {
     const detailed = frameQuality(scene) === 0
     if (mesh.current) mesh.current.visible = detailed
-    if (detailed && material.current) material.current.uniforms.time.value += Math.min(dt, 0.1)
+    if (detailed && !sharedTime) ownTime.value += Math.min(dt, 0.1)
   })
-  return <mesh ref={mesh} name="water-shimmer" geometry={geometry} frustumCulled={false}>
-    <shaderMaterial ref={material} uniforms={{ ...uniforms, ...grassAppearanceUniforms }} transparent depthWrite={false} side={THREE.DoubleSide}
-      vertexShader={`attribute vec2 aFordFlow; varying vec2 vFordFlow; attribute float aShoreMode; varying float vShoreMode; attribute vec4 aShoreCorners; varying vec4 vShoreCorners; attribute float aFall; attribute vec3 aTurbulence; varying vec3 vTurbulence; varying float vFall; varying float vHeight; varying vec2 vUv; varying vec2 vWorld;
+  return <mesh ref={mesh} name="water-shimmer" geometry={geometry} material={material} frustumCulled={false} />
+}
+
+const WATER_VERTEX_SHADER = `attribute vec2 aFordFlow; varying vec2 vFordFlow; attribute float aShoreMode; varying float vShoreMode; attribute vec4 aShoreCorners; varying vec4 vShoreCorners; attribute float aFall; attribute vec3 aTurbulence; varying vec3 vTurbulence; varying float vFall; varying float vHeight; varying vec2 vUv; varying vec2 vWorld;
         void main() { vFordFlow = aFordFlow; vShoreMode = aShoreMode; vShoreCorners = aShoreCorners; vFall = aFall; vTurbulence = aTurbulence; vUv = uv; vWorld = position.xz; vHeight = position.y;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`}
-      fragmentShader={`varying vec2 vFordFlow; varying float vShoreMode; varying vec4 vShoreCorners; ${SHORELINE_SHAPE_GLSL}
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`
+
+const WATER_FRAGMENT_SHADER = `varying vec2 vFordFlow; varying float vShoreMode; varying vec4 vShoreCorners; ${SHORELINE_SHAPE_GLSL}
         ${TERRAIN_EDGE_GLSL}
         ${TERRAIN_WATER_GLSL}
         uniform sampler2D rippleMap;
@@ -154,6 +167,4 @@ export function WaterMotion({ map: suppliedMap, waterPalette, edgeGrain, bounds,
           gl_FragColor = vec4(0.83, 0.94, 0.96, alpha);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
-        }`} />
-  </mesh>
-}
+        }`

@@ -649,3 +649,94 @@ describe("shared provisions and purse", () => {
     expect(sim.parties.get(0)!.members).toEqual([0, 1, 3])
   })
 })
+
+describe("company roster changes", () => {
+  // Same deterministic dice as the simulation, so a test can choose who is admitted.
+  function roll(id: number, n: number): number {
+    let h = Math.imul(id + 1, 0x9e3779b1) ^ Math.imul(n + 1, 0x85ebca6b)
+    h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d)
+    h = Math.imul(h ^ (h >>> 12), 0x297a2d39)
+    h ^= h >>> 15
+    return (h >>> 0) / 4294967296
+  }
+
+  it("regroups the remaining brother when his companion joins the enclave", () => {
+    const width = 30, depth = 18
+    const map: GameMap = { width, depth, tiles: Array(width * depth).fill("grass"), buildings: [],
+      road: Array.from({ length: width }, (_, x) => ({ x, z: 4 })),
+      site: { junction: 10, branch: Array.from({ length: 5 }, (_, i) => ({ x: 10, z: 4 + i })),
+        door: { x: 10, z: 8 }, hovelId: "hovel" } }
+    for (const p of map.road!) map.tiles[p.z * width + p.x] = "path"
+    for (const p of map.site!.branch.slice(1)) map.tiles[p.z * width + p.x] = "track"
+    map.buildings.push({ id: "hovel", admissionFee: 0, label: "Shrine", x: 9, z: 9, w: 3, d: 3, height: 1, color: "tan", roofColor: "brown" })
+    const shelter = BUILD_CATALOG.find(b => b.id === "monk-shelter")!
+    map.buildings.push({ ...shelter, id: "founding-shelter", buildType: "monk-shelter", x: 2, z: 12 },
+      { ...shelter, id: "extra-shelter", buildType: "monk-shelter", x: 6, z: 12 })
+    const friar = (id: number): Traveler => ({ id, name: `Brother ${id}`, type: TRAVELER_TYPES.friar, direction: 1, pace: 1,
+      offset: 3 / (width - 1), party: { id: 0, name: "Brothers of the road 1", slot: id },
+      attributes: { happiness: 80, age: 30, gold: 5, piety: 90, status: 50, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: [] } })
+    const people = [friar(0), friar(1)]
+    const sim = createSim(people, map)
+    stepSim(sim, people, map, 1.5, .1)
+    const party = sim.parties.get(0)!
+    expect(party.members).toEqual([0, 1])
+    // Brother 1's next roll admits him to the enclave; brother 0's does not.
+    const b0 = sim.travelers.get(0)!, b1 = sim.travelers.get(1)!
+    let n = 0; while (roll(1, n) >= .1) n++
+    b1.rolls = n
+    let m = 0; while (roll(0, m) < .1) m++
+    b0.rolls = m
+    party.stage = "visiting"; party.visitPending = []; party.visitStarted = [0, 1]
+    for (const s of [b0, b1]) { s.activity = "walking"; s.partyGathering = undefined }
+    expect(() => stepSim(sim, people, map, 1.5, .1)).not.toThrow()
+    expect(sim.joinedMonks.has(1)).toBe(true)
+    expect(sim.parties.get(0)?.members).toEqual([0])
+    expect(() => { for (let i = 0; i < 20; i++) stepSim(sim, people, map, 1.5, .1) }).not.toThrow()
+  })
+
+  it("adds a newcomer's coin to the company purse and walks them to their place", () => {
+    const width = 60, depth = 18
+    const map: GameMap = { width, depth, tiles: Array(width * depth).fill("grass"), buildings: [],
+      road: Array.from({ length: width }, (_, x) => ({ x, z: 4 })) }
+    for (const p of map.road!) map.tiles[p.z * width + p.x] = "path"
+    const pilgrim = (id: number, gold: number, offset: number): Traveler => ({ id, name: `P${id}`, type: TRAVELER_TYPES.pilgrim, direction: 1, pace: 1, offset,
+      party: { id: 0, name: "company", slot: id },
+      attributes: { happiness: 80, age: 30, gold, piety: 50, status: 20, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: [] } })
+    const first = [pilgrim(0, 100, .3), pilgrim(1, 100, .3)]
+    const sim = createSim(first, map)
+    stepSim(sim, first, map, 1.5, .1)
+    expect(sim.parties.get(0)!.gold).toBe(200)
+    // Raised traffic: the cast grows and a newcomer far down the road joins the same company.
+    const added = pilgrim(2, 10, .8)
+    sim.travelers.set(2, createSim([added], map).travelers.get(2)!)
+    const before = sim.travelers.get(2)!.progress
+    stepSim(sim, [...first, added], map, 1.5, .1)
+    const party = sim.parties.get(0)!
+    expect(party.members).toEqual([0, 1, 2])
+    expect(party.gold).toBe(210)
+    for (const id of party.members) expect(sim.travelers.get(id)!.gold).toBe(210)
+    expect(party.formed).toBe(false)
+    expect(Math.abs(sim.travelers.get(2)!.progress - before)).toBeLessThan(1)
+  })
+})
+
+describe("leaving a gathering that has been built in", () => {
+  it("puts a boxed-in companion back on the road instead of holding the company", () => {
+    const { map, travelers, sim } = fixture(2)
+    run(sim, travelers, map, 1)
+    const party = sim.parties.get(0)!, s = sim.travelers.get(1)!
+    // Waiting on the grass beside the road when the player boxes the place in.
+    const x = worldToTileX(map, s.x)
+    const spot = { x: tileToWorldX(map, x), y: 0, z: tileToWorldZ(map, 9) }
+    Object.assign(s, { x: spot.x, z: spot.z, activity: "walking", offRoadRoute: null, walkFrom: null })
+    s.partyGathering = { spot, arrived: true, waited: 0 }
+    const wall = (id: string, x: number, z: number, w: number, d: number) =>
+      ({ id, label: "Hut", x, z, w, d, height: 1, color: "tan", roofColor: "brown" }) as GameMap["buildings"][number]
+    map.buildings = [...map.buildings, wall("north", x - 1, 8, 3, 1), wall("south", x - 1, 10, 3, 1), wall("west", x - 1, 9, 1, 1), wall("east", x + 1, 9, 1, 1)]
+    run(sim, travelers, map, 90, () => !s.partyGathering)
+    expect(s.partyGathering).toBeUndefined()
+    const progress = party.progress
+    run(sim, travelers, map, 10)
+    expect(Math.abs(partyRoadDelta(party.progress, progress, map.road!.length - 1))).toBeGreaterThan(1)
+  })
+})
