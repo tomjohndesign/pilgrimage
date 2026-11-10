@@ -1,7 +1,13 @@
 {
-  "lastProcessedCommit": "7ab4edba0ca29274dc065da931a1e34d5fd28173",
-  "releaseCount": 271,
+  "lastProcessedCommit": "db3782a28242fa5ce44e57b5704f5ddcd0678b2e",
+  "releaseCount": 272,
   "releases": [
+    {
+      "version": "0.0.286",
+      "title": "Release 0.0.286",
+      "summary": "Fix tick crash, save loss, stranded travelers and shader texture overflow (#306)",
+      "commit": "db3782a28242fa5ce44e57b5704f5ddcd0678b2e"
+    },
     {
       "version": "0.0.285",
       "title": "Release 0.0.285",
