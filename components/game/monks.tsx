@@ -25,7 +25,7 @@ import { preachingRegistry, preachingSpots, stepMonkEvangelism, type PreachingTa
 import { useMonkEvangelismStore } from "@/lib/game/monk-evangelism-store"
 import { walkingSurface } from "@/lib/game/map/walking-surface"
 
-import { blessByProcession, createRelicProcession, nearProcession, processionGrounds, processionRegistry, startAltarProcession, startProcession, stepProcession } from "@/lib/game/relic-procession"
+import { abandonProcession, blessByProcession, createRelicProcession, nearProcession, processionGrounds, processionRegistry, startAltarProcession, startProcession, stepProcession } from "@/lib/game/relic-procession"
 import { useRelicProcessionStore } from "@/lib/game/relic-procession-store"
 import type { Relic } from "@/lib/game/relic"
 import { RelicDisplay, RELIC_DISPLAY_HEIGHT } from "./relic-display"
@@ -205,10 +205,17 @@ export function Monks({ map, monks, relic, flying = false, characterScale = 1 }:
     if (!playback.paused && controls.monkId !== null && world.procession.stage === "idle" && world.grounds) {
       const index = monks.findIndex(m => m.id === controls.monkId)
       const actor = world.states[index]
-      if (actor) { stopAlmsDuty(actor); stopKeepingRelic(actor, map, world.wander); actor.buildingTask = undefined }
+      if (actor) { stopAlmsDuty(actor); stopKeepingRelic(actor, map, world.wander) }
       if (!actor || actor.stamina <= MONK_TIRED_AT || actor.flight || actor.preachingTask || useMonkEvangelismStore.getState().assigned.has(controls.monkId) || !startProcession(world.procession, controls.monkId, actor, world.grounds)) {
         useRelicProcessionStore.setState({ monkId: null, returnRequested: false })
-      }
+      } else actor.buildingTask = undefined
+    }
+    // Rebuilding the church mid-outing removes the grounds: set the relic back and free the carrier.
+    if (!world.grounds && world.procession.stage !== "idle") {
+      const carrier = world.states[monks.findIndex(m => m.id === world.procession.monkId)]
+      const exit = abandonProcession(world.procession, carrier, world.wander, world.pick)
+      if (carrier) { carrier.route = exit; carrier.pause = 0; carrier.destination = "grounds"; carrier.activity = "walking" }
+      useRelicProcessionStore.setState({ monkId: null, stage: "idle", returnRequested: false })
     }
     if (!playback.paused && world.procession.stage === "idle" && world.grounds) {
       const index = world.states.findIndex((s, index) => !s.keeperDuty && !s.flight && s.stamina > MONK_TIRED_AT && !s.processionConsidered &&

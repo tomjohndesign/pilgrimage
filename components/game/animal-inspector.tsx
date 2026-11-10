@@ -2,9 +2,9 @@
 
 import { ChromeButton } from "@/components/ui/chrome-controls"
 import { useEffect, useState } from "react"
-import { useCameraStore } from "@/lib/game/camera-store"
+import { isSelected, useCameraStore } from "@/lib/game/camera-store"
 import { FollowButton } from "./follow-button"
-import { wildlifeRegistry } from "@/lib/game/wildlife/registry"
+import { wildlifeAnimal, wildlifeRegistry } from "@/lib/game/wildlife/registry"
 import { activityLabel } from "@/lib/game/wildlife/behavior"
 import { WILDLIFE_PROFILES } from "@/lib/game/wildlife/species"
 
@@ -12,7 +12,12 @@ import { WILDLIFE_PROFILES } from "@/lib/game/wildlife/species"
 export function AnimalInspector({ id }: { id: number }) {
   const [, refresh] = useState(0)
   useEffect(() => { const timer = setInterval(() => refresh(n => n + 1), 250); return () => clearInterval(timer) }, [])
-  const world = wildlifeRegistry.current, animal = world?.animals[id]
+  const world = wildlifeRegistry.current, animal = wildlifeAnimal(world?.animals, id)
+  // An animal that has left (a demolished coop's flock) takes its dock and follow with it.
+  const gone = !!world && (!animal || animal.reserve)
+  useEffect(() => {
+    if (gone && isSelected(useCameraStore.getState().selection, { kind: "animal", id })) useCameraStore.getState().select(null)
+  }, [gone, id])
   if (!animal || animal.reserve) return null
   const group = world!.animals.filter(other => other.group === animal.group && !other.concealed).length
   const activity = activityLabel(animal)

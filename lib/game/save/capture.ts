@@ -2,7 +2,7 @@ import { useCameraStore } from "../camera-store"
 import type { Settlement } from "../settlement"
 import type { SimState } from "../sim"
 import { useSimulationStore } from "../simulation-store"
-import { SAVE_VERSION, worldIdentity, type GameSave } from "./schema"
+import { SAVE_VERSION, withoutNonFinite, worldIdentity, type GameSave } from "./schema"
 import { captureSettlement } from "./settlement"
 import { captureSimulation } from "./simulation"
 import type { DisplaySettings, WorldSettings } from "./settings"
@@ -16,7 +16,7 @@ export function captureGame({ seed, settings, settlement, sim }: {
 }): GameSave {
   const camera = useCameraStore.getState()
   const playback = useSimulationStore.getState()
-  return {
+  return withoutNonFinite({
     version: SAVE_VERSION,
     savedAt: new Date().toISOString(),
     world: worldIdentity(seed, settings),
@@ -24,5 +24,5 @@ export function captureGame({ seed, settings, settlement, sim }: {
     simulation: captureSimulation(sim, settings.treeModel),
     camera: { targetX: camera.targetX, targetZ: camera.targetZ, viewIndex: camera.viewIndex, viewSize: camera.viewSize },
     playback: { paused: playback.paused, speed: playback.speed },
-  }
+  })
 }

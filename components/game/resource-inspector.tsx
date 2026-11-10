@@ -2,7 +2,7 @@
 
 import { ChromeButton } from "@/components/ui/chrome-controls"
 import { useEffect, useState, type ReactNode } from "react"
-import { useCameraStore, type Selection } from "@/lib/game/camera-store"
+import { isSelected, useCameraStore, type Selection } from "@/lib/game/camera-store"
 import { simRegistry } from "@/lib/game/sim"
 import { TREE_SPECIES } from "@/lib/game/trees/species"
 import { AXE_DAMAGE_PER_HOUR, treeResource, treeStage } from "@/lib/game/trees/timber"
@@ -21,6 +21,11 @@ export function ResourceInspector({ selection }: { selection: Extract<Selection,
     return () => clearInterval(timer)
   }, [])
   const sim = simRegistry.current
+  // A used-up pile or a vanished tree takes its dock and selection with it.
+  const gone = !!sim && (selection.kind === "tree" ? !sim.trees[selection.id] : !sim.piles.get(selection.id))
+  useEffect(() => {
+    if (gone && isSelected(useCameraStore.getState().selection, selection)) useCameraStore.getState().select(null)
+  }, [gone, selection])
   if (!sim) return null
   let title: string
   let content: ReactNode

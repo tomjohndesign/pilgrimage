@@ -460,6 +460,27 @@ describe("generateMap", () => {
     }
   })
 
+  it("cuts the shrine's track when steep ground pushes the junction against the map's edge", () => {
+    // Every value is within the World panel's range and reachable from a
+    // link's e_* parameters. These seeds route the road along the west edge,
+    // inside the border inset, where every bounded track search fails.
+    const elevation = { maxHeight: 4, cliffHeight: 2, cliffDensity: 2, cliffThreshold: 0.25, scale: 8, detail: 0.5, power: 1, cliffLength: 40, slopeCost: 60 }
+    for (const seed of [1885122, 1989851, 2932412]) {
+      const map = generateMap({ seed, width: 128, depth: 128, elevation })
+      const { branch, door, junction } = map.site!
+      expect(branch.length, `seed ${seed} has a track`).toBeGreaterThan(1)
+      expect(branch[0], `seed ${seed} track starts at the junction`).toEqual(map.road![junction])
+      expect(branch.at(-1), `seed ${seed} track ends at the door`).toEqual(door)
+      for (let i = 1; i < branch.length; i++) {
+        const a = branch[i - 1], b = branch[i]
+        expect(Math.abs(a.x - b.x) + Math.abs(a.z - b.z), `seed ${seed} track is unbroken at ${i}`).toBe(1)
+        if (!carriesWater(map, a.x, a.z) && !carriesWater(map, b.x, b.z)) {
+          expect(Number.isFinite(elevationStep(map.elevation, a.z * map.width + a.x, b.z * map.width + b.x)), `seed ${seed} track climbs no cliff at ${i}`).toBe(true)
+        }
+      }
+    }
+  }, SWEEP_TIMEOUT)
+
   it("mixes open meadows with substantial, locally dense woodland", () => {
     for (const seed of SEEDS) {
       const map = mapFor(seed)

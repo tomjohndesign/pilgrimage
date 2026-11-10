@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest"
 
 import { DEFAULT_ELEVATION } from "../map/elevation"
+import { MAX_TRAFFIC } from "../travelers"
+import { parseGameSave, SAVE_VERSION, worldIdentity } from "./schema"
 import { DEFAULT_WORLD_SETTINGS } from "./settings"
 import { parsePlayQuery, playQuery } from "./url"
 
@@ -43,5 +45,24 @@ describe("play URL", () => {
   it("ignores malformed values", () => {
     const parsed = parsePlayQuery({ seed: "abc", size: "big", forest: "NaN", e_maxHeight: "tall", benchmark: "other" })
     expect(parsed).toEqual({ seed: undefined, world: {}, display: {}, benchmark: undefined })
+  })
+
+  it("holds world inputs to the bounds a save accepts, so a link never makes an unloadable world", () => {
+    const parsed = parsePlayQuery({ seed: "5", rivers: "-2", lakes: "-9", forest: "150", glades: "-3", water: "101", traffic: "1000000", size: "9000" })
+    expect(parsed.world).toEqual({ rivers: -1, lakes: -1, coverage: 100, glades: 0, water: 100, traffic: MAX_TRAFFIC, size: 512 })
+    for (const q of [{ rivers: "-2" }, { forest: "150" }, { glades: "-3" }, { water: "101" }, { traffic: "1000000" }, { dark: "-1" }, { relic: "-4" }]) {
+      const { world } = parsePlayQuery({ seed: "5", ...q })
+      const save = { version: SAVE_VERSION, savedAt: "x", world: worldIdentity(5, { ...DEFAULT_WORLD_SETTINGS, ...world }),
+        settlement: { claimedBuildings: [], resources: { gold: 10, wood: 5 }, deliveredWood: 0, spentWood: 0, shrineAdmission: 1,
+          collectedAdmission: 0, collectedTrade: 0, structures: [] },
+        simulation: { time: 1.5, treeModel: "sprites", visits: 0, wood: 0, shrineGold: 0, tradeGold: 0, constructionWood: 0,
+          shrineQueueSequence: 0, admissionSequence: 0, relic: { sanctity: 50, spectacle: 50, doubt: 10 }, felled: [], treeResources: [],
+          foodStores: [], piles: [], travelers: [], joinedMonks: [] },
+        camera: { targetX: 0, targetZ: 0, viewIndex: 0, viewSize: 24 }, playback: { paused: false, speed: 2 } }
+      const loaded = parseGameSave(JSON.parse(JSON.stringify(save)))
+      expect(loaded.error, JSON.stringify(q)).toBeNull()
+      expect(loaded.save?.world).toEqual(save.world)
+    }
+    expect(parsePlayQuery({ traffic: "40" }).world.traffic).toBe(40)
   })
 })

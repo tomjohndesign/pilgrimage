@@ -121,7 +121,10 @@ export function WildlifeBatch({ kind, animals, map, scale, grazing }: { kind: Wi
   const drawnAnimals = useMemo(() => [] as number[], [])
   const posed = useMemo(() => new Array<number>(animals.length).fill(-1), [batch, animals, map, scale, grazing])
   const lastDesign = useRef<unknown>(null)
-  useEffect(() => () => { rig.dispose(); batch.dispose(); material.dispose(); idMaterial.dispose() }, [rig, batch, material, idMaterial])
+  // Coop changes rebuild the batch; the rig and shared materials outlive it.
+  useEffect(() => () => batch.dispose(), [batch])
+  useEffect(() => () => rig.dispose(), [rig])
+  useEffect(() => () => { material.dispose(); idMaterial.dispose() }, [material, idMaterial])
   useFrame(({ camera }) => {
     if (!isWorldVisible(group.current)) return
     const { root, frustum, viewProjection, view, bounds, drawn, sphere } = scratch, size = RIG_TO_WORLD * scale

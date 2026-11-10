@@ -1269,3 +1269,43 @@ it.each([1, -1] as const)("walks nuns along the road at their rig's speed and re
   stepSim(sim, [traveler], map, DEFAULT_WALK_SPEED, 0.1, LINEAR_MOVEMENT, speeds)
   expect((state.progress - paused.progress) * direction).toBeGreaterThan(0)
 })
+
+describe("walking back to the road after a building is placed", () => {
+  function minstrelOnPitch(pitch: { x: number; z: number }) {
+    const width = 30, depth = 18
+    const map: GameMap = { width, depth, tiles: new Array<TerrainId>(width * depth).fill("grass"), buildings: [],
+      road: Array.from({ length: width }, (_, x) => ({ x, z: 4 })) }
+    for (const p of map.road!) map.tiles[p.z * width + p.x] = "path"
+    const minstrel: Traveler = { id: 0, name: "M", type: TRAVELER_TYPES.minstrel, direction: 1, pace: 1, offset: 20 / (width - 1),
+      attributes: { happiness: 80, age: 30, gold: 5, piety: 30, status: 50, hunger: 100, thirst: 100, stamina: 100, jobless: false, skills: [] } }
+    const sim = createSim([minstrel], map)
+    const s = sim.travelers.get(0)!
+    const spot = { x: tileToWorldX(map, pitch.x), y: 0, z: tileToWorldZ(map, pitch.z) }
+    Object.assign(s, { x: spot.x, z: spot.z, spot, activity: "performing", timer: .05, walkFrom: null, offRoadRoute: null })
+    const building = (id: string, x: number, z: number, w: number, d: number) =>
+      ({ id, label: "Hut", x, z, w, d, height: 1, color: "tan", roofColor: "brown" }) as GameMap["buildings"][number]
+    return { map, s, people: [minstrel], building, run: (seconds: number) => {
+      for (let i = 0; i < seconds * 10; i++) stepSim(sim, [minstrel], map, 1.5, .1)
+    } }
+  }
+
+  it("steps out of a footprint laid over the pitch", () => {
+    const { map, s, building, run } = minstrelOnPitch({ x: 20, z: 6 })
+    map.buildings = [...map.buildings, building("hut", 19, 5, 3, 3)]
+    run(60)
+    expect(s.activity).toBe("walking")
+    expect(s.spot).toBeNull()
+  })
+
+  it("returns to the road at its place when buildings box the pitch in", () => {
+    const { map, s, building, run } = minstrelOnPitch({ x: 20, z: 7 })
+    const progress = s.progress
+    map.buildings = [...map.buildings, building("north", 19, 6, 3, 1), building("south", 19, 8, 3, 1),
+      building("west", 19, 7, 1, 1), building("east", 21, 7, 1, 1)]
+    run(60)
+    expect(s.activity).toBe("walking")
+    expect(s.spot).toBeNull()
+    expect(worldToTileZ(map, s.z)).toBe(4)
+    expect(Math.abs(s.progress - progress)).toBeLessThan(10)
+  })
+})

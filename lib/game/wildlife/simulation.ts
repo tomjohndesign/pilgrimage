@@ -19,6 +19,7 @@ import { gaitSpeed, gaitStride, type WildlifeGait, type WildlifeAction } from ".
 import type { AnimalRigEdits } from "./rig-edits"
 import { chooseGait, restDuration } from "./behavior"
 import { isBird, isDomestic, type WildlifeKind } from "./species"
+import { wildlifeAnimal } from "./registry"
 
 export interface WildlifeAnimal extends Point {
   coopId?: string
@@ -319,7 +320,7 @@ export function stepWildlife(world: WildlifeWorld, map: GameMap, dt: number, sca
       continue
     }
     animal.actionAge += dt * (edits[animal.kind]?.clips[animal.action]?.cadence ?? 1); animal.outsideTime += dt
-    const originalLeader = world.animals[animal.leader]
+    const originalLeader = wildlifeAnimal(world.animals, animal.leader) ?? animal
     const leader = originalLeader.fold?.route.length || originalLeader.fold?.arrived ? animal : originalLeader, domestic = isDomestic(animal.kind)
     const threat = domestic ? undefined : nearbyPeople.firstWithin(animal.x, animal.z, 2.5)
     if (threat) { animal.frightened = 3; animal.rest = 0 }

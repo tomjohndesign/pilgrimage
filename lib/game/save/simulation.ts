@@ -47,7 +47,7 @@ export function captureSimulation(sim: SimState, treeModel: TreeModel): Simulati
     foodStores: [...sim.foodStores].map(([id, stock]) => [id, { ...stock }]),
     piles: [...sim.piles.values()].map(pile => ({ ...pile })),
     travelers: [...travelers.values()].map(captureTraveler),
-    partyGold: [...parties.values()].filter(party => party.provisioned).map(party => [party.id, party.gold]),
+    partyGold: [...parties.values()].filter(party => party.provisioned).map(party => [party.id, Math.max(0, party.gold)]),
     joinedMonks: [...sim.joinedMonks].map(([travelerId, monk]) => ({ travelerId, monk: captureMonk(monk) })),
   }
 }

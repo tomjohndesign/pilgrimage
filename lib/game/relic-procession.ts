@@ -107,6 +107,17 @@ export function startAltarProcession(p: RelicProcession, monkId: number, actor: 
   return true
 }
 
+/** The grounds vanish mid-outing when the church is rebuilt. Set the relic back
+ * at once and free the carrier, rather than leaving him and everyone praying
+ * around him standing still until the works finish. Returns the carrier's way
+ * back to his ordinary routine, as an ordinary finish does. */
+export function abandonProcession(p: RelicProcession, actor: WanderSpot | undefined,
+  wander: ReturnType<typeof monkWander>, pick: () => WanderSpot | undefined): WanderSpot[] {
+  Object.assign(p, { monkId: null, stage: "idle", elapsed: 0, route: [], trail: [], position: null, cooldown: PROCESSION_COOLDOWN })
+  const next = actor && pick()
+  return actor && next ? wander.route(actor, next) : []
+}
+
 /** Spend the actual distance budget across corners; never count a turn as travel. */
 function walkRoute(actor: WanderSpot, route: WanderSpot[], distance: number, trail?: WanderSpot[]): void {
   while (route.length) {

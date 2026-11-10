@@ -1,7 +1,7 @@
 import type { Selection } from "./camera-store"
 import { monkPositionRegistry } from "./monks"
 import { simRegistry } from "./sim"
-import { wildlifeRegistry } from "./wildlife/registry"
+import { wildlifeAnimal, wildlifeRegistry } from "./wildlife/registry"
 
 export interface FollowPoint {
   x: number
@@ -40,7 +40,7 @@ export function followPoint(selection: Selection | null): FollowPoint | null {
     return monk ? { x: monk.x, z: monk.z } : null
   }
   if (selection.kind === "animal") {
-    const animal = wildlifeRegistry.current?.animals[selection.id]
+    const animal = wildlifeAnimal(wildlifeRegistry.current?.animals, selection.id)
     return animal && !animal.reserve ? { x: animal.x, z: animal.z } : null
   }
   return null

@@ -1940,3 +1940,27 @@ it("sends an enclave water visitor on to see the relic", () => {
   expect(s.thirst).toBe(100)
   expect(s.visits).toBe(1)
 })
+
+describe("leaving a tavern that has been built in", () => {
+  it("charges a boxed-in customer once and still sends them back to the road", () => {
+    const { map, traveler } = fixture()
+    const t = traveler(0)
+    t.attributes.gold = 20; t.attributes.hunger = 5; t.attributes.thirst = 5
+    const sim = createEstablishedShrine([t], map)
+    Object.assign(sim.balance.rules, { hungerDecay: 0, thirstDecay: 0, staminaDecay: 0 })
+    const tavern = staffTavern(sim, map)
+    const s = sim.travelers.get(0)!
+    run(sim, [t], map, 120, () => s.activity === "buying")
+    expect(s.activity).toBe("buying")
+    // The player rings the tavern with buildings while the customer pays.
+    for (let x = tavern.x - 1; x <= tavern.x + tavern.w; x++) for (let z = tavern.z - 1; z <= tavern.z + tavern.d; z++) {
+      if (x >= tavern.x && x < tavern.x + tavern.w && z >= tavern.z && z < tavern.z + tavern.d) continue
+      map.buildings = [...map.buildings, { id: `wall-${x}-${z}`, label: "Wall", x, z, w: 1, d: 1, height: 1, color: "tan", roofColor: "brown" }]
+    }
+    const gold = s.gold
+    run(sim, [t], map, 60, () => s.activity === "walking")
+    expect(s.activity).toBe("walking")
+    expect(gold - s.gold).toBe(MEAL_PRICE + DRINK_PRICE)
+    expect(sim.tradeGold).toBe(MEAL_PRICE + DRINK_PRICE)
+  })
+})

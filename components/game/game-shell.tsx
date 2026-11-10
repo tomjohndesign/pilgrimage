@@ -112,6 +112,9 @@ export function GameShell({
   // With no ?seed= in the URL the seed is chosen client-side in an effect, so
   // the server and client never render from different seeds.
   const [seed, setSeed] = useState<number | null>(initialSeed ?? null)
+  // Bumped by "Create map", so the same seed and settings still regenerate the
+  // land, and with it everything keyed on the map: settlement, sim and reveal.
+  const [worldEpoch, setWorldEpoch] = useState(0)
   const [landmarkRoad, setLandmarkRoad] = useState<GameMap["road"] | null>(null)
   const [revealStatus, setRevealStatus] = useState<{ road: GameMap["road"]; phase: MapRevealPhase } | null>(null)
   const openingViewSize = useCameraStore(s => s.viewSize)
@@ -215,6 +218,8 @@ export function GameShell({
           }),
     [
       seed,
+      // Not read inside: a new epoch only asks for a fresh map object.
+      worldEpoch,
       started,
       booted,
       settings.elevation,
@@ -440,6 +445,7 @@ export function GameShell({
         onNewMap={({ seed }) => {
           setSettings(current => ({ ...current, size: DEFAULT_WORLD_SETTINGS.size, generation: DEFAULT_WORLD_SETTINGS.generation }))
           setSeed(seed)
+          setWorldEpoch(epoch => epoch + 1)
         }}
         onSeedChange={setSeed}
       />

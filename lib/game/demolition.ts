@@ -22,6 +22,19 @@ export function clearDemolishedBuildings(sim: SimState, removed: ReadonlySet<str
     s.tavernVisit = undefined
     s.waterVisit = undefined
     s.marketParking = undefined
+    // Every errand the forced change below abandons: left set, these hold
+    // reservations or make later trips refuse this person.
+    s.breadVisit = undefined
+    s.naturalWaterVisit = undefined
+    s.penFoodVisit = undefined
+    s.almsVisit = undefined
+    s.musicVisit = undefined
+    s.customerVisit = undefined
+    s.shrineSeat = undefined
+    s.shrinePlace = undefined
+    s.shrineQueueOrder = undefined
+    // An abandoned haul is dropped; wells, alms tables and pens refuse anyone still carrying.
+    s.carrying = 0
     s.workRoute = null
     s.workTarget = null
     s.tree = null
